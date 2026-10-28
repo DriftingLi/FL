@@ -1,5 +1,9 @@
 // AppTopBar 行为锁定（#1619 / ADR-0072）：
-// 身份格（头像/昵称/首字母）、移动端汉堡、通知入口的角色分流、用户菜单的外观三态与退出登录。
+// 身份格（头像/昵称/首字母）、移动端汉堡、通知入口的角色分流、工具位的主题入口、退出登录。
+//
+// 2026-10-28 改判：外观三态从用户菜单里搬到了工具位（ThemeToggle topbar 档），
+// 于是「命令驱动 setMode」这条契约移到了 ThemeToggle.spec，这里只守**位置**与
+// 「菜单里不再有外观项」——位置错了用户就得先点开自己的头像才能换外观。
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { ElDropdown } from 'element-plus/es/components/dropdown/index.mjs'
@@ -43,7 +47,9 @@ import AppTopBar from '../AppTopBar.vue'
 function mountBar(collapsed = false) {
   return mount(AppTopBar, {
     props: { collapsed },
-    global: { plugins: [epLite()], stubs: { NotificationPanel: true } }
+    // ThemeToggle 单独有 spec（三档外观 + setMode 命令）；这里 stub 掉，
+    // 免得它内部的 el-dropdown 抢走 findComponent(ElDropdown) 的第一个命中
+    global: { plugins: [epLite()], stubs: { NotificationPanel: true, ThemeToggle: true } }
   })
 }
 
@@ -101,21 +107,27 @@ describe('顶栏工具位', () => {
     expect(wrapper.find('notification-panel-stub').exists()).toBe(false)
   })
 
-  it('外观三项：命令驱动 setMode，当前项打勾', async () => {
-    h.mode = 'dark'
+  it('主题入口在右区工具位（不在用户菜单里）', () => {
     wrapper = mountBar()
-    await wrapper.findComponent(ElDropdown).vm.$emit('command', 'theme:light')
-    expect(h.setMode).toHaveBeenCalledWith('light')
+    expect(wrapper.find('.topbar-actions theme-toggle-stub').exists()).toBe(true)
+    // 菜单里只剩身份只读行与退出登录：外观三项与分组标题都不该回来
+    expect(wrapper.text()).not.toContain('外观')
+    expect(wrapper.text()).not.toContain('跟随系统')
+    expect(wrapper.text()).not.toContain('浅色')
+  })
 
-    await wrapper.findComponent(ElDropdown).vm.$emit('command', 'theme:system')
-    expect(h.setMode).toHaveBeenCalledWith('system')
+  it('主题入口对所有角色出现（通知才分角色）', () => {
+    h.userInfo = { username: '导师甲', role: 'tutor' }
+    wrapper = mountBar()
+    expect(wrapper.find('theme-toggle-stub').exists()).toBe(true)
+    expect(wrapper.find('notification-panel-stub').exists()).toBe(false)
   })
 
   it('退出登录：确认后 revoke + 跳登录页', async () => {
     h.confirm.mockResolvedValue(undefined)
     h.signOut.mockResolvedValue({ revoked: true })
     wrapper = mountBar()
-    await wrapper.findComponent(ElDropdown).vm.$emit('command', 'logout')
+    await wrapper.findAllComponents(ElDropdown).at(-1)!.vm.$emit('command', 'logout')
     await flushPromises()
     expect(h.confirm).toHaveBeenCalled()
     expect(h.signOut).toHaveBeenCalledTimes(1)
@@ -125,7 +137,7 @@ describe('顶栏工具位', () => {
   it('退出登录：用户取消则不动登录态', async () => {
     h.confirm.mockRejectedValue(new Error('cancel'))
     wrapper = mountBar()
-    await wrapper.findComponent(ElDropdown).vm.$emit('command', 'logout')
+    await wrapper.findAllComponents(ElDropdown).at(-1)!.vm.$emit('command', 'logout')
     await flushPromises()
     expect(h.signOut).not.toHaveBeenCalled()
     expect(h.push).not.toHaveBeenCalled()

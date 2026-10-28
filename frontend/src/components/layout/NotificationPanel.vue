@@ -44,7 +44,9 @@ function onPopoverShow() {
     <template #reference>
       <button class="icon-btn notification-btn" title="通知" aria-label="通知">
         <UiBadge :count="unreadCount" :max="99" class="notification-badge">
-          <UiIcon name="bell" />
+          <!-- 尺寸显式给 18：默认 1em 会吃 .icon-btn 继承来的 13.3px，和同排 18px 的
+               主题 / 用户图标并排时明显小一号（2026-10-28 实测并修） -->
+          <UiIcon name="bell" :size="18" />
         </UiBadge>
       </button>
     </template>

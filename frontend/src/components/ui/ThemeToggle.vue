@@ -2,8 +2,8 @@
   <el-dropdown trigger="click" @command="onCommand">
     <button
       type="button"
-      class="theme-toggle-btn flex cursor-pointer items-center justify-center rounded-pill transition-all duration-[var(--duration-tap)] ease-[var(--ease-default)] active:scale-[0.94]"
-      :class="[variant === 'ghost' ? ghostClass : cardClass, fixed ? fixedClass : '']"
+      class="theme-toggle-btn flex cursor-pointer items-center justify-center transition-all duration-[var(--duration-tap)] ease-[var(--ease-default)] active:scale-[0.94]"
+      :class="[variantClass, fixed ? fixedClass : '']"
       aria-label="切换主题"
       title="切换主题"
     >
@@ -41,17 +41,22 @@ import UiIcon from '@/components/ui/UiIcon.vue'
  * 主题切换按钮（全站统一）：三态下拉菜单（浅色/深色/跟随系统，当前项打勾），
  * 替代旧的 cycle() 循环按钮（交互对齐 DeepSeek）。
  *
- * - variant="card"（默认）：白底描边阴影圆按钮 —— SidebarLayout / AuthPageShell 原外观
+ * - variant="card"（默认）：白底描边阴影圆按钮 —— AuthPageShell 原外观
  * - variant="ghost"：透明无边框、hover 反色 —— ChatPageShell 悬浮胶囊与侧栏 header 内嵌用
- * - fixed：附加右上角固定定位（SidebarLayout / AuthPageShell 需悬浮于内容区；移动端加大触控目标）
+ * - variant="topbar"：顶栏工具位（与通知铃铛同尺寸、同 hover、8px 圆角）—— 2026-10-28 起
+ *   四端顶栏的主题入口就是它（ADR-0072 决策 4 的改判，见该 ADR 的「改判」段）
+ * - fixed：附加右上角固定定位（AuthPageShell 需悬浮于内容区；移动端加大触控目标）
+ *
+ * **圆角归各变体**：基类不写圆角——card / ghost 是胶囊，topbar 是控件档（8px），
+ * 写在基类里再被变体覆盖会变成两个原子类抢同一个属性（R3 禁双写）。
  */
 import { computed } from 'vue'
 import { useThemeStore, type ThemeMode } from '@/stores/theme'
 import type { IconName } from '@/icons/registry'
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
-    variant?: 'card' | 'ghost'
+    variant?: 'card' | 'ghost' | 'topbar'
     fixed?: boolean
   }>(),
   { variant: 'card', fixed: false }
@@ -68,14 +73,23 @@ const themeIcon = computed<IconName>(() => {
   return themeStore.resolved === 'dark' ? 'moon' : 'sun'
 })
 
-// 两种触发器外观（类串集中定义，色值全走 token）
+// 三种触发器外观（类串集中定义，色值全走 token）
 const cardClass =
-  'h-9 w-9 border border-line bg-panel text-ink shadow-card hover:bg-canvas'
+  'h-9 w-9 rounded-pill border border-line bg-panel text-ink shadow-card hover:bg-canvas'
 const ghostClass =
-  'h-8 w-8 border-0 bg-transparent text-ink-3 hover:bg-canvas hover:text-ink'
+  'h-8 w-8 rounded-pill border-0 bg-transparent text-ink-3 hover:bg-canvas hover:text-ink'
+// 顶栏工具位：与 NotificationPanel 的 .icon-btn 同款（36×36 / 控件圆角 / 透明底 / hover 同色）
+const topbarClass =
+  'h-9 w-9 rounded-ctl border-0 bg-transparent text-ink-2 hover:bg-canvas hover:text-ui-soft-ink'
 // fixed 附加：右上角固定 + 移动端加大触控目标（对齐旧 .theme-toggle 移动段）
 const fixedClass =
   'fixed right-4 top-4 z-[var(--z-sticky)] max-[768px]:h-11 max-[768px]:w-11'
+
+const variantClass = computed(() => {
+  if (props.variant === 'ghost') return ghostClass
+  if (props.variant === 'topbar') return topbarClass
+  return cardClass
+})
 
 function onCommand(mode: ThemeMode) {
   themeStore.setMode(mode)
