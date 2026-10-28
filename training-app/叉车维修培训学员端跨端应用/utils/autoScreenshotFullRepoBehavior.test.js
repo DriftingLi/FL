@@ -93,6 +93,16 @@ function probe(ctx) {
     "Write-Output ('FR7_THISRUN_MATCH=' + [bool]$mfRamp.CountsMatch)",
     "Write-Output ('FR7_REPO_MATCH=' + [bool]$mfRamp.DirCountsMatch)",
     "Write-Output ('FR7_REPO_MISSING=' + @($mfRamp.DirMissing).Count)",
+    // ---- FR8：断路腿（设备不可用）必须报得出来，且零产物不冒充绿 ----
+    "$outB = Join-Path $env:FR_OUT3 'brk'",
+    "$rb = Invoke-AutoScreenshot -FullRepo '1864' -RampPages 1 -Device 'nosuchserial0000' -OutputDir $outB -AdbCallTimeoutSeconds 5 6>$null",
+    "Write-Output ('FR8_OK=' + $rb.Ok)",
+    "Write-Output ('FR8_VERDICT=' + [string]$rb.Verdict)",
+    "Write-Output ('FR8_SHOTS=' + @($rb.Screenshots).Count)",
+    "Write-Output ('FR8_PLANNED=' + @($rb.PlannedPages).Count)",
+    "Write-Output ('FR8_ATTEMPTED=' + @($rb.AttemptedPages).Count)",
+    "Write-Output ('FR8_MF=' + [bool]($rb.ManifestPath -and (Test-Path -LiteralPath $rb.ManifestPath)))",
+    "Write-Output ('FR8_PNG=' + @(Get-ChildItem -Path $outB -Filter '*.png' -File -ErrorAction SilentlyContinue).Count)",
     'Write-Output "PROBE_DONE=1"',
   ].join('\n');
   const encoded = Buffer.from(s, 'utf16le').toString('base64');
@@ -102,6 +112,7 @@ function probe(ctx) {
     FR_PROJ: ctx.proj,
     FR_OUT: ctx.out,
     FR_OUT2: ctx.out2,
+    FR_OUT3: ctx.out3,
   });
   try {
     const stdout = execFileSync('pwsh', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
@@ -125,10 +136,11 @@ describe('-FullRepo 全仓逐页载体（运行期，#2078）', () => {
 
   beforeAll(() => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'fullrepo-'));
-    ctx = { tmp, proj: path.join(tmp, 'proj'), out: path.join(tmp, 'arch'), out2: path.join(tmp, 'ramp') };
+    ctx = { tmp, proj: path.join(tmp, 'proj'), out: path.join(tmp, 'arch'), out2: path.join(tmp, 'ramp'), out3: path.join(tmp, 'broken') };
     fs.mkdirSync(ctx.proj, { recursive: true });
     fs.mkdirSync(ctx.out, { recursive: true });
     fs.mkdirSync(ctx.out2, { recursive: true });
+    fs.mkdirSync(ctx.out3, { recursive: true });
     probeRun = probe(ctx);
     if (!probeRun.ok || !field(probeRun.stdout, 'PROBE_DONE')) {
       throw new Error('pwsh 探针未跑通（不 skip）：' + probeRun.stderr.slice(0, 400) + ' | ' + probeRun.stdout.slice(0, 400));
@@ -183,6 +195,20 @@ describe('-FullRepo 全仓逐页载体（运行期，#2078）', () => {
     expect(field(probeRun.stdout, 'FR7_THISRUN_MATCH')).toBe('True');
     expect(field(probeRun.stdout, 'FR7_REPO_MATCH')).toBe('False');
     expect(Number(field(probeRun.stdout, 'FR7_REPO_MISSING'))).toBe(planned - 1);
+  });
+
+  test('FR8: 断路腿（设备不可用）报得出 Verdict，且零产物不冒充绿', () => {
+    // ⑥ 断路腿：「拔设备 ⇒ 明报 INCOMPLETE、已产页不丢、零产物不冒充绿」。
+    // 这里用**不存在的序列号**模拟断连（同一支代码路径：Test-ScreenAwake 拿不到设备状态即 fail-closed），
+    // 不要求人肉拔线也能把判据钉住；真机拔线的形态由发版冒烟一次性覆盖。
+    expect(field(probeRun.stdout, 'FR8_OK')).toBe('False');
+    expect(field(probeRun.stdout, 'FR8_VERDICT')).toBe('FAIL');      // 零产物 ⇒ FAIL，不是 INCOMPLETE 也不是绿
+    expect(Number(field(probeRun.stdout, 'FR8_SHOTS'))).toBe(0);
+    expect(Number(field(probeRun.stdout, 'FR8_PNG'))).toBe(0);       // 没产图就是没产图
+    // 早退路径也必须带全仓分母与 manifest（否则 StrictMode 下读 $r.Verdict 直接抛）
+    expect(Number(field(probeRun.stdout, 'FR8_PLANNED'))).toBeGreaterThan(0);
+    expect(Number(field(probeRun.stdout, 'FR8_ATTEMPTED'))).toBe(1);
+    expect(field(probeRun.stdout, 'FR8_MF')).toBe('True');
   });
 
   test('FR5: manifest 真落盘真读回，本轮对账与目录累计对账是两个结论', () => {

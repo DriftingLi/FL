@@ -892,6 +892,9 @@ function Invoke-AutoScreenshot {
     # 与 -Pages 互斥：一个是「按票号归档的全仓逐页」，一个是「人指定的几页」，两种语义混着给
     # 就没法回答「这一轮到底截了哪些页」⇒ 拒（拒得看得见，不静默取其一）。
     $fullRepoMode = -not [string]::IsNullOrWhiteSpace($FullRepo)
+    # 全仓计划（全量）在此先给默认值，只在 -FullRepo 分支里被真正赋值：
+    # 别在后面的「循环前」段再赋一次 @($targetPages) —— 那会把起跑档的 1 页覆盖成全仓计划（本会话踩过）。
+    $fullRepoPlannedPages = @()
     if ($fullRepoMode -and $FullRepo -notmatch '^\d+$') {
         return [pscustomobject]@{
             Ok = $false; Screenshots = @(); Skipped = @(); HashConflicts = @(); TargetPages = @()
@@ -1113,13 +1116,22 @@ function Invoke-AutoScreenshot {
             StaleShots    = @()
             TargetPages   = $targetPages
             Error         = "设备屏幕未唤醒（$awakeWhy）：灭屏时 screencap 只会得到全黑帧 ⇒ 拒绝截图（fail-closed）。请先唤醒设备（或打开「充电时保持唤醒」）再跑。"
+            # 全仓形态的收口字段**这条早退也必须带**（#2078 现测：⑥ 的断路腿正是落到这一支）：
+            # 少了它们，调用方在 Set-StrictMode 下读 $r.Verdict 直接抛 —— 「明报 INCOMPLETE」就报不出来。
+            # 零产物 ⇒ Verdict=FAIL（零产物不冒充绿）；已产页仍留在归档目录里、manifest 已在循环前落过一次。
+            FullRepo      = $(if ($fullRepoMode) { $FullRepo } else { '' })
+            Verdict       = $(if ($fullRepoMode) { 'FAIL' } else { '' })
+            Counts        = $null
+            ManifestPath  = $(if ($fullRepoMode -and $fullRepoManifestPath) { $fullRepoManifestPath } else { '' })
+            PlannedPages  = $(if ($fullRepoMode) { @($fullRepoPlannedPages) } else { @() })
+            AttemptedPages = $(if ($fullRepoMode) { @($targetPages) } else { @() })
+            PageSeconds   = @()
         }
     }
 
     # 全仓形态的逐页**时间账与心跳**（票 ④.2 / ④.4）：一轮约 3.9 小时，缺「现在第几页、这页花了多久、
     # 累计多少」就等于无人值守时**没有任何可判读的东西** —— 挂死与慢得看不出区别（#1560 那条血账的形状）。
     $fullRepoPageSeconds = @()
-    $fullRepoPlannedPages = @($targetPages)
     $loopStarted = Get-Date
     $prevPageSeconds = 0
 
