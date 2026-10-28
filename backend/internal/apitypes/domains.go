@@ -926,6 +926,22 @@ var Domains = []Domain{
 	},
 
 	{
+		// #2070 / ADR-0089：反馈小域——学员面提交与本人历史，管理面列表与标记已处理。
+		Name:  "feedback",
+		Title: "反馈（/api/feedback 学员提交与本人历史；/api/admin/feedback 管理端列表与标记已处理）",
+		Roots: []string{
+			"feedback.FeedbackDTO",
+			"feedback.FeedbackListResult",
+		},
+		Endpoints: []Endpoint{
+			{Method: "POST", Path: "/feedback"},
+			{Method: "GET", Path: "/feedback"},
+			{Method: "GET", Path: "/admin/feedback"},
+			{Method: "POST", Path: "/admin/feedback/{id}/handle"},
+		},
+	},
+
+	{
 		// 域边界按**前端模块**切（#1097 补登记）：frontend/src/api/inspection.ts 是管理端页面级
 		// 分组，不是后端蓝图分组 —— 该模块消费 8 个端点，其中 4 条的后端面在 internal/inspection/handler.go
 		// 注册函数下（本域），另 4 条（/admin/jobs*、/admin/job-reports*）落在既有 job 域（#1100）。

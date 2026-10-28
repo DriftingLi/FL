@@ -87,7 +87,13 @@ func (s *ImageService) CleanupOrphans(ctx context.Context) int {
 	})
 }
 
-// collectReferencedImages 收集全部主题与回复引用的图片 key 集合（归一化为 images/forum/...）。
+// collectReferencedImages 收集全部引用 images/forum/ 的行（归一化为 images/forum/...）：
+// 主题、回复，**以及反馈**（#2070 / ADR-0089 决策 6）。
+//
+// 反馈为什么在这张表里：反馈图片走的就是本通道、落的就是这个前缀（ADR-0066 决策 5：不新建通道）。
+// 漏掉这一格，学员提交的反馈图会在 24h 后进入可清理集、被下一轮 sweep 静默删掉——
+// 清理是「成功」的，没有任何报警，只有后台列表里逐渐变成裂图。
+//
 // 任一半查不动即返回 error：引用集不完整时无从判断谁还在被引用，sweep 据此整轮放弃
 // （ADR-0062 票5——「查不动」不得被读成「没人引用」）。
 func (s *ImageService) collectReferencedImages() (map[string]bool, error) {
@@ -108,6 +114,19 @@ func (s *ImageService) collectReferencedImages() (map[string]bool, error) {
 	rawList = rawList[:0]
 	if err := s.db.Model(&model.ForumReply{}).Pluck("images", &rawList).Error; err != nil {
 		return nil, fmt.Errorf("收集回复图片引用失败: %w", err)
+	}
+	for _, raw := range rawList {
+		for _, u := range parseImageURLs(raw) {
+			if key := filestore.AttachmentKey(u, filestore.ForumImageDirPrefix); key != "" {
+				ref[key] = true
+			} else if u != "" {
+				ref[u] = true
+			}
+		}
+	}
+	rawList = rawList[:0]
+	if err := s.db.Model(&model.Feedback{}).Pluck("images", &rawList).Error; err != nil {
+		return nil, fmt.Errorf("收集反馈图片引用失败: %w", err)
 	}
 	for _, raw := range rawList {
 		for _, u := range parseImageURLs(raw) {

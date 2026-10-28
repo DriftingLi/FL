@@ -22,6 +22,7 @@ import (
 	"forklift-training/internal/faq"
 	"forklift-training/internal/favorite"
 	"forklift-training/internal/featured"
+	"forklift-training/internal/feedback"
 	"forklift-training/internal/filestore"
 	"forklift-training/internal/forum"
 	"forklift-training/internal/inspection"
@@ -110,6 +111,7 @@ type Deps struct {
 	NoteSvc              *note.Service
 	QuestionKnowledgeSvc *questioninteraction.KnowledgeService
 	FaqSvc               *faq.Service
+	FeedbackSvc          *feedback.Service
 	PointsSvc            *points.Service
 	JobCardSvc           *resume.Service
 	ResumePDFRenderer    *resume.PDFRenderer

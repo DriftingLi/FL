@@ -73,7 +73,7 @@ type target struct {
 // 覆盖范围 = 「对象存储里会被写成绝对 URL」的全部列 + 可能内嵌图片链接的 Markdown 正文：
 // 内容精选（封面 / 正文 / 摘要）、课程封面、章节（正文 / 附件 / 幻灯片）、章节文件、
 // 证书模板、题库（题图 / 题干）、学员头像、投稿文件、招聘简历卡（PDF / 工作照 / 证书）、
-// 论坛主题与回复（正文 / 图集）、AI 助手消息图片。
+// 论坛主题与回复（正文 / 图集）、AI 助手消息图片、学员反馈图片（#2070）。
 //
 // 新增「URL 形态」的列会被 main_test.go 的覆盖锁判红（按 表.列 判，且核对 text/jsonb 形态）：
 // 要么加进来，要么在豁免表里写明理由。
@@ -122,6 +122,10 @@ var defaultTargets = []target{
 	}},
 	{Table: "ai_chat_messages", Columns: []column{
 		{Name: "images", Kind: kindText},
+	}},
+	// 反馈图片（#2070 / ADR-0089）：与论坛图片同前缀 images/forum/，换存储域名时同样要回填。
+	{Table: "feedback", Columns: []column{
+		{Name: "images", Kind: kindJSONB},
 	}},
 }
 

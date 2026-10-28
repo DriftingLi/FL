@@ -28,6 +28,7 @@ import (
 	"forklift-training/internal/course"
 	"forklift-training/internal/favorite"
 	"forklift-training/internal/featured"
+	"forklift-training/internal/feedback"
 	"forklift-training/internal/forum"
 	"forklift-training/internal/inspection"
 	"forklift-training/internal/job"
@@ -185,6 +186,10 @@ var envelopeRegistry = []EnvelopeSpec{
 	{Result: "wrongquestion.WrongQuestionPageDTO", Endpoints: []string{"GET /wrong-questions"},
 		Keys: []string{"items", "page", "page_size", "total"}, Dialect: paging.DialectPageSize,
 		Sample: wrongquestion.WrongQuestionPageDTO{}},
+	// #2070 / ADR-0089：反馈列表（学员历史与管理端列表同一形状）。
+	{Result: "feedback.FeedbackListResult", Endpoints: []string{"GET /feedback", "GET /admin/feedback"},
+		Keys: []string{"items", "page", "page_size", "total"}, Dialect: paging.DialectPageSize,
+		Sample: feedback.FeedbackListResult{}},
 }
 
 // totalPayloadRegistry 含 total + 切片字段、但不是分页信封的结果类型（理由逐条登记）。

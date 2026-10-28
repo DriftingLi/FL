@@ -1694,6 +1694,57 @@ definitions:
       title:
         type: string
     type: object
+  feedback.FeedbackDTO:
+    properties:
+      contact:
+        type: string
+      content:
+        type: string
+      created_at:
+        type: string
+      handled_at:
+        type: string
+        x-nullable: true
+      id:
+        type: integer
+      images:
+        description: Images 恒发 []（无图时不缺席）：消费端可直接遍历，不必先判空。
+        items:
+          type: string
+        type: array
+      status:
+        type: string
+      user_id:
+        type: integer
+        x-optional: true
+      username:
+        type: string
+        x-optional: true
+    type: object
+  feedback.FeedbackInput:
+    properties:
+      contact:
+        type: string
+      content:
+        type: string
+      images:
+        items:
+          type: string
+        type: array
+    type: object
+  feedback.FeedbackListResult:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/feedback.FeedbackDTO'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+    type: object
   forum.ForumImageUploadResultDTO:
     properties:
       url:
@@ -6517,6 +6568,89 @@ paths:
       summary: 精选内容列表（管理端）
       tags:
       - 管理端-精选内容
+  /admin/feedback:
+    get:
+      description: 管理端查看全部反馈（分页，可按状态筛：pending / handled / 空=全部）；每行带提交人 user_id 与昵称
+      parameters:
+      - description: 状态 pending|handled（省略或 all = 全部）
+        in: query
+        name: status
+        type: string
+      - description: 页码
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 列表
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/feedback.FeedbackListResult'
+              type: object
+        "400":
+          description: 状态筛选值无效
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: 无权限
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 管理端反馈列表
+      tags:
+      - 管理端-反馈
+  /admin/feedback/{id}/handle:
+    post:
+      description: 把一条反馈标记为已处理（**幂等**：已处理的行再点一次返回同一行、200、不改处理时间）；标记不向学员发任何消息
+      parameters:
+      - description: 反馈 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 已处理
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/feedback.FeedbackDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: 无权限
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 反馈不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 标记反馈已处理
+      tags:
+      - 管理端-反馈
   /admin/forum/replies/{id}:
     delete:
       description: 管理端删除任意回复（若为被采纳回答则按 rollback 对冲回收，封底 0，幂等）
@@ -11279,6 +11413,76 @@ paths:
       summary: 精选内容列表（公开）
       tags:
       - 学员端-精选内容
+  /feedback:
+    get:
+      description: 学员查看本人提交过的反馈（按时间倒序，分页）；他人反馈一律不可见
+      parameters:
+      - description: 页码
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 列表
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/feedback.FeedbackListResult'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 我的反馈历史
+      tags:
+      - 学员端-反馈
+    post:
+      consumes:
+      - application/json
+      description: 学员向平台提交一条反馈（ADR-0089）：文字 1–1000 字必填；图片 0–3 张（仅本站 images/forum/
+        前缀，复用论坛图片上传通道）；联系方式可空且不校验格式
+      parameters:
+      - description: 反馈内容
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/feedback.FeedbackInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 提交成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/feedback.FeedbackDTO'
+              type: object
+        "400":
+          description: 内容为空/超长/图片张数或地址不合法
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 提交反馈
+      tags:
+      - 学员端-反馈
   /forum/my-liked-topics:
     get:
       consumes:
