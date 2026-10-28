@@ -221,6 +221,8 @@ const pagesData = [
   { name: 'AdminFeaturedContentList', path: '/admin/featured-content', component: () => import('@/pages/admin/FeaturedContentList.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'featured.manage', keepAlive: true, nav: { group: 'system', label: '内容精选', icon: 'file-text', order: 6, activeRouteNames: ['AdminFeaturedContentEdit'] } },
   { name: 'AdminFeaturedContentEdit', path: '/admin/featured-content/edit/:id?', component: () => import('@/pages/admin/FeaturedContentEdit.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'featured.manage' },
   { name: 'AdminFaqManage', path: '/admin/faq', component: () => import('@/pages/admin/FaqManage.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'faq.manage', keepAlive: true, nav: { group: 'system', label: '帮助中心管理', icon: 'circle-question-filled', order: 7 } },
+  // 学员反馈处置（#2070 / ADR-0089）：只做「看到 + 标记已处理」，不做工单流。
+  { name: 'AdminFeedbackManage', path: '/admin/feedback', component: () => import('@/pages/admin/FeedbackManage.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'feedback.manage', keepAlive: true, nav: { group: 'system', label: '学员反馈', icon: 'message-square', order: 8 } },
   // 授权管理两页（#1621 段4）：能力键只挂受保护角色 ⇒ 只有超管看得见这两项（侧栏与守卫同源）。
   // 编辑态页面按 ADR-0073 **不进 keep-alive**（避免把未保存的勾选缓存成"看起来已生效"）。
   { name: 'AdminRoleManage', path: '/admin/roles', component: () => import('@/pages/admin/RoleManage.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, capability: 'admin_role.manage', nav: { group: 'system', label: '角色权限', icon: 'settings', order: 7 } },

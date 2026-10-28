@@ -55,6 +55,7 @@ const (
 	CapContributionSubmit Capability = "contribution.submit" // 资料投稿（学员侧）
 	CapValuationUse       Capability = "valuation.use"       // 残值评估
 	CapFaqRead            Capability = "faq.read"            // 帮助中心（FAQ）只读
+	CapFeedbackSubmit     Capability = "feedback.submit"     // 提交反馈（帮助中心，ADR-0089）
 	CapForumParticipate   Capability = "forum.participate"   // 论坛参与（发帖/回复/互动）
 	CapResumeManage       Capability = "resume.manage"       // 简历卡与在线简历
 	CapJobApply           Capability = "job.apply"           // 浏览职位与投递
@@ -96,6 +97,7 @@ const (
 	CapRecruiterManage    Capability = "recruiter.manage"    // 招聘者账号管理
 	CapJobReportHandle    Capability = "job_report.handle"   // 职位举报处置
 	CapFaqManage          Capability = "faq.manage"          // 帮助中心内容维护（分类与条目 CRUD）
+	CapFeedbackManage     Capability = "feedback.manage"     // 反馈处置（列表与标记已处理，ADR-0089）
 	// 能力键 =「资源域.动作」，**恰一个点**（api 包的命名锁会拦下多点写法）——
 	// 故资源域写成 admin_account / admin_role（与既有 job_report.handle 同形）。
 	CapAdminAccountManage Capability = "admin_account.manage" // 管理员账号管理（改挂角色等）（#1621）
@@ -128,6 +130,7 @@ var roleCapabilities = map[Capability][]Role{
 	CapContributionSubmit: {RoleStudent},
 	CapValuationUse:       {RoleStudent},
 	CapFaqRead:            {RoleStudent},
+	CapFeedbackSubmit:     {RoleStudent},
 	CapForumParticipate:   {RoleStudent},
 	CapResumeManage:       {RoleStudent},
 	CapJobApply:           {RoleStudent},
@@ -170,6 +173,7 @@ var roleCapabilities = map[Capability][]Role{
 	CapRecruiterManage:    {},
 	CapJobReportHandle:    {},
 	CapFaqManage:          {},
+	CapFeedbackManage:     {},
 	CapAdminAccountManage: {},
 	CapAdminRoleManage:    {},
 
@@ -212,6 +216,7 @@ var protectedAdminCapabilities = []Capability{
 	CapRecruiterManage,    // 招聘者账号管理
 	CapJobReportHandle,    // 职位举报处置
 	CapFaqManage,          // 帮助中心内容维护
+	CapFeedbackManage,     // 反馈处置（ADR-0089）
 	CapAdminAccountManage, // 管理员账号管理（#1621）
 	CapAdminRoleManage,    // 管理角色与能力配置（#1621）
 }

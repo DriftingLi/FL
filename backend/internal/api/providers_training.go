@@ -7,6 +7,7 @@ import (
 	"forklift-training/internal/faq"
 	"forklift-training/internal/favorite"
 	"forklift-training/internal/featured"
+	"forklift-training/internal/feedback"
 	"forklift-training/internal/material"
 	"forklift-training/internal/search"
 	"forklift-training/internal/student"
@@ -28,4 +29,6 @@ func provideTraining(c *coreSingletons, d *Deps) {
 	d.ExportSvc = valuation.NewExportService(c.db, c.export, c.logger)
 	d.AuditSvc = audit.NewService(c.db)
 	d.FaqSvc = faq.NewService(c.db, c.logger)
+	// 反馈图片复用论坛图片通道（ADR-0089 决策 5），故它要拿同一个存存储单例做「文件真实存在」校验。
+	d.FeedbackSvc = feedback.NewService(c.db, c.fileSvc, c.logger)
 }

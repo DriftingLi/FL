@@ -146,6 +146,12 @@ var ModelBlocks = []ModelBlock{
 			&Faq{},
 		},
 	},
+	{
+		Name: "反馈",
+		Models: []any{
+			&Feedback{}, // 依赖 hrwai_users 与 admin（两块都先建）
+		},
+	},
 }
 
 // AllModels 按域块顺序汇总全部模型（建表顺序的唯一来源）。
