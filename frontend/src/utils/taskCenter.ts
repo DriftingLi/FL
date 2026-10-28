@@ -36,6 +36,30 @@ export const groupDescMap: Record<TaskGroup, string> = {
   newbie: '一次性任务，完成后不再出现',
 }
 
+// 今日可得：**只算 daily 组**未领取任务的奖励之和（#2065 / 报告 §8 Q11 第 4 条）。
+//
+// 为什么不能把所有未领取任务加进来：newbie 是**一次性**任务（total_limit 非空），它的分不是
+// 「今天能拿到的」，混进来会让卡片上的「今日可得」永远比真实值大（旧实现 110 vs 真实 60）——
+// 这不是文案错，是**口径错**：一处把「还有多少分可拿」与「今天能拿多少分」压成同一个数。
+// 分组语义的唯一出处是后端 config 的 group（ADR-0054：daily = 可再生、newbie = 终身一次），
+// 这里只按它分档，不在端上另立清单。
+//
+// 口径前提：现行配置 daily_limit 恒为 1（每个每日任务一天只能领一次），故「任务分 × 1」
+// 就是今日可得；若将来出现 daily_limit > 1 的任务，得先把 daily_limit 下放到 DTO
+// （今天没有这个事实源，不预支）。
+export interface EarnableTask {
+  /** 分组：daily = 每日可再生 / newbie = 终身一次（后端 config 的 group 投影） */
+  group: string
+  status: string
+  points: number
+}
+
+export function todayEarnable(tasks: EarnableTask[]): number {
+  return tasks
+    .filter((t) => t.group === 'daily' && t.status !== 'claimed')
+    .reduce((sum, t) => sum + t.points, 0)
+}
+
 // 幂等错误的语义分级（#409）：按任务分组区分提示文案，不再依赖后端中文字串匹配。
 export function claimDupMessage(group: TaskGroup): string {
   return group === 'newbie' ? '已领取' : '今日已领取'

@@ -416,9 +416,18 @@ async function loadLearningState(courseId: number) {
   }
 }
 
+/**
+ * 浏览课程上报（#2065）：任务中心「浏览 3 门课程」的事实来源，点开详情那一刻调。
+ * 尽力而为——失败不打断看课（可见性判定在详情请求那一侧，这里只记事实），也不弹 toast。
+ */
+function reportCourseBrowse(courseId: number) {
+  void courseApi.recordCourseBrowse(courseId).catch(() => {})
+}
+
 async function openDetail(course: CourseSummary) {
   detailCourse.value = course
   detailVisible.value = true
+  reportCourseBrowse(course.course_id)
   detailLoading.value = true
   detailChapters.value = []
   try {
@@ -439,6 +448,7 @@ async function openDetail(course: CourseSummary) {
 async function openDetailById(courseId: number) {
   detailCourse.value = null
   detailVisible.value = true
+  reportCourseBrowse(courseId)
   detailLoading.value = true
   detailChapters.value = []
   try {
