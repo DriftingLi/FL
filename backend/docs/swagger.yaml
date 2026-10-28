@@ -1178,6 +1178,11 @@ definitions:
       name:
         type: string
     type: object
+  course.CourseBrowseResult:
+    properties:
+      recorded:
+        type: boolean
+    type: object
   course.CourseDTO:
     properties:
       certificate_name:
@@ -10757,6 +10762,49 @@ paths:
       security:
       - BearerAuth: []
       summary: 课程详情（含学习进度）
+      tags:
+      - 学员端-课程
+  /course/{course_id}/browse:
+    post:
+      description: 学员点开课程详情即上报（#2065）：一天一门课只记一笔，重复进入返回 recorded=false（幂等，不是错误）。可见性（ADR-0058）与详情同一谓词：未发布
+        / 未挂载按「不存在」返回
+      parameters:
+      - description: 课程ID
+        in: path
+        name: course_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 已记录（recorded=false 表示当日已记过）
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/course.CourseBrowseResult'
+              type: object
+        "400":
+          description: 课程ID无效
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 课程不存在
+          schema:
+            $ref: '#/definitions/response.R'
+        "500":
+          description: 服务端内部错误（含可见性查询读不动）
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 上报浏览课程
       tags:
       - 学员端-课程
   /course/{course_id}/chapter/{chapter_id}:

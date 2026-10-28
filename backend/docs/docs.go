@@ -10485,6 +10485,76 @@ const docTemplate = `{
                 }
             }
         },
+        "/course/{course_id}/browse": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "学员点开课程详情即上报（#2065）：一天一门课只记一笔，重复进入返回 recorded=false（幂等，不是错误）。可见性（ADR-0058）与详情同一谓词：未发布 / 未挂载按「不存在」返回",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-课程"
+                ],
+                "summary": "上报浏览课程",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "课程ID",
+                        "name": "course_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "已记录（recorded=false 表示当日已记过）",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/course.CourseBrowseResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "课程ID无效",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "课程不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可见性查询读不动）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/course/{course_id}/chapter/{chapter_id}": {
             "get": {
                 "security": [
@@ -25869,6 +25939,14 @@ const docTemplate = `{
                 },
                 "name": {
                     "type": "string"
+                }
+            }
+        },
+        "course.CourseBrowseResult": {
+            "type": "object",
+            "properties": {
+                "recorded": {
+                    "type": "boolean"
                 }
             }
         },
