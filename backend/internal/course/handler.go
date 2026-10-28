@@ -48,6 +48,10 @@ func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, credRes midd
 	auth.GET("/chapter/:chapter_id/slides", h.GetChapterSlides)
 	auth.POST("/chapter/:chapter_id/slides/regenerate", h.RegenerateChapterSlides)
 	auth.POST("/course/:course_id/progress", h.UpdateStudyProgress)
+	// 浏览课程上报（#2065）：任务中心「浏览 3 门课程」的事实入口。
+	// 挂在已登录组而不是详情 GET 里：`/courses` 与详情都是带主体的读面，但「记录一次浏览」
+	// 是一次写，写要有自己的端点与自己的幂等语义（重复进入 → recorded=false）。
+	auth.POST("/course/:course_id/browse", h.RecordCourseBrowse)
 }
 
 // unreadableFaces404 是「一份内容读不到」背后的**四件事实**在呈现层的登记面
@@ -186,6 +190,37 @@ func (h *handler) GetCourseDetail(c *gin.Context) {
 		// 故这里可达的只有「课程不存在」那一件；四件一起登记是因为它们共享同一张呈现表，
 		// 未兑换若在别处冒出来，也不会被默认面答成 500。
 	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).
+		WithSentinelsMsg(http.StatusNotFound, "课程不存在", unreadableFaces404...).Handle(c)
+}
+
+// RecordCourseBrowse 上报浏览课程
+// @Summary 上报浏览课程
+// @Description 学员点开课程详情即上报（#2065）：一天一门课只记一笔，重复进入返回 recorded=false（幂等，不是错误）。可见性（ADR-0058）与详情同一谓词：未发布 / 未挂载按「不存在」返回
+// @Tags 学员端-课程
+// @Produce json
+// @Security BearerAuth
+// @Param course_id path int true "课程ID"
+// @Success 200 {object} response.R{data=course.CourseBrowseResult} "已记录（recorded=false 表示当日已记过）"
+// @Failure 400 {object} response.R "课程ID无效"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "课程不存在"
+// @Failure 500 {object} response.R "服务端内部错误（含可见性查询读不动）"
+// @Router /course/{course_id}/browse [post]
+func (h *handler) RecordCourseBrowse(c *gin.Context) {
+	httpx.Endpoint[courseDetailReq, CourseBrowseResult]{
+		Parse: func(c *gin.Context) (*courseDetailReq, error) {
+			id, err := httpx.PathInt(c, "course_id", "课程ID无效")
+			if err != nil {
+				return nil, err
+			}
+			uid, _ := c.Get(string(middleware.CtxUserID))
+			studentID, _ := uid.(int)
+			return &courseDetailReq{CourseID: id, StudentID: studentID}, nil
+		},
+		Invoke: func(ctx context.Context, req *courseDetailReq) (*CourseBrowseResult, error) {
+			return h.svc.RecordCourseView(req.StudentID, req.CourseID)
+		},
+	}.WithSuccess(httpx.OkMsg("已记录"), http.StatusInternalServerError).
 		WithSentinelsMsg(http.StatusNotFound, "课程不存在", unreadableFaces404...).Handle(c)
 }
 

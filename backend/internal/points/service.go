@@ -96,7 +96,10 @@ type taskMeta struct {
 	TodayPost       bool // 发布帖子 ≥1
 	TodayOtherReply int  // 回复他人主题数（自帖回复不计，上限 3）
 	TodayBrowse     int  // 浏览他人帖子数（上限 3）
-	CourseDone      bool // 完成过 ≥1 节课程
+	// TodayCourseBrowse 今日浏览过的**不同课程**数（#2065，上限 3）：事实源是 course_views 的
+	// 按日去重行，不读 study_record（那条是学习进度语义，看一眼课程不该写脏进度）。
+	TodayCourseBrowse int
+	CourseDone        bool // 完成过 ≥1 节课程
 }
 
 // loadTaskMeta 一次查询取齐全部行为判定所需数据（读错误向上传播，沿用 #409 口径）。
@@ -140,12 +143,24 @@ func (s *Service) loadTaskMeta(userID int) (*taskMeta, error) {
 	if m.TodayBrowse > 3 {
 		m.TodayBrowse = 3
 	}
+	var courseBrowsed int64
+	if err := s.db.Model(&model.CourseView{}).Where("user_id = ? AND view_date = ?", userID, today).Count(&courseBrowsed).Error; err != nil {
+		return nil, err
+	}
+	m.TodayCourseBrowse = int(courseBrowsed)
+	if m.TodayCourseBrowse > courseBrowseTarget {
+		m.TodayCourseBrowse = courseBrowseTarget
+	}
 	if err := s.db.Model(&model.StudyRecord{}).Where("student_id = ? AND progress >= 100", userID).Count(&n).Error; err != nil {
 		return nil, err
 	}
 	m.CourseDone = n > 0
 	return m, nil
 }
+
+// courseBrowseTarget 「浏览 3 门课程」的达成门槛（#2065）：与配置行的标题/描述同源，
+// 三处（本常量、配置行文案、判据 Progress/Total）一起改才是改口径。
+const courseBrowseTarget = 3
 
 // taskProgress 行为达成判定的结果：claimable 是否可领；progress/total 展示进度。
 type taskProgress struct {
@@ -177,43 +192,58 @@ func profileContactProgress(u *model.HrwaiUser) (done int) {
 }
 
 // taskProgressFor 单任务行为达成判定（#410 后 GetTasks 与 Claim 共用同一实现，杜绝「列表可见/接口空领」分叉）。
-// 返回 nil 表示该任务无行为前置（新任务默认可领，照旧 default 分支；GetTasks 顶层显式透出）。
+//
+// 第二个返回值 ok = **这个任务码有没有实现行为判定**（#2065 起与「达成没达成」分成两件事）：
+//   - ok=false ⇒ 配置行在、判定没写。调用方一律按**不可领**处理（GetTasks 报 todo、Claim 报
+//     ErrTaskNotDone）。这是本票堵的硬坑：收口前 default 分支的语义是「无行为前置 ⇒ 直接可领」，
+//     于是一条只加了配置行、忘了加 case 的任务就成了「点一下白拿分」的空口任务，而且没有任何
+//     信号——列表上它长得跟已完成的任务一模一样。
+//   - 确实无行为前置的任务（每日登录）改由**具名 case** 返回 ok=true + Claimable=true 表达，
+//     不再借 default 兜底：无前置是**一个决定**，delegate 给 default 就没人记得住它被决定过。
+//
 // 全部任务都是纯规则判定，GetTasks 与 Claim 直接调用本函数（「同一判定单实现」纪律）。
 //
 // 历史：原有一层 resolveTaskProgress 包装，用于 growth_first_experience 的查库判定；
 // 该任务随 ADR-0040 退役（配置行由迁移 000027 删除）后包装只剩纯转发，已内联删除。
 // 将来若出现需要查库的截止类任务，再加回包装层即可。
-func taskProgressFor(cfg model.PointsTaskConfig, m *taskMeta) *taskProgress {
+func taskProgressFor(cfg model.PointsTaskConfig, m *taskMeta) (taskProgress, bool) {
 	switch cfg.Code {
 	case "daily_quiz":
-		return &taskProgress{Claimable: m.TodayQuiz || m.TodayMock, Progress: 0, Total: 1}
+		return taskProgress{Claimable: m.TodayQuiz || m.TodayMock, Progress: 0, Total: 1}, true
 	case "daily_browse":
-		return &taskProgress{Claimable: m.TodayBrowse >= 3, Progress: m.TodayBrowse, Total: 3}
+		return taskProgress{Claimable: m.TodayBrowse >= 3, Progress: m.TodayBrowse, Total: 3}, true
+	case "browse_course":
+		return taskProgress{
+			Claimable: m.TodayCourseBrowse >= courseBrowseTarget,
+			Progress:  m.TodayCourseBrowse,
+			Total:     courseBrowseTarget,
+		}, true
 	case "daily_login":
 		// 无行为前置（ADR-0054）：每日进任务中心即可领。原判定挂在「当日 user_daily_login 行
 		// 存在」上，而落表取决于客户端是否续期会话（Web 端「本地 token 未过期就直接用」）——
 		// 客户端实现细节在决定一项每日任务的可用性。事实源表与两条落表路径已随之退役
 		// （迁移 000034）。每日限领一次仍由配置 daily_limit=1 承担。
-		return nil
+		// #2065 起这条**具名表达**「无条件可领」，不再靠 default 分支兜（见函数头注释）。
+		return taskProgress{Claimable: true, Progress: 1, Total: 1}, true
 	case "newbie_profile_basic":
 		done := profileBasicProgress(&m.User)
-		return &taskProgress{Claimable: done == 2, Progress: done, Total: 2}
+		return taskProgress{Claimable: done == 2, Progress: done, Total: 2}, true
 	case "newbie_profile_contact":
 		done := profileContactProgress(&m.User)
-		return &taskProgress{Claimable: done == 2, Progress: done, Total: 2}
+		return taskProgress{Claimable: done == 2, Progress: done, Total: 2}, true
 	case "newbie_credential":
-		return &taskProgress{Claimable: m.User.CurrentCredentialID != nil, Progress: 0, Total: 1}
+		return taskProgress{Claimable: m.User.CurrentCredentialID != nil, Progress: 0, Total: 1}, true
 	case "newbie_first_course":
-		return &taskProgress{Claimable: m.CourseDone, Progress: 0, Total: 1}
+		return taskProgress{Claimable: m.CourseDone, Progress: 0, Total: 1}, true
 	case "growth_post":
-		return &taskProgress{Claimable: m.TodayPost, Progress: 0, Total: 1}
+		return taskProgress{Claimable: m.TodayPost, Progress: 0, Total: 1}, true
 	case "growth_reply":
-		return &taskProgress{Claimable: m.TodayOtherReply >= 3, Progress: m.TodayOtherReply, Total: 3}
+		return taskProgress{Claimable: m.TodayOtherReply >= 3, Progress: m.TodayOtherReply, Total: 3}, true
 	case "growth_mock":
-		return &taskProgress{Claimable: m.TodayMock, Progress: 0, Total: 1}
+		return taskProgress{Claimable: m.TodayMock, Progress: 0, Total: 1}, true
 	default:
-		// 未知任务：无行为前置（GetTasks 顶层按可领处理，与旧 default 语义一致）
-		return nil
+		// 未知任务码：**判定没实现 ⇒ 不可领**（#2065 的默认分支收口）。
+		return taskProgress{}, false
 	}
 }
 
@@ -522,14 +552,20 @@ func (s *Service) GetTasks(userID int) (*PointsTasksResult, error) {
 
 	tasks := make([]PointsTaskItem, 0, len(configs))
 	for _, cfg := range configs {
-		// 行为达成判定（#410 单实现，与 Claim 同源）
-		p := taskProgressFor(cfg, m)
+		// 行为达成判定（#410 单实现，与 Claim 同源）；known=false ⇒ 判定没实现 ⇒ 一律 todo
+		p, known := taskProgressFor(cfg, m)
+		if !known && s.logger != nil {
+			// 配置行在、判定没实现：这是运维要查的配置缺陷，不是用户的问题——
+			// 列表照常可用（这一行按 todo 出现），日志里点名 code 给出定位线索。
+			s.logger.Warn("任务配置行没有对应的行为判定实现，按不可领处理", zap.String("task_code", cfg.Code))
+		}
 		// 额度判定单点（#410）：不可领（当日/终身额度用尽）即视为已领取，不再回落 claimable
 		if !s.canClaim(cfg, cc[cfg.Code].Today, cc[cfg.Code].Lifetime).Claimable {
-			// 已领取时 progress/total 对齐达成口径：资料任务 2/2，其余已达成任务 1/1
+			// 已领取时 progress/total 对齐达成口径：资料任务 2/2，其余已达成任务 1/1。
+			// 判定没实现的配置行同样落这里（额度一般仍允许，故实际走下面是常态）。
 			prog := 1
 			total := 1
-			if p != nil {
+			if known {
 				prog, total = p.Progress, p.Total
 				if prog == 0 {
 					prog = total
@@ -544,7 +580,7 @@ func (s *Service) GetTasks(userID int) (*PointsTasksResult, error) {
 		status := "todo"
 		progress := 0
 		total := 1
-		if p != nil {
+		if known {
 			progress, total = p.Progress, p.Total
 			if p.Claimable {
 				status = "claimable"
@@ -552,10 +588,6 @@ func (s *Service) GetTasks(userID int) (*PointsTasksResult, error) {
 					progress = total
 				}
 			}
-		} else {
-			// 未知任务无行为前置：照旧默认可领
-			status = "claimable"
-			progress = 1
 		}
 		tasks = append(tasks, PointsTaskItem{
 			Code: cfg.Code, Group: cfg.Group, Title: cfg.Title, Desc: cfg.Description,
@@ -585,12 +617,14 @@ func (s *Service) Claim(ctx context.Context, userID int, taskCode string) (*Poin
 		return nil, ErrDailyClaimLimit
 	}
 	// 行为达成校验（ADR-0028）：与 GetTasks 同源判定单实现，未达成（todo）不可空领。
-	// 未知任务（taskProgressFor 返回 nil）无行为前置，放行（与 GetTasks 默认可领口径一致）。
+	// #2065 起「判定没实现」（known=false）也走这一格：错误面复用 ErrTaskNotDone，
+	// 不新增一格 400 文案——从客户端看，它和「还没做完」是同一件事：没有可领的东西。
 	meta, err := s.loadTaskMeta(userID)
 	if err != nil {
 		return nil, err
 	}
-	if p := taskProgressFor(cfg, meta); p != nil && !p.Claimable {
+	p, known := taskProgressFor(cfg, meta)
+	if !known || !p.Claimable {
 		return nil, ErrTaskNotDone
 	}
 	// Redis 锁（进程内双领护栏；最终裁决仍由唯一索引承担）

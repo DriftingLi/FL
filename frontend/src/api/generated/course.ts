@@ -7,12 +7,13 @@
 // 覆盖端点：
 //   GET  /courses
 //   GET  /course/{course_id}
+//   POST /course/{course_id}/browse
 //   POST /course/{course_id}/progress
 //   GET  /course/{course_id}/chapter/{chapter_id}
 //   GET  /chapter/{chapter_id}/slides
 //   POST /chapter/{chapter_id}/slides/regenerate
 //
-// 覆盖的 Go 类型：CertificateTemplateDTO / ChapterDTO / ChapterDetailDTO / ChapterFileDTO / ChapterSlidesDTO / CourseBriefDTO / CourseDTO / CourseDetailDTO / CoursePageResult / CredentialBriefDTO / LevelBriefDTO / SpecialtyBriefDTO / StudyProgressDTO
+// 覆盖的 Go 类型：CertificateTemplateDTO / ChapterDTO / ChapterDetailDTO / ChapterFileDTO / ChapterSlidesDTO / CourseBriefDTO / CourseBrowseResult / CourseDTO / CourseDetailDTO / CoursePageResult / CredentialBriefDTO / LevelBriefDTO / SpecialtyBriefDTO / StudyProgressDTO
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -83,6 +84,10 @@ export interface ChapterSlidesDTO {
 export interface CourseBriefDTO {
   course_id: number
   name: string
+}
+
+export interface CourseBrowseResult {
+  recorded: boolean
 }
 
 export interface CourseDTO {

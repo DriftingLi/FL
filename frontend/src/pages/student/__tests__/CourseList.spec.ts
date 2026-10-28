@@ -8,7 +8,8 @@ import { createPinia, setActivePinia } from 'pinia'
 vi.mock('@/api/course', () => ({
   courseApi: {
     getCourses: vi.fn(),
-    getCourseDetail: vi.fn()
+    getCourseDetail: vi.fn(),
+    recordCourseBrowse: vi.fn()
   }
 }))
 
@@ -113,6 +114,8 @@ beforeEach(() => {
     last_studied_at: '',
     progress: 0
   })
+  // 浏览上报（#2065）：默认成功；个别用例改成失败，验证「上报失败不影响看课」
+  vi.mocked(courseApi.recordCourseBrowse).mockResolvedValue({ recorded: true })
   vi.mocked(trainingApi.getCatalogTree).mockResolvedValue({
     specialties: [
       specialtyOf(2, '维修', [
@@ -147,6 +150,21 @@ describe('CourseList 左右分栏课程中心', () => {
     expect(navNames).toContain('进阶')
     // 侧栏第一张卡片（专业方向）首个导航项计数 = 树内课程总数
     expect(wrapper.find('.cc-filter-card .cc-nav-count').text()).toBe('2')
+  })
+
+  it('点开课程详情即上报浏览（#2065）；上报失败不影响看课', async () => {
+    vi.mocked(courseApi.recordCourseBrowse).mockRejectedValue(new Error('上报失败'))
+    const wrapper = mountPage()
+    await flushPromises()
+
+    await wrapper.findAll('.cc-card')[0].trigger('click')
+    await flushPromises()
+
+    // 上报与详情并行发，course_id 即被点开的那门课
+    expect(courseApi.recordCourseBrowse).toHaveBeenCalledWith(1)
+    expect(courseApi.getCourseDetail).toHaveBeenCalledWith(1)
+    // 上报失败不打断看课：详情照样打开
+    expect((wrapper.vm as any).detailVisible).toBe(true)
   })
 
   it('课程卡片渲染章节数/学时/证书标签', async () => {

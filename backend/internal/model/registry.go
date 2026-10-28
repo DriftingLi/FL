@@ -50,6 +50,7 @@ var ModelBlocks = []ModelBlock{
 			&Chapter{},
 			&ChapterFile{},
 			&StudyRecord{},
+			&CourseView{}, // 浏览课程事实源（#2065）：依赖 hrwai_users 与 course（两块都先建）
 		},
 	},
 	{

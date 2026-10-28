@@ -10,6 +10,7 @@ import type {
   ChapterDetailDTO,
   ChapterFileDTO,
   ChapterSlidesDTO,
+  CourseBrowseResult,
   CourseDTO,
   CourseDetailDTO,
   CoursePageResult,
@@ -21,11 +22,15 @@ export type {
   ChapterDetailDTO,
   ChapterFileDTO,
   ChapterSlidesDTO,
+  CourseBrowseResult,
   CourseDTO,
   CourseDetailDTO,
   CoursePageResult,
   StudyProgressDTO
 }
+
+/** X-Silent：浏览上报是尽力而为的事实记录，失败不该弹全局 toast 打断看课。 */
+const SILENT = { headers: { 'X-Silent': '1' } }
 
 /** 进度上报入参（不生成，ADR-0048 决策 3） */
 export interface UpdateProgressPayload {
@@ -66,6 +71,14 @@ export const courseApi = {
 
   getCourseDetail(id: number) {
     return unwrappedRequest.get<CourseDetailDTO>(`/course/${id}`)
+  },
+
+  /**
+   * 上报「浏览课程」（#2065）：点开课程详情即调。
+   * 返回 recorded=false 表示**今天已经记过这门课**（幂等，不是错误，别重试）。
+   */
+  recordCourseBrowse(id: number) {
+    return unwrappedRequest.post<CourseBrowseResult>(`/course/${id}/browse`, undefined, SILENT)
   },
 
   /** 上报学习进度：后端返回 StudyProgressDTO（此前被当成无载荷） */
