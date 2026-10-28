@@ -463,10 +463,16 @@ function Get-DeviceState {
     $bar  = Invoke-AdbTierCall -AdbArgs @('shell', 'dumpsys', 'statusbar') -BudgetSeconds $BudgetSeconds -Tier 'device-state'
     $st = [pscustomobject]@{
         BatteryPct = & $pick ([string]$batt.Text) 'level:\s*([0-9]+)'
-        Charging   = & $pick ([string]$batt.Text) '(?:AC powered|USB powered|status):\s*(?:true|1)'
+        # Charging 认两种真机形态：powered 行的 true，或 status: 的数字（AOSP 1=未知 2=充电 3=放电 4=未充 5=充满）。
+        # 只认 true 会在多数 ROM 上恒回 n/a —— 那等于这一项根本没归一，只是长得像有读数（#2077 stub 腿实测）。
+        Charging   = $(if ((& $pick ([string]$batt.Text) '(?:AC powered|USB powered|Wireless powered):\s*true') -ne 'n/a') { 'powered' }
+                      else { & $pick ([string]$batt.Text) 'status:\s*([0-9]+)' })
         Brightness = & $pick ([string]$disp.Text) 'mBrightness(?:Full)?[=:]\s*([0-9.]+)'
         StatusBar  = & $pick ([string]$bar.Text) 'mExpanded[=:]\s*(true|false)'
         TimedOut   = [bool]($batt.TimedOut -or $disp.TimedOut -or $bar.TimedOut)
+        # Note 必须在返回值里存在：状态块声明了它，而本函数会把整个对象换掉 —— StrictMode 下
+        # 汇总行读 .Note 会直接抛，把一次可判的取证塌成 UNUSABLE（#2077 真链路 stub 腿实测到此）。
+        Note       = ''
     }
     $warn = @()
     if ($st.BatteryPct -match '^[0-9]+$' -and [int]$st.BatteryPct -lt 20) { $warn += ('battery=' + $st.BatteryPct + '%（<20 ⇒ ROM 可能限频压暗，像素比对基线不可比）') }
@@ -486,22 +492,21 @@ function Write-ReadingsFiles {
     param([string]$Dir, [string]$Status)
     if (-not $Dir) { return '' }
     if (-not (Test-Path -LiteralPath $Dir -PathType Container)) { return '' }
+    # 每行都写成**双引号内插值**（不用 `'x=' + $y` 拼接）：逗号分隔的数组字面量里，`+` 拼接的条目会被
+    # 拆成多个数组元素（#2077 stub 腿实测：readings.txt 一度 15 行变 42 行、每个字段名独占一行）。
+    # 既有 $summary 那一族一直用内插值写法，这里与它同形，不自创第二种。
     $lines = @(
-        'device-capture 读数与结果行（#2077 ④-3 产物入库）',
-        'generated=' + (Get-Date).ToString('yyyy-MM-dd HH:mm:ss'),
-        'DEVICE_CAPTURE_RESULT=' + $Status,
-        'device=serial=' + $script:Serial + ' model=' + $script:DeviceModel,
-        'foreground=' + $script:Foreground.Component + ' package=' + $script:TargetPackage,
-        'battery=' + $script:DeviceState.BatteryPct + '% charging=' + $script:DeviceState.Charging +
-            ' brightness=' + $script:DeviceState.Brightness + ' shade=' + $script:DeviceState.StatusBar +
-            ' note=' + $script:DeviceState.Note,
-        'state_warn=' + (@($script:StateWarns) -join ' | ' ),
-        'capture_gap=' + @($script:CaptureGaps).Count + ' broken=' + $(if ($script:BreakTriggered) { 'YES' } else { 'no' }) +
-            ' breakThreshold=' + $CircuitBreakAfter + ' retryLimit=' + $PageRetryLimit,
-        'resume_given=' + $(if ($Resume) { 'YES' } else { 'no' }) + ' resumed_skipped=' + @($script:ResumedSkipped).Count +
-            ' ledger=' + $manifestPath,
-        'pages=' + (@($script:PageResultsAll | ForEach-Object { $_.Page + '=' + $_.Status }) -join ','),
-        'read_only_guarantee=adb devices / exec-out screencap / shell dumpsys / shell logcat -d 四项只读，未做写操作'
+        "device-capture 读数与结果行（#2077 ④-3 产物入库）",
+        "generated=$((Get-Date).ToString('yyyy-MM-dd HH:mm:ss'))",
+        "DEVICE_CAPTURE_RESULT=$Status",
+        "device=serial=$($script:Serial) model=$($script:DeviceModel)",
+        "foreground=$($script:Foreground.Component) package=$($script:TargetPackage)",
+        "DEVICE_STATE battery=$($script:DeviceState.BatteryPct)% charging=$($script:DeviceState.Charging) brightness=$($script:DeviceState.Brightness) shade=$($script:DeviceState.StatusBar) note=$($script:DeviceState.Note)",
+        "state_warn=$(@($script:StateWarns) -join ' | ')",
+        "CAPTURE_GAP pages=$(@($script:CaptureGaps).Count) broken=$(if ($script:BreakTriggered) { 'YES' } else { 'no' }) breakThreshold=$CircuitBreakAfter retryLimit=$PageRetryLimit",
+        "RESUME given=$(if ($Resume) { 'YES' } else { 'no' }) skipped=$(@($script:ResumedSkipped).Count) ledger=$manifestPath",
+        "pages=$(@($script:PageResultsAll | ForEach-Object { "$($_.Page)=$($_.Status)" }) -join ',')",
+        "read_only_guarantee=adb devices / exec-out screencap / shell dumpsys / shell logcat -d 四项只读，未做写操作"
     )
     $out = Join-Path $Dir 'readings.txt'
     Set-Content -LiteralPath $out -Value ($lines -join "`r`n") -Encoding UTF8
