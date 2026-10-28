@@ -35,8 +35,9 @@ describe('就业在线导航链契约（#705 招聘→我的，单页合并版�
     // 导航栏右侧不得挂可点元素（小程序胶囊遮挡区）
     // #1605 批2：手写 header-right 已随页头件收编，右槽归 app-nav-bar 的 <slot name="right">（空则不渲染）
     expect(list).not.toMatch(/class="header-right"/);
-    // 公告 tab 空态占位，不放假数据
-    expect(list).toContain('暂无公告');
+    // 公告 tab 空态由本模块私有组件承载（票 1941 抽出，见 utils/modules.js 的 jobs.files），不放假数据
+    expect(list).toContain("import NoticePanel from './components/notice-panel.uvue'");
+    expect(read('pages/jobs/components/notice-panel.uvue')).toContain('暂无公告');
     expect(list).not.toContain('mockJobs');
     // 中间页已删：job-list 不得再引用 jobs-mine
     expect(list).not.toContain('jobs-mine');

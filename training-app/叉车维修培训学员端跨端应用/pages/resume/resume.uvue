@@ -176,9 +176,10 @@
         }).catch((e) => {
             console.warn('[resume] load profile failed:', e)
         })
-        // 公告/职位/合集收藏数：后端多态收藏暂未收录这三类 target_type，返回 total 恒为 0；
-        // 接口就绪后此处无需改动映射
-        getFavoritesApi('notice', 1, 1).then((res : FavoriteListResult) : void => {
+        // 公告收藏：公告=内容精选 notice 类别，收藏按 Q22 口径复用现行 featured 类型（零新增类型，
+        // 见根 docs/design/20261026-原型图全量对照-移动端缺失页面功能调研.md Q22）。
+        // 职位/合集两类后端多态收藏仍未收录，total 恒为 0。
+        getFavoritesApi('featured', 1, 1).then((res : FavoriteListResult) : void => {
             noticeFavCount.value = res.total
         }).catch(() => {})
         getFavoritesApi('job', 1, 1).then((res : FavoriteListResult) : void => {
