@@ -956,6 +956,15 @@ function Get-GateResultPrefix {
     if ($script:GatePlan -and $script:GatePlan['resultLine']) { return [string]$script:GatePlan['resultLine']['prefix'] }
     return 'MP_WEIXIN_RESULT'
 }
+# 阶段收尾的**幂等**入口（#1861）：只在真有未闭段时才收尾（否则录制器会抛「无未闭段」）。
+# 为什么要这一层而不是让调用点各自判断：-BuildOnly 有两条退出路径 —— 真跑过 HBuilderX 段（wait-hx /
+# publish 已 Start，有未闭段）与 -SkipBuild（一段都没 Start）。「有没有未闭段」是录制器自己的状态，
+# 不该由调用点各自猜：猜错要么丢掉该出的 STAGE_SUMMARY，要么把一次正常退出抛成 exit 2。
+# ② 的主通过路径同样走这一层（语义等价），收尾点因此仍只有一处字面量（接线守护 gateStagesContract C6）。
+function Stop-GateStageIfOpen {
+    $open = Get-Variable -Name GateStageOpen -Scope Script -ErrorAction SilentlyContinue
+    if ($null -ne $open -and $null -ne $open.Value) { Stop-GateStage }
+}
 # 端口被残留会话占用而换端口这条事实必须进日志（结果行字段清单是固定的，塞不进新字段）
 if ($portSwitchNote) { Write-Log "PORT_SWITCH $portSwitchNote" }
 # #2001 阶段时间戳：录制器指向本门日志（纯追加 [STAGE]/STAGE_SUMMARY 行，不改门判据）
@@ -1962,8 +1971,9 @@ try {
         }
         $buildOnlyLine = "$($script:GatePlan.resultLine.prefix) " + (Format-GateMetricLine -Plan $script:GatePlan -Values $buildOnlyValues)
         Write-Log "`n$buildOnlyLine"
-        # 阶段收尾：只有真跑过 HBuilderX 段（wait-hx / publish）才有未闭段；-SkipBuild 下从未 Start ⇒ 硬 Stop 会抛。
-        if (-not $SkipBuild) { Stop-GateStage }
+        # 阶段收尾走幂等入口：真跑过 HBuilderX 段（wait-hx / publish）时有未闭段可收；-SkipBuild 下从未 Start
+        # ⇒ 幂等入口自己判出「无未闭段」不动作，不靠调用点猜（那正是它会抛 exit 2 的地方）。
+        Stop-GateStageIfOpen
         Write-Host ''
         Write-Host "✅ mp-weixin build-only 通过（构建面）：$buildOnlyLine" -ForegroundColor Green
         Write-Host '   非等价声明：build-only 只证明「publish 成功 + 产物合法」，**不是** ② 的替代 ——' -ForegroundColor Yellow
@@ -2488,7 +2498,7 @@ try {
     $metricLine = Format-GateMetricLine -Plan $script:GatePlan -Values $metricValues
     $resultLine = "$($script:GatePlan.resultLine.prefix) $metricLine"
     Write-Log "`n$resultLine"
-    Stop-GateStage
+    Stop-GateStageIfOpen
     Write-Log ("shots: " + (@($shotPng | ForEach-Object { "$($_.path) $(Get-Prop $_ 'width')x$(Get-Prop $_ 'height') $(Get-Prop $_ 'bytes')B" }) -join ' | '))
     if ($navSkip) {
         $skipLine = "navigation=SKIP reason=$navReason skippedAssertions=$((@(Get-Prop (Get-Prop $probeJson 'navigation') 'skippedAssertions') -join ',')) " +
