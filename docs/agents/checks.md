@@ -1,6 +1,9 @@
 # 测试与检查流程
 
 > 每次提交前必读。从 AGENTS.md 拆出（2026-09-09），内容为权威版本。
+>
+> **动手前先按文件名实测存在性**（2026-10-28 立，#2052；因由 #2044）：票面点名的文件与套件，用 `glob` 或 `git ls-files` 按**文件名**验存在性 —— 内容 grep 零命中**不构成**缺席证据（`training-app/叉车维修培训学员端跨端应用/utils/gateCommitBindingBehavior.test.js` 正文根本不含自身名，内容检索 0 命中曾被评审子代理误判成「套件仓库不存在」并写进票面）；子代理的缺席结论与本会话已读到的正面证据冲突时，先按正面证据裁决，再写入票面/PR。
+> **检索永远给子目录 scope**（2026-10-28 实测，#2052）：`grep` / `glob` 从仓根全量搜会被仓根会话遗留目录（`wt-*` / `.dsh-probe`）里的**悬挂符号链接**炸出 rg `exit 2`（当日肇事 `wtx-base/verifybase/node_modules`，os error 3「系统找不到指定的路径」）—— 整次搜索作废，不是「没搜到」，别把它的空结果当缺席证据。
 
 改动后**必须**跑完对应栈的检查，全绿才能提交：
 
@@ -131,6 +134,8 @@ CI 的 `migration-check`（`ci.yml` Stage 6）在服务容器 `postgres:15-alpin
 ## 运行时面判定与证据校验的机器语义（2026-10-15 从根 `AGENTS.md` 迁入，判据源 `.github/scripts/lib/gate-validator.mjs`）
 
 **执行面是仓库级**：`.github/workflows/pr-evidence.yml` 对**每一个 PR** 运行，但**只对命中运行时面**（`*.uvue` / `*.uts` / training-app 下的三份 json）**的 PR 校验正文的 `## 验收证据` 段** —— 未命中时校验器在校验段**之前**就放行（`runtime.length === 0` 早退，用例见 `.github/scripts/pr-evidence-check.test.mjs`「非运行时面 PR：即使正文为空也通过」），命中而缺段则直接判红；未命中运行时面时仍**约定**写 `免（未命中运行时面）`（先例 #908）。适用范围不限于移动端。
+
+**改本节的判据脚本先过秒级语法闸**（2026-10-28 立，#2052；因由 #2044）：动 `.github/scripts/*.mjs`（含 `lib/gate-validator.mjs`）后，先 `node --check <改动的 .mjs>`（秒级语法闸，2026-10-28 实测 0.3s 回包），再跑对应 `node --test` 套件（`.github/scripts/pr-evidence-check.test.mjs` / `preflight-pr.test.mjs`）——模板字面量转义错位与行级 splice 锚点冲突都曾写出**破损中间态并真实落盘**，肉眼回读和 `node --test` 都不算语法闸。
 
 **候选来源（2026-10-23，#1841 起）**：PR 评论 + commit 评论 + **PR 正文关联的票评论**，三来源**同构**——marker（`<!-- gate-evidence:<门号> -->`）、`commit: <sha>` 绑定、祖先判定与「其间运行时面未改动」、fail-closed（compare 拿不到即不满足）**全部沿用，一条不放宽**。哪些票算候选由判据源 `issueNumbersInBody` 定：**先剥 HTML 注释**（模板注释里堆着历史票号，不剥会被全拉成候选），再取 `Closes` / `Refs` / `Fixes` / `Resolves` / `Related to #N` 与 `https://github.com/<o>/<r>/issues/<n>`，去重后**最多 5 张**；**未在正文关联的票不进判据**。多出的这一处来源是**降级**不是放宽：GitHub 对本仓 `POST /repos/<owner>/<repo>/commits/<sha>/comments` 长期回 HTTP 404（同 token 在别的仓正常，复盘见 [#1838](https://github.com/DriftingLi/FL/issues/1838)），门脚本遇 404 把**同一份**评论（marker 与 `commit: <sha>` 一字不改）改贴到票当正式落点，并打印机检行 `GATE_COMMENT_DEGRADED tier=issue url=<URL>`；**触发条件只有 404**，其余失败仍是硬失败（`GATE_COMMENT_FAILED`），不得静默 skip。
 
