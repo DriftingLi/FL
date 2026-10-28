@@ -37,7 +37,7 @@
 
 - **提交前验分支归属的代价**（2026-09-13 补，血账）第 11 行已写明「查什么」；本条记的是**不查的代价**：主树被别的会话切走时，`git commit` 会把提交落进**别人的分支历史**，补救要「新建独立分支指向该提交 + 把别人的分支 `reset --mixed` 退回」——delta 为零，但过程不必要，且 `reset` 是改写别人历史的动作。实测：一条探针提交落进了别人的分支。
 
-用完 worktree 后记得清理：`git worktree remove <dir>` + `git branch -D <branch>`。
+用完 worktree 的清理**只有一个入口**：`pwsh training-app/叉车维修培训学员端跨端应用/scripts/remove-worktree.ps1 -Task <票号>`（默认 dry-run，确认后加 `-Execute`；它按「摘 junction → `worktree remove` → 目录兜底删除 → 校验」的顺序走，细节见下方「Windows 上用 worktree 的注意事项」的「收尾入口」条）。**别手搓** `git worktree remove <dir>` + `git branch -D <branch>` 那两步：它们不看磁盘，`git worktree list` 会显示干净而目录还留着（2026-10-28 实测留下 3 个孤儿目录）。
 
 - **⚠️ 删 worktree 之前，先把 gitignore 覆盖的证据产物拷出来**（2026-09-22 实测，血账）：`.ci-verify/`、`.scratch/` 这类目录被 `.gitignore` 覆盖 ⇒ **`git worktree remove` 不加 `--force` 也成功**（被忽略的未跟踪文件不使它判 dirty），**并把它们连同目录一起删掉**。实测代价：某票 ①a 真机取证的**判据输入**（原始 `screencap` PNG / `uiautomator` XML / launch 与 logcat 日志）只活在 `.ci-verify/` ⇒ 删树后永久丢失，而 README/PR 里「原始产物留在 `.ci-verify/x.png`」指向**不存在**的地方，结论文里的像素读数（`27090 / 17286 / 9804`）**不再可复算**（入库的 720w JPEG 是重编码件，**不是**判据输入）。
   **纪律**：`git worktree remove` **之前**把判据输入拷到树外留存目录，或**直接入仓**（`uiautomator` XML 每份约 6.5 KB，远在截图入库纪律之内；PNG 超限时至少拷出并在 README 写明留存位置）。
