@@ -126,7 +126,13 @@ import { goBack } from '../../utils/navigation'
     }
 
     async function loadDetail() : Promise<void> {
-        if (contentId.value <= 0) return
+        // 缺 id / id 非法（脏链接、外部直达）⇒ 直接落「内容不存在」态（模板 v-else）。
+        // 不能就这么 return：loading 会永远停在 true，页面卡在「加载中…」——
+        // 这正是 #2097 由 ② 门截图暴露的形态（门导航到本页不带 id，截出来是永久加载中）。
+        if (contentId.value <= 0) {
+            loading.value = false
+            return
+        }
         loading.value = true
         try {
             const result = await getFeaturedContentDetailApi(contentId.value)
