@@ -1187,6 +1187,7 @@ function Invoke-AutoScreenshot {
             ManifestPath  = $(if ($fullRepoMode -and $fullRepoManifestPath) { $fullRepoManifestPath } else { '' })
             PlannedPages  = $(if ($fullRepoMode) { @($fullRepoPlannedPages) } else { @() })
             AttemptedPages = $(if ($fullRepoMode) { @($targetPages) } else { @() })
+            Redirected    = @()
             PageSeconds   = @()
         }
     }
@@ -1406,6 +1407,9 @@ function Invoke-AutoScreenshot {
         # 两个都给调用方，是因为「本轮 PASS」与「全仓齐了」是两个结论，不能靠一个数组猜。
         PlannedPages  = $(if ($fullRepoMode) { @($fullRepoPlannedPages) } else { @() })
         AttemptedPages = $(if ($fullRepoMode) { @($targetPages) } else { @() })
+        # 中转页（请求页被立刻跳到白名单落点）：与 Captured **分开**给调用方 ——
+        # 它是「已交代但没产图」，写进 Screenshots 就是假绿（本会话真机轮实测过这个坑）。
+        Redirected    = @($redirected)
         PageSeconds   = @($fullRepoPageSeconds)
     }
 }
