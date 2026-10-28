@@ -554,6 +554,32 @@ describe('auto-screenshot.ps1 contract', () => {
 
   // S32（2026-10-28，#2078 ⑥）：起跑档 `-RampPages` 的形状 —— 只裁本轮，不裁全仓计划。
   //   运行期那一面（真读 pages.json 跑前 1 页、本轮 PASS 与全仓差 59 页同时可见）由 FR6 / FR7 钉。
+  // S33（2026-10-28，#2078 真机轮）：中转页白名单的形状。
+  //   真机现测：登录态下进入 pages/index/index 后 157ms 就跳 /pages/dashboard/dashboard，
+  //   而 S17 取「最后一条进入行」⇒ 请求页永远落不定 ⇒ 60 页全量的 dirMissing 永久 >0。
+  //   这里钉三件事：白名单来自**数据文件**（不写死页名）、落点必须显式声明、中转页**不产图**。
+  test('S33: 【#2078】中转页白名单来自数据文件，且中转页不产图', () => {
+    const code = src.replace(/<#[\s\S]*?#>/g, '').replace(/^\s*#.*$/gm, '');
+    // ① 白名单只有一个来源：scripts/lib/auto-screenshot-redirects.json
+    expect(code).toMatch(/Get-RedirectMap -Path \(Join-Path \$PSScriptRoot 'auto-screenshot-redirects\.json'\)/);
+    // ② 代码里不得写死具体页名（写死会漂且不可审计）
+    expect(code).not.toMatch(/pages\/dashboard\/dashboard/);
+    expect(code).not.toMatch(/'pages\/index\/index'\s*-eq/);
+    // ③ 落定判据接受白名单落点，但结论带 RedirectedTo（与「普通落定」区分开）
+    expect(code).toMatch(/\[string\[\]\]\$AllowedLandingPages/);
+    expect(code).toMatch(/\$isAllowedLanding = \(\$entered -and \(@\(\$AllowedLandingPages\) -contains \$entered\)\)/);
+    expect(code).toMatch(/\$redir = if \(-not \$isExpected\) \{ \[string\]\$entered \} else \{ '' \}/);
+    // ④ 中转页在循环里**continue**，不得走到截图那一段（画面是落点的画面）
+    const redirAt = code.indexOf('中转页：已进入白名单落点');
+    expect(redirAt).toBeGreaterThan(-1);
+    expect(code.slice(redirAt, redirAt + 260)).toMatch(/continue/);
+    // 与**页面截图**那个调用点比先后。锚点必须用 `-OutFile $partFile`：`$shot = Invoke-BoundedAdbShot`
+    // 在导航采样里也有一处（更靠前），拿它比会永远小于循环体（本会话踩过一次）。
+    const shotCallAt = code.indexOf('-OutFile $partFile');
+    expect(shotCallAt).toBeGreaterThan(-1);
+    expect(redirAt).toBeLessThan(shotCallAt);
+  });
+
   test('S32: 【#2078】-RampPages 只裁本轮，全仓计划仍是分母', () => {
     const code = src.replace(/<#[\s\S]*?#>/g, '').replace(/^\s*#.*$/gm, '');
     // 本轮集合由纯函数从全量派生，且全量另存一份用于累计对账

@@ -563,6 +563,10 @@ function Wait-NavSettled {
         [string]$ProbeFile,
         [string]$NavOutFile,
         [string]$ExpectedPage,
+        # 中转页白名单的落点（#2078）：给了就表示「进入这些页」也算落到目标页，但结论记 **Redirected**
+        # 而不是「普通落定」—— 画面是落点的画面，不能拿它冒充请求页的证据（⑥ 要的就是这个区分）。
+        # 白名单**只由数据文件提供**，不在代码里写死页名（写死会漂且不可审计）。
+        [string[]]$AllowedLandingPages = @(),
         [int]$MinSeconds = 15,
         [int]$TimeoutSeconds = 420,
         [int]$PollSeconds = 5,
@@ -619,9 +623,19 @@ function Wait-NavSettled {
         $enter = Get-NavEnteredPage -NavOutFile $NavOutFile
         if ($enter) { $entered = $enter }
 
-        if ($entered -and $entered -eq $ExpectedPage -and -not $blankNow -and $elapsed -ge $MinSeconds -and $stable -ge 1) {
+        $isExpected = ($entered -and $entered -eq $ExpectedPage)
+        $isAllowedLanding = ($entered -and (@($AllowedLandingPages) -contains $entered))
+        # 稳定性 / 非全黑 / 最短等待三条判据**一条都不放宽**；白名单只替换「页身份等于请求页」这一条，
+        # 且结论明确带 RedirectedTo ⇒ 调用方不会把落点画面当成请求页的证据。
+        if (($isExpected -or $isAllowedLanding) -and -not $blankNow -and $elapsed -ge $MinSeconds -and $stable -ge 1) {
             Write-Host ($navLineFmt -f 'True', $elapsed, $sampled, $callTimeouts, $CallTimeoutSeconds, $TimeoutSeconds) -ForegroundColor DarkGray
-            return [pscustomobject]@{ Settled = $true; Seconds = $elapsed; Samples = $sampled; CallTimeouts = $callTimeouts; EnteredPage = $entered; DiffPercent = $lastDiff; Reason = "已进入目标页且画面稳定（相邻两次采样差异 $lastDiff% ≤ $StableMaxDiffPercent%）" }
+            $redir = if (-not $isExpected) { [string]$entered } else { '' }
+            $why = if ($redir) {
+                "已进入白名单落点 $redir（请求页 $ExpectedPage 为中介页）且画面稳定（相邻两次采样差异 $lastDiff% ≤ $StableMaxDiffPercent%）"
+            } else {
+                "已进入目标页且画面稳定（相邻两次采样差异 $lastDiff% ≤ $StableMaxDiffPercent%）"
+            }
+            return [pscustomobject]@{ Settled = $true; RedirectedTo = $redir; Seconds = $elapsed; Samples = $sampled; CallTimeouts = $callTimeouts; EnteredPage = $entered; DiffPercent = $lastDiff; Reason = $why }
         }
         if ($elapsed -ge $TimeoutSeconds) {
             $why = if ($sampled -eq 0 -and $callTimeouts -gt 0) {
@@ -641,7 +655,7 @@ function Wait-NavSettled {
                 "到上限 $TimeoutSeconds 秒未同时满足「进入目标页 + 非全黑 + 画面稳定（相邻帧差异 ≤ $StableMaxDiffPercent%）」（最后一次差异 $lastDiff%）$tail"
             }
             Write-Host ($navLineFmt -f 'False', $elapsed, $sampled, $callTimeouts, $CallTimeoutSeconds, $TimeoutSeconds) -ForegroundColor DarkGray
-            return [pscustomobject]@{ Settled = $false; Seconds = $elapsed; Samples = $sampled; CallTimeouts = $callTimeouts; EnteredPage = $entered; DiffPercent = $lastDiff; Reason = $why }
+            return [pscustomobject]@{ Settled = $false; RedirectedTo = ''; Seconds = $elapsed; Samples = $sampled; CallTimeouts = $callTimeouts; EnteredPage = $entered; DiffPercent = $lastDiff; Reason = $why }
         }
     }
 }
@@ -713,6 +727,39 @@ function Get-FullRepoShotName {
     return ($flat -replace '^[_.]+', '' -replace '[_.]+$', '')
 }
 
+function Get-RedirectMap {
+    <#
+    .SYNOPSIS
+        读中转页白名单（`scripts/lib/auto-screenshot-redirects.json`），返回 hashtable：请求页 -> 允许落点数组。
+    .DESCRIPTION
+        为什么是**数据文件**而不是代码里的 if：(a) 60 页里哪些页是中介页是项目事实、会随产品变；
+        (b) 判据要可审计 —— 人打开文件就能看到「这一页允许落到哪」，而不是 diff 代码去猜；
+        (c) 漏补一条的后果必须是 fail-closed（该页 Skipped），不能是假绿。
+        文件缺失 / 解析失败 ⇒ 返回空表并**明报**（不是静默降级）：那等于「本轮不认任何中转页」，
+        做法上安全，但人会莫名其妙地看到中介页 Skipped，所以必须说一句。
+    #>
+    [CmdletBinding()]
+    param([string]$Path)
+    $map = @{}
+    if (-not $Path -or -not (Test-Path -LiteralPath $Path)) {
+        Write-Host "[auto-screenshot] 中转页白名单不存在：$Path（本轮不认任何中转页，中介页会记 Skipped）" -ForegroundColor Yellow
+        return $map
+    }
+    try {
+        $json = Get-Content -LiteralPath $Path -Raw -Encoding utf8 | ConvertFrom-Json
+        $names = @($json.PSObject.Properties.Name)
+        if ($names -notcontains 'redirects') { return $map }
+        foreach ($k in @($json.redirects.PSObject.Properties.Name)) {
+            $map[$k] = @($json.redirects.$k | Where-Object { $_ })
+        }
+    }
+    catch {
+        Write-Host "[auto-screenshot] 中转页白名单解析失败（$($_.Exception.Message)）⇒ 本轮不认任何中转页" -ForegroundColor Yellow
+        return @{}
+    }
+    return $map
+}
+
 function Select-FullRepoAttempted {
     <#
     .SYNOPSIS
@@ -747,10 +794,15 @@ function Get-FullRepoCounts {
     param(
         [string[]]$PlannedPages = @(),
         [string[]]$CapturedNames = @(),
-        [string[]]$SkippedNames = @()
+        [string[]]$SkippedNames = @(),
+        # 中转页（拍了也没有自己的画面）：算「已交代」但**不产出** —— 必须与 Captured 分开传，
+        # 否则「已交代」会被读成「有图」，正是这条判据要挡的假绿方向。
+        [string[]]$RedirectedNames = @()
     )
     $expected = @($PlannedPages | ForEach-Object { Get-FullRepoShotName $_ })
-    $missing = @($expected | Where-Object { @($CapturedNames) -notcontains $_ })
+    $missing = @($expected | Where-Object {
+        (@($CapturedNames) -notcontains $_) -and (@($RedirectedNames) -notcontains $_)
+    })
     $captured = @($CapturedNames | Where-Object { @($expected) -contains $_ })
     return [pscustomobject]@{
         PlannedCount  = @($expected).Count
@@ -780,6 +832,8 @@ function Get-FullRepoManifestData {
         [string[]]$AttemptedPages = @(),
         [string[]]$Screenshots = @(),
         [string[]]$Skipped = @(),
+        # 中转页记录（Page / Name / To / Seconds）：进 manifest 做审计，并在计数里当「已交代」
+        $Redirected = @(),
         [string[]]$HashConflicts = @(),
         [string[]]$StaleShots = @(),
         $PageSeconds = @(),
@@ -790,7 +844,8 @@ function Get-FullRepoManifestData {
         [string]$OutputDir = ''
     )
     $attempted = $(if (@($AttemptedPages).Count -gt 0) { @($AttemptedPages) } else { @($PlannedPages) })
-    $counts = Get-FullRepoCounts -PlannedPages $attempted -CapturedNames $Screenshots -SkippedNames $Skipped
+    $redirectedNames = @($Redirected | Where-Object { $_ } | ForEach-Object { [string]$_.Name })
+    $counts = Get-FullRepoCounts -PlannedPages $attempted -CapturedNames $Screenshots -SkippedNames $Skipped -RedirectedNames $redirectedNames
     $dirCaptured = @()
     $dirMissing = @()
     $dirPngCount = 0
@@ -813,6 +868,8 @@ function Get-FullRepoManifestData {
         CapturedCount  = $counts.CapturedCount
         SkippedCount   = $counts.SkippedCount
         Missing        = @($counts.Missing)
+        Redirected     = @($Redirected)
+        RedirectedCount = @($redirectedNames).Count
         # CountsMatch 只判**本轮**（attempted）是否都产出；全仓齐不齐看下面的 DirCountsMatch
         # 累计面（跨轮）：目录里现在有几张 / 缺哪几页 —— 连跑与收口取这一组
         DirPngCount    = $dirPngCount
@@ -1077,6 +1134,11 @@ function Invoke-AutoScreenshot {
     $skipped = @($capped)
     $hashConflicts = @()
     $staleShots = @()
+    # 中转页（请求页被立刻跳到白名单落点）：**不产图、不算 Skipped、算「已交代」**。
+    # 与 Skipped 的区别是处置不同：Skipped 要人查（切页/亮屏/通道），Redirected 是产品事实、无需处置。
+    $redirected = @()
+    # 白名单来源唯一：scripts/lib/auto-screenshot-redirects.json（见 Get-RedirectMap 的理由段）
+    $redirectMap = Get-RedirectMap -Path (Join-Path $PSScriptRoot 'auto-screenshot-redirects.json')
     $seenHashes = @{}
     $prevHash = ''
 
@@ -1163,13 +1225,21 @@ function Invoke-AutoScreenshot {
             # 「导航是否落定」= 有界的**设备侧**判据（不靠退出码、不靠固定 sleep）：
             #   每页一次 launch 要走一遍 HBuilderX（编译 + 推送，分钟级），固定 3 秒必然截到旧画面。
             $probeFile = Join-Path $navLogDir 'nav-probe.png'
+            $allowedLanding = @()
+            if ($redirectMap.ContainsKey($page)) { $allowedLanding = @($redirectMap[$page]) }
             $settle = Wait-NavSettled -AdbExe $adbExe -Serial $Device -ProbeFile $probeFile `
-                -NavOutFile $nav.OutFile -ExpectedPage $page `
+                -NavOutFile $nav.OutFile -ExpectedPage $page -AllowedLandingPages $allowedLanding `
                 -MinSeconds $NavigateMinSeconds -TimeoutSeconds $NavigateTimeoutSeconds -PollSeconds $PollSeconds `
                 -CallTimeoutSeconds $AdbCallTimeoutSeconds -StableMaxDiffPercent $StableMaxDiffPercent
             if (-not $settle.Settled) {
                 $skipped += $pageName
                 Write-Host "  ❌ $pageName 导航未在 $NavigateTimeoutSeconds 秒内落定（$($settle.Reason)；launch 日志：$($nav.OutFile)）——不截这张图" -ForegroundColor Red
+                continue
+            }
+            if ($settle.RedirectedTo) {
+                # 中转页：画面是落点的画面 ⇒ 绝不能存成请求页的图（那正是「名不副实」的证据）
+                $redirected += [pscustomobject]@{ Page = $page; Name = $pageName; To = [string]$settle.RedirectedTo; Seconds = [int]$settle.Seconds }
+                Write-Host "  ↔ $pageName 是中转页：已进入白名单落点 $($settle.RedirectedTo)（不产图，记 Redirected；$($settle.Seconds)s）" -ForegroundColor Yellow
                 continue
             }
             Write-Host "  · 导航已落定（$($settle.Seconds)s，$($settle.Reason)）" -ForegroundColor DarkGray
@@ -1264,6 +1334,7 @@ function Invoke-AutoScreenshot {
                 $prevPageSeconds = $pageSecs
                 $mfArgs = @{ Ticket = $FullRepo; PlannedPages = $fullRepoPlannedPages; AttemptedPages = $targetPages; Screenshots = $screenshots }
                 $mfArgs.Skipped = $skipped
+                $mfArgs.Redirected = $redirected
                 $mfArgs.HashConflicts = $hashConflicts
                 $mfArgs.StaleShots = $staleShots
                 $mfArgs.PageSeconds = $fullRepoPageSeconds
@@ -1290,10 +1361,11 @@ function Invoke-AutoScreenshot {
     $fullRepoCounts = $null
     $verdict = ''
     if ($fullRepoMode) {
-        $fullRepoCounts = Get-FullRepoCounts -PlannedPages $targetPages -CapturedNames $screenshots -SkippedNames $skipped
+        $redirectedNamesFinal = @($redirected | ForEach-Object { [string]$_.Name })
+        $fullRepoCounts = Get-FullRepoCounts -PlannedPages $targetPages -CapturedNames $screenshots -SkippedNames $skipped -RedirectedNames $redirectedNamesFinal
         $mfPost = Get-FullRepoManifestData -Ticket $FullRepo -PlannedPages $fullRepoPlannedPages -AttemptedPages $targetPages -Screenshots $screenshots `
             -Skipped $skipped -HashConflicts $hashConflicts -StaleShots $staleShots `
-            -PageSeconds $fullRepoPageSeconds -RunStartedAt $runStarted -OutputDir $OutputDir
+            -PageSeconds $fullRepoPageSeconds -RunStartedAt $runStarted -OutputDir $OutputDir -Redirected $redirected
         $null = Write-FullRepoManifest -Path $fullRepoManifestPath -Manifest $mfPost
         if ($allOk -and [bool]$fullRepoCounts.CountsMatch) { $verdict = 'PASS' }
         elseif (@($screenshots).Count -eq 0) { $verdict = 'FAIL' }

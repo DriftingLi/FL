@@ -103,6 +103,18 @@ function probe(ctx) {
     "Write-Output ('FR8_ATTEMPTED=' + @($rb.AttemptedPages).Count)",
     "Write-Output ('FR8_MF=' + [bool]($rb.ManifestPath -and (Test-Path -LiteralPath $rb.ManifestPath)))",
     "Write-Output ('FR8_PNG=' + @(Get-ChildItem -Path $outB -Filter '*.png' -File -ErrorAction SilentlyContinue).Count)",
+    // ---- FR9：中转页白名单（真读仓内 json，不写死页名）----
+    "$map = Get-RedirectMap -Path (Join-Path $env:FR_LIB 'auto-screenshot-redirects.json')",
+    "Write-Output ('FR9_HAS_INDEX=' + [bool]$map.ContainsKey('pages/index/index'))",
+    "Write-Output ('FR9_LANDING=' + (@($map['pages/index/index']) -join ','))",
+    "$cntRedir = Get-FullRepoCounts -PlannedPages @('pages/index/index','pages/b/b') -CapturedNames @('pages_b_b') -RedirectedNames @('pages_index_index')",
+    "Write-Output ('FR9_MISSING=' + @($cntRedir.Missing).Count)",
+    "Write-Output ('FR9_MATCH=' + [bool]$cntRedir.CountsMatch)",
+    "$mfRedir = Get-FullRepoManifestData -Ticket '1864' -PlannedPages @('pages/index/index','pages/b/b') -Screenshots @('pages_b_b') -Redirected @([pscustomobject]@{ Page='pages/index/index'; Name='pages_index_index'; To='pages/dashboard/dashboard'; Seconds=12 }) -OutputDir $env:FR_OUT4",
+    "Write-Output ('FR9_MF_REDIR=' + @($mfRedir.Redirected).Count)",
+    "Write-Output ('FR9_MF_REDIRCOUNT=' + $mfRedir.RedirectedCount)",
+    "$mfRedir2 = Get-FullRepoManifestData -Ticket '1864' -PlannedPages @('pages/index/index','pages/b/b') -Screenshots @('pages_b_b') -OutputDir $env:FR_OUT4",
+    "Write-Output ('FR9_NO_REDIR_MISSING=' + @($mfRedir2.Missing).Count)",
     'Write-Output "PROBE_DONE=1"',
   ].join('\n');
   const encoded = Buffer.from(s, 'utf16le').toString('base64');
@@ -113,6 +125,8 @@ function probe(ctx) {
     FR_OUT: ctx.out,
     FR_OUT2: ctx.out2,
     FR_OUT3: ctx.out3,
+    FR_OUT4: ctx.out4,
+    FR_LIB: path.join(ROOT, 'scripts', 'lib'),
   });
   try {
     const stdout = execFileSync('pwsh', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
@@ -136,11 +150,12 @@ describe('-FullRepo 全仓逐页载体（运行期，#2078）', () => {
 
   beforeAll(() => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'fullrepo-'));
-    ctx = { tmp, proj: path.join(tmp, 'proj'), out: path.join(tmp, 'arch'), out2: path.join(tmp, 'ramp'), out3: path.join(tmp, 'broken') };
+    ctx = { tmp, proj: path.join(tmp, 'proj'), out: path.join(tmp, 'arch'), out2: path.join(tmp, 'ramp'), out3: path.join(tmp, 'broken'), out4: path.join(tmp, 'redir') };
     fs.mkdirSync(ctx.proj, { recursive: true });
     fs.mkdirSync(ctx.out, { recursive: true });
     fs.mkdirSync(ctx.out2, { recursive: true });
     fs.mkdirSync(ctx.out3, { recursive: true });
+    fs.mkdirSync(ctx.out4, { recursive: true });
     probeRun = probe(ctx);
     if (!probeRun.ok || !field(probeRun.stdout, 'PROBE_DONE')) {
       throw new Error('pwsh 探针未跑通（不 skip）：' + probeRun.stderr.slice(0, 400) + ' | ' + probeRun.stdout.slice(0, 400));
@@ -209,6 +224,20 @@ describe('-FullRepo 全仓逐页载体（运行期，#2078）', () => {
     expect(Number(field(probeRun.stdout, 'FR8_PLANNED'))).toBeGreaterThan(0);
     expect(Number(field(probeRun.stdout, 'FR8_ATTEMPTED'))).toBe(1);
     expect(field(probeRun.stdout, 'FR8_MF')).toBe('True');
+  });
+
+  test('FR9: 中转页算「已交代」但不产图（白名单真读仓内数据文件）', () => {
+    // 白名单本身：仓内 json 里 index 的允许落点是 dashboard（这条不写死在代码里，S33 钉住）
+    expect(field(probeRun.stdout, 'FR9_HAS_INDEX')).toBe('True');
+    expect(field(probeRun.stdout, 'FR9_LANDING')).toBe('pages/dashboard/dashboard');
+    // 计数：中转页不算缺失 ⇒ 本轮对账可为真（否则 60/60 永远不可达）
+    expect(Number(field(probeRun.stdout, 'FR9_MISSING'))).toBe(0);
+    expect(field(probeRun.stdout, 'FR9_MATCH')).toBe('True');
+    // manifest 里中转页是**独立字段**，不与 Captured 混为一谈
+    expect(Number(field(probeRun.stdout, 'FR9_MF_REDIR'))).toBe(1);
+    expect(Number(field(probeRun.stdout, 'FR9_MF_REDIRCOUNT'))).toBe(1);
+    // 对照：不传中转记录时，同一页必须算缺失 —— 证明「算已交代」是白名单的效果，不是默认放宽
+    expect(Number(field(probeRun.stdout, 'FR9_NO_REDIR_MISSING'))).toBe(1);
   });
 
   test('FR5: manifest 真落盘真读回，本轮对账与目录累计对账是两个结论', () => {

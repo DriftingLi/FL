@@ -1,0 +1,9 @@
+{
+  "_comment": "中转页白名单（#2078）：登录态下某些页会立刻跳到另一个页，它们的落点必须显式声明，判据才可能严格又可满足。键=pages.json 里的 pagePath，值=允许的落点 pagePath 列表。白名单外的落点仍按 S17 fail-closed 记 Skipped。新增中转页漏补只会让该页 Skipped（不假绿）。",
+  "_evidence": "2026-10-28 真机 f0bae674 实测：登录后进入 pages/index/index 后 157ms 即跳 /pages/dashboard/dashboard（launch 日志两条『进入页面』行）。",
+  "redirects": {
+    "pages/index/index": [
+      "pages/dashboard/dashboard"
+    ]
+  }
+}
