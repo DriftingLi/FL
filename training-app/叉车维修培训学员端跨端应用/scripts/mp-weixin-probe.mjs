@@ -49,7 +49,7 @@ function parseArgs(argv) {
   const out = {
     ws: 'ws://127.0.0.1:9420', routes: [], shotDir: '', entryUrl: '', requireRoot: '',
     timeoutMs: 30000, pageTimeoutMs: 10000, settleMs: 2000, tailMax: 40, expectPage: '',
-    assertSelectors: [], assertTexts: [],
+    assertSelectors: [], assertTexts: [], scrollTop: 0, shotsMode: 'single', shotsMax: 5,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
@@ -64,6 +64,13 @@ function parseArgs(argv) {
     else if (a === '--expect-page') out.expectPage = String(val() || '').trim();
     else if (a === '--assert-selector') out.assertSelectors.push(String(val() || '').trim());
     else if (a === '--assert-text') out.assertTexts.push(String(val() || '').trim());
+    // #2097：折叠区取证 —— 目标区在首屏之下时，先滚到该位置再截图；
+    // 不滚的话「截图拍的是标题、改动在屏幕外」，那样的证据不成立（已踩过一次）。
+    else if (a === '--scroll-top') out.scrollTop = Number(val()) || 0;
+    // #2097：'full' = 逐屏滚到页尾各截一张（-p1 / -p2 / …）。改动落在哪一屏都拍得到，
+    // 不必按票手填滚动值 —— 这正是「截图截错位置」那一类问题的通用解。
+    else if (a === '--shots') out.shotsMode = String(val() || 'single');
+    else if (a === '--shots-max') out.shotsMax = Number(val()) || 5;
   }
   return out;
 }
@@ -364,6 +371,80 @@ result.entryPage = result.pageStack[0];
 // `Uncaught [object Object]`，见文件头 2026-09-12 复测段），只判「落地页 == 目标页」+ 截图 + 读数。
 // 达成 ⇒ navigation=ok(detail=cold-start-direct)；未达成 ⇒ SKIP(reason=direct-page-unsupported)：
 // 机制不成立**不冒充门失败**（failures 不产生），也**不冒充逐页取证成立**（不写 true）。
+/**
+ * #2097：滚动到目标位置（折叠区取证的必需前置）。
+ *
+ * 走 mp.evaluate 在**页面上下文**里调 wx.pageScrollTo：automator 的页面级包装 API 在本机 0.12.1
+ * 不稳，而 evaluate 是仓内既有可行通道（先例 scripts/cert-fix-evidence.mjs）。滚动失败不静默吞：
+ * 记 scrollError，让读证据的人知道「这张图不代表目标区」。
+ */
+/**
+ * #2097：逐屏整页取证。改动可能落在任何一屏；只拍首屏就等于「没拍」。
+ * 步长取窗口高度的 80%（留重叠，避免正好切掉某一行），滚到「scrollTop 不再增长」即停，
+ * 上限 args.shotsMax（默认 5）防止长页把一轮门拖成十几分钟。
+ */
+async function captureShots(name, shotDir, step) {
+  if (args.shotsMode !== 'full') {
+    const shotFile = path.join(shotDir, name + '.png');
+    await withTimeout(mp.screenshot({ path: shotFile }), args.timeoutMs, 'mp.screenshot(' + name + ')');
+    if (fs.existsSync(shotFile)) {
+      const info = pngInfo(shotFile);
+      result.shots.push({ name, route: step.currentPage, ...info });
+      step.shot = shotFile;
+    } else {
+      step.shotError = 'screenshot 未落盘（该 API 不返回内容，只能看文件）';
+    }
+    return;
+  }
+  let winH = 0;
+  try {
+    winH = Number(await withTimeout(mp.evaluate(() => wx.getSystemInfoSync().windowHeight), args.timeoutMs, 'mp.evaluate(windowHeight)')) || 0;
+  } catch (e) { winH = 0; }
+  if (winH <= 0) winH = 600;
+  const stepPx = Math.max(200, Math.round(winH * 0.8));
+  let lastTop = -1;
+  step.shots = [];
+  for (let i = 0; i < args.shotsMax; i += 1) {
+    const want = i * stepPx;
+    if (i > 0) {
+      const err = await applyScroll(want);
+      if (err) { step.scrollError = err; break; }
+    }
+    let actual = want;
+    try {
+      actual = Number(await withTimeout(mp.evaluate(() => {
+        const pages = getCurrentPages();
+        const p = pages.length > 0 ? pages[pages.length - 1] : null;
+        return p && typeof p.scrollTop === 'number' ? p.scrollTop : 0;
+      }), args.timeoutMs, 'mp.evaluate(scrollTop)')) || 0;
+    } catch (e) { actual = want; }
+    if (i > 0 && actual <= lastTop) break;
+    lastTop = actual;
+    const shotName = name + '-p' + (i + 1);
+    const shotFile = path.join(shotDir, shotName + '.png');
+    await withTimeout(mp.screenshot({ path: shotFile }), args.timeoutMs, 'mp.screenshot(' + shotName + ')');
+    if (fs.existsSync(shotFile)) {
+      const info = pngInfo(shotFile);
+      result.shots.push({ name: shotName, route: step.currentPage, scrollTop: actual, ...info });
+      step.shots.push(shotFile);
+    } else {
+      step.shotError = 'screenshot 未落盘（该 API 不返回内容，只能看文件）';
+    }
+  }
+  if (step.shots.length > 0) step.shot = step.shots[0];
+}
+
+async function applyScroll(y) {
+  if (!y || y <= 0) return '';
+  try {
+    await withTimeout(mp.evaluate((top) => { wx.pageScrollTo({ scrollTop: top, duration: 0 }); }, y), 8000, 'wx.pageScrollTo');
+    await new Promise((r) => setTimeout(r, 400));
+    return '';
+  } catch (e) {
+    return String((e && e.message) || e);
+  }
+}
+
 if (args.expectPage) {
   const target = rel(args.expectPage);
   const leaf = target.split('/').pop() || 'direct';
@@ -377,7 +458,9 @@ if (args.expectPage) {
   if (args.shotDir) {
     // 达成截目标页（文件名=页名）；未达成也截——但命名 miss- 前缀，**不冒充被改页证据**
     const shotName = reached ? leaf : 'miss-' + leaf;
-    const shotFile = path.join(args.shotDir, shotName + '.png');
+    // 先滚到目标区，再截图（#2097；失败只记读数，不冒充拍到了）
+    const scrollErr = await applyScroll(args.scrollTop);
+    if (scrollErr) step.scrollError = scrollErr;
     // #1690 run5 实测：冷启动后 app 侧渲染服务未热 ⇒ mp.screenshot 会撞 automator 内部
     // 15s 应答超时（dashboard 直达 reached=True 却截不到图判红）。重试一次（隔 3s 让服务
     // 热起来），两次都失败才记错——不把「试过一次」冒充成「截到了」。
@@ -385,13 +468,9 @@ if (args.expectPage) {
     for (let attempt = 1; attempt <= 2; attempt++) {
       shotErr = null;
       try {
-        await withTimeout(mp.screenshot({ path: shotFile }), args.timeoutMs, 'mp.screenshot(' + shotName + ')');
-        if (fs.existsSync(shotFile)) {
-          const info = pngInfo(shotFile);
-          result.shots.push({ name: shotName, route: step.currentPage, ...info });
-          step.shot = shotFile;
-          break;
-        }
+        // #2097：取证入口统一走 captureShots —— single 模式等价旧行为，full 模式逐屏拍到页尾。
+        await captureShots(shotName, args.shotDir, step);
+        if (step.shot) break;
         shotErr = 'screenshot 未落盘（该 API 不返回内容，只能看文件）';
       } catch (e) {
         shotErr = String((e && e.message) || e);
