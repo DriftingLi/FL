@@ -66,8 +66,9 @@ type WrongQuestionDTO struct {
 	Question       *questionbank.QuestionDTO `json:"question,omitempty" extensions:"x-optional"`
 	QuestionID     int                       `json:"question_id"`
 	StudentID      int                       `json:"student_id"`
-	// TopWrongOption 该题历史上「最多人选错的选项」（#2068）：只统计 is_correct=false 且答案非空的作答
-	// （正确项因此天然排除）；该题作答总数 < 5 时不返回该键——缺省不是空串，客户端据此决定不展示。
+	// TopWrongOption 该题历史上「最多人选错的**答案串**」（#2068）：单选题是一个选项，多选题是整串
+	// 组合（如 "A,C"），简答题没有选项、恒不返回。只统计 is_correct=false 且答案非空的作答；
+	// 该题**判错作答 < 5 次**时不返回该键——缺省不是空串，客户端据此决定不展示。
 	TopWrongOption *string `json:"top_wrong_option,omitempty" extensions:"x-optional"`
 	WrongCount     int     `json:"wrong_count"`
 }
@@ -172,8 +173,10 @@ func (s *Service) GetWrongQuestions(studentID, page, pageSize int, qType string,
 	}, nil
 }
 
-// topWrongOptionMinSample 易错项的最少样本量：与单题全站统计（practicemode.questionStats）同阈值，
-// 样本太小时「最多人选错」只是一两个人的偶然，不当作系统性误区（#2068）。
+// topWrongOptionMinSample 易错项的最少样本量，分母是**该题判错的作答次数**（#2068）：
+// 样本太小时「最多人选错」只是一两个人的偶然，不当作系统性误区。阈值数字与单题全站统计
+// （practicemode.questionStats）相同，但那边按总作答数算——这里刻意更严，因为错题本是要拿出来
+// 「识别系统性误区」的，不是展示一个 1 票的众数。
 const topWrongOptionMinSample = 5
 
 // shortAnswerQuestionType 简答题**没有选项**：它的 user_answer 是自由文本，把「最多人写的那段话」
@@ -192,20 +195,6 @@ func (s *Service) loadTopWrongOptions(questionIDs []int) map[int]string {
 	if len(questionIDs) == 0 {
 		return out
 	}
-	var totals []struct {
-		QuestionID int   `gorm:"column:question_id"`
-		Total      int64 `gorm:"column:total"`
-	}
-	s.db.Model(&model.QuestionPracticeRecord{}).
-		Joins("JOIN question ON question.id = question_practice_record.question_id").
-		Select("question_practice_record.question_id AS question_id, COUNT(*) AS total").
-		Where("question_practice_record.question_id IN ? AND question.type <> ?", questionIDs, shortAnswerQuestionType).
-		Group("question_practice_record.question_id").Scan(&totals)
-	totalByQuestion := make(map[int]int64, len(totals))
-	for _, t := range totals {
-		totalByQuestion[t.QuestionID] = t.Total
-	}
-
 	var rows []struct {
 		QuestionID int    `gorm:"column:question_id"`
 		UserAnswer string `gorm:"column:user_answer"`
@@ -219,12 +208,18 @@ func (s *Service) loadTopWrongOptions(questionIDs []int) map[int]string {
 			questionIDs, false, shortAnswerQuestionType).
 		Group("question_practice_record.question_id, user_answer").Scan(&rows)
 
+	// 样本量按**判错的作答次数**算，不是该题全部作答：按总数算的话「10 人做对、4 人选错」
+	// 也会凑够阈值，把一个 4 票的答案当成「系统性误区」。错误作答的分布本身就是分母。
+	wrongByQuestion := make(map[int]int64, len(questionIDs))
+	for _, r := range rows {
+		wrongByQuestion[r.QuestionID] += r.Cnt
+	}
 	best := make(map[int]struct {
 		Answer string
 		Cnt    int64
 	}, len(rows))
 	for _, r := range rows {
-		if totalByQuestion[r.QuestionID] < topWrongOptionMinSample {
+		if wrongByQuestion[r.QuestionID] < topWrongOptionMinSample {
 			continue
 		}
 		cur, seen := best[r.QuestionID]

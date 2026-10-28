@@ -140,7 +140,7 @@ func TestFavoriteJobAndQuestionTagContract(t *testing.T) {
 	// 下钻：按标签过滤（tagB 只命中 q2）
 	var tagOnly FavoritePageResult
 	decodeData(do(http.MethodGet, "/api/favorites?target_type=question&tag_id="+strconv.Itoa(tagB.ID), nil), &tagOnly)
-	if tagOnly.Total != 1 || tagOnly.Favorites[0].TargetID != q2.ID {
+	if tagOnly.Total != 1 || len(tagOnly.Favorites) != 1 || tagOnly.Favorites[0].TargetID != q2.ID {
 		t.Fatalf("按 tagB 下钻应只命中 q2：%+v", tagOnly)
 	}
 
@@ -162,5 +162,97 @@ func TestFavoriteJobAndQuestionTagContract(t *testing.T) {
 	}
 	if afterClose.Total != 1 {
 		t.Fatalf("Total 是收藏行数（不随快照可见性变化），应为 1, got %d", afterClose.Total)
+	}
+
+	// 取消收藏职位（AC 明列）：DELETE 往返后列表归零
+	if w := do(http.MethodDelete, "/api/favorites/"+strconv.FormatInt(added.FavoriteID, 10), nil); w.Code != http.StatusOK {
+		t.Fatalf("取消收藏应 200, got %d %s", w.Code, w.Body.String())
+	}
+	var afterRemove FavoritePageResult
+	decodeData(do(http.MethodGet, "/api/favorites?target_type=job", nil), &afterRemove)
+	if afterRemove.Total != 0 || len(afterRemove.Favorites) != 0 {
+		t.Fatalf("取消后职位收藏应为空, got %+v", afterRemove)
+	}
+
+	// 既有五类回归：课程条目除加性 tags 外形状不变（company/region 不该跑到别的类型上）
+	course := testutil.SeedCourse(t, db, "回归课程")
+	if err := db.Create(&model.Favorite{
+		UserID: student.ID, TargetType: FavoriteTargetCourse, TargetID: course.CourseID, CreatedAt: testutil.Now(),
+	}).Error; err != nil {
+		t.Fatalf("建课程收藏失败: %v", err)
+	}
+	var coursePage FavoritePageResult
+	decodeData(do(http.MethodGet, "/api/favorites?target_type=course", nil), &coursePage)
+	if coursePage.Total != 1 || len(coursePage.Favorites) != 1 {
+		t.Fatalf("课程收藏应 1 条, got %+v", coursePage)
+	}
+	courseItem := coursePage.Favorites[0]
+	if courseItem.Company != "" || courseItem.Region != "" || len(courseItem.Tags) != 0 {
+		t.Fatalf("课程条目不该带职位/标签字段, got %+v", courseItem)
+	}
+	rawCourse, _ := json.Marshal(courseItem)
+	var courseKeys map[string]any
+	if err := json.Unmarshal(rawCourse, &courseKeys); err != nil {
+		t.Fatalf("解析课程条目失败: %v", err)
+	}
+	for _, k := range []string{"favorite_id", "target_type", "target_id", "course_id", "title", "cover", "created_at", "tags"} {
+		if _, ok := courseKeys[k]; !ok {
+			t.Fatalf("课程条目缺既有键 %s: %+v", k, courseKeys)
+		}
+	}
+	if _, ok := courseKeys["company"]; ok {
+		t.Fatalf("课程条目不该有 company 键: %+v", courseKeys)
+	}
+}
+
+// 同一条标签下钻，**内存库（SQLite）**也要跑一遍：这是仓内主测试引擎。
+// 血账形态同 #1095——JOIN 进来之后裸 `created_at` 会撞列，SQLite 直接报
+// "ambiguous column name"，而 PG 会解析到输出列把问题盖住。PG-only 用例看不见这条。
+func TestFavoriteQuestionTagDrillOnMemoryDB(t *testing.T) {
+	t.Parallel()
+	testutil.SetTestGinMode()
+	db := testutil.NewMemoryDB(t)
+	student := testutil.SeedStudent(t, db, "fav_tag_mem", "x")
+	now := testutil.Now()
+	tag := model.QuestionTag{Code: "mem-tag", Name: "内存标签", SortOrder: 1, Status: 1, CreatedAt: now, UpdatedAt: now}
+	if err := db.Create(&tag).Error; err != nil {
+		t.Fatalf("创建标签失败: %v", err)
+	}
+	q := testutil.SeedQuestion(t, db, "single_choice", "内存题库题", "A")
+	if err := db.Create(&model.QuestionTagRelation{QuestionID: q.ID, TagID: tag.ID, CreatedAt: now}).Error; err != nil {
+		t.Fatalf("建标签关系失败: %v", err)
+	}
+	if err := db.Create(&model.Favorite{
+		UserID: student.ID, TargetType: FavoriteTargetQuestion, TargetID: q.ID, CreatedAt: now,
+	}).Error; err != nil {
+		t.Fatalf("建收藏失败: %v", err)
+	}
+
+	cfg := &config.Config{JWTSecretKey: "contract-test-secret", AuthCookie: config.AuthCookieConfig{Name: "hrwai_token"}}
+	r := newFavoriteContractRouter(t, db, cfg)
+	token, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).
+		Issue(int(student.ID), student.Account, "hrwai_user")
+	if err != nil {
+		t.Fatalf("签发 token 失败: %v", err)
+	}
+	req, _ := http.NewRequest(http.MethodGet, "/api/favorites?target_type=question&tag_id="+strconv.Itoa(tag.ID), nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("内存库按标签下钻应 200, got %d %s", w.Code, w.Body.String())
+	}
+	var page FavoritePageResult
+	var env struct {
+		Data json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
+		t.Fatalf("解析信封失败: %v", err)
+	}
+	if err := json.Unmarshal(env.Data, &page); err != nil {
+		t.Fatalf("解析 data 失败: %v", err)
+	}
+	if page.Total != 1 || len(page.Favorites) != 1 || len(page.Favorites[0].Tags) != 1 {
+		t.Fatalf("内存库下钻应命中 1 条且带 1 个标签, got %+v", page)
 	}
 }

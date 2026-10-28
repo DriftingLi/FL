@@ -7,7 +7,7 @@ import type { FavoriteCheckDTO, FavoriteDTO, FavoritePageResult } from './genera
  * 注解层只有 string（枚举词汇尚未进注解，ADR-0048 片一已知限制），故这里保留 UI 侧窄化联合，
  * 由消费处按值断言；生成物 FavoriteDTO.target_type 渲染为 string。
  */
-export type FavoriteTargetType = 'course' | 'chapter' | 'question' | 'featured' | 'topic'
+export type FavoriteTargetType = 'course' | 'chapter' | 'question' | 'featured' | 'topic' | 'job'
 
 /** 收藏条目（列表项，含目标快照；目标已删除的条目后端不返回）——响应形状来自生成物（ADR-0048）。 */
 export type FavoriteItem = FavoriteDTO

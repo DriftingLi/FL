@@ -354,8 +354,11 @@ func (s *Service) List(userID int, targetType string, page, pageSize int, creden
 	if tagID != nil && targetType != FavoriteTargetQuestion {
 		return nil, ErrFavTagFilterRequiresQuestion
 	}
+	// 排序串必须带表前缀：题目标签下钻会给这条查询加 JOIN question_tag_relation，两张表都有
+	// created_at ⇒ 裸名在 SQLite 上直接炸 "ambiguous column name"（PG 会解析到输出列，掩盖问题）。
+	// 同形态血账见 practicemode 的 #1095。
 	rows, total, page, pageSize, err := paging.QueryWithMax[model.Favorite](s.db, page, pageSize, 20, 100,
-		"created_at DESC, favorite_id DESC",
+		"favorite.created_at DESC, favorite.favorite_id DESC",
 		func(q *gorm.DB) *gorm.DB {
 			q = q.Where("user_id = ?", userID)
 			if targetType != "" {
