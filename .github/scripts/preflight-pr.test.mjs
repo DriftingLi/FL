@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseArgs, toValidatorFiles, pickCiSummaryRun, fillCiLine } from './preflight-pr.mjs';
+import { readFileSync } from 'node:fs';
+import { parseArgs, toValidatorFiles, pickCiSummaryRun, fillCiLine, makeFetchCompare } from './preflight-pr.mjs';
 import { validatePrEvidence } from './lib/gate-validator.mjs';
 
 // #1770 S4/S5/S6：本地预检与 CI 必须同判据、同结论。
@@ -104,9 +105,6 @@ test('双跑一致：只在 commit 评论上的 ④ 证据，本地预检与 CI 
   assert.equal(ciSide.ok, true, `commit 评论证据应判绿：${ciSide.errors.join(' | ')}`);
   assert.ok(ciSide.notes.some((n) => n.includes('④')), '应注明 ④ 证据来自评论');
 });
-
-import { readFileSync } from 'node:fs';
-import { makeFetchCompare } from './preflight-pr.mjs';
 
 // ── #2044 契约钉：预检 CLI ↔ 校验器 ↔ CI 两个工作流的 fetchCompare 形态 ──────────────
 // 事故链：CLI 写 (from, to) 位置参数、校验器按 fetchCompare({ base, head }) 调用

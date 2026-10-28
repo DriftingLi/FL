@@ -102,7 +102,7 @@ function compareOf(repo, base, head) {
 export function makeFetchCompare(repo, { compareOfImpl = compareOf, warn } = {}) {
   const write = warn || ((m) => process.stderr.write(m));
   const compareCache = new Map();
-  return ({ base, head } = {}) => {
+  return ({ base, head }) => {
     const key = `${base}...${head}`;
     if (compareCache.has(key)) return compareCache.get(key);
     let value = null;
