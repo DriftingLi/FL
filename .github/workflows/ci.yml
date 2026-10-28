@@ -663,6 +663,8 @@ jobs:
           node --test .github/scripts/pr-evidence-check.test.mjs
           # #1770：本地预检 = 同一判据 + ③ run 链接自动发现（占位不补），双跑一致性钉在这里
           node --test .github/scripts/preflight-pr.test.mjs
+          # #2053：票面引用完整性 lint（preflight 同一份模块；路径/ADR 号位/票号三判据 + mergeRefLint 合并函数）
+          node --test .github/scripts/lint-issue-references.test.mjs
 
   # ============================================================
   # Stage 6.7: 已收敛控件守卫的自检（守护的守护）
