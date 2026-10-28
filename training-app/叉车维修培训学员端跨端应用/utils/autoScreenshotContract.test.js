@@ -3,7 +3,7 @@
  *
  * 背景（2026-09-14）：
  *   · 第一版只截图不翻页（已由 #989 修：改用 `--pagePath` + SHA256 反假绿）。
- *   · 第二版仍**遍历 pages.json 全部页面**（本仓 50 页），而每页一次 `cli launch --pagePath` 要过一遍
+ *   · 第二版仍**遍历 pages.json 全部页面**（本仓现数 60 页，2026-10-28 实测），而每页一次 `cli launch --pagePath` 要过一遍
  *     HBuilderX（编译 + 推送）⇒ 全量截图的成本不可接受。`device-capture.ps1` 早已把「逐页 launch 成本高」
  *     标为待裁定，本次裁定：**只截本次改动涉及的页面**（用户 2026-09-14 Q3）。
  *
@@ -177,7 +177,7 @@ describe('auto-screenshot.ps1 contract', () => {
   //   本条是**回归钉**，钉死「必须 --relative + 必须解码 + 解码器来自唯一真源」三点，旧代码必红。
   test('S14: 【2026-09-15】derivation uses --relative and decodes git-quoted paths', () => {
     const from = src.indexOf('确定目标页集合');
-    // ⚠️ 右边界必须**从 from 之后再找**：文件头说明里就有「…本仓 `pages.json` 有 50 页 ⇒…」，
+    // ⚠️ 右边界必须**从 from 之后再找**：文件头说明里就有「…本仓 `pages.json` 现数 60 页 ⇒…」，
     //    直接 indexOf 那个词会命中它 ⇒ 切片为空 ⇒ 整条守护退化成恒真的空断言（正是要防的弱守护）。
     const to = src.indexOf('3) 0 页', from);
     expect(from).toBeGreaterThan(-1);
@@ -464,5 +464,104 @@ describe('auto-screenshot.ps1 contract', () => {
     expect((code.match(/AWAKE_PROBE ok=/g) || []).length).toBe(3);
     expect(code).toMatch(/callBudgetSeconds=/);
     expect(src).toMatch(/是读数不是判据/);
+  });
+  // S25-S31（2026-10-28，#2078）：`-FullRepo` 全仓逐页载体的形状钉。
+  //   这批只钉「票面承诺在代码里成立」的结构事实；运行期真跑（真读 pages.json 的 60 页、真拿授权门结论）
+  //   由 autoScreenshotFullRepoBehavior.test.js（FR1-FR4）在行为腿另钉 —— 按本仓纪律，接线守护不构成证据。
+  test('S25: 【#2078】-FullRepo 的授权校验排在任何副作用之前（不建目录、不碰设备）', () => {
+    const code = src.replace(/<#[\s\S]*?#>/g, '').replace(/^\s*#.*$/gm, '');
+    const gateAt = code.indexOf('-FullRepo 要的是**发版票号**');
+    const mkdirAt = code.indexOf('New-Item -ItemType Directory -Force -Path $OutputDir');
+    expect(gateAt).toBeGreaterThan(-1);
+    expect(mkdirAt).toBeGreaterThan(-1);
+    expect(gateAt).toBeLessThan(mkdirAt);
+    // 票号与 -Pages 互斥也必须在这儿判（走到步骤 6 才拒就白烧一次编译 + 装机）
+    expect(code).toMatch(/-FullRepo 与 -Pages 互斥/);
+  });
+
+  test('S26: 【#2078】全仓形态不推导、不裁剪；日常形态的 git 推导射程一字未动', () => {
+    const from = src.indexOf('确定目标页集合');
+    const to = src.indexOf('3) 0 页', from);
+    const block = src.slice(from, to);
+    // 授权位 ⇒ 全量清单来自 pages.json 的纯函数（含 subPackages），不是 $allPages（只含 pages 段）
+    expect(block).toMatch(/Get-FullRepoPageList\s+-PagesJson\s+\$pagesJson/);
+    expect(block).not.toMatch(/\$targetPages\s*=\s*@\(\$allPages\)/);
+    // 裁剪闸门必须让位于授权位（默认 -MaxPages 5 会把 60 页砍成 5 页 = 全仓名不副实）
+    const capAt = src.indexOf('4) -MaxPages 兜底裁剪');
+    expect(capAt).toBeGreaterThan(-1);
+    expect(src.slice(capAt, capAt + 400)).toMatch(/if\s*\(\s*-not\s+\$fullRepoMode\s+-and\s+\$targetPages\.Count\s*-gt\s+\$MaxPages\s*\)/);
+    // 日常那一支逐字不变：--relative + 解码器仍来自唯一真源（S14 的正例仍在块内）
+    expect(block).toMatch(/'--name-only',\s*'--relative',\s*'HEAD'/);
+    expect(block).toMatch(/ConvertFrom-GitQuotedPath/);
+  });
+
+  test('S27: 【#2078】全仓形态没有「静默零产物」出口：0 页照样红，且不回退到别的页集合', () => {
+    const zeroAt = src.indexOf('3) 0 页 ⇒ 明报并返回，绝不回退全量');
+    expect(zeroAt).toBeGreaterThan(-1);
+    const zeroBlock = src.slice(zeroAt, zeroAt + 1400);
+    expect(zeroBlock).toMatch(/if\s*\(\$fullRepoMode\)\s*\{/);
+    expect(zeroBlock).toMatch(/全仓形态没有「静默零产物」这条出口/);
+    // 日常那条「不回退到全量」的承诺不得被 -FullRepo 顺手改掉（两句都得在场）
+    expect(src).toMatch(/不回退到全量/);
+  });
+
+  test('S28: 【#2078】截图文件名按形态分流（末段重名会吃掉一页）', () => {
+    const code = src.replace(/<#[\s\S]*?#>/g, '').replace(/^\s*#.*$/gm, '');
+    // 全仓形态按整条路径拍平；日常形态仍按末段 —— 两个分支都必须在同一个表达式里
+    expect(code).toMatch(/\$pageName\s*=\s*if\s*\(\$fullRepoMode\)\s*\{\s*Get-FullRepoShotName\s+-Page\s+\$page\s*\}\s*else\s*\{\s*\(\$page\s*-split\s*'\/'\)\[-1\]\s*\}/);
+    // 拍平函数存在且是纯函数（行为腿 FR2 真跑它）
+    expect(code).toMatch(/function Get-FullRepoShotName/);
+    // 灭屏那一支的 Skipped 也必须同一套名字，否则 manifest 与文件名是两套键、对账当场对不上
+    const awakeAt = code.indexOf('设备屏幕未唤醒');
+    expect(awakeAt).toBeGreaterThan(-1);
+    expect(code.slice(Math.max(0, awakeAt - 1600), awakeAt)).toMatch(/Get-FullRepoShotName\s+-Page\s+\$p/);
+  });
+
+  test('S29: 【#2078】逐页时间账写在 finally（六条 continue 出口一条都不能漏）', () => {
+    const code = src.replace(/<#[\s\S]*?#>/g, '').replace(/^\s*#.*$/gm, '');
+    // 锚点必须**从目标页循环之后再找**：文件里 `finally` 不止一处（`finally { $img.Dispose() } 在像素比较里），
+    // 取第一处会钉到那个不相干的 finally 上 —— 那正是 S14 教过的「右边界要从 from 之后再找」同一类错。
+    const loopAt2 = code.indexOf('foreach ($page in $targetPages)');
+    expect(loopAt2).toBeGreaterThan(-1);
+    const finAt = code.indexOf('finally {', loopAt2);
+    expect(finAt).toBeGreaterThan(loopAt2);
+    const finBlock = code.slice(finAt, finAt + 2200);
+    expect(finBlock).toMatch(/\$pageSecs\s*=\s*\[int\]\(\(Get-Date\)\s*-\s*\$pageStarted\)/);
+    expect(finBlock).toMatch(/\$fmt\s*-f\s+\$pageNum/);   // 心跳行：第几页 / 本页秒 / 累计 / 剩约
+    expect(finBlock).toMatch(/Write-FullRepoManifest/);        // 每页重写，中断也留有已产清单
+    // 心跳与 manifest 重写都必须在 **同一个 finally 的 FullRepo 分支内**：
+    // 写在分支外会让日常形态每页多一次磁盘写；写在分支内但排在 \`continue\` 之前则形同虚设。
+    const branchAt = finBlock.indexOf('if ($fullRepoMode)');
+    const beatAt = finBlock.indexOf('$fmt -f $pageNum');
+    const mfAt = finBlock.indexOf('Write-FullRepoManifest');
+    expect(branchAt).toBeGreaterThan(-1);
+    expect(beatAt).toBeGreaterThan(branchAt);
+    expect(mfAt).toBeGreaterThan(branchAt);
+  });
+
+  test('S30: 【#2078】归档目录 = docs/verification/device/<票号>，且循环前先落一次 manifest', () => {
+    const code = src.replace(/<#[\s\S]*?#>/g, '').replace(/^\s*#.*$/gm, '');
+    expect(code).toMatch(/docs\\verification\\device/);
+    expect(code).toMatch(/Join-Path\s+\$OutputDir\s+'fullrepo-manifest\.json'/);
+    // 锚点取**代码**（不是注释行 —— code 已剥注释，注释锚点在这里恒为 -1）：
+    // 循环前的首次落盘用的就是 \`$mfPre\` 这个变量名，它是「早于循环」的唯一代码证据。
+    const preAt = code.indexOf('$mfPre = Get-FullRepoManifestData');
+    const loopAt = code.indexOf('foreach ($page in $targetPages)');
+    expect(preAt).toBeGreaterThan(-1);
+    expect(preAt).toBeLessThan(loopAt);
+    expect(code.slice(preAt, preAt + 900)).toMatch(/-OutputDir\s+\$OutputDir/);
+  });
+
+  test('S31: 【#2078】不带 -FullRepo 时默认行为与归档路径逐字不变', () => {
+    const code = src.replace(/<#[\s\S]*?#>/g, '').replace(/^\s*#.*$/gm, '');
+    // 默认输出目录仍是 .ci-verify（随树回收消失的那份），票号目录只由授权位进入
+    expect(code).toMatch(/\$OutputDir\s*=\s*if\s*\(\$fullRepoMode\)\s*\{[\s\S]{0,200}?\.ci-verify\\screenshots/);
+    // Ok 判据一字未改（全仓形态只多带 Verdict，不放宽 fail-closed）
+    expect(code).toMatch(/\$allOk\s*=\s*\(\$screenshots\.Count\s*-gt\s*0\s*-and\s*\$skipped\.Count\s*-eq\s*0\s*-and\s*\$hashConflicts\.Count\s*-eq\s*0\)/);
+    // 全仓形态的三态结论必须来自 ADR-0043 决策 6 的三个词，不发明第四态
+    expect(code).toMatch(/verdict\s*\}\s*PASS|\$verdict\s*=\s*'PASS'/);
+    expect(code).toMatch(/\$verdict\s*=\s*'INCOMPLETE'/);
+    expect(code).toMatch(/\$verdict\s*=\s*'FAIL'/);
+    expect(code).not.toMatch(/\$verdict\s*=\s*'WARN'/);  // WARN 是像素侧语义，不在这层混用
   });
 });

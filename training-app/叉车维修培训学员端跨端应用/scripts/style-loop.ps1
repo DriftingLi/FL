@@ -74,6 +74,11 @@ param(
     # 还没有 `.uvue`，靠推导会得到「没活」，而人就是要建这一轮的基线。
     [string]$Pages = '',
     [int]$MaxScreenshotPages = 5,
+    # **仅发版冒烟语境**的授权位（#2078）：值 = 发版票号（纯数字）。给了它，步骤 6 走全仓逐页、
+    # 产物与首轮基线落 `docs/verification/device/<票号>/`，并把步骤 7 的比对目录一起指过去。
+    # 在这里**也**校验一次（不等步骤 6 拒）：链体走到步骤 6 之前已经烧过一次编译 + 一次装机，
+    # 一个写错的票号不该付那笔机时。
+    [string]$FullRepo = '',
     # 像素判据参数：与 dev:finish 同一套默认值（0.5% 阈值 + 可选忽略状态栏行），不在这里另定口径。
     [ValidateRange(0.0, 1.0)]
     [double]$PixelThreshold = 0.005,
@@ -164,6 +169,7 @@ function Invoke-StyleLoopChain {
         [string]$ProjectDir,
         [string]$Pages,
         [int]$MaxScreenshotPages,
+        [string]$FullRepo,
         [double]$PixelThreshold,
         [int]$IgnoreTopRows,
         [int]$IgnoreBottomRows,
@@ -192,7 +198,10 @@ function Invoke-StyleLoopChain {
 
     # ---------- 1) 预检：有没有活 ----------
     Write-Host '[1/7] 预检改动集'
-    $work = if ($Pages) { Get-StyleLoopWorkState -PagesExplicit } else { Get-StyleLoopWorkState -ProjectDir $ProjectDir }
+    # -FullRepo 也走「显式指定」这一支：全仓逐页的活 = pages.json 里的全部页，与改动集无关。
+    # 不这么处理的话，发版冒烟常在**干净树**上跑（就是要给 60 页建基线），预检会一句 no-work 把人挡在门外
+    # —— 那正是 lib/style-loop.ps1 里「谎称没活」被判为最坏方向的那一形。
+    $work = if ($Pages -or $FullRepo) { Get-StyleLoopWorkState -PagesExplicit } else { Get-StyleLoopWorkState -ProjectDir $ProjectDir }
     Write-Host "      haswork=$($work.HasWork) pages-under-diff=$($work.PageFileCount) source=$($work.Source)"
     $inputs.HasWork = [bool]$work.HasWork
     if (-not $work.HasWork) {
@@ -253,7 +262,7 @@ function Invoke-StyleLoopChain {
             # ---------- 6) 逐页截图（只截改动页）----------
             Write-Host '[6/7] 逐页截图'
             $shot = Invoke-AutoScreenshot -Device $Device -CliPath $envResult.CliPath -ProjectDir $ProjectDir `
-                -MaxPages $MaxScreenshotPages -RunStartedAt $started -Pages $Pages
+                -MaxPages $MaxScreenshotPages -RunStartedAt $started -Pages $Pages -FullRepo $FullRepo
             $inputs.PageCount = @($shot.TargetPages).Count
             $inputs.ShotCount = @($shot.Screenshots).Count
             if (-not $shot.Ok) { $inputs.ShotError = [string]$shot.Error }
@@ -277,9 +286,19 @@ function Invoke-StyleLoopChain {
 
         # ---------- 7) 像素比（锁外，纯本地）----------
         Write-Host '[7/7] 与基线做像素比'
+        # 全仓形态的比对目录**跟着归档走**（截图落在票号目录，比对就不该再去 .ci-verify 找）：
+        # 不给这两个值时它们是 $null，Compare-ScreenshotBaseline / Copy-StyleLoopBaselineShot
+        # 各自的「空 ⇒ 用默认」逻辑照旧生效 ⇒ 日常形态逐字不变。
+        # 判据本身**一处都没换**：仍是 lib/screenshot-gate.ps1 的 Get-PngDiffVerdict 四态（票 ②「不建第二套真源」）。
+        $fullRepoShotsDir = $null
+        $fullRepoBaselineDir = $null
+        if ($FullRepo) {
+            $fullRepoShotsDir = Join-Path $ProjectDir (Join-Path 'docs\verification\device' $FullRepo)
+            $fullRepoBaselineDir = Join-Path $fullRepoShotsDir 'baseline'
+        }
         $diff = Compare-ScreenshotBaseline -ProjectDir $ProjectDir -UpdateBaseline:$UpdateBaseline `
             -PixelThreshold $PixelThreshold -IgnoreTopRows $IgnoreTopRows -IgnoreBottomRows $IgnoreBottomRows `
-            -RunStartedAt $started
+            -RunStartedAt $started -CurrentDir $fullRepoShotsDir -BaselineDir $fullRepoBaselineDir
         $changedPages = @()
         foreach ($entry in @($diff.Diff)) {
             $parts = "$entry" -split ':'
@@ -291,7 +310,8 @@ function Invoke-StyleLoopChain {
         if ([string]$inputs.DiffVerdict.Action -eq 'write-baseline') {
             # 判定表里 write-baseline 那一支的**动作**归调用方执行（与 dev-finish 步骤 7 同一口径）；
             # 只转述结论不执行，基线就永远是空的 ⇒ 每轮都「首次运行」、判据永不咬（ADR-0008:419）。
-            $seed = Copy-StyleLoopBaselineShot -ProjectDir $ProjectDir -RunStartedAt $started
+            $seed = Copy-StyleLoopBaselineShot -ProjectDir $ProjectDir -RunStartedAt $started `
+                -SourceDir $fullRepoShotsDir -BaselineDir $fullRepoBaselineDir
             Write-Host "      基线已建立：$(@($seed.Copied) -join ',')（跳过非本轮 $(@($seed.Skipped).Count) 张）"
         }
         Write-Host "      changed=$($diff.ChangedCount) mode=$($diff.Mode) ok=$($inputs.DiffVerdict.Ok) action=$($inputs.DiffVerdict.Action) msg=$($inputs.DiffVerdict.Message)"
@@ -312,11 +332,28 @@ function Invoke-StyleLoopChain {
 #   Duplicated Code 里最贵的那一类：漏抄即静默改语义。
 #   再加一道形状自检：表里的键必须是链体参数名，打错键名当场出一行结论，而不是静默走默认值。
 # ============================================================
+# -FullRepo 的父进程侧校验（**早于取锁、早于任何子进程**）：票号必须是纯数字，且与 -Pages 互斥。
+#   为什么在父进程再判一次（步骤 6 里 auto-screenshot 也会拒）：链体要走到步骤 6 才拒的话，
+#   前面已经付过一次编译（热缓存 257 秒）+ 一次装机 —— 一个打错的票号不该烧那笔机时，
+#   而 HBuilderX 是单实例串行资源，白烧的那段时间是**别人的排队时间**（concurrency.md）。
+#   形态沿用本入口既有的 fail-closed：一行结论 + 非零退出，不抛错误栈。
+# ============================================================
+if ($FullRepo) {
+    if ($FullRepo -notmatch '^\d+$') {
+        Complete-StyleLoopAbort -Phase 'usage' -Reason "fullrepo-ticket-not-numeric-$FullRepo" -Exit 2 -BudgetBytes $MaxLineBytes
+    }
+    if ($Pages) {
+        Complete-StyleLoopAbort -Phase 'usage' -Reason 'fullrepo-conflicts-pages' -Exit 2 -BudgetBytes $MaxLineBytes
+    }
+}
+
+# ============================================================
 $loopOpts = @{
     Device              = $Device
     CliPath             = $CliPath
     ProjectDir          = $ProjectDir
     Pages               = $Pages
+    FullRepo            = $FullRepo
     MaxScreenshotPages  = $MaxScreenshotPages
     PixelThreshold      = $PixelThreshold
     IgnoreTopRows       = $IgnoreTopRows
@@ -342,12 +379,18 @@ if ($DryRun) {
     Write-Host '  3. HBuilderX 锁临界区（4–6 共享一把锁：仅编译 → 真运行 → 逐页截图）'
     Write-Host '  4. 编译期诊断：hx-run -CompileOnly（不推送 / 不启动 / 不需要设备）'
     Write-Host '  5. 真运行到设备：hx-run（判定 = 设备侧事实相对基线前进）'
-    Write-Host ("  6. 逐页截图：auto-screenshot（只截改动页，最多 {0} 页）" -f $MaxScreenshotPages)
+    if ($FullRepo) {
+        # 全仓形态在计划里点名票号与归档位置：DryRun 是人对「这一轮要烧 4 小时机时」唯一的预检面，
+        # 写成日常那句「只截改动页，最多 N 页」会把人误导成一次普通样式轮。
+        Write-Host ("  6. 逐页截图：auto-screenshot -FullRepo {0}（全仓逐页，不推导不裁剪；产物与首轮基线 -> docs/verification/device/{0}/）" -f $FullRepo)
+    } else {
+        Write-Host ("  6. 逐页截图：auto-screenshot（只截改动页，最多 {0} 页）" -f $MaxScreenshotPages)
+    }
     Write-Host '  ── 退出锁临界区，按字节还原 manifest.json / pages.json / platformConfig.json ──'
     Write-Host '  7. 与基线做像素比：screenshot-diff + Get-PngDiffVerdict（与 dev:finish 步骤 7 同源）'
     Write-Host ''
-    Write-Host ("  Device='{0}'  Pages='{1}'  PixelThreshold={2}  IgnoreTopRows={3}  IgnoreBottomRows={4}  UpdateBaseline={5}" -f `
-        $Device, $Pages, $PixelThreshold, $IgnoreTopRows, $IgnoreBottomRows, $UpdateBaseline)
+    Write-Host ("  Device='{0}'  Pages='{1}'  PixelThreshold={2}  IgnoreTopRows={3}  IgnoreBottomRows={4}  UpdateBaseline={5}  FullRepo='{6}'" -f `
+        $Device, $Pages, $PixelThreshold, $IgnoreTopRows, $IgnoreBottomRows, $UpdateBaseline, $FullRepo)
     Write-Host ("  HxWaitSeconds={0}  HxRunTimeoutSeconds={1}  MaxLineBytes={2}" -f $HxWaitSeconds, $HxRunTimeoutSeconds, $MaxLineBytes)
     Write-Host '  本入口不是门：机检行恒带 gate=none，不改任何验收门的触发面与归属。' -ForegroundColor Yellow
 

@@ -5,10 +5,31 @@
 .DESCRIPTION
     **Q3 口径（2026-09-14 用户裁定）**：只截改动页面 + `-Pages` 参数。
     为什么要限范围：每页一次 `cli launch app-android --pagePath <页>` 都要过一遍 HBuilderX
-    （编译 + 推送），本仓 `pages.json` 有 50 页 ⇒ 全量截图成本不可接受
+    （编译 + 推送），本仓 `pages.json` 现数 60 页 ⇒ 全量截图成本不可接受
     （`device-capture.ps1` 早已把「逐页 launch 成本高」标为待裁定，本次裁定即此）。
+    ⚠️ 那个 60 是 **2026-10-28 现测底数**（`pages.json` 的 `pages` 段 60 项、`subPackages` 0 项）；
+    页数的真源永远是 `pages.json` 本身而不是这句话 ⇒ 页数再变也不必回来改这里（写死的数字会漂，#1861 同族）。
+
+    **`-FullRepo <发版票号>`（#2078，仅发版冒烟语境）**：上面「只截改动页」是**日常 PR 的口径**，
+    它管不住发版冒烟要的「全仓逐页 + 首轮基线库」（移动端 ADR-0043 决策 2 与决策 5）。
+    `-FullRepo` 就是那枚**显式授权位**，取值必须是发版票号（纯数字）—— 票号既是授权凭证又是归档目录名，
+    **不留「只给开关不给票号」的通道**：没有票号的产物无处归档，那就是一次说不出主键的全仓截图。
+    开启后：
+      · 页清单 = `pages.json` 全量（含 `subPackages` 的页，现数 0 项），**不走** git diff 推导、**不受** `-MaxPages` 裁剪；
+      · 产物与首轮基线落 `docs/verification/device/<票号>/`（与 `device-capture.ps1` 的归档主键同一处）；
+      · 截图文件名改按**整条路径**生成（`pages_login_login`，不是 `login`）。这条不是美化：本仓 60 条路径的
+        末段只有 **59** 个唯一值（`pages/login/login` 与 `pages/recruiter/login` 末段同为 `login`）⇒ 沿用末段命名
+        会让 60 页**只落 59 张 PNG**、后一张覆盖前一张，「页清单与产物计数对得上」当场落空，而「hash 与上一页
+        相同 ⇒ 切页未生效」还会把这次覆盖读成故障。#2078 实施时现测出来，不是假想边界。
+      · **不带 `-FullRepo` 时本文件逐字行为不变**（末段命名、git 推导、`-MaxPages` 裁剪、0 页不回退全量，全部照旧）。
+    设备侧 fail-closed 一条都不放宽：未落定的页仍记 `Skipped` 且**不产图**，`Skipped` / `HashConflicts` / 零产物
+    照样让 `Ok=$false`（⑥ 的断路腿靠的就是它）。像素那一侧不同：跨发版比对阈值要第二次发版才标定得了
+    （决策 5），故首轮基线按「未改页从宽转人看」—— 见 `style-loop.ps1` 的 `-FullRepo` 分支只**转述**像素结论、
+    不拿同帧 0.5% 阈值冒充跨天判据（`docs/agents/dev-loop.md:417` 血账：零改动树跨天读到 0.919%）。
 
     **页面集合的确定顺序**：
+      0. `-FullRepo <发版票号>` 给定 → 页集合 = `pages.json` **全量**（`pages` + 各 `subPackages`），
+         **不裁剪、不推导**；这一支只由显式授权位进入，日常 PR 走不到（见上 `-FullRepo` 一节）
       1. `-Pages <a,b>` 显式给定 → 用它（最高优先级）
       2. 否则**从 git diff 推导**：把 `pages/**/*.uvue` 的改动映射回 pages.json 里的 page path
          （`-ChangedOnly` 是这一行为的显式声明；两者同给时以 `-Pages` 为准）
@@ -64,6 +85,8 @@
     $r = Invoke-AutoScreenshot -Device '192.168.10.51:39181' -CliPath 'D:\...\cli.exe' -ProjectDir 'D:\FL\...'
     # 显式指定
     $r = Invoke-AutoScreenshot -Pages 'pages/index/index,pages/profile/profile' -Device '...' -CliPath '...'
+    # 仅发版冒烟：全仓逐页 + 首轮基线入库到 docs/verification/device/<票号>/
+    $r = Invoke-AutoScreenshot -FullRepo '1864' -Device '...' -CliPath '...' -ProjectDir 'D:\FL\...'
 #>
 
 function Start-NavLaunchDetached {
@@ -623,6 +646,183 @@ function Wait-NavSettled {
     }
 }
 
+function Get-FullRepoPageList {
+    <#
+    .SYNOPSIS
+        纯函数：`pages.json` 对象 → **全量**页路径清单（`pages` + 各 `subPackages`）。
+    .DESCRIPTION
+        为什么不复用已有的 `$allPages`（= `$pagesJson.pages`）：那是 git diff **映射校验**用的集合，
+        本票 ③ 明写「不带 -FullRepo 时行为逐字不变」⇒ 动它会顺带改掉日常 PR 的推导射程。
+        全仓逐页要的却是「一个页都不漏」，所以 `subPackages` 必须进来（现数 0 项，但清单来源不能写死成 0）。
+        `subPackages` 的 `path` 是**相对各自 root** 的 ⇒ 真正的 pagePath = `root/path`，直接取 `path`
+        会把 `--pagePath` 指到一个不存在的页（fail-closed 那边只会记 Skipped，白烧一轮机时）。
+        Set-StrictMode 兼容：属性存在性先问 `PSObject.Properties.Name`，不裸取（缺属性在 Latest 下直接抛）。
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)]$PagesJson)
+
+    function Get-PathOf($obj) {
+        if (-not $obj) { return '' }
+        if (@($obj.PSObject.Properties.Name) -notcontains 'path') { return '' }
+        return "$($obj.path)".Trim()
+    }
+
+    # 属性存在性必须**先问再取**（#2078 行为腿 FR1 当场抓出来的真实缺陷）：
+    # 调用方 dev:finish / style-loop 都在 Set-StrictMode -Version Latest 下跑，而 Latest 对
+    # 「对象上没有这个属性」是直接抛、不是给 $null。本仓真实 pages.json **根本没有 subPackages 这个键**
+    # （现测 keys = pages, globalStyle, tabBar, uniIdRouter）⇒ 裸写 @($PagesJson.subPackages) 会让
+    # -FullRepo 在真实项目上第一步就炸，而在任何带该键的夹具上都不会 —— 这种「只在真数据上坏」
+    # 的形状，接线守护看不见，只有真读真文件的行为守护抓得到。
+    $names = @($PagesJson.PSObject.Properties.Name)
+    $list = @()
+    if ($names -notcontains 'pages') { return @() }
+    foreach ($p in @($PagesJson.pages)) {
+        $one = Get-PathOf $p
+        if ($one) { $list += $one }
+    }
+    # 没有 subPackages 键（本仓现状）⇒ 到此就是全量，不再碰那个不存在的属性
+    if ($names -notcontains 'subPackages') { return @($list | Where-Object { $_ } | Select-Object -Unique) }
+    foreach ($sp in @($PagesJson.subPackages)) {
+        if (-not $sp) { continue }
+        $root = ''
+        if (@($sp.PSObject.Properties.Name) -contains 'root') { $root = "$($sp.root)".Trim().Trim('/') }
+        foreach ($p in @($sp.pages)) {
+            $one = Get-PathOf $p
+            if (-not $one) { continue }
+            $list += $(if ($root) { "$root/$one" } else { $one })
+        }
+    }
+    return @($list | Where-Object { $_ } | Select-Object -Unique)
+}
+
+function Get-FullRepoShotName {
+    <#
+    .SYNOPSIS
+        纯函数：页路径 → 截图文件基名（整条路径拍平，**不用末段**）。
+    .DESCRIPTION
+        这条是本票实施时**现测**出来的坑，不是风格偏好：主树 60 条页路径的末段只有 **59** 个唯一值
+        （`pages/login/login` 与 `pages/recruiter/login` 末段同为 `login`）。沿用日常形态的末段命名，
+        60 页只会落 59 张 PNG（后一张覆盖前一张），于是
+          · ⑥「60 页清单与产物计数相符」当场落空，且
+          · 「hash 与上一页相同 ⇒ 切页未生效」会把这次覆盖读成一次故障（HashConflicts 假红）。
+        只在 -FullRepo 形态改命名 ⇒ 日常 PR 的产物名逐字不变（票 ③）。
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)][string]$Page)
+    $flat = ($Page -replace '[\\/]', '_') -replace '[^\w.\-]', '_'
+    return ($flat -replace '^[_.]+', '' -replace '[_.]+$', '')
+}
+
+function Get-FullRepoCounts {
+    <#
+    .SYNOPSIS
+        纯函数：页清单 ⇄ 产物计数的**对账**（⑥ 那条判据的机器形态）。
+    .DESCRIPTION
+        「计数相符」判的是*每个计划页都有一个同名产物*，不是「截到的张数 ≤ 计划数」——后者在
+        重名覆盖那一形下 59 ≤ 60 照样绿，正是被这条判据要挡住的假绿。
+        Missing 点名到页，不只给数（4 小时无人值守的夜里，一行「缺哪几页」决定这轮能不能续）。
+    #>
+    [CmdletBinding()]
+    param(
+        [string[]]$PlannedPages = @(),
+        [string[]]$CapturedNames = @(),
+        [string[]]$SkippedNames = @()
+    )
+    $expected = @($PlannedPages | ForEach-Object { Get-FullRepoShotName $_ })
+    $missing = @($expected | Where-Object { @($CapturedNames) -notcontains $_ })
+    $captured = @($CapturedNames | Where-Object { @($expected) -contains $_ })
+    return [pscustomobject]@{
+        PlannedCount  = @($expected).Count
+        CapturedCount = @($captured).Count
+        SkippedCount  = @($SkippedNames).Count
+        Missing       = $missing
+        CountsMatch   = (@($missing).Count -eq 0)
+    }
+}
+
+function Get-FullRepoManifestData {
+    <#
+    .SYNOPSIS
+        纯函数：把一轮全仓逐页的输入拼成 manifest 对象（含 ⑥ 要的对账结论与逐页时间账）。
+    .DESCRIPTION
+        拆出来的理由：这一段既要在**循环里每页**调（中断也留有已产清单），又要在结尾收口时调一次，
+        两处各拼一遍字段必然漂（漂的结果是「跑完的 manifest 与中途的不是同一份形状」，#2077 续跑读它就错开）。
+        计数对账不在这里重写判据 —— 直接调 `Get-FullRepoCounts`。
+    #>
+    [CmdletBinding()]
+    param(
+        [string]$Ticket = '',
+        [string[]]$PlannedPages = @(),
+        [string[]]$Screenshots = @(),
+        [string[]]$Skipped = @(),
+        [string[]]$HashConflicts = @(),
+        [string[]]$StaleShots = @(),
+        $PageSeconds = @(),
+        [Nullable[datetime]]$RunStartedAt = $null,
+        # 归档目录（给了就连目录一起算**累计**进度）：一轮约 3.9 小时、必须可分夜跑，
+        # 目录里的 PNG 是**跨轮累积**的集合。只报「本轮已产」会把第二夜读成「几乎从零开始」，
+        # 而只报「目录里有几张」又会把上一夜的失败页算进本轮 —— 所以两个都报，各标各的语义。
+        [string]$OutputDir = ''
+    )
+    $counts = Get-FullRepoCounts -PlannedPages $PlannedPages -CapturedNames $Screenshots -SkippedNames $Skipped
+    $dirCaptured = @()
+    $dirMissing = @()
+    $dirPngCount = 0
+    if ($OutputDir -and (Test-Path -LiteralPath $OutputDir)) {
+        $dirNames = @(Get-ChildItem -Path $OutputDir -Filter '*.png' -File | ForEach-Object { $_.BaseName })
+        $dirPngCount = @($dirNames).Count
+        $expectedAll = @($PlannedPages | ForEach-Object { Get-FullRepoShotName -Page $_ })
+        $dirCaptured = @($expectedAll | Where-Object { $dirNames -contains $_ })
+        $dirMissing = @($expectedAll | Where-Object { $dirNames -notcontains $_ })
+    }
+    $sumSecs = 0
+    foreach ($r in @($PageSeconds)) { if ($r) { $sumSecs += [int]$r.Seconds } }
+    return [pscustomobject]@{
+        Schema         = 'fullrepo-manifest/1'
+        ReleaseTicket  = $Ticket
+        RunStartedAt   = $(if ($null -ne $RunStartedAt) { [datetime]$RunStartedAt } else { $null })
+        PlannedCount   = $counts.PlannedCount
+        CapturedCount  = $counts.CapturedCount
+        SkippedCount   = $counts.SkippedCount
+        Missing        = @($counts.Missing)
+        CountsMatch    = [bool]$counts.CountsMatch
+        # 累计面（跨轮）：目录里现在有几张 / 缺哪几页 —— 连跑与收口取这一组
+        DirPngCount    = $dirPngCount
+        DirCaptured    = @($dirCaptured)
+        DirMissing     = @($dirMissing)
+        DirCountsMatch = (@($dirMissing).Count -eq 0 -and @($PlannedPages).Count -gt 0)
+        HashConflicts  = @($HashConflicts)
+        StaleShots     = @($StaleShots)
+        TotalPageSeconds = $sumSecs
+        Pages          = @($PageSeconds)
+        WrittenAt      = (Get-Date)
+    }
+}
+
+function Write-FullRepoManifest {
+    <#
+    .SYNOPSIS
+        把一轮全仓逐页的清单 / 产物 / 计数 / 时间账落成归档目录里的 `fullrepo-manifest.json`。
+    .DESCRIPTION
+        为什么每页都重写一遍而不是只在结尾写：一轮约 3.9 小时纯机时，**中途被断电或被 kill 是常态路径**
+        （#2077 的断点续跑就是为这件事建的）。结尾才落盘的 manifest 在挂掉的运行里等于没有；
+        每页重写让它同时充当「已产清单」，续跑才有输入可读。落盘失败**明报但不改判据**（Ok 仍由截图事实决定）。
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)]$Manifest
+    )
+    try {
+        $json = ($Manifest | ConvertTo-Json -Depth 6)
+        [System.IO.File]::WriteAllText($Path, $json, (New-Object System.Text.UTF8Encoding($false)))
+        return [pscustomobject]@{ Ok = $true; Path = $Path; Error = '' }
+    }
+    catch {
+        return [pscustomobject]@{ Ok = $false; Path = $Path; Error = $_.Exception.Message }
+    }
+}
+
 function Invoke-AutoScreenshot {
     [CmdletBinding()]
     param(
@@ -632,6 +832,9 @@ function Invoke-AutoScreenshot {
         [string]$OutputDir,
         [string]$Pages = '',
         [switch]$ChangedOnly,
+        # **仅发版冒烟语境**的显式授权位（#2078）：值 = 发版票号（纯数字）。给了它才走全仓逐页，
+        # 且产物落 `docs/verification/device/<票号>/`。不给 ⇒ 本文件行为逐字不变（票 ③）。
+        [string]$FullRepo = '',
         [int]$MaxPages = 5,
         [int]$WaitSeconds = 3,
         # 导航落定的有界判据（见 Wait-NavSettled）：等满 MinSeconds 且相邻两次采样**内容一致**才算落定；
@@ -650,14 +853,42 @@ function Invoke-AutoScreenshot {
         [Nullable[datetime]]$RunStartedAt = $null
     )
 
+    # ---------- -FullRepo 授权位校验（**任何副作用之前**）----------
+    # 校验排在建目录、探测 adb、点 cli 之前：一个写错的票号不该在树里留下目录，更不该白烧一次编译。
+    # 「不给 -FullRepo 留无票号通道」是票 ③ 的原话 ⇒ 只认纯数字票号。
+    # 与 -Pages 互斥：一个是「按票号归档的全仓逐页」，一个是「人指定的几页」，两种语义混着给
+    # 就没法回答「这一轮到底截了哪些页」⇒ 拒（拒得看得见，不静默取其一）。
+    $fullRepoMode = -not [string]::IsNullOrWhiteSpace($FullRepo)
+    if ($fullRepoMode -and $FullRepo -notmatch '^\d+$') {
+        return [pscustomobject]@{
+            Ok = $false; Screenshots = @(); Skipped = @(); HashConflicts = @(); TargetPages = @()
+            Error = "-FullRepo 要的是**发版票号**（纯数字，如 -FullRepo 1864），收到 '$FullRepo' ⇒ 拒绝开始（不建目录、不碰设备）。"
+        }
+    }
+    if ($fullRepoMode -and $Pages) {
+        return [pscustomobject]@{
+            Ok = $false; Screenshots = @(); Skipped = @(); HashConflicts = @(); TargetPages = @()
+            Error = "-FullRepo 与 -Pages 互斥（前者=按票号归档全仓逐页，后者=人指定的几页）⇒ 二选一，本次拒绝开始。"
+        }
+    }
+
     if (-not $ProjectDir) {
         $ProjectDir = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
     }
     if (-not $OutputDir) {
-        $OutputDir = Join-Path $ProjectDir '.ci-verify\screenshots'
+        # 全仓形态的产物**默认就落在票号目录**（归档主键 = 票号，与 device-capture.ps1 同一处口径）；
+        # 日常形态逐字不变（仍是 .ci-verify 那棵树，随工作树回收消失）。
+        $OutputDir = if ($fullRepoMode) {
+            Join-Path $ProjectDir (Join-Path 'docs\verification\device' $FullRepo)
+        } else {
+            Join-Path $ProjectDir '.ci-verify\screenshots'
+        }
     }
 
     New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
+
+    # 全仓形态的「已产清单」落点：与截图同目录，续跑（#2077）读的就是它。
+    $fullRepoManifestPath = Join-Path $OutputDir 'fullrepo-manifest.json'
 
     # ---------- adb ----------
     # ⚠️ **解析器的唯一真源在 `lib/env-check.ps1`**（`Resolve-AdbExeLocal`）：本文件**不得**再自带候选集。
@@ -704,7 +935,15 @@ function Invoke-AutoScreenshot {
     # ---------- 1) 确定目标页集合 ----------
     $targetPages = @()
 
-    if ($Pages) {
+    if ($fullRepoMode) {
+        # 授权位已确 ⇒ 全量清单直接来自 pages.json（含 subPackages），**不走 git 推导**、
+        # 也**不受 -MaxPages 裁剪**（裁剪是日常 PR 的成本闸门，不是发版冒烟的判据）。
+        # 这里用 Get-FullRepoPageList 而不是复用 $allPages：后者只含 pages 段，
+        # 动它等于顺手改掉日常 PR 的推导射程（票 ③ 要的是逐字不变）。
+        $targetPages = @(Get-FullRepoPageList -PagesJson $pagesJson)
+        Write-Host "[auto-screenshot] -FullRepo $FullRepo ⇒ 全仓逐页 $($targetPages.Count) 页（不推导、不裁剪）" -ForegroundColor Yellow
+    }
+    elseif ($Pages) {
         # 显式清单优先
         $targetPages = @($Pages -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
     }
@@ -745,7 +984,16 @@ function Invoke-AutoScreenshot {
     }
 
     # ---------- 3) 0 页 ⇒ 明报并返回，绝不回退全量 ----------
+    # -FullRepo 形态下这条**照样有效**，但方向相反且更硬：那一支的唯一入参是票号，
+    # 页清单空 ⇒ 「全仓」这个前提 itself 不成立（pages.json 读空 / 结构变了），
+    # 必须红着装不了事，而不是返回一个「0 页全仓截图」的绿。
     if ($targetPages.Count -eq 0) {
+        if ($fullRepoMode) {
+            return [pscustomobject]@{
+                Ok = $false; Screenshots = @(); Skipped = @(); HashConflicts = @(); TargetPages = @()
+                Error = "-FullRepo $FullRepo：pages.json 全量清单解析出 **0 页** ⇒ 无页可截，不返回绿（全仓形态没有「静默零产物」这条出口）。"
+            }
+        }
         $why = if ($Pages) { '指定的 -Pages 为空' } else { 'git diff 里没有 pages/**/*.uvue 改动' }
         return [pscustomobject]@{
             Ok           = $false
@@ -758,8 +1006,9 @@ function Invoke-AutoScreenshot {
     }
 
     # ---------- 4) -MaxPages 兜底裁剪 ----------
+    # 全仓形态**不裁剪**：票号就是授权，裁掉任何一页都让「全仓基线库」名不副实（决策 5）。
     $capped = @()
-    if ($targetPages.Count -gt $MaxPages) {
+    if (-not $fullRepoMode -and $targetPages.Count -gt $MaxPages) {
         $capped = @($targetPages[$MaxPages..($targetPages.Count - 1)])
         $targetPages = @($targetPages[0..($MaxPages - 1)])
         Write-Host "[auto-screenshot] 目标页 $($targetPages.Count + $capped.Count) 个超过 -MaxPages=$MaxPages，裁掉：$($capped -join ', ')" -ForegroundColor Yellow
@@ -778,6 +1027,14 @@ function Invoke-AutoScreenshot {
     # 调用方给了就用它（issue #1158：步骤 7 的「本轮产物」过滤必须与这里同源）。
     $runStarted = if ($null -ne $RunStartedAt) { [datetime]$RunStartedAt } else { Get-Date }
 
+    # 循环**之前**先落一次 manifest（仅全仓形态）：这样「设备没亮 / adb 通道坏 / 中途被 kill」这些
+    # 一页都没截到的形态，归档里也留有「计划 N 页、已产 0 页」的凭据，而不是一个空目录让人猜。
+    # ⑥ 断路腿要的「明报 INCOMPLETE、已产页不丢、零产物不冒充绿」全靠这份早落盘的清单兑现。
+    if ($fullRepoMode) {
+        $mfPre = Get-FullRepoManifestData -Ticket $FullRepo -PlannedPages $targetPages -RunStartedAt $runStarted -OutputDir $OutputDir
+        $null = Write-FullRepoManifest -Path $fullRepoManifestPath -Manifest $mfPre
+    }
+
     # 前置（fail-closed）：设备必须**亮屏**才能截图 —— 灭屏时 screencap 只会给全黑帧，
     # 而全黑帧天然「稳定」⇒ 会被当成本次证据（2026-09-15 实测踩到）。唤醒设备是**人**的动作，脚本不注入 input。
     # 单次调用有界（#1562）：这一处原先是**无上限**的同步等待，而它在每页之前跑 ⇒ 挂住时连「开始截屏」都到不了。
@@ -785,7 +1042,11 @@ function Invoke-AutoScreenshot {
     # 前者查 adb 通道（设备可能好着），后者是**人**去亮屏。混成一句会把通道问题读成没亮屏。
     $awake = Test-ScreenAwake -AdbExe $adbExe -Serial $Device -TimeoutSeconds $AdbCallTimeoutSeconds
     if (-not $awake.Ok) {
-        foreach ($p in $targetPages) { $skipped += ($p -split '/')[-1] }
+        # 灭屏这一支也要按**本轮形态**记名：全仓形态记拍平名，否则 manifest 里的 Skipped
+        # 与截图文件名（以及 #2077 续跑要读的键）是两套名字，对账当场对不上。
+        foreach ($p in $targetPages) {
+            $skipped += $(if ($fullRepoMode) { Get-FullRepoShotName -Page $p } else { ($p -split '/')[-1] })
+        }
         $awakeWhy = if ($awake.TimedOut) {
             "单次 adb 调用未在 $AdbCallTimeoutSeconds 秒内返回（adb 通道问题，不是没亮屏）"
         } else { "mWakefulness=$($awake.State)" }
@@ -800,11 +1061,20 @@ function Invoke-AutoScreenshot {
         }
     }
 
+    # 全仓形态的逐页**时间账与心跳**（票 ④.2 / ④.4）：一轮约 3.9 小时，缺「现在第几页、这页花了多久、
+    # 累计多少」就等于无人值守时**没有任何可判读的东西** —— 挂死与慢得看不出区别（#1560 那条血账的形状）。
+    $fullRepoPageSeconds = @()
+    $loopStarted = Get-Date
+    $prevPageSeconds = 0
+
     $pageNum = 0
     foreach ($page in $targetPages) {
         $pageNum++
-        $pageName = ($page -split '/')[-1]
+        # 文件名：日常形态按末段（**逐字不变**），全仓形态按整条路径拍平。
+        # 不是风格问题：主树 60 页末段只有 59 个唯一值，按末段会少一张图、并把覆盖读成切页故障。
+        $pageName = if ($fullRepoMode) { Get-FullRepoShotName -Page $page } else { ($page -split '/')[-1] }
         $outputFile = Join-Path $OutputDir "$pageName.png"
+        $pageStarted = Get-Date
 
         Write-Host "[auto-screenshot] ($pageNum/$($targetPages.Count)) 导航: $page" -ForegroundColor Cyan
 
@@ -907,8 +1177,39 @@ function Invoke-AutoScreenshot {
             $skipped += $pageName
             Write-Host "  ⚠️ $pageName 异常: $($_.Exception.Message)" -ForegroundColor Yellow
         }
+        finally {
+            # 逐页时间账 + 心跳写在 finally：本循环有 6 条 continue 出口（未落定 / 调用超时 / 截图失败 /
+            # 全黑帧 / 陈旧 / hash 冲突）加一条 catch，挨个补记账必漏一处。本会话实测 pwsh 7：
+            # finally 在 continue、throw、正常路径**三条都走** ⇒ 一处覆盖全部出口。
+            $pageSecs = [int]((Get-Date) - $pageStarted).TotalSeconds
+            if ($fullRepoMode) {
+                $rec = [pscustomobject]@{ Page = $page; Name = $pageName; Seconds = $pageSecs; Index = $pageNum }
+                $fullRepoPageSeconds += $rec
+                $cum = [int]((Get-Date) - $loopStarted).TotalSeconds
+                $doneCount = @($fullRepoPageSeconds).Count
+                $sumSecs = [int](($fullRepoPageSeconds | Measure-Object -Property Seconds -Sum).Sum)
+                $avg = if ($doneCount -gt 0) { [int]($sumSecs / $doneCount) } else { $pageSecs }
+                $remain = [int](($targetPages.Count - $pageNum) * $avg)
+                # 剩余预估按本轮已有页的均值算（第 1 页用本页自身）；不给经验常数——常数正是票 ④.4 要拿实测换掉的东西
+                $fmt = "  [心跳] {0}/{1} {2} 本页 {3}s（上一页 {4}s）累计 {5}s 剩约 {6}s"
+                Write-Host ($fmt -f $pageNum, $targetPages.Count, $pageName, $pageSecs, $prevPageSeconds, $cum, $remain) -ForegroundColor DarkCyan
+                $prevPageSeconds = $pageSecs
+                $mfArgs = @{ Ticket = $FullRepo; PlannedPages = $targetPages; Screenshots = $screenshots }
+                $mfArgs.Skipped = $skipped
+                $mfArgs.HashConflicts = $hashConflicts
+                $mfArgs.StaleShots = $staleShots
+                $mfArgs.PageSeconds = $fullRepoPageSeconds
+                $mfArgs.RunStartedAt = $runStarted
+                $mfArgs.OutputDir = $OutputDir
+                $null = Write-FullRepoManifest -Path $fullRepoManifestPath -Manifest (Get-FullRepoManifestData @mfArgs)
+            }
+        }
     }
 
+    # `Ok` 的判据**一字未改**（票 ③：日常形态逐字不变；全仓形态也不放宽）：
+    # 零产物、有跳过、有 hash 冲突都算不通过。全仓形态只在这之上**多带一个 Verdict**，
+    # 用来把「截到了但没截全」（INCOMPLETE，处置指向工具）与「一页都没截到」（FAIL，阻断）分开
+    # —— 移动端 ADR-0043 决策 6 的三态语义，不是新发明的第四态。
     $allOk = ($screenshots.Count -gt 0 -and $skipped.Count -eq 0 -and $hashConflicts.Count -eq 0)
     $errorMsg = ''
     if ($hashConflicts.Count -gt 0) {
@@ -916,6 +1217,24 @@ function Invoke-AutoScreenshot {
     }
     elseif ($screenshots.Count -eq 0) {
         $errorMsg = '没有任何页面截图成功'
+    }
+
+    $fullRepoCounts = $null
+    $verdict = ''
+    if ($fullRepoMode) {
+        $fullRepoCounts = Get-FullRepoCounts -PlannedPages $targetPages -CapturedNames $screenshots -SkippedNames $skipped
+        $mfPost = Get-FullRepoManifestData -Ticket $FullRepo -PlannedPages $targetPages -Screenshots $screenshots `
+            -Skipped $skipped -HashConflicts $hashConflicts -StaleShots $staleShots `
+            -PageSeconds $fullRepoPageSeconds -RunStartedAt $runStarted -OutputDir $OutputDir
+        $null = Write-FullRepoManifest -Path $fullRepoManifestPath -Manifest $mfPost
+        if ($allOk -and [bool]$fullRepoCounts.CountsMatch) { $verdict = 'PASS' }
+        elseif (@($screenshots).Count -eq 0) { $verdict = 'FAIL' }
+        else { $verdict = 'INCOMPLETE' }
+        $totalSecs = [int]((Get-Date) - $loopStarted).TotalSeconds
+        $fmt = '[fullrepo] verdict={0} planned={1} captured={2} skipped={3} missing={4} 本轮机时={5}s manifest={6}'
+        Write-Host ($fmt -f $verdict, $fullRepoCounts.PlannedCount, $fullRepoCounts.CapturedCount, `
+            $fullRepoCounts.SkippedCount, (@($fullRepoCounts.Missing) -join ','), $totalSecs, $fullRepoManifestPath) `
+            -ForegroundColor $(if ($verdict -eq 'PASS') { 'Green' } else { 'Red' })
     }
 
     return [pscustomobject]@{
@@ -929,5 +1248,16 @@ function Invoke-AutoScreenshot {
         # 不各自 `Get-Date`（两个判据各取一次会漂，先取的那次会把后落的截图误判成陈旧）。
         RunStartedAt  = $runStarted
         Error         = $errorMsg
+        # ---------- -FullRepo 形态专有 ----------
+        # 日常形态（不带 -FullRepo）这几个字段恒为 '' / $null / 空集：调用方照旧只读上面那六个，
+        # 不会被新字段牵到（票 ③「逐字不变」也包括结论对象的形状不变）。
+        # Verdict = 移动端 ADR-0043 决策 6 的三态（PASS / INCOMPLETE / FAIL），不是新发明的第四态。
+        # Counts 是给 ⑥「页清单与产物计数相符」那条判据的**结构化依据** —— 不让人去数目录里的图。
+        FullRepo      = $(if ($fullRepoMode) { $FullRepo } else { '' })
+        Verdict       = $verdict
+        Counts        = $fullRepoCounts
+        ManifestPath  = $(if ($fullRepoMode) { $fullRepoManifestPath } else { '' })
+        PlannedPages  = $(if ($fullRepoMode) { @($targetPages) } else { @() })
+        PageSeconds   = @($fullRepoPageSeconds)
     }
 }
