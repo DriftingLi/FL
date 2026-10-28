@@ -168,7 +168,7 @@ func (h *handler) DeleteComment(c *gin.Context) {
 // @Tags 学员端-题目互动
 // @Security BearerAuth
 // @Param question_id path int true "题目ID"
-// @Success 200 {object} response.R{data=model.Note} "success"
+// @Success 200 {object} response.R{data=note.QuestionNoteDTO} "success（未写笔记时 data 为 null）"
 // @Failure 400 {object} response.R "题目ID无效"
 // @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /questions/{question_id}/note [get]
@@ -188,7 +188,8 @@ func (h *handler) GetNote(c *gin.Context) {
 		response.Success(c, nil)
 		return
 	}
-	response.Success(c, n)
+	dto := note.QuestionNoteToDTO(n)
+	response.Success(c, dto)
 }
 
 // UpsertNote 保存笔记（每人每题一条）
@@ -198,9 +199,9 @@ func (h *handler) GetNote(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param question_id path int true "题目ID"
-// @Param body body object true "笔记" example({"content":"我的笔记"})
-// @Success 200 {object} response.R{data=model.Note} "success"
-// @Failure 400 {object} response.R "题目ID无效"
+// @Param body body object true "笔记" example({"content":"我的笔记","images":["/static/uploads/images/forum/x.png"]})
+// @Success 200 {object} response.R{data=note.QuestionNoteDTO} "success"
+// @Failure 400 {object} response.R "题目ID无效/图片张数或地址不合法"
 // @Failure 500 {object} response.R "服务端内部错误（含可见性/存在性查询读不动；不外发驱动原文）"
 // @Router /questions/{question_id}/note [put]
 func (h *handler) UpsertNote(c *gin.Context) {
@@ -211,18 +212,20 @@ func (h *handler) UpsertNote(c *gin.Context) {
 	}
 	uid := middleware.CurrentUserID(c)
 	var req struct {
-		Content string `json:"content"`
+		Content string   `json:"content"`
+		Images  []string `json:"images"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "参数错误")
 		return
 	}
-	n, err := h.noteSvc.UpsertForQuestion(qid, uid, req.Content, questionbank.StudentQuestionScope(c))
+	n, err := h.noteSvc.UpsertForQuestion(qid, uid, req.Content, req.Images, questionbank.StudentQuestionScope(c))
 	if err != nil {
 		ErrStatus.RenderError(c, err)
 		return
 	}
-	response.Success(c, n)
+	dto := note.QuestionNoteToDTO(n)
+	response.Success(c, dto)
 }
 
 // DeleteNote 删除笔记

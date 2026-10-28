@@ -21,7 +21,8 @@ func studentScope() questionbank.QuestionReadScope { return questionbank.NewQues
 func newNoteSvc(t *testing.T) (*Service, *gorm.DB) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	return NewService(db, zap.NewNop()), db
+	// 图片校验要存储；这组用例测正文与归属，传 nil 即「没有图片可校验」。
+	return NewService(db, nil, zap.NewNop()), db
 }
 
 // TestNoteStandaloneCanBeMultiple 独立笔记可多条（question_id 为空时唯一约束不生效——
@@ -29,7 +30,7 @@ func newNoteSvc(t *testing.T) (*Service, *gorm.DB) {
 func TestNoteStandaloneCanBeMultiple(t *testing.T) {
 	svc, _ := newNoteSvc(t)
 	for _, c := range []string{"第一条", "第二条", "第三条"} {
-		if _, err := svc.Create(1, c); err != nil {
+		if _, err := svc.Create(1, c, nil); err != nil {
 			t.Fatalf("建独立笔记失败(%s): %v", c, err)
 		}
 	}
@@ -51,10 +52,10 @@ func TestNoteStandaloneCanBeMultiple(t *testing.T) {
 func TestNoteQuestionNoteStaysSingle(t *testing.T) {
 	svc, db := newNoteSvc(t)
 	q := testutil.SeedQuestion(t, db, "single_choice", "题干", "A")
-	if _, err := svc.UpsertForQuestion(q.ID, 1, "第一版", studentScope()); err != nil {
+	if _, err := svc.UpsertForQuestion(q.ID, 1, "第一版", nil, studentScope()); err != nil {
 		t.Fatalf("首次保存失败: %v", err)
 	}
-	if _, err := svc.UpsertForQuestion(q.ID, 1, "第二版", studentScope()); err != nil {
+	if _, err := svc.UpsertForQuestion(q.ID, 1, "第二版", nil, studentScope()); err != nil {
 		t.Fatalf("二次保存失败: %v", err)
 	}
 	var cnt int64
@@ -76,7 +77,7 @@ func TestNoteQuestionNoteStaysSingle(t *testing.T) {
 func TestNoteListScopeAndOrder(t *testing.T) {
 	svc, db := newNoteSvc(t)
 	q := testutil.SeedQuestion(t, db, "single_choice", "液压泵异响的判断", "A")
-	if _, err := svc.Create(1, "独立笔记较早"); err != nil {
+	if _, err := svc.Create(1, "独立笔记较早", nil); err != nil {
 		t.Fatal(err)
 	}
 	// 拉开时间：Create 取 clock.Now()，这里直接改库里的 updated_at 以稳定断言
@@ -84,7 +85,7 @@ func TestNoteListScopeAndOrder(t *testing.T) {
 		UpdateColumn("updated_at", time.Now().Add(-2*time.Hour)).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.UpsertForQuestion(q.ID, 1, "题目笔记较新", studentScope()); err != nil {
+	if _, err := svc.UpsertForQuestion(q.ID, 1, "题目笔记较新", nil, studentScope()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -115,11 +116,11 @@ func TestNoteListScopeAndOrder(t *testing.T) {
 // TestNoteOwnershipIsolation 越权隔离：他人笔记按「不存在」处理，不泄漏存在性。
 func TestNoteOwnershipIsolation(t *testing.T) {
 	svc, db := newNoteSvc(t)
-	n, err := svc.Create(1, "甲的笔记")
+	n, err := svc.Create(1, "甲的笔记", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.Update(n.ID, 2, "乙来改"); !errors.Is(err, ErrNoteNotFound) {
+	if _, err := svc.Update(n.ID, 2, "乙来改", nil); !errors.Is(err, ErrNoteNotFound) {
 		t.Fatalf("改他人笔记应报 ErrNoteNotFound, got %v", err)
 	}
 	if err := svc.Delete(n.ID, 2); !errors.Is(err, ErrNoteNotFound) {
@@ -143,14 +144,14 @@ func TestNoteOwnershipIsolation(t *testing.T) {
 // TestNoteContentValidation 正文校验：空 / 超长拒绝（沿用既有字节口径）。
 func TestNoteContentValidation(t *testing.T) {
 	svc, _ := newNoteSvc(t)
-	if _, err := svc.Create(1, "   "); err == nil {
+	if _, err := svc.Create(1, "   ", nil); err == nil {
 		t.Fatal("空白正文应被拒绝")
 	}
 	long := make([]byte, 2001)
 	for i := range long {
 		long[i] = 'a'
 	}
-	if _, err := svc.Create(1, string(long)); err == nil {
+	if _, err := svc.Create(1, string(long), nil); err == nil {
 		t.Fatal("超长正文应被拒绝")
 	}
 }

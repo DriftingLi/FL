@@ -127,6 +127,10 @@ var defaultTargets = []target{
 	{Table: "feedback", Columns: []column{
 		{Name: "images", Kind: kindJSONB},
 	}},
+	// 笔记图片（#2069）：同上，复用论坛图片通道。
+	{Table: "note", Columns: []column{
+		{Name: "images", Kind: kindJSONB},
+	}},
 }
 
 // columnStat 单列的统计：命中行数（含旧前缀的行）与改写行数（dry-run 恒为 0）。

@@ -152,6 +152,15 @@ func TestNoteErrStatusFacesAreProducible(t *testing.T) {
 		{note.ErrNoteContentTooLong, http.StatusBadRequest, http.MethodPost, "/api/notes", map[string]any{"content": strings.Repeat("记", 2001)}, "笔记不能超过2000字"},
 		{note.ErrNoteNotFound, http.StatusNotFound, http.MethodPut, "/api/notes/999999", map[string]any{"content": "改一点"}, "笔记不存在"},
 		{note.ErrNoteNotFound, http.StatusNotFound, http.MethodDelete, "/api/notes/999999", nil, "笔记不存在"},
+		// #2069：图片三档——张数、地址、文件。第三档要真存储（夹具已带 LocalStorage），
+		// 否则「文件不存在」会被答成 500「存储后端未配置」（那是装配事实，不是用户输入）。
+		{note.ErrNoteImagesTooMany, http.StatusBadRequest, http.MethodPost, "/api/notes",
+			map[string]any{"content": "四张图", "images": []string{"/static/uploads/images/forum/a_1.png", "/static/uploads/images/forum/b_2.png", "/static/uploads/images/forum/c_3.png", "/static/uploads/images/forum/d_4.png"}},
+			"最多只能添加 3 张图片"},
+		{note.ErrNoteImageNotAllowed, http.StatusBadRequest, http.MethodPost, "/api/notes",
+			map[string]any{"content": "外链", "images": []string{"https://evil.example.com/a.png"}}, "图片地址不在允许范围内"},
+		{note.ErrNoteImageMissing, http.StatusBadRequest, http.MethodPost, "/api/notes",
+			map[string]any{"content": "没有这个文件", "images": []string{"/static/uploads/images/forum/ghost_2069.png"}}, "图片文件不存在"},
 	})
 
 	// 反向控制：同一批路径换成真实 id 就不再报「不存在」——否则上面四条 404 可能是恒真的。

@@ -174,10 +174,13 @@ type Note struct {
 	ID int `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
 	// QuestionID 挂载的题目；nil = 独立笔记。用指针而非零值哨兵：题目 id 从 1 起，
 	// 拿 0 表达「不挂题」会把「没挂」和「挂了不存在的题」混成一谈。
-	QuestionID *int      `gorm:"column:question_id" json:"question_id"`
-	UserID     int       `gorm:"column:user_id" json:"user_id"`
-	Content    string    `gorm:"column:content" json:"content"`
-	UpdatedAt  time.Time `gorm:"column:updated_at" json:"updated_at"`
+	QuestionID *int   `gorm:"column:question_id" json:"question_id"`
+	UserID     int    `gorm:"column:user_id" json:"user_id"`
+	Content    string `gorm:"column:content" json:"content"`
+	// Images 笔记图片（#2069）：0–3 张，复用论坛图片通道与 images/forum/ 前缀（ADR-0066）。
+	// 空集落 '[]'，读出即 []；顺序即用户添加顺序（服务端不重排）。
+	Images    JSONB     `gorm:"column:images;type:jsonb;default:'[]'" json:"images"`
+	UpdatedAt time.Time `gorm:"column:updated_at" json:"updated_at"`
 }
 
 func (Note) TableName() string { return "note" }
