@@ -6,6 +6,8 @@
  * 不解决「贴得对不对」——首推即绿的前提是本机能先拿到与 CI 相同的结论。判据不抄第二份：
  * 直接 import .github/scripts/lib/gate-validator.mjs（pr-evidence.yml / mobile-gates.yml 也是
  * 用 repos.getContent 取同一个文件执行，见 #1770 S5）。
+ * #2053：同层再对 PR 正文跑引用完整性 lint（.github/scripts/lib/lint-issue-references.mjs），
+ * 红项并进 errors、共决 ok——不新增门、不动 gate-validator 的门清单与行措辞白名单。
  *
  * 用法：
  *   node .github/scripts/preflight-pr.mjs --body-file .scratch/pr-body.md
@@ -18,6 +20,7 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { validatePrEvidence, issueNumbersInBody, GATE_EVIDENCE } from './lib/gate-validator.mjs';
+import { lintIssueReferences, makeFsFacts, makeGhNumberResolver } from './lib/lint-issue-references.mjs';
 
 const USAGE = [
   '用法: node .github/scripts/preflight-pr.mjs [选项]',
@@ -209,6 +212,20 @@ export function fillCiLine(body, url) {
   return { body: lines.join('\n'), filled: true, reason: 'filled', line: lines[idx] };
 }
 
+/**
+ * #2053：引用完整性 lint 结果并进预检——红项进 errors、ok 共决、notes 透传；gates 原样不动。
+ * 纯函数；行为钉在 lint-issue-references.test.mjs 切片5（含「全绿时原结论不变」与「不新增门」两条）。
+ */
+export function mergeRefLint(result, lint) {
+  const reds = lint.reds || [];
+  return {
+    ...result,
+    ok: result.ok && reds.length === 0,
+    errors: [...result.errors, ...reds.map((x) => '引用漂移 · ' + x.message)],
+    notes: [...result.notes, ...(lint.notes || [])],
+  };
+}
+
 function render(ctx) {
   const { args, commit, author, compare, gateComments, commitComments, issueComments, shas, ciRun, result } = ctx;
   const lines = [];
@@ -281,13 +298,18 @@ async function main(argv) {
   const author = currentLogin();
   const fetchCompare = makeFetchCompare(repo);
   const result = await validatePrEvidence({ files: compare.files, body, author, gateComments, commitComments, issueComments, headSha: commit, fetchCompare });
+  // #2053：对 PR 正文跑引用完整性 lint（与证据段判据同层）；空正文无从判起，直接放行分支。
+  const refLint = body
+    ? await lintIssueReferences(body, { ...makeFsFacts(git('rev-parse', '--show-toplevel').trim()), resolveNumber: makeGhNumberResolver(repo, { run }) })
+    : { ok: true, reds: [], notes: [] };
+  const final = mergeRefLint(result, refLint);
   const ciRun = pickCiSummaryRun(checkRuns(repo, commit), commit);
   if (args.json) {
-    console.log(JSON.stringify({ ok: result.ok, errors: result.errors, notes: result.notes, gates: result.gates, commit, base: args.base, author, ciRun }, null, 2));
+    console.log(JSON.stringify({ ok: final.ok, errors: final.errors, notes: final.notes, gates: final.gates, commit, base: args.base, author, ciRun }, null, 2));
   } else {
-    console.log(render({ args, commit, author, compare, gateComments, commitComments, issueComments, shas, ciRun, result, hasBody }));
+    console.log(render({ args, commit, author, compare, gateComments, commitComments, issueComments, shas, ciRun, result: final, hasBody }));
   }
-  return result.ok ? 0 : 1;
+  return final.ok ? 0 : 1;
 }
 
 const invokedDirectly = Boolean(process.argv[1]) && process.argv[1].replace(/\\/g, "/").endsWith(".github/scripts/preflight-pr.mjs");
