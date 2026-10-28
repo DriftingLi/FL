@@ -60,7 +60,7 @@ func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, svc *Service
 // @Produce json
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(10)
-// @Param category query string false "分类"
+// @Param category query string false "分类 company|industry|product|news|exam|notice（省略=全部）"
 // @Param sort query string false "排序 latest|hot" default(latest)
 // @Success 200 {object} response.R{data=featured.FeaturedContentPageResult} "success"
 // @Router /featured-contents [get]
@@ -154,7 +154,7 @@ func (h *handler) IncrementViewCount(c *gin.Context) {
 // @Security BearerAuth
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(10)
-// @Param category query string false "分类"
+// @Param category query string false "分类 company|industry|product|news|exam|notice（省略=全部）"
 // @Param state query string false "状态：draft 草稿 / scheduled 定时中 / published 已发布（空 = 全部）"
 // @Success 200 {object} response.R{data=featured.FeaturedContentAdminPageResult} "success"
 // @Failure 400 {object} response.R "状态过滤无效"

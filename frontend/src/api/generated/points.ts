@@ -8,11 +8,12 @@
 //   GET  /points/balance
 //   GET  /points/ledger
 //   GET  /points/tasks
+//   GET  /points/shop/items
 //   POST /points/tasks/{code}/claim
 //   POST /points/shop/course/{courseId}/redeem
 //   POST /points/shop/{sku}/redeem
 //
-// 覆盖的 Go 类型：PointsBalanceResult / PointsClaimResult / PointsLedgerItem / PointsLedgerResult / PointsTaskItem / PointsTasksResult / RedeemResult
+// 覆盖的 Go 类型：PointsBalanceResult / PointsClaimResult / PointsLedgerItem / PointsLedgerResult / PointsTaskItem / PointsTasksResult / RedeemResult / ShopItemDTO / ShopItemsResult
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -74,4 +75,16 @@ export interface RedeemResult {
   ref_id: string
   sku: string
   total_earned: number
+}
+
+export interface ShopItemDTO {
+  owned: boolean
+  price: number
+  sku: string
+  stock: number
+  title: string
+}
+
+export interface ShopItemsResult {
+  items: ShopItemDTO[]
 }

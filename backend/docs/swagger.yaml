@@ -2564,6 +2564,27 @@ definitions:
       total_earned:
         type: integer
     type: object
+  points.ShopItemDTO:
+    properties:
+      owned:
+        type: boolean
+      price:
+        type: integer
+      sku:
+        type: string
+      stock:
+        description: Stock 为 nil 表示不限库存（与 points_shop_item.stock 的可空语义一致）。
+        type: integer
+      title:
+        type: string
+    type: object
+  points.ShopItemsResult:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/points.ShopItemDTO'
+        type: array
+    type: object
   practicemode.HistoryItemDTO:
     properties:
       created_at:
@@ -6387,7 +6408,7 @@ paths:
         in: query
         name: page_size
         type: integer
-      - description: 分类
+      - description: 分类 company|industry|product|news|exam|notice（省略=全部）
         in: query
         name: category
         type: string
@@ -10796,6 +10817,10 @@ paths:
         in: query
         name: filter
         type: string
+      - description: 免费/付费筛选：true 付费（积分兑换价 > 0）/ false 免费（积分价为空或 0）/ 省略不过滤
+        in: query
+        name: paid
+        type: boolean
       produces:
       - application/json
       responses:
@@ -11103,7 +11128,7 @@ paths:
         in: query
         name: page_size
         type: integer
-      - description: 分类
+      - description: 分类 company|industry|product|news|exam|notice（省略=全部）
         in: query
         name: category
         type: string
@@ -11489,6 +11514,10 @@ paths:
       - description: 精选过滤 true|false，省略表示不过滤（#742）
         in: query
         name: featured
+        type: string
+      - description: 问答解决态 unsolved|solved|all（问答类目的采纳态；省略不过滤；非法值 400）
+        in: query
+        name: solved
         type: string
       - description: 章节ID
         in: query
@@ -12941,6 +12970,10 @@ paths:
         in: query
         name: page_size
         type: integer
+      - description: 收支方向 in|out（省略=全部；非法值 400）
+        in: query
+        name: direction
+        type: string
       produces:
       - application/json
       responses:
@@ -13028,6 +13061,30 @@ paths:
       security:
       - BearerAuth: []
       summary: 兑换课程
+      tags:
+      - 学员端-积分
+  /points/shop/items:
+    get:
+      description: 学员查看可兑换商品、积分价、库存与是否已拥有（已拥有与兑换判据同源）；不列未登记权益读者的行
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 在售列表
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/points.ShopItemsResult'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 积分商城在售商品
       tags:
       - 学员端-积分
   /points/tasks:

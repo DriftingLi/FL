@@ -3407,7 +3407,7 @@
                     },
                     {
                         "type": "string",
-                        "description": "分类",
+                        "description": "分类 company|industry|product|news|exam|notice（省略=全部）",
                         "name": "category",
                         "in": "query"
                     },
@@ -10686,6 +10686,12 @@
                         "description": "热门/精品筛选 hot|featured|all",
                         "name": "filter",
                         "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "免费/付费筛选：true 付费（积分兑换价 \u003e 0）/ false 免费（积分价为空或 0）/ 省略不过滤",
+                        "name": "paid",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -11203,7 +11209,7 @@
                     },
                     {
                         "type": "string",
-                        "description": "分类",
+                        "description": "分类 company|industry|product|news|exam|notice（省略=全部）",
                         "name": "category",
                         "in": "query"
                     },
@@ -11839,6 +11845,12 @@
                         "type": "string",
                         "description": "精选过滤 true|false，省略表示不过滤（#742）",
                         "name": "featured",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "问答解决态 unsolved|solved|all（问答类目的采纳态；省略不过滤；非法值 400）",
+                        "name": "solved",
                         "in": "query"
                     },
                     {
@@ -14226,6 +14238,12 @@
                         "description": "每页数量",
                         "name": "page_size",
                         "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "收支方向 in|out（省略=全部；非法值 400）",
+                        "name": "direction",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -14303,6 +14321,49 @@
                         "description": "余额不足/已拥有",
                         "schema": {
                             "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/points/shop/items": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "学员查看可兑换商品、积分价、库存与是否已拥有（已拥有与兑换判据同源）；不列未登记权益读者的行",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-积分"
+                ],
+                "summary": "积分商城在售商品",
+                "responses": {
+                    "200": {
+                        "description": "在售列表",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/points.ShopItemsResult"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -27817,6 +27878,38 @@
                 },
                 "total_earned": {
                     "type": "integer"
+                }
+            }
+        },
+        "points.ShopItemDTO": {
+            "type": "object",
+            "properties": {
+                "owned": {
+                    "type": "boolean"
+                },
+                "price": {
+                    "type": "integer"
+                },
+                "sku": {
+                    "type": "string"
+                },
+                "stock": {
+                    "description": "Stock 为 nil 表示不限库存（与 points_shop_item.stock 的可空语义一致）。",
+                    "type": "integer"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "points.ShopItemsResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/points.ShopItemDTO"
+                    }
                 }
             }
         },

@@ -6,6 +6,7 @@
 package points
 
 import (
+	"context"
 	"testing"
 
 	"go.uber.org/zap"
@@ -19,6 +20,7 @@ import (
 var nonnilOutletsPoints = map[string]func(t *testing.T) any{
 	"points.PointsLedgerResult.items": outletPointsLedgerEmpty,
 	"points.PointsTasksResult.tasks":  outletPointsTasksNone,
+	"points.ShopItemsResult.items":    outletShopItemsNone,
 }
 
 // TestNonNilDeclaredOutletsNeverEmitNull 本域的举证入口（判据本体在 testutil）。
@@ -47,6 +49,20 @@ func outletPointsTasksNone(t *testing.T) any {
 	res, err := svc.GetTasks(student.ID)
 	if err != nil {
 		t.Fatalf("任务列表失败: %v", err)
+	}
+	return res
+}
+
+// outletShopItemsNone 商城在售列表：一件在售商品都没有时 items 是空集。
+// 播用户只为满足 ListShopItems 的用户维度（Owned 判据按 user_id 查权益）。
+func outletShopItemsNone(t *testing.T) any {
+	t.Helper()
+	db := testutil.NewMemoryDB(t)
+	student := testutil.SeedStudent(t, db, "商城学员", "x")
+	svc := NewService(db, zap.NewNop(), nil, nil)
+	res, err := svc.ListShopItems(context.Background(), student.ID)
+	if err != nil {
+		t.Fatalf("商城在售列表失败: %v", err)
 	}
 	return res
 }

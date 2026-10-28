@@ -28,7 +28,9 @@ export const featuredCategoryLabels: Record<string, string> = {
   company: '公司动态',
   industry: '行业新闻',
   product: '产品资讯',
-  news: '政策法规'
+  news: '政策法规',
+  exam: '考情',
+  notice: '公告'
 }
 
 /** 内容精选分类选项（管理端表单下拉用） */
@@ -36,12 +38,16 @@ export const featuredCategoryOptions = [
   { value: 'company', label: '公司动态' },
   { value: 'industry', label: '行业新闻' },
   { value: 'product', label: '产品资讯' },
-  { value: 'news', label: '政策法规' }
+  { value: 'news', label: '政策法规' },
+  { value: 'exam', label: '考情' },
+  { value: 'notice', label: '公告' }
 ]
 
 /** 获取分类中文标签 */
 export function categoryLabel(category: string): string {
-  return featuredCategoryLabels[category] || '政策法规'
+  // 未知类别回落成**原值**，不再静默冒充「政策法规」（#2063）：字典扩两态后，
+  // 旧回落会把「考情」显示成「政策法规」——错标不报错，比空串更糟。
+  return featuredCategoryLabels[category] ?? category
 }
 
 // ===== 公开详情：本仓 training 域的第二个消费者（ADR-0049 决策 4）=====

@@ -41,7 +41,7 @@ func TestNonNilDeclaredOutletsNeverEmitNull(t *testing.T) {
 // outletCoursePageNoCourses 空库拉学员端课程列表：无一行课程时 courses 发 `[]`。
 func outletCoursePageNoCourses(t *testing.T) any {
 	t.Helper()
-	res, err := NewService(testutil.NewMemoryDB(t), nil, zap.NewNop()).GetCourses(1, 20, nil, nil, nil, "")
+	res, err := NewService(testutil.NewMemoryDB(t), nil, zap.NewNop()).GetCourses(1, 20, nil, nil, nil, "", nil)
 	if err != nil {
 		t.Fatalf("空库拉课程列表失败: %v", err)
 	}

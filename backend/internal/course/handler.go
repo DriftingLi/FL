@@ -84,6 +84,7 @@ var unreadableFaces404 = []error{
 // @Param level_id query int false "等级ID"
 // @Param credential_id query int false "目标证件ID"
 // @Param filter query string false "热门/精品筛选 hot|featured|all" default(all)
+// @Param paid query boolean false "免费/付费筛选：true 付费（积分兑换价 > 0）/ false 免费（积分价为空）/ 省略不过滤"
 // @Success 200 {object} response.R{data=CoursePageResult} "success"
 // @Router /courses [get]
 func (h *handler) ListCourses(c *gin.Context) {
@@ -96,6 +97,10 @@ func (h *handler) ListCourses(c *gin.Context) {
 			if f == "" {
 				f = "all"
 			}
+			paid, err := parsePaidFilter(c.Query("paid"))
+			if err != nil {
+				return nil, err
+			}
 			return &courseListReq{
 				Page:         httpx.QueryIntDefault(c, "page", 1),
 				PageSize:     httpx.QueryIntDefault(c, "page_size", 12),
@@ -103,10 +108,11 @@ func (h *handler) ListCourses(c *gin.Context) {
 				SpecialtyID:  httpx.QueryIDPtr(c, "specialty_id"),
 				LevelID:      httpx.QueryIDPtr(c, "level_id"),
 				Filter:       f,
+				Paid:         paid,
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *courseListReq) (*CoursePageResult, error) {
-			result, err := h.svc.GetCourses(req.Page, req.PageSize, req.CredentialID, req.SpecialtyID, req.LevelID, req.Filter)
+			result, err := h.svc.GetCourses(req.Page, req.PageSize, req.CredentialID, req.SpecialtyID, req.LevelID, req.Filter, req.Paid)
 			if err != nil {
 				return nil, err
 			}
@@ -357,4 +363,22 @@ type courseListReq struct {
 	SpecialtyID  *int
 	LevelID      *int
 	Filter       string
+	Paid         *bool
+}
+
+// parsePaidFilter 解析免费/付费筛选（#2071）：省略 = 不过滤；true = 付费（积分兑换价 > 0）；
+// false = 免费（积分价为空）。判据是积分兑换价 points_price，不是现金价。
+func parsePaidFilter(raw string) (*bool, error) {
+	switch raw {
+	case "":
+		return nil, nil
+	case "true":
+		v := true
+		return &v, nil
+	case "false":
+		v := false
+		return &v, nil
+	default:
+		return nil, httpx.BadRequest("paid 仅支持 true|false")
+	}
 }
