@@ -93,6 +93,32 @@ function compareOf(repo, base, head) {
   return { status: (payload && payload.status) || '', mergeBaseSha: (payload && payload.merge_base_commit && payload.merge_base_commit.sha) || '', files, truncated };
 }
 
+/**
+ * 注入校验器的 fetchCompare：导出工厂（#2044 TDD 提取 seam）。
+ * 参数形态是契约面：校验器按 fetchCompare({ base, head }) 调用、CI 注入实现按 ({ base, head }) 收，
+ * 本地预检必须同构 —— 测试面在 preflight-pr.test.mjs 钉三方一致性。
+ * compareOfImpl / warn 仅测试注桩用，默认走生产路径（gh api 与 stderr）。
+ */
+export function makeFetchCompare(repo, { compareOfImpl = compareOf, warn } = {}) {
+  const write = warn || ((m) => process.stderr.write(m));
+  const compareCache = new Map();
+  return ({ base, head } = {}) => {
+    const key = `${base}...${head}`;
+    if (compareCache.has(key)) return compareCache.get(key);
+    let value = null;
+    try {
+      const c = compareOfImpl(repo, String(base).replace(/^origin\//, ''), String(head));
+      value = { status: c.status, mergeBaseSha: c.mergeBaseSha, files: c.files.map((f) => f.filename), filesTruncated: c.truncated };
+    } catch (e) {
+      // 与 CI 同口径：compare 拿不到就收敛成 null，让校验器 fail-closed（不当成「没改」）。
+      write(`compare ${key} 失败，按 fail-closed 处理：${e.message}\n`);
+      value = null;
+    }
+    compareCache.set(key, value);
+    return value;
+  };
+}
+
 function commitRangeShas(base, commit) {
   const text = git('log', '--format=%H', `${base}..${commit}`);
   return text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
@@ -253,22 +279,7 @@ async function main(argv) {
   // 「哪些票」由校验器里同一个函数定（正文显式关联，≤5 张）——本地预检与 CI 不许两套口径。
   const issueComments = issueNumbersInBody(body).flatMap((n) => issueCommentBodies(repo, n));
   const author = currentLogin();
-  const compareCache = new Map();
-  const fetchCompare = (from, to) => {
-    const key = `${from}...${to}`;
-    if (compareCache.has(key)) return compareCache.get(key);
-    let value = null;
-    try {
-      const c = compareOf(repo, from.replace(/^origin\//, ''), to);
-      value = { status: c.status, mergeBaseSha: c.mergeBaseSha, files: c.files.map((f) => f.filename), filesTruncated: c.truncated };
-    } catch (e) {
-      // 与 CI 同口径：compare 拿不到就收敛成 null，让校验器 fail-closed（不当成「没改」）。
-      process.stderr.write(`compare ${key} 失败，按 fail-closed 处理：${e.message}\n`);
-      value = null;
-    }
-    compareCache.set(key, value);
-    return value;
-  };
+  const fetchCompare = makeFetchCompare(repo);
   const result = await validatePrEvidence({ files: compare.files, body, author, gateComments, commitComments, issueComments, headSha: commit, fetchCompare });
   const ciRun = pickCiSummaryRun(checkRuns(repo, commit), commit);
   if (args.json) {

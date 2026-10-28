@@ -104,3 +104,79 @@ test('双跑一致：只在 commit 评论上的 ④ 证据，本地预检与 CI 
   assert.equal(ciSide.ok, true, `commit 评论证据应判绿：${ciSide.errors.join(' | ')}`);
   assert.ok(ciSide.notes.some((n) => n.includes('④')), '应注明 ④ 证据来自评论');
 });
+
+import { readFileSync } from 'node:fs';
+import { makeFetchCompare } from './preflight-pr.mjs';
+
+// ── #2044 契约钉：预检 CLI ↔ 校验器 ↔ CI 两个工作流的 fetchCompare 形态 ──────────────
+// 事故链：CLI 写 (from, to) 位置参数、校验器按 fetchCompare({ base, head }) 调用
+// ⇒ 对象撞进 from.replace 当场炸 ⇒ 被 catch 收敛成 null ⇒ 祖先绑定（#1841 起降级常态落点）
+// 本地恒按 fail-closed 判红，同一份正文 CI 却判绿。下面用例是该场景的最小复现：
+// 真校验器 + 真 CLI 工厂，只把 compareOf 注桩（不打网络）。
+
+const ANC40 = 'b'.repeat(40);
+
+const gate4OnAncestor = () => [
+  '<!-- gate-evidence:④ -->',
+  'commit: ' + ANC40,
+  '- ④ 执行人：@zhengcookie · 日期：2026-10-27 · 复测对象：整模块 · 结论：build.log 无 error',
+].join('\n');
+
+const bodyWithout4 = () => fillCiLine(unboundBody.split('\n').filter((l) => !l.startsWith('- ④')).join('\n'), CI_URL).body;
+
+test('#2044 祖先绑定·真 CLI 工厂 × 真校验器：对象契约下必须判绿', async () => {
+  const calls = [];
+  const fetchCompare = makeFetchCompare('DriftingLi/FL', {
+    compareOfImpl: (repo, base, head) => {
+      calls.push({ repo, base, head });
+      return { status: 'ahead', mergeBaseSha: String(base), files: [{ filename: 'docs/agents/checks.md', patch: '' }], truncated: false };
+    },
+    warn: () => {},
+  });
+  const r = await validatePrEvidence({
+    files: toValidatorFiles(COMPARE).files,
+    body: bodyWithout4(),
+    author: AUTHOR,
+    commitComments: [gate4OnAncestor()],
+    headSha: HEAD,
+    fetchCompare,
+  });
+  assert.equal(r.ok, true, '祖先绑定 + 其间非运行时面应判绿：' + r.errors.join(' | '));
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].base, ANC40, 'base 应为校验器传入的绑定 sha');
+  assert.equal(calls[0].head, HEAD, 'head 应为校验器传入的小写 sha');
+});
+
+test('#2044 工厂形态：剥 origin/ 前缀、按 base 缓存、抛异常收敛成 null（fail-closed 输入）', () => {
+  const calls = [];
+  const fetchCompare = makeFetchCompare('r/e', {
+    compareOfImpl: (repo, base, head) => {
+      calls.push(String(base));
+      if (String(base).includes('boom')) throw new Error('HTTP 404: no such commit');
+      return { status: 'ahead', mergeBaseSha: String(base), files: [{ filename: 'x.md', patch: '' }], truncated: false };
+    },
+    warn: () => {},
+  });
+  assert.deepEqual(
+    fetchCompare({ base: 'origin/' + ANC40, head: HEAD }),
+    { status: 'ahead', mergeBaseSha: ANC40, files: ['x.md'], filesTruncated: false },
+  );
+  fetchCompare({ base: 'origin/' + ANC40, head: HEAD });
+  assert.ok(!calls.some((b) => b.includes('origin')), 'origin/ 前缀不得带进 compareOf');
+  assert.equal(fetchCompare({ base: ANC40, head: HEAD }).status, 'ahead');
+  fetchCompare({ base: ANC40, head: HEAD });
+  assert.equal(calls.length, 2, '同 key 两次只应各取一次');
+  assert.equal(fetchCompare({ base: 'boom', head: HEAD }), null, 'compare 抛异常 ⇒ 收敛成 null，校验器按 fail-closed 判不满足');
+});
+
+test('#2044 三方形态文本钉：校验器/两个工作流/预检 CLI 都写对象参数契约', () => {
+  const read = (rel) => readFileSync(new URL(rel, import.meta.url), 'utf8');
+  const validator = read('./lib/gate-validator.mjs');
+  const prEvidence = read('../workflows/pr-evidence.yml');
+  const mobileGates = read('../workflows/mobile-gates.yml');
+  const cli = read('./preflight-pr.mjs');
+  assert.match(validator, /fetchCompare\(\{ base, head:/, '校验器调用形态是契约真源');
+  assert.match(prEvidence, /const fetchCompare = async \(\{ base, head \}\) =>/, 'pr-evidence.yml 注入是对象参数');
+  assert.match(mobileGates, /const fetchCompare = async \(\{ base, head \}\) =>/, 'mobile-gates.yml 注入是对象参数');
+  assert.match(cli, /return \(\{ base, head \}.*\) => \{/, '预检 CLI 工厂必须收对象参数（与上面三方同构，防再各写各的）');
+});
