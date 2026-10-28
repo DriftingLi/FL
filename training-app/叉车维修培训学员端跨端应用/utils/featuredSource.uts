@@ -27,10 +27,12 @@ export function sourceDomainOf(source : string) : string {
     } else if (rest.length >= 7 && rest.substring(0, 7).toLowerCase() == 'http://') {
         rest = rest.substring(7)
     }
-    let end = rest.length
+    // ⚠️ 不落 Int 中间量：`rest.length` 推断成 Kotlin `Int`，而 `rest.indexOf` 在 UTS 里是
+    // `Number` ⇒ `end = slash` 会报 assignment type mismatch（④ 门 errors=2 实测）。
+    // 改成「按顺序截字符串」，不再跨类型赋值。
     const slash = rest.indexOf('/')
-    if (slash >= 0 && slash < end) end = slash
+    if (slash >= 0) rest = rest.substring(0, slash)
     const query = rest.indexOf('?')
-    if (query >= 0 && query < end) end = query
-    return rest.substring(0, end)
+    if (query >= 0) rest = rest.substring(0, query)
+    return rest
 }
