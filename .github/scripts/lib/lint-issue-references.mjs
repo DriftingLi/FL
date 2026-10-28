@@ -17,21 +17,23 @@ import { join, sep } from 'node:path';
 // `#<N>` 必须能在 DriftingLi/FL 解析。**小节号引用（§6.3 类）显式不判**（机器可判性低）。
 // ============================================================================
 
-// 反引号内按路径判的白名单前缀（票面圈定的三类；其余前缀属示意/外链面，不进判据）。
-const PATH_PREFIXES = ['docs/design/', 'docs/adr/', 'scripts/'];
+// 反引号内按路径判的白名单前缀 = 仓顶层目录全集（票面圈定的 docs/design、docs/adr、scripts 之外，
+// 评审轴实证「.github/scripts 与移动端承载面同样高频」；裸 lib/、utils/ 这类非顶层前缀属示意形态，不判）。
+const PATH_PREFIXES = ['docs/', 'scripts/', '.github/', 'training-app/', 'deploy/', 'frontend/', 'backend/'];
 // 占位/示意形态：含 <>…*?U+2026 或连续两个以上 N（`docs/adr/NNNN-中文标题.md` 这类模板写法）⇒ 不判。
 const PLACEHOLDER = /[<>*?\u2026]|N{2,}/;
 
 // ADR 号位引用：ADR-0043 / ADR 0043 / 「移动端 ADR 00NN」——号位恰好 4 位数字才进捕获面。
 const ADR_REF = /ADR[-\s]*(\d{4})/g;
-// 「规划新建」语头紧贴 ADR 词头 ⇒ 这条引用指尚未存在的新 ADR（#1861 写死号的形态）。
-const ADR_NEW_MARK = /[新待拟]|规划/;
+// 「规划新建」语头**紧贴** ADR 词头（中间只隔 移动端/引号/空白 这类连接符）⇒ 指尚未存在的新 ADR（#1861 形态）。
+// 收紧判据（评审轴实证）：松窗会把「销账与新登 #25、ADR-0012」这类合法引用误判规划——连接符白名单外的字一律断链。
+const ADR_NEW_MARK = /(?:新|待建|拟)(?:[\s的「『“"（(【]|移动端){0,8}$/;
 // 两套编号互不相关（根仓 ADR-0001+ / 移动端 0001+）：词头前 12 字符内出现「移动端」⇒ 判移动端号位。
 const ADR_MOBILE_MARK = /移动端/;
 
 // 票/PR 号：#1845、范围 #1845-#1848、Closes #2053、[#1838](链接)。GitHub 上 issue 与 PR 共用号空间。
 // hex 色值（#0d9458/#41ba41/#f43146）不误捕：数字串后紧跟字母时 \b 不成立；前置字符排除词字符与 /（URL 尾号）。
-const ISSUE_REF = /(?:^|[^\w/])#(\d{2,6})\b/g;
+const ISSUE_REF = /(?:^|[^\w/])#(\d{1,6})\b/g;
 
 /** 正文预处理：剥 HTML 注释与围栏代码块（历史票号塞满模板注释，#1770 同源教训）。 */
 function cleanBody(body) {
@@ -76,9 +78,12 @@ function lintAdr(text, deps) {
     const key = scope + ':' + num;
     if (seen.has(key)) continue;
     seen.add(key);
+    const after = text.slice(m.index + m[0].length, m.index + m[0].length + 12);
+    // 陈述形态豁免：尾窗含「已被占用/已占/已在库/复盘…」⇒ 这是对既成事实的叙述（血账票面就长这样），不是把新号写死。
+    const narrated = isNew && /(已(被)?占|占用|已在库|已合库|已落地|退场|退役|复盘|血账)/.test(after);
     const exists = deps.adrNumbers(scope).has(num);
     const scopeLabel = mobile ? '移动端' : '根仓';
-    if (isNew && exists) {
+    if (isNew && exists && !narrated) {
       reds.push({ category: 'adr', ref: num, message: '新 ' + scopeLabel + ' ADR ' + num + ' 写死号已被占用（合规写法：编号 = 执行时 docs/adr 最大号 + 1）' });
     } else if (!exists) {
 reds.push({ category: 'adr', ref: num, message: scopeLabel + ' ADR 号位无对应文件在库：' + num });
@@ -124,12 +129,18 @@ export async function lintIssueReferences(body, deps = {}) {
 // —— 默认事实构建器（生产接线用；判据函数本身不碰 fs/网络）————————————————
 
 // 两套 ADR 目录（编号互不相关）：根仓 ADR-0001+ / 移动端 0001+，引用侧靠「移动端」前缀分流。
+const MOBILE_ROOT = 'training-app/叉车维修培训学员端跨端应用';
+
 const ADR_DIRS = {
   root: 'docs/adr',
   mobile: 'training-app/叉车维修培训学员端跨端应用/docs/adr',
 };
 
-/** fs 事实：existsPath 按仓根相对判；adrNumbers 扫目录取号位（缓存；目录缺失 ⇒ 空集，fail-closed）。 */
+/**
+ * fs 事实：existsPath **双承载面探**——同一相对路径在仓根或移动端根任一处存在即算存在
+ * （评审轴实证：移动端票高频写移动端根相对路径，单根判会把在库文件假红一片）。
+ * adrNumbers 扫目录取号位（缓存；目录缺失 ⇒ 空集，fail-closed）。
+ */
 export function makeFsFacts(repoRoot) {
   const adrCache = new Map();
   function adrNumbers(scope) {
@@ -148,7 +159,10 @@ export function makeFsFacts(repoRoot) {
     return set;
   }
   return {
-    existsPath: (rel) => existsSync(join(repoRoot, String(rel).split('/').join(sep))),
+    existsPath: (rel) => {
+      const tail = String(rel).replace(/^\.\//, '').split('/').join(sep);
+      return existsSync(join(repoRoot, tail)) || existsSync(join(repoRoot, MOBILE_ROOT, tail));
+    },
     adrNumbers,
   };
 }

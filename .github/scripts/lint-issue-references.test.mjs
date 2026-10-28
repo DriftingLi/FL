@@ -1,4 +1,8 @@
 import { test } from 'node:test';
+import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { writeFileSync as wfs } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { lintIssueReferences, makeFsFacts, makeGhNumberResolver } from './lib/lint-issue-references.mjs';
@@ -49,10 +53,13 @@ test('切片1：占位/示意形态不判（<NNNN>、…、通配 *、含空格�
   assert.deepEqual(r.reds, [], '示意形态一律放行（NNNN 占位见 adr 切片另钉）');
 });
 
-test('切片1：白名单外前缀与外链不判', async () => {
-  const body = '约定 `docs/agents/issue-tracker.md`，前端 `frontend/src/x.ts`，外链 `https://example.com/docs/design/nope.md`，裸 `lib/mp-weixin-publish.ps1`。';
-  const r = await lintIssueReferences(body, makeDeps({ files: [] }));
-  assert.deepEqual(r.reds, []);
+test('切片1：白名单 = 仓顶层目录全集；裸 lib/、utils/ 与 http 外链不判；顶层内缺文件判红', async () => {
+  const out = await lintIssueReferences('白名单外：裸 `lib/mp-weixin-publish.ps1`、`utils/forumDisplay.uts`、外链 `https://example.com/docs/design/nope.md`。', makeDeps({ files: [] }));
+  assert.deepEqual(out.reds, [], '非顶层前缀与外链不进判据面');
+  const inside = await lintIssueReferences('约定 `docs/agents/issue-tracker.md`，接线 `.github/scripts/lib/nope-not-here.mjs`。', makeDeps({ files: ['docs/agents/issue-tracker.md'] }));
+  const reds = byCat(inside, 'missing-file');
+  assert.equal(reds.length, 1, '评审轴 (c)2：.github/ 缺文件必须判红');
+  assert.equal(reds[0].ref, '.github/scripts/lib/nope-not-here.mjs');
 });
 
 test('切片2：ADR 号位——裸 ADR-00NN 判根仓号位；有文件不红、无文件红', async () => {
@@ -96,7 +103,7 @@ test('切片3：#N 票号在 DriftingLi/FL 解析不到 ⇒ issue-number 红；�
 
 test('切片3：HTML 注释与围栏代码块里的历史票号不进判据（#1770 教训）；§小节号显式不判', async () => {
   const body = ['<!-- 模板残留 #1770 / #883… -->', '详见姊妹调研 §6.3 与 `docs/agents/release.md:13`。', '```', 'gh issue view 9999', '```'].join('\n');
-  const r = await lintIssueReferences(body, makeDeps({ numbers: [] }));
+  const r = await lintIssueReferences(body, makeDeps({ files: ['docs/agents/release.md'], numbers: [] }));
   assert.deepEqual(r.reds, [], '注释/代码块/小节号都不该产出红项');
 });
 
@@ -133,7 +140,7 @@ test('合规夹具：#2049 形态正文跑绿（执行时最大号+1、已占号
     '- 票面引用的规则只引已合库 ADR（issue-tracker 2026-10-24 立规）；前置 #1861 已合并。',
   ].join('\n');
   const deps = makeDeps({
-    files: ['docs/adr', 'scripts'],
+    files: ['docs/adr', 'scripts', '.github/scripts/lib/gate-validator.mjs'],
     adr: { root: new Set(['0043']), mobile: new Set(['0043', '0044', '0045', '0046', '0047']) },
     numbers: [1861],
   });
@@ -182,4 +189,53 @@ test('切片5：mergeRefLint——红项并进 errors、ok 联动、notes 透传
   const m2 = mergeRefLint(base, { ok: true, reds: [], notes: [] });
   assert.equal(m2.ok, true);
   assert.deepEqual(m2.errors, [], 'lint 全绿时原证据结论不变');
+});
+
+test('修复轴1：ADR「新」须紧贴词头（连接符白名单内）；合法在库引用带「新」字不误判', async () => {
+  const adr = { root: new Set(['0012']), mobile: new Set(['0044']) };
+  const legit = await lintIssueReferences('本批销账与新登 #25、ADR-0012 并行推进。', makeDeps({ adr, numbers: [25] }));
+  assert.equal(byCat(legit, 'adr').length, 0, '「与新登 #25、ADR-0012」被连接符断链，不算规划新建');
+  const planned = await lintIssueReferences('按规划的「新移动端 ADR 0044」落证据复用判据。', makeDeps({ adr }));
+  assert.equal(byCat(planned, 'adr').length, 1, '紧贴形态仍判占用');
+});
+
+test('修复轴2：陈述形态豁免——尾窗「已被占用/已占」的血账叙述不判红', async () => {
+  const adr = { root: new Set(), mobile: new Set(['0044', '0045', '0046', '0047']) };
+  const r = await lintIssueReferences('写死「0044」的教训：规划的『新移动端 ADR 0044』已被占用，且 0045–0047 三日内跟进。', makeDeps({ adr }));
+  assert.equal(byCat(r, 'adr').length, 0, '血账票面引用既成事实 ⇒ 不再要求改写');
+});
+
+test('修复轴3：单位数老票号 #4 也进判据面', async () => {
+  const ok = await lintIssueReferences('最早先例 #4。', makeDeps({ numbers: [4] }));
+  assert.deepEqual(ok.reds, []);
+  const bad = await lintIssueReferences('不存在的老号 #9。', makeDeps({ numbers: [] }));
+  assert.equal(byCat(bad, 'issue-number').length, 1);
+});
+
+test('修复轴4：makeFsFacts 双承载面——移动端根相对路径在库不判红；两处都无才红', async () => {
+  const facts = makeFsFacts(fileURLToPath(new URL('../../', import.meta.url)));
+  assert.ok(facts.existsPath('scripts/classify-guards.mjs'), '移动端根存在即算存在');
+  const r = await lintIssueReferences('归腿问 `scripts/classify-guards.mjs`，门判据在 `.github/scripts/lib/gate-validator.mjs`。', facts);
+  assert.deepEqual(r.reds, []);
+  const nope = await lintIssueReferences('不存在的东西 `scripts/nope-not-here-2053.mjs`。', facts);
+  assert.equal(byCat(nope, 'missing-file').length, 1);
+});
+
+test('CLI 面：落票预检主接线点不假绿——--no-numbers 红体例 exit 1、合规体例 exit 0、未知参数 exit 2', () => {
+  const root = fileURLToPath(new URL('../../', import.meta.url));
+  const lib = fileURLToPath(new URL('./lib/lint-issue-references.mjs', import.meta.url));
+  const red = join(tmpdir(), '2053-cli-red.md');
+  const green = join(tmpdir(), '2053-cli-green.md');
+  wfs(red, '不存在的东西 `docs/design/2053-cli-不存在体例.md`。', 'utf8');
+  wfs(green, '目录 `docs/adr/`，接线 `scripts/preflight-pr.ps1`。', 'utf8');
+  const runCli = (args) => spawnSync(process.execPath, [lib, ...args], { encoding: 'utf8', cwd: root });
+  const r = runCli(['--body-file', red, '--no-numbers']);
+  assert.equal(r.status, 1, '红体例必须 exit 1');
+  assert.match(r.stdout, /missing-file/);
+  const g = runCli(['--body-file', green, '--no-numbers']);
+  assert.equal(g.status, 0, '合规体例 exit 0');
+  const u = runCli(['--nope']);
+  assert.equal(u.status, 2, '用法错误 exit 2，不与判据红混发');
+  const m = runCli(['--body-file', red, '--no-numbers', '--json']);
+  assert.equal(JSON.parse(m.stdout).reds.length, 1, '--json 供机器消费');
 });
