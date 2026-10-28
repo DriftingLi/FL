@@ -937,6 +937,10 @@ function Invoke-AutoScreenshot {
         # ⇒ 单一账号采不全，必须分批；`-RampPages` 是「取前 N」，表达不了「排除某一类」。
         # 被排除的页**仍留在全仓计划里**（dirMissing 点名它们），不静默消失。
         [string]$ExcludePrefix = '',
+        # 只跑**这些**前缀（逗号分隔，仅 -FullRepo 下有效）：分批的「只选」面，与排除是同一套前缀语义。
+        # 例：招聘方批次 -OnlyPrefix 'pages/recruiter/'；未登录批次 -OnlyPrefix 'pages/login/,pages/register/,pages/forgot-password/'。
+        # 两者并存时先取 Only 再减 Exclude；都不动全仓计划。
+        [string]$OnlyPrefix = '',
         [int]$MaxPages = 5,
         [int]$WaitSeconds = 3,
         # 导航落定的有界判据（见 Wait-NavSettled）：等满 MinSeconds 且相邻两次采样**内容一致**才算落定；
@@ -982,10 +986,10 @@ function Invoke-AutoScreenshot {
             Error = "-RampPages 只在 -FullRepo 下有意义（日常形态本就按改动页跑）⇒ 拒绝开始，不静默忽略。"
         }
     }
-    if ($ExcludePrefix -and -not $fullRepoMode) {
+    if (($ExcludePrefix -or $OnlyPrefix) -and -not $fullRepoMode) {
         return [pscustomobject]@{
             Ok = $false; Screenshots = @(); Skipped = @(); HashConflicts = @(); TargetPages = @()
-            Error = "-ExcludePrefix 只在 -FullRepo 下有意义（日常形态本就按改动页跑）⇒ 拒绝开始，不静默忽略。"
+            Error = "-OnlyPrefix / -ExcludePrefix 只在 -FullRepo 下有意义（日常形态本就按改动页跑）⇒ 拒绝开始，不静默忽略。"
         }
     }
     if ($fullRepoMode -and $Pages) {
@@ -1070,6 +1074,13 @@ function Invoke-AutoScreenshot {
         $afterRamp = @(Select-FullRepoAttempted -PlannedPages $fullRepoPlannedPages -RampPages $RampPages)
         # 排除按**前缀**做，且只作用于本轮 attempted —— 全仓计划保持全量，缺页由 dirMissing 点名。
         $excludedPages = @()
+        # 先「只选」（Only），再「排除」（Exclude）：同一套前缀语义，不引入第二种匹配规则。
+        if ($OnlyPrefix) {
+            $onlyPrefixes = @($OnlyPrefix -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+            $kept = @($afterRamp | Where-Object { $pg = $_; (@($onlyPrefixes | Where-Object { $pg.StartsWith($_) }).Count -gt 0) })
+            Write-Host ("[auto-screenshot] 只选前缀 $OnlyPrefix ⇒ {0}/{1} 页" -f @($kept).Count, @($fullRepoPlannedPages).Count) -ForegroundColor Magenta
+            $afterRamp = $kept
+        }
         if ($ExcludePrefix) {
             $prefixes = @($ExcludePrefix -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
             $excludedPages = @($afterRamp | Where-Object { $pg = $_; (@($prefixes | Where-Object { $pg.StartsWith($_) }).Count -gt 0) })

@@ -125,6 +125,13 @@ function probe(ctx) {
     "Write-Output ('FR10_EXCLUDED_OFFPREFIX=' + $bad)",
     "$re2 = Invoke-AutoScreenshot -ExcludePrefix 'pages/recruiter/' -Pages 'pages/login/login' 6>$null",
     "Write-Output ('FR10_GATE_OK=' + $re2.Ok)",
+    // ---- FR11：只选前缀（招聘方 9 页那一批的入口）----
+    "$outO = Join-Path $env:FR_OUT6 'only'",
+    "$ro = Invoke-AutoScreenshot -FullRepo '1864' -OnlyPrefix 'pages/recruiter/' -Device 'nosuchserial0000' -OutputDir $outO -AdbCallTimeoutSeconds 5 6>$null",
+    "Write-Output ('FR11_ATTEMPTED=' + @($ro.AttemptedPages).Count)",
+    "Write-Output ('FR11_PLANNED=' + @($ro.PlannedPages).Count)",
+    "$off = @($ro.AttemptedPages | Where-Object { -not $_.StartsWith('pages/recruiter/') }).Count",
+    "Write-Output ('FR11_OFFPREFIX=' + $off)",
     'Write-Output "PROBE_DONE=1"',
   ].join('\n');
   const encoded = Buffer.from(s, 'utf16le').toString('base64');
@@ -137,6 +144,7 @@ function probe(ctx) {
     FR_OUT3: ctx.out3,
     FR_OUT4: ctx.out4,
     FR_OUT5: ctx.out5,
+    FR_OUT6: ctx.out6,
     FR_LIB: path.join(ROOT, 'scripts', 'lib'),
   });
   try {
@@ -161,13 +169,14 @@ describe('-FullRepo 全仓逐页载体（运行期，#2078）', () => {
 
   beforeAll(() => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'fullrepo-'));
-    ctx = { tmp, proj: path.join(tmp, 'proj'), out: path.join(tmp, 'arch'), out2: path.join(tmp, 'ramp'), out3: path.join(tmp, 'broken'), out4: path.join(tmp, 'redir'), out5: path.join(tmp, 'excl') };
+    ctx = { tmp, proj: path.join(tmp, 'proj'), out: path.join(tmp, 'arch'), out2: path.join(tmp, 'ramp'), out3: path.join(tmp, 'broken'), out4: path.join(tmp, 'redir'), out5: path.join(tmp, 'excl'), out6: path.join(tmp, 'only') };
     fs.mkdirSync(ctx.proj, { recursive: true });
     fs.mkdirSync(ctx.out, { recursive: true });
     fs.mkdirSync(ctx.out2, { recursive: true });
     fs.mkdirSync(ctx.out3, { recursive: true });
     fs.mkdirSync(ctx.out4, { recursive: true });
     fs.mkdirSync(ctx.out5, { recursive: true });
+    fs.mkdirSync(ctx.out6, { recursive: true });
     probeRun = probe(ctx);
     if (!probeRun.ok || !field(probeRun.stdout, 'PROBE_DONE')) {
       throw new Error('pwsh 探针未跑通（不 skip）：' + probeRun.stderr.slice(0, 400) + ' | ' + probeRun.stdout.slice(0, 400));
@@ -236,6 +245,13 @@ describe('-FullRepo 全仓逐页载体（运行期，#2078）', () => {
     expect(Number(field(probeRun.stdout, 'FR8_PLANNED'))).toBeGreaterThan(0);
     expect(Number(field(probeRun.stdout, 'FR8_ATTEMPTED'))).toBe(1);
     expect(field(probeRun.stdout, 'FR8_MF')).toBe('True');
+  });
+
+  test('FR11: 只选前缀——招聘方 9 页可单独成批，全仓计划仍是 60', () => {
+    const planned = Number(field(probeRun.stdout, 'FR1_PLANNED'));
+    expect(Number(field(probeRun.stdout, 'FR11_PLANNED'))).toBe(planned);
+    expect(Number(field(probeRun.stdout, 'FR11_ATTEMPTED'))).toBe(9);
+    expect(Number(field(probeRun.stdout, 'FR11_OFFPREFIX'))).toBe(0);
   });
 
   test('FR10: 按前缀分批——排除只裁本轮，全仓计划与被排除名单都可见', () => {

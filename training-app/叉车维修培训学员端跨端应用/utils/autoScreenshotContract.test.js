@@ -557,6 +557,22 @@ describe('auto-screenshot.ps1 contract', () => {
   // S34（2026-10-28，#2078 真机轮）：按前缀分批。
   //   现测：60 页 = 学员 51 + 招聘者 9（pages/recruiter/*），而登录态只能是其中一种角色
   //   ⇒ 单一账号采不全，必须分批。这里钉住「排除只作用于本轮、全仓计划不动」。
+  // S35（2026-10-28，#2078）：-OnlyPrefix —— 分批的「只选」面（招聘方 9 页 / 未登录 3 页要靠它）。
+  //   与 S34 成对：只选与排除是同一套前缀语义，且都不动全仓计划。
+  test('S35: 【#2078】-OnlyPrefix 与 -ExcludePrefix 同语义，且都不动全仓计划', () => {
+    const code = src.replace(/<#[\s\S]*?#>/g, '').replace(/^\s*#.*$/gm, '');
+    expect(code).toMatch(/\[string\]\$OnlyPrefix = ''/);
+    // 先 Only 再 Exclude（顺序固定：两者叠加才有确定语义）
+    const onlyAt = code.indexOf('if ($OnlyPrefix) {');
+    const exclAt = code.indexOf('if ($ExcludePrefix) {');
+    expect(onlyAt).toBeGreaterThan(-1);
+    expect(exclAt).toBeGreaterThan(onlyAt);
+    // 两者共用 StartsWith 前缀语义（不得各写一套匹配规则）
+    expect((code.match(/StartsWith\(\$_\)/g) || []).length).toBeGreaterThanOrEqual(2);
+    // 不带 -FullRepo 时拒（与 Exclude 同一条门禁）
+    expect(code).toMatch(/-OnlyPrefix \/ -ExcludePrefix 只在 -FullRepo 下有意义/);
+  });
+
   test('S34: 【#2078】-ExcludePrefix 只裁本轮，被排除页仍留在全仓计划里', () => {
     const code = src.replace(/<#[\s\S]*?#>/g, '').replace(/^\s*#.*$/gm, '');
     // 先 ramp 再排除，两步都作用于 attempted
