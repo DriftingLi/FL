@@ -1403,6 +1403,18 @@ function Invoke-AutoScreenshot {
         $errorMsg = '没有任何页面截图成功'
     }
 
+    # 有界截图调用会把 adb stderr 落在「产出文件同目录」⇒ 归档目录会多一个 stderr 文件。
+    # 归档是**仓库产物**（docs/verification/device/<票号>/ 会进 git），只该放证据：
+    # 零字节 = 这次调用没吐任何诊断信息 ⇒ 删掉（纯噪声，进仓库只会让人以为它是证据）；
+    # 非零字节 ⇒ 保留（那是排障原料，删了等于把故障现场擦了）。
+    # 只在全仓形态做：日常形态的 .ci-verify 是 gitignored，无所谓。
+    if ($fullRepoMode) {
+        $shotStderr = Join-Path $OutputDir 'adb-screencap-stderr.txt'
+        if ((Test-Path -LiteralPath $shotStderr) -and (Get-Item -LiteralPath $shotStderr).Length -eq 0) {
+            Remove-Item -LiteralPath $shotStderr -Force -ErrorAction SilentlyContinue
+        }
+    }
+
     $fullRepoCounts = $null
     $verdict = ''
     if ($fullRepoMode) {
