@@ -81,7 +81,7 @@ export interface ShopItemDTO {
   owned: boolean
   price: number
   sku: string
-  stock: number
+  stock: number | null
   title: string
 }
 

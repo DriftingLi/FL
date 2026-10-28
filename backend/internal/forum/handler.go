@@ -178,7 +178,7 @@ func (h *handler) UploadImage(c *gin.Context) {
 // @Param scope query string false "范围 all|general|chapter"
 // @Param category query string false "类别 discussion|question|experience，省略表示不过滤（向后兼容）"
 // @Param featured query string false "精选过滤 true|false，省略表示不过滤（#742）"
-// @Param solved query string false "问答解决态 unsolved|solved|all（问答类目的采纳态；省略不过滤；非法值 400）"
+// @Param solved query string false "问答解决态 unsolved|solved|all（省略不过滤；非空时必须同时 category=question，否则 400；非法值 400）"
 // @Param chapter_id query int false "章节ID"
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(10)

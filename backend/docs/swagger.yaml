@@ -2573,8 +2573,11 @@ definitions:
       sku:
         type: string
       stock:
-        description: Stock 为 nil 表示不限库存（与 points_shop_item.stock 的可空语义一致）。
+        description: |-
+          Stock 为 nil 表示不限库存（与 points_shop_item.stock 的可空语义一致）；x-nullable 让生成面
+          说真话（number | null）——少了它 TS 侧会把 null 当 0，而 0 是缺货，语义正好反了（#2064）。
         type: integer
+        x-nullable: true
       title:
         type: string
     type: object
@@ -11519,7 +11522,8 @@ paths:
         in: query
         name: featured
         type: string
-      - description: 问答解决态 unsolved|solved|all（问答类目的采纳态；省略不过滤；非法值 400）
+      - description: 问答解决态 unsolved|solved|all（省略不过滤；非空时必须同时 category=question，否则
+          400；非法值 400）
         in: query
         name: solved
         type: string

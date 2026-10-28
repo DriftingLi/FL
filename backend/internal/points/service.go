@@ -76,8 +76,9 @@ type ShopItemDTO struct {
 	SKU   string `json:"sku"`
 	Title string `json:"title"`
 	Price int    `json:"price"`
-	// Stock 为 nil 表示不限库存（与 points_shop_item.stock 的可空语义一致）。
-	Stock *int `json:"stock"`
+	// Stock 为 nil 表示不限库存（与 points_shop_item.stock 的可空语义一致）；x-nullable 让生成面
+	// 说真话（number | null）——少了它 TS 侧会把 null 当 0，而 0 是缺货，语义正好反了（#2064）。
+	Stock *int `json:"stock" extensions:"x-nullable"`
 	Owned bool `json:"owned"`
 }
 

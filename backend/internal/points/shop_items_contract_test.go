@@ -116,11 +116,18 @@ func TestShopItemsListContract(t *testing.T) {
 	if len(after.Items) != 1 || !after.Items[0].Owned {
 		t.Fatalf("兑换后本人 owned 应为 true, got %+v", after.Items)
 	}
+	// 反证（#2064 AC2）：权益行若按「裸 sku」形态存在（不是兑换写下的权益键 gold:<ref>），
+	// 不得被判成已拥有——否则键形态一漂，列表就会把没买过的人标成已拥有。
+	if err := db.Create(&model.UserEntitlement{
+		UserID: other.ID, SKU: "unlock_gold", RefID: "unlock_gold", CreatedAt: testutil.Now(),
+	}).Error; err != nil {
+		t.Fatalf("插裸键权益失败: %v", err)
+	}
 	res, err := svc.ListShopItems(context.Background(), other.ID)
 	if err != nil {
 		t.Fatalf("他人列表失败: %v", err)
 	}
 	if len(res.Items) != 1 || res.Items[0].Owned {
-		t.Fatalf("他人不应看到已拥有, got %+v", res.Items)
+		t.Fatalf("他人不应看到已拥有（裸 sku 权益也不算）, got %+v", res.Items)
 	}
 }
