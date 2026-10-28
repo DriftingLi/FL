@@ -13,6 +13,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
 )
 
@@ -21,6 +22,7 @@ import (
 // internal/apitypes/nullability_lock_test.go 的 nonNilEvidenceSources）。
 var nonnilOutletsFavorite = map[string]func(t *testing.T) any{
 	"favorite.FavoritePageResult.favorites": outletFavoritePageEmpty,
+	"favorite.FavoriteDTO.tags":             outletFavoriteTagsEmpty,
 }
 
 // TestNonNilDeclaredOutletsNeverEmitNull 本域的举证入口（判据本体在 testutil）。
@@ -34,9 +36,31 @@ func outletFavoritePageEmpty(t *testing.T) any {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
 	student := testutil.SeedStudent(t, db, "收藏空列表学员", "x")
-	res, err := NewService(db, zap.NewNop()).List(student.ID, "", 1, 10, nil)
+	res, err := NewService(db, zap.NewNop()).List(student.ID, "", 1, 10, nil, nil)
 	if err != nil {
 		t.Fatalf("空收藏列表失败: %v", err)
 	}
 	return res
+}
+
+// outletFavoriteTagsEmpty 非题目类型的收藏条目：tags 是空数组而不是 null（集合出口统一表态）。
+// 用真实列表出口取证，而不是手搓一个 DTO —— 举证要覆盖「组装点」本身。
+func outletFavoriteTagsEmpty(t *testing.T) any {
+	t.Helper()
+	db := testutil.NewMemoryDB(t)
+	student := testutil.SeedStudent(t, db, "收藏标签空集学员", "x")
+	course := testutil.SeedCourse(t, db, "标签空集课程")
+	if err := db.Create(&model.Favorite{
+		UserID: student.ID, TargetType: FavoriteTargetCourse, TargetID: course.CourseID, CreatedAt: testutil.Now(),
+	}).Error; err != nil {
+		t.Fatalf("建收藏失败: %v", err)
+	}
+	res, err := NewService(db, zap.NewNop()).List(student.ID, FavoriteTargetCourse, 1, 10, nil, nil)
+	if err != nil {
+		t.Fatalf("收藏列表失败: %v", err)
+	}
+	if len(res.Favorites) != 1 {
+		t.Fatalf("应取到 1 条收藏, got %d", len(res.Favorites))
+	}
+	return res.Favorites[0]
 }
