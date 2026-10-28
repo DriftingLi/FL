@@ -138,14 +138,29 @@ function makeStub(root, name, scenario) {
 }
 
 function runScript(stub, extra) {
-  const args = ['-File', SCRIPT, '-GhCli', stub.exe].concat(extra || []);
+  const x = extra || [];
+  const args = ['-File', SCRIPT, '-GhCli', stub.exe].concat(x);
+  // 目录对账默认注成「干净且存在」的扫描根：$RepoRoot 在 worktree 里按 --git-common-dir 解析到**主树**，
+  // 而主树磁盘上挂着历史会话的残留 wt-* 目录（2026-10-28 实测 47 个）——不注入就是拿历史残留判本次，
+  // BR0-BR5 会当场假红。要测目录判据的用例自己传 -WtRoot（脚本注释里也写了这个用途）。
+  if (!x.includes('-WtRoot')) args.push('-WtRoot', WT_CLEAN);
   const r = spawnSync(psExe(), psArgs(args), { encoding: 'utf8', cwd: ROOT });
   return { code: r.status, out: String(r.stdout || '') + String(r.stderr || '') };
 }
 
+/** 造一个只含指定目录名的扫描根（目录判据的唯一注入面；目录名用 ASCII，防 OEM 码页吞字节）。 */
+function makeWtRoot(name, dirs) {
+  const root = path.join(TMP, name);
+  fs.mkdirSync(root, { recursive: true });
+  for (const d of dirs) fs.mkdirSync(path.join(root, d), { recursive: true });
+  return root;
+}
+
 let TMP = null;
+let WT_CLEAN = null;
 beforeAll(() => {
   TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'residue-'));
+  WT_CLEAN = fs.mkdtempSync(path.join(os.tmpdir(), 'residue-wtclean-')); // 空目录 = 无孤儿
 });
 afterAll(() => {
   if (TMP) fs.rmSync(TMP, { recursive: true, force: true });
@@ -257,5 +272,71 @@ describe('check-branch-residue：ARCHIVED 归档豁免（#2021）', () => {
     expect(r.code).toBe(0);
     expect(r.out).toContain('AUTODELETE=off');
     expect(r.out).not.toContain('AUTODELETE=on');
+  });
+});
+
+/**
+ * 孤儿 worktree **目录**对账（#2061，2026-10-28）。
+ * 为什么单独一组：分支判据查的是远端分支，目录残留发生在本地磁盘 —— 手工两步
+ * （`git worktree remove` + `git branch -D`）把 git 的注册表清掉了、目录还在原地，
+ * 于是 `git worktree list` 显示干净而磁盘留残留（当日主树实测 47 个未注册目录）。
+ * 这组用例只注入 `-WtRoot`（自己造的扫描根），判据不吃真机上的并发残留。
+ */
+function archiveOnly() {
+  return { branches: [{ name: 'arch-1', sha: SHA.arch }], tags: [{ sha: SHA.arch, name: 'archive/keep-1' }], prs: { 'arch-1': [] } };
+}
+
+describe('check-branch-residue：孤儿 worktree 目录对账（#2061）', () => {
+  test('BR6 未注册目录 ⇒ WT_DIR_ORPHAN 逐条 + exit 4，且点目录另指 cleanup 入口', () => {
+    const stub = makeStub(TMP, 'br6', mixedScenario(archiveOnly()));
+    const root = makeWtRoot('br6', ['wt-9999', '.wt-8888']);
+    const r = runScript(stub, ['-WtRoot', root]);
+
+    expect(r.out).toMatch(/WT-DIRS registered=[0-9]+ disk=2 orphans=2/);
+    expect(r.out).toContain('WT_DIR_ORPHAN wt-9999');
+    expect(r.out).toContain('WT_DIR_ORPHAN .wt-8888');
+    expect(r.code).toBe(4); // 分支侧全绿（归档按设计保留），目录侧未收口
+    expect(r.out).toContain('remove-worktree.ps1 -Task 9999');
+    expect(r.out).toContain('cleanup-dot-worktrees.ps1'); // 点目录是 ③ 门静默假绿那块地
+  });
+
+  test('BR7 扫描根干净 ⇒ orphans=0 且 exit 0（不误报；注册表读数同时被钉住非空）', () => {
+    const stub = makeStub(TMP, 'br7', mixedScenario(archiveOnly()));
+    const root = makeWtRoot('br7', []);
+    const r = runScript(stub, ['-WtRoot', root]);
+
+    expect(r.code).toBe(0);
+    expect(r.out).toMatch(/WT-DIRS registered=[1-9][0-9]* disk=0 orphans=0/);
+    expect(r.out).not.toContain('WT_DIR_ORPHAN');
+    expect(r.out).not.toContain('WT-DIRS=unavailable');
+  });
+
+  test('BR8 对账做不成 ⇒ 不判干净：unavailable + unclaimed + exit 5（fail-closed 腿）', () => {
+    const stub = makeStub(TMP, 'br8', mixedScenario(archiveOnly()));
+    const r = runScript(stub, ['-WtRoot', path.join(TMP, 'br8-no-such-root')]);
+
+    expect(r.out).toContain('WT-DIRS=unavailable');
+    expect(r.out).toContain('WT-DIRS=unclaimed');
+    expect(r.code).toBe(5);
+  });
+
+  test('BR9 优先级：分支判据红时 exit 1 不被目录码覆盖，但目录行照打', () => {
+    const stub = makeStub(TMP, 'br9', mixedScenario()); // merged-1 = 真残留
+    const root = makeWtRoot('br9', ['wt-7777']);
+    const r = runScript(stub, ['-WtRoot', root]);
+
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('RESIDUE');
+    expect(r.out).toContain('WT_DIR_ORPHAN wt-7777');
+  });
+
+  test('BR10 单分支核对（-Branch）也带目录判据 —— 钉住「注册表采集必须先于分支路径」那次上移', () => {
+    const stub = makeStub(TMP, 'br10', mixedScenario());
+    const root = makeWtRoot('br10', ['wt-6666']);
+    const r = runScript(stub, ['-Branch', 'open-1', '-WtRoot', root]);
+
+    expect(r.out).toMatch(/OPEN\s+open-1/);
+    expect(r.out).toContain('WT_DIR_ORPHAN wt-6666');
+    expect(r.code).toBe(4); // 该分支侧无残留无待裁定 ⇒ 绿色路径，目录码在此让位
   });
 });
