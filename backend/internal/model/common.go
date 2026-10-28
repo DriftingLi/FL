@@ -107,7 +107,7 @@ func (SystemSetting) TableName() string { return "system_settings" }
 // ===== 通用收藏（ADR-0018）=====
 
 // Favorite 通用收藏：target_type + target_id 多态定位
-// （course/chapter/question/featured/topic，ADR-0018；user+type+id 唯一）。
+// （course/chapter/question/featured/topic/job，ADR-0018；user+type+id 唯一）。
 type Favorite struct {
 	FavoriteID int64     `gorm:"column:favorite_id;primaryKey;autoIncrement" json:"favorite_id"`
 	UserID     int       `gorm:"column:user_id" json:"user_id"`

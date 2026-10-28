@@ -79,6 +79,7 @@ export interface WrongQuestionDTO {
   question?: QuestionDTO
   question_id: number
   student_id: number
+  top_wrong_option?: string
   wrong_count: number
 }
 

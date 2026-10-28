@@ -59,7 +59,7 @@ func TestFavoriteListEntityOwnedByCredential(t *testing.T) {
 		}
 	}
 
-	all, err := svc.List(1, "", 1, 20, nil)
+	all, err := svc.List(1, "", 1, 20, nil, nil)
 	if err != nil {
 		t.Fatalf("List(nil) 失败: %v", err)
 	}
@@ -67,7 +67,7 @@ func TestFavoriteListEntityOwnedByCredential(t *testing.T) {
 		t.Fatalf("nil 应看全部：total=%d items=%d", all.Total, len(all.Favorites))
 	}
 
-	part, err := svc.List(1, "", 1, 20, &credA)
+	part, err := svc.List(1, "", 1, 20, &credA, nil)
 	if err != nil {
 		t.Fatalf("List(credA) 失败: %v", err)
 	}
@@ -80,7 +80,7 @@ func TestFavoriteListEntityOwnedByCredential(t *testing.T) {
 		}
 	}
 
-	only, err := svc.List(1, FavoriteTargetCourse, 1, 20, &credB)
+	only, err := svc.List(1, FavoriteTargetCourse, 1, 20, &credB, nil)
 	if err != nil {
 		t.Fatalf("List(course, credB) 失败: %v", err)
 	}

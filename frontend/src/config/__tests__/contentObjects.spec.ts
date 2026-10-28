@@ -25,14 +25,16 @@ const FAVORITE_TYPE_EXHAUSTIVE: Record<FavoriteTargetType, true> = {
   chapter: true,
   question: true,
   featured: true,
-  topic: true
+  topic: true,
+  job: true
 }
 const KEY_EXHAUSTIVE: Record<ContentObjectKey, true> = {
   course: true,
   chapter: true,
   question: true,
   featured: true,
-  topic: true
+  topic: true,
+  job: true
 }
 
 describe('内容对象表 ↔ 契约枚举', () => {
@@ -68,8 +70,8 @@ describe('内容对象表 ↔ 契约枚举', () => {
     expect([...keys].sort()).toEqual(Object.keys(KEY_EXHAUSTIVE).sort())
   })
 
-  it('收藏 tab 集合 = 四类（featured 刻意排除，#1132 裁定）', () => {
-    expect(favoriteTabContentObjects().map(o => o.key)).toEqual(['course', 'chapter', 'question', 'topic'])
+  it('收藏 tab 集合 = 五类（featured 刻意排除，#1132 裁定；job 由 #2067 加入）', () => {
+    expect(favoriteTabContentObjects().map(o => o.key)).toEqual(['course', 'chapter', 'question', 'topic', 'job'])
   })
 })
 
@@ -80,7 +82,8 @@ describe('内容对象表槽位', () => {
       ['章节', 'success'],
       ['题目', 'warning'],
       ['内容精选', 'info'],
-      ['帖子', 'danger']
+      ['帖子', 'danger'],
+      ['职位', 'neutral']
     ])
   })
 

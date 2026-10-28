@@ -4,7 +4,7 @@
  * **要防的那件事**：常驻文件（每次会话都被整份注入的 `AGENTS.md`）把**按需读的参考表**、
  * 以及**别的文件里已经存在的同源副本**抄在身上 ⇒ 它一年比一年长，而长出来的部分全是漂移源。
  * 根 `AGENTS.md` 自己写过这条判据：「本处**不重复那些表**——它们靠指路而非抄写，
- * 抄过来正是历史上漂移的来源」。本守护把「根线式」钉成七条**跨真源**的不变式：
+ * 抄过来正是历史上漂移的来源」。本守护把「根线式」钉成八条**跨真源**的不变式：
  *
  *   L1 常驻预算  —— `AGENTS.md` 长度 ≤ `residentMax`，**只降不升**的棘轮（同 guardClassification H2 的写法）
  *   L2 不抄写    —— `AGENTS.md` 不得含与根 `AGENTS.md` / 根 `docs/agents/*.md` **逐字相同**的长行；
@@ -28,6 +28,10 @@
  *   L7 别条线路径 —— 移动端 `AGENTS.md` 不得含别条线（Web / 后端 / 运维）的路径与工具名
  *                   （`FOREIGN_PATHS` = `frontend/`、`src/components/ui`、`gofmt`、`docker-compose`、`vue-tsc`，
  *                   票面点名）。先例：#1509「删作失真」——旧文件那些路径在本仓根本不存在，留着既占量又是误导。
+ *   L8 常驻禁行号 —— 两侧 `AGENTS.md` 都不得写 `x.md:16` 这类**行号指针**，只许引小节名 / 步骤号（#2082）。
+ *                   行号在任何一次编辑后都会漂：它指向的行还在，内容已经换了人 ⇒ 指针静默指向错误判据，
+ *                   比悬空链接更坏（悬空至少会红）。同源依据是本仓「引用技能文档引小节名不引行号」的约定；
+ *                   L4 只校「小节名能否解析」，管不到行号写法，故单列一条。
  *
  * **形状**沿用本仓既有守护（见 utils/hxRunContract.test.js、utils/guardClassification.test.js）：
  * 先对**合成样本**注入违规、断言检测有效（防空跑假绿），再对真实文件断言零命中。
@@ -45,8 +49,11 @@ const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 const SELF = path.join(__dirname, 'agentsLayeringContract.test.js');
 
-/** L1 预算：2026-10-03 实测常驻 30,795 字符（票 #1509 的目标是砍到 ≤16,000）。棘轮只许往下调。 */
-const RESIDENT_MAX = 16000;
+/**
+ * L1 预算：2026-10-03 实测常驻 30,795 字符（#1509 砍到 ≤16,000）；2026-10-28 #2082 把「验收门」
+ * 段的复述收成指针后实测 14,892 ⇒ 预算同步下调（棘轮只许往下调，涨回去即红）。
+ */
+const RESIDENT_MAX = 14900;
 
 /** L2 只认「长行」——短行（表头分隔线、列表符号）逐字相同不构成抄写。 */
 const DUP_MIN_LEN = 20;
@@ -86,6 +93,11 @@ const MOVED_ANCHORS = [
   ['docs/agents/concurrency.md', ['HX_LOCK_OWNER', 'HX_BUSY wait=', '先写代码、后集中上机', '1800 秒']],
   ['docs/agents/dev-loop.md', ['时间账与三样慢', '三条原因的实测原文', '成本账反模式（2026-10-03 立）', '语义坑位（血账 #917']],
   ['docs/adr/0008-移动端验收门与证据.md', ['islogin', '唯一名']],
+  // #2082：「验收门」段里被收成指针的那几条复述，判据落在这两份 ADR 里。
+  // 锚点取**判据片段**不取标题词：`证据管家` / `窗口机制` 在标题与修订行里也出现，
+  // 决策正文被改写时它们照样命中 ⇒ 零信号（评审实测）。
+  ['docs/adr/0041-三层门分离与云上证据管家.md', ['不判红', '不代贴', '--shard']],
+  ['docs/adr/0043-真机门降级常态化与发版冒烟（2026-10-23 裁定）.md', ['整体退役', '低风险分层']],
 ];
 
 /** L7 别条线路径黑名单：票 #1509 票面点名的 5 项，逐字。 */
@@ -109,7 +121,20 @@ function uniq(re, text) {
 }
 
 /**
- * 纯函数：吃一份 sources，吐违规清单（`'L1: …'`～`'L7: …'`）。不做 IO，好让测试喂合成样本。
+ * L8 射程：两种行号指针都算 —— `*.md` 后直接跟行号（`:16`、`:24-30`），以及裸 ADR 号 + 行号
+ * （`0008:116-120`，`0043` 正文自己就这么写）。反引号写在路径内外两种形态都归一到同一判据，
+ * 所以先剥反引号再匹配。
+ * 只认这两种文档锚形态：脚本 / 配置的行号、版本号（`jest 27.5.1`）、时刻与端口不属射程。
+ */
+const LINE_POINTER_RE =
+  /[\w\u4e00-\u9fff.\-\/]+\.md\s*:\s*\d+(?:[-\u2013]\d+)?|\b\d{4}\s*:\s*\d+(?:[-\u2013]\d+)?/g;
+
+function linePointers(text) {
+  return uniq(LINE_POINTER_RE, String(text || '').replace(/`/g, ''));
+}
+
+/**
+ * 纯函数：吃一份 sources，吐违规清单（`'L1: …'`～`'L8: …'`）。不做 IO，好让测试喂合成样本。
  * sources = { agents, rootAgents, rootDocs, scripts, cites, residentMax, dupAllowed,
  *             movedAnchors, readMoved(rel), foreignPaths,
  *             existsMobile(rel), existsRepo(rel) }
@@ -184,6 +209,13 @@ function scan(s) {
   // ---- L7 别条线路径
   for (const t of (s.foreignPaths || FOREIGN_PATHS)) {
     if (s.agents.includes(t)) v.push(`L7: 常驻层混入别条线路径「${t}」`);
+  }
+
+  // ---- L8 常驻禁行号（#2082：两侧 AGENTS.md 都管，行号必漂）
+  for (const [label, text] of [['移动端', s.agents], ['根', s.rootAgents]]) {
+    for (const hit of linePointers(text)) {
+      v.push(`L8: ${label} AGENTS.md 用行号指针「${hit}」——行号会漂，改引小节名/步骤号`);
+    }
   }
   return v;
 }
@@ -308,6 +340,8 @@ describe('AGENTS.md 分层守护：检测有效性（注入违规必红，防空
     ['L6', '被搬走的锚点在新家里丢了（落点文件没了）', (s) => ({ readMoved: () => undefined })],
     ['L6', '落点文件在、锚点却不在（搬丢了内容）', (s) => ({ readMoved: () => '这里只剩一段别的文字。' })],
     ['L7', '常驻层混入别条线路径', (s) => ({ agents: `${s.agents}\n入口在 frontend/ 的脚手架里。` })],
+    ['L8', '移动端常驻层写行号指针', (s) => ({ agents: `${s.agents}\n判据见 \`docs/agents/release.md\`:16。` })],
+    ['L8', '根常驻层写行号指针（两侧都管）', (s) => ({ rootAgents: `${s.rootAgents}\n判据见 \`docs/agents/release.md\`:16。` })],
   ];
 
   test.each(cases)('%s：%s', (id, _why, mutate) => {
@@ -351,6 +385,27 @@ describe('AGENTS.md 分层守护：检测有效性（注入违规必红，防空
   test('L7：登记黑名单只认票面 5 项，别的词不误伤', () => {
     expect(of(scan(synth({ agents: `${synth().agents}\n提到 golangci-lint 与 Swagger 不算别条线路径。` })), 'L7')).toEqual([]);
   });
+
+  test('L8：反引号内外两种行号写法都判红（`x.md`:16 与 `x.md:24-30`）', () => {
+    const s0 = synth();
+    const hits = of(scan(synth({
+      agents: `${s0.agents}\n见 \`docs/agents/release.md\`:16 与 \`docs/agents/checks.md:24-30\`。`,
+    })), 'L8');
+    expect(hits).toHaveLength(2);
+  });
+
+  test('L8：裸 ADR 号 + 行号也算行号指针（0043 正文就有 `0008:116-120` 这种写法）', () => {
+    const s0 = synth();
+    const hits = of(scan(synth({ agents: `${s0.agents}\n逐条取证见 0008:116-120。` })), 'L8');
+    expect(hits).toHaveLength(1);
+  });
+
+  test('L8：小节名/步骤号/版本号/端口时间不误伤（只认文档锚的行号）', () => {
+    const s0 = synth();
+    expect(of(scan(synth({
+      agents: `${s0.agents}\n见 docs/agents/release.md「收尾」段（第 7 步）；jest 27.5.1、ADR-0008、127.0.0.1:5764、09:15 都不算。`,
+    })), 'L8')).toEqual([]);
+  });
 });
 
 describe('AGENTS.md 分层守护：真实文件', () => {
@@ -380,5 +435,9 @@ describe('AGENTS.md 分层守护：真实文件', () => {
 
   test('L7 别条线路径不进常驻层（#1509「删作失真」）', () => {
     expect(of(scan(REAL), 'L7')).toEqual([]);
+  });
+
+  test('L8 常驻层禁行号指针（引小节名/步骤号，不引行号）', () => {
+    expect(of(scan(REAL), 'L8')).toEqual([]);
   });
 });

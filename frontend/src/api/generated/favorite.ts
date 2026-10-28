@@ -10,7 +10,7 @@
 //   DELETE /favorites/{id}
 //   GET  /favorites/check
 //
-// 覆盖的 Go 类型：FavoriteCheckDTO / FavoriteDTO / FavoritePageResult
+// 覆盖的 Go 类型：FavoriteCheckDTO / FavoriteDTO / FavoritePageResult / FavoriteTagDTO
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -28,10 +28,13 @@ export interface FavoriteCheckDTO {
 }
 
 export interface FavoriteDTO {
+  company?: string
   course_id: number
   cover: string
   created_at: string
   favorite_id: number
+  region?: string
+  tags: FavoriteTagDTO[]
   target_id: number
   target_type: string
   title: string
@@ -42,4 +45,9 @@ export interface FavoritePageResult {
   page: number
   pages: number
   total: number
+}
+
+export interface FavoriteTagDTO {
+  tag_id: number
+  tag_name: string
 }
