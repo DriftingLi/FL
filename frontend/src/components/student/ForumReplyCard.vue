@@ -39,11 +39,17 @@ const props = withDefaults(defineProps<{
   canAccept?: boolean
   /** 楼主视角：这条已被采纳，可取消 */
   canCancelAccept?: boolean
+  /**
+   * 这条下方正开着行内回复框（缺省 false）：只影响「回复」键的激活色与提示文案，
+   * 开关本身由调用方持有 —— 卡片不知道回复框挂在哪、也没有义务知道。
+   */
+  replying?: boolean
 }>(), {
   density: 'comfortable',
   isOwn: false,
   canAccept: false,
-  canCancelAccept: false
+  canCancelAccept: false,
+  replying: false
 })
 
 const emit = defineEmits<{
@@ -145,7 +151,10 @@ function onMoreSelect(key: string) {
         <div class="reply-actions-right ml-auto flex items-center gap-3">
           <button
             type="button"
-            class="reply-btn inline-flex cursor-pointer items-center gap-1 rounded-ctl border-0 bg-transparent p-0 px-1.5 py-1 text-xs font-medium leading-none text-ink-3 transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)] hover:underline"
+            class="reply-btn inline-flex cursor-pointer items-center gap-1 rounded-ctl border-0 bg-transparent p-0 px-1.5 py-1 text-xs font-medium leading-none transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)] hover:underline"
+            :class="replying ? 'text-ui-soft-ink' : 'text-ink-3'"
+            :aria-expanded="replying"
+            :title="replying ? '收起回复框' : '回复这条'"
             @click="emit('reply-to', reply)"
           >
             <UiIcon name="message-circle" />

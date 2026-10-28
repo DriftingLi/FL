@@ -10,6 +10,7 @@ import { epLite } from '@/test/element-lite'
 import ForumPostForm from '../ForumPostForm.vue'
 import ForumContent from '../ForumContent.vue'
 import ForumComposer from '../ForumComposer.vue'
+import { FORUM_REGION_NOTICE } from '@/utils/forumDisplay'
 
 vi.mock('@/api/request', () => ({
   unwrappedRequest: { get: vi.fn(), post: vi.fn(), delete: vi.fn(), put: vi.fn() }
@@ -112,5 +113,49 @@ describe('回复框正文格式（#879 / ADR-0044）', () => {
 
     const composer = mountComposer();
     expect(composer.findAllComponents({ name: 'UiSegmentTabs' })[0].props('modelValue')).toBe('markdown');
+  })
+})
+// 行内小回复框（inline 档，2026-10-28）：帖子详情里点某条回复的「回复」键就是挂它。
+// 与主回复区的差异只有三处：没有格式档、披露与发送挤同一行、挂载即聚焦。
+describe('行内小回复框（inline 档）', () => {
+  function mountInline() {
+    return mount(ForumComposer, {
+      props: { modelValue: '', images: [], inline: true, rows: 2 },
+      attachTo: document.body,
+      global: { plugins: [epLite()] }
+    })
+  }
+
+  it('不放正文格式分段控件（格式偏好与主回复区共用一份）', () => {
+    const w = mountInline()
+    expect(w.findAllComponents({ name: 'UiSegmentTabs' })).toHaveLength(0)
+  })
+
+  it('披露提示与发送键在同一行（行内档不能再长出一行）', () => {
+    const w = mountInline()
+    const send = w.find('.forum-composer button[title*="发表回复"]')
+    expect(send.exists()).toBe(true)
+    const row = send.element.parentElement!
+    expect(row.textContent).toContain(FORUM_REGION_NOTICE)
+    // 主回复区那一份披露在**下一行**，行内档不该同时存在两份
+    expect(w.findAll('.forum-region-notice')).toHaveLength(1)
+  })
+
+  it('挂载即聚焦输入框（点「回复」的下一步就是打字）', async () => {
+    const w = mountInline()
+    await flushPromises()
+    expect(document.activeElement).toBe(w.find('textarea').element)
+    w.unmount()
+  })
+
+  it('主回复区：发送键与格式档同一行，不再独占最后一行', () => {
+    const w = mountComposer()
+    const send = w.find('.forum-composer button[title*="发表回复"]')
+    const row = send.element.parentElement!
+    // 同一行里既有格式档（.seg-bar）也有发送键
+    expect(row.querySelector('.seg-bar')).toBeTruthy()
+    // 披露提示仍在下方一行（ADR-0045 的披露位置不变）
+    expect(w.findAll('.forum-region-notice')).toHaveLength(1)
+    expect(row.textContent).not.toContain(FORUM_REGION_NOTICE)
   })
 })

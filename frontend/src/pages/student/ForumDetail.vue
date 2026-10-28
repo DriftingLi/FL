@@ -1,5 +1,9 @@
 <template>
-  <div class="mx-auto max-w-[900px] px-4 pb-10">
+  <!-- 页面根是**撑满内容列的 flex 列**（2026-10-28）：回复区要贴在内容列底部，
+       而不是「跟着内容一起上浮、下面留一大块空白」。撑满靠 `flex-1`（SidebarLayout 的
+       .main-content 是 flex 列，页面根是它的 flex 项），不靠百分比高度 —— 后者要算
+       「100vh 减顶栏减页脚」，是外壳知识的第二份拷贝。 -->
+  <div class="mx-auto flex max-w-[900px] flex-1 flex-col px-4">
     <div class="back-bar mb-3">
       <UiButton variant="text" :icon="'arrow-left'" @click="goBack">返回列表</UiButton>
     </div>
@@ -116,24 +120,40 @@
           <!-- 渲染顺序即后端顺序：被采纳回复由后端保证占首页第一条（ADR-0042），
                前端不再派生置顶（旧 sortedReplies 已删）——分页后前端只拿得到一页，
                派生置顶必然失效。 -->
-          <ForumReplyCard
-            v-for="(reply, i) in replies"
-            :key="reply.id"
-            :id="`reply-${reply.id}`"
-            class="stagger-in border-b border-line last:border-b-0"
-            :style="staggerStyle(i)"
-            :reply="reply"
-            :topic-author-id="topic.author.user_id"
-            :is-own="isOwnReply(reply)"
-            :can-accept="canAcceptReply(reply)"
-            :can-cancel-accept="canCancelAcceptReply(reply)"
-            @reply-to="startReplyTo"
-            @like="toggleReplyLike"
-            @report="(r) => openReport('reply', r.id)"
-            @delete="removeReply"
-            @accept="handleAccept"
-            @cancel-accept="handleCancelAccept"
-          />
+          <!-- 行内回复（2026-10-28）：点某条回复的「回复」键就在**这条下方**展开输入框，
+               再点一次收回。原来只有页面底部那一个大回复框 —— 长帖要答某一条就得先滚到底。
+               两个输入框是同**一个组件**的两档（`inline`），提交口径与字数/图片上限同源。 -->
+          <template v-for="(reply, i) in replies" :key="reply.id">
+            <ForumReplyCard
+              :id="`reply-${reply.id}`"
+              class="stagger-in border-b border-line last:border-b-0"
+              :style="staggerStyle(i)"
+              :reply="reply"
+              :topic-author-id="topic.author.user_id"
+              :is-own="isOwnReply(reply)"
+              :can-accept="canAcceptReply(reply)"
+              :can-cancel-accept="canCancelAcceptReply(reply)"
+              :replying="inlineReplyId === reply.id"
+              @reply-to="toggleInlineReply"
+              @like="toggleReplyLike"
+              @report="(r) => openReport('reply', r.id)"
+              @delete="removeReply"
+              @accept="handleAccept"
+              @cancel-accept="handleCancelAccept"
+            />
+            <div v-if="inlineReplyId === reply.id" class="reply-editor-inline mb-2">
+              <ForumComposer
+                inline
+                v-model="inlineReplyContent"
+                v-model:images="inlineReplyImages"
+                :rows="2"
+                :max-images="3"
+                :submitting="inlineSubmitting"
+                :placeholder="`回复 @${displayName(reply.author)}…`"
+                @submit="submitInlineReply"
+              />
+            </div>
+          </template>
           <!-- 加载更多（ADR-0042 / ADR-0060 §4）：追加下一页而非替换，保持阅读连续；到底显示结束态。
                「还有没有下一批」由 useAsyncPage 的 append 档读服务端分页信封决定，页面不参与判断。
                深链 #reply-N 只由采纳通知生成（指向被采纳回复），而后端恒把被采纳回复放首页第一条，
@@ -167,11 +187,12 @@
         />
       </UiDialog>
 
-      <div class="reply-editor mb-4">
+      <!-- 贴底（2026-10-28）：`mt-auto` 把这一块压到内容列底部，配合页面根的 `flex-1`
+           —— 内容短时下面不再空一大块，滚到底时输入框贴着页脚上沿。 -->
+      <div class="reply-editor mt-auto">
         <ForumComposer
           v-model="replyContent"
           v-model:images="replyImages"
-          v-model:replying-to="replyingTo"
           :submitting="submitting"
           :max-images="3"
           placeholder="写下你的回复…"
@@ -227,7 +248,15 @@ const staggerStyle = useStagger()
 const topic = ref<ForumTopicItem | null>(null)
 const replies = ref<ForumReplyItem[]>([])
 const replyContent = ref('')
-const replyingTo = ref<{ id: number; username: string } | null>(null)
+/**
+ * 行内回复框（2026-10-28）：当前展开的回复 id（null = 全收起）。
+ * 盒子只有一个，所以换一条回复时上一条的草稿会被丢掉 —— 留着草稿会让下一条的框里
+ * 出现上一条写了一半的字（比"丢一次没用上的草稿"更糟）。
+ */
+const inlineReplyId = ref<number | null>(null)
+const inlineReplyContent = ref('')
+const inlineReplyImages = ref<string[]>([])
+const inlineSubmitting = ref(false)
 // 已上传图片 URL 由 ForumComposer 内部经 useForumImageUpload 维护，这里只持有结果
 const replyImages = ref<string[]>([])
 
@@ -412,11 +441,11 @@ async function submitReply(payload: { contentFormat: ForumContentFormat }) {
   submitting.value = true
   try {
     const topicId = Number(route.params.topicId)
-    await forumApi.replyTopic(topicId, content, replyingTo.value?.id, replyImages.value, payload.contentFormat)
+    // 页面底部的大回复区只发**顶层回复**：指向某条回复的入口是那条下面的行内框
+    await forumApi.replyTopic(topicId, content, null, replyImages.value, payload.contentFormat)
     ElMessage.success('回复成功')
     replyContent.value = ''
     replyImages.value = []
-    replyingTo.value = null
     // 新回复要落进窗口：清空累积 + 回第 1 批（append 档的刷新入口）
     await reloadReplies()
   } catch (e) {
@@ -427,8 +456,49 @@ async function submitReply(payload: { contentFormat: ForumContentFormat }) {
   }
 }
 
-function startReplyTo(reply: ForumReplyItem) {
-  replyingTo.value = { id: reply.id, username: displayName(reply.author) }
+/** 点某条回复的「回复」键：展开它下面的行内框；再点一次收起（同一条才收起）。 */
+function toggleInlineReply(reply: ForumReplyItem) {
+  if (inlineReplyId.value === reply.id) {
+    inlineReplyId.value = null
+    return
+  }
+  if (inlineReplyContent.value || inlineReplyImages.value.length) {
+    inlineReplyContent.value = ''
+    inlineReplyImages.value = []
+  }
+  inlineReplyId.value = reply.id
+}
+
+/** 行内框提交：回复目标就是它挂在下面那一条（inlineReplyId），不是"当前选中"。 */
+async function submitInlineReply(payload: { contentFormat: ForumContentFormat }) {
+  const targetId = inlineReplyId.value
+  if (!targetId) return
+  const content = inlineReplyContent.value.trim()
+  if (!content && inlineReplyImages.value.length === 0) {
+    ElMessage.warning('请输入回复内容')
+    return
+  }
+  inlineSubmitting.value = true
+  try {
+    await forumApi.replyTopic(
+      Number(route.params.topicId),
+      content,
+      targetId,
+      inlineReplyImages.value,
+      payload.contentFormat
+    )
+    ElMessage.success('回复成功')
+    inlineReplyContent.value = ''
+    inlineReplyImages.value = []
+    inlineReplyId.value = null
+    // 新回复要落进窗口：与主回复区同口径（清空累积 + 回第 1 批）
+    await reloadReplies()
+  } catch (e) {
+    console.error('回复失败:', e)
+    /* 错误已由拦截器提示 */
+  } finally {
+    inlineSubmitting.value = false
+  }
 }
 
 async function removeTopic() {
