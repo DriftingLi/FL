@@ -33,7 +33,8 @@
                 @click="onContinueLearning" />
 
             <!-- 新闻资讯板块 -->
-            <DashboardNewsSection :news-list="newsList" @click="onNewsClick" @more="onMoreNews" />
+            <DashboardNewsSection :news-list="newsList" :failed="newsFailed" @click="onNewsClick" @more="onMoreNews"
+                @retry="loadFeaturedContents" />
 
             <!-- 内容 Tab + 筛选标签 + 课程卡片列表（#1422：数据源改为真实热门课程，经 props 流入） -->
             <DashboardCourseSection :courses="hotCourses" @open-filter="onFilterBtnClick" @course-open="onCourseOpen" />
@@ -111,7 +112,7 @@
 
     // ---- 数据流：未读轮询 / 继续学习 / 新闻资讯 / 首页课程区（composable 持有） ----
     const {
-        unreadCount, continueLearning, newsList, hotCourses,
+        unreadCount, continueLearning, newsList, newsFailed, hotCourses,
         loadMyCourses, loadFeaturedContents, loadHotCourses, startUnreadPolling, stopUnreadPolling,
     } = useDashboardFeeds()
 
