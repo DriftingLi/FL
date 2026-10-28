@@ -15,7 +15,9 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const { loadUts } = require('./utsHarness');
+// readText 是读取层归一（CRLF → LF，ADR-0019）：裸 readFileSync 在 Windows 检出下会让
+// 多行锚点匹配 0 次、变异没生效而断言照跑 ⇒ 守护静默失效（仓内守卫 scripts/check-contract-read.mjs 判红）
+const { loadUts, readText } = require('./utsHarness');
 
 const DISPLAY_UTS = path.join(__dirname, 'jobCredentialDisplay.uts');
 
@@ -103,7 +105,7 @@ describe('buildCredentialFilterOptions：筛选栏「证件」组选项', () => 
 describe('成对取证（必红）：上面那些判据在真实坏实现上确实会红', () => {
   /** 读真源 → 注入变异 → 落临时目录（锚点必须命中：变异没进去就等于没测） */
   const mutatedCopy = (replacements) => {
-    let src = fs.readFileSync(DISPLAY_UTS, 'utf8');
+    let src = readText(DISPLAY_UTS);
     for (const [from, to] of replacements) {
       expect([from, src.includes(from)]).toEqual([from, true]);
       src = src.split(from).join(to);

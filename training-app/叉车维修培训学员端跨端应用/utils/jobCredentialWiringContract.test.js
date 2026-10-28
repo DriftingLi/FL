@@ -10,12 +10,15 @@
  *   ③ 选中证件必须经 `credentialFilterParam` 折成查询参数（0/非法值不发出去），并落进 `credential_id`；
  *   ④ DTO 字段与参数名两端同名：`required_credentials` / `required_credential_ids` / `credential_id`。
  */
-const fs = require('fs');
 const path = require('path');
+
+// readText 走读取层归一（CRLF → LF，ADR-0019）：裸 readFileSync 在 Windows 检出下会让
+// 断言在 CI 与本地判出两种结果（仓内守卫 scripts/check-contract-read.mjs 判红）
+const { readText } = require('./utsHarness');
 
 const ROOT = path.join(__dirname, '..');
 
-const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
+const read = (rel) => readText(path.join(ROOT, rel));
 
 const PAGE = 'pages/jobs/job-list.uvue';
 const API = 'api/job.uts';
