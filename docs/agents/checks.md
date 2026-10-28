@@ -1,6 +1,9 @@
 # 测试与检查流程
 
 > 每次提交前必读。从 AGENTS.md 拆出（2026-09-09），内容为权威版本。
+>
+> **动手前先按文件名实测存在性**（2026-10-28 立，#2044 会话 retro 复盘 / #2052）：票面点名的文件与套件，用 `glob` 或 `git ls-files` 按**文件名**验存在性 —— **内容检索的读数判不了存在性，两个方向都会骗人**：零命中可以只是正文不含自身名（实测 `training-app/叉车维修培训学员端跨端应用/utils/gateCommitBindingBehavior.test.js` 里搜自己的文件名 = 0 次，该断言曾被写进 #2044 票面），非零命中可以全是**别处的引用者**（仓级 `git grep -l gateCommitBinding` 现测 6 个文件，含本文件自己）。子代理的缺席结论与本会话已读到的正面证据冲突时，先按正面证据裁决，再写入票面/PR。
+> **检索永远给子目录 scope**（2026-10-28 实测，#2052）：仓根躺着别的会话留下的悬挂链接，**两种坏法不一样** —— 指向**已删目录**的那条（实测 `wtx-base/verifybase/node_modules -> /d/FL/.wt-1087/…/node_modules`，该点目录 worktree 已不在）让 `grep`（rg）**当场 `exit 2`、整次搜索作废**；指向**已删包**的那批**文件**链接（实测 `.dsh-probe/home/profiles/node_modules/` 164 条链接中 74 条已断，全仓 `.dsh-probe` 下 533 条链接）与 `glob` 都不报错，**只静默跳过、回一个空结果**。⇒ 报错不等于「没有匹配」，空结果不等于「不存在」（见上一条）；scope 收到子目录再看数。
 
 改动后**必须**跑完对应栈的检查，全绿才能提交：
 
@@ -131,6 +134,8 @@ CI 的 `migration-check`（`ci.yml` Stage 6）在服务容器 `postgres:15-alpin
 ## 运行时面判定与证据校验的机器语义（2026-10-15 从根 `AGENTS.md` 迁入，判据源 `.github/scripts/lib/gate-validator.mjs`）
 
 **执行面是仓库级**：`.github/workflows/pr-evidence.yml` 对**每一个 PR** 运行，但**只对命中运行时面**（`*.uvue` / `*.uts` / training-app 下的三份 json）**的 PR 校验正文的 `## 验收证据` 段** —— 未命中时校验器在校验段**之前**就放行（`runtime.length === 0` 早退，用例见 `.github/scripts/pr-evidence-check.test.mjs`「非运行时面 PR：即使正文为空也通过」），命中而缺段则直接判红；未命中运行时面时仍**约定**写 `免（未命中运行时面）`（先例 #908）。适用范围不限于移动端。
+
+**改判据脚本先过秒级语法闸**（2026-10-28 立，#2044 会话 retro 复盘 / #2052）：射程 = `.github/scripts/*.mjs`（含 `lib/gate-validator.mjs`）。改完先 `node --check <改动的 .mjs>`（秒级语法闸，2026-10-28 实测 0.3s 回包），再跑对应 `node --test` 套件（`.github/scripts/pr-evidence-check.test.mjs` / `preflight-pr.test.mjs`）——模板字面量转义错位与行级 splice 锚点冲突都曾写出**破损中间态并真实落盘**，肉眼回读和 `node --test` 都不算语法闸。
 
 **候选来源（2026-10-23，#1841 起）**：PR 评论 + commit 评论 + **PR 正文关联的票评论**，三来源**同构**——marker（`<!-- gate-evidence:<门号> -->`）、`commit: <sha>` 绑定、祖先判定与「其间运行时面未改动」、fail-closed（compare 拿不到即不满足）**全部沿用，一条不放宽**。哪些票算候选由判据源 `issueNumbersInBody` 定：**先剥 HTML 注释**（模板注释里堆着历史票号，不剥会被全拉成候选），再取 `Closes` / `Refs` / `Fixes` / `Resolves` / `Related to #N` 与 `https://github.com/<o>/<r>/issues/<n>`，去重后**最多 5 张**；**未在正文关联的票不进判据**。多出的这一处来源是**降级**不是放宽：GitHub 对本仓 `POST /repos/<owner>/<repo>/commits/<sha>/comments` 长期回 HTTP 404（同 token 在别的仓正常，复盘见 [#1838](https://github.com/DriftingLi/FL/issues/1838)），门脚本遇 404 把**同一份**评论（marker 与 `commit: <sha>` 一字不改）改贴到票当正式落点，并打印机检行 `GATE_COMMENT_DEGRADED tier=issue url=<URL>`；**触发条件只有 404**，其余失败仍是硬失败（`GATE_COMMENT_FAILED`），不得静默 skip。
 

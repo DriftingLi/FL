@@ -4,6 +4,7 @@
 
 > **`gh` 的路径与登录态按机器现测**，不要照抄任何一份记录：`command -v gh` + `gh auth status`。2026-09-20 在 `D:\FL` 这台机器实测 `gh` 就在 PATH 里（`C:\Program Files\GitHub CLI\gh.exe`），`~/.bun/bin` 下没有 gh、`~/.config/gh` 也不存在（Windows 的登录态落在别处）。
 > ⚠️ 另有一条与权限档相关的实测：`gh` 的**任何**子命令（含 `issue list` 这类只读）在 auto 权限档下会被 classifier 拦下 —— 需要发布时换档或由维护者自己跑。
+> **给 deck_* 远端调用把超时放足（≥300s）**（2026-10-28 实测，#2044 会话 retro 复盘 / #2052）：默认 120s 预算内首调实测报 `backend-timeout`，同参重试即成 —— 那个回包是**超时不是失败**，只读操作（读票 / 列票 / 看地图）按重试处置，别读成「查无此票」；**写**侧是另一条判读（超时/报错 ≠ 未落地，先 `gh api` 现测存在性再重试），落点在下方 Conventions 的「deck 与 gh 的分工」与「deck 写操作超时/报错 ≠ 未落地」两条，按这句粗体引导语找。
 
 ## Conventions
 
@@ -14,6 +15,8 @@
 - **Apply / remove labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
 - **Close**: `gh issue close <number> --comment "..."`
 - **票面验收口径只引已合库 ADR**（2026-10-24 立，#1845-#1848 复盘）：开票时 What to build / Acceptance criteria 里引用的规则，只引**已合并进 master 的 ADR/文档**；「已裁定未落库」的口径先落库再进票面——两套口径并存时（如 #1853/#1858 那种文档包与判据包分飞的场景），执行会话无法机械判定哪套生效，只能人肉考古（当日实测代价：票面引 0040/0039 窗口径、而退役窗口的 0043 处于已裁定未合库态）。
+- **deck 与 gh 的分工**（2026-10-28 retro #1861 triage 会话实测）：**写、边、上报、维护者原话走 deck_ 工具**（幂等锚与 workRoute 账只在 deck 侧）；**验证与读回走 `gh api --jq`**——deck 每次回执带约 2KB 记账 JSON（cost/quota/workRoute），反复用 deck 读同一张票就是在付噪声。
+- **deck 写操作超时/报错 ≠ 未落地；写后现测只认 gh**（2026-10-28 实测，#2049 建票）：一次 create 返回 `unsupported: repo.refId missing`、一次 120s 超时无回执，随后 `deck_issue_list` 查重**假阴性报「无」**（索引滞后）；`gh api` 才见票实际已建成。⇒ deck 写操作失败/超时后，先 `gh api` 现测对象存在性，确认不存在才重试，防重复票（重复票处置税见 `docs/agents/triage-labels.md`）。
 
 从 `git remote -v` 推断 repo；在 clone 内运行时，`gh` 会自动处理。
 
