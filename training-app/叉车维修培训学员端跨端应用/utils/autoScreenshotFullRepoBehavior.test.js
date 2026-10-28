@@ -115,6 +115,16 @@ function probe(ctx) {
     "Write-Output ('FR9_MF_REDIRCOUNT=' + $mfRedir.RedirectedCount)",
     "$mfRedir2 = Get-FullRepoManifestData -Ticket '1864' -PlannedPages @('pages/index/index','pages/b/b') -Screenshots @('pages_b_b') -OutputDir $env:FR_OUT4",
     "Write-Output ('FR9_NO_REDIR_MISSING=' + @($mfRedir2.Missing).Count)",
+    // ---- FR10：按前缀分批（学员 51 / 招聘者 9）----
+    "$outE = Join-Path $env:FR_OUT5 'excl'",
+    "$re = Invoke-AutoScreenshot -FullRepo '1864' -ExcludePrefix 'pages/recruiter/' -Device 'nosuchserial0000' -OutputDir $outE -AdbCallTimeoutSeconds 5 6>$null",
+    "Write-Output ('FR10_ATTEMPTED=' + @($re.AttemptedPages).Count)",
+    "Write-Output ('FR10_PLANNED=' + @($re.PlannedPages).Count)",
+    "Write-Output ('FR10_EXCLUDED=' + @($re.Excluded).Count)",
+    "$bad = @($re.Excluded | Where-Object { -not $_.StartsWith('pages/recruiter/') }).Count",
+    "Write-Output ('FR10_EXCLUDED_OFFPREFIX=' + $bad)",
+    "$re2 = Invoke-AutoScreenshot -ExcludePrefix 'pages/recruiter/' -Pages 'pages/login/login' 6>$null",
+    "Write-Output ('FR10_GATE_OK=' + $re2.Ok)",
     'Write-Output "PROBE_DONE=1"',
   ].join('\n');
   const encoded = Buffer.from(s, 'utf16le').toString('base64');
@@ -126,6 +136,7 @@ function probe(ctx) {
     FR_OUT2: ctx.out2,
     FR_OUT3: ctx.out3,
     FR_OUT4: ctx.out4,
+    FR_OUT5: ctx.out5,
     FR_LIB: path.join(ROOT, 'scripts', 'lib'),
   });
   try {
@@ -150,12 +161,13 @@ describe('-FullRepo 全仓逐页载体（运行期，#2078）', () => {
 
   beforeAll(() => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'fullrepo-'));
-    ctx = { tmp, proj: path.join(tmp, 'proj'), out: path.join(tmp, 'arch'), out2: path.join(tmp, 'ramp'), out3: path.join(tmp, 'broken'), out4: path.join(tmp, 'redir') };
+    ctx = { tmp, proj: path.join(tmp, 'proj'), out: path.join(tmp, 'arch'), out2: path.join(tmp, 'ramp'), out3: path.join(tmp, 'broken'), out4: path.join(tmp, 'redir'), out5: path.join(tmp, 'excl') };
     fs.mkdirSync(ctx.proj, { recursive: true });
     fs.mkdirSync(ctx.out, { recursive: true });
     fs.mkdirSync(ctx.out2, { recursive: true });
     fs.mkdirSync(ctx.out3, { recursive: true });
     fs.mkdirSync(ctx.out4, { recursive: true });
+    fs.mkdirSync(ctx.out5, { recursive: true });
     probeRun = probe(ctx);
     if (!probeRun.ok || !field(probeRun.stdout, 'PROBE_DONE')) {
       throw new Error('pwsh 探针未跑通（不 skip）：' + probeRun.stderr.slice(0, 400) + ' | ' + probeRun.stdout.slice(0, 400));
@@ -224,6 +236,18 @@ describe('-FullRepo 全仓逐页载体（运行期，#2078）', () => {
     expect(Number(field(probeRun.stdout, 'FR8_PLANNED'))).toBeGreaterThan(0);
     expect(Number(field(probeRun.stdout, 'FR8_ATTEMPTED'))).toBe(1);
     expect(field(probeRun.stdout, 'FR8_MF')).toBe('True');
+  });
+
+  test('FR10: 按前缀分批——排除只裁本轮，全仓计划与被排除名单都可见', () => {
+    const planned = Number(field(probeRun.stdout, 'FR1_PLANNED'));
+    // 真读数：60 页里 9 页是招聘者侧 ⇒ 排除后本轮 51 页，全仓计划仍是 60
+    expect(Number(field(probeRun.stdout, 'FR10_PLANNED'))).toBe(planned);
+    expect(Number(field(probeRun.stdout, 'FR10_ATTEMPTED'))).toBe(planned - 9);
+    expect(Number(field(probeRun.stdout, 'FR10_EXCLUDED'))).toBe(9);
+    // 被排除的页必须全部命中该前缀（别把无关页顺手排掉）
+    expect(Number(field(probeRun.stdout, 'FR10_EXCLUDED_OFFPREFIX'))).toBe(0);
+    // 不带 -FullRepo 时单独给 -ExcludePrefix ⇒ 拒
+    expect(field(probeRun.stdout, 'FR10_GATE_OK')).toBe('False');
   });
 
   test('FR9: 中转页算「已交代」但不产图（白名单真读仓内数据文件）', () => {

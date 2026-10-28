@@ -836,6 +836,10 @@ function Get-FullRepoManifestData {
         $Redirected = @(),
         [string[]]$HashConflicts = @(),
         [string[]]$StaleShots = @(),
+        # 按前缀排除的记录（分角色分批的审计面）：被排除的页仍在 PlannedPages 里，
+        # 所以 dirMissing 会点名它们 —— 这是「缺 9 页必须可见」的机器形态，不是注释承诺。
+        [string]$ExcludePrefix = '',
+        [string[]]$Excluded = @(),
         $PageSeconds = @(),
         [Nullable[datetime]]$RunStartedAt = $null,
         # 归档目录（给了就连目录一起算**累计**进度）：一轮约 3.9 小时、必须可分夜跑，
@@ -870,6 +874,9 @@ function Get-FullRepoManifestData {
         Missing        = @($counts.Missing)
         Redirected     = @($Redirected)
         RedirectedCount = @($redirectedNames).Count
+        ExcludePrefix  = $ExcludePrefix
+        ExcludedCount  = @($Excluded).Count
+        Excluded       = @($Excluded)
         # CountsMatch 只判**本轮**（attempted）是否都产出；全仓齐不齐看下面的 DirCountsMatch
         # 累计面（跨轮）：目录里现在有几张 / 缺哪几页 —— 连跑与收口取这一组
         DirPngCount    = $dirPngCount
@@ -925,6 +932,11 @@ function Invoke-AutoScreenshot {
         # 前 N 页，但 manifest 里的**全仓计划仍是 60 页**（累计对账不变），「还差几页」一直可算。
         # 不实现成「裁掉全仓清单」：那会让全仓计划跟着变小，分夜跑与 #2077 续跑就失去输入。
         [int]$RampPages = 0,
+        # 按路径前缀**排除**本轮的页（逗号分隔），仅 -FullRepo 下有效：分角色分批的唯一入口。
+        # 现测事实：60 页 = 学员侧 51 + 招聘者侧 9（pages/recruiter/*），而登录态只能是一种角色
+        # ⇒ 单一账号采不全，必须分批；`-RampPages` 是「取前 N」，表达不了「排除某一类」。
+        # 被排除的页**仍留在全仓计划里**（dirMissing 点名它们），不静默消失。
+        [string]$ExcludePrefix = '',
         [int]$MaxPages = 5,
         [int]$WaitSeconds = 3,
         # 导航落定的有界判据（见 Wait-NavSettled）：等满 MinSeconds 且相邻两次采样**内容一致**才算落定；
@@ -968,6 +980,12 @@ function Invoke-AutoScreenshot {
         return [pscustomobject]@{
             Ok = $false; Screenshots = @(); Skipped = @(); HashConflicts = @(); TargetPages = @()
             Error = "-RampPages 只在 -FullRepo 下有意义（日常形态本就按改动页跑）⇒ 拒绝开始，不静默忽略。"
+        }
+    }
+    if ($ExcludePrefix -and -not $fullRepoMode) {
+        return [pscustomobject]@{
+            Ok = $false; Screenshots = @(); Skipped = @(); HashConflicts = @(); TargetPages = @()
+            Error = "-ExcludePrefix 只在 -FullRepo 下有意义（日常形态本就按改动页跑）⇒ 拒绝开始，不静默忽略。"
         }
     }
     if ($fullRepoMode -and $Pages) {
@@ -1049,7 +1067,17 @@ function Invoke-AutoScreenshot {
         #   $fullRepoPlannedPages = 全仓计划（恒为全量，累计对账与续跑的分母）
         #   $targetPages          = 本轮要跑的页（-RampPages 只裁这一份）
         $fullRepoPlannedPages = @(Get-FullRepoPageList -PagesJson $pagesJson)
-        $targetPages = @(Select-FullRepoAttempted -PlannedPages $fullRepoPlannedPages -RampPages $RampPages)
+        $afterRamp = @(Select-FullRepoAttempted -PlannedPages $fullRepoPlannedPages -RampPages $RampPages)
+        # 排除按**前缀**做，且只作用于本轮 attempted —— 全仓计划保持全量，缺页由 dirMissing 点名。
+        $excludedPages = @()
+        if ($ExcludePrefix) {
+            $prefixes = @($ExcludePrefix -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+            $excludedPages = @($afterRamp | Where-Object { $pg = $_; (@($prefixes | Where-Object { $pg.StartsWith($_) }).Count -gt 0) })
+            $targetPages = @($afterRamp | Where-Object { $pg = $_; (@($prefixes | Where-Object { $pg.StartsWith($_) }).Count -eq 0) })
+            Write-Host ("[auto-screenshot] 已按前缀排除 {0} 页（$ExcludePrefix）⇒ 本轮 {1}/{2} 页" -f @($excludedPages).Count, @($targetPages).Count, @($fullRepoPlannedPages).Count) -ForegroundColor Magenta
+        } else {
+            $targetPages = $afterRamp
+        }
         $plannedAll = @($fullRepoPlannedPages).Count
         if (@($targetPages).Count -lt $plannedAll) {
             $rampMsg = "[auto-screenshot] -FullRepo {0} 起跑档：本轮 {1}/{2} 页（全仓计划仍按 {2} 页对账，RampPages={3}）"
@@ -1106,7 +1134,7 @@ function Invoke-AutoScreenshot {
         if ($fullRepoMode) {
             return [pscustomobject]@{
                 Ok = $false; Screenshots = @(); Skipped = @(); HashConflicts = @(); TargetPages = @()
-                Error = "-FullRepo $FullRepo：pages.json 全量清单解析出 **0 页** ⇒ 无页可截，不返回绿（全仓形态没有「静默零产物」这条出口）。"
+                Error = "-FullRepo $FullRepo：本轮可截页为 **0**（pages.json 为空，或被 -ExcludePrefix '$ExcludePrefix' 全排除）⇒ 无页可截，不返回绿（全仓形态没有「静默零产物」这条出口）。"
             }
         }
         $why = if ($Pages) { '指定的 -Pages 为空' } else { 'git diff 里没有 pages/**/*.uvue 改动' }
@@ -1151,7 +1179,7 @@ function Invoke-AutoScreenshot {
     # 一页都没截到的形态，归档里也留有「计划 N 页、已产 0 页」的凭据，而不是一个空目录让人猜。
     # ⑥ 断路腿要的「明报 INCOMPLETE、已产页不丢、零产物不冒充绿」全靠这份早落盘的清单兑现。
     if ($fullRepoMode) {
-        $mfPre = Get-FullRepoManifestData -Ticket $FullRepo -PlannedPages $fullRepoPlannedPages -AttemptedPages $targetPages -RunStartedAt $runStarted -OutputDir $OutputDir
+        $mfPre = Get-FullRepoManifestData -Ticket $FullRepo -PlannedPages $fullRepoPlannedPages -AttemptedPages $targetPages -RunStartedAt $runStarted -OutputDir $OutputDir -ExcludePrefix $ExcludePrefix -Excluded $excludedPages
         $null = Write-FullRepoManifest -Path $fullRepoManifestPath -Manifest $mfPre
     }
 
@@ -1188,6 +1216,9 @@ function Invoke-AutoScreenshot {
             PlannedPages  = $(if ($fullRepoMode) { @($fullRepoPlannedPages) } else { @() })
             AttemptedPages = $(if ($fullRepoMode) { @($targetPages) } else { @() })
             Redirected    = @()
+            RedirectedCount = 0
+            ExcludePrefix = $(if ($fullRepoMode) { $ExcludePrefix } else { '' })
+            Excluded      = $(if ($fullRepoMode) { @($excludedPages) } else { @() })
             PageSeconds   = @()
         }
     }
@@ -1336,6 +1367,8 @@ function Invoke-AutoScreenshot {
                 $mfArgs = @{ Ticket = $FullRepo; PlannedPages = $fullRepoPlannedPages; AttemptedPages = $targetPages; Screenshots = $screenshots }
                 $mfArgs.Skipped = $skipped
                 $mfArgs.Redirected = $redirected
+                $mfArgs.ExcludePrefix = $ExcludePrefix
+                $mfArgs.Excluded = $excludedPages
                 $mfArgs.HashConflicts = $hashConflicts
                 $mfArgs.StaleShots = $staleShots
                 $mfArgs.PageSeconds = $fullRepoPageSeconds
@@ -1366,7 +1399,7 @@ function Invoke-AutoScreenshot {
         $fullRepoCounts = Get-FullRepoCounts -PlannedPages $targetPages -CapturedNames $screenshots -SkippedNames $skipped -RedirectedNames $redirectedNamesFinal
         $mfPost = Get-FullRepoManifestData -Ticket $FullRepo -PlannedPages $fullRepoPlannedPages -AttemptedPages $targetPages -Screenshots $screenshots `
             -Skipped $skipped -HashConflicts $hashConflicts -StaleShots $staleShots `
-            -PageSeconds $fullRepoPageSeconds -RunStartedAt $runStarted -OutputDir $OutputDir -Redirected $redirected
+            -PageSeconds $fullRepoPageSeconds -RunStartedAt $runStarted -OutputDir $OutputDir -Redirected $redirected -ExcludePrefix $ExcludePrefix -Excluded $excludedPages
         $null = Write-FullRepoManifest -Path $fullRepoManifestPath -Manifest $mfPost
         if ($allOk -and [bool]$fullRepoCounts.CountsMatch) { $verdict = 'PASS' }
         elseif (@($screenshots).Count -eq 0) { $verdict = 'FAIL' }
@@ -1410,6 +1443,10 @@ function Invoke-AutoScreenshot {
         # 中转页（请求页被立刻跳到白名单落点）：与 Captured **分开**给调用方 ——
         # 它是「已交代但没产图」，写进 Screenshots 就是假绿（本会话真机轮实测过这个坑）。
         Redirected    = @($redirected)
+        # 被前缀排除的页（分角色分批）：与 Redirected 同属「本轮没产图但已交代」，区别是
+        # Redirected 有落点证据、Excluded 只是「本轮不采」（且 dirMissing 会点名它们）。
+        ExcludePrefix = $(if ($fullRepoMode) { $ExcludePrefix } else { '' })
+        Excluded      = $(if ($fullRepoMode) { @($excludedPages) } else { @() })
         PageSeconds   = @($fullRepoPageSeconds)
     }
 }

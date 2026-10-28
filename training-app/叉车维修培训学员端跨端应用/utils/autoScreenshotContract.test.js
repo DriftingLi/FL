@@ -554,6 +554,22 @@ describe('auto-screenshot.ps1 contract', () => {
 
   // S32（2026-10-28，#2078 ⑥）：起跑档 `-RampPages` 的形状 —— 只裁本轮，不裁全仓计划。
   //   运行期那一面（真读 pages.json 跑前 1 页、本轮 PASS 与全仓差 59 页同时可见）由 FR6 / FR7 钉。
+  // S34（2026-10-28，#2078 真机轮）：按前缀分批。
+  //   现测：60 页 = 学员 51 + 招聘者 9（pages/recruiter/*），而登录态只能是其中一种角色
+  //   ⇒ 单一账号采不全，必须分批。这里钉住「排除只作用于本轮、全仓计划不动」。
+  test('S34: 【#2078】-ExcludePrefix 只裁本轮，被排除页仍留在全仓计划里', () => {
+    const code = src.replace(/<#[\s\S]*?#>/g, '').replace(/^\s*#.*$/gm, '');
+    // 先 ramp 再排除，两步都作用于 attempted
+    expect(code).toMatch(/\$afterRamp = @\(Select-FullRepoAttempted -PlannedPages \$fullRepoPlannedPages -RampPages \$RampPages\)/);
+    expect(code).toMatch(/\$targetPages = @\(\$afterRamp \| Where-Object/);
+    // 全仓计划不得被排除污染
+    expect(code).toMatch(/\$fullRepoPlannedPages = @\(Get-FullRepoPageList -PagesJson \$pagesJson\)/);
+    // 无 -FullRepo 时单独给 -ExcludePrefix 必须拒
+    expect(code).toMatch(/-ExcludePrefix 只在 -FullRepo 下有意义/);
+    // 排除记录进 manifest（审计面）
+    expect(code).toMatch(/ExcludedCount\s*=\s*@\(\$Excluded\)\.Count/);
+  });
+
   // S33（2026-10-28，#2078 真机轮）：中转页白名单的形状。
   //   真机现测：登录态下进入 pages/index/index 后 157ms 就跳 /pages/dashboard/dashboard，
   //   而 S17 取「最后一条进入行」⇒ 请求页永远落不定 ⇒ 60 页全量的 dirMissing 永久 >0。
@@ -584,7 +600,8 @@ describe('auto-screenshot.ps1 contract', () => {
     const code = src.replace(/<#[\s\S]*?#>/g, '').replace(/^\s*#.*$/gm, '');
     // 本轮集合由纯函数从全量派生，且全量另存一份用于累计对账
     expect(code).toMatch(/\$fullRepoPlannedPages = @\(Get-FullRepoPageList -PagesJson \$pagesJson\)/);
-    expect(code).toMatch(/\$targetPages = @\(Select-FullRepoAttempted -PlannedPages \$fullRepoPlannedPages -RampPages \$RampPages\)/);
+    // 形态演进（#2078 分角色分批）：ramp 先算进 $afterRamp，再按需按前缀排除成 $targetPages
+    expect(code).toMatch(/\$afterRamp = @\(Select-FullRepoAttempted -PlannedPages \$fullRepoPlannedPages -RampPages \$RampPages\)/);
     // 两个分母都要进 manifest（少了 attempted，本轮绿就会被读成全仓齐）
     expect(code).toMatch(/-AttemptedPages \$targetPages/);
     expect(code).toMatch(/AttemptedCount\s*=\s*\$counts\.PlannedCount/);
