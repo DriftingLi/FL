@@ -86,6 +86,16 @@ func TestFavoriteErrStatusFacesAreProducible(t *testing.T) {
 	if err := f.db.Create(&draftFeat).Error; err != nil {
 		t.Fatalf("播种精选失败: %v", err)
 	}
+	// 职位支（#2067）：closed 的职位与「不存在」同对待，用它打出 ErrFavTargetJobRejected。
+	recruiter := testutil.SeedRecruiter(t, f.db, "favf_rec", "x")
+	now := testutil.Now()
+	closedJob := model.JobPosting{
+		RecruiterID: recruiter.ID, Title: "停止招聘的职位", Status: "closed",
+		PublishedAt: now, CreatedAt: now, UpdatedAt: now,
+	}
+	if err := f.db.Create(&closedJob).Error; err != nil {
+		t.Fatalf("播种职位失败: %v", err)
+	}
 
 	assertFacesAgainstTable(t, f, "favorite.ErrStatus", favorite.ErrStatus, []factFace{
 		{favorite.ErrFavTargetCourseRejected, http.StatusBadRequest, http.MethodPost, "/api/favorites", map[string]any{"target_type": "course", "target_id": off.CourseID}, "课程不存在或不可收藏"},
@@ -93,6 +103,7 @@ func TestFavoriteErrStatusFacesAreProducible(t *testing.T) {
 		{favorite.ErrFavTargetQuestionRejected, http.StatusBadRequest, http.MethodPost, "/api/favorites", map[string]any{"target_type": "question", "target_id": 999999}, "题目不存在或不可收藏"},
 		{favorite.ErrFavTargetFeaturedRejected, http.StatusBadRequest, http.MethodPost, "/api/favorites", map[string]any{"target_type": "featured", "target_id": draftFeat.ContentID}, "内容不存在或不可收藏"},
 		{favorite.ErrFavTargetTopicNotFound, http.StatusBadRequest, http.MethodPost, "/api/favorites", map[string]any{"target_type": "topic", "target_id": 999999}, "帖子不存在"},
+		{favorite.ErrFavTargetJobRejected, http.StatusBadRequest, http.MethodPost, "/api/favorites", map[string]any{"target_type": "job", "target_id": closedJob.ID}, "职位不存在或已停止招聘"},
 		{favorite.ErrFavTargetTypeUnsupported, http.StatusBadRequest, http.MethodPost, "/api/favorites", map[string]any{"target_type": "nope", "target_id": 1}, "收藏类型仅支持"},
 	})
 }

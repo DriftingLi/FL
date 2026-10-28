@@ -8,7 +8,7 @@ import type { SearchType } from '@/api/search'
 import type { UiTagTone } from '@/components/ui/UiTag.vue'
 import type { RouteName } from './pages'
 
-export type ContentObjectKey = 'course' | 'chapter' | 'question' | 'featured' | 'topic'
+export type ContentObjectKey = 'course' | 'chapter' | 'question' | 'featured' | 'topic' | 'job'
 
 // 标签色用 UiTag 导出的 UiTagTone 收窄（ui-conventions「剩余控件」条）；route name 用 RouteName union（ADR-0047 §2）。
 export type ContentObjectTagTone = UiTagTone
@@ -41,7 +41,8 @@ export interface ContentObject {
   to: (ids: ContentObjectIds) => ContentObjectTarget | null
 }
 
-// 表序 = 搜索分区序（课程/章节/题目/内容精选/帖子）；收藏 tab 由其上剔除 featured 后同序。
+// 表序 = 搜索分区序（课程/章节/题目/内容精选/帖子），末尾再挂非搜索面的可收藏种类（职位，#2067）；
+// 收藏 tab 由表上剔除 featured 后保持同序。
 export const CONTENT_OBJECTS: readonly ContentObject[] = [
   {
     key: 'course',
@@ -107,6 +108,17 @@ export const CONTENT_OBJECTS: readonly ContentObject[] = [
     favoriteTargetType: 'topic',
     inFavoriteTab: true,
     to: ({ id }) => ({ name: 'ForumDetail', params: { topicId: String(id) } })
+  },
+  {
+    key: 'job',
+    label: '职位',
+    tone: 'neutral',
+    // 搜索面尚无职位分区（#2067 只收收藏面），故 searchable=false 且无 searchType/searchField。
+    searchable: false,
+    favoritable: true,
+    favoriteTargetType: 'job',
+    inFavoriteTab: true,
+    to: ({ id }) => ({ name: 'JobDetail', params: { id: String(id) } })
   }
 ]
 
@@ -124,7 +136,7 @@ const BY_SEARCH_TYPE = new Map(CONTENT_OBJECTS.filter(o => o.searchType).map(o =
  * 列表剔除、或漏登记，都判红）。收藏运行期（composables/useFavorite.ts）的 target_type 仍逐次
  * 向表取，本列表只承载类型，不复制契约键。
  */
-export const FAVORITABLE_CONTENT_OBJECT_KEYS = ['course', 'chapter', 'question', 'featured', 'topic'] as const satisfies readonly ContentObjectKey[]
+export const FAVORITABLE_CONTENT_OBJECT_KEYS = ['course', 'chapter', 'question', 'featured', 'topic', 'job'] as const satisfies readonly ContentObjectKey[]
 
 /** 可收藏种类（内容对象表 favoritable=true 那一档；判据唯一出处见上一条注释） */
 export type FavoritableContentObjectKey = (typeof FAVORITABLE_CONTENT_OBJECT_KEYS)[number]

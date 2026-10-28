@@ -10860,8 +10860,14 @@
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "目标类型 course/chapter/question/featured/topic",
+                        "description": "目标类型 course/chapter/question/featured/topic/job",
                         "name": "target_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "题库标签ID：仅在 target_type=question 时生效（按标签下钻题目收藏；传其它类型 400）",
+                        "name": "tag_id",
                         "in": "query"
                     },
                     {
@@ -26269,6 +26275,11 @@
         "favorite.FavoriteDTO": {
             "type": "object",
             "properties": {
+                "company": {
+                    "description": "Company / Region 仅 target_type = job 有意义（职位卡最小字段）；其余类型省略该键（x-optional）。",
+                    "type": "string",
+                    "x-optional": true
+                },
                 "course_id": {
                     "description": "CourseID 目标所属课程ID：**仅 target_type = chapter 有意义** —— 章节落点\n`chapter-view` 要 `course_id` + `chapter_id` 两个键（ADR-0014），而收藏表只存 target_id。\n其余类型恒为 0（不适用，不是「未知」）；键恒在、非 null（0 哨兵口径见 #1089 Q2）。",
                     "type": "integer"
@@ -26281,6 +26292,17 @@
                 },
                 "favorite_id": {
                     "type": "integer"
+                },
+                "region": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "tags": {
+                    "description": "Tags 题库标签（法规/结构/液压…），收藏面按它在「题目」类型内部下钻一层，只有 question 有值；\n其余类型与无标签的题一律发 `[]`（nonnil 表态：集合出口不吐 null，客户端不必判空再遍历）。\n一题多标签时顺序按标签 sort_order。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/favorite.FavoriteTagDTO"
+                    }
                 },
                 "target_id": {
                     "type": "integer"
@@ -26310,6 +26332,17 @@
                 },
                 "total": {
                     "type": "integer"
+                }
+            }
+        },
+        "favorite.FavoriteTagDTO": {
+            "type": "object",
+            "properties": {
+                "tag_id": {
+                    "type": "integer"
+                },
+                "tag_name": {
+                    "type": "string"
                 }
             }
         },
@@ -28014,6 +28047,13 @@
                 "accuracy": {
                     "type": "number"
                 },
+                "by_tag": {
+                    "description": "ByTag 考点标签维度的正确率（#2068）：与 by_type 并列、不替换；只含有作答的标签。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/practicemode.PracticeTagStat"
+                    }
+                },
                 "by_type": {
                     "type": "object",
                     "additionalProperties": {
@@ -28027,6 +28067,26 @@
                     "type": "integer"
                 },
                 "wrong": {
+                    "type": "integer"
+                }
+            }
+        },
+        "practicemode.PracticeTagStat": {
+            "type": "object",
+            "properties": {
+                "accuracy": {
+                    "type": "number"
+                },
+                "correct": {
+                    "type": "integer"
+                },
+                "tag_id": {
+                    "type": "integer"
+                },
+                "tag_name": {
+                    "type": "string"
+                },
+                "total": {
                     "type": "integer"
                 }
             }
@@ -30507,6 +30567,11 @@
                 },
                 "student_id": {
                     "type": "integer"
+                },
+                "top_wrong_option": {
+                    "description": "TopWrongOption 该题历史上「最多人选错的**答案串**」（#2068）：单选题是一个选项，多选题是整串\n组合（如 \"A,C\"），简答题没有选项、恒不返回。只统计 is_correct=false 且答案非空的作答；\n该题**判错作答 \u003c 5 次**时不返回该键——缺省不是空串，客户端据此决定不展示。",
+                    "type": "string",
+                    "x-optional": true
                 },
                 "wrong_count": {
                     "type": "integer"
