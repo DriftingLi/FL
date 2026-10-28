@@ -86,9 +86,9 @@ describe('我的收藏筛选 tab（#1132 复审）', () => {
     return (w.findComponent(UiSegmentTabs).props('options') as Array<{ value: string }>).map((o) => o.value)
   }
 
-  it('补上「章节」tab（此前章节收藏只能在「全部」里翻）', async () => {
+  it('补上「章节」tab（此前章节收藏只能在「全部」里翻）；职位 tab 由 #2067 加入', async () => {
     const w = await mountWith([fav()])
-    expect(tabValues(w)).toEqual(['all', 'course', 'chapter', 'question', 'topic'])
+    expect(tabValues(w)).toEqual(['all', 'course', 'chapter', 'question', 'topic', 'job'])
   })
 
   it('**不补**「内容精选」tab（资讯阅读面在门户、门户无收藏；补了必然长期为空）', async () => {

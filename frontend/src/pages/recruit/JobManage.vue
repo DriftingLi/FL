@@ -96,6 +96,17 @@
         <el-form-item label="经验要求">
           <UiInput v-model="form.experience_req" :maxlength="100" placeholder="如：2年" />
         </el-form-item>
+        <el-form-item label="需持证件">
+          <UiCheckboxGroup v-model="form.required_credential_ids">
+            <UiCheckbox
+              v-for="cred in credentialOptions"
+              :key="cred.id"
+              :value="cred.id"
+            >
+              {{ cred.name }}
+            </UiCheckbox>
+          </UiCheckboxGroup>
+        </el-form-item>
         <el-form-item label="职位描述">
           <UiInput v-model="form.description" type="textarea" :rows="4" :maxlength="5000" show-word-limit />
         </el-form-item>
@@ -110,6 +121,7 @@ import { ElMessage } from 'element-plus'
 import { href } from '@/config/pages'
 import { jobApi, type JobPosting, type JobPostingInput } from '@/api/job'
 import { positionApi } from '@/api/position'
+import { credentialApi, type CredentialDict } from '@/api/credential'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
@@ -120,6 +132,8 @@ import UiDialog from '@/components/ui/UiDialog.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 import UiSelect, { type UiSelectOption } from '@/components/ui/UiSelect.vue'
+import UiCheckbox from '@/components/ui/UiCheckbox.vue'
+import UiCheckboxGroup from '@/components/ui/UiCheckboxGroup.vue'
 
 interface PositionItem {
   position_id: number
@@ -128,6 +142,8 @@ interface PositionItem {
 
 const items = ref<JobPosting[]>([])
 const positions = ref<PositionItem[]>([])
+/** 目标证件字典：职位「需持证件」的候选（复用培训域字典，不建第二套） */
+const credentialOptions = ref<CredentialDict[]>([])
 
 /** 岗位字典 → UiSelect 的 {label,value} */
 const positionOptions = computed<UiSelectOption[]>(() =>
@@ -146,7 +162,9 @@ const form = reactive<JobPostingInput>({
   salary_max: null,
   salary_text: '',
   experience_req: '',
-  description: ''
+  description: '',
+  // 空数组与字段缺省等价，都表示「不限证件」
+  required_credential_ids: []
 })
 
 const {
@@ -172,7 +190,7 @@ const {
 function openCreate() {
   editing.value = false
   editingId.value = 0
-  Object.assign(form, { title: '', position_id: null, region: '', salary_min: null, salary_max: null, salary_text: '', experience_req: '', description: '' })
+  Object.assign(form, { title: '', position_id: null, region: '', salary_min: null, salary_max: null, salary_text: '', experience_req: '', description: '', required_credential_ids: [] })
   dialogVisible.value = true
 }
 
@@ -187,7 +205,9 @@ function openEdit(item: JobPosting) {
     salary_max: item.salary_max ?? null,
     salary_text: item.salary_text,
     experience_req: item.experience_req,
-    description: item.description
+    description: item.description,
+    // 回显已选证件：DTO 恒发 required_credentials（空集是 []，不是缺席）
+    required_credential_ids: (item.required_credentials ?? []).map((c) => c.credential_id)
   })
   dialogVisible.value = true
 }
@@ -233,6 +253,10 @@ onMounted(async () => {
   try {
     const res = await positionApi.listPublic({ silent: true })
     positions.value = res?.positions || []
+  } catch {}
+  try {
+    const res = await credentialApi.listCredentials()
+    credentialOptions.value = res?.credentials || []
   } catch {}
   load()
 })

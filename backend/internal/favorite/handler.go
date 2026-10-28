@@ -1,4 +1,4 @@
-// Package favorite 通用收藏域（ADR-0018）：/api/favorites 多态收藏（course/chapter/question/featured/topic）。
+// Package favorite 通用收藏域（ADR-0018）：/api/favorites 多态收藏（course/chapter/question/featured/topic/job）。
 // 本包是 internal/<域> 形态的样板之一（ADR-0070）：handler.go 是 HTTP 出口（JWT + hrwai_user + 证件域），
 // go 是域实现，nonnil_outlets_test.go 承载声明式证据表。
 // 装配点：internal/api/routes_registry.go 调 favorite.RegisterRoutes(api, rd.Session, rd.CredentialScope, deps.FavoriteSvc)。
@@ -43,6 +43,20 @@ func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, credRes midd
 	g.GET("/check", h.Check)
 }
 
+// parseTagID 解析可选的题库标签过滤（#2067）：缺省 → (nil,false)；非正整数 → (nil,true)。
+// 不用 QueryIDPtr：那枚把「非法」与「未传」都答成 nil，调用方会以为过滤生效——
+// 与「类型不支持就 400」那条恰好自相矛盾（同一个参数两种静默）。
+func parseTagID(raw string) (*int, bool) {
+	if raw == "" {
+		return nil, false
+	}
+	v, ok := httpx.PositiveID(raw)
+	if !ok {
+		return nil, true
+	}
+	return &v, false
+}
+
 // List 我的收藏
 // @Summary 我的收藏列表
 // @Description 分页查询收藏，快照回填；支持按 target_type 过滤
@@ -50,7 +64,8 @@ func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, credRes midd
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param target_type query string false "目标类型 course/chapter/question/featured/topic"
+// @Param target_type query string false "目标类型 course/chapter/question/featured/topic/job"
+// @Param tag_id query int false "题库标签ID：仅在 target_type=question 时生效（按标签下钻题目收藏；传其它类型 400）"
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(20)
 // @Success 200 {object} response.R{data=FavoritePageResult} "success"
@@ -59,8 +74,13 @@ func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, credRes midd
 func (h *handler) List(c *gin.Context) {
 	userID := middleware.CurrentUserID(c)
 	credID := middleware.CredentialIDPtr(c)
+	tagID, badTag := parseTagID(c.Query("tag_id"))
+	if badTag {
+		response.BadRequest(c, "题库标签ID无效")
+		return
+	}
 	resp, err := h.svc.List(userID, c.Query("target_type"),
-		httpx.QueryIntDefault(c, "page", 1), httpx.QueryIntDefault(c, "page_size", 20), credID)
+		httpx.QueryIntDefault(c, "page", 1), httpx.QueryIntDefault(c, "page_size", 20), credID, tagID)
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -113,6 +133,7 @@ var ErrStatus = &httpx.ErrStatusTable{
 		{Sentinel: ErrFavTargetQuestionRejected, Status: http.StatusBadRequest},
 		{Sentinel: ErrFavTargetFeaturedRejected, Status: http.StatusBadRequest},
 		{Sentinel: ErrFavTargetTopicNotFound, Status: http.StatusBadRequest},
+		{Sentinel: ErrFavTargetJobRejected, Status: http.StatusBadRequest},
 		{Sentinel: ErrFavTargetTypeUnsupported, Status: http.StatusBadRequest},
 	},
 	Fallback: http.StatusInternalServerError,

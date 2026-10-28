@@ -51,8 +51,8 @@
 - **①b 能力面人工**：指纹要人按、adb 无只读命令可替代、`INJECT_EVENTS` 被系统硬拒（`device-capture.ps1:13-21,64-76`；`ADR-0016:11`）。
 - **④c 整模块编译无差量**：门语义就是「把 publish 导出的全部 `.kt` 一次性交 kotlinc 复刻整模块」（`kotlin-all-check.ps1:10-18`），且 publish 本身实测为全量重写（`:42`）。**这是门定义，不是实现偷懒。**
 - **② ≠ ① ≠ ④b 的证据边界**：② 只证「工具里打开入口页 console 无 error」，挡不住 `content://` 上传/生物识别/第三方 SDK 回调/真机性能（`mp-weixin-check.ps1:118-122`）——不能靠「挪到更快的自动化」省掉 ①。
-- **squash 直发 production + gate 轮询**：合并即触发 `cd.yml` 部署、gate 最多轮询 15 min（`release.md:12`）；合并前一行披露为硬口径（`release.md:16`）。
-- **pr-evidence 只校结构不装「必检+approve」**：`AGENTS.md:333` 已裁定「逐 PR 审批成本高于约束收益，不装」。
+- **squash 直发 production + gate 轮询**：合并即触发 `cd.yml` 部署、gate 最多轮询 15 min（`release.md` 第 6 步）；合并前一行披露为硬口径（`release.md`「合并前一行披露（2026-09-16 立）」段）。
+- **pr-evidence 只校结构不装「必检+approve」**：`AGENTS.md`「验收门（合并前置）」段已裁定「逐 PR 审批成本高于约束收益，不装」。
 
 **只是「脚本今天这么写」＝可优化空间：**
 - ③ 串行 `-i` 挡的是本机多核 CPU 争抢导致的 5 s 超时抖动（`jest.config.unit.js:2-12`），**并行本地道 `test:unit:local` 已落**（`AGENTS.md:265`，commit 2026-09-30 09:44 #1415）→ 本地段可继续吃并行红利，非结构性。

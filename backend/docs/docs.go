@@ -10867,8 +10867,14 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "目标类型 course/chapter/question/featured/topic",
+                        "description": "目标类型 course/chapter/question/featured/topic/job",
                         "name": "target_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "题库标签ID：仅在 target_type=question 时生效（按标签下钻题目收藏；传其它类型 400）",
+                        "name": "tag_id",
                         "in": "query"
                     },
                     {
@@ -12759,7 +12765,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "学员浏览职位广场（仅 open 且未强制下架，按新鲜度排序；支持岗位/地区/薪资/经验筛选）",
+                "description": "学员浏览职位广场（仅 open 且未强制下架，按新鲜度排序；支持岗位/地区/薪资/经验/所需证件筛选）",
                 "produces": [
                     "application/json"
                 ],
@@ -12796,6 +12802,12 @@ const docTemplate = `{
                         "type": "string",
                         "description": "经验要求",
                         "name": "experience",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "所需证件 ID（命中任一即返回；不传不过滤，与「不限证件」的职位无关）",
+                        "name": "credential_id",
                         "in": "query"
                     },
                     {
@@ -26276,6 +26288,11 @@ const docTemplate = `{
         "favorite.FavoriteDTO": {
             "type": "object",
             "properties": {
+                "company": {
+                    "description": "Company / Region 仅 target_type = job 有意义（职位卡最小字段）；其余类型省略该键（x-optional）。",
+                    "type": "string",
+                    "x-optional": true
+                },
                 "course_id": {
                     "description": "CourseID 目标所属课程ID：**仅 target_type = chapter 有意义** —— 章节落点\n` + "`" + `chapter-view` + "`" + ` 要 ` + "`" + `course_id` + "`" + ` + ` + "`" + `chapter_id` + "`" + ` 两个键（ADR-0014），而收藏表只存 target_id。\n其余类型恒为 0（不适用，不是「未知」）；键恒在、非 null（0 哨兵口径见 #1089 Q2）。",
                     "type": "integer"
@@ -26288,6 +26305,17 @@ const docTemplate = `{
                 },
                 "favorite_id": {
                     "type": "integer"
+                },
+                "region": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "tags": {
+                    "description": "Tags 题库标签（法规/结构/液压…），收藏面按它在「题目」类型内部下钻一层，只有 question 有值；\n其余类型与无标签的题一律发 ` + "`" + `[]` + "`" + `（nonnil 表态：集合出口不吐 null，客户端不必判空再遍历）。\n一题多标签时顺序按标签 sort_order。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/favorite.FavoriteTagDTO"
+                    }
                 },
                 "target_id": {
                     "type": "integer"
@@ -26317,6 +26345,17 @@ const docTemplate = `{
                 },
                 "total": {
                     "type": "integer"
+                }
+            }
+        },
+        "favorite.FavoriteTagDTO": {
+            "type": "object",
+            "properties": {
+                "tag_id": {
+                    "type": "integer"
+                },
+                "tag_name": {
+                    "type": "string"
                 }
             }
         },
@@ -27056,6 +27095,17 @@ const docTemplate = `{
                 }
             }
         },
+        "job.JobCredentialDTO": {
+            "type": "object",
+            "properties": {
+                "credential_id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
         "job.JobListResult": {
             "type": "object",
             "properties": {
@@ -27132,6 +27182,13 @@ const docTemplate = `{
                 "region": {
                     "type": "string"
                 },
+                "required_credentials": {
+                    "description": "RequiredCredentials 所需证件（#2066）：空集 = 不限，恒发 []（不因无要求而缺席）。\n键在场是为了让「这个职位不限证件」与「这个字段没实现」在消费端可区分。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/job.JobCredentialDTO"
+                    }
+                },
                 "salary_max": {
                     "type": "integer",
                     "x-optional": true
@@ -27168,6 +27225,13 @@ const docTemplate = `{
                 },
                 "region": {
                     "type": "string"
+                },
+                "required_credential_ids": {
+                    "description": "RequiredCredentialIDs 所需证件（#2066）：可空多选，空 / 缺省 = 不限。\n编辑语义与其它字段一致——整组替换（空数组即清空）；重复 id 去重，非法 id → 400。",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
                 },
                 "salary_max": {
                     "type": "integer"
@@ -28021,6 +28085,13 @@ const docTemplate = `{
                 "accuracy": {
                     "type": "number"
                 },
+                "by_tag": {
+                    "description": "ByTag 考点标签维度的正确率（#2068）：与 by_type 并列、不替换；只含有作答的标签。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/practicemode.PracticeTagStat"
+                    }
+                },
                 "by_type": {
                     "type": "object",
                     "additionalProperties": {
@@ -28034,6 +28105,26 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "wrong": {
+                    "type": "integer"
+                }
+            }
+        },
+        "practicemode.PracticeTagStat": {
+            "type": "object",
+            "properties": {
+                "accuracy": {
+                    "type": "number"
+                },
+                "correct": {
+                    "type": "integer"
+                },
+                "tag_id": {
+                    "type": "integer"
+                },
+                "tag_name": {
+                    "type": "string"
+                },
+                "total": {
                     "type": "integer"
                 }
             }
@@ -30514,6 +30605,11 @@ const docTemplate = `{
                 },
                 "student_id": {
                     "type": "integer"
+                },
+                "top_wrong_option": {
+                    "description": "TopWrongOption 该题历史上「最多人选错的**答案串**」（#2068）：单选题是一个选项，多选题是整串\n组合（如 \"A,C\"），简答题没有选项、恒不返回。只统计 is_correct=false 且答案非空的作答；\n该题**判错作答 \u003c 5 次**时不返回该键——缺省不是空串，客户端据此决定不展示。",
+                    "type": "string",
+                    "x-optional": true
                 },
                 "wrong_count": {
                     "type": "integer"

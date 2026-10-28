@@ -57,8 +57,13 @@
 
 .PARAMETER WtRoot
     孤儿 worktree **目录**对账的扫描根，默认 = 仓库根。`wt-*` / `.wt-*` 目录在磁盘上、却不在
-    `git worktree list` 的注册表里 ⇒ 记一条 `WT_DIR_ORPHAN`。测试注入临时空目录，判据就不吃真机上的
-    并发残留（#2061 立这条对账的当天，主树里同时挂着 7 棵别人的树）。
+    `git worktree list` 的注册表里 ⇒ 按「能不能安全删」记两档之一（#2081）：
+      · `WT_DIR_ORPHAN`   —— 有文件或有链接（移动端 worktree 的 node_modules 是指回**主树**的 junction，
+                             这类目录绝不能直接递归删：跟随链接会连主树依赖一起删）⇒ 先摘链接再删骨架；
+      · `WT_DIR_SKELETON` —— 纯骨架（全树只有空目录、无文件无链接，**且枚举完整**）⇒ 直接删即可；
+                            任何一层读不进去就不许当骨架（判 orphan，fail-closed）。
+    判据与分档的真源是 `lib/wt-orphans.ps1`（`remove-worktree.ps1 -PruneOrphans` 用同一份）。
+    测试注入临时空目录，判据就不吃真机上的并发残留（#2061 立这条对账的当天，主树里同时挂着 7 棵别人的树）。
 
 .EXAMPLE
     pwsh scripts/check-branch-residue.ps1
@@ -72,6 +77,10 @@
     pwsh scripts/check-branch-residue.ps1 -Branch chore/1137-gitattributes-uts-uvue-lf
     # 单分支核对（已清理的分支 ⇒ ABSENT、exit 0）。
 
+.EXAMPLE
+    pwsh training-app/叉车维修培训学员端跨端应用/scripts/remove-worktree.ps1 -PruneOrphans
+    # 本脚本报出 WT_DIR_ORPHAN / WT_DIR_SKELETON 之后的**批量出口**（默认 dry-run，先摘链接再删骨架）。
+
 .NOTES
     依据：2026-09-19 的 14 个残留分支归因（gh 2.97.0 源码 + GitHub timeline 的
     head_ref_deleted 事件对照取证）。上游设置项：仓库 Settings → Automatically delete head branches
@@ -81,7 +90,7 @@
     所以本脚本会读该设置并如实打 `AUTODELETE=on|off|unknown`，不再无条件劝人去开一个已经开着的开关。
     退出码：0 = 无 MERGED 残留且目录对账做成；1 = 检出 MERGED 残留（或带 -IncludeClosed 时有待裁定项）；
             2 = 取不到仓库信息；3 = gh 不可用/未登录；
-            4 = 分支判据已绿，但磁盘上有未注册的 `wt-*` / `.wt-*` 目录（收口没做完）；
+            4 = 分支判据已绿，但磁盘上有未注册的 `wt-*` / `.wt-*` 目录（两档都算；收口没做完）；
             5 = 目录对账没做成（取不到注册表或扫描根不存在）⇒ **不判干净**（fail-closed，同归档标签那条）。
             优先级：分支判据先出（1 不被 4/5 覆盖），只有 0 路径才让位给 4/5。
 #>
@@ -96,6 +105,10 @@ param(
 )
 
 $ErrorActionPreference = 'Continue'
+
+# 孤儿目录的判据真源（分档 / 归一化 / 注册表解析）与 remove-worktree.ps1 -PruneOrphans 共用同一份，
+# 不在这里再写一遍（见 lib/wt-orphans.ps1 文件头）。
+. (Join-Path $PSScriptRoot 'lib\wt-orphans.ps1')
 
 function Fail([string]$msg, [int]$code) {
     Write-Host "[branch-residue] $msg" -ForegroundColor Red
@@ -165,16 +178,10 @@ if ($null -eq $archiveTags) {
 
 # ── worktree 注册表（磁盘对账与「被哪棵树占着」的唯一来源），必须先于两条分支路径采集：
 #    `-Branch` 的绿色核对会在远端已无此分支时当场退出，注册表若在其后采集，那次退出就带不出目录判据（#2061）。
-$wtOfBranch = @{}
-$wtRegistered = @{}   # 全部注册路径（不只挂在分支上的：detached / bare 也算）
-$curWt = $null
-foreach ($line in (& git -C $RepoRoot worktree list --porcelain 2>$null)) {
-    if ($line -like 'worktree *') {
-        $curWt = $line.Substring(9).Trim()
-        $wtRegistered[$curWt.Replace('\', '/').ToLowerInvariant()] = $true
-    }
-    elseif ($line -like 'branch refs/heads/*') { $wtOfBranch[$line.Substring(18).Trim()] = $curWt }
-}
+# 一次解析出两件事实（全部注册路径 / 分支→路径），归一化规则与磁盘侧同源（lib/wt-orphans.ps1）。
+$registry = Get-WtRegistry -RepoRoot $RepoRoot
+$wtOfBranch = $registry.branchOf
+$wtRegistered = $registry.registered   # 不只挂在分支上的：detached / bare 也算
 
 # ── 孤儿 worktree 目录：磁盘上有 wt-* / .wt-* 目录，但注册表里没有 ⇒ 收口没做完（#2061）
 #    为什么只看磁盘：手工 `git worktree remove` + `branch -D` 两步不看磁盘 —— 元数据被 prune 之后
@@ -184,19 +191,25 @@ $script:WtDirVerdict = $null
 function Get-WtDirVerdict {
     if ($null -ne $script:WtDirVerdict) { return $script:WtDirVerdict }
     $scanRoot = if ($WtRoot) { $WtRoot } else { $RepoRoot }
-    $v = @{ ok = $false; orphans = @() }
-    if ($wtRegistered.Count -eq 0) {
-        Write-Host 'WT-DIRS=unavailable  —— 取不到 worktree 注册表：本次不判孤儿目录，也**不判干净**' -ForegroundColor Yellow
-    } elseif (-not (Test-Path -LiteralPath $scanRoot)) {
-        Write-Host "WT-DIRS=unavailable  —— 扫描根不存在：$scanRoot" -ForegroundColor Yellow
-    } else {
-        $v.ok = $true
-        $dirs = @(Get-ChildItem -LiteralPath $scanRoot -Directory -Force | Where-Object { $_.Name -like 'wt-*' -or $_.Name -like '.wt-*' })
-        foreach ($d in $dirs) {
-            if (-not $wtRegistered.ContainsKey($d.FullName.Replace('\', '/').ToLowerInvariant())) { $v.orphans += $d.Name }
+    $v = Get-WtOrphanVerdict -ScanRoot $scanRoot -Registered $wtRegistered
+    if (-not $v.ok) {
+        if ($wtRegistered.Count -eq 0) {
+            Write-Host 'WT-DIRS=unavailable  —— 取不到 worktree 注册表：本次不判孤儿目录，也**不判干净**' -ForegroundColor Yellow
+        } else {
+            Write-Host "WT-DIRS=unavailable  —— 扫描根不存在：$scanRoot" -ForegroundColor Yellow
         }
-        Write-Host ("WT-DIRS registered={0} disk={1} orphans={2}" -f $wtRegistered.Count, $dirs.Count, $v.orphans.Count)
-        foreach ($o in $v.orphans) { Write-Host ("WT_DIR_ORPHAN {0}" -f $o) -ForegroundColor Red }
+        $script:WtDirVerdict = $v
+        return $v
+    }
+    # 分两档报（#2081）：能不能**安全删**不同，收口动作就不同；混成一列会让人拿同一种手法去删两种东西。
+    $linked = Get-WtOrphanByTier -Items $v.items -Tier 'orphan'
+    $skeleton = Get-WtOrphanByTier -Items $v.items -Tier 'skeleton'
+    Write-Host ("WT-DIRS registered={0} disk={1} orphans={2} linked={3} skeleton={4}" -f $v.registered, $v.disk, $v.items.Count, $linked.Count, $skeleton.Count)
+    foreach ($i in $linked) {
+        Write-Host ("WT_DIR_ORPHAN {0} links={1} files={2}" -f $i.name, $i.linkCount, $i.files) -ForegroundColor Red
+    }
+    foreach ($i in $skeleton) {
+        Write-Host ("WT_DIR_SKELETON {0} links={1} files={2}" -f $i.name, $i.linkCount, $i.files) -ForegroundColor Yellow
     }
     $script:WtDirVerdict = $v
     return $v
@@ -206,24 +219,28 @@ function Get-WtDirVerdict {
 function Exit-Green([string]$line) {
     if ($line) { Write-Host $line -ForegroundColor Green }
     $v = Get-WtDirVerdict
-    if ($v.orphans.Count -gt 0) {
-        Write-Host ''
-        Write-Host '── 孤儿 worktree 目录（分支判据已绿，目录收口没做完）──' -ForegroundColor Cyan
-        foreach ($o in $v.orphans) {
-            if ($o -like '.wt-*') {
-                Write-Host ("  {0}  点目录：③ 门在它里面静默假绿（见 multi-agent-git.md「worktree 目录名不要以 . 开头」），收口走 cleanup-dot-worktrees.ps1" -f $o)
-            } else {
-                Write-Host ("  {0}  收口：remove-worktree.ps1 -Task {1} -Execute（摘 junction → 删树 → 校验）" -f $o, ($o -replace '^wt-', ''))
-            }
-        }
-        Write-Host '   批量对账口径：git -C <主树> worktree list --porcelain 的 worktree 行 vs 上面这些目录名；orphans= 那个数是穷尽的。'
-        exit 4
-    }
     if (-not $v.ok) {
         Write-Host 'WT-DIRS=unclaimed  —— 目录对账没做成，这个 0 不代表工作树干净' -ForegroundColor Yellow
         exit 5
     }
-    exit 0
+    if ($v.items.Count -eq 0) { exit 0 }
+
+    Write-Host ''
+    Write-Host '── 孤儿 worktree 目录（分支判据已绿，目录收口没做完）──' -ForegroundColor Cyan
+    foreach ($i in (Get-WtOrphanByTier -Items $v.items -Tier 'orphan')) {
+        Write-Host ("  {0}  有活链接/文件（links={1} files={2}）⇒ **先摘链接再删骨架**，直接递归删会跟随链接打到主树依赖" -f $i.name, $i.linkCount, $i.files)
+    }
+    foreach ($i in (Get-WtOrphanByTier -Items $v.items -Tier 'skeleton')) {
+        Write-Host ("  {0}  纯骨架（只有空目录，无文件无链接，枚举完整）⇒ 直接删即可" -f $i.name)
+    }
+    foreach ($i in @($v.items | Where-Object { $_.name -like '.wt-*' })) {
+        Write-Host ("  {0}  点目录另有命名风险：③ 门在它里面静默假绿（见 multi-agent-git.md「worktree 目录名不要以 . 开头」）；收口同走上面那条批量出口" -f $i.name)
+    }
+    Write-Host '   批量出口（默认 dry-run；先摘链接、再删骨架）：' -ForegroundColor Yellow
+    Write-Host '     pwsh training-app/叉车维修培训学员端跨端应用/scripts/remove-worktree.ps1 -PruneOrphans'
+    Write-Host '     pwsh training-app/叉车维修培训学员端跨端应用/scripts/remove-worktree.ps1 -PruneOrphans -Execute'
+    Write-Host '   这些目录**不在注册表里** ⇒ 单棵树那套 -Task <n> 用不上（它还会去动分支）；orphans= 那个数是穷尽的。'
+    exit 4
 }
 
 # ── 远端分支（事实源 = API；本地 ref 可能过期）。head sha 用于与归档标签比对。
@@ -387,7 +404,9 @@ if (-not $Execute) {
     }
     if ($residue.Count -gt 0) { exit 1 }
     if ($IncludeClosed -and $needHuman.Count -gt 0) { exit 1 }
-    exit 0
+    # 分支这侧按**当前口径**绿了（待裁定项没被计入）⇒ 出口交给目录对账决定 0/4/5。
+    # 原先这里直接 exit 0：磁盘上 48 个孤儿目录照样报绿（#2081 实测踩到，BR12 钉住）。
+    Exit-Green ''
 }
 
 # ── -Execute：只删 MERGED 残留
@@ -418,11 +437,10 @@ foreach ($b in $toDelete) {
 }
 if ($stillThere.Count -eq 0 -and $unknownBranches.Count -eq 0) {
     if ($toDelete.Count -eq 0) {
-        Write-Host "✅ 本次没有要删的 MERGED 残留（待裁定项 $($needHuman.Count) 个、归档 $($archived.Count) 个按设计未动）。" -ForegroundColor Green
+        Exit-Green ("✅ 本次没有要删的 MERGED 残留（待裁定项 $($needHuman.Count) 个、归档 $($archived.Count) 个按设计未动）。")
     } else {
-        Write-Host "✅ 本次要删的 $($toDelete.Count) 个已合并分支已不在远端；待裁定项 $($needHuman.Count) 个、归档 $($archived.Count) 个按设计未动。" -ForegroundColor Green
+        Exit-Green ("✅ 本次要删的 $($toDelete.Count) 个已合并分支已不在远端；待裁定项 $($needHuman.Count) 个、归档 $($archived.Count) 个按设计未动。")
     }
-    exit 0
 }
 if ($stillThere.Count -gt 0) { Write-Host "❌ 仍在远端：$($stillThere -join ', ')" -ForegroundColor Red }
 if ($unknownBranches.Count -gt 0) { Write-Host "⚠️ 读不到（API 报错，未当成已删除）：$($unknownBranches -join ', ')" -ForegroundColor Yellow }

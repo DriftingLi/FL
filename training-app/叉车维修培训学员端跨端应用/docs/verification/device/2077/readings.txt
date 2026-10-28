@@ -1,0 +1,11 @@
+device-capture 读数与结果行（#2077 ④-3 产物入库）
+generated=2026-10-28 15:41:06
+DEVICE_CAPTURE_RESULT=PASS
+device=serial=f0bae674 model=2510DRK44C
+foreground=com.android.settings/.MainSettings package=com.android.settings
+DEVICE_STATE battery=100% charging=powered brightness=0.06371731 shade=false note=
+state_warn=
+CAPTURE_GAP pages=0 broken=no breakThreshold=3 retryLimit=2
+RESUME given=no skipped=0 ledger=D:\FL\wt-2077\training-app\叉车维修培训学员端跨端应用\.ci-verify\captured.tsv
+pages=pages/login/login=SKIP
+read_only_guarantee=adb devices / exec-out screencap / shell dumpsys / shell logcat -d 四项只读，未做写操作

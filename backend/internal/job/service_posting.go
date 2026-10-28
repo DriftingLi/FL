@@ -1,6 +1,6 @@
 // Package job 招聘域：职位（job posting，spec #449 T2 #451）。
 // 企业供给侧表达「我在招什么人」：职位名（岗位字典 + 可选自由细化）+ 地区/薪资/经验要求/职位描述
-// + 地区/薪资/经验要求/职位描述，open/closed 二态，按发布新鲜度排序。
+// + 所需证件（单一「要求」档，可空多选，#2066），open/closed 二态，按发布新鲜度排序。
 // 学员侧只见 open 且未被强制下架的职位；closed/强制下架职位企业自己仍能看到历史。
 package job
 
@@ -14,6 +14,7 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/internal/scope"
 	"forklift-training/pkg/paging"
 )
 
@@ -29,6 +30,9 @@ var (
 	ErrJobForcedOffline = errors.New("该职位已被强制下架，不能自行重新上架，请联系平台处理")
 	// ErrJobPositionRequired 岗位字典在业务层必填（问题4：与专业方向解绑）。
 	ErrJobPositionRequired = errors.New("岗位不能为空")
+	// ErrJobCredentialInvalid 所需证件里有非正数或字典里不存在的 id（#2066）。
+	// 「不传 / 空数组」不算非法——两者都表意「不限证件」，与字段缺省等价。
+	ErrJobCredentialInvalid = errors.New("所需证件不存在")
 )
 
 // Service 职位服务。
@@ -55,6 +59,9 @@ type JobPostingInput struct {
 	SalaryText    string `json:"salary_text"`
 	ExperienceReq string `json:"experience_req"`
 	Description   string `json:"description"`
+	// RequiredCredentialIDs 所需证件（#2066）：可空多选，空 / 缺省 = 不限。
+	// 编辑语义与其它字段一致——整组替换（空数组即清空）；重复 id 去重，非法 id → 400。
+	RequiredCredentialIDs []int `json:"required_credential_ids"`
 }
 
 // JobPostingDTO 职位展示对象（企业侧与学员侧共用，字段按角色裁剪由 handler 决定）。
@@ -83,6 +90,16 @@ type JobPostingDTO struct {
 	// 学员视角投递状态（#488）：none 可投递 / applied 已投递 / not_hired 未录用（30 天冷却中）
 	ApplyState   string `json:"apply_state,omitempty" extensions:"x-optional"`
 	CooldownDays int    `json:"cooldown_days,omitempty" extensions:"x-optional"` // not_hired 时距可再投天数（向上取整）
+	// RequiredCredentials 所需证件（#2066）：空集 = 不限，恒发 []（不因无要求而缺席）。
+	// 键在场是为了让「这个职位不限证件」与「这个字段没实现」在消费端可区分。
+	RequiredCredentials []JobCredentialDTO `json:"required_credentials" nullability:"nonnil"`
+}
+
+// JobCredentialDTO 职位所需证件的简述（id + 名称）：职位卡据此渲染「需持 X 证」标签，
+// 完整字典项（编码/类别/排序）由证件字典接口提供，这里只给渲染所需的最小集合。
+type JobCredentialDTO struct {
+	CredentialID int    `json:"credential_id"`
+	Name         string `json:"name"`
 }
 
 // validate 校验职位入参（岗位字典业务层必填）。
@@ -105,6 +122,98 @@ func validateJobPostingInput(in *JobPostingInput) error {
 	return nil
 }
 
+// validRequiredCredentialIDs 校验并归一 required_credential_ids（#2066）：
+// 空 / 缺省 → (nil, nil)，与「不限证件」等价；重复 id 去重保序；
+// 非正数或字典里不存在的 id → ErrJobCredentialInvalid（HTTP 面 400）。
+func (s *Service) validRequiredCredentialIDs(ids []int) ([]int, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	seen := make(map[int]bool, len(ids))
+	out := make([]int, 0, len(ids))
+	for _, id := range ids {
+		if id <= 0 {
+			return nil, ErrJobCredentialInvalid
+		}
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		out = append(out, id)
+	}
+	var found int64
+	if err := s.db.Model(&model.Credential{}).Where("id IN ?", out).Count(&found).Error; err != nil {
+		return nil, err
+	}
+	if int(found) != len(out) {
+		return nil, ErrJobCredentialInvalid
+	}
+	return out, nil
+}
+
+// replaceJobCredentials 整组替换某职位的要求集合（空集 = 清空 ⇒ 该职位「不限证件」）。
+// 与职位行同事务提交：写了一半的集合会让「需持 X 证」标签与筛选各说一套。
+func replaceJobCredentials(tx *gorm.DB, jobID int, credIDs []int) error {
+	if err := tx.Where("job_posting_id = ?", jobID).Delete(&model.JobCredentialRequirement{}).Error; err != nil {
+		return err
+	}
+	if len(credIDs) == 0 {
+		return nil
+	}
+	now := clock.Now()
+	rows := make([]model.JobCredentialRequirement, 0, len(credIDs))
+	for _, id := range credIDs {
+		rows = append(rows, model.JobCredentialRequirement{JobPostingID: jobID, CredentialID: id, CreatedAt: now})
+	}
+	return tx.Create(&rows).Error
+}
+
+// fillRequiredCredentials 批量回填所需证件（单次查询，禁止 N+1）：
+// 列表路径一次查全页，单行路径经 withCredentials 复用同一实现。
+// 查不动即上抛 error（ADR-0062 票6：咽掉错误会让列表静默回成「不限证件」）。
+func (s *Service) fillRequiredCredentials(dtos []JobPostingDTO) error {
+	if len(dtos) == 0 {
+		return nil
+	}
+	jobIDs := make([]int, 0, len(dtos))
+	for i := range dtos {
+		jobIDs = append(jobIDs, dtos[i].ID)
+	}
+	var rows []struct {
+		JobPostingID int
+		CredentialID int
+		Name         string
+	}
+	if err := s.db.Table("job_credential_requirements AS requirement").
+		Select("requirement.job_posting_id, requirement.credential_id, credential.name").
+		Joins("JOIN credential ON credential.id = requirement.credential_id").
+		Where("requirement.job_posting_id IN ?", jobIDs).
+		Order("requirement.job_posting_id, credential.sort_order, credential.id").
+		Scan(&rows).Error; err != nil {
+		return err
+	}
+	byJob := make(map[int][]JobCredentialDTO, len(rows))
+	for _, r := range rows {
+		byJob[r.JobPostingID] = append(byJob[r.JobPostingID], JobCredentialDTO{CredentialID: r.CredentialID, Name: r.Name})
+	}
+	for i := range dtos {
+		if list, ok := byJob[dtos[i].ID]; ok {
+			dtos[i].RequiredCredentials = list
+		}
+	}
+	return nil
+}
+
+// withCredentials 单行 DTO 的证件回填（走与列表同一个批量实现，只喂一行）。
+func (s *Service) withCredentials(dto *JobPostingDTO) error {
+	list := []JobPostingDTO{*dto}
+	if err := s.fillRequiredCredentials(list); err != nil {
+		return err
+	}
+	*dto = list[0]
+	return nil
+}
+
 // toDTO 转换 DB 行为 DTO，带企业信息（学员侧可见字段）。
 func (s *Service) toDTO(m *model.JobPosting) JobPostingDTO {
 	dto := JobPostingDTO{
@@ -124,6 +233,9 @@ func (s *Service) toDTO(m *model.JobPosting) JobPostingDTO {
 		PublishedAt:   m.PublishedAt.Format(time.RFC3339),
 		CreatedAt:     m.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:     m.UpdatedAt.Format(time.RFC3339),
+		// 起手就是空集：本函数只给形状，内容由 fillRequiredCredentials 批量补
+		// （列表路径禁止逐行查，见该函数注释）。
+		RequiredCredentials: []JobCredentialDTO{},
 	}
 	if m.PositionID != nil {
 		var pos model.Position
@@ -153,6 +265,10 @@ func (s *Service) Create(recruiterID int, in *JobPostingInput) (*JobPostingDTO, 
 	if active >= maxActiveJobs {
 		return nil, ErrJobActiveLimit
 	}
+	credIDs, err := s.validRequiredCredentialIDs(in.RequiredCredentialIDs)
+	if err != nil {
+		return nil, err
+	}
 	now := clock.Now()
 	m := model.JobPosting{
 		RecruiterID:   recruiterID,
@@ -169,10 +285,19 @@ func (s *Service) Create(recruiterID int, in *JobPostingInput) (*JobPostingDTO, 
 		CreatedAt:     now,
 		UpdatedAt:     now,
 	}
-	if err := s.db.Create(&m).Error; err != nil {
+	// 职位行与要求集合同事务：只写一半会让筛选命中一个没有标签的职位。
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&m).Error; err != nil {
+			return err
+		}
+		return replaceJobCredentials(tx, m.ID, credIDs)
+	}); err != nil {
 		return nil, err
 	}
 	dto := s.toDTO(&m)
+	if err := s.withCredentials(&dto); err != nil {
+		return nil, err
+	}
 	return &dto, nil
 }
 
@@ -188,6 +313,10 @@ func (s *Service) Update(recruiterID, jobID int, in *JobPostingInput) (*JobPosti
 	if m.RecruiterID != recruiterID {
 		return nil, ErrJobNotYours
 	}
+	credIDs, err := s.validRequiredCredentialIDs(in.RequiredCredentialIDs)
+	if err != nil {
+		return nil, err
+	}
 	updates := map[string]any{
 		"title":          strings.TrimSpace(in.Title),
 		"position_id":    in.PositionID,
@@ -199,11 +328,20 @@ func (s *Service) Update(recruiterID, jobID int, in *JobPostingInput) (*JobPosti
 		"description":    strings.TrimSpace(in.Description),
 		"updated_at":     clock.Now(),
 	}
-	if err := s.db.Model(&model.JobPosting{}).Where("id = ?", jobID).Updates(updates).Error; err != nil {
+	// 编辑语义与其它字段一致：要求集合整组替换（空数组即清空 ⇒ 不限）。
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&model.JobPosting{}).Where("id = ?", jobID).Updates(updates).Error; err != nil {
+			return err
+		}
+		return replaceJobCredentials(tx, jobID, credIDs)
+	}); err != nil {
 		return nil, err
 	}
 	_ = s.db.First(&m, jobID).Error
 	dto := s.toDTO(&m)
+	if err := s.withCredentials(&dto); err != nil {
+		return nil, err
+	}
 	return &dto, nil
 }
 
@@ -239,13 +377,28 @@ func (s *Service) ToggleStatus(recruiterID, jobID int) (*JobPostingDTO, error) {
 	}
 	_ = s.db.First(&m, jobID).Error
 	dto := s.toDTO(&m)
+	if err := s.withCredentials(&dto); err != nil {
+		return nil, err
+	}
 	return &dto, nil
 }
+
+// jobStatusOpen 职位「在招」状态值（库层默认值也是它）。
+const jobStatusOpen = "open"
 
 // GetForStudent 学员职位详情（#488）：仅 open 且未强制下架，回填学员视角投递状态。
 // jobVisibleToStudent 学员可见性谓词：open 且未被强制下架（Get 与 GetForStudent 共用）。
 func jobVisibleToStudent(m *model.JobPosting) bool {
-	return m.Status == "open" && !m.ForcedOffline
+	return m.Status == jobStatusOpen && !m.ForcedOffline
+}
+
+// VisibleToStudentScope 学员可见性谓词的**查询侧形态**：open 且未被强制下架。
+//
+// 与 jobVisibleToStudent 同一判据的两种形态（行内 / SQL）。跨域消费者（收藏的目标校验与快照回填）
+// 按它过滤，条件只在本域改一次——否则「收藏里点得进去、详情 404」会静默复发（#2067 的失效口径
+// 就是「不给坏链接」）。
+func VisibleToStudentScope(q *gorm.DB) *gorm.DB {
+	return q.Where("status = ? AND forced_offline = ?", jobStatusOpen, false)
 }
 
 func (s *Service) GetForStudent(studentUserID, jobID int) (*JobPostingDTO, error) {
@@ -256,15 +409,14 @@ func (s *Service) GetForStudent(studentUserID, jobID int) (*JobPostingDTO, error
 	if !jobVisibleToStudent(&m) {
 		return nil, ErrJobNotFound
 	}
-	dto := s.toDTO(&m)
-	if studentUserID > 0 {
-		list := []JobPostingDTO{dto}
-		if err := s.fillApplyStates(studentUserID, list); err != nil {
-			return nil, err
-		}
-		dto = list[0]
+	list := []JobPostingDTO{s.toDTO(&m)}
+	if err := s.fillRequiredCredentials(list); err != nil {
+		return nil, err
 	}
-	return &dto, nil
+	if err := s.fillApplyStates(studentUserID, list); err != nil {
+		return nil, err
+	}
+	return &list[0], nil
 }
 
 // JobListParams 职位列表筛选参数（学员侧与企业管理侧共用）。
@@ -276,6 +428,9 @@ type JobListParams struct {
 	SalaryMin  *int
 	SalaryMax  *int
 	Experience string
+	// CredentialID 按所需证件收窄（#2066）：nil = 不过滤；命中任一要求即返回，
+	// 无要求的职位不命中（空集表意「不限」，不等于「都符合」）。只做筛选，不做证件分区。
+	CredentialID *int
 	// StudentUserID 学员视角（#488）：>0 时列表项回填 apply_state/cooldown_days。
 	StudentUserID int
 	// MineOnly 只看自己的职位（企业管理侧）。
@@ -326,6 +481,14 @@ func (s *Service) List(recruiterID int, p JobListParams) (*JobListResult, error)
 			if p.Experience != "" {
 				q = q.Where("experience_req LIKE ?", "%"+p.Experience+"%")
 			}
+			// 证件谓词走 internal/scope 的具名片段（ADR-0056 §2：调用点不手写 credential_id 比较，
+			// 静态扫描锁住）：nil 语义为「不分区、看全部」，与本筛选的「不传不过滤」同义。
+			if clause, args := scope.EntityOwnedByClause("requirement.credential_id", p.CredentialID); clause != "" {
+				// 用 EXISTS 而不是 JOIN：JOIN 会把「多证件职位」变成多行、污染 total 与分页，
+				// 也会把外表的 created_at 带进 SELECT *（SQLite 上直接 ambiguous column）。
+				q = q.Where("EXISTS (SELECT 1 FROM job_credential_requirements requirement "+
+					"WHERE requirement.job_posting_id = job_postings.id AND "+clause+")", args...)
+			}
 			return q
 		})
 	if err != nil {
@@ -334,6 +497,10 @@ func (s *Service) List(recruiterID int, p JobListParams) (*JobListResult, error)
 	items := make([]JobPostingDTO, 0, len(rows))
 	for i := range rows {
 		items = append(items, s.toDTO(&rows[i]))
+	}
+	// #2066：所需证件整页一次查（与下面投递状态同一个批量口径，不逐行查）
+	if err := s.fillRequiredCredentials(items); err != nil {
+		return nil, err
 	}
 	// #488：学员视角批量回填投递状态
 	if err := s.fillApplyStates(p.StudentUserID, items); err != nil {
@@ -407,5 +574,8 @@ func (s *Service) Get(recruiterID, jobID int) (*JobPostingDTO, error) {
 		return nil, ErrJobNotFound
 	}
 	dto := s.toDTO(&m)
+	if err := s.withCredentials(&dto); err != nil {
+		return nil, err
+	}
 	return &dto, nil
 }

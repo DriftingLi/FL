@@ -71,6 +71,7 @@ beforeEach(() => {
     title: '',
     cover: '',
     created_at: '',
+    tags: [],
     course_id: 0
   })
   vi.mocked(favoriteApi.remove).mockResolvedValue(null)
