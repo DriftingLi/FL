@@ -34,3 +34,7 @@ EXIT=0
 ## 测试面契约钉（防再漂移）
 
 `.github/scripts/preflight-pr.test.mjs` 尾部三条 #2044 用例：真 CLI 工厂 × 真校验器祖先绑定判绿（旧形态必红）、工厂对象契约（剥 origin/ 前缀 / 按 base 缓存 / 异常收敛 null）、三方（校验器 / pr-evidence.yml / mobile-gates.yml / CLI）形态文本钉。本地 9/9 绿、校验器套件 104/104 绿。
+
+## ps1 外壳层复核（票面字面判据补全）
+
+评审指出对照组只跑了裸 node CLI；票面写的是跑 `preflight-pr.ps1`。复核：同一样本树上仅换回修复后的 `.github/scripts/preflight-pr.mjs`，走 `pwsh scripts/preflight-pr.ps1 -BodyFile body.md` ⇒ **EXIT=0**，②④ ✅ 已绑、`[object Object]` 零出现（2026-10-28 09:3x 实测）。外壳层与裸 CLI 同结论。
