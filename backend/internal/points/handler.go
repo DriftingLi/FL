@@ -1,4 +1,4 @@
-// 本文件：积分域的学员端 HTTP 出口（ADR-0070）——/api/points 蓝图（6 条路由）。
+// 本文件：积分域的学员端 HTTP 出口（ADR-0070）——/api/points 蓝图（7 条路由）。
 // 装配点：internal/api/routes_registry.go 调 points.RegisterRoutes(api, rd.Session, deps.PointsSvc)。
 package points
 
@@ -52,6 +52,7 @@ func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, svc *Service
 	g.GET("/ledger", h.GetLedger)
 	g.GET("/tasks", h.GetTasks)
 	g.POST("/tasks/:code/claim", h.Claim)
+	g.GET("/shop/items", h.ListShopItems)
 	g.POST("/shop/course/:courseId/redeem", h.RedeemCourse)
 	g.POST("/shop/:sku/redeem", h.RedeemShop)
 }
@@ -83,6 +84,7 @@ func (h *handler) GetBalance(c *gin.Context) {
 // @Security BearerAuth
 // @Param page query int false "页码"
 // @Param page_size query int false "每页数量"
+// @Param direction query string false "收支方向 in|out（省略或其它取值=不过滤）"
 // @Success 200 {object} response.R{data=points.PointsLedgerResult} "流水"
 // @Failure 401 {object} response.R "未认证"
 // @Router /points/ledger [get]
@@ -195,5 +197,22 @@ func (h *handler) RedeemShop(c *gin.Context) {
 		},
 		// #610：哨兵→状态码收编至 ErrStatus（余额不足/已拥有等 → 400），文案零漂移
 		ErrStatus: ErrStatus,
+	}.Handle(c)
+}
+
+// ListShopItems 商城在售列表
+// @Summary 积分商城在售商品
+// @Description 学员查看可兑换商品、积分价、库存与是否已拥有（已拥有与兑换判据同源）；不列未登记权益读者的行
+// @Tags 学员端-积分
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.R{data=points.ShopItemsResult} "在售列表"
+// @Failure 401 {object} response.R "未认证"
+// @Router /points/shop/items [get]
+func (h *handler) ListShopItems(c *gin.Context) {
+	httpx.Endpoint[struct{}, ShopItemsResult]{
+		Invoke: func(ctx context.Context, _ *struct{}) (*ShopItemsResult, error) {
+			return h.svc.ListShopItems(ctx, middleware.CurrentUserID(c))
+		},
 	}.Handle(c)
 }

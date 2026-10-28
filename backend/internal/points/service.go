@@ -70,6 +70,23 @@ type PointsTasksResult struct {
 	Tasks []PointsTaskItem `json:"tasks" nullability:"nonnil"`
 }
 
+// ShopItemDTO 商城在售商品（#2064）。Owned 与兑换判据同源：走 shopRedeemEntitlementKey
+// 的权益键形状 + 权益读面 entitlement.Holds，不另立「已拥有」口径。
+type ShopItemDTO struct {
+	SKU   string `json:"sku"`
+	Title string `json:"title"`
+	Price int    `json:"price"`
+	// Stock 为 nil 表示不限库存（与 points_shop_item.stock 的可空语义一致）；x-nullable 让生成面
+	// 说真话（number | null）——少了它 TS 侧会把 null 当 0，而 0 是缺货，语义正好反了（#2064）。
+	Stock *int `json:"stock" extensions:"x-nullable"`
+	Owned bool `json:"owned"`
+}
+
+// ShopItemsResult 商城在售列表。
+type ShopItemsResult struct {
+	Items []ShopItemDTO `json:"items" nullability:"nonnil"`
+}
+
 // taskMeta 行为判定需要的「聚合行为快照 + 用户资料」一次性取齐（GetTasks/Claim 共用）。
 type taskMeta struct {
 	User model.HrwaiUser
@@ -826,6 +843,36 @@ func (s *Service) RedeemRealPaper(ctx context.Context, userID, paperID int) (*Re
 		reason:  "redeem_real_paper",
 		refType: "real_exam_paper",
 	})
+}
+
+// ListShopItems 商城在售列表（#2064）：只出 enabled **且**在 sku 对账表里登记了读者的行——
+// 放行判据与 RedeemShop 同取 shopRedeemEntitlementKey，避免「列表里点得动、兑换时报不可兑换」。
+func (s *Service) ListShopItems(ctx context.Context, userID int) (*ShopItemsResult, error) {
+	var rows []model.PointsShopItem
+	if err := s.db.WithContext(ctx).Where("enabled = ?", true).Order("price ASC, sku ASC").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	items := make([]ShopItemDTO, 0, len(rows))
+	for i := range rows {
+		entSKU, refID, err := shopRedeemEntitlementKey(rows[i].SKU)
+		if err != nil {
+			// 未登记权益读者的行不是一件可兑商品（如 unlock_real_paper 只是卷价事实源），不进在售列表。
+			continue
+		}
+		// 逐行查权益（在售量级是个位数）；批量 IN 留给上量那天，口径仍只经 HasEntitlement 一处。
+		owned, err := s.HasEntitlement(userID, entSKU, refID)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, ShopItemDTO{
+			SKU:   rows[i].SKU,
+			Title: rows[i].Title,
+			Price: rows[i].Price,
+			Stock: rows[i].Stock,
+			Owned: owned,
+		})
+	}
+	return &ShopItemsResult{Items: items}, nil
 }
 
 // RedeemShop 兑换商城物品。

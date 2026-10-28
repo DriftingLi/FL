@@ -26,6 +26,9 @@ type CourseListOptions struct {
 	Filter           string
 	WithStudentCount bool
 	DefaultPageSize  int
+	// Paid 免费/付费筛选（#2071）：nil = 不过滤；true = 付费（积分价 > 0）；false = 免费（积分价为空或 0）。
+	// 判据是积分兑换价 points_price，**不是**现金价。
+	Paid *bool
 }
 
 // ListCourses 课程列表共享实现（分页归一化、章节数/前置课程/学员数批量回填、信封组装只此一份）。
@@ -47,6 +50,16 @@ func ListCourses(db *gorm.DB, page, pageSize int, opts CourseListOptions) (Cours
 			q = q.Where("level_id = ?", *opts.LevelID)
 		}
 		q = scope.EntityOwnedBy(q, "credential_id", opts.CredentialID)
+		if opts.Paid != nil {
+			// 付费 = points_price > 0，免费 = 其余。列注释写「NULL/0 = 免费直学」，而 000002 的内联 CHECK
+			// （IS NULL OR > 0）又排除 0 —— 两处不一致，且 ADD COLUMN IF NOT EXISTS 在列已存在的库上整句
+			// no-op（CHECK 根本不会生效）⇒ 按「≤ 0 也算免费」写，两种库上两档并集都等于全集（#2071）。
+			if *opts.Paid {
+				q = q.Where("points_price IS NOT NULL AND points_price > 0")
+			} else {
+				q = q.Where("points_price IS NULL OR points_price <= 0")
+			}
+		}
 		if opts.Filter == "hot" {
 			q = q.Where("is_hot = ?", true)
 		} else if opts.Filter == "featured" {

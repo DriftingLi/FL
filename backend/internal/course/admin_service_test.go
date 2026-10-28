@@ -198,14 +198,14 @@ func TestCourseService_TrainingFields(t *testing.T) {
 	}
 
 	// 学员端列表按专业方向/等级过滤
-	list, err := svc.GetCourses(1, 10, nil, coerce.IntPtr(spec.SpecialtyID), coerce.IntPtr(lv.LevelID), "")
+	list, err := svc.GetCourses(1, 10, nil, coerce.IntPtr(spec.SpecialtyID), coerce.IntPtr(lv.LevelID), "", nil)
 	if err != nil {
 		t.Fatalf("GetCourses 失败: %v", err)
 	}
 	if list.Total != 1 {
 		t.Fatalf("过滤后应 1 条, got %v", list.Total)
 	}
-	empty, err := svc.GetCourses(1, 10, nil, coerce.IntPtr(spec.SpecialtyID), coerce.IntPtr(9999), "")
+	empty, err := svc.GetCourses(1, 10, nil, coerce.IntPtr(spec.SpecialtyID), coerce.IntPtr(9999), "", nil)
 	if err != nil {
 		t.Fatalf("GetCourses 失败: %v", err)
 	}

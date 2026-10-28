@@ -259,12 +259,13 @@ func NewService(db *gorm.DB, slideRenderer *SlideRenderer, logger *zap.Logger) *
 	return &Service{db: db, slideRenderer: slideRenderer, logger: logger}
 }
 
-// GetCourses 课程列表（可额外按专业方向/课程等级/目标证件过滤；filter=hot|featured|all，空串 = 全部）。
+// GetCourses 课程列表（可额外按专业方向/课程等级/目标证件/免费付费过滤；filter=hot|featured|all，空串 = 全部）。
 // 未挂专业方向/等级/证件的课程不展示（与目录树口径统一，见挂载不变式）。
 // 可选位一律**显式命名形参**（#1096：原 filter ...string 变参改为显式参数，arity 在签名处自明）。
-func (s *Service) GetCourses(page, pageSize int, credentialID, specialtyID, levelID *int, filter string) (CoursePageResult, error) {
+func (s *Service) GetCourses(page, pageSize int, credentialID, specialtyID, levelID *int, filter string, paid *bool) (CoursePageResult, error) {
 	return ListCourses(s.db, page, pageSize, CourseListOptions{
-		OnlyMounted: true, CredentialID: credentialID, SpecialtyID: specialtyID, LevelID: levelID, Filter: filter, DefaultPageSize: 12,
+		OnlyMounted: true, CredentialID: credentialID, SpecialtyID: specialtyID, LevelID: levelID, Filter: filter,
+		Paid: paid, DefaultPageSize: 12,
 	})
 }
 

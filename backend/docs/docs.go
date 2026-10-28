@@ -3414,7 +3414,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "分类",
+                        "description": "分类 company|industry|product|news|exam|notice（省略=全部）",
                         "name": "category",
                         "in": "query"
                     },
@@ -10693,6 +10693,12 @@ const docTemplate = `{
                         "description": "热门/精品筛选 hot|featured|all",
                         "name": "filter",
                         "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "免费/付费筛选 true|false（true 付费：积分兑换价 \u003e 0；false 免费：为空或 0）；省略不过滤",
+                        "name": "paid",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -10712,6 +10718,12 @@ const docTemplate = `{
                                     }
                                 }
                             ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -11210,7 +11222,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "分类",
+                        "description": "分类 company|industry|product|news|exam|notice（省略=全部）",
                         "name": "category",
                         "in": "query"
                     },
@@ -11846,6 +11858,12 @@ const docTemplate = `{
                         "type": "string",
                         "description": "精选过滤 true|false，省略表示不过滤（#742）",
                         "name": "featured",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "问答解决态 unsolved|solved|all（省略不过滤；非空时必须同时 category=question，否则 400；非法值 400）",
+                        "name": "solved",
                         "in": "query"
                     },
                     {
@@ -14233,6 +14251,12 @@ const docTemplate = `{
                         "description": "每页数量",
                         "name": "page_size",
                         "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "收支方向 in|out（省略或其它取值=不过滤）",
+                        "name": "direction",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -14310,6 +14334,49 @@ const docTemplate = `{
                         "description": "余额不足/已拥有",
                         "schema": {
                             "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/points/shop/items": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "学员查看可兑换商品、积分价、库存与是否已拥有（已拥有与兑换判据同源）；不列未登记权益读者的行",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-积分"
+                ],
+                "summary": "积分商城在售商品",
+                "responses": {
+                    "200": {
+                        "description": "在售列表",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/points.ShopItemsResult"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "401": {
@@ -27824,6 +27891,39 @@ const docTemplate = `{
                 },
                 "total_earned": {
                     "type": "integer"
+                }
+            }
+        },
+        "points.ShopItemDTO": {
+            "type": "object",
+            "properties": {
+                "owned": {
+                    "type": "boolean"
+                },
+                "price": {
+                    "type": "integer"
+                },
+                "sku": {
+                    "type": "string"
+                },
+                "stock": {
+                    "description": "Stock 为 nil 表示不限库存（与 points_shop_item.stock 的可空语义一致）；x-nullable 让生成面\n说真话（number | null）——少了它 TS 侧会把 null 当 0，而 0 是缺货，语义正好反了（#2064）。",
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "points.ShopItemsResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/points.ShopItemDTO"
+                    }
                 }
             }
         },

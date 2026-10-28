@@ -55,6 +55,7 @@ var studentReadableSurface = map[string]string{
 	"/api/points/balance":                   "我的积分余额",
 	"/api/points/ledger":                    "我的积分流水",
 	"/api/points/tasks":                     "我的任务中心",
+	"/api/points/shop/items":                "我的商城在售列表（含已拥有态；需登录，按 user_id 判 owned）",
 	"/api/check-in/rank":                    "打卡排行榜（含我的名次）",
 	"/api/mock-exam/history":                "我的模考历史",
 	"/api/real-exam/papers":                 "我的套卷列表（带 entitled）",

@@ -105,7 +105,7 @@ func TestStudentCourseListHasChapterCountAndPrereqIDs(t *testing.T) {
 		t.Fatalf("关联证书失败: %v", err)
 	}
 
-	list, err := svc.GetCourses(1, 10, nil, nil, nil, "")
+	list, err := svc.GetCourses(1, 10, nil, nil, nil, "", nil)
 	if err != nil {
 		t.Fatalf("GetCourses 失败: %v", err)
 	}
@@ -146,7 +146,7 @@ func TestStudentCourseListOmitsUnmountedCourses(t *testing.T) {
 		t.Fatalf("创建未挂载课程失败: %v", err)
 	}
 
-	page, err := svc.GetCourses(1, 10, nil, nil, nil, "")
+	page, err := svc.GetCourses(1, 10, nil, nil, nil, "", nil)
 	if err != nil {
 		t.Fatalf("GetCourses 失败: %v", err)
 	}

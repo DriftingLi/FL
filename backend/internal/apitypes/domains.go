@@ -697,11 +697,13 @@ var Domains = []Domain{
 			"points.PointsTasksResult",
 			"points.PointsClaimResult",
 			"points.RedeemResult",
+			"points.ShopItemsResult",
 		},
 		Endpoints: []Endpoint{
 			{Method: "GET", Path: "/points/balance"},
 			{Method: "GET", Path: "/points/ledger"},
 			{Method: "GET", Path: "/points/tasks"},
+			{Method: "GET", Path: "/points/shop/items"},
 			{Method: "POST", Path: "/points/tasks/{code}/claim"},
 			{Method: "POST", Path: "/points/shop/course/{courseId}/redeem"},
 			{Method: "POST", Path: "/points/shop/{sku}/redeem"},

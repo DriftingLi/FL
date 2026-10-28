@@ -33,6 +33,8 @@ var featuredCategoryLabels = map[string]string{
 	"industry": "行业新闻",
 	"product":  "产品资讯",
 	"news":     "政策法规",
+	"exam":     "考情",
+	"notice":   "公告",
 }
 
 // ErrFeaturedContentNotFound 「精选内容行不存在」的唯一载体（ADR-0064 决策 1/2）：
@@ -485,9 +487,6 @@ func featuredImageGate(oldCover, oldContent, newCover, newContent string) error 
 func featuredCategoryLabel(category string) string {
 	if label, ok := featuredCategoryLabels[category]; ok {
 		return label
-	}
-	if category == "news" {
-		return "政策法规"
 	}
 	return "政策法规"
 }
