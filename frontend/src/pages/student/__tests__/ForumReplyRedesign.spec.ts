@@ -34,7 +34,8 @@ vi.mock('@/api/forum', async (importOriginal) => {
       deleteReply: vi.fn(),
       deleteTopic: vi.fn(),
       reportReply: vi.fn(),
-      reportTopic: vi.fn()
+      reportTopic: vi.fn(),
+      replyTopic: vi.fn()
     }
   }
 })
@@ -67,6 +68,7 @@ import UiMoreMenu from '@/components/ui/UiMoreMenu.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 import UiErrorState from '@/components/ui/UiErrorState.vue'
+import ForumComposer from '@/components/student/ForumComposer.vue'
 import ForumDetail from '../ForumDetail.vue'
 
 const getTopic = vi.mocked(forumApi.getTopic)
@@ -539,5 +541,75 @@ describe('被回复人小头像（#855）', () => {
     } as never)
     const wrapper = await mountDetail()
     expect(wrapper.find('.reply-parent').exists()).toBe(false)
+  })
+})
+// 行内回复（2026-10-28）：点某条回复的「回复」键就在**这条下方**展开输入框，再点一次收回。
+// 改之前只有页面底部那一个大回复框——长帖里要答某一条，得先滚到最后。
+describe('行内回复框（2026-10-28）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getTopic.mockReset()
+  })
+
+  async function mountTwoReplies() {
+    getTopic.mockResolvedValue({
+      topic: topic(2), replies: [reply(1), reply(2)], page: 1, pages: 1, total: 2
+    } as never)
+    return mountDetail()
+  }
+
+  it('点回复键在对应那条下方展开，再点一次收回', async () => {
+    const wrapper = await mountTwoReplies()
+    // 页面底部的大回复区恒在（1 个），行内框尚未出现
+    expect(wrapper.findAllComponents(ForumComposer)).toHaveLength(1)
+
+    const first = wrapper.findAll('.reply-item')[0]
+    await first.find('.reply-btn').trigger('click')
+    const box = wrapper.find('.reply-editor-inline')
+    expect(box.exists()).toBe(true)
+    // 位置：紧跟在被点的那条回复之后（而不是页面底部）
+    expect(first.element.nextElementSibling).toBe(box.element)
+    // 回复键进入激活态（同一颗按钮，第二次点即收回）
+    expect(first.find('.reply-btn').attributes('aria-expanded')).toBe('true')
+    expect(wrapper.findAllComponents(ForumComposer)).toHaveLength(2)
+    // 行内那一份带 inline 档（形态差异由 ForumComposer 的用例守）
+    expect(wrapper.find('.reply-editor-inline').findComponent(ForumComposer).props('inline')).toBe(true)
+
+    await first.find('.reply-btn').trigger('click')
+    expect(wrapper.find('.reply-editor-inline').exists()).toBe(false)
+    expect(wrapper.findAllComponents(ForumComposer)).toHaveLength(1)
+  })
+
+  it('换一条回复展开时收起上一条（盒子只有一个）', async () => {
+    const wrapper = await mountTwoReplies()
+    const [a, b] = wrapper.findAll('.reply-item')
+    await a.find('.reply-btn').trigger('click')
+    expect(a.element.nextElementSibling?.className).toContain('reply-editor-inline')
+
+    await b.find('.reply-btn').trigger('click')
+    const boxes = wrapper.findAll('.reply-editor-inline')
+    expect(boxes).toHaveLength(1)
+    expect(b.element.nextElementSibling).toBe(boxes[0].element)
+  })
+
+  it('提交走 replyTopic，回复目标是它挂在下面那一条（parent_id 不是 null）', async () => {
+    const replyTopic = vi.mocked(forumApi.replyTopic)
+    replyTopic.mockReset()
+    replyTopic.mockResolvedValue({} as never)
+    const wrapper = await mountTwoReplies()
+    const second = wrapper.findAll('.reply-item')[1]
+    await second.find('.reply-btn').trigger('click')
+    await flushPromises()
+
+    // 用组件引用定位（stub 也是同一个引用）：行内那一份就在 .reply-editor-inline 里
+    const inline = wrapper.find('.reply-editor-inline').findComponent(ForumComposer)
+    inline.vm.$emit('update:modelValue', '行内答一句')
+    await flushPromises()
+    inline.vm.$emit('submit', { contentFormat: 'text' })
+    await flushPromises()
+
+    expect(replyTopic).toHaveBeenCalledWith(1, '行内答一句', 2, [], 'text')
+    // 提交成功后收起
+    expect(wrapper.find('.reply-editor-inline').exists()).toBe(false)
   })
 })

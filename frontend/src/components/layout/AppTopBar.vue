@@ -8,19 +8,22 @@
  * 故侧栏收起时左格一并收窄（只剩头像）。
  *
  * 为什么身份区在顶栏而不在侧栏（ADR-0072）：外壳三块同底后，侧栏顶部再放一块用户区
- * 会与顶栏的左格重复；身份（头像+昵称）留在棋盘格左格、交互（外观/退出）收进右区用户菜单，
- * 一个入口一处职责。
+ * 会与顶栏的左格重复；身份（头像+昵称）留在棋盘格左格，交互收进右区，一个入口一处职责。
+ *
+ * **改判（2026-10-28，ADR-0072 决策 4）**：主题入口从用户菜单里**独立**出来，作为一个图标
+ * 按钮坐在通知铃铛旁（工具位）。原因是原形态把它藏进了「点开才看见」的菜单里：换外观是
+ * **高频、随时可反悔的偏好切换**，与「退出登录」这种低频破坏性动作不同级，混在一处反而
+ * 让人以为换主题也要先点开自己的头像。菜单里因此只剩身份只读行 + 退出登录。
  */
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import type { IconName } from '@/icons/registry'
 import UiIcon from '@/components/ui/UiIcon.vue'
 import { href } from '@/config/pages'
 import { useAuthStore } from '@/stores/auth'
-import { useThemeStore, type ThemeMode } from '@/stores/theme'
 import { describeRole } from '@/utils/roleWords'
 import { useConfirm } from '@/composables/useConfirm'
 import NotificationPanel from './NotificationPanel.vue'
+import ThemeToggle from '@/components/ui/ThemeToggle.vue'
 
 const props = defineProps<{
   /** 侧栏是否收起（左格随之收窄；由 SidebarLayout 透传） */
@@ -33,7 +36,6 @@ defineEmits<{
 }>()
 
 const authStore = useAuthStore()
-const themeStore = useThemeStore()
 const router = useRouter()
 
 const nickname = computed(
@@ -52,21 +54,7 @@ const showNotifications = computed(
   () => authStore.isLoggedIn && authStore.userInfo?.role === 'hrwai_user'
 )
 
-/**
- * 外观三态。Element Plus 2.14 的下拉**不支持嵌套子菜单**，故这里平铺三项 + 分组标题，
- * 交互与语义与「外观」子菜单一致（单选、当前项打勾）。
- */
-const themeOptions: Array<{ mode: ThemeMode; label: string; icon: IconName }> = [
-  { mode: 'light', label: '浅色', icon: 'sun' },
-  { mode: 'dark', label: '深色', icon: 'moon' },
-  { mode: 'system', label: '跟随系统', icon: 'theme-system' }
-]
-
 async function onCommand(command: string) {
-  if (command.startsWith('theme:')) {
-    themeStore.setMode(command.slice('theme:'.length) as ThemeMode)
-    return
-  }
   if (command === 'logout') {
     try {
       await useConfirm().confirm('确定要退出登录吗？', '提示', {
@@ -108,6 +96,8 @@ async function onCommand(command: string) {
 
     <!-- 右区：工具位 -->
     <div class="topbar-actions">
+      <!-- 主题入口（改判，见文件顶部）：高频偏好切换，独立成图标按钮，与铃铛同级 -->
+      <ThemeToggle variant="topbar" />
       <NotificationPanel v-if="showNotifications" />
 
       <el-dropdown trigger="click" placement="bottom-end" @command="onCommand">
@@ -121,18 +111,6 @@ async function onCommand(command: string) {
               <span class="topbar-identity-name">{{ nickname }}</span>
               <span class="topbar-role-badge" :class="roleClass">{{ roleLabel }}</span>
             </div>
-            <div class="topbar-menu-label">外观</div>
-            <el-dropdown-item
-              v-for="opt in themeOptions"
-              :key="opt.mode"
-              :command="'theme:' + opt.mode"
-            >
-              <span class="topbar-menu-item">
-                <UiIcon :name="opt.icon" :size="14" />
-                {{ opt.label }}
-                <UiIcon v-if="themeStore.mode === opt.mode" name="check" class="topbar-menu-check" :size="14" />
-              </span>
-            </el-dropdown-item>
             <el-dropdown-item divided command="logout">
               <span class="topbar-menu-item is-danger">
                 <UiIcon name="log-out" :size="14" />
@@ -323,22 +301,11 @@ async function onCommand(command: string) {
   color: var(--color-violet-soft-ink);
 }
 
-.topbar-menu-label {
-  padding: var(--space-1) var(--space-4);
-  font-size: var(--text-xs);
-  color: var(--color-text-tertiary);
-}
-
 .topbar-menu-item {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   width: 100%;
-}
-
-.topbar-menu-check {
-  margin-left: auto;
-  color: var(--color-primary-soft-ink);
 }
 
 .topbar-menu-item.is-danger {

@@ -16,7 +16,7 @@
  * 因此凡是写 border-* 样式类的地方，必须显式给出宽度工具类（border / border-t），
  * 否则没宽度的边会被渲染成 3px。
  */
-import { computed, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
@@ -42,6 +42,15 @@ const props = withDefaults(
     /** textarea 行数 */
     rows?: number
     placeholder?: string
+    /**
+     * 行内小回复框（缺省 false = 页面底部的大回复区）。
+     *
+     * 2026-10-28 起帖子详情支持「点某条回复的回复键，就地展开一个小输入框」：
+     * 形态差异只有三处 —— 不放正文格式分段控件（共用同一份格式偏好，主回复区里可见）、
+     * 属地披露与发送挤在同一行、挂载即聚焦。**输入区本体仍是同一个组件**（ADR-0052 决策 1
+     * 的「输入区收敛为一个组件」不因这个档位破例），所以粘贴/拖拽/图片/字数上限全部照旧。
+     */
+    inline?: boolean
   }>(),
   {
     replyingTo: null,
@@ -49,7 +58,8 @@ const props = withDefaults(
     maxImages: 3,
     maxlength: 5000,
     rows: 3,
-    placeholder: '写下你的回复…'
+    placeholder: '写下你的回复…',
+    inline: false
   }
 )
 
@@ -83,7 +93,7 @@ const { format: contentFormat, handleFormatChange } = useForumContentFormat()
 /** 提交口径沿用改造前：内容非空或图片非空 */
 const canSubmit = computed(() => content.value.trim().length > 0 || props.images.length > 0)
 
-const inputRef = ref<{ resetPreview?: () => void } | null>(null)
+const inputRef = ref<{ focus?: () => void; resetPreview?: () => void } | null>(null)
 
 function submit() {
   if (!canSubmit.value || props.submitting) return
@@ -100,6 +110,17 @@ function onKeydown(event: KeyboardEvent) {
     submit()
   }
 }
+
+/**
+ * 行内档挂载即聚焦：这个框是「点了某条回复的回复键」的**直接结果**，
+ * 光标不落进去的话用户还得再点一次输入区才能打字。
+ */
+onMounted(() => {
+  if (!props.inline) return
+  void nextTick(() => inputRef.value?.focus?.())
+})
+
+defineExpose({ focus: () => inputRef.value?.focus?.() })
 </script>
 
 <template>
@@ -122,21 +143,21 @@ function onKeydown(event: KeyboardEvent) {
       @keydown="onKeydown"
     />
 
-    <!-- 正文格式：与发帖侧同控件同口径（数据档位，与输入框内的视图档位分工见 UiUnderlineTabs） -->
+    <!-- 正文格式与发送键**同一行**（2026-10-28）：发送键原来独占一行、落在披露提示下方，
+         与输入框底边相距 98px（1440 宽实测），打完字要跨过两行才找得到。
+         行内档没有格式档（共用同一份格式偏好，在主回复区里可见），这一行只剩「披露 + 发送」。 -->
     <div class="mt-2 flex flex-wrap items-center gap-2">
       <UiSegmentTabs
+        v-if="!props.inline"
         :model-value="contentFormat"
         :options="FORUM_FORMAT_OPTIONS"
         @update:model-value="handleFormatChange"
       />
-    </div>
-
-    <!-- 发布前披露（ADR-0045）：ui-conventions「不写说明性 hint」的明确例外，
-         文案单点在 forumDisplay.FORUM_REGION_NOTICE —— 别在这里另抄一份。 -->
-    <p class="forum-region-notice mt-1.5 mb-0 text-xs text-ink-3">{{ FORUM_REGION_NOTICE }}</p>
-
-    <div class="mt-2 flex items-center justify-end gap-2">
+      <p v-if="props.inline" class="forum-region-notice m-0 text-xs text-ink-3">
+        {{ FORUM_REGION_NOTICE }}
+      </p>
       <UiButton
+        class="ml-auto shrink-0"
         variant="primary"
         :icon="'send'"
         circle
@@ -148,5 +169,11 @@ function onKeydown(event: KeyboardEvent) {
         @click="submit"
       />
     </div>
+
+    <!-- 发布前披露（ADR-0045）：ui-conventions「不写说明性 hint」的明确例外，
+         文案单点在 forumDisplay.FORUM_REGION_NOTICE —— 别在这里另抄一份。 -->
+    <p v-if="!props.inline" class="forum-region-notice mt-1.5 mb-0 text-xs text-ink-3">
+      {{ FORUM_REGION_NOTICE }}
+    </p>
   </div>
 </template>
