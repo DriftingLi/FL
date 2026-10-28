@@ -30576,7 +30576,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "top_wrong_option": {
-                    "description": "TopWrongOption 该题历史上「最多人选错的选项」（#2068）：只统计 is_correct=false 且答案非空的作答\n（正确项因此天然排除）；该题作答总数 \u003c 5 时不返回该键——缺省不是空串，客户端据此决定不展示。",
+                    "description": "TopWrongOption 该题历史上「最多人选错的**答案串**」（#2068）：单选题是一个选项，多选题是整串\n组合（如 \"A,C\"），简答题没有选项、恒不返回。只统计 is_correct=false 且答案非空的作答；\n该题**判错作答 \u003c 5 次**时不返回该键——缺省不是空串，客户端据此决定不展示。",
                     "type": "string",
                     "x-optional": true
                 },
