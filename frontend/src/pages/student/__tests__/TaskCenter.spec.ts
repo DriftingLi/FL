@@ -99,6 +99,33 @@ describe('TaskCenter 领取三态与单次提示（#409）', () => {
   })
 })
 
+describe('今日可得口径（#2065 / Q11 第 4 条）', () => {
+  it('卡片上的「今日可得」只累加 daily 组：新手任务不进这个数', async () => {
+    vi.mocked(pointsApi.getTasks).mockResolvedValue({
+      tasks: [
+        claimableTask({ code: 'daily_login', group: 'daily', points: 5 }),
+        claimableTask({ code: 'daily_quiz', group: 'daily', points: 10 }),
+        claimableTask({ code: 'newbie_credential', group: 'newbie', points: 10 }),
+        claimableTask({ code: 'newbie_first_course', group: 'newbie', points: 20 }),
+      ],
+    })
+    const wrapper = mountPage()
+    await flushPromises()
+    expect(wrapper.text()).toContain('今日可得')
+    expect(wrapper.text()).toContain('+15')
+  })
+
+  it('新任务「浏览 3 门课程」按后端下发的行渲染（端上不写死清单）', async () => {
+    vi.mocked(pointsApi.getTasks).mockResolvedValue({
+      tasks: [claimableTask({ code: 'browse_course', group: 'daily', title: '浏览 3 门课程', desc: '每日浏览 3 门课程', points: 5 })],
+    })
+    const wrapper = mountPage()
+    await flushPromises()
+    expect(wrapper.text()).toContain('浏览 3 门课程')
+    expect(wrapper.text()).toContain('每日浏览 3 门课程')
+  })
+})
+
 describe('任务分组收敛（ADR-0054）', () => {
   it('只渲染「每日任务」「新手任务」两段，不再出现已退役的成长任务分组', async () => {
     vi.mocked(pointsApi.getTasks).mockResolvedValue({

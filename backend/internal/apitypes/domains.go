@@ -515,6 +515,7 @@ var Domains = []Domain{
 		Roots: []string{
 			"course.ChapterDetailDTO",
 			"course.ChapterSlidesDTO",
+			"course.CourseBrowseResult",
 			"course.CourseDetailDTO",
 			"course.CoursePageResult",
 			"course.StudyProgressDTO",
@@ -522,6 +523,7 @@ var Domains = []Domain{
 		Endpoints: []Endpoint{
 			{Method: "GET", Path: "/courses"},
 			{Method: "GET", Path: "/course/{course_id}"},
+			{Method: "POST", Path: "/course/{course_id}/browse"},
 			{Method: "POST", Path: "/course/{course_id}/progress"},
 			{Method: "GET", Path: "/course/{course_id}/chapter/{chapter_id}"},
 			{Method: "GET", Path: "/chapter/{chapter_id}/slides"},
