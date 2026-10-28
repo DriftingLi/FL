@@ -183,9 +183,12 @@ func (s *ReportService) ForceOffline(jobPostingID int, reason string) (*JobPosti
 	_ = s.db.First(&job, jobPostingID).Error
 	// 邮件通知企业（被强制下架的原因）
 	s.notifyEmployerOffline(job.ID, job.Title, reason)
-	// 复用 Service 的 DTO 转换
+	// 复用 Service 的 DTO 转换（含证件要求回填：同一个 DTO 形状，不因动作不同缺一格）
 	ps := &Service{db: s.db, logger: s.logger}
 	dto := ps.toDTO(&job)
+	if err := ps.withCredentials(&dto); err != nil {
+		return nil, err
+	}
 	return &dto, nil
 }
 

@@ -24,7 +24,7 @@
 //   POST /admin/jobs/{id}/force-offline
 //   POST /admin/job-reports/{id}/handle
 //
-// 覆盖的 Go 类型：ApplicationDTO / ApplicationListResult / JobListResult / JobPostingDTO / RecruiterApplicationListResult / ReportDTO / ReportListResult
+// 覆盖的 Go 类型：ApplicationDTO / ApplicationListResult / JobCredentialDTO / JobListResult / JobPostingDTO / RecruiterApplicationListResult / ReportDTO / ReportListResult
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -60,6 +60,11 @@ export interface ApplicationListResult {
   total: number
 }
 
+export interface JobCredentialDTO {
+  credential_id: number
+  name: string
+}
+
 export interface JobListResult {
   items: JobPostingDTO[]
   total: number
@@ -82,6 +87,7 @@ export interface JobPostingDTO {
   published_at: string
   recruiter_id: number
   region: string
+  required_credentials: JobCredentialDTO[]
   salary_max?: number
   salary_min?: number
   salary_text: string

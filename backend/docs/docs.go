@@ -12765,7 +12765,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "学员浏览职位广场（仅 open 且未强制下架，按新鲜度排序；支持岗位/地区/薪资/经验筛选）",
+                "description": "学员浏览职位广场（仅 open 且未强制下架，按新鲜度排序；支持岗位/地区/薪资/经验/所需证件筛选）",
                 "produces": [
                     "application/json"
                 ],
@@ -12802,6 +12802,12 @@ const docTemplate = `{
                         "type": "string",
                         "description": "经验要求",
                         "name": "experience",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "所需证件 ID（命中任一即返回；不传不过滤，与「不限证件」的职位无关）",
+                        "name": "credential_id",
                         "in": "query"
                     },
                     {
@@ -27089,6 +27095,17 @@ const docTemplate = `{
                 }
             }
         },
+        "job.JobCredentialDTO": {
+            "type": "object",
+            "properties": {
+                "credential_id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
         "job.JobListResult": {
             "type": "object",
             "properties": {
@@ -27165,6 +27182,13 @@ const docTemplate = `{
                 "region": {
                     "type": "string"
                 },
+                "required_credentials": {
+                    "description": "RequiredCredentials 所需证件（#2066）：空集 = 不限，恒发 []（不因无要求而缺席）。\n键在场是为了让「这个职位不限证件」与「这个字段没实现」在消费端可区分。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/job.JobCredentialDTO"
+                    }
+                },
                 "salary_max": {
                     "type": "integer",
                     "x-optional": true
@@ -27201,6 +27225,13 @@ const docTemplate = `{
                 },
                 "region": {
                     "type": "string"
+                },
+                "required_credential_ids": {
+                    "description": "RequiredCredentialIDs 所需证件（#2066）：可空多选，空 / 缺省 = 不限。\n编辑语义与其它字段一致——整组替换（空数组即清空）；重复 id 去重，非法 id → 400。",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
                 },
                 "salary_max": {
                     "type": "integer"
