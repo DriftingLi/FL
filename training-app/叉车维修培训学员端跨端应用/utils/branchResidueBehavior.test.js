@@ -29,7 +29,7 @@
  *   提示文案写死「真正的根治是上游设置」⇒ BR5 红（读不到 AUTODELETE=off）
  */
 
-const { spawnSync } = require('child_process');
+const { spawnSync, execSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -148,12 +148,49 @@ function runScript(stub, extra) {
   return { code: r.status, out: String(r.stdout || '') + String(r.stderr || '') };
 }
 
-/** 造一个只含指定目录名的扫描根（目录判据的唯一注入面；目录名用 ASCII，防 OEM 码页吞字节）。 */
-function makeWtRoot(name, dirs) {
+/**
+ * 造一个扫描根（目录判据的唯一注入面；目录名用 ASCII，防 OEM 码页吞字节）。
+ * specs 每项可以是目录名（= 纯骨架：只有空目录）或对象：
+ *   { dir, link: true, targetFiles: 2 }  ⇒ 目录里挂一条指回「主树」的 junction（复刻真实孤儿），
+ *                                           且该 junction **目标**里放几个文件
+ *   { dir, files: 1 }                    ⇒ 目录里放普通文件（无链接）
+ * 真实孤儿的形态就是这么两种（2026-10-28 实测 48 个：33 个挂着 node_modules 活链接、15 个纯骨架）。
+ */
+function makeWtRoot(name, specs) {
   const root = path.join(TMP, name);
   fs.mkdirSync(root, { recursive: true });
-  for (const d of dirs) fs.mkdirSync(path.join(root, d), { recursive: true });
+  for (const s of specs) {
+    const spec = typeof s === 'string' ? { dir: s } : s;
+    const dir = path.join(root, spec.dir);
+    fs.mkdirSync(dir, { recursive: true });
+    if (spec.link) {
+      const target = path.join(root, '_target_' + spec.dir);
+      fs.mkdirSync(target, { recursive: true });
+      for (let i = 0; i < (spec.targetFiles || 1); i++) fs.writeFileSync(path.join(target, 'f' + i + '.js'), 'x');
+      // 目录内放一层 training-app/<app>/node_modules，形状与真孤儿一致
+      const holder = path.join(dir, 'training-app', 'app-under-test');
+      fs.mkdirSync(holder, { recursive: true });
+      fs.symlinkSync(target, path.join(holder, 'node_modules'), 'junction');
+    }
+    for (let i = 0; i < (spec.files || 0); i++) fs.writeFileSync(path.join(dir, 'stray' + i + '.txt'), 'x');
+  }
   return root;
+}
+
+/**
+ * 造一个「读不进去」的目录，返回还原函数。平台各有各的机制，但判据是同一个：**枚举失败**。
+ *   Windows：ACL 拒 RD（icacls /deny user:(RD)）
+ *   Linux/macOS：chmod 000（③ 门跑的那台是 ubuntu-latest，跑测试的不是 root）
+ * ⚠️ 只在非 root 下成立：root 无视权限位 ⇒ 那种环境这条用例会**判红**（fail-loud，不会假绿）。
+ */
+function makeUnreadable(dir) {
+  if (process.platform === 'win32') {
+    const user = `${process.env.USERDOMAIN}\\${process.env.USERNAME}`;
+    execSync(`icacls "${dir}" /deny "${user}:(RD)"`, { stdio: 'ignore' });
+    return () => { try { execSync(`icacls "${dir}" /remove:d "${user}"`, { stdio: 'ignore' }); } catch (e) {} };
+  }
+  fs.chmodSync(dir, 0o000);
+  return () => { try { fs.chmodSync(dir, 0o755); } catch (e) {} };
 }
 
 let TMP = null;
@@ -287,17 +324,46 @@ function archiveOnly() {
 }
 
 describe('check-branch-residue：孤儿 worktree 目录对账（#2061）', () => {
-  test('BR6 未注册目录 ⇒ WT_DIR_ORPHAN 逐条 + exit 4，且点目录另指 cleanup 入口', () => {
+  test('BR6 两档分开报：活链接 ⇒ WT_DIR_ORPHAN，纯骨架 ⇒ WT_DIR_SKELETON + exit 4（#2081）', () => {
     const stub = makeStub(TMP, 'br6', mixedScenario(archiveOnly()));
-    const root = makeWtRoot('br6', ['wt-9999', '.wt-8888']);
+    // 真实孤儿的两种形态：一条挂在目录里的 node_modules 活链接 / 只剩空目录的骨架
+    const root = makeWtRoot('br6', [{ dir: 'wt-9999', link: true, targetFiles: 2 }, '.wt-8888']);
     const r = runScript(stub, ['-WtRoot', root]);
 
-    expect(r.out).toMatch(/WT-DIRS registered=[0-9]+ disk=2 orphans=2/);
-    expect(r.out).toContain('WT_DIR_ORPHAN wt-9999');
-    expect(r.out).toContain('WT_DIR_ORPHAN .wt-8888');
+    expect(r.out).toMatch(/WT-DIRS registered=[0-9]+ disk=2 orphans=2 linked=1 skeleton=1/);
+    // files=0 是承重断言：链接目标里有 2 个文件，一旦遍历链接就会数成 files>=2
+    expect(r.out).toContain('WT_DIR_ORPHAN wt-9999 links=1 files=0');
+    expect(r.out).toContain('WT_DIR_SKELETON .wt-8888 links=0 files=0');
     expect(r.code).toBe(4); // 分支侧全绿（归档按设计保留），目录侧未收口
-    expect(r.out).toContain('remove-worktree.ps1 -Task 9999');
-    expect(r.out).toContain('cleanup-dot-worktrees.ps1'); // 点目录是 ③ 门静默假绿那块地
+    expect(r.out).toContain('remove-worktree.ps1 -PruneOrphans');
+  });
+
+  test('BR13 读不进去的子树不许当骨架：枚举不完整 ⇒ WT_DIR_ORPHAN（fail-closed，评审腿）', () => {
+    const stub = makeStub(TMP, 'br13', mixedScenario(archiveOnly()));
+    const root = makeWtRoot('br13', ['wt-2222']);
+    // 造一棵「看起来是空骨架、其实读不进去」的目录：拒绝 RD 权限 ⇒ GetFileSystemEntries 抛异常
+    const locked = path.join(root, 'wt-2222', 'training-app', 'app-under-test');
+    fs.mkdirSync(locked, { recursive: true });
+    const restore = makeUnreadable(locked);
+    try {
+      const r = runScript(stub, ['-WtRoot', root]);
+      expect(r.out).toContain('WT_DIR_ORPHAN wt-2222');
+      expect(r.out).not.toContain('WT_DIR_SKELETON wt-2222');
+      expect(r.code).toBe(4);
+    } finally {
+      restore();
+    }
+  });
+
+  test('BR11 有文件无链接也算 WT_DIR_ORPHAN —— 骨架的判据是「无文件且无链接」（#2081）', () => {
+    const stub = makeStub(TMP, 'br11', mixedScenario(archiveOnly()));
+    const root = makeWtRoot('br11', [{ dir: 'wt-5555', files: 1 }, 'wt-4444']);
+    const r = runScript(stub, ['-WtRoot', root]);
+
+    expect(r.out).toContain('WT_DIR_ORPHAN wt-5555 links=0 files=1');
+    expect(r.out).toContain('WT_DIR_SKELETON wt-4444 links=0 files=0');
+    expect(r.out).toMatch(/WT-DIRS .*linked=1 skeleton=1/);
+    expect(r.code).toBe(4);
   });
 
   test('BR7 扫描根干净 ⇒ orphans=0 且 exit 0（不误报；注册表读数同时被钉住非空）', () => {
@@ -308,6 +374,7 @@ describe('check-branch-residue：孤儿 worktree 目录对账（#2061）', () =>
     expect(r.code).toBe(0);
     expect(r.out).toMatch(/WT-DIRS registered=[1-9][0-9]* disk=0 orphans=0/);
     expect(r.out).not.toContain('WT_DIR_ORPHAN');
+    expect(r.out).not.toContain('WT_DIR_SKELETON');
     expect(r.out).not.toContain('WT-DIRS=unavailable');
   });
 
@@ -327,7 +394,7 @@ describe('check-branch-residue：孤儿 worktree 目录对账（#2061）', () =>
 
     expect(r.code).toBe(1);
     expect(r.out).toContain('RESIDUE');
-    expect(r.out).toContain('WT_DIR_ORPHAN wt-7777');
+    expect(r.out).toContain('WT_DIR_SKELETON wt-7777');
   });
 
   test('BR10 单分支核对（-Branch）也带目录判据 —— 钉住「注册表采集必须先于分支路径」那次上移', () => {
@@ -336,7 +403,22 @@ describe('check-branch-residue：孤儿 worktree 目录对账（#2061）', () =>
     const r = runScript(stub, ['-Branch', 'open-1', '-WtRoot', root]);
 
     expect(r.out).toMatch(/OPEN\s+open-1/);
-    expect(r.out).toContain('WT_DIR_ORPHAN wt-6666');
+    expect(r.out).toContain('WT_DIR_SKELETON wt-6666');
     expect(r.code).toBe(4); // 该分支侧无残留无待裁定 ⇒ 绿色路径，目录码在此让位
+  });
+
+  test('BR12 待裁定项未计入退出码时，目录判据仍要说话：exit 4 而不是 0（#2081 修 fail-open）', () => {
+    // 只有一条「无关联 PR」的分支：默认口径下它不算红（要 -IncludeClosed 才判红），
+    // 于是这条路径曾经 exit 0 —— 磁盘上 48 个孤儿目录照样报「绿」。没干净就是没干净。
+    const stub = makeStub(TMP, 'br12', mixedScenario({
+      branches: [{ name: 'orphan-1', sha: SHA.orphan }],
+      tags: [],
+      prs: { 'orphan-1': [] },
+    }));
+    const root = makeWtRoot('br12', ['wt-3333']);
+    const r = runScript(stub, ['-WtRoot', root]);
+
+    expect(r.out).toContain('WT_DIR_SKELETON wt-3333');
+    expect(r.code).toBe(4); // 分支侧按默认口径绿了，但目录侧没收口 ⇒ 不许报 0
   });
 });
