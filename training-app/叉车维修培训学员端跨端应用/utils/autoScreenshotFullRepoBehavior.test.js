@@ -74,6 +74,25 @@ function probe(ctx) {
     "Write-Output ('FR5_DIR_MATCH=' + [bool]$back.DirCountsMatch)",
     "Write-Output ('FR5_THISRUN_MISSING=' + @($back.Missing).Count)",
     "Write-Output ('FR5_DIR_MISSING=' + @($back.DirMissing).Count)",
+    // ---- FR6 / FR7：起跑档（本轮裁、全仓不裁）----
+    "$allReal = @(Get-FullRepoPageList -PagesJson $pj)",
+    "$one = @(Select-FullRepoAttempted -PlannedPages $allReal -RampPages 1)",
+    "$none = @(Select-FullRepoAttempted -PlannedPages $allReal -RampPages 0)",
+    "$over = @(Select-FullRepoAttempted -PlannedPages $allReal -RampPages 9999)",
+    "Write-Output ('FR6_ONE=' + @($one).Count)",
+    "Write-Output ('FR6_FIRST=' + $one[0])",
+    "Write-Output ('FR6_NONE=' + @($none).Count)",
+    "Write-Output ('FR6_OVER=' + @($over).Count)",
+    // 起跑轮的真实形态：本轮那一张就落在**同一个归档目录**里，累计对账才该说「还差 59 页」
+    "$rampPng = Join-Path $env:FR_OUT2 'pages_index_index.png'",
+    "[System.IO.File]::WriteAllBytes($rampPng, [byte[]](1,2,3))",
+    "$mfRamp = Get-FullRepoManifestData -Ticket '1864' -PlannedPages $allReal -AttemptedPages $one -Screenshots @('pages_index_index') -OutputDir $env:FR_OUT2",
+    "Write-Output ('FR7_PLANNED=' + $mfRamp.PlannedCount)",
+    "Write-Output ('FR7_ATTEMPTED=' + $mfRamp.AttemptedCount)",
+    "Write-Output ('FR7_RAMP=' + [bool]$mfRamp.RampActive)",
+    "Write-Output ('FR7_THISRUN_MATCH=' + [bool]$mfRamp.CountsMatch)",
+    "Write-Output ('FR7_REPO_MATCH=' + [bool]$mfRamp.DirCountsMatch)",
+    "Write-Output ('FR7_REPO_MISSING=' + @($mfRamp.DirMissing).Count)",
     'Write-Output "PROBE_DONE=1"',
   ].join('\n');
   const encoded = Buffer.from(s, 'utf16le').toString('base64');
@@ -82,6 +101,7 @@ function probe(ctx) {
     FR_PAGES_JSON: PAGES_JSON,
     FR_PROJ: ctx.proj,
     FR_OUT: ctx.out,
+    FR_OUT2: ctx.out2,
   });
   try {
     const stdout = execFileSync('pwsh', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
@@ -105,9 +125,10 @@ describe('-FullRepo 全仓逐页载体（运行期，#2078）', () => {
 
   beforeAll(() => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'fullrepo-'));
-    ctx = { tmp, proj: path.join(tmp, 'proj'), out: path.join(tmp, 'arch') };
+    ctx = { tmp, proj: path.join(tmp, 'proj'), out: path.join(tmp, 'arch'), out2: path.join(tmp, 'ramp') };
     fs.mkdirSync(ctx.proj, { recursive: true });
     fs.mkdirSync(ctx.out, { recursive: true });
+    fs.mkdirSync(ctx.out2, { recursive: true });
     probeRun = probe(ctx);
     if (!probeRun.ok || !field(probeRun.stdout, 'PROBE_DONE')) {
       throw new Error('pwsh 探针未跑通（不 skip）：' + probeRun.stderr.slice(0, 400) + ' | ' + probeRun.stdout.slice(0, 400));
@@ -142,6 +163,26 @@ describe('-FullRepo 全仓逐页载体（运行期，#2078）', () => {
   test('FR4: -FullRepo 与 -Pages 同给 ⇒ 当场红、同样不建目录', () => {
     expect(field(probeRun.stdout, 'FR4_OK')).toBe('False');
     expect(field(probeRun.stdout, 'FR4_NODIR')).toBe('True');
+  });
+
+  test('FR6: 起跑档只裁本轮，全仓清单原样不动（⑥「先一页起跑通」的入口）', () => {
+    const planned = Number(field(probeRun.stdout, 'FR1_PLANNED'));
+    expect(Number(field(probeRun.stdout, 'FR6_ONE'))).toBe(1);
+    expect(field(probeRun.stdout, 'FR6_FIRST')).toBe('pages/index/index');
+    // RampPages=0 与超出总数都不裁（0 是默认值，不是「跑 0 页」）
+    expect(Number(field(probeRun.stdout, 'FR6_NONE'))).toBe(planned);
+    expect(Number(field(probeRun.stdout, 'FR6_OVER'))).toBe(planned);
+  });
+
+  test('FR7: 起跑一轮后，本轮 PASS 与「全仓差 59 页」必须同时可见', () => {
+    const planned = Number(field(probeRun.stdout, 'FR1_PLANNED'));
+    expect(Number(field(probeRun.stdout, 'FR7_PLANNED'))).toBe(planned);   // 全仓分母没被裁小
+    expect(Number(field(probeRun.stdout, 'FR7_ATTEMPTED'))).toBe(1);
+    expect(field(probeRun.stdout, 'FR7_RAMP')).toBe('True');
+    // 本轮该产的 1 页产出了 => 本轮相符；但全仓远未齐 => 目录对账必为 False
+    expect(field(probeRun.stdout, 'FR7_THISRUN_MATCH')).toBe('True');
+    expect(field(probeRun.stdout, 'FR7_REPO_MATCH')).toBe('False');
+    expect(Number(field(probeRun.stdout, 'FR7_REPO_MISSING'))).toBe(planned - 1);
   });
 
   test('FR5: manifest 真落盘真读回，本轮对账与目录累计对账是两个结论', () => {

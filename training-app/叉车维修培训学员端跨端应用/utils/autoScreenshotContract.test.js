@@ -552,6 +552,22 @@ describe('auto-screenshot.ps1 contract', () => {
     expect(code.slice(preAt, preAt + 900)).toMatch(/-OutputDir\s+\$OutputDir/);
   });
 
+  // S32（2026-10-28，#2078 ⑥）：起跑档 `-RampPages` 的形状 —— 只裁本轮，不裁全仓计划。
+  //   运行期那一面（真读 pages.json 跑前 1 页、本轮 PASS 与全仓差 59 页同时可见）由 FR6 / FR7 钉。
+  test('S32: 【#2078】-RampPages 只裁本轮，全仓计划仍是分母', () => {
+    const code = src.replace(/<#[\s\S]*?#>/g, '').replace(/^\s*#.*$/gm, '');
+    // 本轮集合由纯函数从全量派生，且全量另存一份用于累计对账
+    expect(code).toMatch(/\$fullRepoPlannedPages = @\(Get-FullRepoPageList -PagesJson \$pagesJson\)/);
+    expect(code).toMatch(/\$targetPages = @\(Select-FullRepoAttempted -PlannedPages \$fullRepoPlannedPages -RampPages \$RampPages\)/);
+    // 两个分母都要进 manifest（少了 attempted，本轮绿就会被读成全仓齐）
+    expect(code).toMatch(/-AttemptedPages \$targetPages/);
+    expect(code).toMatch(/AttemptedCount\s*=\s*\$counts\.PlannedCount/);
+    expect(code).toMatch(/RampActive\s*=\s*\(@\(\$attempted\)\.Count -lt @\(\$PlannedPages\)\.Count\)/);
+    // RampPages 单独出现（不带 -FullRepo）必须拒，不静默忽略
+    expect(code).toMatch(/-RampPages 只在 -FullRepo 下有意义/);
+    expect(code).toMatch(/-RampPages 不得为负/);
+  });
+
   test('S31: 【#2078】不带 -FullRepo 时默认行为与归档路径逐字不变', () => {
     const code = src.replace(/<#[\s\S]*?#>/g, '').replace(/^\s*#.*$/gm, '');
     // 默认输出目录仍是 .ci-verify（随树回收消失的那份），票号目录只由授权位进入

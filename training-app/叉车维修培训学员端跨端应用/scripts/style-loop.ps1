@@ -79,6 +79,9 @@ param(
     # 在这里**也**校验一次（不等步骤 6 拒）：链体走到步骤 6 之前已经烧过一次编译 + 一次装机，
     # 一个写错的票号不该付那笔机时。
     [string]$FullRepo = '',
+    # 起跑档（仅 -FullRepo 下有效，⑥「先一页起跑通、再逐步扩」的入口）：本轮只跑全仓清单的前 N 页，
+    # 全仓计划与累计对账仍按 60 页算。0 = 不裁。
+    [int]$RampPages = 0,
     # 像素判据参数：与 dev:finish 同一套默认值（0.5% 阈值 + 可选忽略状态栏行），不在这里另定口径。
     [ValidateRange(0.0, 1.0)]
     [double]$PixelThreshold = 0.005,
@@ -170,6 +173,7 @@ function Invoke-StyleLoopChain {
         [string]$Pages,
         [int]$MaxScreenshotPages,
         [string]$FullRepo,
+        [int]$RampPages,
         [double]$PixelThreshold,
         [int]$IgnoreTopRows,
         [int]$IgnoreBottomRows,
@@ -262,7 +266,7 @@ function Invoke-StyleLoopChain {
             # ---------- 6) 逐页截图（只截改动页）----------
             Write-Host '[6/7] 逐页截图'
             $shot = Invoke-AutoScreenshot -Device $Device -CliPath $envResult.CliPath -ProjectDir $ProjectDir `
-                -MaxPages $MaxScreenshotPages -RunStartedAt $started -Pages $Pages -FullRepo $FullRepo
+                -MaxPages $MaxScreenshotPages -RunStartedAt $started -Pages $Pages -FullRepo $FullRepo -RampPages $RampPages
             $inputs.PageCount = @($shot.TargetPages).Count
             $inputs.ShotCount = @($shot.Screenshots).Count
             if (-not $shot.Ok) { $inputs.ShotError = [string]$shot.Error }
@@ -354,6 +358,7 @@ $loopOpts = @{
     ProjectDir          = $ProjectDir
     Pages               = $Pages
     FullRepo            = $FullRepo
+    RampPages           = $RampPages
     MaxScreenshotPages  = $MaxScreenshotPages
     PixelThreshold      = $PixelThreshold
     IgnoreTopRows       = $IgnoreTopRows

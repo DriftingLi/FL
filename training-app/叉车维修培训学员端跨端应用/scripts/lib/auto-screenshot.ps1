@@ -713,6 +713,27 @@ function Get-FullRepoShotName {
     return ($flat -replace '^[_.]+', '' -replace '[_.]+$', '')
 }
 
+function Select-FullRepoAttempted {
+    <#
+    .SYNOPSIS
+        纯函数：从全量清单取**本轮**要跑的页（-RampPages 的分流处）。
+    .DESCRIPTION
+        为什么需要它：票 ⑥ 要求「先一页起跑通、再逐步扩」，而票 ①/④.1 又要求 -FullRepo 是全量、不裁剪。
+        两者不打架的前提是分清**两个数**：*本轮跑几页*（可以 ramp）与*全仓清单有几页*（恒为全量，用于累计对账）。
+        把「起跑」实现成「裁掉全仓清单」是错的 —— 那样 manifest 里的全仓计划也跟着变小，
+        「还差 59 页」这件事就从数据里消失了，分夜跑与 #2077 续跑都失去输入。
+    #>
+    [CmdletBinding()]
+    param(
+        [string[]]$PlannedPages = @(),
+        [int]$RampPages = 0
+    )
+    $all = @($PlannedPages | Where-Object { $_ })
+    if ($RampPages -le 0) { return $all }
+    if ($RampPages -ge @($all).Count) { return $all }
+    return @($all[0..($RampPages - 1)])
+}
+
 function Get-FullRepoCounts {
     <#
     .SYNOPSIS
@@ -753,6 +774,10 @@ function Get-FullRepoManifestData {
     param(
         [string]$Ticket = '',
         [string[]]$PlannedPages = @(),
+        # 本轮实际要跑的页（-RampPages 起跑时是 PlannedPages 的前缀）。不给即本轮=全量。
+        # 分成两个字段是本形态的判据骨架：CountsMatch 判**本轮**是否都产出，
+        # DirCountsMatch 判**全仓**是否已经齐 —— 跑第 1 页的夜里前者绿、后者差 59 页，两者都得看得见。
+        [string[]]$AttemptedPages = @(),
         [string[]]$Screenshots = @(),
         [string[]]$Skipped = @(),
         [string[]]$HashConflicts = @(),
@@ -764,7 +789,8 @@ function Get-FullRepoManifestData {
         # 而只报「目录里有几张」又会把上一夜的失败页算进本轮 —— 所以两个都报，各标各的语义。
         [string]$OutputDir = ''
     )
-    $counts = Get-FullRepoCounts -PlannedPages $PlannedPages -CapturedNames $Screenshots -SkippedNames $Skipped
+    $attempted = $(if (@($AttemptedPages).Count -gt 0) { @($AttemptedPages) } else { @($PlannedPages) })
+    $counts = Get-FullRepoCounts -PlannedPages $attempted -CapturedNames $Screenshots -SkippedNames $Skipped
     $dirCaptured = @()
     $dirMissing = @()
     $dirPngCount = 0
@@ -781,15 +807,18 @@ function Get-FullRepoManifestData {
         Schema         = 'fullrepo-manifest/1'
         ReleaseTicket  = $Ticket
         RunStartedAt   = $(if ($null -ne $RunStartedAt) { [datetime]$RunStartedAt } else { $null })
-        PlannedCount   = $counts.PlannedCount
+        PlannedCount   = @(@($PlannedPages) | ForEach-Object { Get-FullRepoShotName -Page $_ } | Select-Object -Unique).Count
+        AttemptedCount = $counts.PlannedCount
+        RampActive     = (@($attempted).Count -lt @($PlannedPages).Count)
         CapturedCount  = $counts.CapturedCount
         SkippedCount   = $counts.SkippedCount
         Missing        = @($counts.Missing)
-        CountsMatch    = [bool]$counts.CountsMatch
+        # CountsMatch 只判**本轮**（attempted）是否都产出；全仓齐不齐看下面的 DirCountsMatch
         # 累计面（跨轮）：目录里现在有几张 / 缺哪几页 —— 连跑与收口取这一组
         DirPngCount    = $dirPngCount
         DirCaptured    = @($dirCaptured)
         DirMissing     = @($dirMissing)
+        CountsMatch    = [bool]$counts.CountsMatch
         DirCountsMatch = (@($dirMissing).Count -eq 0 -and @($PlannedPages).Count -gt 0)
         HashConflicts  = @($HashConflicts)
         StaleShots     = @($StaleShots)
@@ -835,6 +864,10 @@ function Invoke-AutoScreenshot {
         # **仅发版冒烟语境**的显式授权位（#2078）：值 = 发版票号（纯数字）。给了它才走全仓逐页，
         # 且产物落 `docs/verification/device/<票号>/`。不给 ⇒ 本文件行为逐字不变（票 ③）。
         [string]$FullRepo = '',
+        # 起跑档位，**仅在 -FullRepo 下生效**（⑥「先一页起跑通、再逐步扩」的入口）：>0 即本轮只跑全量清单的
+        # 前 N 页，但 manifest 里的**全仓计划仍是 60 页**（累计对账不变），「还差几页」一直可算。
+        # 不实现成「裁掉全仓清单」：那会让全仓计划跟着变小，分夜跑与 #2077 续跑就失去输入。
+        [int]$RampPages = 0,
         [int]$MaxPages = 5,
         [int]$WaitSeconds = 3,
         # 导航落定的有界判据（见 Wait-NavSettled）：等满 MinSeconds 且相邻两次采样**内容一致**才算落定；
@@ -863,6 +896,18 @@ function Invoke-AutoScreenshot {
         return [pscustomobject]@{
             Ok = $false; Screenshots = @(); Skipped = @(); HashConflicts = @(); TargetPages = @()
             Error = "-FullRepo 要的是**发版票号**（纯数字，如 -FullRepo 1864），收到 '$FullRepo' ⇒ 拒绝开始（不建目录、不碰设备）。"
+        }
+    }
+    if ($RampPages -lt 0) {
+        return [pscustomobject]@{
+            Ok = $false; Screenshots = @(); Skipped = @(); HashConflicts = @(); TargetPages = @()
+            Error = "-RampPages 不得为负（$RampPages）⇒ 拒绝开始。"
+        }
+    }
+    if ($RampPages -ne 0 -and -not $fullRepoMode) {
+        return [pscustomobject]@{
+            Ok = $false; Screenshots = @(); Skipped = @(); HashConflicts = @(); TargetPages = @()
+            Error = "-RampPages 只在 -FullRepo 下有意义（日常形态本就按改动页跑）⇒ 拒绝开始，不静默忽略。"
         }
     }
     if ($fullRepoMode -and $Pages) {
@@ -940,8 +985,18 @@ function Invoke-AutoScreenshot {
         # 也**不受 -MaxPages 裁剪**（裁剪是日常 PR 的成本闸门，不是发版冒烟的判据）。
         # 这里用 Get-FullRepoPageList 而不是复用 $allPages：后者只含 pages 段，
         # 动它等于顺手改掉日常 PR 的推导射程（票 ③ 要的是逐字不变）。
-        $targetPages = @(Get-FullRepoPageList -PagesJson $pagesJson)
-        Write-Host "[auto-screenshot] -FullRepo $FullRepo ⇒ 全仓逐页 $($targetPages.Count) 页（不推导、不裁剪）" -ForegroundColor Yellow
+        # 两个集合分开存 —— 这是本形态的判据骨架：
+        #   $fullRepoPlannedPages = 全仓计划（恒为全量，累计对账与续跑的分母）
+        #   $targetPages          = 本轮要跑的页（-RampPages 只裁这一份）
+        $fullRepoPlannedPages = @(Get-FullRepoPageList -PagesJson $pagesJson)
+        $targetPages = @(Select-FullRepoAttempted -PlannedPages $fullRepoPlannedPages -RampPages $RampPages)
+        $plannedAll = @($fullRepoPlannedPages).Count
+        if (@($targetPages).Count -lt $plannedAll) {
+            $rampMsg = "[auto-screenshot] -FullRepo {0} 起跑档：本轮 {1}/{2} 页（全仓计划仍按 {2} 页对账，RampPages={3}）"
+            Write-Host ($rampMsg -f $FullRepo, @($targetPages).Count, $plannedAll, $RampPages) -ForegroundColor Magenta
+        } else {
+            Write-Host "[auto-screenshot] -FullRepo $FullRepo ⇒ 全仓逐页 $($targetPages.Count) 页（不推导、不裁剪）" -ForegroundColor Yellow
+        }
     }
     elseif ($Pages) {
         # 显式清单优先
@@ -1031,7 +1086,7 @@ function Invoke-AutoScreenshot {
     # 一页都没截到的形态，归档里也留有「计划 N 页、已产 0 页」的凭据，而不是一个空目录让人猜。
     # ⑥ 断路腿要的「明报 INCOMPLETE、已产页不丢、零产物不冒充绿」全靠这份早落盘的清单兑现。
     if ($fullRepoMode) {
-        $mfPre = Get-FullRepoManifestData -Ticket $FullRepo -PlannedPages $targetPages -RunStartedAt $runStarted -OutputDir $OutputDir
+        $mfPre = Get-FullRepoManifestData -Ticket $FullRepo -PlannedPages $fullRepoPlannedPages -AttemptedPages $targetPages -RunStartedAt $runStarted -OutputDir $OutputDir
         $null = Write-FullRepoManifest -Path $fullRepoManifestPath -Manifest $mfPre
     }
 
@@ -1064,6 +1119,7 @@ function Invoke-AutoScreenshot {
     # 全仓形态的逐页**时间账与心跳**（票 ④.2 / ④.4）：一轮约 3.9 小时，缺「现在第几页、这页花了多久、
     # 累计多少」就等于无人值守时**没有任何可判读的东西** —— 挂死与慢得看不出区别（#1560 那条血账的形状）。
     $fullRepoPageSeconds = @()
+    $fullRepoPlannedPages = @($targetPages)
     $loopStarted = Get-Date
     $prevPageSeconds = 0
 
@@ -1194,7 +1250,7 @@ function Invoke-AutoScreenshot {
                 $fmt = "  [心跳] {0}/{1} {2} 本页 {3}s（上一页 {4}s）累计 {5}s 剩约 {6}s"
                 Write-Host ($fmt -f $pageNum, $targetPages.Count, $pageName, $pageSecs, $prevPageSeconds, $cum, $remain) -ForegroundColor DarkCyan
                 $prevPageSeconds = $pageSecs
-                $mfArgs = @{ Ticket = $FullRepo; PlannedPages = $targetPages; Screenshots = $screenshots }
+                $mfArgs = @{ Ticket = $FullRepo; PlannedPages = $fullRepoPlannedPages; AttemptedPages = $targetPages; Screenshots = $screenshots }
                 $mfArgs.Skipped = $skipped
                 $mfArgs.HashConflicts = $hashConflicts
                 $mfArgs.StaleShots = $staleShots
@@ -1223,7 +1279,7 @@ function Invoke-AutoScreenshot {
     $verdict = ''
     if ($fullRepoMode) {
         $fullRepoCounts = Get-FullRepoCounts -PlannedPages $targetPages -CapturedNames $screenshots -SkippedNames $skipped
-        $mfPost = Get-FullRepoManifestData -Ticket $FullRepo -PlannedPages $targetPages -Screenshots $screenshots `
+        $mfPost = Get-FullRepoManifestData -Ticket $FullRepo -PlannedPages $fullRepoPlannedPages -AttemptedPages $targetPages -Screenshots $screenshots `
             -Skipped $skipped -HashConflicts $hashConflicts -StaleShots $staleShots `
             -PageSeconds $fullRepoPageSeconds -RunStartedAt $runStarted -OutputDir $OutputDir
         $null = Write-FullRepoManifest -Path $fullRepoManifestPath -Manifest $mfPost
@@ -1231,9 +1287,14 @@ function Invoke-AutoScreenshot {
         elseif (@($screenshots).Count -eq 0) { $verdict = 'FAIL' }
         else { $verdict = 'INCOMPLETE' }
         $totalSecs = [int]((Get-Date) - $loopStarted).TotalSeconds
-        $fmt = '[fullrepo] verdict={0} planned={1} captured={2} skipped={3} missing={4} 本轮机时={5}s manifest={6}'
+        # 一行里同时给**两个分母**：attempted（本轮该产出的）与 repo（全仓计划）。
+        # 起跑档下 verdict=PASS 只说明「本轮这几页成了」，不代表全仓基线建成 —— 所以
+        # dirMissing（全仓还差哪几页）必须与它同行出现，否则 PASS 会被读成收口完成。
+        $fmt = '[fullrepo] verdict={0} attempted={1} captured={2} skipped={3} missing={4} repo={5} dirMissing={6} 本轮机时={7}s manifest={8}'
+        $dirMissingN = @($mfPost.DirMissing).Count
         Write-Host ($fmt -f $verdict, $fullRepoCounts.PlannedCount, $fullRepoCounts.CapturedCount, `
-            $fullRepoCounts.SkippedCount, (@($fullRepoCounts.Missing) -join ','), $totalSecs, $fullRepoManifestPath) `
+            $fullRepoCounts.SkippedCount, (@($fullRepoCounts.Missing) -join ','), `
+            $mfPost.PlannedCount, $dirMissingN, $totalSecs, $fullRepoManifestPath) `
             -ForegroundColor $(if ($verdict -eq 'PASS') { 'Green' } else { 'Red' })
     }
 
@@ -1257,7 +1318,10 @@ function Invoke-AutoScreenshot {
         Verdict       = $verdict
         Counts        = $fullRepoCounts
         ManifestPath  = $(if ($fullRepoMode) { $fullRepoManifestPath } else { '' })
-        PlannedPages  = $(if ($fullRepoMode) { @($targetPages) } else { @() })
+        # PlannedPages = 全仓计划（恒为全量）；AttemptedPages = 本轮实际跑的页（起跑档是其前缀）。
+        # 两个都给调用方，是因为「本轮 PASS」与「全仓齐了」是两个结论，不能靠一个数组猜。
+        PlannedPages  = $(if ($fullRepoMode) { @($fullRepoPlannedPages) } else { @() })
+        AttemptedPages = $(if ($fullRepoMode) { @($targetPages) } else { @() })
         PageSeconds   = @($fullRepoPageSeconds)
     }
 }
