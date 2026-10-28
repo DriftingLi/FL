@@ -227,8 +227,9 @@ const MODULES = {
      * - `guide` 自 #1395 起消费 `api/credential.uts` 与 `components/cert-selector/`（引导页选证单源化）；
      * - `profile` 随 #1396 删除 credential-switch.uvue 退出消费者面（它曾是 profile 消费
      *   `api/credential.uts` 的唯一接线；A9 实测面对账逼登记诚实）。
+     * - `jobs` 自票 1945 起消费 `api/credential.uts`（职位广场证件筛选组的选项=证件字典单源）。
      */
-    crossModuleConsumers: ['courses', 'featured', 'forum', 'mall', 'notifications', 'practice', 'guide', 'search'],
+    crossModuleConsumers: ['courses', 'featured', 'forum', 'mall', 'notifications', 'practice', 'guide', 'search', 'jobs'],
     budget: BUDGET,
     budgetOverrides: {},
     maxDepth: MAX_DEPTH,
