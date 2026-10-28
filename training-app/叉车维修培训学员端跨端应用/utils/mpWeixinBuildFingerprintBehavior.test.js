@@ -2,6 +2,9 @@
  * ② 门「产物内容指纹 ⇒ 自动 -SkipBuild」行为守护（#1860）。
  *
  * 判据真源 = `scripts/lib/mp-weixin-build-fingerprint.ps1`（门脚本 dot-source 同一份）。
+ * #2048 加了**第四道命中前置条件**：publish 命令规范化串（记录 + 比对，**不进**三个哈希组件）。
+ * 病根：门脚本与一切 .ps1 被输入集排除，而 publish 参数**决定产物** ⇒ 只靠三哈希，改命令会照旧命中、
+ * 跳过 publish、门在旧命令的产物上出绿（fail-open）。
  * 病根：同树重跑时 publish 重建一模一样的产物（≈2–3 min/次）。「产物未变」机判化 ——
  * 指纹键三组件（输入集内容哈希 + 产物内容哈希 + HBuilderX 版本令牌）**全等才命中**；
  * 失配方向 **fail 向重建**（判不出 = 重建，绝不猜命中 —— 调研 §1.2 条 2 / Turborepo
@@ -10,7 +13,8 @@
  * 为什么判据是**真执行库**而不是断言门脚本源码文本：文本断言在「判据被摘掉、只留一句字面量」时
  * 照样绿（C20 教训）。这里用**夹具项目 + 夹具产物**真改真比对钉住语义：
  *   - 必不红：save 后什么都不变 ⇒ 命中；排除面文件（docs/scripts/*.test.js）新增 ⇒ 仍命中；
- *   - 必红：源码变 / 产物变 / 版本变 / 指纹缺失 / 指纹损坏 ⇒ 各自的 kebab reason，绝不命中；
+ *   - 必红：源码变 / 产物变 / 版本变 / **命令变** / **命令未记录** / **本轮命令没给** / 指纹缺失 /
+ *     指纹损坏 ⇒ 各自的 kebab reason，绝不命中；
  *   - 落盘方向：版本令牌算不出 ⇒ 不写（下次必然重建）。
  *
  * 对抗式自查：把判据改坏（摘掉 inputs 组件 / 摘掉 product 组件 / 命中方向反转）时，必红夹具当场翻红。
@@ -25,6 +29,9 @@ const ROOT = path.join(__dirname, '..');
 // ⚠️ 载体路径写成**本文件内的字面量**（③ 门分类器按文件自身的「执行调用 + 仓内载体引用」判类）
 const LIB_REL = 'scripts/lib/mp-weixin-build-fingerprint.ps1';
 const VERSION = '5.23.2026080626|cli=deadbeef';
+/** 夹具用的 publish 命令规范化串（形态 = Get-MpWeixinBuildCommandKey 的长度前缀串）。 */
+const BUILD_COMMAND = '6:publish 9:mp-weixin 9:--project 8:/proj/x';
+const BUILD_COMMAND_2 = '6:publish 9:mp-weixin 9:--project 8:/proj/y';
 
 /** 夹具项目：源（manifest/pages/main.uts）+ 产物（app.json/app.js/页 js）。 */
 function makeProject() {
@@ -76,10 +83,10 @@ function parseOut(stdout) {
 }
 
 /** 常用语句片段：save / hit（键名由调用方给，避免同名覆盖）。 */
-const save = (key, v = '$io.version') =>
-  `$out.${key} = (Save-MpWeixinBuildFingerprint -Project $io.project -Dist $io.dist -HBuilderXVersion ${v})`;
-const hit = (key, v = '$io.version') =>
-  `$out.${key} = (Test-MpWeixinBuildFingerprintHit -Project $io.project -Dist $io.dist -HBuilderXVersion ${v})`;
+const save = (key, v = '$io.version', c = '$io.command') =>
+  `$out.${key} = (Save-MpWeixinBuildFingerprint -Project $io.project -Dist $io.dist -HBuilderXVersion ${v} -BuildCommand ${c})`;
+const hit = (key, v = '$io.version', c = '$io.command') =>
+  `$out.${key} = (Test-MpWeixinBuildFingerprintHit -Project $io.project -Dist $io.dist -HBuilderXVersion ${v} -BuildCommand ${c})`;
 const touch = (key, rel, text) =>
   `$out.${key} = $null; Set-Content -LiteralPath (Join-Path $io.project ${JSON.stringify(rel)}) -Value ${JSON.stringify(text)} -Encoding utf8NoBOM`;
 const touchDist = (key, rel, text) =>
@@ -98,7 +105,7 @@ describe('② 产物内容指纹行为（#1860：三组件全等才命中，fail
         touch('mkScript', 'scripts/tool.ps1', 'Write-Host hi\n'),
         touch('mkTest', 'utils/x.test.js', 'test()\n'),
         hit('hit2')
-      ], { project: f.dir, dist: f.dist, version: VERSION }));
+      ], { project: f.dir, dist: f.dist, version: VERSION, command: BUILD_COMMAND }));
       expect(out.saved.Saved).toBe(true);
       expect(out.hit1.Hit).toBe(true);
       expect(out.hit1.Reason).toBe('fingerprint-hit');
@@ -115,7 +122,7 @@ describe('② 产物内容指纹行为（#1860：三组件全等才命中，fail
         save('saved'),
         touch('ignored', 'pages/index/index.uvue', '<template><text>CHANGED</text></template>\n'),
         hit('hit')
-      ], { project: f.dir, dist: f.dist, version: VERSION }));
+      ], { project: f.dir, dist: f.dist, version: VERSION, command: BUILD_COMMAND }));
       expect(out.saved.Saved).toBe(true);
       expect(out.hit.Hit).toBe(false);
       expect(out.hit.Reason).toBe('inputs-changed');
@@ -131,7 +138,7 @@ describe('② 产物内容指纹行为（#1860：三组件全等才命中，fail
         save('saved'),
         touchDist('ignored', 'app.js', '// tampered\n'),
         hit('hit')
-      ], { project: f.dir, dist: f.dist, version: VERSION }));
+      ], { project: f.dir, dist: f.dist, version: VERSION, command: BUILD_COMMAND }));
       expect(out.hit.Hit).toBe(false);
       expect(out.hit.Reason).toBe('product-changed');
     } finally {
@@ -145,7 +152,7 @@ describe('② 产物内容指纹行为（#1860：三组件全等才命中，fail
       const out = parseOut(runLib([
         save('saved'),
         hit('hit', "'5.24.9999999|cli=deadbeef'")
-      ], { project: f.dir, dist: f.dist, version: VERSION }));
+      ], { project: f.dir, dist: f.dist, version: VERSION, command: BUILD_COMMAND }));
       expect(out.saved.Saved).toBe(true);
       expect(out.hit.Hit).toBe(false);
       expect(out.hit.Reason).toBe('hbuilderx-version-changed');
@@ -164,7 +171,7 @@ describe('② 产物内容指纹行为（#1860：三组件全等才命中，fail
         `$out.corrupt = $null; Set-Content -LiteralPath (Get-MpWeixinBuildFingerprintPath -Dist $io.dist) -Value 'not json {' -Encoding utf8NoBOM`,
         hit('hitCorrupt'),
         hit('hitEmptyVersion', "''")
-      ], { project: f.dir, dist: f.dist, version: VERSION }));
+      ], { project: f.dir, dist: f.dist, version: VERSION, command: BUILD_COMMAND }));
       expect(out.saved.Saved).toBe(true);
       expect(out.hitMissing.Hit).toBe(false);
       expect(out.hitMissing.Reason).toBe('no-fingerprint-file');
@@ -185,7 +192,7 @@ describe('② 产物内容指纹行为（#1860：三组件全等才命中，fail
         touchDist('ignored', 'app.js', '// rebuilt\n'),
         save('saved'),
         hit('hit')
-      ], { project: f.dir, dist: f.dist, version: VERSION }));
+      ], { project: f.dir, dist: f.dist, version: VERSION, command: BUILD_COMMAND }));
       expect(out.saveNoVersion.Saved).toBe(false);
       expect(out.saveNoVersion.Reason).toBe('hbuilderx-version-unavailable');
       expect(out.saved.Saved).toBe(true);
@@ -193,6 +200,66 @@ describe('② 产物内容指纹行为（#1860：三组件全等才命中，fail
     } finally {
       fs.rmSync(f.dir, { recursive: true, force: true });
     }
+  });
+
+  it('必红：publish 命令变 ⇒ build-command-changed（#2048 G1：换了命令不得复用旧命令的产物）', () => {
+    const f = makeProject();
+    try {
+      const out = parseOut(runLib([
+        save('saved'),
+        // 三个哈希全等（源码/产物/版本都没动），只有本轮要用的命令换了 ⇒ 必须不命中
+        hit('hit', '$io.version', "'" + BUILD_COMMAND_2 + "'")
+      ], { project: f.dir, dist: f.dist, version: VERSION, command: BUILD_COMMAND }));
+      expect(out.saved.Saved).toBe(true);
+      expect(out.hit.Hit).toBe(false);
+      expect(out.hit.Reason).toBe('build-command-changed');
+    } finally {
+      fs.rmSync(f.dir, { recursive: true, force: true });
+    }
+  });
+
+  it('必红：本轮命令没给 ⇒ build-command-unavailable（判不出 = 重建）；落盘同样拒写', () => {
+    const f = makeProject();
+    try {
+      const out = parseOut(runLib([
+        save('saveNoCommand', '$io.version', "''"),
+        save('saved'),
+        hit('hit', '$io.version', "''")
+      ], { project: f.dir, dist: f.dist, version: VERSION, command: BUILD_COMMAND }));
+      expect(out.saveNoCommand.Saved).toBe(false);
+      expect(out.saveNoCommand.Reason).toBe('build-command-unavailable');
+      expect(out.saved.Saved).toBe(true);
+      expect(out.hit.Hit).toBe(false);
+      expect(out.hit.Reason).toBe('build-command-unavailable');
+    } finally {
+      fs.rmSync(f.dir, { recursive: true, force: true });
+    }
+  });
+
+  it('必红：schema /1 旧指纹无 command 字段 ⇒ build-command-unrecorded（迁移期多重建一次，方向安全）', () => {
+    const f = makeProject();
+    try {
+      const out = parseOut(runLib([
+        `$out.legacy = $null; Set-Content -LiteralPath (Get-MpWeixinBuildFingerprintPath -Dist $io.dist) -Value (@{ schema = 'mp-weixin-build-fingerprint/1'; hbuilderx = $io.version; inputs = 'deadbeef'; product = 'deadbeef'; savedAt = '1970-01-01T00:00:00' } | ConvertTo-Json -Compress) -Encoding utf8NoBOM`,
+        hit('hitLegacy')
+      ], { project: f.dir, dist: f.dist, version: VERSION, command: BUILD_COMMAND }));
+      expect(out.hitLegacy.Hit).toBe(false);
+      expect(out.hitLegacy.Reason).toBe('build-command-unrecorded');
+    } finally {
+      fs.rmSync(f.dir, { recursive: true, force: true });
+    }
+  });
+
+  it('命令规范化真执行：长度前缀免空格歧义（不同参数切法不得同键）；空参数集 ⇒ $null', () => {
+    const out = parseOut(runLib([
+      `$out.a = (Get-MpWeixinBuildCommandKey -Arguments @('a', 'b c'))`,
+      `$out.b = (Get-MpWeixinBuildCommandKey -Arguments @('a b', 'c'))`,
+      `$out.empty = (Get-MpWeixinBuildCommandKey -Arguments @())`
+    ], {}));
+    expect(out.a).toBe('1:a 3:b c');
+    expect(out.b).toBe('3:a b 1:c');
+    expect(out.a).not.toBe(out.b);
+    expect(out.empty).toBe(null);
   });
 
   it('版本令牌：目录名版本号解析 + cli.exe 内容哈希；cli.exe 缺失 ⇒ $null（fail 向重建）', () => {

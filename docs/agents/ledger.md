@@ -44,13 +44,14 @@
 | 23 | 孤儿目录壳取证失联 | 5 个无 `.git` 的孤儿目录壳（wt-1484/1542/1554/1607/1713-verify）混在主树 untracked 清单里，无人认领；`wt-1713-verify` 装着 #1713 真机取证 25 文件（rl-1~rl-9 截图 + logcat + desktop，6,575,224 字节），而该票正文只以行内附件引用证据、未仓库化 → 判据输入濒临永久丢失（#14 同族）；`cleanup-orphan-worktrees.ps1` 目标列表（1514/1543/1570/1602/1603/1604）与磁盘现状脱节，脚本自身过期 | fixed（本地） | 2026-10-20 复盘当日抢救入库 `docs/verification/forum/1713/`（25 文件 + README，src=dst=25 验证）后删净 5 壳；脚本已加 STALE-GUARD（#1724 合并 c0153bda），targets 表重写待办在 #1723 | 本簿首录 |
 | 24 | CD gate 把主题尾缀 (#N) 一律当 PR 号 | squash 主题合法地引用 issue 号（`(#1723)` 是 issue，PR 是 #1724）时，push 触发的 cd.yml gate `grep -oE '\(#[0-9]+\)$'` 解析出 1723 后直接 `gh pr view 1723` → GraphQL `Could not resolve to a PullRequest` exit 1 → 合并后生产部署 gate 失败、全链 skipped。#16 血账只要求「后缀必须存在」，没管「尾缀必须是 PR 而非 issue」——GitHub issue/PR 共享编号空间，先占号者赢 | open | 实测 2026-10-20 c0153bda，run 39426628397（`GraphQL: Could not resolve to a PullRequest with the number of 1723`）；应急通道 dispatch production run 39426988432 success 放行；修复候选 = gate 查询失败回退 `gh issue view` 判类型，或约定合并主题尾缀一律指 PR | 本簿首录 |
 | 25 | ④ 第三形态判据仍缺 Could not resolve 族 | #2045 把 ④ 的两处判据抽进 lib 并补上 `Could not resolve`，但**第三形态** `scripts/lib/hx-errors.ps1` 的 `Get-HxErrorLines`（`hx-run.ps1` 日常「仅编译拿诊断」路径用，票面明写「只加样品、不搬家」）**仍缺同一族** → 门（④）现在拦得住、日常内循环照样漏 → 同一条假绿在读码上分不出远近：谁走哪条判据决定它瞎不瞎 → 后果是把 #4 的形态原样搬进 `hx:compile-only` 的输出判读 | open | 现测（2026-10-27，本票）：`lib/hx-errors.ps1:30` 的 token 清单为 `\berror\b\|unresolved reference\|cannot infer type\|找不到名称\|类型不匹配\|编译失败\|运行失败`，与 `lib/gate-error-lines.ps1` 那份相比恰缺 `Could not resolve`；样品 E8 已入 `utils/hxErrorLinesBehavior.test.js`，措辞修复留给**三份判据合一票**（#2045 正文 Out of Scope 第一条） | 本簿首录 |
+| 26 | ② 指纹只哈希文件，漏非文件型来源 | 改 `publish` 参数**不动任何哈希组件**（门脚本与一切 `.ps1` 被构建输入集排除）→ 三组件全等、盘上还是旧命令的产物 → 自动 `-SkipBuild` 跳过 publish → 新命令从未执行而门在旧产物上出绿（fail-open，门可信度随它去） | fixed（#2048，2026-10-28） | 第四道命中前置条件 = publish 命令规范化串随指纹落盘并比对（`training-app/叉车维修培训学员端跨端应用/scripts/lib/mp-weixin-build-fingerprint.ps1`，schema `/2`）；行为守护 `utils/mpWeixinBuildFingerprintBehavior.test.js`（命令变 / 记录未含 / 本轮没给 三形必红 + 长度前缀规范化真执行）；成对销账证据 = 本票门评论（修复前 `AUTO_SKIP_BUILD fingerprint-hit` 跳过 publish、修复后 `miss reason=build-command-changed` 真重建）；**残余 G2**（HBuilderX `plugins/` 编译器本体不在键里）由维护者裁定不在本票收口，见 `training-app/叉车维修培训学员端跨端应用/docs/adr/0008-移动端验收门与证据.md` ② 段回记 | 本票 #2048 |
 
 ---
 
 ## 附：状态统计与待办
 
 - **open**：#1 #2 #3 #6 #8 #10 #11 #13 #14 #18 #19 #20 #21 #24 #25（15 条，其中 #19 是「设计裁定记档防误修」，不算待修）
-- **fixed**：#7 #16 #17 + #22/#23（2026-10-20 当日收口两条）+ **#4/#5**（#2045，2026-10-27：判据抽 lib + 金丝雀题库销账，状态改动由机检读出）
+- **fixed**：#7 #16 #17 + #22/#23（2026-10-20 当日收口两条）+ **#4/#5**（#2045，2026-10-27：判据抽 lib + 金丝雀题库销账，状态改动由机检读出） + **#26**（#2048，2026-10-28：② 产物指纹补第四道「publish 命令一致」前置条件，改命令复用旧产物的 fail-open 由成对门评论销账；G2 = HBuilderX `plugins/` 编译器本体不在键里，维护者裁定不在本票收口）
 - **superseded**：#12（被 #1156 修正 + #1702 拆腿取代）
 - **待办（按 §5 候选与复盘发现）**：
   - `check-branch-residue.ps1` 接合并后自动触发点（防 #15/#22 复发——#1718 族已四犯，这是簿上最高优先复）→ **#1723 立票跟进**
