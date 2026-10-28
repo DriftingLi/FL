@@ -26,8 +26,10 @@ import (
 var nonnilOutletsJob = map[string]func(t *testing.T) any{
 	"job.RecruiterApplicationListResult.items": outletRecruiterApplicationListEmpty,
 	"job.JobListResult.items":                  outletJobListEmpty,
-	"job.ApplicationListResult.items":          outletStudentApplicationListEmpty,
-	"job.ReportListResult.items":               outletJobReportQueueEmpty,
+	// #2066：职位 DTO 的所需证件 —— 无要求时是空集（键在场），不是 null。
+	"job.JobPostingDTO.required_credentials": outletJobPostingNoCredentials,
+	"job.ApplicationListResult.items":        outletStudentApplicationListEmpty,
+	"job.ReportListResult.items":             outletJobReportQueueEmpty,
 }
 
 // TestNonNilDeclaredOutletsNeverEmitNull 本域的举证入口（判据本体在 testutil）。
@@ -70,6 +72,24 @@ func outletJobListEmpty(t *testing.T) any {
 		t.Fatalf("职位列表失败: %v", err)
 	}
 	return res
+}
+
+// outletJobPostingNoCredentials 新建职位（未声明所需证件）：required_credentials 是空集而非 null。
+// 走真实写面（Create）而不是手搓 DTO——手工构造零值 DTO 证明不了出口，那正是判据 5 要挡的假绿。
+func outletJobPostingNoCredentials(t *testing.T) any {
+	t.Helper()
+	db := testutil.NewMemoryDB(t)
+	pos := model.Position{PositionID: 1, Code: "job_no_cred", Name: "叉车维修技师", Status: 1, CreatedAt: testutil.Now()}
+	if err := db.Create(&pos).Error; err != nil {
+		t.Fatalf("播岗位失败: %v", err)
+	}
+	svc := NewService(db, zap.NewNop())
+	positionID := pos.PositionID
+	dto, err := svc.Create(7, &JobPostingInput{Title: "不限证件的职位", PositionID: &positionID})
+	if err != nil {
+		t.Fatalf("建职位失败: %v", err)
+	}
+	return dto
 }
 
 // outletStudentApplicationListEmpty 学员「我的投递」：零投递时 items 是空集。

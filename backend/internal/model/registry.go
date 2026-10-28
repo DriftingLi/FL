@@ -124,6 +124,7 @@ var ModelBlocks = []ModelBlock{
 			&RecruitResumeView{},
 			&ContactRequest{},
 			&JobPosting{},
+			&JobCredentialRequirement{}, // 依赖 job_postings 与 credential（两块都先建）
 			&JobApplication{},
 			&JobReport{},
 		},
