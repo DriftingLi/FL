@@ -1,5 +1,5 @@
 // DictStore 集成测试：真实 Postgres 下描述符生成 SQL 的往返正确性。
-// CI 提供 postgres:15 服务（DATABASE_URL），本地未配置时跳过。
+// CI 提供 postgres:18 服务（DATABASE_URL），本地未配置时跳过。
 package valuation
 
 import (

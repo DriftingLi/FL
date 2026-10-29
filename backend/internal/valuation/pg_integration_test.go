@@ -1,4 +1,4 @@
-// 域内共享的真实 Postgres 集成夹具：CI 提供 postgres:15 服务（DATABASE_URL），本地未配置时干净跳过。
+// 域内共享的真实 Postgres 集成夹具：CI 提供 postgres:18 服务（DATABASE_URL），本地未配置时干净跳过。
 // 本文件是**唯一**定义处（#1514 波 7 并包前，dictcrud 与 repository 两个子包各有一份逐字相同的副本）。
 package valuation
 

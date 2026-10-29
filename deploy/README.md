@@ -94,8 +94,105 @@ compose 文件从仓库根迁到 `deploy/` 后，默认项目名会从目录名�
 name: ${COMPOSE_PROJECT_NAME:-forklift-training}
 ```
 
-命名卷仍是 `forklift-training_pgdata-prod` / `forklift-training_redisdata-prod` 等。
+命名卷仍是 `forklift-training_pgdata-prod` / `forklift-training_redisdata-prod` 等。生产实际用的是 environment secret `PG_VOLUME=/srv/ceph/pgdata`（Ceph 绑定挂载），见下一节升级 runbook。
 换宿主机想换项目名时，显式设置 `COMPOSE_PROJECT_NAME`（并在迁移数据卷前确认）。
+
+## 大版本升级：PostgreSQL 15 → 18（一次性 runbook，#2109）
+
+镜像版本不能靠一次 `docker compose up` 换过去：PG 18 的二进制打不开 PG 15 的数据目录。
+数据目录由 `PG_VOLUME` 决定 —— **生产是 Ceph 绑定挂载 `/srv/ceph/pgdata`**（值来自 environment
+secret，不在仓库里），测试 / 新环境才用默认命名卷 `pgdata-prod`。
+全仓零 `CREATE EXTENSION`（没有扩展要在新集群里重装），所以走**逻辑备份搬运**最省事。
+本流程必须人工按序执行，不要塞进 `deploy.py` —— 它一次性、不可重复。
+
+前置：`docker compose -f deploy/docker-compose.prod.yml config` 已是 `postgres:18-alpine`；宿主机能给
+postgres 容器约 2G（不够时把 `shared_buffers` 降到 384MB、`effective_cache_size` 降到 1GB，改在 compose 的
+`command:` 里）。
+
+下面统一用这个变量。**必须带 `--env-file`**：`COMPOSE_PROJECT_NAME` 在 `.env` 里，漏了它会算出
+另一个项目名，容器名与卷名全部对不上。
+
+```bash
+cd "$DEPLOY_PATH"
+COMPOSE="docker compose --env-file .env -f deploy/docker-compose.prod.yml"
+```
+
+0. 记下当前迁移版本（后面要逐字对上）：
+
+   ```bash
+   $COMPOSE run --rm backend /app/bin/migrate status
+   ```
+
+1. 逻辑备份（用**旧**容器里的 15 版 `pg_dump`；落到 root 盘，别落进马上要被挪走的数据目录）：
+
+   ```bash
+   docker exec forklift-pg-prod pg_dump -U forklift -Fc -d forklift_training -f /tmp/fl15.dump
+   docker cp forklift-pg-prod:/tmp/fl15.dump "$DEPLOY_PATH/backups/forklift15-$(date +%Y%m%d).dump"
+   ```
+
+2. 停应用（搬迁期间不接受写入）：
+
+   ```bash
+   $COMPOSE stop backend frontend
+   ```
+
+3. 让开数据目录（**原地改名，不改 `PG_VOLUME`**）：生产的 `PG_VOLUME` 是 environment secret，
+   不该为一次升级去改它。把旧目录挪走、留一个同名空目录给 18 初始化即可：
+
+   ```bash
+   $COMPOSE stop postgres
+   mv /srv/ceph/pgdata "/srv/ceph/pgdata-15-$(date +%Y%m%d)"
+   mkdir -p /srv/ceph/pgdata && chown 70:70 /srv/ceph/pgdata   # postgres 镜像内 uid=70
+   ```
+
+   命名卷的部署等价做法是**换卷名**（`PG_VOLUME` 指向新卷，旧卷保留）。判据是同一条：
+   18 必须在**空目录**上初始化，不能复用 15 的数据目录。
+
+4. 起新库（空目录由 18 初始化）：
+
+   ```bash
+   $COMPOSE up -d postgres
+   $COMPOSE ps postgres      # 等 healthy
+   ```
+
+5. 还原：
+
+   ```bash
+   docker cp "$DEPLOY_PATH/backups/forklift15-<日期>.dump" forklift-pg-prod:/tmp/fl15.dump
+   docker exec forklift-pg-prod pg_restore -U forklift -d forklift_training \
+     --no-owner --no-privileges /tmp/fl15.dump
+   ```
+
+6. 还原后自证：`migrate status` 的版本号必须与第 0 步**逐字相同**且 `CLEAN`；再抽查
+   `hrwai_users` / `evaluations` / `points_ledger` 的行数与旧库一致。
+
+7. 起服务：
+
+   ```bash
+   $COMPOSE up -d backend frontend
+   ```
+
+   **不要在这里手跑 `deploy.py`**：它会按当前 shell 的环境重写 `.env`，而 `SECRET_KEY` /
+   `JWT_SECRET_KEY` / `DB_PASSWORD` 的权威来源是 CD —— 缺这些环境变量时会被写成空值，等于把生产锁死。
+   `.env` 由 CD 生成（合并后的那次部署已经重写过一遍），本次不动它。
+
+8. 冒烟：`curl -fsS https://<DOMAIN>/api/health` 返回 200；再走一遍登录与估值页。
+
+**回滚**：停 → 把 18 的目录挪开 → 把 15 的目录挪回去 → 换回 `postgres:15-alpine` 起库：
+
+```bash
+$COMPOSE stop postgres backend frontend
+mv /srv/ceph/pgdata "/srv/ceph/pgdata-18-broken-$(date +%Y%m%d)"
+mv "/srv/ceph/pgdata-15-<日期>" /srv/ceph/pgdata
+# 镜像改回 postgres:15-alpine（git revert 本 PR，或临时改 compose）之后：
+$COMPOSE up -d postgres
+python3 deploy/deploy.py rollback
+```
+
+回滚**会丢掉**切到 18 之后写入的数据，因此只在零流量窗口执行。
+
+**观测**：升级后 `SELECT calls, mean_exec_time, query FROM pg_stat_statements ORDER BY calls DESC LIMIT 20;`
+就是「哪些查询最重」的答案 —— 没有它，后续任何「该不该加回缓存」的判断都只能靠猜。
 
 ## 迁移失败门（ADR-0056 §6 / #1099）
 
