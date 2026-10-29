@@ -821,6 +821,22 @@ function New-GatePlan {
             anchors = [ordered]@{
                 'pages/login/login' = [ordered]@{ selector = '.app-title'; text = '叉车维修培训系统' }
             }
+            # 带参页口径（#2110 单验定案，2026-10-29）：「devtools 编译条件」的两条入口都在本机单验判死——
+            #   ① CLI `open --compile-condition` 被 yargs 非 strict **静默吞参**：exit 0、无任何报错，CLI 源里
+            #      `open` 对 IDE HTTP 服务只转发 projectpath（`--compile-condition` 只挂在 preview / auto-preview 上）；
+            #      实测冷启动落地 pages/index/index，锚点 skip（读数 .ci-verify/2110/testA-*）。
+            #   ② IDE 编译条件持久层（产物 project.private.config.json 的 condition.miniprogram 段，pathName+query）
+            #      对 `open→auto` 自动化冷启动同样**不生效**：落地页不变（读数 .ci-verify/2110/testB-*）。
+            # ⇒ 带参页（featured-detail / ai-feature / job-detail / resume-detail 等依赖入口 query 的页）在
+            #    「首项换页 + plain 冷启动」机制下**直达内容形态结构不可得**（与 ADR-0038 补注同族结论）：
+            #    ② 对这些页只能记 SKIP（reason=direct-page-unsupported / landed-elsewhere），**不得用空壳 /
+            #    「加载中…」截图充当该页证据**；内容取证落 ①（真机 --pagePath + --pageQuery，PR #1004 手法）
+            #    或发版冒烟（移动端 ADR 0043 决策 3 第二选项，#2110 选定路线 2）。
+            paramEntry = [ordered]@{
+                verdict = 'route-2-accepted（#2110，2026-10-29）'
+                spikeEvidence = '.ci-verify/2110（spike-plan.md / testA-* / testB-* / miss-featured-detail.png）'
+                anchorRule = '带参页不得声明指向参数缺失态文本（如「加载中…」）的锚点；内容文本锚点须先经带参单验（① 链路）才可加'
+            }
             criteria = @(
                 '直达 = 首项临时换页 + plain 冷启动（ADR-0038 决策 1 已证的唯一可靠机制）；探针不得调用 reLaunch/navigateTo',
                 '页身份判据 = 冷启动落地页 pageStack[0] 等于目标路由（与 #1678 真机侧「以进入页面日志为准」同源）',
@@ -830,6 +846,7 @@ function New-GatePlan {
                 '逐页读数（reached/errors/exceptions/logs/shot/elapsed）写进日志与 sha 绑定评论，供 0039 窗口主门成本校准',
                 '会话分相判据 = 入口页 ∪ 游客页族（guestPhase.routes），不得用「是否入口页」单相判据：游客页被注 auth 会话会自己跳走，落地页 ≠ 目标页（#1817）',
                 '未达成页若落地到别处，页级 reason 记 landed-elsewhere(<落地页>)，不得一律记 direct-page-unsupported（#1817）',
+                '带参页 ② = SKIP 定案（#2110，2026-10-29）：编译条件两入口（CLI --compile-condition 被静默吞参 / 私有配置 condition 段不生效）都带不了 query ⇒ 依赖入口参数的页直达内容形态结构不可得，不得用空壳或「加载中…」截图充当证据；内容取证落 ①（真机 --pagePath + --pageQuery）或发版冒烟',
                 'auth 相页在注入 ok=false 时记 skip(reason=auth-session-unavailable) 且不换页不冷启动（#1863）：路由判据不得独自放行（#1845 实证——注入失败后旧过期 token 复活、路由可通过而内容是业务层 401 态）',
                 '锚点断言只走 page.$+element.text()（8s 步超时、精确比对），失败进 failures ⇒ 门红可归因（不得以「环境不可用：」开头，避免被直达循环整组转 exit 2）',
                 '不在 anchors 表的页行为与此前完全一致（argv 不变、不新增失败面）'
@@ -1572,6 +1589,7 @@ function Publish-GateComment {
     if ($NavSkipped) {
         if ($NavReason -like 'direct-*' -or $NavReason -eq 'page-not-in-build' -or $NavReason -eq 'app-json-invalid') {
             $navLines += "- ⚠️ 降级（SKIP，非 PASS）：任意页直达探针（#1682）有页未达成 = SKIP（reason=$($NavReason)）——机制是「构建产物 app.json 首项临时换页 + plain 冷启动」，未达成的页**不得**当成已取证。"
+            $navLines += '- 带参页口径（#2110 定案，2026-10-29）：依赖入口 query 的页（featured-detail / ai-feature / job-detail / resume-detail 等）在编译条件下直达内容形态结构不可得（CLI 参数被静默吞、私有配置 condition 段不生效，单验读数 .ci-verify/2110）⇒ ② 记 SKIP，**不得用空壳 / 「加载中…」截图充当该页证据**；内容取证落 ①（真机 --pagePath + --pageQuery）或发版冒烟。'
             $navLines += '- 门只对**可验证子集**作结论：已达成页逐页 console/exception 读数 + 入口页 `pageStack` 落地判据；**未取证的页**见下面的逐页读数与日志 ``' + $LogRelative + '``。'
         } else {
             $navLines += "- ⚠️ 降级（SKIP，非 PASS）：逐页导航 + 每页截图 = SKIP（reason=$($NavReason)）——本机 ``miniprogram-automator@0.12.1`` 的 ``mp.reLaunch`` / ``mp.navigateTo`` 恒报 ``Uncaught [object Object]``，该组断言在此环境不成立。"
