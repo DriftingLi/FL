@@ -781,6 +781,50 @@ function Select-FullRepoAttempted {
     return @($all[0..($RampPages - 1)])
 }
 
+function Select-FullRepoByPrefix {
+    <#
+    .SYNOPSIS
+        纯函数：按路径前缀对「本轮页集合」做**只选 → 排除**两段筛选（分角色分批的唯一实现）。
+    .DESCRIPTION
+        语义逐字沿用原先内联在 `Invoke-AutoScreenshot` -FullRepo 分支里的那一段：先 Only 再 Exclude，
+        两者都用 StartsWith；被排除的页**不从全仓计划里消失**（调用方各自持有 PlannedPages 与 Excluded）。
+        为什么必须抽成纯函数（#2078 CI 血账）：那段逻辑原先在 `Invoke-AutoScreenshot` 体内，而调用链要先过
+        adb / cli / pages.json 三道**环境检查**。行为腿 FR10/FR11 于是只能穿过整条链去断言页数 —— 在没有 adb
+        的 CI（ubuntu）上函数在环境检查处就早退了，页集合恒空，于是「60 页里排掉 9 页」结构性不可能通过：
+        一条**本地永远绿、CI 永远红**的守护。纯逻辑要有纯函数的调用面 —— 本函数只吃入参、只返回结果，
+        不读环境、不打印、不建目录（S36 钉住这三条）。
+    #>
+    [CmdletBinding()]
+    param(
+        [string[]]$Pages = @(),
+        [string]$OnlyPrefix = '',
+        [string]$ExcludePrefix = ''
+    )
+    $attempted = @($Pages | Where-Object { $_ })
+    $onlyPrefixes = @($OnlyPrefix -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    $excludePrefixes = @($ExcludePrefix -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+
+    $onlyKept = $attempted
+    if (@($onlyPrefixes).Count -gt 0) {
+        $onlyKept = @($attempted | Where-Object { $pg = $_; (@($onlyPrefixes | Where-Object { $pg.StartsWith($_) }).Count -gt 0) })
+    }
+
+    $excluded = @()
+    $kept = $onlyKept
+    if (@($excludePrefixes).Count -gt 0) {
+        $excluded = @($onlyKept | Where-Object { $pg = $_; (@($excludePrefixes | Where-Object { $pg.StartsWith($_) }).Count -gt 0) })
+        $kept = @($onlyKept | Where-Object { $pg = $_; (@($excludePrefixes | Where-Object { $pg.StartsWith($_) }).Count -eq 0) })
+    }
+
+    return [pscustomobject]@{
+        Attempted = @($kept)
+        Excluded  = @($excluded)
+        OnlyKept  = @($onlyKept)
+        OnlyPrefixes    = @($onlyPrefixes)
+        ExcludePrefixes = @($excludePrefixes)
+    }
+}
+
 function Get-FullRepoCounts {
     <#
     .SYNOPSIS
@@ -1038,12 +1082,12 @@ function Invoke-AutoScreenshot {
         return [pscustomobject]@{
             Ok = $false; Screenshots = @(); Skipped = @(); HashConflicts = @(); TargetPages = @()
             Error = '找不到 adb.exe'
-            # 早退也必须带全仓形态的收口字段（CI 现测：ubuntu 上 adb 根本不存在，探针走的就是这一支；
-            # 本机有 adb 时走灭屏那一支 ⇒ 只在「没有 adb 的机器」上才显形的缺口）。
+            # 早退必须与主返回**同形**（StrictMode -Latest 下裸取缺属性直接抛）。CI 的 ubuntu 没有 adb ⇒
+            # 探针走的就是这一支，而它发生在取计划之前 ⇒ 分母如实为空、manifest 路径留空（见 S36）。
             FullRepo      = $(if ($fullRepoMode) { $FullRepo } else { '' })
             Verdict       = $(if ($fullRepoMode) { 'FAIL' } else { '' })
             Counts        = $null
-            ManifestPath  = $(if ($fullRepoMode) { $fullRepoManifestPath } else { '' })
+            ManifestPath  = ''
             PlannedPages  = @()
             AttemptedPages = @()
             Redirected    = @()
@@ -1068,12 +1112,11 @@ function Invoke-AutoScreenshot {
         return [pscustomobject]@{
             Ok = $false; Screenshots = @(); Skipped = @(); HashConflicts = @(); TargetPages = @()
             Error = '找不到 HBuilderX cli.exe'
-            # 早退也必须带全仓形态的收口字段（CI 现测：ubuntu 上 adb 根本不存在，探针走的就是这一支；
-            # 本机有 adb 时走灭屏那一支 ⇒ 只在「没有 adb 的机器」上才显形的缺口）。
+            # 早退必须与主返回**同形**；本支同样在取计划之前 ⇒ 分母如实为空、manifest 路径留空（见 S36）。
             FullRepo      = $(if ($fullRepoMode) { $FullRepo } else { '' })
             Verdict       = $(if ($fullRepoMode) { 'FAIL' } else { '' })
             Counts        = $null
-            ManifestPath  = $(if ($fullRepoMode) { $fullRepoManifestPath } else { '' })
+            ManifestPath  = ''
             PlannedPages  = @()
             AttemptedPages = @()
             Redirected    = @()
@@ -1088,12 +1131,11 @@ function Invoke-AutoScreenshot {
         return [pscustomobject]@{
             Ok = $false; Screenshots = @(); Skipped = @(); HashConflicts = @(); TargetPages = @()
             Error = '找不到 pages.json'
-            # 早退也必须带全仓形态的收口字段（CI 现测：ubuntu 上 adb 根本不存在，探针走的就是这一支；
-            # 本机有 adb 时走灭屏那一支 ⇒ 只在「没有 adb 的机器」上才显形的缺口）。
+            # 早退必须与主返回**同形**；本支同样在取计划之前 ⇒ 分母如实为空、manifest 路径留空（见 S36）。
             FullRepo      = $(if ($fullRepoMode) { $FullRepo } else { '' })
             Verdict       = $(if ($fullRepoMode) { 'FAIL' } else { '' })
             Counts        = $null
-            ManifestPath  = $(if ($fullRepoMode) { $fullRepoManifestPath } else { '' })
+            ManifestPath  = ''
             PlannedPages  = @()
             AttemptedPages = @()
             Redirected    = @()
@@ -1117,22 +1159,19 @@ function Invoke-AutoScreenshot {
         #   $targetPages          = 本轮要跑的页（-RampPages 只裁这一份）
         $fullRepoPlannedPages = @(Get-FullRepoPageList -PagesJson $pagesJson)
         $afterRamp = @(Select-FullRepoAttempted -PlannedPages $fullRepoPlannedPages -RampPages $RampPages)
-        # 排除按**前缀**做，且只作用于本轮 attempted —— 全仓计划保持全量，缺页由 dirMissing 点名。
-        $excludedPages = @()
-        # 先「只选」（Only），再「排除」（Exclude）：同一套前缀语义，不引入第二种匹配规则。
+        # 分批（先「只选」再「排除」）是**纯逻辑**，实现搬进了 Select-FullRepoByPrefix：
+        # 原先内联在这里 ⇒ 行为腿 FR10/FR11 只能穿过 adb / cli / pages.json 三道环境检查去断言页数，
+        # 而没有 adb 的 CI 在环境检查处就早退 ⇒ 页集合恒空 ⇒ 那三条断言本地永远绿、CI 永远红（#2078 CI 血账）。
+        # 纯逻辑要有纯函数的调用面；这里只做「拿结果 + 汇报」。
+        $selection = Select-FullRepoByPrefix -Pages $afterRamp -OnlyPrefix $OnlyPrefix -ExcludePrefix $ExcludePrefix
+        $targetPages = @($selection.Attempted)
+        # 被排除的页**仍留在全仓计划里**（缺页由 dirMissing 点名），只是本轮不跑。
+        $excludedPages = @($selection.Excluded)
         if ($OnlyPrefix) {
-            $onlyPrefixes = @($OnlyPrefix -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-            $kept = @($afterRamp | Where-Object { $pg = $_; (@($onlyPrefixes | Where-Object { $pg.StartsWith($_) }).Count -gt 0) })
-            Write-Host ("[auto-screenshot] 只选前缀 $OnlyPrefix ⇒ {0}/{1} 页" -f @($kept).Count, @($fullRepoPlannedPages).Count) -ForegroundColor Magenta
-            $afterRamp = $kept
+            Write-Host ("[auto-screenshot] 只选前缀 $OnlyPrefix ⇒ {0}/{1} 页" -f @($selection.OnlyKept).Count, @($fullRepoPlannedPages).Count) -ForegroundColor Magenta
         }
         if ($ExcludePrefix) {
-            $prefixes = @($ExcludePrefix -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-            $excludedPages = @($afterRamp | Where-Object { $pg = $_; (@($prefixes | Where-Object { $pg.StartsWith($_) }).Count -gt 0) })
-            $targetPages = @($afterRamp | Where-Object { $pg = $_; (@($prefixes | Where-Object { $pg.StartsWith($_) }).Count -eq 0) })
-            Write-Host ("[auto-screenshot] 已按前缀排除 {0} 页（$ExcludePrefix）⇒ 本轮 {1}/{2} 页" -f @($excludedPages).Count, @($targetPages).Count, @($fullRepoPlannedPages).Count) -ForegroundColor Magenta
-        } else {
-            $targetPages = $afterRamp
+            Write-Host ("[auto-screenshot] 已按前缀排除 {0} 页（$ExcludePrefix）⇒ 本轮 {1}/{2} 页" -f @($selection.Excluded).Count, @($selection.Attempted).Count, @($fullRepoPlannedPages).Count) -ForegroundColor Magenta
         }
         $plannedAll = @($fullRepoPlannedPages).Count
         if (@($targetPages).Count -lt $plannedAll) {

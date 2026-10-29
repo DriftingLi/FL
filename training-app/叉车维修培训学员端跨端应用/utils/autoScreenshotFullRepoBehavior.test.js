@@ -94,15 +94,24 @@ function probe(ctx) {
     "Write-Output ('FR7_REPO_MATCH=' + [bool]$mfRamp.DirCountsMatch)",
     "Write-Output ('FR7_REPO_MISSING=' + @($mfRamp.DirMissing).Count)",
     // ---- FR8：断路腿（设备不可用）必须报得出来，且零产物不冒充绿 ----
+    // ⚠️ 这里**只断言与环境无关**的收口事实。原先还断言 FR8_PLANNED>0 / FR8_ATTEMPTED=1 / FR8_MF=True：
+    //    那三条在本机（有 adb ⇒ 走到灭屏那一支，分母已算过）为真，在 CI（ubuntu 无 adb ⇒ 走「找不到 adb.exe」
+    //    那一支，环境检查在计划之前）恒为空 —— 是「本地永远绿、CI 永远红」的断言，#2078 三次连红就红在这。
+    //    分母/分批评的纯逻辑由 FR1/FR6/FR7/FR10/FR11 直接调纯函数钉（不吃环境）；无 adb 那一支由 FR8N 钉。
     "$outB = Join-Path $env:FR_OUT3 'brk'",
     "$rb = Invoke-AutoScreenshot -FullRepo '1864' -RampPages 1 -Device 'nosuchserial0000' -OutputDir $outB -AdbCallTimeoutSeconds 5 6>$null",
     "Write-Output ('FR8_OK=' + $rb.Ok)",
     "Write-Output ('FR8_VERDICT=' + [string]$rb.Verdict)",
     "Write-Output ('FR8_SHOTS=' + @($rb.Screenshots).Count)",
-    "Write-Output ('FR8_PLANNED=' + @($rb.PlannedPages).Count)",
-    "Write-Output ('FR8_ATTEMPTED=' + @($rb.AttemptedPages).Count)",
-    "Write-Output ('FR8_MF=' + [bool]($rb.ManifestPath -and (Test-Path -LiteralPath $rb.ManifestPath)))",
     "Write-Output ('FR8_PNG=' + @(Get-ChildItem -Path $outB -Filter '*.png' -File -ErrorAction SilentlyContinue).Count)",
+    // 「不冒充绿」的机器形态：本轮若真落了 manifest，它也不得自称已对齐。
+    // 空计划时 Get-FullRepoCounts 恒判相符 ⇒ 在这里「顺手写一份 manifest」正是本票要挡的假绿。
+    "$mfGreen = $false",
+    "if ($rb.ManifestPath -and (Test-Path -LiteralPath $rb.ManifestPath)) {",
+    "    $mj = Get-Content -LiteralPath $rb.ManifestPath -Raw | ConvertFrom-Json",
+    "    $mfGreen = [bool](([bool]$mj.CountsMatch) -or ([bool]$mj.DirCountsMatch))",
+    "}",
+    "Write-Output ('FR8_MF_GREEN=' + $mfGreen)",
     // ---- FR9：中转页白名单（真读仓内 json，不写死页名）----
     "$map = Get-RedirectMap -Path (Join-Path $env:FR_LIB 'auto-screenshot-redirects.json')",
     "Write-Output ('FR9_HAS_INDEX=' + [bool]$map.ContainsKey('pages/index/index'))",
@@ -115,23 +124,46 @@ function probe(ctx) {
     "Write-Output ('FR9_MF_REDIRCOUNT=' + $mfRedir.RedirectedCount)",
     "$mfRedir2 = Get-FullRepoManifestData -Ticket '1864' -PlannedPages @('pages/index/index','pages/b/b') -Screenshots @('pages_b_b') -OutputDir $env:FR_OUT4",
     "Write-Output ('FR9_NO_REDIR_MISSING=' + @($mfRedir2.Missing).Count)",
-    // ---- FR10：按前缀分批（学员 51 / 招聘者 9）----
-    "$outE = Join-Path $env:FR_OUT5 'excl'",
-    "$re = Invoke-AutoScreenshot -FullRepo '1864' -ExcludePrefix 'pages/recruiter/' -Device 'nosuchserial0000' -OutputDir $outE -AdbCallTimeoutSeconds 5 6>$null",
-    "Write-Output ('FR10_ATTEMPTED=' + @($re.AttemptedPages).Count)",
-    "Write-Output ('FR10_PLANNED=' + @($re.PlannedPages).Count)",
-    "Write-Output ('FR10_EXCLUDED=' + @($re.Excluded).Count)",
-    "$bad = @($re.Excluded | Where-Object { -not $_.StartsWith('pages/recruiter/') }).Count",
+    // ---- FR10 / FR11：按前缀分批（学员 51 / 招聘者 9）----
+    // 直接调**纯函数**。原先穿过 Invoke-AutoScreenshot 去断言页数，而没有 adb 的 CI 在环境检查处就早退
+    // ⇒ AttemptedPages / PlannedPages / Excluded 恒空 ⇒「60 页里排掉 9 页」结构性不可能通过。
+    // 接线面（参数确实被传进这个纯函数、全仓计划不被排除污染）由接线腿 S34/S35/S36 钉；纯逻辑的证据在这里。
+    "$sel10 = Select-FullRepoByPrefix -Pages $allReal -ExcludePrefix 'pages/recruiter/'",
+    "Write-Output ('FR10_PLANNED=' + @($allReal).Count)",
+    "Write-Output ('FR10_ATTEMPTED=' + @($sel10.Attempted).Count)",
+    "Write-Output ('FR10_EXCLUDED=' + @($sel10.Excluded).Count)",
+    "$bad = @($sel10.Excluded | Where-Object { -not $_.StartsWith('pages/recruiter/') }).Count",
     "Write-Output ('FR10_EXCLUDED_OFFPREFIX=' + $bad)",
+    // 「只裁本轮」的分区证据：本轮 + 被排除 == 全仓 ⇒ 一页都没被吞掉
+    "Write-Output ('FR10_PARTITION=' + [bool]((@($sel10.Attempted).Count + @($sel10.Excluded).Count) -eq @($allReal).Count))",
+    // 先 Only 再 Exclude 的叠加语义（三批口径靠它确定）
+    "$selCombo = Select-FullRepoByPrefix -Pages $allReal -OnlyPrefix 'pages/' -ExcludePrefix 'pages/recruiter/'",
+    "Write-Output ('FR10_COMBO_ATTEMPTED=' + @($selCombo.Attempted).Count)",
+    "Write-Output ('FR10_COMBO_EXCLUDED=' + @($selCombo.Excluded).Count)",
     "$re2 = Invoke-AutoScreenshot -ExcludePrefix 'pages/recruiter/' -Pages 'pages/login/login' 6>$null",
     "Write-Output ('FR10_GATE_OK=' + $re2.Ok)",
     // ---- FR11：只选前缀（招聘方 9 页那一批的入口）----
-    "$outO = Join-Path $env:FR_OUT6 'only'",
-    "$ro = Invoke-AutoScreenshot -FullRepo '1864' -OnlyPrefix 'pages/recruiter/' -Device 'nosuchserial0000' -OutputDir $outO -AdbCallTimeoutSeconds 5 6>$null",
-    "Write-Output ('FR11_ATTEMPTED=' + @($ro.AttemptedPages).Count)",
-    "Write-Output ('FR11_PLANNED=' + @($ro.PlannedPages).Count)",
-    "$off = @($ro.AttemptedPages | Where-Object { -not $_.StartsWith('pages/recruiter/') }).Count",
+    "$sel11 = Select-FullRepoByPrefix -Pages $allReal -OnlyPrefix 'pages/recruiter/'",
+    "Write-Output ('FR11_PLANNED=' + @($allReal).Count)",
+    "Write-Output ('FR11_ATTEMPTED=' + @($sel11.Attempted).Count)",
+    "$off = @($sel11.Attempted | Where-Object { -not $_.StartsWith('pages/recruiter/') }).Count",
     "Write-Output ('FR11_OFFPREFIX=' + $off)",
+    "Write-Output ('FR11_EXCLUDED=' + @($sel11.Excluded).Count)",
+    // ---- FR8N：无 adb 那一支 ----
+    // 本机有 adb ⇒ 那一支只在上游显形（#2078 三次连红的现场）。把解析器 stub 成 \$null，每台机器都真跑它。
+    // 必须放最后：stub 会改变本进程内后续任何 Invoke-AutoScreenshot 的环境分支。
+    "function Resolve-AdbExeLocal { return $null }",
+    "$outN = Join-Path $env:FR_OUT3 'noadb'",
+    "$rn = Invoke-AutoScreenshot -FullRepo '1864' -Device 'x' -OutputDir $outN",
+    "Write-Output ('FR8N_OK=' + $rn.Ok)",
+    "Write-Output ('FR8N_VERDICT=' + [string]$rn.Verdict)",
+    "Write-Output ('FR8N_ERR_ADB=' + [bool](([string]$rn.Error) -match 'adb'))",
+    "Write-Output ('FR8N_SHOTS=' + @($rn.Screenshots).Count)",
+    "Write-Output ('FR8N_PLANNED=' + @($rn.PlannedPages).Count)",
+    "Write-Output ('FR8N_ATTEMPTED=' + @($rn.AttemptedPages).Count)",
+    "Write-Output ('FR8N_MF_PATH=' + [string]$rn.ManifestPath)",
+    "Write-Output ('FR8N_MF_EXISTS=' + [bool]($rn.ManifestPath -and (Test-Path -LiteralPath $rn.ManifestPath)))",
+    "Write-Output ('FR8N_PNG=' + @(Get-ChildItem -Path $outN -Filter '*.png' -File -ErrorAction SilentlyContinue).Count)",
     'Write-Output "PROBE_DONE=1"',
   ].join('\n');
   const encoded = Buffer.from(s, 'utf16le').toString('base64');
@@ -234,17 +266,34 @@ describe('-FullRepo 全仓逐页载体（运行期，#2078）', () => {
   });
 
   test('FR8: 断路腿（设备不可用）报得出 Verdict，且零产物不冒充绿', () => {
-    // ⑥ 断路腿：「拔设备 ⇒ 明报 INCOMPLETE、已产页不丢、零产物不冒充绿」。
+    // ⑥ 断路腿：「拔设备 ⇒ 明报、已产页不丢、零产物不冒充绿」。
     // 这里用**不存在的序列号**模拟断连（同一支代码路径：Test-ScreenAwake 拿不到设备状态即 fail-closed），
     // 不要求人肉拔线也能把判据钉住；真机拔线的形态由发版冒烟一次性覆盖。
+    // 本用例只收「两支都成立」的事实：分母与分批评另见 FR1/FR6/FR7/FR10/FR11（纯函数）与 FR8N（无 adb 支）。
     expect(field(probeRun.stdout, 'FR8_OK')).toBe('False');
     expect(field(probeRun.stdout, 'FR8_VERDICT')).toBe('FAIL');      // 零产物 ⇒ FAIL，不是 INCOMPLETE 也不是绿
     expect(Number(field(probeRun.stdout, 'FR8_SHOTS'))).toBe(0);
     expect(Number(field(probeRun.stdout, 'FR8_PNG'))).toBe(0);       // 没产图就是没产图
-    // 早退路径也必须带全仓分母与 manifest（否则 StrictMode 下读 $r.Verdict 直接抛）
-    expect(Number(field(probeRun.stdout, 'FR8_PLANNED'))).toBeGreaterThan(0);
-    expect(Number(field(probeRun.stdout, 'FR8_ATTEMPTED'))).toBe(1);
-    expect(field(probeRun.stdout, 'FR8_MF')).toBe('True');
+    // 「不冒充绿」的机器形态：真落了 manifest，它也不得自称已对齐（CountsMatch / DirCountsMatch 任一为真即冒充）
+    expect(field(probeRun.stdout, 'FR8_MF_GREEN')).toBe('False');
+  });
+
+  test('FR8N: 无 adb 那一支——早退也自报 FAIL，且不谎报 manifest 落点', () => {
+    // 现场：CI 是 ubuntu、没有 adb ⇒ 探针走「找不到 adb.exe」那一支；本机有 adb ⇒ 那一支只在上游显形。
+    // 探针把 Resolve-AdbExeLocal stub 成 $null，让**每台机器**都真跑它 —— 这正是「本地永远绿、CI 永远红」
+    // 那条验尸结论的机器形态（#2078 CI 三次连红）。
+    expect(field(probeRun.stdout, 'FR8N_ERR_ADB')).toBe('True');     // 自检：stub 真生效，否则本组与 FR8 同支
+    expect(field(probeRun.stdout, 'FR8N_OK')).toBe('False');
+    expect(field(probeRun.stdout, 'FR8N_VERDICT')).toBe('FAIL');
+    expect(Number(field(probeRun.stdout, 'FR8N_SHOTS'))).toBe(0);
+    expect(Number(field(probeRun.stdout, 'FR8N_PNG'))).toBe(0);
+    // 环境缺失发生在**计划之前** ⇒ 分母如实为空（不是 60，也不假装算过）
+    expect(Number(field(probeRun.stdout, 'FR8N_PLANNED'))).toBe(0);
+    expect(Number(field(probeRun.stdout, 'FR8N_ATTEMPTED'))).toBe(0);
+    // 没写过 manifest 就不许回带路径：假路径让 Test-Path 恒假、让 #2077 续跑读空；
+    // 而「在这里顺手写一份空计划 manifest」会得到 CountsMatch=True 的假绿（空计划恒判相符）。
+    expect(field(probeRun.stdout, 'FR8N_MF_PATH')).toBe('');
+    expect(field(probeRun.stdout, 'FR8N_MF_EXISTS')).toBe('False');
   });
 
   test('FR11: 只选前缀——招聘方 9 页可单独成批，全仓计划仍是 60', () => {
@@ -252,6 +301,8 @@ describe('-FullRepo 全仓逐页载体（运行期，#2078）', () => {
     expect(Number(field(probeRun.stdout, 'FR11_PLANNED'))).toBe(planned);
     expect(Number(field(probeRun.stdout, 'FR11_ATTEMPTED'))).toBe(9);
     expect(Number(field(probeRun.stdout, 'FR11_OFFPREFIX'))).toBe(0);
+    // 只选不是「顺手排除」：没给 -ExcludePrefix ⇒ 被排除名单必须为空
+    expect(Number(field(probeRun.stdout, 'FR11_EXCLUDED'))).toBe(0);
   });
 
   test('FR10: 按前缀分批——排除只裁本轮，全仓计划与被排除名单都可见', () => {
@@ -262,6 +313,11 @@ describe('-FullRepo 全仓逐页载体（运行期，#2078）', () => {
     expect(Number(field(probeRun.stdout, 'FR10_EXCLUDED'))).toBe(9);
     // 被排除的页必须全部命中该前缀（别把无关页顺手排掉）
     expect(Number(field(probeRun.stdout, 'FR10_EXCLUDED_OFFPREFIX'))).toBe(0);
+    // 「只裁本轮」的分区证据：本轮 + 被排除 == 全仓 ⇒ 排除没让任何页凭空消失
+    expect(field(probeRun.stdout, 'FR10_PARTITION')).toBe('True');
+    // 先 Only 再 Exclude 的叠加语义（分角色三批口径靠它确定）
+    expect(Number(field(probeRun.stdout, 'FR10_COMBO_ATTEMPTED'))).toBe(planned - 9);
+    expect(Number(field(probeRun.stdout, 'FR10_COMBO_EXCLUDED'))).toBe(9);
     // 不带 -FullRepo 时单独给 -ExcludePrefix ⇒ 拒
     expect(field(probeRun.stdout, 'FR10_GATE_OK')).toBe('False');
   });

@@ -562,13 +562,19 @@ describe('auto-screenshot.ps1 contract', () => {
   test('S35: 【#2078】-OnlyPrefix 与 -ExcludePrefix 同语义，且都不动全仓计划', () => {
     const code = src.replace(/<#[\s\S]*?#>/g, '').replace(/^\s*#.*$/gm, '');
     expect(code).toMatch(/\[string\]\$OnlyPrefix = ''/);
+    // 语义住在纯函数里（#2078 CI 收口：内联会让纯逻辑只能穿过环境检查才被断言），顺序进函数体内钉
+    const fnAt = code.indexOf('function Select-FullRepoByPrefix');
+    expect(fnAt).toBeGreaterThan(-1);
+    const fnEnd = code.indexOf('function Get-FullRepoCounts', fnAt);
+    expect(fnEnd).toBeGreaterThan(fnAt);
+    const fnBody = code.slice(fnAt, fnEnd);
     // 先 Only 再 Exclude（顺序固定：两者叠加才有确定语义）
-    const onlyAt = code.indexOf('if ($OnlyPrefix) {');
-    const exclAt = code.indexOf('if ($ExcludePrefix) {');
+    const onlyAt = fnBody.indexOf('$onlyKept = @($attempted');
+    const exclAt = fnBody.indexOf('$excluded = @($onlyKept');
     expect(onlyAt).toBeGreaterThan(-1);
     expect(exclAt).toBeGreaterThan(onlyAt);
     // 两者共用 StartsWith 前缀语义（不得各写一套匹配规则）
-    expect((code.match(/StartsWith\(\$_\)/g) || []).length).toBeGreaterThanOrEqual(2);
+    expect((fnBody.match(/StartsWith\(\$_\)/g) || []).length).toBeGreaterThanOrEqual(2);
     // 不带 -FullRepo 时拒（与 Exclude 同一条门禁）
     expect(code).toMatch(/-OnlyPrefix \/ -ExcludePrefix 只在 -FullRepo 下有意义/);
   });
@@ -577,13 +583,40 @@ describe('auto-screenshot.ps1 contract', () => {
     const code = src.replace(/<#[\s\S]*?#>/g, '').replace(/^\s*#.*$/gm, '');
     // 先 ramp 再排除，两步都作用于 attempted
     expect(code).toMatch(/\$afterRamp = @\(Select-FullRepoAttempted -PlannedPages \$fullRepoPlannedPages -RampPages \$RampPages\)/);
-    expect(code).toMatch(/\$targetPages = @\(\$afterRamp \| Where-Object/);
+    // 分批由纯函数完成，且吃的是 ramp 之后的副本（$afterRamp），**不是**全仓计划本身
+    expect(code).toMatch(/\$selection = Select-FullRepoByPrefix -Pages \$afterRamp -OnlyPrefix \$OnlyPrefix -ExcludePrefix \$ExcludePrefix/);
+    expect(code).toMatch(/\$targetPages = @\(\$selection\.Attempted\)/);
+    expect(code).toMatch(/\$excludedPages = @\(\$selection\.Excluded\)/);
     // 全仓计划不得被排除污染
     expect(code).toMatch(/\$fullRepoPlannedPages = @\(Get-FullRepoPageList -PagesJson \$pagesJson\)/);
     // 无 -FullRepo 时单独给 -ExcludePrefix 必须拒
     expect(code).toMatch(/-ExcludePrefix 只在 -FullRepo 下有意义/);
     // 排除记录进 manifest（审计面）
     expect(code).toMatch(/ExcludedCount\s*=\s*@\(\$Excluded\)\.Count/);
+  });
+
+  // S36（2026-10-29，#2078 CI 收口）：两条「只在真环境显形」的缺口，改成确定性检查。
+  //   ① 纯逻辑必须有**不读环境**的调用面：原先前缀分批内联在 -FullRepo 分支里，行为腿只能穿过
+  //      adb / cli / pages.json 三道环境检查去断言页数 ⇒ 无 adb 的 CI 上页集合恒空 ⇒ 本地永远绿、CI 永远红。
+  //   ② 三条环境早退（adb / cli / pages.json）都没写过 manifest ⇒ 不许回带路径（假路径让 Test-Path 恒假、
+  //      让 #2077 续跑读空）；也不许在这一支「顺手写一份」—— 空计划时 CountsMatch 恒真 = 假绿。
+  test('S36: 【#2078】前缀分批是纯函数（不读环境），三条环境早退不谎报 manifest 落点', () => {
+    const code = src.replace(/<#[\s\S]*?#>/g, '').replace(/^\s*#.*$/gm, '');
+    const fnAt = code.indexOf('function Select-FullRepoByPrefix');
+    expect(fnAt).toBeGreaterThan(-1);
+    const fnBody = code.slice(fnAt, code.indexOf('function Get-FullRepoCounts', fnAt));
+    // 不读环境、不打印、不建目录 —— 否则「纯逻辑」又会随环境分支漂回去
+    expect(fnBody).not.toMatch(/Resolve-AdbExeLocal|Invoke-BoundedAdbCall|Get-Command|Write-Host|New-Item|Test-Path/);
+    for (const err of ['找不到 adb\\.exe', '找不到 HBuilderX cli\\.exe', '找不到 pages\\.json']) {
+      const at = code.search(new RegExp(err));
+      expect(at).toBeGreaterThan(-1);
+      const block = code.slice(at, at + 1400);
+      const mfAt = block.indexOf('ManifestPath');
+      expect(mfAt).toBeGreaterThan(-1);
+      expect(block).toMatch(/ManifestPath\s*=\s*''/);
+      // 早退分支里不得出现 manifest 写盘（空计划 → CountsMatch=True → 假绿）
+      expect(block.slice(0, mfAt)).not.toMatch(/Write-FullRepoManifest/);
+    }
   });
 
   // S33（2026-10-28，#2078 真机轮）：中转页白名单的形状。
