@@ -1,0 +1,145 @@
+{
+  "Schema": "fullrepo-manifest/1",
+  "ReleaseTicket": "1864",
+  "RunStartedAt": "2026-10-28T22:46:29.2305369+08:00",
+  "PlannedCount": 60,
+  "AttemptedCount": 9,
+  "RampActive": true,
+  "CapturedCount": 8,
+  "SkippedCount": 1,
+  "Missing": [
+    "pages_recruiter_resume-detail"
+  ],
+  "Redirected": [],
+  "RedirectedCount": 0,
+  "ExcludePrefix": "",
+  "ExcludedCount": 0,
+  "Excluded": [],
+  "DirPngCount": 56,
+  "DirCaptured": [
+    "pages_login_login",
+    "pages_recruiter_login",
+    "pages_recruiter_home",
+    "pages_recruiter_jobs",
+    "pages_recruiter_job-edit",
+    "pages_recruiter_resumes",
+    "pages_recruiter_contacts",
+    "pages_recruiter_applications",
+    "pages_recruiter_me",
+    "pages_register_register",
+    "pages_forgot-password_forgot-password",
+    "pages_profile-setup_profile-setup",
+    "pages_guide_choose-cert",
+    "pages_dashboard_dashboard",
+    "pages_courses_courses",
+    "pages_courses_course-detail",
+    "pages_courses_chapter-view",
+    "pages_resources_materials",
+    "pages_exam_mock-exam",
+    "pages_exam_mock-exam-result",
+    "pages_profile_profile",
+    "pages_profile_settings",
+    "pages_profile_personal-info",
+    "pages_profile_records",
+    "pages_profile_practice-records",
+    "pages_profile_personal-activity",
+    "pages_profile_mock-exam-records",
+    "pages_profile_wrong-questions",
+    "pages_profile_favorites",
+    "pages_profile_notebook",
+    "pages_profile_help-center",
+    "pages_practice_practice",
+    "pages_practice_practice-do",
+    "pages_practice_practice-report",
+    "pages_forum_forum",
+    "pages_forum_forum-detail",
+    "pages_forum_forum-create",
+    "pages_forum_check-in",
+    "pages_notifications_notifications",
+    "pages_ai-assistant_ai-assistant",
+    "pages_ai-assistant_ai-settings",
+    "pages_ai-assistant_custom-models",
+    "pages_points_points-detail",
+    "pages_points_task-center",
+    "pages_points_points-rules",
+    "pages_resources_my-purchases",
+    "pages_resources_my-uploads",
+    "pages_exam-info_exam-info",
+    "pages_resume_resume",
+    "pages_resume_resume-edit",
+    "pages_resume_resume-attach",
+    "pages_jobs_job-list",
+    "pages_mall_mall",
+    "pages_search_search",
+    "pages_featured_featured-list",
+    "pages_featured_featured-detail"
+  ],
+  "DirMissing": [
+    "pages_index_index",
+    "pages_recruiter_resume-detail",
+    "pages_ai-assistant_ai-feature",
+    "pages_jobs_job-detail"
+  ],
+  "CountsMatch": false,
+  "DirCountsMatch": false,
+  "HashConflicts": [],
+  "StaleShots": [],
+  "TotalPageSeconds": 2025,
+  "Pages": [
+    {
+      "Page": "pages/recruiter/login",
+      "Name": "pages_recruiter_login",
+      "Seconds": 235,
+      "Index": 1
+    },
+    {
+      "Page": "pages/recruiter/home",
+      "Name": "pages_recruiter_home",
+      "Seconds": 185,
+      "Index": 2
+    },
+    {
+      "Page": "pages/recruiter/jobs",
+      "Name": "pages_recruiter_jobs",
+      "Seconds": 222,
+      "Index": 3
+    },
+    {
+      "Page": "pages/recruiter/job-edit",
+      "Name": "pages_recruiter_job-edit",
+      "Seconds": 174,
+      "Index": 4
+    },
+    {
+      "Page": "pages/recruiter/resumes",
+      "Name": "pages_recruiter_resumes",
+      "Seconds": 176,
+      "Index": 5
+    },
+    {
+      "Page": "pages/recruiter/contacts",
+      "Name": "pages_recruiter_contacts",
+      "Seconds": 230,
+      "Index": 6
+    },
+    {
+      "Page": "pages/recruiter/applications",
+      "Name": "pages_recruiter_applications",
+      "Seconds": 199,
+      "Index": 7
+    },
+    {
+      "Page": "pages/recruiter/me",
+      "Name": "pages_recruiter_me",
+      "Seconds": 184,
+      "Index": 8
+    },
+    {
+      "Page": "pages/recruiter/resume-detail",
+      "Name": "pages_recruiter_resume-detail",
+      "Seconds": 420,
+      "Index": 9
+    }
+  ],
+  "WrittenAt": "2026-10-28T23:20:14.6605199+08:00"
+}
