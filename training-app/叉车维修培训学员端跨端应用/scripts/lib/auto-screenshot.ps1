@@ -1016,6 +1016,9 @@ function Invoke-AutoScreenshot {
 
     # 全仓形态的「已产清单」落点：与截图同目录，续跑（#2077）读的就是它。
     $fullRepoManifestPath = Join-Path $OutputDir 'fullrepo-manifest.json'
+    # 必须在**任何早退之前**初始化：三条「环境缺失」早退（adb / cli / pages.json）都要回带收口字段，
+    # 而 Set-StrictMode -Latest 对未初始化变量是直接抛，不是给 $null（CI 的 ubuntu 无 adb ⇒ 必炸）。
+    $excludedPages = @()
 
     # ---------- adb ----------
     # ⚠️ **解析器的唯一真源在 `lib/env-check.ps1`**（`Resolve-AdbExeLocal`）：本文件**不得**再自带候选集。
@@ -1032,7 +1035,21 @@ function Invoke-AutoScreenshot {
     }
     $adbExe = Resolve-AdbExeLocal
     if (-not $adbExe) {
-        return [pscustomobject]@{ Ok = $false; Screenshots = @(); Skipped = @(); HashConflicts = @(); TargetPages = @(); Error = '找不到 adb.exe' }
+        return [pscustomobject]@{
+            Ok = $false; Screenshots = @(); Skipped = @(); HashConflicts = @(); TargetPages = @()
+            Error = '找不到 adb.exe'
+            # 早退也必须带全仓形态的收口字段（CI 现测：ubuntu 上 adb 根本不存在，探针走的就是这一支；
+            # 本机有 adb 时走灭屏那一支 ⇒ 只在「没有 adb 的机器」上才显形的缺口）。
+            FullRepo      = $(if ($fullRepoMode) { $FullRepo } else { '' })
+            Verdict       = $(if ($fullRepoMode) { 'FAIL' } else { '' })
+            Counts        = $null
+            ManifestPath  = $(if ($fullRepoMode) { $fullRepoManifestPath } else { '' })
+            PlannedPages  = @()
+            AttemptedPages = @()
+            Redirected    = @()
+            Excluded      = @($excludedPages)
+            PageSeconds   = @()
+        }
     }
 
     # ---------- HBuilderX cli ----------
@@ -1048,13 +1065,41 @@ function Invoke-AutoScreenshot {
         }
     }
     if (-not $CliPath -or -not (Test-Path -LiteralPath $CliPath)) {
-        return [pscustomobject]@{ Ok = $false; Screenshots = @(); Skipped = @(); HashConflicts = @(); TargetPages = @(); Error = '找不到 HBuilderX cli.exe' }
+        return [pscustomobject]@{
+            Ok = $false; Screenshots = @(); Skipped = @(); HashConflicts = @(); TargetPages = @()
+            Error = '找不到 HBuilderX cli.exe'
+            # 早退也必须带全仓形态的收口字段（CI 现测：ubuntu 上 adb 根本不存在，探针走的就是这一支；
+            # 本机有 adb 时走灭屏那一支 ⇒ 只在「没有 adb 的机器」上才显形的缺口）。
+            FullRepo      = $(if ($fullRepoMode) { $FullRepo } else { '' })
+            Verdict       = $(if ($fullRepoMode) { 'FAIL' } else { '' })
+            Counts        = $null
+            ManifestPath  = $(if ($fullRepoMode) { $fullRepoManifestPath } else { '' })
+            PlannedPages  = @()
+            AttemptedPages = @()
+            Redirected    = @()
+            Excluded      = @($excludedPages)
+            PageSeconds   = @()
+        }
     }
 
     # ---------- pages.json（取全量清单，用于映射与校验）----------
     $pagesPath = Join-Path $ProjectDir 'pages.json'
     if (-not (Test-Path -LiteralPath $pagesPath)) {
-        return [pscustomobject]@{ Ok = $false; Screenshots = @(); Skipped = @(); HashConflicts = @(); TargetPages = @(); Error = '找不到 pages.json' }
+        return [pscustomobject]@{
+            Ok = $false; Screenshots = @(); Skipped = @(); HashConflicts = @(); TargetPages = @()
+            Error = '找不到 pages.json'
+            # 早退也必须带全仓形态的收口字段（CI 现测：ubuntu 上 adb 根本不存在，探针走的就是这一支；
+            # 本机有 adb 时走灭屏那一支 ⇒ 只在「没有 adb 的机器」上才显形的缺口）。
+            FullRepo      = $(if ($fullRepoMode) { $FullRepo } else { '' })
+            Verdict       = $(if ($fullRepoMode) { 'FAIL' } else { '' })
+            Counts        = $null
+            ManifestPath  = $(if ($fullRepoMode) { $fullRepoManifestPath } else { '' })
+            PlannedPages  = @()
+            AttemptedPages = @()
+            Redirected    = @()
+            Excluded      = @($excludedPages)
+            PageSeconds   = @()
+        }
     }
     $pagesJson = Get-Content -LiteralPath $pagesPath -Raw | ConvertFrom-Json
     $allPages = @($pagesJson.pages | ForEach-Object { $_.path })
