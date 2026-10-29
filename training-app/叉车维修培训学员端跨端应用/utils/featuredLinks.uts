@@ -1,0 +1,59 @@
+/**
+ * 内容精选正文外链的**集中可达**投影（#2097）
+ *
+ * 口径（移动端 ADR-0045「修订（2026-10-28，#1940 裁定）」）：外链由**正文 Markdown 链接**承载，
+ * `source` 只是来源名称 —— 「`source` 双用途」与「新增 `source_url`」都写在该 ADR 的「明确不做」里。
+ * #1939 曾按双形态上线「查看原文」按钮，已随 #2097 回退（负向锁见 `utils/featuredDetailContract.test.js`）。
+ *
+ * 为什么交的是「一张可点列表」而不是「句中行内可点」（2026-10-29 维护者裁定）：
+ * `featured` 档**没有声明** `MEMBER_INLINE`，解析器交出的块内 `text` 是抹平后的纯文本 —— 那正是
+ * 移动端 ADR-0025 ⑩-6 经 #1499 按面拆分后钉死的**块数组面**硬 AC。要句中行内可点，得给本档声明
+ * `inline` 并让详情页改吃 runs，连带改动有序列表的 `level` 槽与 `![]()` 剥 alt 的职责归属，
+ * 属另一张票的范围裁定。本模块因此**不吃档位、不改共享解析器**：直接对正文原文分词，把链接
+ * 收进一张可点列表 —— 数据源与「正文链接承载」同一个，零跨面回归。
+ *
+ * 协议闸**不在这里、也不该在这里**：run 的 `link` 出自 `utils/markdownInline.uts` 的 `inlineLinkSafe`
+ * （http(s) 白名单，`markdownInlineBehavior.test.js` ④ 组成对钉死）。本模块只认「非空 link」，
+ * **不在第二处放行新协议** —— 与 `externalLinkDispatch.uts` 文件头同一条纪律。
+ *
+ * 为什么直引 `markdownInline` 而不走 `forumLinkDomain`：后者是论坛域的格式轴转发，把论坛词汇引进
+ * 精选域是反向耦合；精选侧需要的只是同一个纯展示件 `inlineLinkDomain`（无第二实现，只是少一层壳）。
+ */
+import { splitInlineRuns, inlineLinkDomain } from './markdownInline'
+
+/** 一条参考链接：可见名（链接文字）+ 目标 + 展示用域名。字段全标量（与 `MarkdownInlineRun` 同形状纪律） */
+export type FeaturedLink = {
+    label : string
+    url : string
+    host : string
+}
+
+/** 已收链表里是否已有该目标 —— 手写遍历，不赌对象数组 `indexOf` 的跨端语义 */
+function hasUrl(list : FeaturedLink[], url : string) : boolean {
+    for (let i = 0; i < list.length; i++) {
+        if (list[i].url == url) return true
+    }
+    return false
+}
+
+/**
+ * 正文原文 → 参考链表（按**出现顺序**、同一 URL 只留首次出现的那条文字）。
+ *
+ * 逐行喂而不是整篇：`splitInlineRuns` 的输入是**行内**源串（块级记号 `#` / `-` / 围栏归
+ * `utils/markdown.uts` 管），整篇丢进去会让跨行的 `]  (` 形态误配。按行喂与解析器交出的行粒度一致。
+ */
+export function collectFeaturedLinks(content : string) : FeaturedLink[] {
+    const out : FeaturedLink[] = []
+    if (content.length == 0) return out
+    const lines = content.split('\n')
+    for (let i = 0; i < lines.length; i++) {
+        const runs = splitInlineRuns(lines[i])
+        for (let j = 0; j < runs.length; j++) {
+            const url = runs[j].link
+            if (url.length == 0) continue
+            if (hasUrl(out, url)) continue
+            out.push({ label: runs[j].text, url: url, host: inlineLinkDomain(url) } as FeaturedLink)
+        }
+    }
+    return out
+}
