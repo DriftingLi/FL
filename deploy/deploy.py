@@ -931,7 +931,9 @@ class Deployer:
                 log_ok(f"基础镜像已缓存: {base}")
                 continue
             log_info(f"拉取基础镜像: {base}")
-            if self.run(["docker", "pull", base], check=False).returncode != 0:
+            # 走 watchdog 而不是裸 docker pull：镜像源挂住时裸拉没有任何超时，
+            # 整个部署会被拖到外层 timeout 兜底（2026-10-29 testing 冒烟因此挂起 35 分钟）。
+            if not self._pull_with_watchdog(base):
                 raise DeployError(f"基础镜像拉取失败: {base}")
 
     # ---------------------------------------------------------------- 数据服务
@@ -1591,6 +1593,15 @@ class Deployer:
 # ======================================================================
 # CLI
 # ======================================================================
+def force_data_services_from_env(value: str) -> bool:
+    """FORCE_DATA_SERVICES 的取值判据（CD 只给 testing 置 true）。
+
+    与 `--force-data-services` 等价，但只能由**可抛弃环境**打开：冒烟栈每次重建，
+    数据服务配置漂移是常态；判定仍走 decide_service，只在确有漂移时才 recreate。
+    """
+    return value.strip().lower() in ("1", "true", "yes")
+
+
 def _parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="deploy/deploy.py",
@@ -1619,6 +1630,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     _configure_stdio()
     parser = _parser()
     args = parser.parse_args(argv)
+
+    # 可抛弃环境（testing 冒烟）用环境变量放行数据服务重建：冒烟栈每次重建、数据可抛弃，
+    # 数据服务配置漂移在那里是常态而不是风险（判据仍只在**确有漂移**时才 recreate，
+    # 见 decide_service），而生产侧永远只认显式 --force-data-services。
+    if force_data_services_from_env(os.environ.get("FORCE_DATA_SERVICES", "")):
+        args.force_data_services = True
 
     # 纯判定入口：不读 .env、不碰 docker、不写文件。
     if args.migration_gate:

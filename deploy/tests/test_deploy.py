@@ -252,5 +252,22 @@ class RenderEnvFileTest(unittest.TestCase):
         self.assertIn("COMPOSE_PROJECT_NAME=forklift-training", out)
 
 
+class ForceDataServicesEnvTest(unittest.TestCase):
+    """FORCE_DATA_SERVICES 的取值判据（CD 只给 testing 置 true）。
+
+    它等价于 --force-data-services，而那道闸门保护的是**生产数据**：
+    生产一旦被误开，配置漂移就会被静默重建。所以取值面锁死在这几个真值上，
+    默认（空串 / 其他任何值）一律 False。
+    """
+
+    def test_truthy_values(self):
+        for value in ("1", "true", "TRUE", "True", "yes", " Yes "):
+            self.assertTrue(deploy.force_data_services_from_env(value), value)
+
+    def test_falsy_values(self):
+        for value in ("", " ", "0", "false", "no", "testing", "production"):
+            self.assertFalse(deploy.force_data_services_from_env(value), repr(value))
+
+
 if __name__ == "__main__":
     unittest.main()
