@@ -147,7 +147,9 @@ describe('② 结果行三分端到端（真跑门脚本 + 桩探针/桩就绪�
       const resultLine = (log.match(/MP_WEIXIN_RESULT [^\r\n]*/) || [''])[0];
       // #1690：结果行新增可选字段 auth=。桩环境没有真会话（假 CLI 的端口不应答 automator 协议），
       // 注入脚本诚实报 none(status+reason) ⇒ 这里把 auth=none(…) 钉进通过分支行形（三分互斥口径不变）。
-      expect(resultLine).toMatch(/appid=wx38c3e31b16a7ced0 pageStack=1 entry=pages\/index\/index errorsTotal=0 exceptionsTotal=0 logsTotal=0 shots=1 navigation=ok ready=\d+s sdk=3\.8\.10 ide=1\.06\.2412050 auth=none(\([a-z0-9-]+\))? log=\.ci-verify\/mp-weixin\.log/);
+      // #2101：新增可选字段 coverage=，夹具是**非 git 目录** ⇒ git 判据不可用 ⇒ 如实写 none（不是「覆盖为零」）。
+      // 这一条同时钉住降级面：`none` 必须出现在行上，不能被静默省略（否则读的人以为覆盖判据可用）。
+      expect(resultLine).toMatch(/appid=wx38c3e31b16a7ced0 pageStack=1 entry=pages\/index\/index errorsTotal=0 exceptionsTotal=0 logsTotal=0 shots=1 navigation=ok ready=\d+s sdk=3\.8\.10 ide=1\.06\.2412050 coverage=none auth=none(\([a-z0-9-]+\))? log=\.ci-verify\/mp-weixin\.log/);
       expect(resultLine).not.toMatch(/errors=/);
       expect(resultLine).not.toMatch(/env-blocked/);
       expect(r.status).toBe(0);

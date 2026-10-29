@@ -26,6 +26,10 @@
    Ok=$true  + Pages 空    —— diff 可用但没有 pages/**.uvue 改动（本来就没有，不是降级）；
    Ok=$false + Reason=slug —— git 判据不可用（git-unavailable / git-timeout / git-exit-<N>），
                               清单为空 = 取证面降级，调用方必须 [warn] 显式说破，不得静默。
+
+ 分工（#2101）：本函数只回答「**改了哪些页**」；「该跑什么页 + 覆盖读数」由
+ `Resolve-MpWeixinDirectCoverage` 回答（清单为空 ⇒ 退冒烟集 ⇒ `coverage=smoke:N`）。
+ 两个函数都不碰入口页顺序 —— 那是调用方的两相序纪律。
 #>
 
 <#
@@ -79,4 +83,40 @@ function Get-MpWeixinChangedUvuePages {
             Select-Object -Unique
     )
     return [ordered]@{ Pages = $pages; Ok = $true; Reason = '' }
+}
+
+<#
+ 解析 `-Pages auto` 的**取证页清单 + 覆盖读数**（#2101，2026-10-29 落库）。
+
+ 为什么要这一段单独成函数：改动页清单为空时，② 会只剩入口页一张 = **覆盖为零的绿**（#2099 盘点出的洞）。
+ 补法是退固定冒烟集，但「退不退」这件事本身是判据 —— 判据必须能被**真执行**，否则哪天有人把分支改成
+ `if ($false)`，文本断言照样绿（C20 教训）。调用方（门脚本）只接结果、不再复述这三分支。
+
+ 三分语义（互斥、穷尽；`Coverage` 就是结果行 `coverage=` 的值）：
+   Ok=$false                ⇒ Pages=@()、Coverage='none'、Degraded=$true
+                              **不退化冒烟集**：git 判据取不到 = 「不知道改了什么」，
+                              换成「我覆盖了冒烟集」是把不可知包装成已覆盖（#2101 明确否掉）。
+   Ok=$true + 改动页非空   ⇒ Pages=改动页、Coverage='changed:<N>'（N=改动页条数，不含入口页）
+   Ok=$true + 改动页空     ⇒ Pages=冒烟集、Coverage='smoke:<N>'（N=冒烟集实际条数，
+                              冒烟集为空时如实写 'smoke:0'，不伪造 2）
+
+ 入口页不在这里拼：调用方按「入口页打头」的两相序纪律自己前置（见门脚本 directList 那处注释）。
+#>
+function Resolve-MpWeixinDirectCoverage {
+    param(
+        # Get-MpWeixinChangedUvuePages 的返回（Pages / Ok / Reason 三键）
+        [Parameter(Mandatory = $true)]$AutoPages,
+        # 改动页清单为空时要跑的固定冒烟集（真源 = 门计划 directPages.smokePages）
+        [string[]]$SmokePages = @()
+    )
+
+    $pages = @(@($AutoPages.Pages) | Where-Object { $_ })
+    if (-not [bool]$AutoPages.Ok) {
+        return [ordered]@{ Pages = @(); Coverage = 'none'; Degraded = $true }
+    }
+    if ($pages.Count -eq 0) {
+        $smoke = @(@($SmokePages) | Where-Object { $_ })
+        return [ordered]@{ Pages = $smoke; Coverage = "smoke:$($smoke.Count)"; Degraded = $false }
+    }
+    return [ordered]@{ Pages = $pages; Coverage = "changed:$($pages.Count)"; Degraded = $false }
 }

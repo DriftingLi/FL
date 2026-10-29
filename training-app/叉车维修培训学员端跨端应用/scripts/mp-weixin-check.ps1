@@ -109,7 +109,9 @@
     **任意页直达探针（#1682 · ADR-0039 拆分步骤 2）**：上面的 SKIP 只证明入口页 ⇒ 取证面用 `-Pages` 扩到被改页。
     机制（已裁定，勿另选）= ADR-0038 决策 1 的「构建产物 `app.json` 首项临时换页 + plain 冷启动」——**不调用任何
     导航 API**，页身份判据 = 冷启动落地页 `pageStack[0]` 等于目标路由（真机侧同手法先例 #1678）。`-Pages auto`（缺省）
-    = 入口页 + 本 PR 改动页（git diff 命中 `pages/**/*.uvue`）；`-Pages none` 关闭直达走旧导航组；`-Pages <csv>` 指定清单。
+    = 入口页 + 本 PR 改动页（git diff 命中 `pages/**/*.uvue`）；**清单为空**（改 `components/` / `utils/*.uts` /
+    `App.uvue` / `pages.json`）时退**固定冒烟集两页**、结果行给 `coverage=smoke:2`（#2101：否则只跑入口页一张 =
+    覆盖为零的绿），git 判据不可用 ⇒ `coverage=none` 且**不**退化冒烟集；`-Pages none` 关闭直达走旧导航组；`-Pages <csv>` 指定清单。
     每页取证 = 截图（落日志目录；只有显式 `-Archive` 才另存一份到 `docs/verification/<模块>/<号码>/`）+ 该页 console error/exception
     读数（`errorsTotal` 语义不变：逐页累加，重试不重复计数）。未达成页**逐页**记入 `navigation.pages`（#1816），组级形态：
     全部达成 ⇒ `ok`、部分达成 ⇒ `partial(ok=<N>,skip=<M>)`（已达成页读数照常计入，**不得**被未达成页整组塌缩）、
@@ -242,6 +244,8 @@
     `close → open → auto → 端口` 这一段的**整段**重试次数（默认 3）。实测冷起点 / IDE 重启窗口下
     第一次 `auto` 会「回显 √ 但端口不起」或「直接挂住」⇒ 单发必红（见脚本头坑位 6）。
     `-AutoAttempts 1` = 恢复单发语义（排障用）。**重试单元是整段**，不是只重试 `auto`（理由见坑位 6）。
+    **本参数只管 auto 段**：逐页冷启动（直达探针）的重试固定 2 次，取自门计划 `directPages.attempts`，
+    不读本值（#2101 落库时按实测语义把两者拆开，理由见计划里那处注释）。
 
 .PARAMETER AutoRetryDelaySeconds
     两次整段尝试之间的等待秒数（默认 20）：让开发者工具把上一次的 IDE 实例/端口收干净再重来。
@@ -718,6 +722,10 @@ function New-GatePlan {
         foreach ($n in @('appid', 'pageStack', 'entry', 'errorsTotal', 'exceptionsTotal', 'logsTotal', 'shots', 'navigation', 'ready', 'sdk', 'ide')) {
             $resultFields += [ordered]@{ name = $n }
         }
+        # 覆盖判据（#2101）：`coverage=changed:N|smoke:N|none`，**只在 `-Pages auto` 下产出**。
+        # 为什么是 optional 而不是必填：`-Pages <csv>`（定向单验）与 `-Pages none`（旧导航组）都是合法跑法，
+        # 它们没有「改动页覆盖」这个语义 —— 硬塞一个值等于让读数说谎。缺席 ≠ 降级，读的人按模式读。
+        $resultFields += [ordered]@{ name = 'coverage'; optional = $true }
         $resultFields += [ordered]@{ name = 'navigationSkipReason'; optional = $true }
         # 会话注入（#1690）读数：auth=existing|injected|none(reason[:detail-slug])——detail-slug 是
         # HTTP 状态/网络错误/超时的归因类别（#1863）；只在直达循环启用时出现（可选字段）
@@ -768,8 +776,24 @@ function New-GatePlan {
             probeArgv = @($ProbePath, '--ws', $ws, '--expect-page', '<page>', '--shot-dir', $LogDir, '--require-root', $AutoRoot, '--timeout-ms', "$ProbeTimeoutMs", '--scroll-top', "$PageScrollTop", '--shots', "$Shots")
             scrollTop = $PageScrollTop
             shots = $Shots
+            # 逐页冷启动的整段重试次数**固定 2**，与 `-AutoAttempts`（auto 段，默认 3）**不是同一个值**：
+            # #2101 票面原写「逐页冷启动共用此值」，落库时按实测语义拆开 —— auto 段 3 次是冷起点/IDE 重启的
+            # 排障余量（单发必红的那个坑），逐页失败只落该页 skip（`landed-elsewhere` / `auth-session-unavailable`）
+            # 不牵连同组其它页，2 次已够；且逐页一旦挂住，代价是每页多等一整段，3 次的账在 ② 的 300 s 里付不起。
             attempts = 2
             retryDelaySeconds = $ProbeRetryDelaySeconds
+            # 覆盖判据（#2101 落库，2026-10-29）：`-Pages auto` 的改动页清单**为空**时跑这组固定冒烟集。
+            # 为什么要有：`-Pages auto` 只认 `pages/**/*.uvue`，改 `components/` / `utils/*.uts` / `App.uvue` /
+            # `pages.json` 时清单为空 ⇒ 只跑入口页一张 = **覆盖为零的绿**（#2099 盘点出的洞）。
+            # 冒烟页清单的唯一真源 = 这里（执行路径按 `$script:GatePlan` 取，不写第二份）。
+            smokePages = @('pages/dashboard/dashboard', 'pages/profile/profile')
+            # 结果行 `coverage=` 的三值形态（#2101/#2102）：只说明「这次绿覆盖了什么」，**不判取舍**。
+            # 缺省值 `none` 不是「没覆盖」，而是「覆盖判据本身不可用（git diff 取不到）」——见执行侧分支。
+            coverageShapes = [ordered]@{
+                changed = 'changed:<N>'
+                smoke = 'smoke:<N>'
+                none = 'none'
+            }
             skipReasons = @('direct-page-unsupported', 'page-not-in-build', 'app-json-invalid', 'auth-session-unavailable', 'landed-elsewhere')
             # 会话分相（#1817）：相判据是「该页在无会话时是否为合法落地页」，**不是**「是否入口页」。
             # 游客页族 = 已登录会自己 reLaunch 走的页（index.uvue:81 / login.uvue:242 / register.uvue:168 /
@@ -2228,19 +2252,30 @@ try {
         }
     }
     $entryRoute = ''
+    # 覆盖判据读数（#2101）：只有 auto 模式有「改动页覆盖」语义。**必须在分支外初始化** —— 它只在
+    # `$Pages -ne 'none'` 且构建产物存在时才算得出来，而结果行在更外层拼；StrictMode 下读未定义变量直接抛。
+    $coverageField = ''
     if ($Pages -ne 'none' -and (Test-Path -LiteralPath $distAppJson)) {
         try { $entryRoute = "$(@(((Get-Content -LiteralPath $distAppJson -Raw) | ConvertFrom-Json).pages)[0])" } catch { $entryRoute = '' }
         $want = @()
         if ($Pages -eq 'auto') {
             # auto 判据 = 本 PR 改动页，真源在 scripts/lib/mp-weixin-pages.ps1（#1853，编码层双解耦见该库头）。
-            # git 不可用 / 无 origin/master 参照（如 detached 树）⇒ Ok=$false：空清单 + [warn] 显式说破，
-            # 直达只剩入口页一张（等价旧取证面，不冒充「改动页已核」）；diff 可用但无 pages/**.uvue
-            # 改动 ⇒ Ok=$true 的空清单（本来就没有，不算降级）。
+            # 「改了哪些页」与「该跑什么页 + 覆盖读数」两件事都在那个库里（#2101）：清单为空 ⇒ 退固定冒烟集，
+            # 否则改 components/utils/App.uvue/pages.json 的 PR 只剩入口页一张 = 覆盖为零的绿（#2099）。
+            # 门脚本这里只接结果 —— 三分支不复述（复述品会漂移，且改坏时文本断言照样绿）。
             $autoPages = Get-MpWeixinChangedUvuePages -Project $Project
-            $want = @($autoPages.Pages)
-            if (-not $autoPages.Ok) {
+            $resolution = Resolve-MpWeixinDirectCoverage -AutoPages $autoPages `
+                -SmokePages @(Get-Prop (Get-Prop $script:GatePlan 'directPages') 'smokePages')
+            $want = @($resolution.Pages)
+            $coverageField = "$($resolution.Coverage)"
+            if ([bool]$resolution.Degraded) {
                 Write-Host "[warn] auto 页清单：git diff 不可用（$($autoPages.Reason)），直达降级为仅入口页（不冒充改动页已核）" -ForegroundColor Yellow
-                Write-Log "auto-pages degraded reason=$($autoPages.Reason)"
+                Write-Log "auto-pages degraded reason=$($autoPages.Reason) coverage=$coverageField"
+            } elseif ($coverageField -like 'smoke:*') {
+                Write-Host ">>> auto 页清单为空（无 pages/**/*.uvue 改动）⇒ 跑固定冒烟集：$($want -join ',')（#2101）" -ForegroundColor Yellow
+                Write-Log "auto-pages empty ⇒ coverage=$coverageField pages=$($want -join ',')"
+            } else {
+                Write-Log "auto-pages changed=$($want.Count) pages=$($want -join ',')"
             }
         } else {
             $want = @($Pages -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
@@ -2517,6 +2552,13 @@ try {
         sdk = "$sdkVersion"
         ide = "$ideVersion"
         log = "$logRelative"
+    }
+    # 覆盖判据（#2101）：`changed:N` / `smoke:N` / `none`，**只有 auto 模式产出**（其余模式字段缺席，见计划注释）。
+    # none 不是「没覆盖」而是「判据不可用」——必须说破，否则读的人会把入口页那张当成改动页已核。
+    if ($coverageField) { $metricValues['coverage'] = "$coverageField" }
+    if ($coverageField -eq 'none') {
+        Write-Host '[warn] 覆盖判据不可用（coverage=none）：本次直达只有入口页，不冒充改动页已核' -ForegroundColor Yellow
+        Write-Log 'coverage=none（git diff 不可用；刻意不退化为冒烟集）'
     }
     # 降级字段是**可选**的：计划里标了 optional，只在真的降级时出现（不降级就不写这个字段）
     if ($navSkip) { $metricValues['navigationSkipReason'] = "$navReason" }

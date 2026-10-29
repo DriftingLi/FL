@@ -52,6 +52,15 @@ export const GATE_EVIDENCE = {
     "source": "[A-Za-z_][\\w.-]*\\s*=\\s*\\S+",
     "hint": "token 后面必须跟着门真打出来的键值对（如 `errors=0` / `pages=3`），只写 token 或写 `...` 都是占位"
   },
+  "coverage": {
+    "field": {
+      "source": "(?:^|\\s)coverage=([^\\s\\x60]+)"
+    },
+    "value": {
+      "source": "^(?:changed|smoke):\\d+$|^none$"
+    },
+    "hint": "`coverage=` 只认 `changed:<N>` / `smoke:<N>` / `none` 三值（门在 `-Pages auto` 下产出，见 ADR-0008 ② 段）"
+  },
   "gates": [
     {
       "key": "②",
@@ -185,6 +194,8 @@ export async function validatePrEvidence({
   const LIST_ITEM_PREFIX = new RegExp(GATE_EVIDENCE.listItem.prefixStrip);
   const RAN_AT = toRe(GATE_EVIDENCE.ranAt);
   const READING_VALUE = toRe(GATE_EVIDENCE.readingValue);
+  const COVERAGE_FIELD = toRe(GATE_EVIDENCE.coverage.field);
+  const COVERAGE_VALUE = toRe(GATE_EVIDENCE.coverage.value);
 
   // ④ 全家（④ / ④a / ④b / ④c）都含「④」⇒ 按行首编号匹配，④a / ④b 行不能顶替 ④ 行。
   const matchesGate = (line, gate) => {
@@ -253,6 +264,20 @@ export async function validatePrEvidence({
       const after = line.slice(line.indexOf(token) + token.length);
       if (!READING_VALUE.test(after)) {
         err(gate.key, `${where}：${gate.tokenHint} 后面没有实际读数 —— ${GATE_EVIDENCE.readingValue.hint}。`);
+      }
+    }
+    // `coverage=` 形态校验（#2101/#2102）。**只校「出现即合法」，不校「必须出现」**：
+    // #2102 原文写「校存在性」，但门只在 `-Pages auto` 下产出该字段 —— `-Pages <csv>`（定向单验）与
+    // `-Pages none`（旧导航组）是合法跑法且没有「改动页覆盖」语义，强制出现会把它们判成假红。
+    // 这与本票「删格式税」的立场一致：能判红的只剩「写了但写错」，不是「少写了一个自报字段」。
+    if (gate.key === '②') {
+      const cov = line.match(COVERAGE_FIELD);
+      if (cov) {
+        // 读数通常被反引号包着（`… coverage=changed:2`），截到反引号前；再兜一刀剥尾反引号
+        const v = cov[1].replace(/`+$/, '');
+        if (!COVERAGE_VALUE.test(v)) {
+          err(gate.key, `${where}：\`coverage=${v}\` 不是合法形态 —— ${GATE_EVIDENCE.coverage.hint}。`);
+        }
       }
     }
     const m = line.match(RAN_AT);

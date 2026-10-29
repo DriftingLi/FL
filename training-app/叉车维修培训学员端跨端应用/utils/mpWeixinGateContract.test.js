@@ -110,7 +110,7 @@ const RESULT_MANDATORY = [
 // 可选字段（只在对应情形出现时才写；顺序 = 出现时的相对顺序）
 // noise：平台层噪音白名单放行的 console error 条数（2026-10-29 F3）。**只在 noise>0 时出现** ——
 // 过滤必须可见：某次跑次真被过滤过东西，读数行上一定看得到；没噪音的跑次结果行逐字节不变。
-const RESULT_OPTIONAL = ['navigationSkipReason', 'auth', 'asserts', 'noise'];
+const RESULT_OPTIONAL = ['coverage', 'navigationSkipReason', 'auth', 'asserts', 'noise'];
 
 /**
  * 取一个 PowerShell 函数的函数体（花括号配对）。
@@ -646,6 +646,26 @@ function scanContract(sources) {
   const archCallAt = s.indexOf('Publish-ScreenshotArchive -PrNumber');
   must(archGuardAt !== -1 && archCallAt !== -1 && archGuardAt < archCallAt, 'C9b',
     '$Archive 守卫不在 Publish-ScreenshotArchive 调用之前（守卫与调用脱节 ⇒ 开关形同虚设）');
+
+  // C30 覆盖判据（#2101 落库，2026-10-29）：`-Pages auto` 只认 `pages/**/*.uvue`，改 `components/` / `utils/*.uts` /
+  // `App.uvue` / `pages.json` 时清单为空 ⇒ 只跑入口页一张 = **覆盖为零的绿**（#2099 盘点出的洞）。
+  // 三分支语义（none 不退化冒烟集 / 空清单退冒烟集 / 改动页全跑）的**真执行**由
+  // utils/mpWeixinPagesCoverageBehavior.test.js 钉住；这里只钉「接上了 + 读数不说谎」，因为文本断言
+  // 测不到分支行为（C20 教训：判据被改成 `if ($false)` 时文本照样绿）。
+  must(/smokePages\s*=\s*@\('pages\/dashboard\/dashboard',\s*'pages\/profile\/profile'\)/.test(s), 'C30',
+    '计划未声明冒烟集两页（清单为空时只剩入口页 ⇒ 覆盖为零的绿）');
+  must(s.includes('Resolve-MpWeixinDirectCoverage -AutoPages $autoPages'), 'C30',
+    'auto 分支没有调用覆盖判据库（判据写了但没接线 = 死代码）');
+  must(s.includes('$coverageField = "$($resolution.Coverage)"'), 'C30',
+    '覆盖读数没有从判据库取（门脚本自己算第二份 = 两个真源）');
+  must(/name = 'coverage'; optional = \$true/.test(s), 'C30',
+    '结果行字段清单里没有 coverage（计划声明了而执行不填 = 假声明）');
+  must(/\$metricValues\['coverage'\] = "\$coverageField"/.test(s), 'C30',
+    'coverage 未注入结果行（字段声明了但永远是空的）');
+  must(!template.includes('观测不到的能力面'), 'C30',
+    'PR 模板仍留着 ①b 的能力面自报框（#2103 说删；勾了不判红、也不决定人签，纯格式税）');
+  must(template.includes('能力面：'), 'C30',
+    'PR 模板没给「命中能力面时写一行」的写法（删了框却没给替代，等于把该记的东西也删了）');
 
   // C11 HBuilderX 忙检测（单实例串行资源）：② 也必须接共享 helper，且不得 kill 主程序
   must(/(lib\/hx-busy\.ps1|lib\\hx-busy\.ps1)/.test(s), 'C11', '未 dot-source scripts/lib/hx-busy.ps1（HBuilderX 忙检测）');
@@ -1186,6 +1206,14 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
       // C9b：把入库触发退回「有号码就入库」（A1 后正常取证会挪走 head sha）/ 删掉显式开关本身
       ['C9b', { ...real, script: real.script.replace('if ($Archive -and -not $NoArchive -and $PostToPr -gt 0) {', 'if ($PostToPr -gt 0 -and -not $NoArchive) {') }],
       ['C9b', { ...real, script: real.script.replace(/\[switch\]\$Archive,/, '') }],
+      // C30：冒烟集被清空 / 判据库没接线 / 读数自己算第二份 / 字段不注入 / 自报框回到模板
+      ['C30', { ...real, script: real.script.replace("smokePages = @('pages/dashboard/dashboard', 'pages/profile/profile')", 'smokePages = @()') }],
+      ['C30', { ...real, script: real.script.replace('Resolve-MpWeixinDirectCoverage -AutoPages $autoPages', 'Get-NoSuchResolver -AutoPages $autoPages') }],
+      ['C30', { ...real, script: real.script.replace('$coverageField = "$($resolution.Coverage)"', "$coverageField = 'changed:0'") }],
+      ['C30', { ...real, script: real.script.replace("name = 'coverage'; optional = $true", "name = 'coverageX'; optional = $true") }],
+      ['C30', { ...real, script: real.script.replace("$metricValues['coverage'] = \"$coverageField\"", '') }],
+      ['C30', { ...real, template: real.template + '\n- [ ] 本次改动触及「agent 观测不到的能力面」\n' }],
+      ['C30', { ...real, template: real.template.replace(/能力面：/g, '能力面X：') }],
       ['C10', { ...real, pkg: real.pkg.replace('build:mp-weixin-check', 'build:mp-x') }],
       // C28 必红：入口在、但没带 -BuildOnly（那是一个「能跑 ② 全量」的同名入口，不是构建面模式）
       ['C28', { ...real, pkg: real.pkg.replace('scripts/mp-weixin-check.ps1 -BuildOnly', 'scripts/mp-weixin-check.ps1') }],

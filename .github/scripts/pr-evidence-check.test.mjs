@@ -48,8 +48,8 @@ const g2 = (sha7, reading = MP) => `- ② 跑于 \`${sha7}\` · \`${reading}\``;
 const g4 = (sha7, reading = KOTLIN) => `- ④ 跑于 \`${sha7}\` · \`${reading}\``;
 // 运行时面 + 未命中 MP-WEIXIN 面 ⇒ ② 免，只有 ④ 必填
 const onlyG4 = (sha7 = HEAD7) => body(g4(sha7));
-// 命中 MP-WEIXIN 面（改 manifest.json）⇒ ②④ 都必填
-const bothGates = (sha7 = HEAD7) => body(g2(sha7), g4(sha7));
+// 命中 MP-WEIXIN 面（改 manifest.json）⇒ ②④ 都必填；mpReading 可换（`coverage=` 形态用例用）
+const bothGates = (sha7 = HEAD7, mpReading = MP) => body(g2(sha7, mpReading), g4(sha7));
 const mpFiles = [uvue(), { filename: 'training-app/叉车维修培训学员端跨端应用/manifest.json', status: 'modified', patch: '' }];
 
 // 注桩：默认「sha 已是 head 祖先 + 其间未动运行时面」
@@ -91,6 +91,31 @@ test('证据只写在 HTML 注释里不算（模板注释不得骗过校验）',
   const r = await run({ body: `## 验收证据\n\n<!-- ${g4(HEAD7)} -->\n` });
   assert.equal(r.ok, false);
   assert.ok(r.errors.some((e) => e.includes('缺该行')));
+});
+
+/* ─────────────── `coverage=` 形态（#2101 / #2102） ─────────────── */
+
+test('coverage= 三值合法（changed:N / smoke:N / none）⇒ 都不判红', async () => {
+  for (const cov of ['changed:3', 'smoke:2', 'none']) {
+    const r = await run({ files: mpFiles, body: bothGates(HEAD7, `${MP} coverage=${cov}`) });
+    assert.deepEqual(r.errors, [], `coverage=${cov} 被误判`);
+  }
+});
+
+test('coverage= 写了但不是三值之一 ⇒ 红（形态校验，不是措辞校验）', async () => {
+  for (const bad of ['2', 'Changed:3', 'covered', 'changed:N']) {
+    const r = await run({ files: mpFiles, body: bothGates(HEAD7, `${MP} coverage=${bad}`) });
+    assert.equal(r.ok, false, `coverage=${bad} 应判红`);
+    assert.ok(r.errors.some((e) => /不是合法形态/.test(e)), `coverage=${bad} 的错误文案不对：${r.errors.join(' | ')}`);
+  }
+});
+
+test('coverage= 缺席不判红（-Pages <csv> / none 是合法跑法，没有覆盖语义）', async () => {
+  // #2102 原文写「校存在性」，落库时收窄为「校形态」：门只在 `-Pages auto` 下产出该字段，
+  // 强制出现会把「定向单验」和「旧导航组」两种合法跑法判成假红。
+  const r = await run({ files: mpFiles, body: bothGates() });
+  assert.deepEqual(r.errors, []);
+  assert.equal(r.ok, true);
 });
 
 test('未命中运行时面 ⇒ 不要求任何门行，也不要求段', async () => {
