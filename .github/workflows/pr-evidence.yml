@@ -76,12 +76,22 @@ jobs:
               try {
                 const res = await github.rest.repos.compareCommits({ owner, repo, base, head });
                 const d = res.data || {};
-                const fileList = (d.files || []).map((f) => f.filename);
+                const status = String(d.status || '');
+                // 改名必须算两次：`a.uvue` → `a.ts`（把逻辑抽进 .ts 是常见动作）时 compare 只报
+                // `filename: a.ts`，不并 previous_filename 就会判「其间运行时面没动」⇒ 旧证据被接受。
+                const raw = Array.isArray(d.files) ? d.files : null;
+                const fileList = raw
+                  ? raw.flatMap((f) => [f && f.filename, f && f.previous_filename].filter(Boolean))
+                  : [];
+                // 截断要按**原始文件数**判，不能用展开后的条数（一次改名会凭空多一条）。
+                // 另：compare 可能因 diff 过大而干脆**不回** files（不是回 300 条）⇒ `length>=300` 判不出来
+                // ⇒ 拿不到数组就按截断处理（identical 时 files 合法为空，除外）。
+                const truncated = raw === null ? status !== 'identical' : raw.length >= COMPARE_FILES_CAP;
                 return {
-                  status: d.status,
+                  status,
                   mergeBaseSha: (d.merge_base_commit && d.merge_base_commit.sha) || '',
                   files: fileList,
-                  filesTruncated: fileList.length >= COMPARE_FILES_CAP,
+                  filesTruncated: truncated,
                 };
               } catch (e) {
                 core.warning(`compareCommits(${String(base).slice(0, 7)}…${String(head).slice(0, 7)}) 失败：${e && e.message ? e.message : e} ⇒ 门证据绑定按 fail-closed 判不满足`);

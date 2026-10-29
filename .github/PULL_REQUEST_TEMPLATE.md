@@ -38,10 +38,11 @@ master 有 ruleset「protect master」，必检只有 ci-summary；pr-evidence �
 
 **图的地位**：截图是**附证**不是判据（#2108）——附在行尾供人看，校验器不读图、也不校验链接可达。
 **自检**：`node .github/scripts/preflight-pr.mjs --body-file <正文文件>`（与 CI 同一份判据；红了别开 PR）。
+**下面两行是占位示例，必须整行换成真读数**：只把 `<sha7>` 换成真 sha、留着 `<…读数行原样>` 不换，会判「没有实际读数」而红（token 后面必须跟着门真打出来的 `key=value`，2026-10-29 review 的 P0）。
 -->
 
-- ② 跑于 `<sha7>` · `MP_WEIXIN_RESULT ...`（`scripts/mp-weixin-check.ps1` 原样输出）· 图
-- ④ 跑于 `<sha7>` · `KOTLIN_ALL_RESULT ...`（`scripts/kotlin-all-check.ps1` 原样输出；dev 面为 `COMPILE_RESULT ...`）
+- ② 跑于 `<sha7>` · `<MP_WEIXIN_RESULT 读数行原样>`（`scripts/mp-weixin-check.ps1` 原样输出；图可选，附行尾）
+- ④ 跑于 `<sha7>` · `<KOTLIN_ALL_RESULT 读数行原样>`（`scripts/kotlin-all-check.ps1` 原样输出；dev 面为 `<COMPILE_RESULT 读数行原样>`）
 
 ## 自检清单
 - [ ] 提交信息遵循 Conventional Commits

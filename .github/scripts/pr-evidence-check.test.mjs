@@ -256,25 +256,52 @@ test('注入自检：桩不被调用时该判定必须失败（防空跑假绿�
   assert.equal(called, 1, '祖先口径必须真的走 compare —— 桩没被调用说明判据空转了');
 });
 
-/* ─────────────── 例外通道 ─────────────── */
+/* ─────────────── 例外通道（2026-10-29 review 收窄：必须点名门） ─────────────── */
 
-test('例外通道：只写「已接受未验证风险」即可放行（A1 删除「事后验证计划」必填件）', async () => {
-  const r = await run({ body: `## 验收证据\n\n已接受未验证风险：本轮只改样式，④ 稍后补。\n` });
+test('例外通道：点名 ④ ⇒ 放行，且把被豁免的缺项原样带进 notes', async () => {
+  const r = await run({ body: `## 验收证据\n\n- 例外：已接受未验证风险 ④\n` });
   assert.equal(r.ok, true);
   assert.deepEqual(r.errors, []);
   assert.match(r.notes.join(), /例外通道/);
+  assert.match(r.notes.join(), /已豁免/);
   assert.match(r.notes.join(), /必须由人执行合并/);
 });
 
+test('P0-2 锁：只写「已接受未验证风险」不点名门 ⇒ 不放行（五个字换不来豁免）', async () => {
+  const r = await run({ body: `## 验收证据\n\n已接受未验证风险\n` });
+  assert.equal(r.ok, false);
+  assert.ok(r.errors.length > 0, '没点名门就把全部 errors 清空 —— 通道宽到没有意义');
+});
+
+test('P0-2 锁：否认句不算声明（「不适用『已接受未验证风险』」曾被当成声明）', async () => {
+  const r = await run({ body: `## 验收证据\n\n本 PR 不适用「已接受未验证风险」通道，证据齐全。\n` });
+  assert.equal(r.ok, false);
+});
+
+test('P0-2 锁：例外只清被点名的门 —— 点名 ② 救不了 ④ 的缺项', async () => {
+  // 命中 MP-WEIXIN 面 ⇒ ②④ 都必填，这里两行都没写
+  const r = await run({ files: mpFiles, body: `## 验收证据\n\n- 例外：已接受未验证风险 ②\n` });
+  assert.equal(r.ok, false);
+  assert.ok(r.errors.some((e) => e.includes('④')), `④ 的缺项必须照红，实际：${r.errors.join(' / ')}`);
+  assert.match(r.notes.join(), /只覆盖了/);
+});
+
+test('例外声明写在段外不算（背景叙述 / 引用的旧例子不得触发）', async () => {
+  const r = await run({ body: `## 改了什么\n\n上一轮用过「已接受未验证风险 ④」。\n\n## 验收证据\n` });
+  assert.equal(r.ok, false);
+  assert.ok(r.errors.length > 0);
+});
+
 test('例外通道不能替代证据段：缺 `## 验收证据` 仍红', async () => {
-  const r = await run({ body: '## 改了什么\n\n已接受未验证风险\n' });
+  const r = await run({ body: '## 改了什么\n\n- 例外：已接受未验证风险 ④\n' });
   assert.equal(r.ok, false);
   assert.match(r.errors[0], /验收证据/);
 });
 
-test('例外通道把缺项原样带进 notes（不许静默吞掉缺了什么）', async () => {
-  const r = await run({ body: `## 验收证据\n\n已接受未验证风险\n` });
-  assert.match(r.notes[0], /缺项：[\s\S]*④/);
+test('点名了但该门没缺项 ⇒ 记 note（多写了），不假装豁免了东西', async () => {
+  const r = await run({ body: `${bothGates()}- 例外：已接受未验证风险 ②\n` });
+  assert.equal(r.ok, true);
+  assert.match(r.notes.join(), /没有缺项/);
 });
 
 /* ─────────────── 结构化字段（预检/渲染消费） ─────────────── */
@@ -308,14 +335,27 @@ test('描述符是严格 JSON 可解析（PowerShell 侧用 ConvertFrom-Json 读
   assert.deepEqual(parsed.gates.map((g) => g.key), ['②', '④']);
 });
 
-test('模板门行形状锁：PR 模板里的门行逐门可被识别（不缺行、不缺读数行）', async () => {
+test('P0-1 锁：模板原样（只换 sha7）不得判绿 —— 否则「照抄模板」就等于有证据', async () => {
   const tpl = readFileSync(templatePath, 'utf8');
-  // 先剥 HTML 注释：注释里也写着「- ② 微信小程序门：…」这类说明行，不剥会锁到说明行上。
+  const section = (tpl.split('## 验收证据')[1] || '').replace(/<!--[\s\S]*?-->/g, '');
+  // 最接近「照抄模板、只改 sha」的形态：占位 sha 换成真 head 前 7 位，读数行原样不动。
+  // 2026-10-29 review 实测：改之前这一形态 ok=true（token 只判 line.includes）。
+  const filled = section.replace(/<sha7>/g, HEAD7);
+  const r = await run({ files: mpFiles, body: `## 验收证据\n${filled}` });
+  assert.equal(r.ok, false, '模板原样被判绿：占位读数被当成真读数（P0-1）');
+  assert.ok(
+    r.errors.some((e) => /没有实际读数/.test(e)),
+    `应报「没有实际读数」，实际：${r.errors.join(' / ')}`,
+  );
+});
+
+test('模板必须给出可照抄的门行形状（光堵假绿不够，人得知道写什么）', () => {
+  const tpl = readFileSync(templatePath, 'utf8');
   const section = (tpl.split('## 验收证据')[1] || '').replace(/<!--[\s\S]*?-->/g, '');
   for (const gate of GATE_EVIDENCE.gates) {
     const line = section.split('\n').find((l) => l.replace(/^\s*[-*]\s+/, '').startsWith(gate.key));
-    assert.ok(line, `模板里没有 ${gate.key} 行 —— 照模板写的人会撞红`);
-    assert.ok(gate.tokens.some((t) => line.includes(t)), `模板的 ${gate.key} 行没写读数行 token`);
+    assert.ok(line, `模板里没有 ${gate.key} 行 —— 照模板写的人不知道要写哪一行`);
+    assert.ok(gate.tokens.some((t) => line.includes(t)), `模板的 ${gate.key} 行没提示读数行 token`);
     assert.match(line, /跑于/, `模板的 ${gate.key} 行没写 \`跑于 <sha7>\``);
   }
 });
@@ -327,6 +367,33 @@ test('判据模块不得把退役机制请回来（评论候选 / marker / 展�
   for (const banned of [/gateComments/, /commitComments/, /issueComments/, /gate-evidence:/, /issueNumbersInBody/, /exemptions/]) {
     assert.doesNotMatch(src, banned, `判据里出现了已退役的东西：${banned}`);
   }
+});
+
+test('W1：CI 的 compare 取数必须并 previous_filename（改名是运行时面改动的一种形态）', () => {
+  const wf = readFileSync(workflowPath, 'utf8');
+  // `a.uvue` → `a.ts` 时 compare 只报 filename=a.ts；不并 previous_filename ⇒ 判「运行时面没动」⇒ fail-open
+  assert.match(wf, /previous_filename/, 'compare 取数没并 previous_filename：改名成 .ts 可绕过祖先判定');
+  assert.match(wf, /f\.filename/, '取数形态变了，这条断言要跟着改');
+});
+
+test('W2：compare 不回 files（非 300 截断）也必须按截断处理，不能当「没改动」', () => {
+  const wf = readFileSync(workflowPath, 'utf8');
+  assert.match(wf, /raw === null/, 'compare 不回 files 的形态没被识别 ⇒ 又一次 fail-open');
+  assert.match(wf, /filesTruncated:\s*truncated|filesTruncated:/, 'filesTruncated 的产出形态变了');
+});
+
+test('CI 同构：剥 export + new Function 求值必须能跑通（import 绿不代表 CI 绿）', async () => {
+  // pr-evidence.yml 不 checkout，用 repos.getContent 取单文件文本再 new Function 求值。
+  // 这条路径与本地 import 不同：文件里一旦出现 import / 顶层 await，本地照样绿、CI 当场炸。
+  const src = readFileSync(validatorPath, 'utf8');
+  const api = new Function(`${src.replace(/^export /gm, '')}\nreturn { validatePrEvidence };`)();
+  const green = await api.validatePrEvidence({ files: [uvue()], body: onlyG4(), headSha: HEAD });
+  assert.equal(green.ok, true);
+  // 同一条路径上，「照抄模板」也必须红 —— 两个加载路径的结论要一致
+  const tpl = readFileSync(templatePath, 'utf8');
+  const filled = (tpl.split('## 验收证据')[1] || '').replace(/<!--[\s\S]*?-->/g, '').replace(/<sha7>/g, HEAD7);
+  const red = await api.validatePrEvidence({ files: mpFiles, body: `## 验收证据\n${filled}`, headSha: HEAD });
+  assert.equal(red.ok, false);
 });
 
 test('workflow 不再读评论，也不再要 issues 权限（A1：证据只在正文）', () => {
@@ -341,7 +408,9 @@ test('workflow 不再读评论，也不再要 issues 权限（A1：证据只在�
 test('workflow 仍把「files ≥300 ⇒ 截断」写进取数回调（截断漏判会放行旧证据）', () => {
   const wf = readFileSync(workflowPath, 'utf8');
   assert.match(wf, /COMPARE_FILES_CAP\s*=\s*300/);
-  assert.match(wf, /filesTruncated:\s*fileList\.length\s*>=\s*COMPARE_FILES_CAP/);
+  // 判的是**原始**文件数：展开 previous_filename 之后一次改名会凭空多一条，
+  // 拿展开后的条数比 300 会把没截断的判成截断（多要一次重跑，方向安全但白付）。
+  assert.match(wf, /raw\.length\s*>=\s*COMPARE_FILES_CAP/);
 });
 
 test('② 判据不得退回「扫改动文本里的字面量」（文本判据与语义脱节的复发防线）', () => {

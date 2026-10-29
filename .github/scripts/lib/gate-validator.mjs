@@ -30,11 +30,10 @@
 // 「跑于」锚点）。node 侧当对象字面量读，PowerShell 侧（证据生成器）抽 marker 之间的**同一段字节**
 // `ConvertFrom-Json` —— 两个消费者读的字节完全相同。
 // 块内规则（PowerShell 的 JSON 解析器不认别的东西）：**不加注释、不加尾逗号、正则只给 source 与 flags**。
-// 加一道门 = 往 gates 里加一条（`#2049` 的 ⑤ 到时候是加配置，不是重构校验器）。
+// 加一道**走已有触发面**的门 = 往 gates 里加一条；加**新触发面**的门还要同时扩触发判定
+// （`isRuntimeFile` / `hitsMpWeixinFace` 是硬编码清单，不是配置）——别以为加条 gates 就够了。
 // ===== GATE_EVIDENCE_DESCRIPTOR BEGIN =====
 export const GATE_EVIDENCE = {
-  "schemaVersion": 2,
-  "ticket": 2100,
   "heading": "## 验收证据",
   "listItem": {
     "source": "^\\s*[-*]\\s",
@@ -49,9 +48,9 @@ export const GATE_EVIDENCE = {
     "strip": "[·|]\\s*$",
     "display": " · "
   },
-  "placeholder": {
-    "source": "^(|[-—–~]+|待人工|待补|待填|待确认|⏳|tbd|todo|n\\/?a|无|暂无)$",
-    "flags": "i"
+  "readingValue": {
+    "source": "[A-Za-z_][\\w.-]*\\s*=\\s*\\S+",
+    "hint": "token 后面必须跟着门真打出来的键值对（如 `errors=0` / `pages=3`），只写 token 或写 `...` 都是占位"
   },
   "gates": [
     {
@@ -68,18 +67,14 @@ export const GATE_EVIDENCE = {
       "tokens": ["KOTLIN_ALL_RESULT", "COMPILE_RESULT"],
       "tokenHint": "门自带的 `KOTLIN_ALL_RESULT`（④c）或 `COMPILE_RESULT`（④a）读数行"
     }
-  ],
-  "verification": {
-    "root": "docs/verification",
-    "display": "docs/verification/<模块>/<票号>/<页名>.<ext>"
-  }
+  ]
 };
 // ===== GATE_EVIDENCE_DESCRIPTOR END =====
 
 const toRe = (spec) => new RegExp(spec.source, spec.flags || '');
 
 // 报错文案里给一行可照抄的形状（判据与提示同源，别在两处各写一份）。
-const EVIDENCE_LINE_HINT = '跑于 `<sha7>` · <门读数行> · 图 <GitHub 附件链接>';
+const EVIDENCE_LINE_HINT = '跑于 `<sha7>` · <门读数行原样>（图可选，附在行尾）';
 
 // 「这张改动单算不算碰了交付形态」——运行时面与 ② 触发面共用同一判据，
 // 免得「门被点亮的理由」和「门证据的失效条件」两套口径各走一路。
@@ -95,6 +90,9 @@ export function isRuntimeFile(p) {
 // A1 下它**不判红**（正文不再写 ④b 行），只作为发版前提醒出现在 notes 里 —— 判据删了，
 // 「这件事存在」的事实不该跟着消失。
 function touchesPackaging(files) {
+  // 这份清单与上面的 `RUNTIME_JSON` **当前恰好同集**，但概念不同：一个是「算不算运行时面」（触发 ④），
+  // 一个是「算不算碰了交付形态」（触发 ④b 的 notes）。别因为看着一样就合并 —— 将来任一侧要分叉
+  // （例如打包面单独加某份资源），合并的写法会把两件事绑死。
   const PACKAGE_FILES = ['manifest.json', 'pages.json', 'platformConfig.json'];
   return files.some((f) => {
     const p = f.filename;
@@ -132,7 +130,10 @@ const shaMatches = (a, b) => Boolean(a) && Boolean(b) && (a.startsWith(b) || b.s
 export async function validatePrEvidence({
   files, body, headSha = '', fetchCompare = null,
 }) {
+  // 错误带上门归属：例外通道要按门豁免，字符串数组做不到「只清 ②、④ 照红」。
+  // 返回给调用方前统一渲染成字符串（三个消费者的接口不变）。
   const errors = [];
+  const err = (gate, text) => errors.push({ gate, text });
   const notes = [];
 
   const runtime = files.filter((f) => isRuntimeFile(f.filename)).map((f) => f.filename);
@@ -153,23 +154,37 @@ export async function validatePrEvidence({
   }
 
   const clean = String(body || '').replace(/<!--[\s\S]*?-->/g, '');
-  const head = clean.match(/^##\s*验收证据\s*$/m);
+  // 段名从描述符取：写死正则会让「改描述符」只动生成侧、校验侧静默不跟（第二套口径）。
+  const escRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const head = clean.match(new RegExp(`^${escRe(GATE_EVIDENCE.heading)}\\s*$`, 'm'));
   if (!head) {
-    errors.push('缺 `## 验收证据` 段（段名固定，见 .github/PULL_REQUEST_TEMPLATE.md）。');
-    return { ok: false, errors, notes, runtime, needs4b, gates };
+    err('*', `缺 \`${GATE_EVIDENCE.heading}\` 段（段名固定，见 .github/PULL_REQUEST_TEMPLATE.md）。`);
+    return { ok: false, errors: errors.map((e) => e.text), notes, runtime, needs4b, gates };
   }
   const rest = clean.slice(head.index + head[0].length);
   const next = rest.search(/^##\s/m);
   const section = next === -1 ? rest : rest.slice(0, next);
 
-  // 例外通道：显式风险接受。A1 只认一句话（#2100 决策 4）——
-  // 「事后验证计划」这个必填件已删：它不改变任何判定，只多一道填字。
-  // 判到即清空 errors、缺项进 notes；**仍须由人执行合并**（约束在 AGENTS.md，机械上分不出人/agent）。
-  const riskDeclared = /已接受未验证风险/.test(clean);
+  // 例外通道：显式风险接受，**必须点名哪道门**（#2100 决策 4；2026-10-29 review 收窄）。
+  //
+  // 旧实现是 `/已接受未验证风险/.test(clean)` —— 全文任意位置命中即清空全部 errors，
+  // 于是「本 PR 不适用『已接受未验证风险』通道」这种**否认句**也会命中，五个字空正文也能过。
+  // 收窄的三条（都不靠加填字，全靠现有结构）：
+  //   ① 只在 `## 验收证据` 段内生效 ⇒ 背景叙述 / 引用的旧例子不会误触发；
+  //   ② 声明必须点名门号（`- 例外：已接受未验证风险 ②`）⇒ 写得含糊就清不掉任何东西，自动退回红；
+  //   ③ 只清空**被点名门**的 errors ⇒ ④ 有缺项时写 ② 的豁免救不了它。
+  const WAIVE_HINT = '- 例外：已接受未验证风险 <门号>';
+  const GATE_KEY_RE = new RegExp(`${GATE_EVIDENCE.gates.map((g) => escRe(g.key)).join('|')}(?![a-z])`, 'g');
+  const waived = new Set();
+  for (const line of section.split('\n')) {
+    if (!/已接受未验证风险/.test(line)) continue;
+    for (const k of line.match(GATE_KEY_RE) || []) waived.add(k);
+  }
 
   const LIST_ITEM = toRe(GATE_EVIDENCE.listItem);
   const LIST_ITEM_PREFIX = new RegExp(GATE_EVIDENCE.listItem.prefixStrip);
   const RAN_AT = toRe(GATE_EVIDENCE.ranAt);
+  const READING_VALUE = toRe(GATE_EVIDENCE.readingValue);
 
   // ④ 全家（④ / ④a / ④b / ④c）都含「④」⇒ 按行首编号匹配，④a / ④b 行不能顶替 ④ 行。
   const matchesGate = (line, gate) => {
@@ -226,16 +241,23 @@ export async function validatePrEvidence({
     const where = `${gate.key} ${gate.label}`;
     const line = lines.find((l) => matchesGate(l, gate));
     if (!line) {
-      errors.push(`${where}：缺该行。按模板写一行 \`- ${gate.key} ${EVIDENCE_LINE_HINT}\`。`);
+      err(gate.key, `${where}：缺该行。按模板写一行 \`- ${gate.key} ${EVIDENCE_LINE_HINT}\`。`);
       continue;
     }
     const token = gate.tokens.find((t) => line.includes(t));
     if (!token) {
-      errors.push(`${where}：该行没有${gate.tokenHint} —— 门自带的机读行原样贴进来即可，不要改写它。`);
+      err(gate.key, `${where}：该行没有${gate.tokenHint} —— 门自带的机读行原样贴进来即可，不要改写它。`);
+    } else {
+      // token 只是「门名」，不能单独算读数。模板曾预置 `MP_WEIXIN_RESULT ...`，只判 includes
+      // 就等于「照抄模板即绿」（2026-10-29 review 的 P0）。token 之后必须跟着门真打出来的键值对。
+      const after = line.slice(line.indexOf(token) + token.length);
+      if (!READING_VALUE.test(after)) {
+        err(gate.key, `${where}：${gate.tokenHint} 后面没有实际读数 —— ${GATE_EVIDENCE.readingValue.hint}。`);
+      }
     }
     const m = line.match(RAN_AT);
     if (!m) {
-      errors.push(`${where}：缺 \`跑于 <sha7>\`（门是在哪个 commit 上跑的，写它的前 7 位）。`);
+      err(gate.key, `${where}：缺 \`跑于 <sha7>\`（门是在哪个 commit 上跑的，写它的前 7 位）。`);
       continue;
     }
     const sha = m[1].toLowerCase();
@@ -249,7 +271,7 @@ export async function validatePrEvidence({
       if (v.reason !== '等于 head') notes.push(`${where}：绑定 ${sha.slice(0, 7)} —— ${v.reason}。`);
     } else {
       state.reason = v.reason;
-      errors.push(`${where}：\`跑于 ${sha.slice(0, 7)}\` 绑不上当前 head —— ${v.reason}。`);
+      err(gate.key, `${where}：\`跑于 ${sha.slice(0, 7)}\` 绑不上当前 head —— ${v.reason}。`);
     }
   }
 
@@ -260,20 +282,40 @@ export async function validatePrEvidence({
     notes.push('④b 打包面命中（三份 json / utssdk 原生面 / *.aar / libs/*.jar）：A1 下不判红、正文不写 ④b 行，但**发版前必须跑** release 云打包（ADR-0008）。');
   }
 
-  if (errors.length > 0 && riskDeclared) {
-    return {
-      ok: true,
-      errors: [],
-      notes: [
-        `⚠️ 本 PR 走的是「已接受未验证风险」例外通道。缺项：${errors.join('；')}`,
-        '⚠️ 例外通道下必须由人执行合并（AGENTS.md：agent 不得自行合并触及运行时面的 PR）。',
-        ...notes,
-      ],
-      runtime,
-      needs4b,
-      gates,
-    };
+  // 例外通道只在「点名门覆盖了**全部**缺项」时放行；否则照红，并说明差在哪。
+  if (errors.length > 0 && waived.size > 0) {
+    const absorbed = errors.filter((e) => waived.has(e.gate));
+    const blocking = errors.filter((e) => !waived.has(e.gate));
+    // 点名了但该门其实没缺项 ⇒ 记 note（防模板残留，也防「我写了豁免 = 全都免了」的误读）
+    const idle = [...waived].filter((k) => !errors.some((e) => e.gate === k));
+    if (blocking.length === 0) {
+      return {
+        ok: true,
+        errors: [],
+        notes: [
+          `⚠️ 走「已接受未验证风险」例外通道，豁免门：${[...waived].join(' / ')}。`,
+          ...absorbed.map((e) => `⚠️ 已豁免：${e.text}`),
+          ...idle.map((k) => `⚠️ 例外声明点了 ${k}，但那道门本次没有缺项（多写了一句，不影响结论）。`),
+          '⚠️ 例外通道下必须由人执行合并（AGENTS.md：agent 不得自行合并触及运行时面的 PR）。',
+          ...notes,
+        ],
+        runtime,
+        needs4b,
+        gates,
+      };
+    }
+    notes.push(`例外声明只覆盖了 ${[...waived].join(' / ')}，仍有未被覆盖的缺项（见下）—— 要豁免就点名对应门号（\`${WAIVE_HINT}\`）。`);
   }
-  if (errors.length === 0) notes.push('证据结构完整（pr-evidence 只校结构与 sha 绑定，真伪由维护者判定）。');
-  return { ok: errors.length === 0, errors, notes, runtime, needs4b, gates };
+  if (errors.length === 0) {
+    if (waived.size > 0) notes.push(`例外声明写了 ${[...waived].join(' / ')}，但本次没有缺项 —— 可以删掉那句话。`);
+    else notes.push('证据结构完整（pr-evidence 只校结构与 sha 绑定，真伪由维护者判定）。');
+  }
+  return {
+    ok: errors.length === 0,
+    errors: errors.map((e) => e.text),
+    notes,
+    runtime,
+    needs4b,
+    gates,
+  };
 }
