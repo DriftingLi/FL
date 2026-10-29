@@ -362,8 +362,13 @@ const MODULES = {
 
   jobs: {
     extraDirs: [],
-    files: ['api/job.uts', 'pages/jobs/job-detail.uvue', 'pages/jobs/job-list.uvue'],
-    extractDirs: [],
+    files: [
+      'api/job.uts',
+      'pages/jobs/components/notice-panel.uvue',
+      'pages/jobs/job-detail.uvue',
+      'pages/jobs/job-list.uvue',
+    ],
+    extractDirs: ['pages/jobs/components'],
     /** 消费 `courses` 的 `api/course.uts`（登记在 courses 的消费者面） */
     crossModuleConsumers: [],
     budget: BUDGET,

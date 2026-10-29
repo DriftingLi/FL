@@ -35,13 +35,8 @@
             </view>
         </view>
 
-        <!-- 职位/公告 Tab 内容 -->
-        <scroll-view class="content-scroll" scroll-y="true" @scrolltolower="onLoadMore">
-            <!-- 公告 tab：后端公告接口未建，空态占位（与旧招聘面板同语义，不放假数据） -->
-            <view v-if="recruitTab === 'notice'" class="empty-tip">
-                <text class="empty-icon">📢</text>
-                <text class="empty-text">暂无公告</text>
-            </view>
+        <!-- 职位/公告 Tab 内容：公告 tab 由本模块私有组件承载（票 1941 抽出，见 utils/modules.js 的 jobs.files） -->
+        <scroll-view v-if="recruitTab === 'job'" class="content-scroll" scroll-y="true" @scrolltolower="onLoadMore">
             <view v-if="recruitTab === 'job' && jobs.length == 0 && !loading" class="empty-tip">
                 <text class="empty-icon">💼</text>
                 <text class="empty-text">暂无职位信息</text>
@@ -86,6 +81,7 @@
                 <text class="loading-text">没有更多了</text>
             </view>
         </scroll-view>
+        <notice-panel v-if="recruitTab === 'notice'" />
     </view>
 </template>
 
@@ -99,6 +95,7 @@
     import { useAuthStore } from '../../stores/auth'
     import { jobCredentialNotice, buildCredentialFilterOptions, credentialFilterParam } from '../../utils/jobCredentialDisplay'
     import type { JobPosting, JobRequiredCredential } from '../../types/index'
+    import NoticePanel from './components/notice-panel.uvue'
 
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
@@ -112,7 +109,7 @@
         return ''
     })
 
-    // ---- 公告/职位 Tab 态（公告暂无后端，职位为默认真实内容）----
+    // ---- 公告/职位 Tab 态（公告 = 内容精选 notice 类别，职位为默认真实内容）----
     const recruitTab = ref<string>('job') // notice | job
 
     function onTabChange(tab : string) : void {
@@ -280,7 +277,6 @@
     }
 
     function onLoadMore() : void {
-        if (recruitTab.value !== 'job') return
         loadJobs(false)
     }
 </script>
@@ -516,6 +512,7 @@
     .job-action-apply-text {
         color: $text-color-inverse;
     }
+
 
     /* 空状态 */
     .empty-tip {

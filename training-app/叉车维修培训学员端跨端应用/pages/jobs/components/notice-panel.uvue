@@ -1,0 +1,197 @@
+<template>
+    <!-- 招聘「公告」tab（票 1941 / spec #1935 草稿 15）：公告 = 内容精选 notice 类别。
+         ADR-0045：不建第二套内容系统；详情复用 featured-detail（Markdown 子集 + source + 收藏）。
+         分页走 ADR-0027 的分页协议（composables/usePagedList），本页不手写装载协议。 -->
+    <scroll-view class="content-scroll" scroll-y="true" @scrolltolower="onLoadMore">
+        <view v-if="isEmpty" class="empty-tip">
+            <text class="empty-icon">📢</text>
+            <text class="empty-text">暂无公告</text>
+        </view>
+        <view v-if="failed" class="empty-tip">
+            <text class="empty-text">加载失败</text>
+            <view class="retry-btn" @click="onRetry">
+                <text class="retry-text">重试</text>
+            </view>
+        </view>
+        <view class="notice-list">
+            <view v-for="notice in notices" :key="notice.content_id" class="notice-card" @click="onNoticeDetail(notice.content_id)">
+                <text class="notice-title">{{ notice.title }}</text>
+                <text v-if="notice.summary.length > 0" class="notice-summary" numberOfLines="2">{{ notice.summary }}</text>
+                <view class="notice-meta">
+                    <view v-if="notice.category_label.length > 0" class="notice-tag">
+                        <text class="notice-tag-text">{{ notice.category_label }}</text>
+                    </view>
+                    <text v-if="notice.source.length > 0" class="notice-source">{{ notice.source }}</text>
+                    <text v-if="notice.published_at.length > 0" class="notice-date">{{ displayTime(notice.published_at) }}</text>
+                </view>
+            </view>
+        </view>
+        <view v-if="loading" class="loading-more">
+            <text class="loading-text">加载中...</text>
+        </view>
+        <view v-if="!hasMore && notices.length > 0" class="loading-more">
+            <text class="loading-text">没有更多了</text>
+        </view>
+    </scroll-view>
+</template>
+
+<script setup lang="uts">
+    import { onMounted } from 'vue'
+    import { getFeaturedContentsApi } from '../../../api/featured'
+    import { usePagedList } from '../../../composables/usePagedList'
+    import { formatDateStr } from '../../../utils/format'
+    import type { PagedBatch } from '../../../composables/usePagedList'
+    import type { FeaturedContentItem } from '../../../types/index'
+
+    /** 每页条数留在本模块闭包里（ADR-0027 ②：模块只递页码） */
+    const NOTICE_PAGE_SIZE = 10
+
+    /** 模板不可直调 import 函数（先例 featured-list）：展示纯函数经本地薄包装 */
+    function displayTime(dateStr : string) : string {
+        return formatDateStr(dateStr)
+    }
+
+    /**
+     * 取第 page 页（页码从 1 起，由 usePagedList 递进来）。
+     * 终止判据取 api 层信封归一的 hasMore（ADR-0037 ①），本模块不再自己算 total。
+     */
+    async function fetchNoticePage(page : number) : Promise<PagedBatch<FeaturedContentItem>> {
+        try {
+            const result = await getFeaturedContentsApi(page, NOTICE_PAGE_SIZE, 'notice')
+            return {
+                items: result.items,
+                hasMore: result.hasMore,
+            } as PagedBatch<FeaturedContentItem>
+        } catch (e) {
+            uni.showToast({ title: '加载公告失败', icon: 'none' })
+            throw new Error('加载公告失败')
+        }
+    }
+
+    // 传箭头包一层而非裸具名引用：UTS 生成 Kotlin 时会把裸引用读成「调用」（先例 useTopicFeed）
+    const paged = usePagedList<FeaturedContentItem>((page : number) : Promise<PagedBatch<FeaturedContentItem>> => fetchNoticePage(page))
+    const notices = paged.items
+    const loading = paged.loading
+    const failed = paged.failed
+    const isEmpty = paged.isEmpty
+    const hasMore = paged.hasMore
+
+    function onLoadMore() : void {
+        paged.onLoadMore()
+    }
+
+    function onRetry() : void {
+        paged.loadFirst()
+    }
+
+    function onNoticeDetail(contentId : number) : void {
+        uni.navigateTo({ url: '/pages/featured/featured-detail?id=' + contentId })
+    }
+
+    // 父组件只在切到公告 tab 时才挂载本组件 ⇒ 挂载即首屏
+    onMounted(() => {
+        paged.loadFirst()
+    })
+</script>
+
+<style lang="scss">
+    .content-scroll {
+        flex: 1;
+    }
+
+    .notice-list {
+        flex-direction: column;
+        padding: $spacing-sm $spacing-md;
+    }
+
+    .notice-card {
+        background-color: $bg-header;
+        border-radius: $radius-md;
+        padding: $spacing-md;
+        margin-bottom: $spacing-sm;
+        border: 1rpx solid #eeeeee;
+        flex-direction: column;
+    }
+
+    .notice-title {
+        font-size: $font-size-lg;
+        font-weight: bold;
+        color: $text-color;
+        margin-bottom: 12rpx;
+    }
+
+    .notice-summary {
+        font-size: 26rpx;
+        color: $text-color-secondary;
+        line-height: 1.5;
+        margin-bottom: 12rpx;
+    }
+
+    .notice-meta {
+        flex-direction: row;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    /* 类别 chip：底色落在 view，文字样式只上 text（uvue 文字类样式只认文字载体） */
+    .notice-tag {
+        background-color: #e8f0fe;
+        border-radius: $radius-sm;
+        padding: 4rpx 12rpx;
+        margin-right: $spacing-sm;
+    }
+
+    .notice-tag-text {
+        font-size: 22rpx;
+        color: $primary-color;
+    }
+
+    .notice-source {
+        font-size: $font-size-xs;
+        color: $text-color-secondary;
+        margin-right: $spacing-sm;
+    }
+
+    .notice-date {
+        font-size: $font-size-xs;
+        color: $text-color-placeholder;
+    }
+
+    .empty-tip {
+        flex-direction: column;
+        align-items: center;
+        padding: 80rpx 0;
+    }
+
+    .empty-icon {
+        font-size: 80rpx;
+        margin-bottom: $spacing-md;
+    }
+
+    .empty-text {
+        font-size: $font-size-md;
+        color: $text-color-placeholder;
+    }
+
+    .retry-btn {
+        margin-top: $spacing-md;
+        padding: 12rpx 40rpx;
+        border-radius: $radius-md;
+        border: 1rpx solid $primary-color;
+    }
+
+    .retry-text {
+        font-size: $font-size-sm;
+        color: $primary-color;
+    }
+
+    .loading-more {
+        align-items: center;
+        padding: $spacing-md 0;
+    }
+
+    .loading-text {
+        font-size: $font-size-xs;
+        color: $text-color-placeholder;
+    }
+</style>
