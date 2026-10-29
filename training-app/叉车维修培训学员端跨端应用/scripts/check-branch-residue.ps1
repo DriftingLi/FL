@@ -127,7 +127,7 @@ function Invoke-Gh {
     return @{ ok = $false; out = @($out) }
 }
 
-# ── 仓库根（同 new-worktree.ps1 / cleanup-dot-worktrees.ps1：从 git 公共目录取，不从脚本位置上溯）
+# ── 仓库根（同 new-worktree.ps1：从 git 公共目录取，不从脚本位置上溯）
 $commonDir = (& git -C $PSScriptRoot rev-parse --git-common-dir 2>$null | Select-Object -First 1)
 if (-not $commonDir) { Fail '取不到 --git-common-dir（不在 git 仓库里？）' 2 }
 $commonDir = $commonDir.Trim()
