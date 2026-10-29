@@ -49,7 +49,7 @@ function parseArgs(argv) {
   const out = {
     ws: 'ws://127.0.0.1:9420', routes: [], shotDir: '', entryUrl: '', requireRoot: '',
     timeoutMs: 30000, pageTimeoutMs: 10000, settleMs: 2000, tailMax: 40, expectPage: '',
-    assertSelectors: [], assertTexts: [],
+    assertSelectors: [], assertTexts: [], scrollTop: 0, shotsMode: 'single', shotsMax: 5,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
@@ -64,6 +64,13 @@ function parseArgs(argv) {
     else if (a === '--expect-page') out.expectPage = String(val() || '').trim();
     else if (a === '--assert-selector') out.assertSelectors.push(String(val() || '').trim());
     else if (a === '--assert-text') out.assertTexts.push(String(val() || '').trim());
+    // #2097：折叠区取证 —— 目标区在首屏之下时，先滚到该位置再截图；
+    // 不滚的话「截图拍的是标题、改动在屏幕外」，那样的证据不成立（已踩过一次）。
+    else if (a === '--scroll-top') out.scrollTop = Number(val()) || 0;
+    // #2097：'full' = 逐屏滚到页尾各截一张（-p1 / -p2 / …）。改动落在哪一屏都拍得到，
+    // 不必按票手填滚动值 —— 这正是「截图截错位置」那一类问题的通用解。
+    else if (a === '--shots') out.shotsMode = String(val() || 'single');
+    else if (a === '--shots-max') out.shotsMax = Number(val()) || 5;
   }
   return out;
 }
@@ -364,6 +371,168 @@ result.entryPage = result.pageStack[0];
 // `Uncaught [object Object]`，见文件头 2026-09-12 复测段），只判「落地页 == 目标页」+ 截图 + 读数。
 // 达成 ⇒ navigation=ok(detail=cold-start-direct)；未达成 ⇒ SKIP(reason=direct-page-unsupported)：
 // 机制不成立**不冒充门失败**（failures 不产生），也**不冒充逐页取证成立**（不写 true）。
+/**
+ * #2097：滚动到目标位置（折叠区取证的必需前置）。
+ *
+ * 走 mp.evaluate 在**页面上下文**里调 wx.pageScrollTo：automator 的页面级包装 API 在本机 0.12.1
+ * 不稳，而 evaluate 是仓内既有可行通道（先例 scripts/cert-fix-evidence.mjs）。滚动失败不静默吞：
+ * 记 scrollError，让读证据的人知道「这张图不代表目标区」。
+ */
+/**
+ * #2097：逐屏整页取证。改动可能落在任何一屏；只拍首屏就等于「没拍」。
+ *
+ * ⚠️ **2026-10-29 实测的血账（本函数第一版为什么恒只出 -p1）**：第一版靠
+ * `getCurrentPages()` 末页对象的 `p.scrollTop` 判「滚到头了没」——小程序 Page 实例**没有**这个属性，
+ * 读不到就落到真值 0 ⇒ 首次滚动后立刻 `actual <= lastTop` 成立 ⇒ break。三页全只出 `-p1`、
+ * 且**没有** scrollError，绿得毫无痕迹。同时本仓页面把内容放在 `<scroll-view>` 里（dashboard 与
+ * featured-detail 都是 `.content-scroll`），**页级 `wx.pageScrollTo` 在 scroll-view 页面上恒无效**。
+ * 现在的判据全部走 automator 的 ScrollViewElement：`scrollHeight()` 量内容高度、`scrollTo(x, y)` 驱动、
+ * `property('scrollTop')` 回读实际位置。**没有可驱动容器时只拍首屏并写 `shotWarning`** —— 宁可少拍、
+ * 不许冒充「已逐屏」（同 ② 门一贯的「不假绿」纪律）。
+ */
+const SHOT_SCROLL_CANDIDATES = ['.content-scroll', '.page-scroll', 'scroll-view'];
+/** 滚动后等渲染稳定的时长（滚动是同步 IPC 但视图刷新是下一帧，太快会拍到大半旧屏） */
+const SHOT_SCROLL_SETTLE_MS = 350;
+
+/**
+ * 找一个**真能滚**的容器：必须有内容高度且 > 0。
+ *
+ * @returns {Promise<null | { el: any, sel: string, contentH: number }>} null = 本页没有可驱动的滚动容器
+ */
+async function findScrollContainer(page) {
+  if (!page) return null;
+  for (let i = 0; i < SHOT_SCROLL_CANDIDATES.length; i += 1) {
+    const sel = SHOT_SCROLL_CANDIDATES[i];
+    let el = null;
+    try {
+      el = await withTimeout(page.$(sel), args.timeoutMs, 'page.$(' + sel + ')');
+    } catch (e) {
+      el = null;
+    }
+    if (!el || typeof el.scrollHeight !== 'function' || typeof el.scrollTo !== 'function') continue;
+    let contentH = 0;
+    try {
+      contentH = Number(await withTimeout(el.scrollHeight(), args.timeoutMs, 'scrollHeight(' + sel + ')')) || 0;
+    } catch (e) {
+      contentH = 0;
+    }
+    if (contentH <= 0) continue;
+    return { el, sel, contentH };
+  }
+  return null;
+}
+
+/** 回读容器实际 scrollTop；失败返回 -1（与真值 0 区分开，别把「读不到」当「在顶部」） */
+async function readScrollTop(container) {
+  try {
+    return Number(await withTimeout(container.el.property('scrollTop'), args.timeoutMs, 'scrollTop(' + container.sel + ')')) || 0;
+  } catch (e) {
+    return -1;
+  }
+}
+
+async function captureShots(name, shotDir, step) {
+  if (args.shotsMode !== 'full') {
+    const shotFile = path.join(shotDir, name + '.png');
+    await withTimeout(mp.screenshot({ path: shotFile }), args.timeoutMs, 'mp.screenshot(' + name + ')');
+    if (fs.existsSync(shotFile)) {
+      const info = pngInfo(shotFile);
+      result.shots.push({ name, route: step.currentPage, ...info });
+      step.shot = shotFile;
+    } else {
+      step.shotError = 'screenshot 未落盘（该 API 不返回内容，只能看文件）';
+    }
+    return;
+  }
+
+  let winH = 0;
+  try {
+    winH = Number(await withTimeout(mp.evaluate(() => wx.getSystemInfoSync().windowHeight), args.timeoutMs, 'mp.evaluate(windowHeight)')) || 0;
+  } catch (e) {
+    winH = 0;
+  }
+  if (winH <= 0) winH = 600;
+  // 步长取窗口高度的 80%（留重叠，避免正好切掉某一行）
+  const stepPx = Math.max(200, Math.round(winH * 0.8));
+
+  step.shots = [];
+  let page = null;
+  try {
+    page = await withTimeout(mp.currentPage(), args.timeoutMs, 'mp.currentPage(shots)');
+  } catch (e) {
+    page = null;
+  }
+  const container = await findScrollContainer(page);
+
+  const shootOnce = async (shotName) => {
+    const shotFile = path.join(shotDir, shotName + '.png');
+    await withTimeout(mp.screenshot({ path: shotFile }), args.timeoutMs, 'mp.screenshot(' + shotName + ')');
+    if (!fs.existsSync(shotFile)) {
+      step.shotError = 'screenshot 未落盘（该 API 不返回内容，只能看文件）';
+      return null;
+    }
+    return { shotFile, info: pngInfo(shotFile) };
+  };
+
+  if (!container) {
+    // 诚实降级：没有可驱动的滚动容器 ⇒ 只拍首屏，并留名（不冒充「已逐屏」）
+    step.shotWarning = 'no-scroll-container';
+    const one = await shootOnce(name + '-p1');
+    if (one) {
+      result.shots.push({ name: name + '-p1', route: step.currentPage, scrollTop: -1, scroller: null, ...one.info });
+      step.shots.push(one.shotFile);
+      step.shot = one.shotFile;
+    }
+    return;
+  }
+
+  step.scroller = container.sel;
+  step.scrollHeight = container.contentH;
+  const maxTop = Math.max(0, container.contentH - winH);
+  const planned = Math.max(1, Math.min(args.shotsMax, Math.ceil(maxTop / stepPx) + 1));
+  step.shotsPlanned = planned;
+
+  for (let i = 0; i < planned; i += 1) {
+    const want = Math.min(i * stepPx, maxTop);
+    if (i > 0) {
+      try {
+        await withTimeout(container.el.scrollTo(0, want), args.timeoutMs, 'scrollTo(' + container.sel + ',' + want + ')');
+      } catch (e) {
+        step.scrollError = String((e && e.message) || e);
+        break;
+      }
+      await new Promise((r) => setTimeout(r, SHOT_SCROLL_SETTLE_MS));
+    }
+    const actual = await readScrollTop(container);
+    const one = await shootOnce(name + '-p' + (i + 1));
+    if (!one) break;
+    result.shots.push({ name: name + '-p' + (i + 1), route: step.currentPage, scrollTop: actual, scroller: container.sel, ...one.info });
+    step.shots.push(one.shotFile);
+  }
+
+  // 诚实标记：计划多屏但每屏字节完全相同 ⇒ 滚动没生效（别把一张图当多屏证据）
+  if (step.shots.length > 1) {
+    const first = fs.readFileSync(step.shots[0]);
+    let allSame = true;
+    for (let i = 1; i < step.shots.length; i += 1) {
+      if (!first.equals(fs.readFileSync(step.shots[i]))) { allSame = false; break; }
+    }
+    if (allSame) step.shotWarning = 'scroll-ineffective';
+  }
+  if (step.shots.length > 0) step.shot = step.shots[0];
+}
+
+async function applyScroll(y) {
+  if (!y || y <= 0) return '';
+  try {
+    await withTimeout(mp.evaluate((top) => { wx.pageScrollTo({ scrollTop: top, duration: 0 }); }, y), 8000, 'wx.pageScrollTo');
+    await new Promise((r) => setTimeout(r, 400));
+    return '';
+  } catch (e) {
+    return String((e && e.message) || e);
+  }
+}
+
 if (args.expectPage) {
   const target = rel(args.expectPage);
   const leaf = target.split('/').pop() || 'direct';
@@ -377,7 +546,9 @@ if (args.expectPage) {
   if (args.shotDir) {
     // 达成截目标页（文件名=页名）；未达成也截——但命名 miss- 前缀，**不冒充被改页证据**
     const shotName = reached ? leaf : 'miss-' + leaf;
-    const shotFile = path.join(args.shotDir, shotName + '.png');
+    // 先滚到目标区，再截图（#2097；失败只记读数，不冒充拍到了）
+    const scrollErr = await applyScroll(args.scrollTop);
+    if (scrollErr) step.scrollError = scrollErr;
     // #1690 run5 实测：冷启动后 app 侧渲染服务未热 ⇒ mp.screenshot 会撞 automator 内部
     // 15s 应答超时（dashboard 直达 reached=True 却截不到图判红）。重试一次（隔 3s 让服务
     // 热起来），两次都失败才记错——不把「试过一次」冒充成「截到了」。
@@ -385,13 +556,9 @@ if (args.expectPage) {
     for (let attempt = 1; attempt <= 2; attempt++) {
       shotErr = null;
       try {
-        await withTimeout(mp.screenshot({ path: shotFile }), args.timeoutMs, 'mp.screenshot(' + shotName + ')');
-        if (fs.existsSync(shotFile)) {
-          const info = pngInfo(shotFile);
-          result.shots.push({ name: shotName, route: step.currentPage, ...info });
-          step.shot = shotFile;
-          break;
-        }
+        // #2097：取证入口统一走 captureShots —— single 模式等价旧行为，full 模式逐屏拍到页尾。
+        await captureShots(shotName, args.shotDir, step);
+        if (step.shot) break;
         shotErr = 'screenshot 未落盘（该 API 不返回内容，只能看文件）';
       } catch (e) {
         shotErr = String((e && e.message) || e);

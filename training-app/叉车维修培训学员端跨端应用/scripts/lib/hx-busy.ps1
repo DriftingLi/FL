@@ -192,6 +192,59 @@ function Test-HxResponsive {
     return @{ Responsive = $true; Output = ($so.Result + $se.Result); ElapsedMs = [int]$sw.Elapsed.TotalMilliseconds }
 }
 
+function Resolve-HxCliExe {
+    <#
+      找一个**能跑**的 HBuilderX `cli.exe`，供 `Wait-HxFree` 的一次忙探测用（#2112）。
+      顺序与各门脚本既有的解析一致：显式 → `$env:HBuilderX_CLI` → 正在运行的 HBuilderX 同目录
+      （版本必然匹配）→ 常见安装位置（新→旧）。
+      **只判「存在且像可执行」，不做 PE 头校验**：那一步留给真正会用它跑 publish 的门（② / ④c
+      各自解析），这里的目标只有一个 —— 给忙探测一个能立刻返回的目标。
+      找不到返回 `$null`，**不猜、不回退到随便一个 exe**：猜错会把「没装 HBuilderX」误判成
+      「主程序忙」，调用方就该在探测超时与「没装」之间来回折腾（这类误诊在本仓有前例）。
+    #>
+    param([string]$Explicit, [string]$HxDir)
+
+    # 1) 显式即权威：给出就只认它（不可用 ⇒ 调用方判环境不可用，不回退）
+    if ($Explicit) {
+        if (Test-Path -LiteralPath $Explicit -PathType Leaf) { return (Resolve-Path -LiteralPath $Explicit).Path }
+        return $null
+    }
+    # 2) 安装根
+    if ($HxDir) {
+        foreach ($rel in @('cli.exe', 'HBuilderX\cli.exe')) {
+            $c = Join-Path $HxDir $rel
+            if (Test-Path -LiteralPath $c -PathType Leaf) { return (Resolve-Path -LiteralPath $c).Path }
+        }
+    }
+    # 3) 环境变量
+    if ($env:HBuilderX_CLI -and (Test-Path -LiteralPath $env:HBuilderX_CLI -PathType Leaf)) {
+        return (Resolve-Path -LiteralPath $env:HBuilderX_CLI).Path
+    }
+    # 4) 正在运行的 HBuilderX 同目录
+    try {
+        $proc = Get-Process HBuilderX -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($proc) {
+            $runningCli = Join-Path (Split-Path $proc.Path -Parent) 'cli.exe'
+            if (Test-Path -LiteralPath $runningCli -PathType Leaf) { return (Resolve-Path -LiteralPath $runningCli).Path }
+        }
+    }
+    catch {
+        # 进程路径读不到（权限）就继续走位置探测
+    }
+    # 5) 常见安装位置
+    foreach ($pattern in @(
+            'D:\软件\HBuilderX*\HBuilderX\cli.exe',
+            'D:\HBuilderX*\HBuilderX\cli.exe',
+            'C:\Program Files\HBuilderX*\HBuilderX\cli.exe',
+            'C:\Program Files\HBuilderX\cli.exe',
+            "$env:LOCALAPPDATA\HBuilderX\cli.exe")) {
+        $hit = Get-ChildItem -Path $pattern -ErrorAction SilentlyContinue |
+            Sort-Object FullName -Descending | Select-Object -First 1
+        if ($hit) { return $hit.FullName }
+    }
+    return $null
+}
+
 function Wait-HxFree {
     <#
       取 agent 互斥锁 + 探测主程序可响应性，直到可用或超时。

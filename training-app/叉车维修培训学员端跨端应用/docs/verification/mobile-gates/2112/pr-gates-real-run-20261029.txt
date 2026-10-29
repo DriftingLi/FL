@@ -1,0 +1,20 @@
+# pr-gates 开始 2026-10-29 11:30:35（#2112：PR 面一次取锁串 ② 与 ④c）
+# project = D:\FL\wt-2112\training-app\叉车维修培训学员端跨端应用
+# cli = D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe
+# 两门的 stdout 原样 tee 在本文件；结果行不加前缀、不改写
+HX_BUSY wait=1 result=free
+
+>>> pr-gates gate=mp start=11:30:36
+>>> pre-probe（#1860 否定性预探）：port-file-dead：.ide 端口文件在但其服务端口试连不上（C:\Users\ZHENG\AppData\Local\微信开发者工具\User Data\389e542e484c9a41faec27e03bd50a9d\Default\.ide:42103）⇒ IDE 残留/崩溃痕迹（楔死）
+[error] 开发者工具环境楔死（.ide 端口文件在但服务端口试连不上）⇒ publish 之前判 env-blocked（exit 2），不烧构建与重试预算。
+        处置（人工执行）：退出并重启微信开发者工具，或清点残留 IDE 进程后重开；本门绝不 kill IDE（ADR-0008 红线）。
+>>> pr-gates gate=mp exit=2 state=env seconds=18
+
+>>> pr-gates gate=kotlin start=11:30:54
+HX_BUSY wait=0 result=inherited
+>>> [cli-open] D:\软件\HBuilderX.5.23.2026080626\HBuilderX\cli.exe
+[timeout] cli-open 超过 900 秒未返回，已终止
+[error] cli-open 超时（900 秒）
+>>> pr-gates gate=kotlin exit=2 state=env seconds=921
+
+PR_GATES mode=run mp=env kotlin=env exit=env locks=1 acquire=free seconds=921 log=D:\FL\wt-2112\training-app\叉车维修培训学员端跨端应用\.ci-verify\pr-gates.log

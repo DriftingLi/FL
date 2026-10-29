@@ -40,6 +40,14 @@
                         <image v-else-if="block.type == 'image'" class="md-image" :src="block.text" mode="widthFix"></image>
                     </view>
                 </view>
+                <!-- 正文外链（#2097）：链接由正文 Markdown 承载，`source` 列只作来源名称、不参与判断 -->
+                <view v-if="sourceLinks.length > 0" class="link-section">
+                    <text class="link-title">参考链接</text>
+                    <view v-for="(lnk, lIdx) in sourceLinks" :key="lIdx" class="link-item" @click="onOpenLink(lnk.url)">
+                        <text class="link-item-text">{{ lnk.label }}</text>
+                        <text class="link-item-host">{{ lnk.host }}</text>
+                    </view>
+                </view>
                 <!-- 上下篇导航 -->
                 <view v-if="detail!.prev != null || detail!.next != null" class="nav-section">
                     <view v-if="detail!.prev != null" class="nav-item" @click="onNavClick(detail!.prev!)">
@@ -69,6 +77,9 @@ import { goBack } from '../../utils/navigation'
     import { parseMarkdown, SUBSET_FEATURED } from '../../utils/markdown'
     import type { FeaturedContentDetail, FeaturedContentItem, MarkdownBlock } from '../../types/index'
     import { formatDateStr } from '../../utils/format'
+    import { collectFeaturedLinks } from '../../utils/featuredLinks'
+    import type { FeaturedLink } from '../../utils/featuredLinks'
+    import { dispatchExternalLinkTap } from '../../utils/externalLinkDispatch'
 
     /** 模板不可直调 import 函数（uvue 模板 import 调用编译为 .invoke() = Kotlin error18，先例 #677）；
      *  本地薄包装消费 utils/format 唯一实现（T03 口径：展示纯函数零第二实现） */
@@ -91,6 +102,17 @@ import { goBack } from '../../utils/navigation'
         return parseMarkdown(detail.value!.content, SUBSET_FEATURED)
     })
 
+    /** 正文 Markdown 里的外链：按出现顺序、同 URL 去重；协议闸在分词器单点，本页不判协议 */
+    const sourceLinks = computed<FeaturedLink[]>(() : FeaturedLink[] => {
+        if (detail.value == null) return []
+        return collectFeaturedLinks(detail.value!.content)
+    })
+
+    /** 确认弹窗 + 按端分叉复用既有编排（移动端 ADR-0025 ⑩-8/⑩-9）；模板不可直调 import ⇒ 本地薄包装 */
+    function onOpenLink(url : string) : void {
+        dispatchExternalLinkTap(url)
+    }
+
     function getHeadingSize(level : number) : string {
         if (level == 1) return '38rpx'
         if (level == 2) return '34rpx'
@@ -99,7 +121,13 @@ import { goBack } from '../../utils/navigation'
     }
 
     async function loadDetail() : Promise<void> {
-        if (contentId.value <= 0) return
+        // 缺 id / id 非法（脏链接、外部直达）⇒ 直接落「内容不存在」态（模板 v-else）。
+        // 不能就这么 return：loading 会永远停在 true，页面卡在「加载中…」——
+        // 这正是 #2097 由 ② 门截图暴露的形态（门导航到本页不带 id，截出来是永久加载中）。
+        if (contentId.value <= 0) {
+            loading.value = false
+            return
+        }
         loading.value = true
         try {
             const result = await getFeaturedContentDetailApi(contentId.value)
@@ -302,6 +330,37 @@ import { goBack } from '../../utils/navigation'
         width: 100%;
         border-radius: 8rpx;
         margin: 8rpx 0;
+    }
+
+    /* 正文外链段（#2097）：无链接整段不渲染；样式落在 text 上（C1：App 端子节点不继承父样式） */
+    .link-section {
+        margin-top: 24rpx;
+        padding-top: 20rpx;
+        border-top-width: 1rpx;
+        border-top-color: #f0f0f0;
+    }
+
+    .link-title {
+        font-size: 24rpx;
+        color: #999999;
+        margin-bottom: 8rpx;
+    }
+
+    .link-item {
+        padding: 12rpx 0;
+    }
+
+    .link-item-text {
+        font-size: 28rpx;
+        color: #2979ff;
+        lines: 1;
+        text-overflow: ellipsis;
+    }
+
+    .link-item-host {
+        font-size: 22rpx;
+        color: #999999;
+        margin-top: 4rpx;
     }
 
     /* 上下篇导航 */

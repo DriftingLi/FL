@@ -1,0 +1,16 @@
+{
+  "_comment": "中转页白名单（#2078）：某些页在特定会话状态下会立刻跳到另一页，落点必须显式声明，判据才可能既严格又可满足。键=pages.json 里的 pagePath，值=允许的落点 pagePath 列表。判据是**加法**：精确匹配仍然优先，白名单只是额外接受。白名单外的落点仍按 S17 fail-closed 记 Skipped。",
+  "_evidence": "2026-10-28 真机实测（b32d8398 / 23049RAD8C，学员登录态），逐次 launch 日志的『进入页面』序列配对得出，不是猜的。",
+  "_stateNote": "落点是**会话状态相关**的：pages/login/login 在未登录时停在自己（正常落定），已登录时跳 dashboard；加法白名单对两种状态都成立。",
+  "redirects": {
+    "pages/index/index": [
+      "pages/dashboard/dashboard"
+    ],
+    "pages/login/login": [
+      "pages/dashboard/dashboard"
+    ],
+    "pages/register/register": [
+      "pages/dashboard/dashboard"
+    ]
+  }
+}
