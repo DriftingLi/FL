@@ -9,13 +9,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"strconv"
 	"time"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"forklift-training/internal/cache"
 	"forklift-training/internal/clock"
 	"forklift-training/internal/dberr"
 	"forklift-training/internal/entitlement"
@@ -271,15 +271,48 @@ func NewService(db *gorm.DB, logger *zap.Logger, clk clock.Clock, notificationSv
 	return &Service{db: db, logger: logger, clk: clk, notificationSvc: notificationSvc}
 }
 
-// tryLock 瞬态并发护栏锁单点（#609 内聚，直记入口 Claim/redeem/DeductAI/AdminPenalty 共用，
-// 前奏仅锁键/TTL 不同）：Redis SetNX 占锁成功返回释放函数（调用方 defer）；Redis 不可用或
-// 已被占时不阻断主流程——锁只是进程级双写护栏，最终裁决由唯一索引/占坑表承担（ADR-0023）。
-// 锁键为瞬态锁面（points:grant:* / shop:* / ai:tokens:* / points:penalty:*），不属幂等占坑键，格式保持现状。
-func (s *Service) tryLock(ctx context.Context, key string, ttl time.Duration) (release func()) {
-	if ok, err := cache.SetNX(ctx, key, "1", ttl); err == nil && ok {
-		return func() { _ = cache.Del(ctx, key) }
+// tryLock 瞬态并发护栏锁单点（#609 内聚，直记入口 Claim / redeem / DeductAI / AdminPenalty 共用）。
+// 抢到返回释放函数（调用方 defer）；抢不到或出错返回空函数，**不阻断主流程** ——
+// 锁只是进程级双写护栏，最终裁决仍由唯一索引 / 占坑表承担（ADR-0023）。
+//
+// #2109 阶段 B 起落到 **PG 会话级 advisory lock**（Redis 退场）：
+//   - 不用事务级锁：各入口的临界区跨越多个事务（先查后写），事务级锁套不进去；
+//   - 会话级锁绑定**固定连接**（sql.Conn），连接断开即自动释放 —— 进程崩溃时锁随连接消失，
+//     比 Redis 的 TTL 更不容易留下粘锁；
+//   - 非 PG 方言（SQLite 契约测试库没有 pg_try_advisory_lock）自动退化为「不加锁」，
+//     与「存储不可用时不阻断」的既有取舍一致。
+//
+// 锁键为瞬态锁面（points:grant:* / shop:* / ai:tokens:* / points:penalty:*），不属幂等占坑键。
+func (s *Service) tryLock(ctx context.Context, key string) (release func()) {
+	sqlDB, err := s.db.DB()
+	if err != nil {
+		return func() {}
 	}
-	return func() {}
+	conn, err := sqlDB.Conn(ctx)
+	if err != nil {
+		return func() {}
+	}
+	lockID := advisoryLockID(key)
+	var got bool
+	if err := conn.QueryRowContext(ctx, "SELECT pg_try_advisory_lock($1)", lockID).Scan(&got); err != nil || !got {
+		_ = conn.Close()
+		return func() {}
+	}
+	return func() {
+		// 解锁用独立 context：调用方 ctx 可能已取消，而释放必须执行。
+		uctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
+		defer cancel()
+		_, _ = conn.ExecContext(uctx, "SELECT pg_advisory_unlock($1)", lockID)
+		_ = conn.Close()
+	}
+}
+
+// advisoryLockID 把业务锁键映射成 advisory lock 的 bigint 键（FNV-1a 64）。
+// 哈希碰撞只是让两把无关的锁互斥（更保守），不会放过本该互斥的一对。
+func advisoryLockID(key string) int64 {
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(key))
+	return int64(h.Sum64())
 }
 
 // shanghaiDate 当前业务自然日日期字符串（Asia/Shanghai）。
@@ -627,14 +660,14 @@ func (s *Service) Claim(ctx context.Context, userID int, taskCode string) (*Poin
 	if !known || !p.Claimable {
 		return nil, ErrTaskNotDone
 	}
-	// Redis 锁（进程内双领护栏；最终裁决仍由唯一索引承担）
+	// 瞬态护栏锁（PG advisory lock；最终裁决仍由唯一索引承担）
 	lockKey := fmt.Sprintf("points:grant:%d:%s", userID, taskCode)
 	if cfg.Group != "newbie" {
 		lockKey += ":" + today
 	} else {
 		lockKey += ":once"
 	}
-	release := s.tryLock(ctx, lockKey, 5*time.Second)
+	release := s.tryLock(ctx, lockKey)
 	defer release()
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 		// 1. 占坑（唯一索引并发裁决；幂等冲突按任务臂映射为对应文案）
@@ -776,7 +809,7 @@ type redeemOpts struct {
 // 幂等键 redeem:{sku}:{userID}（ADR-0062 票1）：占坑冲突映射为「已兑换」，整笔事务回滚；
 // 余额扣减经 ApplyTx 守卫（`points_balance >= ?` + RowsAffected 校验），并发双花不击穿余额。
 func (s *Service) redeem(ctx context.Context, userID int, o redeemOpts) (*RedeemResult, error) {
-	release := s.tryLock(ctx, o.lockKey, 5*time.Second)
+	release := s.tryLock(ctx, o.lockKey)
 	defer release()
 	// 已拥有校验
 	var entCnt int64
@@ -998,7 +1031,7 @@ func (s *Service) DeductAI(ctx context.Context, userID int, requestID string, pr
 	total, prompt, completion := estimateAITokens(promptChars, completionChars)
 	points := aiPointsForTokens(total)
 	lockKey := fmt.Sprintf("ai:tokens:%d:%s", userID, requestID)
-	release := s.tryLock(ctx, lockKey, 60*time.Second)
+	release := s.tryLock(ctx, lockKey)
 	defer release()
 	// 幂等：同一 requestId 已扣过则直接返回
 	var cnt int64
@@ -1058,7 +1091,7 @@ func (s *Service) AdminPenalty(ctx context.Context, adminID, userID, delta int, 
 		return 0, ErrEmptyPenaltyReason
 	}
 	lockKey := fmt.Sprintf("points:penalty:%d", userID)
-	release := s.tryLock(ctx, lockKey, 5*time.Second)
+	release := s.tryLock(ctx, lockKey)
 	defer release()
 	var user model.HrwaiUser
 	if err := s.db.First(&user, userID).Error; err != nil {

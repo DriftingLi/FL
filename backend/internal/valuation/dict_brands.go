@@ -7,10 +7,10 @@ import (
 
 // ListBrands 列出全部品牌（按 k_brand 倒序）
 func (r *DictionaryRepository) ListBrands(ctx context.Context) ([]Brand, error) {
-	return readList[Brand](r, ctx, readSpecBrandsList, CacheKeyBrandsList, "查询品牌")
+	return readList[Brand](r, ctx, readSpecBrandsList, "查询品牌")
 }
 
 // GetBrandByName 按名称查询品牌（供 service 实时计算 Kb 使用）
 func (r *DictionaryRepository) GetBrandByName(ctx context.Context, name string) (Brand, error) {
-	return readGet[Brand](r, ctx, readSpecBrandsGet, cacheKey(CachePrefixBrandGet, name), "查询品牌", name)
+	return readGet[Brand](r, ctx, readSpecBrandsGet, "查询品牌", name)
 }

@@ -228,8 +228,10 @@ const MODULES = {
      * - `profile` 随 #1396 删除 credential-switch.uvue 退出消费者面（它曾是 profile 消费
      *   `api/credential.uts` 的唯一接线；A9 实测面对账逼登记诚实）。
      * - `jobs` 自票 1945 起消费 `api/credential.uts`（职位广场证件筛选组的选项=证件字典单源）。
+     * - `exam-info` 自票 1940 起消费 `api/featured.uts`（考情资讯页接内容精选，与 `featured` 同一条；
+     *   登记口径见本文件头 ①「该域有既有模块契约 ⇒ 归该契约模块」）。
      */
-    crossModuleConsumers: ['courses', 'featured', 'forum', 'mall', 'notifications', 'practice', 'guide', 'search', 'jobs'],
+    crossModuleConsumers: ['courses', 'featured', 'forum', 'mall', 'notifications', 'practice', 'guide', 'search', 'jobs', 'exam-info'],
     budget: BUDGET,
     budgetOverrides: {},
     maxDepth: MAX_DEPTH,

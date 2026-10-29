@@ -175,8 +175,8 @@
       ③ 结果行 token 换成 **`MP_WEIXIN_BUILDONLY_RESULT`**（与 ② 的 `MP_WEIXIN_RESULT` 可判读分流，同
          `TEST_UNIT_LOCAL_RESULT` 先例），三条产出路径（通过 / 门未过 / 异常）都用它 —— 前缀只有一个取值点
          （门计划的 `resultLine.prefix`），不靠调用方自觉。
-    退出码与 ② 同形（0 通过 / 1 产物不合法 / 2 环境受阻）；**不贴 ② 门评论**（`-PostToIssue` 只提示忽略，
-    ⑤ 行的评论形态由 #2049 落地）。
+    退出码与 ② 同形（0 通过 / 1 产物不合法 / 2 环境受阻）；**不产出 ② 的证据块**（`-PostToIssue` 只提示忽略，
+    ⑤ 行的证据形态由 #2049 落地；A1 #2100 起全部门脚本都只打印块、不贴评论）。
 
     **非等价声明（勿删）**：② ≠ ① 真机门，也 ≠ ④b 云打包门。
       ② 只证明「小程序端在开发者工具里打开入口页 + 被改页时 console 无 error、无 exception」；
@@ -247,13 +247,11 @@
     两次整段尝试之间的等待秒数（默认 20）：让开发者工具把上一次的 IDE 实例/端口收干净再重来。
 
 .PARAMETER PostToIssue
-    > 0 时，**仅在门通过（exit 0）分支**把结果贴成评论（② 门结果免手抄，与 ④ 门同款）。
-    #1770 起**判据评论先贴到 commit**（证据主键），同一份正文的展示副本贴该票号/PR 号；
-    #1841 起 commit 端点回 404 时票号评论升格为正式证据落点（显式降级，不影响门结论）。
-    评论正文严格形如 `<!-- gate-evidence:② -->` + 「② 微信开发者工具无报错（半自动，agent 执行）」
-    + `commit: <HEAD sha>` + 结论（含 MP_WEIXIN_RESULT）与产物路径 + 复现命令；
-    `.github/workflows/pr-evidence.yml` 只认「带该标记且贴在 sha 上」的评论，不校真伪。
-    gh 不可用/取不到 sha 时只打印警告，**不影响门的结论**。
+    > 0 时，**仅在门通过（exit 0）分支**把证据块**打印到终端** —— A1（#2100）起**不再贴任何评论**。
+    打印出来的块就是该粘进 PR `## 验收证据` 段的那一段：结论行（含 MP_WEIXIN_RESULT）与产物路径 + 复现命令。
+    校验器只读 PR 正文（一行 `跑于 <sha7>` + 门读数行），「贴在哪个 sha 上」不再参与判定，
+    因此不再校验 sha 可达性、不发任何 gh 写请求；号码仍作**归档目录键 / 批次标识**（见 -NoArchive）。
+    投递退役不是失败：不打印警告，**不影响门的结论**（退出码 0/1/2 语义不变）。
 
 .PARAMETER PostToPr
     `-PostToIssue` 的**别名**（同值，一个版本后退役）。
@@ -360,7 +358,7 @@ $script:buildSkippedByFingerprint = $false
 # -PortWaitSeconds 由 90 抬到 180（2026-09-13）：-Doctor 首跑实测到一次「cli.bat auto 回显 √ auto、
 # 端口 90s 内始终没监听」，紧接着同一命令 8s 内就起来了 ⇒ **这一条只抬预算，不是修复**：病根未定位，
 # 已如实记进 ADR-0008 ② 段的待排查项；遇到它时结果行是 reason=port-not-listening，-Doctor 的 L6 会标 FAIL。
-# -Doctor：只做环境体检（不接 HBuilderX、不构建、不跑探针、不贴评论、**不产出门的通过结论**），
+# -Doctor：只做环境体检（不接 HBuilderX、不构建、不跑探针、不产证据块、**不产出门的通过结论**），
 # 逐层给 OK/WARN/FAIL。它复用主流程的 close → open → auto → 就绪闸门，所以体检走的就是门真正的路径。
 if ($Doctor) { $SkipBuild = $true }
 
@@ -451,9 +449,27 @@ function Invoke-Process {
     $exited = $p.WaitForExit($TimeoutSeconds * 1000)
     if (-not $exited) {
         try { $p.Kill($true) } catch { }
-        return @{ Output = "[timeout] $Tag 超过 $TimeoutSeconds 秒未返回，已终止"; ExitCode = -1; TimedOut = $true }
+        return @{ Output = "[timeout] $Tag 超过 $TimeoutSeconds 秒未返回，已终止"; ExitCode = -1; TimedOut = $true; DrainAbandoned = $false }
     }
-    return @{ Output = ($stdout.Result + $stderr.Result); ExitCode = $p.ExitCode; TimedOut = $false }
+    # ---------- F4（2026-10-29）：主进程已退出 ≠ 输出流 EOF ----------
+    # 病根（#2107 量尺实测，1050 s 纯挂死的一段）：`cli.bat close` 回显 `✔` 后 cmd.exe 正常退场，
+    # 但**它拉起的开发者工具进程还活着，并继承了 stdout 句柄** ⇒ `ReadToEndAsync` 永远等不到 EOF，
+    # 下方 `.Result` 会一直挂着。而超时判据**刚刚已经被 WaitForExit 走过了**（它返回 true），
+    # 于是没有任何兜底：门其实早就出了结论，命令却不返回，现场读起来像「还在跑」。
+    # 处置：主进程退出后给输出流一个**有界收尾窗口**（5 s，正常命令的数据早已写完）；
+    # 收不到就明确放弃剩余输出并打 [warn]，绝不让一条挂住的读取抹掉「进程已退出」这个事实。
+    # 判据因此只认**进程真退出**（WaitForExit 的返回值），不认 `✔` 之类的回显文案。
+    $drainMs = 5000
+    $drained = $false
+    try { $drained = [System.Threading.Tasks.Task]::WaitAll(@($stdout, $stderr), $drainMs) } catch { $drained = $false }
+    if (-not $drained) {
+        Write-Host "[warn] [$Tag] 主进程已退出（exit=$($p.ExitCode)）但输出流仍被占用（子进程继承了 stdout 句柄）⇒ 放弃剩余输出，不影响退出码与门结论" -ForegroundColor Yellow
+    }
+    # 只在真的完成时取值：未完成的 Task 上取 .Result 就是上面那条挂死的复现方式
+    $outText = ''; $errText = ''
+    try { if ($stdout.IsCompleted) { $outText = $stdout.Result } } catch { $outText = '' }
+    try { if ($stderr.IsCompleted) { $errText = $stderr.Result } } catch { $errText = '' }
+    return @{ Output = ($outText + $errText); ExitCode = $p.ExitCode; TimedOut = $false; DrainAbandoned = (-not $drained) }
 }
 
 # 探针 JSON 的安全取值：Set-StrictMode 下访问不存在的属性会抛异常，
@@ -694,6 +710,9 @@ function New-GatePlan {
         $resultFields += [ordered]@{ name = 'auth'; optional = $true }
         # 锚点断言执行数（#1919）：只在有锚点执行时出现——无锚点跑次 Format-GateMetricLine 跳过它，结果行逐字节不变
         $resultFields += [ordered]@{ name = 'asserts'; optional = $true }
+        # 平台噪音读数（2026-10-29 F3）：被白名单放行的 console error 条数。**只在真的过滤过东西时出现**
+        # （noise>0），没有噪音的跑次结果行逐字节不变——零回归；有噪音时它一定出现在行上，过滤不可静默。
+        $resultFields += [ordered]@{ name = 'noise'; optional = $true }
         $resultFields += [ordered]@{ name = 'log' }
     }
 
@@ -1174,6 +1193,9 @@ function Invoke-DevToolsClose {
     $closeStep = Get-GateStep -Plan $script:GatePlan -Id 'devtools-close'
     try {
         $r = Invoke-Process -FilePath $devTools -Arguments $closeStep.argv -TimeoutSeconds $closeStep.timeoutSeconds -Tag $closeStep.tag
+        # F4（2026-10-29）：close 后开发者工具**本来就会活着**（它只关项目窗口），继承 stdout 句柄是常态。
+        # 把这层预期写进日志，免得下一个人把 Invoke-Process 的 [warn] 读成故障。
+        if ($r.DrainAbandoned) { Write-Log ">>> $($closeStep.tag)：主进程已退出，输出流被常驻 IDE 继承（DrainAbandoned=true，预期行为，不影响结论）" }
         Write-Log "`n>>> $($closeStep.tag)`n$($r.Output)"
         Write-Host $r.Output
     } catch {
@@ -1539,29 +1561,10 @@ function Publish-GateComment {
     # commit 端点回 404 时号码评论升格为正式证据落点（显式降级，不判红）；号码仍是「归档目录键 / 批次标识」。
     try {
         $sent = Send-GateComment -ProjectDir $Project -Sha $sha -Reachable ([bool]$binding.Reachable) -IssueNumber $PrNumber -Body $body
-        # #1841：commit 评论端点 404 是降级（证据落点换成票评论），不是错误 —— 机检行 + 人读行 + Notes 都要打出来；
-        # 门结论（exit code）在任何投递失败下都不变（#1209）。
-        if ($sent.CommitUnavailable -and $sent.EvidenceUrl) {
-            Write-Host "GATE_COMMENT_DEGRADED tier=issue url=$($sent.EvidenceUrl)"
-            Write-Host "证据主键降级：commit 评论不可用（HTTP 404）→ 落点 $($sent.EvidenceUrl)"
-            foreach ($note in @($sent.Notes)) { Write-Host $note }
-        }
-        elseif ($sent.CommitKind -eq 'failed' -or @($sent.Errors).Count -gt 0) {
-            $gateCommentFailReason = (@($sent.Errors) | Where-Object { "$_".Trim() } | Select-Object -Last 1)
-            Write-Host "GATE_COMMENT_FAILED reason=$gateCommentFailReason"
-            Write-Host "[warn] 贴 commit $short 的 ② 门评论未成功（门结论不受影响）：$((@($sent.Errors) -join '；'))" -ForegroundColor Yellow
-            if ($PrNumber -gt 0) {
-                if ($sent.IssueOk) { Write-Host "   展示副本已贴 #$PrNumber：$($sent.IssueUrl)" -ForegroundColor Green }
-                else { Write-Host "[warn] 展示副本未贴 #$PrNumber（判据面不受影响）" -ForegroundColor Yellow }
-            }
-        }
-        elseif ($sent.CommitOk) {
-            Write-Host "✅ 已贴 commit $short 的 ② 门评论：$($sent.CommitUrl)" -ForegroundColor Green
-            if ($PrNumber -gt 0) {
-                if ($sent.IssueOk) { Write-Host "   展示副本已贴 #$PrNumber：$($sent.IssueUrl)" -ForegroundColor Green }
-                else { Write-Host "[warn] 展示副本未贴 #$PrNumber（判据面不受影响）" -ForegroundColor Yellow }
-            }
-        }
+        # A1（#2100）：投递已退役 ⇒ 原先三支（降级 / 失败 / 成功）的判据**全部恒假**，整段已删：
+        # CommitUnavailable 恒 $false、EvidenceUrl 恒空、CommitKind 恒 'retired'、Errors 恒空、CommitOk 恒 $false。
+        # 证据块由 Send-GateComment 直接打印；这里只回声它的去路说明（Notes）。门结论不信报告层（#1209）。
+        foreach ($note in @($sent.Notes)) { Write-Host $note }
     } catch {
         Write-Host "[warn] 门评论投递异常（门结论不受影响）：$_" -ForegroundColor Yellow
     }
@@ -2242,7 +2245,7 @@ try {
         # 不再写第二处 -Id 字面量——守护 C12/C18 的注入判据按「首个取用点」定位，重复取用会让注入失配）
         $coldSteps = [ordered]@{ open = $openStep; auto = $autoStep; port = $portStep; ready = $readyStep }
         $directStart = Get-Date
-        $agg = @{ errors = 0; exceptions = 0; logs = 0; shots = @(); steps = @(); failures = @(); anchorsTotal = 0 }
+        $agg = @{ errors = 0; exceptions = 0; logs = 0; shots = @(); steps = @(); failures = @(); anchorsTotal = 0; noise = 0 }
         $firstJson = $null
         $missReason = ''
         $missPages = @()
@@ -2338,6 +2341,8 @@ try {
             }
             if (-not $firstJson) { $firstJson = $pj }
             $agg.errors += [int]$pj.errorsTotal
+            # 平台噪音读数（2026-10-29 F3）：与 errors 并列聚合——过滤过的条数必须一路上报到结果行
+            $agg.noise += [int](Get-Prop $pj 'noiseTotal')
             $agg.exceptions += [int]$pj.exceptionsTotal
             $agg.logs += [int]$pj.logsTotal
             $agg.shots += @($pj.shots)
@@ -2351,7 +2356,7 @@ try {
             $shotLeaf = $(if ($pngOne.Count -gt 0) { Split-Path (@($pngOne)[-1]).path -Leaf } else { '' })
             $emOne = Get-Prop $pj 'elapsedMs'
             if ($null -eq $emOne) { $emOne = 0 }
-            $line = "direct-page $pg reached=$([bool]$reached) errors=$($pj.errorsTotal) exceptions=$($pj.exceptionsTotal) logs=$($pj.logsTotal) shot=$shotLeaf elapsed=$([int]([double]$emOne / 1000))s"
+            $line = "direct-page $pg reached=$([bool]$reached) errors=$($pj.errorsTotal) noise=$([int](Get-Prop $pj 'noiseTotal')) exceptions=$($pj.exceptionsTotal) logs=$($pj.logsTotal) shot=$shotLeaf elapsed=$([int]([double]$emOne / 1000))s"
             Write-Log $line
             $directLines += $line
             $pageReason = ''
@@ -2414,6 +2419,7 @@ try {
             pageStack = @($(if ($firstJson) { $firstJson.pageStack } else { @() }))
             entryPage = $(if ($firstJson) { $firstJson.entryPage } else { '' })
             errorsTotal = $agg.errors
+            noiseTotal = $agg.noise
             exceptionsTotal = $agg.exceptions
             logsTotal = $agg.logs
             shots = @($agg.shots)
@@ -2505,6 +2511,9 @@ try {
     # 锚点执行数（#1919）：只在有锚点执行时写——无锚点跑次该 token 缺席、结果行逐字节不变（计划里 optional）
     $anchorsTotal = [int](Get-Prop $probeJson 'anchorsTotal')
     if ($anchorsTotal -gt 0) { $metricValues['asserts'] = "$anchorsTotal" }
+    # 平台噪音读数（2026-10-29 F3）：过滤过的条数必须上结果行——沉默的过滤等于「覆盖为零的绿」
+    $noiseTotal = [int](Get-Prop $probeJson 'noiseTotal')
+    if ($noiseTotal -gt 0) { $metricValues['noise'] = "$noiseTotal" }
     $metricLine = Format-GateMetricLine -Plan $script:GatePlan -Values $metricValues
     $resultLine = "$($script:GatePlan.resultLine.prefix) $metricLine"
     Write-Log "`n$resultLine"

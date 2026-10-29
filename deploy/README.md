@@ -8,12 +8,12 @@
 | 文件 | 作用 |
 | --- | --- |
 | `deploy.py` | 部署 CLI：按变更重启、迁移、回滚、健康检查、测试环境 down |
-| `docker-compose.prod.yml` | 生产编排（postgres / redis / libreoffice / backend / frontend） |
+| `docker-compose.prod.yml` | 生产编排（postgres / libreoffice / backend / frontend） |
 | `env.defaults` | 部署默认值生成物（唯一事实源 `backend/internal/deploy/topology.go`；`cd backend && go run ./cmd/gen-deploy`） |
 | `setup-server.sh` | 服务器首次初始化（Docker / 部署用户 / 目录 / 防火墙 / cron） |
 | `lxc-install-docker.sh` / `lxc-setup-ssh.sh` | LXC 容器内 Docker / SSH 初始化 |
 | `backup-daily.sh` / `rbd-snap-hourly.sh` | 每日逻辑备份 / 每小时 RBD 快照 |
-| `forklift-watchdog.sh` + `systemd/` | 生产链路存活巡检与告警投递 |
+| `forklift-watchdog.sh` + `systemd/` | 生产链路存活巡检与告警投递（CD 随包上传，**安装仍要人工**，见下文「巡检脚本与 systemd 单元」） |
 | `tests/` | 增量计划 / 回滚 / 迁移门的常驻判据物（Python `unittest` + Node `--test`） |
 
 ## 常用命令
@@ -32,7 +32,7 @@ python3 deploy/deploy.py local           # 本地 / 手动一键：构建前端 
 常用开关：
 
 - `--force`：重建全部**应用**服务（backend / frontend / libreoffice），不碰数据服务。
-- `--force-data-services`：允许重建 postgres / redis（危险，仅在确认卷/配置变更时有意义）。
+- `--force-data-services`：允许重建 postgres（危险，仅在确认卷/配置变更时有意义）。
 - `--skip-migrate`：跳过迁移（本地模式直接用；远程仍可用 `SKIP_MIGRATION=true`）。
 - `--remove-orphans`：`up` 时移除孤儿容器（默认不做，避免误删 profile 外服务）。
 
@@ -56,7 +56,7 @@ python3 deploy/deploy.py local           # 本地 / 手动一键：构建前端 
 | 以上都不是 | `skip` |
 | **数据服务**配置漂移 | `blocked`（默认中止，需 `--force-data-services`） |
 
-`postgres` / `redis` 永远不因应用镜像变更进入计划；只有容器不存在/停止时才启动。
+`postgres` 永远不因应用镜像变更进入计划；只有容器不存在/停止时才启动。
 
 ## 部署顺序
 
@@ -64,7 +64,7 @@ python3 deploy/deploy.py local           # 本地 / 手动一键：构建前端 
 2. 解析镜像加速代理 → 写 `.env`（内容未变则跳过写入）；
 3. 记录当前运行镜像到 `backups/last-version.txt`；生产环境并行做 `pg_dump` 备份；
 4. 只拉取本地缺失的镜像（内容哈希标签命中即跳过）；
-5. 确保 postgres / redis 在运行，等待数据库就绪；
+5. 确保 postgres 在运行，等待数据库就绪；
 6. 迁移兼容性预检（镜像内迁移版本不得落后于数据库）；
 7. 等待备份完成 → 清 dirty → **先迁移**；
 8. 算应用计划，只对变化的服务 `up -d`（backend 先于 frontend，libreoffice 最先）。
@@ -94,7 +94,7 @@ compose 文件从仓库根迁到 `deploy/` 后，默认项目名会从目录名�
 name: ${COMPOSE_PROJECT_NAME:-forklift-training}
 ```
 
-命名卷仍是 `forklift-training_pgdata-prod` / `forklift-training_redisdata-prod` 等。生产实际用的是 environment secret `PG_VOLUME=/srv/ceph/pgdata`（Ceph 绑定挂载），见下一节升级 runbook。
+命名卷仍是 `forklift-training_pgdata-prod` 等（`redisdata-prod` 随 #2109 退役）。生产实际用的是 environment secret `PG_VOLUME=/srv/ceph/pgdata18`（RBD 挂载），见下一节升级 runbook。
 换宿主机想换项目名时，显式设置 `COMPOSE_PROJECT_NAME`（并在迁移数据卷前确认）。
 
 ## 大版本升级：PostgreSQL 15 → 18（一次性 runbook，#2109）
@@ -221,6 +221,31 @@ $COMPOSE up -d postgres
 - `ALLOW_MIGRATION_FAILURE=1`：显式带「新代码跑在旧 schema」的已知风险继续。
 - `SKIP_MIGRATION=true`：整段迁移不跑（不存在失败与否）。
 - dry-run 入口：`python3 deploy/deploy.py --migration-gate`（唯一判据点 `migration_failure_action`）。
+
+## 巡检脚本与 systemd 单元（forklift-watchdog）
+
+`forklift-watchdog.sh` 与 `systemd/` 下的三个单元随 CD **上传**到 `$DEPLOY_PATH/deploy/`，
+但**不会**自动装进系统 —— 写入 `/usr/local/bin` 与 `/etc/systemd/system/` 是系统级动作，
+仍由人工执行（脚本头注释里有完整命令）。
+
+改了脚本或单元之后**必须重装一次**，否则机器上继续跑旧判据。2026-10-29 的实例：
+`forklift-redis-prod` 已从 compose 删除，而 `/usr/local/bin` 里的旧副本仍在盯它，
+连续 3 次判红并真的发出了告警邮件。
+
+```bash
+cd "$DEPLOY_PATH"
+install -m 755 deploy/forklift-watchdog.sh /usr/local/bin/forklift-watchdog.sh
+install -m 644 deploy/systemd/forklift-watchdog.service \
+               deploy/systemd/forklift-watchdog.timer \
+               deploy/systemd/forklift-alert@.service /etc/systemd/system/
+systemctl daemon-reload && systemctl restart forklift-watchdog.timer
+/usr/local/bin/forklift-watchdog.sh --dry-run   # 自检：应打「达告警级别 0/6」
+# 注意用**安装后的路径**自检：仓库里的脚本是 100644（靠 install -m 755 赋执行位），
+# 直接跑 deploy/forklift-watchdog.sh 会 Permission denied。
+```
+
+脚本里的 `EXPECT_CONTAINERS` 是容器判据：**部署面增减容器时必须同步它**（否则误报）。
+删掉某个服务（例如 #2109 的 redis）时，连它一起从这条清单里删。
 
 ## 判据物与本地校验
 

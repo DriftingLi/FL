@@ -15,7 +15,7 @@
 | 3 ③ 两腿 | `npm run test:unit`（接线全量）/ `npm run test:behavior`（行为**子集**） | `TEST_UNIT_RESULT` / `TEST_BEHAVIOR_RESULT … mode=changed planned=N` | 子集红而 CI 绿 → 先自查，**不当 flake**；选错腿的 config = 0 套件假绿 |
 | 4 ④c（+④a） | `npm run build:kotlin-all`；命中三份 json / 新增页 / 模块手术再加 `npm run build:compile` | 退出码 0 | ④a 命中**必须清缓存**：`pages.json` 改一行不清 = 产物没更新还报编译成功 |
 | 5 ② 改动页 | `npm run build:mp-weixin-check`（**② 微信开发者工具门 = 半自动门**，执行人允许「agent 执行」） | `MP_WEIXIN_RESULT` 整行 + `coverage=changed:N\|smoke:2\|none` | `none` 判 INCOMPLETE **不阻断**，但须原样进正文；清单为空才跑冒烟两页；`publish` 每 PR **只一次**，重试不再编译 |
-| 6 证据 | — | 正文一行 `跑于 <sha7>`；门读数行**原样**贴「结论」栏；图只作附证 | 图不是判据；`anchors=0` 不判红（人看该页） |
+| 6 证据 | — | 正文一行 `跑于 <sha7>`；门读数行**原样**跟在后面（A1 已无「结论」栏）；图只作附证 | 图不是判据；`anchors=0` 不判红（人看该页） |
 | 7 开 PR 与合并 | `pwsh scripts/preflight-pr.ps1`（**仓库根**跑）预检绿 → `pwsh scripts/submit-pr.ps1` 建 PR | 证据齐 → agent 直接合并 | 例外通道只认「已接受未验证风险」一句，**且由人合并** |
 | 8 收尾 | `pwsh scripts/dev-close.ps1 -Task <票号>`（仓库根；默认 dry-run，`-Yes` 执行） | 树摘净、分支残留机检绿 | 该脚本尚未落地：暂用 `training-app/叉车维修培训学员端跨端应用/scripts/remove-worktree.ps1 -Task <n>`，再在干净树里 `git fetch && git merge --ff-only origin/master`。拆树别手搓两步 |
 
@@ -29,6 +29,7 @@
 - **红是「看见」不是「拦截」**：ruleset 必检只有 `ci-summary`，`pr-evidence` 不在必检 ⇒ 证据体系是荣誉制，别人不替你兜底。
 - **① 整门退役**：①a 降为发版前一次（发版冒烟）；①b 与能力面人签**已整体退役**——命中能力面的 PR 合并前**零人签**、不要求设备在线，正文命中才写一行 `能力面：<类别> · 已记入发版冒烟`。发版冒烟五场景固定全做、不按 diff 生成，清单在移动端 `docs/adr/` 的 `0043` 与 `0016`。
 - **③④ 照旧必过**；云打包按打包面触发（三份 json / `uni_modules` app-android / 新增 aar·jar），正式发版前必跑并装机自测。门脚本须**全访问权限**执行。
+- **⑤ 不门化（2026-10-29，#2130）**：改的命中运行时面、而 ② 命中位未命中时（`manifest.json` / `platformConfig.json` 未改且 diff 无 MP-WEIXIN 指令行），PR 前**建议**跑一次 `npm run build:mp-weixin-buildonly`——可选、不判红；`build=skipped(fingerprint)` 也算编译过。
 - 非运行时面 PR（纯文档 / 测试 / CI 配置）agent 自行合并；例外通道仍由人合并。
 
 ## 开发内循环（移动端 UI 迭代）

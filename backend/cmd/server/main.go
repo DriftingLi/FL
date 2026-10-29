@@ -27,7 +27,6 @@ import (
 	"forklift-training/internal/api"
 	"forklift-training/internal/audit"
 	"forklift-training/internal/auth"
-	"forklift-training/internal/cache"
 	"forklift-training/internal/config"
 	"forklift-training/internal/db"
 	"forklift-training/internal/geolocation"
@@ -87,13 +86,6 @@ func main() {
 	gormDB, err := db.InitDB(cfg.DatabaseURL, logger)
 	if err != nil {
 		logger.Error("数据库连接失败", zap.Error(err))
-		os.Exit(1)
-	}
-
-	// 2.5. 连接 Redis 缓存
-	redisClient, err := cache.InitRedis(cfg.Redis, logger)
-	if err != nil {
-		logger.Error("Redis 连接失败", zap.Error(err))
 		os.Exit(1)
 	}
 
@@ -210,8 +202,6 @@ func main() {
 	}
 	// 释放 GORM 连接池（此前仅关闭了 valuation 的 pgx 池，GORM 池会被泄漏）
 	db.Close(gormDB, logger)
-	// 释放 Redis 连接池
-	cache.CloseRedis(redisClient, logger)
 	logger.Info("服务已退出")
 }
 

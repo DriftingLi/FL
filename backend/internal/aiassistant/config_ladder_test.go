@@ -153,7 +153,7 @@ func TestResolveHotCacheInvalidation(t *testing.T) {
 	if got := cfgSvc.ResolveConfig(ctx, FeatureGradeShortAnswer); got.APIKey != "sk-bbb" {
 		t.Fatalf("改绑后应立即生效: %+v", got)
 	}
-	// 展示缓存（Redis 不可用时降级直查）与热点缓存一致
+	// 展示缓存（存储不可用时降级直查）与热点缓存一致
 	bindings, err := cfgSvc.ListBindings(ctx)
 	if err != nil {
 		t.Fatalf("ListBindings 失败: %v", err)

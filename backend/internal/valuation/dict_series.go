@@ -15,7 +15,7 @@ func (r *DictionaryRepository) ListSeries(ctx context.Context, brand string) ([]
 		spec.Where = "brand = $1"
 		args = append(args, brand)
 	}
-	return readList[Series](r, ctx, spec, cacheKey(CachePrefixSeriesByBrand, brand), "查询系列", args...)
+	return readList[Series](r, ctx, spec, "查询系列", args...)
 }
 
 // ListSeriesConfigOptions 查询指定 series 支持的配置维度及可选项（复杂查询，保留 typed）
@@ -25,7 +25,7 @@ func (r *DictionaryRepository) ListSeriesConfigOptions(ctx context.Context, bran
 		dimension  string
 		optionName string
 	}
-	rows, err := listCached(r, ctx, cacheKey(CachePrefixSco, brand, series), "查询系列配置选项",
+	rows, err := listRows(r, ctx, "查询系列配置选项",
 		`SELECT dimension, option_name FROM series_config_options
 		 WHERE brand = $1 AND series = $2
 		 ORDER BY dimension ASC, id ASC`,

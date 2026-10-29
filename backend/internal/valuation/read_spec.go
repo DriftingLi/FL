@@ -2,8 +2,7 @@
 // 由 ReadSpec 声明、读面引擎生成，消除「SELECT 列顺序 + scan 列顺序」双处手工同步
 // 的漂移面。字段 Name/Column/Type 复用写面 DictField 为单点（+ 引擎自动补 id 列）。
 //
-// 读面独有的 SELECT 列顺序 / ORDER BY / WHERE 模板由 ReadSpec 声明；缓存 key 由
-// facade 按既有契约常量（dict_cache_keys.go）+ cacheKey 构造后传入引擎——线上 key 不变。
+// 读面独有的 SELECT 列顺序 / ORDER BY / WHERE 模板由 ReadSpec 声明。
 // 特殊行解码（可空列 / 时间格式化，如 coefficient_configs）由 facade 继续传入既有
 // scan 闭包走 listCached/getCached，仅 SQL 从 ReadSpec.selectSQL() 生成，保持单点。
 package valuation
@@ -68,19 +67,19 @@ func (s ReadSpec) fullColumns() []DictField {
 	return cols
 }
 
-// readList 读面引擎的列表读分支：生成 SQL + 反射扫描，走 listCached 缓存。
-func readList[T any](r *DictionaryRepository, ctx context.Context, spec ReadSpec, key, what string, args ...any) ([]T, error) {
-	return listCached(r, ctx, key, what, spec.selectSQL(), scanRows[T](spec), args...)
+// readList 读面引擎的列表读分支：生成 SQL + 反射扫描。
+func readList[T any](r *DictionaryRepository, ctx context.Context, spec ReadSpec, what string, args ...any) ([]T, error) {
+	return listRows(r, ctx, what, spec.selectSQL(), scanRows[T](spec), args...)
 }
 
-// readGet 读面引擎的单行读分支：生成 SQL + 反射扫描，走 getCached 缓存。
-func readGet[T any](r *DictionaryRepository, ctx context.Context, spec ReadSpec, key, what string, args ...any) (T, error) {
-	return getCached(r, ctx, key, what, spec.selectSQL(), scanRow[T](spec), args...)
+// readGet 读面引擎的单行读分支：生成 SQL + 反射扫描。
+func readGet[T any](r *DictionaryRepository, ctx context.Context, spec ReadSpec, what string, args ...any) (T, error) {
+	return getRow(r, ctx, what, spec.selectSQL(), scanRow[T](spec), args...)
 }
 
 // readScalarList 标量列表读（[]string 等去省市）：生成 SQL + 逐行标量扫描。
-func readScalarList(r *DictionaryRepository, ctx context.Context, spec ReadSpec, key, what string, args ...any) ([]string, error) {
-	return listCached(r, ctx, key, what, spec.selectSQL(), func(rows pgx.Rows) (string, error) {
+func readScalarList(r *DictionaryRepository, ctx context.Context, spec ReadSpec, what string, args ...any) ([]string, error) {
+	return listRows(r, ctx, what, spec.selectSQL(), func(rows pgx.Rows) (string, error) {
 		var s string
 		if err := rows.Scan(&s); err != nil {
 			return "", err
@@ -89,14 +88,14 @@ func readScalarList(r *DictionaryRepository, ctx context.Context, spec ReadSpec,
 	}, args...)
 }
 
-// scanRows 构造 listCached 的 scan 闭包：按 ReadSpec 列顺序反射扫描一行到 T。
+// scanRows 构造 listRows 的 scan 闭包：按 ReadSpec 列顺序反射扫描一行到 T。
 func scanRows[T any](spec ReadSpec) func(pgx.Rows) (T, error) {
 	return func(rows pgx.Rows) (T, error) {
 		return scanInto[T](spec, rows)
 	}
 }
 
-// scanRow 构造 getCached 的 scan 闭包：按 ReadSpec 列顺序反射扫描一行到 T。
+// scanRow 构造 getRow 的 scan 闭包：按 ReadSpec 列顺序反射扫描一行到 T。
 func scanRow[T any](spec ReadSpec) func(pgx.Row) (T, error) {
 	return func(row pgx.Row) (T, error) {
 		return scanInto[T](spec, row)

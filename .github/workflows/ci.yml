@@ -162,15 +162,6 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
     defaults:
       run:
         working-directory: backend
@@ -186,9 +177,6 @@ jobs:
       - name: 运行单元测试（第 ${{ matrix.shard }}/2 片）
         env:
           DATABASE_URL: postgres://testuser:testpass@localhost:5432/forklift_test?sslmode=disable
-          REDIS_ADDR: localhost:6379
-          REDIS_PASSWORD: ""
-          REDIS_DB: "0"
           SHARD: ${{ matrix.shard }}
           SHARDS: '2'
         # -timeout 收回 10m（2026-09-29，#1366 测试面瘦身）：先前抬到 20m 是止血——internal/api
@@ -647,7 +635,7 @@ jobs:
   # ============================================================
   # Stage 6.6: pr-evidence 校验逻辑的自检（守护的守护）
   #   校验器在 .github/scripts/lib/gate-validator.mjs（#1770 起从 pr-evidence.yml 抽出的单一来源，
-  #   pr-evidence.yml / mobile-gates.yml 都用 repos.getContent 取它执行），本 job 直接 import 跑表驱动单测；
+  #   pr-evidence.yml 用 repos.getContent 取它执行；管家 mobile-gates.yml 已随 A1（#2100）整份删除），本 job 直接 import 跑表驱动单测；
   #   本地预检（.github/scripts/preflight-pr.mjs）也 import 同一份，故它的纯函数与「双跑一致」一并在这里钉：
   #   逻辑被改坏或模块被删 → 这里红 → ci-summary 红 → 不能合并。
   # ============================================================

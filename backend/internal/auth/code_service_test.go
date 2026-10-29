@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"forklift-training/internal/cache"
 	"forklift-training/internal/core"
+	"forklift-training/internal/kv"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
@@ -105,7 +105,7 @@ func testSmsChannel(sms SMSProvider) *SmsChannel {
 
 // codeKeyForTest 与生产 codeKey 等价（同前缀，验证线上 key 兼容性）。
 func codeKeyForTest(ch CodeChannel, purpose CodePurpose, target string) string {
-	return cache.SafeKey(ch.KeyPrefix(), string(purpose), target)
+	return kv.SafeKey(ch.KeyPrefix(), string(purpose), target)
 }
 
 func extractCode(t *testing.T, store *memCodeStore, ch CodeChannel, purpose CodePurpose, target string) string {
@@ -297,7 +297,7 @@ func TestRegisterAndLoginWithCode(t *testing.T) {
 
 	// 禁用账号不能登录
 	_ = svc.db.Model(&model.HrwaiUser{}).Where("email = ?", email).Update("status", 0).Error
-	_ = store.Del(ctx, cache.SafeKey(ch.KeyPrefix()+"_send", "login", email))
+	_ = store.Del(ctx, kv.SafeKey(ch.KeyPrefix()+"_send", "login", email))
 	if err := svc.Send(ctx, ch, CodePurposeLogin, email); err != nil {
 		t.Fatalf("发送登录验证码失败: %v", err)
 	}
@@ -617,13 +617,13 @@ func TestCodeKey_CompatibleWithLegacy(t *testing.T) {
 	emailCh := testEmailChannel(&fakeMailer{})
 	phoneCh := testSmsChannel(&fakeSMSProvider{})
 
-	if got, want := svc.codeKey(emailCh, CodePurposeRegister, "a@b.com", false), cache.SafeKey("email_code", "register", "a@b.com"); got != want {
+	if got, want := svc.codeKey(emailCh, CodePurposeRegister, "a@b.com", false), kv.SafeKey("email_code", "register", "a@b.com"); got != want {
 		t.Errorf("email code key = %q, want %q", got, want)
 	}
-	if got, want := svc.codeKey(emailCh, CodePurposeLogin, "a@b.com", true), cache.SafeKey("email_code_send", "login", "a@b.com"); got != want {
+	if got, want := svc.codeKey(emailCh, CodePurposeLogin, "a@b.com", true), kv.SafeKey("email_code_send", "login", "a@b.com"); got != want {
 		t.Errorf("email throttle key = %q, want %q", got, want)
 	}
-	if got, want := svc.codeKey(phoneCh, CodePurposeBind, "13800000000", false), cache.SafeKey("phone_code", "bind", "13800000000"); got != want {
+	if got, want := svc.codeKey(phoneCh, CodePurposeBind, "13800000000", false), kv.SafeKey("phone_code", "bind", "13800000000"); got != want {
 		t.Errorf("phone code key = %q, want %q", got, want)
 	}
 }

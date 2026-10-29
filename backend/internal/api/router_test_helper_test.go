@@ -49,7 +49,7 @@ func newContractDepsWithStorage(t *testing.T, db *gorm.DB, cfg *config.Config, s
 		cfg = &config.Config{}
 	}
 	d := NewDeps(cfg, db, st, zap.NewNop(), nil)
-	// 测试链路没有 Redis：会话模块的黑名单存储换成内存实现，否则「注销先写吊销标记」
+	// 测试链路不接持久化 kv：会话模块的黑名单存储换成内存实现，否则「注销先写吊销标记」
 	// 这类要真实写凭证状态的端点只能判红（ADR-0060 票2）。Cookie 与有效期口径不变。
 	d.Session = security.SessionFromConfigWithBlacklist(cfg, testutil.NewValueBlacklist())
 	// P2 波 3a：handler 随域包收进 internal/auth（包私有），会话改由域包的注册入口注给服务

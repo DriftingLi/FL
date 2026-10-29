@@ -14,7 +14,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
-	"forklift-training/internal/cache"
 	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
 )
@@ -24,15 +23,6 @@ import (
 type ConfigHandler struct {
 	dictRepo DictionaryConfigStore
 	logger   *zap.Logger
-}
-
-// invalidateCache 失效指定 pattern 的缓存，失败仅记录日志不影响业务返回。
-func (h *ConfigHandler) invalidateCache(ctx context.Context, patterns ...string) {
-	for _, p := range patterns {
-		if err := cache.InvalidatePattern(ctx, p); err != nil {
-			h.logger.Warn("缓存失效失败", zap.String("pattern", p), zap.Error(err))
-		}
-	}
 }
 
 // NewConfigHandler 构造配置处理器

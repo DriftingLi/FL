@@ -207,12 +207,51 @@ function logEntry(msg) {
   };
 }
 
+// ---------- 平台层噪音白名单（2026-10-29 立；**独立常量，回滚只动这一段**）----------
+// 病根：开发者工具在「page stack 非空时又 appLaunch」会向 console 打一条 **error**。cold-start-direct
+// （#1682 逐页直达）每次直达到非入口页都必然触发，且实测**三页逐字相同** ⇒ `noConsoleErrors` 恒假、
+// ② 在新形态下**永远拿不到绿**（读数见 #2107 全量实测：② 834 s 且判红；#2099 盘点的判据快照）。
+// 它不是被测代码的问题（平台自身行为），所以不计入 `errorsTotal`。
+//
+// ⚠️ 过滤**必须可见**（这是本改动的承重条款，删等于重新引入「覆盖为零的绿」）：
+//   命中的条数进 `noiseTotal`、原文进 `noiseTail`，读数行里与 errorsTotal 并列输出 `noise=<N>`；
+//   消费者（mp-weixin-check.ps1）把它写进 metric 行的 optional `noise` 字段。
+//   某天这条白名单吞掉了真错误 ⇒ 读数里 noise 非 0，一眼能看出「这一跑过滤过东西」。
+//
+// 判据刻意**窄**：只认 appLaunch 这一族，且必须在锚词之后 200 字符的**同一个窗口**里同时出现
+// 「non-empty」与「page stack」——这两个词的**语序不固定**（实测读到过 `non-empty page stack` 与
+// `page stack is non-empty` 两种形态，写死语序会让白名单在换个工具版本后静默失效 ⇒ 又变回恒假红）。
+// 另：只对 `type === 'error'` 生效。宁可漏（漏了就还是红，安全默认），不可宽（宽了就静默吞真错）。
+const PLATFORM_NOISE_PATTERNS = [
+  {
+    id: 'appLaunchNonEmptyStack',
+    anchor: /appLaunch/i,
+    also: [/non-?empty/i, /page\s*stack/i],
+    window: 200,
+  },
+];
+
+function platformNoiseOf(entry) {
+  if (!entry || entry.type !== 'error') return null;
+  const text = entry.args.map((v) => (typeof v === 'string' ? v : String(v))).join(' ');
+  for (const p of PLATFORM_NOISE_PATTERNS) {
+    const m = p.anchor.exec(text);
+    if (!m) continue;
+    const near = text.slice(m.index, m.index + (p.window || 200));
+    if (p.also.every((re) => re.test(near))) return { id: p.id, text: text.slice(0, 200) };
+  }
+  return null;
+}
+
 const rel = (p) => String(p || '').replace(/^\//, '');
 const started = Date.now();
 const result = {
   ws: args.ws, connected: false, automatorFrom: '', routes: args.routes,
   pageStack: [], entryPage: '', steps: [], shots: [],
   logsTotal: 0, errorsTotal: 0, exceptionsTotal: 0, consoleTail: [], elapsedMs: 0,
+  // noiseTotal / noiseTail：被平台噪音白名单放行的条数与原文（2026-10-29，见 PLATFORM_NOISE_PATTERNS 注释）。
+  // 与 errorsTotal **并列**上报——过滤可见，不是静默吞掉。
+  noiseTotal: 0, noiseTail: [],
   // connectError：连接失败时的**归因口径**（{kind: not-ready|unreachable|timeout|unknown, raw}），
   // 调用方靠它区分「会话未就绪」与「端口连不上」——两者以前都写成同一句，导致误诊（2026-09-13）。
   connectError: null,
@@ -339,8 +378,20 @@ try {
 // console / exception 全程收集：必须在任何导航之前挂上，否则漏掉入口页的报错
 mp.on('console', (msg) => {
   const entry = logEntry(msg);
-  if (entry.type === 'error') result.errorsTotal += 1;
   result.logsTotal += 1;
+  if (entry.type === 'error') {
+    // 平台层噪音先分类，再决定是否计数（2026-10-29 F3）：命中白名单 ⇒ 记 noise、**不进** errorsTotal。
+    // 尾部日志仍保留这条（type 改标 platform-noise），便于事后逐条核对到底放行了什么。
+    const noise = platformNoiseOf(entry);
+    if (noise) {
+      result.noiseTotal += 1;
+      if (result.noiseTail.length < args.tailMax) result.noiseTail.push({ type: 'platform-noise', id: noise.id, args: [noise.text] });
+      entry.type = 'platform-noise';
+      entry.noiseId = noise.id;
+    } else {
+      result.errorsTotal += 1;
+    }
+  }
   if (result.consoleTail.length < args.tailMax) result.consoleTail.push(entry);
 });
 mp.on('exception', (e) => {
@@ -577,7 +628,8 @@ if (args.expectPage) {
     ? { status: 'ok', reason: '', detail: 'cold-start-direct', at: 'direct:' + target, skippedAssertions: [], skippedSteps: [] }
     : { status: 'skip', reason: 'direct-page-unsupported', detail: 'direct-page-unsupported', at: 'direct:' + target, skippedAssertions: [], skippedSteps: [] };
   console.log('[direct] ' + (reached ? 'ok' : 'skip') + ' page=' + target + ' current=' + step.currentPage
-    + ' errors=' + result.errorsTotal + ' exceptions=' + result.exceptionsTotal + ' shot=' + (step.shot || '-')
+    + ' errors=' + result.errorsTotal + ' noise=' + result.noiseTotal
+    + ' exceptions=' + result.exceptionsTotal + ' shot=' + (step.shot || '-')
     + ' anchors=' + result.anchors.passed + '/' + result.anchors.total);
   await new Promise((r) => setTimeout(r, args.settleMs));
   finish(false);

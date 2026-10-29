@@ -91,7 +91,7 @@
 **入口的第一行就是预期时长**（#1702 验收 ③）：慢 ≠ 卡死，读者一开始就该知道多久算正常。
 
 **为什么入口要写进文档**：#1546 把落盘件合进 master 之后，`test:unit:gate` 这个串在 tracked 文件里只有三处命中
-（`package.json` 的 scripts、`dev-finish.ps1` 头部的 `.EXAMPLE`、贴评论时的复现行），两份 `AGENTS.md` 与
+（`package.json` 的 scripts、`dev-finish.ps1` 头部的 `.EXAMPLE`、证据块里的复现行），两份 `AGENTS.md` 与
 全部 `docs/**` **零命中**（2026-10-05 现测）⇒ 门有出口但没人指路，下一个会话照旧选「再跑一遍」。本节就是那个家。
 
 **产物（跑完就在，绿跑也在）** —— 两腿各一份，路径里带腿名：

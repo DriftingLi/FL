@@ -8,40 +8,23 @@ import (
 
 	"github.com/google/uuid"
 
-	"forklift-training/internal/cache"
+	"forklift-training/internal/kv"
 )
 
 // TTL 验证码答案有效期。
 const TTL = 2 * time.Minute
 
-// Store 验证码答案存储接口（生产 Redis，测试内存）。
+// Store 验证码答案存储接口（生产为 kv.Store，测试用内存实现）。
+// 只需要 Get/Set/Del —— kv.Store 结构上即满足。
 type Store interface {
 	Get(ctx context.Context, key string) (string, error)
 	Set(ctx context.Context, key, value string, ttl time.Duration) error
 	Del(ctx context.Context, keys ...string) error
 }
 
-// RedisStore 基于全局 Redis 缓存的验证码存储。
-type RedisStore struct{}
+func storeKey(id string) string { return kv.SafeKey("captcha", id) }
 
-// Get 读取验证码答案。
-func (RedisStore) Get(ctx context.Context, key string) (string, error) {
-	return cache.Get(ctx, key)
-}
-
-// Set 写入验证码答案。
-func (RedisStore) Set(ctx context.Context, key, value string, ttl time.Duration) error {
-	return cache.Set(ctx, key, value, ttl)
-}
-
-// Del 删除验证码答案。
-func (RedisStore) Del(ctx context.Context, keys ...string) error {
-	return cache.Del(ctx, keys...)
-}
-
-func storeKey(id string) string { return cache.SafeKey("captcha", id) }
-
-// StoreKey 返回验证码答案在共享缓存中的 key 约定（cache.SafeKey("captcha", id)）。
+// StoreKey 返回验证码答案在共享缓存中的 key 约定（kv.SafeKey("captcha", id)）。
 // 供测试等外部调用方按统一约定读取/校验，避免重拼 key 公式导致的不一致。
 func StoreKey(id string) string { return storeKey(id) }
 

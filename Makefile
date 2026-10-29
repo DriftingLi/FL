@@ -60,7 +60,7 @@ help: ## 显示可用命令
 	$(info   frontend-check     typecheck + test)
 	$(info   frontend-clean     清理 dist / coverage / .vite)
 	$(info )
-	$(info   dev-up             起本地 postgres / redis（等健康）)
+	$(info   dev-up             起本地 postgres（等健康）)
 	$(info   dev-down           停本地依赖)
 	$(info   dev-reset          清卷重建本地依赖（数据丢失）)
 	$(info   dev                dev-up + migrate-up + run)
@@ -153,8 +153,8 @@ gen: ## 生成链（swagger -> apitypes -> aifeatures，顺序固定）
 	$(MAKE) gen-aifeatures
 
 # ---------------------------------------------------------------- 本地依赖
-dev-up: ## 起本地 postgres / redis（等健康）
-	$(COMPOSE) -f $(COMPOSE_FILE) up -d --wait postgres redis
+dev-up: ## 起本地 postgres（等健康）
+	$(COMPOSE) -f $(COMPOSE_FILE) up -d --wait postgres
 
 dev-down: ## 停本地依赖
 	$(COMPOSE) -f $(COMPOSE_FILE) down

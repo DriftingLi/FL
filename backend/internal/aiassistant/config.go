@@ -12,10 +12,8 @@ import (
 
 	einomodel "github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
-	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 
-	"forklift-training/internal/cache"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 )
@@ -57,9 +55,6 @@ type ModelOption struct {
 }
 
 const (
-	bindingsCacheKey = "ai:bindings"
-	bindingsCacheTTL = 5 * time.Minute
-
 	// aiResolveTTL 进程内热点解析缓存的 TTL：管理端改绑后最迟此延迟生效
 	//（写路径同时主动失效，TTL 仅兜底多实例部署）。
 	aiResolveTTL = 30 * time.Second
@@ -72,7 +67,7 @@ type aiResolveEntry struct {
 }
 
 // aiResolveCache 进程内热点解析缓存（ResolveConfig/ListConfigsForFeature/ResolveAssistantPair）。
-// 解密后的 API Key 只留在进程内、不落 Redis；写路径（建/改/删配置与绑定）主动清空。
+// 解密后的 API Key 只留在进程内、不落库；写路径（建/改/删配置与绑定）主动清空。
 type aiResolveCache struct {
 	mu      sync.Mutex
 	entries map[string]aiResolveEntry
@@ -240,18 +235,8 @@ func (s *ConfigService) DeleteConfig(ctx context.Context, id int) error {
 }
 
 // ListBindings 返回所有 AI 功能的绑定情况（未绑定功能也展示，config_id 为 null）。
+// #2109 阶段 B：原来的 Redis 展示缓存已退役（管理端低频读，直查 DB 即可）。
 func (s *ConfigService) ListBindings(ctx context.Context) ([]FeatureBindingDTO, error) {
-	// 优先查 Redis 缓存
-	var cached []FeatureBindingDTO
-	err := cache.GetOrSetJSON(ctx, bindingsCacheKey, bindingsCacheTTL, &cached, func() (any, error) {
-		return s.loadBindingsFromDB(ctx)
-	})
-	if err == nil {
-		return cached, nil
-	}
-	if !errors.Is(err, redis.Nil) {
-		s.logger.Warn("ListBindings 缓存读取异常，降级直查 DB", zap.Error(err))
-	}
 	return s.loadBindingsFromDB(ctx)
 }
 
@@ -394,11 +379,9 @@ func (s *ConfigService) SetBinding(ctx context.Context, featureKey string, confi
 	return nil
 }
 
-// invalidateBindings 绑定写路径的缓存失效：Redis 展示缓存 + 进程内热点解析缓存。
-func (s *ConfigService) invalidateBindings(ctx context.Context) {
-	if err := cache.Del(ctx, bindingsCacheKey); err != nil {
-		s.logger.Warn("失效绑定缓存失败（不影响 DB 写入结果）", zap.Error(err))
-	}
+// invalidateBindings 绑定写路径的失效：只剩进程内热点解析缓存
+// （#2109 阶段 B：Redis 展示缓存已退役）。
+func (s *ConfigService) invalidateBindings(_ context.Context) {
 	s.resolveCache.invalidate()
 }
 

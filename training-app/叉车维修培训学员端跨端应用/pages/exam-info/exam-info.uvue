@@ -1,27 +1,36 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
         <app-nav-bar title="考情资讯" @left-click="onBack" />
-        <scroll-view class="tab-bar" direction="horizontal" :show-scrollbar="false">
-            <view v-for="(tab, idx) in mainTabs" :key="idx" class="tab-item" @click="onMainTabChange(idx)">
+        <view class="tab-bar">
+            <view v-for="(tab, idx) in mainTabs" :key="tab" class="tab-item" @click="onMainTabChange(idx)">
                 <text class="tab-text" :class="{ 'tab-text-active': activeMainTab === idx }" lines="1">{{ tab }}</text>
                 <view v-if="activeMainTab === idx" class="tab-underline"></view>
             </view>
-        </scroll-view>
-        <view class="filter-bar">
-            <view v-for="(tag, idx) in filterTags" :key="idx" class="filter-tag"
+        </view>
+        <!-- 「报名入口」「成绩查询」同走考情内容（#1940 Q3 裁定）：文案把「同一批内容」讲清楚 -->
+        <view v-if="hintText.length > 0" class="hint-bar">
+            <text class="hint-text">{{ hintText }}</text>
+        </view>
+        <!-- chips 只在「新闻资讯」tab（#1940 Q4 裁定）：其余 tab 自身已是类别 -->
+        <view v-if="withFilters" class="filter-bar">
+            <view v-for="(tag, idx) in filterTags" :key="tag" class="filter-tag"
                 :class="{ 'filter-tag-active': activeFilter === idx }" @click="onFilterChange(idx)">
                 <text class="filter-tag-text"
                     :class="{ 'filter-tag-text-active': activeFilter === idx }">{{ tag }}</text>
             </view>
         </view>
         <scroll-view class="content-scroll" direction="vertical" @scrolltolower="onLoadMore">
-            <view v-if="items.length == 0 && !loading" class="empty-tip">
-                <text class="empty-text">暂无资讯</text>
-            </view>
+            <!-- 失败态与空态分开（#816 口径）：拉不到不能说成「暂无资讯」 -->
+            <app-empty-state v-if="items.length == 0 && failed && !loading" text="资讯加载失败" action-text="重试"
+                @action="onRetry" />
+            <app-empty-state v-else-if="items.length == 0 && !loading" icon="📰" text="暂无资讯" />
             <view class="news-list">
-                <view v-for="(item, idx) in items" :key="idx" class="news-item" @click="onItemClick(item)">
-                    <view class="news-dot"></view>
-                    <text class="news-title">{{ item.title }}</text>
+                <view v-for="item in items" :key="item.content_id" class="news-item" @click="onItemClick(item)">
+                    <text class="news-title" lines="2">{{ item.title }}</text>
+                    <view class="news-meta">
+                        <text v-if="item.category_label.length > 0" class="news-category">{{ item.category_label }}</text>
+                        <text v-if="item.published_at.length > 0" class="news-date">{{ displayDate(item.published_at) }}</text>
+                    </view>
                 </view>
             </view>
             <view v-if="loading" class="loading-more">
@@ -35,68 +44,107 @@
 </template>
 
 <script setup lang="uts">
-    import { ref } from 'vue'
+    import { ref, computed } from 'vue'
     import { onLoad } from '@dcloudio/uni-app'
     import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
+    import appEmptyState from '../../components/app-empty-state/app-empty-state.uvue'
     import { goBack } from '../../utils/navigation'
-    function onBack() : void {
-        goBack()
-    }
+    import { getFeaturedContentsApi } from '../../api/featured'
+    import { mergeDashboardNews } from '../../utils/dashboardNews'
+    import { EXAM_INFO_TABS, EXAM_INFO_FILTERS, tabCategories, tabHint, showsFilters, filterQuery, appendUnique } from '../../utils/examInfoTabs'
+    import { formatDateStr } from '../../utils/format'
+    import type { FeaturedContentItem } from '../../types/index'
+
+    /** 单类别请求的页大小；多类别 tab（新闻资讯 = 行业新闻 + 政策法规）合并后一屏约 2× 条 */
+    const PAGE_SIZE : number = 10
+
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
-    const mainTabs : string[] = ['招聘信息', '新闻资讯', '考试动态', '相关问题', '报名入口', '成绩查询', '岗位表']
-    const activeMainTab = ref<number>(1)
+    /** tab 表与 chips 表的唯一口径在 utils/examInfoTabs：改口径改那里，不改模板 */
+    const mainTabs : string[] = EXAM_INFO_TABS
+    const filterTags : string[] = EXAM_INFO_FILTERS
 
-    const filterTags : string[] = ['最新资讯', '热点关注', '政策法规', '全部']
+    const activeMainTab = ref<number>(0)
     const activeFilter = ref<number>(0)
 
-    type NewsItem = {
-        id : number
-        title : string
-        category : string
-    }
-
-    const items = ref<NewsItem[]>([])
+    const items = ref<FeaturedContentItem[]>([])
     const page = ref<number>(1)
     const loading = ref<boolean>(false)
     const noMore = ref<boolean>(false)
+    /** 本轮**所有**类别都失败（与「暂无资讯」区分开；#816 口径） */
+    const failed = ref<boolean>(false)
 
+    const withFilters = computed<boolean>(() : boolean => showsFilters(activeMainTab.value))
+    const hintText = computed<string>(() : string => tabHint(activeMainTab.value))
+
+    /** 模板不可直调 import 函数（uvue 模板 import 调用编译为 .invoke() = Kotlin error18，先例 #677） */
+    function displayDate(dateStr : string) : string {
+        return formatDateStr(dateStr)
+    }
+
+    function onBack() : void {
+        goBack()
+    }
+
+    /**
+     * 取数：按 tab 的类别表**各发一次**请求（后端只支持单个 category，#2063 边界），
+     * 合并 / 去重 / 倒序复用 utils/dashboardNews（#1939 已落地的同一口径）。
+     */
     async function loadItems(reset : boolean = false) : Promise<void> {
         if (loading.value) return
         if (reset) {
             page.value = 1
             noMore.value = false
+            failed.value = false
+            items.value = []
         }
-        if (noMore.value && !reset) return
+        if (noMore.value) return
 
         loading.value = true
-        try {
-            const mockItems : NewsItem[] = [
-                { id: 1, title: '国务院安委会办公室应急管理部关于开展2026年', category: 'policy' },
-                { id: 2, title: '2026年特种设备作业人员考试安排通知', category: 'exam' },
-                { id: 3, title: '叉车司机职业技能等级认定新规解读', category: 'hot' },
-                { id: 4, title: '应急管理部发布叉车安全操作规范（2026修订版）', category: 'policy' },
-                { id: 5, title: '全国叉车维修技能竞赛报名入口已开放', category: 'latest' },
-            ]
-            if (reset) {
-                items.value = mockItems
-            } else {
-                items.value = items.value.concat(mockItems)
+        // 无 chips 的 tab 用「全部」口径（不筛不排）；有 chips 时按 chip 映射（政策法规 chip 直接锁类别）
+        const query = showsFilters(activeMainTab.value) ? filterQuery(activeFilter.value) : filterQuery(3)
+        let cats : string[] = tabCategories(activeMainTab.value)
+        if (query.category.length > 0) {
+            const only : string[] = [query.category]
+            cats = only
+        }
+
+        const groups : FeaturedContentItem[][] = []
+        let failedCount = 0
+        for (let i = 0; i < cats.length; i++) {
+            try {
+                const result = await getFeaturedContentsApi(page.value, PAGE_SIZE, cats[i], query.sort)
+                groups.push(result.items)
+            } catch (e) {
+                // 单类别抖动不拦整页：一个类别失败不该把已有内容清空
+                failedCount = failedCount + 1
+                console.warn('[exam-info] load failed:', e)
             }
-            noMore.value = true
-        } catch (e) {
-            console.error('[exam-info] load failed:', e)
-        } finally {
-            loading.value = false
+        }
+        loading.value = false
+
+        if (failedCount == cats.length) {
+            failed.value = items.value.length == 0
+            return
+        }
+        const merged = mergeDashboardNews(groups, 0)
+        items.value = appendUnique(items.value, merged)
+        noMore.value = merged.length == 0
+        if (merged.length > 0) {
+            page.value = page.value + 1
         }
     }
 
     function onMainTabChange(idx : number) : void {
+        if (activeMainTab.value == idx) return
         activeMainTab.value = idx
+        // chips 只在新闻资讯 tab：切走时回到「最新资讯」，切回来不会带着上一次的热点口径
+        activeFilter.value = 0
         loadItems(true)
     }
 
     function onFilterChange(idx : number) : void {
+        if (activeFilter.value == idx) return
         activeFilter.value = idx
         loadItems(true)
     }
@@ -105,8 +153,13 @@
         loadItems(false)
     }
 
-    function onItemClick(item : NewsItem) : void {
-        uni.showToast({ title: '详情开发中', icon: 'none' })
+    /** 详情复用内容精选详情页（ADR-0045：三处消费点同一个落点）；正文外链由该页「参考链接」承载 */
+    function onItemClick(item : FeaturedContentItem) : void {
+        uni.navigateTo({ url: '/pages/featured/featured-detail?id=' + item.content_id.toString() })
+    }
+
+    function onRetry() : void {
+        loadItems(true)
     }
 
     onLoad((_options : any) => {
@@ -129,7 +182,7 @@
     }
 
     .tab-item {
-        width: 160rpx;
+        flex: 1;
         align-items: center;
         position: relative;
         flex-shrink: 0;
@@ -151,6 +204,16 @@
         border-radius: 3rpx;
         background-color: $primary-color;
         margin-top: $spacing-xs;
+    }
+
+    .hint-bar {
+        background-color: $bg-tint;
+        padding: 16rpx 32rpx;
+    }
+
+    .hint-text {
+        font-size: $font-size-sm;
+        color: $text-color-secondary;
     }
 
     .filter-bar {
@@ -194,36 +257,35 @@
     }
 
     .news-item {
-        flex-direction: row;
-        align-items: center;
+        flex-direction: column;
         padding: 28rpx 32rpx;
         border-bottom: 1rpx solid $bg-color;
     }
 
-    .news-dot {
-        width: 12rpx;
-        height: 12rpx;
-        border-radius: 6rpx;
-        background-color: $primary-color;
-        margin-right: 20rpx;
-        flex-shrink: 0;
-    }
-
     .news-title {
-        flex: 1;
         font-size: $font-size-md;
         color: $text-color;
         lines: 2;
         text-overflow: ellipsis;
     }
 
-    .empty-tip {
+    .news-meta {
+        flex-direction: row;
         align-items: center;
-        padding: 120rpx 0;
+        margin-top: $spacing-xs;
     }
 
-    .empty-text {
-        font-size: $font-size-md;
+    .news-category {
+        font-size: $font-size-xs;
+        color: $primary-color;
+        background-color: $primary-tint;
+        padding: 4rpx 12rpx;
+        border-radius: $radius-sm;
+        margin-right: $spacing-sm;
+    }
+
+    .news-date {
+        font-size: $font-size-xs;
         color: $text-color-placeholder;
     }
 
