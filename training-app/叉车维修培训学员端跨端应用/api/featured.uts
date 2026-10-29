@@ -76,15 +76,21 @@ function buildFeaturedDetailResult(data : UTSJSONObject) : FeaturedContentDetail
  * 精选列表
  * @param page 页码
  * @param pageSize 每页条数
- * @param category 分类过滤（可选）
+ * @param category 分类过滤（可选，单值：#2063 边界不加多值参数）
+ * @param sort 排序（可选）：'latest' 按发布时间 / 'hot' 按浏览量；空串不传（后端缺省 latest）
  */
-export function getFeaturedContentsApi(page : number = 1, pageSize : number = 10, category : string = '') : Promise<Page<FeaturedContentItem>> {
+export function getFeaturedContentsApi(page : number = 1, pageSize : number = 10, category : string = '', sort : string = '') : Promise<Page<FeaturedContentItem>> {
 	const params : UTSJSONObject = {
 		page: page.toString(),
 		page_size: pageSize.toString(),
 	} as UTSJSONObject
 	if (category.length > 0) {
 		params['category'] = category
+	}
+	// 排序透传（#1940）：后端 handler.go 早已支持 sort=latest|hot，此前消费侧没传 ⇒ 原型的
+	// 「最新资讯 / 热点关注」两个 chip 只能退回缺省值。空串不传，保持既有调用方的行为不变。
+	if (sort.length > 0) {
+		params['sort'] = sort
 	}
 	// 装载走信封归一出口 `decodePage`（ADR-0037 PR-B）：数组键 `items`，分页字段只认 total
 	return getMapped<Page<FeaturedContentItem>>('/featured-contents', params, (data : UTSJSONObject) : Page<FeaturedContentItem> => decodePage<FeaturedContentItem>(data, '/featured-contents', page, pageSize, (obj : UTSJSONObject) : FeaturedContentItem => buildFeaturedItem(obj), ['items']))

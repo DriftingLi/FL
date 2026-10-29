@@ -1,0 +1,99 @@
+/**
+ * 考情资讯页的 tab / chips 口径（#1940）
+ *
+ * 口径来源：移动端 `docs/adr/0045-移动端内容消费复用内容精选域.md`「修订（2026-10-28，#1940 裁定）」段。
+ * 为什么单点成纯函数：tab→类别、chips→(category, sort)、分页去重都是**产品口径**而不是渲染细节。
+ * 写成页面里的字面量，下次改口径要读两百行模板才知道映射在哪；写成纯函数，行为腿能真执行它
+ * （`utils/utsHarness` 的 loadUts），映射写错或后端字典换了先红。
+ *
+ * 类别字典 = 内容精选六态里的取值（后端 #2063）：industry 行业新闻 / news 政策法规 / exam 考情
+ * / notice 公告 / company 公司动态 / product 产品资讯。本页只消费前三个。
+ */
+import type { FeaturedContentItem } from '../types/index'
+
+/** 主 tab：收敛为原型四 tab（原页面多出的「招聘信息 / 相关问题 / 岗位表」无原型依据、无数据源） */
+export const EXAM_INFO_TABS : string[] = ['新闻资讯', '考试动态', '报名入口', '成绩查询']
+
+/**
+ * 「报名入口」「成绩查询」同走 exam 类别（#1940 Q3 裁定：接受两 tab 同列表），
+ * 靠这一行文案把「两个 tab 是同一批考情内容」讲清楚，而不是让读者以为其中一个坏了。
+ */
+const EXAM_ACTION_HINT : string = '入口类内容与「考试动态」同源，正文里的报名/成绩查询链接可直接打开'
+
+/** tab → 类别：新闻资讯 = 行业新闻 + 政策法规；考试动态 / 报名入口 / 成绩查询 = 考情 */
+export function tabCategories(tabIndex : number) : string[] {
+    if (tabIndex == 0) {
+        const newsTab : string[] = ['industry', 'news']
+        return newsTab
+    }
+    const examTab : string[] = ['exam']
+    return examTab
+}
+
+/** tab 下的说明行；新闻资讯与考试动态返回空串（不显示说明条） */
+export function tabHint(tabIndex : number) : string {
+    if (tabIndex == 2 || tabIndex == 3) return EXAM_ACTION_HINT
+    return ''
+}
+
+/** chips（原型：最新资讯 / 热点关注 / 政策法规 / 全部） */
+export const EXAM_INFO_FILTERS : string[] = ['最新资讯', '热点关注', '政策法规', '全部']
+
+/**
+ * chips 只在「新闻资讯」tab 出现：其余 tab 自身已是类别，
+ * 「政策法规」chip 在考情类目下必然空结果（#1940 Q4 裁定）。
+ */
+export function showsFilters(tabIndex : number) : boolean {
+    return tabIndex == 0
+}
+
+/**
+ * chips → 请求参数。**一个 chip 只发一次请求**：category 空串 = 不传（按 tab 的类别表逐类取），
+ * sort 空串 = 不传（后端缺省 latest）。后端公开列表只支持单个 category（#2063 边界）、
+ * 已有 sort=latest|hot（`backend/internal/featured/handler.go`）——两件事都在服务端，消费侧只映射。
+ */
+export type FeaturedQuery = {
+    category : string
+    sort : string
+}
+
+export function filterQuery(filterIndex : number) : FeaturedQuery {
+    if (filterIndex == 1) {
+        // 热点关注 → 浏览量口径（与官网归档页「热点资讯」同一条）
+        return { category: '', sort: 'hot' } as FeaturedQuery
+    }
+    if (filterIndex == 2) {
+        // 政策法规 → 直接锁到 news 类别，不再叠 tab 的行业新闻
+        return { category: 'news', sort: '' } as FeaturedQuery
+    }
+    if (filterIndex == 3) {
+        // 全部 → 不筛不排（后端缺省按发布时间）
+        return { category: '', sort: '' } as FeaturedQuery
+    }
+    // 缺省 = 最新资讯
+    return { category: '', sort: 'latest' } as FeaturedQuery
+}
+
+/**
+ * 分页追加：同 content_id 已在表内则跳过。
+ * 翻页期间上游新增内容会让相邻两页重叠，不按 id 去重就会出现同一篇两条。
+ * 不用 Array.prototype.filter / Set —— 与 utils/dashboardNews 同口径，手写循环在 Kotlin / Swift / 小程序三端都稳。
+ */
+export function appendUnique(current : FeaturedContentItem[], incoming : FeaturedContentItem[]) : FeaturedContentItem[] {
+    const next : FeaturedContentItem[] = []
+    for (let i = 0; i < current.length; i++) {
+        next.push(current[i])
+    }
+    for (let j = 0; j < incoming.length; j++) {
+        const item = incoming[j]
+        let seen = false
+        for (let k = 0; k < next.length; k++) {
+            if (next[k].content_id == item.content_id) {
+                seen = true
+                break
+            }
+        }
+        if (!seen) next.push(item)
+    }
+    return next
+}
