@@ -104,7 +104,10 @@ const RESULT_MANDATORY = [
   'appid', 'pageStack', 'entry', 'errorsTotal', 'exceptionsTotal', 'logsTotal',
   'shots', 'navigation', 'ready', 'sdk', 'ide', 'log'
 ];
-const RESULT_OPTIONAL = ['navigationSkipReason', 'auth', 'asserts'];
+// 可选字段（只在对应情形出现时才写；顺序 = 出现时的相对顺序）
+// noise：平台层噪音白名单放行的 console error 条数（2026-10-29 F3）。**只在 noise>0 时出现** ——
+// 过滤必须可见：某次跑次真被过滤过东西，读数行上一定看得到；没噪音的跑次结果行逐字节不变。
+const RESULT_OPTIONAL = ['navigationSkipReason', 'auth', 'asserts', 'noise'];
 
 /**
  * 取一个 PowerShell 函数的函数体（花括号配对）。
