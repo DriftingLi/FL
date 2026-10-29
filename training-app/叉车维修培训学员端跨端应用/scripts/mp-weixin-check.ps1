@@ -110,7 +110,7 @@
     机制（已裁定，勿另选）= ADR-0038 决策 1 的「构建产物 `app.json` 首项临时换页 + plain 冷启动」——**不调用任何
     导航 API**，页身份判据 = 冷启动落地页 `pageStack[0]` 等于目标路由（真机侧同手法先例 #1678）。`-Pages auto`（缺省）
     = 入口页 + 本 PR 改动页（git diff 命中 `pages/**/*.uvue`）；`-Pages none` 关闭直达走旧导航组；`-Pages <csv>` 指定清单。
-    每页取证 = 截图（按现行入仓判据落 `docs/verification/<模块>/<PR号>/<页名>.png`）+ 该页 console error/exception
+    每页取证 = 截图（落日志目录；只有显式 `-Archive` 才另存一份到 `docs/verification/<模块>/<号码>/`）+ 该页 console error/exception
     读数（`errorsTotal` 语义不变：逐页累加，重试不重复计数）。未达成页**逐页**记入 `navigation.pages`（#1816），组级形态：
     全部达成 ⇒ `ok`、部分达成 ⇒ `partial(ok=<N>,skip=<M>)`（已达成页读数照常计入，**不得**被未达成页整组塌缩）、
     全部未达成 ⇒ `navigation=skip(reason=…)`（reason ∈ direct-page-unsupported / page-not-in-build / app-json-invalid），
@@ -250,11 +250,21 @@
     > 0 时，**仅在门通过（exit 0）分支**把证据块**打印到终端** —— A1（#2100）起**不再贴任何评论**。
     打印出来的块就是该粘进 PR `## 验收证据` 段的那一段：结论行（含 MP_WEIXIN_RESULT）与产物路径 + 复现命令。
     校验器只读 PR 正文（一行 `跑于 <sha7>` + 门读数行），「贴在哪个 sha 上」不再参与判定，
-    因此不再校验 sha 可达性、不发任何 gh 写请求；号码仍作**归档目录键 / 批次标识**（见 -NoArchive）。
-    投递退役不是失败：不打印警告，**不影响门的结论**（退出码 0/1/2 语义不变）。
+    因此不再校验 sha 可达性、不发任何 gh 写请求；号码只作**批次标识**（以及 `-Archive` 时的归档目录键）。
+    投递退役不是失败：不打印警告，**不影响门的结论**（退出码 0/1/2 语义不变）。**本参数无写副作用**。
 
 .PARAMETER PostToPr
     `-PostToIssue` 的**别名**（同值，一个版本后退役）。
+
+.PARAMETER Archive
+    **显式开启截图入库**（默认关闭）。开启后门通过时把截图压缩后 `git add` + `commit` + push 到
+    `docs/verification/<模块>/<号码>/`，即**门自己会给分支造一个 commit 并挪走 head sha**。
+    A1（#2100）的裁定是「门证据不入库、图按需贴」，所以这件事必须是显式动作，不能由传号码顺带发生
+    —— 否则正文里的 `跑于 <sha7>` 会从 head 变成祖先。只是要证据块的话**不要**加这个开关。
+    入库任何失败都只警告，不影响门的结论（维护者 2026-09-12 要求）。
+
+.PARAMETER NoArchive
+    `-Archive` 的**反向逃生开关**（优先级更高）：同时给 `-Archive -NoArchive` 时以 `-NoArchive` 为准。
 
 .PARAMETER IdeUserDataRoot
     预探（#1860）的 `.ide` 端口文件用户目录根**注入点**（行为守护与楔死态验收用）。
@@ -270,7 +280,8 @@
     npm run build:mp-weixin-check
     pwsh -NoProfile -File scripts/mp-weixin-check.ps1 -SkipBuild
     pwsh -NoProfile -File scripts/mp-weixin-check.ps1 -Routes 'pages/index/index,pages/login/login'
-    pwsh -NoProfile -File scripts/mp-weixin-check.ps1 -PostToPr 884
+    pwsh -NoProfile -File scripts/mp-weixin-check.ps1 -PostToPr 884          # 只打印证据块，不写盘
+    pwsh -NoProfile -File scripts/mp-weixin-check.ps1 -PostToPr 884 -Archive  # 显式开截图入库（会造 commit）
     pwsh -NoProfile -File scripts/mp-weixin-check.ps1 -DryRun
     npm run build:mp-weixin-buildonly          # = -BuildOnly：只跑构建面（#1861）
 #>
@@ -303,6 +314,9 @@ param(
     [int]$PortWaitSeconds = 180,
     [string]$Module = 'mp-weixin',
     [switch]$NoArchive,
+    # A1（#2100）之后：截图入库从「传号码就发生」改成「显式 -Archive 才发生」。
+    # 旧默认下为了拿证据块**必须**传 -PostToPr，于是「正常拿证据」会顺手 commit + push 挪走 head sha。
+    [switch]$Archive,
     [int]$HxWaitSeconds = 600,
     [switch]$HxNoWait,
     [int]$ProbeTimeoutSeconds = 180,
@@ -1992,8 +2006,8 @@ try {
         Write-Host '   非等价声明：build-only 只证明「publish 成功 + 产物合法」，**不是** ② 的替代 ——' -ForegroundColor Yellow
         Write-Host '   console error / exception / pageStack / 截图一概未取证（ADR-0043 决策 3 不动：建成它不构成降频 ② 的理由）。' -ForegroundColor Yellow
         if ($PostToPr -gt 0) {
-            Write-Host '   注意：-BuildOnly 不贴 ② 门评论（-PostToIssue 在本模式下被忽略）；⑤ 行的评论形态由 #2049 落地。' -ForegroundColor Yellow
-            Write-Log 'build-only: -PostToIssue 忽略（本模式不产出 ② 门评论）'
+            Write-Host '   注意：-BuildOnly 不产出 ② 门证据块（-PostToIssue 在本模式下被忽略）；本模式也不入库（-Archive 同样不生效）。' -ForegroundColor Yellow
+            Write-Log 'build-only: -PostToIssue / -Archive 忽略（本模式不产出门证据、不入库）'
         }
         exit 0
     }
@@ -2550,10 +2564,12 @@ try {
         Write-Host "    $partialLine" -ForegroundColor Yellow
     }
 
-    # P2：门通过时把截图**压缩入库**到 PR 分支（docs/verification/<模块>/<PR号>/<页名>-after.<ext>）
+    # 截图**入库**（把图提交进 git）是显式动作（`-Archive`），默认不发生。
+    # A1（#2100）之前它是「传了号码就入库」，而 A1 之后为了拿证据块**必须**传号码 ⇒ 「正常取证」
+    # 会顺手 commit + push，把 head sha 挪走、让正文里的 `跑于 <sha7>` 从 head 变成祖先。
     # 任何失败都只警告 + 给命令，**不让门因此失败**（维护者 2026-09-12 要求）。
     $archive = $null
-    if ($PostToPr -gt 0 -and -not $NoArchive) {
+    if ($Archive -and -not $NoArchive -and $PostToPr -gt 0) {
         try {
             $archive = Publish-ScreenshotArchive -PrNumber $PostToPr -Module $Module -ShotDir $logDir -ProbeJson $probeJson -RepoRoot $Project
         } catch {
@@ -2567,6 +2583,8 @@ try {
         }
     } elseif ($NoArchive) {
         Write-Host "   [archive] -NoArchive：跳过截图入库" -ForegroundColor Yellow
+    } elseif ($PostToPr -gt 0) {
+        Write-Host "   [archive] 未开 -Archive：截图不入库（A1：图按需贴 PR，需要存档时加 -Archive）" -ForegroundColor DarkGray
     }
 
     $failed = @($probeJson.failures)

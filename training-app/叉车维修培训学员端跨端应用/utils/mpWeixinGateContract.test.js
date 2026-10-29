@@ -636,6 +636,17 @@ function scanContract(sources) {
   must(s.includes('省了'), 'C9', '减图时未要求在评论里写明省了哪几页');
   must(s.includes('入库截图'), 'C9', '评论未用仓库内相对路径列出入库截图');
 
+  // C9b 入库触发面（2026-10-29 A1 收尾）：入库必须是**显式** `-Archive` 才发生。
+  // 为什么单独钉：A1 之后「拿证据块」必须传 `-PostToPr`，若入库仍由号码触发，正常取证会顺手
+  // `git add`+`commit`+push ⇒ 门给分支造一个 commit、head sha 被挪走，正文 `跑于 <sha7>` 从 head 变祖先。
+  // 三条一起钉（开关在 / 旧条件消失 / 守卫在调用之前）：任一条单独都能被「保留开关但仍由号码触发」绕过。
+  must(/\[switch\]\$Archive\b/.test(s), 'C9b', '缺 [switch]$Archive（截图入库必须是显式动作，不能由号码顺带触发）');
+  must(!s.includes('if ($PostToPr -gt 0 -and -not $NoArchive)'), 'C9b', '入库触发退回旧条件（只要有号码就 commit + push ⇒ 挪走 head sha）');
+  const archGuardAt = s.indexOf('if ($Archive');
+  const archCallAt = s.indexOf('Publish-ScreenshotArchive -PrNumber');
+  must(archGuardAt !== -1 && archCallAt !== -1 && archGuardAt < archCallAt, 'C9b',
+    '$Archive 守卫不在 Publish-ScreenshotArchive 调用之前（守卫与调用脱节 ⇒ 开关形同虚设）');
+
   // C11 HBuilderX 忙检测（单实例串行资源）：② 也必须接共享 helper，且不得 kill 主程序
   must(/(lib\/hx-busy\.ps1|lib\\hx-busy\.ps1)/.test(s), 'C11', '未 dot-source scripts/lib/hx-busy.ps1（HBuilderX 忙检测）');
   must(/Wait-HxFree/.test(s), 'C11', '未调用 Wait-HxFree（忙检测 + 等待上限）');
@@ -1172,6 +1183,9 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
       ['C8', { ...real, script: real.script.replace(/manifest-appid/g, 'manifest-x') }],
       ['C9', { ...real, script: real.script.replace('$script:ArchiveMaxBytes = 150KB', '$script:ArchiveMaxBytes = 900KB') }],
       ['C9', { ...real, script: real.script.replace(/-NoArchive/g, '-ArchiveAll') }],
+      // C9b：把入库触发退回「有号码就入库」（A1 后正常取证会挪走 head sha）/ 删掉显式开关本身
+      ['C9b', { ...real, script: real.script.replace('if ($Archive -and -not $NoArchive -and $PostToPr -gt 0) {', 'if ($PostToPr -gt 0 -and -not $NoArchive) {') }],
+      ['C9b', { ...real, script: real.script.replace(/\[switch\]\$Archive,/, '') }],
       ['C10', { ...real, pkg: real.pkg.replace('build:mp-weixin-check', 'build:mp-x') }],
       // C28 必红：入口在、但没带 -BuildOnly（那是一个「能跑 ② 全量」的同名入口，不是构建面模式）
       ['C28', { ...real, pkg: real.pkg.replace('scripts/mp-weixin-check.ps1 -BuildOnly', 'scripts/mp-weixin-check.ps1') }],
