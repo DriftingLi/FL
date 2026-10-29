@@ -150,7 +150,7 @@ jobs:
         shard: [1, 2]
     services:
       postgres:
-        image: postgres:15-alpine
+        image: postgres:18-alpine
         env:
           POSTGRES_DB: forklift_test
           POSTGRES_USER: testuser
@@ -446,7 +446,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:15-alpine
+        image: postgres:18-alpine
         env:
           POSTGRES_DB: forklift_migrate
           POSTGRES_USER: migrateuser

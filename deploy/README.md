@@ -94,8 +94,126 @@ compose 文件从仓库根迁到 `deploy/` 后，默认项目名会从目录名�
 name: ${COMPOSE_PROJECT_NAME:-forklift-training}
 ```
 
-命名卷仍是 `forklift-training_pgdata-prod` / `forklift-training_redisdata-prod` 等。
+命名卷仍是 `forklift-training_pgdata-prod` / `forklift-training_redisdata-prod` 等。生产实际用的是 environment secret `PG_VOLUME=/srv/ceph/pgdata`（Ceph 绑定挂载），见下一节升级 runbook。
 换宿主机想换项目名时，显式设置 `COMPOSE_PROJECT_NAME`（并在迁移数据卷前确认）。
+
+## 大版本升级：PostgreSQL 15 → 18（一次性 runbook，#2109）
+
+镜像版本不能靠一次 `docker compose up` 换过去：PG 18 的二进制打不开 PG 15 的数据目录。
+全仓零 `CREATE EXTENSION`（没有扩展要在新集群里重装），所以走**逻辑备份搬运**最省事。
+本流程必须人工按序执行，不要塞进 `deploy.py` —— 它一次性、不可重复。
+
+**两条 2026-10-29 生产实测出来的事实，动手前先读：**
+
+1. **生产的 `PG_VOLUME`（`/srv/ceph/pgdata`）不是普通目录，是 Ceph RBD 镜像的挂载点**
+   （`/dev/rbd0` → xfs；`/etc/fstab` 按 UUID 挂载、`/etc/ceph/rbdmap` 负责 map，镜像上还有每小时快照）。
+   挂载点**不能 `mv`**（实测 `Device or resource busy`）—— 升级必须**另起一个镜像**，
+   旧镜像原样留着就是回滚件。
+2. **18+ 官方镜像的挂载点是 `/var/lib/postgresql`，不是 `/var/lib/postgresql/data`。**
+   18 起 PGDATA 变成 `/var/lib/postgresql/<主版本>/docker`；卷挂在旧路径上会被入口脚本判成
+   「升级残留数据」并拒绝启动（实测 `there appears to be PostgreSQL data in: /var/lib/postgresql/data`）。
+
+前置：`docker compose -f deploy/docker-compose.prod.yml config` 已是 `postgres:18-alpine`；宿主机能给
+postgres 容器约 2G（不够时把 `shared_buffers` 降到 384MB、`effective_cache_size` 降到 1GB，改在 compose 的
+`command:` 里）。
+
+下面统一用这个变量。**必须带 `--env-file`**：`COMPOSE_PROJECT_NAME` 在 `.env` 里，漏了它会算出
+另一个项目名，容器名与卷名全部对不上。
+
+```bash
+cd "$DEPLOY_PATH"
+COMPOSE="docker compose --env-file .env -f deploy/docker-compose.prod.yml"
+```
+
+0. 记下当前迁移版本（后面要逐字对上）：
+
+   ```bash
+   $COMPOSE run --rm backend /app/bin/migrate status
+   ```
+
+1. 逻辑备份（用**旧**容器里的 15 版 `pg_dump`；落到 root 盘，别落进马上要被挪走的数据目录）：
+
+   ```bash
+   docker exec forklift-pg-prod pg_dump -U forklift -Fc -d forklift_training -f /tmp/fl15.dump
+   docker cp forklift-pg-prod:/tmp/fl15.dump "$DEPLOY_PATH/backups/forklift15-$(date +%Y%m%d).dump"
+   ```
+
+2. 停应用（搬迁期间不接受写入）：
+
+   ```bash
+   $COMPOSE stop backend frontend
+   ```
+
+3. 准备新数据目录并切 `PG_VOLUME`（**纯增量，不碰旧镜像**）：
+
+   ```bash
+   rbd create forklift-data/pgdata18 --size 20G
+   echo "forklift-data/pgdata18 id=admin,keyring=/etc/ceph/ceph.client.admin.keyring" >> /etc/ceph/rbdmap
+   DEV=$(rbd device map forklift-data/pgdata18)
+   mkfs.xfs -L pgdata18 "$DEV"
+   mkdir -p /srv/ceph/pgdata18 && mount "$DEV" /srv/ceph/pgdata18
+   chown 70:70 /srv/ceph/pgdata18 && chmod 700 /srv/ceph/pgdata18   # postgres 镜像内 uid=70
+   UUID=$(blkid -s UUID -o value "$DEV")
+   echo "UUID=$UUID /srv/ceph/pgdata18 xfs rw,defaults,noatime,x-systemd.requires=rbdmap.service 0 0" >> /etc/fstab
+
+   gh secret set PG_VOLUME --env production --body "/srv/ceph/pgdata18"
+   sed -i 's|^PG_VOLUME=.*|PG_VOLUME=/srv/ceph/pgdata18|' .env   # CD 下次会写出同一个值
+   ```
+
+   命名卷的部署等价做法：换一个新卷名（旧卷保留）。判据相同 —— 18 必须在**空目录**上 initdb。
+
+4. 停应用与旧库，再起新库（空目录由 18 initdb）：
+
+   ```bash
+   $COMPOSE stop backend frontend
+   $COMPOSE stop postgres
+   $COMPOSE up -d postgres
+   $COMPOSE ps postgres      # 等 healthy
+   ```
+
+   ⚠️ 起来后的头几十秒，`pg_isready` 可能已经返回，但 `forklift_training` 还建在 initdb 的
+   临时实例里 —— 这时连库会报 `database "forklift_training" does not exist`，**等 30 秒再判**。
+
+5. 还原：
+
+   ```bash
+   docker cp "$DEPLOY_PATH/backups/forklift15-<日期>.dump" forklift-pg-prod:/tmp/fl15.dump
+   docker exec forklift-pg-prod pg_restore -U forklift -d forklift_training \
+     --no-owner --no-privileges /tmp/fl15.dump
+   ```
+
+6. 还原后自证：`migrate status` 的版本号必须与第 0 步**逐字相同**且 `CLEAN`；再抽查
+   `hrwai_users` / `evaluations` / `points_ledger` 的行数与旧库一致。
+
+7. 起服务：
+
+   ```bash
+   $COMPOSE up -d backend frontend
+   ```
+
+   **不要在这里手跑 `deploy.py`**：它会按当前 shell 的环境重写 `.env`，而 `SECRET_KEY` /
+   `JWT_SECRET_KEY` / `DB_PASSWORD` 的权威来源是 CD —— 缺这些环境变量时会被写成空值，等于把生产锁死。
+   `.env` 由 CD 生成（合并后的那次部署已经重写过一遍），本次不动它。
+
+8. 冒烟：`curl -fsS https://<DOMAIN>/api/health` 返回 200；再走一遍登录与估值页。
+
+**回滚**：旧镜像与旧挂载点一直没动过，切回去只要把 `PG_VOLUME` 指回去：
+
+```bash
+$COMPOSE stop postgres backend frontend
+gh secret set PG_VOLUME --env production --body "/srv/ceph/pgdata"
+sed -i 's|^PG_VOLUME=.*|PG_VOLUME=/srv/ceph/pgdata|' .env
+# 镜像与挂载目标改回 15 那一版（git revert，或临时改 compose 的 image 与 volumes）之后：
+$COMPOSE up -d postgres
+```
+
+回滚**会丢掉**切到 18 之后写入的数据，因此只在零流量窗口执行。
+
+**升级后必做**：`deploy/rbd-snap-hourly.sh` 的快照目标是 `forklift-data/pgdata`，升级后在线数据
+在 `pgdata18` 上 —— 不同步改掉，每小时快照就还在拍旧镜像，在线数据失去小时级覆盖。
+
+**观测**：升级后 `SELECT calls, mean_exec_time, query FROM pg_stat_statements ORDER BY calls DESC LIMIT 20;`
+就是「哪些查询最重」的答案 —— 没有它，后续任何「该不该加回缓存」的判断都只能靠猜。
 
 ## 迁移失败门（ADR-0056 §6 / #1099）
 
