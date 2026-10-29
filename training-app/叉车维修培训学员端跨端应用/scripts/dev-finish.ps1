@@ -39,7 +39,7 @@
     npm run dev:finish -- -Level standard -Device 192.168.10.51:39181
     npm run dev:finish -- -DryRun
     npm run test:unit:gate                 # ③ 门两腿（test:unit + test:behavior）：每腿 日志 + （红跑）摘要 + 机检行
-    pwsh scripts/dev-finish.ps1 -UnitGate -PostToIssue 1546   # 同上，并把结果贴成 sha 绑定评论（判据先贴 commit；404 时降级为票评论）
+    pwsh scripts/dev-finish.ps1 -UnitGate -PostToIssue 1546   # 同上，并打印可粘贴的证据块（A1 #2100：不贴评论）
     npm run test:unit:changed              # 本地收口行为腿的**受影响子集**（#2034 / ADR-0046 步骤 3）：现算、现打印原因行
 #>
 [CmdletBinding()]
@@ -70,11 +70,11 @@ param(
     # 子集由 `scripts/behavior-suite-deps.mjs --changed-json` 现算（每跑现测，不缓存成文件）；
     # 四条兜底边（门脚本 / 套件集合 / 页面集合 / b′ 名单）由工具判定，本脚本只接线不重写判据。
     # 机检行用独立首 token（`TEST_*_CHANGED_RESULT` + `mode=changed`）：它不是 ③ 门全量，
-    # 少跑过套件的绿**不能**被读成门绿 ⇒ 不贴 sha 绑定评论、不进 CI。
+    # 少跑过套件的绿**不能**被读成门绿 ⇒ 不产证据块、不进 CI。
     # 位置在 -UnitLocal 之前 ⇒ `-UnitGate -Changed` 同时给时本模式优先（与 -UnitLocal 的取舍同形）。
     [switch]$Changed,
-    # 与 ②④ 两条门脚本同名同义：把本次结果贴成 sha 绑定的评论（0 = 不贴）。
-    # #1770：号码（票号/PR 号）的三处用途：①归档目录键 ②展示副本落点 ③无 PR 时的批次标识。
+    # 与 ②④ 两条门脚本同名同义：把本次结果**打印成可粘贴的证据块**（0 = 不打印）。
+    # A1（#2100）起不再投递任何评论；号码（票号/PR 号）只剩两处用途：①归档目录键 ②无 PR 时的批次标识。
     # `-PostToIssue` 是正式名；`-PostToPr` 保留为**别名**（同值，一个版本后退役），旧调用点一字不改。
     [int]$PostToIssue = 0,
     [int]$PostToPr = 0,
@@ -1201,29 +1201,9 @@ function Publish-UnitGateComment {
     # commit 端点回 404 时号码评论升格为正式证据落点（显式降级，不判红）；号码仍是「归档目录键 / 批次标识」。
     try {
         $sent = Send-GateComment -ProjectDir $ProjectDir -Sha $sha -Reachable ([bool]$binding.Reachable) -IssueNumber $PrNumber -Body ($body -join "`n")
-        # #1841：commit 评论端点 404 是降级（证据落点换成票评论），不是错误 —— 机检行 + 人读行 + Notes 都要打出来；
-        # 门结论（exit code）在任何投递失败下都不变（#1209）。
-        if ($sent.CommitUnavailable -and $sent.EvidenceUrl) {
-            Write-Host "GATE_COMMENT_DEGRADED tier=issue url=$($sent.EvidenceUrl)"
-            Write-Host "证据主键降级：commit 评论不可用（HTTP 404）→ 落点 $($sent.EvidenceUrl)"
-            foreach ($note in @($sent.Notes)) { Write-Host $note }
-        }
-        elseif ($sent.CommitKind -eq 'failed' -or @($sent.Errors).Count -gt 0) {
-            $gateCommentFailReason = (@($sent.Errors) | Where-Object { "$_".Trim() } | Select-Object -Last 1)
-            Write-Host "GATE_COMMENT_FAILED reason=$gateCommentFailReason"
-            Write-Host "[warn] 贴 commit $short 的评论未成功（门结论不受影响）：$((@($sent.Errors) -join '；'))" -ForegroundColor Yellow
-            if ($PrNumber -gt 0) {
-                if ($sent.IssueOk) { Write-Host "   展示副本已贴 #$PrNumber：$($sent.IssueUrl)" -ForegroundColor Green }
-                else { Write-Host "[warn] 展示副本未贴 #$PrNumber（判据面不受影响）" -ForegroundColor Yellow }
-            }
-        }
-        elseif ($sent.CommitOk) {
-            Write-Host "✅ 已贴 commit $short 的全量单测门评论：$($sent.CommitUrl)" -ForegroundColor Green
-            if ($PrNumber -gt 0) {
-                if ($sent.IssueOk) { Write-Host "   展示副本已贴 #$PrNumber：$($sent.IssueUrl)" -ForegroundColor Green }
-                else { Write-Host "[warn] 展示副本未贴 #$PrNumber（判据面不受影响）" -ForegroundColor Yellow }
-            }
-        }
+        # A1（#2100）：投递已退役 ⇒ 原先三支（降级 / 失败 / 成功）的判据**全部恒假**，整段已删。
+        # 证据块由 Send-GateComment 直接打印；这里只回声它的去路说明（Notes）。门结论不信报告层（#1209）。
+        foreach ($note in @($sent.Notes)) { Write-Host $note }
     }
     catch {
         Write-Host "[warn] 贴评论失败（门结论不受影响）：$_" -ForegroundColor Yellow
@@ -1303,7 +1283,7 @@ if ($Changed) {
     Write-Host '  子集每跑现测（不缓存成文件；套件数一律现测，任何地方都不写死）；纯静态计算，无副作用'
     Write-Host "  日志（绿跑也落，落原文）：$changedUnitLog / $changedBehaviorLog"
     if ($PostToPr -gt 0) {
-        Write-Host '  ⚠️ -PostToIssue 只在 -UnitGate（③ 门全量）生效：子集跑不是门的证据，本模式不贴评论' -ForegroundColor DarkYellow
+        Write-Host '  ⚠️ -PostToIssue 只在 -UnitGate（③ 门全量）生效：子集跑不是门的证据，本模式不打印证据块' -ForegroundColor DarkYellow
     }
     if ($BehaviorRunner) {
         # `-i` 的保证来自 package.json 那条 `npm run test:behavior`（自带 -i）；覆盖执行器就绕过了它。
@@ -1424,7 +1404,7 @@ if ($Changed) {
 # ============================================================
 if ($UnitLocal) {
     if ($PostToPr -gt 0) {
-        Write-Host '  ⚠️ -PostToPr 只在 -UnitGate（全量门）生效；本地快路径不贴 PR 评论' -ForegroundColor DarkYellow
+        Write-Host '  ⚠️ -PostToPr 只在 -UnitGate（全量门）生效；本地快路径不打印证据块' -ForegroundColor DarkYellow
     }
     $localStarted = Get-Date
     $ciDir = Join-Path $ProjectDir '.ci-verify'
