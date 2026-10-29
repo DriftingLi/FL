@@ -12,6 +12,9 @@
  *   C4 判成败只看输出：不得出现 $LASTEXITCODE；必须解析 MP_WEIXIN_PROBE / MP_WEIXIN_RESULT 与 publish 文案
  *   C5 端口监听面风险必须写明（实测绑 `::` 通配地址，CLI 无法收窄），且必须轮询端口延迟出现
  *   C6 结果评论格式 == `gate-evidence:②` + `commit: <sha>`；只在门通过（exit 0）分支贴
+ *      ⚠️ A1（#2100）后**贴评论已退役**（Send-GateComment 降为「只打印可粘贴块」），本项的
+ *      marker / `-PostToPr` 断言保护的是调用点形状而非投递行为 —— 仍能挡住「调用点被静默摘掉」，
+ *      但已不能证明「有评论被贴出」。待随投递面清理一并对齐（见 PR #2131 遗留段）。
  *   C7 `cli.bat close` 在 finally 路径里执行 + 幂等保护（避免端口/会话残留）
  *   C8 非等价声明 + 挡不住的类别 + **源 manifest appid 前置断言**（HBuilderX 首次导入会回写 manifest 置 null）
  *   C9 截图入库纪律（P2）：WebP→JPEG 回退、宽 ≤720、单张 ≤150KB、合计 ≤1.5MB、-NoArchive、失败不阻塞门
@@ -104,7 +107,10 @@ const RESULT_MANDATORY = [
   'appid', 'pageStack', 'entry', 'errorsTotal', 'exceptionsTotal', 'logsTotal',
   'shots', 'navigation', 'ready', 'sdk', 'ide', 'log'
 ];
-const RESULT_OPTIONAL = ['navigationSkipReason', 'auth', 'asserts'];
+// 可选字段（只在对应情形出现时才写；顺序 = 出现时的相对顺序）
+// noise：平台层噪音白名单放行的 console error 条数（2026-10-29 F3）。**只在 noise>0 时出现** ——
+// 过滤必须可见：某次跑次真被过滤过东西，读数行上一定看得到；没噪音的跑次结果行逐字节不变。
+const RESULT_OPTIONAL = ['navigationSkipReason', 'auth', 'asserts', 'noise'];
 
 /**
  * 取一个 PowerShell 函数的函数体（花括号配对）。
@@ -889,7 +895,9 @@ function scanContract(sources) {
   must(adr.includes('半自动'), 'C10', 'ADR-0008 未把 ② 记为半自动门');
   must(adr.includes('#883'), 'C10', 'ADR-0008 未引用 #883');
   must(adr.includes('mp-weixin-check.ps1'), 'C10', 'ADR-0008 未记录 ② 的脚本载体');
-  must(template.includes('gate-evidence:②'), 'C10', 'PR 模板未说明 ② 可用 -PostToPr 评论承载');
+  // A1（#2100）：模板的证据形态是「正文一行 `跑于 <sha7>` + 门读数行」，
+  // 不再要求写 marker / `-PostToPr` 评论承载 —— 那套载体已随 A1 整体退役。
+  must(template.includes('跑于'), 'C10', 'PR 模板未写明 A1 证据形态（正文一行 `跑于 <sha7>`）');
   must(agents.includes('人工门只剩') || agents.includes('② 微信开发者工具门 = 半自动门'), 'C10', '移动端 AGENTS.md 未把 ② 移出人工门清单并写明运行前提');
 
   return violations;
@@ -1173,7 +1181,7 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
       ['C29', { ...real, probe: real.probe.replace('const actual = await readScrollTop(container);', 'const actual = (getCurrentPages().pop() || {}).scrollTop;') }],
       ['C29', { ...real, probe: real.probe.replace(/step\.shotWarning/g, 'step.warnX') }],
       ['C10', { ...real, adr: real.adr.replace(/半自动/g, '全自动') }],
-      ['C10', { ...real, template: real.template.replace(/gate-evidence:②/g, 'gate-evidence:x') }],
+      ['C10', { ...real, template: real.template.replace(/跑于/g, '跑过') }],
       ['C10', { ...real, agents: '人工门清单（无 ② 条目）' }],
       ['C11', { ...real, script: real.script.replace(/hx-busy\.ps1/g, 'other.ps1') }],
       ['C11', { ...real, script: real.script.replace(/Release-HxLock/g, 'ReleaseNothing') }],
@@ -1376,7 +1384,7 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
     expect(real.adr).toContain('半自动');
     expect(real.adr).toContain('#883');
     expect(real.adr).toContain('mp-weixin-check.ps1');
-    expect(real.template).toContain('gate-evidence:②');
+    expect(real.template).toContain('跑于');
     expect(real.agents).toContain('② 微信开发者工具门 = 半自动门');
   });
 
@@ -1619,8 +1627,11 @@ describe('C20：产物合法性判据（#1210）', () => {
     expect(block).not.toContain('exit 2');
   });
 
-  it('C20-wiring②：ADR ② 段与 PR 模板都写明了新判据（决策回写纪律）', () => {
+  it('C20-wiring②：ADR 写明产物合法性判据，模板写明 ④b 的去向（决策回写纪律）', () => {
+    // A1（#2100）后 ④b 不判红、正文不写 ④b 行，只在 notes 里留提醒。
+    // 所以「模板必须复述产物合法性判据」这条断言已过期 —— 但「这件事在文档里没消失」仍要守：
+    // ADR 侧保留判据原文（口径的归档位置），模板侧保留 ④b 的去向说明（写的人知道它去哪儿了）。
     expect(readSource(ADR_REL)).toContain('产物合法性');
-    expect(readSource(PR_TEMPLATE_REL)).toContain('产物合法性');
+    expect(readSource(PR_TEMPLATE_REL)).toContain('④b');
   });
 });

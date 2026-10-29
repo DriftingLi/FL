@@ -1,195 +1,100 @@
 // ============================================================================
 // pr-evidence 校验器 —— 判据的**单一来源**（#1770）
 //
-// 为什么在这里：判据曾被两处各写一遍（pr-evidence.yml 内联 + mobile-gates.yml 从 yml 抽块），
-// 而 PR 号当证据主键又逼着「先开 PR、再补证据」。现在校验器只有这一份，三个消费者读同一段源码：
+// **A1 形态（2026-10-29，#2100 裁定）**：证据主键 = PR 正文里的**一行**。
+//   行里写 `跑于 <sha7>` + 门自带的机读读数行（`MP_WEIXIN_RESULT` / `KOTLIN_ALL_RESULT` / `COMPILE_RESULT`）。
+//   退役的四样（本文件不再有任何代码路径）：sha 绑定门评论、三候选集（PR / commit / 票评论）、
+//   marker 与展示副本、①③④b 的字段签核。
+//
+// 为什么降到这里：整套取证仪式是从「多个陌生 agent 并发推同一仓、必须互相取证」长出来的；
+// 单账号串行开发的形态不持有那个前提（#2099 实读：pr-evidence / mobile-gates 都不在 ruleset 必检，
+// 这套门本来就是荣誉制）。留着它只是让人照着一页执行单写 A1、却撞上旧校验器判红。
+//
+// 为什么只剩这两道门：真正挡住 bug 的是「测试绿 + 编译过」（#2099 盘点）。
+//   ② 是投放主渠道（微信小程序）的运行时抖动唯一机判；④ 是编译面。① 已在 ADR-0043 降为发版前一次、
+//   ①b 已整体退役（#2103）；③ 与 ④b 已判纯税（两腿 / 打包链路都在 CI 与发版流程里，正文再抄一遍零信息）。
+//
+// 纯函数 + 单一注入点：输入 files / body / headSha / fetchCompare，输出
+// { ok, errors, notes, runtime, needs4b, gates }。fetchCompare 是**注入的**取数回调
+// （测试注桩、不打网络）：入参 { base, head }，返回 { status, mergeBaseSha, files, filesTruncated }；
+// 取不到即返回 null（fail-closed）。因注入了异步回调，本函数返回 Promise，调用方必须 await。
+//
+// 消费者三处，读的都是这一份源码：
 //   ① .github/workflows/pr-evidence.yml —— 不 checkout，用 repos.getContent 取本文件 → new Function 求值
-//   ② .github/workflows/mobile-gates.yml —— 同上（判据同源，不另算口径）
-//   ③ .github/scripts/pr-evidence-check.test.mjs / 本地预检 preflight-pr.mjs —— 直接 import
-//
-// 纯函数：输入 files/body/author/gateComments/commitComments/issueComments/headSha/fetchCompare，
-// 输出 { ok, errors, notes, runtime, needs4b, gates }。
-// fetchCompare 是**注入的**取数回调（测试里注桩，不打网络）：入参 { base, head }，返回
-// { status, mergeBaseSha, files, filesTruncated }；取不到即返回 null（fail-closed）。
-// 因注入了异步回调，本函数返回 Promise；调用方必须 await。
-//
-// 2026-10-23（#1841）候选来源新增**票（issue）评论**。原因不是判据想松：GitHub 对本仓
-// `POST /repos/{owner}/{repo}/commits/{sha}/comments` 长期回 HTTP 404（同 token 在别的仓正常，
-// 复盘见 #1838），门脚本据此**降级**——同一份评论（marker 与 `commit: <sha>` 一字不改）改贴到票上
-// 当正式落点。票评论若不进候选，降级后的证据在判据面等于没贴。
-// **同构，不放宽**：marker、`commit: <sha>`、祖先判定、其间运行时面未变、fail-closed 全部沿用，
-// 只是「去哪儿找候选」多了一处。哪些票算候选由下面的 `issueNumbersInBody` 定（PR 正文显式关联的票），
-// 调用方按它取数后喂进 `issueComments`；**未关联的票不进判据**（判据面与展示面各认一处关联会腐）。
+//   ② .github/scripts/preflight-pr.mjs —— 直接 import（本地预检，与 CI 同一份判据）
+//   ③ .github/scripts/pr-evidence-check.test.mjs —— 直接 import
+// 注意 ① 的求值方式要求**本文件自包含**（不得 import 别的模块），改结构时别拆文件。
 // ============================================================================
 
-// 「这张 PR 关联了哪些票」：`Closes #N` / `Refs #N` 之类关键字 + issue 直链。
-// 为什么写在校验器而不是调用方：它决定**哪些票的评论被当候选**，属判据的一部分；写进 workflow
-// 就成了第二份口径（#1770 拆掉的那类分叉）。
-// 必须剥 HTML 注释：PR 模板注释里塞满了历史票号（#1770 / #883…），不剥会全被拉成候选。
-// 上限 5 张：候选越多，「别的票上的证据」被误认成本 PR 证据的面积越大；正常 PR 只关联 1–2 张。
-export function issueNumbersInBody(body) {
-  const clean = String(body || '').replace(/<!--[\s\S]*?-->/g, '');
-  const nums = new Set();
-  for (const m of clean.matchAll(/(?:closes|fixes|refs|resolves|related\s+to)\s*:?\s*#(\d+)/gi)) {
-    nums.add(Number(m[1]));
-  }
-  for (const m of clean.matchAll(/https?:\/\/github\.com\/[^/\s]+\/[^/\s]+\/issues\/(\d+)/gi)) {
-    nums.add(Number(m[1]));
-  }
-  return [...nums].filter((n) => Number.isInteger(n) && n > 0).slice(0, 5);
-}
-
-// 「验收证据行该长什么样」的**唯一真源**（#1920）。
-//
-// 为什么写在这里而不是单独的 .json：#1770 起两份 workflow（pr-evidence.yml / mobile-gates.yml）都
-// **不 checkout**，用 `repos.getContent` 取**本文件文本** → 剥 `export` → `new Function` 求值；
-// pr-evidence.yml 还留着「取不到就退回 yml 内联块」的兜底。把形状搬到独立 .json 需要三处 loader 各改
-// 一遍、且兜底块还得再抄一份 —— 那正好造出第三个来源，与本票的目的相反。所以形状留在本文件里，
-// 用 marker 圈出一段**严格 JSON**：node 侧当对象字面量读，PowerShell 侧（证据生成器 / 投递侧）
-// 抽同一段字节 `ConvertFrom-Json`。两个消费者读的字节完全相同。
-//
+// 「验收证据行该长什么样」的**唯一真源**（#1920 起；A1 下缩到两门 + 行首形态 +
+// 「跑于」锚点）。node 侧当对象字面量读，PowerShell 侧（证据生成器）抽 marker 之间的**同一段字节**
+// `ConvertFrom-Json` —— 两个消费者读的字节完全相同。
 // 块内规则（PowerShell 的 JSON 解析器不认别的东西）：**不加注释、不加尾逗号、正则只给 source 与 flags**。
-// 改形状 = 改这段 JSON + 改它的守护测试（`.github/scripts/gate-evidence-descriptor.test.mjs`）。
-// 门的**语义**（各门判什么、触发面、fail-closed 顺序）不在这里，也不因改它而变。
-// 已知扩展位：`anchor`（页锚）与「断言数」由 #1919 追加；消费者忽略未知字段。
+// 加一道**走已有触发面**的门 = 往 gates 里加一条；加**新触发面**的门还要同时扩触发判定
+// （`isRuntimeFile` / `hitsMpWeixinFace` 是硬编码清单，不是配置）——别以为加条 gates 就够了。
 // ===== GATE_EVIDENCE_DESCRIPTOR BEGIN =====
 export const GATE_EVIDENCE = {
-  "schemaVersion": 1,
-  "ticket": 1920,
   "heading": "## 验收证据",
-  "marker": {
-    "source": "<!--\\s*gate-evidence:{key}\\s*-->",
-    "keyPlaceholder": "{key}"
-  },
   "listItem": {
     "source": "^\\s*[-*]\\s",
     "prefixStrip": "^\\s*[-*]\\s+",
     "prefix": "- "
   },
-  "fieldNames": ["执行人", "日期", "复测对象", "结论"],
-  "conclusionField": "结论",
-  "conclusionLabel": "结论（含产物）",
+  "ranAt": {
+    "label": "跑于",
+    "source": "跑于\\s*`?([0-9a-fA-F]{7,40})`?"
+  },
   "fieldSeparator": {
     "strip": "[·|]\\s*$",
     "display": " · "
   },
-  "placeholder": {
-    "source": "^(|[-—–~]+|待人工|待补|待填|待确认|⏳|tbd|todo|n\\/?a|无|暂无)$",
-    "flags": "i"
-  },
-  "date": {
-    "source": "\\d{4}-\\d{2}-\\d{2}"
-  },
-  "exemptSubject": {
-    "source": "^(无|暂无)$"
+  "readingValue": {
+    "source": "[A-Za-z_][\\w.-]*\\s*=\\s*\\S+",
+    "hint": "token 后面必须跟着门真打出来的键值对（如 `errors=0` / `pages=3`），只写 token 或写 `...` 都是占位"
   },
   "gates": [
     {
-      "key": "①",
-      "label": "Android 真机逐页截图对比",
-      "fields": ["执行人", "日期", "复测对象", "结论"],
-      "artifact": "screenshot",
-      "noSubjectWhenExempt": true
-    },
-    {
       "key": "②",
-      "label": "微信开发者工具无报错（半自动：agent 可执行 scripts/mp-weixin-check.ps1）",
-      "fields": ["执行人", "日期", "复测对象", "结论"],
-      "artifact": "screenshot",
-      "requires": "mpweixin"
-    },
-    {
-      "key": "③",
-      "label": "npm run test:unit / test:behavior 两腿全绿",
-      "fields": ["结论"],
-      "artifact": "ci-run"
+      "label": "微信开发者工具无报错",
+      "requires": "mpweixin",
+      "tokens": ["MP_WEIXIN_RESULT"],
+      "tokenHint": "门自带的 `MP_WEIXIN_RESULT` 读数行"
     },
     {
       "key": "④",
-      "label": "本地编译门（默认 ④c 整模块；dev 面追加 ④a）",
-      "fields": ["执行人", "日期", "复测对象", "结论"],
-      "artifact": "compile-log"
-    },
-    {
-      "key": "④b",
-      "label": "release 云打包（触及打包面时）",
-      "fields": ["执行人", "日期", "复测对象", "结论"],
-      "artifact": "any",
-      "requires": "4b"
+      "label": "本地编译门",
+      "requires": "runtime",
+      "tokens": ["KOTLIN_ALL_RESULT", "COMPILE_RESULT"],
+      "tokenHint": "门自带的 `KOTLIN_ALL_RESULT`（④c）或 `COMPILE_RESULT`（④a）读数行"
     }
-  ],
-  "exemptions": {
-    "①": [
-      {
-        "id": "1a",
-        "prefix": "^\\s*免",
-        "text": "免（①a 降级发版前一次，ADR-0043）",
-        "requireAll": ["①a 降级发版前一次", "ADR-0043"],
-        "note": "①a 降级常态，ADR-0043",
-        "skippedNote": "跳过（①a 降级常态，ADR-0043）——「结论」写的是「{conclusion}」；①a 已降级为发版前一次（发版冒烟），本 PR 不做逐页真机取证。"
-      },
-      {
-        "id": "window",
-        "prefix": "^\\s*SKIP\\b",
-        "prefixFlags": "i",
-        "text": "SKIP — 待批收口（窗口过渡旧写法；窗口机制已被 ADR-0043 退役，仅过渡期认）",
-        "requireAll": ["待批收口"],
-        "note": "窗口口径·过渡期旧写法",
-        "skippedNote": "跳过（窗口口径·过渡期旧写法）——「结论」写的是「{conclusion}」；窗口机制已被 ADR-0043 退役，旧写法暂按双白名单认（退场判据见 #1859）。"
-      }
-    ]
-  },
-  "artifacts": {
-    "screenshot": {
-      "issueCommentLink": { "source": "#issuecomment-\\d+" },
-      "repoVerification": {
-        "source": "docs\\/verification\\/[^\\s/`\"'<>]+\\/\\d+\\/[^\\s/`\"'<>]+\\.(?:png|jpe?g|webp|gif|bmp)\\b",
-        "flags": "i"
-      },
-      "githubHost": {
-        "source": "^https:\\/\\/(?:github\\.com\\/user-attachments\\/|[^\\s/]*user-images\\.githubusercontent\\.com\\/)"
-      },
-      "inlineGithubImage": {
-        "source": "(?:https:\\/\\/github\\.com\\/user-attachments\\/|https:\\/\\/[^\\s/]*user-images\\.githubusercontent\\.com\\/)[^\\s)`\"']*"
-      },
-      "markdownImage": {
-        "source": "!\\[[^\\]]*\\]\\(([^)\\s]+)(?:\\s+\"[^\"]*\")?\\)",
-        "flags": "g"
-      },
-      "imageExt": {
-        "source": "\\.(?:png|jpe?g|webp|gif|bmp)\\b",
-        "flags": "i"
-      }
-    },
-    "ci-run": { "source": "actions\\/runs\\/\\d+" },
-    "compile-log": { "source": "build\\.log|kotlin-all\\.log" },
-    "any": { "source": "\\S" }
-  },
-  "verification": {
-    "root": "docs/verification",
-    "display": "docs/verification/<模块>/<票号>/<页名>.<ext>"
-  }
+  ]
 };
 // ===== GATE_EVIDENCE_DESCRIPTOR END =====
 
-// 描述符里的正则只存 { source, flags }（PowerShell 的 JSON 解析器不认正则字面量）；node 侧在此还原。
 const toRe = (spec) => new RegExp(spec.source, spec.flags || '');
 
-export async function validatePrEvidence({
-  files, body, author, gateComments = [], commitComments = [], issueComments = [], headSha = '',
-  fetchCompare = null,
-}) {
-  const RUNTIME_JSON = ['manifest.json', 'pages.json', 'platformConfig.json'];
-  const isRuntimeFile = (p) => {
-    if (p.endsWith('.uvue') || p.endsWith('.uts')) return true;
-    if (!p.startsWith('training-app/')) return false;
-    return RUNTIME_JSON.includes(p.split('/').pop());
-  };
+// 报错文案里给一行可照抄的形状（判据与提示同源，别在两处各写一份）。
+const EVIDENCE_LINE_HINT = '跑于 `<sha7>` · <门读数行原样>（图可选，附在行尾）';
 
-  // ④b 触发条件（ADR-0008，2026-09-11 修订）：按「交付形态」触发——打包链路（AAPT2 资源合并、
-  // AndroidManifest 合并、R8/aar 依赖解析、证书签名）只有真打包才覆盖，本地编译门不覆盖。
+// 「这张改动单算不算碰了交付形态」——运行时面与 ② 触发面共用同一判据，
+// 免得「门被点亮的理由」和「门证据的失效条件」两套口径各走一路。
+const RUNTIME_JSON = ['manifest.json', 'pages.json', 'platformConfig.json'];
+export function isRuntimeFile(p) {
+  if (p.endsWith('.uvue') || p.endsWith('.uts')) return true;
+  if (!p.startsWith('training-app/')) return false;
+  return RUNTIME_JSON.includes(p.split('/').pop());
+}
+
+// ④b 触发条件（ADR-0008，2026-09-11 修订）：按「交付形态」触发 —— 打包链路（AAPT2 资源合并、
+// AndroidManifest 合并、R8/aar 依赖解析、证书签名）只有真打包才覆盖，本地编译门不覆盖。
+// A1 下它**不判红**（正文不再写 ④b 行），只作为发版前提醒出现在 notes 里 —— 判据删了，
+// 「这件事存在」的事实不该跟着消失。
+function touchesPackaging(files) {
+  // 这份清单与上面的 `RUNTIME_JSON` **当前恰好同集**，但概念不同：一个是「算不算运行时面」（触发 ④），
+  // 一个是「算不算碰了交付形态」（触发 ④b 的 notes）。别因为看着一样就合并 —— 将来任一侧要分叉
+  // （例如打包面单独加某份资源），合并的写法会把两件事绑死。
   const PACKAGE_FILES = ['manifest.json', 'pages.json', 'platformConfig.json'];
-  const touchesPackaging = files.some((f) => {
+  return files.some((f) => {
     const p = f.filename;
     if (p.startsWith('training-app/') && PACKAGE_FILES.includes(p.split('/').pop())) return true;
     if (/uni_modules\/[^/]+\/utssdk\/app-android\//.test(p)) return true;
@@ -197,425 +102,220 @@ export async function validatePrEvidence({
     if (/(^|\/)libs\/[^/]+\.jar$/.test(p)) return true;
     return false;
   });
-  const needs4b = touchesPackaging;
+}
 
-  // ② 触发条件（ADR-0008）：命中 MP-WEIXIN 面 —— 条件编译段 / manifest.json / platformConfig.json。
-  // （初版实现漏了这条，对任何运行时面 PR 都强制要求第②门，比 ADR 更严；此处对齐 ADR。）
-  //
-  // 2026-09-15 修订（#1030）：初版的第二条是 `(f.patch || '').includes('MP-WEIXIN')` ——
-  // 判的是「改动文本里出现过这个字符串」，与 ADR 的「命中 MP-WEIXIN **面**（交付形态）」不是一回事
-  // （更严），实害有二：① 误报 —— 在 ADR/文档里写「② 免（未命中 MP-WEIXIN 面）」这句话**本身**
-  // 就把门点亮（#1028 实测，改写措辞即消失；同族还有 `utils/useBiometric.test.js` 用字符串断言
-  // `// #ifdef APP || MP-WEIXIN`）；② 反向激励 —— 想不被误报只能**不写**这个术语，而 ADR-0008
-  // 恰恰要求把这类口径写进文档。
-  // 新判据（两条，任一命中即需过 ②）：
-  //   ① 文件清单：training-app 下的 manifest.json / platformConfig.json（不读 diff 文本）；
-  //   ② 运行时面文件（*.uvue / *.uts / 三份 json —— 与 isRuntimeFile 同一判据）的 diff 里
-  //      **增删了一条真正的条件编译指令行**：去掉 +/- 标记后行首（允许 `//` `/*` `<!--` `"` `'`
-  //      注释/键包装）是 `#ifdef|#ifndef|#if`，且**条件表达式**里含 `MP-WEIXIN`
-  //      （`#ifdef APP || MP-WEIXIN` 同算；删除指令行同样算 —— 那也是交付形态变了）。
-  //      表达式**之后**的部分不判：`// #ifdef APP-PLUS // 与 MP-WEIXIN 分支不同` 这类
-  //      「真指令行 + 同行散文提及」不算命中（表达式只允许平台表达式字符）。
-  //      **提到**该术语（.md 正文、*.test.js 的断言字符串、散文提及）一律不算：
-  //      ② 是「交付形态变了」的门，不是「文本里出现了这个词」的门。
-  // 已知边界（写实，本次不收紧）：第 ② 条读 `patch`，而 GitHub 对超大 diff / 二进制**不给** `patch`
-  //   ⇒ 这类文件判不出指令行，该路径 fail-open（与 ④b 当年因此改成文件清单的动机同源；但条件编译段
-  //   天然只能从文本判，改不成文件清单）。收紧（`patch` 缺失即判 needs2）会把改名的 .uvue 也拖进 ②，
-  //   收益不抵成本，故照实记为边界。
-  const MP_WEIXIN_FILES = ['manifest.json', 'platformConfig.json'];
-  // 指令行判据：`#ifdef|#ifndef|#if` 之后到 `MP-WEIXIN` 之间**只允许平台表达式字符**
-  // （字母数字、空白、`|` `&` `(` `)` `!` `-`）—— 于是「指令行 + 同行散文/注释提及」被排除在外。
-  const MP_WEIXIN_DIRECTIVE = /^\s*(?:\/{2,}|\/\*|<!--|["'])?\s*#\s*(?:ifdef|ifndef|if)\s+[A-Za-z0-9_\s|&()!-]*\bMP-WEIXIN\b/;
-  const hasMpWeixinDirective = (patch) =>
-    String(patch || '')
-      .split('\n')
-      // 只看 diff 里**增删的内容行**：`+` / `-` 开头（`+++ b/…` / `--- a/…` 是文件头，不是内容）
-      .filter((line) => /^[+-]/.test(line) && !/^(?:\+\+\+|---)/.test(line))
-      .map((line) => line.slice(1))
-      .some((content) => MP_WEIXIN_DIRECTIVE.test(content));
-  const isMpWeixinJson = (p) =>
-    p.startsWith('training-app/') && MP_WEIXIN_FILES.includes(p.split('/').pop());
-  const hitsMpWeixinFace = (f) =>
-    isMpWeixinJson(f.filename) || (isRuntimeFile(f.filename) && hasMpWeixinDirective(f.patch));
-  const needs2 = files.some(hitsMpWeixinFace);
-  const needs2Why = files.filter(hitsMpWeixinFace).map((f) => f.filename);
+// ② 触发条件（ADR-0008，2026-09-15 修订 #1030）：命中 MP-WEIXIN **面**，不是「文本里出现了这个词」。
+//   ① 文件清单：training-app 下的 manifest.json / platformConfig.json；
+//   ② 运行时面文件的 diff 里**增删了一条真正的条件编译指令行**（去掉 +/- 后行首、允许注释/引号包装，
+//      是 `#ifdef|#ifndef|#if`，且表达式里含 MP-WEIXIN）。表达式**之后**的部分不判 ——
+//      `// #ifdef APP-PLUS // 与 MP-WEIXIN 分支不同` 这类「真指令行 + 同行散文提及」不算命中（#1028 实证）。
+// 已知边界（写实）：第 ② 条读 `patch`，GitHub 对超大 diff / 二进制不给 `patch` ⇒ 该路径 fail-open。
+const MP_WEIXIN_FILES = ['manifest.json', 'platformConfig.json'];
+const MP_WEIXIN_DIRECTIVE = /^\s*(?:\/{2,}|\/\*|<!--|["'])?\s*#\s*(?:ifdef|ifndef|if)\s+[A-Za-z0-9_\s|&()!-]*\bMP-WEIXIN\b/;
+const hasMpWeixinDirective = (patch) =>
+  String(patch || '')
+    .split('\n')
+    .filter((line) => /^[+-]/.test(line) && !/^(?:\+\+\+|---)/.test(line))
+    .map((line) => line.slice(1))
+    .some((content) => MP_WEIXIN_DIRECTIVE.test(content));
+const hitsMpWeixinFace = (f) => {
+  const p = f.filename;
+  if (p.startsWith('training-app/') && MP_WEIXIN_FILES.includes(p.split('/').pop())) return true;
+  return isRuntimeFile(p) && hasMpWeixinDirective(f.patch);
+};
 
-  const runtime = files.filter((f) => isRuntimeFile(f.filename)).map((f) => f.filename);
+// sha 前缀比较：A1 正文只写 7 位，compare 回来的是 40 位 —— 严格 `!==` 会让祖先口径**永假**。
+const shaMatches = (a, b) => Boolean(a) && Boolean(b) && (a.startsWith(b) || b.startsWith(a));
+
+export async function validatePrEvidence({
+  files, body, headSha = '', fetchCompare = null,
+}) {
+  // 错误带上门归属：例外通道要按门豁免，字符串数组做不到「只清 ②、④ 照红」。
+  // 返回给调用方前统一渲染成字符串（三个消费者的接口不变）。
   const errors = [];
+  const err = (gate, text) => errors.push({ gate, text });
   const notes = [];
 
-  // 低风险运行时面分层已于 2026-10-24 整体退役（ADR-0043 决策 3/8，票 #1859）：
-  // ① 半被 ①a 降级常态吞掉（免行 `免（①a 降级发版前一次，ADR-0043）`，见下方 ① 门判据），
-  // ② 半被「触发面命中即必跑」覆盖——纯 .uts 命中 MP-WEIXIN 条件编译不再免 ②。原判据
-  // （LOW_RISK_NON_RUNTIME / isLowRiskUtChange / lowRiskRuntime 输出字段）随之删除，不留第二套口径。
+  const runtime = files.filter((f) => isRuntimeFile(f.filename)).map((f) => f.filename);
+  const needs2Why = files.filter(hitsMpWeixinFace).map((f) => f.filename);
+  const needs2 = needs2Why.length > 0;
+  const needs4b = touchesPackaging(files);
+  const headLc = String(headSha || '').toLowerCase();
 
-  // P1：④ 本地编译门与 ② 微信开发者工具门的结果可由「sha 绑定的 PR 评论」承载（脚本输出免手抄进正文）。
-  // 判据只为「结构与 sha 绑定」，不校真伪（与正文证据同一口径）：评论须同时带
-  // <!-- gate-evidence:<门号> --> 标记与 commit: <sha>。
-  // ② 自 2026-09-12 起是**半自动门**（#883 实测 agent 可无人值守跑完），口径与 ④ 一致，故共用同一实现。
-  //
-  // 2026-09-12 修订：绑定判据从「sha 必须**等于** head」放宽为「**祖先 + 运行时面未变**」。
-  // 动机：ruleset 开了 strict_required_status_checks_policy（分支必须与 master 同步），而 master 高频前进
-  // ⇒ 每次 sync 都产生新 head ⇒ 旧口径下**已贴的门证据全部作废、必须重跑重贴**（#624 反复被拖的主因）；
-  // 而其中大部分前进是**无害**的（只改文档/脚本/测试，运行时面逐字节未变）。
-  // 新判据（三条，任一满足即算绑上）：
-  //   ① commit == head                                   ⇒ 满足（旧行为，保留）；
-  //   ② commit 是 head 的**祖先**（compare status ∈ {ahead, identical} 且 merge_base == commit）
-  //      **且** 二者之间改动集**不含运行时面文件**（isRuntimeFile，与「运行时面」同一判据）⇒ 满足；
-  //   ③ 其余（不是祖先 / 该 commit 在 head 上找不到 / 其间运行时面已变 / compare API 拿不到）⇒ 不满足。
-  // **fail-closed**：compare 调用异常、超时、返回 null（未知 sha / 超大 diff 截断）一律按「不满足」，
-  // 不得因 API 异常而放行。判定仍是**只校绑定形态、不校真伪**（不校验那次编译是否真的按该 sha 跑过）。
-  const RUNTIME_LABEL = '.uvue / .uts / 三份 json';
-  const shaMatches = (a, b) => Boolean(a) && Boolean(b) && (a.startsWith(b) || b.startsWith(a));
-  // 门评论的 marker 形态同样来自描述符（#1920）：投递侧与判据侧认同一个字符串。
-  const markerRe = (gateKey) => new RegExp(
-    GATE_EVIDENCE.marker.source.split(GATE_EVIDENCE.marker.keyPlaceholder).join(gateKey),
-  );
-  const isGateEvidenceFor = (text, gateKey) => markerRe(gateKey).test(text);
-  const gateCommitIn = (text) => {
-    const m = text.match(/commit:\s*`?([0-9a-fA-F]{7,40})`?/);
-    return m ? m[1].toLowerCase() : '';
-  };
-  // 注入回调的**单次包装**：同一 base 只取一次，且任何异常都收敛成 null（fail-closed，不外抛）
-  const compareCache = new Map();
-  const compareOnce = async (base) => {
-    if (typeof fetchCompare !== 'function') return null;
-    if (compareCache.has(base)) return compareCache.get(base);
-    let res = null;
-    try {
-      res = await fetchCompare({ base, head: String(headSha || '').toLowerCase() });
-    } catch (e) {
-      res = null;
-    }
-    compareCache.set(base, res || null);
-    return res || null;
-  };
-  // 单个候选评论的判定：返回 { ok } 或 { ok:false, reason }（reason 只用于报错文案）
-  const judgeGateComment = async (text) => {
-    const commit = gateCommitIn(text);
-    if (!commit) return { ok: false, reason: '评论里没有 `commit: <sha>` 字段' };
-    const commit7 = commit.slice(0, 7);
-    if (!headSha) return { ok: false, reason: '本次事件没给出 head sha（fail-closed）' };
-    if (shaMatches(commit, String(headSha).toLowerCase())) return { ok: true, reason: 'commit == head' };
-    // 祖先判定 + 运行时面比对（都要靠 compare API；拿不到 ⇒ 不满足）
-    const cmp = await compareOnce(commit);
-    if (!cmp) {
-      return {
-        ok: false,
-        reason: `绑定 \`${commit7}\`：取不到 compare(\`${commit7}\`…head) 结果（未知 sha / API 异常 / 超时）⇒ fail-closed 不满足`,
-      };
-    }
-    const status = String(cmp.status || '');
-    const mergeBase = String(cmp.mergeBaseSha || '').toLowerCase();
-    if ((status !== 'ahead' && status !== 'identical') || mergeBase !== commit) {
-      return { ok: false, reason: `绑定 \`${commit7}\`：它不是当前 head 的祖先（compare status=${status || '未知'}）` };
-    }
-    if (cmp.filesTruncated) {
-      return { ok: false, reason: `绑定 \`${commit7}\` 与 head 之间的 diff 过大被 GitHub 截断（files ≥300）⇒ 判不出运行时面是否变过，fail-closed 不满足` };
-    }
-    const changed = Array.isArray(cmp.files) ? cmp.files.filter((f) => isRuntimeFile(String(f || ''))) : [];
-    if (changed.length > 0) {
-      return {
-        ok: false,
-        reason: `绑定 \`${commit7}\` 之后运行时面文件已变更（${changed.slice(0, 3).join('、')}${changed.length > 3 ? ' 等' : ''}）⇒ 需重跑并重贴`,
-      };
-    }
-    return { ok: true, reason: `commit \`${commit7}\` 是 head 的祖先且其间运行时面（${RUNTIME_LABEL}）未变` };
-  };
-  // 门评论：任一候选「绑上」即算满足；全都不满足时把**最有信息量的那条**原因带进错误文案。
-  // 顺序上先判「commit 恰好等于 head」的候选（不打 compare，也就不会因 API 抖动把一条本可用的评论拖红）；
-  // 祖先口径的候选排在后面 —— 于是「老评论绑旧 sha + 新评论绑新 sha」共存时优先认新评论。
-  // 候选来源（#1770、#1841）：PR 评论 + **commit 评论** + **正文关联的票评论**。
-  // commit 评论是「证据先于 PR 存在」的正路：证据齐了、贴到 commit 上，再开 PR。
-  // 票评论是 #1841 的**降级落点**：本仓 commit 评论端点恒 404（#1838），门脚本把同一份正文改贴到票上。
-  // 它不是宽松档——候选只在 `isGateEvidenceFor` 通过后产生，marker / `commit: <sha>` / 祖先判定一条不少。
-  // 哪些票算候选不在这里决定：调用方按 `issueNumbersInBody(body)` 取数喂进来（未关联的票不进判据）。
-  const gateComment = async (gateKey) => {
-    const candidates = [...(gateComments || []), ...(commitComments || []), ...(issueComments || [])]
-      .map((c) => (typeof c === 'string' ? c : ((c && c.body) || '')))
-      .filter((t) => isGateEvidenceFor(t, gateKey));
-    if (candidates.length === 0) return { hit: undefined, reason: '' };
-    const headLc = String(headSha || '').toLowerCase();
-    const exact = headLc ? candidates.filter((t) => shaMatches(gateCommitIn(t), headLc)) : [];
-    const rest = candidates.filter((t) => !exact.includes(t));
-    const reasons = [];
-    let informative = '';
-    for (const text of exact) {
-      const v = await judgeGateComment(text);
-      if (v.ok) return { hit: text, reason: v.reason };
-      reasons.push(v.reason);
-    }
-    for (const text of rest) {
-      const v = await judgeGateComment(text);
-      if (v.ok) return { hit: text, reason: v.reason };
-      reasons.push(v.reason);
-      // 越靠后的失败原因越具体（compare 拿不到 / 运行时面已变），优先用它
-      if (v.reason.includes('运行时面') || v.reason.includes('compare') || v.reason.includes('祖先')) informative = v.reason;
-    }
-    return { hit: undefined, reason: informative || reasons[reasons.length - 1] };
-  };
-  const g4 = await gateComment('④');
-  const g2 = await gateComment('②');
-  const gate4Comment = g4.hit;
-  const gate2Comment = g2.hit;
-  const headSha7 = String(headSha || '').slice(0, 7);
-  // 摘要行必须写**实际绑上的那个 commit**（2026-09-13 补正）：祖先绑定成立时证据是在**旧 commit**
-  // 上产出的；写死 head 会让摘要读起来像「证据是在当前 head 上跑的」—— 在一个只校结构的门里，
-  // 这属于往「更可信」方向失真。恰好等于 head 时输出与旧文案逐字一致（旧用例不受影响）。
-  const boundPhrase = (text) => {
-    const b7 = (gateCommitIn(text) || '').slice(0, 7) || headSha7;
-    return b7 === headSha7
-      ? `sha 绑定 ${b7}`
-      : `sha 绑定 ${b7} —— 祖先口径，当前 head 为 ${headSha7}`;
-  };
-  // gateReason 只在「有门评论但一条都没绑上」时才有值 —— 用于 ① 缺行报错文案，② 末尾的留痕 notes
-  const gateReason = {
-    '④': gate4Comment ? '' : g4.reason,
-    '②': gate2Comment ? '' : g2.reason,
-  };
-
-  // 2026-10-16 新增（移动端 ADR-0041 决策 3）：把**每道门的判定结果**作为结构化字段返回。
-  // 用途：`.github/workflows/mobile-gates.yml` 的「门证据管家」从 head 取本文件、抽出
-  // 本函数原样跑一遍，把结论渲染成 PR 上的一条常驻评论 —— **判据永远同源**，管家不另写一套。
-  // 纯增量：不改任何 ok / errors / notes 的既有语义与文案（抽取式单测另有断言）。
-  // 2026-10-22 追加 ① 的 { required, bound, skipped }：只为让「窗口口径跳过」在评论里可见、且
-  // 与「已取证 / 还缺」区分开（#1766）；不改 ②④ 的字段语义。
-  const collectGate = (verdict) => ({
-    bound: Boolean(verdict.hit),
-    commit: verdict.hit ? (gateCommitIn(verdict.hit) || '').slice(0, 7) : '',
-    reason: verdict.hit ? '' : String(verdict.reason || ''),
-  });
   const gates = {
-    // ① 门没有「sha 绑定评论」承载路径，结构化字段只服务 mobile-gates 的渲染：
-    // 「免行跳过（①a 降级 / 窗口过渡）」必须与「已取证 / 还缺」区分开 —— 跳过要可见，不能长得像已取证（#1766）。
-    '①': { required: runtime.length > 0, bound: false, skipped: false },
-    '②': {
-      ...collectGate(g2),
-      // 与上面 GATES 循环同一判据（requires: 'mpweixin'），别在这里另算
-      required: Boolean(needs2),
-      why: Boolean(needs2) ? needs2Why.slice(0, 5) : [],
-    },
-    '④': {
-      ...collectGate(g4),
-      required: runtime.length > 0,
-      why: runtime.slice(0, 5),
-    },
+    '②': { required: needs2, bound: false, commit: '', reason: '', why: needs2 ? needs2Why.slice(0, 5) : [] },
+    '④': { required: runtime.length > 0, bound: false, commit: '', reason: '', why: runtime.slice(0, 5) },
   };
 
+  // 未命中运行时面 ⇒ 整段免（分级判据，ADR-0008）。空正文也放行，这一条与改动前同义。
   if (runtime.length === 0) {
     notes.push(`未命中运行时面（改动 ${files.length} 个文件），按 ADR-0008 免人工门与 ④ 编译门。`);
     return { ok: true, errors, notes, runtime, needs4b, gates };
   }
 
   const clean = String(body || '').replace(/<!--[\s\S]*?-->/g, '');
-  const head = clean.match(/^##\s*验收证据\s*$/m);
+  // 段名从描述符取：写死正则会让「改描述符」只动生成侧、校验侧静默不跟（第二套口径）。
+  const escRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const head = clean.match(new RegExp(`^${escRe(GATE_EVIDENCE.heading)}\\s*$`, 'm'));
   if (!head) {
-    errors.push('缺 `## 验收证据` 段（段名固定，见 .github/PULL_REQUEST_TEMPLATE.md）。');
-    return { ok: false, errors, notes, runtime, needs4b, gates };
+    err('*', `缺 \`${GATE_EVIDENCE.heading}\` 段（段名固定，见 .github/PULL_REQUEST_TEMPLATE.md）。`);
+    return { ok: false, errors: errors.map((e) => e.text), notes, runtime, needs4b, gates };
   }
   const rest = clean.slice(head.index + head[0].length);
   const next = rest.search(/^##\s/m);
   const section = next === -1 ? rest : rest.slice(0, next);
 
-  // 例外通道：显式风险接受。
-  // 本仓有可用的 admin 通道（维护者持有仓库所有者账号），但裁定不装「必检 + approve=1」
-  // ——逐 PR 审批成本高于约束收益（ADR-0008「为何不装『必检 + approve』」）。
-  // 该通道的约束改由 AGENTS.md 的「agent 不得自合触及运行时面的 PR」承担。
-  const riskDeclared = /已接受未验证风险/.test(clean) && /事后验证计划/.test(clean);
+  // 例外通道：显式风险接受，**必须点名哪道门**（#2100 决策 4；2026-10-29 review 收窄）。
+  //
+  // 旧实现是 `/已接受未验证风险/.test(clean)` —— 全文任意位置命中即清空全部 errors，
+  // 于是「本 PR 不适用『已接受未验证风险』通道」这种**否认句**也会命中，五个字空正文也能过。
+  // 收窄的三条（都不靠加填字，全靠现有结构）：
+  //   ① 只在 `## 验收证据` 段内生效 ⇒ 背景叙述 / 引用的旧例子不会误触发；
+  //   ② 声明必须点名门号（`- 例外：已接受未验证风险 ②`）⇒ 写得含糊就清不掉任何东西，自动退回红；
+  //   ③ 只清空**被点名门**的 errors ⇒ ④ 有缺项时写 ② 的豁免救不了它。
+  const WAIVE_HINT = '- 例外：已接受未验证风险 <门号>';
+  const GATE_KEY_RE = new RegExp(`${GATE_EVIDENCE.gates.map((g) => escRe(g.key)).join('|')}(?![a-z])`, 'g');
+  const waived = new Set();
+  for (const line of section.split('\n')) {
+    if (!/已接受未验证风险/.test(line)) continue;
+    for (const k of line.match(GATE_KEY_RE) || []) waived.add(k);
+  }
 
-  // 五门的形状（key / label / 必填字段 / 产物类别 / 触发条件）来自描述符 GATE_EVIDENCE —— #1920 前
-  // 这套字面量在本文件、evidence-gen.ps1、PULL_REQUEST_TEMPLATE.md、preflight-pr.mjs 各有一份。
-  // 本处只留「字段怎么用」，形状改动发生在描述符里。
-  // 标签文案是给人读的（#1702 两腿）；判据只认行首 key（matchesGate），改文案不动校验语义。
-  const GATES = GATE_EVIDENCE.gates;
-  const PLACEHOLDER = toRe(GATE_EVIDENCE.placeholder);
-  // 截图证据的**结构性判据**（2026-09-12 修订，ADR-0008「截图证据的结构性判据」）：
-  // 旧判据是过宽的子串正则（`https?:\/\/` / `.ci-verify\/\S+\.png` / `mp-weixin\.png`）——
-  // 在「结论」里贴个**本地产物路径**或随手一个链接就能让这门结构上被判满足（假绿）。
-  // 现在只认三种**可核验**的来源：① GitHub 托管的图片（附件直链 / Markdown 图片语法）；
-  // ② 仓库内 `docs/verification/<模块>/<票号>/<页名>.<ext>`（目录键必须是数字段；#1770 起是票号，旧 PR 号同为数字段、仍被接受——下同）；
-  // ③ 指向 sha 绑定门评论的链接（`#issuecomment-<id>`）。
-  // **明确不接受**裸 `.ci-verify/*.png` 之类的本地产物路径与任意 http(s) 链接（不在仓库里、读不到）。
-  // 仍然**只校结构、不校真伪**（ADR-0008「明确不做」）：不校验链接可达、不校验图片内容。
-  // 产物判据的正则同样来自描述符（#1920）：门「认不认这张截图」这件事只有一个真源。
-  const A = GATE_EVIDENCE.artifacts;
-  const IMAGE_EXT = toRe(A.screenshot.imageExt);
-  const GITHUB_IMAGE_HOST = toRe(A.screenshot.githubHost);
-  const REPO_VERIFICATION = toRe(A.screenshot.repoVerification);
-  const ISSUE_COMMENT_LINK = toRe(A.screenshot.issueCommentLink);
-  const INLINE_GITHUB_IMAGE = toRe(A.screenshot.inlineGithubImage);
-  const MARKDOWN_IMAGE = toRe(A.screenshot.markdownImage);
-  const isScreenshotArtifact = (value) => {
-    const v = String(value || '');
-    if (!v) return false;
-    // ③ sha 绑定门评论链接（评论本身已按 gate-evidence 标记 + commit sha 绑定到 head）
-    if (ISSUE_COMMENT_LINK.test(v)) return true;
-    // ② 仓库内路径（可点开预览、可核验）
-    if (REPO_VERIFICATION.test(v)) return true;
-    // ① GitHub 托管的图片：附件 / 图床直链
-    if (INLINE_GITHUB_IMAGE.test(v)) return true;
-    // Markdown 图片语法：远程图片（GitHub 托管或带图片扩展名的 http(s) URL）或仓库内路径；
-    // **相对路径不得指向本地产物**（`.ci-verify/x.png` 之类不在仓库里、渲染即裂图、无从核验）。
-    const mdImages = [...v.matchAll(MARKDOWN_IMAGE)].map((m) => m[1]);
-    return mdImages.some((u) => (/^https?:\/\//i.test(u) ? (GITHUB_IMAGE_HOST.test(u) || IMAGE_EXT.test(u)) : REPO_VERIFICATION.test(u)));
-  };
-  const ARTIFACT = {
-    screenshot: isScreenshotArtifact,
-    'ci-run': toRe(A['ci-run']),
-    'compile-log': toRe(A['compile-log']),
-    any: toRe(A.any),
-  };
-  const artifactOk = (kind, value) => {
-    const spec = ARTIFACT[kind];
-    return typeof spec === 'function' ? spec(value) : spec.test(value);
-  };
-
-  // ④ 门一行，但 ④b 行同样含「④」——按行首编号匹配（行首 ④ 后紧跟字母 a/b 的属于 ④a/④b 行），
-  // 免得只填了 ④b 就算过了 ④
-  // 证据行的**行形态**也来自描述符：列表项前缀、字段名与字段分隔符（#1920）。
   const LIST_ITEM = toRe(GATE_EVIDENCE.listItem);
   const LIST_ITEM_PREFIX = new RegExp(GATE_EVIDENCE.listItem.prefixStrip);
-  const FIELD_MARK = new RegExp(
-    `(${GATE_EVIDENCE.fieldNames.join('|')})(?:[（(][^）)]*[）)])?\\s*[：:]\\s*`,
-    'g',
-  );
-  const FIELD_SEP = new RegExp(GATE_EVIDENCE.fieldSeparator.strip);
+  const RAN_AT = toRe(GATE_EVIDENCE.ranAt);
+  const READING_VALUE = toRe(GATE_EVIDENCE.readingValue);
+
+  // ④ 全家（④ / ④a / ④b / ④c）都含「④」⇒ 按行首编号匹配，④a / ④b 行不能顶替 ④ 行。
   const matchesGate = (line, gate) => {
     const core = line.replace(LIST_ITEM_PREFIX, '');
     if (!core.startsWith(gate.key)) return false;
-    if (gate.key === '④') return !/[ab]/.test(core.charAt(1));
+    if (gate.key === '④') return !/[a-z]/.test(core.charAt(1));
     return true;
   };
 
+  // 绑定判定（ADR-0008，2026-09-12 放宽）：sha7 等于 head，或它是 head 的祖先**且**其间运行时面未变。
+  // **fail-closed**：compare 取不到（未知 sha / 异常 / 截断）一律判不满足，不得因 API 抖动放行。
+  const compareCache = new Map();
+  const compareOnce = async (base) => {
+    if (typeof fetchCompare !== 'function') return null;
+    if (compareCache.has(base)) return compareCache.get(base);
+    let res = null;
+    try {
+      res = await fetchCompare({ base, head: headLc });
+    } catch {
+      res = null;
+    }
+    compareCache.set(base, res || null);
+    return res || null;
+  };
+  const judgeBinding = async (sha) => {
+    if (!headLc) return { ok: false, reason: '本次事件没给出 head sha（fail-closed）' };
+    if (shaMatches(sha, headLc)) return { ok: true, reason: `等于 head` };
+    const cmp = await compareOnce(sha);
+    if (!cmp) {
+      return { ok: false, reason: `取不到 compare(\`${sha}\`…head) 结果（未知 sha / API 异常 / 超时）⇒ fail-closed 不满足，重跑一次并写当前 head 的前 7 位` };
+    }
+    const status = String(cmp.status || '');
+    const mergeBase = String(cmp.mergeBaseSha || '').toLowerCase();
+    if ((status !== 'ahead' && status !== 'identical') || !shaMatches(sha, mergeBase)) {
+      return { ok: false, reason: `它不是当前 head 的祖先（compare status=${status || '未知'}）` };
+    }
+    if (cmp.filesTruncated) {
+      return { ok: false, reason: '与 head 之间的 diff 过大被 GitHub 截断（files ≥300）⇒ 判不出运行时面是否变过，fail-closed 不满足' };
+    }
+    const changed = Array.isArray(cmp.files) ? cmp.files.filter((f) => isRuntimeFile(String(f || ''))) : [];
+    if (changed.length > 0) {
+      return { ok: false, reason: `之后运行时面文件已变更（${changed.slice(0, 3).join('、')}${changed.length > 3 ? ' 等' : ''}）⇒ 需重跑并把 \`跑于\` 改成当前 head 的前 7 位` };
+    }
+    return { ok: true, reason: `是 head 的祖先且其间运行时面（\`.uvue\` / \`.uts\` / 三份 json）未变，当前 head=${headLc.slice(0, 7)}` };
+  };
+
   const lines = section.split('\n').filter((l) => LIST_ITEM.test(l));
-  for (const gate of GATES) {
-    if (gate.requires === 'mpweixin' && !needs2) continue;
-    if (gate.requires === '4b' && !needs4b) continue;
-    // ④ 的门证据已由 sha 绑定的 PR 评论承载 → 跳过字段校验（正文该行可写「见评论 <链接>」）
-    if (gate.key === '④' && gate4Comment) {
-      notes.push(`④ 本地编译门：证据来自 PR 评论（${boundPhrase(gate4Comment)}）。`);
+  for (const gate of GATE_EVIDENCE.gates) {
+    const state = gates[gate.key];
+    if (!state.required) {
+      notes.push(`${gate.key} ${gate.label}：未触发（${gate.requires === 'mpweixin' ? '未命中 MP-WEIXIN 面，ADR-0008' : '未命中运行时面'}）⇒ 免。`);
       continue;
     }
-    // ② 门同理（2026-09-12 起为半自动门：agent 可执行 scripts/mp-weixin-check.ps1 并贴评论）；
-    // 「执行人」栏仍须由人签收 —— 校验器分不出人/agent（单账号），约束落在 AGENTS.md 上。
-    if (gate.key === '②' && gate2Comment) {
-      notes.push(`② 微信开发者工具门（半自动）：证据来自 PR 评论（${boundPhrase(gate2Comment)}）；执行人栏仍须由人签收。`);
-      continue;
-    }
-    const line = lines.find((l) => matchesGate(l, gate));
     const where = `${gate.key} ${gate.label}`;
+    const line = lines.find((l) => matchesGate(l, gate));
     if (!line) {
-      // 该门有 gate-evidence 评论但**没绑上**时，把「为什么不算」写进错误文案
-      const why = gateReason[gate.key];
-      errors.push(`${where}：缺该行（每门一行，格式见模板）${why ? `；${gate.key} 门证据绑定 ${why}` : ''}。`);
+      err(gate.key, `${where}：缺该行。按模板写一行 \`- ${gate.key} ${EVIDENCE_LINE_HINT}\`。`);
       continue;
     }
-    // 解析「字段：值」，字段之间用 · 或 | 分隔
-    const marks = [...line.matchAll(FIELD_MARK)];
-    const values = {};
-    marks.forEach((m, i) => {
-      const start = m.index + m[0].length;
-      const end = i + 1 < marks.length ? marks[i + 1].index : line.length;
-      values[m[1]] = line.slice(start, end).replace(FIELD_SEP, '').trim();
-    });
-    // ① 门的免行判据——**双白名单过渡**（#1859，2026-10-24；ADR-0043 决策 1/8）：
-    //   · 新口径（0043 常态，主通道）：结论 `免（①a 降级发版前一次，ADR-0043）`——①a 永久降级为
-    //     「发版前一次」（发版冒烟），运行时面 PR 不再逐 PR 真机取证，该行是显式声明的审计痕迹。
-    //     判据**只认字样不认文件**：`免` 开头 + 含「①a 降级发版前一次」+ 含「ADR-0043」——
-    //     判据包（本改动）与文档包（#1858，ADR-0043 本体入库）谁先合入都不悬空。
-    //   · 旧口径（0039/0040 窗口，过渡期暂留）：结论 `^SKIP` 且含「待批收口」——窗口机制已被
-    //     0043 退役，「待批收口」从此指向不存在的未来；退场判据 = 本判据与 #1858 都合入后，
-    //     第一个用新写法完整过门的运行时面 PR 出现 ⇒ 立小票删旧通道（防双轨永久化）。
-    // 两通道共同语义：跳过的是「取证」不是「签收」——执行人须非占位、日期须为 YYYY-MM-DD
-    // （下面两条校验**不**绕过）；降级期无实机可测 ⇒ 仅「复测对象」允许写「无」（占位判定对这一个字段豁免）。
-    // ②③④④b 一律不受此分支影响（免行只属于 ① 门）。
-    // **必须**打头（`免` / `SKIP`）：真截图结论里若顺手写了这些字样，不能被误判成跳过
-    // （否则「已有证据」会被渲染成「跳过」）。
-    const conclusion1 = String(values[GATE_EVIDENCE.conclusionField] || '');
-    // 免行口径来自描述符（#1920）：一道门可以有多条豁免（① 的 1a 与窗口过渡旧写法），
-    // 每条 = 行首前缀 + 必须同时出现的字样。判据**只认字样不认文件**，与改动前同义。
-    const exemption = (GATE_EVIDENCE.exemptions[gate.key] || []).find(
-      (e) => new RegExp(e.prefix, e.prefixFlags || '').test(conclusion1)
-        && e.requireAll.every((s) => conclusion1.includes(s)),
-    );
-    const exempt1a = Boolean(exemption);
-    const errorsBefore = errors.length;
-    for (const field of gate.fields) {
-      const v = values[field];
-      if (v === undefined) {
-        errors.push(`${where}：缺字段「${field}」。`);
-        continue;
+    const token = gate.tokens.find((t) => line.includes(t));
+    if (!token) {
+      err(gate.key, `${where}：该行没有${gate.tokenHint} —— 门自带的机读行原样贴进来即可，不要改写它。`);
+    } else {
+      // token 只是「门名」，不能单独算读数。模板曾预置 `MP_WEIXIN_RESULT ...`，只判 includes
+      // 就等于「照抄模板即绿」（2026-10-29 review 的 P0）。token 之后必须跟着门真打出来的键值对。
+      const after = line.slice(line.indexOf(token) + token.length);
+      if (!READING_VALUE.test(after)) {
+        err(gate.key, `${where}：${gate.tokenHint} 后面没有实际读数 —— ${GATE_EVIDENCE.readingValue.hint}。`);
       }
-      if (exempt1a && field === '复测对象' && toRe(GATE_EVIDENCE.exemptSubject).test(v)) continue;
-      if (PLACEHOLDER.test(v)) errors.push(`${where}：「${field}」为空或仍是占位（「待人工」「⏳」不算证据）。`);
     }
-    if (gate.fields.includes('日期') && values['日期'] && !/\d{4}-\d{2}-\d{2}/.test(values['日期'])) {
-      errors.push(`${where}：「日期」须为 YYYY-MM-DD。`);
-    }
-    // 单账号仓库无法机械区分「人」与「agent」：只提示、不拦（约束落在 AGENTS.md 上）
-    if (gate.fields.includes('执行人') && values['执行人'] === `@${author}`) {
-      notes.push(`${where}：执行人与 PR 作者是同一账号（${author}）——本仓单账号，机械上分不出人与 agent；agent 不得代填该字段。`);
-    }
-    // 免行跳过：不走截图判据，但**留下可见的 notes**（跳过 ≠ 免签收，也不许静默）。
-    // 只有该行自身没有报错才算跳过：执行人占位 / 日期不是 YYYY-MM-DD 时这行仍红，
-    // 且不得记成 skipped —— 否则管家会替一条不合格的行渲染「⏭ 跳过」。
-    if (exempt1a && errors.length === errorsBefore) {
-      gates['①'].skipped = true;
-      // 文案也是形状的一部分（#1920）：跳过句整句来自描述符，本处只做 {conclusion} 插值。
-      notes.push(`${where}：${String(exemption.skippedNote || '').replace('{conclusion}', String(values['结论'] || ''))}`);
+    const m = line.match(RAN_AT);
+    if (!m) {
+      err(gate.key, `${where}：缺 \`跑于 <sha7>\`（门是在哪个 commit 上跑的，写它的前 7 位）。`);
       continue;
     }
-    if (exempt1a) continue; // 该行已红：不再叠加「须引用可核验截图」这条噪音，红因保持精确
-    if (values['结论'] && !artifactOk(gate.artifact, values['结论'])) {
-      const hint = {
-        screenshot: '须引用**可核验**的截图：GitHub 附件/Markdown 图片、仓库内 `docs/verification/<模块>/<票号>/<页名>.<ext>`（目录键须为数字段），或 sha 绑定门评论链接（`#issuecomment-<id>`）；裸本地产物路径（`.ci-verify/*.png` 等）与任意 http(s) 链接不算证据',
-        'ci-run': '须贴 CI run 链接（…/actions/runs/<id>）',
-        'compile-log': '须引用 `.ci-verify/build.log`（④a）或 `.ci-verify/kotlin-all.log`（④c）',
-        any: '须引用产物',
-      }[gate.artifact];
-      errors.push(`${where}：「结论」${hint}。`);
-    } else if (gate.key === '①' && values['结论'] && errors.length === errorsBefore) {
-      // ① 行填了可核验截图 ⇒ 结构化字段记为「已取证」（窗口口径跳过时上面已 continue）
-      gates['①'].bound = true;
+    const sha = m[1].toLowerCase();
+    const v = await judgeBinding(sha);
+    if (v.ok) {
+      state.bound = true;
+      state.commit = sha.slice(0, 7);
+      state.reason = v.reason;
+      // 祖先绑定要明示（不静默放宽）：证据是在**旧 commit** 上产出的，
+      // 写成「已绑」而不说是哪个 sha，读起来像「证据是在当前 head 上跑的」——这在只校结构的门里属往更可信方向失真。
+      if (v.reason !== '等于 head') notes.push(`${where}：绑定 ${sha.slice(0, 7)} —— ${v.reason}。`);
+    } else {
+      state.reason = v.reason;
+      err(gate.key, `${where}：\`跑于 ${sha.slice(0, 7)}\` 绑不上当前 head —— ${v.reason}。`);
     }
   }
 
-  if (errors.length > 0 && riskDeclared) {
-    return {
-      ok: true,
-      errors: [],
-      notes: [
-        `⚠️ 本 PR 走的是「已接受未验证风险」例外通道。缺项：${errors.join('；')}`,
-        '⚠️ 例外通道下必须由人执行合并（AGENTS.md：agent 不得自行合并触及运行时面的 PR）。',
-      ],
-      runtime,
-      needs4b,
-      gates,
-    };
-  }
-  // ② 的**触发理由**要写在摘要里（#1030 的另一半诉求）：门被点亮时让人一眼看见是**哪个文件**
-  // 命中了 MP-WEIXIN 面，而不是让人去猜/去试措辞（旧判据下唯一「排查手段」是改文档措辞重推）。
   if (needs2) {
-    notes.push(
-      `② 触发面命中（MP-WEIXIN 面，ADR-0043 起为常态主门、无低风险减免）：${needs2Why.slice(0, 5).join('、')}${needs2Why.length > 5 ? ' 等' : ''}。`,
-    );
-  } else {
-    notes.push('未命中 MP-WEIXIN 面（条件编译段增删 / manifest.json / platformConfig.json 改动）→ 第②门免（ADR-0008）。');
+    notes.push(`② 触发面命中（MP-WEIXIN 面，ADR-0043 起为常态主门、无低风险减免）：${needs2Why.slice(0, 5).join('、')}${needs2Why.length > 5 ? ' 等' : ''}。`);
   }
-  if (errors.length === 0) notes.push('证据结构完整（pr-evidence 只校结构，真伪由维护者判定）。');
-  // 门证据「绑上但非 sha 相等」（祖先 + 运行时面未变）写成明示说明：不静默放宽
-  if (gate4Comment && g4.reason && !/commit == head/.test(g4.reason)) {
-    notes.push(`④ 门证据的绑定口径：${g4.reason}（放宽判据见 ADR-0008）。`);
+  if (needs4b) {
+    notes.push('④b 打包面命中（三份 json / utssdk 原生面 / *.aar / libs/*.jar）：A1 下不判红、正文不写 ④b 行，但**发版前必须跑** release 云打包（ADR-0008）。');
   }
-  if (gate2Comment && g2.reason && !/commit == head/.test(g2.reason)) {
-    notes.push(`② 门证据的绑定口径：${g2.reason}（放宽判据见 ADR-0008）。`);
+
+  // 例外通道只在「点名门覆盖了**全部**缺项」时放行；否则照红，并说明差在哪。
+  if (errors.length > 0 && waived.size > 0) {
+    const absorbed = errors.filter((e) => waived.has(e.gate));
+    const blocking = errors.filter((e) => !waived.has(e.gate));
+    // 点名了但该门其实没缺项 ⇒ 记 note（防模板残留，也防「我写了豁免 = 全都免了」的误读）
+    const idle = [...waived].filter((k) => !errors.some((e) => e.gate === k));
+    if (blocking.length === 0) {
+      return {
+        ok: true,
+        errors: [],
+        notes: [
+          `⚠️ 走「已接受未验证风险」例外通道，豁免门：${[...waived].join(' / ')}。`,
+          ...absorbed.map((e) => `⚠️ 已豁免：${e.text}`),
+          ...idle.map((k) => `⚠️ 例外声明点了 ${k}，但那道门本次没有缺项（多写了一句，不影响结论）。`),
+          '⚠️ 例外通道下必须由人执行合并（AGENTS.md：agent 不得自行合并触及运行时面的 PR）。',
+          ...notes,
+        ],
+        runtime,
+        needs4b,
+        gates,
+      };
+    }
+    notes.push(`例外声明只覆盖了 ${[...waived].join(' / ')}，仍有未被覆盖的缺项（见下）—— 要豁免就点名对应门号（\`${WAIVE_HINT}\`）。`);
   }
-  // 有 gate-evidence 评论但没绑上 ⇒ 即使该门因触发条件被跳过（如 ② 未命中 MP-WEIXIN 面），也要明示它不算数
-  // 有 gate-evidence 评论但没绑上，**且这门的失败确实走到了「缺行」这条分支**时补一条 notes。
-  // 判据：门没绑上**且**报错里没带过该原因 ⇒ 这门的失败被触发条件或评论路径跳过了
-  // ⇒ 必须留痕，别让人以为评论已经被接受（删掉下面这行的判断会让「免的门」静默吞掉一条作废评论）。
-  for (const [k, why] of Object.entries(gateReason)) {
-    if (why && !errors.some((e) => e.includes(why))) notes.push(`${k} 门证据未绑上：${why}`);
+  if (errors.length === 0) {
+    if (waived.size > 0) notes.push(`例外声明写了 ${[...waived].join(' / ')}，但本次没有缺项 —— 可以删掉那句话。`);
+    else notes.push('证据结构完整（pr-evidence 只校结构与 sha 绑定，真伪由维护者判定）。');
   }
-  return { ok: errors.length === 0, errors, notes, runtime, needs4b, gates };
+  return {
+    ok: errors.length === 0,
+    errors: errors.map((e) => e.text),
+    notes,
+    runtime,
+    needs4b,
+    gates,
+  };
 }
