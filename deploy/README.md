@@ -239,7 +239,9 @@ install -m 644 deploy/systemd/forklift-watchdog.service \
                deploy/systemd/forklift-watchdog.timer \
                deploy/systemd/forklift-alert@.service /etc/systemd/system/
 systemctl daemon-reload && systemctl restart forklift-watchdog.timer
-deploy/forklift-watchdog.sh --dry-run     # 自检：应打「达告警级别 0/6」
+/usr/local/bin/forklift-watchdog.sh --dry-run   # 自检：应打「达告警级别 0/6」
+# 注意用**安装后的路径**自检：仓库里的脚本是 100644（靠 install -m 755 赋执行位），
+# 直接跑 deploy/forklift-watchdog.sh 会 Permission denied。
 ```
 
 脚本里的 `EXPECT_CONTAINERS` 是容器判据：**部署面增减容器时必须同步它**（否则误报）。
