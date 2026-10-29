@@ -522,12 +522,17 @@ func (s *Service) GetStats(studentID int, credentialID *int) (*PracticeStatsDTO,
 		}
 		byType[t] = PracticeTypeStat{Total: tt, Correct: tc, Accuracy: acc}
 	}
+	byTag, err := practiceTagStats(base)
+	if err != nil {
+		return nil, err
+	}
 	return &PracticeStatsDTO{
 		Total:    total,
 		Correct:  correct,
 		Wrong:    wrong,
 		Accuracy: accuracy,
 		ByType:   byType,
+		ByTag:    byTag,
 	}, nil
 }
 

@@ -1,7 +1,7 @@
 // 复杂实体（#95）描述符写存储集成测试：真实 Postgres 下
 // original_prices（宽行 upsert/update + updated_at 尾列）与
 // coefficient_configs（按 key 更新 + RETURNING 整行）的往返正确性。
-// CI 提供 postgres:15 服务（DATABASE_URL），本地未配置时跳过。
+// CI 提供 postgres:18 服务（DATABASE_URL），本地未配置时跳过。
 package valuation
 
 import (

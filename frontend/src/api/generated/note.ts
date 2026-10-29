@@ -25,6 +25,7 @@
 export interface NoteDTO {
   content: string
   id: number
+  images: string[]
   question_content: string
   question_id: number | null
   updated_at: string

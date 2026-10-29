@@ -403,6 +403,35 @@ func (s *Service) GetCourseDetail(courseID, studentID int) (*CourseDetailDTO, er
 	}, nil
 }
 
+// CourseBrowseResult 「浏览课程」上报结果（#2065）。
+// Recorded=false 表示**今天已经记过这门课**（幂等），不是错误：重复进入详情是正常行为。
+type CourseBrowseResult struct {
+	Recorded bool `json:"recorded"`
+}
+
+// RecordCourseView 记一笔「浏览课程」（#2065）：学员打开课程详情即上报。
+//
+// 三条口径：
+//   - 可见性复用详情的同一谓词（未发布 / 未挂载按「不存在」）——不给任意 id 造事实的机会；
+//   - 一天一门课只记一笔（主键去重，ON CONFLICT DO NOTHING），重复进入不改写、不重复计；
+//   - 写失败如实上抛（ADR-0062 票6）：咽掉会让任务进度静默停在旧值。
+func (s *Service) RecordCourseView(studentID, courseID int) (*CourseBrowseResult, error) {
+	visible, err := CourseVisibleByID(s.db, courseID)
+	if err != nil {
+		return nil, err
+	}
+	if !visible {
+		return nil, model.ErrCourseNotFound
+	}
+	res := s.db.Exec(
+		"INSERT INTO course_views (user_id, view_date, course_id) VALUES (?,?,?) ON CONFLICT (user_id, view_date, course_id) DO NOTHING",
+		studentID, clock.DayKey(clock.Now()), courseID)
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	return &CourseBrowseResult{Recorded: res.RowsAffected > 0}, nil
+}
+
 // GetChapterDetail 章节详情（学员端路径回填 study_status）。
 // 可见性：章节可见性跟随所属课程（ADR-0058）——未发布 / 未挂载课程的章节按「不存在」返回，
 // 与搜索的章节分区、以及收藏的写时校验同一谓词。

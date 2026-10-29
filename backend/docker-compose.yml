@@ -3,7 +3,7 @@
 # 前端通过 Vite dev server 运行在宿主机（npm run dev），通过 CORS 访问 backend
 services:
   postgres:
-    image: postgres:15-alpine
+    image: postgres:18-alpine
     container_name: forklift-pg
     restart: unless-stopped
     environment:

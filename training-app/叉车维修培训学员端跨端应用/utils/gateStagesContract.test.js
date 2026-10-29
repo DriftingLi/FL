@@ -12,7 +12,9 @@
  *      if (-not $SkipPublish) { 之后、hx-wait 在其 else 分支且先于 Wait-HxFree）。
  *  C5 ② mp-weixin-check.ps1 四段齐全：wait-hx/publish/automation/auto-probe；
  *      wait-hx 在第一个 if (-not $SkipBuild) { 内且先于 Wait-HxFree、publish 在第二个该分支之后。
- *  C6 三份门脚本都恰好一次 Stop-GateStage（STAGE_SUMMARY 只出一行）。
+ *  C6 三份门脚本都恰好一次 Stop-GateStage（STAGE_SUMMARY 只出一行）。#1861 起 ② 的两个收尾点
+ *      （主通过路径与 -BuildOnly 的构建面收口）都经脚本内的幂等包装 `Stop-GateStageIfOpen` 调用，
+ *      字面量仍只有函数体里一处 —— 判据不变，变的是「为什么它还能是 1」。
  *
  * 读源码一律走 utsHarness.readText（ADR-0019；裸 readFileSync 会被 check-contract-read 判违规）。
  */

@@ -21,6 +21,7 @@ var nonnilOutletsPractice = map[string]func(t *testing.T) any{
 	"practicemode.HistoryResultDTO.records":         outletPracticeHistoryEmpty,
 	"practicemode.PracticeStartResultDTO.questions": outletPracticeStartSequential,
 	"practicemode.PracticeStatsDTO.by_type":         outletPracticeStatsEmpty,
+	"practicemode.PracticeStatsDTO.by_tag":          outletPracticeStatsEmpty,
 }
 
 // TestNonNilDeclaredOutletsNeverEmitNull 本域的举证入口（判据本体在 testutil）。

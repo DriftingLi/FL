@@ -26,6 +26,15 @@
             </view>
         </view>
 
+        <!-- 证件筛选组（#1945）：选项=证件字典；「全部证件」即清除，选具体证件走列表 credential_id -->
+        <view class="filter-row filter-row-tight" v-if="recruitTab === 'job' && credentialFilterTags.length > 1">
+            <view v-for="(tag, idx) in credentialFilterTags" :key="tag.credential_id"
+                :class="{ 'filter-tag': true, 'ml-16': idx > 0, 'filter-tag-active': activeCredentialFilter == idx }"
+                @click="onCredentialFilterChange(idx)">
+                <text class="filter-tag-text" :class="{ 'filter-tag-text-active': activeCredentialFilter == idx }">{{ tag.name }}</text>
+            </view>
+        </view>
+
         <!-- 职位/公告 Tab 内容 -->
         <scroll-view class="content-scroll" scroll-y="true" @scrolltolower="onLoadMore">
             <!-- 公告 tab：后端公告接口未建，空态占位（与旧招聘面板同语义，不放假数据） -->
@@ -43,6 +52,12 @@
                         <text class="job-company">{{ job.company_name }}</text>
                     </view>
                     <text class="job-title">{{ job.title }}</text>
+                    <!-- 「需持 X 证」（#1945）：单一档语义、无「优先」；多证折叠成「前 N 个 + 等 N 证」，无要求整行不渲染 -->
+                    <view v-if="credentialNoticeOf(job).length > 0" class="job-credential-row">
+                        <view class="job-credential-chip">
+                            <text class="job-credential-text">{{ credentialNoticeOf(job) }}</text>
+                        </view>
+                    </view>
                     <view class="job-info-row">
                         <text class="job-salary">{{ formatSalary(job) }}</text>
                         <text class="job-location">{{ job.region.length > 0 ? job.region : '未填写' }}</text>
@@ -79,9 +94,11 @@
     import { onLoad } from '@dcloudio/uni-app'
     import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { getJobListApi } from '../../api/job'
+    import { getAllCredentialsApi } from '../../api/credential'
     import { getCatalogTreeSpecialties } from '../../api/course'
     import { useAuthStore } from '../../stores/auth'
-    import type { JobPosting } from '../../types/index'
+    import { jobCredentialNotice, buildCredentialFilterOptions, credentialFilterParam } from '../../utils/jobCredentialDisplay'
+    import type { JobPosting, JobRequiredCredential } from '../../types/index'
 
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
@@ -108,6 +125,11 @@
     const filterTags = ref<FilterTag[]>([{ label: '全部', id: 0 }])
     const activeFilter = ref<number>(0)
 
+    // ---- 证件筛选组（#1945）：选项来自后端证件字典；首项「全部证件」（id=0）即清除筛选 ----
+    // 选项构造与「选中→查询参数」折算都在 utils/jobCredentialDisplay 里（行为腿真跑那份单点）
+    const credentialFilterTags = ref<JobRequiredCredential[]>([])
+    const activeCredentialFilter = ref<number>(0)
+
     // ---- 职位数据 ----
     const jobs = ref<JobPosting[]>([])
     const loading = ref<boolean>(false)
@@ -129,6 +151,28 @@
         }
     }
 
+    // ---- 证件筛选组加载（字典分组拍平后交给单点，不在这里造第二份证件清单）----
+    async function loadCredentialFilters() : Promise<void> {
+        try {
+            const groups = await getAllCredentialsApi()
+            const dict : JobRequiredCredential[] = []
+            for (const group of groups) {
+                for (const item of group.items) {
+                    dict.push({ credential_id: item.id, name: item.name } as JobRequiredCredential)
+                }
+            }
+            credentialFilterTags.value = buildCredentialFilterOptions(dict)
+        } catch (e) {
+            // 降级：只剩「全部证件」（筛选组不消失、不清空已有结果）
+            credentialFilterTags.value = buildCredentialFilterOptions([])
+        }
+    }
+
+    /** 卡面「需持 X 证」一行：无证件要求返回空串 ⇒ 模板据此不渲染该行 */
+    function credentialNoticeOf(job : JobPosting) : string {
+        return jobCredentialNotice(job.required_credentials)
+    }
+
     // ---- 职位列表加载 ----
     async function loadJobs(reset : boolean = false) : Promise<void> {
         if (loading.value) return
@@ -142,10 +186,13 @@
         try {
             const activeTag = filterTags.value[activeFilter.value]
             const specialtyId = activeTag != null ? activeTag.id : 0
+            const activeCredTag = credentialFilterTags.value[activeCredentialFilter.value]
+            const credentialId = activeCredTag != null ? activeCredTag.credential_id : 0
             const result = await getJobListApi({
                 page: page.value,
                 page_size: PAGE_SIZE,
                 specialty_id: specialtyId > 0 ? specialtyId : null,
+                credential_id: credentialFilterParam(credentialId),
             })
             if (reset) {
                 jobs.value = result.items
@@ -163,10 +210,19 @@
         }
     }
 
+    // 证件筛选切换：定义在 loadJobs 之后（script setup 顶层函数不允许前向引用，
+    // 机检见 utils/utsAndroidCompile.test.js「A：无 script setup 顶层函数前向引用」）
+    function onCredentialFilterChange(idx : number) : void {
+        if (activeCredentialFilter.value == idx) return
+        activeCredentialFilter.value = idx
+        loadJobs(true)
+    }
+
     // ---- 生命周期 ----
     // onLoad 必须带 options 形参：Kotlin Function1<OnLoadOptions, Unit>，零参即 error17
     onLoad((options : OnLoadOptions) => {
         loadFilters()
+        loadCredentialFilters()
         loadJobs(true)
     })
 
@@ -327,6 +383,13 @@
         color: $primary-color;
     }
 
+    /* 第二组筛选（证件，票 1945）：证件条目可能多于一行 ⇒ 允许折行。
+       票号只写「票 1945」：样式块里的「井号 + 四位十六进制」会被 batch2UiContract 的裸 hex 机检当成颜色值。 */
+    .filter-row-tight {
+        flex-wrap: wrap;
+        border-bottom: 1rpx solid $border-color-light;
+    }
+
     /* 职位列表 */
     .job-list {
         flex-direction: column;
@@ -367,6 +430,25 @@
         align-items: center;
         justify-content: space-between;
         margin-bottom: 12rpx;
+    }
+
+    /* 「需持 X 证」行：外行只管布局，底色落在内层 chip（uvue 里文字类样式只上 text） */
+    .job-credential-row {
+        flex-direction: row;
+        align-items: center;
+        margin-bottom: 12rpx;
+    }
+
+    .job-credential-chip {
+        flex-direction: row;
+        background-color: #e8f0fe;
+        border-radius: $radius-sm;
+        padding: 4rpx 12rpx;
+    }
+
+    .job-credential-text {
+        font-size: 22rpx;
+        color: $primary-color;
     }
 
     .job-salary {

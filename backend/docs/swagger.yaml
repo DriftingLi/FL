@@ -1178,6 +1178,11 @@ definitions:
       name:
         type: string
     type: object
+  course.CourseBrowseResult:
+    properties:
+      recorded:
+        type: boolean
+    type: object
   course.CourseDTO:
     properties:
       certificate_name:
@@ -1453,6 +1458,10 @@ definitions:
     type: object
   favorite.FavoriteDTO:
     properties:
+      company:
+        description: Company / Region 仅 target_type = job 有意义（职位卡最小字段）；其余类型省略该键（x-optional）。
+        type: string
+        x-optional: true
       course_id:
         description: |-
           CourseID 目标所属课程ID：**仅 target_type = chapter 有意义** —— 章节落点
@@ -1465,6 +1474,17 @@ definitions:
         type: string
       favorite_id:
         type: integer
+      region:
+        type: string
+        x-optional: true
+      tags:
+        description: |-
+          Tags 题库标签（法规/结构/液压…），收藏面按它在「题目」类型内部下钻一层，只有 question 有值；
+          其余类型与无标签的题一律发 `[]`（nonnil 表态：集合出口不吐 null，客户端不必判空再遍历）。
+          一题多标签时顺序按标签 sort_order。
+        items:
+          $ref: '#/definitions/favorite.FavoriteTagDTO'
+        type: array
       target_id:
         type: integer
       target_type:
@@ -1484,6 +1504,13 @@ definitions:
         type: integer
       total:
         type: integer
+    type: object
+  favorite.FavoriteTagDTO:
+    properties:
+      tag_id:
+        type: integer
+      tag_name:
+        type: string
     type: object
   featured.FeaturedContentAdminDetailDTO:
     properties:
@@ -1666,6 +1693,57 @@ definitions:
         type: string
       title:
         type: string
+    type: object
+  feedback.FeedbackDTO:
+    properties:
+      contact:
+        type: string
+      content:
+        type: string
+      created_at:
+        type: string
+      handled_at:
+        type: string
+        x-nullable: true
+      id:
+        type: integer
+      images:
+        description: Images 恒发 []（无图时不缺席）：消费端可直接遍历，不必先判空。
+        items:
+          type: string
+        type: array
+      status:
+        type: string
+      user_id:
+        type: integer
+        x-optional: true
+      username:
+        type: string
+        x-optional: true
+    type: object
+  feedback.FeedbackInput:
+    properties:
+      contact:
+        type: string
+      content:
+        type: string
+      images:
+        items:
+          type: string
+        type: array
+    type: object
+  feedback.FeedbackListResult:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/feedback.FeedbackDTO'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
     type: object
   forum.ForumImageUploadResultDTO:
     properties:
@@ -1992,6 +2070,13 @@ definitions:
       total:
         type: integer
     type: object
+  job.JobCredentialDTO:
+    properties:
+      credential_id:
+        type: integer
+      name:
+        type: string
+    type: object
   job.JobListResult:
     properties:
       items:
@@ -2046,6 +2131,13 @@ definitions:
         type: integer
       region:
         type: string
+      required_credentials:
+        description: |-
+          RequiredCredentials 所需证件（#2066）：空集 = 不限，恒发 []（不因无要求而缺席）。
+          键在场是为了让「这个职位不限证件」与「这个字段没实现」在消费端可区分。
+        items:
+          $ref: '#/definitions/job.JobCredentialDTO'
+        type: array
       salary_max:
         type: integer
         x-optional: true
@@ -2071,6 +2163,13 @@ definitions:
         type: integer
       region:
         type: string
+      required_credential_ids:
+        description: |-
+          RequiredCredentialIDs 所需证件（#2066）：可空多选，空 / 缺省 = 不限。
+          编辑语义与其它字段一致——整组替换（空数组即清空）；重复 id 去重，非法 id → 400。
+        items:
+          type: integer
+        type: array
       salary_max:
         type: integer
       salary_min:
@@ -2364,22 +2463,6 @@ definitions:
       username:
         type: string
     type: object
-  model.Note:
-    properties:
-      content:
-        type: string
-      id:
-        type: integer
-      question_id:
-        description: |-
-          QuestionID 挂载的题目；nil = 独立笔记。用指针而非零值哨兵：题目 id 从 1 起，
-          拿 0 表达「不挂题」会把「没挂」和「挂了不存在的题」混成一谈。
-        type: integer
-      updated_at:
-        type: string
-      user_id:
-        type: integer
-    type: object
   model.QuestionTag:
     properties:
       code:
@@ -2407,6 +2490,11 @@ definitions:
         type: string
       id:
         type: integer
+      images:
+        description: Images 恒发 []（无图时不缺席）：消费端可直接遍历，不必先判空。
+        items:
+          type: string
+        type: array
       question_content:
         type: string
       question_id:
@@ -2426,6 +2514,24 @@ definitions:
       page_size:
         type: integer
       total:
+        type: integer
+    type: object
+  note.QuestionNoteDTO:
+    properties:
+      content:
+        type: string
+      id:
+        type: integer
+      images:
+        items:
+          type: string
+        type: array
+      question_id:
+        type: integer
+        x-nullable: true
+      updated_at:
+        type: string
+      user_id:
         type: integer
     type: object
   notification.NotificationDTO:
@@ -2648,6 +2754,11 @@ definitions:
     properties:
       accuracy:
         type: number
+      by_tag:
+        description: ByTag 考点标签维度的正确率（#2068）：与 by_type 并列、不替换；只含有作答的标签。
+        items:
+          $ref: '#/definitions/practicemode.PracticeTagStat'
+        type: array
       by_type:
         additionalProperties:
           $ref: '#/definitions/practicemode.PracticeTypeStat'
@@ -2657,6 +2768,19 @@ definitions:
       total:
         type: integer
       wrong:
+        type: integer
+    type: object
+  practicemode.PracticeTagStat:
+    properties:
+      accuracy:
+        type: number
+      correct:
+        type: integer
+      tag_id:
+        type: integer
+      tag_name:
+        type: string
+      total:
         type: integer
     type: object
   practicemode.PracticeTypeStat:
@@ -4326,6 +4450,13 @@ definitions:
         type: integer
       student_id:
         type: integer
+      top_wrong_option:
+        description: |-
+          TopWrongOption 该题历史上「最多人选错的**答案串**」（#2068）：单选题是一个选项，多选题是整串
+          组合（如 "A,C"），简答题没有选项、恒不返回。只统计 is_correct=false 且答案非空的作答；
+          该题**判错作答 < 5 次**时不返回该键——缺省不是空串，客户端据此决定不展示。
+        type: string
+        x-optional: true
       wrong_count:
         type: integer
     type: object
@@ -6444,6 +6575,89 @@ paths:
       summary: 精选内容列表（管理端）
       tags:
       - 管理端-精选内容
+  /admin/feedback:
+    get:
+      description: 管理端查看全部反馈（分页，可按状态筛：pending / handled / 空=全部）；每行带提交人 user_id 与昵称
+      parameters:
+      - description: 状态 pending|handled（省略或 all = 全部）
+        in: query
+        name: status
+        type: string
+      - description: 页码
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 列表
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/feedback.FeedbackListResult'
+              type: object
+        "400":
+          description: 状态筛选值无效
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: 无权限
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 管理端反馈列表
+      tags:
+      - 管理端-反馈
+  /admin/feedback/{id}/handle:
+    post:
+      description: 把一条反馈标记为已处理（**幂等**：已处理的行再点一次返回同一行、200、不改处理时间）；标记不向学员发任何消息
+      parameters:
+      - description: 反馈 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 已处理
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/feedback.FeedbackDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: 无权限
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 反馈不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 标记反馈已处理
+      tags:
+      - 管理端-反馈
   /admin/forum/replies/{id}:
     delete:
       description: 管理端删除任意回复（若为被采纳回答则按 rollback 对冲回收，封底 0，幂等）
@@ -10691,6 +10905,49 @@ paths:
       summary: 课程详情（含学习进度）
       tags:
       - 学员端-课程
+  /course/{course_id}/browse:
+    post:
+      description: 学员点开课程详情即上报（#2065）：一天一门课只记一笔，重复进入返回 recorded=false（幂等，不是错误）。可见性（ADR-0058）与详情同一谓词：未发布
+        / 未挂载按「不存在」返回
+      parameters:
+      - description: 课程ID
+        in: path
+        name: course_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 已记录（recorded=false 表示当日已记过）
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/course.CourseBrowseResult'
+              type: object
+        "400":
+          description: 课程ID无效
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 课程不存在
+          schema:
+            $ref: '#/definitions/response.R'
+        "500":
+          description: 服务端内部错误（含可见性查询读不动）
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 上报浏览课程
+      tags:
+      - 学员端-课程
   /course/{course_id}/chapter/{chapter_id}:
     get:
       consumes:
@@ -10913,10 +11170,14 @@ paths:
       - application/json
       description: 分页查询收藏，快照回填；支持按 target_type 过滤
       parameters:
-      - description: 目标类型 course/chapter/question/featured/topic
+      - description: 目标类型 course/chapter/question/featured/topic/job
         in: query
         name: target_type
         type: string
+      - description: 题库标签ID：仅在 target_type=question 时生效（按标签下钻题目收藏；传其它类型 400）
+        in: query
+        name: tag_id
+        type: integer
       - default: 1
         description: 页码
         in: query
@@ -11159,6 +11420,76 @@ paths:
       summary: 精选内容列表（公开）
       tags:
       - 学员端-精选内容
+  /feedback:
+    get:
+      description: 学员查看本人提交过的反馈（按时间倒序，分页）；他人反馈一律不可见
+      parameters:
+      - description: 页码
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 列表
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/feedback.FeedbackListResult'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 我的反馈历史
+      tags:
+      - 学员端-反馈
+    post:
+      consumes:
+      - application/json
+      description: 学员向平台提交一条反馈（ADR-0089）：文字 1–1000 字必填；图片 0–3 张（仅本站 images/forum/
+        前缀，复用论坛图片上传通道）；联系方式可空且不校验格式
+      parameters:
+      - description: 反馈内容
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/feedback.FeedbackInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 提交成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/feedback.FeedbackDTO'
+              type: object
+        "400":
+          description: 内容为空/超长/图片张数或地址不合法
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 提交反馈
+      tags:
+      - 学员端-反馈
   /forum/my-liked-topics:
     get:
       consumes:
@@ -12081,7 +12412,7 @@ paths:
       - 系统
   /jobs:
     get:
-      description: 学员浏览职位广场（仅 open 且未强制下架，按新鲜度排序；支持岗位/地区/薪资/经验筛选）
+      description: 学员浏览职位广场（仅 open 且未强制下架，按新鲜度排序；支持岗位/地区/薪资/经验/所需证件筛选）
       parameters:
       - description: 岗位 ID
         in: query
@@ -12103,6 +12434,10 @@ paths:
         in: query
         name: experience
         type: string
+      - description: 所需证件 ID（命中任一即返回；不传不过滤，与「不限证件」的职位无关）
+        in: query
+        name: credential_id
+        type: integer
       - description: 页码
         in: query
         name: page
@@ -14179,13 +14514,13 @@ paths:
         type: integer
       responses:
         "200":
-          description: success
+          description: success（未写笔记时 data 为 null）
           schema:
             allOf:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/model.Note'
+                  $ref: '#/definitions/note.QuestionNoteDTO'
               type: object
         "400":
           description: 题目ID无效
@@ -14225,10 +14560,10 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/model.Note'
+                  $ref: '#/definitions/note.QuestionNoteDTO'
               type: object
         "400":
-          description: 题目ID无效
+          description: 题目ID无效/图片张数或地址不合法
           schema:
             $ref: '#/definitions/response.R'
         "500":

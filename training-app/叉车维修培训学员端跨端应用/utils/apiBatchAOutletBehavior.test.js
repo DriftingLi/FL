@@ -70,10 +70,15 @@ function loadJobApi(raw) {
     getMapped: makeGetMapped(raw, getCalls),
     toNumber: helpers().toNumber,
   }));
+  // helpers 是零依赖真源（toNumber / toStr）：票 1945 起 job.uts 的 DTO 映射用它读证件数组，
+  // 少注入一枚 harness 就判「缺绑定」（它故意不兜底 —— 假注入会让映射行为不可信）
+  const h = helpers();
   const mod = loadUts(JOB_UTS, {
     getMapped: makeGetMapped(raw, getCalls),
     getPaged: env.getPaged,
     decodePage: env.decodePage,
+    toNumber: h.toNumber,
+    toStr: h.toStr,
     post: (url, payload) => {
       postCalls.push({ url, payload });
       return Promise.resolve(undefined);
@@ -112,6 +117,12 @@ const JOB_DETAIL_RAW = {
   forced_offline: null,
   apply_state: null,
   cooldown_days: null,
+  // 所需证件（票 1945 / 后端 #2066）：后端恒发两列，数组形态与最小集合 id+名称
+  required_credential_ids: [3, 9],
+  required_credentials: [
+    { credential_id: 3, name: '叉车司机N1证' },
+    { credential_id: 9, name: '电工证' },
+  ],
 };
 
 /** 列表裸响应：两条记录，其中一条**故意缺字段**（走默认值那一支） */
@@ -146,6 +157,12 @@ describe('job.uts：有载荷的 GET 出口经 getMapped，映射行为逐字段
       forced_offline: false, // 缺省 → false，不是 null、也不是 true
       apply_state: '', // 缺省 → ''，不是 null（页面按长度判可投）
       cooldown_days: null, // 数字缺省保持 null，**不是 0**（0 会被当成「当天可投」）
+      // 证件数组逐项映射：id 与名称都要读到（卡面「需持 X 证」只认名称）
+      required_credential_ids: [3, 9],
+      required_credentials: [
+        { credential_id: 3, name: '叉车司机N1证' },
+        { credential_id: 9, name: '电工证' },
+      ],
     });
   });
 
@@ -175,6 +192,9 @@ describe('job.uts：有载荷的 GET 出口经 getMapped，映射行为逐字段
       forced_offline: false,
       apply_state: '',
       cooldown_days: null,
+      // 缺字段 ⇒ 空数组（不是 null）：页面据 length 判「渲染不渲染这一行」，null 会炸 Kotlin 侧
+      required_credential_ids: [],
+      required_credentials: [],
     });
   });
 

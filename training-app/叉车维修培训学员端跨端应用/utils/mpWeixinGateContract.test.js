@@ -627,7 +627,9 @@ function scanContract(sources) {
   // 锚点取**整条字面量**（不是裸 `no-dist`）：裸子串会被 `no-dist-X` 这类改名蒙过去（子串遮蔽，见 C17 的同类教训）。
   const openUseAt = s.indexOf("-Id 'devtools-open'");
   must(openUseAt !== -1, 'C12', '执行路径里没有按 id 取用 open 步骤（计划与执行脱节）');
-  const lastDistGuard = s.indexOf("'MP_WEIXIN_RESULT errors=env-blocked reason=no-dist'");
+  // #1861 起锚点**不含前缀**：结果行前缀已收成 Get-GateResultPrefix（-BuildOnly 出独立 token），
+  // 锚死 `MP_WEIXIN_RESULT ` 等于逼执行路径为过守护再把前缀硬写一次 —— 那正是这次重构要消掉的东西。
+  const lastDistGuard = s.indexOf('errors=env-blocked reason=no-dist');
   must(lastDistGuard !== -1, 'C12', '找不到 -SkipBuild 分支的 no-dist 兜底（open 的执行点晚于哪个锚点就判不出来了）');
   if (openUseAt !== -1 && lastDistGuard !== -1) {
     must(openUseAt > lastDistGuard, 'C12', 'open 的执行点落在构建分支条件内（-SkipBuild 路径到不了它）');
@@ -866,6 +868,9 @@ function scanContract(sources) {
 
   // C10 注册与文档
   must(/"build:mp-weixin-check"\s*:\s*"[^"]*scripts\/mp-weixin-check\.ps1"/.test(pkg), 'C10', 'package.json 未注册 build:mp-weixin-check');
+  // C28 构建面模式入口（#1861 第一段）：入口是 DoD 的一部分，被静默摘掉就等于「能力没有落地」——
+  // 判据是「入口存在**且**它真的带 -BuildOnly」（只判脚本名会被一个不带开关的同名入口蒙过去）。
+  must(/"build:mp-weixin-buildonly"\s*:\s*"[^"]*scripts\/mp-weixin-check\.ps1\s+-BuildOnly"/.test(pkg), 'C28', 'package.json 未注册 build:mp-weixin-buildonly（或入口未带 -BuildOnly）');
   must(adr.includes('半自动'), 'C10', 'ADR-0008 未把 ② 记为半自动门');
   must(adr.includes('#883'), 'C10', 'ADR-0008 未引用 #883');
   must(adr.includes('mp-weixin-check.ps1'), 'C10', 'ADR-0008 未记录 ② 的脚本载体');
@@ -1145,6 +1150,8 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
       ['C9', { ...real, script: real.script.replace('$script:ArchiveMaxBytes = 150KB', '$script:ArchiveMaxBytes = 900KB') }],
       ['C9', { ...real, script: real.script.replace(/-NoArchive/g, '-ArchiveAll') }],
       ['C10', { ...real, pkg: real.pkg.replace('build:mp-weixin-check', 'build:mp-x') }],
+      // C28 必红：入口在、但没带 -BuildOnly（那是一个「能跑 ② 全量」的同名入口，不是构建面模式）
+      ['C28', { ...real, pkg: real.pkg.replace('scripts/mp-weixin-check.ps1 -BuildOnly', 'scripts/mp-weixin-check.ps1') }],
       ['C10', { ...real, adr: real.adr.replace(/半自动/g, '全自动') }],
       ['C10', { ...real, template: real.template.replace(/gate-evidence:②/g, 'gate-evidence:x') }],
       ['C10', { ...real, agents: '人工门清单（无 ② 条目）' }],

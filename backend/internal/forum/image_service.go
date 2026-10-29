@@ -87,34 +87,40 @@ func (s *ImageService) CleanupOrphans(ctx context.Context) int {
 	})
 }
 
-// collectReferencedImages 收集全部主题与回复引用的图片 key 集合（归一化为 images/forum/...）。
-// 任一半查不动即返回 error：引用集不完整时无从判断谁还在被引用，sweep 据此整轮放弃
-// （ADR-0062 票5——「查不动」不得被读成「没人引用」）。
+// forumImageRefSources 复用 images/forum/ 前缀的落点（ADR-0066 决策 5：上传通道只有一条）。
+//
+// **新增一个复用该前缀的域，就在这里加一行**——漏了它，那个域上传的图会在 24h 后进入可清理集、
+// 被下一轮 sweep 静默删掉：清理是「成功」的，没有任何报警，只有用户侧逐渐变成裂图。
+// 这正是 #2070（反馈）与 #2069（笔记）各自要回来加一行的原因，也是本表被做成清单的原因。
+var forumImageRefSources = []struct {
+	Model any
+	Label string
+}{
+	{&model.ForumTopic{}, "主题"},
+	{&model.ForumReply{}, "回复"},
+	{&model.Feedback{}, "反馈"}, // #2070 / ADR-0089 决策 6
+	{&model.Note{}, "笔记"},     // #2069
+}
+
+// collectReferencedImages 收集全部引用 images/forum/ 的行（归一化为 images/forum/...）。
+// 来源见 forumImageRefSources；任一来源查不动即返回 error：引用集不完整时无从判断谁还在被引用，
+// sweep 据此整轮放弃（ADR-0062 票5——「查不动」不得被读成「没人引用」）。
 func (s *ImageService) collectReferencedImages() (map[string]bool, error) {
 	ref := map[string]bool{}
-	var rawList []string
-	if err := s.db.Model(&model.ForumTopic{}).Pluck("images", &rawList).Error; err != nil {
-		return nil, fmt.Errorf("收集主题图片引用失败: %w", err)
-	}
-	for _, raw := range rawList {
-		for _, u := range parseImageURLs(raw) {
-			if key := filestore.AttachmentKey(u, filestore.ForumImageDirPrefix); key != "" {
-				ref[key] = true
-			} else if u != "" {
-				ref[u] = true
-			}
+	for _, src := range forumImageRefSources {
+		// 每次换新切片：Pluck 的语义是覆盖，复用同一个切片在「上一轮多、这一轮少」时
+		// 不会清掉尾部（曾经踩过同类读串），这里用最笨的写法换确定性。
+		var rawList []string
+		if err := s.db.Model(src.Model).Pluck("images", &rawList).Error; err != nil {
+			return nil, fmt.Errorf("收集%s图片引用失败: %w", src.Label, err)
 		}
-	}
-	rawList = rawList[:0]
-	if err := s.db.Model(&model.ForumReply{}).Pluck("images", &rawList).Error; err != nil {
-		return nil, fmt.Errorf("收集回复图片引用失败: %w", err)
-	}
-	for _, raw := range rawList {
-		for _, u := range parseImageURLs(raw) {
-			if key := filestore.AttachmentKey(u, filestore.ForumImageDirPrefix); key != "" {
-				ref[key] = true
-			} else if u != "" {
-				ref[u] = true
+		for _, raw := range rawList {
+			for _, u := range parseImageURLs(raw) {
+				if key := filestore.AttachmentKey(u, filestore.ForumImageDirPrefix); key != "" {
+					ref[key] = true
+				} else if u != "" {
+					ref[u] = true
+				}
 			}
 		}
 	}

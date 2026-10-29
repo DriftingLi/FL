@@ -35,6 +35,8 @@ export interface JobPostingInput {
   salary_text?: string
   experience_req?: string
   description?: string
+  /** 需持证件（#2066）：可空多选；空数组与字段缺省等价，都表示「不限」 */
+  required_credential_ids?: number[]
 }
 
 export const jobApi = {

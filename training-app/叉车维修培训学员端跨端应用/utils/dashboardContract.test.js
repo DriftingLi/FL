@@ -460,6 +460,37 @@ describe('#1422 课程区接线：DashboardCourseSection 页面↔组件双向�
     expect(show).toContain('loadHotCourses(currentCredentialId.value, filterValues[selectedFilter.value])');
   });
 
+/* ══ #1939 新闻板块：类别口径接线锁（行为腿证明算法对，这里证明**接线没断**） ══ */
+describe('新闻板块类别口径接线（#1939：考情 + 行业新闻 + 政策法规）', () => {
+  const feeds = read('pages/dashboard/composables/use-dashboard-feeds.uts');
+
+  it('取数口径来自 utils/dashboardNews 单点（类别表不在页面/组合式函数里另抄一份）', () => {
+    expect(feeds).toMatch(/import\s*\{[^}]*DASHBOARD_NEWS_CATEGORIES[^}]*\}\s*from\s*'\.\.\/\.\.\/\.\.\/utils\/dashboardNews'/);
+    expect(feeds).toMatch(/import\s*\{[^}]*mergeDashboardNews[^}]*\}\s*from\s*'\.\.\/\.\.\/\.\.\/utils\/dashboardNews'/);
+  });
+
+  it('按类别各发一次（单请求 / 无 category 都算断），且每条都带 limit 与类别', () => {
+    const body = feeds.slice(feeds.indexOf('async function loadFeaturedContents'));
+    const loop = body.slice(0, body.indexOf('\n    }') + 6);
+    expect(loop).toContain('DASHBOARD_NEWS_CATEGORIES.length');
+    expect(loop).toContain('getFeaturedContentsApi(1, DASHBOARD_NEWS_LIMIT, DASHBOARD_NEWS_CATEGORIES[i])');
+    expect(loop).toContain('mergeDashboardNews(groups, DASHBOARD_NEWS_LIMIT)');
+  });
+
+  it('失败态只在三类全挂时成立（个别类别抖动不清空整块）', () => {
+    expect(feeds).toContain('newsFailed.value = failedCount == DASHBOARD_NEWS_CATEGORIES.length');
+  });
+
+  it('板块按失败 / 空 / 列表三级渲染，空态复用 app-empty-state（不写死假内容）', () => {
+    const sec = read('pages/dashboard/components/dashboard-news-section.uvue');
+    expect(sec).toContain('app-empty-state');
+    expect(sec).toContain('资讯加载失败');
+    expect(sec).toContain('暂无资讯');
+    // 卡片 key 用内容 id，不用 v-for 下标（本仓列表规范）
+    expect(sec).toContain(':key="news.content_id"');
+  });
+});
+
   /** feeds 源现读（不进文件顶层：顶层读法会被后续新增文件的 EOL 归一问题牵连，同本文件既有 describe 口径） */
   function feedsSrc() {
     return read('pages/dashboard/composables/use-dashboard-feeds.uts');

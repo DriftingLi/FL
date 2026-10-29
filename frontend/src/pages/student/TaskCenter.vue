@@ -105,7 +105,7 @@ import { computed, ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { href } from '@/config/pages'
 import { pointsApi, type PointsTaskItem } from '@/api/points'
-import { groupLabelMap, groupDescMap, claimDupMessage, isClaimExhausted } from '@/utils/taskCenter'
+import { groupLabelMap, groupDescMap, claimDupMessage, isClaimExhausted, todayEarnable as calcTodayEarnable } from '@/utils/taskCenter'
 import type { TaskGroup } from '@/utils/taskCenter'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useStagger } from '@/composables/useStagger'
@@ -148,9 +148,8 @@ const { loading, loadError, retrying, retry: retryLoad, run: refresh } = useAsyn
   }
 )
 
-const todayEarnable = computed(() =>
-  tasks.value.filter((t) => t.status !== 'claimed').reduce((sum, t) => sum + t.points, 0),
-)
+// 今日可得 = daily 组未领取任务的合计（口径在 utils/taskCenter.todayEarnable，含「为什么不算 newbie」）
+const todayEarnable = computed(() => calcTodayEarnable(tasks.value))
 
 const grouped = computed(() => {
   const order: TaskGroup[] = ['daily', 'newbie']

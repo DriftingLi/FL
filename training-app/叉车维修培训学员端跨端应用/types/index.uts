@@ -17,7 +17,7 @@ export { type ResumeExperience, type ResumeCertification, type ResumeData, type 
 export { type FeaturedContentItem, type FeaturedContentListResult, type FeaturedContentDetail } from './featured'
 export { type FavoriteItem, type FavoriteListResult, type FavoriteCheckResult } from './favorite'
 export { type SearchItem, type SearchCategoryResult, type SearchResult, type SearchPagedResult, type HighlightSegment } from './search'
-export { type JobPosting, type JobListParams, type JobListResult, type ReportReason } from './job'
+export { type JobPosting, type JobListParams, type JobListResult, type ReportReason, type JobRequiredCredential } from './job'
 export { type RecruitJob, type RecruitJobListResult, type RecruitJobInput, type RecruitApplication, type RecruitApplicationListResult, type RecruitMe, type RecruitCertification, type RecruitResumeCard, type RecruitResumeListResult, type RecruitResumeFilters, type RecruitContactPlain, type RecruitContactRequest } from './recruit'
 export { type StudyStats, type CourseProgressItem, type StudentProfile, type StudyRecord, type StudentCourse, type StudentCourseListResult, type StudentCourseChapterProgress, type StudentCourseDetail } from './student'
 export { type NoteItem, type NoteListResult } from './note'

@@ -19,7 +19,8 @@ func provideExam(c *coreSingletons, d *Deps) {
 	d.RealExamSvc = realexam.NewService(c.db, c.pointsSvc, c.logger)
 	d.WrongQuestionSvc = wrongquestion.NewService(c.db, c.aiSvc, c.logger)
 	d.QuestionCommentSvc = questioninteraction.NewService(c.db, c.logger)
-	d.NoteSvc = note.NewService(c.db, c.logger)
+	// #2069：笔记图片复用论坛图片通道，故它要拿同一个存储单例做「文件真实存在」校验。
+	d.NoteSvc = note.NewService(c.db, c.fileSvc, c.logger)
 	d.QuestionKnowledgeSvc = questioninteraction.NewKnowledgeService(c.db)
 	d.TrainingCatalogSvc = training.NewService(c.db, c.logger)
 	d.PointsSvc = c.pointsSvc

@@ -208,7 +208,7 @@ func (h *handler) GetMine(c *gin.Context) {
 
 // ListPublic 学员职位广场 GET /api/jobs（只 open 且未强制下架，按新鲜度）
 // @Summary 职位广场
-// @Description 学员浏览职位广场（仅 open 且未强制下架，按新鲜度排序；支持岗位/地区/薪资/经验筛选）
+// @Description 学员浏览职位广场（仅 open 且未强制下架，按新鲜度排序；支持岗位/地区/薪资/经验/所需证件筛选）
 // @Tags 招聘域-职位
 // @Produce json
 // @Security BearerAuth
@@ -217,6 +217,7 @@ func (h *handler) GetMine(c *gin.Context) {
 // @Param salary_min query int false "最低薪资"
 // @Param salary_max query int false "最高薪资"
 // @Param experience query string false "经验要求"
+// @Param credential_id query int false "所需证件 ID（命中任一即返回；不传不过滤，与「不限证件」的职位无关）"
 // @Param page query int false "页码"
 // @Param page_size query int false "每页数量"
 // @Success 200 {object} response.R{data=job.JobListResult} "列表"
@@ -237,6 +238,15 @@ func (h *handler) ListPublic(c *gin.Context) {
 			}
 			if v := httpx.QueryIDPtr(c, "salary_max"); v != nil {
 				params.SalaryMax = v
+			}
+			// #2066：按所需证件收窄（业务筛选，不是证件分区——职位域不随当前证件分区）。
+			// 显式给了却不合法 ⇒ 400：静默忽略会让调用方以为结果已按证件收窄（同 P1 的 tag_id 判据）。
+			if raw := c.Query("credential_id"); raw != "" {
+				id, ok := httpx.PositiveID(raw)
+				if !ok {
+					return nil, httpx.BadRequest("所需证件ID无效")
+				}
+				params.CredentialID = &id
 			}
 			params.Region = c.Query("region")
 			params.Experience = c.Query("experience")

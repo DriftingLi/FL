@@ -50,6 +50,7 @@ var ModelBlocks = []ModelBlock{
 			&Chapter{},
 			&ChapterFile{},
 			&StudyRecord{},
+			&CourseView{}, // 浏览课程事实源（#2065）：依赖 hrwai_users 与 course（两块都先建）
 		},
 	},
 	{
@@ -124,6 +125,7 @@ var ModelBlocks = []ModelBlock{
 			&RecruitResumeView{},
 			&ContactRequest{},
 			&JobPosting{},
+			&JobCredentialRequirement{}, // 依赖 job_postings 与 credential（两块都先建）
 			&JobApplication{},
 			&JobReport{},
 		},
@@ -142,6 +144,12 @@ var ModelBlocks = []ModelBlock{
 		Models: []any{
 			&FaqCategory{}, // 先建分类：faq.category_id 外键指向它
 			&Faq{},
+		},
+	},
+	{
+		Name: "反馈",
+		Models: []any{
+			&Feedback{}, // 依赖 hrwai_users 与 admin（两块都先建）
 		},
 	},
 }

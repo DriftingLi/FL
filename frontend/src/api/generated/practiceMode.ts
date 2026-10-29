@@ -16,7 +16,7 @@
 //   GET  /practice-mode/stats
 //   GET  /practice-mode/history
 //
-// 覆盖的 Go 类型：HistoryItemDTO / HistoryResultDTO / PracticePracticeStatsDTO / PracticeStartResultDTO / PracticeStatsDTO / PracticeTypeStat / ProgressResultDTO / ProgressSaveResultDTO / SubmitResultDTO / QuestionDTO
+// 覆盖的 Go 类型：HistoryItemDTO / HistoryResultDTO / PracticePracticeStatsDTO / PracticeStartResultDTO / PracticeStatsDTO / PracticeTagStat / PracticeTypeStat / ProgressResultDTO / ProgressSaveResultDTO / SubmitResultDTO / QuestionDTO
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -61,10 +61,19 @@ export interface PracticeStartResultDTO {
 
 export interface PracticeStatsDTO {
   accuracy: number
+  by_tag: PracticeTagStat[]
   by_type: Record<string, PracticeTypeStat>
   correct: number
   total: number
   wrong: number
+}
+
+export interface PracticeTagStat {
+  accuracy: number
+  correct: number
+  tag_id: number
+  tag_name: string
+  total: number
 }
 
 export interface PracticeTypeStat {

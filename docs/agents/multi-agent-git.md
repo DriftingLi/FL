@@ -39,6 +39,8 @@
 
 用完 worktree 的清理**只有一个入口**：`pwsh training-app/叉车维修培训学员端跨端应用/scripts/remove-worktree.ps1 -Task <票号>`（默认 dry-run，确认后加 `-Execute`；它按「摘 junction → `worktree remove` → 目录兜底删除 → 校验」的顺序走，细节见下方「Windows 上用 worktree 的注意事项」的「收尾入口」条）。**别手搓** `git worktree remove <dir>` + `git branch -D <branch>` 那两步：它们不看磁盘，`git worktree list` 会显示干净而目录还留着（2026-10-28 实测留下 3 个孤儿目录）。
 
+- **未注册的孤儿目录走同脚本的批量出口**（2026-10-28 补，#2081）：磁盘上有 `wt-*` / `.wt-*`、`git worktree list` 里却没有的那些，`-Task <n>` 那套对它没好处（它还会去动分支）。用 `pwsh training-app/叉车维修培训学员端跨端应用/scripts/remove-worktree.ps1 -PruneOrphans`（默认 dry-run）——顺序是**先逐条摘链接、再删骨架**，删完复核每条链接目标原样还在；直接递归删会跟随 `node_modules` junction 打到**主树依赖**。哪些算孤儿、算哪一档由 `check-branch-residue.ps1` 报出：`WT_DIR_ORPHAN`（有文件/活链接）与 `WT_DIR_SKELETON`（纯骨架），判据真源 = `scripts/lib/wt-orphans.ps1`。
+
 - **⚠️ 删 worktree 之前，先把 gitignore 覆盖的证据产物拷出来**（2026-09-22 实测，血账）：`.ci-verify/`、`.scratch/` 这类目录被 `.gitignore` 覆盖 ⇒ **`git worktree remove` 不加 `--force` 也成功**（被忽略的未跟踪文件不使它判 dirty），**并把它们连同目录一起删掉**。实测代价：某票 ①a 真机取证的**判据输入**（原始 `screencap` PNG / `uiautomator` XML / launch 与 logcat 日志）只活在 `.ci-verify/` ⇒ 删树后永久丢失，而 README/PR 里「原始产物留在 `.ci-verify/x.png`」指向**不存在**的地方，结论文里的像素读数（`27090 / 17286 / 9804`）**不再可复算**（入库的 720w JPEG 是重编码件，**不是**判据输入）。
   **纪律**：`git worktree remove` **之前**把判据输入拷到树外留存目录，或**直接入仓**（`uiautomator` XML 每份约 6.5 KB，远在截图入库纪律之内；PNG 超限时至少拷出并在 README 写明留存位置）。
   **一般化**：凡在 README/PR 里写「产物留在 `.ci-verify/…`」，先问一句「**这棵树会被删吗**」——会被删的，要么入仓、要么写明留存位置。判据不是「我记得拷」，而是**留存位置写在证据文件里、且删树后仍在**。

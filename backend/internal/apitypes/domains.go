@@ -290,7 +290,9 @@ var Domains = []Domain{
 		Roots: []string{
 			"questioninteraction.QuestionCommentPageResult",
 			"questioninteraction.QuestionCommentDTO",
-			"model.Note",
+			// #2069：笔记的返回形状从 model.Note 换成显式 DTO（加 images 又不让模型的 JSONB
+			// 落进响应闭包被表态锁追着要 nullability tag）。
+			"note.QuestionNoteDTO",
 			"model.QuestionTag",
 		},
 		Endpoints: []Endpoint{
@@ -515,6 +517,7 @@ var Domains = []Domain{
 		Roots: []string{
 			"course.ChapterDetailDTO",
 			"course.ChapterSlidesDTO",
+			"course.CourseBrowseResult",
 			"course.CourseDetailDTO",
 			"course.CoursePageResult",
 			"course.StudyProgressDTO",
@@ -522,6 +525,7 @@ var Domains = []Domain{
 		Endpoints: []Endpoint{
 			{Method: "GET", Path: "/courses"},
 			{Method: "GET", Path: "/course/{course_id}"},
+			{Method: "POST", Path: "/course/{course_id}/browse"},
 			{Method: "POST", Path: "/course/{course_id}/progress"},
 			{Method: "GET", Path: "/course/{course_id}/chapter/{chapter_id}"},
 			{Method: "GET", Path: "/chapter/{chapter_id}/slides"},
@@ -920,6 +924,22 @@ var Domains = []Domain{
 			{Method: "POST", Path: "/admin/faq/entries"},
 			{Method: "PUT", Path: "/admin/faq/entries/{id}"},
 			{Method: "DELETE", Path: "/admin/faq/entries/{id}", NoData: true},
+		},
+	},
+
+	{
+		// #2070 / ADR-0089：反馈小域——学员面提交与本人历史，管理面列表与标记已处理。
+		Name:  "feedback",
+		Title: "反馈（/api/feedback 学员提交与本人历史；/api/admin/feedback 管理端列表与标记已处理）",
+		Roots: []string{
+			"feedback.FeedbackDTO",
+			"feedback.FeedbackListResult",
+		},
+		Endpoints: []Endpoint{
+			{Method: "POST", Path: "/feedback"},
+			{Method: "GET", Path: "/feedback"},
+			{Method: "GET", Path: "/admin/feedback"},
+			{Method: "POST", Path: "/admin/feedback/{id}/handle"},
 		},
 	},
 

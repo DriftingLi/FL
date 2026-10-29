@@ -178,3 +178,19 @@ type StudyRecord struct {
 }
 
 func (StudyRecord) TableName() string { return "study_record" }
+
+// CourseView 「浏览课程」按日去重的浏览事实（#2065）：学员打开课程详情那一刻记一笔。
+//
+// 为什么另立一张表而不复用 study_record：后者的语义是**学习进度**（有进度、有学时、有最后位置），
+// 「点开看了一眼」既不产生进度也不该把进度写脏；把浏览塞进进度语义会让「学没学过」和
+// 「看没看过」变成同一件事（任务判据与学习事实互相污染）。
+// 去重键与 forum_topic_views 同构：一天之内同一门课只记一笔，主键顺序把「按人按日取一批」
+// （任务判据的唯一查询）做成前缀扫描。
+type CourseView struct {
+	UserID    int       `gorm:"column:user_id;primaryKey" json:"user_id"`
+	ViewDate  string    `gorm:"column:view_date;primaryKey;type:date" json:"view_date"`
+	CourseID  int       `gorm:"column:course_id;primaryKey" json:"course_id"`
+	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+func (CourseView) TableName() string { return "course_views" }

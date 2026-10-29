@@ -28,6 +28,7 @@ import (
 	"forklift-training/internal/course"
 	"forklift-training/internal/favorite"
 	"forklift-training/internal/featured"
+	"forklift-training/internal/feedback"
 	"forklift-training/internal/forum"
 	"forklift-training/internal/inspection"
 	"forklift-training/internal/job"
@@ -185,6 +186,10 @@ var envelopeRegistry = []EnvelopeSpec{
 	{Result: "wrongquestion.WrongQuestionPageDTO", Endpoints: []string{"GET /wrong-questions"},
 		Keys: []string{"items", "page", "page_size", "total"}, Dialect: paging.DialectPageSize,
 		Sample: wrongquestion.WrongQuestionPageDTO{}},
+	// #2070 / ADR-0089：反馈列表（学员历史与管理端列表同一形状）。
+	{Result: "feedback.FeedbackListResult", Endpoints: []string{"GET /feedback", "GET /admin/feedback"},
+		Keys: []string{"items", "page", "page_size", "total"}, Dialect: paging.DialectPageSize,
+		Sample: feedback.FeedbackListResult{}},
 }
 
 // totalPayloadRegistry 含 total + 切片字段、但不是分页信封的结果类型（理由逐条登记）。
@@ -195,6 +200,8 @@ var totalPayloadRegistry = []PayloadSpec{
 		Reason: "内容生成任务进度：results 是章节生成结果、total/completed 是任务进度，不是列表页"},
 	{Result: "practicemode.PracticeStartResultDTO",
 		Reason: "练习会话载荷：questions 是本次会话题集、total/completed 是会话进度，不是列表页"},
+	{Result: "practicemode.PracticeStatsDTO",
+		Reason: "练习统计总览：by_type/by_tag 是维度明细、total 是作答总数（无 page 元数据，不是列表页）"},
 	{Result: "search.SearchSectionDTO",
 		Reason: "搜索分区片段：由 SearchPageDTO 信封承载，分区自身不分页（无 page 元数据、无独立端点）"},
 }

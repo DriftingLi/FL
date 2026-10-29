@@ -2,9 +2,12 @@ import { unwrappedRequest } from './request'
 import type {
   QuestionCommentDTO,
   QuestionCommentPageResult,
-  Note,
+  QuestionNoteDTO,
   QuestionTag
 } from './generated/questionInteraction'
+
+/** 题目笔记的返回形状（#2069：后端从 model.Note 换成显式 DTO，键一个不少、多一格 images）。 */
+export type QuestionNote = QuestionNoteDTO
 
 export const questionInteractionApi = {
   listComments(questionId: number, params?: { page?: number; page_size?: number }) {
@@ -21,10 +24,11 @@ export const questionInteractionApi = {
    * 故这里显式加 `| null`，调用方必须判空。
    */
   getNote(questionId: number) {
-    return unwrappedRequest.get<Note | null>(`/questions/${questionId}/note`)
+    return unwrappedRequest.get<QuestionNoteDTO | null>(`/questions/${questionId}/note`)
   },
-  upsertNote(questionId: number, data: { content: string }) {
-    return unwrappedRequest.put<Note>(`/questions/${questionId}/note`, data)
+  /** 保存笔记：images 为整组替换（#2069），省略即清空。 */
+  upsertNote(questionId: number, data: { content: string; images?: string[] }) {
+    return unwrappedRequest.put<QuestionNoteDTO>(`/questions/${questionId}/note`, data)
   },
   deleteNote(questionId: number) {
     return unwrappedRequest.delete(`/questions/${questionId}/note`)

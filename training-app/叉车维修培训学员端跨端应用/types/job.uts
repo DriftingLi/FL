@@ -6,6 +6,15 @@
  * 等已收紧域同构：DTO 落 `types/<域>.uts`，页面经 `types/index` 消费，api 层只做映射）。
  */
 
+/**
+ * 职位所需证件（#1945 / 后端 #2066）：最小集合 = id + 名称。
+ * 语义只有一档「需持有」，**没有「优先证件」**（根 CONTEXT.md「职位」词条）。
+ */
+export type JobRequiredCredential = {
+    credential_id : number
+    name : string
+}
+
 /** 职位详情 */
 export type JobPosting = {
     id : number
@@ -25,6 +34,10 @@ export type JobPosting = {
     apply_state ?: string
     /** 'not_hired' 时距可再投的天数（服务端向上取整；30 天冷却） */
     cooldown_days ?: number
+    /** 所需证件 id 列表（#2066）：空数组 = 不限证件 */
+    required_credential_ids : number[]
+    /** 所需证件最小集合（#2066，服务端恒发 []）：卡面「需持 X 证」只认它 */
+    required_credentials : JobRequiredCredential[]
 }
 
 /** 职位列表查询参数 */
@@ -36,6 +49,8 @@ export type JobListParams = {
     salary_min ?: number
     salary_max ?: number
     experience ?: string
+    /** 所需证件筛选（#2066）：不传 = 不限证件 */
+    credential_id ?: number
 }
 
 /** 职位列表查询结果 */

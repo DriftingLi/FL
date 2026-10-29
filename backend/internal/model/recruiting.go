@@ -127,6 +127,17 @@ type JobPosting struct {
 
 func (JobPosting) TableName() string { return "job_postings" }
 
+// JobCredentialRequirement 职位-所需证件的关联（多对多，#2066）。
+// 语义只有一档「需持有」：没有「优先 / 加分」档（CONTEXT.md「职位」词条）；
+// 证件字典复用培训域 credential，不建第二套。空集 = 不限证件，与「没有关联行」等价。
+type JobCredentialRequirement struct {
+	JobPostingID int       `gorm:"column:job_posting_id;primaryKey" json:"job_posting_id"`
+	CredentialID int       `gorm:"column:credential_id;primaryKey" json:"credential_id"`
+	CreatedAt    time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+func (JobCredentialRequirement) TableName() string { return "job_credential_requirements" }
+
 // JobApplication 学员对职位的投递（三态 applied/rejected/withdrawn）。
 // 冗余 recruiter_id（授权落地与企业维度查询都需要它，避免每次 join 职位）。
 type JobApplication struct {

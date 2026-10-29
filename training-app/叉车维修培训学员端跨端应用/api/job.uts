@@ -13,8 +13,9 @@
  */
 import { getMapped, post } from './request'
 import { getPaged } from './envelope'
+import { toNumber, toStr } from './helpers'
 import type { Page } from './envelope'
-import type { JobPosting, JobListParams, ReportReason } from '../types/index'
+import type { JobPosting, JobListParams, ReportReason, JobRequiredCredential } from '../types/index'
 
 /** 预设举报原因列表 */
 export const REPORT_REASONS : ReportReason[] = [
@@ -26,6 +27,29 @@ export const REPORT_REASONS : ReportReason[] = [
 
 /** 从 UTSJSONObject 构造 JobPosting（详情与列表共用；字段读取与收紧前逐行一致） */
 function buildJobPosting(obj : UTSJSONObject) : JobPosting {
+    // 所需证件（#2066 / #1945）：数组一律先落 UTSJSONObject[] 再逐项取字段 —— Android 端把 JSON
+    // 元素直接 as 成具体类型不可预期（同 api/recruit.uts 的简历证件数组）。
+    // 无证件要求的职位两列都是空数组（服务端恒发 []），这里也恒给空数组，页面不必判 null。
+    const requiredIds : number[] = []
+    const idsRaw = obj['required_credential_ids']
+    if (idsRaw != null) {
+        const idsArr = idsRaw as Array<any>
+        for (let i = 0; i < idsArr.length; i++) {
+            const id = toNumber(idsArr[i], 0)
+            if (id > 0) requiredIds.push(id)
+        }
+    }
+    const requiredCreds : JobRequiredCredential[] = []
+    const credsRaw = obj['required_credentials']
+    if (credsRaw != null) {
+        const credsArr = credsRaw as Array<UTSJSONObject>
+        for (let i = 0; i < credsArr.length; i++) {
+            const item = credsArr[i]
+            const id = toNumber(item['credential_id'], 0)
+            if (id <= 0) continue
+            requiredCreds.push({ credential_id: id, name: toStr(item['name']) } as JobRequiredCredential)
+        }
+    }
     return {
         id: obj['id'] as number,
         title: (obj['title'] as string) ?? '',
@@ -42,6 +66,8 @@ function buildJobPosting(obj : UTSJSONObject) : JobPosting {
         forced_offline: (obj['forced_offline'] as boolean) ?? false,
         apply_state: (obj['apply_state'] as string) ?? '',
         cooldown_days: obj['cooldown_days'] != null ? obj['cooldown_days'] as number : null,
+        required_credential_ids: requiredIds,
+        required_credentials: requiredCreds,
     } as JobPosting
 }
 
@@ -88,6 +114,9 @@ export function getJobListApi(params : JobListParams = {}) : Promise<Page<JobPos
     if (params.salary_min != null) query['salary_min'] = params.salary_min!.toString()
     if (params.salary_max != null) query['salary_max'] = params.salary_max!.toString()
     if (params.experience != null && params.experience!.length > 0) query['experience'] = params.experience!
+    // 所需证件收窄（#2066）：只在 > 0 时下发；后端对非法 id 判 400（票面「非法证件 id 400」），
+    // 所以「全部证件」/非法值由页面经 credentialFilterParam 折成 null，这里再兜一道 > 0。
+    if (params.credential_id != null && params.credential_id! > 0) query['credential_id'] = params.credential_id!.toString()
 
     const page = params.page != null && params.page! > 0 ? params.page! : 1
     const pageSize = params.page_size != null && params.page_size! > 0 ? params.page_size! : 20

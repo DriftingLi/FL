@@ -13,6 +13,7 @@ import (
 	"forklift-training/internal/faq"
 	"forklift-training/internal/favorite"
 	"forklift-training/internal/featured"
+	"forklift-training/internal/feedback"
 	"forklift-training/internal/forum"
 	"forklift-training/internal/inspection"
 	"forklift-training/internal/job"
@@ -154,6 +155,8 @@ var routeRegistrars = []routeRegistrar{
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
 			// #1079：学员端只读整页（faq.read）+ 管理端分类与条目 CRUD（faq.manage）
 			faq.RegisterRoutes(api, rd.Session, deps.FaqSvc)
+			// #2070 / ADR-0089：反馈小域——学员面 /api/feedback（feedback.submit）+ 管理面 /api/admin/feedback（feedback.manage）
+			feedback.RegisterRoutes(api, rd.Session, deps.FeedbackSvc)
 		},
 	},
 	{

@@ -108,7 +108,7 @@
 
 - 语言：Go 1.26
 - Web 框架：Gin v1.10 + gin-contrib/cors
-- 数据库：PostgreSQL 15 + pgx/v5 + GORM
+- 数据库：PostgreSQL 18 + pgx/v5 + GORM
 - 缓存 / 黑名单：Redis 7（go-redis/v9）
 - 数据库迁移：golang-migrate/v4
 - 认证：golang-jwt/v5（双令牌）
@@ -141,7 +141,7 @@
 
 ### 基础设施
 
-- 数据库：PostgreSQL 15；缓存：Redis 7（生产必需）
+- 数据库：PostgreSQL 18；缓存：Redis 7（生产必需）
 - 对象存储：S3 兼容网关（Ceph RGW）
 - 文档转换：LibreOffice sidecar（`libreoffice-sidecar/`）
 - 编排：Docker Compose
@@ -223,7 +223,7 @@
 - Python 3.9+（仅部署 CLI `deploy/deploy.py`；目标服务器 Debian / PVE 自带 `python3`）
 - GNU Make（仓库根 `Makefile`；Windows 可用 Git Bash / WSL）
 - Docker + Docker Compose（本地依赖与生产编排）
-- PostgreSQL 15、Redis 7（由 docker-compose 提供或已有实例）
+- PostgreSQL 18、Redis 7（由 docker-compose 提供或已有实例）
 - HBuilderX（仅移动端开发需要）
 
 ## 快速开始
@@ -455,7 +455,7 @@ python3 deploy/deploy.py local --skip-migrate  # 跳过数据库迁移
 
 `deploy/docker-compose.prod.yml` 编排五个服务：
 
-- `postgres`（PostgreSQL 15，持久化卷 `pgdata-prod`）
+- `postgres`（PostgreSQL 18，持久化目录由 `PG_VOLUME` 指定；生产是 Ceph 挂载 `/srv/ceph/pgdata`）
 - `redis`（Redis 7，仅内网，LRU 淘汰、禁用持久化）
 - `libreoffice`（文档转换 sidecar）
 - `backend`（Go 后端，仅内网，经前端反代访问）
