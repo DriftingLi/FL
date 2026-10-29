@@ -52,7 +52,7 @@ function makeRequestStub(reply) {
 function loadPoints(reply) {
   const stub = makeRequestStub(reply);
   // PR-F #1666：积分流水出口改走信封出口 getPaged（列表装载），故同时注入真 envelope.getPaged
-  const mod = loadUts(POINTS_UTS, { getMapped: stub.getMapped, getPaged: envelope.getPaged, postMapped: stub.postMapped, toNumber, toStr });
+  const mod = loadUts(POINTS_UTS, { getMapped: stub.getMapped, getPaged: envelope.getPaged, postMapped: stub.postMapped, toNumber, toNumberOrNull, toStr, toBool });
   return { mod, calls: stub.calls };
 }
 
@@ -211,7 +211,7 @@ describe('C. 判别力自检：变异真源必须让对应行为断言变红', (
     fs.writeFileSync(f, mutated);
     try {
       const stub = makeRequestStub(null);
-      const mod = loadUts(f, { getMapped: stub.getMapped, getPaged: envelope.getPaged, postMapped: stub.postMapped, toNumber, toStr });
+      const mod = loadUts(f, { getMapped: stub.getMapped, getPaged: envelope.getPaged, postMapped: stub.postMapped, toNumber, toNumberOrNull, toStr, toBool });
       await mod.redeemCoursePointsApi(7);
       expect(stub.calls[0].url).not.toBe('/points/shop/course/7/redeem');
     } finally {
