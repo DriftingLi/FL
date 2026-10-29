@@ -517,6 +517,11 @@ jobs:
       # ===== testing 加速参数（按环境注入,环境名取自 gate outputs 以兼容 push 事件）=====
       # testing 跳过部署期 pg_dump 备份（回滚保障由 RBD 快照+每日备份承担）
       SKIP_BACKUP: ${{ needs.gate.outputs.environment == 'testing' && 'true' || 'false' }}
+      # testing 的栈每次重建、数据可抛弃：compose 一改数据服务就判「配置漂移」，
+      # 而那道闸门是给生产数据用的。冒烟环境放行重建，否则每次动 postgres 都会让
+      # testing 冒烟一直红到有人手工 --force-data-services 为止（2026-10-29 实测：
+      # #2114 改镜像之后所有冒烟都卡在这一步）。
+      FORCE_DATA_SERVICES: ${{ needs.gate.outputs.environment == 'testing' && 'true' || 'false' }}
       # testing 不启用 libreoffice profile（省 500MB 镜像传输）；production 必须 full
       COMPOSE_PROFILES: ${{ needs.gate.outputs.environment == 'production' && 'full' || '' }}
       # testing 缩短健康检查轮询，快速通过即停容器
@@ -699,6 +704,7 @@ jobs:
             # BACKEND_HOST_PORT / PG_VOLUME / REDIS_VOLUME / UPLOADS_VOLUME / REPORTS_VOLUME
             # 同样来自 deploy/env.defaults。
             printf 'export SKIP_BACKUP=%q\n' "${SKIP_BACKUP:-false}"
+            printf 'export FORCE_DATA_SERVICES=%q\n' "${FORCE_DATA_SERVICES:-false}"
             printf 'export COMPOSE_PROFILES=%q\n' "${COMPOSE_PROFILES:-}"
             printf 'export HEALTH_CHECK_RETRIES=%q\n' "${HEALTH_CHECK_RETRIES:-20}"
             # 整体超时必须写进远程 env 文件：job env 不会自动传进 ssh 远端 shell
