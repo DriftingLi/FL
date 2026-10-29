@@ -926,7 +926,7 @@ class Deployer:
                 continue
             if not self._pull_one(name, image):
                 raise DeployError(f"{name}镜像拉取失败: {image}")
-        for base in ("postgres:15-alpine", "redis:7-alpine"):
+        for base in ("postgres:18-alpine", "redis:7-alpine"):
             if self.image_exists(base):
                 log_ok(f"基础镜像已缓存: {base}")
                 continue

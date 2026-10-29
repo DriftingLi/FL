@@ -100,7 +100,7 @@ node --test deploy/tests/deploy-rollback-plan.test.mjs
 
 两者的判定都是显式声明，默认路径一律 fail-closed。常驻判据物：`node --test deploy/tests/deploy-migration-gate.test.mjs`（dry-run 入口 `python3 deploy/deploy.py --migration-gate`，断言「未声明 ⇒ abort / =1 ⇒ continue」，不跑 docker）。
 
-CI 的 `migration-check`（`ci.yml` Stage 6）在服务容器 `postgres:15-alpine` 上空库真跑三步，共用 job 级 `DATABASE_URL`：
+CI 的 `migration-check`（`ci.yml` Stage 6）在服务容器 `postgres:18-alpine` 上空库真跑三步，共用 job 级 `DATABASE_URL`：
 
 1. `go run ./cmd/migrate up` —— 空库重建 baseline（全部 up 迁移真执行一次）。
 2. `go run ./cmd/migrate check-columns` —— 自 #1362 起是**三段**判据（实现：`backend/internal/migrate/columns.go`；子命令复用 `cmd/migrate` 既有的 direction 分派，不改 CLI 入口）：

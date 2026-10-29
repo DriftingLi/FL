@@ -15,9 +15,28 @@ services:
   # PostgreSQL 数据库
   # ==========================================
   postgres:
-    image: postgres:15-alpine
+    image: postgres:18-alpine
     container_name: forklift-pg-prod
     restart: unless-stopped
+    # 参数与内存预算（#2109）：原先热点字典/评估详情由 Redis 挡在前面，收回到 PG 之后
+    # 这些读必须能常驻 shared_buffers，否则每次命中都落盘。work_mem 压到 8MB 是因为
+    # max_connections 与连接池相乘才是内存上限；random_page_cost=1.1 按 SSD 给。
+    # pg_stat_statements 是唯一的观测手段（去缓存后哪个查询变重），官方镜像自带，
+    # 只加 preload 即可，不需要自建镜像。
+    command: >
+      postgres
+      -c shared_buffers=512MB
+      -c effective_cache_size=1536MB
+      -c work_mem=8MB
+      -c maintenance_work_mem=128MB
+      -c max_connections=60
+      -c random_page_cost=1.1
+      -c wal_compression=on
+      -c shared_preload_libraries=pg_stat_statements
+      -c pg_stat_statements.track=all
+    # 并行查询走 posix 动态共享内存（/dev/shm），容器默认 64MB 撑不住上面的
+    # shared_buffers，会报 "could not resize shared memory segment"。
+    shm_size: 256mb
     environment:
       POSTGRES_DB: forklift_training
       POSTGRES_USER: ${DB_USER:-forklift}
@@ -45,10 +64,10 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512M
+          memory: 2G
           cpus: "1.0"
         reservations:
-          memory: 256M
+          memory: 512M
           cpus: "0.5"
     logging:
       driver: json-file

@@ -1,7 +1,7 @@
 // 迁移文件可发现性测试（#364 顺带补的守卫）。
 //
 // 为什么需要：本测试补的是**静态可发现性**，与 CI 的 migration-check 分工不同。
-// （#1099 之后 migration-check 已在 postgres:15-alpine 上真跑 up / check-columns / down，
+// （#1099 之后 migration-check 已在 postgres:18-alpine 上真跑 up / check-columns / down，
 // 「只比较文件数量、从不连数据库」是收编前的旧口径。）本测试仍守着 SQL 语义之外的那一层：
 //   - 文件名不符合 <version>_<title>.(up|down).sql（golang-migrate 直接读不到）
 //   - 版本号重复（migrate 启动即失败）
