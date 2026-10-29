@@ -21,7 +21,11 @@ const ROOT = path.join(__dirname, '..');
 const PROBE_REL = 'scripts/mp-weixin-probe.mjs';
 const SCRIPT_REL = 'scripts/mp-weixin-check.ps1';
 
-const readText = (p) => fs.readFileSync(p, 'utf8');
+// 读取层归一（ADR-0019 / #1177）：必须走共享读者，不自己写 readFileSync。
+// 裸读在 Windows 检出（core.autocrlf=true）上会让多行锚点里的 `.` 撞上 `\r` 而匹配 0 次
+// ⇒ 切片为空 ⇒ 守护静默失效；而 CI 跑 ubuntu 默认关 autocrlf，这一类**结构性不可见**
+// （本行由 scripts/check-contract-read.mjs 守，本次 CI 就是这么抓到的）。
+const { readText } = require('./utsHarness');
 
 /** 取一个 PowerShell 函数的函数体（花括号配对）。注释已剥离不影响配对，但**不要用注释当锚点**（#1209）。 */
 function psFunctionBody(code, decl) {
