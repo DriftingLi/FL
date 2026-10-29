@@ -293,8 +293,9 @@
         goBack()
     }
 
+    /** #1942：积分商城页已落地，这里不再是 toast「功能开发中」的死按钮 */
     function goExchange() : void {
-        uni.showToast({ title: '功能开发中', icon: 'none' })
+        uni.navigateTo({ url: '/pages/points/points-shop' })
     }
 
     onShow(() => {

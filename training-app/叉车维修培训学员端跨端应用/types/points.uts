@@ -39,6 +39,20 @@ export type PointsTasksResult = {
     tasks : PointsTaskItem[]
 }
 
+/** 商城在售项 GET /points/shop/items（#2064 后端 / #1942 页面） */
+export type ShopItem = {
+    sku : string            // 商品 SKU（POST /points/shop/{sku}/redeem 用）
+    title : string          // 商品名
+    price : number          // 积分价（以库为事实源，客户端不另存常量）
+    stock : number | null   // 库存：null = 不限库存（≠ 0；0 才是售罄）
+    owned : boolean         // 当前用户是否已拥有（服务端按人算，与兑换判据同源）
+}
+
+/** 商城在售列表结果 */
+export type ShopItemsResult = {
+    items : ShopItem[]
+}
+
 /** 商城兑换结果 POST /points/shop/{sku}/redeem（后端 service.RedeemResult 逐字段对齐，#920） */
 export type PointsRedeemResult = {
     balance : number        // 兑换后余额
