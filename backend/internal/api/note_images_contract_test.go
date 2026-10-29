@@ -66,11 +66,16 @@ func newNoteImageEnv(t *testing.T, db *gorm.DB) *noteImageEnv {
 }
 
 // uploadForumImage 走论坛图片通道真上传一张 PNG（#2069：笔记不新建上传通道）。
-func (e *noteImageEnv) uploadForumImage(t *testing.T) string {
+//
+// 文件名必须由调用方给且互不相同：存储侧 key 是 <name>_<毫秒时间戳>.<ext>
+// （filestore.FileStore.Save），两次同秒上传同名文件会拿到**同一个 URL**，
+// 而笔记侧又有「同一张图只留一次」的去重（note.validateNoteImages）——
+// 于是「两图原样回显且保序」会被 dedupe 成一条，测试随机变红（实测连跑 6 次红 5 次）。
+func (e *noteImageEnv) uploadForumImage(t *testing.T, filename string) string {
 	t.Helper()
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
-	fw, err := mw.CreateFormFile("file", "note-shot.png")
+	fw, err := mw.CreateFormFile("file", filename)
 	if err != nil {
 		t.Fatalf("构造 multipart 失败: %v", err)
 	}
@@ -120,8 +125,8 @@ func (e *noteImageEnv) createNote(t *testing.T, body map[string]any) (int, noteD
 
 func assertNoteImageContract(t *testing.T, db *gorm.DB) {
 	e := newNoteImageEnv(t, db)
-	img1 := e.uploadForumImage(t)
-	img2 := e.uploadForumImage(t)
+	img1 := e.uploadForumImage(t, "note-shot-a.png")
+	img2 := e.uploadForumImage(t, "note-shot-b.png")
 
 	// ===== 1. 带图创建：回显地址与顺序原样 =====
 	code, created := e.createNote(t, map[string]any{"content": "第三章的液压图", "images": []string{img1, img2}})
