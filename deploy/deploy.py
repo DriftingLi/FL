@@ -931,7 +931,9 @@ class Deployer:
                 log_ok(f"基础镜像已缓存: {base}")
                 continue
             log_info(f"拉取基础镜像: {base}")
-            if self.run(["docker", "pull", base], check=False).returncode != 0:
+            # 走 watchdog 而不是裸 docker pull：镜像源挂住时裸拉没有任何超时，
+            # 整个部署会被拖到外层 timeout 兜底（2026-10-29 testing 冒烟因此挂起 35 分钟）。
+            if not self._pull_with_watchdog(base):
                 raise DeployError(f"基础镜像拉取失败: {base}")
 
     # ---------------------------------------------------------------- 数据服务
