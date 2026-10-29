@@ -264,6 +264,7 @@ function scanPlan(plan) {
   must(Number.isFinite(E.port) && E.port > 0, 'C18', '自动化端口不是正整数');
   must(E.ws === `ws://127.0.0.1:${E.port}`, 'C18', '端点 ws 与端口对不上');
 
+
   // ---- C2：close → auto 的顺序；auto 必须跑完；参数与端口写死在计划里 ----
   const autoStep = step('devtools-auto');
   must(at('devtools-close') !== -1 && at('devtools-auto') !== -1 && at('devtools-close') < at('devtools-auto'),
@@ -542,6 +543,20 @@ function scanContract(sources) {
   must(probe.includes('getPageMetaByWebviewId'), 'C3', '探针未记录 pageStack 空导致的误导弹错（#883 坑位 1）');
   // 锚点参数入口被拆 ⇒ 红（--assert-selector / --assert-text 是锚点断言的唯一入口）
   must(probe.includes("'--assert-selector'") && probe.includes("'--assert-text'"), 'C3', '探针缺 --assert-selector/--assert-text 解析（#1919 锚点断言入口被拆）');
+
+  // ---- C29（#2097）：逐屏取证的滚动机制必须走 scroll-view 元素 API ----
+  // 血账（2026-10-29 真跑实测）：第一版判停读 getCurrentPages() 末页的 p.scrollTop —— 小程序 Page 没有
+  // 这个属性，读不到即落到 0 ⇒ 首次滚动后立刻判「已到页尾」，三页全只出 -p1 且无任何报错。且本仓页面
+  // 都在 <scroll-view> 里滚，页级 wx.pageScrollTo 恒无效。故：量 scrollHeight、scrollTo 驱动、property 回读。
+  // ⚠️ 判据必须吃**块注释也抹净**的视图：血账原文写在函数文档里，只抹 // 会被自己的注释绊红。
+  {
+    const probeCode = probe.replace(/\/\*[\s\S]*?\*\//g, '');
+    must(probeCode.includes('scrollHeight('), 'C29', '逐屏取证没量滚动容器内容高度（算不出该拍几屏）');
+    must(probeCode.includes('.scrollTo('), 'C29', '逐屏取证没经 scroll-view 元素的 scrollTo 驱动滚动');
+    must(probeCode.includes("property('scrollTop')"), 'C29', '逐屏取证没回读实际 scrollTop（证明不了真滚了）');
+    must(!/getCurrentPages\(\)[\s\S]{0,120}?scrollTop/.test(probeCode), 'C29', '仍从 getCurrentPages() 末页读 scrollTop 判停（该属性不存在 ⇒ 恒判已到页尾，#2097 血账）');
+    must(probeCode.includes('shotWarning'), 'C29', '没有滚动容器 / 滚动无效时的降级没有留名（会冒充「已逐屏」）');
+  }
   probe.split(/\r?\n/).forEach((line, idx) => {
     if (/^\s*\/\//.test(line)) return; // 注释里提 API 名是允许的；本守护守的是「别用」
     if (/page\.waitFor\(\s*['"`]/.test(line)) {
@@ -1152,6 +1167,11 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
       ['C10', { ...real, pkg: real.pkg.replace('build:mp-weixin-check', 'build:mp-x') }],
       // C28 必红：入口在、但没带 -BuildOnly（那是一个「能跑 ② 全量」的同名入口，不是构建面模式）
       ['C28', { ...real, pkg: real.pkg.replace('scripts/mp-weixin-check.ps1 -BuildOnly', 'scripts/mp-weixin-check.ps1') }],
+      // C29 必红四条：删掉内容高度测量 / 改掉回读属性名 / 把无效判停塞回代码 / 抹掉降级留名
+      ['C29', { ...real, probe: real.probe.replace(/scrollHeight\(/g, 'scrollHeightX(') }],
+      ['C29', { ...real, probe: real.probe.replace(/property\('scrollTop'\)/g, "property('scrollTopX')") }],
+      ['C29', { ...real, probe: real.probe.replace('const actual = await readScrollTop(container);', 'const actual = (getCurrentPages().pop() || {}).scrollTop;') }],
+      ['C29', { ...real, probe: real.probe.replace(/step\.shotWarning/g, 'step.warnX') }],
       ['C10', { ...real, adr: real.adr.replace(/半自动/g, '全自动') }],
       ['C10', { ...real, template: real.template.replace(/gate-evidence:②/g, 'gate-evidence:x') }],
       ['C10', { ...real, agents: '人工门清单（无 ② 条目）' }],

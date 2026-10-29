@@ -18,14 +18,9 @@
                 <!-- 元信息 -->
                 <view class="article-meta">
                     <text v-if="detail!.category_label.length > 0" class="meta-category">{{ detail!.category_label }}</text>
-                    <!-- #1939 定断：source 双形态 —— 名称原样展示，完整链接只露域名 -->
-                    <text v-if="detail!.source.length > 0" class="meta-text">{{ sourceLabel }}</text>
+                    <text v-if="detail!.source.length > 0" class="meta-text">{{ detail!.source }}</text>
                     <text v-if="detail!.published_at.length > 0" class="meta-text">{{ displayTime(detail!.published_at) }}</text>
                     <text class="meta-text">{{ detail!.view_count }} 阅读</text>
-                </view>
-                <!-- 原文外链：只有 source 是 http(s) 完整链接时才有（名称形态不造按钮） -->
-                <view v-if="hasSourceLink" class="source-link" @click="onOpenSource">
-                    <text class="source-link-text">查看原文</text>
                 </view>
                 <!-- 封面图 -->
                 <view v-if="detail!.cover_image.length > 0" class="cover-wrap">
@@ -43,6 +38,14 @@
                         <text v-else-if="block.type == 'quote'" class="md-quote">{{ block.text }}</text>
                         <view v-else-if="block.type == 'divider'" class="md-divider"></view>
                         <image v-else-if="block.type == 'image'" class="md-image" :src="block.text" mode="widthFix"></image>
+                    </view>
+                </view>
+                <!-- 正文外链（#2097）：链接由正文 Markdown 承载，`source` 列只作来源名称、不参与判断 -->
+                <view v-if="sourceLinks.length > 0" class="link-section">
+                    <text class="link-title">参考链接</text>
+                    <view v-for="(lnk, lIdx) in sourceLinks" :key="lIdx" class="link-item" @click="onOpenLink(lnk.url)">
+                        <text class="link-item-text">{{ lnk.label }}</text>
+                        <text class="link-item-host">{{ lnk.host }}</text>
                     </view>
                 </view>
                 <!-- 上下篇导航 -->
@@ -74,7 +77,8 @@ import { goBack } from '../../utils/navigation'
     import { parseMarkdown, SUBSET_FEATURED } from '../../utils/markdown'
     import type { FeaturedContentDetail, FeaturedContentItem, MarkdownBlock } from '../../types/index'
     import { formatDateStr } from '../../utils/format'
-    import { isExternalSourceUrl, sourceDomainOf } from '../../utils/featuredSource'
+    import { collectFeaturedLinks } from '../../utils/featuredLinks'
+    import type { FeaturedLink } from '../../utils/featuredLinks'
     import { dispatchExternalLinkTap } from '../../utils/externalLinkDispatch'
 
     /** 模板不可直调 import 函数（uvue 模板 import 调用编译为 .invoke() = Kotlin error18，先例 #677）；
@@ -98,24 +102,15 @@ import { goBack } from '../../utils/navigation'
         return parseMarkdown(detail.value!.content, SUBSET_FEATURED)
     })
 
-    /** 元信息里那一行的来源文案：链接形态只展示域名，名称形态原样 */
-    const sourceLabel = computed<string>(() : string => {
-        if (detail.value == null) return ''
-        const src = detail.value!.source
-        if (isExternalSourceUrl(src)) return sourceDomainOf(src)
-        return src
+    /** 正文 Markdown 里的外链：按出现顺序、同 URL 去重；协议闸在分词器单点，本页不判协议 */
+    const sourceLinks = computed<FeaturedLink[]>(() : FeaturedLink[] => {
+        if (detail.value == null) return []
+        return collectFeaturedLinks(detail.value!.content)
     })
 
-    /** 是否给出「查看原文」：协议闸在 utils/featuredSource（只认 http/https） */
-    const hasSourceLink = computed<boolean>(() : boolean => {
-        if (detail.value == null) return false
-        return isExternalSourceUrl(detail.value!.source)
-    })
-
-    /** 确认弹窗 + 按端分叉一律复用论坛那条编排（⑩-8/⑩-9），本页不自建第二份 */
-    function onOpenSource() : void {
-        if (detail.value == null) return
-        dispatchExternalLinkTap(detail.value!.source)
+    /** 确认弹窗 + 按端分叉复用既有编排（移动端 ADR-0025 ⑩-8/⑩-9）；模板不可直调 import ⇒ 本地薄包装 */
+    function onOpenLink(url : string) : void {
+        dispatchExternalLinkTap(url)
     }
 
     function getHeadingSize(level : number) : string {
@@ -126,7 +121,13 @@ import { goBack } from '../../utils/navigation'
     }
 
     async function loadDetail() : Promise<void> {
-        if (contentId.value <= 0) return
+        // 缺 id / id 非法（脏链接、外部直达）⇒ 直接落「内容不存在」态（模板 v-else）。
+        // 不能就这么 return：loading 会永远停在 true，页面卡在「加载中…」——
+        // 这正是 #2097 由 ② 门截图暴露的形态（门导航到本页不带 id，截出来是永久加载中）。
+        if (contentId.value <= 0) {
+            loading.value = false
+            return
+        }
         loading.value = true
         try {
             const result = await getFeaturedContentDetailApi(contentId.value)
@@ -208,22 +209,6 @@ import { goBack } from '../../utils/navigation'
 
     .content-scroll {
         flex: 1;
-    }
-
-    /* #1939：原文外链按钮（source 为完整链接时才渲染；文字样式只能落在 text 上） */
-    .source-link {
-        margin: 0 32rpx 16rpx 32rpx;
-        padding: 16rpx 0;
-        border-radius: 12rpx;
-        border-width: 2rpx;
-        border-style: solid;
-        border-color: #2979ff;
-        align-items: center;
-    }
-
-    .source-link-text {
-        font-size: 28rpx;
-        color: #2979ff;
     }
 
     .loading-wrap {
@@ -345,6 +330,37 @@ import { goBack } from '../../utils/navigation'
         width: 100%;
         border-radius: 8rpx;
         margin: 8rpx 0;
+    }
+
+    /* 正文外链段（#2097）：无链接整段不渲染；样式落在 text 上（C1：App 端子节点不继承父样式） */
+    .link-section {
+        margin-top: 24rpx;
+        padding-top: 20rpx;
+        border-top-width: 1rpx;
+        border-top-color: #f0f0f0;
+    }
+
+    .link-title {
+        font-size: 24rpx;
+        color: #999999;
+        margin-bottom: 8rpx;
+    }
+
+    .link-item {
+        padding: 12rpx 0;
+    }
+
+    .link-item-text {
+        font-size: 28rpx;
+        color: #2979ff;
+        lines: 1;
+        text-overflow: ellipsis;
+    }
+
+    .link-item-host {
+        font-size: 22rpx;
+        color: #999999;
+        margin-top: 4rpx;
     }
 
     /* 上下篇导航 */
