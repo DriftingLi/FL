@@ -47,6 +47,7 @@ master 有 ruleset「protect master」，必检只有 ci-summary；pr-evidence �
 -->
 
 - ② 跑于 `<sha7>` · `<MP_WEIXIN_RESULT 读数行原样>`（`scripts/mp-weixin-check.ps1` 原样输出；图可选，附行尾）
+  - **带参页专项（#2110 定案，2026-10-29）**：依赖入口 query 的页（featured-detail / ai-feature / job-detail / resume-detail 等）在 ② 的「首项换页 + plain 冷启动」下直达内容形态结构不可得（CLI `--compile-condition` 被静默吞参、私有配置 condition 段不生效，单验读数 `.ci-verify/2110`）⇒ ② 对这些页记 skip，**空壳 / 「加载中…」截图不得充当该页证据**；内容取证落 ①（真机 `--pagePath` + `--pageQuery`）或发版冒烟（移动端 ADR 0043 决策 3）。
 - ④ 跑于 `<sha7>` · `<KOTLIN_ALL_RESULT 读数行原样>`（`scripts/kotlin-all-check.ps1` 原样输出；dev 面为 `<COMPILE_RESULT 读数行原样>`）
 
 ## 自检清单
