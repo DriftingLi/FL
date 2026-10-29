@@ -210,9 +210,6 @@ var runtimeOverlapNames = []string{
 	"LOG_MAX_AGE_DAYS",
 	"LOG_MAX_BACKUPS",
 	"LOG_MAX_SIZE_MB",
-	"REDIS_DB",
-	"REDIS_KEY_PREFIX",
-	"REDIS_POOL_SIZE",
 	"SMTP_FROM_NAME",
 	"SMTP_PORT",
 	"STORAGE_DRIVER",
@@ -476,7 +473,7 @@ func TestDeployEnvChainPreservesProvidedValues(t *testing.T) {
 
 	// 模拟 CD runner：cwd = 仓库根（生成块里 grep deploy/env.defaults 是相对路径，CI 就是这么跑的），
 	// DEPLOY_PATH 指向临时目录（deploy/env.defaults 就是真生成物），PG_VOLUME/DOMAIN 模拟
-	// production 环境 secret；REDIS_POOL_SIZE 故意不提供，用于验证默认值仍生效。
+	// production 环境 secret；LOG_LEVEL 故意不提供，用于验证默认值仍生效。
 	rootAbs, err := filepath.Abs(root)
 	if err != nil {
 		t.Fatalf("解析仓库根失败: %v", err)
@@ -490,7 +487,7 @@ func TestDeployEnvChainPreservesProvidedValues(t *testing.T) {
 
 	// 模拟远端：source 之后看生效值（set -u 一并验证：未定义的变量不许炸）。
 	probeScript := filepath.Join(tmp, "probe.sh")
-	probeBody := "set -eu\nsource " + envFile + "\nprintf '%s|%s|%s\\n' \"$PG_VOLUME\" \"$DOMAIN\" \"$REDIS_POOL_SIZE\"\n"
+	probeBody := "set -eu\nsource " + envFile + "\nprintf '%s|%s|%s\\n' \"$PG_VOLUME\" \"$DOMAIN\" \"$LOG_LEVEL\"\n"
 	if err := os.WriteFile(probeScript, []byte(probeBody), 0o755); err != nil {
 		t.Fatalf("写探针脚本失败: %v", err)
 	}
@@ -501,7 +498,7 @@ func TestDeployEnvChainPreservesProvidedValues(t *testing.T) {
 		t.Fatalf("远端 source 失败: %v\n%s", err, out)
 	}
 	got := strings.TrimSpace(string(out))
-	want := "/srv/ceph/pgdata|prod.example.com|20"
+	want := "/srv/ceph/pgdata|prod.example.com|info"
 	if got != want {
 		t.Fatalf("链路把 CD 提供的值弄丢了：\n  got  = %s\n  want = %s\n"+
 			"（第 1 段 = CD 提供的 PG_VOLUME，必须原样保留；第 3 段 = 未提供变量的默认值，必须来自生成物）", got, want)

@@ -20,10 +20,10 @@ import (
 
 	"gorm.io/gorm"
 
-	"forklift-training/internal/cache"
 	"forklift-training/internal/clock"
 	"forklift-training/internal/config"
 	"forklift-training/internal/core"
+	"forklift-training/internal/kv"
 	"forklift-training/internal/model"
 )
 
@@ -53,7 +53,7 @@ type CodeChannel interface {
 	Normalize(target string) (string, error)
 	// Noun 通道目标的中文名（用于错误文案）。
 	Noun() string
-	// KeyPrefix 验证码缓存 key 前缀（"email_code" / "phone_code"，与线上 Redis key 兼容）。
+	// KeyPrefix 验证码 key 前缀（"email_code" / "phone_code"；#2109 起落在 ephemeral_kv，键形态不变）。
 	KeyPrefix() string
 	// FindAccount 统计匹配 target 的账号数；excludeUserID > 0 时排除该用户（绑定场景）。
 	FindAccount(ctx context.Context, db *gorm.DB, target string, excludeUserID int) (int64, error)
@@ -70,29 +70,12 @@ type CodeChannel interface {
 	BindColumn() string
 }
 
-// AuthCodeStore 验证码存储接口（生产用 Redis，测试用内存实现）。
+// AuthCodeStore 验证码存储接口（生产为 kv.Store，测试用内存实现）。
+// 只需要 Get/Set/Del —— kv.Store 结构上即满足，装配处直接注入。
 type AuthCodeStore interface {
 	Get(ctx context.Context, key string) (string, error)
 	Set(ctx context.Context, key, value string, ttl time.Duration) error
 	Del(ctx context.Context, keys ...string) error
-}
-
-// RedisAuthCodeStore 基于全局 Redis 缓存的验证码存储。
-type RedisAuthCodeStore struct{}
-
-// Get 读取验证码。
-func (RedisAuthCodeStore) Get(ctx context.Context, key string) (string, error) {
-	return cache.Get(ctx, key)
-}
-
-// Set 写入验证码。
-func (RedisAuthCodeStore) Set(ctx context.Context, key, value string, ttl time.Duration) error {
-	return cache.Set(ctx, key, value, ttl)
-}
-
-// Del 删除验证码。
-func (RedisAuthCodeStore) Del(ctx context.Context, keys ...string) error {
-	return cache.Del(ctx, keys...)
 }
 
 // SMSProvider 短信发送接口。Send 接收目标手机号、验证码、有效期（分钟）与用途，
@@ -363,9 +346,8 @@ type VerifyCodeService struct {
 	logger  *zap.Logger
 }
 
-// NewVerifyCodeService 构造验证码服务。
 // NewVerifyCodeService 构造验证码 engine。
-// store 为验证码存储 adapter（生产 Redis，测试内存），接口存在即接线。
+// store 为验证码存储 adapter（生产 kv.Store，测试内存），接口存在即接线。
 func NewVerifyCodeService(db *gorm.DB, authSvc *Service, codeTTL time.Duration, store AuthCodeStore, logger *zap.Logger) *VerifyCodeService {
 	if codeTTL <= 0 {
 		codeTTL = 5 * time.Minute
@@ -588,7 +570,7 @@ func (s *VerifyCodeService) ResetPasswordWithCode(ctx context.Context, ch CodeCh
 		return res.Err
 	}
 	// 尽力而为族（与改密同族、与注销族有意不同）：口令已生效且不可回退，吊销标记写失败
-	// 只记日志暴露缺口——为吊销失败而拒绝落口令会让 Redis 抖动时用户找不回账号。
+	// 只记日志暴露缺口——为吊销失败而拒绝落口令会让库抖动时用户找不回账号。
 	if res.RevokeErr != nil {
 		s.logger.Warn("重置口令后 refresh 吊销标记写入失败", zap.Int("user_id", user.ID), zap.Error(res.RevokeErr))
 	}
@@ -700,11 +682,11 @@ func (s *VerifyCodeService) currentUserPhone(ctx context.Context, userID int) (s
 }
 
 // codeKey 构造验证码缓存 key；throttle=true 时为发送频率限制 key。
-// 前缀与旧实现完全一致（email_code / email_code_send），保证线上 Redis 数据兼容。
+// 前缀与旧实现完全一致（email_code / email_code_send）：同一份键口径沿用，不因存储换代而改名。
 func (s *VerifyCodeService) codeKey(ch CodeChannel, purpose CodePurpose, target string, throttle bool) string {
 	prefix := ch.KeyPrefix()
 	if throttle {
 		prefix += "_send"
 	}
-	return cache.SafeKey(prefix, string(purpose), target)
+	return kv.SafeKey(prefix, string(purpose), target)
 }

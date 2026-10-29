@@ -117,7 +117,7 @@ func TestResetPassword_旧refresh在重置后被拒(t *testing.T) {
 }
 
 // 吊销标记写不进去 ⇒ 口令仍然生效（尽力而为族：不能为吊销失败而拒绝落口令，
-// 否则 Redis 抖动时用户找不回账号）。
+// 否则存储抖动时用户找不回账号）。
 func TestResetPassword_吊销写失败口令仍生效(t *testing.T) {
 	t.Parallel()
 	r, _, store, ch, _ := newPasswordFamilyRouter(t, rejectBlacklist{})

@@ -13038,7 +13038,7 @@ const docTemplate = `{
         },
         "/health": {
             "get": {
-                "description": "探测 Redis 连通性；不可达时返回 503 degraded，供容器编排重启决策。非统一信封（裸 gin.H）。公开端点：无需鉴权，不受限流且不进访问日志（middleware.HealthPaths）",
+                "description": "探测数据库连通性；不可达时返回 503 degraded，供容器编排重启决策。非统一信封（裸 gin.H）。公开端点：无需鉴权，不受限流且不进访问日志（middleware.HealthPaths）",
                 "produces": [
                     "application/json"
                 ],
@@ -13055,7 +13055,7 @@ const docTemplate = `{
                         }
                     },
                     "503": {
-                        "description": "降级：{status:degraded,redis:unreachable,error:原因}",
+                        "description": "降级：{status:degraded,database:unreachable,error:原因}",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -13066,7 +13066,7 @@ const docTemplate = `{
         },
         "/health/live": {
             "get": {
-                "description": "仅表示进程存活，不依赖 Redis 等外部组件；容器编排探活应使用本端点，避免 Redis 抖动导致容器被重启。非统一信封。公开端点：无需鉴权，不受限流且不进访问日志（middleware.HealthPaths）",
+                "description": "仅表示进程存活，不依赖数据库等外部组件；容器编排探活应使用本端点，避免数据库抖动导致容器被重启。非统一信封。公开端点：无需鉴权，不受限流且不进访问日志（middleware.HealthPaths）",
                 "produces": [
                     "application/json"
                 ],
@@ -24079,7 +24079,7 @@ const docTemplate = `{
         },
         "/valuation/health": {
             "get": {
-                "description": "返回子模块状态/服务名/时间戳，不连数据库也不连 Redis，仅证明该蓝图可响应。非统一信封（裸 HealthResponse，字段全为字符串）。公开端点：无需登录",
+                "description": "返回子模块状态/服务名/时间戳，不连数据库也不查任何外部组件，仅证明该蓝图可响应。非统一信封（裸 HealthResponse，字段全为字符串）。公开端点：无需登录",
                 "produces": [
                     "application/json"
                 ],

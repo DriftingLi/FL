@@ -95,6 +95,9 @@ var ModelBlocks = []ModelBlock{
 			&FeaturedContent{},
 			&SearchFact{},
 			&SystemSetting{},
+			// 带 TTL 的临时 KV（#2109：验证码 / 图形码 / JWT 黑名单）。无外键，
+			// 摆在块尾即可；漏了它 SQLite 测试库会「找不到表」。
+			&EphemeralKV{},
 		},
 	},
 	{

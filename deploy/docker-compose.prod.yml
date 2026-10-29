@@ -80,50 +80,6 @@ services:
         max-file: "3"
 
   # ==========================================
-  # Redis 缓存（纯缓存定位：禁用持久化，LRU 淘汰）
-  # ==========================================
-  redis:
-    image: redis:7-alpine
-    container_name: forklift-redis-prod
-    restart: unless-stopped
-    # REDIS_PASSWORD 为空时不启用 requirepass（Redis 仅在内网 Docker 网络访问，不暴露端口）
-    # 使用 shell 形式以便用参数扩展处理可选密码
-    command: >
-      sh -c '
-      if [ -n "$$REDIS_PASSWORD" ]; then
-        exec redis-server --requirepass "$$REDIS_PASSWORD" --maxmemory 200mb --maxmemory-policy allkeys-lru --save "" --appendonly no --timeout 300 --tcp-keepalive 60
-      else
-        exec redis-server --maxmemory 200mb --maxmemory-policy allkeys-lru --save "" --appendonly no --timeout 300 --tcp-keepalive 60
-      fi
-      '
-    # 不暴露到宿主机，仅 Docker 内部网络访问
-    expose:
-      - "6379"
-    environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-    volumes:
-      # 默认 named volume；可经 REDIS_VOLUME 环境变量覆盖为 bind mount 路径
-      - ${REDIS_VOLUME:-redisdata-prod}:/data
-    healthcheck:
-      # 密码为空时 redis-cli ping；非空时 redis-cli -a <password> ping
-      test: ["CMD-SHELL", "redis-cli $${REDIS_PASSWORD:+-a $${REDIS_PASSWORD}} ping | grep -q PONG"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-    networks:
-      - forklift-net
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: "0.5"
-    logging:
-      driver: json-file
-      options:
-        max-size: "20m"
-        max-file: "3"
-
-  # ==========================================
   # LibreOffice Sidecar 服务（PPT → PDF → PNG 转换）
   # 通过 HTTP multipart API 提供转换能力，无需共享 volume
   # 拆分自 backend 容器，使 backend 镜像从 ~500MB 减小到 ~50MB
@@ -169,8 +125,6 @@ services:
     restart: unless-stopped
     depends_on:
       postgres:
-        condition: service_healthy
-      redis:
         condition: service_healthy
       # libreoffice 依赖已移除：服务 profile 化后未启用时会报
       # "depends on disabled profile service"；sidecar 是独立 HTTP 服务，
@@ -228,11 +182,6 @@ services:
       LOG_MAX_BACKUPS: "${LOG_MAX_BACKUPS:-7}"
       LOG_MAX_AGE_DAYS: "${LOG_MAX_AGE_DAYS:-30}"
       LOG_COMPRESS: "${LOG_COMPRESS:-true}"
-      REDIS_ADDR: redis:6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-      REDIS_DB: "${REDIS_DB:-0}"
-      REDIS_POOL_SIZE: "${REDIS_POOL_SIZE:-20}"
-      REDIS_KEY_PREFIX: "${REDIS_KEY_PREFIX:-fl:}"
       # 可信反向代理 —— 「取客户端 IP 是否采信 X-Forwarded-For / X-Real-IP」的唯一开关
       # （读取方 backend/internal/middleware/clientip.go，装配方 api.applyTrustedProxies）。
       # 默认不信任任何代理；下面这三个地址是本部署自己的代理，不是通用默认值：
@@ -365,8 +314,6 @@ networks:
 
 volumes:
   pgdata-prod:
-    driver: local
-  redisdata-prod:
     driver: local
   uploads-data:
     driver: local

@@ -117,7 +117,7 @@ func KeysOf(m map[string]any) []string {
 	return out
 }
 
-// ValueBlacklist 保留写入值的内存黑名单存储（生产走 Redis）。
+// ValueBlacklist 保留写入值的内存黑名单存储（生产走 kv.Store）。
 //
 // 它区别于只记 key 存在的「存在性」替身：用户级吊销标记的**值**是时间戳，
 // 只记 key 的实现会把标记读成 1970 年、判成「未吊销」。

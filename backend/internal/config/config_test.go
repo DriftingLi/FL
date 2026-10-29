@@ -74,10 +74,6 @@ func TestValidate_Production_AllPresent(t *testing.T) {
 		JWTSecretKey: "real-jwt-secret",
 		DatabaseURL:  "postgres://localhost/db",
 		CORSOrigins:  []string{"https://example.com"},
-		Redis: RedisConfig{
-			Addr:     "localhost:6379",
-			Password: "real-redis-password",
-		},
 		AuthCookie: AuthCookieConfig{
 			Name:   "hrwai_token",
 			Domain: "example.com",
@@ -95,10 +91,6 @@ func TestValidate_Production_MissingAuthCookieDomain(t *testing.T) {
 		JWTSecretKey: "real-jwt-secret",
 		DatabaseURL:  "postgres://localhost/db",
 		CORSOrigins:  []string{"https://example.com"},
-		Redis: RedisConfig{
-			Addr:     "localhost:6379",
-			Password: "real-redis-password",
-		},
 		DefaultPasswords: DefaultPasswordsConfig{
 			Admin: "admin123", Tutor: "tutor123", Student: "student123",
 		},

@@ -469,11 +469,6 @@ jobs:
       CORS_ORIGINS: ${{ secrets.CORS_ORIGINS }}
       # 部署选项
       SKIP_MIGRATION: ${{ inputs.skip_migration || 'false' }}
-      # Redis 缓存
-      REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD || '' }}
-      REDIS_DB: ${{ secrets.REDIS_DB || '0' }}
-      REDIS_POOL_SIZE: ${{ secrets.REDIS_POOL_SIZE || '20' }}
-      REDIS_KEY_PREFIX: ${{ secrets.REDIS_KEY_PREFIX || 'fl:' }}
       # 可信反向代理（取客户端 IP 的唯一开关）：留空即用 deploy/docker-compose.prod.yml 里按本部署
       # 实测网桥网关登记的默认值；只有换宿主机 / 重建网络导致网段变化时才需要在此覆盖
       TRUSTED_PROXIES: ${{ vars.TRUSTED_PROXIES }}
@@ -508,10 +503,9 @@ jobs:
       # ProxyJump 代码分支保留，供未来需要跳板时经 SSH_JUMP_HOST 重新启用
       SSH_JUMP_HOST: ${{ secrets.SSH_JUMP_HOST || '' }}
       # Volume 路径：两环境均在 PVE 宿主机直接运行 Docker 26+，named volume 正常工作
-      # 留空 → deploy/deploy.py 默认使用 named volume（pgdata-prod / redisdata-prod 等）
+      # 留空 → deploy/deploy.py 默认使用 named volume（pgdata-prod 等）
       # Ceph 化后可在 environment secret 配置（如 PG_VOLUME=/srv/ceph/pgdata 指向 RBD 挂载点）
       PG_VOLUME: ${{ secrets.PG_VOLUME || '' }}
-      REDIS_VOLUME: ${{ secrets.REDIS_VOLUME || '' }}
       UPLOADS_VOLUME: ${{ secrets.UPLOADS_VOLUME || '' }}
       REPORTS_VOLUME: ${{ secrets.REPORTS_VOLUME || '' }}
       # ===== testing 加速参数（按环境注入,环境名取自 gate outputs 以兼容 push 事件）=====
@@ -686,8 +680,7 @@ jobs:
             printf 'export CORS_ORIGINS=%q\n' "${CORS_ORIGINS:-}"
             printf 'export COMPOSE_FILE=%q\n' "${COMPOSE_FILE:-deploy/docker-compose.prod.yml}"
             printf 'export SKIP_MIGRATION=%q\n' "${SKIP_MIGRATION:-false}"
-            printf 'export REDIS_PASSWORD=%q\n' "${REDIS_PASSWORD:-}"
-            # REDIS_DB / REDIS_POOL_SIZE / REDIS_KEY_PREFIX / TRUSTED_PROXIES / STORAGE_DRIVER
+            # TRUSTED_PROXIES / STORAGE_DRIVER
             # 的默认值由 deploy/env.defaults 提供（上面 source），此处不再自写。
             printf 'export R2_ENDPOINT=%q\n' "${R2_ENDPOINT:-}"
             printf 'export R2_ACCOUNT_ID=%q\n' "${R2_ACCOUNT_ID:-}"
@@ -701,7 +694,7 @@ jobs:
             printf 'export BACKUP_REMOTE_HOST=%q\n' "${BACKUP_REMOTE_HOST:-}"
             printf 'export BACKUP_REMOTE_DIR=%q\n' "${BACKUP_REMOTE_DIR:-}"
             printf 'export BACKUP_REMOTE_KEY=%q\n' "${BACKUP_REMOTE_KEY:-}"
-            # BACKEND_HOST_PORT / PG_VOLUME / REDIS_VOLUME / UPLOADS_VOLUME / REPORTS_VOLUME
+            # BACKEND_HOST_PORT / PG_VOLUME / UPLOADS_VOLUME / REPORTS_VOLUME
             # 同样来自 deploy/env.defaults。
             printf 'export SKIP_BACKUP=%q\n' "${SKIP_BACKUP:-false}"
             printf 'export FORCE_DATA_SERVICES=%q\n' "${FORCE_DATA_SERVICES:-false}"

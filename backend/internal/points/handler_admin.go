@@ -37,7 +37,7 @@ type adminPenaltyReq struct {
 // Penalty 管理员扣罚（#1098 扣罚即通知回归积分域）：
 // 站内信编排（同事务强一致）已在 Service.AdminPenalty 内，handler 只剩
 // 「解析 → 一行 invoke → 域表渲染」；通知写失败经 ErrStatus 渲染 500 + 可见原因。
-// invoke 适配器不带 ctx，服务侧用请求作用域 ctx（罚分锁为瞬态护栏，Redis 不可用不阻断主流程）。
+// invoke 适配器不带 ctx，服务侧用请求作用域 ctx（罚分锁为瞬态护栏，存储不可用不阻断主流程）。
 func (h *adminHandler) Penalty(c *gin.Context) {
 	adminID := middleware.CurrentUserID(c)
 	httpx.Endpoint[adminPenaltyReq, PointsPenaltyResultDTO]{

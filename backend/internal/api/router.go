@@ -40,7 +40,9 @@ func NewRouter(deps *Deps) *gin.Engine {
 
 	// 健康检查与根路由（无需鉴权）。handler 是包级具名函数（system.go）：
 	// swag 只解析具名函数上方的注解块，内联闭包上的注释不会进 swagger（issue #1417）。
-	r.GET("/api/health", HealthCheck)
+	// 数据库句柄经路由级中间件注入（#2109：探活从 Redis 改探 PG）—— 具名函数拿不到
+	// 装配根，又不能用包级变量（并行测试下会被 -race 判成数据竞争）。
+	r.GET("/api/health", InjectProbe(deps.HealthProbe), HealthCheck)
 	r.GET("/api/health/live", HealthLive)
 	r.GET("/api", APIRoot)
 

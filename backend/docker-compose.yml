@@ -1,4 +1,4 @@
-# 本地开发环境：Docker 容器化 PostgreSQL + Redis + Go 后端
+# 本地开发环境：Docker 容器化 PostgreSQL + Go 后端（#2109 起不再需要 Redis）
 # 使用：make dev-up / docker compose up -d
 # 前端通过 Vite dev server 运行在宿主机（npm run dev），通过 CORS 访问 backend
 services:
@@ -21,26 +21,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-
-  redis:
-    image: redis:7-alpine
-    container_name: forklift-redis
-    restart: unless-stopped
-    command: >
-      redis-server
-      --maxmemory 100mb
-      --maxmemory-policy allkeys-lru
-      --save ""
-      --appendonly no
-    ports:
-      - "6379:6379"
-    volumes:
-      - redisdata:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
 
   # LibreOffice sidecar:用于 PPT→PDF→PNG 转换(无宿主污染)
   # backend 通过 HTTP 调用该容器
@@ -70,17 +50,14 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
       libreoffice:
         condition: service_started
     environment:
       APP_ENV: development
       PORT: "8080"
-      # 通过 env_file 加载 backend/.env 的所有变量（DATABASE_URL/REDIS_ADDR/AI_* 等）
-      # 但 DATABASE_URL/REDIS_ADDR 需指向容器内 postgres/redis 主机名
+      # 通过 env_file 加载 backend/.env 的所有变量（DATABASE_URL/AI_* 等）
+      # 但 DATABASE_URL 需指向容器内 postgres 主机名
       DATABASE_URL: postgres://forklift:forklift123@postgres:5432/forklift_training?sslmode=disable
-      REDIS_ADDR: redis:6379
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:5174,http://training.localhost:5173,http://valuation.localhost:5173}
       MAX_CONTENT_LENGTH_MB: "250"
       # LibreOffice sidecar HTTP 地址(容器内服务名 + 端口)
@@ -106,6 +83,4 @@ services:
 
 volumes:
   pgdata:
-    driver: local
-  redisdata:
     driver: local
