@@ -14,6 +14,13 @@ name: PR - testing 冒烟补齐
 #      （必过检查在某个 sha 上缺失 = 那个 sha 永远合不了）；
 #   2. 收到事件时 CI 往往还没跑完 —— 所以这里**等** ci-summary 出结论（最多 15 分钟），
 #      绿了才派发；CI 红就直接放行（合并本就被 ci-summary 挡着）。
+#
+# #2120：上面那个修法留了一个空洞 —— 本 job 原先「派发完就 exit 0」，于是**检查绿 ≠ 记录在**。
+# 派发出去的 CD run 在 cd-testing 组繁忙时只是排队；合并一旦发生在它前面，删分支会把排队中的 run 一起
+# 取消（实测 2026-10-29：run 40811195831 一个作业都没启动就被 cancelled），deployment 记录于是永不存在，
+# 而 cd.yml 的生产 gate 要求它 ⇒ 生产部署被永久阻断（`69ec84d6` / `7dee52b7` 连中两次）。
+# 现语义：**派发后等这条 run 真的 success，并复核 deployment 记录存在，才让检查变绿**；cancelled / 超时
+# 一律 fail-closed 判红。代价是合并要等一次 testing 部署的时间（绿不了的 PR 本就不该合）。
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
@@ -35,7 +42,7 @@ jobs:
     # 跳过草稿 PR：草稿阶段不该占 testing 机器（标记 ready_for_review 时会再触发一次）
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 60
     steps:
       # ADR-0053 §10：ci-summary 的聚合收成了单点脚本（scripts/ci-summary-status.sh），
       # 本 job 原先刻意不 checkout（gh 用 --repo 显式指定仓库），但脚本文件必须存在于工作区 ——
@@ -101,4 +108,50 @@ jobs:
             echo "::error::派发失败（分支 ${REF} 可能已被删除）。这是 #1852 描述过的竞态：本检查若为必过检查，正常应发生在合并之前；走人工合并时请用应急通道 gh workflow run cd.yml -f environment=production -f ref=${SHA}"
             exit 1
           fi
-          echo "| 补发 | PR #${PR_NUMBER} · commit `${SHA:0:8}` → testing |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 补发 | PR #${PR_NUMBER} · commit ${SHA:0:8} → testing |" >> "$GITHUB_STEP_SUMMARY"
+
+          # ===== 4. 等这条 run 真的成功（#2120：让「检查绿」⇔「deployment 记录已存在」）=====
+          # 以前派发完就 exit 0，检查在冒烟尚未成功时即变绿；合并一旦抢先（cd-testing 组繁忙时必然如此），
+          # 删分支会把排队中的 run 取消 ⇒ 记录永不出现 ⇒ 生产 gate 永久阻断。
+          RUN_ID=''
+          FIND_DEADLINE=$(( $(date +%s) + 120 ))
+          while :; do
+            # 注意：这里不能写 `[ -n "$RUN_ID" ] && break` —— 独立语句在 set -e 下失败即退出（首次迭代必然失败）
+            RUN_ID=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow cd.yml --event workflow_dispatch \
+                       --limit 30 --json databaseId,headSha,createdAt \
+                       --jq "[.[] | select(.headSha==\"$SHA\")] | sort_by(.createdAt) | last | .databaseId // empty" || true)
+            if [ -n "$RUN_ID" ]; then break; fi
+            if [ "$(date +%s)" -ge "$FIND_DEADLINE" ]; then
+              echo "::error::派发后 2 分钟仍找不到 commit ${SHA:0:8} 的 CD run —— 无法确认冒烟是否真的跑起来，不放行"
+              exit 1
+            fi
+            sleep 10
+          done
+          echo "| 冒烟 run | [${RUN_ID}](https://github.com/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}) |" >> "$GITHUB_STEP_SUMMARY"
+
+          WAIT_DEADLINE=$(( $(date +%s) + 2400 ))
+          while :; do
+            SMOKE=$(gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --json status,conclusion \
+                     --jq '"\(.status)/\(.conclusion // "-")"' || echo 'unknown/-')
+            case "$SMOKE" in
+              completed/success) break ;;
+              completed/*)
+                echo "::error::testing 冒烟 run ${RUN_ID} 结束为 ${SMOKE#completed/}（不是 success）⇒ 不放行：生产 gate 会找不到成功记录。处置：看该 run 日志；若是排队被取消或机器问题，重跑本检查，或手动 gh workflow run cd.yml --repo ${GITHUB_REPOSITORY} --ref master -f environment=testing -f ref=${SHA}"
+                exit 1 ;;
+            esac
+            if [ "$(date +%s)" -ge "$WAIT_DEADLINE" ]; then
+              echo "::error::等 testing 冒烟 run ${RUN_ID} 超过 40 分钟仍未完成（当前 ${SMOKE}）⇒ fail-closed 不绿灯。多半是 cd-testing 组被别的部署占着（cd.yml 按环境串行）"
+              exit 1
+            fi
+            echo "testing 冒烟 ${SMOKE}，30 秒后重试…"
+            sleep 30
+          done
+
+          # ===== 5. 复核 deployment 记录（把「检查绿但没记录」变回红）=====
+          DEP=$(gh api "repos/$GITHUB_REPOSITORY/deployments?per_page=100" \
+                 --jq "[.[] | select(.sha==\"$SHA\" and .environment==\"testing\")] | length")
+          if [ "$DEP" = "0" ]; then
+            echo "::error::run ${RUN_ID} 虽 success，但按 sha=${SHA:0:8} + environment=testing 仍查不到 deployment 记录 ⇒ 生产 gate 依然会阻断"
+            exit 1
+          fi
+          echo "✅ testing 冒烟记录已就位（sha=${SHA:0:8}，deployment 共 ${DEP} 条）" | tee -a "$GITHUB_STEP_SUMMARY"
