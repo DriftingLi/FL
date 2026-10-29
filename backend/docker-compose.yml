@@ -14,7 +14,8 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # 同生产：18+ 镜像的 PGDATA 在 /var/lib/postgresql/<主版本>/docker，必须挂父目录
+      - pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U forklift -d forklift_training"]
       interval: 5s
