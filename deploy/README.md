@@ -13,7 +13,7 @@
 | `setup-server.sh` | 服务器首次初始化（Docker / 部署用户 / 目录 / 防火墙 / cron） |
 | `lxc-install-docker.sh` / `lxc-setup-ssh.sh` | LXC 容器内 Docker / SSH 初始化 |
 | `backup-daily.sh` / `rbd-snap-hourly.sh` | 每日逻辑备份 / 每小时 RBD 快照 |
-| `forklift-watchdog.sh` + `systemd/` | 生产链路存活巡检与告警投递 |
+| `forklift-watchdog.sh` + `systemd/` | 生产链路存活巡检与告警投递（CD 随包上传，**安装仍要人工**，见下文「巡检脚本与 systemd 单元」） |
 | `tests/` | 增量计划 / 回滚 / 迁移门的常驻判据物（Python `unittest` + Node `--test`） |
 
 ## 常用命令
@@ -221,6 +221,29 @@ $COMPOSE up -d postgres
 - `ALLOW_MIGRATION_FAILURE=1`：显式带「新代码跑在旧 schema」的已知风险继续。
 - `SKIP_MIGRATION=true`：整段迁移不跑（不存在失败与否）。
 - dry-run 入口：`python3 deploy/deploy.py --migration-gate`（唯一判据点 `migration_failure_action`）。
+
+## 巡检脚本与 systemd 单元（forklift-watchdog）
+
+`forklift-watchdog.sh` 与 `systemd/` 下的三个单元随 CD **上传**到 `$DEPLOY_PATH/deploy/`，
+但**不会**自动装进系统 —— 写入 `/usr/local/bin` 与 `/etc/systemd/system/` 是系统级动作，
+仍由人工执行（脚本头注释里有完整命令）。
+
+改了脚本或单元之后**必须重装一次**，否则机器上继续跑旧判据。2026-10-29 的实例：
+`forklift-redis-prod` 已从 compose 删除，而 `/usr/local/bin` 里的旧副本仍在盯它，
+连续 3 次判红并真的发出了告警邮件。
+
+```bash
+cd "$DEPLOY_PATH"
+install -m 755 deploy/forklift-watchdog.sh /usr/local/bin/forklift-watchdog.sh
+install -m 644 deploy/systemd/forklift-watchdog.service \
+               deploy/systemd/forklift-watchdog.timer \
+               deploy/systemd/forklift-alert@.service /etc/systemd/system/
+systemctl daemon-reload && systemctl restart forklift-watchdog.timer
+deploy/forklift-watchdog.sh --dry-run     # 自检：应打「达告警级别 0/6」
+```
+
+脚本里的 `EXPECT_CONTAINERS` 是容器判据：**部署面增减容器时必须同步它**（否则误报）。
+删掉某个服务（例如 #2109 的 redis）时，连它一起从这条清单里删。
 
 ## 判据物与本地校验
 
