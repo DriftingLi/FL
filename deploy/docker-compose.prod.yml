@@ -51,8 +51,12 @@ services:
     expose:
       - "5432"
     volumes:
-      # 默认 named volume；可经 PG_VOLUME 环境变量覆盖为 bind mount 路径
-      - ${PG_VOLUME:-pgdata-prod}:/var/lib/postgresql/data
+      # 默认 named volume；可经 PG_VOLUME 环境变量覆盖为 bind mount 路径。
+      # 挂载点是 /var/lib/postgresql 而不是 .../data：18+ 官方镜像把 PGDATA 改成
+      # /var/lib/postgresql/<主版本>/docker，卷挂在旧路径上会被入口脚本判成「升级残留数据」
+      # 并拒绝启动（2026-10-29 生产实测）。挂父目录后数据落在卷的 18/docker 子目录，
+      # 后续 pg_upgrade --link 也不会被挂载边界卡住。
+      - ${PG_VOLUME:-pgdata-prod}:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-forklift} -d forklift_training"]
       interval: 10s
