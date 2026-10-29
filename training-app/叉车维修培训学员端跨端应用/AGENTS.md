@@ -15,7 +15,7 @@
 | 3 ③ 两腿 | `npm run test:unit`（接线全量）/ `npm run test:behavior`（行为**子集**） | `TEST_UNIT_RESULT` / `TEST_BEHAVIOR_RESULT … mode=changed planned=N` | 子集红而 CI 绿 → 先自查，**不当 flake**；选错腿的 config = 0 套件假绿 |
 | 4 ④c（+④a） | `npm run build:kotlin-all`；命中三份 json / 新增页 / 模块手术再加 `npm run build:compile` | 退出码 0 | ④a 命中**必须清缓存**：`pages.json` 改一行不清 = 产物没更新还报编译成功 |
 | 5 ② 改动页 | `npm run build:mp-weixin-check`（**② 微信开发者工具门 = 半自动门**，执行人允许「agent 执行」） | `MP_WEIXIN_RESULT` 整行 + `coverage=changed:N\|smoke:2\|none` | `none` 判 INCOMPLETE **不阻断**，但须原样进正文；清单为空才跑冒烟两页；`publish` 每 PR **只一次**，重试不再编译 |
-| 6 证据 | — | 正文一行 `跑于 <sha7>`；门读数行**原样**贴「结论」栏；图只作附证 | 图不是判据；`anchors=0` 不判红（人看该页） |
+| 6 证据 | — | 正文一行 `跑于 <sha7>`；门读数行**原样**跟在后面（A1 已无「结论」栏）；图只作附证 | 图不是判据；`anchors=0` 不判红（人看该页） |
 | 7 开 PR 与合并 | `pwsh scripts/preflight-pr.ps1`（**仓库根**跑）预检绿 → `pwsh scripts/submit-pr.ps1` 建 PR | 证据齐 → agent 直接合并 | 例外通道只认「已接受未验证风险」一句，**且由人合并** |
 | 8 收尾 | `pwsh scripts/dev-close.ps1 -Task <票号>`（仓库根；默认 dry-run，`-Yes` 执行） | 树摘净、分支残留机检绿 | 该脚本尚未落地：暂用 `training-app/叉车维修培训学员端跨端应用/scripts/remove-worktree.ps1 -Task <n>`，再在干净树里 `git fetch && git merge --ff-only origin/master`。拆树别手搓两步 |
 
