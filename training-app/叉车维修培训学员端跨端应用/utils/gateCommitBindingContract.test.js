@@ -7,13 +7,15 @@
  *    `utils/gateCommitBindingBehavior.test.js`：那里真建 bare 远端 + monorepo 形状工作树，真跑
  *    `Test-ShaReachable` / `Push-ArchiveCommit` / `Resolve-CommitBinding`，成对取证（必不红 + 必红）。
  *
- * 为什么要有这一层：口径的承重点不在某一个脚本里，而在「**所有**贴 sha 绑定评论的脚本都走同一处」——
+ * 为什么要有这一层：口径的承重点不在某一个脚本里，而在「**所有**产出证据块的脚本都走同一处」——
  * 只加行为守护的话，将来有人新增一个门、或在某个脚本里自己算一遍 sha（第二真源），行为守护照样全绿。
  *
- * #1841 追加（K8–K11）：commit 评论端点 404 的降级必须**一处判定、六处消费** ——
- *   404 判据只准在 `Get-CommitCommentKind`；六个调用方必须消费 CommitKind / CommitUnavailable /
- *   EvidenceUrl / Notes 并打印 `GATE_COMMENT_DEGRADED`；返回字段一个都不能少；库与调用方都不得
- *   因投递失败 exit（#1209 血账）。
+ * #1841 追加（K8–K11）→ **A1（#2100）起大半已退役**：
+ *   - 404 降级判据（`Get-CommitCommentKind`）随投递一起删；「六处必须消费降级三字段」的要求也已撤（见 K9 注释）——
+ *     投递退役后那三支**恒假**，还要求调用方处理一条永不发生的分支只会制造误导。
+ *   - 调用方的「降级 / 失败 / 成功」三支**已于 2026-10-29 删除**，只留一行 Notes 回声。
+ *   - 仍然有效的：K8（库内不得再出现任何评论写请求）、K10（返回形状一个都不能少）、
+ *     K11（库与调用方都不得因投递失败 exit —— #1209 血账）。
  */
 const path = require('path');
 const { readText } = require('./utsHarness');
@@ -264,8 +266,10 @@ describe('门评论 sha 绑定口径接线（#1695）', () => {
       ['K10', { ...real, lib: real.lib.replace(/Notes\s*=\s*@\(\$notes\)/, 'NotesX = @($notes)') }],
       ['K11', { ...real, lib: real.lib + '\nexit 1\n' }],
       ['K11', patchCaller('scripts/emulator-smoke.ps1', (t) => t.replace(
-        'Write-Log "GATE_COMMENT_FAILED reason=$gateCommentFailReason"',
-        'Write-Log "GATE_COMMENT_FAILED reason=$gateCommentFailReason"; exit 1',
+        // A1（#2100）：调用方三支恒假分支已删，锚点迁到 Send-GateComment 之后仍在的那一行（Notes 回声）。
+        // 锚点若哪天又被删掉，`replace` 不命中 ⇒ 本 case 落进 missed ⇒ 下面那句 expect 直接红（不会静默失效）。
+        'foreach ($note in @($sent.Notes)) { Write-Log $note }',
+        'foreach ($note in @($sent.Notes)) { Write-Log $note }; exit 1',
       ))],
     ];
     // 一次报出**所有**没被抓到的注入（只报第一个的话，改一条又冒出下一条，来回跑很多轮）

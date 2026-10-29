@@ -164,8 +164,9 @@
     逃生开关：跳过截图压缩入库。
 
 .PARAMETER PostToPr
-    大于 0 时把结果贴成 PR 评论，标记 <!-- prefilter:device-capture -->（**刻意不用验收门证据那套前缀**，
-    避免被 .github/workflows/pr-evidence.yml 当成验收门证据——本次**不改**门校验器）。
+    大于 0 时把结果块**打印到终端** —— A1（#2100）起**不再贴 PR 评论**。块带标记
+    <!-- prefilter:device-capture -->（**刻意不用验收门证据那套前缀**，避免被 pr-evidence.yml 当成验收门证据）。
+    本脚本是非门，结果不进验收判据；号码仅作归档目录键（见 -Module / -NoArchive）。
 
 .NOTES
     退出码：0 = 通过；1 = 断言失败；2 = 环境不可用。
@@ -955,31 +956,9 @@ function Publish-PrefilterComment {
         # #1770/#1841：判据评论先贴 commit（证据主键），同一份正文的展示副本贴号码 —— 两个落点都在 lib/gate-commit.ps1 里。
         # commit 端点回 404 时号码评论升格为正式证据落点（显式降级，不判红）。
         $sent = Send-GateComment -ProjectDir $ProjectRoot -Sha $sha -Reachable ([bool]$binding.Reachable) -IssueNumber $PrNumber -Body $body
-        # #1841：commit 评论端点 404 是降级（证据落点换成票评论），不是错误 —— 机检行 + 人读行 + Notes 都要打出来；
-        # 门结论（exit code）在任何投递失败下都不变（#1209）。
-        if ($sent.CommitUnavailable -and $sent.EvidenceUrl) {
-            Write-Log "GATE_COMMENT_DEGRADED tier=issue url=$($sent.EvidenceUrl)"
-            Write-Log "证据主键降级：commit 评论不可用（HTTP 404）→ 落点 $($sent.EvidenceUrl)"
-            foreach ($note in @($sent.Notes)) { Write-Log $note }
-        }
-        elseif ($sent.CommitKind -eq 'failed' -or @($sent.Errors).Count -gt 0) {
-            $gateCommentFailReason = (@($sent.Errors) | Where-Object { "$_".Trim() } | Select-Object -Last 1)
-            Write-Log "GATE_COMMENT_FAILED reason=$gateCommentFailReason"
-            Write-Log '评论未贴到 commit（判据面缺证据，门结论不受影响）'
-            if ($PrNumber -gt 0) {
-                if ($sent.IssueOk) { Write-Log "展示副本已贴 #$PrNumber：$($sent.IssueUrl)" }
-                else { Write-Log "展示副本未贴 #$PrNumber（判据面不受影响）" }
-            }
-            foreach ($e in @($sent.Errors)) { Write-Log "  评论投递：$e" }
-        }
-        else {
-            if ($sent.CommitOk) { Write-Log "评论已贴到 commit ${sha}：$($sent.CommitUrl)" }
-            if ($PrNumber -gt 0) {
-                if ($sent.IssueOk) { Write-Log "展示副本已贴 #$PrNumber：$($sent.IssueUrl)" }
-                else { Write-Log "展示副本未贴 #$PrNumber（判据面不受影响）" }
-            }
-            foreach ($e in @($sent.Errors)) { Write-Log "  评论投递：$e" }
-        }
+        # A1（#2100）：投递已退役 ⇒ 原先三支（降级 / 失败 / 成功）的判据**全部恒假**，整段已删。
+        # 证据块由 Send-GateComment 直接打印；这里只回声它的去路说明（Notes）。门结论不信报告层（#1209）。
+        foreach ($note in @($sent.Notes)) { Write-Log $note }
     } catch {
         Write-Log "贴 PR 评论失败（不影响结论）：$($_.Exception.Message)"
     }
