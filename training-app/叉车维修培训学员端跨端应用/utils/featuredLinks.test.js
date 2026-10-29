@@ -9,9 +9,8 @@
  * 图片链接都不算）—— 那与「运营在正文里用行内 [文字](url) 写外链」是同一份口径，不是解析漏了；
  * 要放宽得先改口径，别让下一个人把它当 bug 顺手改掉。
  */
-const fs = require('fs');
 const path = require('path');
-const { loadUts, importedNames } = require('./utsHarness');
+const { loadUts, importedNames, readText } = require('./utsHarness');
 
 const MARKDOWN_INLINE = path.join(__dirname, 'markdownInline.uts');
 const FEATURED_LINKS = path.join(__dirname, 'featuredLinks.uts');
@@ -26,7 +25,8 @@ const collect = (src) => mod().collectFeaturedLinks(src);
 
 describe('featuredLinks（真执行）：内容精选正文外链的集中可达', () => {
   it('注入面与真 import 一致（清单不漂第二份）', () => {
-    const src = fs.readFileSync(FEATURED_LINKS, 'utf8');
+    // 经共享读者归一 EOL（ADR-0019）：裸读在 CI（ubuntu/关 autocrlf）上结构性看不出来
+    const src = readText(FEATURED_LINKS);
     expect([...importedNames(src)].sort()).toEqual(Object.keys(bindings()).sort());
   });
 
