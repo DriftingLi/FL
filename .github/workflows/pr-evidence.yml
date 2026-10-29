@@ -2,39 +2,28 @@ name: PR - 验收证据校验
 
 # 本 workflow 是仓库「PR 事件不触发任何 CI/CD」的**唯一豁免**（依据 training-app/叉车维修培训学员端跨端应用/docs/adr/0008-移动端验收门与证据.md
 # —— 写全路径：该 ADR 属移动端编号体系，根仓库另有一个同名的 ADR-0008，只写 docs/adr/0008-… 在根目录解析不到）：
-# 它只读 PR 正文、评论与改动文件清单，**不 checkout、不构建、不部署、不执行 PR 里的任何代码**，
+# 它只读 PR 正文与改动文件清单，**不 checkout、不构建、不部署、不执行 PR 里的任何代码**，
 # 因此 PR 事件在这里不产生构建/部署副作用。若要新增其他 PR 触发 workflow，先改 ADR-0008。
 #
-# #1770 起：**证据主键是 commit sha，不是 PR 号**——证据齐了、贴到 commit 上，再开 PR。判据源码移到
-# `.github/scripts/lib/gate-validator.mjs`（单一来源，mobile-gates 与本地预检读同一份）；本 job 不 checkout，
-# 用 repos.getContent 取该文件文本 → 剥 `export` → new Function 求值。取的是**默认分支**上的版本（PR 改不了自己的判据）。
-# 证据来源四处：PR 正文（结构）、PR 评论、**commit 评论**（`gh api repos/{owner}/{repo}/commits/<sha>/comments`）、
-# 以及 **PR 正文关联的票评论**（`Closes #N` / `Refs #N` / issue 直链，去重 ≤5 张）。票评论自 #1841 起进候选：
-# 本仓 commit 评论 POST 长期 HTTP 404（#1838 复盘），门脚本据此**降级**把同一份评论贴到票上当正式落点；
-# 三者**同构**（marker / sha 绑定 / 祖先判定 / 其间运行时面 / fail-closed 全不变），未在正文关联的票不进判据。
+# **A1 形态（2026-10-29，#2100）**：证据只有一个来源 —— **PR 正文**。
+#   一行 `跑于 <sha7>` + 门自带的机读读数行；判据只校「行在不在、读数行在不在、sha 绑不绑得上 head」。
+#   本 job 因此**不再读任何评论**（PR 评论 / commit 评论 / 票评论三条取数路径全部退役），
+#   `issues: read` 权限随之删除 —— 少了三次分页取数，也少了「证据贴在哪」这个自由度。
+#   失效条件写明：只校结构与 sha 绑定，**不校真伪**（不校验那次门是否真的按该 sha 跑过），真伪由维护者判定。
 #
-# 它只校验「证据段的结构与产物字段是否存在」，**不校验真伪** —— 真伪由维护者读日志/截图判定（ADR-0008 明确不做）。
-# 截图产物的判据是**结构性**的（2026-09-12 修订）：只认 GitHub 托管图片（附件/Markdown 图片）、仓库内
-# `docs/verification/<模块>/<数字>/<页名>.<ext>`（数字 = 票号或旧口径的 PR 号）、以及 sha 绑定门评论链接
-# （`#issuecomment-<id>`）；裸本地产物路径（`.ci-verify/*.png`）与任意 http(s) 链接**不算证据**（改判据的理由见 ADR-0008）。
-# ④ 本地编译门与 ② 微信开发者工具门（2026-09-12 起为半自动门）的证据都可由脚本（`-PostToIssue` / 旧名 `-PostToPr`）
-# 贴的「commit 评论」承载，校验器只校结构与 sha 绑定，同样不校真伪。
-# 门证据的**绑定判据**（2026-09-12 修订）：从「sha 必须等于 head」放宽为「**祖先 + 运行时面未变**」——
-# commit == head，或 commit 是 head 的祖先**且**二者之间没有运行时面（`*.uvue` / `*.uts` / 三份 json）改动
-# 即算绑上；否则（不是祖先 / 其间运行时面已变 / compare 拿不到）仍判不满足并要求重跑重贴。动机是
-# ruleset 的 strict_required_status_checks_policy × master 高频前进导致的证据 churn，详见 ADR-0008。
+# 判据源码在 .github/scripts/lib/gate-validator.mjs（单一来源，本地预检 preflight-pr.mjs 直接 import
+# 同一份）。本 job 不 checkout，用 repos.getContent 取该文件文本 → 剥 `export` → new Function 求值；
+# 取的是**默认分支**上的版本（PR 改不了自己的判据）。
 
 on:
   pull_request:
     types: [opened, edited, synchronize, reopened]
 
-# 权限（2026-09-12 复核，按需最小集；#1770 补：取判据模块文本 + 读 commit 评论）：
-#   pull-requests: read → 读 PR 正文与改动文件清单（pulls.listFiles / pulls.listCommits）
-#   issues: read        → 读 PR 评论（issues.listComments，PR 的评论走 issues 端点）
-#   contents: read      → repos.compareCommits（判断证据 commit 是否为 head 祖先、其间改了哪些文件）
-#                         + repos.getContent（取 .github/scripts/lib/gate-validator.mjs 的文本，不 checkout）
-#                         + repos.listCommitComments（读 commit 评论上的门证据）
-# 四项之外一个不多给：本 job 不 checkout、不写评论、不碰 actions/secrets。
+# 权限（2026-10-29 复核，A1 后按需最小集）：
+#   pull-requests: read → 读 PR 正文与改动文件清单（pulls.listFiles）
+#   contents: read      → repos.compareCommits（判 `跑于 <sha7>` 是否为 head 祖先、其间改了哪些文件）
+#                         + repos.getContent（取判据模块文本，不 checkout）
+# 两项之外一个不多给：本 job 不 checkout、不读评论、不写任何东西、不碰 actions/secrets。
 
 concurrency:
   group: pr-evidence-${{ github.event.pull_request.number }}
@@ -43,7 +32,6 @@ concurrency:
 permissions:
   contents: read
   pull-requests: read
-  issues: read # 读 PR 评论（P1：④ / ② 门的 sha 绑定证据评论）；issues 端点在 PR 上共用，缺它可能取不到评论
 
 jobs:
   pr-evidence:
@@ -55,7 +43,6 @@ jobs:
             // ==== 判据来源（#1770）：校验器只有一份源码 .github/scripts/lib/gate-validator.mjs ====
             // 本 job 不 checkout（见文件头），用 repos.getContent 取模块文本 → 剥掉行首 export → new Function 求值。
             // 取**默认分支**（pull_request.base.ref）而不是 PR head：PR 不能改自己的判据。
-            // 迁移期兜底：base 上还没有模块时退回旧的「从 pr-evidence.yml 抽标记块」读法（合入后一个版本即可删）。
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const readRepoFile = async (path, ref) => {
@@ -66,45 +53,23 @@ jobs:
               }
               return Buffer.from(data.content, data.encoding === 'base64' ? 'base64' : 'utf8').toString('utf8');
             };
-            // 判据面需要的两个纯函数：主判据 + 「PR 正文关联了哪些票」（#1841）。
-            // 后者也住在校验器里而不是这里：它决定**哪些票的评论进候选**，属判据的一部分；
-            // 写进 workflow 就是第二份口径（#1770 拆掉的那类分叉）。
-            // 兼容窗口：默认分支上的旧版模块还没有 issueNumbersInBody。typeof 对未声明的标识符安全，
-            // 取不到就返回 null，调用方把「票评论」这条来源按未启用处理（fail-closed，不报错）。
-            const evalValidator = (srcText) =>
-              new Function(
-                `${srcText.replace(/^export /gm, '')}\nreturn { validatePrEvidence, issueNumbersInBody: typeof issueNumbersInBody === 'function' ? issueNumbersInBody : null };`,
-              )();
-            const loadValidator = async (ref) => {
-              try {
-                return evalValidator(await readRepoFile('.github/scripts/lib/gate-validator.mjs', ref));
-              } catch (e) {
-                const wf = await readRepoFile('.github/workflows/pr-evidence.yml', ref);
-                const m = wf.match(/\/\/ ==== PR-EVIDENCE-VALIDATOR-START ====([\s\S]*?)\/\/ ==== PR-EVIDENCE-VALIDATOR-END ====/);
-                if (!m) throw e;
-                return new Function(`${m[1]}\nreturn { validatePrEvidence, issueNumbersInBody: typeof issueNumbersInBody === 'function' ? issueNumbersInBody : null };`)();
-              }
-            };
+            // 迁移期兜底（从 pr-evidence.yml 抽内联块）已于 A1 删除：它读的 marker 块早已不存在，
+            // 留着只是一条永远走不到的分支。取不到模块就如实失败——判据缺失不该被"降级"成放行。
+            const srcText = await readRepoFile('.github/scripts/lib/gate-validator.mjs', context.payload.pull_request.base.ref);
+            const { validatePrEvidence } = new Function(`${srcText.replace(/^export /gm, '')}\nreturn { validatePrEvidence };`)();
 
             const pr = context.payload.pull_request;
-            const { validatePrEvidence, issueNumbersInBody } = await loadValidator(pr.base.ref);
 
             const files = await github.paginate(github.rest.pulls.listFiles, {
               owner, repo, pull_number: pr.number, per_page: 100,
             });
-            // P1：④ 本地编译门的证据可由脚本（-PostToIssue / 旧名 -PostToPr）贴成「sha 绑定」的评论，
-            // 这里把评论正文数组与 head sha 一并交给校验器（只读，不写任何评论）。
-            const gateComments = (
-              await github.paginate(github.rest.issues.listComments, {
-                owner, repo, issue_number: context.issue.number, per_page: 100,
-              })
-            ).map((c) => c.body || '');
-            // 2026-09-12 新增：注入「取 compare 结果」的回调（校验器保持纯函数、可单测注桩）。
-            // 判据是「证据 commit 是否为 head 祖先 + 其间运行时面是否变过」，都落在 compare 上：
-            //   status/merge_base_commit 判祖先；files[].filename 交给校验器用同一 isRuntimeFile 过滤。
+
+            // 注入「取 compare 结果」的回调（校验器保持纯函数、可单测注桩）。
+            // 判据是「`跑于 <sha7>` 是否为 head 祖先 + 其间运行时面是否变过」，都落在 compare 上：
+            //   status / merge_base_commit 判祖先；files[].filename 交给校验器用同一 isRuntimeFile 过滤。
             // **fail-closed**：任何异常（未知 sha 的 404、超时、限流）都返回 null ⇒ 校验器判「不满足」，绝不放行。
             // **截断要写明**：GitHub 的 compare 接口 files 上限 300（与 listFiles 不同，这里不分页），
-            //   超过即被截断 ⇒ 无法判定运行时面是否变过 ⇒ 按 fail-closed 判「不满足并需重跑重贴」，
+            //   超过即被截断 ⇒ 无法判定运行时面是否变过 ⇒ 按 fail-closed 判「不满足并要求重跑」，
             //   而不是拿被截断的列表当「没有运行时面改动」。
             const COMPARE_FILES_CAP = 300;
             const fetchCompare = async ({ base, head }) => {
@@ -123,50 +88,16 @@ jobs:
                 return null;
               }
             };
-            // S2（#1770）：证据主键改为 **commit sha** —— 门评论可以直接贴在 commit 上（证据齐了再开 PR）。
-            // 为什么不止读 head 的 commit 评论：证据可能贴在一个仍是 head 祖先的旧 commit 上（绑定判据允许），
-            // 于是把本 PR 的提交逐个取一遍（取最近 30 个，足够覆盖证据所在的那次推送）。
-            const prCommits = await github.paginate(github.rest.pulls.listCommits, {
-              owner, repo, pull_number: pr.number, per_page: 100,
-            });
-            const commitShas = [...new Set([...prCommits.map((c) => c.sha), pr.head.sha])].slice(-30);
-            const commitComments = [];
-            for (const sha of commitShas) {
-              const cs = await github.paginate(github.rest.repos.listCommitComments, {
-                owner, repo, commit_sha: sha, per_page: 100,
-              });
-              for (const c of cs) commitComments.push(c.body || '');
-            }
-            // #1841：commit 评论端点对本仓恒 404（#1838）⇒ 门脚本把**同一份**正文（marker + `commit: <sha>`）
-            // 改贴到票上当正式落点，票评论因此进候选。只认 **PR 正文显式关联的票**（`Closes #N` / `Refs #N`，≤5 张），
-            // 未关联的票不进判据——否则「别的票上的证据」能被任意 PR 复用。
-            // 过渡窗口：base 分支尚未带这条改动时没有 issueNumbersInBody ⇒ 本来源不启用（fail-closed，而非报错）。
-            const issueNumbers =
-              typeof issueNumbersInBody === 'function' ? issueNumbersInBody(pr.body || '') : [];
-            const issueComments = [];
-            for (const n of issueNumbers) {
-              try {
-                const cs = await github.paginate(github.rest.issues.listComments, {
-                  owner, repo, issue_number: n, per_page: 100,
-                });
-                for (const c of cs) issueComments.push(c.body || '');
-              } catch (e) {
-                // 票评论取不到不影响 PR 评论 / commit 评论两条既有来源；这一路按「没有候选」处理。
-                core.warning(`listComments(#${n}) 失败：${e && e.message ? e.message : e}`);
-              }
-            }
 
             const result = await validatePrEvidence({
-              files, body: pr.body || '', author: pr.user.login,
-              gateComments, commitComments, issueComments, headSha: pr.head.sha, fetchCompare,
+              files, body: pr.body || '', headSha: pr.head.sha, fetchCompare,
             });
 
-
             await core.summary
-              .addHeading('验收证据校验（ADR-0008）', 3)
+              .addHeading('验收证据校验（ADR-0008 / A1）', 3)
               .addRaw(`命中运行时面的文件：${result.runtime.length} 个`).addEOL()
               .addList(result.runtime.length ? result.runtime : ['（无）'])
-              .addRaw(`④b release 云打包门：${result.needs4b ? '触发（触及打包面：三份 json / utssdk 原生面 / *.aar / libs/*.jar）' : '未触发'}`).addEOL()
+              .addRaw(`④b release 云打包门：${result.needs4b ? '打包面命中（A1 下不判红，发版前必跑）' : '未触发'}`).addEOL()
               .addList([...result.notes, ...result.errors.map((e) => `❌ ${e}`)])
               .write();
 

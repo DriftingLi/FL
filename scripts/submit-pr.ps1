@@ -37,36 +37,14 @@ try {
         Write-Warning '工作区不干净：PR 只包含已提交内容，未提交改动不会被评审看到（确认这是有意的再继续）。'
     }
 
-    # 第一遍只看 ci-summary（红也能读出 JSON）：③ 门的 run 链接要写进正文才能判绿，
-    # 而链接只有 check-runs 里有——这就是 S4「不再要人手抄」的落点。
+    # 第一遍先看 ci-summary（红也能读出 JSON）。A1（#2100）后正文**不再写 ③ 的 run 链接**
+    # （③ 判据已判纯税：两腿在 ci-summary 里，正文抄一遍零信息），但「测试绿了没」仍是开 PR 的前置事实 ——
+    # 不许在一个有红腿的 commit 上开 PR，那会让评审看到一份「证据齐、测试红」的自相矛盾。
     $probe = (& node $cli --json --body-file $BodyFile --base "origin/$Base" 2>$null) | Out-String
     try { $probeJson = $probe | ConvertFrom-Json } catch { throw "预检没吐出 JSON：$probe" }
     $ciRun = $probeJson.ciRun
     if (-not $ciRun) { throw "commit $($head.Substring(0,7)) 上还没有 ci-summary（先把分支推到 origin，等 CI 跑完再来）" }
-    if ($ciRun.conclusion -ne 'success') { throw "ci-summary 当前是 $($ciRun.conclusion)：③ 门没有可引用的绿 run，等它绿再来（别贴一个没绿的链接）" }
-
-    # ③ run 链接：交给同一支 node（--fill-body）补，PowerShell 不再自己拼字符串 ——
-    # 「占位不补 / 已有链接不补」两个判据也就只有一个实现，可被单测钉住。
-    #
-    # 但**预检已经绿就别补**：非运行时面 PR 按约定只写「免（未命中运行时面）」，正文里本来就没有 ③ 行，
-    # 此时去补会以 no-gate-3-line 误报（#1770 自己的 PR 就是这一类，踩过一次）。
-    if ($probeJson.ok) {
-        Write-Host '预检已绿：正文无需补 ③ run 链接'
-    } else {
-        $fill = (& node $cli --fill-body --body-file $BodyFile) | Out-String
-        try { $fillJson = $fill | ConvertFrom-Json } catch { throw "补 ③ 行没吐出 JSON：$fill" }
-        if ($fillJson.filled) {
-            Write-Host "③ 行已自动补上 ci-summary run 链接：$($fillJson.ciRun.url)"
-        } elseif ($fillJson.reason -eq 'already-has-run') {
-            Write-Host '③ 行已有 run 链接，未改动'
-        } elseif ($fillJson.reason -in @('conclusion-placeholder', 'no-conclusion-field')) {
-            throw "③ 行的结论还没写（$($fillJson.reason)）：先在正文写清结论（如「两腿全绿」），再重跑 —— 补链接不替你写结论"
-        } elseif ($fillJson.reason -eq 'no-gate-3-line') {
-            throw '正文里没有 ③ 行：按模板补一行（行首 ③、含「结论：」）'
-        } else {
-            throw "③ 行补链接失败：$($fillJson.reason)"
-        }
-    }
+    if ($ciRun.conclusion -ne 'success') { throw "ci-summary 当前是 $($ciRun.conclusion)：先让两腿跑绿再来开 PR" }
 
     # 第二遍：正文补完后再判一次，绿了才建 PR（这一步与 CI 同一份判据）。
     & node $cli --body-file $BodyFile --base "origin/$Base"

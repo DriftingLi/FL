@@ -3,7 +3,8 @@
     验收证据**形状**的 PowerShell 侧读取器：同一份描述符，node 与 pwsh 读同一段字节。
 
 .DESCRIPTION
-    门的形状（五门、必填字段、产物类别、① 免行口径与跳过文案）只有一个真源：
+    A1（2026-10-29，#2100）起门的形状缩到两门（② / ④），行形态变成
+    `- <门号> 跑于 `<sha7>` · `<读数行>``；描述符仍是唯一真源，本模块只按它拼装。
     仓库根 `.github/scripts/lib/gate-validator.mjs` 里 `GATE_EVIDENCE_DESCRIPTOR BEGIN/END`
     marker 圈出的那段**严格 JSON**（#1920）。判据侧（校验器）与预检侧（preflight-pr.mjs）
     是 node，直接 import 那个常量；本机生成侧（evidence-gen.ps1 等）是 pwsh，用本模块抽
@@ -83,29 +84,34 @@ function Get-GateEvidenceGate {
     return $gate
 }
 
-function Format-GateEvidenceRow {
+function Format-GateEvidenceLine {
     <#
     .SYNOPSIS
-        按描述符把一门的字段值渲染成**单行**证据（字段以 ` · ` 分隔、结论带「（含产物）」）。
+        按描述符把一门的证据渲染成**A1 单行**：`- <门号> 跑于 `<sha7>` · `<读数行>`[ · 图 <链接>]`。
     .DESCRIPTION
-        行形态（列表项前缀、字段名、字段显示名、分隔符）全部来自描述符；本函数只做拼装。
-        校验器按「以门号开头的那一行」取门，所以**必须单行** —— 多行块会被判「缺该行」
+        A1（2026-10-29，#2100）起行形态变了：不再有 `执行人 / 日期 / 复测对象 / 结论` 四字段
+        （执行人问 git，日期问 commit，复测对象就是那行读数，结论就是读数本身），
+        只留两样硬内容 —— **门在哪个提交上跑的**（`跑于`）与**门自己打的机读读数行**（原样，别改写）。
+        校验器按「以门号开头的那一行」取门，所以**必须单行**：多行块会被判「缺该行」
         （2026-09-29 #1403 的回归形状，见 evidence-gen.ps1 头注释）。
+        形状（列表项前缀、`跑于` 标签、分隔符）全部来自描述符；本函数只做拼装。
     #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]$Gate,
-        [Parameter(Mandatory)][hashtable]$Values,
+        [Parameter(Mandatory)][string]$Sha7,
+        # 门的机读读数行，**原样**传入（`MP_WEIXIN_RESULT …` / `KOTLIN_ALL_RESULT …` / `COMPILE_RESULT …`）
+        [AllowEmptyString()][Parameter(Mandatory = $true)][string]$Readings,
+        # 附证（GitHub 附件直链）。A1：图不参与判定（#2108），可空
+        [AllowEmptyString()][string]$Artifact = '',
         $Descriptor = (Get-GateEvidenceDescriptor)
     )
 
-    $conclusionField = [string]$Descriptor.conclusionField
     $sep = [string]$Descriptor.fieldSeparator.display
     $rowPrefix = [string]$Descriptor.listItem.prefix
-    $parts = foreach ($field in $Gate.fields) {
-        $display = if ($field -eq $conclusionField) { [string]$Descriptor.conclusionLabel } else { [string]$field }
-        $value = if ($Values.ContainsKey($field)) { [string]$Values[$field] } else { '' }
-        "$display：$value"
-    }
-    return "$rowPrefix$($Gate.key) $($Gate.label) — $($parts -join $sep)"
+    $ranAtLabel = [string]$Descriptor.ranAt.label
+    # `` = 一个字面量反引号（PowerShell 转义）；读数行加反引号是为了整行渲染成行内代码，一眼能看出没被改写
+    $parts = @(('{0} `{1}`' -f $ranAtLabel, $Sha7), ('`{0}`' -f $Readings))
+    if ($Artifact) { $parts += "图 $Artifact" }
+    return "$rowPrefix$($Gate.key) $($parts -join $sep)"
 }

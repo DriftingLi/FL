@@ -1,7 +1,7 @@
 <!--
 合并方式固定 Squash and merge；目标分支固定 master（本模板此前写在移动端目录下且写着 main，GitHub 读不到、分支名也是错的）。
 master 有 ruleset「protect master」，必检只有 ci-summary；pr-evidence 在本仓是**可见检查**（本仓有可用 admin 通道，但裁定不装必检——逐 PR 审批成本高于约束收益）。
-**证据 = PR 正文一行 `跑于 <sha7>` + 门读数行原样（A1 形态，2026-10-29 #2100 起）**：sha 绑定门评论、三候选集（PR / commit / 票评论）、`-PostToIssue`、marker 与展示副本**全部退役**（来路 #1770 / #1841 / [#1838](https://github.com/DriftingLi/FL/issues/1838) 复盘）→ `preflight-pr.ps1` 预检绿 → 再由 `submit-pr.ps1` 建 PR。**先开 PR 再补证据的老顺序已废弃**。
+**证据 = PR 正文一行 `跑于 <sha7>` + 门读数行原样（A1 形态，2026-10-29 #2100 起）**：sha 绑定门评论、三候选集（PR / commit / 票评论）、`-PostToIssue`、marker 与展示副本**全部退役**（来路 #1770 / #1841 / [#1838](https://github.com/DriftingLi/FL/issues/1838) 复盘）→ `preflight-pr.mjs` 预检绿 → 再由 `submit-pr.ps1` 建 PR。**先开 PR 再补证据的老顺序已废弃**。
 真正的阻塞只剩行为约束：**证据齐即 agent 直接合并，不必停在「待人工签收」**——**①b 已整体退役**（2026-10-29，#2103）：能力面 PR 合并前**零人签**、不要求设备在线，正文命中才写一行 `能力面：<类别> · 已记入发版冒烟`（**不是「需要人签」**）；**①a** 降为发版前一次的发版冒烟（见 `training-app/叉车维修培训学员端跨端应用/docs/adr/0043-真机门降级常态化与发版冒烟（2026-10-23 裁定）.md`）。证据填齐即可合并；例外通道（「已接受未验证风险」）仍由人执行合并。口径见 `training-app/叉车维修培训学员端跨端应用/docs/adr/0008-移动端验收门与证据.md`（**必须写全路径**：该 ADR 属**移动端编号体系**，根仓库另有一个同名的 `docs/adr/ADR-0008-字典描述符驱动的管理面.md`，只写 `docs/adr/0008-…` 在根目录解析不到）。
 -->
 
@@ -20,53 +20,28 @@ master 有 ruleset「protect master」，必检只有 ci-summary；pr-evidence �
 ## 影响范围 / 风险点
 <!-- 涉及哪些模块、是否影响线上、有无数据库/接口变更；跨模块夹带必须显式写明 -->
 
-- [ ] **本次改动触及「agent 观测不到的能力面」**（指纹 / 运行时权限弹窗 / 真机上传 / 厂商 ROM 交互）—— 勾上则 **①b 必做、由人给出原文**；机检口径 = `training-app/叉车维修培训学员端跨端应用/scripts/lib/capability-surface.ps1` 的**路径白名单** + 收口脚本提示行（`dev:finish` 打 `CAPABILITY_SURFACE touched=…`），两者**只做提示、不判红**；实际触及却没勾属**漏报**（`pr-evidence` 不做机械判据，靠 ①a 的 logcat、评审与事后验证回执兜；口径见 `training-app/叉车维修培训学员端跨端应用/docs/adr/0016-真机门的人工性收缩与按批取证.md`）
+- [ ] **本次改动触及「agent 观测不到的能力面」**（指纹 / 运行时权限弹窗 / 真机上传 / 厂商 ROM 交互）—— 勾上**不代表需要人签**（①b 已整体退役，#2103），只表示该面记入下一次发版冒烟；机检口径 = `training-app/叉车维修培训学员端跨端应用/scripts/lib/capability-surface.ps1` 的**路径白名单** + 收口脚本提示行（`dev:finish` 打 `CAPABILITY_SURFACE touched=…`），两者**只做提示、不判红**。
 
 ## 验收证据
 
 <!--
-口径见 ADR-0008。**分级判据（哪些改动算命中运行时面）的权威定义在**
-`.github/scripts/lib/gate-validator.mjs`（**判据单一来源**：`pr-evidence.yml` 与 `mobile-gates.yml` 都不 checkout，用 `repos.getContent` 取同一份模块执行；改判据只改这一处）——
-本模板**刻意不再复述那份文件清单**：复述品会与权威定义漂移，历史上已因此产生过一次假红
-（作者照模板写正文，却被校验器判红）。**未命中运行时面的 PR 仍按约定写「免（未命中运行时面）」**。
+口径见 ADR-0008（A1 形态，2026-10-29 #2100 起）。**这一段只有一件必做的事**：哪道门触发了，就把它自带的机读行**原样**贴进来，行首写门号、行内写 `跑于 <sha7>`。
 
-字段格式固定：执行人（④ / ② / ①a 填执行会话所用账号并注明「agent 执行」；含 ①b 时必须是**人**给出的原文，agent 只可代录） · 日期（YYYY-MM-DD） · 复测对象 · 结论（含产物）
-「待人工」「⏳」或只有勾选 = 缺证据，pr-evidence 会直接红；结论必须引用可核验产物：
-截图及其链接、CI run 链接、.ci-verify/kotlin-all.log（④c）/ .ci-verify/build.log（④a）（只写「已验证」不算）。
-**可核验产物认这三种（#1770）**：GitHub 附件 / Markdown 图片 · 仓库内 `docs/verification/<模块>/<数字>/<页名>.<ext>`（数字 = **票号**；旧 PR 号目录仍被接受） · sha 绑定的门评论链接 `#issuecomment-<id>`（commit 评论、PR 评论与 **PR 正文关联的票评论**——#1841 起 commit 评论 HTTP 404 时的正式落点——都在候选集，id 同源、判据同构）。裸本地产物路径与任意 http(s) 链接一律不认。
-④ 的证据可由脚本贴的「sha 绑定评论」承载：本仓 `npm run build:kotlin-all` 不转发参数，
-要贴评论请直接跑 `pwsh -NoProfile -File scripts/kotlin-all-check.ps1 -PostToIssue <票号>`
-（dev 面同理 `scripts/compile-check.ps1 -PostToIssue <票号>`，仅门通过时贴；`-PostToPr` 是旧别名，一个版本后退役）；正文该行写「见评论 <链接>」即可。
-② 自 2026-09-12 起是**半自动门**（#883 实测全链路无人值守，≈4.5 分钟/次）：跑
-`pwsh -NoProfile -File scripts/mp-weixin-check.ps1 -PostToIssue <票号>`（或 `npm run build:mp-weixin-check`），
-门通过时会贴 `<!-- gate-evidence:② -->` + `commit: <head sha>` 的评论，正文该行同样写「见评论 <链接>」。
-**自 2026-09-21 起（#1210）② 还含一道「产物合法性」前置断言**：必需文件（`project.config.json` / `app.json` /
-`app.js` / `app.wxss`）齐、两份 JSON 可解析（非法即打印 `line N, position M`）、appid 由解析后取值、
-`app.json.pages` 每页有 `.js`；**产物坏了判 `exit 1`（门未过）**，与「环境不可用 `exit 2`」分开 ——
-坏产物会让开发者工具白屏、`pageStack` 永不应答，别再把它当「环境 / 锁 / 端口」问题去查。
-**但「执行人」栏仍须由人签收**：agent 只产出证据（`MP_WEIXIN_RESULT` + 截图），不得代填执行人、不得写「已通过」。
-校验器只认「带 gate-evidence:④ / gate-evidence:② 注释标记 + commit 与 head 绑定」的评论，不校真伪（候选集 = **PR 评论 + commit 评论 + PR 正文关联的票评论**；票的取法见 `issueNumbersInBody`——`Closes` / `Refs` / issue 直链、去重 ≤5 张，**未关联的票不进判据**；三来源同构，**不放宽**）：
-绑定 = `commit` **等于** head sha，**或**它是 head 的**祖先**且二者之间没有运行时面（`*.uvue` / `*.uts` / 三份 json）改动
-（2026-09-12 放宽，免去 master 前进一次就重跑重贴的 churn）；其间运行时面动过、或不是祖先，仍须重跑并重贴。
-带 `-PostToIssue` 时 ② 还会把截图**压缩入库**到当前分支的 `docs/verification/<模块>/<票号>/<页名>-after.<ext>`
-（WebP q75，本机无编码器则 JPEG q75；宽 ≤720；单次 ≤10 张 / 单张 ≤150KB / 合计 ≤1.5MB；`-NoArchive` 可跳过），
-并在评论里用仓库内相对路径列出——**入库失败只警告、不影响门结论**。
-⚠️ HBuilderX 是**单实例串行资源**：需要 HBuilderX 的门（② / ④a / ④c 的 publish 段）会先走
-`scripts/lib/hx-busy.ps1` 的「锁 + 忙探测 + 等待上限」；维护者正在用 GUI 时脚本会等到上限后 `exit 2`
-（环境不可用，绝不抢占主程序），日志里打 `HX_BUSY wait=<秒> result=...`。**跑完任何 HBuilderX 门后先
-`git status` 看 `manifest.json` 是否被 HBuilderX 回写改脏**（它会把 mp-weixin.appid 置 null），脏了就还原再继续。
-①a 降级常态（ADR-0043，2026-10-23，移动端编号体系）：真机逐页取证降级为**发版前一次**（发版冒烟），运行时面 PR 的 ① 行
-固定写 `免（①a 降级发版前一次，ADR-0043）`（执行人 / 日期仍须填，复测对象可写「无」）；② 触发面命中（三份 json /
-MP-WEIXIN 条件编译）时每个运行时面 PR 必跑——**低风险分层已退役**，纯 .uts 不再免 ②（0043 决策 3/8；校验器认新免行 +
-过渡期双白名单，判据票 #1859）。旧窗口写法 `SKIP·待批收口` 过渡期暂认。
-例外通道：正文写明「已接受未验证风险」+ 理由 + 事后验证计划，检查会打警告放行，但**这类 PR 必须由人执行合并**。
+- ② 微信小程序门：命中 MP-WEIXIN 面时必填（ADR-0043 起为常态主门）
+- ④ 本地编译门：命中运行时面时必填
+- ① 不写（已降为发版前一次的发版冒烟）；③ 不写（两腿在 ci-summary 里，正文抄一遍零信息）；④b 不写（打包链路在发版流程里，触到只留 notes 提醒）
+
+分级判据（哪些改动算命中运行时面 / MP-WEIXIN 面）的权威定义在 `.github/scripts/lib/gate-validator.mjs`——本模板**刻意不复述那份文件清单**：复述品会与权威定义漂移，历史上已因此产生过一次假红。未命中运行时面的 PR 写「免（未命中运行时面）」。
+
+`<sha7>` = 门实际跑的那个 commit 的前 7 位。它等于 head、或是 head 的祖先且其间运行时面没动过，都算绑上；
+其余一律要重跑并把 sha7 改成当前 head（**fail-closed**：compare 取不到也判不满足，不因 API 抖动放行）。
+
+**图的地位**：截图是**附证**不是判据（#2108）——附在行尾供人看，校验器不读图、也不校验链接可达。
+**自检**：`node .github/scripts/preflight-pr.mjs --body-file <正文文件>`（与 CI 同一份判据；红了别开 PR）。
 -->
 
-- ① Android 真机逐页截图对比（**①a**：已降级为发版前一次，正文写免行 `免（①a 降级发版前一次，ADR-0043）`；**①b**：命中「能力面」时由人签收） — 执行人： · 日期： · 复测对象： · 结论（含产物）：
-- ② 微信开发者工具无报错（半自动：可跑 `scripts/mp-weixin-check.ps1` 产出证据，执行人栏仍由人签收） — 执行人： · 日期： · 复测对象： · 结论（含产物，引用 `MP_WEIXIN_RESULT` + 截图 `.ci-verify/*.png`；也可写「见评论 <链接>」）：
-- ③ `npm run test:unit`（接线腿）+ `npm run test:behavior`（行为腿）两腿全绿 — 结论（含产物，贴 CI run 链接；本地落盘入口 `npm run test:unit:gate` 会给两条 `TEST_*_RESULT` 机检行）：
-- ④ 本地编译门（默认 ④c `npm run build:kotlin-all`；dev 面追加 ④a `npm run build:compile`） — 执行人： · 日期： · 复测对象： · 结论（含产物，引用 `.ci-verify/kotlin-all.log` 或 `.ci-verify/build.log`；也可写「见评论 <链接>」）：
-- ④b release 云打包（触及打包面时必填；正式发版前必跑） — 执行人： · 日期： · 复测对象： · 结论（含产物）：
+- ② 跑于 `<sha7>` · `MP_WEIXIN_RESULT ...`（`scripts/mp-weixin-check.ps1` 原样输出）· 图
+- ④ 跑于 `<sha7>` · `KOTLIN_ALL_RESULT ...`（`scripts/kotlin-all-check.ps1` 原样输出；dev 面为 `COMPILE_RESULT ...`）
 
 ## 自检清单
 - [ ] 提交信息遵循 Conventional Commits
