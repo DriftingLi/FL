@@ -39,7 +39,6 @@ type Config struct {
 	AIBaseURL string
 	AIModel   string
 	Valuation ValuationConfig
-	Redis     RedisConfig
 	RateLimit RateLimitConfig
 	// TrustedProxies 可信反向代理地址（TRUSTED_PROXIES，逗号分隔的 IP / CIDR）。
 	// 默认空 = 不信任任何代理。gin 的默认值是「信任所有代理」（0.0.0.0/0），
@@ -204,22 +203,6 @@ type ValuationConfig struct {
 	DBConnMaxLifetime int
 }
 
-// RedisConfig Redis 缓存配置。
-type RedisConfig struct {
-	Addr         string        // REDIS_ADDR，默认 "localhost:6379"
-	Password     string        // REDIS_PASSWORD，生产环境从环境变量注入
-	DB           int           // REDIS_DB，默认 0
-	PoolSize     int           // REDIS_POOL_SIZE，默认 20
-	MinIdleConns int           // REDIS_MIN_IDLE_CONNS，默认 3
-	MaxRetries   int           // REDIS_MAX_RETRIES，默认 3
-	Prefix       string        // REDIS_KEY_PREFIX，统一 key 前缀，默认 "fl:"
-	DialTimeout  time.Duration // REDIS_DIAL_TIMEOUT，默认 2s
-	ReadTimeout  time.Duration // REDIS_READ_TIMEOUT，默认 3s
-	WriteTimeout time.Duration // REDIS_WRITE_TIMEOUT，默认 3s
-	PoolTimeout  time.Duration // REDIS_POOL_TIMEOUT，默认 4s
-	IdleTimeout  time.Duration // REDIS_IDLE_TIMEOUT，默认 5m
-}
-
 // RateLimitConfig 限流配置（基于客户端 IP 的 token bucket）。
 // 生产环境建议开启，防止暴力枚举/撞库/爬虫。
 type RateLimitConfig struct {
@@ -251,8 +234,8 @@ type SwaggerConfig struct {
 // setDefaults 集中定义全部配置默认值。
 //
 // 一个键的默认值只许写一处：另有少数键把单点写在 Load 的读取回退里
-// （redis_pool_size / redis_dial_timeout，ADR-0060 票5 消掉的双写），
-// 两侧各写一遍正是 REDIS_POOL_SIZE 那次 20/10/20 漂移的形状。
+// （positiveInt / positiveDuration 的第二个参数），两侧各写一遍正是历史上
+// REDIS_POOL_SIZE 那次 20/10/20 漂移的形状（Redis 已在 #2109 退役，这个教训留着）。
 // 两侧形态都由 internal/deploy 的漂移锁对账（TestEnvDefaultsNoDrift）。
 func setDefaults() {
 	viper.SetDefault("app_env", "development")
@@ -283,18 +266,6 @@ func setDefaults() {
 	viper.SetDefault("valuation_db_max_open_conns", 20)
 	viper.SetDefault("valuation_db_max_idle_conns", 5)
 	viper.SetDefault("valuation_db_conn_max_lifetime", 3600)
-	viper.SetDefault("redis_addr", "localhost:6379")
-	viper.SetDefault("redis_password", "")
-	viper.SetDefault("redis_db", 0)
-	// redis_pool_size 的默认值单点在 Load 的 positiveInt 回退里（不双写，ADR-0060 票5）
-	viper.SetDefault("redis_min_idle_conns", 5)
-	viper.SetDefault("redis_max_retries", 3)
-	viper.SetDefault("redis_key_prefix", "fl:")
-	// redis_dial_timeout 的默认值单点在 Load 的 positiveDuration 回退里（不双写，ADR-0060 票5）
-	viper.SetDefault("redis_read_timeout", "2s")
-	viper.SetDefault("redis_write_timeout", "2s")
-	viper.SetDefault("redis_pool_timeout", "3s")
-	viper.SetDefault("redis_idle_timeout", "5m")
 	viper.SetDefault("rate_limit_rps", 20.0)
 	viper.SetDefault("rate_limit_burst", 40)
 	// 空 = 不信任任何反向代理（与 gin 的默认值相反，见 Config.TrustedProxies）
@@ -387,21 +358,6 @@ func Load() (*Config, error) {
 			DBMaxOpenConns:    positiveInt("valuation_db_max_open_conns", 20),
 			DBMaxIdleConns:    positiveInt("valuation_db_max_idle_conns", 5),
 			DBConnMaxLifetime: positiveInt("valuation_db_conn_max_lifetime", 3600),
-		},
-		Redis: RedisConfig{
-			// PoolSize 与 DialTimeout 的默认值单点在这里（setDefaults 不再双写，ADR-0060 票5）
-			Addr:         viper.GetString("redis_addr"),
-			Password:     viper.GetString("redis_password"),
-			DB:           nonNegInt("redis_db", 0),
-			PoolSize:     positiveInt("redis_pool_size", 20),
-			MinIdleConns: positiveInt("redis_min_idle_conns", 5),
-			MaxRetries:   positiveInt("redis_max_retries", 3),
-			Prefix:       viper.GetString("redis_key_prefix"),
-			DialTimeout:  positiveDuration("redis_dial_timeout", 2*time.Second),
-			ReadTimeout:  positiveDuration("redis_read_timeout", 2*time.Second),
-			WriteTimeout: positiveDuration("redis_write_timeout", 2*time.Second),
-			PoolTimeout:  positiveDuration("redis_pool_timeout", 3*time.Second),
-			IdleTimeout:  positiveDuration("redis_idle_timeout", 5*time.Minute),
 		},
 		RateLimit: RateLimitConfig{
 			Enabled: rateLimitEnabled,
@@ -520,9 +476,6 @@ func (c *Config) Validate() error {
 	if c.DatabaseURL == "" {
 		missing = append(missing, "DATABASE_URL")
 	}
-	if c.Redis.Addr == "" {
-		missing = append(missing, "REDIS_ADDR")
-	}
 	// R2 对象存储校验：driver=r2 时必填 R2 凭证
 	// （自建 RGW 时 R2_ACCOUNT_ID 可给占位，endpoint 由 R2_ENDPOINT 指定）
 	if c.Storage.Driver == "r2" {
@@ -616,25 +569,9 @@ func positiveInt(key string, def int) int {
 	return def
 }
 
-// nonNegInt 读取非负整数配置，非法或 <0 时回退默认值。
-func nonNegInt(key string, def int) int {
-	if v := viper.GetInt(key); v >= 0 {
-		return v
-	}
-	return def
-}
-
 // positiveFloat 读取浮点配置，非法或 <=0 时回退默认值。
 func positiveFloat(key string, def float64) float64 {
 	if v := viper.GetFloat64(key); v > 0 {
-		return v
-	}
-	return def
-}
-
-// positiveDuration 读取时长配置，非法或 <=0 时回退默认值。
-func positiveDuration(key string, def time.Duration) time.Duration {
-	if v := viper.GetDuration(key); v > 0 {
 		return v
 	}
 	return def

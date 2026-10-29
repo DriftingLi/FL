@@ -7,10 +7,10 @@ import (
 
 // ListConditionRatings 列出全部车况评级
 func (r *DictionaryRepository) ListConditionRatings(ctx context.Context) ([]ConditionRating, error) {
-	return readList[ConditionRating](r, ctx, readSpecConditionList, CacheKeyConditionList, "查询车况评级")
+	return readList[ConditionRating](r, ctx, readSpecConditionList, "查询车况评级")
 }
 
 // GetConditionRating 按 rating 查询（供 service 计算 Kc 使用）
 func (r *DictionaryRepository) GetConditionRating(ctx context.Context, rating string) (ConditionRating, error) {
-	return readGet[ConditionRating](r, ctx, readSpecConditionGet, cacheKey(CachePrefixConditionGet, rating), "查询车况评级", rating)
+	return readGet[ConditionRating](r, ctx, readSpecConditionGet, "查询车况评级", rating)
 }

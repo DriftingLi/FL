@@ -2,7 +2,7 @@
 // 一个 Descriptor 声明实体名、路由段、字段、校验与失效标记，POST/PUT/DELETE 的
 // 绑定/写库/失效/响应骨架由本文件的四个函数共用，不再逐实体手写。
 // 路由注册（具名分派表）在 dictcrud_dispatch.go；响应字段表的派生在 dictcrud/response.go。
-// 失效 pattern 仍来自 repository 缓存契约单点（PatternsOf），本文件不书写字面量。
+// #2109 阶段 B：写后缓存失效随 Redis 一起退役（字典缓存已删），本文件不再持有失效面。
 package valuation
 
 import (
@@ -17,16 +17,6 @@ import (
 	"forklift-training/pkg/response"
 )
 
-// dictInvalidationPatterns 描述符实体的写后失效集：
-// 契约 pattern（PatternsOf）+ （按描述符）评估结果缓存 pattern。
-func dictInvalidationPatterns(d DictDescriptor) []string {
-	patterns := PatternsOf(d.Name)
-	if d.InvalidateResult {
-		patterns = append(patterns, ResultCachePattern)
-	}
-	return patterns
-}
-
 // createDict 描述符驱动创建骨架：
 // bind（JSON 语法/字段类型/bind 必填）→ 默认值 → 应用层必填 → 写库 → 缓存失效 → 返回整行。
 func (h *ConfigHandler) createDict(c *gin.Context, d DictDescriptor) {
@@ -40,7 +30,6 @@ func (h *ConfigHandler) createDict(c *gin.Context, d DictDescriptor) {
 		response.ServerError(c, "新增"+d.EntityLabel+"失败")
 		return
 	}
-	h.invalidateCache(c.Request.Context(), dictInvalidationPatterns(d)...)
 	response.Success(c, BuildCreateResult(d, id, values))
 }
 
@@ -69,7 +58,6 @@ func (h *ConfigHandler) updateDict(c *gin.Context, d DictDescriptor) {
 		response.ServerError(c, "更新"+d.EntityLabel+"失败")
 		return
 	}
-	h.invalidateCache(c.Request.Context(), dictInvalidationPatterns(d)...)
 	response.Success(c, BuildUpdateResult(d, id, values))
 }
 
@@ -99,7 +87,6 @@ func (h *ConfigHandler) updateDictByKey(c *gin.Context, d DictDescriptor) {
 		response.ServerError(c, "更新"+d.EntityLabel+"失败")
 		return
 	}
-	h.invalidateCache(c.Request.Context(), dictInvalidationPatterns(d)...)
 	response.Success(c, row)
 }
 
@@ -119,7 +106,6 @@ func (h *ConfigHandler) deleteDict(c *gin.Context, d DictDescriptor) {
 		response.ServerError(c, "删除"+d.EntityLabel+"失败")
 		return
 	}
-	h.invalidateCache(c.Request.Context(), dictInvalidationPatterns(d)...)
 	response.Success(c, gin.H{"id": id})
 }
 

@@ -33,7 +33,7 @@
 | 方法 | 路径 | 鉴权 | 说明 |
 |---|---|---|---|
 | GET | `/api` | 无 | 服务信息（版本号） |
-| GET | `/api/health` | 无 | 健康检查（探测 Redis，异常返回 503 degraded） |
+| GET | `/api/health` | 无 | 健康检查（探测数据库，异常返回 503 degraded） |
 | GET | `/api/health/live` | 无 | 存活探针（liveness，仅进程存活） |
 | GET | `/api/captcha` | 无 | 图形验证码（人机验证，发验证码前调用） |
 | GET/HEAD | `/static/*filepath` | 无 | 静态资源与上传文件（uploads 前缀走上传目录） |

@@ -15,9 +15,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
-	"forklift-training/internal/cache"
 	"forklift-training/internal/captcha"
 	"forklift-training/internal/core"
+	"forklift-training/internal/kv"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
@@ -149,7 +149,7 @@ func newCodeAuthTestRouterX(t *testing.T, captchaEnabled bool) (*gin.Engine, *co
 // extractStoredCode 按与生产一致的 key 公式从内存 store 取验证码（存储值为 authCodeValue JSON）。
 func extractStoredCode(t *testing.T, store *codeAuthStoreN, ch *codeAuthChannelN, purpose CodePurpose, target string) string {
 	t.Helper()
-	raw, ok := store.m[cache.SafeKey(ch.KeyPrefix(), string(purpose), target)]
+	raw, ok := store.m[kv.SafeKey(ch.KeyPrefix(), string(purpose), target)]
 	if !ok {
 		t.Fatalf("验证码未存储: channel=%s purpose=%s target=%s", ch.KeyPrefix(), purpose, target)
 	}

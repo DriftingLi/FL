@@ -111,20 +111,20 @@ class DecideServiceTest(unittest.TestCase):
         self.assertIn("--force", d.reason)
 
     def test_plan_order(self):
+        # #2109 起 redis 已从部署面退役：数据服务只剩 postgres。
         states = {
             "postgres": self.state(),
-            "redis": self.state(),
             "backend": self.state(image="img:old", image_id="sha256:old"),
             "frontend": self.state(image="img:new", image_id="sha256:new"),
         }
         decisions = deploy.plan_decisions(
             {"backend": "img:new", "frontend": "img:new"},
             states,
-            {"postgres": "h1", "redis": "h1", "backend": "h1", "frontend": "h1"},
+            {"postgres": "h1", "backend": "h1", "frontend": "h1"},
             {"backend": "sha256:new", "frontend": "sha256:new"},
         )
-        self.assertEqual([d.service for d in decisions], ["postgres", "redis", "backend", "frontend"])
-        self.assertEqual([d.action for d in decisions], ["skip", "skip", "recreate", "skip"])
+        self.assertEqual([d.service for d in decisions], ["postgres", "backend", "frontend"])
+        self.assertEqual([d.action for d in decisions], ["skip", "recreate", "skip"])
 
 
 class ApplyAppTest(unittest.TestCase):

@@ -11,39 +11,69 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
-
-	"forklift-training/internal/cache"
 )
 
-// HealthCheck 健康检查：探测 Redis 连通性，异常时返回 503 便于容器编排重启。
+// ctxHealthProbe 系统端点在 gin context 里取「探活函数」的键（由 InjectProbe 写入）。
+const ctxHealthProbe = "system_health_probe"
+
+// InjectProbe 把装配根提供的探活函数挂进 gin context，供具名 handler 取用。
+//
+// 为什么注入**函数**而不是 *gorm.DB：api 层不得持库句柄（ADR-0056 §3，守卫见
+// gorm_seam_guard_test.go），探活只需要「能不能连通」这一个布尔事实，不需要 SQL 能力。
+// 为什么用路由级中间件而不是包级变量：具名函数拿不到装配根（swag 要求具名），
+// 而包级变量会被并行测试的 -race 判成数据竞争（同一进程内多份 router）。
+func InjectProbe(probe func(context.Context) error) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if probe != nil {
+			c.Set(ctxHealthProbe, probe)
+		}
+		c.Next()
+	}
+}
+
+// HealthCheck 健康检查：探测数据库连通性，异常时返回 503 便于容器编排重启。
 // @Summary 服务健康检查
-// @Description 探测 Redis 连通性；不可达时返回 503 degraded，供容器编排重启决策。非统一信封（裸 gin.H）。公开端点：无需鉴权，不受限流且不进访问日志（middleware.HealthPaths）
+// @Description 探测数据库连通性；不可达时返回 503 degraded，供容器编排重启决策。非统一信封（裸 gin.H）。公开端点：无需鉴权，不受限流且不进访问日志（middleware.HealthPaths）
 // @Tags 系统
 // @Produce json
 // @Success 200 {object} map[string]any "正常：{status:ok,message:backend is running}"
-// @Failure 503 {object} map[string]any "降级：{status:degraded,redis:unreachable,error:原因}"
+// @Failure 503 {object} map[string]any "降级：{status:degraded,database:unreachable,error:原因}"
 // @Router /health [get]
 func HealthCheck(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
 	defer cancel()
-	if err := cache.Ping(ctx); err != nil {
+	if err := pingDatabase(ctx, c); err != nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"status": "degraded",
-			"redis":  "unreachable",
-			"error":  err.Error(),
+			"status":   "degraded",
+			"database": "unreachable",
+			"error":    err.Error(),
 		})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "backend is running"})
 }
 
+// pingDatabase 取注入的探活函数并执行。
+func pingDatabase(ctx context.Context, c *gin.Context) error {
+	raw, ok := c.Get(ctxHealthProbe)
+	if !ok {
+		return errors.New("探活函数未注入")
+	}
+	probe, ok := raw.(func(context.Context) error)
+	if !ok || probe == nil {
+		return errors.New("探活函数类型异常")
+	}
+	return probe(ctx)
+}
+
 // HealthLive 存活探针（liveness）：仅表示进程存活，不依赖外部组件。
 // @Summary 存活探针（liveness）
-// @Description 仅表示进程存活，不依赖 Redis 等外部组件；容器编排探活应使用本端点，避免 Redis 抖动导致容器被重启。非统一信封。公开端点：无需鉴权，不受限流且不进访问日志（middleware.HealthPaths）
+// @Description 仅表示进程存活，不依赖数据库等外部组件；容器编排探活应使用本端点，避免数据库抖动导致容器被重启。非统一信封。公开端点：无需鉴权，不受限流且不进访问日志（middleware.HealthPaths）
 // @Tags 系统
 // @Produce json
 // @Success 200 {object} map[string]any "{status:ok}"

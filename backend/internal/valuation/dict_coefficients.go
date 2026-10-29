@@ -27,7 +27,7 @@ func scanCoefficient(row interface{ Scan(dest ...any) error }) (CoefficientConfi
 
 // ListCoefficientConfigs 列出全部系数配置
 func (r *DictionaryRepository) ListCoefficientConfigs(ctx context.Context) ([]CoefficientConfig, error) {
-	return listCached(r, ctx, CacheKeyCoefList, "查询系数配置",
+	return listRows(r, ctx, "查询系数配置",
 		readSpecCoefList.selectSQL(),
 		func(rows pgx.Rows) (CoefficientConfig, error) {
 			return scanCoefficient(rows)
@@ -36,7 +36,7 @@ func (r *DictionaryRepository) ListCoefficientConfigs(ctx context.Context) ([]Co
 
 // GetCoefficientByKey 按 key 查询系数
 func (r *DictionaryRepository) GetCoefficientByKey(ctx context.Context, key string) (CoefficientConfig, error) {
-	return getCached(r, ctx, cacheKey(CachePrefixCoefGet, key), "查询系数配置",
+	return getRow(r, ctx, "查询系数配置",
 		readSpecCoefGet.selectSQL(),
 		func(row pgx.Row) (CoefficientConfig, error) {
 			return scanCoefficient(row)

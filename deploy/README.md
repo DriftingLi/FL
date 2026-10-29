@@ -8,7 +8,7 @@
 | 文件 | 作用 |
 | --- | --- |
 | `deploy.py` | 部署 CLI：按变更重启、迁移、回滚、健康检查、测试环境 down |
-| `docker-compose.prod.yml` | 生产编排（postgres / redis / libreoffice / backend / frontend） |
+| `docker-compose.prod.yml` | 生产编排（postgres / libreoffice / backend / frontend） |
 | `env.defaults` | 部署默认值生成物（唯一事实源 `backend/internal/deploy/topology.go`；`cd backend && go run ./cmd/gen-deploy`） |
 | `setup-server.sh` | 服务器首次初始化（Docker / 部署用户 / 目录 / 防火墙 / cron） |
 | `lxc-install-docker.sh` / `lxc-setup-ssh.sh` | LXC 容器内 Docker / SSH 初始化 |
@@ -32,7 +32,7 @@ python3 deploy/deploy.py local           # 本地 / 手动一键：构建前端 
 常用开关：
 
 - `--force`：重建全部**应用**服务（backend / frontend / libreoffice），不碰数据服务。
-- `--force-data-services`：允许重建 postgres / redis（危险，仅在确认卷/配置变更时有意义）。
+- `--force-data-services`：允许重建 postgres（危险，仅在确认卷/配置变更时有意义）。
 - `--skip-migrate`：跳过迁移（本地模式直接用；远程仍可用 `SKIP_MIGRATION=true`）。
 - `--remove-orphans`：`up` 时移除孤儿容器（默认不做，避免误删 profile 外服务）。
 
@@ -56,7 +56,7 @@ python3 deploy/deploy.py local           # 本地 / 手动一键：构建前端 
 | 以上都不是 | `skip` |
 | **数据服务**配置漂移 | `blocked`（默认中止，需 `--force-data-services`） |
 
-`postgres` / `redis` 永远不因应用镜像变更进入计划；只有容器不存在/停止时才启动。
+`postgres` 永远不因应用镜像变更进入计划；只有容器不存在/停止时才启动。
 
 ## 部署顺序
 
@@ -64,7 +64,7 @@ python3 deploy/deploy.py local           # 本地 / 手动一键：构建前端 
 2. 解析镜像加速代理 → 写 `.env`（内容未变则跳过写入）；
 3. 记录当前运行镜像到 `backups/last-version.txt`；生产环境并行做 `pg_dump` 备份；
 4. 只拉取本地缺失的镜像（内容哈希标签命中即跳过）；
-5. 确保 postgres / redis 在运行，等待数据库就绪；
+5. 确保 postgres 在运行，等待数据库就绪；
 6. 迁移兼容性预检（镜像内迁移版本不得落后于数据库）；
 7. 等待备份完成 → 清 dirty → **先迁移**；
 8. 算应用计划，只对变化的服务 `up -d`（backend 先于 frontend，libreoffice 最先）。
@@ -94,7 +94,7 @@ compose 文件从仓库根迁到 `deploy/` 后，默认项目名会从目录名�
 name: ${COMPOSE_PROJECT_NAME:-forklift-training}
 ```
 
-命名卷仍是 `forklift-training_pgdata-prod` / `forklift-training_redisdata-prod` 等。生产实际用的是 environment secret `PG_VOLUME=/srv/ceph/pgdata`（Ceph 绑定挂载），见下一节升级 runbook。
+命名卷仍是 `forklift-training_pgdata-prod` 等（`redisdata-prod` 随 #2109 退役）。生产实际用的是 environment secret `PG_VOLUME=/srv/ceph/pgdata18`（RBD 挂载），见下一节升级 runbook。
 换宿主机想换项目名时，显式设置 `COMPOSE_PROJECT_NAME`（并在迁移数据卷前确认）。
 
 ## 大版本升级：PostgreSQL 15 → 18（一次性 runbook，#2109）

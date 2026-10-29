@@ -54,6 +54,25 @@ func TestEvaluationsRepository_LockedSuggestionsMapping(t *testing.T) {
 	}
 }
 
+// testEvalParams 一份可直接落库的评估参数。
+// #2109 阶段 B：原先借用缓存集成测试里的 fixture，那份随缓存退役删掉了，这里给一份自足的。
+func testEvalParams() *CreateEvaluationParams {
+	return &CreateEvaluationParams{
+		Brand: "集成测试", VehicleType: "电动叉车", Series: "S系列",
+		Tonnage: 2.5, ConfigType: "标准", MastType: "标准门架", MastHeightMM: 3000,
+		FactoryYear: 2020, SaleYear: 2024, UsageHours: 800,
+		OriginalPaint: true, Province: "安徽省", City: "合肥市",
+		HasLicensePlate: true, HasRegistrationCertificate: true, HasMaintenanceRecords: true,
+		ConditionRating: "A",
+		OriginalPrice:   100000, KTime: 0.5, KHours: 1.0, KBrand: 1.1, KCondition: 1.04, KMarket: 1.0,
+		EstimatedValue: 52000, ConfidenceLow: 46800, ConfidenceHigh: 57200,
+		UserID:           0,
+		Suggestions:      []string{"建议一：车况良好", "建议二：保留原厂漆"},
+		LambdaElectric:   0.12,
+		LambdaCombustion: 0.10,
+	}
+}
+
 // TestEvaluationsRepository_VehicleTypeFilter 历史列表车型过滤（#400）：
 // vehicle_type 参与查询、与 brand 组合（AND 口径）；无该参数时行为不变（返回全部）。
 func TestEvaluationsRepository_VehicleTypeFilter(t *testing.T) {
@@ -66,7 +85,7 @@ func TestEvaluationsRepository_VehicleTypeFilter(t *testing.T) {
 
 	repo := NewEvaluationRepository(pool)
 	mkParams := func(brand, vt string) *CreateEvaluationParams {
-		p := cacheRegressionParams()
+		p := testEvalParams()
 		p.Brand = brand
 		p.VehicleType = vt
 		p.UserID = 0

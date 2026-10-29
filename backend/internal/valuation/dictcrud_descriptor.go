@@ -92,9 +92,6 @@ type DictDescriptor struct {
 	UniqueColumns []string
 	// Upsert 唯一冲突处理模式。
 	Upsert DictUpsertMode
-	// InvalidateResult 写操作是否追加失效评估结果缓存（ResultCachePattern）。
-	// series 为 false（现状），其余实体为 true。
-	InvalidateResult bool
 	// RequiredMessage 应用层必填校验失败消息（如 "province 与 city 必填"）。
 	RequiredMessage string
 	// UpdateTimestamp 写 SQL 尾列追加 updated_at = NOW()

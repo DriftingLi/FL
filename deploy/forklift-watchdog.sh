@@ -54,7 +54,7 @@ BRANDS_URL=${WATCH_PUBLIC_BRANDS_URL:-https://api.gdyidao.cn/api/ai-assistant/di
 FE_HOST=${WATCH_FE_HOST:-api.gdyidao.cn}
 REMOTE_HOST=${WATCH_REMOTE_HOST:-172.17.1.41}
 REMOTE_LXC=${WATCH_REMOTE_LXC:-101}
-EXPECT_CONTAINERS=(forklift-frontend-prod forklift-backend-prod forklift-pg-prod forklift-redis-prod forklift-libreoffice-prod)
+EXPECT_CONTAINERS=(forklift-frontend-prod forklift-backend-prod forklift-pg-prod forklift-libreoffice-prod)
 
 MODE=check
 DRY_RUN=0

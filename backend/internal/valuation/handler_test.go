@@ -458,7 +458,7 @@ func newTestValuationEngineWithStorage(t *testing.T, st storage.Storage) (*gin.E
 		JWTSecretKey: "test-secret",
 		AuthCookie:   config.AuthCookieConfig{Name: "hrwai_token"},
 	}
-	sess := security.SessionFromConfig(cfg)
+	sess := security.SessionFromConfigWithBlacklist(cfg, security.NewMemoryBlacklist())
 	r := gin.New()
 	r.Use(gin.Recovery())
 	// 管理端能力解析源（#1618 段1）：本域测试用内存 adapter 装配，故用替身（见 admin_caps_stub_test.go）。

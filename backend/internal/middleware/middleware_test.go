@@ -53,7 +53,7 @@ func newTestRouter(cfg *config.Config, capabilities ...authz.Capability) *gin.En
 // 解析源挂在组首：它不读 claims，与 JWTAuth 的先后无关（与装配根的挂法一致）。
 func newTestRouterWithResolver(cfg *config.Config, resolver CapabilityResolver, capabilities ...authz.Capability) *gin.Engine {
 	r := gin.New()
-	sess := security.SessionFromConfig(cfg)
+	sess := security.SessionFromConfigWithBlacklist(cfg, security.NewMemoryBlacklist())
 	protected := r.Group("/protected", AdminCapabilityResolver(resolver), JWTAuth(sess))
 	if len(capabilities) > 0 {
 		protected.Use(CapabilityRequired(capabilities[0]))
@@ -169,7 +169,7 @@ func TestJWTAuth_ExpiredToken(t *testing.T) {
 
 func TestOptionalAuth_WithToken(t *testing.T) {
 	cfg := &config.Config{JWTSecretKey: testSecret}
-	sess := security.SessionFromConfig(cfg)
+	sess := security.SessionFromConfigWithBlacklist(cfg, security.NewMemoryBlacklist())
 	r := gin.New()
 	r.GET("/optional", OptionalAuth(sess), func(c *gin.Context) {
 		uid, exists := c.Get(string(CtxUserID))
@@ -189,7 +189,7 @@ func TestOptionalAuth_WithToken(t *testing.T) {
 
 func TestOptionalAuth_WithoutToken(t *testing.T) {
 	cfg := &config.Config{JWTSecretKey: testSecret}
-	sess := security.SessionFromConfig(cfg)
+	sess := security.SessionFromConfigWithBlacklist(cfg, security.NewMemoryBlacklist())
 	r := gin.New()
 	r.GET("/optional", OptionalAuth(sess), func(c *gin.Context) {
 		c.JSON(200, gin.H{"ok": true})
@@ -206,7 +206,7 @@ func TestOptionalAuth_WithoutToken(t *testing.T) {
 
 func TestOptionalAuth_InvalidToken(t *testing.T) {
 	cfg := &config.Config{JWTSecretKey: testSecret}
-	sess := security.SessionFromConfig(cfg)
+	sess := security.SessionFromConfigWithBlacklist(cfg, security.NewMemoryBlacklist())
 	r := gin.New()
 	r.GET("/optional", OptionalAuth(sess), func(c *gin.Context) {
 		_, exists := c.Get(string(CtxUserID))
@@ -226,7 +226,7 @@ func TestOptionalAuth_InvalidToken(t *testing.T) {
 	}
 }
 
-// memBlacklistStore 内存版黑名单存储（测试注入双，替代真实 Redis，断言确定性执行）。
+// memBlacklistStore 内存版黑名单存储（测试注入双，替代真实 kv 存储，断言确定性执行）。
 type memBlacklistStore struct {
 	mu sync.Mutex
 	m  map[string]string

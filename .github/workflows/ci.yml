@@ -162,15 +162,6 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
     defaults:
       run:
         working-directory: backend
@@ -186,9 +177,6 @@ jobs:
       - name: 运行单元测试（第 ${{ matrix.shard }}/2 片）
         env:
           DATABASE_URL: postgres://testuser:testpass@localhost:5432/forklift_test?sslmode=disable
-          REDIS_ADDR: localhost:6379
-          REDIS_PASSWORD: ""
-          REDIS_DB: "0"
           SHARD: ${{ matrix.shard }}
           SHARDS: '2'
         # -timeout 收回 10m（2026-09-29，#1366 测试面瘦身）：先前抬到 20m 是止血——internal/api

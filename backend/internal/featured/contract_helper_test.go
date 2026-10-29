@@ -18,7 +18,7 @@ import (
 //
 // 与 internal/api 的 newContractDeps(t, db, nil) + providers_training.go 同义：
 // cfg 走零值（原链传的就是 nil ⇒ &config.Config{}）、fileSvc 传 st=nil、
-// 会话用内存黑名单构造（测试链路没有 Redis，审计 §8.6）。
+// 会话用内存黑名单构造（测试链路不接持久化 kv，审计 §8.6）。
 func newFeaturedContractEnv(t *testing.T, db *gorm.DB) *gin.Engine {
 	t.Helper()
 	cfg := &config.Config{}

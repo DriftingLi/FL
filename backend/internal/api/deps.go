@@ -27,6 +27,7 @@ import (
 	"forklift-training/internal/forum"
 	"forklift-training/internal/inspection"
 	"forklift-training/internal/job"
+	"forklift-training/internal/kv"
 	"forklift-training/internal/material"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/mockexam"
@@ -69,6 +70,11 @@ type Deps struct {
 	Storage storage.Storage
 	Logger  *zap.Logger
 	Session *security.Session
+	// KV 带 TTL 的临时 KV（#2109：验证码 / 图形码 / 黑名单共用），过期清扫守护读它。
+	KV *kv.Store
+	// HealthProbe 健康检查的依赖探针（#2109：从探 Redis 改探数据库）。
+	// 只交出「能不能连通」这个事实，不把库句柄漏给 api 层（ADR-0056 §3）。
+	HealthProbe func(context.Context) error
 
 	AuthSvc         *auth.Service
 	CodeSvc         *auth.VerifyCodeService
@@ -145,10 +151,20 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 		Storage: st,
 		Logger:  logger,
 		Session: shared.sess,
+		KV:      shared.kv,
 		// 横切单例在 Deps 上的投影（路由装配与蓝图注册直接读这几个字段）
 		FileSvc:         shared.fileSvc,
 		SlideRenderer:   shared.slideRenderer,
 		NotificationSvc: shared.notifSvc,
+	}
+
+	// 健康探针：只 Ping 不读表。api 层拿到的是一枚函数，不是 *gorm.DB（ADR-0056 §3）。
+	d.HealthProbe = func(ctx context.Context) error {
+		sqlDB, err := db.DB()
+		if err != nil {
+			return err
+		}
+		return sqlDB.PingContext(ctx)
 	}
 
 	// 各域装配：一行一域，顺序即依赖序（域之间只经 core 的共享单例交互）。
@@ -180,6 +196,18 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 		{Name: "contact-request-expire", Interval: time.Hour, Run: func(ctx context.Context) {
 			if _, err := d.ContactSvc.ExpirePending(clock.Now()); err != nil {
 				logger.Warn("contact expire 失败", zap.Error(err))
+			}
+		}},
+		// 临时 KV 的过期清扫（#2109）：读路径自带 expires_at > ? ，清扫只负责别让表无限长大。
+		// 5 分钟对「验证码 5 分钟 / 图形码 2 分钟 / 黑名单 7 天」这种量级纯属精度余量。
+		{Name: "kv-expired-sweep", Interval: 5 * time.Minute, Run: func(ctx context.Context) {
+			n, err := d.KV.Sweep(ctx, 1000)
+			if err != nil {
+				logger.Warn("ephemeral_kv 过期清扫失败", zap.Error(err))
+				return
+			}
+			if n > 0 {
+				logger.Info("ephemeral_kv 过期清扫完成", zap.Int64("deleted", n))
 			}
 		}},
 		// 内容精选的定时发布（#1748）：每分钟把已到点的排期落成已发布。精度就是 1 分钟 ——

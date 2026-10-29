@@ -28,7 +28,7 @@ func (courseContractCredResolver) CurrentCredentialID(int) (int, bool) { return 
 // newContractDepsWithStorage + providers_training.go 那条链同义（st 同样传 nil），
 // 只是不经装配根（#1445 域包契约测试下沉）。
 //
-// 会话必须带内存黑名单：NewSession 装的是 Redis 存储，测试链路没有 Redis，
+// 会话必须带内存黑名单：NewSession 装的是进程内黑名单，测试链路不接持久化 kv，
 // 「注销先写吊销标记」这类端点会恒红（#1445 批 1 的教训，见
 // docs/design/1445-api-contract-test-audit.md §8.6）。
 func newCourseContractRouter(t *testing.T, db *gorm.DB, cfg *config.Config) *gin.Engine {

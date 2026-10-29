@@ -25,6 +25,7 @@ var expectedDaemonNames = []string{
 	"contribution-file-cleanup",
 	"featured-scheduled-publish",
 	"forum-image-cleanup",
+	"kv-expired-sweep", // #2109：ephemeral_kv 过期清扫
 }
 
 func TestDaemonRegistryLock(t *testing.T) {

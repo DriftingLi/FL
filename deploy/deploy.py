@@ -5,7 +5,7 @@
 docs/adr/ADR-0088-部署脚本收敛与按变更重启.md：
 
 * **按变更重启**：先算计划（容器状态 + 镜像内容 + compose config-hash），
-  只对真正变化的服务执行 up；postgres / redis 是数据服务，默认永不自动重建。
+  只对真正变化的服务执行 up；postgres 是数据服务，默认永不自动重建。
 * **迁移先于应用重启**：新后端镜像先跑 migrate，成功后才重建 backend / frontend。
 * **回滚只动回滚涉及的服务**，并做运行镜像自证。
 * 纯标准库、Python 3.9+；目标服务器（Debian / PVE）自带 python3，不依赖 Node。
@@ -54,15 +54,14 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # 日志流：--json 时改走 stderr，保证 stdout 只有 JSON。
 LOG_STREAM = sys.stdout
 
-# 数据服务：只确保在跑，绝不因为应用镜像变更而重建。
-DATA_SERVICES = ("postgres", "redis")
+# 数据服务：只确保在跑，绝不因为应用镜像变更而重建（#2109 起 Redis 已退役，只剩 postgres）。
+DATA_SERVICES = ("postgres",)
 APP_SERVICES = ("libreoffice", "backend", "frontend")
 # compose 中显式指定的容器名：用于清理同名但非本项目管理的残留容器（沿用旧脚本行为）。
 KNOWN_CONTAINERS = (
     "forklift-backend-prod",
     "forklift-frontend-prod",
     "forklift-pg-prod",
-    "forklift-redis-prod",
     "forklift-libreoffice-prod",
 )
 
@@ -633,10 +632,6 @@ class Deployer:
         add("VOLUME_MOUNT_PATH", "/data")
         add("MAX_CONTENT_LENGTH_MB", "250")
         add("VALUATION_PDF_OUTPUT_DIR", "/data/reports")
-        add("REDIS_PASSWORD", env_val(getenv("REDIS_PASSWORD")))
-        add("REDIS_DB", getenv("REDIS_DB", "0"))
-        add("REDIS_POOL_SIZE", getenv("REDIS_POOL_SIZE", "20"))
-        add("REDIS_KEY_PREFIX", env_val(getenv("REDIS_KEY_PREFIX", "fl:")))
         add("STORAGE_DRIVER", getenv("STORAGE_DRIVER", "local"))
         add("R2_ENDPOINT", env_val(getenv("R2_ENDPOINT")))
         add("R2_ACCOUNT_ID", env_val(getenv("R2_ACCOUNT_ID")))
@@ -647,7 +642,6 @@ class Deployer:
         add("EDGE_ORIGIN_TOKEN", env_val(getenv("EDGE_ORIGIN_TOKEN")))
         add("BACKEND_HOST_PORT", getenv("BACKEND_HOST_PORT", "8080"))
         add("PG_VOLUME", getenv("PG_VOLUME", "pgdata-prod"))
-        add("REDIS_VOLUME", getenv("REDIS_VOLUME", "redisdata-prod"))
         add("UPLOADS_VOLUME", getenv("UPLOADS_VOLUME", "uploads-data"))
         add("REPORTS_VOLUME", getenv("REPORTS_VOLUME", "reports-data"))
         add("LOGS_VOLUME", getenv("LOGS_VOLUME", "logs-data"))
@@ -926,7 +920,7 @@ class Deployer:
                 continue
             if not self._pull_one(name, image):
                 raise DeployError(f"{name}镜像拉取失败: {image}")
-        for base in ("postgres:18-alpine", "redis:7-alpine"):
+        for base in ("postgres:18-alpine",):
             if self.image_exists(base):
                 log_ok(f"基础镜像已缓存: {base}")
                 continue
@@ -958,30 +952,12 @@ class Deployer:
             )
         targets = [d.service for d in decisions if d.changes_container]
         if not targets:
-            log_ok("数据服务 postgres / redis 已在运行，跳过")
+            log_ok("数据服务 postgres 已在运行，跳过")
             return
         for d in decisions:
             if d.changes_container:
                 log_info(f">>> {d.service}: {d.reason}")
         self.run(self._compose() + ["up", "-d", "--no-deps", *targets])
-
-    def wait_redis(self) -> bool:
-        log_info(">>> 等待 Redis 就绪...")
-        password = getenv("REDIS_PASSWORD")
-        for _ in range(15):
-            cid = self.compose_ps_id("redis")
-            if cid:
-                cmd = ["docker", "exec", cid, "redis-cli"]
-                if password:
-                    cmd += ["-a", password]
-                cmd.append("ping")
-                cp = self.run(cmd, check=False, capture=True)
-                if "PONG" in (cp.stdout or ""):
-                    log_ok("Redis 就绪")
-                    return True
-            time.sleep(2)
-        log_warn("Redis 在超时时间内未就绪，后续依赖 Redis 的步骤可能失败")
-        return False
 
     def wait_postgres(self) -> bool:
         log_info(">>> 等待数据库就绪...")
@@ -1413,7 +1389,6 @@ class Deployer:
             data_decisions = self.plan_data()
             self.apply_data(data_decisions)
             self.wait_postgres()
-            self.wait_redis()
 
             if not self.preflight_migration_check(self.backend_ref):
                 raise DeployError("迁移预检失败，终止部署（避免后端因缺少迁移文件崩溃循环）")
@@ -1497,7 +1472,6 @@ class Deployer:
 
         self.apply_data(self.plan_data())
         self.wait_postgres()
-        self.wait_redis()
 
         # 「是否真的回滚这个服务」只看 tag 是否变化：相同 tag 不重建，避免回滚把无关容器也重启。
         cur_backend_tag = rollback_tag(self.backend_ref)
@@ -1578,7 +1552,6 @@ class Deployer:
         # 先拉起数据库，再跑 go migrate（迁移要连 localhost:5432）。
         self.apply_data(self.plan_data())
         self.wait_postgres()
-        self.wait_redis()
         if not self.opts.skip_migrate:
             log_info(">>> 执行数据库迁移（走后端镜像内的 migrate，不依赖宿主机 Go/5432 端口）...")
             self.run(self._compose() + [
@@ -1614,7 +1587,7 @@ def _parser() -> argparse.ArgumentParser:
                    help="只打印变更计划，不重建运行中的容器")
     p.add_argument("--json", action="store_true", help="--plan 输出 JSON（stdout 只有 JSON）")
     p.add_argument("--force", action="store_true", help="重建全部应用服务（不含数据服务）")
-    p.add_argument("--force-data-services", action="store_true", help="允许重建 postgres/redis（危险）")
+    p.add_argument("--force-data-services", action="store_true", help="允许重建 postgres（危险）")
     p.add_argument("--remove-orphans", action="store_true", help="up 时移除孤儿容器")
     p.add_argument("--skip-build", action="store_true", help="本地模式跳前端构建")
     p.add_argument("--skip-migrate", action="store_true", help="跳过数据库迁移")

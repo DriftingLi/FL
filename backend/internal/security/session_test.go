@@ -156,7 +156,7 @@ func TestRevoke_TwoTokensIndependent(t *testing.T) {
 	}
 }
 
-// errBlacklistStore 黑名单存储故障桩（模拟 Redis 不可用）。
+// errBlacklistStore 黑名单存储故障桩（模拟 kv 存储不可用）。
 type errBlacklistStore struct{}
 
 func (errBlacklistStore) Get(context.Context, string) (string, error) {
