@@ -286,6 +286,12 @@ param(
     [int]$Port = 9420,
     [string]$Routes = 'pages/index/index,pages/login/login',
     [string]$Pages = 'auto',
+    # #2097：截前滚动位置（px）。目标区在首屏之下时必给 —— 否则截图拍的是标题、改动在屏幕外，
+    # 那种「证据」不成立（#1939 已踩一次）。只对直达冷启动分支生效，整屏滚动（wx.pageScrollTo）。
+    [int]$PageScrollTop = 0,
+    # #2097：逐页截图模式。'full'（默认）= 逐屏滚到页尾各截一张（-p1/-p2/…），
+    # 让「改动落在第几屏」不再决定证据有没有用；'single' = 旧行为（只拍首屏）。
+    [ValidateSet('full', 'single')][string]$Shots = 'full',
     # 会话注入（#1690）：auto = 直达循环前与每页冷启动后注入登录态（幂等，已登录即 existing）；off = 不注入。
     [string]$Auth = 'auto',
     [switch]$SkipBuild,
@@ -497,7 +503,9 @@ function New-GatePlan {
         [bool]$Doctor,
         [bool]$BuildOnly,
         [int]$PostToPr,
-        [string]$PagesMode
+        [string]$PagesMode,
+        [int]$PageScrollTop = 0,
+        [string]$Shots = 'full'
     )
     $ws = "ws://127.0.0.1:$Port"
     $entryUrl = if (@($RouteList).Count -gt 0) { $RouteList[0] } else { '' }
@@ -724,7 +732,9 @@ function New-GatePlan {
             swapNote = '只换构建产物 app.json 的 pages 首项；不动源头 pages.json（运行时面判据来源，ADR-0038 决策 2）'
             restore = 'finally'
             exec = 'node'
-            probeArgv = @($ProbePath, '--ws', $ws, '--expect-page', '<page>', '--shot-dir', $LogDir, '--require-root', $AutoRoot, '--timeout-ms', "$ProbeTimeoutMs")
+            probeArgv = @($ProbePath, '--ws', $ws, '--expect-page', '<page>', '--shot-dir', $LogDir, '--require-root', $AutoRoot, '--timeout-ms', "$ProbeTimeoutMs", '--scroll-top', "$PageScrollTop", '--shots', "$Shots")
+            scrollTop = $PageScrollTop
+            shots = $Shots
             attempts = 2
             retryDelaySeconds = $ProbeRetryDelaySeconds
             skipReasons = @('direct-page-unsupported', 'page-not-in-build', 'app-json-invalid', 'auth-session-unavailable', 'landed-elsewhere')
@@ -885,7 +895,7 @@ function New-ThisGatePlan {
         -ProbeTimeoutSeconds $ProbeTimeoutSeconds -ProbeAttempts $ProbeAttempts `
         -ProbeRetryDelaySeconds $ProbeRetryDelaySeconds -PublishTimeoutSeconds $PublishTimeoutSeconds `
         -SkipBuild ([bool]$SkipBuild) -Doctor ([bool]$Doctor) -BuildOnly ([bool]$BuildOnly) -PostToPr $PostToPr `
-        -PagesMode $Pages
+        -PagesMode $Pages -PageScrollTop $PageScrollTop -Shots $Shots
 }
 $script:GatePlan = New-ThisGatePlan -UsePort $Port
 
