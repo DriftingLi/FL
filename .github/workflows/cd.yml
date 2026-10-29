@@ -587,11 +587,19 @@ jobs:
       # --------------------------------------------------------
       - name: 上传部署脚本和配置
         run: |
-          # 打包：部署 CLI / compose / 默认值 / Caddyfile（ADR-0088：部署面聚合在 deploy/）
+          # 打包：部署 CLI / compose / 默认值 / 巡检脚本与单元 / Caddyfile
+          # （ADR-0088：部署面聚合在 deploy/）。
+          # 巡检脚本必须随包上传：它装到 /usr/local/bin 由 systemd 跑，改了源码却不重装
+          # 就等于机器上继续跑旧判据 —— 2026-10-29 血账：redis 容器已从 compose 删除，
+          # /usr/local/bin 里的旧副本仍在盯它，连续 3 次判红并发出了告警邮件。
           tar czf /tmp/deploy-files.tar.gz \
             deploy/deploy.py \
             deploy/docker-compose.prod.yml \
             deploy/env.defaults \
+            deploy/forklift-watchdog.sh \
+            deploy/systemd/forklift-watchdog.service \
+            deploy/systemd/forklift-watchdog.timer \
+            deploy/systemd/forklift-alert@.service \
             frontend/Caddyfile
 
           scp -o ConnectTimeout=15 -o ServerAliveInterval=30 \
