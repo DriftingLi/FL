@@ -26,11 +26,11 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 
-	"forklift-training/internal/cache"
 	"forklift-training/internal/config"
 )
 
@@ -112,7 +112,7 @@ type CookieConfig struct {
 	Secure bool
 }
 
-// BlacklistStore 黑名单存储接口（生产 Redis，测试内存实现）。
+// BlacklistStore 黑名单存储接口（生产 kv.Store，测试内存实现）。
 // PutIfAbsent 是会话轮换原子性的落点（SETNX 语义）：以「写入即抢占」同时完成
 // 吊销与并发互斥，并发双刷同一 refresh 恰有一路成功。
 type BlacklistStore interface {
@@ -121,22 +121,62 @@ type BlacklistStore interface {
 	PutIfAbsent(ctx context.Context, key, value string, ttl time.Duration) (bool, error)
 }
 
-// RedisBlacklistStore 基于全局 Redis 缓存的黑名单存储。
-type RedisBlacklistStore struct{}
-
-// Get 读取黑名单条目。
-func (RedisBlacklistStore) Get(ctx context.Context, key string) (string, error) {
-	return cache.Get(ctx, key)
+// MemoryBlacklistStore 进程内黑名单（无持久化）。
+//
+// 只给测试与「进程即生命周期」的场景用：吊销标记只活在进程内，**重启即丢**——
+// 生产必须经 SessionFromConfigWithBlacklist 注入 kv.Store，否则重启后被吊销的
+// refresh 会重新变得可用。
+type MemoryBlacklistStore struct {
+	mu   sync.Mutex
+	data map[string]memEntry
 }
 
-// Set 写入黑名单条目。
-func (RedisBlacklistStore) Set(ctx context.Context, key, value string, ttl time.Duration) error {
-	return cache.Set(ctx, key, value, ttl)
+type memEntry struct {
+	value     string
+	expiresAt time.Time
 }
 
-// PutIfAbsent 原子写入：key 不存在时写入并返回 true，已存在返回 false（SETNX 语义）。
-func (RedisBlacklistStore) PutIfAbsent(ctx context.Context, key, value string, ttl time.Duration) (bool, error) {
-	return cache.SetNX(ctx, key, value, ttl)
+// NewMemoryBlacklist 构造一份空的内存黑名单。
+func NewMemoryBlacklist() *MemoryBlacklistStore {
+	return &MemoryBlacklistStore{data: make(map[string]memEntry)}
+}
+
+// Get 读取条目；不存在或已过期返回 ("", nil)（与「未吊销」同义）。
+func (s *MemoryBlacklistStore) Get(_ context.Context, key string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e, ok := s.data[key]
+	if !ok || (!e.expiresAt.IsZero() && !time.Now().Before(e.expiresAt)) {
+		return "", nil
+	}
+	return e.value, nil
+}
+
+// Set 写入条目，ttl>0 时带过期。
+func (s *MemoryBlacklistStore) Set(_ context.Context, key, value string, ttl time.Duration) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e := memEntry{value: value}
+	if ttl > 0 {
+		e.expiresAt = time.Now().Add(ttl)
+	}
+	s.data[key] = e
+	return nil
+}
+
+// PutIfAbsent 不存在（或已过期）才写入，返回是否写入成功。
+func (s *MemoryBlacklistStore) PutIfAbsent(_ context.Context, key, value string, ttl time.Duration) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if e, ok := s.data[key]; ok && (e.expiresAt.IsZero() || time.Now().Before(e.expiresAt)) {
+		return false, nil
+	}
+	e := memEntry{value: value}
+	if ttl > 0 {
+		e.expiresAt = time.Now().Add(ttl)
+	}
+	s.data[key] = e
+	return true, nil
 }
 
 // Session 会话模块：签发（issue）/ 校验（verify）/ 吊销（revoke）JWT，
@@ -163,9 +203,12 @@ func refreshCookiesFor(cookie, recruiterCookie CookieConfig) (CookieConfig, Cook
 		CookieConfig{Name: DefaultRecruiterRefreshCookieName, Domain: recruiterCookie.Domain, Secure: recruiterCookie.Secure}
 }
 
-// NewSession 构造会话模块（默认 Redis 黑名单存储；refresh 默认 7 天）。
+// NewSession 构造会话模块（refresh 默认 7 天）。
+//
+// 黑名单默认落**进程内** MemoryBlacklistStore —— 它是给测试与短命进程用的便捷构造，
+// 不是生产路径：生产由装配根显式注入 kv.Store（SessionFromConfigWithBlacklist）。
 func NewSession(jwtSecret string, jwtExpiry time.Duration, cookie CookieConfig) *Session {
-	return NewSessionWithBlacklistAndRefresh(jwtSecret, jwtExpiry, defaultRefreshExpiry, cookie, RedisBlacklistStore{})
+	return NewSessionWithBlacklistAndRefresh(jwtSecret, jwtExpiry, defaultRefreshExpiry, cookie, NewMemoryBlacklist())
 }
 
 // NewSessionWithBlacklistAndRefresh 构造会话模块：黑名单存储与 refresh 有效期均可注入（测试用）。
@@ -192,13 +235,11 @@ func NewSessionWithRecruiterCookie(jwtSecret string, jwtExpiry, refreshExpiry ti
 	}
 }
 
-// SessionFromConfig 从应用配置构造会话模块（黑名单固定为 Redis 存储，refresh 用配置值）。
-func SessionFromConfig(cfg *config.Config) *Session {
-	return SessionFromConfigWithBlacklist(cfg, RedisBlacklistStore{})
-}
-
-// SessionFromConfigWithBlacklist 同 SessionFromConfig，但黑名单存储可注入
-// （契约测试链路没有 Redis，而注销/登出/轮换都要真实写黑名单）。
+// SessionFromConfigWithBlacklist 从应用配置构造会话模块，黑名单存储必须显式注入。
+//
+// 不提供「默认存储」的重载是有意的：注销 / 登出 / 轮换都要真实写黑名单，
+// 而唯一正确的生产实现是 kv.Store（持久化）；给个默认值只会让漏注入的装配
+// 静默退化成「重启即丢吊销」。
 func SessionFromConfigWithBlacklist(cfg *config.Config, blacklist BlacklistStore) *Session {
 	hrwaiCookie := CookieConfig{
 		Name:   cfg.AuthCookie.Name,
@@ -338,7 +379,7 @@ func (s *Session) RevokeIdentity(ctx context.Context, role string, userID int) e
 // 一并拒绝——宁错杀（改密前 token 同秒逃逸后会轮换洗白整条链），合法重登被拒属
 // 自我修复（下次刷新被拒即强制重登，新秒的 token 正常）。
 // 读故障放行（fail-open）：与登录链路「读黑名单失败放行」的取舍一致（ADR-0016），
-// 后续 RotateRefresh 的 PutIfAbsent 抢占仍 fail-closed 兜底，Redis 整体故障时不会真签发。
+// 后续 RotateRefresh 的 PutIfAbsent 抢占仍 fail-closed 兜底，存储整体故障时不会真签发。
 func (s *Session) refreshRevoked(ctx context.Context, role string, userID int, issuedAt time.Time) bool {
 	v, err := s.blacklist.Get(ctx, s.refreshRevocationKey(role, userID))
 	if err != nil {

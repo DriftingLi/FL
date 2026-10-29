@@ -89,7 +89,7 @@ node --test deploy/tests/deploy-migration-gate.test.mjs
 node --test deploy/tests/deploy-rollback-plan.test.mjs
 ```
 
-**按变更重启**（ADR-0088）：部署前按「容器状态 + 镜像内容（image ID）+ compose config-hash」算计划，只对 `skip` 之外的服务执行 `up -d`（**不带 `--no-deps`**：config-hash 包含 `depends_on`，带它会让 backend/frontend 每次都被判「配置变更」重建）。`postgres` / `redis` 是**数据服务**：默认永不因应用镜像变更而重建；检测到配置漂移（例如 `PG_VOLUME` 被改）时判 `blocked` 并中止，必须显式 `--force-data-services` 才允许重建。`--force` 只重建应用服务（backend / frontend / libreoffice）。`--plan --json` 给机器读的计划。
+**按变更重启**（ADR-0088）：部署前按「容器状态 + 镜像内容（image ID）+ compose config-hash」算计划，只对 `skip` 之外的服务执行 `up -d`（**不带 `--no-deps`**：config-hash 包含 `depends_on`，带它会让 backend/frontend 每次都被判「配置变更」重建）。`postgres` 是**数据服务**：默认永不因应用镜像变更而重建；检测到配置漂移（例如 `PG_VOLUME` 被改）时判 `blocked` 并中止，必须显式 `--force-data-services` 才允许重建（**testing 例外**：冒烟栈可抛弃，CD 用 `FORCE_DATA_SERVICES=true` 放行，见 `deploy/deploy.py` 的 `force_data_services_from_env`）。`--force` 只重建应用服务（backend / frontend / libreoffice）。`--plan --json` 给机器读的计划。
 
 **迁移失败即中止部署**（第十一波 / #1099）：`deploy/deploy.py` 的 `run_migration` 失败不再降级为 `log_warn` 后继续，而是抛出 `DeployError`、`main` 返回 1（默认路径必须中止）。线上事故确需带「新代码跑在旧 schema」这个已知风险继续时，显式声明 `ALLOW_MIGRATION_FAILURE=1`（变量名与理由写在脚本「迁移」配置段，判定点只有一处：`migration_failure_action`）；未显式声明一律中止，不得靠改日志绕过。
 

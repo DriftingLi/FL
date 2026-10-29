@@ -10,8 +10,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-
-	"forklift-training/internal/cache"
 )
 
 // EvaluationRepository 评估记录仓储
@@ -109,38 +107,27 @@ func (r *EvaluationRepository) CreateEvaluation(ctx context.Context, p *CreateEv
 	if err != nil {
 		return 0, fmt.Errorf("插入评估记录失败: %w", err)
 	}
-	// 失效列表与统计缓存（新建记录会改变 list 与 count 结果）
-	invalidateEvalWrite(ctx, evalWriteCreate)
 	return id, nil
 }
 
 // GetEvaluation 按 ID 查询评估详情（不按用户过滤）
 // 用于公开的报告生成/下载场景（report.go），鉴权详情请用 GetEvaluationByUser
 func (r *EvaluationRepository) GetEvaluation(ctx context.Context, id int64) (*EvaluationDetail, error) {
-	cacheKey := evalGetKey(id)
-	var result EvaluationDetail
-	err := cache.GetOrSetJSON(ctx, cacheKey, 10*time.Minute, &result, func() (any, error) {
-		return r.scanEvaluationByID(ctx, id, 0, false)
-	})
+	d, err := r.scanEvaluationByID(ctx, id, 0, false)
 	if err != nil {
 		return nil, err
 	}
-	return &result, nil
+	return &d, nil
 }
 
 // GetEvaluationByUser 按 ID 查询评估详情，并校验归属（user_id 必须等于 userID）
 // 用于登录用户查看自己的历史详情；不属于该用户的记录返回 pgx.ErrNoRows
 func (r *EvaluationRepository) GetEvaluationByUser(ctx context.Context, id int64, userID int) (*EvaluationDetail, error) {
-	// 详情缓存 key 带上 userID，避免跨用户串缓存
-	cacheKey := evalGetUserKey(userID, id)
-	var result EvaluationDetail
-	err := cache.GetOrSetJSON(ctx, cacheKey, 10*time.Minute, &result, func() (any, error) {
-		return r.scanEvaluationByID(ctx, id, userID, true)
-	})
+	d, err := r.scanEvaluationByID(ctx, id, userID, true)
 	if err != nil {
 		return nil, err
 	}
-	return &result, nil
+	return &d, nil
 }
 
 // evaluationDetailColumns 评估详情读共用列清单（scanEvaluationDetailRow 的扫描顺序与此对齐）。
@@ -207,90 +194,81 @@ func (r *EvaluationRepository) scanEvaluationByID(ctx context.Context, id int64,
 // ListEvaluations 分页查询评估列表
 // brand/vehicleType 为空时不过滤；userID>0 时仅返回该用户的记录，userID=0 时返回全部（公开统计场景）
 func (r *EvaluationRepository) ListEvaluations(ctx context.Context, brand, vehicleType string, userID int, limit, offset int) ([]EvaluationDetail, error) {
-	cacheKey := evalListKey(brand, vehicleType, userID, limit, offset)
-	var result []EvaluationDetail
-	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLStats, &result, func() (any, error) {
-		// 动态拼装 WHERE：brand / vehicle_type / user_id 均为可选过滤
-		where := make([]string, 0, 3)
-		args := make([]any, 0, 4)
-		argIdx := 1
-		if brand != "" {
-			where = append(where, fmt.Sprintf("brand = $%d", argIdx))
-			args = append(args, brand)
-			argIdx++
-		}
-		if vehicleType != "" {
-			where = append(where, fmt.Sprintf("vehicle_type = $%d", argIdx))
-			args = append(args, vehicleType)
-			argIdx++
-		}
-		if userID > 0 {
-			where = append(where, fmt.Sprintf("user_id = $%d", argIdx))
-			args = append(args, userID)
-			argIdx++
-		}
-		whereClause := ""
-		if len(where) > 0 {
-			whereClause = "WHERE " + joinStrings(where, " AND ")
-		}
-		args = append(args, limit, offset)
-		query := fmt.Sprintf(`
+	// 动态拼装 WHERE：brand / vehicle_type / user_id 均为可选过滤
+	where := make([]string, 0, 3)
+	args := make([]any, 0, 4)
+	argIdx := 1
+	if brand != "" {
+		where = append(where, fmt.Sprintf("brand = $%d", argIdx))
+		args = append(args, brand)
+		argIdx++
+	}
+	if vehicleType != "" {
+		where = append(where, fmt.Sprintf("vehicle_type = $%d", argIdx))
+		args = append(args, vehicleType)
+		argIdx++
+	}
+	if userID > 0 {
+		where = append(where, fmt.Sprintf("user_id = $%d", argIdx))
+		args = append(args, userID)
+		argIdx++
+	}
+	whereClause := ""
+	if len(where) > 0 {
+		whereClause = "WHERE " + joinStrings(where, " AND ")
+	}
+	args = append(args, limit, offset)
+	query := fmt.Sprintf(`
 			SELECT `+evaluationDetailColumns+`
 			FROM evaluations %s
 			ORDER BY created_at DESC LIMIT $%d OFFSET $%d`, whereClause, argIdx, argIdx+1)
-		rows, err := r.pool.Query(ctx, query, args...)
-		if err != nil {
-			return nil, fmt.Errorf("查询评估列表失败: %w", err)
+	rows, err := r.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("查询评估列表失败: %w", err)
+	}
+	defer rows.Close()
+	out := make([]EvaluationDetail, 0, limit)
+	for rows.Next() {
+		d, scanErr := scanEvaluationDetailRow(rows)
+		if scanErr != nil {
+			return nil, scanErr
 		}
-		defer rows.Close()
-		out := make([]EvaluationDetail, 0, limit)
-		for rows.Next() {
-			d, scanErr := scanEvaluationDetailRow(rows)
-			if scanErr != nil {
-				return nil, scanErr
-			}
-			out = append(out, d)
-		}
-		return out, rows.Err()
-	})
-	return result, err
+		out = append(out, d)
+	}
+	return out, rows.Err()
 }
 
 // CountEvaluations 统计评估记录总数
 // brand/vehicleType 为空时不过滤；userID>0 时仅统计该用户的记录，userID=0 时统计全部（公开统计场景）
 func (r *EvaluationRepository) CountEvaluations(ctx context.Context, brand, vehicleType string, userID int) (int, error) {
-	cacheKey := evalCountKey(brand, vehicleType, userID)
-	var result int
-	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLStats, &result, func() (any, error) {
-		where := make([]string, 0, 3)
-		args := make([]any, 0, 3)
-		argIdx := 1
-		if brand != "" {
-			where = append(where, fmt.Sprintf("brand = $%d", argIdx))
-			args = append(args, brand)
-			argIdx++
-		}
-		if vehicleType != "" {
-			where = append(where, fmt.Sprintf("vehicle_type = $%d", argIdx))
-			args = append(args, vehicleType)
-			argIdx++
-		}
-		if userID > 0 {
-			where = append(where, fmt.Sprintf("user_id = $%d", argIdx))
-			args = append(args, userID)
-		}
-		whereClause := ""
-		if len(where) > 0 {
-			whereClause = "WHERE " + joinStrings(where, " AND ")
-		}
-		var total int
-		query := fmt.Sprintf(`SELECT COUNT(*) FROM evaluations %s`, whereClause)
-		if err := r.pool.QueryRow(ctx, query, args...).Scan(&total); err != nil {
-			return nil, err
-		}
-		return total, nil
-	})
-	return result, err
+
+	where := make([]string, 0, 3)
+	args := make([]any, 0, 3)
+	argIdx := 1
+	if brand != "" {
+		where = append(where, fmt.Sprintf("brand = $%d", argIdx))
+		args = append(args, brand)
+		argIdx++
+	}
+	if vehicleType != "" {
+		where = append(where, fmt.Sprintf("vehicle_type = $%d", argIdx))
+		args = append(args, vehicleType)
+		argIdx++
+	}
+	if userID > 0 {
+		where = append(where, fmt.Sprintf("user_id = $%d", argIdx))
+		args = append(args, userID)
+	}
+	whereClause := ""
+	if len(where) > 0 {
+		whereClause = "WHERE " + joinStrings(where, " AND ")
+	}
+	var total int
+	query := fmt.Sprintf(`SELECT COUNT(*) FROM evaluations %s`, whereClause)
+	if err := r.pool.QueryRow(ctx, query, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
 }
 
 // nullableUserID 把 0 转为 nil 便于 user_id 落 NULL（匿名提交）
@@ -334,7 +312,6 @@ func (r *EvaluationRepository) UpdateEvaluationReportPath(ctx context.Context, i
 		return err
 	}
 	// 失效详情缓存（pattern 失效同时覆盖公开与 per-user 两种读 key 形状）
-	invalidateEvalWrite(ctx, evalWriteReportPath)
 	return nil
 }
 
@@ -376,6 +353,5 @@ func (r *EvaluationRepository) UpdateEvaluationSuggestions(ctx context.Context, 
 		return fmt.Errorf("回填建议失败 (id=%d): %w", id, err)
 	}
 	// 失效详情缓存（pattern 失效同时覆盖公开与 per-user 两种读 key 形状）
-	invalidateEvalWrite(ctx, evalWriteSuggestions)
 	return nil
 }

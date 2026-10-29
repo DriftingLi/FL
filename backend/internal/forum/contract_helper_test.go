@@ -19,7 +19,7 @@ import (
 // （service_test.go，注释写明「与 deps.go 的装配同形」）之上补「会话 + gin 引擎」。
 //
 // 不另起第二份构造链——域内测试装置只此一份，契约测试要的是它的 HTTP 面。
-// 会话必须带内存黑名单：NewSession 装的是 Redis 存储，测试链路没有 Redis，
+// 会话必须带内存黑名单：NewSession 装的是进程内黑名单，测试链路不接持久化 kv，
 // 「注销先写吊销标记」这类端点会恒红（#1445 批 1 的教训，见
 // docs/design/1445-api-contract-test-audit.md §8.6）。
 //

@@ -46,8 +46,8 @@ func newContributionRouter(t *testing.T) (*gin.Engine, *contributionContractDeps
 	}
 	st := storage.NewLocalStorage(t.TempDir())
 	logger := zap.NewNop()
-	// 会话黑名单走内存实现：测试链路没有 Redis（审计 §8.6 的教训——
-	// security.NewSession 装的是 Redis 存储，「注销先写吊销标记」这类端点会恒红）。
+	// 会话黑名单走内存实现：测试链路不接持久化 kv（审计 §8.6 的教训——
+	// security.NewSession 装的是进程内黑名单，「注销先写吊销标记」这类端点会恒红）。
 	sess := security.SessionFromConfigWithBlacklist(cfg, testutil.NewValueBlacklist())
 	fileSvc := filestore.NewFileStore(cfg.LibreOfficeSidecarURL, st, logger)
 	notifSvc := notification.NewService(db, logger)

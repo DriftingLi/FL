@@ -31,11 +31,10 @@ var BrandDescriptor = DictDescriptor{
 		Fields:       []string{"k_brand", "is_active"},
 		BindRequired: []string{"k_brand"},
 	},
-	Delete:           true,
-	UniqueColumns:    []string{"name"},
-	Upsert:           DictUpsertDoUpdate,
-	InvalidateResult: true,
-	RequiredMessage:  "name 必填",
+	Delete:          true,
+	UniqueColumns:   []string{"name"},
+	Upsert:          DictUpsertDoUpdate,
+	RequiredMessage: "name 必填",
 }
 
 // VehicleTypeDescriptor 车型：name/power_type 必填 + earliest_factory_year 默认 1980（双侧）。
@@ -58,15 +57,13 @@ var VehicleTypeDescriptor = DictDescriptor{
 		Fields:       []string{"name", "power_type", "earliest_factory_year"},
 		BindRequired: []string{"name", "power_type"},
 	},
-	Delete:           true,
-	UniqueColumns:    []string{"name"},
-	Upsert:           DictUpsertDoUpdate,
-	InvalidateResult: true,
-	RequiredMessage:  "name 与 power_type 必填",
+	Delete:          true,
+	UniqueColumns:   []string{"name"},
+	Upsert:          DictUpsertDoUpdate,
+	RequiredMessage: "name 与 power_type 必填",
 }
 
-// SeriesDescriptor 系列：(brand, name) 复合唯一 DO NOTHING + 默认 2000；
-// 唯一不追加评估结果缓存 pattern 的实体（InvalidateResult=false，现状）。
+// SeriesDescriptor 系列：(brand, name) 复合唯一 DO NOTHING + 默认 2000。
 var SeriesDescriptor = DictDescriptor{
 	Name:            "series",
 	EntityLabel:     "系列",
@@ -86,11 +83,10 @@ var SeriesDescriptor = DictDescriptor{
 		Fields:       []string{"brand", "name", "earliest_factory_year"},
 		BindRequired: []string{"brand", "name"},
 	},
-	Delete:           true,
-	UniqueColumns:    []string{"brand", "name"},
-	Upsert:           DictUpsertDoNothing,
-	InvalidateResult: false,
-	RequiredMessage:  "brand 与 name 必填",
+	Delete:          true,
+	UniqueColumns:   []string{"brand", "name"},
+	Upsert:          DictUpsertDoNothing,
+	RequiredMessage: "brand 与 name 必填",
 }
 
 // TonnageDescriptor 吨位：单 float 唯一列 DO NOTHING + C/D。
@@ -107,10 +103,9 @@ var TonnageDescriptor = DictDescriptor{
 		Fields:       []string{"value"},
 		BindRequired: []string{"value"},
 	},
-	Delete:           true,
-	UniqueColumns:    []string{"value"},
-	Upsert:           DictUpsertDoNothing,
-	InvalidateResult: true,
+	Delete:        true,
+	UniqueColumns: []string{"value"},
+	Upsert:        DictUpsertDoNothing,
 }
 
 // MastTypeDescriptor 门架类型：单 name 唯一列 DO NOTHING + C/D。
@@ -127,10 +122,9 @@ var MastTypeDescriptor = DictDescriptor{
 		Fields:       []string{"name"},
 		BindRequired: []string{"name"},
 	},
-	Delete:           true,
-	UniqueColumns:    []string{"name"},
-	Upsert:           DictUpsertDoNothing,
-	InvalidateResult: true,
+	Delete:        true,
+	UniqueColumns: []string{"name"},
+	Upsert:        DictUpsertDoNothing,
 }
 
 // MastHeightDescriptor 门架高度：单 value_mm 唯一列 DO NOTHING + C/D。
@@ -147,10 +141,9 @@ var MastHeightDescriptor = DictDescriptor{
 		Fields:       []string{"value_mm"},
 		BindRequired: []string{"value_mm"},
 	},
-	Delete:           true,
-	UniqueColumns:    []string{"value_mm"},
-	Upsert:           DictUpsertDoNothing,
-	InvalidateResult: true,
+	Delete:        true,
+	UniqueColumns: []string{"value_mm"},
+	Upsert:        DictUpsertDoNothing,
 }
 
 // BatteryTypeDescriptor 电池类型：单 name 唯一列 DO NOTHING + C/D。
@@ -167,10 +160,9 @@ var BatteryTypeDescriptor = DictDescriptor{
 		Fields:       []string{"name"},
 		BindRequired: []string{"name"},
 	},
-	Delete:           true,
-	UniqueColumns:    []string{"name"},
-	Upsert:           DictUpsertDoNothing,
-	InvalidateResult: true,
+	Delete:        true,
+	UniqueColumns: []string{"name"},
+	Upsert:        DictUpsertDoNothing,
 }
 
 // TransmissionTypeDescriptor 传动系统类型：单 name 唯一列 DO NOTHING + C/D。
@@ -187,10 +179,9 @@ var TransmissionTypeDescriptor = DictDescriptor{
 		Fields:       []string{"name"},
 		BindRequired: []string{"name"},
 	},
-	Delete:           true,
-	UniqueColumns:    []string{"name"},
-	Upsert:           DictUpsertDoNothing,
-	InvalidateResult: true,
+	Delete:        true,
+	UniqueColumns: []string{"name"},
+	Upsert:        DictUpsertDoNothing,
 }
 
 // EngineTypeDescriptor 发动机类型：单 name 唯一列 DO NOTHING + C/D。
@@ -207,10 +198,9 @@ var EngineTypeDescriptor = DictDescriptor{
 		Fields:       []string{"name"},
 		BindRequired: []string{"name"},
 	},
-	Delete:           true,
-	UniqueColumns:    []string{"name"},
-	Upsert:           DictUpsertDoNothing,
-	InvalidateResult: true,
+	Delete:        true,
+	UniqueColumns: []string{"name"},
+	Upsert:        DictUpsertDoNothing,
 }
 
 // #95 复杂实体
@@ -235,11 +225,10 @@ var ConditionRatingDescriptor = DictDescriptor{
 		Fields:       []string{"label", "base_coefficient"},
 		BindRequired: []string{"label", "base_coefficient"},
 	},
-	Delete:           true,
-	UniqueColumns:    []string{"rating"},
-	Upsert:           DictUpsertDoUpdate,
-	InvalidateResult: true,
-	RequiredMessage:  "rating 与 label 必填",
+	Delete:          true,
+	UniqueColumns:   []string{"rating"},
+	Upsert:          DictUpsertDoUpdate,
+	RequiredMessage: "rating 与 label 必填",
 }
 
 // RegionCoefficientDescriptor 区域系数描述符（迁移 tracer）。
@@ -264,11 +253,10 @@ var RegionCoefficientDescriptor = DictDescriptor{
 		Fields:       []string{"coefficient"},
 		BindRequired: []string{"coefficient"},
 	},
-	Delete:           true,
-	UniqueColumns:    []string{"province", "city"},
-	Upsert:           DictUpsertDoUpdate,
-	InvalidateResult: true,
-	RequiredMessage:  "province 与 city 必填",
+	Delete:          true,
+	UniqueColumns:   []string{"province", "city"},
+	Upsert:          DictUpsertDoUpdate,
+	RequiredMessage: "province 与 city 必填",
 }
 
 // CoefficientConfigDescriptor 系数配置：只读 + 按 key 更新（U-only，PUT /:key）。
@@ -295,7 +283,6 @@ var CoefficientConfigDescriptor = DictDescriptor{
 	UpdateKeyMessage:  "系数 key 不能为空",
 	ResponseReturning: true,
 	ResponseColumns:   []string{"key", "value", "description", "updated_at"},
-	InvalidateResult:  true,
 	ResponseScan: func(row pgx.Row) (map[string]any, error) {
 		var id int32
 		var key string
@@ -357,7 +344,6 @@ var OriginalPriceDescriptor = DictDescriptor{
 	ValidatePositive: []string{"original_price"},
 	PositiveMessage:  "original_price 必须大于 0",
 	ResponseExtra:    []string{"updated_at"},
-	InvalidateResult: true,
 	RequiredMessage:  "brand/vehicle_type/series 必填",
 }
 

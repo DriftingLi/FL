@@ -29,7 +29,7 @@ import (
 func newDeleteAccountPGRouter(t *testing.T, db *gorm.DB, uid int) (*gin.Engine, string) {
 	t.Helper()
 	testutil.SetTestGinMode()
-	// 黑名单必须走内存实现，与装配链的 newContractDepsWithStorage 同一份构造：测试链路没有 Redis，
+	// 黑名单必须走内存实现，与装配链的 newContractDepsWithStorage 同一份构造：测试链路不接持久化 kv，
 	// 少了它「注销先写吊销标记」这条判据恒红（#1445 批 1 下沉后 CI 实测：注销应 200 实际 400
 	// 「会话吊销未生效」；本机因 PG 用例 skip 而测不出）。
 	sess := security.SessionFromConfigWithBlacklist(&config.Config{}, testutil.NewValueBlacklist())

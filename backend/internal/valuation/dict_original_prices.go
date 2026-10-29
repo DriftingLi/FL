@@ -64,8 +64,7 @@ func (r *DictionaryRepository) FindOriginalPriceMatch(
 	ctx context.Context, brand, vehicleType, series string,
 	tonnage float64, configType, mastType string, mastHeightMM int,
 ) (OriginalPrice, error) {
-	return getCached(r, ctx, cacheKey(CachePrefixOpMatch, brand, vehicleType, series,
-		fmt.Sprintf("%v", tonnage), configType, mastType, fmt.Sprintf("%d", mastHeightMM)), "查询原价记录",
+	return getRow(r, ctx, "查询原价记录",
 		`SELECT `+originalPriceCols+`
 		FROM original_prices
 		WHERE brand = $1 AND vehicle_type = $2 AND series = $3
@@ -95,6 +94,6 @@ func (r *DictionaryRepository) FindOriginalPriceFuzzy(
 		ORDER BY original_price DESC LIMIT 1`
 		args = []any{brand, vehicleType, series, tonnage}
 	}
-	return getCached(r, ctx, cacheKey(CachePrefixOpFuzzy, brand, vehicleType, series, fmt.Sprintf("%v", tonnage)),
+	return getRow(r, ctx,
 		"查询原价记录", query, scanOriginalPrice, args...)
 }

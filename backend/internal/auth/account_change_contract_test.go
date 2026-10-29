@@ -15,9 +15,9 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"forklift-training/internal/cache"
 	"forklift-training/internal/captcha"
 	"forklift-training/internal/core"
+	"forklift-training/internal/kv"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
@@ -117,7 +117,7 @@ func TestAuthAccountChange_FullFlow(t *testing.T) {
 
 	// 5b. 验证码校验成功后即失效（被占用分支已消费），成功分支需重新获取；
 	// 先清掉发送节流 key（真实场景等待 60s 即可）
-	_ = store.Del(context.Background(), cache.SafeKey("phone_code_send", "account_change", "13800138000"))
+	_ = store.Del(context.Background(), kv.SafeKey("phone_code_send", "account_change", "13800138000"))
 	if w := testutil.CodeAuthRequest(r, http.MethodPost, "/api/auth/account/send-code", nil, token); w.Code != http.StatusOK {
 		t.Fatalf("重发 send-code 状态码 = %d\nbody=%s", w.Code, w.Body.String())
 	}

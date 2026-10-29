@@ -24,7 +24,9 @@ import (
 var studentReadableSurface = map[string]string{
 	// ===== 无主体的公开面（访客即可读，学员 token 自然也能读）=====
 	"/api":                     "服务索引（router.go 的根路由）",
+	"/api/health":              "健康检查（无主体，容器编排与部署侧在用）",
 	"/api/health/live":         "存活探针，部署侧在用",
+	"/api/captcha":             "图形验证码生成（无主体，登录/注册前即可取）",
 	"/api/courses":             "课程列表：发现面，公开（内容受门禁）",
 	"/api/featured-contents":   "内容精选公开列表（门户同源）",
 	"/api/faq":                 "帮助中心学员面，一次返回分类与已发布条目",

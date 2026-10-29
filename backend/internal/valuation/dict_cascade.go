@@ -6,8 +6,6 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-
-	"forklift-training/internal/cache"
 )
 
 // ListSeriesByBrand 按品牌列出系列
@@ -20,7 +18,7 @@ func (r *DictionaryRepository) ListSeriesByBrand(ctx context.Context, brand stri
 // 注：vehicleType 与 tonnage 参数保留以维持接口兼容，但不再用于过滤
 // （series_config_options 按 brand+series 索引，battery 维度与 vehicle_type/tonnage 无关）
 func (r *DictionaryRepository) ListBatteryTypesByCascade(ctx context.Context, brand, vehicleType, series, tonnage string) ([]BatteryTypeDict, error) {
-	return listCached(r, ctx, cacheKey(CachePrefixBatteryCascade, brand, vehicleType, series, tonnage), "级联查询电池类型",
+	return listRows(r, ctx, "级联查询电池类型",
 		`SELECT DISTINCT bt.id, bt.name
 		FROM series_config_options sco
 		JOIN battery_types bt ON bt.name = sco.option_name
@@ -40,33 +38,25 @@ func (r *DictionaryRepository) ListBatteryTypesByCascade(ctx context.Context, br
 func (r *DictionaryRepository) GetEarliestFactoryYearByCascade(
 	ctx context.Context, brand, vehicleType, series string, tonnage float64,
 ) (int, error) {
-	cacheKey := cacheKey(CachePrefixEarliestYear, brand, vehicleType, series, fmt.Sprintf("%v", tonnage))
-	var result int
-	err := cache.GetOrSetJSON(ctx, cacheKey, cache.TTLDictionary, &result, func() (interface{}, error) {
-		var year int
-		if series == "" {
-			if e := r.pool.QueryRow(ctx, `
-				SELECT COALESCE(MIN(earliest_factory_year), 1980)
-				FROM original_prices
-				WHERE brand = $1 AND vehicle_type = $2 AND tonnage = $3`,
-				brand, vehicleType, tonnage).Scan(&year); e != nil {
-				return nil, fmt.Errorf("查询最早出厂年份失败: %w", e)
-			}
-			return year, nil
-		}
-		if e := r.pool.QueryRow(ctx, `
+	var year int
+	if series == "" {
+		if err := r.pool.QueryRow(ctx, `
 			SELECT COALESCE(MIN(earliest_factory_year), 1980)
 			FROM original_prices
-			WHERE brand = $1 AND vehicle_type = $2 AND series = $3 AND tonnage = $4`,
-			brand, vehicleType, series, tonnage).Scan(&year); e != nil {
-			return nil, fmt.Errorf("查询最早出厂年份失败: %w", e)
+			WHERE brand = $1 AND vehicle_type = $2 AND tonnage = $3`,
+			brand, vehicleType, tonnage).Scan(&year); err != nil {
+			return 1980, fmt.Errorf("查询最早出厂年份失败: %w", err)
 		}
 		return year, nil
-	})
-	if err != nil {
-		return 1980, err
 	}
-	return result, nil
+	if err := r.pool.QueryRow(ctx, `
+		SELECT COALESCE(MIN(earliest_factory_year), 1980)
+		FROM original_prices
+		WHERE brand = $1 AND vehicle_type = $2 AND series = $3 AND tonnage = $4`,
+		brand, vehicleType, series, tonnage).Scan(&year); err != nil {
+		return 1980, fmt.Errorf("查询最早出厂年份失败: %w", err)
+	}
+	return year, nil
 }
 
 // CascadeFilter 级联过滤参数
@@ -84,7 +74,7 @@ type CascadeFilter struct {
 // LEFT JOIN vehicle_types 字典表仅用于补充 power_type / earliest_factory_year
 // 管理员在原价表里填新 vehicle_type 后学生端立即可见，无需先在 vehicle_types 字典表建记录
 func (r *DictionaryRepository) ListVehicleTypesByBrand(ctx context.Context, brand string) ([]VehicleType, error) {
-	return listCached(r, ctx, cacheKey(CachePrefixVtByBrand, brand), "级联查询车型",
+	return listRows(r, ctx, "级联查询车型",
 		`SELECT MIN(op.id), op.vehicle_type,
 		       COALESCE(MIN(vt.power_type), ''),
 		       COALESCE(MIN(vt.earliest_factory_year), 1980)
@@ -104,7 +94,7 @@ func (r *DictionaryRepository) ListVehicleTypesByBrand(ctx context.Context, bran
 // 数据源为 original_prices 表，LEFT JOIN series 字典表仅用于补充 earliest_factory_year
 // 这样管理员在原价表里新增 series 名字后，学生端立即可见，无需先在 series 字典表建记录
 func (r *DictionaryRepository) ListSeriesByCascade(ctx context.Context, brand, vehicleType string) ([]Series, error) {
-	return listCached(r, ctx, cacheKey(CachePrefixSeriesCascade, brand, vehicleType), "级联查询系列",
+	return listRows(r, ctx, "级联查询系列",
 		`SELECT MIN(op.id), op.brand, op.series, COALESCE(MIN(s.earliest_factory_year), 1980)
 		FROM original_prices op
 		LEFT JOIN series s ON s.brand = op.brand AND s.name = op.series
@@ -121,7 +111,7 @@ func (r *DictionaryRepository) ListSeriesByCascade(ctx context.Context, brand, v
 // ListTonnagesByCascade 按品牌+车辆类型+系列级联查询吨位（数据源为 original_prices 表）
 // 管理员在原价表里填新 tonnage 后学生端立即可见，无需先在 tonnages 字典表建记录
 func (r *DictionaryRepository) ListTonnagesByCascade(ctx context.Context, brand, vehicleType, series string) ([]Tonnage, error) {
-	return listCached(r, ctx, cacheKey(CachePrefixTonnagesCascade, brand, vehicleType, series), "级联查询吨位",
+	return listRows(r, ctx, "级联查询吨位",
 		`SELECT MIN(op.id), op.tonnage
 		FROM original_prices op
 		WHERE op.brand = $1 AND op.vehicle_type = $2 AND op.series = $3
@@ -137,7 +127,7 @@ func (r *DictionaryRepository) ListTonnagesByCascade(ctx context.Context, brand,
 // ListConfigOptionsByCascade 按品牌+车辆类型+系列+吨位级联查询配置类型选项
 // config_type 为复合字符串（如"手波/国产发动机"、"磷酸铁锂(LFP)"），直接从 original_prices 取 DISTINCT
 func (r *DictionaryRepository) ListConfigOptionsByCascade(ctx context.Context, brand, vehicleType, series, tonnage string) ([]ConfigOption, error) {
-	return listCached(r, ctx, cacheKey(CachePrefixConfigCascade, brand, vehicleType, series, tonnage), "级联查询配置类型",
+	return listRows(r, ctx, "级联查询配置类型",
 		`SELECT DISTINCT MIN(op.id), op.config_type
 		FROM original_prices op
 		WHERE op.brand = $1 AND op.vehicle_type = $2 AND op.series = $3 AND op.tonnage = $4::numeric
@@ -153,7 +143,7 @@ func (r *DictionaryRepository) ListConfigOptionsByCascade(ctx context.Context, b
 // ListMastTypesByCascade 按前序层级+配置类型级联查询门架类型（数据源为 original_prices 表）
 // 管理员在原价表里填新 mast_type 后学生端立即可见，无需先在 mast_types 字典表建记录
 func (r *DictionaryRepository) ListMastTypesByCascade(ctx context.Context, brand, vehicleType, series, tonnage, configType string) ([]MastType, error) {
-	return listCached(r, ctx, cacheKey(CachePrefixMastTypesCascade, brand, vehicleType, series, tonnage, configType), "级联查询门架类型",
+	return listRows(r, ctx, "级联查询门架类型",
 		`SELECT MIN(op.id), op.mast_type
 		FROM original_prices op
 		WHERE op.brand = $1 AND op.vehicle_type = $2 AND op.series = $3 AND op.tonnage = $4::numeric AND op.config_type = $5
@@ -169,7 +159,7 @@ func (r *DictionaryRepository) ListMastTypesByCascade(ctx context.Context, brand
 // ListMastHeightsByCascade 按前序层级+门架类型级联查询门架高度（数据源为 original_prices 表）
 // 管理员在原价表里填新 mast_height_mm 后学生端立即可见，无需先在 mast_heights 字典表建记录
 func (r *DictionaryRepository) ListMastHeightsByCascade(ctx context.Context, brand, vehicleType, series, tonnage, configType, mastType string) ([]MastHeight, error) {
-	return listCached(r, ctx, cacheKey(CachePrefixMastHeightsCascade, brand, vehicleType, series, tonnage, configType, mastType), "级联查询门架高度",
+	return listRows(r, ctx, "级联查询门架高度",
 		`SELECT MIN(op.id), op.mast_height_mm
 		FROM original_prices op
 		WHERE op.brand = $1 AND op.vehicle_type = $2 AND op.series = $3 AND op.tonnage = $4::numeric AND op.config_type = $5 AND op.mast_type = $6

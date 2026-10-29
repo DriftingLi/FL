@@ -12,6 +12,7 @@ import (
 	"forklift-training/internal/core"
 	"forklift-training/internal/course"
 	"forklift-training/internal/filestore"
+	"forklift-training/internal/kv"
 	"forklift-training/internal/notification"
 	"forklift-training/internal/points"
 	"forklift-training/internal/security"
@@ -32,6 +33,8 @@ type coreSingletons struct {
 	export  valuation.ExportStore
 	sess    *security.Session
 	forumCn core.ForumCounter
+	// kv 带 TTL 的临时 KV 单例（#2109：Redis 退场后验证码 / 图形码 / 黑名单共用同一实现）。
+	kv *kv.Store
 
 	authSvc       *auth.Service
 	codeSvc       *auth.VerifyCodeService
@@ -58,14 +61,17 @@ type coreSingletons struct {
 func provideCore(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Logger, exportStore valuation.ExportStore) *coreSingletons {
 	c := &coreSingletons{cfg: cfg, db: db, st: st, logger: logger, export: exportStore}
 
-	// 会话唯一实例：签发（AuthService）与校验（中间件/估值模块）共用同一实例
-	c.sess = security.SessionFromConfig(cfg)
+	// 临时 KV 单例：验证码 / 图形码 / JWT 黑名单三处共用（同一张 ephemeral_kv 表）。
+	c.kv = kv.NewStore(db)
+	// 会话唯一实例：签发（AuthService）与校验（中间件/估值模块）共用同一实例；
+	// 黑名单显式注入 kv（不用 NewSession 的内存默认值 —— 那会让吊销标记重启即丢）。
+	c.sess = security.SessionFromConfigWithBlacklist(cfg, c.kv)
 	// 论坛计数器唯一实例：ForumService / ForumModerationService 与 AuthService 共享（计数列唯一写入口，spec #297）
 	c.forumCn = core.NewForumCounter()
 	c.authSvc = auth.NewService(db, c.sess, c.forumCn,
 		cfg.DefaultPasswords.Admin, cfg.DefaultPasswords.Tutor, cfg.DefaultPasswords.Student, logger)
-	c.codeSvc = auth.NewVerifyCodeService(db, c.authSvc, cfg.EmailCodeTTL, &auth.RedisAuthCodeStore{}, logger)
-	c.captchaSvc = captcha.NewService(captcha.RedisStore{})
+	c.codeSvc = auth.NewVerifyCodeService(db, c.authSvc, cfg.EmailCodeTTL, c.kv, logger)
+	c.captchaSvc = captcha.NewService(c.kv)
 	c.emailCh = auth.NewEmailChannel(cfg.SMTP, cfg.IsProd(), logger)
 	// 邮件发送器单点（spec #449 决定 15）：联系方式交换与投递通知共用，不再注入 nil 只写日志。
 	c.mailSender = core.NewMailSender(cfg.SMTP, cfg.IsProd(), logger)

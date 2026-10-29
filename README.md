@@ -81,7 +81,7 @@
 
 - **统一账号**：`hrwai_users` 表 + 一套 JWT，学员端 / 残值评估 / AI 助手共用（历史上学员与估值用户的双 JWT 体系已收敛）
 - **角色**：`hrwai_user`、`tutor`、`admin`、`recruiter`，后三者为独立账号表
-- **双令牌（ADR-0016）**：access 2 小时（中间件仅收 access）+ refresh 7 天轮换；Redis 黑名单只管 refresh，access 自然过期
+- **双令牌（ADR-0016）**：access 2 小时（中间件仅收 access）+ refresh 7 天轮换；refresh 黑名单落在 `ephemeral_kv` 表（#2109），access 自然过期
 - **登录方式**：密码、邮箱验证码、手机验证码、微信扫码（开放平台）、微信小程序 `wx-login`
 - **验证码（ADR-0001）**：邮箱（SMTP）与短信（腾讯云 SMS）是同一状态机两侧的 adapter，六态用途，默认 5 分钟内有效、60 秒节流、错误上限 5 次
 
@@ -109,7 +109,7 @@
 - 语言：Go 1.26
 - Web 框架：Gin v1.10 + gin-contrib/cors
 - 数据库：PostgreSQL 18 + pgx/v5 + GORM
-- 缓存 / 黑名单：Redis 7（go-redis/v9）
+- 临时 KV（验证码 / 图形码 / refresh 黑名单）：PostgreSQL 单表 `ephemeral_kv`（#2109 起 Redis 已退役）
 - 数据库迁移：golang-migrate/v4
 - 认证：golang-jwt/v5（双令牌）
 - 配置：viper（环境变量 + 默认值）
@@ -141,7 +141,7 @@
 
 ### 基础设施
 
-- 数据库：PostgreSQL 18；缓存：Redis 7（生产必需）
+- 数据库：PostgreSQL 18（唯一存储面，含原 Redis 承担的临时 KV）
 - 对象存储：S3 兼容网关（Ceph RGW）
 - 文档转换：LibreOffice sidecar（`libreoffice-sidecar/`）
 - 编排：Docker Compose
@@ -175,7 +175,7 @@
 │   ├── migrations/               # 迁移脚本（000001 ~ 000040，共 40 组，up/down 成对）
 │   ├── docs/                     # Swagger 生成产物（docs.go / swagger.json|yaml）
 │   ├── Dockerfile / entrypoint.sh
-│   ├── docker-compose.yml        # 本地 postgres + redis + libreoffice + backend
+│   ├── docker-compose.yml        # 本地 postgres + libreoffice + backend
 │   └── docker-compose.override.yml.example
 ├── frontend/                     # Vue3 前端（forklift-training-frontend）
 │   ├── src/                      # 源码（api / pages / components / layouts / stores / router /
@@ -191,7 +191,7 @@
 │   └── 叉车维修培训学员端跨端应用/  # uni-app x 学员端移动 App
 ├── deploy/                       # 部署面（ADR-0088，全部部署相关文件聚合于此）
 │   ├── deploy.py                 # 部署 CLI（按变更重启 / 迁移 / 回滚 / 健康检查）
-│   ├── docker-compose.prod.yml   # 生产编排（PostgreSQL + Redis + LibreOffice + 后端 + Caddy 前端）
+│   ├── docker-compose.prod.yml   # 生产编排（PostgreSQL + LibreOffice + 后端 + Caddy 前端）
 │   ├── env.defaults              # 部署默认值生成物（唯一事实源 backend/internal/deploy）
 │   ├── setup-server.sh / lxc-install-docker.sh / lxc-setup-ssh.sh   # 服务器初始化
 │   ├── backup-daily.sh / rbd-snap-hourly.sh / forklift-watchdog.sh  # 备份、快照、存活巡检
@@ -223,16 +223,16 @@
 - Python 3.9+（仅部署 CLI `deploy/deploy.py`；目标服务器 Debian / PVE 自带 `python3`）
 - GNU Make（仓库根 `Makefile`；Windows 可用 Git Bash / WSL）
 - Docker + Docker Compose（本地依赖与生产编排）
-- PostgreSQL 18、Redis 7（由 docker-compose 提供或已有实例）
+- PostgreSQL 18（由 docker-compose 提供或已有实例；#2109 起不再需要 Redis）
 - HBuilderX（仅移动端开发需要）
 
 ## 快速开始
 
-### 1. 启动后端依赖（PostgreSQL + Redis + LibreOffice）
+### 1. 启动后端依赖（PostgreSQL + LibreOffice）
 
 ```bash
 cd backend
-docker compose up -d          # postgres :5432 / redis :6379 / libreoffice :8000 / backend :18080
+docker compose up -d          # postgres :5432 / libreoffice :8000 / backend :18080
 ```
 
 `backend/docker-compose.yml` 把后端容器的 8080 映射到宿主机 **18080**，前端 dev 代理默认指向 `127.0.0.1:18080`。
@@ -306,18 +306,9 @@ make frontend-dev                              # 默认 :5173
 | `CORS_ORIGINS` | 允许的前端来源（含各子域名，逗号分隔） | <http://localhost:5173> |
 | `MAX_CONTENT_LENGTH_MB` | 上传大小上限 | 250 |
 
-### Redis
+> **#2109 起 Redis 已退役**：验证码、图形码与 refresh 黑名单落在 PostgreSQL 的 `ephemeral_kv` 表，配置面不再有 `REDIS_*` 变量；带 TTL 的临时 KV 由 `internal/kv` 提供，过期清扫是 `internal/daemon` 里的一条 5 分钟守护。
 
-| 变量 | 说明 | 默认值 |
-| --- | --- | --- |
-| `REDIS_ADDR` | Redis 地址 | localhost:6379 |
-| `REDIS_PASSWORD` | Redis 密码 | 空 |
-| `REDIS_DB` / `REDIS_POOL_SIZE` / `REDIS_MIN_IDLE_CONNS` | 库 / 连接池 / 最小空闲 | 0 / 20 / **3** |
-| `REDIS_KEY_PREFIX` | 键前缀 | fl: |
-| `REDIS_MAX_RETRIES` / `REDIS_POOL_TIMEOUT` / `REDIS_IDLE_TIMEOUT` | 重试 / 池超时 / 空闲超时 | 3 / **4s** / 5m |
-| `REDIS_DIAL_TIMEOUT` / `REDIS_READ_TIMEOUT` / `REDIS_WRITE_TIMEOUT` | 拨号 / 读 / 写超时 | 2s / 3s / 3s |
-
-> 默认值的**唯一宿主是 `backend/internal/config/config.go`**（第十三波 ADR-0060 票 5 起入漂移锁，代码内部不得再各写一份 fallback）。本表若与代码不一致，以代码为准并来改正这里——`REDIS_POOL_SIZE` 曾因两处各写一份而漂成 20/10/20，而本表当时也跟着写了个错值（旧版的 `MIN_IDLE 5` / `POOL_TIMEOUT 3s` 即是）。
+> 配置默认值的**唯一宿主是 `backend/internal/config/config.go`**（ADR-0060 票 5 起入漂移锁，代码内部不得再各写一份 fallback）。本表若与代码不一致，以代码为准并来改正这里——历史上 `REDIS_POOL_SIZE` 曾因两处各写一份而漂成 20/10/20（该变量已随 Redis 退役）。
 
 ### 存储与文档转换
 
@@ -439,7 +430,7 @@ ls backend/migrations/*.up.sql | sed 's#.*/##'
 
 部署面自 ADR-0088 起**聚合在 [`deploy/`](deploy/)**：部署 CLI、生产 compose、默认值生成物、服务器初始化 / 备份 / 巡检脚本、systemd 单元与部署判据测试都在这里。详细说明见 [`deploy/README.md`](deploy/README.md)。
 
-**按变更重启**：`deploy/deploy.py` 先按「容器状态 + 镜像内容（ID）+ compose config-hash」算计划，只重建真正变化的服务；`postgres` / `redis` 是数据服务，默认永不因应用变更而重建（配置漂移会中止，需显式 `--force-data-services`）。`--force` 只重建应用服务。
+**按变更重启**：`deploy/deploy.py` 先按「容器状态 + 镜像内容（ID）+ compose config-hash」算计划，只重建真正变化的服务；`postgres` 是数据服务，默认永不因应用变更而重建（配置漂移会中止，需显式 `--force-data-services`）。`--force` 只重建应用服务。
 
 ### 本地 / 手动一键部署
 
@@ -453,10 +444,9 @@ python3 deploy/deploy.py local --skip-migrate  # 跳过数据库迁移
 
 ### 生产编排
 
-`deploy/docker-compose.prod.yml` 编排五个服务：
+`deploy/docker-compose.prod.yml` 编排四个服务：
 
 - `postgres`（PostgreSQL 18，持久化目录由 `PG_VOLUME` 指定；生产是 Ceph 挂载 `/srv/ceph/pgdata`）
-- `redis`（Redis 7，仅内网，LRU 淘汰、禁用持久化）
 - `libreoffice`（文档转换 sidecar）
 - `backend`（Go 后端，仅内网，经前端反代访问）
 - `frontend`（Caddy，host 网络监听 80/443：证书自动签发 + `/api` 反代 + 静态托管 + 对象存储前缀反代）

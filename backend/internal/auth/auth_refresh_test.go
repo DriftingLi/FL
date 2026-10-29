@@ -21,7 +21,7 @@ import (
 	"forklift-training/internal/testutil"
 )
 
-// memBlacklist 内存黑名单存储（本测试专用；生产走 Redis）。
+// memBlacklist 内存黑名单存储（本测试专用；生产走 kv.Store）。
 type memBlacklist struct {
 	mu sync.Mutex
 	m  map[string]string
