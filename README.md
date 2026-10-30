@@ -1,230 +1,150 @@
 # 叉车维修培训与残值评估系统
 
-面向叉车维修培训、学员就业对接与叉车残值评估的全栈系统。包含在线培训与考试练习、论坛问答、学员资料投稿、积分激励、AI 助手、企业招聘对接，以及叉车残值评估与电池剩余寿命（RUL）评估等模块。系统按角色划分工作区（学员 / 讲师 / 管理员 / 企业招聘者），前端以子域名承载独立工作区。
+面向叉车维修培训、学员就业对接与叉车残值评估的全栈系统：在线培训与考试练习、论坛问答、资料投稿、积分激励、AI 助手、企业招聘对接，以及整机残值与电池剩余寿命（RUL）评估。系统按角色划分工作区（学员 / 讲师 / 管理员 / 企业招聘者），前端以子域名承载。
 
-领域术语以 [`CONTEXT.md`](./CONTEXT.md) 为准，架构决策记录在 [`docs/adr/`](./docs/adr/)（`ADR-0001` ~ `ADR-0070`，71 篇）。
+领域术语以 [`CONTEXT.md`](./CONTEXT.md) 为准，架构决策记录在 [`docs/adr/`](./docs/adr/)（当前 91 篇）。
 
 ## 功能特性
 
 ### 培训学习（学员 · `training.`）
 
-- **目标证件**：学员报考的外部持证目标（特种作业上岗证 / 职业技能等级），作为**全局过滤器**贯穿课程、题库、练习、模考、错题、搜索、收藏与投稿；首次登录强制预筛选
+- **目标证件**：学员报考的外部持证目标，作为全局过滤器贯穿课程、题库、练习、模考、错题、搜索、收藏与投稿
 - **课程目录**：`目标证件 → 专业方向 → 课程等级 → 课程` 三层虚拟树；章节支持 PPT / 视频 / 图文混排（PPT 经 LibreOffice sidecar 转 WebP）
-- **学习位置**：记录最后章节与视频播放位置，断点续学；章节完成以 progress ≥ 100 为单一事实源
-- **练习**：顺序 / 随机 / 专项 / 标签四种模式，含结果卡、AI 解析、评论、考点与私有笔记五模块
-- **模拟考试**：自动判分 + AI 评分（简答），按当前证件题库抽题
-- **真题卷**：按套解锁的真题练习，真题题不进公共练习池
-- **错题本**：按题收录，单题即时重做，与练习共用提交管线
-- **论坛**：三种模式——**讨论 / 问答**由学员发帖时自述（意图），**备考经验**由管理端认定（认定蕴含精选）；采纳奖励、点赞、举报、楼中楼回复
-- **资料投稿**：学员自主上传（1–5 个文件，先审后发）换取积分；过审 +50、下载达阶追加，违规下架走积分对冲追回（ADR-0026）
-- **积分域**：统一账务（余额 + 流水 + 幂等占坑）。任务中心、问答采纳、AI 按 token 计费、兑换与管理员扣罚共用一套簿记（ADR-0023）
-- **在线简历**：学员维护简历，可导出 PDF，向企业投递并查看进度
-- **AI 助手**：大模型流式对话（DeepSeek 默认，OpenAI 兼容可换），按 tokens 计量扣积分
-- **全局搜索**：course / question / content / topic 四类聚合
-- **收藏**：可收藏对象五类（course / chapter / question / featured / topic），前端清单与后端 `FavoriteTarget*` 由互等锁对齐（`config/contentObjects.ts` ↔ `favorite_service.go`）
+- **练习与考试**：顺序 / 随机 / 专项 / 标签四种练习模式；模拟考试自动判分 + AI 评分（简答）；按套解锁的真题卷
+- **学习与错题**：断点续学（章节 + 视频位置）；错题本按题收录、单题即时重做，与练习共用提交管线
+- **论坛**：讨论 / 问答 / 备考经验三种模式，支持采纳、点赞、举报、楼中楼
+- **资料投稿**：学员上传资料换取积分，先审后发，违规下架走积分对冲追回（ADR-0026）
+- **积分域**：统一账务（余额 + 流水 + 幂等占坑），任务中心、问答采纳、AI 计费、兑换与扣罚共用一套簿记（ADR-0023）
+- **在线简历**：维护简历、导出 PDF、向企业投递并查看进度
+- **AI 助手**：大模型流式对话（DeepSeek 默认，OpenAI 兼容可换），按 token 计量扣积分
+- **搜索与收藏**：course / question / content / topic 四类聚合搜索；course / chapter / question / featured / topic 五类对象可收藏
 
 ### 招聘对接（企业招聘者 · `recruit.` / 学员端职位广场）
 
-- **职位发布与广场**：企业发布职位并挂专业方向，学员端按地区 / 方向筛选浏览
-- **投递与授权**：投递即授权简历可见（ADR-0025），企业侧查看投递列表与简历详情
-- **简历库与交换**：企业检索简历、发起联系请求，双向交换联系方式
-- **招聘者管理**：授信码开通、资料编辑、微信绑定、查看统计
+- 企业发布职位（挂专业方向），学员按地区 / 方向筛选浏览
+- 投递即授权简历可见（ADR-0025）；企业检索简历、发起联系请求，双向交换联系方式
+- 招聘者管理：授信码开通、资料编辑、微信绑定、统计
 
-### 残值评估（学员 `hrwai_user` · 界面在门户 `valuation.hrwai.cn`）
+### 残值评估（学员 `hrwai_user` · 公开界面在门户 `valuation.hrwai.cn`）
 
-> **2026-10 北迁完成**：公开界面（填报 / 历史 / 报告）整体搬到门户仓的 Nuxt 应用（`valuation.hrwai.cn/valuation`），
-> 本仓保留**后端与数据**，以及管理端的「残值配置」。旧子域 `valuation.gdyidao.cn` 现在只是一条 301。
+> 公开界面（填报 / 历史 / 报告）已北迁到门户仓的 Nuxt 应用（`valuation.hrwai.cn/valuation`）；本仓保留后端与数据、管理端的「残值配置」。旧子域现在只是一条 301。
 
-- **整机残值评估**：输入品牌、车型、系列、吨位、配置、出厂年份、工时、车况、区域等参数，输出残值估算、置信区间与多维系数雷达图
-- **评估公式**：`残值 = 原价 × Kt_adj × Kc × Km`，其中 `Kt_adj = Kt^(Kh/Kb)`
-- **五维系数**：出厂时间 Kt、使用强度 Kh、品牌价值 Kb、车况 Kc、市场需求 Km
-- **电池 RUL 评估**：基于特征提取与混合神经网络的锂电池剩余寿命预测（含 SOH、置信区间与建议）
-- **PDF 报告**：评估结果一键生成可下载的中文 PDF 报告
+- **整机残值**：按品牌、车型、吨位、出厂年份、工时、车况、区域等参数输出残值估算、置信区间与多维系数雷达图
+- **评估公式**：`残值 = 原价 × Kt_adj × Kc × Km`，其中 `Kt_adj = Kt^(Kh/Kb)`；五维系数为出厂时间 Kt、使用强度 Kh、品牌价值 Kb、车况 Kc、市场需求 Km
+- **电池 RUL**：基于特征提取与混合神经网络的锂电池剩余寿命预测（含 SOH、置信区间与建议）
+- **PDF 报告**：评估结果一键生成可下载的中文 PDF
 
-### 管理后台（管理员 · `manage.`）
+### 管理后台（`manage.`）与讲师工作区（`mentor.`）
 
-- 学员 / 讲师 / 招聘者账号管理、目标证件与专业方向维护
-- 课程目录与章节、题库审核、标签管理
-- 投稿审核、论坛管理、资料审核、精选内容、职位管理、统计看板
-- AI 设置、内容生成、审计日志、系统巡检、残值算法配置
-
-### 讲师工作区（`mentor.`）
-
-- 章节内容编排与编辑、题库创建 / 维护 / 驳回、题库标签、投稿审核
+- 管理后台：账号与基础数据维护、课程 / 题库 / 标签、投稿与论坛审核、精选内容、职位管理、统计看板、AI 设置、审计日志、系统巡检、残值算法配置
+- 讲师工作区：章节编排、题库创建 / 维护 / 驳回、题库标签、投稿审核
 
 ### 移动端（学员 App + 招聘者端）
 
-- **uni-app x** 跨端应用（Android / iOS / H5 / 微信小程序）
-- `training-app/叉车维修培训学员端跨端应用/pages/` 下已有 23 个页面模块（含 `recruiter` 招聘者端）
-- **落地范围与验收门不在本仓评审面**：移动端由 @zhengcookie 负责，其功能清单以该目录的 `pages.json` 与**移动端自己的 ADR 体系**（`training-app/…/docs/adr/`，编号与根仓库无关）为准，本处不复述功能状态
+- **uni-app x** 跨端应用（Android / iOS / H5 / 微信小程序），页面清单以 `pages.json` 为准
+- 由 @zhengcookie 负责，功能状态与验收门见该目录的 [`AGENTS.md`](training-app/叉车维修培训学员端跨端应用/AGENTS.md) 与移动端自己的 ADR 体系（编号与根仓库无关）
 
 ## 系统架构
 
-单仓库包含三个可独立部署的部分：**后端（Go）**、**前端（Vue3）**、**移动端（uni-app x）**。前后端通过 HTTP API 通信，接口清单见 [`API.md`](./API.md)，Swagger 文档由后端 `/swagger` 提供。
+单仓库包含三个可独立部署的部分：**后端（Go）**、**前端（Vue 3）**、**移动端（uni-app x）**。前后端通过 HTTP API 通信，接口清单见 [`API.md`](./API.md)，Swagger 由后端 `/swagger` 提供。
 
-### 子域名多工作区（前端）
+### 子域名工作区（前端）
 
-前端为单一应用，按访问子域名切换工作区，路由守卫在不同子域名间整页跳转：
+前端为单一应用，按访问子域名切换工作区；API 统一走 `api.<domain>`，页面域名与 API 解耦（ADR-0077）。
 
 | 子域名 | 工作区 | 角色 | 主要内容 |
 | --- | --- | --- | --- |
-| `www` | 官网门户 | 访客 | 由**独立 Nuxt 仓库**承载、部署在腾讯云 EdgeOne（主域 `www.hrwai.cn`）；旧域 `www.gccsmile.com` 只留「页面 301 + API」，资源在 `cdn` 子域 |
+| `www` | 官网门户 | 访客 | **独立 Nuxt 仓库**，部署在腾讯云 EdgeOne；旧域 `gccsmile.com` 已硬切退役，不留 301（ADR-0077） |
 | `training.` | 培训学习 | 学员 `hrwai_user` | 课程、练习、模考、真题、论坛、投稿、积分、AI 助手、简历、职位广场 |
 | `mentor.` | 讲师工作区 | 讲师 `tutor` | 章节、题库、标签、投稿审核 |
 | `manage.` | 管理后台 | 管理员 `admin` | 全站管理与配置 |
-| `valuation.` | 残值评估 | 学员 `hrwai_user` | 整机残值、电池 RUL、评估报告 |
+| `valuation.` | 残值评估 | 学员 `hrwai_user` | 已北迁，仅剩一跳 301 到门户 |
 | `recruit.` | 招聘工作区 | 企业招聘者 `recruiter` | 职位发布、简历库、投递管理 |
 
-生产环境登录态用 httpOnly Cookie，但**两族的域作用域不同**（ADR-0022）：学员侧 `hrwai_token` 挂**父域名**以便各子域名共享，招聘者侧 `recruiter_token` 刻意收紧为 **host-only**（`Domain=""`）——否则已登录学员的静默恢复路径会拿到 recruiter token、串角色。Cookie 不可用时降级为带一次性 `auth_token` 参数的跨子域名跳转交接。IP 直连模式（无 DNS 子域名）下不做跨域跳转，各工作区按路径在同一 origin 内访问。
+生产登录态用 httpOnly Cookie，但两族域作用域不同（ADR-0022「招聘角色隔离」；两族并存时的族判定见 ADR-0067）：学员侧 `hrwai_token` 挂父域名以便各子域名共享，招聘者侧 `recruiter_token` 刻意收紧为 host-only，否则已登录学员的静默恢复路径会拿到 recruiter token、串角色。Cookie 不可用时降级为带一次性 `auth_token` 参数的跨子域名跳转。
 
 ### 统一账号与双令牌（后端）
 
-- **统一账号**：`hrwai_users` 表 + 一套 JWT，学员端 / 残值评估 / AI 助手共用（历史上学员与估值用户的双 JWT 体系已收敛）
-- **角色**：`hrwai_user`、`tutor`、`admin`、`recruiter`，后三者为独立账号表
-- **双令牌（ADR-0016）**：access 2 小时（中间件仅收 access）+ refresh 7 天轮换；refresh 黑名单落在 `ephemeral_kv` 表（#2109），access 自然过期
-- **登录方式**：密码、邮箱验证码、手机验证码、微信扫码（开放平台）、微信小程序 `wx-login`
-- **验证码（ADR-0001）**：邮箱（SMTP）与短信（腾讯云 SMS）是同一状态机两侧的 adapter，六态用途，默认 5 分钟内有效、60 秒节流、错误上限 5 次
-
-统一响应结构：`{ "code": <HTTP状态码>, "message": "...", "data": ... }`（`code` 即 HTTP 状态码，`200` 表示成功，见 ADR-0005）。
+- **统一账号**：`hrwai_users` + 一套 JWT，学员端 / 残值评估 / AI 助手共用；角色 `hrwai_user`、`tutor`、`admin`、`recruiter`（后三者为独立账号表）
+- **双令牌（ADR-0016）**：access 2 小时（中间件仅收 access）+ refresh 7 天轮换；refresh 黑名单落在 PostgreSQL `ephemeral_kv` 表（#2109），access 自然过期
+- **登录方式**：密码、邮箱验证码、手机验证码、微信扫码、微信小程序 `wx-login`
+- **验证码（ADR-0001）**：邮箱（SMTP）与短信（腾讯云 SMS）是同一状态机两侧的 adapter，默认 5 分钟内有效、60 秒节流、错误上限 5 次
+- 统一响应结构 `{ "code": <HTTP状态码>, "message": "...", "data": ... }`（ADR-0005）
 
 ### 后端按功能域分包（ADR-0070）
 
-后端**不按技术分层切目录**，而是「一个功能域 = 一个包」：`backend/internal/<域>/`，共 30 个域；域名与路由前缀的唯一真源是 [`backend/internal/apitypes/domains.go`](./backend/internal/apitypes/domains.go) 的域声明表（它同时是 swagger definitions 前缀与前端生成契约的域边界）。
-
-- 包内按**文件名**分层：`handler*.go`（HTTP 出口与路由注册）/ `service.go` / `dto.go` / `errors.go`；测试与实现同目录同包。**不用子目录分层**——子目录 = 多包 = 导出面被迫扩大，且会让「目录即射程」的守卫失明。
-- 跨域共享件只有三个出口：注入参数 → 升级到 [`backend/pkg/httpx`](./backend/pkg/httpx)（HTTP 形状与请求解析）→ 共享助手层 [`backend/internal/core`](./backend/internal/core)（能进叶子包的一律进叶子包）。
-- 装配根是 [`backend/internal/api`](./backend/internal/api)：只剩 `NewDeps` + `providers_*.go` + 路由登记，没有业务实现；域包**不得反向依赖**它。
-- 三条分层规矩由 [`backend/internal/layers`](./backend/internal/layers/layer_guard.go) 可执行地守着（单向依赖 / 测试与实现同居 / gin 只出现在 HTTP 面与登记的基建里）；「哪些文件算 HTTP 面」的唯一出处是 `backend/internal/testutil/codescan.go`。
-
-逐波迁移账本（含共享件落点表与全部踩坑血账）见 [`docs/agents/domain-package-migration.md`](./docs/agents/domain-package-migration.md)；决策理由见 [`ADR-0070`](./docs/adr/ADR-0070-域包形态与目录即射程的收口.md)。
+- **一个功能域 = 一个包**：`backend/internal/<域>/`；域清单的唯一真源是 [`backend/internal/apitypes/domains.go`](./backend/internal/apitypes/domains.go)（同时是 swagger definitions 前缀与前端契约的域边界）
+- 包内按**文件名**分层：`handler*.go`（HTTP 出口与路由）/ `service.go` / `dto.go` / `errors.go`，不建子目录（子目录 = 多包 = 导出面被迫扩大，且让「目录即射程」的守卫失明）
+- 跨域共享只有三个出口：注入参数 → [`backend/pkg/httpx`](./backend/pkg/httpx) → [`backend/internal/core`](./backend/internal/core)；**没有 repository 层**，读写都在各域里
+- 装配根 [`backend/internal/api`](./backend/internal/api) 只做 `NewDeps` + 路由登记，域包不得反向依赖它；三条分层规矩由 [`backend/internal/layers`](./backend/internal/layers/layer_guard.go) 可执行地守着
+- 迁移账本与踩坑血账见 [`docs/agents/domain-package-migration.md`](./docs/agents/domain-package-migration.md)，决策理由见 [`ADR-0070`](./docs/adr/ADR-0070-域包形态与目录即射程的收口.md)
 
 ### 文件与对象存储
 
-`storage_driver` 可切换 `local` / `r2`（S3 兼容）。生产环境在**资源域 `cdn.<domain>`**（公开 URL 基址 `R2_PUBLIC_DOMAIN`，只允许 GET/HEAD）把 `featured/ avatars/ contributions/ resumes/ images/ chapters/ slides/ uploads/ reports/` 等前缀反代到 S3 兼容对象存储网关；旧域的同名路径只做 301 到资源域，不再直出（票 #1742）。
+`storage_driver` 可切换 `local` / `r2`（S3 兼容）。生产在资源域 `cdn.<domain>`（公开 URL 基址 `R2_PUBLIC_DOMAIN`，只允许 GET/HEAD）把 `featured/ avatars/ contributions/ resumes/ images/ chapters/ slides/ uploads/ reports/` 等前缀反代到对象存储网关。
 
 ## 技术栈
 
-### 后端（backend）
+### 后端
 
-- 语言：Go 1.26
-- Web 框架：Gin v1.10 + gin-contrib/cors
-- 数据库：PostgreSQL 18 + pgx/v5 + GORM
-- 临时 KV（验证码 / 图形码 / refresh 黑名单）：PostgreSQL 单表 `ephemeral_kv`（#2109 起 Redis 已退役）
-- 数据库迁移：golang-migrate/v4
-- 认证：golang-jwt/v5（双令牌）
-- 配置：viper（环境变量 + 默认值）
-- 日志：zap + lumberjack（轮转）
-- 对象存储：aws-sdk-go-v2 S3
-- PDF 生成：gofpdf（中文 SimHei 字体）；PPT/文档转换走 LibreOffice sidecar
-- AI：CloudWeGo Eino + OpenAI 兼容接口（DeepSeek 默认）+ go-openai
-- 限流：golang.org/x/time
-- 文档：swaggo/gin-swagger
-- 测试：glebarez/sqlite（绝大多数单测与契约测试走内存 SQLite）+ `testutil.NewPostgresDB`（跑**真实 `migrations/`** 的库层契约测试，无 `DATABASE_URL` 时干净 skip，首跑在 CI）
+- Go 1.26（CI 钉 1.26.10）、Gin v1.12、GORM + pgx/v5、PostgreSQL 18
+- **PostgreSQL 为唯一存储面**：验证码、图形码、refresh 黑名单等临时 KV 落在 `ephemeral_kv` 单表（#2109 起 Redis 退役），过期清扫是 daemon 里的一条 5 分钟守护
+- golang-migrate、golang-jwt/v5、viper、zap + lumberjack、aws-sdk-go-v2（S3）、gofpdf
+- AI：CloudWeGo Eino + OpenAI 兼容接口（DeepSeek 默认）；PPT / 文档转换走 LibreOffice sidecar
+- 测试：glebarez/sqlite（多数单测）+ `testutil.NewPostgresDB`（跑真实 `migrations/` 的库层契约测试，无 `DATABASE_URL` 时干净 skip，首跑在 CI）
 
-### 前端（frontend）
+### 前端
 
-- 框架：Vue 3.4 + TypeScript 5.7
-- 构建：Vite 8（rolldown 内核；分块判据在 `frontend/vite.config.ts` 的 `CHUNK_GROUPS`）
-- UI：Element Plus 2.5 + @element-plus/icons-vue + Tailwind CSS v4（与既有 scoped 样式增量共存）
-- 状态管理：Pinia 2.1
-- 路由：vue-router 4（子域名多工作区 + 角色守卫）
-- HTTP：axios（access 过期自动刷新重试）
-- 图表：ECharts 6（DimensionRadar / FutureValueChart / BatteryRadar）
-- 其他：dayjs、marked + marked-highlight + highlight.js、markstream-vue、vditor、vuedraggable、element-china-area-data
-- 测试：vitest 5 + @vue/test-utils + happy-dom
+- Vue 3.5 + TypeScript 5.7 + Vite 8（rolldown 内核；分块判据在 `frontend/vite.config.ts` 的 `CHUNK_GROUPS`）
+- Element Plus 2.14 + Tailwind CSS v4（与既有 scoped 样式增量共存）；Pinia 4；vue-router 5
+- axios（access 过期自动刷新重试）、ECharts 6、dayjs、marked / markstream-vue / vditor、KaTeX、Mermaid
+- 测试：Vitest 5 + @vue/test-utils + happy-dom
 
-### 移动端（training-app）
+### 移动端
 
-- 框架：uni-app x（Vue 3 + UTS / uvue）
-- 工具：HBuilderX（运行 / 发行）；已配 jest 单测
-- 跨端目标：Android、iOS、H5、微信小程序
+- uni-app x（Vue 3 + UTS / uvue）；HBuilderX 运行 / 发行；Jest 单测
 
 ### 基础设施
 
-- 数据库：PostgreSQL 18（唯一存储面，含原 Redis 承担的临时 KV）
-- 对象存储：S3 兼容网关（Ceph RGW）
-- 文档转换：LibreOffice sidecar（`libreoffice-sidecar/`）
-- 编排：Docker Compose
-- 反向代理 / 静态托管：Caddy（host-network 监听 80/443，**证书自动申请与续期** + `/api` 反代 + 静态托管 + 对象存储反代）
-- CI/CD：GitHub Actions（`ci.yml` / `cd.yml` / `testing-smoke.yml` / `pr-evidence.yml`），公网 SSH 部署到自托管服务器
-- 备选：Cloudflare Pages（`frontend/wrangler.jsonc`）
+- PostgreSQL 18、S3 兼容网关（Ceph RGW）、LibreOffice sidecar
+- Docker Compose 编排；Caddy 反向代理（host 网络，自动证书 + `/api` 反代 + 静态托管 + 对象存储反代）
+- GitHub Actions CI/CD，公网 SSH 部署到自托管服务器；备选 Cloudflare Pages（`frontend/wrangler.jsonc`）
 
 ## 项目结构
 
-```
-叉车维修项目/
-├── backend/                      # Go 后端（module: forklift-training）
-│   ├── cmd/
-│   │   ├── server/               # 服务入口（默认 :8080；启动即跑 migrate up + 建默认账号）
-│   │   ├── migrate/              # 数据库迁移 CLI（up | down | version | force | check-columns）
-│   │   ├── gen-apitypes/ gen-authz/ gen-credscope/ gen-aifeatures/ gen-deploy/
-│   │   │                         # 代码生成：Go 声明表 → 前端契约类型 / 授权表 / 证件作用域表 / AI 功能表 / 部署默认值
-│   │   └── import-reference-content/ backfill-evaluation-suggestions/ backfill-mock-exam-scores/
-│   │                                 # 一次性数据导入与回填工具
-│   ├── internal/
-│   │   ├── api/                  # 装配根：NewDeps + providers_*.go + 路由登记（无业务实现）
-│   │   ├── <域>/ × 30            # 30 个功能域包（域名见 apitypes/domains.go）：handler*.go / service.go / dto.go / errors.go
-│   │   ├── core/ model/ db/      # 共享助手层 / GORM 实体与跨域词汇 / GORM 初始化——**没有 repository 层**，读写都在各域里（勿再新增）
-│   │   ├── config/ logger/ middleware/ cache/ captcha/ clock/ security/ daemon/ storage/ geolocation/
-│   │   ├── authz/ apitypes/ codegen/ credentialscope/ deploy/ migrate/ layers/ testutil/
-│   │   │                         # 授权矩阵 / 前端契约 codegen / 证件作用域表 / 部署事实 / 迁移执行 / 分层守卫 / 测试基建
-│   │   ├── coerce/ timefmt/ textx/ slicesx/ sortorder/ questionpool/ region/ filestore/ entitlement/ scope/ dberr/ pdfutil/
-│   │   │                         # 叶子包：数值转换 / 时间格式化 / 文本 / 切片 / 排序位 / 题库 SQL 片段 / 地区 / 文件存取 / 权益 / 证件分区 / DB 错误 / PDF 字体与版式常量
-│   │   └── valuation/            # 残值评估域（扁平单包：109 个 .go、0 个子目录，含电池 RUL / 字典描述符 CRUD / PDF 报告）
-│   ├── pkg/{httpx,paging,response}/   # HTTP 解析出口与端点骨架 / 分页 / 统一响应
-│   ├── migrations/               # 迁移脚本（000001 ~ 000040，共 40 组，up/down 成对）
-│   ├── docs/                     # Swagger 生成产物（docs.go / swagger.json|yaml）
-│   ├── Dockerfile / entrypoint.sh
-│   ├── docker-compose.yml        # 本地 postgres + libreoffice + backend
-│   └── docker-compose.override.yml.example
-├── frontend/                     # Vue3 前端（forklift-training-frontend）
-│   ├── src/                      # 源码（api / pages / components / layouts / stores / router /
-│   │                             #   composables / utils / config / types / constants / test /
-│   │                             #   assets / icons）
-│   ├── scripts/                  # 前端侧守卫与扫描器（scan-el-components.mjs 等）
-│   ├── Dockerfile
-│   ├── Caddyfile                 # 生产 host 网络模式 Caddy（自动证书；api=后端入口、cdn=对象存储、其余子域=SPA）
-│   ├── docker-entrypoint.sh
-│   ├── wrangler.jsonc            # Cloudflare Pages 备选部署
+```text
+.
+├── backend/                 # Go 后端（module: forklift-training）
+│   ├── cmd/                 # server / migrate / 代码生成（gen-*）/ 一次性回填工具
+│   ├── internal/            # api（装配根）/ <功能域>/ / core / model / kv / layers / testutil 等
+│   ├── pkg/                 # httpx / paging / response
+│   ├── migrations/          # 迁移脚本（up/down 成对）
+│   ├── docs/                # Swagger 生成产物
+│   └── Dockerfile / docker-compose.yml（本地 postgres + libreoffice + backend）
+├── frontend/                # Vue 3 前端（api / pages / components / stores / router / composables）
+│   ├── Caddyfile            # 生产反向代理（自动证书；api / cdn / 各工作区子域）
+│   ├── wrangler.jsonc       # Cloudflare Pages 备选
 │   └── .env.example
-├── training-app/
-│   └── 叉车维修培训学员端跨端应用/  # uni-app x 学员端移动 App
-├── deploy/                       # 部署面（ADR-0088，全部部署相关文件聚合于此）
-│   ├── deploy.py                 # 部署 CLI（按变更重启 / 迁移 / 回滚 / 健康检查）
-│   ├── docker-compose.prod.yml   # 生产编排（PostgreSQL + LibreOffice + 后端 + Caddy 前端）
-│   ├── env.defaults              # 部署默认值生成物（唯一事实源 backend/internal/deploy）
-│   ├── setup-server.sh / lxc-install-docker.sh / lxc-setup-ssh.sh   # 服务器初始化
-│   ├── backup-daily.sh / rbd-snap-hourly.sh / forklift-watchdog.sh  # 备份、快照、存活巡检
-│   ├── systemd/                  # 巡检 timer / service 单元
-│   └── tests/                    # 增量计划 / 回滚 / 迁移门的常驻判据物（Python + Node）
-├── libreoffice-sidecar/          # 文档转换服务镜像（PPT → WebP、简历 PDF）
-├── viz/                          # 设计提案 / 设计系统静态原型（HTML，仅参考）
-├── scripts/
-│   ├── check-*.mjs               # 八条静态守卫（api-seam / el-controls / async-section /
-│   │                             #   api-consumers / ai-assistant-send / render-error-face / catalog-sort /
-│   │                             #   comment-cleanliness）；每条配同名 .test.mjs 自检，runner 面在 lib/guard.mjs
-│   ├── guard.test.mjs / gate-predicates.test.mjs
-│   │                             # 守卫 runner、CD 门禁谓词（CI 在跑）
-│   └── audit-api-annotations.mjs / ci-summary-status.sh   # 注解审计 / CI 汇总状态
-├── docs/                         # `.gitignore` 忽略 `docs/*`，五个例外入库：`adr/`、`agents/`、`design/`、`README.md`、`verification/`
-│   ├── adr/                      # 架构决策记录 ADR-0001 ~ ADR-0088（89 篇，入库，核心资产）
-│   ├── agents/                   # AI/agent 工作约定（入库，由根 AGENTS.md 导航；权威检查流程在 checks.md）
-│   ├── design/                   # 调研与实测账本（入库，如 1445 契约测试审计）
-│   ├── verification/             # 验收产物（真机截图等）——`pr-evidence.yml` 认的可核验路径之一
-│   └── plans/ reference/ archive/   # 方案、参考资料、归档（本地不入库；代码百科 `reference/CODE_WIKI.md` 住这里）
-├── Makefile                      # 仓库根命令入口（后端构建 / 测试 / 生成 / 迁移 / 本地依赖）
-└── .github/workflows/            # CI/CD（ci.yml / cd.yml / testing-smoke.yml / pr-evidence.yml）
+├── training-app/            # uni-app x 移动端（学员端 + 招聘者端）
+├── deploy/                  # 部署面（ADR-0088）：deploy.py / 生产 compose / 服务器脚本 / systemd / 判据测试
+├── libreoffice-sidecar/     # 文档转换服务镜像（PPT → WebP、简历 PDF）
+├── scripts/                 # CI 守卫与预检（check-*.mjs、preflight-pr.ps1、submit-pr.ps1）
+├── docs/                    # adr（入库）/ agents（入库）/ design（入库）/ verification（入库）；
+│                            # 其余目录默认不入库（见 .gitignore）
+├── viz/                     # 设计原型（本地生成，不入库）
+├── Makefile                 # 仓库根命令入口
+└── .github/workflows/       # ci / cd / testing-smoke / pr-evidence / branch-residue
 ```
 
 ## 环境要求
 
-- Go ≥ 1.26（`go.mod` 与 CI 都钉 1.26；本机可以是更新的版本）
-- Node.js ≥ 20（CI 用 22）
+- Go ≥ 1.26（`go.mod` 与 CI 都钉 1.26；本机可更新）
+- Node 20.19+ 或 22.12+（Vite 8 要求；CI 用 24）
 - Python 3.9+（仅部署 CLI `deploy/deploy.py`；目标服务器 Debian / PVE 自带 `python3`）
-- GNU Make（仓库根 `Makefile`；Windows 可用 Git Bash / WSL）
+- GNU Make（Windows 用 Git Bash / WSL）
 - Docker + Docker Compose（本地依赖与生产编排）
-- PostgreSQL 18（由 docker-compose 提供或已有实例；#2109 起不再需要 Redis）
-- HBuilderX（仅移动端开发需要）
+- PostgreSQL 18（由 docker-compose 提供或已有实例；**不再需要 Redis**）
+- HBuilderX（仅移动端开发）
 
 ## 快速开始
 
@@ -235,7 +155,7 @@ cd backend
 docker compose up -d          # postgres :5432 / libreoffice :8000 / backend :18080
 ```
 
-`backend/docker-compose.yml` 把后端容器的 8080 映射到宿主机 **18080**，前端 dev 代理默认指向 `127.0.0.1:18080`。
+后端容器把 8080 映射到宿主机 **18080**（避开 Windows Hyper-V 预留端口段），前端 dev 代理默认指向 `127.0.0.1:18080`。
 
 ### 2. 执行迁移并启动后端（仓库根目录）
 
@@ -244,14 +164,14 @@ make migrate-up               # 执行数据库迁移（亦可 make dev 一步�
 make run                      # 启动服务，默认 :8080
 ```
 
-启动后会自动加载配置、连接数据库并执行迁移、创建默认账号。健康检查：
+启动时自动加载配置、连接数据库并执行迁移、创建默认账号。健康检查：
 
 ```bash
 curl http://localhost:8080/api/health
 # {"code":200,"message":"success","data":{...}}
 ```
 
-Swagger（非生产环境默认开启）：<http://localhost:8080/swagger/index.html>
+Swagger（非生产默认开启）：<http://localhost:8080/swagger/index.html>
 
 ### 3. 启动前端（仓库根目录）
 
@@ -261,15 +181,15 @@ make frontend-install
 make frontend-dev                              # 默认 :5173
 ```
 
-开发服务器已配置代理：`/api` 与 `/static` 转发至 `http://127.0.0.1:18080`。本地多子域名开发需在 `hosts` 添加：
+开发服务器把 `/api` 与 `/static` 代理到 `http://127.0.0.1:18080`。本地多子域名开发需在 `hosts` 添加：
 
-```
+```text
 127.0.0.1 training.localhost valuation.localhost mentor.localhost manage.localhost recruit.localhost
 ```
 
 ### 4. 移动端（可选）
 
-用 **HBuilderX** 打开 `training-app/叉车维修培训学员端跨端应用`，通过「运行」选择 Android / iOS / H5 / 微信小程序。运行前需把 `config/env.uts` 中的后端地址改为可达地址。
+用 **HBuilderX** 打开 `training-app/叉车维修培训学员端跨端应用`，通过「运行」选择 Android / iOS / H5 / 微信小程序。运行前把 `config/env.uts` 中的后端地址改为可达地址。
 
 ### 5. 访问系统
 
@@ -288,70 +208,24 @@ make frontend-dev                              # 默认 :5173
 
 企业招聘者不预置账号，由管理员通过授信码开通。
 
-## 配置说明
+## 配置
 
-后端配置全部通过环境变量注入（viper AutomaticEnv + 集中默认值），非 production 环境自动读取 `backend/.env`。生产环境（`APP_ENV=production`）会校验必填项与弱口令，缺失或仍为默认值则启动失败。
-
-### 核心
+后端配置全部通过环境变量注入（viper AutomaticEnv + 集中默认值），非 production 自动读取 `backend/.env`；完整模板见 [`backend/.env.example`](./backend/.env.example)。生产环境（`APP_ENV=production`）会校验必填项与弱口令，缺失或仍为开发默认值则启动失败。
 
 | 变量 | 说明 | 默认值 |
 | --- | --- | --- |
-| `APP_ENV` | 运行环境 | development |
-| `PORT` | 服务端口 | 8080 |
-| `SECRET_KEY` | 应用密钥（生产必改） | dev-secret-key |
+| `APP_ENV` / `PORT` | 运行环境 / 端口 | development / 8080 |
 | `DATABASE_URL` | PostgreSQL 连接串 | 空（生产必填） |
-| `JWT_SECRET_KEY` | JWT 签名密钥（生产必改） | jwt-secret-key |
-| `JWT_EXPIRES_HOURS` | access 令牌有效期（小时） | 2 |
-| `JWT_REFRESH_EXPIRES_DAYS` | refresh 令牌有效期（天） | 7 |
-| `CORS_ORIGINS` | 允许的前端来源（含各子域名，逗号分隔） | <http://localhost:5173> |
-| `MAX_CONTENT_LENGTH_MB` | 上传大小上限 | 250 |
-
-> **#2109 起 Redis 已退役**：验证码、图形码与 refresh 黑名单落在 PostgreSQL 的 `ephemeral_kv` 表，配置面不再有 `REDIS_*` 变量；带 TTL 的临时 KV 由 `internal/kv` 提供，过期清扫是 `internal/daemon` 里的一条 5 分钟守护。
-
-> 配置默认值的**唯一宿主是 `backend/internal/config/config.go`**（ADR-0060 票 5 起入漂移锁，代码内部不得再各写一份 fallback）。本表若与代码不一致，以代码为准并来改正这里——历史上 `REDIS_POOL_SIZE` 曾因两处各写一份而漂成 20/10/20（该变量已随 Redis 退役）。
-
-### 存储与文档转换
-
-| 变量 | 说明 | 默认值 |
-| --- | --- | --- |
-| `STORAGE_DRIVER` | `local` 或 `r2`（S3 兼容） | local |
-| `UPLOAD_FOLDER` | 本地上传目录 | 空 |
-| `VOLUME_MOUNT_PATH` | 容器卷挂载根路径 | 空 |
-| `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` / `R2_PUBLIC_DOMAIN` | S3 兼容对象存储凭据 | 空 |
-| `LIBREOFFICE_SIDECAR_URL` | LibreOffice 转换服务地址 | 空 |
-
-### 认证与通知通道
-
-| 变量 | 说明 | 默认值 |
-| --- | --- | --- |
-| `AUTH_COOKIE_NAME` / `AUTH_COOKIE_DOMAIN` | 学员登录态 Cookie 名与父域名（生产必填父域名） | hrwai_token / localhost |
-| `RECRUITER_COOKIE_NAME` / `RECRUITER_COOKIE_DOMAIN` | 招聘者登录态 Cookie | recruiter_token / 空 |
-| `CAPTCHA_ENABLED` | 图形验证码开关 | 生产默认开 |
-| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USERNAME` / `SMTP_PASSWORD` / `SMTP_FROM` / `SMTP_FROM_NAME` | 邮件验证码通道 | 587 / 和润天下 |
-| `EMAIL_CODE_TTL_MINUTES` | 验证码有效期（分钟） | 5 |
-| `TENCENT_SMS_SECRET_ID` / `TENCENT_SMS_SECRET_KEY` / `TENCENT_SMS_SDK_APP_ID` / `TENCENT_SMS_SIGN_NAME` / `TENCENT_SMS_REGION` | 短信验证码通道 | ap-guangzhou |
-| `TENCENT_SMS_TEMPLATE_REGISTER` / `_LOGIN` / `_PASSWORD` / `_BIND_PHONE` | 短信模板 ID | 空 |
-| `WECHAT_MINI_PROGRAM_APP_ID` / `_SECRET` | 微信小程序登录 | 空 |
-| `WECHAT_OPEN_PLATFORM_APP_ID` / `_SECRET` | 网页端微信扫码登录（与小程序凭证不可混用） | 空 |
-
-### AI、限流、日志与文档
-
-| 变量 | 说明 | 默认值 |
-| --- | --- | --- |
+| `SECRET_KEY` / `JWT_SECRET_KEY` | 应用密钥 / JWT 签名密钥（生产必改） | 开发占位值 |
+| `CORS_ORIGINS` | 允许的前端来源（含各子域名，逗号分隔） | 开发默认 localhost 各端口 / 子域 |
+| `AUTH_COOKIE_DOMAIN` / `RECRUITER_COOKIE_DOMAIN` | 学员 / 招聘者登录态 Cookie 域 | localhost / 空 |
+| `STORAGE_DRIVER` + `R2_*` | `local` 或 `r2` 对象存储 | local / 空 |
 | `AI_BASE_URL` / `AI_MODEL` | OpenAI 兼容模型接入 | <https://api.deepseek.com> / deepseek-v4-flash |
-| `RATE_LIMIT_ENABLED` / `RATE_LIMIT_RPS` / `RATE_LIMIT_BURST` | 限流开关与速率 | 生产开 / 20 / 40 |
-| `LOG_LEVEL` / `LOG_FORMAT` / `LOG_DIR` | 日志级别 / 格式 / 目录 | info / console / 空 |
-| `LOG_MAX_SIZE_MB` / `LOG_MAX_BACKUPS` / `LOG_MAX_AGE_DAYS` / `LOG_COMPRESS` | 日志轮转 | 100 / 7 / 30 / true |
-| `SWAGGER_ENABLED` / `SWAGGER_USER` / `SWAGGER_PASS` | Swagger 开关与 Basic 认证 | 非生产开 / 空 |
-| `VALUATION_PDF_OUTPUT_DIR` | 评估报告 PDF 输出目录 | storage/reports |
-| `VALUATION_DB_MAX_OPEN_CONNS` / `_IDLE_CONNS` / `_CONN_MAX_LIFETIME` | 残值库连接池 | 20 / 5 / 3600 |
+| `RATE_LIMIT_*` / `LOG_*` / `SWAGGER_*` | 限流、日志轮转、Swagger | 见 `.env.example` |
 
-### 前端环境变量（`.env.example`）
-
-- `VITE_MAIN_DOMAIN`
-- `VITE_TRAINING_SUBDOMAIN` / `VITE_VALUATION_SUBDOMAIN` / `VITE_MENTOR_SUBDOMAIN` / `VITE_ADMIN_SUBDOMAIN`
-
-生产环境通过 DNS A 记录把各子域名指向同一服务器 IP。API 地址用 `VITE_API_BASE_URL`（缺省 `/api`，开发经 Vite 代理转发）。
+> 配置默认值的**唯一宿主是 [`backend/internal/config/config.go`](./backend/internal/config/config.go)**（ADR-0060），代码内部不再各写一份 fallback；本表与代码不一致时，以代码为准并来改正这里。
+> 部署侧默认值是生成物 `deploy/env.defaults`（`make gen-deploy`），唯一事实源在 `backend/internal/deploy`。
+> 前端变量见 [`frontend/.env.example`](./frontend/.env.example)（主域与各工作区子域名）；`VITE_API_BASE_URL` 可覆盖 API 基址（缺省 `/api`，开发经 Vite 代理）。生产用 DNS 把各子域名指向同一服务器 IP。
 
 ## 常用命令
 
@@ -360,24 +234,21 @@ make frontend-dev                              # 默认 :5173
 ```bash
 make build           # 编译二进制到 backend/bin/server
 make run             # go run ./cmd/server
-make test            # 运行测试（-race -cover）
+make test            # go test ./... -race -cover
 make vet             # go vet ./...
-make lint            # 代码检查（golangci-lint）
+make lint            # golangci-lint（本机 Windows 暂不可用，由 CI 兜底）
+make check           # vet + test（提交前轻量检查）
 make fmt / tidy      # 格式化 / 整理依赖
 make swagger         # 重新生成 Swagger 文档
-make gen             # swagger -> apitypes -> aifeatures（顺序固定）
+make gen             # 生成链：swagger -> apitypes -> aifeatures（顺序固定）
+make gen-deploy      # 重新生成 deploy/env.defaults 与 Caddyfile 生成区
 make migrate-up      # 执行数据库迁移
 make migrate-down    # 回滚最近一次迁移
 make dev             # dev-up + migrate-up + run（一步到位）
 make dev-up / dev-down / dev-reset   # 起停依赖容器 / 清卷重建（数据丢失）
 ```
 
-也可直接用 Go 运行迁移 CLI：
-
-```bash
-go run ./cmd/migrate up
-go run ./cmd/migrate down
-```
+也可直接用 Go 运行迁移 CLI：`cd backend && go run ./cmd/migrate up|down|version|force|check-columns`。
 
 ### 前端（在仓库根目录）
 
@@ -385,146 +256,66 @@ go run ./cmd/migrate down
 make frontend-install    # npm ci（按 package-lock）
 make frontend-dev        # Vite 开发服务器 :5173
 make frontend-build      # 生产构建（含 precompress）
-make frontend-preview    # 预览构建产物
 make frontend-typecheck  # vue-tsc --noEmit
 make frontend-test       # vitest run
-make frontend-test-watch # vitest watch
-make frontend-coverage   # vitest run --coverage
 make frontend-check      # typecheck + test
-make frontend-clean      # 清理 dist / coverage / .vite
 make check-all           # 后端 check + 前端 check
 ```
 
-等价的原生命令是 `cd frontend && npm install / npm run dev / ...`；`make` 只是从仓库根统一入口。
+等价的原生命令是 `cd frontend && npm ci / npm run dev / ...`；`make` 只是从仓库根统一入口。
 
 ### 移动端（在 `training-app/叉车维修培训学员端跨端应用/` 下）
 
-通过 **HBuilderX** 打开目录，使用菜单「运行 / 发行」选择目标平台。
+用 **HBuilderX** 打开目录，通过「运行 / 发行」选择目标平台；命令行测试与检查见移动端 `AGENTS.md`。
+
+### 只跑一个测试
+
+- 后端：`go test ./internal/core/ -race`；单用例 `-run TestXxx`
+- 前端：`npx vitest run src/api/__tests__/page.spec.ts`；按名 `-t "用例名片段"`
+- 移动端：按套件所在腿选 `jest --config`（选错腿会让 jest 当套件不存在）
 
 ## 数据库迁移
 
-迁移脚本位于 `backend/migrations/`，`序号_名称.up.sql` / `.down.sql` 成对组织，当前 **40 组**（`000001` baseline ~ `000040` 练习进度与证件级联）。
+迁移脚本在 `backend/migrations/`，`序号_名称.up.sql` / `.down.sql` 成对组织。**这里不列清单**——清单看目录本身，意图看每条迁移的头部注释。
 
-**这里不再逐项列表**——旧版列到 000020 后再没人更新，读它只会得到一个错误的现状。清单看目录本身，意图看每条迁移自己的头部注释（本仓惯例是每条都写明「为什么需要它、为什么是这个形状、回滚的有损性在哪」）：
-
-```bash
-ls backend/migrations/*.up.sql | sed 's#.*/##'
-```
-
-配对性与真实可执行由 CI 的 `migration-check` 保证：空库 `migrate up` → `check-columns` 三段对账（模型期望的列 ⊆ 实际列；关键偏唯一索引登记表 ⇔ migrations 逐字相等；登记表 ⇒ `pg_indexes` 存在性，按 `current_schema()` 收窄）→ `migrate down` 回空库并**反向断言**对账报缺表。判据细节与「哪几段本机不连库就能红」见 `docs/agents/checks.md`。
-
-执行 / 回滚（仓库根）：`make migrate-up` / `make migrate-down`，或直接 `go run ./cmd/migrate up|down|version|force|check-columns`（在 `backend/` 下）。**部署侧的迁移失败默认中止**（`ALLOW_MIGRATION_FAILURE=1` 才带已知风险继续，见 `docs/agents/checks.md`）。
+配对性与真实可执行由 CI 的 `migration-check` 保证：空库 `migrate up` → 列 / 索引对账（按 `current_schema()` 收窄）→ `migrate down` 回空库并反向断言。**部署侧迁移失败默认中止**（`ALLOW_MIGRATION_FAILURE=1` 才带已知风险继续）。
 
 ## 测试与检查
 
-> **权威版本在 [`docs/agents/checks.md`](docs/agents/checks.md)**（含八条静态守卫、swagger 与 codegen 的生成链顺序、PG 契约测试纪律、两条环境的已知例外）。本节只留入口，不复述细节——过去这里就是靠抄写漂移的。
+> 权威版本在 [`docs/agents/checks.md`](./docs/agents/checks.md)（生成链顺序、PG 契约测试纪律、守卫清单与 CI 触发模型）。本节只留入口。
 
-- **后端**（`backend/`）：`gofmt -l .` → `go vet ./...` → `golangci-lint run ./...` → `go test ./...`。
-  ⚠️ 本机（Windows）**目前跑不了 `golangci-lint`**：v1.64.8 构建于 go 1.26.4，面对本机 go 1.27.1 直接失败 ⇒ 本地三条 + CI 的 `backend-lint` 兜底。WSL 环境下 Go 工具链在 `~/go/bin`。
-- **守卫**：改前端 UI / api 消费面 / 端点错误面 / 目录排序后跑对应 `node scripts/check-*.mjs --all`（本地可用 `--diff origin/master` 只看新增行），自检 `node --test scripts/*.test.mjs`。
-- **前端**（`frontend/`）：`make frontend-typecheck`（vue-tsc）、`make frontend-test`（vitest）
-- **部署配置**：改 `deploy/` 下文件后 `docker compose -f deploy/docker-compose.prod.yml config -q`；变更计划判定 `python3 deploy/deploy.py --plan`；纯判定自测 `python3 -m unittest discover -s deploy/tests -p 'test_*.py'` 与 `node --test deploy/tests/deploy-migration-gate.test.mjs deploy/tests/deploy-rollback-plan.test.mjs`
-- **安全检测**：触及认证 / 授权 / 密钥 / DB 连接 / AI 生成代码时跑 DeepSec（Shield），确认无新增 critical/high
+- **后端**（`backend/`）：`gofmt -l .` → `go vet ./...` → `golangci-lint run ./...` → `go test ./...`。本机 Windows 暂时跑不了 `golangci-lint`，由 CI 的 `backend-lint` 兜底；WSL 下 Go 工具链在 `~/go/bin`
+- **守卫**：改前端 UI / api 消费面 / 端点错误面 / 目录排序 / 图标字号后，跑对应的 `node scripts/check-*.mjs --all`；自检 `node --test scripts/*.test.mjs`
+- **前端**（`frontend/`）：`make frontend-typecheck`、`make frontend-test`
+- **部署配置**：`docker compose -f deploy/docker-compose.prod.yml config -q`；变更计划 `python3 deploy/deploy.py --plan`；判据测试见 `deploy/README.md`「判据物与本地校验」
+- **安全检测**：触及认证 / 授权 / 密钥 / DB 连接 / AI 生成代码时跑 DeepSec（Shield），确认无新增 critical / high
 
 ## 部署
 
-部署面自 ADR-0088 起**聚合在 [`deploy/`](deploy/)**：部署 CLI、生产 compose、默认值生成物、服务器初始化 / 备份 / 巡检脚本、systemd 单元与部署判据测试都在这里。详细说明见 [`deploy/README.md`](deploy/README.md)。
-
-**按变更重启**：`deploy/deploy.py` 先按「容器状态 + 镜像内容（ID）+ compose config-hash」算计划，只重建真正变化的服务；`postgres` 是数据服务，默认永不因应用变更而重建（配置漂移会中止，需显式 `--force-data-services`）。`--force` 只重建应用服务。
-
-### 本地 / 手动一键部署
+部署面自 ADR-0088 起聚合在 [`deploy/`](deploy/)，完整说明（按变更重启、回滚、PostgreSQL 大版本升级 runbook、域名 / 回源 / 生产诊断）见 [`deploy/README.md`](deploy/README.md)。
 
 ```bash
 python3 deploy/deploy.py local                 # 构建前端 → 迁移 → 按变更部署 → 健康检查
 python3 deploy/deploy.py local --skip-build    # 跳过前端构建
-python3 deploy/deploy.py local --skip-migrate  # 跳过数据库迁移
+python3 deploy/deploy.py --plan                # 只打印计划（--json 机器可读）
+python3 deploy/deploy.py rollback              # 回滚到 backups/last-version.txt
+python3 deploy/deploy.py down                  # 停栈（testing 冒烟收尾，命名卷保留）
 ```
 
-本地模式读取 `backend/.env`、不覆盖它；compose 项目名用仓库目录名（小写），避免与生产的 `forklift-training_*` 命名卷撞名。testing 由 CD 流水线自动部署并探活后停容器。
-
-### 生产编排
-
-`deploy/docker-compose.prod.yml` 编排四个服务：
-
-- `postgres`（PostgreSQL 18，持久化目录由 `PG_VOLUME` 指定；生产是 Ceph 挂载 `/srv/ceph/pgdata`）
-- `libreoffice`（文档转换 sidecar）
-- `backend`（Go 后端，仅内网，经前端反代访问）
-- `frontend`（Caddy，host 网络监听 80/443：证书自动签发 + `/api` 反代 + 静态托管 + 对象存储前缀反代）
-
-```bash
-docker compose --env-file .env -f deploy/docker-compose.prod.yml up -d
-```
-
-### 远程部署（自托管服务器）
-
-CD 通过公网 SSH 把 `deploy/deploy.py` 与 compose / Caddyfile 上传到服务器 `/opt/forklift-training`，再执行 `python3 deploy/deploy.py`：
-
-- `python3 deploy/deploy.py --plan`：只打印本次会动哪些容器（`--json` 机器可读）；
-- `python3 deploy/deploy.py rollback`：回滚到 `backups/last-version.txt` 记录的上一个版本（只重建 tag 变化的服务并自证运行镜像）；
-- `python3 deploy/deploy.py down`：停栈（testing 冒烟收尾用，命名卷保留）。
-
-备份默认落在 `$DEPLOY_PATH/backups`。配套脚本：`deploy/setup-server.sh`（初始化）、`deploy/lxc-install-docker.sh` / `deploy/lxc-setup-ssh.sh`（LXC 容器初始化）、`deploy/backup-daily.sh` / `deploy/rbd-snap-hourly.sh`（定时备份与快照）、`deploy/forklift-watchdog.sh`（存活巡检）。
-
-### 域名与资源域（双域族，票 #1756 / ADR-0077）
-
-**和润**（门户 + 残值评估）在 `hrwai.cn`，**易道**（培训 / 讲师 / 管理 / 招聘）在 `gdyidao.cn`。本仓反代只服务后者；`hrwai.cn` 与本机没有直接关系（除 EdgeOne 回源到 `api.<domain>`）。旧域 `gccsmile.com` 按硬切口径整体退役，不留 301。
-
-| host | 职责 |
-| --- | --- |
-| `api.<domain>` | **唯一 API 入口**：`/api`、`/swagger`、`/health`。移动端、门户回源、残值 BFF 都打这里 —— 页面域名与它解耦，下次换页面域名这三条链路不用动 |
-| `training` / `mentor` / `manage` / `recruit`.`<domain>` | 四个工作区 SPA（同源 `/api` 反代） |
-| `cdn.<domain>` | 对象存储直出（公开 URL 基址 `R2_PUBLIC_DOMAIN`）+ `/reports/`；仅 GET/HEAD，未知前缀 404（不吐 SPA） |
-| `dify.<domain>` | 内网 Dify 与知识库图片反代（SSE 不缓冲） |
-| `valuation.<domain>` | 一跳 301 到 `https://valuation.hrwai.cn/valuation`（北迁已完成，本仓不再有该工作区的 SPA） |
-| 裸域 / `www.<domain>` | 一跳 301 到培训入口 |
-
-**EdgeOne 回源口径**：新站的 `https://www.hrwai.cn/api/**` 由 EdgeOne 回源到 `https://api.<domain>`。回源鉴权见下节（`X-Origin-Token`）。
-
-**回填旧 URL**（一次性，票 #1742；#1756 换域时按同一口径再跑一次，用 `-from`/`-to` 指新前缀）：命令随后端镜像构建为 `/app/bin/backfill-asset-domain`。**切换日必须先 dry-run 记账、执行后第二次命中 0 行**，否则切完历史图片全碎。
-
-```bash
-docker compose --env-file .env -f deploy/docker-compose.prod.yml run --rm backend /app/bin/backfill-asset-domain            # dry-run：只报每表命中行数
-docker compose --env-file .env -f deploy/docker-compose.prod.yml run --rm backend /app/bin/backfill-asset-domain -write     # 落库（整轮一个事务）
-```
-
-**客户端 IP：EdgeOne 回源鉴权（票 #1746）**。经 EdgeOne 回源时反代看到的对端是边缘节点，但 EdgeOne 会带 `EO-Connecting-IP`（实测为真实客户端；同一次请求里的 `X-Forwarded-For` / `X-Real-IP` 都只是边缘链路）。门户（EdgeOne Pages）的 `/api` 代理回源时带 `X-Origin-Token`，**只有 token 命中才采信** `EO-Connecting-IP`（`frontend/Caddyfile` 的 `(backend_api)` 片段：命中走单独的 `handle`，`header_up` 只给这一个值、不追加对端），否则沿用「追加对端」的语义 —— 直连源站伪造该头无效。
-
-- **两处同值**：本仓部署 secret `EDGE_ORIGIN_TOKEN`（production / testing 两个 environment 都要）+ 门户 Pages 环境变量 `NUXT_API_ORIGIN_TOKEN`。
-- **fail closed**：模板启用鉴权而 token 为空时，前端容器入口直接拒绝启动 —— 空键会匹配空头，等于信任所有人的 `EO-Connecting-IP`。
-- **轮换**：两处同时改，重新部署前后端即可，不需要改代码。
-- **不采用**「把 EdgeOne 公共段塞进 `TRUSTED_PROXIES`」：公共段进白名单等于让任何直连者伪造来源。
-- 排查含混时别把日志里的 `ip` 当用户 IP（见下一节）。
-
-### 生产诊断：某个端点到底有没有真实流量
-
-回答「这接口有人调吗 / 多少次 / 谁在调」时，**只有一个面可用**：后端容器 named volume 里的 `app.log`。
-
-```bash
-# 在 pve-02（生产应用宿主）上，按路径计数
-F=/var/lib/docker/volumes/forklift-training_logs-data/_data/app.log
-grep -a "\"path\": \"/api/valuation/auth/logout\"" "$F" | wc -l
-```
-
-三条口径，少一条就会得出错结论：
-
-1. **必须带 `-a`**。该文件含二进制字节，不加 `-a` 时 `grep` 只回一句 `binary file matches` 而**不给计数** —— 看着像 0，其实什么都没数。
-2. **别用反代容器的访问日志**。`forklift-frontend-prod` 是 `network_mode: host`，反代的访问行直接进 docker `json-file` 驱动（不出落在文件里的 access.log）；而 **CD 每次部署都重建容器 ⇒ 历史清零**。实测（2026-09-30）该窗口只剩 10.2 小时 / 8875 行，且窗口内 `/api/**` 的 POST 一条都没有（只有扫描器探针）——在那里面「命中 0」与「没有流量」**不可区分**。
-3. **计数不带方向，要回到行里看**。日志行由 `logger/access.go` 逐请求写一条 JSON：`{method, path, status, duration_ms, ip, user_id, user_role, request_id}`。判「是不是集成客户端在调」看 `user_id` / `user_role` 与同一 `ip` 前后的请求时序，而不是只看总数（2026-09-30 那次就是靠这个把「33 天 1 次」定性成人为试探而非使用）。
-
-留存边界：`app.log` 由 lumberjack 按 `LOG_DIR=/data/logs`、`LOG_MAX_SIZE_MB`（生产 100）、`LOG_MAX_BACKUPS`（7）、`LOG_MAX_AGE_DAYS`（30）、`LOG_COMPRESS` 轮转（实现 `backend/internal/logger/logger.go` 的 `newRotatingFile`），跨容器重建留存；实测窗口 33 天 / 13.5 万行。⚠️ 归档只在**越过大小阈值时**才产生，所以「卷里只有一个 app.log」不等于「没配轮转」。
-
-判据类改动的取证纪律见 [`docs/agents/checks.md`](docs/agents/checks.md)；`docker exec` 免密读库的只读法与「用镜像内容标签判断生产在跑哪一版」见 `docs/agents/release.md` 一侧的运维记录。
+- `deploy/deploy.py` 按「容器状态 + 镜像 ID + compose config-hash」算计划，只重建真正变化的服务；`postgres` 默认永不因应用变更而重建（配置漂移会中止，需显式 `--force-data-services`）
+- `deploy/docker-compose.prod.yml` 编排 `postgres` / `libreoffice` / `backend`（仅内网）/ `frontend`（Caddy，host 网络监听 80/443）
+- CD 通过公网 SSH 把部署文件上传到服务器 `/opt/forklift-training` 后执行 `deploy.py`；失败自动回滚，备份默认落在 `$DEPLOY_PATH/backups`
+- 服务器初始化、备份 / 快照、巡检脚本与 systemd 单元都在 `deploy/` 下
 
 ### CI/CD（GitHub Actions）
 
-触发模型：**非 master 分支 push → 全量 CI →（CI 绿且分支有开启的 PR）testing 冒烟部署**；**PR 事件默认不触发流水线**（PR 页显示的是分支 push 的同 commit 检查，`ci-summary` 为合并必检）——**唯一例外是 `pr-evidence.yml`**，它只读 PR 正文 / PR 评论 / **commit 评论**（#1770 起的证据主键）/ **PR 正文关联的票评论**（#1841 起：本仓 commit 评论 POST 长期 HTTP 404 时的降级落点，正文 `Closes` / `Refs #N` / issue 直链关联、去重 ≤5 张）/ 改动清单，不 checkout、不构建、不部署；**master 合并（push）不跑 CI，直接 CD 到 production**，前置由 `gate` job 回查来源 PR 的 `ci-summary` 结论与该 commit 的 testing 冒烟结论。
-
-- `ci.yml`：`changes`（变更检测：与 master 的**合并基点**比，见 [`docs/agents/checks.md`](docs/agents/checks.md)「CI 触发模型」，决定哪些 job 该跑）→ `backend-lint`（gofmt / go vet / golangci-lint / swagger 新鲜度 / 两条后端守卫 `--all`）→ `backend-test`（**按包分两片**并行，`-race` + cover，含 Postgres service；与 lint 并行不同步）→ `frontend-check`（type-check + build + vitest + 五条前端守卫 `--all` 与增量门）→ `security-scan` → `migration-check`（真跑 up→列对账→down 到底）→ `mobile-test`（仅命中移动端面）→ `el-controls-selftest` / `pr-evidence-selftest`（守卫与门自身的判据自检）→ `ci-summary`（汇总并派发 testing 部署）
-- `cd.yml`：`gate`（解析目标环境 + 生产门禁）→ 构建并推送镜像（ghcr.io：backend / frontend / libreoffice，内容未变则跳过）→ 公网 SSH 部署 → 健康检查 → 失败自动回滚；testing 环境探活通过后停容器 → `notify`
-- `testing-smoke.yml`：PR 开启时，若该 commit 尚无冒烟记录则补发一次 testing 部署
-- `pr-evidence.yml`：验收证据段结构校验（只对命中运行时面的 PR 判红；判据源码在 `.github/scripts/lib/gate-validator.mjs`，与 `mobile-gates.yml` 同源；证据候选 = PR 正文 / PR 评论 / commit 评论 / **PR 正文关联的票评论**（#1841 起，commit 评论 HTTP 404 的降级落点，同 marker / sha 绑定 / 祖先 / 其间运行时面 / fail-closed 判据、不放宽）；产物路径认 `docs/verification/<模块>/<票号>/`、GitHub 附件、sha 绑定门评论）
-
-合并门禁：ruleset「protect master」要求必检 `ci-summary` 通过且分支与 master 同步 —— squash 会在 master 生成从未跑过 CI 的新 SHA，生产 `gate` 靠回查来源 PR 的结论对齐。
+- **触发模型**：非 master 分支 push 跑全量 CI；**master 合并直发 production**（`gate` 回查来源 PR 的 `ci-summary` 与 testing 冒烟结论）；PR 事件不直接触发 ci / cd 主流水（PR 页显示的是同 commit 的分支检查），PR 侧另有 `testing-smoke` / `pr-evidence`
+- `ci.yml`：`changes` → `backend-lint` / `backend-test`（按包分两片）/ `frontend-check` / `security-scan` / `migration-check` / `mobile-test` → `ci-summary`；含守卫与门自身的自检 job
+- `cd.yml`：构建并推送镜像（内容未变则跳过）→ SSH 部署 → 健康检查 → 失败回滚；testing 探活通过后停容器
+- `testing-smoke.yml`：PR 打开 / 同步时补齐 testing 冒烟，并等到部署真的成功才放行检查
+- `pr-evidence.yml`：验收证据段校验，**只对命中运行时面的 PR 判红**；证据 = PR 正文一行 `跑于 <sha7>` + 门读数行原样（A1 形态，#2100）
+- `branch-residue.yml`：每日扫描合并后残留分支（只报警、不删）
+- **合并门禁**：ruleset 要求必检 `ci-summary` 通过且分支与 master 同步（PR 侧 `testing-smoke` 同属必过检查，须等到冒烟真的成功）；squash 生成的新 SHA 由生产 `gate` 回查来源 PR 对齐
 
 ## 相关文档
 
@@ -532,12 +323,14 @@ grep -a "\"path\": \"/api/valuation/auth/logout\"" "$F" | wc -l
 | --- | --- |
 | [`CONTEXT.md`](./CONTEXT.md) | 领域词汇表（canonical 术语与 Avoid 清单） |
 | [`API.md`](./API.md) | API 清单 |
-| [`AGENTS.md`](./AGENTS.md) | AI / agent 工作约定与发布流程 |
-| [`docs/adr/`](./docs/adr/) | 架构决策记录 `ADR-0001` ~ `ADR-0070`（71 篇，入库） |
-| [`docs/agents/`](./docs/agents/) | AI/agent 工作约定（**入库**，由根 `AGENTS.md` 导航）：issue-tracker / triage-labels / domain / security-scan / **ui-conventions** / **checks（测试与检查的权威版本）** / **release** / **multi-agent-git** / handoff-验收门 |
-| [`docs/README.md`](./docs/README.md) | `docs/` 自身的索引与入库 / 本地分层规则 |
-| `docs/reference/CODE_WIKI.md` | 代码百科（**本地不入库**，故不设链接）：目录结构 / 域包职责 / 数据模型 / 算法 / 运行与部署方式 |
+| [`AGENTS.md`](./AGENTS.md) | AI / agent 工作约定、验收门与发布流程 |
+| [`docs/adr/`](./docs/adr/) | 架构决策记录 ADR-0001 ~ ADR-0090（91 篇） |
+| [`docs/agents/`](./docs/agents/) | agent 工作约定（**checks.md** 为测试与检查权威版本，**release.md** 为发布流程） |
+| [`docs/README.md`](./docs/README.md) | `docs/` 索引与入库 / 本地分层规则 |
+| [`deploy/README.md`](deploy/README.md) | 部署面：CLI、编排、数据库升级 runbook、域名 / 回源 / 诊断 |
+| [`training-app/叉车维修培训学员端跨端应用/AGENTS.md`](training-app/叉车维修培训学员端跨端应用/AGENTS.md) | 移动端工作约定与验收门 |
 | [`THIRD_PARTY.md`](./THIRD_PARTY.md) | 第三方组件与许可 |
+| `docs/reference/CODE_WIKI.md` | 代码百科（本地不入库，故不设链接） |
 
 ## 许可证
 

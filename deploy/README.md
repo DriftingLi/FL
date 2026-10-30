@@ -258,3 +258,52 @@ docker compose -f deploy/docker-compose.prod.yml config -q
 
 CI 在 `.github/workflows/ci.yml` 的 `el-controls-selftest` job 里跑这些判据（Node 用例需要 `python3`），
 并额外跑一次 `docker compose -f deploy/docker-compose.prod.yml config -q` 的语法校验。
+
+## 域名、资源域与回源（ADR-0077）
+
+**双域族**：和润（门户 + 残值评估）在 `hrwai.cn`，易道（培训 / 讲师 / 管理 / 招聘）在 `gdyidao.cn`。本仓反代只服务后者；`hrwai.cn` 与本机没有直接关系（除 EdgeOne 回源到 `api.<domain>`）。旧域 `gccsmile.com` 按硬切口径整体退役，不留 301。
+
+| host | 职责 |
+| --- | --- |
+| `api.<domain>` | **唯一 API 入口**：`/api`、`/swagger`、`/health`。移动端、门户回源、残值 BFF 都打这里 —— 页面域名与它解耦，下次换页面域名这三条链路不用动 |
+| `training` / `mentor` / `manage` / `recruit`.`<domain>` | 四个工作区 SPA（同源 `/api` 反代） |
+| `cdn.<domain>` | 对象存储直出（公开 URL 基址 `R2_PUBLIC_DOMAIN`）+ `/reports/`；仅 GET/HEAD，未知前缀 404（不吐 SPA） |
+| `dify.<domain>` | 内网 Dify 与知识库图片反代（SSE 不缓冲） |
+| `valuation.<domain>` | 一跳 301 到 `https://valuation.hrwai.cn/valuation`（北迁已完成，本仓不再有该工作区的 SPA） |
+| 裸域 / `www.<domain>` | 一跳 301 到培训入口 |
+
+**EdgeOne 回源口径**：新站的 `https://www.hrwai.cn/api/**` 由 EdgeOne 回源到 `https://api.<domain>`，回源鉴权见下节。
+
+**回填旧 URL**（一次性，票 #1742；换域时按同一口径用 `-from` / `-to` 指新前缀再跑一次）：命令随后端镜像构建为 `/app/bin/backfill-asset-domain`。**切换日必须先 dry-run 记账、执行后第二次命中 0 行**，否则切完历史图片全碎。
+
+```bash
+docker compose --env-file .env -f deploy/docker-compose.prod.yml run --rm backend /app/bin/backfill-asset-domain            # dry-run：只报每表命中行数
+docker compose --env-file .env -f deploy/docker-compose.prod.yml run --rm backend /app/bin/backfill-asset-domain -write     # 落库（整轮一个事务）
+```
+
+## 客户端 IP：EdgeOne 回源鉴权（票 #1746）
+
+经 EdgeOne 回源时，反代看到的对端是边缘节点，但 EdgeOne 会带 `EO-Connecting-IP`（实测为真实客户端；同一次请求里的 `X-Forwarded-For` / `X-Real-IP` 都只是边缘链路）。门户（EdgeOne Pages）的 `/api` 代理回源时带 `X-Origin-Token`，**只有 token 命中才采信** `EO-Connecting-IP`（`frontend/Caddyfile` 的 `(backend_api)` 片段：命中走单独的 `handle`，`header_up` 只给这一个值、不追加对端），否则沿用「追加对端」的语义 —— 直连源站伪造该头无效。
+
+- **两处同值**：本仓部署 secret `EDGE_ORIGIN_TOKEN`（production / testing 两个 environment 都要）+ 门户 Pages 环境变量 `NUXT_API_ORIGIN_TOKEN`。
+- **fail closed**：模板启用鉴权而 token 为空时，前端容器入口直接拒绝启动 —— 空键会匹配空头，等于信任所有人的 `EO-Connecting-IP`。
+- **轮换**：两处同时改，重新部署前后端即可，不需要改代码。
+- **不采用**「把 EdgeOne 公共段塞进 `TRUSTED_PROXIES`」：公共段进白名单等于让任何直连者伪造来源。
+
+## 生产诊断：某个端点到底有没有真实流量
+
+回答「这接口有人调吗 / 多少次 / 谁在调」时，**只有一个面可用**：后端容器 named volume 里的 `app.log`。
+
+```bash
+# 在 pve-02（生产应用宿主）上，按路径计数
+F=/var/lib/docker/volumes/forklift-training_logs-data/_data/app.log
+grep -a "\"path\": \"/api/valuation/auth/logout\"" "$F" | wc -l
+```
+
+三条口径，少一条就会得出错结论：
+
+1. **必须带 `-a`**。该文件含二进制字节，不加 `-a` 时 `grep` 只回一句 `binary file matches` 而**不给计数** —— 看着像 0，其实什么都没数。
+2. **别用反代容器的访问日志**。`forklift-frontend-prod` 是 `network_mode: host`，反代的访问行直接进 docker `json-file` 驱动（不出落在文件里的 access.log）；而 **CD 每次部署都重建容器 ⇒ 历史清零**。实测（2026-09-30）该窗口只剩 10.2 小时 / 8875 行，且窗口内 `/api/**` 的 POST 一条都没有（只有扫描器探针）——在那里面「命中 0」与「没有流量」**不可区分**。
+3. **计数不带方向，要回到行里看**。日志行由 `logger/access.go` 逐请求写一条 JSON：`{method, path, status, duration_ms, ip, user_id, user_role, request_id}`。判「是不是集成客户端在调」看 `user_id` / `user_role` 与同一 `ip` 前后的请求时序，而不是只看总数（2026-09-30 那次就是靠这个把「33 天 1 次」定性成人为试探而非使用）。
+
+留存边界：`app.log` 由 lumberjack 按 `LOG_DIR=/data/logs`、`LOG_MAX_SIZE_MB`（生产 100）、`LOG_MAX_BACKUPS`（7）、`LOG_MAX_AGE_DAYS`（30）、`LOG_COMPRESS` 轮转（实现 `backend/internal/logger/logger.go` 的 `newRotatingFile`），跨容器重建留存；实测窗口 33 天 / 13.5 万行。⚠️ 归档只在**越过大小阈值时**才产生，所以「卷里只有一个 app.log」不等于「没配轮转」。

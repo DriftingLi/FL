@@ -25,6 +25,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { validatePrEvidence, GATE_EVIDENCE } from './lib/gate-validator.mjs';
 import { lintIssueReferences, makeFsFacts, makeGhNumberResolver } from './lib/lint-issue-references.mjs';
+import { scanEvidenceLogs, classifyForPreflight } from './lib/evidence-encoding.mjs';
 
 const USAGE = [
   '用法: node .github/scripts/preflight-pr.mjs [选项]',
@@ -165,6 +166,33 @@ export function mergeRefLint(result, lint) {
   };
 }
 
+/**
+ * #2139：证据日志可解码性并进预检——与 #2053 同构（红项进 errors、ok 共决、读数行进 notes）。
+ * 不新增门、不动 gate-validator 的门清单与行措辞：本票只治「证据文件可读性」这一维。
+ * 纯函数；行为钉在 evidence-encoding.test.mjs 判据六 / 七（必红一条、必不红一条，成对）。
+ */
+export function mergeEncodingLint(result, lint) {
+  const reds = lint.reds || [];
+  return {
+    ...result,
+    ok: result.ok && reds.length === 0,
+    errors: [...result.errors, ...reds],
+    notes: [...result.notes, ...(lint.notes || [])],
+  };
+}
+
+/** 分支点时刻 = merge-base(HEAD, base) 的提交时刻；读不到返回 0，调用方据此跳过并在 notes 说明。 */
+function branchPointMs(baseApi) {
+  for (const ref of [baseApi, `origin/${baseApi}`]) {
+    try {
+      const sha = git('merge-base', 'HEAD', ref).trim();
+      const secs = Number(git('show', '-s', '--format=%ct', sha).trim());
+      if (Number.isFinite(secs) && secs > 0) return secs * 1000;
+    } catch { /* 换下一个 ref 再试 */ }
+  }
+  return 0;
+}
+
 function render(ctx) {
   const { args, commit, compare, ciRun, result, hasBody } = ctx;
   const lines = [];
@@ -211,7 +239,14 @@ async function main(argv) {
   const refLint = body
     ? await lintIssueReferences(body, { ...makeFsFacts(git('rev-parse', '--show-toplevel').trim()), resolveNumber: makeGhNumberResolver(repo, { run }) })
     : { ok: true, reds: [], notes: [] };
-  const final = mergeRefLint(result, refLint);
+  const refMerged = mergeRefLint(result, refLint);
+  // #2139：证据日志可解码性 —— 只判**本次新产出**（mtime 不早于分支点）的 `.ci-verify` 日志。
+  // 读不到分支点就不判（不替别的会话的存量背红），但把「跳过」说出来，不留静默绿。
+  const sinceMs = branchPointMs(baseApi);
+  const encLint = sinceMs > 0
+    ? classifyForPreflight(scanEvidenceLogs({ root: git('rev-parse', '--show-toplevel').trim(), sinceMs }))
+    : { ok: true, reds: [], notes: ['证据日志可读性：跳过（读不到分支点基线）'] };
+  const final = mergeEncodingLint(refMerged, encLint);
   const ciRun = pickCiSummaryRun(checkRuns(repo, commit), commit);
   if (args.json) {
     console.log(JSON.stringify({ ok: final.ok, errors: final.errors, notes: final.notes, gates: final.gates, commit, base: args.base, ciRun }, null, 2));
