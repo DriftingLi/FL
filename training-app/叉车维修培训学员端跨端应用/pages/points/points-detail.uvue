@@ -12,6 +12,12 @@
                 </view>
             </view>
 
+            <!-- 商城入口条（#1942 口径 B）：设计稿的「去积分商城」，落点为商城页 -->
+            <view class="shop-entry" @click="onGoShop">
+                <text class="shop-entry-text">去积分商城挑好物</text>
+                <text class="shop-entry-arrow">›</text>
+            </view>
+
             <!-- Tab 切换：收支方向走后端 direction 查询（#512） -->
             <view class="tab-bar">
                 <view :class="['tab-item', { active: currentTab == 'all' }]" @click="onTabClick('all')">
@@ -129,6 +135,11 @@
 
     function itemDateText(createdAt : string) : string {
         return formatDateTimeStr(createdAt)
+    }
+
+    /** 商城入口：与任务中心「去兑换」同落点（#1942） */
+    function onGoShop() : void {
+        uni.navigateTo({ url: '/pages/points/points-shop' })
     }
 
     /** tab → 后端 direction 查询值（全部不传） */
@@ -269,6 +280,27 @@
     .balance-label {
         font-size: 24rpx;
         color: $text-color-inverse;
+    }
+
+    /* 商城入口条（#1942） */
+    .shop-entry {
+        margin: 24rpx;
+        padding: 26rpx 32rpx;
+        border-radius: 16rpx;
+        background-color: $card-bg;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .shop-entry-text {
+        font-size: 26rpx;
+        color: $text-color;
+    }
+
+    .shop-entry-arrow {
+        font-size: 34rpx;
+        color: $text-color-placeholder;
     }
 
     .tab-bar {

@@ -38,6 +38,10 @@ type shopSKUDecl struct {
 	Blocked error
 }
 
+// aiProSKU 商城里的「AI 专业版」那一行（与移动端 useAiPro / ADR-0009 的门是同一件商品）。
+// 种子行见 migrations/000049_shop_ai_pro_sku.up.sql，价格以库为事实源。
+const aiProSKU = "ai_pro"
+
 // shopSKUDecls 商城 sku 声明表（key = points_shop_item.sku）。新增商品必须在这里登记读者。
 var shopSKUDecls = map[string]shopSKUDecl{
 	realPaperUnlockSKU: {
@@ -45,6 +49,11 @@ var shopSKUDecls = map[string]shopSKUDecl{
 		ReadBy: "无读者：本行只是**全部卷价的事实源**（RealPaperPrice 读 price 列）。按套兑换走 " +
 			"POST /real-exam/papers/{paper_id}/redeem，写 real_paper:{paper_id} 权益，由真题读面查",
 		Blocked: ErrRealPaperUnlockNotRedeemable,
+	},
+	aiProSKU: {
+		EntitlementSKU: func(_ string) string { return aiProSKU },
+		ReadBy: "移动端积分商城页的已拥有态（GET /points/shop/items 的 owned 经 HasEntitlement 查 " +
+			"(ai_pro, ai_pro)）；AI 专业版能力门 useAiPro 仍按 redeem_ai_pro 流水推导",
 	},
 }
 

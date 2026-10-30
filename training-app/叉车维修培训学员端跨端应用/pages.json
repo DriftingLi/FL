@@ -335,6 +335,13 @@
             }
         },
         {
+            "path": "pages/points/points-shop",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "积分商城"
+            }
+        },
+        {
             "path": "pages/resources/my-purchases",
             "style": {
                 "navigationStyle": "custom",

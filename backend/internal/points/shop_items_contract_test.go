@@ -53,6 +53,17 @@ func seedShopItems(t *testing.T, db *gorm.DB) {
 	}
 }
 
+// findShopItem 按 sku 取列表项：#1942 登记 ai_pro（含 migrations/000049 种子行）后，
+// 在售列表不再「恒一行」，判据改按 sku 取，别再绑下标。
+func findShopItem(items []ShopItemDTO, sku string) (ShopItemDTO, bool) {
+	for _, it := range items {
+		if it.SKU == sku {
+			return it, true
+		}
+	}
+	return ShopItemDTO{}, false
+}
+
 func TestShopItemsListContract(t *testing.T) {
 	db := testutil.NewPostgresDB(t)
 	buyer := testutil.SeedStudent(t, db, "shopBuyer", "pwd")
@@ -97,14 +108,25 @@ func TestShopItemsListContract(t *testing.T) {
 	}
 
 	before := decode(do(token))
-	if len(before.Items) != 1 || before.Items[0].SKU != "unlock_gold" {
-		t.Fatalf("在售列表应只有 unlock_gold（下架与未登记读者的行都不出），got %+v", before.Items)
+	// 在售面 = 登记的测试行 unlock_gold + 迁移种子的 ai_pro（#1942）；下架与未登记读者的行仍不出。
+	if len(before.Items) != 2 {
+		t.Fatalf("在售列表应为 unlock_gold 与 ai_pro 两行（下架与未登记读者的行都不出），got %+v", before.Items)
 	}
-	if before.Items[0].Owned {
+	gold, ok := findShopItem(before.Items, "unlock_gold")
+	if !ok {
+		t.Fatalf("在售列表缺 unlock_gold, got %+v", before.Items)
+	}
+	if gold.Owned {
 		t.Fatalf("未兑换前 owned 应为 false")
 	}
-	if before.Items[0].Stock == nil || *before.Items[0].Stock != 5 {
-		t.Fatalf("库存应回 5, got %+v", before.Items[0].Stock)
+	if gold.Stock == nil || *gold.Stock != 5 {
+		t.Fatalf("库存应回 5, got %+v", gold.Stock)
+	}
+	if _, bad := findShopItem(before.Items, "unlock_silver"); bad {
+		t.Fatalf("下架行不得出现在列表, got %+v", before.Items)
+	}
+	if _, bad := findShopItem(before.Items, "unlock_mystery"); bad {
+		t.Fatalf("未登记权益读者的行不得出现在列表, got %+v", before.Items)
 	}
 
 	// 兑换后：同一人 owned=true；另一人仍 false（已拥有按人算）
@@ -113,8 +135,12 @@ func TestShopItemsListContract(t *testing.T) {
 		t.Fatalf("兑换失败: %v", err)
 	}
 	after := decode(do(token))
-	if len(after.Items) != 1 || !after.Items[0].Owned {
+	goldAfter, ok := findShopItem(after.Items, "unlock_gold")
+	if !ok || !goldAfter.Owned {
 		t.Fatalf("兑换后本人 owned 应为 true, got %+v", after.Items)
+	}
+	if ai, ok := findShopItem(after.Items, "ai_pro"); ok && ai.Owned {
+		t.Fatalf("兑换 unlock_gold 不得让 ai_pro 也变已拥有（按 sku 归位）, got %+v", after.Items)
 	}
 	// 反证（#2064 AC2）：权益行若按「裸 sku」形态存在（不是兑换写下的权益键 gold:<ref>），
 	// 不得被判成已拥有——否则键形态一漂，列表就会把没买过的人标成已拥有。
@@ -127,7 +153,10 @@ func TestShopItemsListContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("他人列表失败: %v", err)
 	}
-	if len(res.Items) != 1 || res.Items[0].Owned {
+	if len(res.Items) != 2 {
+		t.Fatalf("他人在售列表同样应为两行, got %+v", res.Items)
+	}
+	if otherGold, ok := findShopItem(res.Items, "unlock_gold"); !ok || otherGold.Owned {
 		t.Fatalf("他人不应看到已拥有（裸 sku 权益也不算）, got %+v", res.Items)
 	}
 }

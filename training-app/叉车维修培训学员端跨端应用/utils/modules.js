@@ -173,8 +173,11 @@ const MODULES = {
      * `components/app-empty-state`，**未引用 ai-chat 任何文件** ⇒ 登记面照实测写 `[]`。
      * 决策意图由对账兜底：`search` 真的接线那天，`consumerFacts().unregistered` 会判红并要求登记
      * （不拿一条假声明去保真）。
+     *
+     * #1942：`pages/points/points-shop.uvue` 消费 `composables/useAiPro.uts` 的 `AI_PRO_SKU`
+     * （商城兑换成功后的落点判定与 AI 专业版能力门同一个 SKU，不许各写一份字面量）⇒ 登记 points。
      */
-    crossModuleConsumers: [],
+    crossModuleConsumers: ['points'],
     /** 超预算：ai-assistant.uvue 822 / ai-feature 606 / api/aiAssistant.uts 633（ai-settings 583 已进预算，#1732 摘走设置读写与归一化） */
     budget: 'pending',
     budgetOverrides: {},
@@ -421,7 +424,7 @@ const MODULES = {
 
   points: {
     extraDirs: [],
-    files: ['api/points.uts', 'pages/points/points-detail.uvue', 'pages/points/points-rules.uvue', 'pages/points/task-center.uvue'],
+    files: ['api/points.uts', 'pages/points/points-detail.uvue', 'pages/points/points-rules.uvue', 'pages/points/points-shop.uvue', 'pages/points/task-center.uvue'],
     extractDirs: [],
     // #1421：course-detail.uvue 消费 api/points.uts（redeemCoursePointsApi + getPointsBalanceApi，
     // 兑换面单点归详情但动词单点归 points 域 —— 消费者登记在被消费模块，ADR-0023 ③）

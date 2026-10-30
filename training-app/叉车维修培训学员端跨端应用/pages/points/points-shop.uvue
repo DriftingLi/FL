@@ -1,0 +1,384 @@
+<template>
+    <view class="container" :style="{ height: windowHeight + 'px' }">
+        <app-nav-bar title="积分商城" @left-click="onBack" divider />
+
+        <scroll-view class="content-scroll" scroll-y="true">
+            <!-- 余额条：与任务中心同一套卡片语言，兑换前先让用户看清手里有多少分 -->
+            <view class="balance-card">
+                <view class="balance-info">
+                    <text class="balance-label">可用积分</text>
+                    <text class="balance-value">{{ pointsBalance }}</text>
+                </view>
+                <view class="balance-earn" @click="onEarnPoints">
+                    <text class="earn-text">去赚积分</text>
+                </view>
+            </view>
+
+            <!-- 三态分离（#408/#409 口径）：失败给重试，空态如实说「暂无可兑换商品」 -->
+            <view v-if="loadFailed && items.length == 0" class="error-tip">
+                <text class="error-text">商品加载失败</text>
+                <view class="retry-btn" @click="loadItems">
+                    <text class="retry-text">重试</text>
+                </view>
+            </view>
+            <view v-else-if="loading && items.length == 0" class="loading-tip">
+                <text class="loading-text">加载中...</text>
+            </view>
+            <view v-else-if="items.length == 0" class="empty-tip">
+                <text class="empty-text">暂无可兑换商品</text>
+            </view>
+
+            <!-- 在售项：可点性只由服务端事实决定（已拥有 / 售罄） -->
+            <view v-if="items.length > 0" class="shop-card">
+                <view v-for="(item, i) in items" :key="item.sku"
+                    :class="['shop-item', { 'shop-item-last': i == items.length - 1 }]">
+                    <view class="shop-content">
+                        <text class="shop-title">{{ item.title }}</text>
+                        <view class="shop-meta">
+                            <text class="shop-price">{{ item.price }} 积分</text>
+                            <text v-if="stockText(item).length > 0" class="shop-stock">{{ stockText(item) }}</text>
+                        </view>
+                    </view>
+                    <view :class="['shop-btn', btnClass(item)]" @click="onRedeem(item)">
+                        <text :class="['shop-btn-text', btnTextClass(item)]">{{ btnText(item) }}</text>
+                    </view>
+                </view>
+            </view>
+
+            <view class="bottom-spacer"></view>
+        </scroll-view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
+    import { ref } from 'vue'
+    import { onShow } from '@dcloudio/uni-app'
+    import { goBack } from '../../utils/navigation'
+    import { getPointsBalanceApi, getShopItemsApi, redeemShopItemApi } from '../../api/points'
+    import { errMsg } from '../../api/helpers'
+    import { AI_PRO_SKU } from '../../composables/useAiPro'
+    import type { ShopItem } from '../../types/index'
+
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    // ===== 状态（声明先于引用它的函数：UTS 无提升，后置声明即 Kotlin 编译错）=====
+    const pointsBalance = ref<number>(0)
+    const items = ref<ShopItem[]>([])
+    const loading = ref<boolean>(false)
+    const loadFailed = ref<boolean>(false)
+    /** 正在兑换的 sku（空串表示无进行中请求，兼作防重入闸门） */
+    const redeemingSku = ref<string>('')
+
+    // ===== 纯映射（须先于调用它们的函数声明，守护规则 A）=====
+
+    /** 库存文案：null = 不限库存（后端 x-nullable，null ≠ 0；0 才是售罄） */
+    function stockText(item : ShopItem) : string {
+        const s = item.stock
+        if (s == null) return ''
+        if (s == 0) return '已售罄'
+        return '仅剩 ' + s.toString() + ' 件'
+    }
+
+    /** 不可点：已拥有（服务端判据）或售罄 */
+    function blocked(item : ShopItem) : boolean {
+        if (item.owned) return true
+        const s = item.stock
+        if (s != null && s == 0) return true
+        return false
+    }
+
+    function btnText(item : ShopItem) : string {
+        if (item.owned) return '已拥有'
+        const s = item.stock
+        if (s != null && s == 0) return '已售罄'
+        if (redeemingSku.value == item.sku) return '兑换中'
+        return '兑换'
+    }
+
+    function btnClass(item : ShopItem) : string {
+        if (blocked(item)) return 'shop-btn-disabled'
+        if (redeemingSku.value == item.sku) return 'shop-btn-busy'
+        return 'shop-btn-active'
+    }
+
+    function btnTextClass(item : ShopItem) : string {
+        if (blocked(item)) return 'shop-btn-text-disabled'
+        return 'shop-btn-text-active'
+    }
+
+    // ===== 数据加载 =====
+
+    /** 余额读失败不挡列表（装饰性提示不该制造一次用户没触发的报错，ADR-0031 决策 3） */
+    async function loadBalance() : Promise<void> {
+        try {
+            const bal = await getPointsBalanceApi(true)
+            pointsBalance.value = bal.balance
+        } catch (e) {
+            console.warn('[points-shop] balance failed:', errMsg(e, '余额读取失败'))
+        }
+    }
+
+    async function loadItems() : Promise<void> {
+        loading.value = true
+        loadFailed.value = false
+        try {
+            const res = await getShopItemsApi()
+            items.value = res.items
+        } catch (e) {
+            loadFailed.value = true
+            console.warn('[points-shop] items failed:', errMsg(e, '商品加载失败'))
+        }
+        loading.value = false
+    }
+
+    // ===== 跳转与兑换（被调用者先声明）=====
+
+    function onBack() : void {
+        goBack()
+    }
+
+    function onEarnPoints() : void {
+        uni.navigateTo({ url: '/pages/points/task-center' })
+    }
+
+    /** 兑换成功后的落点（#1942 验收：权益即时生效、落点可达）：当前唯一可兑权益是 AI 专业版 */
+    function goEntitlementLanding(sku : string) : void {
+        if (sku == AI_PRO_SKU) {
+            uni.switchTab({ url: '/pages/ai-assistant/ai-assistant' })
+        }
+    }
+
+    /** 真正发起兑换：守卫全在服务端（余额 / 已拥有 / 在售），客户端不预扣、不本地写「已解锁」 */
+    async function doRedeem(item : ShopItem) : Promise<void> {
+        if (redeemingSku.value.length > 0) return
+        redeemingSku.value = item.sku
+        try {
+            const res = await redeemShopItemApi(item.sku)
+            redeemingSku.value = ''
+            pointsBalance.value = res.balance
+            uni.showToast({ title: '兑换成功', icon: 'success' })
+            await loadItems()
+            goEntitlementLanding(item.sku)
+        } catch (e) {
+            redeemingSku.value = ''
+            uni.showToast({ title: errMsg(e, '兑换失败'), icon: 'none' })
+            // 失败后按服务端事实重拉：已拥有 / 售罄 / 下架都在这一步被纠正
+            await loadItems()
+        }
+    }
+
+    /**
+     * 兑换前提示：把「要扣多少 / 手里有多少」摆进同一句；余额不足时明说会被服务端拒，
+     * 并给「去赚积分」的出路——但**不代替服务端裁定**（预判不拦截 CTA，ADR-0031 决策 3）。
+     */
+    function onRedeem(item : ShopItem) : void {
+        if (blocked(item) || redeemingSku.value.length > 0) return
+        const short = pointsBalance.value < item.price
+        const content = '该商品需 ' + item.price.toString() + ' 积分，当前可用 ' +
+            pointsBalance.value.toString() + ' 积分。' +
+            (short ? '余额不足，继续兑换会被服务端拒绝。' : '确认兑换？')
+        uni.showModal({
+            title: short ? '积分不足' : '积分兑换',
+            content: content,
+            confirmText: short ? '继续兑换' : '确认兑换',
+            cancelText: short ? '去赚积分' : '取消',
+            // showModal 的 success 回调不可为 async（Kotlin error17），异步动作转独立函数
+            success: (res) => {
+                if (res.confirm) {
+                    doRedeem(item)
+                    return
+                }
+                if (short) {
+                    onEarnPoints()
+                }
+            }
+        })
+    }
+
+    onShow(() => {
+        loadBalance()
+        loadItems()
+    })
+</script>
+
+<style lang="scss">
+    .container {
+        flex: 1;
+        background-color: $bg-color;
+        flex-direction: column;
+    }
+
+    .content-scroll {
+        flex: 1;
+    }
+
+    /* 余额卡片 */
+    .balance-card {
+        margin: 24rpx;
+        padding: 32rpx;
+        border-radius: 16rpx;
+        background-color: $card-bg;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .balance-info {
+        flex: 1;
+        flex-direction: column;
+    }
+
+    .balance-label {
+        font-size: 24rpx;
+        color: $text-color-placeholder;
+    }
+
+    .balance-value {
+        font-size: 56rpx;
+        font-weight: bold;
+        color: $text-color;
+        margin-top: 4rpx;
+    }
+
+    .balance-earn {
+        padding: 16rpx 32rpx;
+        border-radius: 32rpx;
+        background-color: $bg-color;
+    }
+
+    .earn-text {
+        font-size: 26rpx;
+        color: $text-color-secondary;
+    }
+
+    /* 错误态 / 加载态 / 空态 */
+    .error-tip {
+        margin: 24rpx;
+        padding: 40rpx 32rpx;
+        border-radius: 16rpx;
+        background-color: $card-bg;
+        align-items: center;
+        flex-direction: column;
+    }
+
+    .error-text {
+        font-size: 26rpx;
+        color: $text-color-secondary;
+    }
+
+    .retry-btn {
+        margin-top: 20rpx;
+        padding: 12rpx 40rpx;
+        border-radius: 32rpx;
+        background-color: $bg-color;
+    }
+
+    .retry-text {
+        font-size: 26rpx;
+        color: $primary-color;
+    }
+
+    .loading-tip {
+        padding: 60rpx 0;
+        align-items: center;
+    }
+
+    .loading-text {
+        font-size: 26rpx;
+        color: $text-color-placeholder;
+    }
+
+    .empty-tip {
+        padding: 120rpx 0;
+        align-items: center;
+    }
+
+    .empty-text {
+        font-size: 26rpx;
+        color: $text-color-placeholder;
+    }
+
+    /* 商品列表 */
+    .shop-card {
+        margin: 0 24rpx;
+        padding: 0 24rpx;
+        border-radius: 16rpx;
+        background-color: $card-bg;
+        flex-direction: column;
+    }
+
+    .shop-item {
+        padding: 28rpx 0;
+        border-bottom: 1rpx solid $border-color-light;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .shop-item-last {
+        border-bottom-width: 0;
+    }
+
+    .shop-content {
+        flex: 1;
+        flex-direction: column;
+    }
+
+    .shop-title {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: $text-color;
+    }
+
+    .shop-meta {
+        margin-top: 10rpx;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .shop-price {
+        font-size: 26rpx;
+        color: $warning-color;
+        margin-right: 16rpx;
+    }
+
+    .shop-stock {
+        font-size: 22rpx;
+        color: $text-color-placeholder;
+    }
+
+    .shop-btn {
+        min-width: 132rpx;
+        padding: 14rpx 28rpx;
+        border-radius: 32rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .shop-btn-active {
+        background-color: $primary-color;
+    }
+
+    .shop-btn-busy {
+        background-color: $bg-color;
+    }
+
+    .shop-btn-disabled {
+        background-color: $bg-color;
+    }
+
+    .shop-btn-text {
+        font-size: 26rpx;
+    }
+
+    .shop-btn-text-active {
+        color: $text-color-inverse;
+    }
+
+    .shop-btn-text-disabled {
+        color: $text-color-placeholder;
+    }
+
+    .bottom-spacer {
+        height: 40rpx;
+    }
+</style>
