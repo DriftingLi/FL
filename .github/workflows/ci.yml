@@ -653,6 +653,8 @@ jobs:
           node --test .github/scripts/preflight-pr.test.mjs
           # #2053：票面引用完整性 lint（preflight 同一份模块；路径/ADR 号位/票号三判据 + mergeRefLint 合并函数）
           node --test .github/scripts/lint-issue-references.test.mjs
+          # #2139：证据日志可解码性（三类损坏 A/B1/B2 的判据 + mtime 范围口径 + mergeEncodingLint 合并函数）
+          node --test .github/scripts/evidence-encoding.test.mjs
 
   # ============================================================
   # Stage 6.7: 已收敛控件守卫的自检（守护的守护）

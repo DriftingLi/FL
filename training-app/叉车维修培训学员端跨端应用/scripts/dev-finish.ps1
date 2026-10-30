@@ -881,6 +881,8 @@ function Invoke-BehaviorLeg {
         [int]$PollMilliseconds = 200
     )
     $utf8 = [System.Text.Encoding]::UTF8
+    # #2139：增量解码函数住在采集层库里（该文件零副作用，只有函数定义）。纯字节方案 ⇒ 无需跨块状态。
+    . (Join-Path $PSScriptRoot 'lib\process-capture.ps1')
     $legStarted = Get-Date
     $sb = [System.Text.StringBuilder]::new()
     $append = { param([string]$Text) if ($null -ne $Text -and $Text.Length -gt 0) { [void]$sb.Append($Text) } }
@@ -953,20 +955,16 @@ function Invoke-BehaviorLeg {
     }
 
     # 增量读一个正在增长的文件（jest 的 stdout/stderr）。进程被 kill 时最后一段也要读出来。
+    # #2139：旧写法每块各调一次无状态的 `UTF8.GetString`，块边界切在多字节序列中间就当场烤进
+    # U+FFFD（实测 `test-behavior.log` 与 `2045-behavior.log` 各有 56 个、位置成簇 2376/2378/2379/2380），
+    # 一旦烤进就**不可逆**。换成 `Read-Utf8Chunk`：只解码凑齐的前缀，半截尾字节留在文件里、不推进偏移，
+    # 下次轮询连着新到的字节一起重读。收尾那次带 `-Flush`：真截断的尾巴宁可留替换字符也不丢字。
+    # 行为守护：`utils/evidenceCaptureEncodingBehavior.test.js`。
     $readNew = {
-        param([string]$Path, [ref]$Pos)
-        if (-not (Test-Path -LiteralPath $Path)) { return '' }
-        try {
-            $fs = [System.IO.File]::Open($Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, ([System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete))
-        } catch { return '' }
-        try {
-            if ($fs.Length -le $Pos.Value) { return '' }
-            [void]$fs.Seek($Pos.Value, [System.IO.SeekOrigin]::Begin)
-            $buf = [byte[]]::new($fs.Length - $Pos.Value)
-            $read = $fs.Read($buf, 0, $buf.Length)
-            $Pos.Value += $read
-            return $utf8.GetString($buf, 0, $read)
-        } finally { $fs.Dispose() }
+        param([string]$Path, [ref]$Pos, [switch]$Flush)
+        $chunk = Read-Utf8Chunk -Path $Path -Offset $Pos.Value -Flush:$Flush.IsPresent
+        if ($chunk.BytesRead -gt 0) { $Pos.Value += $chunk.BytesRead }
+        return $chunk.Text
     }
 
     $stalledSuite = ''
@@ -1041,9 +1039,9 @@ function Invoke-BehaviorLeg {
             $proc.WaitForExit()
         }
         # 收尾再读一次：进程退出 / 被 kill 前最后写出的那段不能丢。
-        $tail = & $readNew $outFile $outPos
+        $tail = & $readNew $outFile $outPos -Flush
         if ($tail) { & $append $tail; Write-Host -NoNewline $tail }
-        $tailErr = & $readNew $errFile $errPos
+        $tailErr = & $readNew $errFile $errPos -Flush
         if ($tailErr) { & $append $tailErr }
         $suiteSecs = [Math]::Round(((Get-Date) - $suiteStarted).TotalSeconds, 1)
         $attempted += 1
