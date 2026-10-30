@@ -20,8 +20,9 @@
       · 取锁记录 = `HX_BUSY wait=<秒> result=free`。父进程只调一次 `Wait-HxFree`，把它的
         `-LogPath` 指向本脚本的**同一份**日志 ⇒ 那条记录在日志里只有一处；结果行再复述成
         `locks=<n>`（n = 日志里 `result=free` 的条数，期望 1）。
-      · 两门的结果行**原样**落在同一份日志里：本脚本只 `Tee-Object` 转发子进程输出，**不改写、
-        不重排、不加前缀**（「逐字节不变」靠「不碰」实现，不靠事后比对）。
+      · 两门的结果行**原样**落在同一份日志里：本脚本只用 `scripts/lib/gate-tee.ps1` 逐行转发子进程
+        输出（**不是** PowerShell 管道 + `Tee-Object`，见 #2147），**不改写、不重排、不加前缀**
+        （「逐字节不变」靠「不碰」实现，不靠事后比对）。
       · 排队行（`等待另一个 agent 会话释放 HBuilderX 锁`）只可能来自父进程这一次；子进程走
         `inherited` 分支，早于排队逻辑返回。
 
@@ -125,6 +126,12 @@ if (-not $LogPath) { $LogPath = Join-Path (Join-Path $Project '.ci-verify') 'pr-
 $pwshExe = (Get-Process -Id $PID).Path
 if (-not $pwshExe) { $pwshExe = 'pwsh' }
 
+# 子门输出转发器（#2147）。**不再用 PowerShell 管道 + Tee-Object**：子门拉起的微信开发者工具（常驻 GUI）
+# 会继承那层管道的写句柄 ⇒ Tee 永远等不到 EOF ⇒ 整条 pr-gates 挂死（2026-10-30 实测 1050 s，④c 没开始）。
+# 判据库 scripts/lib/gate-tee.ps1（行为守护 utils/prGatesTeeBehavior.test.js 真执行）。
+. (Join-Path $PSScriptRoot 'lib\gate-tee.ps1')
+$TeeDrainMs = 5000
+
 # ---------- 两门的命令行（**唯一的参数拼装处**：DryRun 与真跑共用这一份）----------
 $shared = @{}
 if ($Cli) { $shared['Cli'] = $Cli }
@@ -212,16 +219,21 @@ function Invoke-Gate {
     )
 
     $argv = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $ScriptPath) + $Argv
-    # ⚠️ 不能写 `$out = @(& ... | Tee-Object -FilePath ...)`：Tee 的产物被赋值**吞掉** ⇒ 控制台
-    # 一行都看不到（实测：门跑完了却静默，红跑要等的人只能干等）。故 tee 到文件后**再逐行回显**，
-    # 顺手收进 $out 供结果行判定（同一趟，不重跑）。
-    $collected = [System.Collections.Generic.List[string]]::new()
-    & $pwshExe @argv 2>&1 | Tee-Object -FilePath $LogPath -Append | ForEach-Object {
-        Write-Host "$_"
-        $collected.Add("$_")
+    # ⚠️ 两条都不能写：
+    #   ① `$out = @(& ... | Tee-Object ...)` —— Tee 的产物被赋值**吞掉**，控制台一行看不到（门跑完了却静默）；
+    #   ② `& $pwshExe @argv 2>&1 | Tee-Object ... | ForEach-Object` —— 子门拉起的常驻 IDE 继承这层管道的
+    #      写句柄，EOF 永不到来 ⇒ **整条 pr-gates 挂死**（#2147：② 已出结果、门却挂到被外部 killed，④c 没开始）。
+    # 现在是自带的有界收流器：逐行回显 + 逐行落盘 + 主进程退出后只收 DrainMs 就放手（判据库 gate-tee.ps1）。
+    $tee = Invoke-GateTee -FilePath $pwshExe -Arguments $argv -LogPath $LogPath -DrainMs $TeeDrainMs
+    $code = $tee.ExitCode
+    $out = @($tee.Lines)
+    # #2147：收流被放弃这一事实必须落进日志 —— 现场唯一的产物就是这份 log，只 Write-Host 等于只在
+    # 当时那台控制台上留痕。它也是 R8 的判据（时序断言在机器上贴边，见 utils/prGatesBehavior R8）。
+    if ($tee.DrainAbandoned) {
+        $drainLine = ">>> pr-gates tee gate=$Name drain=abandoned（子进程已退出但输出流仍被其子进程占用，已放弃剩余输出；不影响退出码与门结论）"
+        Write-Host $drainLine -ForegroundColor Yellow
+        Add-Content -LiteralPath $LogPath -Encoding utf8 -Value $drainLine
     }
-    $code = $LASTEXITCODE
-    $out = $collected.ToArray()
 
     $found = @($out | ForEach-Object { "$_" } | Where-Object { $_ -match ("^" + $Token + "(\s|$)") })
     $line = if ($found.Count -gt 0) { $found[$found.Count - 1] } else { '' }
