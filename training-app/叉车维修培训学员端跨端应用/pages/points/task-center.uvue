@@ -133,6 +133,7 @@
         if (code == 'daily_login') return '👆'
         if (code == 'daily_quiz') return '📝'
         if (code == 'daily_browse') return '📖'
+        if (code == 'browse_course') return '🎓'
         if (code == 'growth_post') return '📋'
         if (code == 'growth_reply') return '💬'
         if (code == 'growth_mock') return '📊'
@@ -153,6 +154,8 @@
         if (code == 'newbie_profile_basic' || code == 'newbie_profile_contact') return { url: '/pages/profile/personal-info', tab: false } as TaskRoute
         if (code == 'newbie_credential') return { url: '/pages/profile-setup/profile-setup', tab: false } as TaskRoute
         if (code == 'newbie_first_course') return { url: '/pages/courses/courses', tab: true } as TaskRoute
+        // #1944「浏览 3 门课程」落课程列表；daily_browse 是论坛帖子浏览，两者不得同落点
+        if (code == 'browse_course') return { url: '/pages/courses/courses', tab: true } as TaskRoute
         return { url: '', tab: false } as TaskRoute
     }
 

@@ -13,7 +13,7 @@
  *   buildXxx 函数负责字段映射转换
  *
  * @note 出口家族（T08 手术收紧；ADR-0007「api 契约收紧」，T01 #639 出入口）：
- *   本域除 updateCourseProgressApi 外的全部请求都经 getMapped<T> mapper-callback 出口，
+ *   本域除 updateCourseProgressApi 外的全部请求都经 getMapped<T> / postMapped<T> mapper-callback 出口，
  *   映射函数一律箭头包裹 build*（守护规则 M 禁「裸 builder 引用作 mapper」）；
  *   params 仍沿用手动 query 序列化、请求形态未变（getMapped 的 URL 构造段与历史 get 逐字一致）。
  * @note 唯一裸出口 = updateCourseProgressApi（确认型透传、无 DTO 可映射），理由见其函数注释，
@@ -25,7 +25,8 @@
  *   计数锁 utils/coursesContract.test.js 已 4→0；mallPilotContract 的「getMockCourseList 保留」已反转。
  *   筛选条（specialties / levels）失败保持静默降级（job-list 同款先例；判据见 ADR-0007 实施回记）。
  */
-import { getMapped, post, NOT_FOUND_MESSAGE_PREFIX } from './request'
+import { getMapped, post, postMapped, NOT_FOUND_MESSAGE_PREFIX } from './request'
+import type { RequestOptions } from './request'
 import { decodeList, decodePage } from './envelope'
 import type { Page } from './envelope'
 import { toNumber, toNumberOrNull, toBool, toStr, errMsg } from './helpers'
@@ -361,6 +362,24 @@ export function getCourseDetailApi(courseId : number) : Promise<CourseDetail> {
 	return getMapped<CourseDetail>('/course/' + courseId, null, (data : UTSJSONObject) : CourseDetail => {
 		return buildCourseDetail(data)
 	})
+}
+
+/**
+ * 上报「浏览课程」（后端契约 #2065 / 移动端接线 #1944）：点开课程详情那一刻与详情请求并行发，
+ * 不等详情回包 —— 旁路上报不该把详情页的可见时延拖成「等两个请求」。
+ *
+ * 后端按（学员, 课程, 当日）去重：`recorded: false` 是「今天已经记过这门课」的**幂等回包**，
+ * 不是失败，端上不重试、不据此改任何本地状态（重试只会把一次去重变成两次请求）。
+ * 任务可领态一律以 GET /points/tasks 的返回为准，端上不做本地推断。
+ *
+ * silent = true：上报是旁路，404（课程未发布 / 未挂载）与 400（id 非法）都不该给正在浏览课程的
+ * 用户弹一次他没触发的报错（口径同移动端 ADR-0031 决策 3 的余额预读）。失败一律上抛、由调用方
+ * 静默吞掉 —— api 层零 `.catch`（#1331 计数锁，coursesContract「api 层零静默回退」）。
+ */
+export function recordCourseBrowseApi(courseId : number) : Promise<boolean> {
+	const url = '/course/' + encodeURIComponent(courseId.toString()) + '/browse'
+	const opts : RequestOptions = { url: url, silent: true } as RequestOptions
+	return postMapped<boolean>(url, null, (data : UTSJSONObject) : boolean => data['recorded'] == true, opts)
 }
 
 /**
