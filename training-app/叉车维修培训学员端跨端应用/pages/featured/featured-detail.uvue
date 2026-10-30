@@ -29,13 +29,13 @@
                 <!-- 正文 Markdown 渲染 -->
                 <view class="article-body">
                     <view v-for="(block, idx) in contentBlocks" :key="idx" class="md-block">
-                        <text v-if="block.type == 'heading'" class="md-heading" :style="{ fontSize: getHeadingSize(block.level) }">{{ block.text }}</text>
-                        <text v-else-if="block.type == 'paragraph'" class="md-paragraph">{{ block.text }}</text>
+                        <text v-if="block.type == 'heading'" class="md-heading" :style="{ fontSize: getHeadingSize(block.level) }"><text v-for="(run, ri) in runsOf(block.text)" :key="ri" :class="runClasses(run, 2, block.level)" @click="onRunTap(run)">{{ runText(run) }}</text></text>
+                        <text v-else-if="block.type == 'paragraph'" class="md-paragraph"><text v-for="(run, ri) in runsOf(block.text)" :key="ri" :class="runClasses(run, 0, 0)" @click="onRunTap(run)">{{ runText(run) }}</text></text>
                         <text v-else-if="block.type == 'code'" class="md-code">{{ block.text }}</text>
                         <view v-else-if="block.type == 'list'" class="md-list">
-                            <text v-for="(item, itemIdx) in block.items" :key="itemIdx" class="md-list-item">· {{ item }}</text>
+                            <text v-for="(item, itemIdx) in block.items" :key="itemIdx" class="md-list-item"><text class="md-list-bullet">{{ listBullet(block.level, itemIdx) }}</text><text v-for="(run, ri) in runsOf(item)" :key="ri" :class="runClasses(run, 0, 0)" @click="onRunTap(run)">{{ runText(run) }}</text></text>
                         </view>
-                        <text v-else-if="block.type == 'quote'" class="md-quote">{{ block.text }}</text>
+                        <text v-else-if="block.type == 'quote'" class="md-quote"><text v-for="(run, ri) in runsOf(block.text)" :key="ri" :class="runClasses(run, 1, 0)" @click="onRunTap(run)">{{ runText(run) }}</text></text>
                         <view v-else-if="block.type == 'divider'" class="md-divider"></view>
                         <image v-else-if="block.type == 'image'" class="md-image" :src="block.text" mode="widthFix"></image>
                     </view>
@@ -80,6 +80,8 @@ import { goBack } from '../../utils/navigation'
     import { collectFeaturedLinks } from '../../utils/featuredLinks'
     import type { FeaturedLink } from '../../utils/featuredLinks'
     import { dispatchExternalLinkTap } from '../../utils/externalLinkDispatch'
+    import { splitInlineRuns } from '../../utils/markdownInline'
+    import type { MarkdownInlineRun } from '../../utils/markdownInline'
 
     /** 模板不可直调 import 函数（uvue 模板 import 调用编译为 .invoke() = Kotlin error18，先例 #677）；
      *  本地薄包装消费 utils/format 唯一实现（T03 口径：展示纯函数零第二实现） */
@@ -111,6 +113,47 @@ import { goBack } from '../../utils/navigation'
     /** 确认弹窗 + 按端分叉复用既有编排（移动端 ADR-0025 ⑩-8/⑩-9）；模板不可直调 import ⇒ 本地薄包装 */
     function onOpenLink(url : string) : void {
         dispatchExternalLinkTap(url)
+    }
+
+    /** 正文行内 runs（ADR-0025 ⑩-2 口径，#2124 起精选面也走）：分词器是唯一实现，此处只是模板可调的薄包装
+     *  （模板不可直调 import 函数 —— uvue 编译成 .invoke() 即 Kotlin error18，先例 #677）。 */
+    const runsOf = (src : string) : MarkdownInlineRun[] => splitInlineRuns(src)
+
+    /** 列表符号（⑩-3 / ⑩-4）：有序档由 `level` 槽判定，编号一律从 1 起；无序沿用本页原有 `·` */
+    function listBullet(level : number, idx : number) : string {
+        if (level == 1) return (idx + 1).toString() + '. '
+        return '· '
+    }
+
+    /**
+     * C1：App 端**子 `<text>` 不继承父样式** ⇒ 每条 run 自带字号字色行高，再叠样式位。
+     * 第二参 = 块上下文（0 正文 / 1 引用 / 2 标题），第三参 = 标题级数（字号与 getHeadingSize 同表）。
+     * ⚠️ UTS 匿名函数不允许参数默认值（论坛面实测）⇒ 所有调用点显式传满三参。
+     * 顺序即优先级：基线 → 块覆盖 → 样式位（uvue 只认同权重后来者）。
+     */
+    const runClasses = (run : MarkdownInlineRun, kind : number, level : number) : string[] => {
+        const cls : string[] = ['md-run']
+        if (kind == 1) cls.push('md-run-q')
+        else if (kind == 2) {
+            if (level <= 1) cls.push('md-run-h1')
+            else if (level == 2) cls.push('md-run-h2')
+            else if (level == 3) cls.push('md-run-h3')
+            else cls.push('md-run-h4')
+        }
+        if (run.bold) cls.push('md-run-b')
+        if (run.italic) cls.push('md-run-i')
+        if (run.strike) cls.push('md-run-s')
+        if (run.code) cls.push('md-run-c')
+        if (run.link.length > 0) cls.push('md-run-l')
+        return cls
+    }
+
+    /** C3：行内代码不写 padding / margin（子 text 上不生效），胶囊感靠 background + 前后字符空格 */
+    const runText = (run : MarkdownInlineRun) : string => run.code ? ' ' + run.text + ' ' : run.text
+
+    /** ⑩-8：句中链接点击委托既有编排（确认弹窗 + 按端分叉）；link 为空 = 普通文字，不弹窗 */
+    const onRunTap = (run : MarkdownInlineRun) : void => {
+        if (run.link.length > 0) dispatchExternalLinkTap(run.link)
     }
 
     function getHeadingSize(level : number) : string {
@@ -332,6 +375,79 @@ import { goBack } from '../../utils/navigation'
         margin: 8rpx 0;
     }
 
+    /* ── 行内 run（ADR-0025 ⑩-2；C1–C4 的落点；#2124 起精选正文也走 runs）──────────────
+       每条 run 自带字号 / 字色 / 行高：App 端子 `<text>` **不继承**父组件样式（C1）。
+       基线取本页正文（28rpx / #555555 / 44rpx）；引用与标题由下面的覆盖条改尺寸。 */
+    .md-run {
+        font-size: 28rpx;
+        color: #555555;
+        line-height: 44rpx;
+    }
+
+    .md-run-b {
+        font-weight: bold;
+    }
+
+    .md-run-i {
+        font-style: italic;
+    }
+
+    /* C2：只写长形态 —— `text-decoration` 简写在 app 端不支持，值域只有 underline / line-through / overline / none */
+    .md-run-s {
+        text-decoration-line: line-through;
+    }
+
+    .md-run-l {
+        color: #2979ff;
+        text-decoration-line: underline;
+    }
+
+    /* C3：行内代码不写 padding / margin / width / display（子 text 上不生效），胶囊感靠 background + 模板前后空格；
+       C4：等宽只给单一 monospace，不写逗号回退列表。 */
+    .md-run-c {
+        font-family: monospace;
+        background-color: #f0f0f0;
+        color: #333333;
+    }
+
+    /* 引用块内的 run：父级样式带不下来，由 runClasses 的第二参显式传入（不靠 CSS 级联） */
+    .md-run-q {
+        font-size: 26rpx;
+        color: #888888;
+        line-height: 40rpx;
+    }
+
+    /* 标题内的 run：字号与 getHeadingSize 同表，否则子 run 缩成正文尺寸（C1） */
+    .md-run-h1 {
+        font-size: 38rpx;
+        color: #333333;
+        font-weight: bold;
+    }
+
+    .md-run-h2 {
+        font-size: 34rpx;
+        color: #333333;
+        font-weight: bold;
+    }
+
+    .md-run-h3 {
+        font-size: 30rpx;
+        color: #333333;
+        font-weight: bold;
+    }
+
+    .md-run-h4 {
+        font-size: 28rpx;
+        color: #333333;
+        font-weight: bold;
+    }
+
+    /* 列表符号同样是子 text（C1）：自带字号字色，符号·间距由字符本身撑开 */
+    .md-list-bullet {
+        font-size: 28rpx;
+        color: #2979ff;
+        line-height: 44rpx;
+    }
     /* 正文外链段（#2097）：无链接整段不渲染；样式落在 text 上（C1：App 端子节点不继承父样式） */
     .link-section {
         margin-top: 24rpx;
