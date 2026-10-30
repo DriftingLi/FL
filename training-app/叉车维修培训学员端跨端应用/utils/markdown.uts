@@ -76,16 +76,17 @@ export const SUBSET_MEMBERS_CHAPTER : string[] = [
 	MEMBER_HEADING, MEMBER_LIST, MEMBER_QUOTE,
 	MEMBER_CODE, MEMBER_DIVIDER, MEMBER_IMAGE, MEMBER_TABLE,
 ]
-/** 内容精选档声明：三端交集（不含表格） */
+/** 内容精选档声明：三端交集（不含表格）；2026-10-30 #2124 起**声明 inline**（句中行内可点，与门户端 featuredMarked 对齐）。
+ *  ⚠️ 块数组面自此交出**源串**：⑩-6「chapter/featured 逐字不变」里**精选面那一半退出**，章节面那一半原样不动。 */
 export const SUBSET_MEMBERS_FEATURED : string[] = [
 	MEMBER_HEADING, MEMBER_LIST, MEMBER_QUOTE,
-	MEMBER_CODE, MEMBER_DIVIDER, MEMBER_IMAGE,
+	MEMBER_CODE, MEMBER_DIVIDER, MEMBER_IMAGE, MEMBER_INLINE,
 ]
 /** 论坛档声明（ADR-0025）：比内容精选档**少一个 image**（图文分离：正文内嵌 `![alt](url)`
- *  与 Web 同口径**展开成 alt 文本**，图片走 `images` 数组），另**多一个 inline**（⑩-2：
- *  唯一声明行内格式的档 —— 粗体 / 斜体 / 行内代码 / 链接 / 删除线 / 有序编号在论坛渲染）。
+ *  与 Web 同口径**展开成 alt 文本**，图片走 `images` 数组），另与内容精选档一样**声明 inline**（⑩-2：
+ *  行内档 = 论坛 + 精选两档 —— 粗体 / 斜体 / 行内代码 / 链接 / 删除线 / 有序编号在这两档渲染）。
  *  ⚠️ 后一条是 2026-10-02 对 ③ 第一条的重开：④ 当年「不给论坛改共享件」的理由仍成立，
- *  走的是**按成员开关**这条不摊风险的路 —— `chapter` / `featured` 不声明 ⇒ **块数组**逐字不变（⑩-6 的硬 AC 面）。
+ *  走的是**按成员开关**这条不摊风险的路 —— `chapter` 不声明 ⇒ **块数组**逐字不变（⑩-6 的硬 AC 面；**精选面 2026-10-30 #2124 退出该面**）。
  *  ⚠️ 「逐字不变」的射程就是块数组：`stripInlinePlain` 是三档共用的剥离件，摘要面另走 ⑩-5 的修复集口径（#1499 按面拆分）。
  *  代价具名登记：同一个 app 里帖子有粗体、课程章节没有（一处新的跨面不一致）。 */
 export const SUBSET_MEMBERS_FORUM : string[] = [
