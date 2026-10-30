@@ -5,7 +5,7 @@
 /** 收藏条目 */
 export type FavoriteItem = {
     favorite_id : number
-    target_type : string            // course / chapter / question / featured / topic
+    target_type : string            // course / chapter / question / featured / topic / job
     target_id : number
     /**
      * 所属课程 ID（#1089）。
@@ -18,6 +18,15 @@ export type FavoriteItem = {
      */
     course_id : number
     title : string
+    /**
+     * 企业名 / 地区（#1946 职位收藏）——**只对 `target_type == 'job'` 有意义**。
+     *
+     * 后端按 target_type 补齐这两键、其余类型省略（x-optional），故装载侧走 `toStr` 缺省空串。
+     * 收藏面据此给职位条目补「企业 · 地区」第二行，口径与职位卡最小字段一致。
+     * **非可空**：与 `course_id` 同式用空串哨兵，避开 Kotlin 侧可空比较的坑。
+     */
+    company : string
+    region : string
     cover : string
     created_at : string
 }

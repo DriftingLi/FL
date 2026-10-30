@@ -492,7 +492,8 @@ const MODULES = {
       'pages/profile/wrong-questions.uvue',
     ],
     extractDirs: ['pages/profile/components', 'pages/profile/composables'],
-    crossModuleConsumers: ['courses', 'dashboard', 'featured', 'practice', 'resources', 'resume'],
+    /** jobs 于 #1946 加入：job-detail.uvue 消费本模块的 api/favorite.uts（详情页收藏按钮） */
+    crossModuleConsumers: ['courses', 'dashboard', 'featured', 'jobs', 'practice', 'resources', 'resume'],
     /** 达标但贴近上限：`pages/profile/wrong-questions.uvue` 恰 600 行（先例 profileContract 的落袋锁） */
     budget: BUDGET,
     budgetOverrides: {},
