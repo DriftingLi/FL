@@ -50,7 +50,7 @@ const MEMBER_IMAGE = 'image';
 const MEMBER_TABLE = 'table';
 const MEMBER_INLINE = 'inline';
 const SUBSET_MEMBERS_CHAPTER = [MEMBER_HEADING, MEMBER_LIST, MEMBER_QUOTE, MEMBER_CODE, MEMBER_DIVIDER, MEMBER_IMAGE, MEMBER_TABLE];
-const SUBSET_MEMBERS_FEATURED = [MEMBER_HEADING, MEMBER_LIST, MEMBER_QUOTE, MEMBER_CODE, MEMBER_DIVIDER, MEMBER_IMAGE];
+const SUBSET_MEMBERS_FEATURED = [MEMBER_HEADING, MEMBER_LIST, MEMBER_QUOTE, MEMBER_CODE, MEMBER_DIVIDER, MEMBER_IMAGE, MEMBER_INLINE];
 const SUBSET_MEMBERS_FORUM = [MEMBER_HEADING, MEMBER_LIST, MEMBER_QUOTE, MEMBER_CODE, MEMBER_DIVIDER, MEMBER_INLINE];
 /** 镜像 `subsetMembers`：未知档位退到章节档（与 parseMarkdown 的缺省档同向） */
 function subsetMembers(subset) {
@@ -509,6 +509,10 @@ describe('镜像同步：utils/markdown.uts 与本文件镜像逐条一致', () 
     // 分叉的正反两面：论坛档交出源串、章节档仍交出抹平文本
     expect(firstText('**粗** 体', SUBSET_FORUM)).toBe('**粗** 体');
     expect(firstText('**粗** 体', SUBSET_CHAPTER)).toBe('粗 体');
+    // 内容精选档自 2026-10-30 #2124 起同样声明 inline（句中行内可点，与门户端 featuredMarked 对齐）：
+    // 同样交出源串、同样把有序编号落到 `level` 槽 —— 这是裁定，不是「顺手加进去」（差集断言已同批改）
+    expect(firstText('**粗** 体', SUBSET_FEATURED)).toBe('**粗** 体');
+    expect(parseMarkdown('3. 起步', SUBSET_FEATURED)[0].level).toBe(LIST_LEVEL_OL);
   });
 
   it('⑩-5 的 `~~` 剥离规则在 .uts 与镜像里同源（缺任何一处都是「摘要还漏删除线」）', () => {
@@ -611,6 +615,14 @@ describe('页面级契约：章节面渲染表格、内容精选面走交集', (
     // runs 的入口必须在（否则上面那条「一处直出」是假的：分支根本没渲染文字）
     expect(forumMd).toContain('runsOf(');
     expect(forumMd).toContain('runClasses(');
+    // 精选详情页（#2124 起正文同样走 runs）：直出点同样恰好一处，且必须是代码块那一处
+    // （图片分支的 `:src="block.text"` 是属性、不是文字直出，故不进计数）
+    const featuredMd = read('pages/featured/featured-detail.uvue');
+    const featuredRaw = (featuredMd.match(/\{\{\s*block\.text\s*\}\}/g) || []);
+    expect(featuredRaw.length).toBe(1);
+    expect(featuredMd).toContain('md-code');
+    expect(featuredMd).toContain('runsOf(');
+    expect(featuredMd).toContain('runClasses(');
   });
 
   it('论坛面：格式由详情壳层扁平下发（组件不自行读 topic / 回复 DTO）', () => {

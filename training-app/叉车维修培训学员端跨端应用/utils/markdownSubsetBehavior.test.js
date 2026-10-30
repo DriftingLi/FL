@@ -154,17 +154,19 @@ describe('行为对账 · 反向：未声明的成员不得出块，且内容退
     expect(blocks[0].text).toContain('A-->B;');
   });
 
-  it('论坛档与内容精选档**块集接近但不等同、且是各自的声明**（按端分档：允许不同、各自成文）', () => {
+  it('论坛档与内容精选档：差集只剩 image，inline 为两档共有（#2124 裁定后各自成文）', () => {
     const m = md();
-    // 两者都不含 table（各自的理由不同）；论坛档少一个 image（图文分离，与 Web 同口径）、
-    // 多一个 inline（⑩-2 重开 ③ 第一条：唯一声明行内格式的档）。**两个方向都不许相等**，
-    // 所以这两行是「按端分档」的正反面对账 —— 有人把 inline 顺手加进精选档，这里就红。
+    // 两者都不含 table（各自的理由不同）；论坛档少一个 image（图文分离，与 Web 同口径）。
+    // #2124（2026-10-30 维护者裁定 Q1=做）：精选档**也声明 inline** ⇒ forum∖featured 这个方向
+    // 由 `[inline]` 变为**空集**，inline 从「论坛专属」变成两档共有 —— 这是裁定本身，不是漂移。
+    // 反向仍必须非空（image），否则「按端分档」就退化成同一张表：两行都留着，正反各盯一次。
     const forum = declared(m, m.SUBSET_FORUM);
     const featured = declared(m, m.SUBSET_FEATURED);
     expect(forum).not.toContain(m.MEMBER_TABLE);
     expect(featured).not.toContain(m.MEMBER_TABLE);
     expect(featured.filter((x) => !forum.includes(x))).toEqual([m.MEMBER_IMAGE]);
-    expect(forum.filter((x) => !featured.includes(x))).toEqual([m.MEMBER_INLINE]);
+    expect(forum.filter((x) => !featured.includes(x))).toEqual([]);
+    expect(declared(m, m.SUBSET_FEATURED)).toContain(m.MEMBER_INLINE);
     expect(m.SUBSET_FORUM).not.toBe(m.SUBSET_FEATURED);
   });
 
@@ -186,7 +188,7 @@ describe('行为对账 · 反向：未声明的成员不得出块，且内容退
 
 // ===== ④ 零回归：既有两档的行为没被这次改造动过 =====
 
-describe('零回归（ADR-0025 ⑤）：章节档与内容精选档的行为逐条不变', () => {
+describe('零回归（ADR-0025 ⑤）：章节档的行为逐条不变（精选面自 #2124 退出该保证）', () => {
   it('章节档仍是唯一出表格块的档，且表头/正文 level 口径不变', () => {
     const m = md();
     const blocks = m.parseMarkdown(TABLE, m.SUBSET_CHAPTER);
