@@ -248,6 +248,35 @@ describe('域 api 收紧（T08 / ADR-0007）：DTO 函数经 mapper-callback 出
   });
 });
 
+describe('#1944 浏览课程上报接线（后端 #2065 契约：点开详情即上报）', () => {
+  const src = read('api/course.uts');
+  const pageSrc = stripComments(read('pages/courses/course-detail.uvue'));
+
+  // 承重的行为判据（请求形态 / 幂等回包不重试 / silent）在 utils/courseBrowseReportBehavior.test.js，
+  // 本 describe 只补接线面：出口家族没走偏、调用点挂在「点开」这一次、页面侧失败静默。
+  it('recordCourseBrowseApi 走 postMapped mapper 出口 + silent，course_id 进路径不进 body', () => {
+    const body = fnBody(src, 'export function recordCourseBrowseApi');
+    expect(body).not.toBe('');
+    expect(body).toContain('postMapped<boolean>(');
+    expect(body).toContain("encodeURIComponent(courseId.toString()) + '/browse'");
+    expect(body).toContain('silent: true');
+    expect(body).not.toContain('.catch'); // api 层不吞错（#1331 口径），静默权在调用方
+  });
+
+  it('详情页把上报挂在 onLoad（一命一次），onShow 不重复发（返回不该把同一门课再报一遍）', () => {
+    expect(pageSrc).toMatch(/import\s*\{[^}]*recordCourseBrowseApi[^}]*\}\s*from\s*'\.\.\/\.\.\/api\/course'/);
+    const onLoadBlock = pageSrc.slice(pageSrc.indexOf('onLoad('), pageSrc.indexOf('onShow('));
+    expect(onLoadBlock).toContain('recordCourseBrowseApi(courseId.value)');
+    expect(pageSrc.slice(pageSrc.indexOf('onShow('))).not.toContain('recordCourseBrowseApi');
+  });
+
+  it('页面侧失败静默吞掉：不弹提示、不引入新的详情错误态', () => {
+    const onLoadBlock = pageSrc.slice(pageSrc.indexOf('onLoad('), pageSrc.indexOf('onShow('));
+    expect(onLoadBlock).toContain('.catch((): void => { })');
+    expect(onLoadBlock).not.toContain('loadDetail()'); // #1126 单一取数入口不因上报而改变
+  });
+});
+
 describe('幻影路由锁（#662 口径）：api 层路由必须落在后端已注册清单内', () => {
   const apiSrc = stripComments(read('api/course.uts'));
 
@@ -285,9 +314,10 @@ describe('幻影路由锁（#662 口径）：api 层路由必须落在后端已�
     expect(phantom).toEqual([]);
   });
 
-  it('后端确实注册了本域用到的 7 个端点（防「清单读空 ⇒ 全判幻影」的反向假绿）', () => {
+  it('后端确实注册了本域用到的 8 个端点（防「清单读空 ⇒ 全判幻影」的反向假绿）', () => {
     const registered = backendRoutes();
-    for (const r of ['/courses', '/catalog/tree', '/levels', '/tags', '/course/:course_id', '/course/:course_id/chapter/:chapter_id', '/course/:course_id/progress']) {
+    // #1944 增第 8 条：/course/:course_id/browse（后端 handler.go:54，迁移 000045 随 #2065 上线）
+    for (const r of ['/courses', '/catalog/tree', '/levels', '/tags', '/course/:course_id', '/course/:course_id/chapter/:chapter_id', '/course/:course_id/progress', '/course/:course_id/browse']) {
       expect(registered).toContain(r);
     }
   });

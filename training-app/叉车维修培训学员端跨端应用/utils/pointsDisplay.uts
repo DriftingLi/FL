@@ -33,6 +33,7 @@ export function ledgerReasonLabel(reason : string, delta : number) : string {
 	if (reason == 'daily_login') return '每日登录'
 	if (reason == 'daily_quiz') return '每日答题'
 	if (reason == 'daily_browse') return '浏览帖子'
+	if (reason == 'browse_course') return '浏览课程' // #1944（与 daily_browse 语义不同码不同条，别并）
 	if (reason == 'growth_post') return '发布帖子'
 	if (reason == 'growth_reply') return '回复帖子'
 	if (reason == 'growth_mock') return '完成模考'

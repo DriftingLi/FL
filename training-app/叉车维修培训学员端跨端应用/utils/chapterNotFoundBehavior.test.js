@@ -182,6 +182,8 @@ function buildApp(opts = {}) {
 
   const courseBindings = {
     getMapped: request.getMapped,
+    // #1944：course.uts 新增 postMapped 出口 ⇒ 绑定表同步（缺名会打断整棵装配）
+    postMapped: request.postMapped,
     post: request.post,
     decodePage: envelope.decodePage,
     decodeList: envelope.decodeList,
