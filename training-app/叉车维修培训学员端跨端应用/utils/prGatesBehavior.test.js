@@ -249,12 +249,15 @@ describe('pr-gates：PR 面一次取锁串 ② 与 ④c（#2112）', () => {
     expect(code).toBe(1);
     const line = resultLine(out);
     expect(line).toMatch(/mp=fail kotlin=ok exit=fail/);
-    // ⚠️ 判据取**入口自己打的 seconds=**，不取 Jest 的墙钟：execFileSync 这层同样读管道，而 holder
-    // 继承了整条链上的可继承句柄 ⇒ 外层墙钟会一直挂到 holder 自然退出（15 s）。那正是 #2147 同一个病
-    // 在**上一层**的形态（外层读者必须自己也有界，仓库内这层管不到）—— 入口有没有被挂死，看它自己的读数。
+    // 承重判据 = **收流被放弃这件事在日志里可读**（不是墙钟阈值）：门自己打 drain=abandoned ⇒ 它确实
+    // 撞上了「子进程已退出但句柄未释放」，并且选择放弃剩余输出继续跑，而不是等 EOF。
+    // ⚠️ 不再用「seconds < 12」这类贴边时序断言：门本身基线 8 s + DrainMs 5 s 已贴近 holder 存活量级，
+    // 单跑/整文件跑读数会在阈值两侧摆（实测 13–16 s），那是环境敏感守护（guards.md 末节 Q4 / #2078 同族）。
+    expect(out).toContain('drain=abandoned');
+    // 粗上界只兜「真挂死」：holder 活 15 s，一旦在它自然退出后才收口，读数会明显更大
     const secs = Number((line.match(/seconds=(\d+)/) || [])[1]);
     expect(Number.isFinite(secs)).toBe(true);
-    expect(secs).toBeLessThan(12);
+    expect(secs).toBeLessThan(60);
     // 「没跑」不许被读成「这一半没问题」：② 红时 ④c 仍必须跑到并打出结果行
     expect(out).toContain(ktLine);
     expect(fs.existsSync(path.join(tmpRoot, 'hx-agent.lock'))).toBe(false);

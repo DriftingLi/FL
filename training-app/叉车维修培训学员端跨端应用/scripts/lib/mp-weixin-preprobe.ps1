@@ -90,8 +90,14 @@ function Test-MpWeixinTcpConnect {
  @returns 进程数（int；取不到进程表 ⇒ 0，与「IDE 未运行」同义，fail 向放行）
 #>
 function Get-MpWeixinIdeProcessCount {
-    $procs = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match 'wechatdevtools|微信开发者工具' })
-    return [int]$procs.Count
+    # 探测失败与「真的 0 个」必须分开：前者返回 -1（调用方按 ≥1 处理 ⇒ 维持拦截，fail-closed），
+    # 否则一次取不到进程表就会把真楔死环境静默放行（#2147 审查点）。
+    try {
+        $procs = @(Get-Process -ErrorAction Stop | Where-Object { $_.ProcessName -match 'wechatdevtools|微信开发者工具' })
+        return [int]$procs.Count
+    } catch {
+        return -1
+    }
 }
 
 <#

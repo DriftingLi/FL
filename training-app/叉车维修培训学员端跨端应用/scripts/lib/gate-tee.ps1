@@ -48,8 +48,13 @@ function Invoke-GateTee {
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError = $true
     $psi.CreateNoWindow = $true
-    $psi.StandardOutputEncoding = [System.Text.Encoding]::UTF8
-    $psi.StandardErrorEncoding = [System.Text.Encoding]::UTF8
+    # 解码用**本进程的控制台编码**，与旧 `Tee-Object` 管道同源（本机 cp936；调用方若已把
+    # [Console]::OutputEncoding 顶成 UTF-8，就与旧路径逐字一致）。**不要硬钉 UTF-8**：cli.exe 一族
+    # 在本机是按控制台码页吐字节的，硬钉 UTF-8 会把中文变成不可逆的替换字符（#2147 审查实测）。
+    $enc = [System.Text.Encoding]::UTF8
+    try { if ([Console]::OutputEncoding) { $enc = [Console]::OutputEncoding } } catch { }
+    $psi.StandardOutputEncoding = $enc
+    $psi.StandardErrorEncoding = $enc
     if ($WorkingDirectory) { $psi.WorkingDirectory = $WorkingDirectory }
     foreach ($a in $Arguments) { [void]$psi.ArgumentList.Add($a) }
 

@@ -227,6 +227,13 @@ function Invoke-Gate {
     $tee = Invoke-GateTee -FilePath $pwshExe -Arguments $argv -LogPath $LogPath -DrainMs $TeeDrainMs
     $code = $tee.ExitCode
     $out = @($tee.Lines)
+    # #2147：收流被放弃这一事实必须落进日志 —— 现场唯一的产物就是这份 log，只 Write-Host 等于只在
+    # 当时那台控制台上留痕。它也是 R8 的判据（时序断言在机器上贴边，见 utils/prGatesBehavior R8）。
+    if ($tee.DrainAbandoned) {
+        $drainLine = ">>> pr-gates tee gate=$Name drain=abandoned（子进程已退出但输出流仍被其子进程占用，已放弃剩余输出；不影响退出码与门结论）"
+        Write-Host $drainLine -ForegroundColor Yellow
+        Add-Content -LiteralPath $LogPath -Encoding utf8 -Value $drainLine
+    }
 
     $found = @($out | ForEach-Object { "$_" } | Where-Object { $_ -match ("^" + $Token + "(\s|$)") })
     $line = if ($found.Count -gt 0) { $found[$found.Count - 1] } else { '' }
