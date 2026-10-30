@@ -19,6 +19,8 @@
 | 7 开 PR 与合并 | `pwsh scripts/preflight-pr.ps1`（**仓库根**跑）预检绿 → `pwsh scripts/submit-pr.ps1` 建 PR | 证据齐 → agent 直接合并 | 例外通道只认「已接受未验证风险」一句，**且由人合并** |
 | 8 收尾 | `pwsh scripts/dev-close.ps1 -Task <票号>`（仓库根；默认 dry-run，`-Yes` 执行） | 树摘净、分支残留机检绿 | 该脚本尚未落地：暂用 `training-app/叉车维修培训学员端跨端应用/scripts/remove-worktree.ps1 -Task <n>`，再在干净树里 `git fetch && git merge --ff-only origin/master`。拆树别手搓两步 |
 
+**第 5 步的纪律面**：纯 `.uvue` / `.uts` 命中运行时面时，② 属**纪律必跑**——校验器对这一支**不判**（`needs2` 只认 MP-WEIXIN 面），但 ADR-0043 决策 3 已把「每个运行时面 PR 都执行 ②」定为常态主门；**别把校验器的「免」当成不必执行**。
+
 **成本尺**：常态 ≈12 min（同树）/ 17 min（新树）。超 2× 先查是不是在排队（HBuilderX 单实例，不是脚本慢）。
 
 **第 2 步四条红线**（全表在 [`docs/agents/uvue-css.md`](docs/agents/uvue-css.md)）：`<style>` 必须 `lang="scss"`；选择器只认 `.class`（tag / ID / 伪类 / 属性选择器一律不可用）；文字类样式只落 `<text>` / `<button>` / `<input>` / `<textarea>`（落 `<view>` 上静默忽略并逐处打 error，机检 `utils/uvueFontCarrierContract.test.js`）；`gap` / `calc()` / `env()` / `var(--x)` / `transition` / `animation` 原生端不支持。**WARNING 不阻断但可能不生效**——`gap` 被静默忽略把布局搞坏就是这一类。
@@ -27,7 +29,7 @@
 
 - **证据 = PR 正文一行 `跑于 <sha7>` + 门读数行原样**（A1 形态）。sha 绑定门评论 / 三候选集 / `-PostToIssue` / 展示副本**全退役**；图走 GitHub 附件、只作附证。判据全文与来路见 [`docs/adr/0008-移动端验收门与证据.md`](docs/adr/0008-移动端验收门与证据.md)（**写全路径**）。
 - **红是「看见」不是「拦截」**：ruleset 必检只有 `ci-summary`，`pr-evidence` 不在必检 ⇒ 证据体系是荣誉制，别人不替你兜底。
-- **① 整门退役**：①a 降为发版前一次（发版冒烟）；①b 与能力面人签**已整体退役**——命中能力面的 PR 合并前**零人签**、不要求设备在线，正文命中才写一行 `能力面：<类别> · 已记入发版冒烟`。发版冒烟五场景固定全做、不按 diff 生成，清单在移动端 `docs/adr/` 的 `0043` 与 `0016`。
+- **① 整门退役**：①a 降为发版前一次（发版冒烟）；①b 与能力面人签**已整体退役**——命中能力面的 PR 合并前**零人签**、不要求设备在线，正文命中才写一行 `能力面：<类别> · 已记入发版冒烟`。发版冒烟的人工场景清单**固定全做、不按 diff 生成**（5 条 = 3 条常态必做 + 2 条条件项），载体是移动端 ADR `docs/adr/0043-真机门降级常态化与发版冒烟（2026-10-23 裁定）.md`「发版冒烟固定人工场景清单」段——它管**能力场景人工操作**，与决策 5「按 diff 选改动页」的人看范围（管**页级视觉**）是两个不同对象；ADR-0048 ③ 已裁定清单不进本页。
 - **③④ 照旧必过**；云打包按打包面触发（三份 json / `uni_modules` app-android / 新增 aar·jar），正式发版前必跑并装机自测。门脚本须**全访问权限**执行。
 - **⑤ 不门化（2026-10-29，#2130）**：改的命中运行时面、而 ② 命中位未命中时（`manifest.json` / `platformConfig.json` 未改且 diff 无 MP-WEIXIN 指令行），PR 前**建议**跑一次 `npm run build:mp-weixin-buildonly`——可选、不判红；`build=skipped(fingerprint)` 也算编译过。
 - 非运行时面 PR（纯文档 / 测试 / CI 配置）agent 自行合并；例外通道仍由人合并。
