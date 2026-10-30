@@ -66,6 +66,9 @@ function loadCourse(reply, source) {
   })();
   const mod = loadUts(file, {
     getMapped: stub.getMapped,
+    // #1944：course.uts 新增 postMapped 出口（浏览上报走它）⇒ 绑定表必须同步，
+    // 缺一名会让 utsHarness 的 fail-closed 把整棵装配打断（CI #1944 行为腿实测）
+    postMapped: stub.postMapped,
     decodePage: envelope.decodePage,
     decodeList: envelope.decodeList,
     post: stub.postMapped,
