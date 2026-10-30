@@ -18,11 +18,11 @@
                     </view>
                 </view>
                 <view class="stats-row">
-                    <view class="stat-card">
+                    <view class="stat-card" @click="onOpenFavorites('featured')">
                         <text class="stat-num">{{ noticeFavCount }}</text>
                         <text class="stat-label">公告收藏</text>
                     </view>
-                    <view class="stat-card">
+                    <view class="stat-card" @click="onOpenFavorites('job')">
                         <text class="stat-num">{{ jobFavCount }}</text>
                         <text class="stat-label">职位收藏</text>
                     </view>
@@ -154,6 +154,17 @@
         uni.navigateTo({ url: '/pages/resume/resume-attach' })
     }
 
+    /**
+     * 收藏格 → 收藏面对应 tab（#1946）。
+     *
+     * 原型「求职者2/3.png」把三格画成**入口**，此前只显示数字、点了没反应（等价死按钮）；
+     * 本页只做「带类型跳过去」，落点表仍在 `utils/favoriteLanding.uts` 那一份里，不在这里复制。
+     * 合集收藏（Q22 不做）仍保持不可点：那个类型后端未收录，接上去只会得到一张空列表。
+     */
+    function onOpenFavorites(type : string) : void {
+        uni.navigateTo({ url: '/pages/profile/favorites?type=' + type })
+    }
+
     /** 以服务端数据刷新完善度；未建（404）→ 0 项；其他错误保持上次状态（未加载成功则引导卡隐藏） */
     function refreshResumeFilled() : void {
         getResumeApi().then((r : ResumeData) : void => {
@@ -176,9 +187,10 @@
         }).catch((e) => {
             console.warn('[resume] load profile failed:', e)
         })
-        // 公告收藏：公告=内容精选 notice 类别，收藏按 Q22 口径复用现行 featured 类型（零新增类型，
-        // 见根 docs/design/20261026-原型图全量对照-移动端缺失页面功能调研.md Q22）。
-        // 职位/合集两类后端多态收藏仍未收录，total 恒为 0。
+        // 三格计数口径（Q22，根 docs/design/20261026-原型图全量对照-移动端缺失页面功能调研.md）：
+        // - 公告收藏 = 内容精选 featured 类型（零新增类型，复用现行收藏）；
+        // - 职位收藏 = job 类型（后端 #2067 已收录，本票 #1946 起吃的是真数，不再是恒 0）；
+        // - 合集收藏 = **不做**（非内容对象，要动「内容对象」六槽声明表）⇒ 后端未收录、total 恒 0。
         getFavoritesApi('featured', 1, 1).then((res : FavoriteListResult) : void => {
             noticeFavCount.value = res.total
         }).catch(() => {})

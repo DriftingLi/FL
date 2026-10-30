@@ -1,6 +1,6 @@
 /**
  * 收藏模块 API（ADR-0018）
- * - 多态收藏：target_type ∈ course / chapter / question / featured / topic
+ * - 多态收藏：target_type ∈ course / chapter / question / featured / topic / job（#1946 加 job）
  * - user + type + id 唯一（幂等）
  *
  * 接口：
@@ -27,6 +27,10 @@ function buildFavoriteItem(obj : UTSJSONObject) : FavoriteItem {
 		// 会抛 Kotlin NullPointerException（同 toNumberOrNull 的注释所述）。
 		course_id: toNumber(obj['course_id']),
 		title: toStr(obj['title']),
+		// 企业 / 地区（#1946）：后端仅对 target_type=job 补齐该两键（x-optional），其余类型省略 ⇒ 空串。
+		// 同样走 toStr 缺省，别写 `obj['company'] as string`（缺键即 Kotlin NPE，同 course_id 注释）。
+		company: toStr(obj['company']),
+		region: toStr(obj['region']),
 		cover: toStr(obj['cover']),
 		created_at: toStr(obj['created_at']),
 	} as FavoriteItem

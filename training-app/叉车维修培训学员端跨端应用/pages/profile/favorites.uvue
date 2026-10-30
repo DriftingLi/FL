@@ -32,6 +32,7 @@
                             <text class="fav-type-tag" :style="{ backgroundColor: getTypeColor(item.target_type) }">{{ getTypeLabel(item.target_type) }}</text>
                             <text class="fav-title">{{ item.title.length > 0 ? item.title : getTypeLabel(item.target_type) + ' #' + item.target_id }}</text>
                         </view>
+                        <text v-if="item.company.length > 0" class="fav-sub">{{ jobSubline(item) }}</text>
                         <text v-if="item.created_at.length > 0" class="fav-time">{{ displayTime(item.created_at) }}</text>
                     </view>
                     <view class="fav-actions" @click.stop="onRemove(item)">
@@ -51,7 +52,7 @@
 
 <script setup lang="uts">
     import { ref } from 'vue'
-    import { onShow } from '@dcloudio/uni-app'
+    import { onLoad, onShow } from '@dcloudio/uni-app'
     import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 import { goBack } from '../../utils/navigation'
     import { getFavoritesApi, removeFavoriteApi } from '../../api/favorite'
@@ -79,7 +80,12 @@ import { goBack } from '../../utils/navigation'
         { label: '帖子', value: 'topic' },
         { label: '资讯', value: 'featured' },
         { label: '题目', value: 'question' },
+        { label: '职位', value: 'job' },
     ]
+
+    /** 合法类型集（#1946）：路由参数 `type` 来自招聘「我的」三收藏格，越界值一律忽略，
+     *  免得把一个后端不认的 target_type 透到查询串上。 */
+    const VALID_TYPES : string[] = ['course', 'chapter', 'topic', 'featured', 'question', 'job']
 
     const currentType = ref<string>('')
     const items = ref<FavoriteItem[]>([])
@@ -95,6 +101,7 @@ import { goBack } from '../../utils/navigation'
         if (type == 'topic') return '帖子'
         if (type == 'featured') return '资讯'
         if (type == 'question') return '题目'
+        if (type == 'job') return '职位'
         return type
     }
 
@@ -104,7 +111,20 @@ import { goBack } from '../../utils/navigation'
         if (type == 'topic') return '#f44336'
         if (type == 'featured') return '#9e9e9e'
         if (type == 'question') return '#ff9800'
+        if (type == 'job') return '#1565c0'
         return '#999999'
+    }
+
+    /**
+     * 职位条目的第二行「企业 · 地区」（#1946）。
+     *
+     * 后端只对 job 补齐这两键，其余类型是空串 ⇒ 本函数返回空串、模板据此不渲染该行。
+     * 与 `displayTime` 同理是本页本地薄包装（模板不可直调 import 函数，#677）。
+     */
+    function jobSubline(item : FavoriteItem) : string {
+        if (item.company.length == 0) return ''
+        if (item.region.length == 0) return item.company
+        return item.company + ' · ' + item.region
     }
 
     async function loadFavorites(reset : boolean = false) : Promise<void> {
@@ -202,6 +222,27 @@ import { goBack } from '../../utils/navigation'
     function onBack() : void {
         goBack()
     }
+
+    /**
+     * 路由参数 `type`（#1946）：招聘「我的」页的「公告收藏 / 职位收藏」格直接落到对应 tab。
+     *
+     * 只认 VALID_TYPES（其余值静默忽略 ⇒ 回到「全部」），因为该参数是**跨页约定**、
+     * 不是本页内部量；越界值透下去会让列表查询带一个后端不认的 target_type。
+     * 首屏加载仍由下面的 onShow 触发（onLoad 先于 onShow），不在这里重复请求。
+     */
+    onLoad((options : OnLoadOptions) => {
+        const opts = options as UTSJSONObject | null
+        const t = opts != null ? opts['type'] : null
+        if (t == null) return
+        const want = t as string
+        if (want.length == 0) return
+        for (let i = 0; i < VALID_TYPES.length; i++) {
+            if (VALID_TYPES[i] == want) {
+                currentType.value = want
+                return
+            }
+        }
+    })
 
     onShow(() => {
         loadFavorites(true)
@@ -373,5 +414,15 @@ import { goBack } from '../../utils/navigation'
     .loading-text {
         font-size: 24rpx;
         color: #999999;
+    }
+
+    /* 职位条目第二行「企业 · 地区」（#1946）：文字类样式必须落 <text>，故挂在 .fav-sub 上 */
+    .fav-sub {
+        font-size: 22rpx;
+        color: $text-color-secondary;
+        margin-top: 2rpx;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        lines: 1;
     }
 </style>
