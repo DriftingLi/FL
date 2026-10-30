@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/testutil"
 )
 
 // seedAiProShopItem 与 migrations/000049 同形（测试库走 AutoMigrate，不执行 migrations/）。
@@ -69,8 +70,9 @@ func TestShopAiProListedAndRedeemable(t *testing.T) {
 		t.Fatalf("被拒的重复兑换不得扣分, got %d", got)
 	}
 
-	other := seedUserWithBalance(t, db, 0)
-	otherList, err := svc.ListShopItems(context.Background(), other)
+	// 另一个人不复用 seedUserWithBalance：它固定 account/phone，同库二次插入会撞 hrwai_users.phone 的 UNIQUE。
+	otherU := testutil.SeedStudent(t, db, "aiProOther", "pwd")
+	otherList, err := svc.ListShopItems(context.Background(), otherU.ID)
 	if err != nil {
 		t.Fatalf("他人列表失败: %v", err)
 	}
