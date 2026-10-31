@@ -21,6 +21,13 @@
  *      ⇒ 入口必须**照样返回**（旧写法挂在 `Tee-Object` 等 EOF 上：实测 1050 s、④c 没开始），
  *      且 ④c 照跑、两门结果行都在。这条锁的是「入口**真的用了**有界收流器」—— 库里有个函数、
  *      入口却还写着管道，库的单测照样绿（接线与行为的成对义务，见 docs/agents/guards.md 末节）。
+ *   R9 真实门打印形（#2162）：两门脚本的 `Write-Log` 必须把**行首结果行原样透传 stdout**
+ *      —— 入口按 `^token` 认读数，而历史上通过/env 分支只把结论行写进日志文件（中文前缀行进不了
+ *      解析），`PR_GATES` 因此**从未读出过 ok**。本条是源码文本判据（接线面），它的行为面 = R10 +
+ *      真跑取数（#2162 票面 AC4，需 HBuilderX 环境）。
+ *   R10 旧真门形钉成反例（#2162）：假门按**旧真实形状**只打中文前缀行 ⇒ 入口判 `no-line`、
+ *      exit=env —— 「绿跑读成 no-line」这个成因从此有回归防线，不许再固化（#2098 教训：
+ *      假门夹具若打了真门**不产出**的行首裸 token，守护就变成假绿的守卫）。
  *
  * 安全性（为什么可在任何机器上跑、也不抢维护者的 HBuilderX）：
  *   路径一律带 `-TempRoot <临时目录>`：锁目录被换到临时根（父进程与两个子门用同一个），
@@ -85,16 +92,29 @@ function makeProject(tmpRoot) {
  * 然后按给定 token / 退出码演一门。
  */
 function makeFakeGate(tmpRoot, opts) {
-  const { name, token, code, line, emit = true, holdStdout = false } = opts;
+  const {
+    name, token, code, line,
+    emit = true,
+    holdStdout = false,
+    // #2162：假门默认按**真门修正后的打印形**演 —— 先一行行首裸结果行（= 日志里那行，逐字节），
+    // 再一行中文结论行给人读。旧形（只有中文行）走 legacyChineseOnly，留给 R10 当反例。
+    legacyChineseOnly = false,
+  } = opts;
   const file = path.join(tmpRoot, `fake-${name}.ps1`);
   const logFile = path.join(tmpRoot, `fake-${name}.log`);
+  const printBlock = legacyChineseOnly
+    ? `Write-Host ('✅ ${name} 通过：' + '${psQuote(line)}')`
+    : [
+        `Write-Host '${psQuote(line)}'`,
+        `Write-Host ('✅ ${name} 通过：' + '${psQuote(line)}')`,
+      ].join('\n');
   const body = [
     '$ErrorActionPreference = "Stop"',
     `. '${psQuote(HXBUSY)}'`,
     `$null = Wait-HxFree -CliExe 'dummy-not-a-real-cli' -TimeoutSeconds 5 -LogPath '${psQuote(logFile)}'`,
     "Write-Host ('FAKE_" + name + "_OWNER=' + $env:HX_LOCK_OWNER)",
     "Write-Host ('FAKE_" + name + "_LOCKPID=' + (Get-Content -LiteralPath (Join-Path $env:TEMP 'hx-agent.lock') | Select-Object -First 1))",
-    emit ? `Write-Host '${psQuote(line)}'` : "# (no result token on purpose)",
+    emit ? printBlock : "# (no result token on purpose)",
     // #2147 复现件：退出后留一个**孙进程继续持有本进程的 stdout 句柄**（微信开发者工具那种常驻 GUI 的形态）。
     // 必须走 .NET + UseShellExecute=false：Start-Process 默认走 ShellExecuteEx，子进程拿不到我们的管道句柄
     // ⇒ 夹具退化成「什么都没持有」，R8 就变成假绿。
@@ -276,5 +296,38 @@ describe('pr-gates：PR 面一次取锁串 ② 与 ④c（#2112）', () => {
     expect(out).toContain('mp-weixin-check.ps1');
     expect(fs.existsSync(path.join(tmpRoot, 'hx-agent.lock'))).toBe(false);
     expect(fs.existsSync(logPath)).toBe(false);
+  });
+
+  it('R9（#2162）：真实门的 Write-Log 必须把行首结果行原样透传 stdout（源码文本判据；行为面 = R10 + 票面 AC4 真跑）', () => {
+    const cases = [
+      ['scripts/mp-weixin-check.ps1', "'^MP_WEIXIN(_BUILDONLY)?_RESULT(\\s|$)'"],
+      ['scripts/kotlin-all-check.ps1', "'^KOTLIN_ALL_RESULT(\\s|$)'"],
+    ];
+    for (const [rel, anchor] of cases) {
+      const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+      // 找不到多行函数体 = 实现退回单行「只写文件」⇒ 假形状回来了，这条断言红即是判据
+      const fn = src.match(/function Write-Log \{[\s\S]*?\n\}/);
+      expect(fn).not.toBeNull();
+      expect(fn[0]).toContain('Add-Content');   // 文件仍是字节级真源
+      expect(fn[0]).toContain('-split');        // 逐行判行首，不许整串匹配
+      expect(fn[0]).toContain(anchor);          // 锚定本门结果 token（含 -BuildOnly 独立 token）
+      expect(fn[0]).toContain('Write-Host');    // 原样透传，不加前后缀
+      // ② 侧额外排除投递诊断行（`comment=FAILED` 同样裸 token 开头，入口取最后一条会被它顶掉读数行）
+      if (rel.includes('mp-weixin')) expect(fn[0]).toContain("-notmatch ' comment='");
+    }
+  });
+
+  it('R10（#2162）：假门按**旧真门形**只打中文前缀行 ⇒ 入口判 mp=no-line、exit=env —— 成因钉成反例', () => {
+    const project = makeProject(tmpRoot);
+    const mpLine = 'MP_WEIXIN_RESULT errorsTotal=0 shots=1 coverage=smoke:2';
+    const mp = makeFakeGate(tmpRoot, { name: 'MP', token: 'MP_WEIXIN_RESULT', code: 0, line: mpLine, legacyChineseOnly: true });
+    const kt = makeFakeGate(tmpRoot, { name: 'KT', token: 'KOTLIN_ALL_RESULT', code: 0, line: 'KOTLIN_ALL_RESULT errors=0 classes=1 files=1' });
+
+    const { code, out } = runPrGates(baseArgs(project, mp, kt));
+
+    expect(resultLine(out)).toMatch(/mp=no-line/);
+    expect(resultLine(out)).toMatch(/kotlin=ok/);
+    expect(code).toBe(2); // no-line 按环境受阻算：别把「读不到」放成「过了」
+    expect(fs.existsSync(path.join(tmpRoot, 'hx-agent.lock'))).toBe(false);
   });
 });
