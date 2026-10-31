@@ -20,7 +20,7 @@ withDefaults(
   <label
     data-slot="field-label"
     :for="forId || undefined"
-    class="block text-sm font-medium text-ink-2 transition-colors group-data-[invalid]/field:text-bad"
+    class="block text-sm font-medium text-ink-2 transition-colors group-data-[orientation=horizontal]/field:whitespace-nowrap group-data-[invalid]/field:text-bad"
   >
     <slot />
     <span v-if="required" class="ml-0.5 text-bad" aria-hidden="true">*</span>
