@@ -73,6 +73,15 @@ export function revealThemeFrom(
   const origin = revealOriginOf(originEl, viewport)
   const radius = circleRevealRadius(origin, viewport)
 
+  // 先把圈心写进 CSS 变量：::view-transition-new(root) 的初始 clip 读它，
+  // 保证新快照出现的第一帧就是「半径 0」，而不是整页新主题。
+  const root = doc.documentElement
+  root.style.setProperty('--theme-reveal-x', `${origin.x}px`)
+  root.style.setProperty('--theme-reveal-y', `${origin.y}px`)
+  // 主题菜单在选中后要淡出；让它立刻从过渡快照里消失，否则白底的菜单会在
+  // 圆里停留一百多毫秒，看起来像闪了一下。
+  root.classList.add('is-theme-revealing')
+
   let transition: ViewTransition
   try {
     transition = start.call(doc, async () => {
@@ -80,6 +89,7 @@ export function revealThemeFrom(
     })
   } catch {
     // 浏览器给了方法却拒绝启动（例如另一个 transition 正在跑）：直接切换，不吞掉主题变更
+    root.classList.remove('is-theme-revealing')
     void apply()
     return
   }
@@ -97,6 +107,9 @@ export function revealThemeFrom(
         {
           duration: options.duration ?? THEME_REVEAL_DURATION_MS,
           easing: options.easing ?? THEME_REVEAL_EASING,
+          // fill: both —— 动画结束后保持满圆，直到浏览器移除过渡层；
+          // 否则会回落到上面的初始 clip（0 半径），在收尾处再闪一帧。
+          fill: 'both',
           pseudoElement: '::view-transition-new(root)'
         }
       )
@@ -111,5 +124,11 @@ export function revealThemeFrom(
     })
     .finally(() => {
       running = false
+      // 过渡层已移除后再清变量，避免收尾帧读回 0 半径
+      win.requestAnimationFrame(() => {
+        root.style.removeProperty('--theme-reveal-x')
+        root.style.removeProperty('--theme-reveal-y')
+        root.classList.remove('is-theme-revealing')
+      })
     })
 }

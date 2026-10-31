@@ -9,14 +9,13 @@
 // 第十三波 票9 补的是同一族里**当时还只写在注释上**的四条判据：
 //   3. `exact` 已不参与判定（name 匹配天然精确，别再拿它当「前缀开关」）；
 //   4. 命中唯一性（双高亮的正面表述：同一路由下兄弟项里至多一项亮）；
-//   5. 两层深度上限（flattenLeaves 与 isGroupActive 都不看第三层往下的子孙）；
+//   5. 两层深度上限（isGroupActive 不看第三层往下的子孙）；
 //   6. 分组高亮的结构性不对称（isGroupActive 只看子孙，分组行自己的 routeName 不算）。
 import { describe, it, expect } from 'vitest'
 import {
   isNavRouteActive,
   isGroupExpanded,
   toggleGroupExpanded,
-  flattenLeaves,
   isGroupActive,
   type NavItem
 } from '../navigation'
@@ -133,24 +132,6 @@ describe('侧栏分组判定（纯函数）', () => {
     expect(toggleGroupExpanded({}, 'g')).toEqual({ g: false })
   })
 
-  it('flattenLeaves 收集两层叶子项，跳过没有 routeName/externalUrl 的容器', () => {
-    const group: NavItem = {
-      key: 'g',
-      label: '分组',
-      children: [
-        leaf('l1', 'CourseList'),
-        { key: 'mid', label: '二级分组', children: [leaf('l2', 'ChapterView'), { key: 'bad', label: '空容器' }] }
-      ]
-    }
-    const got = flattenLeaves(group).map(i => i.routeName)
-    expect(got).toEqual(['CourseList', 'ChapterView'])
-  })
-
-  it('flattenLeaves 收外链项（externalUrl 视为叶子）', () => {
-    const group: NavItem = { key: 'g', label: '分组', children: [{ key: 'x', label: '官网', externalUrl: 'https://www.example.com' }] }
-    expect(flattenLeaves(group).map(i => i.key)).toEqual(['x'])
-  })
-
   it('翻页后单层分组激活：任一子项命中即激活', () => {
     const group: NavItem = { key: 'g', label: '分组', children: [leaf('a', 'CourseList'), leaf('b', 'ForumPage')] }
     expect(isGroupActive(group, 'ForumPage')).toBe(true)
@@ -192,7 +173,7 @@ describe('侧栏分组判定（纯函数）', () => {
     expect(isGroupActive(group, 'RealExamPractice')).toBe(true)
   })
 
-  it('两层深度上限：第三层往下的子孙既不点亮分组，也不进 tooltip 清单', () => {
+  it('两层深度上限：第三层往下的子孙不点亮分组', () => {
     // 侧栏结构只到三层（分组 ┬ 项 ┬ 子项）；再深的层级属数据表越界，判据不跟着无限递归
     const deep: NavItem = {
       key: 'g',
@@ -209,17 +190,6 @@ describe('侧栏分组判定（纯函数）', () => {
     }
     expect(isGroupActive(deep, 'WrongQuestions')).toBe(true) // 第三层是「一级子级的子级」，在判据内
     expect(isGroupActive(deep, 'ForumDetail')).toBe(false) // 第四层不参与
-    expect(flattenLeaves(deep).map(i => i.key)).toEqual(['third'])
-  })
-
-  it('flattenLeaves 只收子孙：分组行自身即使可点也不进 tooltip（点了没意义，它一直在侧栏上）', () => {
-    const group: NavItem = {
-      key: 'g',
-      label: '题库练习',
-      routeName: 'QuestionBank',
-      children: [{ key: 'c1', label: '外部题源', externalUrl: 'https://bank.example.net' }]
-    }
-    expect(flattenLeaves(group).map(i => i.key)).toEqual(['c1'])
   })
 
   it('展开态按 key 记账：切换一个分组不牵连其它分组', () => {

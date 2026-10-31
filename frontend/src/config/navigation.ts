@@ -294,7 +294,6 @@ export function toggleGroupExpanded(
   return { ...map, [key]: !isGroupExpanded(map, key) }
 }
 
-/** 收集分组下的全部叶子项（最多两层一级子级，与侧栏结构一致；无 routeName/externalUrl 的容器跳过）。 */
 /**
  * 该导航项是否「有落点」（可渲染成一行），还是只是一个分组标题。
  *
@@ -304,19 +303,6 @@ export function toggleGroupExpanded(
  */
 export function isNavItemRenderable(item: NavItem): boolean {
   return !!(item.externalUrl || item.routeName)
-}
-
-export function flattenLeaves(item: NavItem): NavItem[] {
-  const result: NavItem[] = []
-  for (const child of item.children || []) {
-    if (child.routeName || child.externalUrl) result.push(child)
-    if (child.children?.length) {
-      for (const sub of child.children) {
-        if (sub.routeName || sub.externalUrl) result.push(sub)
-      }
-    }
-  }
-  return result
 }
 
 /** 分组是否激活：任一子项（含二层）命中当前路由即点亮整条分组。 */

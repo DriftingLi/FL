@@ -13,33 +13,17 @@
          收进那一个项级 module，票9 / ADR-0060 §9）；本组件只留分组编排与判定接线。 -->
     <nav class="sidebar-nav">
       <template v-for="item in menuItems" :key="item.key">
-        <!-- 有子项的分组。分组头在展开/收起两态共用同一棵 DOM：
-             文字与箭头靠透明度/位移过渡，图标始终居中 —— 不再因为 v-if 换一棵树而瞬间跳变。
-             折叠态（effectiveCollapsed）下分组头不接受点击（旧形态只有图标，无展开语义），
-             悬停仍出叶子清单。 -->
+        <!-- 有子项的分组：分组头只出文字（与叶子行的「图标 + 文字」区分开），
+             不再复用叶子图标。折叠态下它退化为一条分隔线，保留分组边界。 -->
         <template v-if="item.children && item.children.length">
-          <UiTooltip placement="right" :show-after="300" :disabled="!effectiveCollapsed">
-            <template #content>
-              <div class="nav-group-tooltip-title">{{ item.label }}</div>
-              <div
-                v-for="leaf in flattenLeaves(item)"
-                :key="leaf.key"
-                class="nav-group-tooltip-item"
-                :class="{ active: isRouteActive(leaf) }"
-              >
-                {{ leaf.label }}
-              </div>
-            </template>
-            <div
-              class="nav-group-label"
-              :class="{ 'is-active': isGroupActiveLocal(item), 'is-accordion': !effectiveCollapsed }"
-              @click="onGroupHeaderClick(item.key)"
-            >
-              <NavIcon :icon="item.icon" v-if="item.icon" class="nav-group-icon" />
-              <span class="nav-group-text">{{ item.label }}</span>
-              <UiIcon name="chevron-down" class="nav-group-arrow" :class="{ expanded: isGroupExpandedLocal(item.key) }" />
-            </div>
-          </UiTooltip>
+          <div
+            class="nav-group-label"
+            :class="{ 'is-active': isGroupActiveLocal(item), 'is-accordion': !effectiveCollapsed }"
+            @click="onGroupHeaderClick(item.key)"
+          >
+            <span class="nav-group-text">{{ item.label }}</span>
+            <UiIcon name="chevron-down" class="nav-group-arrow" :class="{ expanded: isGroupExpandedLocal(item.key) }" />
+          </div>
           <!-- 高度过渡：grid 0fr → 1fr，不用 v-show 瞬时 display:none -->
           <UiCollapse :open="isGroupExpandedLocal(item.key)" class="nav-group-collapse">
             <div class="nav-group-children">
@@ -115,20 +99,17 @@
 <script setup lang="ts">
 import UiIcon from '@/components/ui/UiIcon.vue'
 import UiCollapse from '@/components/ui/UiCollapse.vue'
-import NavIcon from './NavIcon.vue'
 import { computed, reactive, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   isNavRouteActive,
   isGroupExpanded,
   toggleGroupExpanded,
-  flattenLeaves,
   isGroupActive,
   type NavItem
 } from '@/config/navigation'
 import { isNavItemRenderable } from '@/config/navigation'
 import AppSidebarItem from '@/components/layout/AppSidebarItem.vue'
-import UiTooltip from '@/components/ui/UiTooltip.vue'
 
 const props = defineProps<{
   menuItems: NavItem[]
@@ -237,6 +218,12 @@ function isRouteActive(item: NavItem): boolean {
   height: 0;
 }
 
+/* 导航列是定高 flex 容器：子项默认 flex-shrink:1 会被压扁（分组头曾被压到 16px，
+   文字被 overflow:hidden 裁掉）。这里让内容保持自身高度，溢出交给纵向滚动。 */
+.sidebar-nav > * {
+  flex-shrink: 0;
+}
+
 .nav-group-label {
   position: relative;
   overflow: hidden;
@@ -271,10 +258,6 @@ function isRouteActive(item: NavItem): boolean {
   color: var(--color-primary-soft-ink);
 }
 
-.nav-group-label.is-active .nav-group-icon {
-  color: var(--color-primary-soft-ink);
-}
-
 .nav-group-label.is-accordion {
   cursor: pointer;
   user-select: none;
@@ -296,45 +279,18 @@ function isRouteActive(item: NavItem): boolean {
   transform: rotate(180deg);
 }
 
-.nav-group-icon {
-  font-size: var(--text-sm);
-  color: var(--color-text-tertiary);
-  flex-shrink: 0;
-}
-
-/* 折叠态：分组头收成一颗图标（尺寸对齐退役前的 .nav-group-icon-only，
-   但不再另换一棵 DOM —— 文字与箭头原地淡出，宽度由侧栏自身的 width 过渡承担）。 */
+/* 折叠态：分组头没有图标可留，退化成一条分隔线，仍标出分组边界。 */
 .app-sidebar.collapsed .nav-group-label {
-  justify-content: center;
-  padding: var(--space-2);
-  gap: 0;
-}
-
-.app-sidebar.collapsed .nav-group-label.is-active {
-  background: var(--color-primary-soft);
-  border-radius: var(--radius-md);
-}
-
-.app-sidebar.collapsed .nav-group-icon {
-  font-size: var(--text-base);
+  height: 1px;
+  padding: 0;
+  margin: var(--space-2) var(--space-3);
+  background: var(--color-border-light);
+  pointer-events: none;
 }
 
 .app-sidebar.collapsed .nav-group-text,
 .app-sidebar.collapsed .nav-group-arrow {
-  position: absolute;
-  pointer-events: none;
-  opacity: 0;
-  transform: translateX(-6px);
-}
-
-.app-sidebar.collapsed .nav-group-text {
-  left: calc(var(--space-2) + var(--text-base) + var(--space-2));
-  right: var(--space-2);
-}
-
-.app-sidebar.collapsed .nav-group-arrow {
-  right: var(--space-2);
-  margin-left: 0;
+  display: none;
 }
 
 .nav-group-children {
@@ -353,23 +309,6 @@ function isRouteActive(item: NavItem): boolean {
 
 .nav-sub-group-label.is-active {
   color: var(--color-primary-soft-ink);
-}
-
-.nav-group-tooltip-title {
-  font-weight: var(--font-semibold);
-  margin-bottom: 4px;
-  font-size: var(--text-xs);
-}
-
-.nav-group-tooltip-item {
-  font-size: var(--text-xs);
-  line-height: 1.7;
-  opacity: 0.9;
-}
-
-.nav-group-tooltip-item.active {
-  font-weight: var(--font-semibold);
-  opacity: 1;
 }
 
 /* 底部功能区 */

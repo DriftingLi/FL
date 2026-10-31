@@ -94,13 +94,27 @@ describe('圆形揭示的降级', () => {
     revealThemeFrom(el, apply)
 
     expect(start).toHaveBeenCalledTimes(1)
+    // 圈心必须在 startViewTransition 之前落进 CSS 变量：新快照的初始 clip 读它
+    expect(document.documentElement.style.getPropertyValue('--theme-reveal-x')).toBe('110px')
+    expect(document.documentElement.style.getPropertyValue('--theme-reveal-y')).toBe('60px')
+    expect(document.documentElement.classList.contains('is-theme-revealing')).toBe(true)
     await new Promise(resolve => setTimeout(resolve, 0))
     expect(apply).toHaveBeenCalledTimes(1)
 
     const [keyframes, options] = animate.mock.calls[0]
     expect(keyframes.clipPath[0]).toBe('circle(0px at 110px 60px)')
     expect(keyframes.clipPath[1]).toBe('circle(' + circleRevealRadius({ x: 110, y: 60 }, { width: window.innerWidth, height: window.innerHeight }) + 'px at 110px 60px)')
-    expect(options).toMatchObject({ pseudoElement: '::view-transition-new(root)' })
+    expect(options).toMatchObject({
+      pseudoElement: '::view-transition-new(root)',
+      // 结束态保持满圆，避免回落到初始 0 半径
+      fill: 'both'
+    })
     expect(options.duration).toBe(420)
+
+    // 过渡结束后清掉内联变量（rAF 后执行）
+    await new Promise(resolve => setTimeout(resolve, 40))
+    expect(document.documentElement.style.getPropertyValue('--theme-reveal-x')).toBe('')
+    expect(document.documentElement.style.getPropertyValue('--theme-reveal-y')).toBe('')
+    expect(document.documentElement.classList.contains('is-theme-revealing')).toBe(false)
   })
 })
