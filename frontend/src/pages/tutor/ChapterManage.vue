@@ -25,40 +25,41 @@
       </template>
 
       <div class="flex flex-col gap-3">
-      <UiCard
-        v-for="(chapter, index) in chapters"
-        :key="chapter.chapter_id"
-        variant="interactive"
-        class="group flex items-center gap-4"
-        @click="goToEdit(chapter.chapter_id)"
-      >
-        <span
-          class="flex h-9 w-9 shrink-0 items-center justify-center rounded-pill bg-ui-soft text-sm font-semibold text-ui-soft-ink"
+        <router-link
+          v-for="(chapter, index) in chapters"
+          :key="chapter.chapter_id"
+          :to="{ name: 'TutorChapterEdit', params: { courseId: route.params.id, chapterId: chapter.chapter_id } }"
+          class="block no-underline"
         >
-          {{ String(index + 1).padStart(2, '0') }}
-        </span>
+          <UiCard variant="interactive" class="group flex items-center gap-4">
+            <span
+              class="flex h-9 w-9 shrink-0 items-center justify-center rounded-pill bg-ui-soft text-sm font-semibold text-ui-soft-ink"
+            >
+              {{ String(index + 1).padStart(2, '0') }}
+            </span>
 
-        <div class="min-w-0 flex-1">
-          <p class="truncate text-base font-medium text-ink">{{ chapter.title }}</p>
-          <div class="mt-2 flex flex-wrap items-center gap-3">
-            <UiTag :tone="contentTypeTone(chapter.content_type || '')">
-              {{ contentTypeLabel(chapter.content_type || '') }}
-            </UiTag>
-            <span v-if="chapter.duration" class="inline-flex items-center gap-1 text-xs text-ink-3">
-              <UiIcon name="timer" /> {{ chapter.duration }}分钟
-            </span>
-            <span v-if="getFileCount(chapter) > 0" class="inline-flex items-center gap-1 text-xs text-ink-3">
-              <UiIcon name="file-text" /> {{ getFileCount(chapter) }} 个文件
-            </span>
-            <span v-if="chapter.content" class="inline-flex items-center gap-1 text-xs text-ok">
-              <UiIcon name="square-pen" /> 含正文
-            </span>
-          </div>
-        </div>
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-base font-medium text-ink">{{ chapter.title }}</p>
+              <div class="mt-2 flex flex-wrap items-center gap-3">
+                <UiTag :tone="contentTypeTone(chapter.content_type || '')">
+                  {{ contentTypeLabel(chapter.content_type || '') }}
+                </UiTag>
+                <span v-if="chapter.duration" class="inline-flex items-center gap-1 text-xs text-ink-3">
+                  <UiIcon name="timer" /> {{ chapter.duration }}分钟
+                </span>
+                <span v-if="getFileCount(chapter) > 0" class="inline-flex items-center gap-1 text-xs text-ink-3">
+                  <UiIcon name="file-text" /> {{ getFileCount(chapter) }} 个文件
+                </span>
+                <span v-if="chapter.content" class="inline-flex items-center gap-1 text-xs text-ok">
+                  <UiIcon name="square-pen" /> 含正文
+                </span>
+              </div>
+            </div>
 
-        <UiIcon name="arrow-right" class="shrink-0 text-ink-3 transition-colors duration-150 group-hover:underline max-sm:hidden" />
-      </UiCard>
-    </div>
+            <UiIcon name="arrow-right" class="shrink-0 text-ink-3 transition-colors duration-150 group-hover:underline max-sm:hidden" />
+          </UiCard>
+        </router-link>
+      </div>
       <template #empty>
         <UiEmptyState
       title="暂无章节"
@@ -142,11 +143,6 @@ function getFileCount(chapter: { files?: unknown[] }): number {
 
 function goBack() {
   router.push({ name: 'TutorCourses' })
-}
-
-function goToEdit(chapterId: number) {
-  const courseId = route.params.id
-  router.push({ name: 'TutorChapterEdit', params: { courseId, chapterId } })
 }
 
 onMounted(() => {

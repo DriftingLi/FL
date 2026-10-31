@@ -33,7 +33,7 @@ const props = withDefaults(
   { tone: 'neutral', size: 'sm', effect: 'light' }
 )
 
-const EP_TYPE: Record<string, 'primary' | 'success' | 'warning' | 'danger' | 'info'> = {
+const EP_TYPE: Record<UiTagTone, 'primary' | 'success' | 'warning' | 'danger' | 'info'> = {
   brand: 'info',
   primary: 'primary',
   success: 'success',

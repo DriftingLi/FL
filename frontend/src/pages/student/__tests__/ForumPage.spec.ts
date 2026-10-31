@@ -76,7 +76,8 @@ async function mountPage(total = 3, options: { attachTo?: HTMLElement; topics?: 
     global: {
       plugins: [epLite()],
       // 打桩子组件：避免拉起真实网络层与弹窗（打卡已迁独立页，论坛不再内嵌打卡弹窗）。
-      stubs: { ForumImageUploader: true }
+      // RouterLink：打卡入口整块是链接（#2156 起可点性由真实交互元素承担），这里没装 router。
+      stubs: { ForumImageUploader: true, RouterLink: true }
     }
   })
   await flushPromises()
@@ -189,7 +190,7 @@ describe('论坛类别分流', () => {
 
   it('顶部有「讨论 / 问答」分段控件，且渲染出两个选项', async () => {
     const wrapper = await mountPage()
-    const labels = categoryGroup(wrapper).findAll('[role="tab"]').map((b) => b.text().trim())
+    const labels = categoryGroup(wrapper).findAll('[role="radio"]').map((b) => b.text().trim())
     expect(labels).toEqual(expect.arrayContaining(['讨论', '问答']))
   })
 
@@ -259,7 +260,7 @@ describe('论坛类别分流', () => {
     // chips 只渲染学员能自述的两意图（「备考经验」是管理端认定，不在发布入口）
     const chipBar = form().findComponent(UiSegmentTabs)
     expect(chipBar.exists()).toBe(true)
-    const chipLabels = chipBar.findAll('[role="tab"]').map((b) => b.text().trim())
+    const chipLabels = chipBar.findAll('[role="radio"]').map((b) => b.text().trim())
     expect(chipLabels).toEqual(['讨论', '问答'])
 
     // 未动 chips 直接提交：默认 = 所在 Tab（讨论）
