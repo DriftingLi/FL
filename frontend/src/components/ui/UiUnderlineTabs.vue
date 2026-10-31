@@ -79,7 +79,7 @@ function select(option: UiUnderlineOption) {
       :aria-selected="modelValue === opt.value"
       :tabindex="activeValue === opt.value ? 0 : -1"
       :disabled="disabled"
-      class="-mb-px cursor-pointer border-0 border-b-2 bg-transparent px-2.5 py-2 text-sm font-[inherit] transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)] disabled:cursor-not-allowed disabled:opacity-50"
+      class="-mb-px cursor-pointer rounded-t-ctl border-0 border-b-2 bg-transparent px-2.5 py-2 text-sm font-[inherit] transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)] focus-visible:ring-2 focus-visible:ring-ui-500/60 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
       :class="
         modelValue === opt.value
           ? 'border-ui-500 text-ui-soft-ink'

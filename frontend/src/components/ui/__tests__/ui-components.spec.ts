@@ -173,6 +173,23 @@ describe('UiEmptyState / UiErrorState', () => {
     expect(w.emitted('action')).toHaveLength(1)
   })
 
+  it('不再渲染 EP 出厂插画（空态改由图标媒体位承担，#2156）', () => {
+    const w = mountWith(UiEmptyState, { title: '暂无数据', description: '换个筛选条件试试' })
+    expect(w.find('.el-empty').exists()).toBe(false)
+    expect(w.find('img').exists()).toBe(false)
+    expect(w.text()).toContain('换个筛选条件试试')
+  })
+
+  it('媒体位只在传 icon 时渲染（不传就是纯文案空态）', () => {
+    const withoutIcon = mountWith(UiEmptyState, { title: '暂无数据' })
+    expect(withoutIcon.find('[data-slot="empty-media"]').exists()).toBe(false)
+
+    const withIcon = mountWith(UiEmptyState, { title: '暂无数据', icon: 'calendar' })
+    const media = withIcon.find('[data-slot="empty-media"]')
+    expect(media.exists()).toBe(true)
+    expect(media.find('svg').exists() || media.find('i').exists() || media.html().length > 0).toBe(true)
+  })
+
   it('错误态点击重试抛出 retry', async () => {
     const w = mountWith(UiErrorState, { description: '网络异常' })
     expect(w.text()).toContain('网络异常')

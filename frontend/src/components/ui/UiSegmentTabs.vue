@@ -166,7 +166,7 @@ onUnmounted(() => {
       role="radio"
       :aria-checked="modelValue === opt.value"
       :tabindex="activeValue === opt.value ? 0 : -1"
-      class="relative z-10 cursor-pointer rounded-ctl bg-transparent px-3.5 py-1.5 text-xs font-medium whitespace-nowrap transition-colors duration-150"
+      class="relative z-10 cursor-pointer rounded-ctl bg-transparent px-3.5 py-1.5 text-xs font-medium whitespace-nowrap transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ui-500/60 focus-visible:outline-none"
       :class="modelValue === opt.value ? 'text-white' : 'text-ink-3 hover:text-ink-2'"
       :style="equal ? { flex: '1 1 0' } : undefined"
       @click="select(opt)"
