@@ -132,6 +132,19 @@ h1, h2, h3, h4, h5, h6 {
   mix-blend-mode: normal;
 }
 
+/* 新快照在 Web Animations 的圆扩散挂上之前先裁成 0 半径：
+   否则「快照已可见、动画还没开始」的那一帧会整页闪一下新主题
+   （AI 助手页背景与旧主题接近，所以那边不明显）。 */
+::view-transition-new(root) {
+  clip-path: circle(0px at var(--theme-reveal-x, 50%) var(--theme-reveal-y, 50%));
+}
+
+/* 主题菜单选中后立即从快照里消失（它自己的淡出会持续一百多毫秒，
+   留在圆里会像闪了一下白块）。 */
+html.is-theme-revealing .theme-toggle-popper {
+  display: none;
+}
+
 /* 列表错峰进场（方案 11.5）：配合 composables/useStagger 挂的 --i 使用。
    索引超过 8 后不再累加，避免长列表末尾延迟拖尾。 */
 @keyframes staggerIn {

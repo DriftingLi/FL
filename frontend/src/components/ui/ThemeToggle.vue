@@ -1,5 +1,5 @@
 <template>
-  <el-dropdown trigger="click" @command="onCommand">
+  <el-dropdown trigger="click" popper-class="theme-toggle-popper" @command="onCommand">
     <button
       ref="triggerRef"
       type="button"
