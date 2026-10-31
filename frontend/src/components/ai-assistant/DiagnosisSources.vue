@@ -8,7 +8,7 @@
       :open="open"
       @toggle="open = !open"
     />
-    <template v-if="embedded || open">
+    <UiCollapse :open="embedded || open" lazy>
       <div
         v-for="(source, si) in sources"
         :key="source.id ?? si"
@@ -43,7 +43,7 @@
           <span v-if="!source.metadata?.source_url && !source.metadata?.page_start">暂无来源资料</span>
         </div>
       </div>
-    </template>
+    </UiCollapse>
   </div>
 </template>
 
@@ -52,6 +52,7 @@
 // 外部助手吐绝对路径（/assistant/static/manual/…，lxc101 取证）：strip 后再进后端代理。
 import { ref } from 'vue'
 import MarkdownRender from 'markstream-vue'
+import UiCollapse from '@/components/ui/UiCollapse.vue'
 import { MARKSTREAM_MERMAID_PROPS } from '@/utils/markstreamRuntime'
 import { aiAssistantApi, type DiagnosisSource } from '@/api/aiAssistant'
 import SourcesFoldHeader from '@/components/ai-assistant/SourcesFoldHeader.vue'

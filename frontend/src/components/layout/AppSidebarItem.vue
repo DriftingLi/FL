@@ -18,28 +18,40 @@
     rel="noopener"
     class="nav-item"
     :class="{ 'nav-sub-item': level === 3 }"
+    :title="collapsed ? item.label : undefined"
+    :aria-label="collapsed ? item.label : undefined"
   >
     <div class="nav-item-icon">
       <NavIcon :icon="item.icon" />
     </div>
-    <span v-if="!collapsed" class="nav-item-label">{{ item.label }}</span>
+    <span class="nav-item-label" :aria-hidden="collapsed ? 'true' : undefined">{{ item.label }}</span>
   </a>
   <router-link
     v-else-if="kind === 'route'"
     :to="to"
     class="nav-item"
     :class="{ 'nav-sub-item': level === 3, active }"
+    :title="collapsed ? item.label : undefined"
+    :aria-label="collapsed ? item.label : undefined"
   >
     <div class="nav-item-icon">
       <NavIcon :icon="item.icon" />
     </div>
-    <span v-if="!collapsed" class="nav-item-label">{{ item.label }}</span>
+    <span class="nav-item-label" :aria-hidden="collapsed ? 'true' : undefined">{{ item.label }}</span>
   </router-link>
-  <a v-else href="#" class="nav-item" :class="{ 'nav-sub-item': level === 3 }" @click.prevent>
+  <a
+    v-else
+    href="#"
+    class="nav-item"
+    :class="{ 'nav-sub-item': level === 3 }"
+    :title="collapsed ? item.label : undefined"
+    :aria-label="collapsed ? item.label : undefined"
+    @click.prevent
+  >
     <div class="nav-item-icon">
       <NavIcon :icon="item.icon" />
     </div>
-    <span v-if="!collapsed" class="nav-item-label">{{ item.label }}</span>
+    <span class="nav-item-label" :aria-hidden="collapsed ? 'true' : undefined">{{ item.label }}</span>
   </a>
 </template>
 
@@ -129,6 +141,7 @@ const to = computed(() => ({ name: props.item.routeName, params: props.item.rout
 .app-sidebar.collapsed .nav-item {
   justify-content: center;
   padding: var(--space-3) var(--space-2);
+  gap: 0;
 }
 
 .app-sidebar.collapsed .nav-item::before {
@@ -156,5 +169,21 @@ const to = computed(() => ({ name: props.item.routeName, params: props.item.rout
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition:
+    opacity var(--duration-fast) var(--ease-default),
+    transform var(--duration-fast) var(--ease-default);
+}
+
+/* 折叠时不把标签从 DOM 里摘掉（旧 v-if 会让文字在宽度过渡的第一帧就消失）：
+   移出 flex 流后图标照常居中，标签原地淡出；展开时同样的值反向过渡回来。
+   读屏侧由模板上的 aria-hidden / 行级 aria-label 接管。 */
+.app-sidebar.collapsed .nav-item-label {
+  position: absolute;
+  left: calc(var(--space-3) + 20px + var(--space-3));
+  right: var(--space-3);
+  flex: none;
+  opacity: 0;
+  transform: translateX(-6px);
+  pointer-events: none;
 }
 </style>

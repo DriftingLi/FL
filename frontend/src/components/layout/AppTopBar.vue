@@ -129,6 +129,8 @@ async function onCommand(command: string) {
    整条顶栏与页面同底、无下边框 —— 「无感接缝」由同底承担，不用分隔线。 */
 .app-topbar {
   position: fixed;
+  /* 左格宽 = 侧栏宽：随折叠一起过渡，与 .app-sidebar 的 width 同一条曲线、同一时长 */
+  transition: grid-template-columns var(--duration-normal) var(--ease-default);
   top: 0;
   left: 0;
   right: 0;
@@ -150,12 +152,17 @@ async function onCommand(command: string) {
 
 /* 左格 */
 .topbar-left {
+  position: relative;
+  overflow: hidden;
   display: flex;
   align-items: center;
   gap: var(--space-3);
   padding: 0 var(--space-4);
   min-width: 0;
   height: 100%;
+  transition:
+    padding var(--duration-normal) var(--ease-default),
+    gap var(--duration-normal) var(--ease-default);
   /* 十字细线的**竖线**在顶栏内的那一段：与侧栏右边界连成一条（同一条缝、同一个线色） */
   border-right: 1px solid var(--color-border-seam);
 }
@@ -190,10 +197,19 @@ async function onCommand(command: string) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition:
+    opacity var(--duration-fast) var(--ease-default),
+    transform var(--duration-fast) var(--ease-default);
 }
 
+/* 折叠态昵称移出 flex 流再淡出：旧 `display:none` 会让头像在宽度过渡的第一帧
+   就跳到居中位（左格此时还没收窄）。移出流后头像位置不变，昵称原地消失。 */
 .app-topbar.is-collapsed .topbar-nickname {
-  display: none;
+  position: absolute;
+  left: calc(var(--space-4) + 32px + var(--space-3));
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-6px);
 }
 
 /* 汉堡只在移动端出现（桌面端侧栏常驻，无需唤出入口） */

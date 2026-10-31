@@ -119,6 +119,19 @@ h1, h2, h3, h4, h5, h6 {
   }
 }
 
+/*
+ * View Transitions（主题切换的圆形揭示，utils/themeReveal.ts）。
+ *
+ * 关掉浏览器默认的整页交叉淡入：否则旧快照先淡出一层、新快照再被圆盖住，
+ * 圆外区域会短暂发灰，看起来像「闪一下」而不是「从一个点扩散开」。
+ * 圆的 clip-path 由 themeReveal 用 Web Animations API 挂在 ::view-transition-new(root) 上。
+ */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
 /* 列表错峰进场（方案 11.5）：配合 composables/useStagger 挂的 --i 使用。
    索引超过 8 后不再累加，避免长列表末尾延迟拖尾。 */
 @keyframes staggerIn {

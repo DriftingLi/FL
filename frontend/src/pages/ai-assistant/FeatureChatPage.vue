@@ -23,68 +23,71 @@
           @click="filterOpen = !filterOpen"
         />
       </div>
-      <!-- 折叠面板本体（挂输入区上方，随输入框居中/沉底；欢迎区不再渲染，避免撑爆空态） -->
-      <div v-if="isDiagnosis && filterOpen" class="diagnosis-panel">
-        <div class="diagnosis-catalog">
-          <div class="catalog-row">
-            <span class="catalog-label">品牌</span>
-            <UiSelect
-              v-model="selectedBrand"
-              size="small"
-              placeholder="选择品牌"
-              filterable
-              clearable
-              class="catalog-select"
-              :options="brands"
-              @change="onBrandChange($event as string)"
-            />
-            <span v-if="catalogLoading" class="catalog-loading">加载中...</span>
-          </div>
-          <div v-if="selectedBrand && selectedBrand !== 'all'" class="catalog-row">
-            <span class="catalog-label">车型</span>
-            <UiSelect
-              v-model="selectedModel"
-              size="small"
-              placeholder="选择车型"
-              filterable
-              clearable
-              class="catalog-select"
-              :options="modelOptions"
-              @change="onModelChange"
-            />
-          </div>
-          <div class="catalog-row" v-if="selectedBrand || faultTotal">
-            <span class="catalog-label">故障码</span>
-            <div class="catalog-fault-search">
-              <input
-                v-model="faultKeyword"
-                class="catalog-fault-input"
-                placeholder="搜索故障码或故障名"
-                @keyup.enter="loadFaultCodes(1)"
+      <!-- 折叠面板本体（挂输入区上方，随输入框居中/沉底；欢迎区不再渲染，避免撑爆空态）。
+           高度走 UiCollapse 的 0fr→1fr 过渡，不再 v-if 瞬间出现/消失。 -->
+      <UiCollapse v-if="isDiagnosis" :open="filterOpen" lazy>
+        <div class="diagnosis-panel">
+          <div class="diagnosis-catalog">
+            <div class="catalog-row">
+              <span class="catalog-label">品牌</span>
+              <UiSelect
+                v-model="selectedBrand"
+                size="small"
+                placeholder="选择品牌"
+                filterable
+                clearable
+                class="catalog-select"
+                :options="brands"
+                @change="onBrandChange($event as string)"
               />
-              <button class="quick-option-chip" @click="loadFaultCodes(1)">查询</button>
-              <span v-if="faultTotal" class="catalog-fault-total">共 {{ faultTotal }} 条</span>
+              <span v-if="catalogLoading" class="catalog-loading">加载中...</span>
             </div>
-            <div v-if="faultCodes.length" class="catalog-fault-list">
-              <button
-                v-for="fc in faultCodes"
-                :key="fc.id"
-                class="catalog-fault-item"
-                :title="fc.symptom"
-                @click="useFaultCode(fc)"
-              >
-                <b>{{ fc.fault_code }}</b>
-                <span>{{ fc.fault_name }}</span>
-              </button>
-              <button
-                v-if="faultTotal > faultCodes.length"
-                class="quick-option-chip catalog-fault-more"
-                @click="loadFaultCodes(faultPage + 1)"
-              >加载更多</button>
+            <div v-if="selectedBrand && selectedBrand !== 'all'" class="catalog-row">
+              <span class="catalog-label">车型</span>
+              <UiSelect
+                v-model="selectedModel"
+                size="small"
+                placeholder="选择车型"
+                filterable
+                clearable
+                class="catalog-select"
+                :options="modelOptions"
+                @change="onModelChange"
+              />
+            </div>
+            <div class="catalog-row" v-if="selectedBrand || faultTotal">
+              <span class="catalog-label">故障码</span>
+              <div class="catalog-fault-search">
+                <input
+                  v-model="faultKeyword"
+                  class="catalog-fault-input"
+                  placeholder="搜索故障码或故障名"
+                  @keyup.enter="loadFaultCodes(1)"
+                />
+                <button class="quick-option-chip" @click="loadFaultCodes(1)">查询</button>
+                <span v-if="faultTotal" class="catalog-fault-total">共 {{ faultTotal }} 条</span>
+              </div>
+              <div v-if="faultCodes.length" class="catalog-fault-list">
+                <button
+                  v-for="fc in faultCodes"
+                  :key="fc.id"
+                  class="catalog-fault-item"
+                  :title="fc.symptom"
+                  @click="useFaultCode(fc)"
+                >
+                  <b>{{ fc.fault_code }}</b>
+                  <span>{{ fc.fault_name }}</span>
+                </button>
+                <button
+                  v-if="faultTotal > faultCodes.length"
+                  class="quick-option-chip catalog-fault-more"
+                  @click="loadFaultCodes(faultPage + 1)"
+                >加载更多</button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </UiCollapse>
     </template>
 
     <!-- 欢迎区差异内容：其余专项功能静态快捷选项（诊断筛选已搬入工具栏，此处不再渲染） -->
@@ -158,6 +161,7 @@ import { ElMessage } from 'element-plus'
 import type { UploadFile } from 'element-plus'
 import { href } from '@/config/pages'
 import ChatPageShell from '@/components/ai-assistant/ChatPageShell.vue'
+import UiCollapse from '@/components/ui/UiCollapse.vue'
 import { useAIAssistantStore, type SendOptions } from '@/stores/aiAssistant'
 import {
   getAIFeatureByRoute,

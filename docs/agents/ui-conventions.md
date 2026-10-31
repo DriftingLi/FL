@@ -10,7 +10,7 @@
 - **渐变是品牌动作，不是待优化的瑕疵**：主按钮 `--gradient-brand`（`#0F766E → #0369A1`，135°），两端白字实测 5.47 / 5.93（#1892），判据锁在 `contrast.spec.ts`，改色标会红。培训域里它出现的面只有两类：主 CTA（`element-overrides.css`）与头像/首字母块（`AppTopBar` / `Profile` / `ProfileEditDialog`）。外部工具会把青蓝渐变判成「AI 味」—— 那是工具的口径，**不改实底、不扩散到第三类面**（不用于正文、边框、大面积背景）。残值域另有独立用法（含 64px 指标数字的渐变文字，`valuation-tokens.css:225`），属该域既有形态，不在本条射程。
 - **表面靠同色消融，边界靠一条缝**：外壳三面同用 `--color-bg-page`，层次由卡片承担；边界只有十字细线 `--color-border-seam`（ADR-0072 / #1629）。不叠第二档底色、不加外壳阴影。
 - **字体三分工**：正文 Noto Sans SC、西文与数字 DM Sans、等宽 JetBrains Mono 只给代码与需要对齐的数字。字号只有七档（ADR-0080），展示级 28 / 40 / 44 / 64 是单独登记的例外。
-- **动效只报状态，不做编排**：`--duration-tap 120ms` 给点击反馈，过渡走 150 / 200 / 250ms；弹簧与 `reducedMotion` 在 `config/motion.ts`。不加入场编排、不做装饰性循环动画。
+- **动效只报状态，不做编排**：`--duration-tap 120ms` 给点击反馈，过渡走 150 / 200 / 250ms；弹簧与 `reducedMotion` 在 `config/motion.ts`。不加入场编排、不做装饰性循环动画。**主题切换**走 View Transitions 的圆形揭示（`utils/themeReveal.ts`，圈心 = 触发图标中心，时长/缓动单点在 `config/motion.ts`）；浏览器不支持或 `prefers-reduced-motion: reduce` 时保持瞬时切换。
 - **密度中偏高**：B 端后台，信息密度优先于留白（先例：侧栏密度统一到单档，#1932）。给某个页面加「呼吸感」之前，先确认它不是在偷走一屏信息。
 - **中文优先**：界面文案、空态、错误、提示全中文，英文只出现在专有名词与代码里。
 
@@ -100,6 +100,7 @@
 | 头像 | `el-avatar`（原生，登记） | 15 |
 | 图片 | `el-image` / `el-image-viewer`（EP 自带全屏查看器，`el-image` 配套）+ 域内查看器（`ImageViewer` / `PptViewer` / `SpreadsheetViewer` / `DocumentViewer` / `VideoPlayer`） | 4 + viewer 1 |
 | 折叠面板 | `el-collapse`（原生，登记） | 2 / 6 |
+| 高度折叠 | `UiCollapse`（grid 0fr→1fr + inert；内容常驻，不瞬时 display:none） | 3（侧栏分组 / AI 来源 / 诊断筛选） |
 | 描述列表 | `el-descriptions`（原生，登记） | 1 / 6 |
 | 布局栅格 | `el-row` / `el-col`（EP 布局，登记） | 4 / 10 |
 | 表单容器 | `el-form`（原生，登记；字段壳 `el-form-item` 见下「子件」） | 38 |
