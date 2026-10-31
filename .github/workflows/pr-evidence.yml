@@ -58,6 +58,16 @@ jobs:
             const srcText = await readRepoFile('.github/scripts/lib/gate-validator.mjs', context.payload.pull_request.base.ref);
             const { validatePrEvidence } = new Function(`${srcText.replace(/^export /gm, '')}\nreturn { validatePrEvidence };`)();
 
+            // ==== ADR-0052 波 2：影子分档的名单注入 ====
+            // 名单从**默认分支**取（与判据同侧：PR 改不了自己的分档依据）。
+            // 取不到/解析不了 ⇒ coreList=null，由校验器 fail-closed 按全门记录 —— 影子期这不影响任何判红路径。
+            let coreList = null;
+            try {
+              coreList = JSON.parse(await readRepoFile('.github/scripts/lib/mobile-gate-core-list.json', context.payload.pull_request.base.ref));
+            } catch (e) {
+              core.warning(`核心名单取不到（${e && e.message ? e.message : e}）⇒ 影子分档 fail-closed 按全门记录（不影响 ②④ 判据）`);
+            }
+
             const pr = context.payload.pull_request;
 
             const files = await github.paginate(github.rest.pulls.listFiles, {
@@ -100,7 +110,7 @@ jobs:
             };
 
             const result = await validatePrEvidence({
-              files, body: pr.body || '', headSha: pr.head.sha, fetchCompare,
+              files, body: pr.body || '', headSha: pr.head.sha, fetchCompare, coreList,
             });
 
             await core.summary
