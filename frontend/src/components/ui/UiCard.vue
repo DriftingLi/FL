@@ -10,7 +10,13 @@
  */
 const props = withDefaults(
   defineProps<{
-    /** flat 描边卡片；raised 带投影；interactive 可点击，带 hover / tap 反馈 */
+    /**
+     * flat 描边卡片；raised 带投影；interactive 带 hover / tap 反馈。
+     *
+     * ⚠️ interactive **只给视觉反馈**，不自任按钮（#2156）：改前它挂 `role="button"` 与
+     * `tabindex="0"` 却没有 Enter/Space 处理，读屏播报「按钮」而键盘按不动。可点由**调用方**用
+     * 真实的 `<button>` / `<a>` 包住本卡片承担；卡片自己始终是容器语义。
+     */
     variant?: 'flat' | 'raised' | 'interactive'
     padding?: 'none' | 'sm' | 'base' | 'md' | 'lg'
     /**
@@ -50,8 +56,6 @@ const VARIANT: Record<string, string> = {
   <section
     class="rounded-card border border-line bg-panel"
     :class="[VARIANT[props.variant], PADDING[props.padding]]"
-    :tabindex="props.variant === 'interactive' ? 0 : undefined"
-    :role="props.variant === 'interactive' ? 'button' : undefined"
   >
     <header
       v-if="$slots.header || $slots.actions"

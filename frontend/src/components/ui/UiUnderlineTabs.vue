@@ -16,22 +16,33 @@
  *
  * 不做右侧插槽：顶栏 = `flex` 行里「本组件 + 工具栏」，由调用方拼，组件不替调用方决定间距。
  *
- * ARIA 与 `UiSegmentTabs` 同口径（role=tablist/tab + aria-selected），**方向键漫游没有做**：
- * 两件是同一类控件，要补应当一起补；只给这一件加会让「分段控件」这一族出现两套键盘行为。
+ * ARIA 契约（#2156）：role=tablist/tab + aria-selected 保留，并补齐了选项卡该有的键盘行为——
+ * 方向键移动并切换、roving tabindex（整组只有一个 Tab 落点）、Home/End 到两端。
+ * 给了 `panelId` 时每个 tab 挂 `aria-controls` 与稳定 id，调用方据此给内容区挂 `role="tabpanel"`
+ * 与 `aria-labelledby`；不给则不渲染关联属性（没有面板就不假称有）。
+ *
+ * 与 `UiSegmentTabs` 的差别在**角色**而不在键盘手感：那边是单选组（radiogroup，选一个参数），
+ * 这边是选项卡（tablist，换一块视图区）。两件都支持方向键，同一族不会出现两套手感。
  */
-export interface UiUnderlineOption {
-  label: string
-  value: string
-}
+import { useRovingSelection, type RovingOption } from '@/composables/useRovingSelection'
+
+export type UiUnderlineOption = RovingOption
 
 const props = withDefaults(
   defineProps<{
     modelValue: string
     options: UiUnderlineOption[]
     disabled?: boolean
+    /**
+     * 它所控制的内容区 id（#2156）。给了就给每个 tab 挂 `aria-controls` 与稳定的 `id`，
+     * 调用方据此给内容区挂 `role="tabpanel"` + `aria-labelledby="<panelId>-tab-<当前值>"`。
+     * 不给则不渲染关联属性 —— 没有面板就不假称有。
+     */
+    panelId?: string
   }>(),
   {
-    disabled: false
+    disabled: false,
+    panelId: ''
   }
 )
 
@@ -39,6 +50,14 @@ const emit = defineEmits<{
   (e: 'update:modelValue', v: string): void
   (e: 'change', v: string): void
 }>()
+
+/** roving tabindex 与方向键手感由 `useRovingSelection` 统一提供（与分段控件同族）。 */
+const { activeValue, setBtnRef, onKeydown } = useRovingSelection<UiUnderlineOption>({
+  options: () => props.options,
+  current: () => props.modelValue,
+  disabled: () => props.disabled,
+  select: (opt) => select(opt)
+})
 
 function select(option: UiUnderlineOption) {
   if (props.disabled) return
@@ -50,11 +69,15 @@ function select(option: UiUnderlineOption) {
 <template>
   <div class="ui-underline-tabs flex items-center gap-0.5" role="tablist">
     <button
-      v-for="opt in options"
+      v-for="(opt, i) in options"
       :key="opt.value"
+      :ref="(el) => setBtnRef(el, i)"
       type="button"
       role="tab"
+      :id="panelId ? `${panelId}-tab-${opt.value}` : undefined"
+      :aria-controls="panelId || undefined"
       :aria-selected="modelValue === opt.value"
+      :tabindex="activeValue === opt.value ? 0 : -1"
       :disabled="disabled"
       class="-mb-px cursor-pointer border-0 border-b-2 bg-transparent px-2.5 py-2 text-sm font-[inherit] transition-colors duration-[var(--duration-base)] ease-[var(--ease-default)] disabled:cursor-not-allowed disabled:opacity-50"
       :class="
@@ -63,6 +86,7 @@ function select(option: UiUnderlineOption) {
           : 'border-transparent text-ink-3 hover:text-ink-2'
       "
       @click="select(opt)"
+      @keydown="onKeydown($event, i)"
     >
       {{ opt.label }}
     </button>

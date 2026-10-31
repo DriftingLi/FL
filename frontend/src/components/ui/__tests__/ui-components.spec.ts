@@ -54,10 +54,13 @@ describe('UiCard', () => {
     expect(w.attributes('role')).toBeUndefined()
   })
 
-  it('interactive 变体带 button 语义与 tabindex', () => {
+  it('interactive 只给视觉反馈，不自任按钮（语义由外层交互元素承担，#2156）', () => {
     const w = mountWith(UiCard, { variant: 'interactive' })
-    expect(w.attributes('role')).toBe('button')
-    expect(w.attributes('tabindex')).toBe('0')
+    // 挂 role=button 却不实现 Enter/Space 是假语义；可点由调用方的 button/a 承担
+    expect(w.attributes('role')).toBeUndefined()
+    expect(w.attributes('tabindex')).toBeUndefined()
+    // 视觉钩子仍在（global.css 的移动端触控规则靠它命中）
+    expect(w.classes()).toContain('ui-card-interactive')
   })
 
   it('padding=none 时不加内边距类', () => {
@@ -448,12 +451,58 @@ describe('UiSegmentTabs（分段选项卡）', () => {
     { label: '近30天', value: '30d' }
   ]
 
-  it('渲染选项并标记激活项 aria-selected', () => {
+  it('单选组语义：容器 radiogroup、选项 radio + aria-checked（不再是选项卡，#2156）', () => {
     const w = mountWith(UiSegmentTabs, { modelValue: '7d', options: opts })
     const btns = w.findAll('button')
+    expect(w.attributes('role')).toBe('radiogroup')
     expect(btns).toHaveLength(2)
-    expect(btns[0].attributes('aria-selected')).toBe('true')
-    expect(btns[1].attributes('aria-selected')).toBe('false')
+    expect(btns[0].attributes('role')).toBe('radio')
+    expect(btns[0].attributes('aria-checked')).toBe('true')
+    expect(btns[1].attributes('aria-checked')).toBe('false')
+    // 角色变了，旧属性不得回流
+    expect(btns[0].attributes('aria-selected')).toBeUndefined()
+  })
+
+  it('roving tabindex：只有选中项能被 Tab 进入', () => {
+    const w = mountWith(UiSegmentTabs, { modelValue: '30d', options: opts })
+    const btns = w.findAll('button')
+    expect(btns[0].attributes('tabindex')).toBe('-1')
+    expect(btns[1].attributes('tabindex')).toBe('0')
+  })
+
+  it('方向键切换选中并发事件（右/左/Home/End）', async () => {
+    const w = mountWith(UiSegmentTabs, { modelValue: '7d', options: [...opts, { label: '全部', value: 'all' }] })
+    await w.findAll('button')[0].trigger('keydown', { key: 'ArrowRight' })
+    expect(w.emitted('update:modelValue')?.[0]).toEqual(['30d'])
+    expect(w.emitted('change')?.[0]).toEqual(['30d'])
+    // 模拟 v-model 回写后再按 Home：从第 2 项跳到第 1 项
+    await w.setProps({ modelValue: '30d' })
+    await w.findAll('button')[1].trigger('keydown', { key: 'Home' })
+    expect(w.emitted('update:modelValue')?.[1]).toEqual(['7d'])
+    await w.setProps({ modelValue: '7d' })
+    await w.findAll('button')[0].trigger('keydown', { key: 'ArrowLeft' })
+    expect(w.emitted('update:modelValue')?.[2]).toEqual(['all'])
+  })
+
+  it('方向键后焦点落到新选中项', async () => {
+    const w = mount(UiSegmentTabs, {
+      props: { modelValue: '7d', options: opts },
+      global: { plugins: [epLite()] },
+      attachTo: document.body
+    })
+    const btns = w.findAll('button')
+    ;(btns[0].element as HTMLElement).focus()
+    await btns[0].trigger('keydown', { key: 'ArrowRight' })
+    await nextTick()
+    await nextTick()
+    expect(document.activeElement).toBe(btns[1].element)
+    w.unmount()
+  })
+
+  it('disabled 时方向键不改变选中', async () => {
+    const w = mountWith(UiSegmentTabs, { modelValue: '7d', options: opts, disabled: true })
+    await w.findAll('button')[0].trigger('keydown', { key: 'ArrowRight' })
+    expect(w.emitted('update:modelValue')).toBeFalsy()
   })
 
   it('点击选项发 update:modelValue + change', async () => {
@@ -493,13 +542,13 @@ describe('UiSegmentTabs（分段选项卡）', () => {
     }
   })
 
-  it('options 变化后按 modelValue 重新标记激活项', async () => {
+  it('options 变化后按 modelValue 重新标记选中项', async () => {
     const w = mountWith(UiSegmentTabs, { modelValue: '7d', options: opts })
     await w.setProps({ options: [...opts, { label: '全部', value: 'all' }] })
     const btns = w.findAll('button')
     expect(btns).toHaveLength(3)
-    expect(btns[0].attributes('aria-selected')).toBe('true')
-    expect(btns[2].attributes('aria-selected')).toBe('false')
+    expect(btns[0].attributes('aria-checked')).toBe('true')
+    expect(btns[2].attributes('aria-checked')).toBe('false')
   })
 })
 
@@ -509,7 +558,7 @@ describe('UiUnderlineTabs（下划线选项卡）', () => {
     { label: '预览', value: 'preview' }
   ]
 
-  it('渲染选项并标记激活项 aria-selected', () => {
+  it('选项卡语义：tablist/tab + aria-selected，且只有激活项能被 Tab 进入', () => {
     const w = mountWith(UiUnderlineTabs, { modelValue: 'write', options: opts })
     const btns = w.findAll('button')
     expect(w.attributes('role')).toBe('tablist')
@@ -517,6 +566,31 @@ describe('UiUnderlineTabs（下划线选项卡）', () => {
     expect(btns[0].attributes('role')).toBe('tab')
     expect(btns[0].attributes('aria-selected')).toBe('true')
     expect(btns[1].attributes('aria-selected')).toBe('false')
+    expect(btns[0].attributes('tabindex')).toBe('0')
+    expect(btns[1].attributes('tabindex')).toBe('-1')
+  })
+
+  it('方向键移动并切换（左/右）', async () => {
+    const w = mountWith(UiUnderlineTabs, { modelValue: 'write', options: opts })
+    await w.findAll('button')[0].trigger('keydown', { key: 'ArrowRight' })
+    expect(w.emitted('update:modelValue')?.[0]).toEqual(['preview'])
+    expect(w.emitted('change')?.[0]).toEqual(['preview'])
+    await w.setProps({ modelValue: 'preview' })
+    await w.findAll('button')[1].trigger('keydown', { key: 'ArrowLeft' })
+    expect(w.emitted('update:modelValue')?.[1]).toEqual(['write'])
+  })
+
+  it('给 panelId 时 tab 与面板建立 aria-controls / id 关联', () => {
+    const w = mountWith(UiUnderlineTabs, { modelValue: 'write', options: opts, panelId: 'editor-panel' })
+    const btns = w.findAll('button')
+    expect(btns[0].attributes('aria-controls')).toBe('editor-panel')
+    expect(btns[0].attributes('id')).toBe('editor-panel-tab-write')
+    expect(btns[1].attributes('id')).toBe('editor-panel-tab-preview')
+  })
+
+  it('不给 panelId 时不渲染 aria-controls（面板尚未接线）', () => {
+    const w = mountWith(UiUnderlineTabs, { modelValue: 'write', options: opts })
+    expect(w.findAll('button')[0].attributes('aria-controls')).toBeUndefined()
   })
 
   it('点击选项发 update:modelValue + change', async () => {

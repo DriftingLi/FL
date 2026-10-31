@@ -6,14 +6,21 @@
     -->
     <div class="md-mode-tabs flex shrink-0 border-b border-line bg-canvas px-1.5">
       <UiUnderlineTabs
+        panel-id="md-editor-panel"
         :model-value="mode"
         :options="MODE_OPTIONS"
         :disabled="!isReady"
         @update:model-value="onModeChange"
       />
     </div>
-    <!-- vditor 挂载点 -->
-    <div ref="vditorRef" class="md-vditor-host flex-1 overflow-hidden relative"></div>
+    <!-- vditor 挂载点（也是模式的 tabpanel：tab 的 aria-controls 指向它） -->
+    <div
+      id="md-editor-panel"
+      role="tabpanel"
+      :aria-labelledby="`md-editor-panel-tab-${mode}`"
+      ref="vditorRef"
+      class="md-vditor-host flex-1 overflow-hidden relative"
+    ></div>
     <!-- 加载中遮罩：Vditor 内部模块未就绪前覆盖，避免用户在未 ready 时切换模式触发 VditorIRDOM2Md undefined -->
     <div v-if="!isReady" class="md-loading absolute inset-0 z-10 flex items-center justify-center text-sm text-ink-3 pointer-events-all">
       <span>编辑器加载中…</span>

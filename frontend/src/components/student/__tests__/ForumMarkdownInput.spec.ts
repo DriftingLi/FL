@@ -271,4 +271,17 @@ describe('粘贴与键盘', () => {
     await w.find('textarea').trigger('keydown', { key: 'Enter', ctrlKey: true })
     expect(w.emitted('keydown')).toBeTruthy()
   })
+
+  // #2156 契约批：tab 与它控制的内容区必须互指，否则「选项卡」只兑现了一半
+  it('视图区是 tab 的面板：role=tabpanel + 随模式变的 aria-labelledby', async () => {
+    const w = mountInput({ format: 'markdown' })
+    const panel = w.find('#forum-md-panel')
+    expect(panel.exists()).toBe(true)
+    expect(panel.attributes('role')).toBe('tabpanel')
+    expect(panel.attributes('aria-labelledby')).toBe('forum-md-panel-tab-write')
+
+    const tab = w.findAll('[role="tab"]').find((t) => t.text() === '编写')
+    expect(tab?.attributes('aria-controls')).toBe('forum-md-panel')
+    expect(tab?.attributes('id')).toBe('forum-md-panel-tab-write')
+  })
 })

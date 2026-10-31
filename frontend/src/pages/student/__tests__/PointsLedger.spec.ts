@@ -80,7 +80,7 @@ describe('PointsLedger 积分明细页（#512）', () => {
     const w = mountPage()
     await flushPromises()
     vi.mocked(pointsApi.getLedger).mockClear()
-    const btns = w.findAll('[role="tab"]')
+    const btns = w.findAll('[role="radio"]')
     const outTab = btns.find((b) => b.text() === '支出')
     expect(outTab).toBeTruthy()
     await outTab!.trigger('click')
@@ -111,7 +111,7 @@ describe('PointsLedger 积分明细页（#512）', () => {
     expect(vi.mocked(pointsApi.getLedger).mock.calls.at(-1)?.[0]).toMatchObject({ page: 4 })
 
     vi.mocked(pointsApi.getLedger).mockClear()
-    const outTab = w.findAll('[role="tab"]').find((b) => b.text() === '支出')
+    const outTab = w.findAll('[role="radio"]').find((b) => b.text() === '支出')
     expect(outTab).toBeTruthy()
     await outTab!.trigger('click')
     await flushPromises()

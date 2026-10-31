@@ -13,13 +13,16 @@
     </div>
 
     <!-- 每日打卡入口（ADR-0028：打卡已迁独立页 /training/check-in，论坛只留跳转） -->
-    <UiCard variant="interactive" padding="base" class="mb-3 flex items-center justify-between gap-3" @click="goCheckIn">
-      <div class="flex items-center gap-2 text-sm text-ink">
-        <UiIcon name="calendar" class="text-base text-ui-soft-ink" />
-        <span>每日打卡赚积分</span>
-      </div>
-      <UiButton variant="text" size="small">去看看</UiButton>
-    </UiCard>
+    <router-link :to="{ name: 'CheckIn' }" class="mb-3 block no-underline">
+      <UiCard variant="interactive" padding="base" class="flex items-center justify-between gap-3">
+        <div class="flex items-center gap-2 text-sm text-ink">
+          <UiIcon name="calendar" class="text-base text-ui-soft-ink" />
+          <span>每日打卡赚积分</span>
+        </div>
+        <!-- 整行是同一个动作：入口文字不再套按钮（链接里不能再放可交互元素），用品牌墨色保留动作感 -->
+        <span class="text-sm font-medium text-ui-soft-ink">去看看</span>
+      </UiCard>
+    </router-link>
 
     <!-- 一级 Tab（解耦后的版本）：
          讨论 / 问答 看的是"内容类别"（含排序/求助筛选），点击我的帖子/我的回复/浏览记录只是
@@ -491,10 +494,6 @@ function goAsk() {
 }
 
 // 打卡入口跳独立页（ADR-0028：打卡从论坛剥离为独立激励面）
-function goCheckIn() {
-  router.push({ name: 'CheckIn' })
-}
-
 onMounted(() => {
   // 允许从路由 ?tab= 跳转进指定 Tab（与 nav 链接/通知深链共用一套语义）
   if (route.query.tab === 'question') {
