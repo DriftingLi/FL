@@ -24,7 +24,7 @@ import { get, getMapped, post, postMapped } from './request'
 import { decodeList, decodePage } from './envelope'
 import type { Page } from './envelope'
 import { toNumber, toStr, toBool } from './helpers'
-import type { Question, SubmitAnswerResult, SubmitAnswerParams, QuestionOption, PracticeStats, PracticeOverview, PracticeHistoryItem, PracticeProgress } from '../types/index'
+import type { Question, SubmitAnswerResult, SubmitAnswerParams, QuestionOption, PracticeStats, PracticeOverview, PracticeTagAccuracy, PracticeHistoryItem, PracticeProgress } from '../types/index'
 
 
 
@@ -313,4 +313,36 @@ export function getPracticeHistoryApi(page : number = 1, pageSize : number = 20,
 	}
 	// 装载走信封归一出口 `decodePage`（ADR-0037 PR-B）：数组键 `records` / `items`
 	return getMapped<Page<PracticeHistoryItem>>('/practice-mode/history', params, (data : UTSJSONObject) : Page<PracticeHistoryItem> => decodePage<PracticeHistoryItem>(data, '/practice-mode/history', page, pageSize, (obj : UTSJSONObject) : PracticeHistoryItem => buildHistoryItem(obj), ['records', 'items']))
+}
+/** 从 /practice-mode/stats 响应的 by_tag 数组构造考点正确率表（#1948）
+ *  缺键 / 空数组 ⇒ 空表（后端 nonnil 数组，无作答的标签不进结果，不是错误） */
+function buildPracticeTagAccuracyList(data : UTSJSONObject) : PracticeTagAccuracy[] {
+	const out : PracticeTagAccuracy[] = []
+	const raw = data['by_tag']
+	if (raw == null) return out
+	const arr = raw as Array<UTSJSONObject>
+	for (let i = 0; i < arr.length; i++) {
+		const o = arr[i]
+		out.push({
+			tag_id: toNumber(o['tag_id']),
+			tag_name: toStr(o['tag_name']),
+			total: toNumber(o['total']),
+			correct: toNumber(o['correct']),
+			accuracy: toNumber(o['accuracy']),
+		} as PracticeTagAccuracy)
+	}
+	return out
+}
+
+/**
+ * 考点标签维度正确率（GET /practice-mode/stats 的 by_tag）——#1948 的接线点：
+ *  此前面板副标题的百分比由标签 id 派生（假值），现改取这里的真实统计。
+ * @param credentialId 浏览证件 id（>0 才发参）：模块列表的题数按它计数（#702 与抽题池同口径），
+ *   正确率必须落同一分区，否则「A 证件的题数」配「全证件的正确率」——不传则后端按拦截器
+ *   注入的当前证件分区，与显式传入的浏览证件在切证场景下会错开。
+ */
+export function getPracticeTagAccuracyApi(credentialId : number) : Promise<PracticeTagAccuracy[]> {
+	const params : UTSJSONObject = {} as UTSJSONObject
+	if (credentialId > 0) params['credential_id'] = credentialId.toString()
+	return getMapped<PracticeTagAccuracy[]>('/practice-mode/stats', params, (data : UTSJSONObject) : PracticeTagAccuracy[] => buildPracticeTagAccuracyList(data))
 }

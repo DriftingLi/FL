@@ -30,7 +30,7 @@
     import PracticeFeatureGrid from './components/practice-feature-grid.uvue'
     import PracticeModuleList from './components/practice-module-list.uvue'
     const windowHeight = uni.getSystemInfoSync().windowHeight
-    const { overview, modules, listLoading, listError, loadOverview, loadModules } = usePracticeOverview()
+    const { overview, modules, listLoading, listError, loadOverview, loadModules, loadTagAccuracy } = usePracticeOverview()
     const region = ref<string>('全国')
     const regionOptions : string[] = ['全国', '北京', '上海', '广东', '浙江', '江苏', '山东', '四川', '湖北', '湖南', '河南']
     const isRefreshing = ref<boolean>(false)
@@ -48,7 +48,8 @@
         else if (feature == 'wrong_question') { uni.navigateTo({ url: '/pages/profile/wrong-questions' }) }
     }
     async function onRefresh() : Promise<void> { isRefreshing.value = true; await loadOverview(); await loadModules(); isRefreshing.value = false }
-    onShow(() => { loadOverview(); if (modules.value.length == 0) { loadModules() } })
+    // 做题回本页（#1948）：模块已装载时只补一次正确率（单请求），不重跑标签与逐标签进度面
+    onShow(() => { loadOverview(); if (modules.value.length == 0) { loadModules() } else { loadTagAccuracy() } })
 </script>
 
 <style lang="scss">

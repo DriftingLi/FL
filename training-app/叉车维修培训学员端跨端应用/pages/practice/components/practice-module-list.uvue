@@ -45,6 +45,7 @@
 
 <script setup lang="uts">
     import type { ModuleRow } from '../composables/usePracticeOverview'
+    import { moduleMetaText } from '../../../utils/practiceModuleDisplay'
 
     const props = withDefaults(defineProps<{
         loading? : boolean
@@ -58,23 +59,9 @@
 
     const emit = defineEmits(['retry', 'moduleClick'])
 
-    /**
-     * mock 正确率：后端无"按标签"维度正确率接口（stats 仅按题型），
-     * 用标签 ID 派生的稳定伪值填充 UI，接口就绪后删除本函数并接真实字段。
-     */
-    function mockAccuracy(tagId : number) : number {
-        return 60 + (tagId * 13) % 35
-    }
-
-    /** 模块行副标题：已开始显示完成进度（正确率为 mock），未开始显示总题量 */
+    /** 模块行副标题（#1948 摘 mock）：正确率来自 by_tag，文案唯一实现在 utils/practiceModuleDisplay.uts */
     function moduleMeta(m : ModuleRow) : string {
-        if (m.completed > 0) {
-            return '已完成 ' + m.completed.toString() + '/' + m.total.toString() + ' 正确率 ' + mockAccuracy(m.tag_id).toString() + '%'
-        }
-        if (m.total > 0) {
-            return '共 ' + m.total.toString() + ' 题'
-        }
-        return '暂无题目'
+        return moduleMetaText(m.completed, m.total, m.accuracy, m.has_accuracy)
     }
 
     function onRetry() : void {

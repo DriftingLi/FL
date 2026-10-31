@@ -196,3 +196,48 @@ describe('api 层零静默回退（失败要可见）', () => {
     expect(api).not.toContain('.catch(');
   });
 });
+
+describe('考点正确率接线（#1948：摘 mockAccuracy，改接 stats 的 by_tag）', () => {
+  const list = read('pages/practice/components/practice-module-list.uvue');
+  const comp = read('pages/practice/composables/usePracticeOverview.uts');
+  const page = read('pages/practice/practice.uvue');
+  const apiSrc = read('api/practice.uts');
+  const types = read('types/practice.uts');
+
+  it('组件里 mock 彻底离场（函数、调用、派生式三者都不得残留）', () => {
+    expect(list).not.toContain('mockAccuracy');
+    expect(list).not.toMatch(/60 \+ \(tagId/);
+  });
+
+  it('副标题文案来自 utils/practiceModuleDisplay 唯一实现（组件不自带第二份文案）', () => {
+    expect(list).toContain("import { moduleMetaText } from '../../../utils/practiceModuleDisplay'");
+    expect(list).toContain('return moduleMetaText(m.completed, m.total, m.accuracy, m.has_accuracy)');
+    expect(list).not.toMatch(/\n\s*function accuracyText\(/);
+  });
+
+  it('api 层导出 by_tag 装载出口并读后端新键', () => {
+    expect(apiSrc).toContain('export function getPracticeTagAccuracyApi');
+    expect(apiSrc).toContain("data['by_tag']");
+  });
+
+  it('正确率与题数落同一证件分区（#702 口径：不传则两处会错开）', () => {
+    expect(apiSrc).toContain("params['credential_id']");
+    expect(comp).toContain('getPracticeTagAccuracyApi(browseCredentialId)');
+  });
+
+  it('composable 声明新两字段并消费装载出口（悬空 import 是编译盲区，#779 同类）', () => {
+    expect(comp).toContain('accuracy : number; has_accuracy : boolean');
+    expect(comp).toContain('getPracticeTagAccuracyApi');
+    expect(comp).toContain('has_accuracy: false');
+  });
+
+  it('类型面有 PracticeTagAccuracy 且 index 有出口（缺出口则消费侧 error18 找不到名称）', () => {
+    expect(types).toContain('export type PracticeTagAccuracy');
+    expect(read('types/index.uts')).toContain('type PracticeTagAccuracy');
+  });
+
+  it('回本页轻量刷正确率，不重跑逐标签进度面', () => {
+    expect(comp).toContain('loadTagAccuracy');
+    expect(page).toContain('loadTagAccuracy()');
+  });
+});

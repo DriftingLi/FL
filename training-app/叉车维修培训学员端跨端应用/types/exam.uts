@@ -89,6 +89,10 @@ export type WrongQuestionItem = {
     created_at : string
     /** 最近错误时间（后端 WrongQuestionDTO.last_wrong_at，列表排序依据） */
     last_wrong_at : string
+    /** 易错项（后端 WrongQuestionDTO.top_wrong_option，#1948）：该题历史上最多人选错的答案串。
+     *  判错样本 < 5 / 简答题 / 无判错记录 ⇒ 后端缺省该键 ⇒ 装载后为空串；文案唯一实现在
+     *  utils/wrongQuestionDisplay.uts 的 wrongOptionText。多选题的值是答案串组合（如 "A,C"）。 */
+    top_wrong_option : string
     favorited : boolean      // 是否已收藏（后端 JOIN favorite 回填）
 }
 
