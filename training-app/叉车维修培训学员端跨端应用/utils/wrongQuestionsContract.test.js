@@ -149,7 +149,12 @@ describe('WrongQuestionCard 接线契约', () => {
     const card = read('pages/profile/components/wrong-question-card.uvue');
     expect(page).toContain("import { getTypeName, isMultiChoice } from '../../utils/wrongQuestionDisplay'");
     // #1083 扩展：卡片另取「答案与解析」开合文案（仍是同一份 utils，零第二实现）
-    expect(card).toContain("import { getTypeName, isMultiChoice, answerFoldLabel } from '../../../utils/wrongQuestionDisplay'");
+    // #1948 扩展：parseAnswerKeys 从卡片挪进同一份 utils（卡片恰在 600 行预算上限），
+    //            并新增易错项文案唯一实现 wrongOptionText —— 仍是零第二实现
+    expect(card).toContain("import { getTypeName, isMultiChoice, answerFoldLabel, parseAnswerKeys, wrongOptionText } from '../../../utils/wrongQuestionDisplay'");
+    // 搬动之后卡片不得再留 parseAnswerKeys 的本地定义（否则就是两份实现）
+    expect(card).not.toMatch(/\n\s*function parseAnswerKeys\(/);
+    expect(read('utils/wrongQuestionDisplay.uts')).toMatch(/export function parseAnswerKeys\(/);
     // 卡片内不得再有本地定义
     expect(card).not.toMatch(/\n\s*function getTypeName\(/);
     expect(card).not.toMatch(/\n\s*function isMultiChoice\(/);
@@ -248,5 +253,34 @@ describe('600 行软预算机检（wrong-questions 模块文件）', () => {
     ].map((rel) => ({ file: rel, lines: read(rel).split('\n').length }))
       .filter((x) => x.lines > 600);
     expect(over).toEqual([]);
+  });
+});
+
+describe('易错项接线（#1948：错题本每题显示 top_wrong_option，缺省即不展示）', () => {
+  const page = read('pages/profile/wrong-questions.uvue');
+  const card = read('pages/profile/components/wrong-question-card.uvue');
+  const apiSrc = read('api/wrongQuestion.uts');
+  const types = read('types/exam.uts');
+
+  it('装载层读后端新键 top_wrong_option（后端缺省该键 ⇒ toStr 得空串）', () => {
+    expect(apiSrc).toContain("top_wrong_option: toStr(obj['top_wrong_option'])");
+  });
+
+  it('类型面有该字段且注释登记了「缺省即空串」语义', () => {
+    expect(types).toContain('top_wrong_option : string');
+  });
+
+  it('页面把值扁平传给卡片（可选对象 prop 成员直读在 Kotlin 侧 error18，全仓先例传原始类型）', () => {
+    expect(page).toMatch(/:top-wrong-option="item\.top_wrong_option"/);
+  });
+
+  it('卡片声明 topWrongOption 展示 prop 并给空串默认值', () => {
+    expect(card).toContain('topWrongOption?: string');
+    expect(card).toContain("topWrongOption: ''");
+  });
+
+  it('卡片经本地包装消费文案唯一实现，且 v-if 判空（模板不得直调 import 函数，先例 answerFoldText）', () => {
+    expect(card).toContain('return wrongOptionText(props.topWrongOption)');
+    expect(card).toMatch(/v-if="wrongOptionLine\(\)\.length > 0"[^>]*>\{\{ wrongOptionLine\(\) \}\}/);
   });
 });

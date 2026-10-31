@@ -3,6 +3,8 @@
                     <view class="record-header">
                         <text class="record-type-tag">{{ displayTypeName }}</text>
                         <text class="record-wrong-count">错 {{ wrongCount }} 次</text>
+                        <!-- 易错项（#1948）：后端缺省该键 ⇒ 文案为空串 ⇒ 整条不渲染，不留空标签 -->
+                        <text v-if="wrongOptionLine().length > 0" class="record-wrong-count">{{ wrongOptionLine() }}</text>
                         <text v-if="favorited" class="record-fav-tag">收藏</text>
                         <text class="record-date">{{ displayDate }}</text>
                         <text v-if="displayLastWrongDate.length > 0" class="record-date record-date-last">最近 {{ displayLastWrongDate }}</text>
@@ -77,7 +79,7 @@
 <script setup lang="uts">
     import { ref, computed } from 'vue'
     import type { QuestionOption } from '../../../types/index'
-    import { getTypeName, isMultiChoice, answerFoldLabel } from '../../../utils/wrongQuestionDisplay'
+    import { getTypeName, isMultiChoice, answerFoldLabel, parseAnswerKeys, wrongOptionText } from '../../../utils/wrongQuestionDisplay'
     import { formatDateStr, formatDateTimeStr, resolveFileUrl } from '../../../utils/format'
 
     /** 错题卡片：展示 + 重做选项选中态（选中态属展示时态随卡片自持；提交结果由页面下发） */
@@ -103,6 +105,7 @@
         expanded?: boolean
         redoResult?: RedoResult | null
         lastRedoAnswer?: string
+        topWrongOption?: string
     }>(), {
         itemType: '',
         itemTitle: '',
@@ -117,7 +120,8 @@
         options: () => [] as QuestionOption[],
         expanded: false,
         redoResult: null,
-        lastRedoAnswer: ''
+        lastRedoAnswer: '',
+        topWrongOption: ''
     })
 
     const emit = defineEmits(['toggleExpand', 'submitRedo', 'remove'])
@@ -172,32 +176,6 @@
     /** 重做结果用户答案（模板调用） */
     function redoResultUserAnswer() : string {
         return props.lastRedoAnswer.length > 0 ? props.lastRedoAnswer : '未作答'
-    }
-
-    /** 将答案字符串解析为 key 数组，兼容多种分隔符 */
-    function parseAnswerKeys(answer : string) : string[] {
-        if (answer.length == 0) return [] as string[]
-        if (answer == 'true' || answer == 'false') return [answer] as string[]
-        let separator = ''
-        if (answer.indexOf(',') >= 0) separator = ','
-        else if (answer.indexOf('，') >= 0) separator = '，'
-        else if (answer.indexOf(' ') >= 0) separator = ' '
-        else if (answer.indexOf(';') >= 0) separator = ';'
-        else if (answer.indexOf('|') >= 0) separator = '|'
-        if (separator.length > 0) {
-            const parts = answer.split(separator)
-            const keys : string[] = []
-            for (let i = 0; i < parts.length; i++) {
-                const k = parts[i].trim()
-                if (k.length > 0) keys.push(k)
-            }
-            return keys
-        }
-        const keys : string[] = []
-        for (let i = 0; i < answer.length; i++) {
-            keys.push(answer.charAt(i))
-        }
-        return keys
     }
 
     /** 本地比对：用户答案与正确答案 key 集合是否一致（模板调用） */
@@ -268,6 +246,11 @@
     /** 「答案与解析」按钮文案（#1083；模板不得直调 import 函数，本地包装一层） */
     function answerFoldText() : string {
         return answerFoldLabel(answerOpen.value)
+    }
+
+    /** 易错项一行文案（#1948）：模板不得直调 import 函数（先例 answerFoldText），本地包装一层 */
+    function wrongOptionLine() : string {
+        return wrongOptionText(props.topWrongOption)
     }
 
     /** 「我上次选的答案」文案（#1083）：空 = 接口无作答记录，与「作答为空」同形 */

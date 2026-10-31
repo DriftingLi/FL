@@ -1,0 +1,28 @@
+/**
+ * 练习面板模块行展示纯函数（#1948 摘 mock：正确率改由后端 by_tag 供给）
+ * 先例：utils/wrongQuestionDisplay.uts（展示纯函数唯一实现 + jest 镜像测试）
+ */
+
+/** 正确率展示值：后端 by_tag.accuracy 是 round1 的 0-100，面板按整数显示（与 practice-report 页 Math.round 同口径） */
+export function accuracyText(accuracy : number) : string {
+    return Math.round(accuracy).toString()
+}
+
+/**
+ * 模块行副标题的唯一文案出口（#1948）
+ * @param hasAccuracy 该考点是否出现在 by_tag 里（后端只收 total>0 的标签）
+ *   - true   ⇒ 有过作答：报进度 + **真实**正确率
+ *   - false  ⇒ 零作答 / 统计未取到：宁可只报进度或「共 N 题」，**不得**编造百分比
+ */
+export function moduleMetaText(completed : number, total : number, accuracy : number, hasAccuracy : boolean) : string {
+    if (hasAccuracy) {
+        return '已完成 ' + completed.toString() + '/' + total.toString() + ' 正确率 ' + accuracyText(accuracy) + '%'
+    }
+    if (completed > 0) {
+        return '已完成 ' + completed.toString() + '/' + total.toString() + ' 题'
+    }
+    if (total > 0) {
+        return '共 ' + total.toString() + ' 题'
+    }
+    return '暂无题目'
+}

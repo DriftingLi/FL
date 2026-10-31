@@ -23,3 +23,44 @@ export function isMultiChoice(type : string) : boolean {
 export function answerFoldLabel(open : boolean) : string {
     return open ? '收起答案' : '查看答案与解析'
 }
+
+
+/** 将答案字符串解析为 key 数组，兼容多种分隔符
+ *  （#1948 从 pages/profile/components/wrong-question-card.uvue 挪出：无 props/state 依赖的展示纯函数，
+ *    归本文件的「展示纯函数唯一实现」面；卡片与页面 import 同一份，调用点函数名不变） */
+export function parseAnswerKeys(answer : string) : string[] {
+    if (answer.length == 0) return [] as string[]
+    if (answer == 'true' || answer == 'false') return [answer] as string[]
+    let separator = ''
+    if (answer.indexOf(',') >= 0) separator = ','
+    else if (answer.indexOf('，') >= 0) separator = '，'
+    else if (answer.indexOf(' ') >= 0) separator = ' '
+    else if (answer.indexOf(';') >= 0) separator = ';'
+    else if (answer.indexOf('|') >= 0) separator = '|'
+    if (separator.length > 0) {
+        const parts = answer.split(separator)
+        const keys : string[] = []
+        for (let i = 0; i < parts.length; i++) {
+            const k = parts[i].trim()
+            if (k.length > 0) keys.push(k)
+        }
+        return keys
+    }
+    const keys : string[] = []
+    for (let i = 0; i < answer.length; i++) {
+        keys.push(answer.charAt(i))
+    }
+    return keys
+}
+
+/**
+ * 错题本「易错项」一行文案（#1948，摘 mock 的错题本半边）
+ * 数据源 = 后端 WrongQuestionDTO.top_wrong_option：该题**判错样本 < 5**、简答题、
+ * 无判错记录时后端**缺省该键**（不是空串、不是 0）⇒ 装载侧读成空串 ⇒ 这里返回空串
+ * ⇒ 模板据此整条不渲染（空态诚实，不生成「易错项」这种空标签）。
+ * 多选的取值本身就是答案串组合（如 "A,C"），原样展示、不拆成单字母。
+ */
+export function wrongOptionText(option : string) : string {
+    if (option.length == 0) return ''
+    return '易错项 ' + option
+}

@@ -5,8 +5,8 @@ import { ref } from 'vue'
 import type { Ref } from 'vue'
 import { getTagsApi } from '../../../api/course'
 import { getCurrentCredentialApi } from '../../../api/credential'
-import { getPracticeOverviewApi, getPracticeProgressApi } from '../../../api/practice'
-import type { TagItem, PracticeOverview } from '../../../types/index'
+import { getPracticeOverviewApi, getPracticeProgressApi, getPracticeTagAccuracyApi } from '../../../api/practice'
+import type { TagItem, PracticeOverview, PracticeTagAccuracy } from '../../../types/index'
 
 /** 本 composable 的显式返回类型。
  *  UTS 对无标注的匿名返回对象无法在消费侧解析成员（error18「找不到名称」），
@@ -19,9 +19,14 @@ export type UsePracticeOverviewResult = {
     listError : Ref<string>
     loadOverview : () => Promise<void>
     loadModules : () => Promise<void>
+    loadTagAccuracy : () => Promise<void>
 }
 
-export type ModuleRow = { tag_id : number; name : string; total : number; completed : number }
+/** 考点模块行。
+ *  accuracy / has_accuracy 来自 /practice-mode/stats 的 by_tag（#1948 摘 mock）：
+ *  后端只返回 total>0 的标签 ⇒ has_accuracy=false 即「该考点零作答或统计未取到」，展示侧不得给百分比。
+ */
+export type ModuleRow = { tag_id : number; name : string; total : number; completed : number; accuracy : number; has_accuracy : boolean }
 
 export function usePracticeOverview() : UsePracticeOverviewResult {
     const overview = ref<PracticeOverview>({ today_count: 0, total_count: 0, total_days: 0 } as PracticeOverview)
@@ -29,7 +34,28 @@ export function usePracticeOverview() : UsePracticeOverviewResult {
     const listLoading = ref<boolean>(false)
     const listError = ref<string>('')
 
+    /** 按 tag_id 把 by_tag 结果并进模块行（by_tag 按标签 sort_order 排，与列表顺序无关，故双循环对齐） */
+    function mergeAccuracy(rows : ModuleRow[], list : PracticeTagAccuracy[]) : void {
+        for (let i = 0; i < rows.length; i++) {
+            for (let j = 0; j < list.length; j++) {
+                if (list[j].tag_id == rows[i].tag_id) {
+                    rows[i].accuracy = list[j].accuracy
+                    rows[i].has_accuracy = true
+                }
+            }
+        }
+    }
+
     async function loadOverview() : Promise<void> { try { overview.value = await getPracticeOverviewApi() } catch (e) { console.error('[practice] load overview failed:', e) } }
+
+    /** 只刷正确率（#1948）：做完题回本页时的轻量刷新，单请求，不重跑标签与进度面 */
+    async function loadTagAccuracy() : Promise<void> {
+        const rows = modules.value
+        if (rows.length == 0) return
+        let credId = 0
+        try { const cred = await getCurrentCredentialApi(); if (cred != null) { credId = cred!.id } } catch (e) { console.warn('[practice] reload credential failed:', e) }
+        try { const list = await getPracticeTagAccuracyApi(credId); mergeAccuracy(rows, list); modules.value = rows.slice() } catch (e) { console.warn('[practice] reload tag accuracy failed:', e) }
+    }
 
     async function loadModules() : Promise<void> {
         listLoading.value = true; listError.value = ''
@@ -40,19 +66,20 @@ export function usePracticeOverview() : UsePracticeOverviewResult {
         let tags : TagItem[] = []
         try { tags = await getTagsApi(browseCredentialId) } catch (e) { console.error('[practice] load tags failed:', e); listError.value = '加载失败，请点击重试'; listLoading.value = false; return }
         const rows : ModuleRow[] = []
-        for (let i = 0; i < tags.length; i++) { const t = tags[i]; rows.push({ tag_id: t.id, name: t.name, total: t.question_count, completed: 0 } as ModuleRow) }
+        for (let i = 0; i < tags.length; i++) { const t = tags[i]; rows.push({ tag_id: t.id, name: t.name, total: t.question_count, completed: 0, accuracy: 0, has_accuracy: false } as ModuleRow) }
         modules.value = rows; listLoading.value = false
         for (let i = 0; i < rows.length; i++) {
             try { const p = await getPracticeProgressApi('tag:' + rows[i].tag_id.toString()); if (p.completed > 0 || p.total > 0) { rows[i].completed = p.completed; if (p.total > 0) { rows[i].total = p.total }; modules.value = rows.slice() } } catch (e) { /* silent */ }
         }
+        // 考点正确率（#1948）：与 /tags 同分区取 by_tag；进度回灌完再并，避免出现「有百分比没进度」的中间态。
+        // 取失败即全部 has_accuracy=false ⇒ 副标题退回「共 N 题 / 已完成 x/y 题」，不回落任何假数值。
+        try { const acc = await getPracticeTagAccuracyApi(browseCredentialId); mergeAccuracy(rows, acc); modules.value = rows.slice() } catch (e) { console.warn('[practice] load tag accuracy failed:', e) }
     }
 
     return {
-        overview,
-        modules,
-        listLoading,
-        listError,
+        overview, modules, listLoading, listError,
         loadOverview: () => loadOverview(),
-        loadModules: () => loadModules()
+        loadModules: () => loadModules(),
+        loadTagAccuracy: () => loadTagAccuracy()
     } as UsePracticeOverviewResult
 }

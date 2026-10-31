@@ -68,6 +68,11 @@ const DOMAIN_TOTAL_READS = [
     why: '练习统计 /practice-mode/stats 的真键就叫 total（后端 PracticeStatsDTO.Total），累计练习题数',
   },
   {
+    file: 'api/practice.uts',
+    fn: 'buildPracticeTagAccuracyList',
+    why: 'by_tag 每项的 total = 该考点累计作答次数（后端 PracticeTagStat.Total，正确率的分母），不是分页总条数（#1948）',
+  },
+  {
     file: 'api/wrongQuestion.uts',
     fn: 'buildWrongQuestionStats',
     why: '错题统计 /wrong-questions/stats 的 total = 错题总数（后端 WrongQuestionStatsDTO.Total）',

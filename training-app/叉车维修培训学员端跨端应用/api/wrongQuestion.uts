@@ -78,6 +78,8 @@ function buildWrongQuestionItem(obj : UTSJSONObject) : WrongQuestionItem {
 		// 后端顶层 last_user_answer（#1077 新增）才是「我上次选的答案」；
 		// 原读的 user_answer 在 WrongQuestionDTO 上不存在，恒空 ⇒ 卡片展示恒「未作答」。
 		last_user_answer: toStr(obj['last_user_answer']),
+		// 易错项（#1948）：后端缺省该键 ⇒ toStr 得空串 ⇒ 展示侧整条不渲染
+		top_wrong_option: toStr(obj['top_wrong_option']),
 		wrong_count: toNumber(obj['wrong_count']),
 		created_at: toStr(obj['created_at']),
 		last_wrong_at: toStr(obj['last_wrong_at']),

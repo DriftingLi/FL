@@ -43,6 +43,16 @@ export type PracticeStats = {
     streak_days : number       // 连续练习天数
 }
 
+/** 考点标签维度正确率（GET /practice-mode/stats 的 by_tag，#1948 摘 mock 的数据源）
+ *  accuracy 是后端 round1 的 0-100；后端**只返回 total>0 的标签** ⇒ 数组里没有的标签即该考点零作答 */
+export type PracticeTagAccuracy = {
+    tag_id : number
+    tag_name : string
+    total : number
+    correct : number
+    accuracy : number
+}
+
 /** 练习历史记录项 */
 export type PracticeHistoryItem = {
     record_id : number
