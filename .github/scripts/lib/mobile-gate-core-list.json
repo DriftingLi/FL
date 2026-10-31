@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "updated": "2026-10-31",
+  "decidedBy": "维护者 2026-10-31 拍板；规则原文 training-app/叉车维修培训学员端跨端应用/docs/adr/0052-验收门②三档分层与Shadow试运行（2026-10-31 裁定）.md；追踪票 #2170",
+  "scopeRoot": "training-app/叉车维修培训学员端跨端应用",
+  "matchRule": "目录前缀按路径段边界匹配（pages/exam 不命中 pages/exam-info）；路径相对 scopeRoot",
+  "switches": {
+    "exemptionActive": false,
+    "logicLiteTierOpen": false
+  },
+  "corePagePrefixes": [
+    "pages/login",
+    "pages/register",
+    "pages/forgot-password",
+    "pages/dashboard",
+    "pages/exam",
+    "pages/exam-info",
+    "pages/practice",
+    "pages/profile",
+    "pages/points",
+    "pages/mall",
+    "pages/ai-assistant"
+  ],
+  "alwaysFullGateDirPrefixes": [
+    "api",
+    "stores",
+    "composables",
+    "utils",
+    "components",
+    "uni_modules",
+    "config",
+    "constants",
+    "i18n",
+    "types"
+  ],
+  "alwaysFullGateFilePrefixes": [
+    "App.uvue",
+    "main.uts"
+  ],
+  "unlistedNewPageDefault": "full-gate",
+  "notes": [
+    "本文件是核心名单的唯一可执行数据源，gate-validator 只读这里；ADR 与文档不抄第二份名单。",
+    "exemptionActive=false 期间校验器影子记录分档、不改任何验收门行为；翻转属波 3b，须维护者审阅影子报告（波 3a）后另行落地。",
+    "pages/recruiter 未入核心名单为 2026-10-31 裁定原值；招聘者侧改动仅按 diff 内容阶梯（决策 3）与全局升档判据（决策 4）约束。"
+  ]
+}
