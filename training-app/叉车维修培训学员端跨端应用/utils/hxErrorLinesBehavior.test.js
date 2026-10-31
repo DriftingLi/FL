@@ -23,6 +23,8 @@
  *     E6 「0 error」否证行 ⇒ 不判失败
  *     E7 空输入 ⇒ 返回**数组**（不是 $null；StrictMode 下 `$null.Count` 会抛）
  *     E8 血账 #917 的「编译成功 / 已停止运行...」正常收口行 ⇒ **不判失败**（#2045 补的样品）
+ *     E9 血账 #4 的 `Could not resolve` 族（ledger #25，销账票 #2166）⇒ 无时间戳插件诊断行**判失败**；
+ *        同串**带时间戳**（设备 console 形）照旧被时间戳过滤器排除 —— 成对样品：补族不伤 ADR-0012。
  *
  * 运行前提：需要 `pwsh`（PowerShell 7）。**不可用时 fail-closed 抛错，不 skip** ——
  * 与仓库先例 mpWeixinGateContract.test.js:143 一致；静默跳过等于假绿。
@@ -46,11 +48,17 @@ const DEVICE_STACK_FRAMES = [
   '21:49:14.497 \tat java.lang.reflect.Method.invoke(Native Method)',
 ];
 
+// 血账 #4 原形行（根 `docs/agents/ledger.md` #4/#25；④ 侧判据由 #2045 补族，第三形态销账 = #2166）：
+// uvue 插件诊断行**行内不含 `error` 一词** ⇒ 旧 token 清单结构上不可能命中，编译不过的内循环照样判绿。
+// 同一常量供 E3/E5 题库与 E9 成对样品（Duplicated Code 消解：一处定义）。
+const PLUGIN_UNRESOLVED_LINE = '[plugin:uni:app-uvue] Could not resolve "../../api/recruit"  at pages/recruiter/components/recruiter-filter-drawer.uvue:84:5';
+
 const COMPILE_DIAGNOSTICS = [
   'unresolved reference: foo at utils/secureStorage.uts:12',
   'Cannot infer type for this parameter. Please specify it explicitly.',
   '找不到名称 undefined',
   '类型不匹配: Any? vs Any',
+  PLUGIN_UNRESOLVED_LINE,
 ];
 
 const COMPILE_ERROR_WITH_FILELINE = 'utils/secureStorage.uts:134:8 error: identity equality is deprecated';
@@ -194,5 +202,16 @@ describe('错误行判定行为级守护（ADR-0012，运行期）', () => {
     const r = probe(COMPILE_ONLY_OK_LINES);
     mustRun(r);
     expect({ count: pick(r.stdout, 'COUNT'), hits: hits(r.stdout) }).toEqual({ count: '0', hits: [] });
+  });
+
+  test('E9: `Could not resolve` 族（血账 #4 同族 → ledger #25 销账，票 #2166）⇒ 无时间戳插件形判红；同串带时间戳的设备形仍被排除（ADR-0012 口径未动）', () => {
+    const pluginShape = [PLUGIN_UNRESOLVED_LINE];
+    const deviceShape = ['21:49:14.900 [plugin:uni:app-uvue] Could not resolve "../../api/helpers"'];
+    const r1 = probe(pluginShape);
+    mustRun(r1);
+    expect(pick(r1.stdout, 'COUNT')).toBe('1');
+    const r2 = probe(deviceShape);
+    mustRun(r2);
+    expect(pick(r2.stdout, 'COUNT')).toBe('0');
   });
 });
