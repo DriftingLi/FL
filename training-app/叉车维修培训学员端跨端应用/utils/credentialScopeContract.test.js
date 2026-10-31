@@ -109,7 +109,7 @@ const SCOPED_REQUEST_COUNTS = {
   'api/course.uts': 2,
   'api/favorite.uts': 4,
   'api/mockExam.uts': 2,
-  'api/practice.uts': 13,
+  'api/practice.uts': 14,
   'api/search.uts': 2,
   'api/wrongQuestion.uts': 2
 };
@@ -124,6 +124,21 @@ const EXPLICIT_QUERY = [
   { api: 'api/search.uts', fn: 'searchByTypeApi', pass: ['credentialId : number = 0', ', credentialId)'] },
   { api: 'api/course.uts', fn: 'getCourseListApi', pass: ['credentialId : number = 0', "params['credential_id'] = credentialId.toString()"] },
   { api: 'api/course.uts', fn: 'getTagsApi', pass: ['credentialId : number = 0', 'credential_id: credentialId.toString()'] }
+];
+
+/**
+ * 「浏览指定」登记（#1948）——上面「依赖兜底的面不许传（传了就是浏览指定，需另登记）」那条的落点。
+ * /practice-mode/stats 的兜底确实生效（拦截器按 JWT 注入**当前**证件），但本处刻意显式传**浏览**证件：
+ * 面板副标题的题数来自 /tags（按浏览证件计数，#702 与抽题池同口径），正确率必须落同一分区，
+ * 否则切证浏览时会出现「A 证件的题数」配「另一套分区的正确率」。同端点的 getPracticeStatsApi
+ * 仍留在兜底面（报告页只看当前证件），两者语义不同、不合并。
+ */
+const BROWSE_PINNED_FNS = [
+  {
+    api: 'api/practice.uts',
+    fn: 'getPracticeTagAccuracyApi',
+    pass: ['credentialId : number', 'if (credentialId > 0)', "params['credential_id'] = credentialId.toString()"],
+  },
 ];
 
 /** 依赖服务端兜底（JWT 面）：函数体内不得出现 credential_id */
@@ -183,6 +198,21 @@ describe('#1107 必须显式传的面（漏传面为零）', () => {
   it('POST /contributions：创建投稿的 body 带归属证件（既有行为不变）', () => {
     const body = fnBody('api/contribution.uts', 'createContributionApi');
     expect(body).toContain('credential_id: credentialId');
+  });
+});
+
+describe('#1948 浏览指定的面：显式传证件必须成对存在（形参 + 判位 + 赋值）', () => {
+  it.each(BROWSE_PINNED_FNS)('$api#$fn：query 落点齐三件', ({ api, fn, pass }) => {
+    const body = fnBody(api, fn);
+    expect(body.length).toBeGreaterThan(0);
+    for (const token of pass) expect(body).toContain(token);
+  });
+
+  it('登记的函数确实在 scoped 消费面里（防表与扫描面两张皮）', () => {
+    const hit = SCOPED_SITES.filter((s) => s.file === 'api/practice.uts' && s.path === '/practice-mode/stats');
+    // 实测三处字面量：getPracticeReportApi 与 getPracticeStatsApi 走兜底（当前证件），
+    // getPracticeTagAccuracyApi 走浏览指定（与 /tags 的题数同分区）——「另登记」必须落得住计数
+    expect(hit.length).toBe(3);
   });
 });
 
