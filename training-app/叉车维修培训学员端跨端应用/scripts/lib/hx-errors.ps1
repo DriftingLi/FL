@@ -25,8 +25,12 @@ function Get-HxErrorLines {
     #>
     param([string]$Output)
     $deviceLogLine = '(?m)^\s*\d{2}:\d{2}:\d{2}\.\d{3}'
+    # #2166（销 ledger #25）：补 `Could not resolve` 族 —— uvue 插件诊断行行内不含 `error` 一词，
+    # `\berror\b` 结构上不可能命中（血账 #4 同族；④ 侧 #2045 已补，第三形态照此对齐）。
+    # 已知边界（留「三份判据合一」票）：**带时间戳**的同族诊断行照旧被下面的设备过滤器排除 ——
+    # 「编译诊断不带时间戳 / 设备 console 必带」是 ADR-0012 的既有判据，补族不翻转它（E9 反向题钉住）。
     return @("$Output" -split "`r?`n" |
         Where-Object { $_ -notmatch $deviceLogLine } |
-        Where-Object { $_ -match '(?i)\berror\b|unresolved reference|cannot infer type|找不到名称|类型不匹配|编译失败|运行失败' } |
+        Where-Object { $_ -match '(?i)\berror\b|unresolved reference|cannot infer type|找不到名称|类型不匹配|编译失败|运行失败|Could not resolve' } |
         Where-Object { $_ -notmatch '(?i)0\s*error|errors?\s*[:=]\s*0|no errors?|error count\s*[:=]\s*0' })
 }

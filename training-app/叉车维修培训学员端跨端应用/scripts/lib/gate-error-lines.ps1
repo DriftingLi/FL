@@ -32,7 +32,8 @@
         的「同一批日志行对两条 pattern 的现测对照」表。那两行是 CLI/插件输出、本就不在 ④c 的 kotlinc
         输入面上 ⇒ 本票按票面「拿不准的宁缺毋滥」不为它改措辞，只登记进合一候选。
       - 第三条判据 `Get-HxErrorLines`（本目录 `hx-errors.ps1`，`hx-run.ps1` 日常路径用）**不在本文件**，
-        且它同样缺 `Could not resolve` 族 —— 本票射程只到 ④ 的两处，这条单独记进根 `docs/agents/ledger.md`。
+        其同族缺账已由 #2166 单独补族销账（根 `docs/agents/ledger.md` #25）；本文件仍只管 ④ 的两处，
+        「带时间戳的编译诊断归谁判」属三副本合一票的输入面裁剪，未随补族动（见本簿尾候选清单）。
 
     准入门槛（对齐 `lib/gate-common.ps1` 的 G1–G3，别绕过）
       搬进共享库的代码应当「各副本逐字节相同」**且**「未被守护测试作为字面量锚点 pin 住」。
@@ -70,8 +71,8 @@ function Get-CompileGateErrorLines {
     #   与其「后续（刻意本轮不做）」段；逐行对照：`docs/verification/recruiter-workspace/1207/README.md`
     #   「同一批日志行对两条 pattern 的现测对照」表第一行。
     #   销账证据：`utils/gateErrorLinesBehavior.test.js` G0/G4（真执行本函数，喂上面那两行原文）。
-    #   ⚠️ 同族在第三条判据 `lib/hx-errors.ps1`（hx-run 日常路径）仍缺 —— 本票射程只到 ④ 的两处，
-    #   那条单独记进根 ledger，合一票处理。
+    #   同族在第三条判据 `lib/hx-errors.ps1`（hx-run 日常路径）曾同样缺账 —— 已由 #2166 补族销账
+    #   （ledger #25，E9 成对样品）；「带时间戳的编译诊断归哪一路判」仍归合一票，见根 ledger 候选。
     return @("$Output" -split "`r?`n" |
         Where-Object { $_ -match '(?i)\berror\b|unresolved reference|cannot infer type|找不到名称|类型不匹配|编译失败|Could not resolve' } |
         Where-Object { $_ -notmatch '(?i)0\s*error|errors?\s*[:=]\s*0|no errors?|error count\s*[:=]\s*0' })
