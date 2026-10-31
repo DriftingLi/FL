@@ -311,6 +311,13 @@ param(
     # 构建面模式（#1861 第一段）：跑到「publish + 产物合法性 + 指纹落盘」为止，会话段整段跳过。
     [switch]$BuildOnly,
     [int]$PublishTimeoutSeconds = 900,
+    # 构建段「按产物收流」（#2163）两旋钮，只在 publish 一步生效：
+    #   Quiet  = 产物最新文件距今至少这么多秒才算「写完了」（实测产物是末尾一次性落盘，643 文件
+    #            出现在同一个 ≤5 s 窗口里 ⇒ 15 s 足够，且能盖住「页 .js 齐了但公共 chunk 还在写」）。
+    #   Grace  = 收流判据成立后**再**等 cli 自然退出这么多秒。实测健康跑的空洞 ≈90 s，落在窗口内
+    #            ⇒ 健康跑行为与改动前一致（仍读得到成功文案）；只有 B 形态（空洞无界）才改走产物依据。
+    [int]$PublishSettleQuietSeconds = 15,
+    [int]$PublishSettleGraceSeconds = 120,
     [int]$AutoTimeoutSeconds = 180,
     [int]$AutoAttempts = 3,
     [int]$AutoRetryDelaySeconds = 20,
@@ -448,8 +455,23 @@ function Resolve-DevToolsCli {
 }
 
 # 统一进程入口：超时兜底 + UTF-8 解码。**不返回退出码作为判据**（只在日志里留痕）。
+#
+# 可选的「按产物收流」（#2163）：只给 -SettleDist / -SettleSince 时启用，服务构建段。
+# 为什么要它（实测 2026-10-31，新树 5 s 采样）：产物写满（643 文件，14:53:54）与 cli 退出
+# （14:55:29）之间**连健康跑都有 ≈90 s 空洞**；票面 B 形态是同一个空洞失去上界（产物 170 s 齐、
+# cli 12 分钟不退）。旧实现只认 `WaitForExit(预算)` 一个信号 ⇒ 空洞一无界就必然烧到预算，
+# 以 `errors=env-blocked reason=timeout` 白烧整轮 ②。
+# 次序刻意是「判据成立后**再**等 cli 自然退出 GraceSeconds」，不是判据一成立就返回：
+#   健康跑（实测 ≈90 s）落在 grace 窗口内 ⇒ 仍由 cli 自己退出、仍拿得到「导出微信小程序成功」
+#   文案 ⇒ 行为与改动前一致；只有 cli 赖着不退（B 形态）才改走产物依据。
+# 红线（票面第 5 条 / 移动端 ADR-0008）：收流**不 kill 任何进程** —— 与 timeout 分支的
+# `Kill($true)` 相反，这里留下活着的 cli 并把它的 pid 记进门日志。
 function Invoke-Process {
-    param([string]$FilePath, [string[]]$Arguments, [int]$TimeoutSeconds, [string]$Tag, [string]$WorkingDirectory)
+    param(
+        [string]$FilePath, [string[]]$Arguments, [int]$TimeoutSeconds, [string]$Tag, [string]$WorkingDirectory,
+        [string]$SettleDist = '', [datetime]$SettleSince = (Get-Date),
+        [int]$SettleQuietSeconds = 15, [int]$SettleGraceSeconds = 120, [int]$SettlePollSeconds = 2
+    )
     $psi = [System.Diagnostics.ProcessStartInfo]::new()
     $psi.FileName = $FilePath
     $psi.UseShellExecute = $false
@@ -464,10 +486,50 @@ function Invoke-Process {
     $p = [System.Diagnostics.Process]::Start($psi)
     $stdout = $p.StandardOutput.ReadToEndAsync()
     $stderr = $p.StandardError.ReadToEndAsync()
-    $exited = $p.WaitForExit($TimeoutSeconds * 1000)
+
+    # ---------- 有界等待 +（可选）按产物收流 ----------
+    # 旧写法一次 `WaitForExit(整个预算)`：预算期内除「进程退出」没有别的信号，产物早写满也得干等。
+    # 这里切成小片轮询，片间问一次收流判据；不给 SettleDist 时 sliceMs = 整个剩余预算，与旧行为同形。
+    $settled = $false
+    $settleInfo = $null
+    $settledAt = $null
+    $exited = $false
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ($true) {
+        $remainMs = [int](($deadline - (Get-Date)).TotalMilliseconds)
+        if ($remainMs -le 0) { break }
+        $sliceMs = if ($SettleDist) { [Math]::Min($SettlePollSeconds * 1000, $remainMs) } else { $remainMs }
+        if ($p.WaitForExit($sliceMs)) { $exited = $true; break }
+        if (-not $SettleDist) { continue }
+        $settleInfo = Get-MpWeixinPublishSettle -Dist $SettleDist -Since $SettleSince -QuietSeconds $SettleQuietSeconds
+        if (-not $settleInfo.Settled) { $settledAt = $null; continue }
+        if ($null -eq $settledAt) {
+            $settledAt = Get-Date
+            Write-Host "[settle] [$Tag] 产物已完整（$($settleInfo.Files) 文件 / $($settleInfo.Pages) 页），再等 cli 自然退出至多 $SettleGraceSeconds s" -ForegroundColor DarkGray
+        }
+        if (((Get-Date) - $settledAt).TotalSeconds -ge $SettleGraceSeconds) { $settled = $true; break }
+    }
+
     if (-not $exited) {
+        if ($settled) {
+            # 不 kill：留下活着的 cli（其进程树里还有 HBuilderX 拉起的开发者工具），只放弃输出流。
+            Write-Host "[warn] [$Tag] cli 未在 grace 窗口（$SettleGraceSeconds s）内退出（pid=$($p.Id)）⇒ 按产物收流，**未终止任何进程**；输出流放弃读取" -ForegroundColor Yellow
+            return @{
+                Output = ''; ExitCode = -1; TimedOut = $false; DrainAbandoned = $true
+                Settled = $true; ChildPid = $p.Id; SettleReason = $settleInfo.Reason
+                SettleDetail = $settleInfo.Detail; SettleFiles = $settleInfo.Files; SettlePages = $settleInfo.Pages
+            }
+        }
         try { $p.Kill($true) } catch { }
-        return @{ Output = "[timeout] $Tag 超过 $TimeoutSeconds 秒未返回，已终止"; ExitCode = -1; TimedOut = $true; DrainAbandoned = $false }
+        # 到点被杀时把「为什么没收流」的实测量留在输出里：票面 A 形态要求日志能分清
+        # 「没产物」与「有产物没退出」—— 旧实现两种都只打 reason=timeout，读不出差别。
+        $why = 'settle=off'
+        $s = @{ Reason = ''; Files = 0; NewestAgeS = -1 }
+        if ($SettleDist) {
+            $s = Get-MpWeixinPublishSettle -Dist $SettleDist -Since $SettleSince -QuietSeconds $SettleQuietSeconds
+            $why = "settleReason=$($s.Reason) files=$($s.Files) newestAgeS=$($s.NewestAgeS) dist=$SettleDist"
+        }
+        return @{ Output = "[timeout] $Tag 超过 $TimeoutSeconds 秒未返回，已终止（$why）"; ExitCode = -1; TimedOut = $true; DrainAbandoned = $false; Settled = $false; ChildPid = 0; SettleReason = $s.Reason; SettleDetail = $why; SettleFiles = $s.Files; SettlePages = 0 }
     }
     # ---------- F4（2026-10-29）：主进程已退出 ≠ 输出流 EOF ----------
     # 病根（#2107 量尺实测，1050 s 纯挂死的一段）：`cli.bat close` 回显 `✔` 后 cmd.exe 正常退场，
@@ -487,7 +549,7 @@ function Invoke-Process {
     $outText = ''; $errText = ''
     try { if ($stdout.IsCompleted) { $outText = $stdout.Result } } catch { $outText = '' }
     try { if ($stderr.IsCompleted) { $errText = $stderr.Result } } catch { $errText = '' }
-    return @{ Output = ($outText + $errText); ExitCode = $p.ExitCode; TimedOut = $false; DrainAbandoned = (-not $drained) }
+    return @{ Output = ($outText + $errText); ExitCode = $p.ExitCode; TimedOut = $false; DrainAbandoned = (-not $drained); Settled = $false; ChildPid = 0; SettleReason = ''; SettleDetail = ''; SettleFiles = 0; SettlePages = 0 }
 }
 
 # 探针 JSON 的安全取值：Set-StrictMode 下访问不存在的属性会抛异常，
@@ -857,6 +919,10 @@ function New-GatePlan {
         steps = $steps
         timeouts = [ordered]@{
             publish = $PublishTimeoutSeconds
+            # 构建段「按产物收流」两窗（#2163）：quiet = 落盘静默窗口，grace = 判据成立后再等 cli
+            # 自然退出的窗口（健康跑的空洞实测 ≈90 s，落在 grace 内 ⇒ 仍走文案判据，行为不变）。
+            publishSettleQuiet = $PublishSettleQuietSeconds
+            publishSettleGrace = $PublishSettleGraceSeconds
             open = $OpenTimeoutSeconds
             auto = $AutoTimeoutSeconds
             autoAttempts = $AutoAttempts
@@ -1928,8 +1994,15 @@ try {
         #    第四道比对会退化成「比对用 A、执行用 B」的假保险。
         #    墙钟单独计（#1861 ④）：-BuildOnly 的结果行要报 publish 段秒数（参照值 161 s / 48 页、227 s / 59 页），
         #    不从 [STAGE] 行反推 —— 那些行在早退路径上可能缺席。
+        #
+        # 「按产物收流」（#2163）：基准时刻取在**发 publish 命令之前** ⇒ 上一次跑留下的产物必然判
+        # stale（本票实测：中途终止的构建根本不写 dist，写完的才会新）。判据本体在
+        # `lib/mp-weixin-publish-settle.ps1`，它复用 #1210 的产物合法性单点真源 —— 这里不复述第二份。
+        . (Join-Path $PSScriptRoot 'lib\mp-weixin-publish-settle.ps1')
+        $settleSince = Get-Date
         $pubSw = [System.Diagnostics.Stopwatch]::StartNew()
-        $pub = Invoke-Process -FilePath $cliExe -Arguments $publishArgs -TimeoutSeconds $PublishTimeoutSeconds -Tag 'publish-mp-weixin'
+        $pub = Invoke-Process -FilePath $cliExe -Arguments $publishArgs -TimeoutSeconds $PublishTimeoutSeconds -Tag 'publish-mp-weixin' `
+            -SettleDist $dist -SettleSince $settleSince -SettleQuietSeconds $PublishSettleQuietSeconds -SettleGraceSeconds $PublishSettleGraceSeconds
         $pubSw.Stop()
         $publishSeconds = [int]$pubSw.Elapsed.TotalSeconds
         Write-Log "`n>>> publish-mp-weixin`n$($pub.Output)"
@@ -1941,11 +2014,23 @@ try {
         }
         if ($pub.TimedOut) {
             Write-Host "[error] publish 超时（$PublishTimeoutSeconds 秒）" -ForegroundColor Red
-            Write-Log "$(Get-GateResultPrefix) errors=env-blocked reason=timeout"
+            # 读数把两种形态分开钉住：没产物（settle=product-missing files=0）与
+            # 「产物齐了但 cli 不退」（旧实现只能等预算到点）处置完全不同，而旧的那行两种都只打
+            # reason=timeout，现场读不出差别（票面 AC1 要的正是能被区分出来的两种形态）。
+            $sr = if ($pub.SettleReason) { $pub.SettleReason } else { 'off' }
+            Write-Log "$(Get-GateResultPrefix) errors=env-blocked reason=timeout settle=$sr files=$($pub.SettleFiles) budget=${PublishTimeoutSeconds}s"
             exit 2
         }
+        if ($pub.Settled) {
+            # 收流成立：cli 没退 ⇒ 输出流没 EOF，**没有文案可读**。依据换成产物判据（同 #1381 的
+            # 教训：别让单条文案成为必要条件，采集面丢一条就把整扇门变恒红）。
+            # 门结论依旧由下面的产物合法性 + appid 断言与探针跑出，不是「大概成功了」。
+            # 红线：此处不终止任何进程（cli pid 记进日志，交下面的 close 段处置）。
+            Write-Host "[settle] publish 按产物收流：$($pub.SettleDetail)（cli pid=$($pub.ChildPid) 未终止）" -ForegroundColor Green
+            Write-Log "publish=settled-by-artifact cli_pid=$($pub.ChildPid) files=$($pub.SettleFiles) pages=$($pub.SettlePages) reason=$($pub.SettleReason) secs=$publishSeconds"
+        }
         # 成败一律解析输出（CLI 退出码不可用）
-        if ($pub.Output -notmatch '导出微信小程序成功|编译成功') {
+        if (-not $pub.Settled -and $pub.Output -notmatch '导出微信小程序成功|编译成功') {
             Write-Host '[error] publish 未报「导出微信小程序成功」（见日志）：先解决构建失败，再跑 ②。' -ForegroundColor Red
             Write-Host '        提示：HBuilderX 按**项目名（目录名）**解析，同名目录会被误命中 ⇒ 请用唯一目录名（#883 坑位）。' -ForegroundColor Red
             Write-Log "$(Get-GateResultPrefix) errors=1 stage=publish reason=no-artifact"
