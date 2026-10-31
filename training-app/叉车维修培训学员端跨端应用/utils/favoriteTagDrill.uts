@@ -1,0 +1,46 @@
+/**
+ * 收藏「题目」类型内按题库类别下钻（#1947）—— 二级类别 chip 行的**唯一决策**
+ *
+ * Q25 定案（spec #1935 / 报告 §8）：**不推翻内容类型 tab 结构**，只在「题目」类型内部
+ * 加一层类别下钻。故本模块只回答两个问题：这一层**有没有**、**有哪些项**。
+ *
+ * 为什么决策必须住在这里而不是 `pages/profile/favorites.uvue`（先例 #1237）：.uvue 在 node 里
+ * 跑不了，决策内联在页面时只能被「取函数体 + new Function」那类自搓执行器跑 —— 按
+ * `docs/agents/guards.md` 的分类器判据它落不进**行为守护**，于是「题目以外也渲染了类别栏」
+ * 这类回归没有 ③ 承重证据。
+ *
+ * 类别清单来源 = 题库类别字典 `getTagsApi`（+ 当前证件），**不用**收藏条目上的 `tags[]`：
+ * 后者只随当前页到达，类别会随翻页增长 —— 第 21 条之后才出现的类别第一屏根本看不到。
+ * 已接受的代价（两条，都是字典驱动的直接后果，不是缺陷）：
+ *   ① 可能出现「有类别但零收藏」，点进去是空态；
+ *   ② 一题多标签时同一题会出现在多个类别下 —— 下钻不引入「题目归属唯一类别」的裁定。
+ */
+import type { TagItem } from '../types/index'
+
+/** 类别 chip：`tag_id == 0` 是「全部」（不按类别过滤），其余对应后端 `?tag_id=` */
+export type FavoriteTagChip = {
+    tag_id : number
+    name : string
+}
+
+/**
+ * 当前内容类型下该显示哪些类别 chip。
+ *
+ * 返回空数组 = **整行不渲染**，两种情形都是它：
+ *   - 非「题目」类型（这一层不越界，Q25）；
+ *   - 字典为空（只有「全部」一项的栏没有意义）。
+ *
+ * 顺序原样取字典顺序，**不在客户端重排**：`/tags` 的排序真源是
+ * `backend/internal/training/catalog_specs.go` 的 `questionTagCatalogSpec`（`OrderBy: sort_order ASC, id ASC`，
+ * 经 `catalog_service.go` 的 catalogList 落地），再排一次就是第二份排序知识。
+ */
+export function favoriteTagChips(targetType : string, tags : TagItem[]) : FavoriteTagChip[] {
+    const chips : FavoriteTagChip[] = []
+    if (targetType != 'question') return chips
+    if (tags.length == 0) return chips
+    chips.push({ tag_id: 0, name: '全部' } as FavoriteTagChip)
+    for (let i = 0; i < tags.length; i++) {
+        chips.push({ tag_id: tags[i].id, name: tags[i].name } as FavoriteTagChip)
+    }
+    return chips
+}

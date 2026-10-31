@@ -53,13 +53,19 @@ function buildFavoriteCheckResult(data : UTSJSONObject) : FavoriteCheckResult {
  *       `FavoriteListResult`（只有 items / total），故走 `decodePage` 短接而非 `getPaged`
  *       （后者出口是 `Page<T>`，唯一按 `FavoriteListResult` 标注的消费方在 .uvue 里，不为它抬门的级）。
  */
-export function getFavoritesApi(targetType : string = '', page : number = 1, pageSize : number = 20) : Promise<FavoriteListResult> {
+export function getFavoritesApi(targetType : string = '', page : number = 1, pageSize : number = 20, tagId : number = 0) : Promise<FavoriteListResult> {
 	const params : UTSJSONObject = {
 		page: page.toString(),
 		page_size: pageSize.toString(),
 	} as UTSJSONObject
 	if (targetType.length > 0) {
 		params['target_type'] = targetType
+	}
+	// 题库类别下钻（#1947）：后端只对 `target_type=question` 认 `tag_id`，**传其它类型直接 400**
+	// （#2067 契约）。判据放这里而不是页面：页面漏判也发不出那个会 400 的请求。
+	// `tagId == 0` = 「全部」，等价于不带该参数 —— 不下发零值，别让后端去猜 `tag_id=0` 算什么。
+	if (targetType == 'question' && tagId > 0) {
+		params['tag_id'] = tagId.toString()
 	}
 	return getMapped<FavoriteListResult>('/favorites', params, (data : UTSJSONObject) : FavoriteListResult => {
 		const paged = decodePage<FavoriteItem>(data, '/favorites', page, pageSize, (obj : UTSJSONObject) : FavoriteItem => buildFavoriteItem(obj), ['favorites'])
