@@ -9,8 +9,9 @@
  * `searchItemPath`、`utils/wrongQuestionDisplay.uts`）。
  *
  * 口径来源：移动端 `ADR-0014`（章节落点要 `course_id` + `chapter_id` **两个键**）、
- * 根仓库 `ADR-0018`（多态收藏五类；`target_type` 是**开放**的类型轴，新增类型要同步此处 +
- * `favorites.uvue` 的 chips / `getTypeLabel`）。
+ * 根仓库 `ADR-0018`（多态收藏；`target_type` 是**开放**的类型轴，新增类型要同步此处 +
+ * `favorites.uvue` 的 chips / `getTypeLabel`）。现行六类：course / chapter / topic / featured /
+ * question / job（job 由 #1946 追加，后端 #2067 落地）。
  */
 import type { FavoriteItem } from '../types/index'
 
@@ -49,6 +50,12 @@ export function favoriteLanding(item : FavoriteItem) : FavoriteLanding {
     if (item.target_type == 'featured') {
         // 收藏侧的类型名是 `featured`，搜索侧对应的是 `content` —— 只共用路径，不共用分支 key
         return { url: '/pages/featured/featured-detail?id=' + item.target_id.toString(), notice: '' } as FavoriteLanding
+    }
+    if (item.target_type == 'job') {
+        // 职位落点键是 `id`（job-detail.uvue 的 onLoad 读 options['id']）。**不需要 notice 分支**：
+        // 后端对下架/删除职位取「过滤」口径（收藏行仍在库，列表里不出现，见 #2067 契约测试），
+        // 故能出现在列表里的职位条目必然可打开。
+        return { url: '/pages/jobs/job-detail?id=' + item.target_id.toString(), notice: '' } as FavoriteLanding
     }
     if (item.target_type == 'question') {
         return { url: '/pages/practice/practice-do?mode=single&question_id=' + item.target_id.toString(), notice: '' } as FavoriteLanding

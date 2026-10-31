@@ -30,6 +30,7 @@ const REASON_LABELS = {
   daily_login: '每日登录',
   daily_quiz: '每日答题',
   daily_browse: '浏览帖子',
+  browse_course: '浏览课程', // #1944（新任务码，语义与 daily_browse 不同）
   growth_post: '发布帖子',
   growth_reply: '回复帖子',
   growth_mock: '完成模考',

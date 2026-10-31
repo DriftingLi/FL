@@ -60,7 +60,7 @@
     import { onLoad, onShow } from '@dcloudio/uni-app'
     import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 import { goBack } from '../../utils/navigation'
-    import { getCourseDetailApi } from '../../api/course'
+    import { getCourseDetailApi, recordCourseBrowseApi } from '../../api/course'
     import { getStudentCourseDetailApi } from '../../api/student'
     import { checkFavoriteApi, addFavoriteApi, removeFavoriteApi } from '../../api/favorite'
     import { redeemCoursePointsApi, getPointsBalanceApi } from '../../api/points'
@@ -384,6 +384,10 @@ import { goBack } from '../../utils/navigation'
         const id = options['id']
         if (id != null) {
             courseId.value = parseInt(`${id}`)
+            // #1944 浏览课程上报：旁路 fire-and-forget，挂在 onLoad（一命只发一次）。
+            // 从章节页 navigateBack 返回时只有 onShow 会再跑 ⇒ 不把同一天同一门课重复上报；
+            // 去重权威在后端，端上不做本地记账。失败静默：不得把上报失败渲染成详情错误态。
+            recordCourseBrowseApi(courseId.value).catch((): void => { })
         }
     })
 

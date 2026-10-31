@@ -17,6 +17,10 @@
  *   R5 最重者胜：一门 1、另一门 2 ⇒ exit 2；缺结果行（exit 0 却无 token）⇒ no-line + exit 2（fail-closed）
  *   R6 锁必须释放：红跑 / 环境跑之后 `hx-agent.lock` 都不在
  *   R7 `-DryRun`：不取锁、不写日志、不打两门（看计划这件事不能先占住共享主程序）
+ *   R8 收流有界（#2147）：② 退出后**孙进程仍握着它的 stdout 句柄**（开发者工具那种常驻 GUI 的形态）
+ *      ⇒ 入口必须**照样返回**（旧写法挂在 `Tee-Object` 等 EOF 上：实测 1050 s、④c 没开始），
+ *      且 ④c 照跑、两门结果行都在。这条锁的是「入口**真的用了**有界收流器」—— 库里有个函数、
+ *      入口却还写着管道，库的单测照样绿（接线与行为的成对义务，见 docs/agents/guards.md 末节）。
  *
  * 安全性（为什么可在任何机器上跑、也不抢维护者的 HBuilderX）：
  *   路径一律带 `-TempRoot <临时目录>`：锁目录被换到临时根（父进程与两个子门用同一个），
@@ -81,7 +85,7 @@ function makeProject(tmpRoot) {
  * 然后按给定 token / 退出码演一门。
  */
 function makeFakeGate(tmpRoot, opts) {
-  const { name, token, code, line, emit = true } = opts;
+  const { name, token, code, line, emit = true, holdStdout = false } = opts;
   const file = path.join(tmpRoot, `fake-${name}.ps1`);
   const logFile = path.join(tmpRoot, `fake-${name}.log`);
   const body = [
@@ -91,6 +95,19 @@ function makeFakeGate(tmpRoot, opts) {
     "Write-Host ('FAKE_" + name + "_OWNER=' + $env:HX_LOCK_OWNER)",
     "Write-Host ('FAKE_" + name + "_LOCKPID=' + (Get-Content -LiteralPath (Join-Path $env:TEMP 'hx-agent.lock') | Select-Object -First 1))",
     emit ? `Write-Host '${psQuote(line)}'` : "# (no result token on purpose)",
+    // #2147 复现件：退出后留一个**孙进程继续持有本进程的 stdout 句柄**（微信开发者工具那种常驻 GUI 的形态）。
+    // 必须走 .NET + UseShellExecute=false：Start-Process 默认走 ShellExecuteEx，子进程拿不到我们的管道句柄
+    // ⇒ 夹具退化成「什么都没持有」，R8 就变成假绿。
+    holdStdout
+      ? [
+        '$holderPsi = [System.Diagnostics.ProcessStartInfo]::new()',
+        '$holderPsi.FileName = (Get-Process -Id $PID).Path',
+        '$holderPsi.Arguments = \'-NoProfile -NonInteractive -Command "Start-Sleep -Seconds 15"\'',
+        '$holderPsi.UseShellExecute = $false',
+        '$holderPsi.CreateNoWindow = $true',
+        '$null = [System.Diagnostics.Process]::Start($holderPsi)'
+      ].join('\n')
+      : '# (no handle holder)',
     `exit ${code}`,
     ''
   ].join('\n');
@@ -216,6 +233,34 @@ describe('pr-gates：PR 面一次取锁串 ② 与 ④c（#2112）', () => {
 
     expect(code).toBe(2);
     expect(resultLine(out)).toMatch(/mp=no-line kotlin=ok exit=env/);
+  });
+
+  it('R8：② 退出后孙进程仍握 stdout 句柄 ⇒ 入口照样返回，且 ④c 照跑（#2147）', () => {
+    const project = makeProject(tmpRoot);
+    const mpLine = 'MP_WEIXIN_RESULT errors=1 failures=noConsoleErrors';
+    const ktLine = 'KOTLIN_ALL_RESULT errors=0 classes=1560 files=126';
+    const mp = makeFakeGate(tmpRoot, {
+      name: 'MP', token: 'MP_WEIXIN_RESULT', code: 1, line: mpLine, holdStdout: true
+    });
+    const kt = makeFakeGate(tmpRoot, { name: 'KT', token: 'KOTLIN_ALL_RESULT', code: 0, line: ktLine });
+
+    const { code, out } = runPrGates(baseArgs(project, mp, kt));
+
+    expect(code).toBe(1);
+    const line = resultLine(out);
+    expect(line).toMatch(/mp=fail kotlin=ok exit=fail/);
+    // 承重判据 = **收流被放弃这件事在日志里可读**（不是墙钟阈值）：门自己打 drain=abandoned ⇒ 它确实
+    // 撞上了「子进程已退出但句柄未释放」，并且选择放弃剩余输出继续跑，而不是等 EOF。
+    // ⚠️ 不再用「seconds < 12」这类贴边时序断言：门本身基线 8 s + DrainMs 5 s 已贴近 holder 存活量级，
+    // 单跑/整文件跑读数会在阈值两侧摆（实测 13–16 s），那是环境敏感守护（guards.md 末节 Q4 / #2078 同族）。
+    expect(out).toContain('drain=abandoned');
+    // 粗上界只兜「真挂死」：holder 活 15 s，一旦在它自然退出后才收口，读数会明显更大
+    const secs = Number((line.match(/seconds=(\d+)/) || [])[1]);
+    expect(Number.isFinite(secs)).toBe(true);
+    expect(secs).toBeLessThan(60);
+    // 「没跑」不许被读成「这一半没问题」：② 红时 ④c 仍必须跑到并打出结果行
+    expect(out).toContain(ktLine);
+    expect(fs.existsSync(path.join(tmpRoot, 'hx-agent.lock'))).toBe(false);
   });
 
   it('R7：-DryRun 不取锁、不写日志', () => {

@@ -1,7 +1,12 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
         <app-nav-bar title="职位详情" @left-click="onBack" divider>
-            <template #right><text v-if="!hasReported" class="report-btn" @click="onOpenReport">举报</text></template>
+            <template #right>
+                <view class="nav-action" @click="toggleFavorite">
+                    <text class="favorite-icon">{{ isFavorited ? '♥' : '♡' }}</text>
+                </view>
+                <text v-if="!hasReported" class="report-btn" @click="onOpenReport">举报</text>
+            </template>
         </app-nav-bar>
 
         <!-- 加载中 -->
@@ -100,6 +105,7 @@
     import { onLoad } from '@dcloudio/uni-app'
     import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { getJobDetailApi, reportJobApi, applyJobApi, REPORT_REASONS } from '../../api/job'
+    import { checkFavoriteApi, addFavoriteApi, removeFavoriteApi } from '../../api/favorite'
     import type { JobPosting, ReportReason } from '../../types/index'
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
@@ -107,6 +113,12 @@
     const job = ref<JobPosting | null>(null)
     const loading = ref<boolean>(true)
     const jobId = ref<number>(0)
+
+    // ---- 收藏（#1946）----
+    // 与 course-detail 同形：isFavorited 只是**服务端态的回显**，真值来自 GET /favorites/check；
+    // favoriteId 是取消收藏的句柄（DELETE /favorites/:id 只认它，不是 target_id）。
+    const isFavorited = ref<boolean>(false)
+    const favoriteId = ref<number>(0)
 
     // ---- 举报相关 ----
     const showReportModal = ref<boolean>(false)
@@ -154,6 +166,49 @@
         }
     }
 
+    /**
+     * 拉取收藏态（#1946）。
+     *
+     * 失败**不弹提示**：收藏是详情页的次动作，静默降级成「未收藏」比给一个加载失败 toast 更合理
+     * （与 course-detail 的 loadFavoriteStatus 同口径）；真出错时下一次点击会走 add 分支、
+     * 由收藏接口自己报错。
+     */
+    async function loadFavoriteStatus() : Promise<void> {
+        if (jobId.value <= 0) return
+        try {
+            const result = await checkFavoriteApi('job', jobId.value)
+            isFavorited.value = result.favorited
+            favoriteId.value = result.favorite_id
+        } catch (e) {
+            console.warn('[job-detail] checkFavorite failed:', e)
+        }
+    }
+
+    /**
+     * 收藏 ↔ 取消收藏往返（#1946 AC 第一条：即时生效）。
+     *
+     * 两条分支都**先落本地态再等网络**是不行的——收藏接口幂等但取消只认 favoriteId，
+     * 失败后本地态与库里不一致就再也对不回来。故一律「先成功、后改本地态」。
+     */
+    async function toggleFavorite() : Promise<void> {
+        if (jobId.value <= 0) return
+        try {
+            if (isFavorited.value) {
+                await removeFavoriteApi(favoriteId.value)
+                isFavorited.value = false
+                favoriteId.value = 0
+                uni.showToast({ title: '已取消收藏', icon: 'none' })
+            } else {
+                const result = await addFavoriteApi('job', jobId.value)
+                isFavorited.value = true
+                favoriteId.value = result.favorite_id
+                uni.showToast({ title: '收藏成功', icon: 'none' })
+            }
+        } catch (e) {
+            console.error('[job-detail] toggleFavorite failed:', e)
+        }
+    }
+
     // ---- 页面加载 ----
     onLoad((_options : any) => {
         const opts = _options as UTSJSONObject | null
@@ -161,6 +216,7 @@
         if (id != null && (id as string).length > 0) {
             jobId.value = parseInt(id as string)
             loadJobDetail()
+            loadFavoriteStatus()
         } else {
             uni.showToast({ title: '职位不存在', icon: 'none' })
             setTimeout(() => { uni.navigateBack() }, 1500)
@@ -275,6 +331,22 @@
     .report-btn-disabled {
         font-size: 28rpx;
         color: $text-disabled;
+    }
+
+    /* 收藏按钮（#1946）：右槽是 .nav-bar-side（flex-direction: row）⇒ 与「举报」并排。
+       两态都渲染字形（♥ 已收藏 / ♡ 未收藏），靠实心/空心区分 —— 与 course-detail 同一套先例
+       （未收藏态渲染空串 = 点击区在、却看不见，观感等同没有该功能，#1140 教训）。 */
+    .nav-action {
+        width: 64rpx;
+        height: 64rpx;
+        align-items: center;
+        justify-content: center;
+        margin-right: 8rpx;
+    }
+
+    .favorite-icon {
+        font-size: 40rpx;
+        color: $text-color;
     }
 
     /* 加载中 */

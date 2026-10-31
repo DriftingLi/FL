@@ -318,18 +318,44 @@ describe('task-center.uvue 分组收敛（ADR-0054：growth 组退役，任务 c
     }
   });
 
-  it('order 白名单只剩 daily / newbie；迁移 000034 后的真实形状落成两段且兜底段永不命中', () => {
+  it('order 白名单只剩 daily / newbie；迁移 000034 + 000045 后的真实形状落成两段且兜底段永不命中', () => {
     const order = groupOrder(taskSrc);
     expect(order).toEqual(['daily', 'newbie']);
     // 夹具与迁移 000034 后的生产种子同形：三条 growth_* 的 group 已改判 daily
-    const tasks = ['daily_login', 'daily_quiz', 'daily_browse', 'growth_post', 'growth_reply', 'growth_mock']
+    // browse_course = 迁移 000045（后端 #2065）新增的 daily 任务；端上渲染仍全按后端返回，此夹具只锁「形状不凭空多段」
+    const tasks = ['daily_login', 'daily_quiz', 'daily_browse', 'browse_course', 'growth_post', 'growth_reply', 'growth_mock']
       .map((code) => ({ code, group: 'daily' }))
       .concat(['newbie_profile_basic', 'newbie_profile_contact', 'newbie_credential', 'newbie_first_course']
         .map((code) => ({ code, group: 'newbie' })));
     // 空段判据：order 内每个分组都非空（buildGroups 只在 bucket.length > 0 时 push 一段）
-    expect(order.map((g) => tasks.filter((t) => t.group === g).length)).toEqual([6, 4]);
+    expect(order.map((g) => tasks.filter((t) => t.group === g).length)).toEqual([7, 4]);
     // 兜底判据：没有任务落在 order 之外 ⇒ rest 恒空，「其他任务」段不会渲染
     expect(tasks.filter((t) => order.indexOf(t.group) < 0)).toEqual([]);
+  });
+});
+
+describe('#1944 browse_course：图标 / 「去完成」落点 / 流水事由（后端 #2065 新任务码，不复用 daily_browse）', () => {
+  const displaySrc = stripComments(read('utils/pointsDisplay.uts'));
+
+  it('任务中心有独立图标，且不与论坛的 daily_browse 共用一条分支', () => {
+    expect(taskSrc).toContain("if (code == 'browse_course') return '🎓'");
+    expect(taskSrc).toContain("if (code == 'daily_browse') return '📖'");
+  });
+
+  it('「去完成」落课程列表 tab，不落论坛（两个码语义不同，#2065 评论点名别串台）', () => {
+    expect(taskSrc).toContain("if (code == 'browse_course') return { url: '/pages/courses/courses', tab: true } as TaskRoute");
+    for (const line of taskSrc.split(/\r?\n/).filter((l) => l.includes("'browse_course'"))) {
+      expect(line).not.toContain('forum');
+    }
+  });
+
+  it('领取后流水事由映射「浏览课程」（后端 Claim 落账 Reason = 任务 code，缺映射会把裸 code 甩给用户）', () => {
+    expect(displaySrc).toContain("if (reason == 'browse_course') return '浏览课程'");
+  });
+
+  it('端上不写死任务文案与分值：标题/描述/points 全部读 GET /points/tasks 返回（Q11 定案）', () => {
+    expect(taskSrc).not.toContain('浏览 3 门课程'); // 文案唯一来源是后端下发
+    expect(taskSrc).not.toMatch(/今日可得[^\n]*6[05]/);
   });
 });
 

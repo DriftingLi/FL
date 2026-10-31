@@ -15,13 +15,20 @@
  %LOCALAPPDATA%\微信开发者工具\User Data\<MD5>\Default\.ide，同根多 profile 各一份 —— 枚举器按
  候选根有界递归，不写死单一路径）。
 
- 楔死态签名（**最窄**，勿放宽）：端口文件存在 + 其端口可解析 + TCP 试连失败。
+ 楔死态签名（**最窄**，勿放宽）：端口文件存在 + 其端口可解析 + TCP 试连失败 + **IDE 进程数 ≥ 1**。
+ 进程数这一维是 #2147 补的（2026-10-30 现场）：同一支签名原先盖住两种本质不同的状态 ——
+   ① IDE 在跑但端口僵（该拦，#1860 的初衷）；② IDE 早已退出、只剩陈旧端口文件（那是**冷起点的同一
+ 事实的不同痕迹**，却被拦死）。实测代价：连续三次 `ide-port-unreachable` 早退且**不会自愈**，而门
+ 自己的 publish/open 本来就能把它拉起来。0 个 IDE 进程时**无从 kill** ⇒ 不违反 ADR-0008 红线，也
+ 不是把否定性闸门放宽成肯定性放行（它只是把「文件不存在」的冷起点语义扩到「文件在但无进程」）。
  为什么是否定性闸门（调研 §1.2 条 1 的风险条款，勿改成肯定性放行）：预探判错会把「可跑」误报成
  env-blocked。故只拦上面这一种组合，其余一律放行并如实记录观察：
    - 端口文件不存在           ⇒ IDE 未运行（冷起点，门自己经 publish/open 拉起）⇒ 放行；
    - 端口文件在 + 试连可达     ⇒ IDE 服务在听 ⇒ 放行 —— **不冒充「会话已就绪」**：就绪判据
                                  仍是协议级的 SDKVersion + pageStack，归就绪闸门（坑位 5/6）；
-   - 端口文件在但内容不可解析  ⇒ 未知 ⇒ 放行（宁可漏拦交给后续闸门，不误杀可跑环境）。
+   - 端口文件在但内容不可解析  ⇒ 未知 ⇒ 放行（宁可漏拦交给后续闸门，不误杀可跑环境）；
+   - 端口文件在 + 试连失败 + IDE 进程数 = 0 ⇒ `stale-port-file`（只剩陈旧文件）⇒ 按冷起点放行（#2147）：
+                                 放行**不冒充**「IDE 在跑」，观察串把进程数一起打出来。
  处置（楔死命中时由门脚本打印，人工执行）：退出并重启微信开发者工具 / 清点残留 IDE 进程后重开；
  ADR-0008 红线不变 —— 门**绝不 kill** IDE 主程序。
 
@@ -77,20 +84,45 @@ function Test-MpWeixinTcpConnect {
 }
 
 <#
- 否定性预探：「.ide 端口文件在但其服务端口试连不上」⇒ Wedged=$true（楔死），其余一律放行。
+ 数微信开发者工具进程（#2147）。本机两种进程名都要认：英文安装的 exe 名 `wechatdevtools`、中文安装的
+ 「微信开发者工具」—— #1690 已踩过一次「只数英文名 ⇒ 这台机器恒 0」的坑，这里按 ProcessName 双名匹配。
+ 只数不算、不做任何处置（门绝不 kill IDE：ADR-0008 红线）。
+ @returns 进程数（int；取不到进程表 ⇒ 0，与「IDE 未运行」同义，fail 向放行）
+#>
+function Get-MpWeixinIdeProcessCount {
+    # 探测失败与「真的 0 个」必须分开：前者返回 -1（调用方按 ≥1 处理 ⇒ 维持拦截，fail-closed），
+    # 否则一次取不到进程表就会把真楔死环境静默放行（#2147 审查点）。
+    try {
+        $procs = @(Get-Process -ErrorAction Stop | Where-Object { $_.ProcessName -match 'wechatdevtools|微信开发者工具' })
+        return [int]$procs.Count
+    } catch {
+        return -1
+    }
+}
+
+<#
+ 否定性预探：「.ide 端口文件在但其服务端口试连不上」**且 IDE 进程数 ≥ 1** ⇒ Wedged=$true（楔死），
+ 其余一律放行 —— 含「文件在 + 连不上 + 进程数 = 0」这一支（stale-port-file，等价于冷起点，#2147）。
  @param UserDataRoots    候选用户目录根（空 ⇒ 本机标准位置）
  @param ConnectTimeoutMs 单次 TCP 试连预算（毫秒；门从 GATE_PLAN timeouts.preprobeMs 取）
- @returns 有序字典：Wedged（bool）/ Observed（人读观察串，进日志）/ DeadPorts（楔死时「文件:端口」清单）
+ @param IdeProcessProbe  进程数探测器（缺省 = Get-MpWeixinIdeProcessCount）。行为守护靠它注入夹具：
+                         真执行路径上的「进程数」必须是**可注入的一维**，否则夹具只能等本机真起 IDE
+                         （那既是环境依赖，也测不到 0 与 ≥1 两侧）。
+ @returns 有序字典：Wedged（bool）/ StalePortFile（bool，#2147 的第三态）/ IdeProcesses（数到的进程数）/
+          Observed（人读观察串，进日志）/ DeadPorts（楔死时「文件:端口」清单）
 #>
 function Test-MpWeixinDevToolsSessionReachable {
     param(
         [AllowEmptyCollection()][string[]]$UserDataRoots = @(),
-        [int]$ConnectTimeoutMs = 2000
+        [int]$ConnectTimeoutMs = 2000,
+        [scriptblock]$IdeProcessProbe
     )
     $files = Get-MpWeixinIdePortFiles -UserDataRoots $UserDataRoots
     if (@($files).Count -eq 0) {
         return [ordered]@{
             Wedged = $false
+            StalePortFile = $false
+            IdeProcesses = $null
             Observed = 'no-port-file：.ide 端口文件不存在 ⇒ IDE 未运行（冷起点，门自己拉起）⇒ 放行'
             DeadPorts = @()
         }
@@ -110,9 +142,24 @@ function Test-MpWeixinDevToolsSessionReachable {
         else { $dead += "${f}:${port}" }
     }
     if (@($dead).Count -gt 0 -and @($alive).Count -eq 0) {
+        # #2147：同一支签名（文件在 + 连不上）先数一次进程，把两种本质不同的状态分开 ——
+        # 进程数 ≥ 1 ⇒ IDE 真的在跑而端口僵（楔死，维持 exit 2）；= 0 ⇒ 只剩陈旧文件（stale-port-file，
+        # 等价于冷起点 ⇒ 放行，交给后续 publish/open 拉起）。判据只读、不 kill、不启停 IDE。
+        $ideCount = if ($IdeProcessProbe) { [int](& $IdeProcessProbe) } else { [int](Get-MpWeixinIdeProcessCount) }
+        if ($ideCount -eq 0) {
+            return [ordered]@{
+                Wedged = $false
+                StalePortFile = $true
+                IdeProcesses = 0
+                Observed = "stale-port-file：.ide 端口文件在但其服务端口试连不上（$($dead -join ', ')），且 IDE 进程数 = 0（只剩陈旧文件）⇒ 等价于冷起点（门自己经 publish/open 拉起）⇒ 放行"
+                DeadPorts = @($dead)
+            }
+        }
         return [ordered]@{
             Wedged = $true
-            Observed = "port-file-dead：.ide 端口文件在但其服务端口试连不上（$($dead -join ', ')）⇒ IDE 残留/崩溃痕迹（楔死）"
+            StalePortFile = $false
+            IdeProcesses = $ideCount
+            Observed = "port-file-dead：.ide 端口文件在但其服务端口试连不上（$($dead -join ', ')），且 IDE 进程数 = $ideCount（≥1 ⇒ 真楔死）⇒ IDE 残留/崩溃痕迹（楔死）"
             DeadPorts = @($dead)
         }
     }
@@ -120,5 +167,5 @@ function Test-MpWeixinDevToolsSessionReachable {
     if (@($alive).Count -gt 0) { $notes += "试连可达（$($alive -join ', ')）⇒ 放行（不冒充会话就绪，就绪判据归就绪闸门）" }
     if (@($unparsed).Count -gt 0) { $notes += "端口文件内容不可解析（$($unparsed -join ', ')）⇒ 最窄签名不拦" }
     if ($notes.Count -eq 0) { $notes += '端口文件在但无可解析端口 ⇒ 放行' }
-    return [ordered]@{ Wedged = $false; Observed = ($notes -join '；'); DeadPorts = @() }
+    return [ordered]@{ Wedged = $false; StalePortFile = $false; IdeProcesses = $null; Observed = ($notes -join '；'); DeadPorts = @() }
 }

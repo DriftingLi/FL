@@ -548,7 +548,8 @@ function New-GatePlan {
     # -1) 环境预探（#1860）：publish 之前的**秒级否定性预探** —— 把「环境被楔死」的暴露点从
     #     publish+open 之后（9–26 min/轮）提到秒级。判据库 scripts/lib/mp-weixin-preprobe.ps1
     #     （官方检测法：用户目录端口文件 + 尝试连接）。⚠️ 只做**否定性闸门**：只拦「.ide 端口文件
-    #     在但其服务端口试连不上」的楔死态；其余一律放行且不冒充「会话已就绪」（就绪判据归就绪闸门）。
+    #     在但其服务端口试连不上 **且 IDE 进程数 ≥ 1**」的楔死态；其余一律放行且不冒充「会话已就绪」
+    #     （就绪判据归就绪闸门）。#2147：进程数 = 0 时只剩陈旧文件（stale-port-file），按冷起点放行。
     #     本步**只读**（不操控 IDE、不发命令），故排在 quit 之前（quit 是第一个会话步骤）；
     #     -Doctor 跳过（体检自带逐层报告）。试连预算写死在 timeouts.preprobeMs（计划是预算唯一真源）。
     $steps += [ordered]@{
@@ -561,6 +562,7 @@ function New-GatePlan {
             '楔死态签名（最窄，勿放宽）= 端口文件存在 + 端口可解析 + 试连失败 ⇒ exit 2 reason=ide-port-unreachable，处置提示指向人工重启开发者工具（门绝不 kill IDE，ADR-0008 红线）',
             '端口文件不存在（IDE 未运行，冷起点）或试连可达 ⇒ 放行 —— 不做肯定性放行、不冒充「会话已就绪」（预探判错会把可跑环境误报成 env-blocked，调研 §1.2 条 1 风险条款）',
             '端口文件内容不可解析 ⇒ 放行（宁可漏拦交给就绪闸门，不误杀可跑环境）',
+            '端口文件在 + 试连失败 + IDE 进程数 = 0 ⇒ stale-port-file（只剩陈旧文件）按冷起点放行（#2147）：0 个进程时无从 kill，不违反 ADR-0008 红线，也不是把否定性闸门放宽成肯定性放行',
             '-Doctor 跳过本步（体检自带逐层报告）；行为守护 utils/mpWeixinGatePreprobeBehavior.test.js 真执行判据库'
         )
         exit2 = @([ordered]@{ on = 'unreachable'; reason = 'ide-port-unreachable' })
@@ -1841,8 +1843,13 @@ try {
         $pre = Test-MpWeixinDevToolsSessionReachable -UserDataRoots $preRoots -ConnectTimeoutMs ([int]$script:GatePlan['timeouts']['preprobeMs'])
         Write-Log "pre-probe: $($pre.Observed)"
         Write-Host ">>> pre-probe（#1860 否定性预探）：$($pre.Observed)"
+        # #2147：stale-port-file 是**放行**的第三态（文件在 + 连不上 + IDE 进程数 0）。它必须可见 ——
+        # 否则「门为什么肯冷起点」下一次又要靠人翻日志推断；同时它**不冒充**「IDE 在跑」。
+        if ($pre.StalePortFile) {
+            Write-Host ">>> pre-probe：stale-port-file（IDE 进程数 = $($pre.IdeProcesses)）⇒ 按冷起点放行，交给后续 publish/open 拉起（本门不启停、不 kill IDE）" -ForegroundColor DarkYellow
+        }
         if ($pre.Wedged) {
-            Write-Host '[error] 开发者工具环境楔死（.ide 端口文件在但服务端口试连不上）⇒ publish 之前判 env-blocked（exit 2），不烧构建与重试预算。' -ForegroundColor Red
+            Write-Host '[error] 开发者工具环境楔死（.ide 端口文件在但服务端口试连不上，且 IDE 进程数 ≥ 1）⇒ publish 之前判 env-blocked（exit 2），不烧构建与重试预算。' -ForegroundColor Red
             Write-Host '        处置（人工执行）：退出并重启微信开发者工具，或清点残留 IDE 进程后重开；本门绝不 kill IDE（ADR-0008 红线）。' -ForegroundColor Red
             Write-Log (New-MpWeixinEnvResultLine -Prefix $($script:GatePlan.resultLine.prefix) -Reason 'ide-port-unreachable' -Failures @("环境不可用：开发者工具 .ide 端口文件在但服务端口试连不上（$(@($pre.DeadPorts) -join ', '))"))
             # finally 的 close 在此路径会读死端口 ⇒ cli 自启 IDE 再关（#1860 三件套要消的正是自启族）；

@@ -57,6 +57,7 @@
  *   C26 **publish 前秒级环境预探**（#1860）：门计划第一步是 env-preprobe（exec=none，**只读**不操控 IDE），
  *       判据库 scripts/lib/mp-weixin-preprobe.ps1；楔死态签名 = 「.ide 端口文件在但其服务端口试连不上」，
  *       是**否定性闸门**（只拦楔死，不肯定性放行）；exit 2 归属 = ide-port-unreachable（envReasons 在列）。
+ *       #2147 补进程维度：进程数 0 的陈旧端口文件（stale-port-file）走放行，不算楔死。
  *   C27 **产物内容指纹自动 -SkipBuild**（#1860）：判据库 scripts/lib/mp-weixin-build-fingerprint.ps1，
  *       指纹键 = 输入集内容哈希 + 产物内容哈希 + HBuilderX 版本令牌（三组件全等才命中）；命中翻
  *       $SkipBuild 并重建门计划；落盘在产物合法/appid 断言都过之后；失配方向 fail 向重建。
@@ -1376,6 +1377,9 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
     const criteria = pre.criteria.join(' ');
     expect(criteria).toContain('否定性'); // 只拦楔死，不肯定性放行
     expect(criteria).toContain('ide-port-unreachable');
+    // #2147：进程数 0 的陈旧端口文件是**放行**的第三态，必须写进计划判据（计划是判据的唯一真源；
+    // 只写在判据库注释里 = 下一个人读计划时看不到「门为什么肯冷起点」）
+    expect(criteria).toContain('stale-port-file');
     expect(pre.exit2).toEqual([{ on: 'unreachable', reason: 'ide-port-unreachable' }]);
     // exit 2 归属必须进 envReasons 白名单（结果行 reason= 的取值域）
     expect(realPlan.branches.envBlocked.envReasons).toContain('ide-port-unreachable');
@@ -1392,6 +1396,8 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
     // 否定性闸门的 exit 2 走结果行构造器（形状由 mp-weixin-env.ps1 单点保证，不裸拼字符串）
     const body = code.slice(code.indexOf('Test-MpWeixinDevToolsSessionReachable'));
     expect(body).toContain("New-MpWeixinEnvResultLine -Prefix $($script:GatePlan.resultLine.prefix) -Reason 'ide-port-unreachable'");
+    // #2147：进程维度这一支必须**真被门消费** —— 判据库数了进程、门里却不看，等于白写（且不可见）
+    expect(body).toContain('$pre.StalePortFile');
     // 楔死早退路径跳过 finally 的 close：close 对死端口 .ide 会自启 IDE 再关（#1860 要消的自启族），
     // 且本路径从未创建自动化会话、无残留可收 —— 收尾哨兵必须真的被 close 函数消费。
     expect(code).toMatch(/\$script:skipFinalClose = \$true/);

@@ -105,6 +105,8 @@ const fav = (targetType, targetId, courseId = 0) => ({
   target_id: targetId,
   course_id: courseId,
   title: 't',
+  company: '',
+  region: '',
   cover: '',
   created_at: '',
 });
@@ -121,7 +123,8 @@ describe('执行器自检：落点模块真的被 loadUts 跑起来了（防空�
   it('落点路径只出现在被测模块里（页面已无内联落点表）', () => {
     const page = read(PAGE);
     for (const seg of ['/pages/courses/course-detail', '/pages/courses/chapter-view',
-      '/pages/forum/forum-detail', '/pages/featured/featured-detail', '/pages/practice/practice-do']) {
+      '/pages/forum/forum-detail', '/pages/featured/featured-detail', '/pages/practice/practice-do',
+      '/pages/jobs/job-detail']) {
       expect(read(MODULE)).toContain(seg);
       expect(page).not.toContain(seg);
     }
@@ -163,11 +166,33 @@ describe('#1089 我的收藏落点：五类条目各有正确落点', () => {
       click(fav('featured', 12)).navigations[0],
       click(fav('course', 7)).navigations[0],
       click(fav('topic', 5)).navigations[0],
+      click(fav('job', 88)).navigations[0],
     ];
     expect(urls.filter((u) => !u)).toEqual([]);
     for (const u of urls) {
       expect(pagesJson).toContain('"' + u.replace(/^\//, '').split('?')[0] + '"');
     }
+  });
+});
+
+/**
+ * #1946：收藏类型轴新增 job（后端 #2067 落地）。
+ *
+ * 为什么这条必须先落：落点表**缺分支时是静默 no-op** —— 新手往往以为「没报错 = 没问题」，
+ * 而真机表现是「点收藏的职位毫无反应」，正是 #1089 的原始缺陷形态。故这里断言**正向落点**。
+ */
+describe('#1946 职位收藏落点：job 类型落到职位详情', () => {
+  it('job：落到 job-detail，query 键是 id（该页 onLoad 读 options 的 id 键）', () => {
+    const c = click(fav('job', 88));
+    expect(c.navigations).toEqual(['/pages/jobs/job-detail?id=88']);
+    expect(c.toasts).toEqual([]);
+  });
+
+  it('job 不需要 notice 分支：下架职位由后端「过滤」掉，能出现在列表里的必然可打开', () => {
+    // 与 chapter 的「有落点但缺前提」相对照：job 的前提由后端保证（#2067 契约测试钉住），
+    // 故任何 job 条目都只跳转、不提示。
+    expect(click(fav('job', 1)).toasts).toEqual([]);
+    expect(click(fav('job', 1)).navigations.length).toBe(1);
   });
 });
 
@@ -299,6 +324,16 @@ describe('#1089 落点的数据前提：FavoriteItem.course_id 真的从响应�
     const missing = build.call({ target_type: 'chapter', target_id: 31 });
     expect(click(missing).navigations).toEqual([]);
     expect(click(missing).toasts.length).toBe(1);
+  });
+
+  it('#1946 职位两字段 company / region 同样从响应映射进来，缺键时为空串（不抛错）', () => {
+    const job = build.call({ target_type: 'job', target_id: 88, title: '技师', company: '某公司', region: '上海' });
+    expect(job.company).toBe('某公司');
+    expect(job.region).toBe('上海');
+    // 非 job 类型后端省略该两键（x-optional）⇒ 空串哨兵，不是 undefined
+    const course = build.call({ target_type: 'course', target_id: 7, title: '课' });
+    expect(course.company).toBe('');
+    expect(course.region).toBe('');
   });
 
   it('类型声明里 `course_id` 是**非可空** number（可空会让 Kotlin 侧 `<=` 比较编译报错）', () => {

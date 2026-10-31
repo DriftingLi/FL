@@ -202,7 +202,9 @@ const MODULES = {
     ],
     extractDirs: ['pages/courses/components', 'pages/courses/composables'],
     // #1422：dashboard 首页课程区接真实数据 ⇒ 消费本域 `api/course.uts`（getCourseListApi 热门口径）
-    crossModuleConsumers: ['dashboard', 'jobs', 'mall', 'practice'],
+    // #1947：profile 收藏页「题目」二级类别栏要题库类别字典 ⇒ 消费 `api/course.uts` 的 getTagsApi
+    //   （题库标签接口的既有家；没有第二处可去，不为此新开模块）。
+    crossModuleConsumers: ['dashboard', 'jobs', 'mall', 'practice', 'profile'],
     budget: BUDGET,
     budgetOverrides: {},
     maxDepth: MAX_DEPTH,
@@ -233,8 +235,12 @@ const MODULES = {
      * - `jobs` 自票 1945 起消费 `api/credential.uts`（职位广场证件筛选组的选项=证件字典单源）。
      * - `exam-info` 自票 1940 起消费 `api/featured.uts`（考情资讯页接内容精选，与 `featured` 同一条；
      *   登记口径见本文件头 ①「该域有既有模块契约 ⇒ 归该契约模块」）。
+     * - `profile` 自票 1947 起重回消费者面：收藏页「题目」的二级类别栏按定案要「字典 + 当前证件」，
+     *   `getTagsApi(credentialId)` 的证件由 `getCurrentCredentialApi()` 取（与练习页同口径）。
+     *   ⚠️ 上面 #1396 那条是**历史实测**（当时唯一接线随 credential-switch 删除），不是禁令；
+     *   这次是新增接线，登记照实。
      */
-    crossModuleConsumers: ['courses', 'featured', 'forum', 'mall', 'notifications', 'practice', 'guide', 'search', 'jobs', 'exam-info'],
+    crossModuleConsumers: ['courses', 'featured', 'forum', 'mall', 'notifications', 'practice', 'guide', 'search', 'jobs', 'exam-info', 'profile'],
     budget: BUDGET,
     budgetOverrides: {},
     maxDepth: MAX_DEPTH,
@@ -492,7 +498,8 @@ const MODULES = {
       'pages/profile/wrong-questions.uvue',
     ],
     extractDirs: ['pages/profile/components', 'pages/profile/composables'],
-    crossModuleConsumers: ['courses', 'dashboard', 'featured', 'practice', 'resources', 'resume'],
+    /** jobs 于 #1946 加入：job-detail.uvue 消费本模块的 api/favorite.uts（详情页收藏按钮） */
+    crossModuleConsumers: ['courses', 'dashboard', 'featured', 'jobs', 'practice', 'resources', 'resume'],
     /** 达标但贴近上限：`pages/profile/wrong-questions.uvue` 恰 600 行（先例 profileContract 的落袋锁） */
     budget: BUDGET,
     budgetOverrides: {},

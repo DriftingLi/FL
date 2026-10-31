@@ -58,7 +58,8 @@ Shield 扫的是**我们自己写的代码**，看不到「依赖里的已知漏
 - **版本更新**：`.github/dependabot.yml` 覆盖 `gomod:/backend`、`npm:/frontend`、`github-actions:/`、
   `docker:/{backend,frontend,libreoffice-sidecar}`，每周一 09:00（Asia/Shanghai）跑一次，minor+patch 合成一个 PR。
 - **刻意不覆盖移动端**（`training-app/叉车维修培训学员端跨端应用`）：那一侧由 @zhengcookie 负责，
-  PR 要过真机验收门（四门 + 证据），机器开的依赖单到不了那道门，只会变成红单。
+  PR 要过运行时门——现行只剩 ② 微信开发者工具（投放主渠道的运行时抖动）与 ④ 编译面两道机判，
+  ① 已于 2026-10-29 整门退役（降为发版的冒烟），机器开的依赖单到不了那道门，只会变成红单。
 
 ### 2. Go 标准库漏洞看的是**构建工具链**，不是 `go.mod`
 

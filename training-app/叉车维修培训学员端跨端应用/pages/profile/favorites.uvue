@@ -13,6 +13,17 @@
             </scroll-view>
         </view>
 
+        <!-- 类别下钻（#1947 / Q25）：只有「题目」类型有这一层；tagChips 为空 = 整行不渲染 -->
+        <view v-if="tagChips.length > 0" class="filter-bar filter-bar-secondary">
+            <scroll-view class="filter-scroll" scroll-x="true">
+                <view v-for="chip in tagChips" :key="chip.tag_id"
+                    :class="['filter-chip', { active: tagId == chip.tag_id }]"
+                    @click="onTagClick(chip.tag_id)">
+                    <text class="filter-chip-text">{{ chip.name }}</text>
+                </view>
+            </scroll-view>
+        </view>
+
         <scroll-view class="content-scroll" scroll-y="true" @scrolltolower="onLoadMore">
             <!-- 收藏列表 -->
             <view v-if="items.length == 0 && !loading" class="empty-tip">
@@ -32,6 +43,7 @@
                             <text class="fav-type-tag" :style="{ backgroundColor: getTypeColor(item.target_type) }">{{ getTypeLabel(item.target_type) }}</text>
                             <text class="fav-title">{{ item.title.length > 0 ? item.title : getTypeLabel(item.target_type) + ' #' + item.target_id }}</text>
                         </view>
+                        <text v-if="item.company.length > 0" class="fav-sub">{{ jobSubline(item) }}</text>
                         <text v-if="item.created_at.length > 0" class="fav-time">{{ displayTime(item.created_at) }}</text>
                     </view>
                     <view class="fav-actions" @click.stop="onRemove(item)">
@@ -51,13 +63,17 @@
 
 <script setup lang="uts">
     import { ref } from 'vue'
-    import { onShow } from '@dcloudio/uni-app'
+    import { onLoad, onShow } from '@dcloudio/uni-app'
     import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 import { goBack } from '../../utils/navigation'
     import { getFavoritesApi, removeFavoriteApi } from '../../api/favorite'
-    import type { FavoriteItem } from '../../types/index'
+    import { getTagsApi } from '../../api/course'
+    import { getCurrentCredentialApi } from '../../api/credential'
+    import type { FavoriteItem, TagItem } from '../../types/index'
     import { formatDateStr } from '../../utils/format'
     import { favoriteLanding } from '../../utils/favoriteLanding'
+    import { favoriteTagChips } from '../../utils/favoriteTagDrill'
+    import type { FavoriteTagChip } from '../../utils/favoriteTagDrill'
 
     /** 模板不可直调 import 函数（uvue 模板 import 调用编译为 .invoke() = Kotlin error18，先例 #677）；
      *  本地薄包装消费 utils/format 唯一实现（T03 口径：展示纯函数零第二实现） */
@@ -79,7 +95,12 @@ import { goBack } from '../../utils/navigation'
         { label: '帖子', value: 'topic' },
         { label: '资讯', value: 'featured' },
         { label: '题目', value: 'question' },
+        { label: '职位', value: 'job' },
     ]
+
+    /** 合法类型集（#1946）：路由参数 `type` 来自招聘「我的」三收藏格，越界值一律忽略，
+     *  免得把一个后端不认的 target_type 透到查询串上。 */
+    const VALID_TYPES : string[] = ['course', 'chapter', 'topic', 'featured', 'question', 'job']
 
     const currentType = ref<string>('')
     const items = ref<FavoriteItem[]>([])
@@ -89,12 +110,19 @@ import { goBack } from '../../utils/navigation'
     const loading = ref<boolean>(false)
     const noMore = ref<boolean>(false)
 
+    /** 题库类别字典全量（#1947，`GET /tags`）与当前类型下的 chip 行（空数组 = 整行不渲染） */
+    const allTags = ref<TagItem[]>([])
+    const tagChips = ref<FavoriteTagChip[]>([])
+    /** 当前下钻的类别：0 = 「全部」（不按类别过滤） */
+    const tagId = ref<number>(0)
+
     function getTypeLabel(type : string) : string {
         if (type == 'course') return '课程'
         if (type == 'chapter') return '章节'
         if (type == 'topic') return '帖子'
         if (type == 'featured') return '资讯'
         if (type == 'question') return '题目'
+        if (type == 'job') return '职位'
         return type
     }
 
@@ -104,20 +132,76 @@ import { goBack } from '../../utils/navigation'
         if (type == 'topic') return '#f44336'
         if (type == 'featured') return '#9e9e9e'
         if (type == 'question') return '#ff9800'
+        if (type == 'job') return '#1565c0'
         return '#999999'
     }
 
+    /**
+     * 职位条目的第二行「企业 · 地区」（#1946）。
+     *
+     * 后端只对 job 补齐这两键，其余类型是空串 ⇒ 本函数返回空串、模板据此不渲染该行。
+     * 与 `displayTime` 同理是本页本地薄包装（模板不可直调 import 函数，#677）。
+     */
+    function jobSubline(item : FavoriteItem) : string {
+        if (item.company.length == 0) return ''
+        if (item.region.length == 0) return item.company
+        return item.company + ' · ' + item.region
+    }
+
+    /**
+     * 按当前类型重算类别 chip 行（#1947）。
+     *
+     * 决策在 `utils/favoriteTagDrill`（唯一实现；行为守护经 loadUts 真跑它）：非「题目」类型
+     * 或字典为空都返回空数组 ⇒ 模板整行不渲染。页面不自己判断类型，免得这一层越界到其它 tab。
+     */
+    function refreshTagChips() : void {
+        tagChips.value = favoriteTagChips(currentType.value, allTags.value)
+    }
+
+    /**
+     * 拉题库类别字典（#1947，`GET /tags`）。
+     *
+     * 只在 onLoad 取一次；失败静默降级为「没有类别栏」——收藏列表本身照常可用，
+     * 不该因为一个二级筛选挂掉整页。证件口径与练习页同源（`/tags` 是公开路由、handler
+     * 自读 `credential_id`，见 docs/agents/credential-scope.md）：传当前证件才与学员题池对齐。
+     */
+    async function loadTagChips() : Promise<void> {
+        let credentialId = 0
+        try {
+            const cred = await getCurrentCredentialApi()
+            if (cred != null) { credentialId = cred!.id }
+        } catch (e) {
+            console.warn('[favorites] load credential failed:', e)
+        }
+        try {
+            allTags.value = await getTagsApi(credentialId)
+            refreshTagChips()
+        } catch (e) {
+            console.error('[favorites] load tags failed:', e)
+        }
+    }
+
+    /** 请求代号：只为「谁的结果算数」服务（竞态注释见 loadFavorites 头） */
+    const loadSeq = ref<number>(0)
+
     async function loadFavorites(reset : boolean = false) : Promise<void> {
-        if (loading.value) return
+        // 竞态（#1947）：原判据 `if (loading.value) return` 写在 reset 分支**之前** —— 连点两个
+        // 类别（或两个类型）时，后一次的重置被静默丢弃：chip 高亮 B、列表还是 A，接着 loadMore
+        // 还会把 B 的第 2 页拼到 A 的第 1 页。现在：追加仍被在途请求挡掉（同一页重拉没意义），
+        // 重置**永远放行**，再由 loadSeq 丢弃过期响应（谁后发谁算数）。
+        if (!reset && loading.value) return
         if (reset) {
             page.value = 1
             noMore.value = false
         }
         if (noMore.value && !reset) return
 
+        loadSeq.value = loadSeq.value + 1
+        const seq = loadSeq.value
         loading.value = true
         try {
-            const result = await getFavoritesApi(currentType.value, page.value, pageSize)
+            const result = await getFavoritesApi(currentType.value, page.value, pageSize, tagId.value)
+            if (seq != loadSeq.value) return
             if (reset) {
                 items.value = result.items
             } else {
@@ -132,13 +216,26 @@ import { goBack } from '../../utils/navigation'
         } catch (e) {
             console.error('[favorites] load failed:', e)
         } finally {
-            loading.value = false
+            if (seq == loadSeq.value) { loading.value = false }
         }
     }
 
+    /** 类别 chip 点击（#1947）：`0` = 「全部」，等价于不带 tag_id 的那一次请求 */
+    function onTagClick(val : number) : void {
+        if (tagId.value == val) return
+        tagId.value = val
+        loadFavorites(true)
+    }
+
+    /**
+     * 类型切换（#1947）：类别过滤**归零**——每个类型都从「全部」开始，免得带着上一类的
+     * tag_id 看到一份被静默收窄的列表（api 层已兜住非 question 不下发，这里只管观感）。
+     */
     function onTypeClick(val : string) : void {
         if (currentType.value == val) return
         currentType.value = val
+        tagId.value = 0
+        refreshTagChips()
         loadFavorites(true)
     }
 
@@ -203,7 +300,34 @@ import { goBack } from '../../utils/navigation'
         goBack()
     }
 
+    /**
+     * 路由参数 `type`（#1946）：招聘「我的」页的「公告收藏 / 职位收藏」格直接落到对应 tab。
+     *
+     * 只认 VALID_TYPES（其余值静默忽略 ⇒ 回到「全部」），因为该参数是**跨页约定**、
+     * 不是本页内部量；越界值透下去会让列表查询带一个后端不认的 target_type。
+     * 首屏加载仍由下面的 onShow 触发（onLoad 先于 onShow），不在这里重复请求。
+     */
+    onLoad((options : OnLoadOptions) => {
+        const opts = options as UTSJSONObject | null
+        const t = opts != null ? opts['type'] : null
+        if (t == null) return
+        const want = t as string
+        if (want.length == 0) return
+        for (let i = 0; i < VALID_TYPES.length; i++) {
+            if (VALID_TYPES[i] == want) {
+                currentType.value = want
+                return
+            }
+        }
+    })
+
+    /**
+     * 每次显示都重取类别字典（#1947）：与练习页同节拍（practice.uvue 的 onShow 也重取证件 + 字典）。
+     * 只挂 onLoad 会让「在别的页换了目标证件」后本页 chip 行停在旧证件的类别上；
+     * 字典拉失败时 allTags 保持上一次成功的值，不闪空。
+     */
     onShow(() => {
+        loadTagChips()
         loadFavorites(true)
     })
 </script>
@@ -221,6 +345,11 @@ import { goBack } from '../../utils/navigation'
         margin-top: 16rpx;
         border-radius: 12rpx;
         border: 1px solid #eeeeee;
+    }
+
+    /* 二级类别栏（#1947）：与类型栏同形，只是紧贴其下，不再吃一份上边距 */
+    .filter-bar-secondary {
+        margin-top: 0;
     }
 
     .filter-scroll {
@@ -373,5 +502,15 @@ import { goBack } from '../../utils/navigation'
     .loading-text {
         font-size: 24rpx;
         color: #999999;
+    }
+
+    /* 职位条目第二行「企业 · 地区」（#1946）：文字类样式必须落 <text>，故挂在 .fav-sub 上 */
+    .fav-sub {
+        font-size: 22rpx;
+        color: $text-color-secondary;
+        margin-top: 2rpx;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        lines: 1;
     }
 </style>
