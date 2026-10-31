@@ -12,7 +12,7 @@
 | --- | --- | --- | --- |
 | 1 开工 | `pwsh training-app/叉车维修培训学员端跨端应用/scripts/new-worktree.ps1 -Task <票号>`；建树后立刻建分支、尽早推 origin | `git status --porcelain` 无 `training-app/` | 宿主树里改 = ③ 门静默假绿（#1144）。判据看**意图**（含未 add 的新文件），不看 `git diff` |
 | 2 改完自检 | `npm run hx:compile-only` | 无 `ERROR` | 四条红线见下；这一步**不碰设备**，别拿真机验编译期的事 |
-| 3 ③ 两腿 | `npm run test:unit`（接线全量）/ `npm run test:behavior`（行为**子集**） | `TEST_UNIT_RESULT` / `TEST_BEHAVIOR_RESULT … mode=changed planned=N` | 子集红而 CI 绿 → 先自查，**不当 flake**；选错腿的 config = 0 套件假绿 |
+| 3 ③ 两腿 | `npm run test:unit:changed`（接线全量 + 行为**受影响子集**；全量两腿走 `npm run test:unit:gate`） | `TEST_UNIT_CHANGED_RESULT` / `TEST_BEHAVIOR_CHANGED_RESULT … mode=changed planned=N` | 子集红而 CI 绿 → 先自查，**不当 flake**；选错腿的 config = 0 套件假绿 |
 | 4 ④c（+④a） | `npm run build:kotlin-all`；命中三份 json / 新增页 / 模块手术再加 `npm run build:compile` | 退出码 0 | ④a 命中**必须清缓存**：`pages.json` 改一行不清 = 产物没更新还报编译成功 |
 | 5 ② 改动页 | `npm run build:mp-weixin-check`（**② 微信开发者工具门 = 半自动门**，执行人允许「agent 执行」） | `MP_WEIXIN_RESULT` 整行 + `coverage=changed:N\|smoke:2\|none` | `none` = 覆盖判据不可用（git diff 取不到，只剩入口页；不会退化成冒烟集）**不阻断**，但须原样进正文；清单为空才跑冒烟两页；`publish` 每 PR **只一次**，重试不再编译 |
 | 6 证据 | — | 正文一行 `跑于 <sha7>`；门读数行**原样**跟在后面（A1 已无「结论」栏）；图只作附证 | 图不是判据；`anchors=0` 不判红（人看该页） |

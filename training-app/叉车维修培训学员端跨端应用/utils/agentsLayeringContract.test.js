@@ -4,7 +4,7 @@
  * **要防的那件事**：常驻文件（每次会话都被整份注入的 `AGENTS.md`）把**按需读的参考表**、
  * 以及**别的文件里已经存在的同源副本**抄在身上 ⇒ 它一年比一年长，而长出来的部分全是漂移源。
  * 根 `AGENTS.md` 自己写过这条判据：「本处**不重复那些表**——它们靠指路而非抄写，
- * 抄过来正是历史上漂移的来源」。本守护把「根线式」钉成八条**跨真源**的不变式：
+ * 抄过来正是历史上漂移的来源」。本守护把「根线式」钉成九条**跨真源**的不变式：
  *
  *   L1 常驻预算  —— `AGENTS.md` 长度 ≤ `residentMax`，**只降不升**的棘轮（同 guardClassification H2 的写法）
  *   L2 不抄写    —— `AGENTS.md` 不得含与根 `AGENTS.md` / 根 `docs/agents/*.md` **逐字相同**的长行；
@@ -32,6 +32,12 @@
  *                   行号在任何一次编辑后都会漂：它指向的行还在，内容已经换了人 ⇒ 指针静默指向错误判据，
  *                   比悬空链接更坏（悬空至少会红）。同源依据是本仓「引用技能文档引小节名不引行号」的约定；
  *                   L4 只校「小节名能否解析」，管不到行号写法，故单列一条。
+ *   L9 读数行不矛盾 —— 两侧 `AGENTS.md` 的**同一行**不得把 gate 裸 token（`TEST_<腿>_RESULT`）与
+ *                   `mode=changed/local` 写在一起。首 token 由 `$headToken` 三分互斥（`scripts/dev-finish.ps1`
+ *                   token 组装，#2168 现测：`TEST_BEHAVIOR_RESULT` 与 `mode=changed` **从未同时存在**），
+ *                   且 `mode=` 只属于快路径与子集两种行 ⇒ 混写 = 照抄不可能的读数行（#2116 一页化时的转抄伤）。
+ *                   行为面兜底（guards.md Q3）：token 组装与 `-Mode` 的行为归 `utils/behaviorSubsetBehavior.test.js`
+ *                   S3 与 `utils/devFinishContract.test.js` U15（两者皆 [行为]）；本条只守**文档面**一致性（接线）。
  *
  * **形状**沿用本仓既有守护（见 utils/hxRunContract.test.js、utils/guardClassification.test.js）：
  * 先对**合成样本**注入违规、断言检测有效（防空跑假绿），再对真实文件断言零命中。
@@ -219,6 +225,18 @@ function scan(s) {
       v.push(`L8: ${label} AGENTS.md 用行号指针「${hit}」——行号会漂，改引小节名/步骤号`);
     }
   }
+
+  // ---- L9 gate 裸 token 与 mode= 不同行（#2168：首 token 三分互斥，混写行不可执行）
+  {
+    // 只认**裸** gate 形：`TEST_<腿>_RESULT` 后不接词界字符 ⇒ `TEST_UNIT_CHANGED_RESULT` /
+    // `TEST_BEHAVIOR_LOCAL_RESULT` 这类合规形不可能含该连续子串，不误伤。
+    const GATE_BARE_RE = /TEST_(?:UNIT|BEHAVIOR)_RESULT(?![\w])/;
+    const label9 = (t) => t.split('\n').findIndex((line) => GATE_BARE_RE.test(line) && /\bmode=(?:changed|local)\b/.test(line));
+    for (const [label, text] of [['移动端', s.agents], ['根', s.rootAgents]]) {
+      const ln = label9(String(text || ''));
+      if (ln >= 0) v.push(`L9: ${label} AGENTS.md 第 ${ln + 1} 行把 gate 裸 token 与 mode=changed/local 写进同一行（token 组装互斥，该行不可能出自 dev-finish）`);
+    }
+  }
   return v;
 }
 
@@ -344,6 +362,7 @@ describe('AGENTS.md 分层守护：检测有效性（注入违规必红，防空
     ['L7', '常驻层混入别条线路径', (s) => ({ agents: `${s.agents}\n入口在 frontend/ 的脚手架里。` })],
     ['L8', '移动端常驻层写行号指针', (s) => ({ agents: `${s.agents}\n判据见 \`docs/agents/release.md\`:16。` })],
     ['L8', '根常驻层写行号指针（两侧都管）', (s) => ({ rootAgents: `${s.rootAgents}\n判据见 \`docs/agents/release.md\`:16。` })],
+    ['L9', '执行单把 gate 裸 token 与 mode=changed 写进同一行（chimera 形，#2168）', (s) => ({ agents: `${s.agents}\n| 9 x | 命令 | \`TEST_BEHAVIOR_RESULT … mode=changed planned=N\` | 判据 |` })],
   ];
 
   test.each(cases)('%s：%s', (id, _why, mutate) => {
@@ -441,5 +460,15 @@ describe('AGENTS.md 分层守护：真实文件', () => {
 
   test('L8 常驻层禁行号指针（引小节名/步骤号，不引行号）', () => {
     expect(of(scan(REAL), 'L8')).toEqual([]);
+  });
+
+  test('L9 执行单第 3 步：读数行与 mode= 不矛盾，且钉住 -Changed 真形（#2168）', () => {
+    expect(of(scan(REAL), 'L9')).toEqual([]);
+    const row = String(REAL.agents).split('\n').find((l) => l.startsWith('| 3 '));
+    expect(row).toBeDefined();
+    expect(row).toContain('test:unit:changed');
+    expect(row).toContain('TEST_UNIT_CHANGED_RESULT');
+    expect(row).toContain('TEST_BEHAVIOR_CHANGED_RESULT');
+    expect(row).toContain('test:unit:gate');
   });
 });
