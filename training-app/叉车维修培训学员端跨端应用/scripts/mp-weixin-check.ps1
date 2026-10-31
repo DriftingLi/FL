@@ -1089,7 +1089,19 @@ Set-Content -LiteralPath $logPath -Encoding utf8 -Value @(
     "# 判成败只看输出：HBuilderX CLI / cli.bat / 探针的退出码一律不作门结论",
     "# 门计划（GATE_PLAN）是步骤/参数/预算/结果行字段的唯一真源；见 New-GatePlan 与 -DryRun"
 )
-function Write-Log { param([string]$Text) Add-Content -LiteralPath $logPath -Value $Text -Encoding utf8 }
+function Write-Log {
+    param([string]$Text)
+    Add-Content -LiteralPath $logPath -Value $Text -Encoding utf8
+    # #2162：行首结果行**原样透传** stdout —— 通过分支的裸行此前被「✅ ② 通过：<行>」的中文前缀
+    # 遮住（行首判据匹配不上），环境受阻分支则一个字都不打 ⇒ pr-gates 的 mp= 只能读成 no-line。
+    # 覆盖三种结果行（通过/门未过/env-blocked，互斥由构造器保证）与 -BuildOnly 的独立 token；
+    # 日志文件仍是字节级真源，透传逐字节 = 日志里那行，非结果行维持「只进文件」原语义。
+    # 排除 `comment=`（投递诊断行，#2830 先例）：它同样以裸 token 开头但**不是读数行** ——
+    # pr-gates 取**最后**一条行首匹配（pr-gates.ps1:239），绿跑后若投递失败，诊断行会顶掉真读数。
+    foreach ($ln in ($Text -split "`r?`n")) {
+        if ($ln -match '^MP_WEIXIN(_BUILDONLY)?_RESULT(\s|$)' -and $ln -notmatch ' comment=') { Write-Host $ln }
+    }
+}
 # -BuildOnly 的脏改提示（#1861 2026-10-28 裁定「跑完打印脏改提示」）：publish 经 HBuilderX 会回写工作树 ——
 # manifest.json 的 mp-weixin.appid 可能被置 null、pages.json 可能被写入 condition（GUI 选的启动页，属本地开发
 # 配置、禁止提交）。脚本**不自动改工作树**（自动 checkout 会把用户真实的改动一起抹掉），只把核对与还原动作印出来。

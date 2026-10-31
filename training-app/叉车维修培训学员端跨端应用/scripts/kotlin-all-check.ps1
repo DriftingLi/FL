@@ -167,7 +167,17 @@ Set-Content -LiteralPath $logPath -Encoding utf8 -Value @(
 # #2001 阶段时间戳：录制器指向本门日志（纯追加 [STAGE]/STAGE_SUMMARY 行，不改门判据）
 . (Join-Path $PSScriptRoot 'lib\gate-stages.ps1')
 Initialize-GateStageRecorder -LogPath $logPath
-function Write-Log { param([string]$Text) Add-Content -LiteralPath $logPath -Value $Text -Encoding utf8 }
+function Write-Log {
+    param([string]$Text)
+    Add-Content -LiteralPath $logPath -Value $Text -Encoding utf8
+    # #2162：行首结果行**原样透传** stdout —— 历史上通过/env/fail 的结论行只进日志文件，
+    # 而入口（pr-gates）按 ^token 行首认读数 ⇒ 任何跑法都被读成 no-line。日志文件仍是字节级真源；
+    # 透传不加前后缀、不改写（票面 AC：逐字节 = 日志里那行），非结果行维持「只进文件」原语义。
+    # 判据语义与退出码三分不在此处（射程外，见 #2162「射程外」段）。
+    foreach ($ln in ($Text -split "`r?`n")) {
+        if ($ln -match '^KOTLIN_ALL_RESULT(\s|$)') { Write-Host $ln }
+    }
+}
 
 # ---------- HBuilderX 忙检测（单实例串行资源，ADR-0008 坑位段）----------
 . (Join-Path $PSScriptRoot 'lib\hx-busy.ps1')
