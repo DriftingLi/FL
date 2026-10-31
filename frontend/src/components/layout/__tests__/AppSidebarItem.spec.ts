@@ -65,9 +65,14 @@ describe('侧栏导航行（AppSidebarItem）', () => {
     expect(link.find('a').attributes('href')).not.toBe('#')
   })
 
-  it('collapsed 时不渲染文字，只留图标位（紧凑态不撑宽侧栏）', () => {
+  it('collapsed 时文字标签保留在 DOM、交给透明度/布局过渡收起（不再 v-if 瞬删）', () => {
     const w = mk({ collapsed: true })
-    expect(w.find('.nav-item-label').exists()).toBe(false)
+    const label = w.find('.nav-item-label')
+    // 保留 DOM 是「宽度过渡期间文字不会第一帧就消失」的前提；视觉收起由 .collapsed CSS 负责
+    expect(label.exists()).toBe(true)
+    expect(label.attributes('aria-hidden')).toBe('true')
+    // 读屏名由行级 aria-label 接管（可见文字被 aria-hidden）
+    expect(w.find('a').attributes('aria-label')).toBe('课程中心')
     expect(w.find('.nav-item-icon').exists()).toBe(true)
   })
 })

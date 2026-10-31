@@ -2,7 +2,7 @@
  * 前端动效参数的**单点**（ADR-0079）。
  *
  * CSS 过渡仍走 `design-tokens.css` 的 `--duration-*` / `--ease-*`；这里只放
- * requestAnimationFrame 驱动的形变参数，避免同一个手感散落在各组件里。
+ * requestAnimationFrame / Web Animations API 驱动的动效参数，避免同一个手感散落在各组件里。
  */
 
 /** 弹簧：morphicons 的预设名，或自定义刚度/阻尼。 */
@@ -24,3 +24,10 @@ export type UiReducedMotion = 'never' | 'user' | 'always'
 
 /** 默认降级口径。 */
 export const UI_REDUCED_MOTION_DEFAULT: UiReducedMotion = 'user'
+
+/**
+ * 主题切换的圆形揭示（View Transitions API）：从触发图标中心扩散到整页。
+ * 时长取 420ms、缓动与 --ease-default 同一条曲线；降低动效偏好由 utils/themeReveal 先行短路。
+ */
+export const THEME_REVEAL_DURATION_MS = 420
+export const THEME_REVEAL_EASING = 'cubic-bezier(0.4, 0, 0.2, 1)'

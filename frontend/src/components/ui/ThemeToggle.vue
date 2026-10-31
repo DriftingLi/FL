@@ -1,6 +1,7 @@
 <template>
   <el-dropdown trigger="click" @command="onCommand">
     <button
+      ref="triggerRef"
       type="button"
       class="theme-toggle-btn flex cursor-pointer items-center justify-center transition-all duration-[var(--duration-tap)] ease-[var(--ease-default)] active:scale-[0.94]"
       :class="[variantClass, fixed ? fixedClass : '']"
@@ -50,8 +51,9 @@ import UiIcon from '@/components/ui/UiIcon.vue'
  * **圆角归各变体**：基类不写圆角——card / ghost 是胶囊，topbar 是控件档（8px），
  * 写在基类里再被变体覆盖会变成两个原子类抢同一个属性（R3 禁双写）。
  */
-import { computed } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import { useThemeStore, type ThemeMode } from '@/stores/theme'
+import { revealThemeFrom } from '@/utils/themeReveal'
 import type { IconName } from '@/icons/registry'
 
 const props = withDefaults(
@@ -63,6 +65,9 @@ const props = withDefaults(
 )
 
 const themeStore = useThemeStore()
+
+// 圆形揭示的圈心取触发器中心：同一份组件在顶栏 / 认证页 / AI 浮动胶囊里都能用
+const triggerRef = ref<HTMLButtonElement | null>(null)
 
 /**
  * 触发器的图形 = 当前外观三态之一：位置固定、只有形状变，正是形变的用场。
@@ -92,7 +97,11 @@ const variantClass = computed(() => {
 })
 
 function onCommand(mode: ThemeMode) {
-  themeStore.setMode(mode)
+  // 等 Vue 把图标与 data-theme 一起刷完，再让浏览器拍新快照（否则新帧里还是旧图标）
+  revealThemeFrom(triggerRef.value, async () => {
+    themeStore.setMode(mode)
+    await nextTick()
+  })
 }
 </script>
 

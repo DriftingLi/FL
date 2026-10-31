@@ -8,7 +8,14 @@
     ></div>
 
     <!-- 左上角悬浮图标组（侧栏不可见时显示：桌面收起态 / 移动端） -->
-    <div v-if="isMobile || collapsed" class="fixed left-3 top-3 z-20 flex items-center gap-2">
+    <!-- 常驻 DOM、靠透明度显隐：收起侧栏时不至于整块瞬间出现（v-if 会让它和侧栏宽度
+         过渡同时「啪」地冒出）。隐藏态 inert，键盘不会 Tab 进不可见的按钮。 -->
+    <div
+      class="fixed left-3 top-3 z-20 flex items-center gap-2 transition-opacity duration-[var(--duration-fast)] ease-[var(--ease-default)]"
+      :class="isMobile || collapsed ? 'opacity-100' : 'pointer-events-none opacity-0'"
+      :inert="!isMobile && !collapsed"
+      :aria-hidden="!isMobile && !collapsed ? 'true' : undefined"
+    >
       <!-- 胶囊容器：logo + 侧栏开关 + 新建 + 主题（对齐 DeepSeek 收起态） -->
       <div class="flex items-center gap-1 rounded-pill border border-line bg-panel p-1 shadow-card">
         <a :href="homeUrl" class="ml-0.5 mr-0.5 flex h-8 w-8 shrink-0 items-center justify-center" title="和润天下">
@@ -38,13 +45,18 @@
     </div>
 
     <!-- 会话侧栏（登录/未登录都渲染；移动端为抽屉） -->
+    <!-- 桌面收起不再 `hidden`（瞬时抹掉一整列）：宽度恒定 260、用负 margin 把它滑出
+         根容器的 overflow-hidden 边界，主对话区的宽度随之平滑增长；内容宽度不变，
+         所以收起过程中会话标题不会先被挤成一行省略号。 -->
     <aside
       class="session-sidebar flex shrink-0 flex-col bg-canvas"
       :class="[
         isMobile
           ? ['fixed inset-y-0 left-0 z-40 w-[260px] border-r border-line shadow-lg transition-transform duration-[var(--duration-normal)] ease-[var(--ease-default)]', mobileDrawerOpen ? 'translate-x-0' : '-translate-x-full']
-          : ['relative h-full border-r border-line', collapsed ? 'hidden' : 'w-[260px]']
+          : ['relative h-full w-[260px] border-r border-line transition-[margin-left] duration-[var(--duration-normal)] ease-[var(--ease-default)]', collapsed ? '-ml-[260px] pointer-events-none' : 'ml-0']
       ]"
+      :inert="isMobile ? !mobileDrawerOpen : collapsed"
+      :aria-hidden="(isMobile ? !mobileDrawerOpen : collapsed) ? 'true' : undefined"
     >
       <!-- 侧栏顶部：logo + 侧栏开关 + 主题 -->
       <div class="sidebar-header flex items-center justify-between px-3 py-3">

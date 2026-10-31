@@ -13,19 +13,12 @@
          收进那一个项级 module，票9 / ADR-0060 §9）；本组件只留分组编排与判定接线。 -->
     <nav class="sidebar-nav">
       <template v-for="item in menuItems" :key="item.key">
-        <!-- 有子项的分组 -->
+        <!-- 有子项的分组。分组头在展开/收起两态共用同一棵 DOM：
+             文字与箭头靠透明度/位移过渡，图标始终居中 —— 不再因为 v-if 换一棵树而瞬间跳变。
+             折叠态（effectiveCollapsed）下分组头不接受点击（旧形态只有图标，无展开语义），
+             悬停仍出叶子清单。 -->
         <template v-if="item.children && item.children.length">
-          <div
-            v-if="!effectiveCollapsed"
-            class="nav-group-label is-accordion"
-            :class="{ 'is-active': isGroupActiveLocal(item) }"
-            @click="onGroupToggle(item.key)"
-          >
-            <NavIcon :icon="item.icon" v-if="item.icon" class="nav-group-icon" />
-            <span>{{ item.label }}</span>
-            <UiIcon name="chevron-down" class="nav-group-arrow" :class="{ expanded: isGroupExpandedLocal(item.key) }" />
-          </div>
-          <UiTooltip v-else placement="right" :show-after="300">
+          <UiTooltip placement="right" :show-after="300" :disabled="!effectiveCollapsed">
             <template #content>
               <div class="nav-group-tooltip-title">{{ item.label }}</div>
               <div
@@ -37,44 +30,53 @@
                 {{ leaf.label }}
               </div>
             </template>
-            <div class="nav-group-icon-only" :class="{ 'is-active': isGroupActiveLocal(item) }">
-              <NavIcon :icon="item.icon" />
+            <div
+              class="nav-group-label"
+              :class="{ 'is-active': isGroupActiveLocal(item), 'is-accordion': !effectiveCollapsed }"
+              @click="onGroupHeaderClick(item.key)"
+            >
+              <NavIcon :icon="item.icon" v-if="item.icon" class="nav-group-icon" />
+              <span class="nav-group-text">{{ item.label }}</span>
+              <UiIcon name="chevron-down" class="nav-group-arrow" :class="{ expanded: isGroupExpandedLocal(item.key) }" />
             </div>
           </UiTooltip>
-          <div v-show="isGroupExpandedLocal(item.key)" class="nav-group-children">
-            <template v-for="child in item.children" :key="child.key">
-              <!-- 二级嵌套：child 自身还有 children（如 题库练习 ┬ 真题练习） -->
-              <template v-if="child.children && child.children.length">
+          <!-- 高度过渡：grid 0fr → 1fr，不用 v-show 瞬时 display:none -->
+          <UiCollapse :open="isGroupExpandedLocal(item.key)" class="nav-group-collapse">
+            <div class="nav-group-children">
+              <template v-for="child in item.children" :key="child.key">
+                <!-- 二级嵌套：child 自身还有 children（如 题库练习 ┬ 真题练习） -->
+                <template v-if="child.children && child.children.length">
+                  <AppSidebarItem
+                    v-if="isNavItemRenderable(child)"
+                    :item="child"
+                    :collapsed="effectiveCollapsed"
+                    :active="isRouteActive(child)"
+                    :level="2"
+                  />
+                  <div v-else class="nav-group-label nav-sub-group-label" :class="{ 'is-active': isGroupActiveLocal(child) }">
+                    <span>{{ child.label }}</span>
+                  </div>
+                  <AppSidebarItem
+                    v-for="sub in child.children"
+                    :key="sub.key"
+                    :item="sub"
+                    :collapsed="effectiveCollapsed"
+                    :active="isRouteActive(sub)"
+                    :level="3"
+                  />
+                </template>
+                <!-- 叶子 child：目标未就绪时出一行不可点的占位（fallback="inert"） -->
                 <AppSidebarItem
-                  v-if="isNavItemRenderable(child)"
+                  v-else
                   :item="child"
                   :collapsed="effectiveCollapsed"
                   :active="isRouteActive(child)"
                   :level="2"
-                />
-                <div v-else class="nav-group-label nav-sub-group-label" :class="{ 'is-active': isGroupActiveLocal(child) }">
-                  <span>{{ child.label }}</span>
-                </div>
-                <AppSidebarItem
-                  v-for="sub in child.children"
-                  :key="sub.key"
-                  :item="sub"
-                  :collapsed="effectiveCollapsed"
-                  :active="isRouteActive(sub)"
-                  :level="3"
+                  fallback="inert"
                 />
               </template>
-              <!-- 叶子 child：目标未就绪时出一行不可点的占位（fallback="inert"） -->
-              <AppSidebarItem
-                v-else
-                :item="child"
-                :collapsed="effectiveCollapsed"
-                :active="isRouteActive(child)"
-                :level="2"
-                fallback="inert"
-              />
-            </template>
-          </div>
+            </div>
+          </UiCollapse>
         </template>
 
         <!-- 无子项的顶级导航（外链与路由项都在同一行形态里，差别由 AppSidebarItem 判） -->
@@ -94,10 +96,15 @@
     <div class="h-px shrink-0 bg-[var(--color-border-seam)]"></div>
     <div class="sidebar-footer">
       <div class="footer-row">
-        <button class="footer-btn collapse-btn" @click="$emit('toggle-collapse')">
+        <button
+          class="footer-btn collapse-btn"
+          :aria-label="effectiveCollapsed ? '展开侧栏' : '收起侧栏'"
+          :title="effectiveCollapsed ? '展开侧栏' : '收起侧栏'"
+          @click="$emit('toggle-collapse')"
+        >
           <!-- 收起/展开是同一按钮上的两个方向：形状变了，所以走形变（ADR-0079 白名单） -->
           <UiIcon :name="effectiveCollapsed ? 'panel-left-open' : 'panel-left-close'" morph class="collapse-icon" />
-          <span v-if="!effectiveCollapsed" class="footer-btn-label">收起侧栏</span>
+          <span class="footer-btn-label">{{ effectiveCollapsed ? '展开侧栏' : '收起侧栏' }}</span>
         </button>
       </div>
     </div>
@@ -107,6 +114,7 @@
 
 <script setup lang="ts">
 import UiIcon from '@/components/ui/UiIcon.vue'
+import UiCollapse from '@/components/ui/UiCollapse.vue'
 import NavIcon from './NavIcon.vue'
 import { computed, reactive, watch } from 'vue'
 import { useRoute } from 'vue-router'
@@ -160,6 +168,12 @@ function isGroupExpandedLocal(key: string): boolean {
 
 function onGroupToggle(key: string): void {
   Object.assign(expandedMap, toggleGroupExpanded(expandedMap, key))
+}
+
+/** 折叠态的分组头只是图标入口（悬停出叶子清单），不承担展开/收起。 */
+function onGroupHeaderClick(key: string): void {
+  if (effectiveCollapsed.value) return
+  onGroupToggle(key)
 }
 
 function isGroupActiveLocal(item: NavItem): boolean {
@@ -224,6 +238,8 @@ function isRouteActive(item: NavItem): boolean {
 }
 
 .nav-group-label {
+  position: relative;
+  overflow: hidden;
   font-size: var(--text-xs);
   font-weight: var(--font-medium);
   color: var(--color-text-tertiary);
@@ -233,6 +249,22 @@ function isRouteActive(item: NavItem): boolean {
   display: flex;
   align-items: center;
   gap: 6px;
+  transition:
+    padding var(--duration-normal) var(--ease-default),
+    gap var(--duration-normal) var(--ease-default);
+}
+
+/* 分组名与箭头是**过渡件**：折叠时不换树，只移出布局并淡出（见下方 .collapsed 规则） */
+.nav-group-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-xs);
+  transition:
+    opacity var(--duration-fast) var(--ease-default),
+    transform var(--duration-fast) var(--ease-default);
 }
 
 .nav-group-label.is-active {
@@ -255,7 +287,9 @@ function isRouteActive(item: NavItem): boolean {
 .nav-group-arrow {
   margin-left: auto;
   font-size: var(--text-xs);
-  transition: transform var(--duration-fast) var(--ease-default);
+  transition:
+    transform var(--duration-fast) var(--ease-default),
+    opacity var(--duration-fast) var(--ease-default);
 }
 
 .nav-group-arrow.expanded {
@@ -268,21 +302,39 @@ function isRouteActive(item: NavItem): boolean {
   flex-shrink: 0;
 }
 
-.nav-group-icon-only {
-  display: flex;
-  align-items: center;
+/* 折叠态：分组头收成一颗图标（尺寸对齐退役前的 .nav-group-icon-only，
+   但不再另换一棵 DOM —— 文字与箭头原地淡出，宽度由侧栏自身的 width 过渡承担）。 */
+.app-sidebar.collapsed .nav-group-label {
   justify-content: center;
   padding: var(--space-2);
-  /* 图标尺寸：UiIcon 默认 1em，靠容器字号给到 16px（ADR-0081 / 原 .el-icon 规则的接替） */
-  font-size: var(--text-base);
-  color: var(--color-text-tertiary);
-  cursor: default;
+  gap: 0;
 }
 
-.nav-group-icon-only.is-active {
-  color: var(--color-primary-soft-ink);
+.app-sidebar.collapsed .nav-group-label.is-active {
   background: var(--color-primary-soft);
   border-radius: var(--radius-md);
+}
+
+.app-sidebar.collapsed .nav-group-icon {
+  font-size: var(--text-base);
+}
+
+.app-sidebar.collapsed .nav-group-text,
+.app-sidebar.collapsed .nav-group-arrow {
+  position: absolute;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(-6px);
+}
+
+.app-sidebar.collapsed .nav-group-text {
+  left: calc(var(--space-2) + var(--text-base) + var(--space-2));
+  right: var(--space-2);
+}
+
+.app-sidebar.collapsed .nav-group-arrow {
+  right: var(--space-2);
+  margin-left: 0;
 }
 
 .nav-group-children {
@@ -327,6 +379,8 @@ function isRouteActive(item: NavItem): boolean {
 }
 
 .footer-btn {
+  position: relative;
+  overflow: hidden;
   width: 100%;
   height: 36px;
   display: flex;
@@ -369,6 +423,21 @@ function isRouteActive(item: NavItem): boolean {
 }
 
 .footer-btn-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: var(--text-sm);
+  transition:
+    opacity var(--duration-fast) var(--ease-default),
+    transform var(--duration-fast) var(--ease-default);
+}
+
+.app-sidebar.collapsed .footer-btn-label {
+  position: absolute;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(-6px);
 }
 </style>
