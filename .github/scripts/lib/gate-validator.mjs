@@ -133,11 +133,160 @@ const hitsMpWeixinFace = (f) => {
   return isRuntimeFile(p) && hasMpWeixinDirective(f.patch);
 };
 
-// sha 前缀比较：A1 正文只写 7 位，compare 回来的是 40 位 —— 严格 `!==` 会让祖先口径**永假**。
+// ============================================================================
+// ADR-0052（移动端）② 门三档分层的**影子分档器** —— 波 2：只记录，不判红、不免除。
+//
+// 输入 = 改动文件清单（带 patch/status）+ 注入的核心名单（.github/scripts/lib/
+// mobile-gate-core-list.json；本文件必须自包含，名单只能由调用方取好传进来）+ PR 正文。
+// 输出 = tiering 对象（附在返回值上）与若干条 `SHADOW-0052` note。**errors 永不经它**。
+//
+// 阶梯（ADR-0052 决策 3/4，兜底永远向上；判定不动 → 按最高档记）：
+//   full         全门：核心页前缀 / 公共目录 / App.uvue·main.uts / 三份 json / 非 modified 状态
+//                （新增·删除·改名）/ `.uts`（逻辑减配档未开）/ scope 根外的运行时文件 /
+//                patch 缺失或内容识别不出 / script 块、import、组件标签、数据与事件绑定
+//   lite-targeted2  非核心页 `.uvue`，diff 触到 DOM 结构、布局属性、安全区、导航栏、静态类名
+//   lite-exempt2    非核心页 `.uvue`，只有文本行与非布局样式值
+// PR 档 = 各文件最坏值（混档自动升全门由 max 聚合天然成立）。
+//
+// **代码级锁定**：名单 switches 在本波只读不生效。exemptionActive/logicLiteTierOpen
+// 被翻真时不改判，只记 anomaly（波 3b 才接线）——「Shadow 期间不可能被提前打开」。
+// ============================================================================
+
+const LITE_RANK = { 'lite-exempt2': 1, 'lite-targeted2': 2, 'full': 3 };
+const BUILTIN_TAGS = new Set(['view','text','image','button','input','textarea','swiper','swiper-item','scroll-view','cover-view','cover-image','icon','rich-text','progress','checkbox','checkbox-group','radio','radio-group','form','label','picker','picker-view','slider','switch','navigator','video','camera','map','canvas','ad','official-account','open-data','template','slot','block','include','list','list-item','cell','cell-group','refresh-indicator','web-view','movable-area','movable-view','page-meta','view-group','layout','span','p','div','ul','li']);
+const LAYOUT_CSS = /(?:^|[;{\s])(?:display|flex(?:-[\w-]+)?|grid(?:-[\w-]+)?|justify-content|align-(?:items|content|self)|position|top|left|right|bottom|width|height|min-[\w-]+|max-[\w-]+|margin(?:-[\w-]+)?|padding(?:-[\w-]+)?|gap|line-height|transform|z-index)\b/;
+const EXEMPT_CSS = /(?:^|[;{\s])(?:color|background(?:-color)?|font(?:-weight|-family)?|font-style|letter-spacing|text-align|text-decoration|text-shadow|opacity|visibility|border(?:-radius|-style|-color)?|box-shadow)\b\s*:/;
+const VISUAL_WORD = /safe-area|safeArea|statusBar|statusbar|navigationBarTitleText|navigationStyle/i;
+
+// 名单形状校验（不是业务校验）：字段缺失/类型不对 ⇒ null ⇒ 调用方按「名单不可用」fail-closed。
+export function parseCoreList(raw) {
+  let obj = raw;
+  if (typeof raw === 'string') { try { obj = JSON.parse(raw); } catch { return null; } }
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null;
+  if (obj.version !== 1 || typeof obj.scopeRoot !== 'string') return null;
+  for (const k of ['corePagePrefixes', 'alwaysFullGateDirPrefixes', 'alwaysFullGateFilePrefixes']) {
+    if (!Array.isArray(obj[k]) || obj[k].some((p) => typeof p !== 'string' || !p)) return null;
+  }
+  if (!obj.switches || typeof obj.switches.exemptionActive !== 'boolean' || typeof obj.switches.logicLiteTierOpen !== 'boolean') return null;
+  return obj;
+}
+
+const inPrefixSegments = (rel, prefixes) =>
+  prefixes.some((p) => rel === p || rel.startsWith(p.replace(/\/+$/, '') + '/'));
+
+// diff 内容阶梯：只看增删行（去 +/- 前缀；排除 +++/--- 文件头）。返回该文件档位。
+function classifyUvuePatch(patch, list) {
+  const content = String(patch || '').split('\n')
+    .filter((l) => /^[+-]/.test(l) && !/^(?:\+\+\+|---)/.test(l))
+    .map((l) => l.slice(1));
+  if (content.length === 0) return { tier: 'full', why: 'patch 缺失或无增删行 ⇒ 识别不出，fail-closed' };
+  let rank = 0; let why = '';
+  const bump = (r, w) => { if (r > rank) { rank = r; why = w; } };
+  const coreDirRe = new RegExp(`(?:pages)/(?:${list.corePagePrefixes.map((p) => p.replace(/^pages\//, '')).join('|')})/`);
+  for (const c of content) {
+    const t = c.trim();
+    if (!t) continue;
+    // —— 全门触发（3）——
+    if (/<\/?script/i.test(t) || /^\s*(?:\/\/)?\s*(?:const|let|var|function|import|export|class|async|await)\b/.test(t)) { bump(3, 'script/顶层代码行增删'); continue; }
+    if (/^\s*import\b/.test(t) || coreDirRe.test(t)) { bump(3, '依赖引用变化（import/核心路径）'); continue; }
+    if (/(?:^|\s)[:@][A-Za-z_][\w.-]*\s*=|v-(?:if|else|for|model|show|bind|on|html|slot)\b|\{\{/.test(t)) { bump(3, '数据/事件绑定或插值'); continue; }
+    const tagM = t.match(/<\/?([A-Za-z][\w-]*)/);
+    if (tagM && !BUILTIN_TAGS.has(tagM[1].toLowerCase())) { bump(3, '自定义组件标签增删'); continue; }
+    // —— ② 定向触发（2）——
+    if (tagM) { bump(2, '内置标签/DOM 结构增删'); continue; }
+    if (VISUAL_WORD.test(t) || LAYOUT_CSS.test(t)) { bump(2, '布局/安全区/导航栏'); continue; }
+    if (/\bclass\s*=/.test(t)) { bump(2, '静态类名改动（布局影响未证）'); continue; }
+    // —— 可免 ②（1）——
+    if (EXEMPT_CSS.test(t)) { bump(1, '非布局样式值'); continue; }
+    if (!/[<>{}]|=\s*["']/.test(t)) { bump(1, '纯文本内容行'); continue; }
+    // 落不进任何一级：识别不出 ⇒ 保守（不 bump，保持当前 rank；rank 仍 0 时下面收口成 full）
+  }
+  if (rank === 0) return { tier: 'full', why: '增删行落不进阶梯任何一级 ⇒ 识别不出，fail-closed' };
+  return { tier: rank === 3 ? 'full' : rank === 2 ? 'lite-targeted2' : 'lite-exempt2', why };
+}
+
+// 正文档位声明：`- 档位：全门|模板减配|逻辑减配`（段内任意位置，半全角冒号都认）。
+export function parseDeclaredTier(bodyText) {
+  const m = String(bodyText || '').match(/^\s*[-*]?\s*档位\s*[:：]\s*(全门|模板减配|逻辑减配)/m);
+  return m ? m[1] : null;
+}
+
+export function classifyTiering({ files, coreList, bodyText }) {
+  const runtimeFiles = (files || []).filter((f) => isRuntimeFile(f.filename));
+  const declared = parseDeclaredTier(bodyText);
+  const out = { state: 'shadow', tier: 'n/a', declared, verified: 'n/a', triggers: [], anomalies: [], planned: { state: 'absent' } };
+  if (runtimeFiles.length === 0) { out.verified = '不适用（未命中运行时面）'; return out; }
+  const list = parseCoreList(coreList);
+  if (!list) {
+    out.tier = 'full'; out.verified = '名单不可用';
+    out.anomalies.push('名单缺失/形状不合 ⇒ fail-closed 按全门记录');
+    out.planned = judgePlannedCert(bodyText, 'full');
+    return out;
+  }
+  if (list.switches.exemptionActive) out.anomalies.push('名单 exemptionActive=true，但波 2 校验器未接线 ⇒ 忽略开关、继续影子（转正属波 3b）');
+  if (list.switches.logicLiteTierOpen) out.anomalies.push('名单 logicLiteTierOpen=true，同上 ⇒ 逻辑改动仍按全门记录');
+  const scope = list.scopeRoot.replace(/\/+$/, '') + '/';
+  let rank = 0;
+  for (const f of runtimeFiles) {
+    const fn = String(f.filename || '');
+    const rel = fn.startsWith(scope) ? fn.slice(scope.length) : null;
+    const put = (r, why) => {
+      if (r > rank) { rank = r; out.tier = r === 3 ? 'full' : r === 2 ? 'lite-targeted2' : 'lite-exempt2'; }
+      if (out.triggers.length < 8) out.triggers.push(`${rel || fn}：${why}`);
+    };
+    if (rel === null) { put(3, 'scope 根外的运行时文件 ⇒ 不识别'); continue; }
+    const base = rel.split('/').pop();
+    if (['manifest.json', 'pages.json', 'platformConfig.json'].includes(base)) { put(3, '三份 json（性质判据）'); continue; }
+    if (f.status && f.status !== 'modified') { put(3, `状态 ${f.status}（新增/删除/改名一律保守）`); continue; }
+    if (list.alwaysFullGateFilePrefixes.includes(rel)) { put(3, '全局升档文件（App.uvue/main.uts）'); continue; }
+    if (inPrefixSegments(rel, list.alwaysFullGateDirPrefixes)) { put(3, '公共目录改动（核心依赖传播面）'); continue; }
+    if (inPrefixSegments(rel, list.corePagePrefixes)) { put(3, '核心页模块'); continue; }
+    if (!rel.startsWith('pages/')) { put(3, '不在名单覆盖面（页面外路径）⇒ fail-closed'); continue; }
+    if (rel.endsWith('.uts')) { put(3, '页面局部 .uts 逻辑（逻辑减配档未开）'); continue; }
+    if (rel.endsWith('.uvue')) { const r = classifyUvuePatch(f.patch, list); put(LITE_RANK[r.tier] || 3, r.why); continue; }
+    put(3, '识别不出的文件形态 ⇒ fail-closed');
+  }
+  out.tier = rank === 3 ? 'full' : rank === 2 ? 'lite-targeted2' : 'lite-exempt2';
+  // 核身（声明 vs 事实）：本波只记不符，不判红。声明高于事实=保守方向，接受。
+  if (!declared) { out.verified = '未声明（影子按记录全门对待）'; }
+  else if (declared === '逻辑减配') { out.verified = '不符：逻辑减配档未开'; }
+  else if (declared === '全门') { out.verified = out.tier === 'full' ? '符' : '保守方向声明（事实更轻，接受）'; }
+  else if (declared === '模板减配') {
+    out.verified = out.tier === 'lite-exempt2' ? '符'
+      : out.tier === 'lite-targeted2' ? '不符：实际需 ② 定向'
+      : '不符：事实为全门';
+  }
+  out.planned = judgePlannedCert(bodyText, out.tier);
+  return out;
+}
+
+// planned=0 双证链（ADR-0052 决策 6）：正文出现 changed 读数行才判；影子期只记状态。
+// 合法 planned=0 ⇔ 同行 `discovered=N`（N>0，证明发现过程健康）且档位为模板级
+//（页面模板改动天然无套件映射）。runner 侧 `discovered=` 的产出接线属波 3a 前置。
+function judgePlannedCert(bodyText, tier) {
+  const lines = String(bodyText || '').match(/TEST_(?:UNIT|BEHAVIOR)_CHANGED_RESULT[^\n]*/g) || [];
+  if (lines.length === 0) return { state: 'absent', why: '正文无 changed 读数行（A1 下 ③ 不入正文，常态即此）' };
+  const issues = [];
+  let zeroProved = 0;
+  for (const line of lines) {
+    const pm = line.match(/\bplanned=(\d+)/);
+    if (!pm) { issues.push('planned= 缺失'); continue; }
+    if (pm[1] !== '0') continue;
+    const dm = line.match(/\bdiscovered=(\d+)/);
+    if (!dm) { issues.push('planned=0 但同行无 discovered ⇒ 双证缺一（发现过程未证明）'); continue; }
+    if (dm[1] === '0') { issues.push('discovered=0 ⇒ 测试配置失效/发现异常'); continue; }
+    // 全门档的 planned=0 不靠它免任何东西（③ 两腿在 CI 全量跑），模板档才是双证链要保护的档位。
+    if (tier !== 'full') zeroProved += 1;
+  }
+  if (issues.length > 0) return { state: 'anomaly', why: issues.join('；') };
+  return { state: 'ok', why: `planned=0 均有 discovered>0 同行双证（模板档命中 ${zeroProved} 行）` };
+}
+
+//  sha 前缀比较：A1 正文只写 7 位，compare 回来的是 40 位 —— 严格 `!==` 会让祖先口径**永假**。
 const shaMatches = (a, b) => Boolean(a) && Boolean(b) && (a.startsWith(b) || b.startsWith(a));
 
 export async function validatePrEvidence({
-  files, body, headSha = '', fetchCompare = null,
+  files, body, headSha = '', fetchCompare = null, coreList = null,
 }) {
   // 错误带上门归属：例外通道要按门豁免，字符串数组做不到「只清 ②、④ 照红」。
   // 返回给调用方前统一渲染成字符串（三个消费者的接口不变）。
@@ -159,16 +308,29 @@ export async function validatePrEvidence({
   // 未命中运行时面 ⇒ 整段免（分级判据，ADR-0008）。空正文也放行，这一条与改动前同义。
   if (runtime.length === 0) {
     notes.push(`未命中运行时面（改动 ${files.length} 个文件），按 ADR-0008 免人工门与 ④ 编译门。`);
-    return { ok: true, errors, notes, runtime, needs4b, gates };
+    return {
+      ok: true, errors, notes, runtime, needs4b, gates,
+      tiering: { state: 'shadow', tier: 'n/a', declared: null, verified: '不适用（未命中运行时面）', triggers: [], anomalies: [], planned: { state: 'absent', why: '未命中运行时面' } },
+    };
   }
 
   const clean = String(body || '').replace(/<!--[\s\S]*?-->/g, '');
+
+  // ---- ADR-0052 影子分档（波 2）：算档、核身、planned 双证，全部只进 notes/tiering，
+  // 不进 errors —— 本函数对 ok 的影响恒为「无」。----
+  const tiering = classifyTiering({ files, coreList, bodyText: clean });
+  notes.push(`SHADOW-0052 分档：档=${tiering.tier} 声明=${tiering.declared || '未声明'} 核身=${tiering.verified}（影子记录，不参与判据；转正属波 3b）`);
+  if (tiering.triggers.length > 0) {
+    notes.push(`SHADOW-0052 判据出处：${tiering.triggers.slice(0, 4).join(' / ')}${tiering.triggers.length > 4 ? ' 等' : ''}。`);
+  }
+  for (const a of tiering.anomalies) notes.push(`SHADOW-0052 异常：${a}`);
+  if (tiering.planned.state !== 'absent') notes.push(`SHADOW-0052 planned 双证：${tiering.planned.state} —— ${tiering.planned.why}`);
   // 段名从描述符取：写死正则会让「改描述符」只动生成侧、校验侧静默不跟（第二套口径）。
   const escRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const head = clean.match(new RegExp(`^${escRe(GATE_EVIDENCE.heading)}\\s*$`, 'm'));
   if (!head) {
     err('*', `缺 \`${GATE_EVIDENCE.heading}\` 段（段名固定，见 .github/PULL_REQUEST_TEMPLATE.md）。`);
-    return { ok: false, errors: errors.map((e) => e.text), notes, runtime, needs4b, gates };
+    return { ok: false, errors: errors.map((e) => e.text), notes, runtime, needs4b, gates, tiering };
   }
   const rest = clean.slice(head.index + head[0].length);
   const next = rest.search(/^##\s/m);
@@ -327,6 +489,7 @@ export async function validatePrEvidence({
         runtime,
         needs4b,
         gates,
+        tiering,
       };
     }
     notes.push(`例外声明只覆盖了 ${[...waived].join(' / ')}，仍有未被覆盖的缺项（见下）—— 要豁免就点名对应门号（\`${WAIVE_HINT}\`）。`);
@@ -342,5 +505,6 @@ export async function validatePrEvidence({
     runtime,
     needs4b,
     gates,
+    tiering,
   };
 }

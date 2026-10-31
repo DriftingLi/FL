@@ -17,7 +17,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { validatePrEvidence as validate, GATE_EVIDENCE } from './lib/gate-validator.mjs';
+import { validatePrEvidence as validate, GATE_EVIDENCE, classifyTiering, parseCoreList, parseDeclaredTier } from './lib/gate-validator.mjs';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(SCRIPT_DIR, '..', '..');
@@ -449,4 +449,131 @@ test('删掉的门不得有任何残留判据（① / ③ / ④b 的行判定）
   assert.doesNotMatch(src, /gate\.key === '①'/);
   assert.doesNotMatch(src, /gate\.key === '③'/);
   assert.deepEqual(GATE_EVIDENCE.gates.map((g) => g.key), ['②', '④'], '描述符只留两道门');
+});
+
+/* ─────────────── ADR-0052 波 2：影子分档（只记录、不判红、不改判） ─────────────── */
+// 六类判据用例（波面 2 项 5）：路径归类 / 混档升级 / 核心依赖传播 / 声明不符 /
+// 测试发现异常（fail-closed）/ 合法 planned=0。夹具读**真实名单文件**——名单与判据同仓演化，
+// 假名单测不出真前缀的形状问题（例如 pages/exam 与 pages/exam-info 的段边界）。
+
+const SCOPE = 'training-app/叉车维修培训学员端跨端应用/';
+const CORE_LIST = JSON.parse(readFileSync(path.join(REPO_ROOT, '.github/scripts/lib/mobile-gate-core-list.json'), 'utf8'));
+const mob = (rel, patch = '', extra = {}) => ({ filename: SCOPE + rel, status: 'modified', patch, ...extra });
+const tierOf = (files, opts = {}) => classifyTiering({
+  files,
+  coreList: 'coreList' in opts ? opts.coreList : CORE_LIST,
+  bodyText: opts.bodyText || '',
+});
+
+test('名单形状：真实文件必须过 parseCoreList，且登录=核心、论坛=非核心（分类锚点）', () => {
+  assert.ok(parseCoreList(CORE_LIST), '真实名单形状不合 ⇒ 全仓影子分档会恒 fail-closed');
+  assert.equal(tierOf([mob('pages/login/login.uvue', '+ 你好')]).tier, 'full');
+  assert.equal(tierOf([mob('pages/forum/forum.uvue', '+ 你好世界')]).tier, 'lite-exempt2');
+});
+
+test('G1 路径归类：七类位置各自的档（核心页/纯文本/布局/script/页面 uts/公共目录/三份 json/新增/scope 外/patch 缺）', () => {
+  const rows = [
+    ['核心页', mob('pages/profile/profile.uvue', '+ 文字'), 'full'],
+    ['非核心纯文本', mob('pages/search/search.uvue', '+ 新词'), 'lite-exempt2'],
+    ['非核心非布局样式值', mob('pages/search/search.uvue', '+ color: #333;'), 'lite-exempt2'],
+    ['非核心布局', mob('pages/search/search.uvue', '+ display: flex;'), 'lite-targeted2'],
+    ['非核心安全区', mob('pages/search/search.uvue', '+ padding-top: env(safe-area-inset-top);'), 'lite-targeted2'],
+    ['script 增删', mob('pages/search/search.uvue', '+ const a = 1;'), 'full'],
+    ['数据绑定', mob('pages/search/search.uvue', '+ <text :style="s">字</text>'), 'full'],
+    ['事件绑定', mob('pages/search/search.uvue', '+ <button @tap="go">按</button>'), 'full'],
+    ['页面局部 .uts', mob('pages/search/useX.uts', '+ let b = 2;'), 'full'],
+    ['公共目录 utils', mob('utils/x.uts', '+ // 改'), 'full'],
+    ['公共目录 components', mob('components/app-nav-bar/app-nav-bar.uvue', '+ 文字'), 'full'],
+    ['三份 json', mob('pages.json', '+ 1'), 'full'],
+    ['全局升档文件', mob('App.uvue', '+ 文字'), 'full'],
+    ['新增文件', mob('pages/search/new.uvue', '+ 文字', { status: 'added' }), 'full'],
+    ['改名', mob('pages/search/a.uvue', '', { status: 'renamed' }), 'full'],
+    ['scope 外运行时', { filename: 'other-app/x.uvue', status: 'modified', patch: '+ 文字' }, 'full'],
+    ['patch 缺失', mob('pages/search/search.uvue', ''), 'full'],
+  ];
+  for (const [name, file, want] of rows) {
+    assert.equal(tierOf([file]).tier, want, `归类错位：${name}`);
+  }
+});
+
+test('G2 混档升级：核心 + 非核心同 PR ⇒ 整体全门', () => {
+  const t = tierOf([mob('pages/dashboard/dashboard.uvue', '+ 文字'), mob('pages/search/search.uvue', '+ 文字')]);
+  assert.equal(t.tier, 'full');
+});
+
+test('G3 核心依赖传播：非核心页新增 import（含指向核心页路径）⇒ 全门', () => {
+  const t1 = tierOf([mob('pages/search/search.uvue', "+ import { x } from '@/pages/login/api.uts'")]);
+  assert.equal(t1.tier, 'full');
+  const t2 = tierOf([mob('pages/search/search.uvue', "+ import { y } from '@/utils/format.uts'")]);
+  assert.equal(t2.tier, 'full', 'import 变化本身即依赖变化');
+});
+
+test('G4 声明核身：四象限（符 / 不符-需定向 / 不符-实为全门 / 保守方向接受）+ 未声明', () => {
+  assert.equal(parseDeclaredTier('- 档位：模板减配'), '模板减配');
+  assert.equal(parseDeclaredTier('- 档位: 全门'), '全门');
+  assert.equal(parseDeclaredTier('没有声明'), null);
+  const lite = tierOf([mob('pages/search/search.uvue', '+ 文字')], { bodyText: '- 档位：模板减配' });
+  assert.equal(lite.verified, '符');
+  const cov = tierOf([mob('pages/search/search.uvue', '+ display: flex;')], { bodyText: '- 档位：模板减配' });
+  assert.equal(cov.verified, '不符：实际需 ② 定向');
+  const script = tierOf([mob('pages/search/search.uvue', '+ const a = 1;')], { bodyText: '- 档位：模板减配' });
+  assert.match(script.verified, /不符：事实为全门/);
+  const over = tierOf([mob('pages/search/search.uvue', '+ 文字')], { bodyText: '- 档位：全门' });
+  assert.match(over.verified, /保守方向/);
+});
+
+test('G5 fail-closed：名单缺失/坏形 ⇒ 按全门记录；开关被翻真 ⇒ 留异常行（波 2 影子从不改判）', () => {
+  const noList = tierOf([mob('pages/search/search.uvue', '+ 文字')], { coreList: null });
+  assert.equal(noList.tier, 'full');
+  assert.match(noList.anomalies.join(), /fail-closed/);
+  const badList = tierOf([mob('pages/search/search.uvue', '+ 文字')], { coreList: '{oops' });
+  assert.equal(badList.tier, 'full');
+  const flipped = { ...CORE_LIST, switches: { exemptionActive: true, logicLiteTierOpen: true } };
+  const t3 = tierOf([mob('pages/search/search.uvue', '+ 文字')], { coreList: flipped });
+  assert.equal(t3.tier, 'lite-exempt2', 'tier 是分档器的事实输出；波 2 的「不免除」由「影子从不改判」保证，不靠强改 tier');
+  assert.match(t3.anomalies.join(), /忽略开关|未开/, '开关被翻真必须留异常行');
+  // 影子不改判的完整锁在下面的「锁：影子恒不改判」用例里（ok/errors 逐字节相等）。
+});
+
+test('G6 planned=0 双证链：discovered>0 合法；缺 discovered / discovered=0 / 缺 planned ⇒ 异常；无行 ⇒ 不适用', () => {
+  const ok = tierOf([mob('pages/search/search.uvue', '+ 文字')], {
+    bodyText: 'TEST_BEHAVIOR_CHANGED_RESULT mode=changed planned=0 discovered=129 wall=3s',
+  });
+  assert.equal(ok.planned.state, 'ok');
+  const noDisc = tierOf([mob('pages/search/search.uvue', '+ 文字')], {
+    bodyText: 'TEST_BEHAVIOR_CHANGED_RESULT mode=changed planned=0 wall=1s',
+  });
+  assert.equal(noDisc.planned.state, 'anomaly');
+  const zeroDisc = tierOf([mob('pages/search/search.uvue', '+ 文字')], {
+    bodyText: 'TEST_UNIT_CHANGED_RESULT mode=changed planned=0 discovered=0',
+  });
+  assert.equal(zeroDisc.planned.state, 'anomaly');
+  const planned = tierOf([mob('pages/search/search.uvue', '+ 文字')], {
+    bodyText: 'TEST_UNIT_CHANGED_RESULT mode=changed planned=7 discovered=129',
+  });
+  assert.equal(planned.planned.state, 'ok', 'planned>0 不触发双证');
+  assert.equal(tierOf([mob('pages/search/search.uvue', '+ 文字')]).planned.state, 'absent');
+});
+
+test('锁：影子恒不改判 —— 同输入带/不带名单、带不符声明，ok 与 errors 逐字节相等', async () => {
+  const files = [mob('pages/search/search.uvue', '+ const a = 1;'), uvue()];
+  const b = onlyG4();
+  const baseR = await run({ files, body: b });
+  const shadowR = await validate({ files, body: `${b}\n- 档位：模板减配\n`, headSha: HEAD, coreList: CORE_LIST });
+  assert.equal(shadowR.ok, baseR.ok, '影子改了 ok');
+  assert.deepEqual(shadowR.errors, baseR.errors, '影子改了 errors');
+  assert.match(shadowR.notes.join(), /SHADOW-0052/);
+  assert.equal(shadowR.tiering.tier, 'full');
+  // 例外通道的返回形态也要带 tiering（不静默丢影子记录）
+  const wa = await validate({ files: [uvue()], body: '## 验收证据\n\n- 例外：已接受未验证风险 ④\n', headSha: HEAD, coreList: CORE_LIST });
+  assert.equal(wa.tiering.tier, 'full');
+});
+
+test('影子判据在 CI 的 new Function 路径同样成立（自包含约束的正面验证）', async () => {
+  const src = readFileSync(validatorPath, 'utf8');
+  const api = new Function(`${src.replace(/^export /gm, '')}\nreturn { validatePrEvidence, classifyTiering };`)();
+  const r = await api.validatePrEvidence({ files: [mob('pages/search/search.uvue', '+ 文字')], body: onlyG4(), headSha: HEAD, coreList: CORE_LIST });
+  assert.equal(r.ok, true, r.errors.join());
+  assert.equal(r.tiering.tier, 'lite-exempt2', 'eval 路径的分档与 import 路径不一致 ⇒ 自包含被打穿');
+  assert.match(r.notes.join(), /SHADOW-0052 分档/);
 });

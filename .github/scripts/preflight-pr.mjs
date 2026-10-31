@@ -27,6 +27,18 @@ import { validatePrEvidence, GATE_EVIDENCE } from './lib/gate-validator.mjs';
 import { lintIssueReferences, makeFsFacts, makeGhNumberResolver } from './lib/lint-issue-references.mjs';
 import { scanEvidenceLogs, classifyForPreflight } from './lib/evidence-encoding.mjs';
 
+/**
+ * ADR-0052 波 2：读核心名单（与 CI 的 getContent 同一份文件，本地直读磁盘）。
+ * 读不到/解析不了 ⇒ null ⇒ 校验器影子分档 fail-closed 按全门记录，不影响 ②④ 判据。
+ */
+function loadCoreList(repoRoot) {
+  try {
+    return JSON.parse(readFileSync(`${repoRoot}/.github/scripts/lib/mobile-gate-core-list.json`, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
 const USAGE = [
   '用法: node .github/scripts/preflight-pr.mjs [选项]',
   '',
@@ -208,6 +220,10 @@ function render(ctx) {
     const state = gate.required === false ? '— 免' : gate.bound ? `✅ 已绑 ${gate.commit}` : '❌ 未绑';
     lines.push(`  ${key} ${state}`);
   }
+  // ADR-0052 波 2：影子分档行（只读展示；判据只有 ②④，这行不决定绿红）。
+  if (result.tiering) {
+    lines.push(`  0052 影子分档: 档=${result.tiering.tier} 声明=${result.tiering.declared || '未声明'} 核身=${result.tiering.verified}`);
+  }
   if (result.errors.length > 0) {
     lines.push("");
     for (const e of result.errors) lines.push(`  ❌ ${e}`);
@@ -234,7 +250,7 @@ async function main(argv) {
   const hasBody = Boolean(args.bodyFile || args.pr);
   const body = args.bodyFile ? readFileSync(args.bodyFile, 'utf8') : args.pr ? prBody(args.pr) : '';
   const fetchCompare = makeFetchCompare(repo);
-  const result = await validatePrEvidence({ files: compare.files, body, headSha: commit, fetchCompare });
+  const result = await validatePrEvidence({ files: compare.files, body, headSha: commit, fetchCompare, coreList: loadCoreList(git('rev-parse', '--show-toplevel').trim()) });
   // #2053：对 PR 正文跑引用完整性 lint（与证据段判据同层）；空正文无从判起，直接放行分支。
   const refLint = body
     ? await lintIssueReferences(body, { ...makeFsFacts(git('rev-parse', '--show-toplevel').trim()), resolveNumber: makeGhNumberResolver(repo, { run }) })
@@ -249,7 +265,7 @@ async function main(argv) {
   const final = mergeEncodingLint(refMerged, encLint);
   const ciRun = pickCiSummaryRun(checkRuns(repo, commit), commit);
   if (args.json) {
-    console.log(JSON.stringify({ ok: final.ok, errors: final.errors, notes: final.notes, gates: final.gates, commit, base: args.base, ciRun }, null, 2));
+    console.log(JSON.stringify({ ok: final.ok, errors: final.errors, notes: final.notes, gates: final.gates, tiering: final.tiering || null, commit, base: args.base, ciRun }, null, 2));
   } else {
     console.log(render({ args, commit, compare, ciRun, result: final, hasBody }));
   }
