@@ -34,7 +34,7 @@ function mountForm(props: FormProps) {
 }
 
 const chipLabels = (chips: { findAll: (s: string) => Array<{ text: () => string }> }) =>
-  chips.findAll('[role="tab"]').map((b) => b.text().trim())
+  chips.findAll('[role="radio"]').map((b) => b.text().trim())
 
 // mockPost 是模块级共享 mock：逐例清调用记录，否则提交类用例互相污染计数
 beforeEach(() => {

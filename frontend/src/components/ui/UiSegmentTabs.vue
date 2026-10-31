@@ -1,9 +1,13 @@
 <script setup lang="ts">
 /**
- * 分段选项卡（segment tabs）：滑动指示条 + 激活项浮起，替代散落各页的 el-tabs/手搓胶囊。
+ * 分段控件（segmented control）：滑动指示条 + 激活项浮起，替代散落各页的 el-tabs/手搓胶囊。
  *
- * 交互：原生 button（键盘可达）；激活项浮起 + 滑动指示过渡；
- * prefers-reduced-motion 下过渡由全局媒体查询压平（见 global.css）。
+ * 注意它**不是选项卡**（#2156）：无面板可切，只从一组里选一个参数，故角色是单选组
+ * （容器 radiogroup、选项 radio + aria-checked），不是 tab/tablist。要换视图区请用
+ * `UiUnderlineTabs`（那边才是 tablist，并带 `aria-controls` 指向面板）。
+ *
+ * 交互：原生 button；方向键在组内移动并选中、Home/End 到两端、整组只留一个 Tab 落点；
+ * 激活项浮起 + 滑动指示过渡；prefers-reduced-motion 下过渡由全局媒体查询压平（见 global.css）。
  * 等分模式（equal）：窄容器内各选项等宽铺满。
  *
  * ⚠️ 配色约束（改动前必读）：
@@ -19,11 +23,9 @@
  * 整个盖住（2026-09-09 第二轮反馈「青色滑块在灰色胶囊下面滑动」的根因）。
  */
 import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { useRovingSelection, type RovingOption } from '@/composables/useRovingSelection'
 
-export interface UiSegmentOption {
-  label: string
-  value: string
-}
+export type UiSegmentOption = RovingOption
 
 const props = withDefaults(
   defineProps<{
@@ -49,6 +51,20 @@ interface Indicator { width: number; height: number; x: number; y: number }
 const indicator = ref<Indicator>({ width: 0, height: 0, x: 0, y: 0 })
 
 /**
+ * 单选组语义（#2156）：这一件只做「从一组里选一个参数」，不是选项卡。
+ * 容器 radiogroup / 选项 radio + aria-checked —— 改前挂的 tab/tablist 没有面板也没有方向键，
+ * 读屏播报「选项卡」而键盘按不动，属假语义。
+ *
+ * roving tabindex 与方向键手感由 `useRovingSelection` 统一提供（与下划线选项卡同族）。
+ */
+const { activeValue, setBtnRef, onKeydown } = useRovingSelection<UiSegmentOption>({
+  options: () => props.options,
+  current: () => props.modelValue,
+  disabled: () => props.disabled,
+  select: (opt) => select(opt)
+})
+
+/**
  * 首帧定位完成前不加过渡。
  * indicator 初值为 0，若一开始就带 transition，滑块会从左上角以「尺寸 0 生长」的方式
  * 滑到激活项 —— 那不是设计中的动效。定位落定后再放开过渡。
@@ -59,7 +75,7 @@ const ready = ref(false)
 function placeIndicator() {
   const bar = barRef.value
   if (!bar) return
-  const active = bar.querySelector('[aria-selected="true"]') as HTMLElement | null
+  const active = bar.querySelector('[aria-checked="true"]') as HTMLElement | null
   if (!active) return
   indicator.value = {
     width: active.offsetWidth,
@@ -122,7 +138,7 @@ onUnmounted(() => {
     ref="barRef"
     class="seg-bar relative inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-ctl bg-canvas p-1 [scrollbar-width:none]"
     :class="disabled ? 'opacity-60' : ''"
-    role="tablist"
+    role="radiogroup"
   >
     <!--
       滑动指示条：left/top 归零，translate 跟随激活项几何，避免 Tailwind 原子类计算偏差。
@@ -143,15 +159,18 @@ onUnmounted(() => {
       }"
     />
     <button
-      v-for="opt in options"
+      v-for="(opt, i) in options"
       :key="opt.value"
+      :ref="(el) => setBtnRef(el, i)"
       type="button"
-      role="tab"
-      :aria-selected="modelValue === opt.value"
-      class="relative z-10 cursor-pointer rounded-ctl bg-transparent px-3.5 py-1.5 text-xs font-medium whitespace-nowrap transition-colors duration-150"
+      role="radio"
+      :aria-checked="modelValue === opt.value"
+      :tabindex="activeValue === opt.value ? 0 : -1"
+      class="relative z-10 cursor-pointer rounded-ctl bg-transparent px-3.5 py-1.5 text-xs font-medium whitespace-nowrap transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ui-500/60 focus-visible:outline-none"
       :class="modelValue === opt.value ? 'text-white' : 'text-ink-3 hover:text-ink-2'"
       :style="equal ? { flex: '1 1 0' } : undefined"
       @click="select(opt)"
+      @keydown="onKeydown($event, i)"
     >
       <!-- 自定义富 label（如带图标/计数）：覆盖默认 opt.label；不传则按 opt.label 渲染，向后兼容 -->
       <slot name="option" :option="opt" :is-active="modelValue === opt.value">

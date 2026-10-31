@@ -217,11 +217,16 @@ defineExpose({
         窄屏取舍：tab 不许被压（shrink-0），工具栏允许被压到容器宽后**横向滚动**
         （min-w-0 是让 flex 子项能缩到内容宽以下的关键，否则它会撑破卡片）。
       -->
-      <UiUnderlineTabs class="shrink-0" :model-value="mode" :options="MODE_OPTIONS" @update:model-value="onModeChange" />
+      <UiUnderlineTabs class="shrink-0" panel-id="forum-md-panel" :model-value="mode" :options="MODE_OPTIONS" @update:model-value="onModeChange" />
       <MarkdownToolbar :disabled="previewing" @command="runCommand" />
     </div>
 
-    <div class="p-3">
+    <div
+      id="forum-md-panel"
+      role="tabpanel"
+      :aria-labelledby="`forum-md-panel-tab-${mode}`"
+      class="p-3"
+    >
       <!-- 预览与发布同源：都走 ForumContent 这一个 UGC 渲染单点 -->
       <ForumContent
         v-if="previewing"

@@ -1,6 +1,7 @@
 // 标签栏组件（#1620）：路由变化开签、点击切签、关闭按钮、固定页无关闭按钮、固定页随能力集换页（#1638）。
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { nextTick } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 
 const h = vi.hoisted(() => ({
@@ -85,5 +86,75 @@ describe('AdminTabBar', () => {
     await w.findAll('.admin-tab-close')[0].trigger('click')
     expect(store.tabs.map(t => t.name)).toEqual([PINNED_ADMIN_TAB])
     expect(h.push).toHaveBeenCalledWith({ name: PINNED_ADMIN_TAB })
+  })
+})
+
+// #2158：挂了 role=tab 就必须兑现选项卡的键盘契约，否则读屏的承诺是假的
+describe('AdminTabBar 键盘契约（#2158）', () => {
+  function mountWithTwoTabs() {
+    const store = useAdminTabsStore()
+    store.open({ name: 'AuditLogs' as never, title: '审计日志', pinned: false })
+    h.route = { name: 'AuditLogs', fullPath: '/admin/audit-logs', meta: { workspace: 'manage' } }
+    return mountBar()
+  }
+
+  it('容器是 tablist，页签是 tab 且带 aria-selected', () => {
+    const w = mountWithTwoTabs()
+    const list = w.find('[role="tablist"]')
+    expect(list.exists()).toBe(true)
+    expect(list.attributes('aria-label')).toBeTruthy()
+    const tabs = w.findAll('[role="tab"]')
+    expect(tabs).toHaveLength(2)
+    expect(tabs.map((t) => t.attributes('aria-selected'))).toEqual(['false', 'true'])
+  })
+
+  it('roving tabindex：只有激活页签能被 Tab 进入', () => {
+    const w = mountWithTwoTabs()
+    const tabs = w.findAll('[role="tab"]')
+    expect(tabs[0].attributes('tabindex')).toBe('-1')
+    expect(tabs[1].attributes('tabindex')).toBe('0')
+  })
+
+  it('关闭按钮不在 Tab 序列里（整条页签栏只停一次）', () => {
+    const w = mountWithTwoTabs()
+    expect(w.find('.admin-tab-close').attributes('tabindex')).toBe('-1')
+  })
+
+  it('方向键在页签间移动并激活', async () => {
+    const w = mountWithTwoTabs()
+    await w.findAll('[role="tab"]')[1].trigger('keydown', { key: 'ArrowLeft' })
+    expect(h.push).toHaveBeenCalledWith({ name: PINNED_ADMIN_TAB })
+  })
+
+  it('方向键到头会循环', async () => {
+    const store = useAdminTabsStore()
+    store.open({ name: 'AuditLogs' as never, title: '审计日志', pinned: false })
+    // 当前路由是首个页签（固定页）：在它上面按左方向键应回绕到最后一个
+    h.route = { name: PINNED_ADMIN_TAB, fullPath: '/admin/dashboard', meta: { workspace: 'manage' } }
+    const w = mountBar()
+    await w.findAll('[role="tab"]')[0].trigger('keydown', { key: 'ArrowLeft' })
+    expect(h.push).toHaveBeenCalledWith({ name: 'AuditLogs' })
+  })
+
+  it('Delete 关闭当前页签（固定页不关）', async () => {
+    const w = mountWithTwoTabs()
+    const store = useAdminTabsStore()
+    await w.findAll('[role="tab"]')[0].trigger('keydown', { key: 'Delete' })
+    expect(store.tabs.map((t) => t.name)).toEqual([PINNED_ADMIN_TAB, 'AuditLogs'])
+    await w.findAll('[role="tab"]')[1].trigger('keydown', { key: 'Delete' })
+    expect(store.tabs.map((t) => t.name)).toEqual([PINNED_ADMIN_TAB])
+  })
+
+  it('右键出菜单（role=menu），点遮罩关闭', async () => {
+    const w = mountWithTwoTabs()
+    await w.findAll('[role="tab"]')[1].trigger('contextmenu')
+    await nextTick()
+    const menu = document.querySelector('.admin-tabbar-menu')
+    expect(menu).toBeTruthy()
+    expect(menu!.querySelectorAll('[role="menuitem"]')).toHaveLength(3)
+
+    await w.find('.admin-tabbar-mask').trigger('click')
+    await nextTick()
+    expect(document.querySelector('.admin-tabbar-menu')).toBeNull()
   })
 })
