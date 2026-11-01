@@ -31,7 +31,7 @@ RUN go build -trimpath -ldflags="-s -w" -o /bin/migrate ./cmd/migrate
 RUN go build -trimpath -buildvcs=false -ldflags="-s -w" -o /bin/backfill-asset-domain ./cmd/backfill-asset-domain
 
 # ----- Runtime 阶段：轻量运行时镜像 -----
-FROM alpine:3.20
+FROM alpine:3.24
 
 # 安装运行时依赖（已移除 LibreOffice + poppler-utils + font-noto-cjk,改由 sidecar 容器提供）：
 # - ca-certificates tzdata su-exec：基础依赖
