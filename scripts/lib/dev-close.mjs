@@ -50,7 +50,11 @@ export function findTargetTree(worktreeListText, task) {
   return { path: '', branch: ref, registered: false }
 }
 
-/** 未合并活：origin/master..HEAD 有提交就算有活，绝不能拆（squash 仓里这条只能问 git，不能问 patch-id） */
+/**
+ * 未合并活：**PR 头之后**还有提交就算有活，绝不能拆。
+ * 不许拿 origin/master..HEAD 当判据 —— 本仓走 squash 合并，功能分支的提交永远不是 master 祖先，
+ * 那样判在每一条已合并的 PR 上都会是「有未合并提交」（#2174 dogfood 实测踩中）。
+ */
 export function hasUnmergedCommits(logText) {
   return String(logText ?? '').split(/\r?\n/).some((l) => l.trim() !== '')
 }

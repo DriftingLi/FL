@@ -56,6 +56,15 @@ test('L2a 未合并 / 读不到 PR 状态一律拒绝拆树（fail-closed）', (
   assert.equal(d.allow, false, '有未合并提交时不许拆（remove-worktree 自己也会保留分支）')
 })
 
+test('L2a2 squash 仓判据：只能问 PR 头，不能问 origin/master（#2174 dogfood 实测）', () => {
+  const ps1 = readFileSync(join(here, 'dev-close.ps1'), 'utf8')
+  assert.ok(ps1.includes('headRefOid'), '必须取 PR 的 head sha 当比对基准')
+  assert.ok(!/origin\/master\.\.HEAD/.test(ps1), '不许再用 origin/master..HEAD：squash 合并后它恒非空，会挡住每一次正常收尾')
+  assert.ok(ps1.includes('"$prHead..HEAD"'), '没合并的活 = PR 头之后的提交')
+  const d = decide({ task: '2174', prState: 'MERGED', worktreeList: LIST_PRESENT, unmergedLog: 'pr-head-unreadable', execute: true })
+  assert.equal(d.allow, false, '读不到 PR 头必须 fail-closed，不许当成「没活」放行')
+})
+
 test('L2b dry-run 是默认，-Yes 才透传 -Execute', () => {
   const dry = decide({ task: '2174', prState: 'MERGED', worktreeList: LIST_PRESENT, unmergedLog: '', execute: false })
   assert.equal(dry.allow, true, '已合并且无未提交活 => 允许')

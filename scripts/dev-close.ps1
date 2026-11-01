@@ -72,17 +72,28 @@ $wtList = '' + (& git -C $root worktree list --porcelain 2>&1 | Out-String)
 $unmerged = ''
 $treePathHint = ''
 $cursor = ''
+# squash 合并仓里，功能分支的提交**永远不是** master 的祖先（GitHub squash 会造一个新提交），
+# 所以「有没有还没合的活」不能问 origin/master，只能问 PR 自己的 head sha。
+Push-Location $root
+try { $prJsonText = '' + (& gh pr list --state all --head $branch --json state,headRefOid 2>&1 | Out-String) }
+finally { Pop-Location }
+$prHead = ''
+$mh = [regex]::Match($prJsonText, '"headRefOid"\s*:\s*"([0-9a-fA-F]{7,40})"')
+if ($mh.Success) { $prHead = $mh.Groups[1].Value }
 foreach ($line in ($wtList -split '\r?\n')) {
     $t = '' + $line
     if ($t.StartsWith('worktree ')) { $cursor = $t.Substring(9).Trim() }
     elseif ($t.StartsWith('branch ') -and $t.Substring(7).Trim() -eq "refs/heads/$branch") { $treePathHint = $cursor }
 }
 if ($treePathHint -and (Test-Path -LiteralPath $treePathHint)) {
-    $unmerged = '' + (& git -C $treePathHint log --oneline origin/master..HEAD 2>&1 | Out-String)
+    if ($prHead) {
+        # 只问「PR 头之后还有没有提交」：合并后被本地补提交的活，就是没进 PR 的活
+        $unmerged = '' + (& git -C $treePathHint log --oneline "$prHead..HEAD" 2>&1 | Out-String)
+    } else {
+        # 读不到 PR 头就不许拆（fail-closed）：拿不到比对基准时，「看起来没活」不是放行理由
+        $unmerged = 'pr-head-unreadable'
+    }
 }
-Push-Location $root
-try { $prJsonText = '' + (& gh pr list --state all --head $branch --json state 2>&1 | Out-String) }
-finally { Pop-Location }
 
 $dec = Invoke-Core '--decide' ([ordered]@{
     task = $Task; execute = [bool]$Yes; cwd = ('' + (Get-Location).Path)
