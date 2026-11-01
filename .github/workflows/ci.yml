@@ -761,6 +761,11 @@ jobs:
       - name: 一致性锁（判据不许改回双份）
         run: node --test scripts/gate-predicates.test.mjs
 
+      # #2174：收尾一条命令的判定层。CI 全线 ubuntu，所以判定做成纯 node（ps1 侧的副作用 CI 测不到），
+      # 这条 run 是它唯一的跑手——不进跑手 = 没有守护。
+      - name: 表驱动单测（收尾判定 dev-close）
+        run: node --test scripts/dev-close.test.mjs
+
   # ============================================================
   # Stage 7: CI 汇总 + testing 冒烟部署门禁
   #   1) 汇总各 job 结论。本 job 的 check run 名（ci-summary）是 ruleset 配置的
