@@ -149,7 +149,7 @@ function runScenarios() {
     '  $calls = \'\'',
     '  if (Test-Path -LiteralPath $callsLog) { $calls = ((Get-Content -LiteralPath $callsLog) -join \',\') }',
     '  $logText = [System.IO.File]::ReadAllText($sc.logPath, [System.Text.Encoding]::UTF8)',
-    '  $out[$p.Name] = @{ output = $r.Output; resultLine = $art.ResultLine; calls = $calls; exitCode = $r.ExitCode; planned = $r.Planned; completed = $r.Completed; stalls = $r.Stalls; stalled = $r.StalledSuite; reason = $r.StalledReason; logText = $logText }',
+    '  $out[$p.Name] = @{ output = $r.Output; resultLine = $art.ResultLine; calls = $calls; exitCode = $r.ExitCode; planned = $r.Planned; completed = $r.Completed; discovered = $r.Discovered; stalls = $r.Stalls; stalled = $r.StalledSuite; reason = $r.StalledReason; logText = $logText }',
     '}',
     'ConvertTo-Json -InputObject $out -Depth 6 -Compress | Set-Content -LiteralPath \'' + resultPath + '\' -Encoding UTF8',
     "$out.Keys -join ','",
@@ -182,6 +182,8 @@ describeWin('行为腿看门狗 / 总超时 / 断点续跑（#1994，假 jest + 
     expect(s.output).toMatch(/JEST_SUITE i=2\/3 status=STALL secs=[\d.]+(?: reason=stall)? file=b\.test\.js/);
     expect(s.output).toMatch(/RUN c\.test\.js/);
     expect(s.planned).toBe(3);
+    // #2179：发现数取子集过滤前 —— b 被 kill 也仍是 3（发现过程与完成度是两件事）
+    expect(s.discovered).toBe(3);
     expect(s.completed).toBe(2); // b 被 kill ⇒ 只有 a/c 是「跑完」的
     expect(s.stalls).toBe(1);
     expect(s.stalled).toBe('b.test.js');
@@ -229,6 +231,7 @@ describeWin('行为腿看门狗 / 总超时 / 断点续跑（#1994，假 jest + 
     expect(g.resultLine).toContain('stalls=0');
     expect(g.resultLine).toContain('resumedFrom=0');
     expect(g.resultLine).toContain('planned=2');
+    expect(g.discovered).toBe(2);
     expect(g.resultLine).toContain('completed=2');
     // 守住「不给卡住算绿」的另一侧：没卡也不许把字段省略
     expect(g.resultLine).toMatch(/\bsuitesFailed=0\b/);

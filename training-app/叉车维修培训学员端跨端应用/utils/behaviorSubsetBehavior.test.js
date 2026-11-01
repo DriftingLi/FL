@@ -91,6 +91,8 @@ function runHarness() {
   fs.mkdirSync(legDir, { recursive: true });
   fs.writeFileSync(path.join(legDir, 'fake-jest.cjs'), FAKE_JEST, 'utf8');
   for (const f of ['a.test.js', 'b.test.js', 'c.test.js']) fs.writeFileSync(path.join(legDir, f), 'OK\n', 'utf8');
+  // #2179：一个「什么都列不出来」的执行器 —— 只为走 Invoke-BehaviorLeg 的 planned=0 早退路径（发现数如实 0）。
+  fs.writeFileSync(path.join(legDir, 'empty-jest.cjs'), "'use strict';" + '\n' + 'process.exit(0);' + '\n', 'utf8');
 
   const inputPath = path.join(root, 'input.json');
   const resultPath = path.join(root, 'result.json');
@@ -125,21 +127,33 @@ function runHarness() {
     "Remove-Item -LiteralPath $log -ErrorAction SilentlyContinue",
     '$r = Invoke-BehaviorLeg -ProjectDir $spec.legDir -Runner $runner -StallSeconds 30 -TotalTimeoutSeconds 0 -OnlySuites @(\'a.test.js\', \'c.test.js\')',
     "$calls = ''; if (Test-Path -LiteralPath $log) { $calls = ((Get-Content -LiteralPath $log) -join ',') }",
-    '$out[\'legSubset\'] = @{ output = $r.Output; calls = $calls; planned = $r.Planned; completed = $r.Completed; exitCode = $r.ExitCode }',
+    '$out[\'legSubset\'] = @{ output = $r.Output; calls = $calls; planned = $r.Planned; completed = $r.Completed; discovered = $r.Discovered; exitCode = $r.ExitCode }',
     '',
     '# ---- ② 名字对不上就 fail-closed ----',
     "Remove-Item -LiteralPath $log -ErrorAction SilentlyContinue",
     '$r = Invoke-BehaviorLeg -ProjectDir $spec.legDir -Runner $runner -StallSeconds 30 -TotalTimeoutSeconds 0 -OnlySuites @(\'a.test.js\', \'zzz-missing.test.js\')',
     "$calls = ''; if (Test-Path -LiteralPath $log) { $calls = ((Get-Content -LiteralPath $log) -join ',') }",
-    '$out[\'legMissing\'] = @{ output = $r.Output; calls = $calls; planned = $r.Planned; exitCode = $r.ExitCode }',
+    '$out[\'legMissing\'] = @{ output = $r.Output; calls = $calls; planned = $r.Planned; discovered = $r.Discovered; exitCode = $r.ExitCode }',
+    '',
+    '# ---- ②b 一个套件都发现不了 ⇒ planned=0 早退，但发现数如实（0 是异常形态，不是绿）----',
+    "Remove-Item -LiteralPath $log -ErrorAction SilentlyContinue",
+    "$runnerEmpty = 'node ' + (Join-Path $spec.legDir 'empty-jest.cjs')",
+    '$rEmpty = Invoke-BehaviorLeg -ProjectDir $spec.legDir -Runner $runnerEmpty -StallSeconds 30 -TotalTimeoutSeconds 0',
+    "$out['legEmpty'] = @{ output = $rEmpty.Output; planned = $rEmpty.Planned; discovered = $rEmpty.Discovered; exitCode = $rEmpty.ExitCode }",
     '',
     '# ---- ③ 机检行身份：changed 与默认门必须可判读地区分 ----',
     "$logPath = Join-Path $spec.tmp 'r.log'; $sumPath = Join-Path $spec.tmp 'r.txt'",
     '$text = "Test Suites: 2 passed, 2 total`r`nTests: 4 passed, 4 total`r`nTime: 0.4 s`r`n"',
     '# -Mode changed 时行为腿发 TEST_BEHAVIOR_CHANGED_RESULT + mode=changed；不给 Mode 的那次逐字仍是旧形态',
-    "$artChanged = Write-UnitGateArtifacts -Output $text -LogPath $logPath -SummaryPath $sumPath -ExitCode 0 -Mode changed -Leg behavior -DurationSeconds 1 -PlannedSuites 2 -CompletedSuites 2 -HeadSha 'a1b2c3d' -WorktreeState clean",
+    "$artChanged = Write-UnitGateArtifacts -Output $text -LogPath $logPath -SummaryPath $sumPath -ExitCode 0 -Mode changed -Leg behavior -DurationSeconds 1 -PlannedSuites 2 -CompletedSuites 2 -DiscoveredSuites 3 -HeadSha 'a1b2c3d' -WorktreeState clean",
     "$artGate = Write-UnitGateArtifacts -Output $text -LogPath $logPath -SummaryPath $sumPath -ExitCode 0 -Leg behavior -DurationSeconds 1 -PlannedSuites 2 -CompletedSuites 2 -HeadSha 'a1b2c3d' -WorktreeState clean",
-    '$out[\'resultLine\'] = @{ changed = $artChanged.ResultLine; gate = $artGate.ResultLine }',
+    '# #2179：双证两形 —— planned=0 只有同行带 discovered=N（N>0）才合法；discovered=0 是「配置失效」的形态，如实写出、不补 0',
+    "$artZeroLegal = Write-UnitGateArtifacts -Output $text -LogPath $logPath -SummaryPath $sumPath -ExitCode 0 -Mode changed -Leg behavior -DurationSeconds 1 -PlannedSuites 0 -CompletedSuites 0 -DiscoveredSuites 3 -HeadSha 'a1b2c3d' -WorktreeState clean",
+    "$artZeroFatal = Write-UnitGateArtifacts -Output $text -LogPath $logPath -SummaryPath $sumPath -ExitCode 0 -Mode changed -Leg behavior -DurationSeconds 1 -PlannedSuites 0 -CompletedSuites 0 -DiscoveredSuites 0 -HeadSha 'a1b2c3d' -WorktreeState clean",
+    '# 取不到发现数 ⇒ 写问号（不补 0）；接线腿 changed 档跑的是全量 ⇒ planned 与 discovered 同值、两枚都在',
+    "$artUnitChanged = Write-UnitGateArtifacts -Output $text -LogPath $logPath -SummaryPath $sumPath -ExitCode 0 -Mode changed -DurationSeconds 1 -DiscoveredSuites 158 -HeadSha 'a1b2c3d' -WorktreeState clean",
+    "$artNoDisc = Write-UnitGateArtifacts -Output $text -LogPath $logPath -SummaryPath $sumPath -ExitCode 0 -Mode changed -Leg behavior -DurationSeconds 1 -PlannedSuites 2 -CompletedSuites 2 -HeadSha 'a1b2c3d' -WorktreeState clean",
+    '$out[\'resultLine\'] = @{ changed = $artChanged.ResultLine; gate = $artGate.ResultLine; zeroLegal = $artZeroLegal.ResultLine; zeroFatal = $artZeroFatal.ResultLine; unitChanged = $artUnitChanged.ResultLine; noDisc = $artNoDisc.ResultLine }',
     '',
     '# ---- ④ 子集计算的接线（真调工具 / 工具缺失 fail-closed）----',
     '# 改动清单**写死一份**，不从工作树取：收口时工作树通常是干净的，而「此刻恰好有未提交改动」的守护',
@@ -256,6 +270,8 @@ describeWin('#2034 行为腿受影响子集：接线（假 jest / 真 Invoke-Beh
     expect(s.output).toMatch(/JEST_SUITE_SUBSET requested=2 listed=3 selected=2 missing=0/);
     // 汇总行按**本次子集**累加（2 个套件），不是按 --listTests 的 3 个
     expect(s.output).toMatch(/Test Suites: 2 passed, 2 total/);
+    // #2179：发现数是**过滤前**的清单长度（3），不是本跑计划（2）—— 两件事混用就分不出「映射为空」与「配置失效」
+    expect(s.discovered).toBe(3);
   });
 
   test('S2: 子集里的名字不在 --listTests 清单里 ⇒ 非绿 + 逐个点名 + 一个套件都不起', () => {
@@ -265,6 +281,8 @@ describeWin('#2034 行为腿受影响子集：接线（假 jest / 真 Invoke-Beh
     expect(s.planned).toBe(0);
     expect(s.output).toContain('JEST_SUITE_SUBSET_MISSING file=zzz-missing.test.js');
     expect(s.output).toMatch(/missing=1/);
+    // 名字对不上 = 映射错，但发现过程本身健康：两枚读数必须能被分别读出
+    expect(s.discovered).toBe(3);
   });
 
   test('S3: 机检行身份 —— changed 发独立首 token + mode=changed，默认门那行逐字仍是旧形态', () => {
@@ -274,6 +292,38 @@ describeWin('#2034 行为腿受影响子集：接线（假 jest / 真 Invoke-Beh
     expect(ctx.resultLine.gate.split(' ')[0]).toBe('TEST_BEHAVIOR_RESULT');
     expect(ctx.resultLine.gate).not.toContain('mode=');
     expect(ctx.resultLine.gate).not.toContain('CHANGED');
+    // 发现数是 changed 档的字段：默认门那行连字段名都不该出现
+    expect(ctx.resultLine.gate).not.toContain('discovered=');
+  });
+
+  test('S6: 发现数进 changed 行 —— 取子集过滤前的清单长度；取不到写问号不补 0；接线腿两枚同值', () => {
+    const c = ctx.resultLine.changed;
+    expect(c).toContain('planned=2');
+    expect(c).toContain('discovered=3'); // 计划 2 ≠ 发现 3：这两枚回答的是两个不同的问题
+    // 取不到 ⇒ 问号（补 0 会被校验器读成「测试配置失效」这个结论）
+    expect(ctx.resultLine.noDisc).toContain('discovered=?');
+    // 接线腿在 changed 档跑的是全量、没有「计划子集」⇒ planned 与 discovered 同值、两枚都在（双证凑得齐）
+    expect(ctx.resultLine.unitChanged.split(' ')[0]).toBe('TEST_UNIT_CHANGED_RESULT');
+    expect(ctx.resultLine.unitChanged).toContain('planned=158');
+    expect(ctx.resultLine.unitChanged).toContain('discovered=158');
+  });
+
+  test('S7: 双证两形可判读 —— planned=0 discovered=3 合法，planned=0 discovered=0 是失效形态', () => {
+    const ok = ctx.resultLine.zeroLegal;
+    expect(ok.split(' ')[0]).toBe('TEST_BEHAVIOR_CHANGED_RESULT');
+    expect(ok).toContain('planned=0');
+    expect(ok).toContain('discovered=3');
+    const fatal = ctx.resultLine.zeroFatal;
+    expect(fatal).toContain('planned=0');
+    expect(fatal).toContain('discovered=0');
+  });
+
+  test('S8: 一个套件都发现不了 ⇒ planned=0 早退且发现数如实 0（异常形态不伪装成绿）', () => {
+    const e = ctx.legEmpty;
+    expect(e.exitCode).toBe(1);
+    expect(e.planned).toBe(0);
+    expect(e.discovered).toBe(0);
+    expect(e.output).toContain('JEST_SUITE_PLAN total=0');
   });
 
   test('S4: Get-BehaviorSubset 的取数与工具同源；工具缺失 ⇒ Ok=$false 且 Error 点名（不静默 0 套件）', () => {
@@ -313,6 +363,18 @@ describe('#2034 行为腿受影响子集：脚本接线（读源码，钉「不�
     expect(branch).not.toContain('jest.config.behavior.js');
     // 工具尾行那条并行命令只作为「不是本次跑法」的提示出现，不许真被当命令抄进来执行
     expect(branch).not.toMatch(/npx jest --config/);
+    // 3a 前置（#2179）：发现数走同一条 npm 入口现测（config 路径仍只活在 package.json 一处），两腿都进机检行
+    expect(branch).toContain('npm run test:unit -- --listTests');
+    expect(branch).toContain('-DiscoveredSuites $unitDiscovered');
+    expect(branch).toContain('-DiscoveredSuites $behaviorDiscoveredChanged');
+    // 探针必须排在真跑之前：读数要「跑之前的发现」，跑完再数会把「跑空了」当成发现健康
+    // 探针必须排在真跑之前（比的是两条**代码行**，不是注释里的同名字样）：读数要「跑之前的发现」，
+    // 跑完再数会把「跑空了」当成发现健康。
+    const probeAt = branch.indexOf('$unitListOut = (& npm run test:unit -- --listTests');
+    const runAt = branch.indexOf('$unitOutput = Invoke-GateLegCommand { & npm run test:unit }');
+    expect(probeAt).toBeGreaterThan(-1);
+    expect(runAt).toBeGreaterThan(-1);
+    expect(probeAt).toBeLessThan(runAt);
   });
 
   test('W2: 分支位置在 -DryRun 之后、-UnitLocal 之前（既有分支切片边界一个字不动）', () => {

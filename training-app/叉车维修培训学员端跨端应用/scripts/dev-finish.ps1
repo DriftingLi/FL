@@ -607,6 +607,12 @@ function Write-UnitGateArtifacts {
         [int]$ResumeFrom = 0,
         [int]$PlannedSuites = -1,
         [int]$CompletedSuites = -1,
+        # ---- #2179（ADR-0052 决策 6 / 波 3a 前置）：这一腿**发现**了多少套件 ----
+        # 口径 = 该腿 config 现测 `--listTests` 的计数，**子集过滤之前**（见 Invoke-BehaviorLeg）。
+        # 只在 `-Mode changed` 的读数行里出现 —— 门 / 本地两档的行逐字节不变。
+        # 取不到写 `?`（与 planned= / missing= 同口径），不补 0：`discovered=0` 在校验器里判红
+        # （测试配置失效 / 发现异常），补 0 等于把「不知道」说成「零条」。
+        [int]$DiscoveredSuites = -1,
         [int]$Stalls = 0,
         [int]$StallLimitSeconds = 0,
         [int]$LegTimeoutSeconds = -1
@@ -720,7 +726,17 @@ function Write-UnitGateArtifacts {
     )
     if ($isLocal) { $parts += 'mode=local' }
     # `mode=changed` 同理：子集跑法自报身份，读的人不必去「套件数对不对」里反推它是哪一档。
-    if ($isChanged) { $parts += 'mode=changed' }
+    if ($isChanged) {
+        $parts += 'mode=changed'
+        # 波 3a 前置（#2179）：`planned=0` 只有同一行还带 `discovered=N`（N>0）时才合法
+        # （ADR-0052 决策 6）—— 两枚合起来才说明「映射算得为空」+「发现过程本身健康」。
+        # 接线腿在 changed 档跑的是**全量**、没有「计划子集」这回事 ⇒ 它的 planned 就是发现数，两枚同值。
+        if ($Leg -ne 'behavior') {
+            $discoveredText = $(if ($DiscoveredSuites -ge 0) { "$DiscoveredSuites" } else { '?' })
+            $parts += "planned=$discoveredText"
+            $parts += "discovered=$discoveredText"
+        }
+    }
     # #1994：行为腿的五枚看门狗读数。字段**恒在**（取不到写 `?`）—— 「这一腿有没有卡过」必须能
     # 从一行机检行回答，不能靠「字段缺席」表达。unit 腿不追加任何字段 ⇒ 既有行逐字节不变。
     if ($Leg -eq 'behavior') {
@@ -735,6 +751,8 @@ function Write-UnitGateArtifacts {
         if ($StalledReason) { $parts += "stalledReason=$StalledReason" }
         $parts += "stallLimit=$(if ($StallLimitSeconds -gt 0) { "${StallLimitSeconds}s" } else { '?' })"
         $parts += "legTimeout=$(if ($LegTimeoutSeconds -gt 0) { "${LegTimeoutSeconds}s" } elseif ($LegTimeoutSeconds -eq 0) { 'off' } else { '?' })"
+        # 波 3a 前置（#2179）：发现数。只在 changed 行出现 ⇒ 行为腿的门 / 本地两形逐字节不变。
+        if ($isChanged) { $parts += "discovered=$(if ($DiscoveredSuites -ge 0) { $DiscoveredSuites } else { '?' })" }
     }
     if ($staleSummary) { $parts += "staleSummary=$staleSummary" }
     if ($missing.Count -gt 0) { $parts += "missing=$(@($missing) -join '|')" }
@@ -766,6 +784,7 @@ function Write-UnitGateArtifacts {
         SummaryError = $summaryError
         StaleSummary = $staleSummary
         Mode         = $Mode
+        DiscoveredSuites = $DiscoveredSuites
         StalledSuite = $StalledSuite
         StalledReason = $StalledReason
         ResumeFrom   = $ResumeFrom
@@ -910,6 +929,10 @@ function Invoke-BehaviorLeg {
     $listProc.WaitForExit()
     $suites = @($listOut -split "\r?\n" | ForEach-Object { $_.Trim() } | Where-Object { $_ -and (Test-Path -LiteralPath $_) })
 
+    # 波 3a 前置（#2179）：**发现数**取子集过滤前的清单长度 —— 过滤后那个数是「本跑计划跑几个」，
+    # 两件事混用会让「映射算得为空」与「测试配置失效」长得一模一样。
+    $discovered = $suites.Count
+
     # ---- 子集过滤（#2034）：只在显式传 -OnlySuites 时生效，默认路径逐字节不变 ----
     # 口径：套件集合的**真源仍是** `--listTests`（本腿到底有哪些套件），这里只做「从它里面挑」。
     # 于是「子集里的名字在真清单里不存在」能被发现并当场判非绿（清单漂移 / 路径拼错 / 改了腿）。
@@ -938,7 +961,7 @@ function Invoke-BehaviorLeg {
             }
             return [pscustomobject]@{
                 Output = $sb.ToString(); ExitCode = 1; StalledSuite = ''; StalledReason = '';
-                Stalls = 0; Completed = 0; Planned = 0; ResumeFrom = $ResumeFrom;
+                Stalls = 0; Completed = 0; Planned = 0; ResumeFrom = $ResumeFrom; Discovered = $discovered;
                 StallSeconds = $StallSeconds; TotalTimeoutSeconds = $TotalTimeoutSeconds;
                 TestsKnown = $false; FailedSuites = 0; WallSeconds = 0
             }
@@ -952,7 +975,7 @@ function Invoke-BehaviorLeg {
         & $append ($listErr + "`r`n")
         return [pscustomobject]@{
             Output = $sb.ToString(); ExitCode = 1; StalledSuite = ''; StalledReason = '';
-            Stalls = 0; Completed = 0; Planned = 0; ResumeFrom = $ResumeFrom;
+            Stalls = 0; Completed = 0; Planned = 0; ResumeFrom = $ResumeFrom; Discovered = $discovered;
             StallSeconds = $StallSeconds; TotalTimeoutSeconds = $TotalTimeoutSeconds
         }
     }
@@ -1126,6 +1149,7 @@ function Invoke-BehaviorLeg {
         Stalls = $stalls
         Completed = $completed
         Planned = $planned
+        Discovered = $discovered
         ResumeFrom = $ResumeFrom
         StallSeconds = $StallSeconds
         TotalTimeoutSeconds = $TotalTimeoutSeconds
@@ -1336,6 +1360,18 @@ if ($Changed) {
 
     # ---- 接线腿：与全量门同一条命令（全量、-i 串行），不是第二份 jest 参数 ----
     $changedUnitStarted = Get-Date
+    # ---- 发现过程证明（ADR-0052 决策 6 / 波 3a 前置 #2179）：同一条 npm 入口加 `--listTests` 现测 ----
+    # 与行为腿同源：仍走 package.json 那条 `npm run test:unit`（config 路径只活在那里），只在尾部追加旗标 ——
+    # 不在这里抄第二份 jest 参数（#974 的双份漂移形态）。探针输出**不落日志**：结论只有「几个」，
+    # 一百多行路径进日志只会把真读数淹掉。取不到留 -1 ⇒ 机检行写 `discovered=?`，绝不补 0。
+    $unitDiscovered = -1
+    try {
+        $unitListOut = (& npm run test:unit -- --listTests 2>&1 | Out-String)
+        $unitDiscovered = @($unitListOut -split "\r?\n" | ForEach-Object { $_.Trim() } | Where-Object { $_ -and (Test-Path -LiteralPath $_) }).Count
+    }
+    catch {
+        $unitDiscovered = -1
+    }
     $unitOutput = ''
     $unitExitCode = 1
     try {
@@ -1349,7 +1385,7 @@ if ($Changed) {
     $artUnitChanged = Write-UnitGateArtifacts -Output $unitOutput -LogPath $changedUnitLog -SummaryPath $changedUnitSummary `
         -ExitCode $unitExitCode -DurationSeconds ([int]((Get-Date) - $changedUnitStarted).TotalSeconds) `
         -LogRef '.ci-verify/test-unit-changed.log' -SummaryRef '.ci-verify/test-unit-changed-failure.txt' `
-        -HeadSha $headSha -WorktreeState $worktreeState -DirtyFiles $porcelain -ProjectDir $ProjectDir -Mode changed
+        -HeadSha $headSha -WorktreeState $worktreeState -DirtyFiles $porcelain -ProjectDir $ProjectDir -Mode changed -DiscoveredSuites $unitDiscovered
     Write-UnitGateArtifactReport -Art $artUnitChanged -LogPath $changedUnitLog -SummaryPath $changedUnitSummary
 
     # ---- 行为腿：只有「跑哪些套件」不同，看门狗 / 续跑 / 汇总口径全走既有实现 ----
@@ -1370,12 +1406,14 @@ if ($Changed) {
     }
     $behaviorPlannedChanged = -1
     $behaviorCompletedChanged = -1
+    $behaviorDiscoveredChanged = -1
     $behaviorStallsChanged = 0
     $behaviorStalledSuiteChanged = ''
     $behaviorStalledReasonChanged = ''
     if ($null -ne $behaviorRun) {
         $behaviorPlannedChanged = $behaviorRun.Planned
         $behaviorCompletedChanged = $behaviorRun.Completed
+        $behaviorDiscoveredChanged = $(if ($null -ne $behaviorRun.Discovered) { [int]$behaviorRun.Discovered } else { -1 })
         $behaviorStallsChanged = $behaviorRun.Stalls
         $behaviorStalledSuiteChanged = $behaviorRun.StalledSuite
         $behaviorStalledReasonChanged = $behaviorRun.StalledReason
@@ -1383,6 +1421,7 @@ if ($Changed) {
     $artBehaviorChanged = Write-UnitGateArtifacts -Output $behaviorOutput -LogPath $changedBehaviorLog -SummaryPath $changedBehaviorSummary `
         -ExitCode $behaviorExitCode -Leg behavior -Mode changed `
         -DurationSeconds ([int]((Get-Date) - $changedBehaviorStarted).TotalSeconds) `
+        -DiscoveredSuites $behaviorDiscoveredChanged `
         -PlannedSuites $behaviorPlannedChanged -CompletedSuites $behaviorCompletedChanged -ResumeFrom $BehaviorResumeFrom `
         -StalledSuite $behaviorStalledSuiteChanged -StalledReason $behaviorStalledReasonChanged -Stalls $behaviorStallsChanged `
         -StallLimitSeconds $BehaviorStallSeconds -LegTimeoutSeconds $BehaviorTotalTimeoutSeconds `
