@@ -24,6 +24,9 @@ const ROOT = path.resolve(__dirname, '..');
 const TOOL = path.join(ROOT, 'scripts', 'behavior-suite-deps.mjs');
 const SCRIPT = path.join(ROOT, 'scripts', 'dev-finish.ps1');
 const SUBSET_LIB = path.join(ROOT, 'scripts', 'lib', 'behavior-subset.ps1');
+// #2175：Invoke-BehaviorLeg 在函数体内 dot-source 采集层库；被 AST 抽取外置执行时那里 $PSScriptRoot 是空串
+// ⇒ 由 harness 在脚本作用域先把**真实库**备好（写法沿用 utils/evidenceCaptureEncodingBehavior.test.js:61-68）。
+const CAPTURE_LIB = path.join(ROOT, 'scripts', 'lib', 'process-capture.ps1');
 
 jest.setTimeout(180000);
 
@@ -94,7 +97,7 @@ function runHarness() {
   const harnessPath = path.join(root, 'harness.ps1');
   fs.writeFileSync(
     inputPath,
-    JSON.stringify({ script: SCRIPT, subsetLib: SUBSET_LIB, legDir, projectDir: ROOT, tmp: root }),
+    JSON.stringify({ script: SCRIPT, subsetLib: SUBSET_LIB, captureLib: CAPTURE_LIB, legDir, projectDir: ROOT, tmp: root }),
     'utf8'
   );
 
@@ -113,6 +116,7 @@ function runHarness() {
     '}',
     'foreach ($f in $fns) { Invoke-Expression $f.Extent.Text }',
     '. $spec.subsetLib',
+    '. $spec.captureLib',   // #2175：真库先到位，函数体内的幂等加载才会跳过（不复制、不模拟库）
     '$runner = "node `"$(Join-Path $spec.legDir \'fake-jest.cjs\')`""',
     "$out = [ordered]@{}",
     '',

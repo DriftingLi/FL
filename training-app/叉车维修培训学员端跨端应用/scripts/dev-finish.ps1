@@ -882,7 +882,16 @@ function Invoke-BehaviorLeg {
     )
     $utf8 = [System.Text.Encoding]::UTF8
     # #2139：增量解码函数住在采集层库里（该文件零副作用，只有函数定义）。纯字节方案 ⇒ 无需跨块状态。
-    . (Join-Path $PSScriptRoot 'lib\process-capture.ps1')
+    # 幂等加载（#2175）：本函数只用 Read-Utf8Chunk，而它运行时才调 Get-Utf8CompletePrefixLength（库 :138）
+    # ⇒ 到位判据取这两个符号；只查一个会把「半加载」读成「已加载」。未到位才走原有的 $PSScriptRoot 加载
+    # （真跑按文件执行 ⇒ 必有值 ⇒ 含「每次调用各自加载」的旧语义在内，生产行为一字不变）；已在当前会话
+    # （守护 harness 在脚本作用域预 dot-source 真库）就跳过 —— 被 AST 抽取外置执行时函数体内 $PSScriptRoot
+    # 是空串，Join-Path -Path '' 抛的匿名绑定错误会拖死整条 harness（#2139 把加载放进了函数体）。
+    $captureMissing = @('Get-Utf8CompletePrefixLength', 'Read-Utf8Chunk') | Where-Object { -not (Get-Command $_ -ErrorAction SilentlyContinue) }
+    if (@($captureMissing).Count -gt 0) {
+        if (-not $PSScriptRoot) { throw ('Invoke-BehaviorLeg：采集层库未加载（缺 ' + (@($captureMissing) -join ' / ') + '）且 $PSScriptRoot 为空 ⇒ 调用方须先 dot-source lib/process-capture.ps1') }
+        . (Join-Path $PSScriptRoot 'lib\process-capture.ps1')
+    }
     $legStarted = Get-Date
     $sb = [System.Text.StringBuilder]::new()
     $append = { param([string]$Text) if ($null -ne $Text -and $Text.Length -gt 0) { [void]$sb.Append($Text) } }

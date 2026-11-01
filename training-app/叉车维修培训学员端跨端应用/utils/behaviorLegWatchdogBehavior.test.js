@@ -25,6 +25,9 @@ jest.setTimeout(180000);
 
 const ROOT = path.resolve(__dirname, '..');
 const SCRIPT = path.join(ROOT, 'scripts', 'dev-finish.ps1');
+// #2175：见 behaviorSubsetBehavior 同段说明 —— 被抽取执行的函数体内 $PSScriptRoot 是空串，
+// 采集层真实库必须由 harness 先备好（先例 utils/evidenceCaptureEncodingBehavior.test.js:61-68）。
+const CAPTURE_LIB = path.join(ROOT, 'scripts', 'lib', 'process-capture.ps1');
 
 // ⚠️ Windows-only：被测物 dev-finish.ps1 用 ComSpec 起子进程（cmd /d /s /c），且 ubuntu CI 上没有 pwsh
 //    ⇒ 平台不满足时整组 skip 并打印原因。fail-closed 只保留给「pwsh 在、但脚本抛错」。
@@ -119,7 +122,7 @@ function runScenarios() {
   const inputPath = path.join(root, 'input.json');
   const resultPath = path.join(root, 'result.json');
   const harness = path.join(root, 'harness.ps1');
-  fs.writeFileSync(inputPath, JSON.stringify({ script: SCRIPT, cases }), 'utf8');
+  fs.writeFileSync(inputPath, JSON.stringify({ script: SCRIPT, captureLib: CAPTURE_LIB, cases }), 'utf8');
 
   const body = [
     "$ErrorActionPreference = 'Stop'",
@@ -135,6 +138,7 @@ function runScenarios() {
     "  if (@($fns | Where-Object { $_.Name -eq $name }).Count -ne 1) { throw \"$name 没有被抽到（被改名 / 被拆走 / 定义形态变了）\" }",
     '}',
     'foreach ($f in $fns) { Invoke-Expression $f.Extent.Text }',
+    '. $spec.captureLib',   // #2175：真库备到脚本作用域，函数体内的幂等加载才会跳过
     '$out = [ordered]@{}',
     'foreach ($p in $spec.cases.PSObject.Properties) {',
     '  $sc = $p.Value',
