@@ -139,9 +139,13 @@ $residueCode = $LASTEXITCODE
 Write-Host $residueText.Trim()
 
 # ---------- 4) 读数：原始产物交回判定层，这里不解析 ----------
+# local_branch 必须与 `git branch --list` 一致（#2188 验收第 3 条）：remove 跑完后现采事实，交判定层兜底。
+# 采集放这里不放别处——此刻分支若还在，就是「真没删掉」，早采晚采都会把中间态读成假话。
+$lbText = '' + (& git -C $root branch --list "$branch" 2>&1 | Out-String)
 $v = Invoke-Core '--verdict' ([ordered]@{
     task = $Task; prState = (FactOf $dec.Text 'pr'); mode = $(if ($Yes) { 'execute' } else { 'dryrun' })
     fetch = $fetchState; treeBefore = $treeBefore
+    localBranch = $(if ($lbText.Trim()) { 'kept' } else { 'absent' })
     remove = [ordered]@{ ran = [bool](-not $skipRemove); exitCode = $removeCode; raw = $removeText }
     residue = [ordered]@{ ran = $true; exitCode = $residueCode; raw = $residueText }
 })
