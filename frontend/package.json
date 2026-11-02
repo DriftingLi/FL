@@ -14,7 +14,7 @@
     "@fontsource/dm-sans": "^5.3.0",
     "@fontsource/jetbrains-mono": "^5.3.0",
     "@fontsource/noto-sans-sc": "^5.3.1",
-    "axios": "^1.6.5",
+    "axios": "^1.21.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dayjs": "^1.11.13",
@@ -23,11 +23,11 @@
     "element-plus": "^2.14.7",
     "highlight.js": "^11.11.1",
     "katex": "^0.18.10",
-    "lucide": "1.61.0",
-    "marked": "^18.1.1",
+    "lucide": "1.64.0",
+    "marked": "^18.1.2",
     "marked-highlight": "^2.2.4",
     "marked-katex-extension": "^5.1.13",
-    "markstream-vue": "^2.0.20",
+    "markstream-vue": "^2.0.21",
     "mermaid": "^12.2.0",
     "morphicons": "2.0.2",
     "pinia": "^4.1.0",
@@ -50,6 +50,6 @@
     "typescript": "^5.7.3",
     "vite": "^8.3.5",
     "vitest": "^5.0.5",
-    "vue-tsc": "^3.3.13"
+    "vue-tsc": "^3.3.14"
   }
 }
