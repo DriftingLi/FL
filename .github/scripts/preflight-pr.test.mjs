@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { parseArgs, toValidatorFiles, pickCiSummaryRun, makeFetchCompare } from './preflight-pr.mjs';
+import { parseArgs, toValidatorFiles, pickCiSummaryRun, makeFetchCompare, skipDeclarationHint } from './preflight-pr.mjs';
 import { validatePrEvidence } from './lib/gate-validator.mjs';
 
 // #1770 S4/S5/S6：本地预检与 CI 必须同判据、同结论。
@@ -135,3 +135,53 @@ test('#2044 三方形态文本钉：校验器 / pr-evidence 工作流 / 预检 C
   // 管家（mobile-gates.yml）已随 A1 整份删除：它曾经是第三个消费者，删了就不该再有第四份实现。
   assert.throws(() => read('../workflows/mobile-gates.yml'), /ENOENT/);
 });
+
+// ── #2216：② 非触发面的「自选跳过」留痕 —— 只提示、不判红 ──────────────────────
+const MP_OK = 'MP_WEIXIN_RESULT appid=wx1234567890abcdef stack=3 entry=pages/index/index errorsTotal=0 exceptionsTotal=0 shots=2 navigation=ok';
+const uvueEdit = () => [{ filename: uvue.filename, status: 'modified', patch: '@@ -1 +1 @@\n-<view/>\n+<view class=\"a\"/>' }];
+const manifestEdit = () => [{ filename: 'training-app/叉车维修培训学员端跨端应用/manifest.json', status: 'modified', patch: '@@ -1 +1 @@' }];
+const skipOnly = (reason, sha7 = HEAD7) => '## 验收证据\n\n- ② 自选跳过 reason=' + reason + '\n- ④ 跑于 `' + sha7 + '` · `' + KOTLIN + '`\n';
+const readingBody = (sha7 = HEAD7) => '## 验收证据\n\n- ② 跑于 `' + sha7 + '` · `' + MP_OK + '`\n- ④ 跑于 `' + sha7 + '` · `' + KOTLIN + '`\n';
+
+test('#2216 非触发面只写跳过行 ⇒ 校验器判绿（② 门不检查），提示为空', async () => {
+  const body = skipOnly('dev-loop-latency');
+  const r = await validatePrEvidence({ files: uvueEdit(), body, headSha: HEAD, fetchCompare: async () => null });
+  assert.equal(r.ok, true, r.errors.join(' | '));
+  assert.equal(r.gates['②'].required, false, '② 非触发面不 required');
+  assert.equal(skipDeclarationHint({ body, needs2: false, runtimeHit: true }), null);
+});
+
+test('#2216 跳过行 reason 还是占位 <slug> ⇒ 提示换真实 slug（不判红）', () => {
+  const hint = skipDeclarationHint({ body: skipOnly('<slug>'), needs2: false, runtimeHit: true });
+  assert.match(hint, /占位/);
+});
+
+test('#2216 非触发面既无读数也无跳过 ⇒ 提示补留痕，但校验器仍判绿', async () => {
+  const body = '## 验收证据\n\n- ④ 跑于 `' + HEAD7 + '` · `' + KOTLIN + '`\n';
+  const r = await validatePrEvidence({ files: uvueEdit(), body, headSha: HEAD, fetchCompare: async () => null });
+  assert.equal(r.ok, true, '缺跳过行不该判红：' + r.errors.join(' | '));
+  assert.match(skipDeclarationHint({ body, needs2: false, runtimeHit: true }), /既无/);
+});
+
+test('#2216 needs2 触发面只写跳过行 ⇒ 校验器红（跳过不构成 ② 证据）', async () => {
+  const body = skipOnly('dev-loop-latency');
+  const files = manifestEdit().concat(uvueEdit());
+  const r = await validatePrEvidence({ files, body, headSha: HEAD, fetchCompare: async () => null });
+  assert.equal(r.gates['②'].required, true, 'manifest.json 命中触发面');
+  assert.equal(r.ok, false, 'needs2 面跳过行不能替代读数行');
+  assert.match(skipDeclarationHint({ body, needs2: true, runtimeHit: true }), /必跑/);
+});
+
+test('#2216 needs2 触发面贴了读数行 ⇒ 仍判绿（跳过条款不干扰既有判据）', async () => {
+  const files = manifestEdit().concat(uvueEdit());
+  const r = await validatePrEvidence({ files, body: readingBody(), headSha: HEAD, fetchCompare: async () => null });
+  assert.equal(r.ok, true, r.errors.join(' | '));
+});
+
+test('#2216 needs2 里跳过行排在读数行前 ⇒ 被 lines.find 抢先、仍判红（模板据此要求二选一）', async () => {
+  const body = '## 验收证据\n\n- ② 自选跳过 reason=dev-loop-latency\n- ② 跑于 `' + HEAD7 + '` · `' + MP_OK + '`\n- ④ 跑于 `' + HEAD7 + '` · `' + KOTLIN + '`\n';
+  const files = manifestEdit().concat(uvueEdit());
+  const r = await validatePrEvidence({ files, body, headSha: HEAD, fetchCompare: async () => null });
+  assert.equal(r.ok, false, '段内第一条 ② 行是跳过行 ⇒ 不认后面那条读数行');
+});
+
