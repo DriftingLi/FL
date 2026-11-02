@@ -15,6 +15,8 @@
  *   C8/C9 npm 脚本已注册、ADR-0008 已记录
  *   C10 编译门结果免手抄：两个脚本都必须支持 -PostToPr 贴「sha 绑定」的 PR 评论
  *      （标记 `gate-evidence:④` + `commit: <sha>`），pr-evidence 才认得出这条证据
+ *   C11/#2161 中文工作树下证据日志必须可解码：门钉齐 UTF-8 三性、并在出口跑一次 #2139 判据自查；
+ *      C11b 反向钉死「被否方案」（JAVA_TOOL_OPTIONS / 门内内联 JVM 参数 / 源码里的 U+FFFD 字面量）
  *
  * 设计沿用本仓既有守护测试的形态（见 utils/utsAndroidCompile.test.js）：
  * 先对「注入违规」的变形样本断言检测有效（防空跑假绿），再对真实文件断言零命中。
@@ -131,6 +133,34 @@ function scanContract(sources) {
     }
   });
 
+  // C11（#2161）：中文工作树下 ④c 的证据可读性 —— 三性 + 出口自查都得**在代码里**，不是注释里提一句。
+  // 锚点跑在 codeOnly（行注释与块注释都掩掉）上：注释提到 token 不算钉住，防止「写条注释就当实现」。
+  const codeOnly = maskedScript
+    .split(/\r?\n/)
+    .map((line) => (/^\s*#/.test(line) ? '' : line))
+    .join('\n');
+  ['Get-KotlinJvmUtf8Args', '[Console]::OutputEncoding', '$OutputEncoding ='].forEach((token) => {
+    if (!codeOnly.includes(token)) {
+      violations.push('C11 门脚本缺 UTF-8 三性要素（#2161）：' + token);
+    }
+  });
+  if (!/lib[\\/]evidence-selfcheck\.ps1/.test(codeOnly)) {
+    violations.push('C11 门脚本未 dot-source 出口自查库 scripts/lib/evidence-selfcheck.ps1');
+  }
+  if (!/Get-EvidenceLogVerdict/.test(codeOnly)) {
+    violations.push('C11 门脚本未调用出口自查（坏证据要门自己点名，不再等 preflight 报「缺该行」）');
+  }
+  // C11b 反向断言：被否的方案不许复活，也不许在门里内联那条 JVM 参数（唯一真源在 lib，同 C3b 口径）。
+  [
+    [/-Dfile\.encoding/, '门脚本内联了 -Dfile.encoding 字面量（参数唯一住 Get-KotlinJvmUtf8Args）'],
+    [/JAVA_TOOL_OPTIONS/, '门脚本用了 JAVA_TOOL_OPTIONS（现测：子在 stderr 打 "Picked up …" 污染日志，已否）'],
+    [/[\uFFFD]/, '门脚本源码里出现 U+FFFD 字面量（#2139 编码自律：该字符会被写入链整字吞掉）']
+  ].forEach(([re, why]) => {
+    if (re.test(codeOnly)) {
+      violations.push('C11b ' + why);
+    }
+  });
+
   return violations;
 }
 
@@ -160,12 +190,20 @@ describe('④ 本地编译门契约（#870 T2 / 2026-09-11 修订）', () => {
       ['C9', { ...real, adr: real.adr.replace(/④c/g, '门 C') }],
       ['C10', { ...real, script: real.script.replace(/gate-evidence:④/g, 'gate-evidence:x') }],
       ['C10', { ...real, compileScript: real.compileScript.replace(/commit:/g, 'sha=') }],
-      ['C10', { ...real, compileScript: real.compileScript.replace(/PostToPr/g, 'PostIt') }]
+      ['C10', { ...real, compileScript: real.compileScript.replace(/PostToPr/g, 'PostIt') }],
+      ['C11', { ...real, script: real.script.replace(/Get-KotlinJvmUtf8Args/g, 'Get-WhateverArgs') }],
+      ['C11', { ...real, script: real.script.replace('[Console]::OutputEncoding =', '[Console]::WhateverEncoding =') }],
+      ['C11', { ...real, script: real.script.replace('$OutputEncoding = [System.Text.Encoding]::UTF8', '') }],
+      ['C11', { ...real, script: real.script.replace(/evidence-selfcheck\.ps1/g, 'other-selfcheck.ps1') }],
+      ['C11', { ...real, script: real.script.replace(/Get-EvidenceLogVerdict/g, 'Get-NothingAtAll') }],
+      ['C11b', { ...real, script: real.script + "\n\$env:JAVA_TOOL_OPTIONS = '-Dfile.encoding=UTF-8'\n" }],
+      ['C11b', { ...real, script: real.script + "\n\$more = @('-Dfile.encoding=UTF-8')\n" }]
     ];
-    cases.forEach(([rule, sources]) => {
-      const found = scanContract(sources);
-      expect(found.some((v) => v.startsWith(rule))).toBe(true);
-    });
+    const missed = cases
+      .map(([rule, sources]) => [rule, scanContract(sources)])
+      .filter(([rule, found]) => !found.some((v) => v.startsWith(rule)))
+      .map(([rule, found]) => rule + ' -> ' + JSON.stringify(found));
+    expect(missed).toEqual([]);
   });
 
   it('真实文件：零违规', () => {
