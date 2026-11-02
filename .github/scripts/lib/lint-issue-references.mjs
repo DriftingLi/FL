@@ -43,8 +43,29 @@ function cleanBody(body) {
 }
 
 /**
+ * 花括号简写展开（#2189）：a/{b,c}.md → 逐个展开项判存在，缺哪个红哪个（红项带简写原文定位）。
+ * 多组简写逐级展开（叉乘）；无逗号单组（{a}）不展开、按字面判——字面文件真在库才放行。
+ */
+function expandBrace(token) {
+  const groups = token.match(/\{[^{}]*\}/g) || [];
+  if (groups.length === 0) return [token];
+  let out = [token];
+  for (const g of groups) {
+    const inner = g.slice(1, -1);
+    if (!inner.includes(',')) continue;
+    const next = [];
+    for (const t of out) {
+      for (const alt of inner.split(',')) next.push(t.replace(g, () => alt));
+    }
+    out = next;
+  }
+  return out;
+}
+
+/**
  * ①路径判据：反引号内、白名单前缀、非占位；`:35`/`:24-30` 行号后缀先剥再判；
- * 目录写法（docs/adr/）去尾斜杠判目录。同一文件重复引用只报一次（seen）。
+ * 目录写法（docs/adr/）去尾斜杠判目录；花括号简写先展开、逐项判存在。
+ * 同一文件重复引用只报一次（seen）。
  */
 function lintPaths(text, deps) {
   const reds = [];
@@ -55,8 +76,17 @@ function lintPaths(text, deps) {
     const stripped = token.replace(/:\d+(?:-\d+)?$/, '').replace(/\/+$/, '');
     if (!stripped || PLACEHOLDER.test(stripped) || seen.has(stripped)) continue;
     seen.add(stripped);
-    if (!deps.existsPath(stripped)) {
-      reds.push({ category: 'missing-file', ref: stripped, message: '反引号路径不存在于仓：' + stripped });
+    for (const exp of expandBrace(stripped)) {
+      if (!deps.existsPath(exp)) {
+        const isShorthand = exp !== stripped;
+        reds.push({
+          category: 'missing-file',
+          ref: exp,
+          message: isShorthand
+            ? '反引号花括号简写展开后不存在于仓：' + exp + '（简写原文：' + stripped + '）'
+            : '反引号路径不存在于仓：' + exp,
+        });
+      }
     }
   }
   return reds;
