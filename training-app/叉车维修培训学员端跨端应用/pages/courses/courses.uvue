@@ -39,14 +39,6 @@
                 </view>
             </view>
 
-            <!-- 筛选标签 -->
-            <view class="filter-row">
-                <view v-for="(tag, idx) in filterTags" :key="idx"
-                    :class="{ 'filter-tag': true, 'ml-16': idx > 0, 'filter-tag--active': activeFilter == idx }" @click="onFilterTap(idx)">
-                    <text class="filter-tag-text" :class="{ 'filter-tag-text--active': activeFilter == idx }">{{ tag }}</text>
-                </view>
-            </view>
-
             <!-- 免费/付费组（#1951）：走后端布尔参数 paid，付费口径 = 需积分兑换（与详情页 CTA 同源） -->
             <view class="filter-row">
                 <view v-for="(tag, idx) in paidTags" :key="idx"
@@ -203,15 +195,6 @@
         } finally {
             loading.value = false
         }
-    }
-
-    // ---- 筛选标签 ----
-    const filterTags : string[] = ['已完结', '进行中', '全部']
-    const activeFilter = ref<number>(0)
-
-    function onFilterTap(idx : number) : void {
-        activeFilter.value = idx
-        loadCourses(true)
     }
 
     // ---- 免费/付费组（#1951）----
