@@ -134,3 +134,93 @@ test('L6 CLI 真执行：带 BOM 的 stdin 必须照读，坏 JSON 必须 fail-c
   assert.equal(v.status, 0, v.stdout + v.stderr)
   assert.match(v.stdout, /^DEV_CLOSE_RESULT task=2174 .*verdict=planned$/m)
 })
+
+// #2188 补的第三族：production wire 形态重放。L4/L6 的 fixture 都是「预解析字段直喂 judgeVerdict」，
+// 而 ps1 生产链路只交 {ran,exitCode,raw}（dev-close.ps1:145-146）—— fixture 形态不等于生产形态，
+// 就是这个缺口让 dir=na / local_branch=kept / exit-4 恒红三连漂到线上跑了几个月。
+test('L7 wire 形态重放：raw 必须被判定层解析，residue 的 4/5/2/3 不许揉成一条 branch-residue', () => {
+  // remove raw 的真实形状 = plan ConvertTo-Json 与 result ConvertTo-Json 两块相连（remove-worktree.ps1:391/461）。
+  const planJson = [
+    '{',
+    '    "task":  "2184",',
+    '    "worktree":  "D:/FL/wt-2184",',
+    '    "branch":  "feat/2184",',
+    '    "holders":  [],',
+    '    "actions":  ["git-worktree-remove: D:/FL/wt-2184"]',
+    '}',
+  ].join('\n')
+  const resultJson = [
+    '{',
+    '    "task":  "2184",',
+    '    "worktree":  "D:/FL/wt-2184",',
+    '    "dirRemoved":  true,',
+    '    "regRemoved":  true,',
+    '    "branchRemoved":  true',
+    '}',
+  ].join('\n')
+  const removeRaw = [planJson, resultJson, '[remove-worktree] done'].join('\n')
+  const ABSENT = 'ABSENT  feat/2184'
+  const SUMMARY0 = 'SUMMARY branches=0 mergedResidue=0 needHuman=0 openPR=0 archived=0'
+  const orphanRaw = [ABSENT, SUMMARY0, 'WT-DIRS registered=5 disk=6 orphans=1 linked=0 skeleton=1'].join('\n')
+  const dirsCleanRaw = [ABSENT, SUMMARY0, 'WT-DIRS registered=4 disk=4 orphans=0 linked=0 skeleton=0'].join('\n')
+  const auditDeadRaw = [ABSENT, SUMMARY0, 'WT-DIRS=unavailable'].join('\n')
+  const residueRaw1 = ['RESIDUE   feat/2184  PR#2184 merged', 'SUMMARY branches=1 mergedResidue=1 needHuman=0 openPR=0 archived=0'].join('\n')
+  const wire = (over) => judgeVerdict({
+    task: '2184', prState: 'MERGED', mode: 'execute', fetch: 'ok', treeBefore: 'present',
+    remove: { ran: true, exitCode: 0, raw: removeRaw },
+    residue: { ran: true, exitCode: 0, raw: dirsCleanRaw },
+    ...over,
+  })
+
+  // A) #2184 现场重放：真拆了树 + 分支侧绿（ABSENT），但仓级孤儿目录让 residue exit 4。
+  //    旧代码当场 dir=na reg=na local_branch=kept verdict=red reason=branch-residue —— 三连漂的现场形状。
+  const a = wire({ residue: { ran: true, exitCode: 4, raw: orphanRaw } })
+  assert.match(a.line, / dir=ok/, 'raw 里的 result JSON 必须被读回（' + a.line + '）')
+  assert.match(a.line, / reg=ok/)
+  assert.match(a.line, /local_branch=removed/)
+  assert.match(a.line, /remote_branch=absent/)
+  assert.match(a.line, /wt_dirs=orphan:1/, '别人树的孤儿目录要可见，但进独立 token，不揉进本票残留')
+  assert.match(a.line, /verdict=ok$/, '分支侧已绿 = 本次收尾干净，孤儿目录不是本票的债（' + a.line + '）')
+
+  // B) 幂等腿重放：树已 absent、remove 未发起，local_branch 必须随 git branch --list 事实报 absent（验收第 3 条）。
+  const b = wire({ treeBefore: 'absent', localBranch: 'absent', remove: { ran: false, exitCode: 0, raw: '' } })
+  assert.match(b.line, /local_branch=absent/, '重跑不能谎报 kept（' + b.line + '）')
+  assert.match(b.line, / dir=na/)
+  assert.match(b.line, /verdict=ok$/)
+
+  // C) 真残留（exit 1）照旧红，reason 不变 —— 老语义的回归钉。
+  const c = wire({ residue: { ran: true, exitCode: 1, raw: residueRaw1 } })
+  assert.match(c.line, /verdict=red$/)
+  assert.match(c.line, /reason=branch-residue/)
+  assert.match(c.line, /remote_branch=residue/)
+
+  // D) 目录对账不可用（exit 5）：fail-closed 仍红，但 reason 必须与真残留分家（验收第 1 条的「区分」）。
+  const d = wire({ residue: { ran: true, exitCode: 5, raw: auditDeadRaw } })
+  assert.match(d.line, /verdict=red$/)
+  assert.match(d.line, /reason=wt-audit-unavailable/, '（' + d.line + '）')
+  assert.match(d.line, /remote_branch=absent/, '分支侧读数是绿的事实，红在目录审计（' + d.line + '）')
+  assert.match(d.line, /wt_dirs=unavailable/)
+
+  // E) API 读不到（exit 2）：红且 reason 独立。
+  const e = wire({ residue: { ran: true, exitCode: 2, raw: '[check-branch-residue] gh api failed' } })
+  assert.match(e.line, /verdict=red$/)
+  assert.match(e.line, /reason=branch-check-failed/)
+
+  // F) remove 跑了但 result JSON 读不回：fail-closed，不许 ok。
+  const f2 = wire({ remove: { ran: true, exitCode: 0, raw: [planJson, '[remove-worktree] output truncated'].join('\n') } })
+  assert.match(f2.line, / dir=unknown/)
+  assert.match(f2.line, /reason=tree-leftover/, '删除结果读不回不许当成已删（' + f2.line + '）')
+  assert.match(f2.line, /verdict=red$/)
+
+  // G) CLI 全链路（ps1 stdin 形态直喂）：与 A 同读数。
+  const core2 = join(here, 'lib', 'dev-close.mjs')
+  const cli = spawnSync(process.execPath, [core2, '--verdict'], {
+    input: JSON.stringify({
+      task: '2184', prState: 'MERGED', mode: 'execute', fetch: 'ok', treeBefore: 'present', localBranch: 'absent',
+      remove: { ran: true, exitCode: 0, raw: removeRaw }, residue: { ran: true, exitCode: 4, raw: orphanRaw },
+    }),
+    encoding: 'utf8',
+  })
+  assert.equal(cli.status, 0, cli.stdout + cli.stderr)
+  assert.match(cli.stdout, / dir=ok reg=ok local_branch=removed remote_branch=absent wt_dirs=orphan:1 verdict=ok/)
+})
