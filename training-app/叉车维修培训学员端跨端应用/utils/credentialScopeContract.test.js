@@ -247,7 +247,8 @@ describe('#1107 消费面接线：页面/组合式函数把证件交给 api', ()
     const page = read('pages/courses/courses.uvue');
     expect(page).toContain('const browseCredentialId = ref<number>(0)');
     expect(page).toContain('await ensureBrowseCredential()');
-    expect(page).toContain('getCourseListApi(page.value, pageSize, 0, 0, browseCredentialId.value)');
+    // #1951 追加 paid 形参后，证件仍固定在第 5 位下发（本锁原意是「下发纪律」，不是「整串冻结」）
+    expect(page).toContain(`getCourseListApi(page.value, pageSize, 0, 0, browseCredentialId.value, courseListFilter, paidValues[activePaid.value])`);
     expect(page).toContain('if (browseCredentialId.value != prevCredentialId)');
   });
 
