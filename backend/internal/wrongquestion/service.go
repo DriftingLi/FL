@@ -173,67 +173,11 @@ func (s *Service) GetWrongQuestions(studentID, page, pageSize int, qType string,
 	}, nil
 }
 
-// topWrongOptionMinSample 易错项的最少样本量，分母是**该题判错的作答次数**（#2068）：
-// 样本太小时「最多人选错」只是一两个人的偶然，不当作系统性误区。阈值数字与单题全站统计
-// （practicemode.questionStats）相同，但那边按总作答数算——这里刻意更严，因为错题本是要拿出来
-// 「识别系统性误区」的，不是展示一个 1 票的众数。
-const topWrongOptionMinSample = 5
-
-// shortAnswerQuestionType 简答题**没有选项**：它的 user_answer 是自由文本，把「最多人写的那段话」
-// 当易错项外发等于泄漏别人的作答，且字段名/语义都对不上。单题全站统计 questionStats 早就有这条守卫，
-// 这里必须同口径（#2068 评审阻断项）。
-const shortAnswerQuestionType = "short_answer"
-
-// loadTopWrongOptions 批量取每题的「最多人选错的选项」（#2068）。
-//
-// 口径（可复算）：分母 = 该题全部作答次数（question_practice_record，按题目聚合、不限学员）；
-// 分子 = 按 user_answer 分组的 is_correct=false 次数；空答案不计（空提交不是「选错某个选项」）。
-// 正确项因此不进候选——判错行的 user_answer 本来就不等于正确答案。并列按答案字典序升序取第一条，
-// 保证同一份数据每次返回同一个值。两次批量查询覆盖整页（禁 N+1）。
+// loadTopWrongOptions 批量取每题的「最多人选错的选项」：判据全在 practicemode.LoadTopWrongOptions
+// （#2155 起结果卡 common_wrong 与本列表共用同一份实现）——这里只做一次转调，不再各写一份 SQL。
+// 曾经两份 SQL 分飞成两套口径（分母、空答案、并列排序三处都不同），同一道题两处不同值。
 func (s *Service) loadTopWrongOptions(questionIDs []int) map[int]string {
-	out := make(map[int]string, len(questionIDs))
-	if len(questionIDs) == 0 {
-		return out
-	}
-	var rows []struct {
-		QuestionID int    `gorm:"column:question_id"`
-		UserAnswer string `gorm:"column:user_answer"`
-		Cnt        int64  `gorm:"column:cnt"`
-	}
-	s.db.Model(&model.QuestionPracticeRecord{}).
-		Joins("JOIN question ON question.id = question_practice_record.question_id").
-		Select("question_practice_record.question_id AS question_id, user_answer, COUNT(*) AS cnt").
-		Where("question_practice_record.question_id IN ? AND question_practice_record.is_correct = ? "+
-			"AND question_practice_record.user_answer <> '' AND question.type <> ?",
-			questionIDs, false, shortAnswerQuestionType).
-		Group("question_practice_record.question_id, user_answer").Scan(&rows)
-
-	// 样本量按**判错的作答次数**算，不是该题全部作答：按总数算的话「10 人做对、4 人选错」
-	// 也会凑够阈值，把一个 4 票的答案当成「系统性误区」。错误作答的分布本身就是分母。
-	wrongByQuestion := make(map[int]int64, len(questionIDs))
-	for _, r := range rows {
-		wrongByQuestion[r.QuestionID] += r.Cnt
-	}
-	best := make(map[int]struct {
-		Answer string
-		Cnt    int64
-	}, len(rows))
-	for _, r := range rows {
-		if wrongByQuestion[r.QuestionID] < topWrongOptionMinSample {
-			continue
-		}
-		cur, seen := best[r.QuestionID]
-		if !seen || r.Cnt > cur.Cnt || (r.Cnt == cur.Cnt && r.UserAnswer < cur.Answer) {
-			best[r.QuestionID] = struct {
-				Answer string
-				Cnt    int64
-			}{Answer: r.UserAnswer, Cnt: r.Cnt}
-		}
-	}
-	for q, b := range best {
-		out[q] = b.Answer
-	}
-	return out
+	return practicemode.LoadTopWrongOptions(s.db, questionIDs)
 }
 
 // loadLastUserAnswers 批量查询每题「学员最近一次作答」的答案（question_id → user_answer）。
