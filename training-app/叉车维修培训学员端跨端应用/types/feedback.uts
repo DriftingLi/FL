@@ -1,0 +1,33 @@
+/**
+ * 学员意见反馈域类型（ADR-0089 反馈小域）
+ *
+ * 与后端契约同形：`POST /api/feedback` 的回包即 `FeedbackItem`，
+ * `GET /api/feedback` 回 `{ items, page, page_size, total }`。
+ *
+ * 两处端上口径别再漂移：
+ * - `status` 只有两态：`pending` 待处理 / `handled` 已处理；**本域不向学员下发回复**，
+ *   所以任何页面都不得写「客服已回复」这类文案。
+ * - `contact` 可空、**不校验格式**（手机 / 微信 / QQ / 邮箱 / 一句时间都收）。
+ */
+export type FeedbackItem = {
+	/** 反馈 ID */
+	id : number
+	/** 反馈正文（1–1000 字，后端已去首尾空白） */
+	content : string
+	/** 图片附件（站内相对路径 `/static/uploads/images/forum/…`，0–3 张；空数组 = 无图） */
+	images : string[]
+	/** 联系方式原文（可空） */
+	contact : string
+	/** 处理状态：`pending` / `handled` */
+	status : string
+	/** 处理时间（RFC3339）；未处理时是 null（键在） */
+	handled_at : string | null
+	/** 提交时间（RFC3339） */
+	created_at : string
+}
+
+/** 我的反馈分页结果（GET /api/feedback） */
+export type FeedbackListResult = {
+	items : FeedbackItem[]
+	total : number
+}

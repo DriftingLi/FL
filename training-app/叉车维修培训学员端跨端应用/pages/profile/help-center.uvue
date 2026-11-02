@@ -56,7 +56,55 @@
                     </view>
                 </view>
             </view>
+
+            <!-- 服务区（#1950）：反馈有落点（提交 + 历史），「在线客服」落到 AI 助手（送审要求客服可达）。
+                 三条入口都在内容滚动区底部，搜索/分类切换不影响它 —— 它不属于 FAQ 内容，属服务入口。 -->
+            <view class="service-card">
+                <text class="service-title">服务</text>
+                <view class="service-row" @click="onOpenFeedback">
+                    <text class="service-label">意见反馈</text>
+                    <text class="service-desc">问题提交后有落点，可附图</text>
+                    <text class="service-arrow">▸</text>
+                </view>
+                <view class="service-row" @click="onToggleHistory">
+                    <text class="service-label">我的反馈</text>
+                    <text class="service-desc">查看处理状态</text>
+                    <text class="service-arrow">{{ historyVisible ? '▾' : '▸' }}</text>
+                </view>
+                <view class="service-row" @click="onOpenCustomerService">
+                    <text class="service-label">在线客服</text>
+                    <text class="service-desc">AI 学助手，随时可问</text>
+                    <text class="service-arrow">▸</text>
+                </view>
+
+                <!-- 历史列表：点「我的反馈」就地展开，不另开一页（提交成功自动重拉） -->
+                <view v-if="historyVisible" class="history-box">
+                    <view v-if="historyLoading" class="history-tip">
+                        <text class="history-tip-text">加载中...</text>
+                    </view>
+                    <view v-if="!historyLoading && historyFailed" class="history-tip" @click="loadHistory">
+                        <text class="history-tip-text">反馈列表加载失败，点此重试</text>
+                    </view>
+                    <view v-if="!historyLoading && !historyFailed && historyItems.length == 0" class="history-tip">
+                        <text class="history-tip-text">还没有提交过反馈</text>
+                    </view>
+                    <view v-for="item in historyItems" :key="item.id" class="history-item">
+                        <view class="history-head">
+                            <text class="history-status"
+                                :class="{ 'history-status-handled': item.status == handledStatus }">{{ statusText(item.status) }}</text>
+                            <text class="history-time">{{ item.created_at }}</text>
+                        </view>
+                        <text class="history-content">{{ item.content }}</text>
+                        <note-image-strip v-if="item.images.length > 0" :urls="item.images"
+                            :max="imageMax" :editable="false" />
+                        <text v-if="item.contact.length > 0" class="history-contact">联系方式：{{ item.contact }}</text>
+                    </view>
+                </view>
+            </view>
         </scroll-view>
+
+        <!-- 反馈表单（表单真值源与提交流程收在组件里，页面只关心开关与提交成功后刷新历史） -->
+        <feedback-dialog :show="feedbackVisible" @close="onCloseFeedback" @submitted="onFeedbackSubmitted" />
     </view>
 </template>
 
@@ -66,8 +114,14 @@
     import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 import { goBack } from '../../utils/navigation'
     import { getFaqApi } from '../../api/faq'
+    import { listFeedbackApi, FEEDBACK_STATUS_HANDLED, FEEDBACK_IMAGES_MAX } from '../../api/feedback'
     import { buildFaqNav, buildFaqGroups, faqEmptyText, faqEmptyIcon } from '../../utils/faqDisplay'
-    import type { FaqCategory, FaqGroup, FaqNavItem } from '../../types/index'
+    import type { FaqCategory, FaqGroup, FaqNavItem, FeedbackItem } from '../../types/index'
+    import feedbackDialog from './components/feedback-dialog.uvue'
+    import noteImageStrip from './components/note-image-strip.uvue'
+
+    /** AI 学助手（tabBar 页，只能走 switchTab；先例 pages/points/points-shop.uvue:148） */
+    const AI_ASSISTANT_ROUTE = '/pages/ai-assistant/ai-assistant'
 
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
@@ -94,6 +148,65 @@ import { goBack } from '../../utils/navigation'
     const emptyText = computed<string>(() : string => faqEmptyText(keyword.value))
 
     const emptyIcon = computed<string>(() : string => faqEmptyIcon(keyword.value))
+
+    /** 反馈表单开关（表单内部自己管草稿与提交，页面只开关 + 成功后刷历史） */
+    const feedbackVisible = ref<boolean>(false)
+    /** 历史列表：默认收起，点「我的反馈」才拉（没人看的列表不占一次请求） */
+    const historyVisible = ref<boolean>(false)
+    const historyLoading = ref<boolean>(false)
+    const historyFailed = ref<boolean>(false)
+    const historyItems = ref<FeedbackItem[]>([])
+    /** 状态词只在模板里比较，不写字面量（`pending` / `handled` 由 api/feedback 导出） */
+    const handledStatus = FEEDBACK_STATUS_HANDLED
+    const imageMax = FEEDBACK_IMAGES_MAX
+
+    /** 状态 → 中文标签。本域不向学员下发回复，所以只说「待处理 / 已处理」，不写「已回复」 */
+    function statusText(status : string) : string {
+        return status == handledStatus ? '已处理' : '待处理'
+    }
+
+    function onOpenFeedback() : void {
+        feedbackVisible.value = true
+    }
+
+    function onCloseFeedback() : void {
+        feedbackVisible.value = false
+    }
+
+    /** 我的反馈：展开即拉一次（失败给重试位，不伪装成空列表） */
+    async function loadHistory() : Promise<void> {
+        if (historyLoading.value) return
+        historyLoading.value = true
+        historyFailed.value = false
+        try {
+            const page = await listFeedbackApi(1, 20)
+            historyItems.value = page.items
+        } catch (e) {
+            console.error('[help-center] history load failed:', e)
+            historyFailed.value = true
+        } finally {
+            historyLoading.value = false
+        }
+    }
+
+    /** 提交成功后：收起表单、打开历史并重拉一遍，让用户当场看到自己刚提交的那条 */
+    function onFeedbackSubmitted() : void {
+        feedbackVisible.value = false
+        historyVisible.value = true
+        loadHistory()
+    }
+
+    function onToggleHistory() : void {
+        historyVisible.value = !historyVisible.value
+        if (historyVisible.value) {
+            loadHistory()
+        }
+    }
+
+    /** 在线客服 = AI 学助手（教育类目送审要求客服可达；不新建客服页、不接第三方客服） */
+    function onOpenCustomerService() : void {
+        uni.switchTab({ url: AI_ASSISTANT_ROUTE })
+    }
 
     /** 拉取帮助中心（失败置 failed，由重试位重新进入） */
     async function loadFaq() : Promise<void> {
@@ -326,5 +439,104 @@ import { goBack } from '../../utils/navigation'
         font-size: 26rpx;
         color: #666666;
         line-height: 42rpx;
+    }
+
+    /* 服务区（#1950）：入口列表 + 历史 */
+    .service-card {
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 8rpx 24rpx 16rpx 24rpx;
+        margin: 8rpx 24rpx 40rpx 24rpx;
+        flex-direction: column;
+    }
+
+    .service-title {
+        font-size: 26rpx;
+        font-weight: bold;
+        color: #999999;
+        padding: 20rpx 0 8rpx 0;
+    }
+
+    .service-row {
+        flex-direction: row;
+        align-items: center;
+        padding: 24rpx 0;
+        border-bottom-width: 1rpx;
+        border-bottom-style: solid;
+        border-bottom-color: #f0f0f0;
+    }
+
+    .service-label {
+        font-size: 28rpx;
+        color: #333333;
+        width: 160rpx;
+    }
+
+    .service-desc {
+        flex: 1;
+        font-size: 24rpx;
+        color: #999999;
+    }
+
+    .service-arrow {
+        font-size: 28rpx;
+        color: #999999;
+        margin-left: 16rpx;
+    }
+
+    .history-box {
+        flex-direction: column;
+        padding-top: 12rpx;
+    }
+
+    .history-tip {
+        align-items: center;
+        padding: 32rpx 0;
+    }
+
+    .history-tip-text {
+        font-size: 26rpx;
+        color: #999999;
+    }
+
+    .history-item {
+        flex-direction: column;
+        background-color: #f7f8fa;
+        border-radius: 12rpx;
+        padding: 20rpx;
+        margin-bottom: 16rpx;
+    }
+
+    .history-head {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        padding-bottom: 12rpx;
+    }
+
+    .history-status {
+        font-size: 22rpx;
+        color: #ff9800;
+    }
+
+    .history-status-handled {
+        color: #4caf50;
+    }
+
+    .history-time {
+        font-size: 22rpx;
+        color: #999999;
+    }
+
+    .history-content {
+        font-size: 26rpx;
+        color: #333333;
+        line-height: 40rpx;
+    }
+
+    .history-contact {
+        font-size: 24rpx;
+        color: #666666;
+        padding-top: 12rpx;
     }
 </style>

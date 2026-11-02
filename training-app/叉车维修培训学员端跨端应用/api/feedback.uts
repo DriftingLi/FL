@@ -1,0 +1,59 @@
+/**
+ * 学员意见反馈域 API（ADR-0089 反馈小域）
+ *
+ * 接口（后端 PR #2093，squash `6fbd7e75`）：
+ *   POST /api/feedback   提交（需登录）{ content, images, contact }
+ *   GET  /api/feedback   我的反馈（只回本人；`page` / `page_size`）
+ *
+ * 图片**不新建通道**：先走 `uploadForumImageApi`（`POST /api/forum/upload-image`）
+ * 拿到站内相对路径，再把 URL 放进 `images[]`（服务端校验 `images/forum/` 前缀与文件真实存在）。
+ */
+import { postMapped } from './request'
+import { getPaged } from './envelope'
+import { toNumber, toStr } from './helpers'
+import { extractImages } from './forumDto'
+import type { Page } from './envelope'
+import type { FeedbackItem } from '../types/index'
+
+/** 正文长度上限（与后端校验同源；1–1000 字，首尾空白由后端去掉） */
+export const FEEDBACK_CONTENT_MAX = 1000
+
+/** 图片上限（张）——与后端 `feedback.ImagesMax` 同源，端上先闸住，别让用户传满再吃 400 */
+export const FEEDBACK_IMAGES_MAX = 3
+
+/** 状态词（模板不写字面量，避免「待处理 / 已处理」在两处漂移） */
+export const FEEDBACK_STATUS_PENDING = 'pending'
+export const FEEDBACK_STATUS_HANDLED = 'handled'
+
+/** 从 UTSJSONObject 构造 FeedbackItem（ADR-0003 手动 JSON 映射） */
+function buildFeedbackItem(obj : UTSJSONObject) : FeedbackItem {
+	const handledRaw : any | null = obj['handled_at']
+	return {
+		id: toNumber(obj['id']),
+		content: toStr(obj['content']),
+		images: extractImages(obj),
+		contact: toStr(obj['contact']),
+		status: toStr(obj['status']),
+		handled_at: handledRaw != null ? toStr(handledRaw) : null,
+		created_at: toStr(obj['created_at']),
+	} as FeedbackItem
+}
+
+/**
+ * 提交反馈
+ *
+ * @param images 图片 URL 数组（先经 `uploadForumImageApi` 上传；上限 `FEEDBACK_IMAGES_MAX`）。
+ *        缺省传空数组而不是省略 —— 与笔记同一口径，端上永远全量提交。
+ * @param contact 联系方式原文；**可空串、端上不做格式校验**（后端也不校验，见 ADR-0089）。
+ */
+export function submitFeedbackApi(content : string, images : string[] = [], contact : string = '') : Promise<FeedbackItem> {
+	const payload : UTSJSONObject = { content: content, images: images, contact: contact } as UTSJSONObject
+	return postMapped<FeedbackItem>('/feedback', payload, (data : UTSJSONObject) : FeedbackItem => buildFeedbackItem(data))
+}
+
+/** 我的反馈列表（只回本人；排序由后端给，端上不重排） */
+export function listFeedbackApi(page : number = 1, pageSize : number = 20) : Promise<Page<FeedbackItem>> {
+	return getPaged<FeedbackItem>('/feedback', page, pageSize, (obj : UTSJSONObject) : FeedbackItem => {
+		return buildFeedbackItem(obj)
+	})
+}
