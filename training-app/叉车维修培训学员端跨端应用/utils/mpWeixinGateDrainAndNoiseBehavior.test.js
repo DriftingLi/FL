@@ -47,7 +47,21 @@ describe('F3：平台层噪音白名单（② 在 cold-start-direct 下不再恒
   const constDecl = (src.match(/const PLATFORM_NOISE_PATTERNS = \[[\s\S]*?\n\];/) || [''])[0];
   // #2164：跨条共现规则同为独立常量段。回滚单位 = 两段常量 + 分类函数签名——任一段切不到 ⇒ 守护红（fail-closed）。
   const contextDecl = (src.match(/const PLATFORM_NOISE_CONTEXT_RULES = \[[\s\S]*?\n\];/) || [''])[0];
-  const fnDecl = (src.match(/function platformNoiseOf\([^)]*\) \{[\s\S]*?\n\}/) || [''])[0];
+  // Q4（#2211 裁定原文）：抽取对**签名**不敏感 —— 从 `function platformNoiseOf` 起点切到**下一个顶层
+  // `function `** 或文件末尾。正则按 `[^)]*` 切参数面，签名一变（加参数、解构、默认值带括号）就切歪，
+  // 切歪的后果是守护自己静默失效：切不到 ⇒ beforeAll 直接红（fail-closed），切到半截 ⇒ 行为断言失真。
+  const fnDecl = (() => {
+    const at = src.indexOf('function platformNoiseOf');
+    if (at === -1) return '';
+    // 终止面按「顶层语句起点」取：函数体内部一律缩进，故**行首无缩进**的 `function` / `const` / `let`
+    // / `var` / `(async` 就是本函数的边界。裁定原文写的「下一个顶层 function 或文件末尾」在只有这一种
+    // 顶层语句时等价；本文件平台噪音函数后面紧跟的是 `const rel = …`（顶层常量），只认 `function`
+    // 会把下面引用 `args` 的主流程一并切进来 ⇒ 守护当场 ReferenceError。多认几个顶层起点只收窄、不放宽。
+    const stop = /\n(?:function |const |let |var |\(async |async function )/g;
+    stop.lastIndex = at + 1;
+    const m = stop.exec(src);
+    return src.slice(at, m ? m.index : src.length);
+  })();
 
   let platformNoiseOf;
   beforeAll(() => {
@@ -113,9 +127,9 @@ describe('F3：平台层噪音白名单（② 在 cold-start-direct 下不再恒
 
   it('N3 反向锁②：有 appLaunch 上下文时真业务 error 仍计数（不得扩成「本页后续全放行」）', () => {
     expect(platformNoiseOf(entry('error', 'request:fail timeout'), [APP_LAUNCH])).toBeNull();
-    // Q2=(a)：routeDone / screenHeight 这两族分裂到 #2211，本票一条都不放行
-    expect(platformNoiseOf(entry('error', 'routeDone with a webviewId 5 is not found'), [APP_LAUNCH])).toBeNull();
-    expect(platformNoiseOf(entry('error', "TypeError: Cannot read properties of null (reading 'screenHeight')"), [APP_LAUNCH])).toBeNull();
+    // #2211 起 routeDone / screenHeight 两族有**自己的锚词**放行（见 M 组），但它们不靠 appLaunch 背书：
+    // 同一条文本在「没有 routeDone 锚」的形态下仍必须红（下面的 M3 钉这一侧）。
+    expect(platformNoiseOf(entry('error', 'something else entirely'), [APP_LAUNCH])).toBeNull();
   });
 
   it('N4 判据最窄：五条件缺一不放行（非 error / 多 args / 字符串恰为 [object Object] / 非对象标量参）', () => {
@@ -125,6 +139,41 @@ describe('F3：平台层噪音白名单（② 在 cold-start-direct 下不再恒
     expect(platformNoiseOf(entry('error', '[object Object]'), [APP_LAUNCH])).toBeNull();
     expect(platformNoiseOf({ type: 'error', args: [null] }, [APP_LAUNCH])).toBeNull();
     expect(platformNoiseOf({ type: 'error', args: [15] }, [APP_LAUNCH])).toBeNull();
+  });
+
+  // ---- #2211：routeDone / screenHeight 两族各自的窄共现（2026-11-02 维护者裁定 Q1/Q2）----
+
+  it('M1 放行：routeDone 锚 + 同窗同时有 webviewId 与 is not found ⇒ 平台噪音', () => {
+    const hit = platformNoiseOf(entry('error', 'routeDone with a webviewId 5 is not found'));
+    expect(hit).toBeTruthy();
+    expect(hit.id).toBe('routeDoneWebviewMissing');
+    // 前后夹带上下文也认（窗口是 200 字符，不是整句相等）
+    expect(platformNoiseOf(entry('error', '[system] routeDone with a webviewId 7 is not found (page=courses)'))).toBeTruthy();
+  });
+
+  it('M2 放行：appServiceSDKScriptError 锚 + 同窗 reading 某属性 + screenHeight ⇒ 平台噪音', () => {
+    const text = "TypeError: SystemError (appServiceSDKScriptError)\nCannot read properties of null (reading 'screenHeight')";
+    const hit = platformNoiseOf(entry('error', text));
+    expect(hit).toBeTruthy();
+    expect(hit.id).toBe('appServiceNullScreenHeight');
+  });
+
+  it('M3 反向锁①：缺任一强词都不放行（routeDone 无 webviewId / 无 is not found；screenHeight 无 appServiceSDKScriptError）', () => {
+    // routeDone 族：三个词缺一不可
+    expect(platformNoiseOf(entry('error', 'routeDone but no webview here'))).toBeNull();
+    expect(platformNoiseOf(entry('error', 'routeDone: webviewId 5 is fine'))).toBeNull();
+    expect(platformNoiseOf(entry('error', 'file not found'))).toBeNull();
+    // screenHeight 族：它是**共现词不是锚** —— 业务侧自己读 screenHeight 报的 TypeError 必须照旧红
+    expect(platformNoiseOf(entry('error', "TypeError: Cannot read properties of null (reading 'screenHeight')"))).toBeNull();
+    expect(platformNoiseOf(entry('error', "appServiceSDKScriptError reading 'width'"))).toBeNull();
+  });
+
+  it('M4 不越界：非 error 级别与跨窗外共现都不放行（窗口之外的词不算同一条）', () => {
+    expect(platformNoiseOf(entry('warn', 'routeDone with a webviewId 5 is not found'))).toBeNull();
+    expect(platformNoiseOf(entry('log', "appServiceSDKScriptError reading 'screenHeight'"))).toBeNull();
+    // 锚之后 200 字符外才出现共现词 ⇒ 不是同一条噪音
+    const far = 'routeDone ' + 'x'.repeat(240) + ' webviewId 5 is not found';
+    expect(platformNoiseOf(entry('error', far))).toBeNull();
   });
 
   it('N5 接线不回退：console 回调必须把同跑噪音上下文传入分类并记录命中 id（剪线 = 静默失效）', () => {

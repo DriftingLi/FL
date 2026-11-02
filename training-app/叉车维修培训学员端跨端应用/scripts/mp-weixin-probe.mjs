@@ -232,6 +232,27 @@ const PLATFORM_NOISE_PATTERNS = [
     also: [/non-?empty/i, /page\s*stack/i],
     window: 200,
   },
+  // #2211（2026-11-02 维护者裁定 Q1/Q2，两族各自最窄共现，不合并成一条宽判据）：
+  //   A. `routeDone with a webviewId 5 is not found` —— 逐页直达后旧 webview 已销毁，
+  //      路由回调仍打到它身上。窄口径：**锚 routeDone ∧ 同窗同时出现 webviewId 与 is not found**。
+  //      「is not found」单独出现（如文件没找到）缺 webviewId ⇒ 不放行。
+  //   B. `SystemError (appServiceSDKScriptError) … reading 'screenHeight'` —— 平台在无活跃
+  //      webview 时读到的空对象上取属性。窄口径：**锚 appServiceSDKScriptError ∧ 同窗同时出现
+  //      `reading '<某属性>'` 与该属性名 screenHeight**。screenHeight 只是**共现词**（不是锚），
+  //      业务代码里自己读 screenHeight 报的 TypeError 不带 appServiceSDKScriptError ⇒ 照旧红。
+  //   两族都只对 `type === 'error'` 生效，且都要在锚之后 200 字符的同一窗口内凑齐，宁可漏不可宽。
+  {
+    id: 'routeDoneWebviewMissing',
+    anchor: /routeDone/i,
+    also: [/webviewId/i, /is\s*not\s*found/i],
+    window: 200,
+  },
+  {
+    id: 'appServiceNullScreenHeight',
+    anchor: /appServiceSDKScriptError/i,
+    also: [/reading\s*'[^']+'/i, /screenHeight/i],
+    window: 200,
+  },
 ];
 
 // #2164 跨条共现规则（2026-11-02 维护者裁定 Q1=(a)，最窄形态，Q2=(a) 不扩背书）：
@@ -243,8 +264,9 @@ const PLATFORM_NOISE_PATTERNS = [
 //   error 级（函数入口判）∧ args 恰好一个 ∧ 该参是非字符串的对象 ∧ 渲染文本恰为 [object Object]
 //   ∧ 同跑已放行过 requires 背书的噪音 id。
 // **条序不入判据**：这条 error 与 appLaunch 是否恒成对/恒有序，属未证事实（AC7）——真跑取证
-// 若发现不同页不总是成对 ⇒ 停下回报，不自行放宽或收紧。routeDone / screenHeight 两族不放行，
-// 分裂到 #2211。宁可漏（漏了照旧红），不可宽（宽了静默吞真错）。
+// 若发现不同页不总是成对 ⇒ 停下回报，不自行放宽或收紧。routeDone / screenHeight 两族**不并入本条**
+// ——它们各有独立锚词，已由 #2211 在上表按维护者裁定的窄共现放行（不跨条背书、不看条序）。
+// 宁可漏（漏了照旧红），不可宽（宽了静默吞真错）。
 const PLATFORM_NOISE_CONTEXT_RULES = [
   {
     id: 'appLaunchCompanionEmptyObject',
