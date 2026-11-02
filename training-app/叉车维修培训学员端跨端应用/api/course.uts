@@ -286,8 +286,12 @@ function buildLevelItem(obj : UTSJSONObject) : LevelItem {
  * @param levelId 课程等级 ID 过滤（可选，0 表示全部）
  * @param credentialId 当前证件 ID（>0 才下发；0 = 未声明，与服务端 nil 语义一致）
  * @param filter 热门/精品口径（'' = 全部，不下发；'hot' | 'featured' —— #1422 dashboard 课程区取热门）
+ * @param paid 免费/付费口径（'' = 全部，不下发；'free' | 'paid' —— #1951 课程页筛选组）。
+ *        取值由本函数映射成后端布尔字面量 `false` / `true`，端上不自己算「贵不贵」：
+ *        后端按 `points_price`（价 > 0 = 付费）派生，口径与详情页「该课程需 N 积分解锁」同源，
+ *        契约为 `backend/internal/course/course_paid_filter_contract_test.go`（含 `paid=maybe` → 400）。
  */
-export function getCourseListApi(page : number = 1, pageSize : number = 12, specialtyId : number = 0, levelId : number = 0, credentialId : number = 0, filter : string = '') : Promise<Page<CourseItem>> {
+export function getCourseListApi(page : number = 1, pageSize : number = 12, specialtyId : number = 0, levelId : number = 0, credentialId : number = 0, filter : string = '', paid : string = '') : Promise<Page<CourseItem>> {
 	const params : UTSJSONObject = {
 		page: page.toString(),
 		page_size: pageSize.toString(),
@@ -304,6 +308,12 @@ export function getCourseListApi(page : number = 1, pageSize : number = 12, spec
 	// #1422：'' 与后端缺省 all 同义，不下发空参数（保持既有请求形状零变化，向后兼容 mall / courses）
 	if (filter.length > 0) {
 		params['filter'] = filter
+	}
+	// #1951：免费/付费组。端上只说语义（'free' | 'paid'），布尔字面量在此处映射 ——
+	// 后端 `paid` 只认 true/false，传 'maybe' 一类直接 400（契约 `course_paid_filter_contract_test.go` 已钉）。
+	// '' = 全部，与 filter 同款「缺省即全量」约定，不下发。
+	if (paid.length > 0) {
+		params['paid'] = paid == 'paid' ? 'true' : 'false'
 	}
 	return getMapped<Page<CourseItem>>('/courses', params, (data : UTSJSONObject) : Page<CourseItem> => {
 		return decodePage<CourseItem>(data, '/courses', page, pageSize, (obj : UTSJSONObject) : CourseItem => buildCourseItem(obj), COURSE_LIST_KEYS)

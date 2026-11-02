@@ -77,6 +77,16 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# #2161 UTF-8 三性（全部在调 java 之前钉死；缺任一条，中文工作树下的证据日志就会烤成不可解码）：
+#   ① [Console]::OutputEncoding —— 同族门脚本逐字同款写法（dev-finish / hx-run / pr-gates / wt-bootstrap…），
+#      本脚本此前是唯一没钉的一个，故 ④c 的 kotlin-all.log 在中文树下必坏（#2139 判据随后判红）。
+#   ② $OutputEncoding —— 走原生命令 stdin 那一路的编码。
+#   ③ JVM 侧 -Dfile.encoding —— 参数由 lib/evidence-selfcheck.ps1 的 Get-KotlinJvmUtf8Args 给出（现测与排除项都在那里）。
+try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
+$OutputEncoding = [System.Text.Encoding]::UTF8
+# 出口自查只判「本次跑写过」的日志：早于这个起点的属 #2139 的存量豁免，不在本门射程
+$GateStartMs = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+
 # #1770：验收证据主键从 PR 号改成 commit sha。`-PostToIssue` 是正式名（票号），`-PostToPr` 是**别名**
 # （同值，一个版本后退役）—— 归一成一枚后，下文一律沿用旧字形 `$PostToPr`，不制造第二份来源。
 if ($PostToIssue -gt 0) { $PostToPr = $PostToIssue }
@@ -149,6 +159,10 @@ function Resolve-HBuilderXRoot {
 # 故 `utils/kotlinAllProcessCaptureBehavior.test.js` 可以 dot-source 它并**真执行**采集契约 ——
 # 采集留在本脚本里就只能读源码文本断言，而接线守护不构成 ③ 证据（#1285）。
 . (Join-Path $PSScriptRoot 'lib\process-capture.ps1')
+
+# ④c 出口的「证据自查」判据同样住零副作用 lib（#2161）：坏件要由门自己在输出里点名，
+# 而不是等 preflight 把它报成「缺该行」。JVM 编码参数的唯一真源也在那里（免第二份来源）。
+. (Join-Path $PSScriptRoot 'lib\evidence-selfcheck.ps1')
 
 # ---------- 项目与日志 ----------
 if (-not $Project) { $Project = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path }
@@ -349,7 +363,9 @@ New-Item -ItemType Directory -Force -Path $classOutDir | Out-Null
 
 Start-GateStage -Name 'kotlinc'
 # ---------- 4) 整模块编译（HBuilderX 自带 kotlinc + UTS 编译器插件）----------
-$javaArgs = @(
+# 第一位起效：JVM 参数必须在主类（Preloader）之前 —— 中文工作树下 kotlinc 的诊断行按
+# OEM 码页写 stdout，采集层按 UTF-8 解就把中文烤成 U+FFFD（#2161，现测 fffd 18→0）。
+$javaArgs = @(Get-KotlinJvmUtf8Args) + @(
     '-Xmx2g', '--add-opens', 'java.base/java.util=ALL-UNNAMED',
     '-cp', $preloaderJar,
     'org.jetbrains.kotlin.preloading.Preloader',
@@ -448,6 +464,21 @@ exit 0
 
 
 } finally {
+    # #2161 出口自查 —— 日志坏在门自己的输出里点名。finally 是唯一收口点：
+    # 0/1/2 三种终态出口全在 try 内（现测 pwsh 的 exit 仍会跑 finally），一处覆盖三种出口。
+    # 只点名、不翻转退出码：成败口径仍归 C3/C4（解析输出，绝不看退出码）；判据本体住 lib。
+    if ((Test-Path variable:logPath) -and (Test-Path -LiteralPath $logPath -PathType Leaf)) {
+        $ev = Get-EvidenceLogVerdict -Root $Project -SinceMs $GateStartMs
+        $evColor = if ($ev.Status -eq 'corrupt') { 'Red' } elseif ($ev.Ok) { 'DarkGray' } else { 'Yellow' }
+        Write-Host (">>> " + $ev.Summary) -ForegroundColor $evColor
+        foreach ($evBad in @($ev.Bad)) { Write-Host ("    " + $evBad) -ForegroundColor Red }
+        if ($ev.Status -eq 'corrupt') {
+            Write-Host '    ↑ 证据日志含不可解码字节（#2161 的缺陷形态）：这条读数的中文进不了 PR 正文，先修编码再复采。' -ForegroundColor Red
+        }
+        if ($ev.Status -eq 'unknown') {
+            Write-Host '    ↑ 出口自查没跑成：unknown 不等于干净（fail-closed），判据 CLI 或 node 不可用时要人工过目日志。' -ForegroundColor Yellow
+        }
+    }
     # 释放 agent 互斥锁（-SkipPublish 下未取锁，Release-HxLock 是安全的空操作）
     Release-HxLock
 }

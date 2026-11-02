@@ -825,6 +825,26 @@ describe('#1422 首页课程区接真实数据：is_hot 迁出 · filter=hot 口
     expect(body).toContain("if (filter.length > 0)");
   });
 
+  it('#1951 免费/付费组：paid 形参在 api 面单点映射布尔、课程页按组下发且换组回第一页', () => {
+    const code = stripAll(read(API));
+    const body = fnBody(code, 'export function getCourseListApi');
+    // 形状：尾部可选形参，'' = 全部不下发（既有 5 参调用方零变化）
+    expect(body).toMatch(/paid : string = ''/);
+    expect(body).toContain("if (paid.length > 0)");
+    // 布尔字面量只在 api 面映射一处（端上不自己算贵不贵）
+    expect(body).toContain("params['paid'] = paid == 'paid' ? 'true' : 'false'");
+
+    const page = stripAll(read('pages/courses/courses.uvue'));
+    // 组与语义值在册，且走同一个请求出口
+    expect(page).toContain("const paidTags : string[] = ['全部', '免费', '积分兑换']");
+    expect(page).toContain("const paidValues : string[] = ['', 'free', 'paid']");
+    expect(page).toContain('paidValues[activePaid.value]');
+    // 付费=积分兑换的文案口径不许写成自造词
+    expect(page).toContain('与课程详情页扣积分为同一口径');
+    // 服务端口径 ⇒ 换组必须回第一页重取，不能被本地过滤糊过去
+    expect(page).toMatch(/function onPaidTap[\s\S]*?loadCourses\(true\)/);
+  });
+
   it('dashboard 课程区经 useDashboardFeeds 消费 filter 口径（#1608 §8⑤ 单轴透传）+ 当前证件显式下发', () => {
     const feeds = stripAll(read(FEEDS));
     expect(feeds).toContain("import { getCourseListApi } from '../../../api/course'");
