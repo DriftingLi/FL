@@ -48,13 +48,28 @@ function Invoke-GateTee {
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError = $true
     $psi.CreateNoWindow = $true
-    # 解码用**本进程的控制台编码**，与旧 `Tee-Object` 管道同源（本机 cp936；调用方若已把
-    # [Console]::OutputEncoding 顶成 UTF-8，就与旧路径逐字一致）。**不要硬钉 UTF-8**：cli.exe 一族
-    # 在本机是按控制台码页吐字节的，硬钉 UTF-8 会把中文变成不可逆的替换字符（#2147 审查实测）。
-    $enc = [System.Text.Encoding]::UTF8
-    try { if ([Console]::OutputEncoding) { $enc = [Console]::OutputEncoding } } catch { }
-    $psi.StandardOutputEncoding = $enc
-    $psi.StandardErrorEncoding = $enc
+    # 子进程的流是**混合编码**（2026-11-02 真链路实测，pr-gates.log）：
+    #   · 子门 pwsh 自己的文本按系统码页吐（本机 cp936）—— 无窗口进程拿不到控制台，外层 chcp 65001 也改不动它；
+    #   · 它拉起的原生程序（HBuilderX cli.exe / java-kotlinc / node）按 **UTF-8** 写。
+    # 单编码必然解错一边：钉 UTF-8 ⇒ cp936 段整句 U+FFFD（实测 fffd=6899，预检判红）；钉 cp936 ⇒ UTF-8 段
+    # 变 GBK 乱码（实测 moji=47，④c 出口自检同样判 corrupt）。也不要取父进程的 `[Console]::OutputEncoding`
+    # —— pr-gates.ps1:104 早把它顶成 UTF-8（#2027，管的是父进程自己写的字节）。
+    # 处置：先用 Latin-1（28591）把字节**无损**收成行（字节 ↔ 字符一一对应，不丢信息、不产生替换符），
+    # 再逐行「严格 UTF-8 解一次，抛错就退回系统码页」—— 两种来源各解各的，日志里两种字都对。
+    $byteEnc = [System.Text.Encoding]::GetEncoding(28591)
+    $psi.StandardOutputEncoding = $byteEnc
+    $psi.StandardErrorEncoding = $byteEnc
+    $utf8Strict = [System.Text.UTF8Encoding]::new($false, $true)
+    $oemEnc = [System.Text.Encoding]::UTF8
+    if ($IsWindows) {
+        try { $oemEnc = [System.Text.Encoding]::GetEncoding([System.Globalization.CultureInfo]::CurrentCulture.TextInfo.OEMCodePage) }
+        catch { $oemEnc = [System.Text.Encoding]::UTF8 }
+    }
+    $decodeLine = {
+        param([string]$rawLine)
+        $bytes = $byteEnc.GetBytes($rawLine)
+        try { return $utf8Strict.GetString($bytes) } catch { return $oemEnc.GetString($bytes) }
+    }
     if ($WorkingDirectory) { $psi.WorkingDirectory = $WorkingDirectory }
     foreach ($a in $Arguments) { [void]$psi.ArgumentList.Add($a) }
 
@@ -82,9 +97,10 @@ function Invoke-GateTee {
                 $errTask = if ($null -ne $line) { $p.StandardError.ReadLineAsync() } else { $null }
             }
             if ($null -ne $line) {
-                Write-Host "$line"
-                $collected.Add("$line")
-                if ($LogPath) { Add-Content -LiteralPath $LogPath -Encoding utf8 -Value "$line" }
+                $text = & $decodeLine $line
+                Write-Host "$text"
+                $collected.Add("$text")
+                if ($LogPath) { Add-Content -LiteralPath $LogPath -Encoding utf8 -Value "$text" }
             }
         }
         # 主进程退出 ⇒ 起一个有界收尾窗口；窗口用完就放弃剩余输出（#2147 的承重条款）
