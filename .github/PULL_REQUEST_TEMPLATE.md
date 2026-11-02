@@ -35,6 +35,7 @@ master 有 ruleset「protect master」，必检只有 ci-summary；pr-evidence �
 - ② 微信小程序门：命中 MP-WEIXIN 面时必填（ADR-0043 起为常态主门）
 - ④ 本地编译门：命中运行时面时必填
 - ① 不写（已降为发版前一次的发版冒烟）；③ 不写（两腿在 ci-summary 里，正文抄一遍零信息）；④b 不写（打包链路在发版流程里，触到只留 notes 提醒）
+- ② 的**非触发面**（命中运行时面、但未命中 MP-WEIXIN 面）：默认跑；确实不跑时**必须留痕**——把 ② 那一行换成 `- ② 自选跳过 reason=<slug>`（slug 只用小写字母/数字/连字符）。它**不是门证据**：校验器只在 `needs2` 时检查 ②，非触发面整道门不检查，所以它不参与判绿；反过来，`needs2` 触发面写它会因「缺读数」判红（触发面必跑并贴读数行，见 ADR-0043 追加节 / #2207）。
 
 分级判据（哪些改动算命中运行时面 / MP-WEIXIN 面）的权威定义在 `.github/scripts/lib/gate-validator.mjs`——本模板**刻意不复述那份文件清单**：复述品会与权威定义漂移，历史上已因此产生过一次假红。未命中运行时面的 PR 写「免（未命中运行时面）」。
 
@@ -43,11 +44,12 @@ master 有 ruleset「protect master」，必检只有 ci-summary；pr-evidence �
 
 **图的地位**：截图是**附证**不是判据（#2108）——附在行尾供人看，校验器不读图、也不校验链接可达。
 **自检**：`node .github/scripts/preflight-pr.mjs --body-file <正文文件>`（与 CI 同一份判据；红了别开 PR）。
-**下面两行是占位示例，必须整行换成真读数**：只把 `<sha7>` 换成真 sha、留着 `<…读数行原样>` 不换，会判「没有实际读数」而红（token 后面必须跟着门真打出来的 `key=value`，2026-10-29 review 的 P0）。
+**下面三行是占位示例（② 的两种形态二选一，不要两行都留）**：只把 `<sha7>` 换成真 sha、留着 `<…读数行原样>` 不换，会判「没有实际读数」而红（token 后面必须跟着门真打出来的 `key=value`，2026-10-29 review 的 P0）。跳过行只在没跑 ② 时用，`<slug>` 要换成真实原因。
 -->
 
 - ② 跑于 `<sha7>` · `<MP_WEIXIN_RESULT 读数行原样>`（`scripts/mp-weixin-check.ps1` 原样输出；图可选，附行尾）
   - **带参页专项（#2110 定案，2026-10-29）**：依赖入口 query 的页（featured-detail / ai-feature / job-detail / resume-detail 等）在 ② 的「首项换页 + plain 冷启动」下直达内容形态结构不可得（CLI `--compile-condition` 被静默吞参、私有配置 condition 段不生效，单验读数 `.ci-verify/2110`）⇒ ② 对这些页记 skip，**空壳 / 「加载中…」截图不得充当该页证据**；内容取证落 ①（真机 `--pagePath` + `--pageQuery`）或发版冒烟（移动端 ADR 0043 决策 3）。
+- ② 自选跳过 reason=<slug>（**只用于命中运行时面但非 needs2 触发面的 PR**：没跑 ② 就留这一行，与上面的 ② 读数行二选一；`needs2` 触发面不许写）
 - ④ 跑于 `<sha7>` · `<KOTLIN_ALL_RESULT 读数行原样>`（`scripts/kotlin-all-check.ps1` 原样输出；dev 面为 `<COMPILE_RESULT 读数行原样>`）
 
 ## 自检清单

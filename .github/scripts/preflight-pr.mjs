@@ -193,6 +193,36 @@ export function mergeEncodingLint(result, lint) {
   };
 }
 
+/**
+ * #2216：② 的非触发面允许「自选跳过」，但跳过必须留痕（移动端 ADR-0043 追加节 / #2207）。
+ * **只产提示、任何一支都不判红** —— 判据仍只有 gate-validator 的 ②④。
+ * 三种形态：
+ *   ① 命中运行时面、非 needs2、正文既无读数行也无跳过行 ⇒ 提醒留痕；
+ *   ② 非 needs2、有跳过行但 reason 还是占位 `<slug>` ⇒ 提醒换真实 slug；
+ *   ③ needs2 出现跳过行 ⇒ 跳过在触发面不生效（缺读数行时校验器本就会判红）。
+ */
+// 注意：不能用 \b —— 中文与空格之间不构成 ASCII 词边界，`② 自选跳过` 后面接空白时 \b 永不成立（#2216 实测）。
+const SKIP_LINE_RE = /^[ \t]*[-*][ \t]*②[ \t]*自选跳过[^\n]*/m;
+export function skipDeclarationHint({ body, needs2, runtimeHit }) {
+  if (!runtimeHit) return null;
+  const text = String(body || '').replace(/<!--[\s\S]*?-->/g, '');
+  const hasReading = /\bMP_WEIXIN_RESULT\b/.test(text);
+  const skipLine = (text.match(SKIP_LINE_RE) || [])[0] || null;
+  if (needs2) {
+    if (!skipLine) return null;
+    return hasReading
+      ? '② 触发面（needs2=true）不允许自选跳过：删掉 `② 自选跳过` 行，只留 `MP_WEIXIN_RESULT` 读数行（#2207）。'
+      : '② 触发面（needs2=true）必跑：`② 自选跳过` 不构成 ② 证据，需贴 `MP_WEIXIN_RESULT` 读数行（#2207）。';
+  }
+  if (!skipLine && !hasReading) {
+    return '② 非触发面：正文既无 `MP_WEIXIN_RESULT` 读数行，也无 `② 自选跳过 reason=<slug>` —— 没跑就补一行跳过声明，跑了就贴读数行（#2207）。';
+  }
+  if (skipLine && /reason=\s*<slug>/.test(skipLine)) {
+    return '② 自选跳过 的 `reason` 还是占位 `<slug>`：换成真实原因短 slug（`^[a-z0-9-]+$`）。';
+  }
+  return null;
+}
+
 /** 分支点时刻 = merge-base(HEAD, base) 的提交时刻；读不到返回 0，调用方据此跳过并在 notes 说明。 */
 function branchPointMs(baseApi) {
   for (const ref of [baseApi, `origin/${baseApi}`]) {
@@ -263,6 +293,13 @@ async function main(argv) {
     ? classifyForPreflight(scanEvidenceLogs({ root: git('rev-parse', '--show-toplevel').trim(), sinceMs }))
     : { ok: true, reds: [], notes: ['证据日志可读性：跳过（读不到分支点基线）'] };
   const final = mergeEncodingLint(refMerged, encLint);
+  // #2216：② 非触发面的跳过留痕提示（只进 notes，不参与 ok —— 判据仍是 gate-validator）。
+  const skipHint = skipDeclarationHint({
+    body,
+    needs2: Boolean(final.gates && final.gates['②'] && final.gates['②'].required),
+    runtimeHit: Boolean(final.gates && final.gates['④'] && final.gates['④'].required),
+  });
+  if (skipHint) final.notes.push(skipHint);
   const ciRun = pickCiSummaryRun(checkRuns(repo, commit), commit);
   if (args.json) {
     console.log(JSON.stringify({ ok: final.ok, errors: final.errors, notes: final.notes, gates: final.gates, tiering: final.tiering || null, commit, base: args.base, ciRun }, null, 2));
