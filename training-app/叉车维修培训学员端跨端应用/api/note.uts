@@ -14,6 +14,7 @@
 import { postMapped, putMapped, del } from './request'
 import { getPaged } from './envelope'
 import { toNumber, toNumberOrNull, toStr } from './helpers'
+import { extractImages } from './forumDto'
 import type { Page } from './envelope'
 import type { NoteItem } from '../types/index'
 
@@ -21,6 +22,14 @@ import type { NoteItem } from '../types/index'
 export const NOTE_SCOPE_ALL = 'all'
 export const NOTE_SCOPE_QUESTION = 'question'
 export const NOTE_SCOPE_STANDALONE = 'standalone'
+
+/**
+ * 笔记图片上限（张）——**唯一来源**，别在页面里再写字面量。
+ *
+ * 与后端 `note.NoteImagesMax` 同源（契约 #2094）：超限后端回 400「最多只能添加 3 张图片」，
+ * 端上先按同一个数闸住，用户不会先传满再吃一个 400。
+ */
+export const NOTE_IMAGES_MAX = 3
 
 /** 从 UTSJSONObject 构造 NoteItem（ADR-0003 手动 JSON 映射） */
 function buildNoteItem(obj : UTSJSONObject) : NoteItem {
@@ -30,6 +39,7 @@ function buildNoteItem(obj : UTSJSONObject) : NoteItem {
 		question_id: toNumberOrNull(obj['question_id']),
 		question_content: toStr(obj['question_content']),
 		updated_at: toStr(obj['updated_at']),
+		images: extractImages(obj),
 	} as NoteItem
 }
 
@@ -45,15 +55,25 @@ export function listNotesApi(scope : string, page : number = 1, pageSize : numbe
 	}, { scope: scope } as UTSJSONObject)
 }
 
-/** 新建独立笔记（与题目无关；question_id 由后端置空） */
-export function createNoteApi(content : string) : Promise<NoteItem> {
-	const payload : UTSJSONObject = { content: content } as UTSJSONObject
+/**
+ * 新建独立笔记（与题目无关；question_id 由后端置空）
+ *
+ * @param images 图片 URL 数组（先经 `uploadForumImageApi` 上传；上限 `NOTE_IMAGES_MAX`）。
+ *        **缺省值必须是空数组而不是省略**：后端按「省略 = 无图」处理，而本端每次都全量提交。
+ */
+export function createNoteApi(content : string, images : string[] = []) : Promise<NoteItem> {
+	const payload : UTSJSONObject = { content: content, images: images } as UTSJSONObject
 	return postMapped<NoteItem>('/notes', payload, (data : UTSJSONObject) : NoteItem => buildNoteItem(data))
 }
 
-/** 改笔记正文（只认本人；他人笔记后端按「不存在」404，不泄漏存在性） */
-export function updateNoteApi(id : number, content : string) : Promise<NoteItem> {
-	const payload : UTSJSONObject = { content: content } as UTSJSONObject
+/**
+ * 改笔记（只认本人；他人笔记后端按「不存在」404，不泄漏存在性）
+ *
+ * 图片是**全量替换**语义（契约 #2094）：编辑时把当前整份数组原样传上去，
+ * 删一张就是「新数组里没有它」——不存在「只传新增」的差量写法。
+ */
+export function updateNoteApi(id : number, content : string, images : string[] = []) : Promise<NoteItem> {
+	const payload : UTSJSONObject = { content: content, images: images } as UTSJSONObject
 	return putMapped<NoteItem>('/notes/' + id.toString(), payload, (data : UTSJSONObject) : NoteItem => buildNoteItem(data))
 }
 

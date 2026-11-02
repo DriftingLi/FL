@@ -51,6 +51,10 @@
                         </view>
                         <text class="note-title">{{ titleText(item.content) }}</text>
                         <text v-if="excerptText(item.content).length > 0" class="note-excerpt">{{ excerptText(item.content) }}</text>
+                        <!-- 图片附件：只读回显（点开看大图），增删都在编辑器里做 -->
+                        <view v-if="item.images.length > 0" class="note-images">
+                            <note-image-strip :urls="item.images" :max="noteImageLimit" />
+                        </view>
                         <view class="note-actions">
                             <view class="note-action" @click="onEdit(item)">
                                 <text class="note-action-text">编辑</text>
@@ -78,6 +82,9 @@
         <InfoDialog :show="editorVisible" :title="editorTitle" cancel-text="取消"
             :confirm-text="editorConfirmText" @close="onEditorCancel" @confirm="onSave">
             <textarea class="editor-textarea" v-model="draft" placeholder="记点什么…" maxlength="2000" />
+            <!-- 图片区整域（选图 / 逐张上传 / 删除 / 预览 / 上限提示）收在 `components/note-image-strip.uvue` -->
+            <note-image-strip :urls="editorImages" :max="noteImageLimit" :editable="true"
+                @change="onEditorImagesChange" @busy="onEditorImagesBusy" />
         </InfoDialog>
     </view>
 </template>
@@ -87,11 +94,12 @@
     import { onShow } from '@dcloudio/uni-app'
     import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 import { goBack } from '../../utils/navigation'
-    import { listNotesApi, createNoteApi, updateNoteApi, removeNoteApi, NOTE_SCOPE_ALL, NOTE_SCOPE_QUESTION, NOTE_SCOPE_STANDALONE } from '../../api/note'
+    import { listNotesApi, createNoteApi, updateNoteApi, removeNoteApi, NOTE_SCOPE_ALL, NOTE_SCOPE_QUESTION, NOTE_SCOPE_STANDALONE, NOTE_IMAGES_MAX } from '../../api/note'
     import type { NoteItem } from '../../types/index'
     import { noteTitle, noteExcerpt, noteBadgeText, isStandaloneNote, noteEmptyText } from '../../utils/notebookDisplay'
     import { formatDateTimeStr } from '../../utils/format'
     import InfoDialog from './components/info-dialog.uvue'
+    import NoteImageStrip from './components/note-image-strip.uvue'
 
     /** 模板不可直调 import 函数（uvue 模板 import 调用编译为 .invoke() = Kotlin error18，先例 #677）；
      *  本地薄包装消费 utils/notebookDisplay 唯一实现（展示纯函数零第二实现） */
@@ -149,6 +157,22 @@ import { goBack } from '../../utils/navigation'
     const editingId = ref<number>(0)
     const draft = ref<string>('')
     const saving = ref<boolean>(false)
+
+    /** 图片上限：与后端 `note.NoteImagesMax` 同源（`NOTE_IMAGES_MAX`），页面不写第二份字面量 */
+    const noteImageLimit = NOTE_IMAGES_MAX
+
+    /** 编辑器里的图片（全量数组；选图 / 上传 / 删除 / 预览都在 `note-image-strip` 里做，这里只收结果） */
+    const editorImages = ref<string[]>([])
+    /** 上传中：保存按钮要等图传完，否则用户看到「已保存」但少一张图 */
+    const editorUploading = ref<boolean>(false)
+
+    function onEditorImagesChange(urls : string[]) : void {
+        editorImages.value = urls
+    }
+
+    function onEditorImagesBusy(busy : boolean) : void {
+        editorUploading.value = busy
+    }
 
     const editorTitle = computed<string>(() : string => {
         return editingId.value > 0 ? '编辑笔记' : '新建笔记'
@@ -234,18 +258,20 @@ import { goBack } from '../../utils/navigation'
         uni.navigateTo({ url: '/pages/practice/practice-do?mode=single&question_id=' + qid!.toString() })
     }
 
-    function openEditor(id : number, content : string) : void {
+    function openEditor(id : number, content : string, images : string[]) : void {
         editingId.value = id
         draft.value = content
+        // 编辑时把**当前全量**图片灌进选择器（提交是全量替换语义，删一张就是新数组里没有它）
+        editorImages.value = images.slice()
         editorVisible.value = true
     }
 
     function onCreate() : void {
-        openEditor(0, '')
+        openEditor(0, '', [] as string[])
     }
 
     function onEdit(item : NoteItem) : void {
-        openEditor(item.id, item.content)
+        openEditor(item.id, item.content, item.images)
     }
 
     function onEditorCancel() : void {
@@ -253,9 +279,10 @@ import { goBack } from '../../utils/navigation'
         editorVisible.value = false
         editingId.value = 0
         draft.value = ''
+        editorImages.value = [] as string[]
     }
 
-    /** 保存：新建走 POST /notes（独立笔记），编辑走 PUT /notes/:id；成功后回列表重取 */
+    /** 保存：新建走 POST /notes（独立笔记），编辑走 PUT /notes/:id；图片全量随正文一起提交 */
     async function onSave() : Promise<void> {
         if (saving.value) return
         const content = draft.value
@@ -263,16 +290,22 @@ import { goBack } from '../../utils/navigation'
             uni.showToast({ title: '笔记内容不能为空', icon: 'none' })
             return
         }
+        if (editorUploading.value) {
+            uni.showToast({ title: '图片还在上传，稍等一下', icon: 'none' })
+            return
+        }
+        const images = editorImages.value.slice()
         saving.value = true
         try {
             if (editingId.value > 0) {
-                await updateNoteApi(editingId.value, content)
+                await updateNoteApi(editingId.value, content, images)
             } else {
-                await createNoteApi(content)
+                await createNoteApi(content, images)
             }
             editorVisible.value = false
             editingId.value = 0
             draft.value = ''
+            editorImages.value = [] as string[]
             uni.showToast({ title: '已保存', icon: 'none' })
             await loadNotes()
         } catch (e) {
@@ -477,6 +510,13 @@ import { goBack } from '../../utils/navigation'
         overflow: hidden;
         text-overflow: ellipsis;
         lines: 2;
+    }
+
+    /* 列表里的图片附件（只读回显；点开看大图） */
+    .note-images {
+        flex-direction: row;
+        flex-wrap: wrap;
+        margin-bottom: 16rpx;
     }
 
     .note-actions {

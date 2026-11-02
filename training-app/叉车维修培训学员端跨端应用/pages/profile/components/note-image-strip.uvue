@@ -1,0 +1,155 @@
+<template>
+    <view class="strip">
+        <view class="strip-row">
+            <view v-for="(url, idx) in shownUrls" :key="url" class="cell">
+                <image class="thumb" :src="srcOf(url)" mode="aspectFill" @click="onPreview(idx)" />
+                <view v-if="editable" class="remove" @click.stop="onRemove(idx)">
+                    <text class="remove-x">×</text>
+                </view>
+            </view>
+            <view v-if="editable && shownUrls.length < max" class="add" @click="onAdd">
+                <text class="add-x">{{ uploading ? '…' : '+' }}</text>
+            </view>
+        </view>
+        <text v-if="editable" class="tip">最多 {{ max }} 张图片 · 已选 {{ shownUrls.length }}/{{ max }}</text>
+    </view>
+</template>
+
+<script setup lang="uts">
+    /**
+     * 笔记图片条（#1949）：只读回显与编辑选图共用一件，避免页面里出现两套尺寸/两套交互。
+     *
+     * - `editable=false`（列表）：只回显 + 点开看大图，内部不碰选图器。
+     * - `editable=true`（编辑器）：选图 / 逐张上传 / 删除走 `composables/useForumImagePicker.uts`，
+     *   上限由 `max` 传入（页面从 `api/note.NOTE_IMAGES_MAX` 取，页面不写第二份字面量）。
+     *   选中与上传完成都通过 `change` 回传**全量**数组（提交是全量替换语义），`busy` 回传上传中状态。
+     */
+    import { computed, ref, watch } from 'vue'
+    import { useForumImagePicker } from '../../../composables/useForumImagePicker'
+    import { resolveFileUrl } from '../../../utils/forumDisplay'
+    import { previewImages as openPreview } from '../../../utils/forumDetailDisplay'
+
+    const props = withDefaults(defineProps<{
+        urls?: string[]
+        max?: number
+        editable?: boolean
+    }>(), {
+        urls: (): string[] => [],
+        max: 3,
+        editable: false,
+    })
+
+    const emit = defineEmits(['change', 'busy'])
+
+    /** 图片域（选图 / 逐张上传 / 删除 / 预览）整域复用论坛那件，限额由参数表达 */
+    const { images, uploading, onAddImage, onRemoveImage, onPreviewImage } = useForumImagePicker(props.max)
+
+    /** 只读模式直接展示入参；编辑模式展示选择器里的当前全量 */
+    const shownUrls = computed<string[]>(() : string[] => {
+        return props.editable ? images.value : props.urls
+    })
+
+    /** 模板不直调 import 函数（uvue 模板 import 调用编译为 .invoke()，先例 #677） */
+    function srcOf(url : string) : string {
+        return resolveFileUrl(url)
+    }
+
+    function onPreview(idx : number) : void {
+        if (props.editable) {
+            onPreviewImage(idx)
+            return
+        }
+        openPreview(props.urls, idx)
+    }
+
+    /** 点 × 只改选择器内的数组，真正的 `change` 由下方 watch 统一发（一条路径，不两处 emit） */
+    function onRemove(idx : number) : void {
+        onRemoveImage(idx)
+    }
+
+    function onAdd() : void {
+        onAddImage()
+    }
+
+    /** 父作用域打开编辑器时灌入**当前全量**图片；内容相同就不动（防「回灌 → 再 emit」自激） */
+    watch(() : string[] => props.urls, (next : string[]) : void => {
+        if (!props.editable) return
+        if (next.join('|') == images.value.join('|')) return
+        images.value = next.slice()
+    })
+
+    watch(images, (next : string[]) : void => {
+        if (!props.editable) return
+        emit('change', next.slice())
+    }, { deep: true })
+
+    watch(uploading, (busy : boolean) : void => {
+        emit('busy', busy)
+    })
+</script>
+
+<style lang="scss">
+    .strip {
+        flex-direction: column;
+    }
+
+    .strip-row {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+
+    .cell {
+        width: 148rpx;
+        height: 148rpx;
+        margin-right: 12rpx;
+        margin-bottom: 12rpx;
+        position: relative;
+    }
+
+    .thumb {
+        width: 148rpx;
+        height: 148rpx;
+        border-radius: 12rpx;
+        background-color: #f0f0f0;
+    }
+
+    .remove {
+        position: absolute;
+        top: -8rpx;
+        right: -8rpx;
+        width: 40rpx;
+        height: 40rpx;
+        border-radius: 20rpx;
+        align-items: center;
+        justify-content: center;
+        background-color: #333333;
+    }
+
+    .remove-x {
+        font-size: 24rpx;
+        color: #ffffff;
+        line-height: 28rpx;
+    }
+
+    .add {
+        width: 148rpx;
+        height: 148rpx;
+        border-radius: 12rpx;
+        border: 1rpx dashed #cccccc;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 12rpx;
+    }
+
+    .add-x {
+        font-size: 44rpx;
+        color: #999999;
+        line-height: 48rpx;
+    }
+
+    .tip {
+        font-size: 22rpx;
+        color: #999999;
+        margin-top: 4rpx;
+    }
+</style>

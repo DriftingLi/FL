@@ -210,8 +210,8 @@ describe('#1082 编辑：新建独立笔记 + 编辑同构 practice-do（纯文�
   it('新建走 createNoteApi、编辑走 updateNoteApi（按 editingId 分流）', () => {
     const fn = pageScript.slice(pageScript.indexOf('async function onSave'));
     const body = fn.slice(0, fn.indexOf('\n    }'));
-    expect(body).toContain('updateNoteApi(editingId.value, content)');
-    expect(body).toContain('createNoteApi(content)');
+    expect(body).toContain('updateNoteApi(editingId.value, content, images)');
+    expect(body).toContain('createNoteApi(content, images)');
   });
 
   it('textarea 上限与 practice-do 的笔记输入框**逐值同构**（从对方源码取，不写死第二份）', () => {
@@ -247,6 +247,31 @@ describe('#1082 编辑：新建独立笔记 + 编辑同构 practice-do（纯文�
     expect(handlers.length).toBeGreaterThanOrEqual(9);
     const missing = handlers.filter((h) => !new RegExp('function ' + h + '\\(').test(pageScript));
     expect(missing).toEqual([]);
+  });
+
+  it('#1949 图片上限与后端同源：页面从 api 的唯一常量取，不写第二份字面量', () => {
+    expect(pageScript).toContain('const noteImageLimit = NOTE_IMAGES_MAX');
+    // 页内不得出现 `max: 3` / `max = 3` 这类散落的图片上限字面量（限额只走 NOTE_IMAGES_MAX）
+    expect(/max\s*[:=]\s*\d/.test(pageScript)).toBe(false);
+  });
+
+  it('#1949 图片区整域收在模块私有组件里（页面只收全量结果，不自己拼选图流水线）', () => {
+    const strip = read('pages/profile/components/note-image-strip.uvue');
+    // 组件内是唯一持有者：选图器 + 上限取自 props
+    expect(strip).toContain('useForumImagePicker(props.max)');
+    expect(strip).toContain('emit(\'change\', next.slice())');
+    // 页面侧：只读回显 + 编辑器两处用法，都从 noteImageLimit 取上限
+    expect(pageTemplate).toContain(':urls="item.images"');
+    expect(pageTemplate).toContain(':urls="editorImages"');
+    expect(pageScript).toContain('function onEditorImagesChange(urls : string[]) : void {');
+    // 页面不再直接持有选图器（防两套流水线再次分叉）
+    expect(pageScript).not.toContain('useForumImagePicker(');
+  });
+
+  it('#1949 编辑器把当前全量灌进去、保存时整份提交（全量替换语义）', () => {
+    expect(pageScript).toContain('editorImages.value = images.slice()');
+    expect(pageScript).toContain('const images = editorImages.value.slice()');
+    expect(pageScript).toContain('上传中');
   });
 });
 
