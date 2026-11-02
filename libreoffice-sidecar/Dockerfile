@@ -5,7 +5,7 @@
 # 与 backend 不再共享 volume，全部通过 HTTP multipart 收发
 # 镜像大小约 500MB(LibreOffice + poppler-utils + fonts + python + Pillow)
 
-FROM python:3.12-alpine
+FROM python:3.15-alpine
 
 # 安装 LibreOffice + poppler-utils + 中日韩字体
 # Pillow 13.0.0 在 alpine 上仍提供 musllinux wheel（pillow-13.0.0-cp312-cp312-musllinux_1_2_x86_64.whl，
