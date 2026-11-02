@@ -1,0 +1,134 @@
+<template>
+    <info-dialog :show="show" title="意见反馈" cancel-text="取消"
+        :confirm-text="submitting ? '提交中…' : '提交'" @close="onClose" @confirm="onSubmit">
+        <!-- 表单真值源与提交流程收在本组件：帮助中心页面只关心「打开 / 提交成功刷新历史」 -->
+        <textarea class="fb-textarea" v-model="draft" :maxlength="contentMax"
+            placeholder="说说遇到的问题（必填，1–1000 字）" />
+        <text class="fb-count">{{ draft.length }}/{{ contentMax }}</text>
+        <!-- 图片区整域复用笔记那件（选图 / 逐张上传 / 删除 / 预览 / 上限提示），走论坛图片通道 -->
+        <note-image-strip :urls="images" :max="imageMax" :editable="true"
+            @change="onImagesChange" @busy="onImagesBusy" />
+        <input class="fb-contact" type="text" v-model="contact"
+            placeholder="联系方式（选填，手机 / 微信 / QQ 都行）" />
+        <text class="fb-tip">提交后可在「我的反馈」查看处理状态；平台不在此域回复消息。</text>
+    </info-dialog>
+</template>
+
+<script setup lang="uts">
+    /**
+     * 意见反馈表单（#1950，后端契约 PR #2093 / ADR-0089）
+     *
+     * - 正文必填、1–1000 字（`FEEDBACK_CONTENT_MAX` 与后端同源），端上先拦空串，不吃 400。
+     * - 图片 0–3 张，走论坛图片通道上传后把站内路径放进 `images[]`（不新建通道）。
+     * - 联系方式可空、**不做格式校验** —— 手机 / 微信 / QQ / 「晚上八点后打」都收，
+     *   端上加格式校验会把真实可用的联系方式拦掉（ADR-0089 明写）。
+     * - 上传中禁止提交（与笔记同一道守卫），避免提交半张图。
+     */
+    import { ref, watch } from 'vue'
+    import { submitFeedbackApi, FEEDBACK_CONTENT_MAX, FEEDBACK_IMAGES_MAX } from '../../../api/feedback'
+    import InfoDialog from './info-dialog.uvue'
+    import noteImageStrip from './note-image-strip.uvue'
+
+    const props = withDefaults(defineProps<{
+        show?: boolean
+    }>(), {
+        show: false
+    })
+
+    const emit = defineEmits(['close', 'submitted'])
+
+    const contentMax = FEEDBACK_CONTENT_MAX
+    const imageMax = FEEDBACK_IMAGES_MAX
+
+    const draft = ref<string>('')
+    const contact = ref<string>('')
+    const images = ref<string[]>([])
+    const uploadingImage = ref<boolean>(false)
+    const submitting = ref<boolean>(false)
+
+    /** 每次打开都从空白开始：关表单等于放弃草稿，避免上一次的内容混到这一次 */
+    watch(() : boolean => props.show, (now : boolean) : void => {
+        if (now) {
+            draft.value = ''
+            contact.value = ''
+            images.value = []
+            uploadingImage.value = false
+            submitting.value = false
+        }
+    })
+
+    function onImagesChange(next : string[]) : void {
+        images.value = next
+    }
+
+    function onImagesBusy(busy : boolean) : void {
+        uploadingImage.value = busy
+    }
+
+    function onClose() : void {
+        if (submitting.value) return
+        emit('close')
+    }
+
+    async function onSubmit() : Promise<void> {
+        if (submitting.value) return
+        const text = draft.value.trim()
+        if (text.length == 0) {
+            uni.showToast({ title: '请先写点内容', icon: 'none' })
+            return
+        }
+        if (uploadingImage.value) {
+            uni.showToast({ title: '图片还在上传，稍等一下', icon: 'none' })
+            return
+        }
+        submitting.value = true
+        try {
+            await submitFeedbackApi(text, images.value.slice(), contact.value.trim())
+            uni.showToast({ title: '反馈已提交', icon: 'success' })
+            emit('submitted')
+            emit('close')
+        } catch (e) {
+            console.error('[feedback] submit failed:', e)
+            uni.showToast({ title: '提交失败，稍后再试', icon: 'none' })
+        } finally {
+            submitting.value = false
+        }
+    }
+</script>
+
+<style lang="scss">
+    .fb-textarea {
+        width: 100%;
+        height: 180rpx;
+        background-color: #f7f8fa;
+        border-radius: 12rpx;
+        padding: 16rpx;
+        font-size: 26rpx;
+        color: #333333;
+    }
+
+    .fb-count {
+        font-size: 22rpx;
+        color: #999999;
+        text-align: right;
+        padding: 8rpx 0 12rpx 0;
+    }
+
+    .fb-contact {
+        width: 100%;
+        height: 76rpx;
+        background-color: #f7f8fa;
+        border-radius: 12rpx;
+        padding: 0 16rpx;
+        font-size: 26rpx;
+        color: #333333;
+        margin-top: 12rpx;
+    }
+
+    .fb-tip {
+        font-size: 22rpx;
+        color: #999999;
+        line-height: 34rpx;
+        padding-top: 12rpx;
+    }
+</style>

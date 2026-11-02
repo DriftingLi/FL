@@ -112,15 +112,17 @@ describe('「我的」页面原型图契约', () => {
   });
 
   it('工具宫格条目与原型一致（含顺序，#1011 新增第 9 项「练习记录」落在最后）', () => {
+    // #1950（Q20/Q21）：点不开的「学练计划」死占位已摘，工具宫格回到 8 项
     expect(toolItems.map((i) => i.title)).toEqual([
-      '学习记录', '收藏夹', '错题本', '笔记本', '学练计划', '学习资料', '就业在线', '任务中心',
+      '学习记录', '收藏夹', '错题本', '笔记本', '学习资料', '就业在线', '任务中心',
       '练习记录',
     ]);
   });
 
   it('服务宫格条目与原型一致（含顺序，设置落在第二行）', () => {
+    // #1950：无落地页的「我的订单」「地址管理」死占位一并摘除（点不开的入口不再摆放）
     expect(serviceItems.map((i) => i.title)).toEqual([
-      '我的订单', '帮助中心', '地址管理', '消息中心', '设置',
+      '帮助中心', '消息中心', '设置',
     ]);
   });
 
@@ -141,9 +143,9 @@ describe('「我的」页面原型图契约', () => {
   });
 
   it('每项入口都有图标与文案，签到胶囊保留今日签到状态', () => {
-    // 8 项工具 + 5 项服务；#1011 起工具宫格为 9 项（+「练习记录」）
-    expect(toolItems.length).toBe(9);
-    expect(allEntries.length).toBe(14);
+    // #1950 起 8 项工具 + 3 项服务（学练计划 / 我的订单 / 地址管理 三处死占位已摘）
+    expect(toolItems.length).toBe(8);
+    expect(allEntries.length).toBe(11);
     for (const item of allEntries) {
       expect(item.icon.length).toBeGreaterThan(0);
       expect(item.title.length).toBeGreaterThan(0);
@@ -166,12 +168,13 @@ describe('「我的」页面跳转契约', () => {
     }
   });
 
-  it('原型中尚无对应页的条目走占位提示而非死链', () => {
+  it('死占位清零：没有对应页的入口不再摆放（#1950 Q20/Q21）', () => {
     const placeholder = allEntries.filter((i) => !i.available).map((i) => i.key);
-    // 「帮助中心」已随 #1081 接线、「笔记本」已随 #1082 接线（占位项名单同步收缩：available:true + 已注册 path）
-    expect(placeholder.sort()).toEqual(
-      ['address', 'orders', 'study-plan'].sort()
-    );
+    // 三处无落地页入口（学练计划 / 我的订单 / 地址管理）已整体摘除，而不是继续挂在宫格里点一下弹 toast
+    expect(placeholder.sort()).toEqual([]);
+    for (const gone of ['study-plan', 'orders', 'address']) {
+      expect(allEntries.some((i) => i.key === gone)).toBe(false);
+    }
   });
 
   it('已落地的入口不再停留在占位态（#1082 笔记本接线）', () => {

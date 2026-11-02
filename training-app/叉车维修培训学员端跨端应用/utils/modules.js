@@ -472,6 +472,8 @@ const MODULES = {
       'api/faq.uts',
       /** 票 D 补登记：唯一消费方是 profile（notebook），同 api/faq.uts */
       'api/note.uts',
+      /** #1950：唯一消费方是 profile（help-center 反馈入口） */
+      'api/feedback.uts',
       'api/student.uts',
       'api/wrongQuestion.uts',
       'pages/profile/components/activity-tab-bar.uvue',
@@ -480,6 +482,8 @@ const MODULES = {
       'pages/profile/components/info-dialog.uvue',
       /** #1949：笔记图片条（列表只读回显 + 编辑器选图），唯一消费方是 profile（notebook） */
       'pages/profile/components/note-image-strip.uvue',
+      /** #1950：意见反馈表单（正文 + 图片 + 联系方式），唯一消费方是 profile（help-center） */
+      'pages/profile/components/feedback-dialog.uvue',
       'pages/profile/components/profile-user-row.uvue',
       'pages/profile/components/wrong-filter-bar.uvue',
       'pages/profile/components/wrong-question-card.uvue',
