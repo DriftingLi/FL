@@ -82,7 +82,7 @@ HBuilderX 是**单实例串行资源**——这是架构约束，不是可调优
 
 ## 按需层（本线 `docs/agents/`）
 
-`guards.md` 守护分类与新增守护三问 · `issue-dispatch.md` 派活与阶段闸门 · `uvue-css.md` 样式与 UTS 约束全表 · `concurrency.md` 锁与时间预算 · `dev-loop.md` 内循环时间账与坑位原文 · `skills.md` 技能供给 · `ui-hints.md` UI hint 例外 · `domain.md` / `issue-tracker.md` / `triage-labels.md` / `credential-scope.md` 各按其名。
+`guards.md` 守护分类与新增守护三问 · `issue-dispatch.md` 派活与阶段闸门 · `uvue-css.md` 样式与 UTS 约束全表 · `concurrency.md` 锁与时间预算 · `dev-loop.md` 内循环时间账与坑位原文 · `skills.md` 技能供给 · `ai-workflow.md` 专项 AI 工作流与让位表 · `ui-hints.md` UI hint 例外 · `domain.md` / `issue-tracker.md` / `triage-labels.md` / `credential-scope.md` 各按其名。
 
 Issues 存放在 GitHub Issues（使用 `gh` CLI）。See `docs/agents/issue-tracker.md`.
 AI 安全审计用 DeepSec（Shield）。See `docs/agents/security-scan.md`.
