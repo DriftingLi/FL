@@ -37,7 +37,10 @@ type ProgressSaveResultDTO struct {
 // IsCorrect 为 *bool：简答题经 AI 判定前为 nil（JSON null），判定后与客观题一样为 true/false。
 // 简答题追加 reference_answer / scoring_criteria / max_score；
 // AI 评分成功追加 ai_score / ai_comment，降级时追加 ai_fallback。
-// 解析增强（spec #284）：全站正确率 accuracy_rate（样本<5 时不返回）与易错项 common_wrong（仅选择题，样本<5 或无错题时不返回）。
+// 解析增强（spec #284）：全站正确率 accuracy_rate（样本<5 时不返回）与易错项 common_wrong
+// （仅选择题；判错样本<5、无错题、或答案全为空提交时不返回，#2155）。
+// 两个字段的门槛不同源：正确率按总作答数，易错项按判错次数——因此可能出现「有 accuracy_rate
+// 无 common_wrong」；反向不可能（判错数 ≤ 总作答数）。
 type SubmitResultDTO struct {
 	IsCorrect       *bool    `json:"is_correct" extensions:"x-nullable"`
 	CorrectAnswer   string   `json:"correct_answer"`

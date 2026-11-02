@@ -495,8 +495,9 @@ Query：`tag_id`（必填）、`count`（0=全部）。
 { "code": 200, "message": "success", "data": { "is_correct": true, "correct_answer": "A", "explanation": "解析", "question_id": 1, "user_answer": "A", "accuracy_rate": 85.5, "common_wrong": "B", "total_attempts": 120, "ai_explanation": "本题考查..." } }
 ```
 
-- `accuracy_rate`：全站正确率（基于 `question_practice_record` 聚合，样本 `<5` 时不返回，前端显示“—”）
-- `common_wrong`：易错项（全体答错样本中最多的选项；多选按选项组合聚合；简答题不返回）
+- `accuracy_rate`：全站正确率（基于 `question_practice_record` 聚合，**总**作答样本 `<5` 时不返回，前端显示“—”）
+- `common_wrong`：易错项（按 `user_answer` 分组的**判错**作答次数最多的选项，多选按选项组合聚合；判错样本 `<5`、无错题、或答案全为空提交时不返回；并列按答案字典序升序取第一条；简答题不返回）
+- 两个字段门槛不同源：`accuracy_rate` 按总作答数、`common_wrong` 按判错次数 ⇒ 可能出现有 `accuracy_rate` 而无 `common_wrong`（例：总 14 次、判错 4 次）；反向不可能（判错数 ≤ 总作答数）。`common_wrong` 与错题本列表的 `top_wrong_option` 同判据、同值（#2155）
 - `ai_explanation`：AI 解析（按需生成并缓存到题目，未配置 AI 时降级为静态 `explanation`）
 
 简答题追加 `reference_answer`/`scoring_criteria`/`max_score`，AI 评分后追加 `ai_score`/`ai_comment`（降级时 `ai_fallback: true`）；未判定前 `is_correct` 为 null。
