@@ -396,7 +396,7 @@ func (s *Service) SubmitAnswer(studentID, questionID int, userAnswer any, practi
 // 全站统计回填 → AI 解析（aiassistant.QuestionExplanation module 单点）→ 简答分支
 // （AI 及格覆写 IsCorrect 并二次 Save 同步练习记录，降级时 AIFallback 同写）。
 func FinalizeSubmitResult(db *gorm.DB, explainer *aiassistant.QuestionExplanation, result *SubmitResultDTO, gr GradeResult, rec *model.QuestionPracticeRecord, q *model.Question) {
-	if stats := questionStats(db, q.ID, q.Type); stats != nil {
+	if stats := questionStats(db, q.ID); stats != nil {
 		result.AccuracyRate = stats.accuracyRate
 		result.CommonWrong = stats.commonWrong
 		result.TotalAttempts = stats.total
@@ -542,37 +542,28 @@ type questionStatResult struct {
 	commonWrong  *string
 }
 
-// questionStats 单题全站统计（练习/错题重做共享唯一实现）：总数、样本≥5 时的正确率
-// 与易错项（易错项仅统计选择题，简答早退）。
-func questionStats(db *gorm.DB, questionID int, qType string) *questionStatResult {
+// questionStats 单题全站统计（练习/错题重做共享唯一实现）：总数、样本≥5 时的正确率与易错项。
+//
+// **两个字段两道门槛**（#2155）：正确率按**总**作答数 ≥ 5，易错项按**判错**次数 ≥ 5。
+// 曾经是一条 total<5 早退同时管两者，改口径后必须拆开——正确率的分母本就该是全部作答
+// （剔除答错的再算正确率会让「大家都错」的题显示 100%），而易错项要回答的是「错的人集中错在哪」，
+// 分母天然是错的那部分。二者依据不同，不能同进同退。
+//
+// 由此多出「有 accuracy_rate 但 common_wrong 缺省」这一状态（例：14 总 / 4 判错）；
+// 反向不可能，因判错数 ≤ 总作答数——这条包含关系由 wrong_option_contract_test.go 钉住。
+// 正确率的形状**不变**：简答题照旧有 accuracy_rate（#2155 之前就是如此，本次不动），
+// 它只是没有易错项——那条守卫归 LoadTopWrongOptions 的 SQL 单点，这里再写一条就是第二套口径。
+func questionStats(db *gorm.DB, questionID int) *questionStatResult {
 	var total int64
 	db.Model(&model.QuestionPracticeRecord{}).Where("question_id = ?", questionID).Count(&total)
 	res := &questionStatResult{total: int(total)}
-	if total < 5 {
-		return res
+	if total >= 5 {
+		var correct int64
+		db.Model(&model.QuestionPracticeRecord{}).Where("question_id = ? AND is_correct = ?", questionID, true).Count(&correct)
+		acc := coerce.RoundFloat1(float64(correct) / float64(total) * 100)
+		res.accuracyRate = &acc
 	}
-	var correct int64
-	db.Model(&model.QuestionPracticeRecord{}).Where("question_id = ? AND is_correct = ?", questionID, true).Count(&correct)
-	acc := coerce.RoundFloat1(float64(correct) / float64(total) * 100)
-	res.accuracyRate = &acc
-	if qType == "short_answer" {
-		return res
-	}
-	type aggRow struct {
-		UserAnswer string `gorm:"column:user_answer"`
-		Cnt        int64  `gorm:"column:cnt"`
-	}
-	var row aggRow
-	err := db.Model(&model.QuestionPracticeRecord{}).
-		Select("user_answer, COUNT(*) as cnt").
-		Where("question_id = ? AND is_correct = ?", questionID, false).
-		Group("user_answer").
-		Order("cnt DESC").
-		Limit(1).
-		Scan(&row).Error
-	if err == nil && row.Cnt > 0 {
-		res.commonWrong = &row.UserAnswer
-	}
+	res.commonWrong = CommonWrongOption(db, questionID)
 	return res
 }
 

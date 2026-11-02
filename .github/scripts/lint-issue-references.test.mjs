@@ -191,6 +191,30 @@ test('切片5：mergeRefLint——红项并进 errors、ok 联动、notes 透传
   assert.deepEqual(m2.errors, [], 'lint 全绿时原证据结论不变');
 });
 
+test('花括号简写（#2189）：展开逐项判存在——全在库 ⇒ 绿', async () => {
+  const body = '按块读 `docs/agents/{issue-tracker,triage-labels,domain}.md`。';
+  const files = ['docs/agents/issue-tracker.md', 'docs/agents/triage-labels.md', 'docs/agents/domain.md'];
+  const r = await lintIssueReferences(body, makeDeps({ files }));
+  assert.deepEqual(r.reds, [], '合法简写展开后三个目标都在库 ⇒ 不许假红');
+  assert.equal(r.ok, true);
+});
+
+test('花括号简写（#2189）：混入不存在项 ⇒ 逐项展开后缺哪个红哪个', async () => {
+  const body = '混写 `docs/agents/{issue-tracker,nope-2189}.md`。';
+  const r = await lintIssueReferences(body, makeDeps({ files: ['docs/agents/issue-tracker.md'] }));
+  const reds = byCat(r, 'missing-file');
+  assert.equal(reds.length, 1, '只在库项不红、缺项红一次');
+  assert.equal(reds[0].ref, 'docs/agents/nope-2189.md');
+  assert.match(reds[0].message, /issue-tracker,nope-2189/, '红项带简写原文可定位');
+});
+
+test('花括号简写（#2189）：无逗号单组 {a} 不展开，按字面判', async () => {
+  const r = await lintIssueReferences('怪写法 `docs/agents/{weird}.md`。', makeDeps({ files: ['docs/agents/{weird}.md'] }));
+  assert.deepEqual(r.reds, [], '字面文件真存在则放行');
+  const bad = await lintIssueReferences('怪写法 `docs/agents/{weird}.md`。', makeDeps({ files: [] }));
+  assert.equal(byCat(bad, 'missing-file').length, 1, '字面不存在仍走原判据红');
+});
+
 test('修复轴1：ADR「新」须紧贴词头（连接符白名单内）；合法在库引用带「新」字不误判', async () => {
   const adr = { root: new Set(['0012']), mobile: new Set(['0044']) };
   const legit = await lintIssueReferences('本批销账与新登 #25、ADR-0012 并行推进。', makeDeps({ adr, numbers: [25] }));

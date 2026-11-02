@@ -106,22 +106,52 @@ export function decide(f) {
   return { ...base, allow: true, reason: 'ok', skipRemove: false, passExecute: execute }
 }
 
-/** remove-worktree.ps1 的出口 JSON（后面还跟着 ✅/持有者行）；读不回来显式标 unknown，不当成已删除 */
+/**
+ * remove-worktree.ps1 的出口 JSON（后面还跟着 ✅/持有者行）；读不回来显式标 unknown，不当成已删除。
+ * #2188 接线坑：execute 腿连着打 plan（remove-worktree.ps1:391）与 result（:461）两个 ConvertTo-Json 块，
+ * 原先贪婪的 `\{[\s\S]*\}` 从 plan 的第一个 { 吞到 result 的最后一个 } —— 整块 parse 必失败、恒 unknown。
+ * 改成按花括号配对切候选、从后往前扫：result 才是事实（含 dirRemoved），plan 只是意图，跳过。
+ */
 export function parseRemoveJson(stdoutText) {
   const s = String(stdoutText ?? '')
-  const m = s.match(/\{[\s\S]*\}/)
-  if (!m) return { unknown: true }
-  try {
-    const o = JSON.parse(m[0])
-    return {
-      dirRemoved: Boolean(o.dirRemoved),
-      regRemoved: Boolean(o.regRemoved),
-      branchRemoved: Boolean(o.branchRemoved),
-      worktree: o.worktree || '',
+  const cands = s.match(/\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}/g) || []
+  for (let i = cands.length - 1; i >= 0; i--) {
+    let o = null
+    try { o = JSON.parse(cands[i]) } catch { continue }
+    if (o && typeof o === 'object' && 'dirRemoved' in o) {
+      return {
+        dirRemoved: Boolean(o.dirRemoved),
+        regRemoved: Boolean(o.regRemoved),
+        branchRemoved: Boolean(o.branchRemoved),
+        worktree: o.worktree || '',
+      }
     }
-  } catch {
-    return { unknown: true }
   }
+  return { unknown: true }
+}
+
+/**
+ * check-branch-residue.ps1 在 -Branch 形态下的出口分类（#2188 主症：原先一个 `exitCode !== 0`
+ * 把 1/2/3/4/5 揉成同一条 branch-residue —— 而 4 是「分支侧已绿、只是仓里躺着别的会话的孤儿目录」，
+ * 于是真拆树那次必假红）。出口码归脚本管、这里是唯一读码处；raw 的固定锚行只供读数 token。
+ * 读不到的一律 unknown，fail-closed 的教条不变：不可读永远不当成干净。
+ */
+export function parseResidueText(stdoutText, exitCode) {
+  const s = String(stdoutText ?? '')
+  const out = {}
+  if (/^\s*ABSENT\s+\S+/m.test(s)) out.state = 'absent'
+  else if (/^\s*RESIDUE\s+\S+/m.test(s)) out.state = 'residue'
+  else if (/^\s*NEED-HUMAN\s+\S+/m.test(s)) out.state = 'need-human'
+  else if (/^\s*OPEN\s+\S+/m.test(s)) out.state = 'open'
+  else if (/^\s*ARCHIVED\s+\S+/m.test(s)) out.state = 'archived'
+  else if (exitCode === 0 || exitCode === 4 || exitCode === 5) out.state = 'clean'
+  else if (exitCode === 1) out.state = 'residue'
+  else out.state = 'unknown'
+  const d = s.match(/WT-DIRS registered=\d+ disk=\d+ orphans=(\d+)/)
+  if (d) { out.orphans = Number(d[1]); out.dirs = out.orphans > 0 ? 'orphan' : 'clean' }
+  else if (/WT-DIRS=(unavailable|unclaimed)/.test(s)) out.dirs = 'unavailable'
+  else out.dirs = 'na'
+  return out
 }
 
 function ternary(flag, unknown) {
@@ -133,18 +163,38 @@ function ternary(flag, unknown) {
 
 /** ③：两侧读数汇成一行机检。dry-run 永远只报 planned，绝不声称已删除。 */
 export function judgeVerdict(f) {
-  const r = f.remove ?? {}
-  const res = f.residue ?? {}
   const mode = f.mode === 'execute' ? 'execute' : 'dryrun'
+  // 生产接线只交 {ran,exitCode,raw}（dev-close.ps1 的 facts），预解析字段是测试与旧调用的便捷形：
+  // raw 只补 facts 里缺的那几个字段，两种形都走同一条判定链（#2188 的教训：fixture 形不等于生产形）。
+  const r = { ...(f.remove ?? {}) }
+  if (mode === 'execute' && r.ran && r.raw != null && r.dirRemoved === undefined) Object.assign(r, parseRemoveJson(r.raw))
+  const res = { ...(f.residue ?? {}) }
+  if (res.ran && res.raw != null && res.state === undefined) Object.assign(res, parseResidueText(res.raw, res.exitCode))
 
   let verdict = 'ok'
   let reason = ''
   if (f.blockedReason) { verdict = 'blocked'; reason = f.blockedReason }
   else if (mode === 'dryrun') { verdict = 'planned' }
-  else if (r.unknown || r.exitCode !== 0 || r.dirRemoved === false || r.regRemoved === false) { verdict = 'red'; reason = 'tree-leftover' }
-  else if (res.ran && res.exitCode !== 0) { verdict = 'red'; reason = 'branch-residue' }
+  else if (r.ran && (r.unknown || r.exitCode !== 0 || r.dirRemoved === false || r.regRemoved === false)) { verdict = 'red'; reason = 'tree-leftover' }
+  else if (res.ran && res.exitCode !== 0) {
+    // 出口码分家（码义在 check-branch-residue.ps1 的 Exit-Green / exit 定义处）：
+    // 1=真有残留；4=分支侧已绿、只是仓里躺着别的会话的孤儿目录 —— 并发边界：本票只核本票的分支，
+    // 孤儿目录不进本票的红、进 wt_dirs 读数供人处置；5=目录对账读不到，fail-closed 仍红但 reason 分家；2/3=读不到。
+    if (res.exitCode === 1) { verdict = 'red'; reason = 'branch-residue' }
+    else if (res.exitCode === 5) { verdict = 'red'; reason = 'wt-audit-unavailable' }
+    else if (res.exitCode !== 4) { verdict = 'red'; reason = 'branch-check-failed' }
+  }
 
-  const tree = f.treeBefore === 'absent' ? 'absent' : (verdict === 'ok' ? 'removed' : mode === 'dryrun' ? 'todo' : 'kept')
+  // 三个 token 一律从事实来，不再从 verdict 反推（#2188 的三连漂：tree=kept、dir=na、local_branch=kept 都是编的）。
+  const treeDone = r.dirRemoved === true && r.regRemoved === true
+  const tree = f.treeBefore === 'absent' ? 'absent' : mode === 'dryrun' ? 'todo'
+    : treeDone ? 'removed' : r.unknown ? 'unknown' : verdict === 'ok' ? 'removed' : 'kept'
+  const lb = r.branchRemoved === true ? 'removed'
+    : r.ran && r.unknown ? 'unknown'
+    : f.localBranch === 'kept' ? 'kept'
+    : f.localBranch === 'absent' ? 'absent'
+    : r.ran ? 'kept' : 'na'
+  const dirs = !res.ran ? 'na' : res.dirs === 'orphan' ? `orphan:${res.orphans ?? 0}` : (res.dirs || 'na')
   const parts = [
     'DEV_CLOSE_RESULT',
     `task=${f.task}`,
@@ -154,8 +204,9 @@ export function judgeVerdict(f) {
     `tree=${tree}`,
     `dir=${ternary(r.dirRemoved, r.unknown)}`,
     `reg=${ternary(r.regRemoved, r.unknown)}`,
-    `local_branch=${r.branchRemoved ? 'removed' : (r.unknown ? 'unknown' : 'kept')}`,
-    `remote_branch=${res.state || 'na'}`, ...(reason ? [`reason=${reason}`] : []),
+    `local_branch=${lb}`,
+    `remote_branch=${res.state || (res.ran ? 'unknown' : 'na')}`,
+    `wt_dirs=${dirs}`, ...(reason ? [`reason=${reason}`] : []),
     `verdict=${verdict}`,
   ]
   return { line: parts.join(' '), ok: verdict === 'ok' || verdict === 'planned', verdict, reason }
