@@ -207,7 +207,10 @@ function logEntry(msg) {
   };
 }
 
-// ---------- 平台层噪音白名单（2026-10-29 立；**独立常量，回滚只动这一段**）----------
+// ---------- 平台层噪音白名单（2026-10-29 立；2026-11-02 #2164 扩充跨条共现）----------
+// ⚠️ 回滚单位自 #2164 起**不再是**「只动这一段」：= 两段常量（PATTERNS + CONTEXT_RULES）
+//   + platformNoiseOf 签名（第二参 runNoiseIds）+ F3 守护的源码切片，两处一起撤才干净。
+//   来路与裁定全文见票面 #2164（维护者 2026-11-02 Q1/Q2/Q3=(a)）。
 // 病根：开发者工具在「page stack 非空时又 appLaunch」会向 console 打一条 **error**。cold-start-direct
 // （#1682 逐页直达）每次直达到非入口页都必然触发，且实测**三页逐字相同** ⇒ `noConsoleErrors` 恒假、
 // ② 在新形态下**永远拿不到绿**（读数见 #2107 全量实测：② 834 s 且判红；#2099 盘点的判据快照）。
@@ -231,7 +234,26 @@ const PLATFORM_NOISE_PATTERNS = [
   },
 ];
 
-function platformNoiseOf(entry) {
+// #2164 跨条共现规则（2026-11-02 维护者裁定 Q1=(a)，最窄形态，Q2=(a) 不扩背书）：
+// 同页还会打一条 {"type":"error","args":[{}]} —— Error 的 message/stack 非可枚举，
+// 原帧经 JSON 序列化被抹平成空对象 ⇒ 探针侧可锚文本只剩 '[object Object]'，零区分度，
+// 多次红跑逐字节录恒定同一形态、不会多出可锚信息（#2107 留档 + #2164 三页红跑）。
+// 单看它谁也可能是真错 ⇒ 放行不靠文本靠**同页同跑的跨条共现**：本次跑此前已放行过
+// appLaunchNonEmptyStack，且下列条件逐条全成立才算噪音：
+//   error 级（函数入口判）∧ args 恰好一个 ∧ 该参是非字符串的对象 ∧ 渲染文本恰为 [object Object]
+//   ∧ 同跑已放行过 requires 背书的噪音 id。
+// **条序不入判据**：这条 error 与 appLaunch 是否恒成对/恒有序，属未证事实（AC7）——真跑取证
+// 若发现不同页不总是成对 ⇒ 停下回报，不自行放宽或收紧。routeDone / screenHeight 两族不放行，
+// 分裂到 #2211。宁可漏（漏了照旧红），不可宽（宽了静默吞真错）。
+const PLATFORM_NOISE_CONTEXT_RULES = [
+  {
+    id: 'appLaunchCompanionEmptyObject',
+    requires: 'appLaunchNonEmptyStack',
+    textEquals: '[object Object]',
+  },
+];
+
+function platformNoiseOf(entry, runNoiseIds) {
   if (!entry || entry.type !== 'error') return null;
   const text = entry.args.map((v) => (typeof v === 'string' ? v : String(v))).join(' ');
   for (const p of PLATFORM_NOISE_PATTERNS) {
@@ -239,6 +261,15 @@ function platformNoiseOf(entry) {
     if (!m) continue;
     const near = text.slice(m.index, m.index + (p.window || 200));
     if (p.also.every((re) => re.test(near))) return { id: p.id, text: text.slice(0, 200) };
+  }
+  const seen = Array.isArray(runNoiseIds) ? runNoiseIds : [];
+  for (const r of PLATFORM_NOISE_CONTEXT_RULES) {
+    if (!seen.includes(r.requires)) continue;
+    if (entry.args.length !== 1) continue;
+    const a0 = entry.args[0];
+    if (typeof a0 !== 'object' || a0 === null || Array.isArray(a0)) continue;
+    if (text !== r.textEquals) continue;
+    return { id: r.id, text: text + ' (co-noise=' + r.requires + ')' };
   }
   return null;
 }
@@ -376,15 +407,19 @@ try {
 }
 
 // console / exception 全程收集：必须在任何导航之前挂上，否则漏掉入口页的报错
+// #2164 共现上下文：本跑已放行的噪音 id。cold-start-direct 一个进程 = 一个页 ⇒「本跑」即「同页」。
+// 内部状态：不进 result、不给读数行加字段；只供 platformNoiseOf 判跨条共现，回滚随两段常量一起撤。
+const runNoiseIds = [];
 mp.on('console', (msg) => {
   const entry = logEntry(msg);
   result.logsTotal += 1;
   if (entry.type === 'error') {
     // 平台层噪音先分类，再决定是否计数（2026-10-29 F3）：命中白名单 ⇒ 记 noise、**不进** errorsTotal。
     // 尾部日志仍保留这条（type 改标 platform-noise），便于事后逐条核对到底放行了什么。
-    const noise = platformNoiseOf(entry);
+    const noise = platformNoiseOf(entry, runNoiseIds);
     if (noise) {
       result.noiseTotal += 1;
+      runNoiseIds.push(noise.id);
       if (result.noiseTail.length < args.tailMax) result.noiseTail.push({ type: 'platform-noise', id: noise.id, args: [noise.text] });
       entry.type = 'platform-noise';
       entry.noiseId = noise.id;

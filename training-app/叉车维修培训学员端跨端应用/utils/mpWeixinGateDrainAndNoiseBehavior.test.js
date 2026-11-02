@@ -45,17 +45,24 @@ describe('F3：平台层噪音白名单（② 在 cold-start-direct 下不再恒
   // 把常量声明与分类函数从探针源码里切出来重建，**真跑** —— 不 import 整个脚本（那会启动探针主流程）
   const src = readText(path.join(ROOT, PROBE_REL));
   const constDecl = (src.match(/const PLATFORM_NOISE_PATTERNS = \[[\s\S]*?\n\];/) || [''])[0];
-  const fnDecl = (src.match(/function platformNoiseOf\(entry\) \{[\s\S]*?\n\}/) || [''])[0];
+  // #2164：跨条共现规则同为独立常量段。回滚单位 = 两段常量 + 分类函数签名——任一段切不到 ⇒ 守护红（fail-closed）。
+  const contextDecl = (src.match(/const PLATFORM_NOISE_CONTEXT_RULES = \[[\s\S]*?\n\];/) || [''])[0];
+  const fnDecl = (src.match(/function platformNoiseOf\([^)]*\) \{[\s\S]*?\n\}/) || [''])[0];
 
   let platformNoiseOf;
   beforeAll(() => {
     expect(constDecl).not.toBe('');
+    expect(contextDecl).not.toBe('');
     expect(fnDecl).not.toBe('');
     // eslint-disable-next-line no-new-func
-    platformNoiseOf = new Function(`${constDecl}\n${fnDecl}\nreturn platformNoiseOf;`)();
+    platformNoiseOf = new Function(`${constDecl}\n${contextDecl}\n${fnDecl}\nreturn platformNoiseOf;`)();
   });
 
   const entry = (type, text) => ({ type, args: [text] });
+  // #2164：非字符串 args 形态。automator 原帧透传 + Error 非可枚举字段被 JSON 抹平 ⇒
+  // 到探针只剩 args:[{}]，渲染文本恒为 '[object Object]'，再多次红跑也不会多出区分度。
+  const emptyObjectEntry = (type) => ({ type, args: [{}] });
+  const APP_LAUNCH = 'appLaunchNonEmptyStack';
 
   it('H1 放行：开发者工具「栈非空又 appLaunch」这条平台文案不计入 errors', () => {
     expect(platformNoiseOf(entry('error', 'appLaunch with non-empty page stack'))).toBeTruthy();
@@ -83,6 +90,46 @@ describe('F3：平台层噪音白名单（② 在 cold-start-direct 下不再恒
     // 命中时既要记数、也要把原文留进尾部日志
     expect(src).toMatch(/result\.noiseTotal \+= 1/);
     expect(src).toMatch(/result\.noiseTail\.push/);
+  });
+
+  // ---- #2164：同页跨条共现放行（2026-11-02 维护者裁定 Q1=(a)，形态取最窄 Q2=(a) 不扩背书）----
+
+  it('N1 共现放行：同页本次跑已放行 appLaunchNonEmptyStack 后，args:[{}] 的 error 同判平台噪音', () => {
+    const hit = platformNoiseOf(emptyObjectEntry('error'), [APP_LAUNCH]);
+    expect(hit).toBeTruthy();
+    expect(hit.id).toBe('appLaunchCompanionEmptyObject');
+    // 放行必须可核对：原文无可锚文本 ⇒ text 里保留 args 形态与背书关系
+    expect(hit.text).toContain('[object Object]');
+    expect(hit.text).toContain(APP_LAUNCH);
+  });
+
+  it('N2 反向锁①：没有 appLaunch 噪音的同页，单条 [object Object] error 仍计入 errorsTotal', () => {
+    expect(platformNoiseOf(emptyObjectEntry('error'), [])).toBeNull();
+    // 不传上下文（旧调用形态）= 无背书 ⇒ 不放行
+    expect(platformNoiseOf(emptyObjectEntry('error'))).toBeNull();
+    // 别的噪音 id 不背书：共现判据只认 appLaunchNonEmptyStack 一个 sponsors
+    expect(platformNoiseOf(emptyObjectEntry('error'), ['unrelatedNoise'])).toBeNull();
+  });
+
+  it('N3 反向锁②：有 appLaunch 上下文时真业务 error 仍计数（不得扩成「本页后续全放行」）', () => {
+    expect(platformNoiseOf(entry('error', 'request:fail timeout'), [APP_LAUNCH])).toBeNull();
+    // Q2=(a)：routeDone / screenHeight 这两族分裂到 #2211，本票一条都不放行
+    expect(platformNoiseOf(entry('error', 'routeDone with a webviewId 5 is not found'), [APP_LAUNCH])).toBeNull();
+    expect(platformNoiseOf(entry('error', "TypeError: Cannot read properties of null (reading 'screenHeight')"), [APP_LAUNCH])).toBeNull();
+  });
+
+  it('N4 判据最窄：五条件缺一不放行（非 error / 多 args / 字符串恰为 [object Object] / 非对象标量参）', () => {
+    expect(platformNoiseOf(emptyObjectEntry('warn'), [APP_LAUNCH])).toBeNull();
+    expect(platformNoiseOf({ type: 'error', args: [{}, 'extra'] }, [APP_LAUNCH])).toBeNull();
+    // 字符串 args 不进共现形态（判据要求「该参非字符串」）
+    expect(platformNoiseOf(entry('error', '[object Object]'), [APP_LAUNCH])).toBeNull();
+    expect(platformNoiseOf({ type: 'error', args: [null] }, [APP_LAUNCH])).toBeNull();
+    expect(platformNoiseOf({ type: 'error', args: [15] }, [APP_LAUNCH])).toBeNull();
+  });
+
+  it('N5 接线不回退：console 回调必须把同跑噪音上下文传入分类并记录命中 id（剪线 = 静默失效）', () => {
+    expect(src).toMatch(/platformNoiseOf\(entry,\s*runNoiseIds\)/);
+    expect(src).toMatch(/runNoiseIds\.push\(noise\.id\)/);
   });
 });
 
