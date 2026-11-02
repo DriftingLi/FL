@@ -19,7 +19,7 @@
 | 7 开 PR 与合并 | `pwsh scripts/preflight-pr.ps1`（**仓库根**跑）预检绿 → `pwsh scripts/submit-pr.ps1` 建 PR | 证据齐 → agent 直接合并 | 例外通道只认「已接受未验证风险」一句，**且由人合并** |
 | 8 收尾 | `pwsh scripts/dev-close.ps1 -Task <票号>`（仓库根；默认 dry-run，`-Yes` 执行） | `DEV_CLOSE_RESULT … verdict=ok`（dry-run 只 `verdict=planned`，别当已收尾） | `verdict=blocked reason=pr-not-merged` = 还没合并，本就不该拆；树被占用 ⇒ 关掉占用的工具再跑，别 kill |
 
-**第 5 步的纪律面**：纯 `.uvue` / `.uts` 命中运行时面时，② 属**纪律必跑**——校验器对这一支**不判**（`needs2` 只认 MP-WEIXIN 面），但 ADR-0043 决策 3 已把「每个运行时面 PR 都执行 ②」定为常态主门；**别把校验器的「免」当成不必执行**。
+**第 5 步的纪律面**：纯 `.uvue` / `.uts` 命中运行时面时，校验器对这一支**不判**（`needs2` 只认 MP-WEIXIN 面）。ADR-0043 决策 3 自 2026-11-02 起收窄（#2207）：**`needs2` 触发面必跑，非触发面默认跑、可跳过**——跳过时在正文写一行 `② 自选跳过 reason=<slug>`，别沉默跳过。
 
 **成本尺**：常态 ≈12 min（同树）/ 17 min（新树）。超 2× 先查是不是在排队（HBuilderX 单实例，不是脚本慢）。
 
