@@ -478,6 +478,8 @@ const MODULES = {
       'pages/profile/components/activity-topic-card.uvue',
       'pages/profile/components/activity-user-card.uvue',
       'pages/profile/components/info-dialog.uvue',
+      /** #1949：笔记图片条（列表只读回显 + 编辑器选图），唯一消费方是 profile（notebook） */
+      'pages/profile/components/note-image-strip.uvue',
       'pages/profile/components/profile-user-row.uvue',
       'pages/profile/components/wrong-filter-bar.uvue',
       'pages/profile/components/wrong-question-card.uvue',

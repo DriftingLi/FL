@@ -19,6 +19,8 @@ export type NoteItem = {
 	question_content : string
 	/** 更新时间（RFC3339，后端按它倒序） */
 	updated_at : string
+	/** 图片附件（站内相对路径，顺序即提交顺序；空数组 = 无图）。上限与后端同源见 `api/note.NOTE_IMAGES_MAX` */
+	images : string[]
 }
 
 /** 我的笔记分页结果（GET /api/notes） */
