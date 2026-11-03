@@ -512,6 +512,11 @@ test('G4 声明核身：四象限（符 / 不符-需定向 / 不符-实为全门
   assert.equal(parseDeclaredTier('- 档位：模板减配'), '模板减配');
   assert.equal(parseDeclaredTier('- 档位: 全门'), '全门');
   assert.equal(parseDeclaredTier('没有声明'), null);
+  // #2228：逻辑减配档已由 #2219 裁定退役 ⇒ 该声明值一并停认（不再是一个合法档位）。
+  assert.equal(parseDeclaredTier('- 档位：逻辑减配'), null, '已退役的档位不得再被认作合法声明');
+  const retired = tierOf([mob('pages/search/search.uvue', '+ 文字')], { bodyText: '- 档位：逻辑减配' });
+  assert.equal(retired.declared, null, '退役档位的声明按「未声明」处理，而不是落进一条永远报不符的死分支');
+  assert.equal(retired.verified, '未声明（影子按记录全门对待）');
   const lite = tierOf([mob('pages/search/search.uvue', '+ 文字')], { bodyText: '- 档位：模板减配' });
   assert.equal(lite.verified, '符');
   const cov = tierOf([mob('pages/search/search.uvue', '+ display: flex;')], { bodyText: '- 档位：模板减配' });
@@ -528,7 +533,19 @@ test('G5 fail-closed：名单缺失/坏形 ⇒ 按全门记录；开关被翻真
   assert.match(noList.anomalies.join(), /fail-closed/);
   const badList = tierOf([mob('pages/search/search.uvue', '+ 文字')], { coreList: '{oops' });
   assert.equal(badList.tier, 'full');
-  const flipped = { ...CORE_LIST, switches: { exemptionActive: true, logicLiteTierOpen: true } };
+  // #2228：删掉 logicLiteTierOpen 必填校验后，「少一个字段」与「整个 switches 坏了」的语义必须仍分得开。
+  // 缺 switches 整体 / switches 缺 exemptionActive / 类型不对 ⇒ 名单不可用 ⇒ fail-closed 全门。
+  const { switches: _drop, ...noSwitches } = CORE_LIST;
+  const withoutSwitches = tierOf([mob('pages/search/search.uvue', '+ 文字')], { coreList: noSwitches });
+  assert.equal(withoutSwitches.tier, 'full', '缺 switches 整体必须 fail-closed 按全门');
+  assert.match(withoutSwitches.anomalies.join(), /fail-closed/);
+  const noExemption = tierOf([mob('pages/search/search.uvue', '+ 文字')], { coreList: { ...CORE_LIST, switches: {} } });
+  assert.equal(noExemption.tier, 'full', 'switches 缺 exemptionActive 必须 fail-closed 按全门');
+  const badType = tierOf([mob('pages/search/search.uvue', '+ 文字')], { coreList: { ...CORE_LIST, switches: { exemptionActive: 'false' } } });
+  assert.equal(badType.tier, 'full', 'exemptionActive 非布尔必须 fail-closed 按全门');
+  assert.equal(parseCoreList({ ...CORE_LIST, switches: { exemptionActive: false, logicLiteTierOpen: true } }), null,
+    '已退役字段不再被认可：名单仍带 logicLiteTierOpen 时形状校验直接不认（避免新旧名单并存时静默漂移）');
+  const flipped = { ...CORE_LIST, switches: { ...CORE_LIST.switches, exemptionActive: true } };
   const t3 = tierOf([mob('pages/search/search.uvue', '+ 文字')], { coreList: flipped });
   assert.equal(t3.tier, 'lite-exempt2', 'tier 是分档器的事实输出；波 2 的「不免除」由「影子从不改判」保证，不靠强改 tier');
   assert.match(t3.anomalies.join(), /忽略开关|未开/, '开关被翻真必须留异常行');
