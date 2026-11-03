@@ -9,9 +9,9 @@ export type { CredentialDict, CredentialListDTO, CurrentCredentialDTO, GroupedCr
 /** 证件分组（special_operation / skill_level 两组恒在）—— 旧名保留为生成别名 */
 export type GroupedCredentials = GroupedCredentialsDTO
 
-/** 创建/更新证件入参（不生成，ADR-0048 决策 3） */
+/** 创建/更新证件入参（不生成，ADR-0048 决策 3）；code 由后端创建时生成，故可选。 */
 export interface CredentialPayload {
-  code: string
+  code?: string
   name: string
   category: 'special_operation' | 'skill_level'
   level?: number | null

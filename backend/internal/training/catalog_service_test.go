@@ -58,10 +58,7 @@ func TestSpecialtyCRUD(t *testing.T) {
 		t.Fatalf("创建结果不匹配: %+v", result)
 	}
 
-	// 编码/名称为空校验
-	if _, err := svc.CreateSpecialty(SpecialtyInput{Name: "x"}); err == nil {
-		t.Fatal("编码为空应报错")
-	}
+	// 名称为空校验（编码为空会由后端自动生成，不再是校验项）
 	if _, err := svc.CreateSpecialty(SpecialtyInput{Code: "x"}); err == nil {
 		t.Fatal("名称为空应报错")
 	}
@@ -97,12 +94,12 @@ func TestSpecialtyCRUD(t *testing.T) {
 	}
 }
 
-// TestSpecialtyValidation 专业方向校验（收口在 service）：编码/名称必填、编码唯一、状态枚举。
+// TestSpecialtyValidation 专业方向校验（收口在 service）：名称必填、编码唯一、状态枚举。
 func TestSpecialtyValidation(t *testing.T) {
 	svc, _ := newCatalogSvc(t)
 
-	if _, err := svc.CreateSpecialty(SpecialtyInput{Code: "", Name: "x"}); err == nil || err.Error() != "专业方向编码不能为空" {
-		t.Fatalf("编码为空应报「专业方向编码不能为空」, got %v", err)
+	if _, err := svc.CreateSpecialty(SpecialtyInput{Name: "x"}); err != nil {
+		t.Fatalf("编码为空应自动生成并创建成功, got %v", err)
 	}
 	if _, err := svc.CreateSpecialty(SpecialtyInput{Code: "x", Name: ""}); err == nil || err.Error() != "专业方向名称不能为空" {
 		t.Fatalf("名称为空应报「专业方向名称不能为空」, got %v", err)
@@ -140,8 +137,10 @@ func TestLevelCRUD(t *testing.T) {
 	}
 	levelID := result.LevelID
 
-	if _, err := svc.CreateLevel(LevelInput{Name: "x"}); err == nil {
-		t.Fatal("编码为空应报错")
+	if auto, err := svc.CreateLevel(LevelInput{Name: "x"}); err != nil {
+		t.Fatalf("编码为空应自动生成并创建成功, got %v", err)
+	} else if err := svc.DeleteLevel(auto.LevelID); err != nil {
+		t.Fatalf("清理自动生成等级失败: %v", err)
 	}
 	updated, err := svc.UpdateLevel(levelID, LevelInput{Name: "初级"})
 	if err != nil {
@@ -250,8 +249,10 @@ func TestQuestionTagCRUD(t *testing.T) {
 	}
 	tagID := result.ID
 
-	if _, err := svc.CreateQuestionTag(QuestionTagInput{Name: "x"}); err == nil {
-		t.Fatal("编码为空应报错")
+	if auto, err := svc.CreateQuestionTag(QuestionTagInput{Name: "x"}); err != nil {
+		t.Fatalf("编码为空应自动生成并创建成功, got %v", err)
+	} else if err := svc.DeleteQuestionTag(auto.ID); err != nil {
+		t.Fatalf("清理自动生成标签失败: %v", err)
 	}
 	updated, err := svc.UpdateQuestionTag(tagID, QuestionTagInput{Name: "液压系统"})
 	if err != nil {

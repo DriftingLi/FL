@@ -44,9 +44,6 @@
 
     <UiDialog v-model="dialogVisible" :title="form.id ? '编辑证件' : '新增证件'" width="520px" destroy-on-close confirm-text="保存" :confirm-loading="submitting" @confirm="handleSubmit">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
-        <el-form-item label="编码" prop="code">
-          <UiInput v-model="form.code" placeholder="如 forklift_n1" :disabled="!!form.id"  />
-        </el-form-item>
         <el-form-item label="名称" prop="name">
           <UiInput v-model="form.name" placeholder="如 叉车司机N1证"  />
         </el-form-item>
@@ -124,9 +121,8 @@ const filtered = computed(() => {
 const dialogVisible = ref(false)
 const submitting = ref(false)
 const formRef = ref<FormInstance | null>(null)
-const form = reactive<{ id: number | null; code: string; name: string; category: 'special_operation' | 'skill_level' | ''; level: number | null; description: string; sort_order: number; status: number }>({
+const form = reactive<{ id: number | null; name: string; category: 'special_operation' | 'skill_level' | ''; level: number | null; description: string; sort_order: number; status: number }>({
   id: null,
-  code: '',
   name: '',
   category: '',
   level: null,
@@ -136,7 +132,6 @@ const form = reactive<{ id: number | null; code: string; name: string; category:
 })
 
 const rules = {
-  code: [{ required: true, message: '请输入编码', trigger: 'blur' }],
   name: [{ required: true, message: '请输入名称', trigger: 'blur' }],
   category: [{ required: true, message: '请选择类别', trigger: 'change' }]
 }
@@ -144,7 +139,6 @@ const rules = {
 function openDialog(row?: CredentialDict) {
   if (row) {
     form.id = row.id
-    form.code = row.code
     form.name = row.name
     // 生成形状的 category 是 string（注解层暂无枚举词汇，见 ADR-0048 片一已知限制）；
     // 后端取值域就是这两个，表单模型是封闭值集，此处按域收窄。
@@ -155,7 +149,6 @@ function openDialog(row?: CredentialDict) {
     form.status = row.status
   } else {
     form.id = null
-    form.code = ''
     form.name = ''
     form.category = '' as any
     form.level = null
@@ -176,7 +169,6 @@ async function handleSubmit() {
   submitting.value = true
   try {
     const payload: CredentialPayload = {
-      code: form.code,
       name: form.name,
       category: form.category as any,
       description: form.description,
@@ -185,9 +177,7 @@ async function handleSubmit() {
     }
     if (form.category === 'skill_level') payload.level = form.level!
     if (form.id) {
-      // 编辑时不传 code（后端 code 为空表示不改动）
-      const { code, ...rest } = payload as any
-      await credentialApi.updateCredential(form.id, rest)
+      await credentialApi.updateCredential(form.id, payload)
       ElMessage.success('已更新')
     } else {
       await credentialApi.createCredential(payload)

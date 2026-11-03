@@ -6,6 +6,7 @@ package training
 import (
 	"errors"
 
+	"forklift-training/internal/entcode"
 	"forklift-training/internal/sortorder"
 
 	"gorm.io/gorm"
@@ -16,9 +17,10 @@ type CatalogEntitySpec[M any, I any, D any] struct {
 	Table    string
 	IDColumn string
 	OrderBy  string
-	CodeErr  string
-	NameErr  string
-	DupMsg   string
+	// CodePrefix 是自动生成编码的前缀（如 specialty / position）。
+	CodePrefix string
+	NameErr    string
+	DupMsg     string
 	// NotFound 是该实体「行不存在」这一事实的具名哨兵（ADR-0064 决策 1/2）。
 	// 此前这里是一个 string：引擎只能 errors.New 出一个匿名错误 ⇒
 	// ①「查不动」与「不存在」在 api 层分不出档，②一处引擎缺陷同时污染全部目录实体。
@@ -44,6 +46,9 @@ type CatalogEntitySpec[M any, I any, D any] struct {
 	// SetCode / SetName 写入通用字段。
 	SetCode func(*M, string)
 	SetName func(*M, string)
+	// SetInputCode 把自动生成的编码写回入参：创建时空编码由引擎补齐，
+	// 而入参是 NewModel 读取编码的唯一来源，故必须回写而不是只改 model。
+	SetInputCode func(*I, string)
 	// ToDict 是实体 typed facade 的返回形状。
 	ToDict func(*M) D
 }
@@ -64,7 +69,16 @@ func catalogList[M any, I any, D any](db *gorm.DB, spec CatalogEntitySpec[M, I, 
 
 func catalogCreate[M any, I any, D any](db *gorm.DB, spec CatalogEntitySpec[M, I, D], in *I) (D, error) {
 	var zero D
-	if err := validateCatalogCodeName(spec.Code(in), spec.Name(in), spec.CodeErr, spec.NameErr); err != nil {
+	code := spec.Code(in)
+	if code == "" {
+		generated, err := entcode.Generate(spec.CodePrefix)
+		if err != nil {
+			return zero, err
+		}
+		spec.SetInputCode(in, generated)
+		code = generated
+	}
+	if err := validateCatalogName(spec.Name(in), spec.NameErr); err != nil {
 		return zero, err
 	}
 	if err := validateStatus(spec.Status(in)); err != nil {
@@ -75,7 +89,7 @@ func catalogCreate[M any, I any, D any](db *gorm.DB, spec CatalogEntitySpec[M, I
 			return zero, err
 		}
 	}
-	if err := ensureCodeUnique(db, spec.Table, spec.IDColumn, spec.Code(in), 0, spec.DupMsg); err != nil {
+	if err := ensureCodeUnique(db, spec.Table, spec.IDColumn, code, 0, spec.DupMsg); err != nil {
 		return zero, err
 	}
 

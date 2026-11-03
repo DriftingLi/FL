@@ -126,9 +126,6 @@
         <el-form-item label="标签名" prop="name">
           <UiInput v-model="tagForm.name" placeholder="如：法规、结构、液压、电气、制动、故障诊断、应急" :maxlength="30" show-word-limit @keyup.enter="submitTag" />
         </el-form-item>
-        <el-form-item label="编码" prop="code">
-          <UiInput v-model="tagForm.code" placeholder="唯一编码，如 HYDRAULIC" :maxlength="30" @keyup.enter="submitTag" />
-        </el-form-item>
       </el-form>
     </UiDialog>
 
@@ -187,10 +184,9 @@ const currentTagName = computed(() => {
 const tagDialogVisible = ref(false)
 const tagSubmitting = ref(false)
 const tagFormRef = ref<FormInstance | null>(null)
-const tagForm = reactive<{ id: number | null; name: string; code: string }>({ id: null, name: '', code: '' })
+const tagForm = reactive<{ id: number | null; name: string }>({ id: null, name: '' })
 const tagRules = {
-  name: [{ required: true, message: '请输入标签名', trigger: 'blur' }],
-  code: [{ required: true, message: '请输入唯一编码', trigger: 'blur' }]
+  name: [{ required: true, message: '请输入标签名', trigger: 'blur' }]
 }
 
 const tagAssignVisible = ref(false)
@@ -246,7 +242,6 @@ function handleSelectionChange(rows?: Question[] | undefined) {
 function openTagDialog(tag?: QuestionTag) {
   tagForm.id = tag?.id ?? null
   tagForm.name = tag?.name ?? ''
-  tagForm.code = tag?.code ?? ''
   tagDialogVisible.value = true
 }
 
@@ -255,10 +250,7 @@ async function submitTag() {
   await tagFormRef.value.validate()
   tagSubmitting.value = true
   try {
-    const payload = {
-      name: tagForm.name,
-      code: tagForm.code
-    }
+    const payload = { name: tagForm.name }
     if (tagForm.id) {
       await trainingApi.updateQuestionTag(tagForm.id, payload)
       ElMessage.success('标签已更新')

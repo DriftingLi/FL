@@ -78,7 +78,6 @@ func TestCredentialValidation(t *testing.T) {
 		in  CredentialInput
 		msg string
 	}{
-		{CredentialInput{Code: "", Name: "a", Category: "special_operation"}, "证件编码不能为空"},
 		{CredentialInput{Code: "c1", Name: "", Category: "special_operation"}, "证件名称不能为空"},
 		{CredentialInput{Code: "c1", Name: "a", Category: "invalid"}, "证件类别无效"},
 		{CredentialInput{Code: "c1", Name: "a", Category: "skill_level", Level: ptrLevel(0)}, "技能等级须为1-5"},

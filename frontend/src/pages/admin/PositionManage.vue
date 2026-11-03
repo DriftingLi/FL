@@ -40,9 +40,6 @@
         <el-form-item label="岗位名称" prop="name">
           <UiInput v-model="form.name" :maxlength="50" placeholder="如：叉车维修技师"  />
         </el-form-item>
-        <el-form-item label="编码" prop="code">
-          <UiInput v-model="form.code" :maxlength="30" placeholder="唯一编码，如：maintenance_tech"  />
-        </el-form-item>
         <el-form-item label="描述">
           <UiInput v-model="form.description" type="textarea" :rows="2" :maxlength="200"  />
         </el-form-item>
@@ -87,10 +84,9 @@ const dialogVisible = ref(false)
 const editing = ref(false)
 const submitting = ref(false)
 const formRef = ref<FormInstance | null>(null)
-const form = reactive<{ id: number | null; name: string; code: string; description: string; status: number }>({ id: null, name: '', code: '', description: '', status: 1 })
+const form = reactive<{ id: number | null; name: string; description: string; status: number }>({ id: null, name: '', description: '', status: 1 })
 const formRules = {
-  name: [{ required: true, message: '请输入岗位名称', trigger: 'blur' }],
-  code: [{ required: true, message: '请输入唯一编码', trigger: 'blur' }]
+  name: [{ required: true, message: '请输入岗位名称', trigger: 'blur' }]
 }
 
 // 列表：admin 列表状态机 useAdminTable（#793，ADR-0039）——无分页，一次拉全量（total = list.length）
@@ -115,7 +111,6 @@ function openDialog(item?: PositionItem) {
   editing.value = !!item
   form.id = item?.position_id ?? null
   form.name = item?.name ?? ''
-  form.code = item?.code ?? ''
   form.description = item?.description ?? ''
   form.status = item?.status ?? 1
   dialogVisible.value = true
@@ -126,7 +121,7 @@ async function handleSubmit() {
   await formRef.value.validate()
   submitting.value = true
   try {
-    const payload = { name: form.name, code: form.code, description: form.description, status: form.status }
+    const payload = { name: form.name, description: form.description, status: form.status }
     if (editing.value && form.id != null) {
       await positionApi.update(form.id, payload)
       ElMessage.success('岗位已更新')
