@@ -28,15 +28,9 @@
 
         <!-- 课程内容区 -->
         <view v-if="activeCategory == 'course'" class="course-section">
-            <!-- 子分类标题 + tabs -->
+            <!-- 分组标题（#2230：原「精品课 / 图书同步精讲」子标签已摘除 —— 点击只换高亮、取数从不发生，见票面） -->
             <view class="section-card">
                 <text class="section-card-title">课程</text>
-                <view class="sub-tab-row">
-                    <view v-for="(tab, idx) in subTabs" :key="idx"
-                        :class="{ 'sub-tab': true, 'ml-16': idx > 0, 'sub-tab--active': activeSubTab == idx }" @click="onSubTabTap(idx)">
-                        <text class="sub-tab-text" :class="{ 'sub-tab-text--active': activeSubTab == idx }">{{ tab }}</text>
-                    </view>
-                </view>
             </view>
 
             <!-- 免费/付费组（#1951）：走后端布尔参数 paid，付费口径 = 需积分兑换（与详情页 CTA 同源） -->
@@ -137,14 +131,6 @@
 
     function onCategoryTap(cat : string) : void {
         activeCategory.value = cat
-    }
-
-    // ---- 子分类 tabs ----
-    const subTabs : string[] = ['精品课', '图书同步精讲']
-    const activeSubTab = ref<number>(0)
-
-    function onSubTabTap(idx : number) : void {
-        activeSubTab.value = idx
     }
 
     // ---- 课程数据 ----
@@ -378,32 +364,6 @@
         font-weight: 700;
         color: #1a1a1a;
         margin-bottom: 16rpx;
-    }
-
-    .sub-tab-row {
-        flex-direction: row;
-    }
-
-    .sub-tab {
-        padding: 10rpx 24rpx;
-        border-radius: 24rpx;
-        border-width: 2rpx;
-        border-color: #e0e0e0;
-        border-style: solid;
-    }
-
-    .sub-tab--active {
-        border-color: #2979ff;
-    }
-
-    .sub-tab-text {
-        font-size: 26rpx;
-        color: #666666;
-    }
-
-    .sub-tab-text--active {
-        color: #2979ff;
-        font-weight: 600;
     }
 
     /* ---- 筛选标签 ---- */
