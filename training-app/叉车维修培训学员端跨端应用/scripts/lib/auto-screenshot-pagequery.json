@@ -1,0 +1,14 @@
+{
+  "_comment": "带参页启动参数白名单（#1864）：某些页只有带 query 才会进内容形态，不带就弹回/自退（详情页、按 key 分流的功能页）。键=pages.json 里的 pagePath，值=直接拼给 cli 的 --pageQuery 字符串（多参数用 & 连接）。只有**已确认真实可用**的参数值才写在这里——写猜的值等于用一张『加载中…』或空态截图冒充证据。",
+  "_evidence": "HBuilderX cli.exe 的 launch app-android 原生支持 --pageQuery（2026-11-03 本机 --help 实列：『启动页面查询参数，多个参数用 & 连接』）；仓内带参先例 .ci-verify/launch-850.ps1:20。参数形态来自源码：pages/ai-assistant/ai-feature.uvue:367-388 取 options['featureKey']（有效键见 pages/ai-assistant/ai-assistant-constants.uts:26-31 FUNCTION_ITEMS）；pages/jobs/job-detail.uvue:213-223 取 opts['id']；pages/recruiter/resume-detail.uvue:454-468 先判 isRecruiterActive() 再取 options['id']。",
+  "_stateNote": "只在本载体（-FullRepo 全仓逐页）注入 --pageQuery：日常形态（-Pages 改动页）逐字不变。",
+  "_requiresQuery": [
+    "pages/ai-assistant/ai-feature",
+    "pages/jobs/job-detail",
+    "pages/recruiter/resume-detail"
+  ],
+  "_pendingNote": "jobs/job-detail 与 recruiter/resume-detail 的真实 id 无法由 agent 自足取得（/api/jobs 无 token 一律 401；resume-detail 还需招聘方角色登录态）。这两条留空 = 本轮不注入 query、该页按原样弹回并被记 Skipped，**不冒充绿**。真实 id 由人提供后填进下方 pageQuery 即可补采。",
+  "pageQuery": {
+    "pages/ai-assistant/ai-feature": "featureKey=fault_diagnosis"
+  }
+}

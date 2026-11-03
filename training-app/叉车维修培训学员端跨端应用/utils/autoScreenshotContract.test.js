@@ -660,6 +660,41 @@ describe('auto-screenshot.ps1 contract', () => {
     expect(code).toMatch(/-RampPages 不得为负/);
   });
 
+  // S37（2026-11-03，#1864）：带参页通道的形状。
+  //   现场：详情页 / 按 key 分流的功能页**不带 query 就进不去内容形态** —— 会 toast 后自退或 navigateBack，
+  //   在设备上必然弹回首页 ⇒ 落点判据 fail-closed 记 Skipped，被读成「切页故障」，其实是载体没传参。
+  //   cli 原生支持 `--pageQuery`（2026-11-03 `launch app-android --help` 实列），是本载体漏了这条通道。
+  //   这里钉四件事：白名单来自**数据文件**（不写死页名/参数值）、只在 -FullRepo 形态注入、
+  //   参数行必须单引号包裹（`&` 否则被 pwsh 当运算符吃掉）、落定判据不受 query 影响。
+  //   运行期那一面（真读 json、`&` 经重解析原样到达）由 FR12 钉。
+  test('S37: 【#1864】带参页走 --pageQuery，白名单来自数据文件且只作用于 -FullRepo', () => {
+    const code = src.replace(/<#[\s\S]*?#>/g, '').replace(/^\s*#.*$/gm, '');
+    // ① 白名单只有一个来源：scripts/lib/auto-screenshot-pagequery.json（与中转页白名单同一套做法）
+    expect(code).toMatch(/Get-PageQueryMap -Path \(Join-Path \$PSScriptRoot 'auto-screenshot-pagequery\.json'\)/);
+    // ② 代码里不得写死具体参数值（写死会漂且不可审计）
+    expect(code).not.toMatch(/featureKey=fault_diagnosis/);
+    // ③ 初始化必须带形态分支：日常形态（-Pages 改动页）逐字不变（票 ③ 的边界）
+    expect(code).toMatch(/\$pageQueryMap\s*=\s*\$\(if\s*\(\$fullRepoMode\)\s*\{[\s\S]{0,160}?\}\s*else\s*\{[\s\S]{0,80}?\}\)/);
+    // ④ 注入点：只往 launchArgs 追加，且必须在 $launchArgs 定义之后、派发之前
+    const launchAt = code.indexOf("$launchArgs = @('launch', 'app-android', '--pagePath', $page, '--project', $ProjectDir)");
+    expect(launchAt).toBeGreaterThan(-1);
+    const injectAt = code.indexOf("$launchArgs += @('--pageQuery', [string]$pageQueryMap[$page])");
+    expect(injectAt).toBeGreaterThan(launchAt);
+    const dispatchAt = code.indexOf('Start-NavLaunchDetached -CliArgs $launchArgs');
+    expect(dispatchAt).toBeGreaterThan(injectAt);
+    // ⑤ 不得把 query 拼进 $page：落定判据取的应用自打「进入页面」行只有页路径、不含 query，
+    //    拼进去会让 ExpectedPage 永远对不上（60 页全量的 dirMissing 永久 >0 的另一种形状）
+    expect(code).not.toMatch(/--pagePath',\s*"?\$page\?/);
+    // ⑥ 参数行重解析：一律单引号包裹（双引号只防拆词、不防 `&` 被当运算符）
+    const argFnAt = code.indexOf('function ConvertTo-CliArgLine');
+    expect(argFnAt).toBeGreaterThan(-1);
+    const argFnBody = code.slice(argFnAt, code.indexOf('function Start-NavLaunchDetached', argFnAt));
+    expect(argFnBody).toMatch(/Replace\("'", "''"\)/);
+    expect(argFnBody).not.toMatch(/-match '\\\\s'/);       // 旧的「含空白才加引号」判据必须消失
+    // wrap 脚本必须用这个函数拼参数行（不许再各写一套）
+    expect(code).toMatch(/\$argLine = ConvertTo-CliArgLine -CliArgs \$CliArgs/);
+  });
+
   test('S31: 【#2078】不带 -FullRepo 时默认行为与归档路径逐字不变', () => {
     const code = src.replace(/<#[\s\S]*?#>/g, '').replace(/^\s*#.*$/gm, '');
     // 默认输出目录仍是 .ci-verify（随树回收消失的那份），票号目录只由授权位进入
