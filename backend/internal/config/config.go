@@ -680,8 +680,12 @@ func validateDiagnosisV2(apiKey, ossBase string) error {
 	if u.Host == "" {
 		return fmt.Errorf("DIAGNOSIS_V2_OSS_BASE 缺少主机名: %q", base)
 	}
-	if !strings.HasPrefix(u.Path, diagnosisOSSPathPrefix+"/") {
-		return fmt.Errorf("DIAGNOSIS_V2_OSS_BASE 的路径必须以 %s/ 开头（当前 %q）", diagnosisOSSPathPrefix, u.Path)
+	// 前缀判定接受两种合法形状：恰好是前缀本身（部署默认值就是这形
+	// https://<bucket>.oss-cn-beijing.aliyuncs.com/forklift/repair_img），
+	// 或落在它之下（有人把桶内某个子目录直接当基准）。**不接受** `/forklift/repair_imgX`
+	// 这种擦边：白名单按「前缀 + /」折叠，擦边值会让所有图静默落选。
+	if u.Path != diagnosisOSSPathPrefix && !strings.HasPrefix(u.Path, diagnosisOSSPathPrefix+"/") {
+		return fmt.Errorf("DIAGNOSIS_V2_OSS_BASE 的路径必须以 %s 开头（当前 %q）", diagnosisOSSPathPrefix, u.Path)
 	}
 	return nil
 }
