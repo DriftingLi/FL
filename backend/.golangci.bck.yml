@@ -1,0 +1,18 @@
+# golangci-lint 配置（v1 格式）
+# 与 CI backend-lint job 保持一致；显式列出默认检查集合，保证跨版本行为确定。
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  disable-all: true
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+
+issues:
+  exclude-use-default: true

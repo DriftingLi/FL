@@ -32,13 +32,6 @@ func newOSSFake(t *testing.T) (*httptest.Server, *string) {
 	return server, &lastPath
 }
 
-// ossBaseFor 把假 OSS 的地址包成「https + 白名单前缀」形状的基准。
-// 假服务器是 http 的，故这里只用于测**路径折叠**：helper 直接调 diagnosisOSSProxyPath 时
-// 用纯字符串基准即可；回源测试走 OpenOSSImage 的 relative 分支。
-func ossBaseFor(server *httptest.Server) string {
-	return "https://" + testOSSHostPath + testOSSBasePath
-}
-
 // TestDiagnosisOSSProxyPath_Whitelist 五道闸：正例与全部反例。
 func TestDiagnosisOSSProxyPath_Whitelist(t *testing.T) {
 	base := "https://" + testOSSHostPath + testOSSBasePath

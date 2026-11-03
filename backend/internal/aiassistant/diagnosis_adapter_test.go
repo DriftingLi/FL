@@ -69,17 +69,6 @@ func newDiagnosisForTest(server *httptest.Server) ModelPort {
 	return NewDiagnosisAssistantModel(server.URL, "test-key", testOSSBase, zap.NewNop())
 }
 
-// sseFrames 把若干帧体拼成完整 SSE 响应（含尾随空行）。
-func sseFrames(frames ...string) string {
-	var b strings.Builder
-	for _, f := range frames {
-		b.WriteString("data: ")
-		b.WriteString(f)
-		b.WriteString("\n\n")
-	}
-	return b.String()
-}
-
 // msgsSample 组装流量：system + 历史轮次 + 最后用户消息（文本，无图）。
 func msgsSample(query string, extraTurns int) []*schema.Message {
 	msgs := []*schema.Message{schema.SystemMessage(diagnosisSystemPrompt)}

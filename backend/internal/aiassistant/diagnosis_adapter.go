@@ -60,12 +60,6 @@ func DiagnosisSourcesFrom(ctx context.Context) []DiagnosisSource {
 	return append([]DiagnosisSource(nil), b.sources...)
 }
 
-func (b *diagnosisSourcesBox) set(s []DiagnosisSource) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.sources = append([]DiagnosisSource(nil), s...)
-}
-
 // diagnosisStatusCtxKey ctx 键：上游 status 事件的下沉通道（「正在检索维修知识库…」这类过程文案）。
 // v2 在首个 delta 之前会先发 status，正好填住我方 8~15 秒只有加载点的空档。
 //
