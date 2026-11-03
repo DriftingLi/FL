@@ -13,7 +13,7 @@ export type AdminFaqCategory = AdminFaqCategoryDTO
 export type AdminFaqEntry = AdminFaqEntryDTO
 
 export interface AdminFaqCategoryPayload {
-  code: string
+  code?: string
   title: string
   sort_order: number
   enabled: boolean

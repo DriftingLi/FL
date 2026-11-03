@@ -76,10 +76,6 @@
       @confirm="saveCategory"
     >
       <div class="mb-3">
-        <div class="mb-1 text-sm text-ink-3">标识（小写字母 / 数字 / 下划线，2-64 位）</div>
-        <UiInput v-model="categoryForm.code" placeholder="如 account"  />
-      </div>
-      <div class="mb-3">
         <div class="mb-1 text-sm text-ink-3">名称</div>
         <UiInput v-model="categoryForm.title" placeholder="如 账号与登录"  />
       </div>
@@ -184,7 +180,7 @@ function handleEntryFilterChange() {
 // ===== 分类 =====
 const categoryDialog = ref(false)
 const editingCategoryId = ref<number | null>(null)
-const categoryForm = ref<AdminFaqCategoryPayload>({ code: '', title: '', sort_order: 0, enabled: true })
+const categoryForm = ref<AdminFaqCategoryPayload>({ title: '', sort_order: 0, enabled: true })
 
 function openEditCategory(row: AdminFaqCategory) {
   editingCategoryId.value = row.id
@@ -195,7 +191,7 @@ function openEditCategory(row: AdminFaqCategory) {
 function openCreate() {
   if (tab.value === 'categories') {
     editingCategoryId.value = null
-    categoryForm.value = { code: '', title: '', sort_order: 0, enabled: true }
+    categoryForm.value = { title: '', sort_order: 0, enabled: true }
     categoryDialog.value = true
     return
   }

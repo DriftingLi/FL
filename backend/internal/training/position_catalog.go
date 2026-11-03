@@ -48,7 +48,7 @@ func positionCatalogSpec() CatalogEntitySpec[model.Position, PositionInput, Posi
 		Table:      "positions",
 		IDColumn:   "position_id",
 		OrderBy:    "sort_order ASC, position_id ASC",
-		CodeErr:    "岗位编码不能为空",
+		CodePrefix: "position",
 		NameErr:    "岗位名称不能为空",
 		DupMsg:     "岗位编码已存在",
 		NotFound:   ErrPositionNotFound,
@@ -80,8 +80,9 @@ func positionCatalogSpec() CatalogEntitySpec[model.Position, PositionInput, Posi
 				m.Status = *in.Status
 			}
 		},
-		SetCode: func(m *model.Position, code string) { m.Code = code },
-		SetName: func(m *model.Position, name string) { m.Name = name },
+		SetCode:      func(m *model.Position, code string) { m.Code = code },
+		SetName:      func(m *model.Position, name string) { m.Name = name },
+		SetInputCode: func(in *PositionInput, code string) { in.Code = code },
 		ToDict: func(m *model.Position) PositionDict {
 			return PositionDict{
 				Code:        m.Code,

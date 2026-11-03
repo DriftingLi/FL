@@ -12,9 +12,9 @@ export type { PositionDict, PositionListDTO }
 /** X-Silent：选项字典加载失败不弹全局 toast（由调用方自行分类呈现）。 */
 const SILENT = { headers: { 'X-Silent': '1' } }
 
-/** 创建/更新岗位入参（复用培训域 catalog 的既有语义：Code/Name 为空表示不改动）。 */
+/** 创建/更新岗位入参。code 由后端在创建时自动生成，故可选；更新时不传表示不改动。 */
 export interface PositionPayload {
-  code: string
+  code?: string
   name: string
   description?: string | null
   sort_order?: number | null
