@@ -89,6 +89,23 @@
     $r = Invoke-AutoScreenshot -FullRepo '1864' -Device '...' -CliPath '...' -ProjectDir 'D:\FL\...'
 #>
 
+function ConvertTo-CliArgLine {
+    <#
+    .SYNOPSIS
+        纯函数：把 cli 参数数组拼成**一行** PowerShell 调用片段（供 wrap 脚本再解析）。
+    .DESCRIPTION
+        为什么需要它（#1864）：`Start-NavLaunchDetached` 会把这行写进 `.wrap.ps1` 再交 pwsh **解析一次**，
+        所以参数里的 PowerShell 元字符会被当成语法 —— `--pageQuery id=1&lang=zh` 的 `&` 是后台运算符，
+        会把后面的参数整段吃掉（哪怕加了双引号：双引号只防拆词，不防运算符）。
+        旧写法只判「含空白才加双引号」，在带参之前恰好没暴露。
+        做法：**一律单引号包裹**，内部单引号按 PowerShell 规则写成两个（`'` 内除 `''` 外无任何转义语义
+        ⇒ `&`、`$`、`(`、`;` 全部原样传给 cli，不必再逐字符猜哪些危险）。空串也包成 `''` 保住位置。
+    #>
+    [CmdletBinding()]
+    param([string[]]$CliArgs = @())
+    return (@($CliArgs | ForEach-Object { "'" + ([string]$_).Replace("'", "''") + "'" }) -join ' ')
+}
+
 function Start-NavLaunchDetached {
     <#
       切页步专用：**派发后不等待**。
@@ -113,7 +130,8 @@ function Start-NavLaunchDetached {
     $pwshExe = (Get-Process -Id $PID).Path
     if (-not $pwshExe) { $pwshExe = 'pwsh' }
     $wrapFile = Join-Path $LogDir "launch-nav-$stamp.wrap.ps1"
-    $argLine = ($CliArgs | ForEach-Object { if ("$_" -match '\s') { '"' + $_ + '"' } else { "$_" } }) -join ' '
+    # 参数行重解析陷阱（#1864）：wrap 脚本会被 pwsh **再解析一次** ⇒ 见 ConvertTo-CliArgLine 的理由段。
+    $argLine = ConvertTo-CliArgLine -CliArgs $CliArgs
     $wrapLines = @(
         '$ErrorActionPreference = ''Continue'''
         # pin child-output decoding to UTF-8: the DCloud CLI writes UTF-8, while pwsh otherwise decodes
@@ -760,6 +778,44 @@ function Get-RedirectMap {
     return $map
 }
 
+function Get-PageQueryMap {
+    <#
+    .SYNOPSIS
+        读带参页启动参数白名单（`scripts/lib/auto-screenshot-pagequery.json`），返回 hashtable：请求页 -> `--pageQuery` 字符串。
+    .DESCRIPTION
+        为什么需要它（#1864）：仓内有一批页**只有带 query 才进内容形态** —— 详情页不带 id 会 toast「不存在」再自退，
+        按 key 分流的功能页不带 key 会 navigateBack。而本载体原先只拼 `--pagePath`
+        （见下方 launchArgs），这类页在设备上必然弹回首页 ⇒ 落点判据 fail-closed 记 Skipped，
+        被读成「切页故障」，其实是**载体没传参**。cli 本身早就支持 `--pageQuery`（2026-11-03 --help 实列），
+        所以这不是机械不可达，是本载体漏了一条通道。
+        为什么是**数据文件**而不是代码里的 if：哪些页要哪些参数是项目事实、会随产品变；
+        参数值必须**已确认真实可用**（写猜的 id 等于用空态截图冒充证据），放数据文件里可审计、可只补一行就补采。
+        文件缺失 / 解析失败 ⇒ 返回空表并**明报**（不静默降级）：那等于「本轮一个带参页都不补」，做法上安全，
+        但人会莫名其妙地看到详情页 Skipped，所以必须说一句。
+    #>
+    [CmdletBinding()]
+    param([string]$Path)
+    $map = @{}
+    if (-not $Path -or -not (Test-Path -LiteralPath $Path)) {
+        Write-Host "[auto-screenshot] 带参页白名单不存在：$Path（本轮不注入 --pageQuery，带参页会记 Skipped）" -ForegroundColor Yellow
+        return $map
+    }
+    try {
+        $json = Get-Content -LiteralPath $Path -Raw -Encoding utf8 | ConvertFrom-Json
+        if (@($json.PSObject.Properties.Name) -notcontains 'pageQuery') { return $map }
+        foreach ($k in @($json.pageQuery.PSObject.Properties.Name)) {
+            $q = [string]$json.pageQuery.$k
+            # 空值 = 参数还没确认真值（如 job-detail 的真实 id 需登录态才能取）⇒ 不注入，该页按原样弹回并记 Skipped
+            if ($q -and $q.Trim()) { $map[$k] = $q.Trim() }
+        }
+    }
+    catch {
+        Write-Host "[auto-screenshot] 带参页白名单解析失败（$($_.Exception.Message)）⇒ 本轮不注入 --pageQuery" -ForegroundColor Yellow
+        return @{}
+    }
+    return $map
+}
+
 function Select-FullRepoAttempted {
     <#
     .SYNOPSIS
@@ -902,7 +958,17 @@ function Get-FullRepoManifestData {
         $dirPngCount = @($dirNames).Count
         $expectedAll = @($PlannedPages | ForEach-Object { Get-FullRepoShotName -Page $_ })
         $dirCaptured = @($expectedAll | Where-Object { $dirNames -contains $_ })
-        $dirMissing = @($expectedAll | Where-Object { $dirNames -notcontains $_ })
+        # 中转页（本轮实测「请求页立刻跳到白名单落点」）**不产图**是产品事实 —— `pages/index/index.uvue`
+        # 那条已登录 reLaunch 是全应用唯一的冷启动落地路由、不得删改 ⇒ 这类页永远不会有自己的 PNG。
+        # 它们算「已交代」，不进 dirMissing。判据与 `Get-FullRepoCounts` 的 `$missing` **逐字同一套**：
+        # `-notcontains $dirNames` **且** `-notcontains $redirectedNames`。
+        # 少了后一条，计划里只要含一个中转页，`DirCountsMatch` 就**永不可能为真** —— 2026-11-03 现测正是这个形状
+        # （dirMissing=4 里就有 pages_index_index，而 counts 侧那条 Missing 已判它「已交代」⇒ 两套账互相打架）。
+        # ⚠️ 只减**本轮真观测到**的 Redirected，**不按白名单整类豁免**：白名单是「加法」语义
+        # （pages/login/login 在未登录态会停在自己并正常产图），整类豁免会把真实的缺图吞成假绿。
+        $dirMissing = @($expectedAll | Where-Object {
+            ($dirNames -notcontains $_) -and (@($redirectedNames) -notcontains $_)
+        })
     }
     $sumSecs = 0
     foreach ($r in @($PageSeconds)) { if ($r) { $sumSecs += [int]$r.Seconds } }
@@ -1262,6 +1328,9 @@ function Invoke-AutoScreenshot {
     $redirected = @()
     # 白名单来源唯一：scripts/lib/auto-screenshot-redirects.json（见 Get-RedirectMap 的理由段）
     $redirectMap = Get-RedirectMap -Path (Join-Path $PSScriptRoot 'auto-screenshot-redirects.json')
+    # 带参页白名单（#1864）：**只在全仓形态**读 —— 日常形态（-Pages）不注入 --pageQuery、逐字不变。
+    # 必须在**循环之前**初始化（Set-StrictMode 下引用未定义变量会抛）。
+    $pageQueryMap = $(if ($fullRepoMode) { Get-PageQueryMap -Path (Join-Path $PSScriptRoot 'auto-screenshot-pagequery.json') } else { @{} })
     $seenHashes = @{}
     $prevHash = ''
 
@@ -1343,6 +1412,14 @@ function Invoke-AutoScreenshot {
             #    ⇒ 步骤 6 **永久挂住**：截图不落盘，HashConflicts / TargetPages 永远算不出来。
             #    现在与 hx-run.ps1 的 launch 步同一套做法（包装脚本 + UseShellExecute 新进程树）。
             $launchArgs = @('launch', 'app-android', '--pagePath', $page, '--project', $ProjectDir)
+            # 带参页通道（#1864）：**只在 -FullRepo 形态**注入 ⇒ 日常形态（-Pages 改动页）逐字不变（票 ③）。
+            # 为什么需要：详情页 / 按 key 分流的功能页不带 query 会 toast 后自退或 navigateBack，
+            # 在设备上必然弹回首页 ⇒ 落点判据 fail-closed 记 Skipped，被读成「切页故障」，其实是载体没传参。
+            # ⚠️ 落定判据**不受影响**：`Get-NavEnteredPage` 取的是应用自己打的 `进入页面:"pages/xxx"` 行，
+            #    那行只有页路径、不含 query ⇒ 拿 query 去比反而永远对不上（这也是不把 query 拼进 $page 的原因）。
+            if ($fullRepoMode -and $pageQueryMap.ContainsKey($page)) {
+                $launchArgs += @('--pageQuery', [string]$pageQueryMap[$page])
+            }
             if ($Device) { $launchArgs += @('--deviceId', $Device) }
             $navLogDir = Join-Path $ProjectDir '.ci-verify'
             New-Item -ItemType Directory -Force -Path $navLogDir | Out-Null

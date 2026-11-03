@@ -124,6 +124,57 @@ function probe(ctx) {
     "Write-Output ('FR9_MF_REDIRCOUNT=' + $mfRedir.RedirectedCount)",
     "$mfRedir2 = Get-FullRepoManifestData -Ticket '1864' -PlannedPages @('pages/index/index','pages/b/b') -Screenshots @('pages_b_b') -OutputDir $env:FR_OUT4",
     "Write-Output ('FR9_NO_REDIR_MISSING=' + @($mfRedir2.Missing).Count)",
+    // ---- FR9D：**目录累计**也必须减中转页（#1864 的两套账打架）----
+    // 现场：`Get-FullRepoCounts` 的 Missing 减 Redirected，但 `$dirMissing` 原先**不减** ⇒
+    // 计划里只要含一个中转页，DirCountsMatch 就**永不可能为真**（2026-11-03 实测 dirMissing=4 里就有
+    // pages_index_index）。这里用同一个中转记录、同一份空目录，把两条账的**一致性**钉死：
+    //   带 Redirected ⇒ dirMissing 减 1；不带 ⇒ 不减（证明是「本轮真观测到」的效果，不是按白名单整类豁免）。
+    "$mfDirRedir = Get-FullRepoManifestData -Ticket '1864' -PlannedPages @('pages/index/index','pages/b/b') -Screenshots @('pages_b_b') -Redirected @([pscustomobject]@{ Page='pages/index/index'; Name='pages_index_index'; To='pages/dashboard/dashboard'; Seconds=12 }) -OutputDir $env:FR_OUT5",
+    "Write-Output ('FR9D_DIR_MISSING=' + @($mfDirRedir.DirMissing).Count)",
+    "Write-Output ('FR9D_DIR_MATCH=' + [bool]$mfDirRedir.DirCountsMatch)",
+    "Write-Output ('FR9D_MISSING=' + @($mfDirRedir.Missing).Count)",
+    "$mfDirNoRedir = Get-FullRepoManifestData -Ticket '1864' -PlannedPages @('pages/index/index','pages/b/b') -Screenshots @('pages_b_b') -OutputDir $env:FR_OUT6",
+    "Write-Output ('FR9D_NO_REDIR_DIR_MISSING=' + @($mfDirNoRedir.DirMissing).Count)",
+    // 上一条断言的现场补足：目录里放齐 b_b 那张图，再算一次 ⇒ 中转页也不点名时 dirMissing 必须为 0
+    // （修复前这里是 1：pages_index_index 被当成「还没采」）。这正是票面「不得放宽落点判据凑绿」要挡的反面。
+    "[System.IO.File]::WriteAllBytes((Join-Path $env:FR_OUT5 'pages_b_b.png'), [byte[]](1,2,3))",
+    "$mfDirFull = Get-FullRepoManifestData -Ticket '1864' -PlannedPages @('pages/index/index','pages/b/b') -Screenshots @('pages_b_b') -Redirected @([pscustomobject]@{ Page='pages/index/index'; Name='pages_index_index'; To='pages/dashboard/dashboard'; Seconds=12 }) -OutputDir $env:FR_OUT5",
+    "Write-Output ('FR9D_DIR_MISSING_FULL=' + @($mfDirFull.DirMissing).Count)",
+    "Write-Output ('FR9D_DIR_MATCH_FULL=' + [bool]$mfDirFull.DirCountsMatch)",
+    // 白名单里 login 在未登录态会停在自己并正常产图 ⇒ 整类豁免会吞掉真实缺图。这里让 login 有图、index 没有，
+    // 断言「只减本轮观测到的那个」：DirMissing 仍点名 login 之外的真缺口，不是把三个中转页一起豁免。
+    "[System.IO.File]::WriteAllBytes((Join-Path $env:FR_OUT5 'pages_login_login.png'), [byte[]](1,2,3))",
+    "$mfPartial = Get-FullRepoManifestData -Ticket '1864' -PlannedPages @('pages/index/index','pages/login/login','pages/register/register') -Screenshots @('pages_login_login') -Redirected @([pscustomobject]@{ Page='pages/index/index'; Name='pages_index_index'; To='pages/dashboard/dashboard'; Seconds=12 }) -OutputDir $env:FR_OUT5",
+    "Write-Output ('FR9D_PARTIAL_DIR_MISSING=' + (@($mfPartial.DirMissing) -join ','))",
+    // ---- FR12：带参页参数通道（#1864）----
+    // ① 白名单真读仓内数据文件：ai-feature 有值，两个详情页因真实 id 需登录态而留空 ⇒ 不注入（不冒充）。
+    "$pq = Get-PageQueryMap -Path (Join-Path $env:FR_LIB 'auto-screenshot-pagequery.json')",
+    "Write-Output ('FR12_HAS_AIFEATURE=' + [bool]$pq.ContainsKey('pages/ai-assistant/ai-feature'))",
+    "Write-Output ('FR12_AIFEATURE_Q=' + [string]$pq['pages/ai-assistant/ai-feature'])",
+    "Write-Output ('FR12_HAS_JOBDETAIL=' + [bool]$pq.ContainsKey('pages/jobs/job-detail'))",
+    "Write-Output ('FR12_COUNT=' + @($pq.Keys).Count)",
+    // ② 参数行重解析：`&` 必须原样到达 cli，不能被 pwsh 当运算符吃掉。
+    "$line = ConvertTo-CliArgLine -CliArgs @('launch','app-android','--pageQuery','id=1&lang=zh','--pagePath','pages/jobs/job-detail')",
+    "Write-Output ('FR12_LINE=' + $line)",
+    "Write-Output ('FR12_AMP_QUOTED=' + [bool]($line -match \"'id=1&lang=zh'\"))",
+    // ③ 真跑一次重解析：拿同一行直接交给 pwsh **再解析**（与 wrap 脚本被 -File 执行时同一条路径），
+    //    回显收到的三个参数 ⇒ 逐字相等才算过。用 Invoke-Expression 而不是写 wrap 文件，避免探针里再套一层转义。
+    "function Get-Echo { param([string]$p, [string]$q, [string]$r) Write-Output ($p + '|' + $q + '|' + $r) }",
+    "$echoLine = ConvertTo-CliArgLine -CliArgs @('pages/jobs/job-detail','id=1&lang=zh','pages/x/x')",
+    "$echoed = Invoke-Expression ('Get-Echo ' + $echoLine)",
+    "Write-Output ('FR12_ECHO=' + $echoed)",
+    // `&` 若被当运算符，$q 会只剩 `id=1`（后面整段被吃掉）⇒ 这条是对照组：证明上面的相等不是巧合
+    "Write-Output ('FR12_ECHO_AMP=' + [bool]($echoed -eq 'pages/jobs/job-detail|id=1&lang=zh|pages/x/x'))",
+    // 单引号内的单引号要按 `''` 转义（PowerShell 唯一规则）；含空格的参数同样原样到达
+    "$sqLine = ConvertTo-CliArgLine -CliArgs @(\"it's a path\", 'with space')",
+    "$sqEchoed = Invoke-Expression ('Get-Echo ' + $sqLine)",
+    "Write-Output ('FR12_SQUOTE=' + [bool]($sqEchoed -eq \"it's a path|with space|\"))",
+    // ---- FR13：带参注入只发生在 -FullRepo 形态 ----
+    // 日常形态（-Pages 改动页）必须逐字不变（票 ③）。纯逻辑侧：映射读取函数本身不判形态，
+    // 形态分支在调用点 —— 接线侧由 S37 钉（`$pageQueryMap` 初始化必须带 $fullRepoMode 分支）。
+    "Write-Output ('FR13_DONE=1')",
+
+
     // ---- FR10 / FR11：按前缀分批（学员 51 / 招聘者 9）----
     // 直接调**纯函数**。原先穿过 Invoke-AutoScreenshot 去断言页数，而没有 adb 的 CI 在环境检查处就早退
     // ⇒ AttemptedPages / PlannedPages / Excluded 恒空 ⇒「60 页里排掉 9 页」结构性不可能通过。
@@ -334,6 +385,45 @@ describe('-FullRepo 全仓逐页载体（运行期，#2078）', () => {
     expect(Number(field(probeRun.stdout, 'FR9_MF_REDIRCOUNT'))).toBe(1);
     // 对照：不传中转记录时，同一页必须算缺失 —— 证明「算已交代」是白名单的效果，不是默认放宽
     expect(Number(field(probeRun.stdout, 'FR9_NO_REDIR_MISSING'))).toBe(1);
+  });
+
+  test('FR9D: 目录累计账也减中转页——两套账必须同源（#1864 的 dirMissing=4 误报）', () => {
+    // 现场（2026-11-03 实测）：`Get-FullRepoCounts` 的 Missing 减 Redirected，`$dirMissing` 原先不减
+    // ⇒ 计划里含中转页时 DirCountsMatch 永不可能为真，而人读到的是「还差 4 页」。
+    // 这里把「两条账必须给出同一个结论」钉死：同一份空目录 + 同一个中转记录。
+    const missing = Number(field(probeRun.stdout, 'FR9D_MISSING'));
+    expect(missing).toBe(0);
+    // 空目录 + b_b 那张图没落盘 ⇒ 两条账都只该点名 b_b（各 1）；修复前 dirMissing 是 2（把中转页也算了）
+    expect(Number(field(probeRun.stdout, 'FR9D_DIR_MISSING'))).toBe(1);
+    // 图放齐后：中转页不算缺 ⇒ 目录账归零、DirCountsMatch 为真（修复前恒为 1 / False，60 页永远对不齐）
+    expect(Number(field(probeRun.stdout, 'FR9D_DIR_MISSING_FULL'))).toBe(0);   // ← 修复前这里是 1
+    expect(field(probeRun.stdout, 'FR9D_DIR_MATCH_FULL')).toBe('True');
+    // 对照组：不给中转记录 ⇒ 目录账同样点名它（证明减的是「本轮真观测到」而非按白名单整类豁免）
+    expect(Number(field(probeRun.stdout, 'FR9D_NO_REDIR_DIR_MISSING'))).toBe(2);
+    // 部分中转：login 有图、index 中转、register 什么都没 ⇒ DirMissing 只应剩 register
+    const partial = field(probeRun.stdout, 'FR9D_PARTIAL_DIR_MISSING');
+    expect(partial).toBe('pages_register_register');
+  });
+
+  test('FR12: 带参页参数通道——白名单真读，且 `&` 经 wrap 重解析后原样到达', () => {
+    // ① 白名单真读仓内数据文件（不写死页名/参数值）
+    expect(field(probeRun.stdout, 'FR12_HAS_AIFEATURE')).toBe('True');
+    expect(field(probeRun.stdout, 'FR12_AIFEATURE_Q')).toBe('featureKey=fault_diagnosis');
+    // 两个详情页的真实 id 需登录态才能取 ⇒ 留空 = 不注入，该页按原样弹回记 Skipped（不冒充绿）
+    expect(field(probeRun.stdout, 'FR12_HAS_JOBDETAIL')).toBe('False');
+    expect(Number(field(probeRun.stdout, 'FR12_COUNT'))).toBe(1);
+    // ② 参数行：`&` 必须被单引号包住（双引号只防拆词、不防运算符）
+    expect(field(probeRun.stdout, 'FR12_LINE')).toContain("'id=1&lang=zh'");
+    expect(field(probeRun.stdout, 'FR12_AMP_QUOTED')).toBe('True');
+    // ③ 真交 pwsh 再解析一次并回显：逐字相等才算过（`&` 被当运算符时 $q 只会剩 `id=1`）
+    expect(field(probeRun.stdout, 'FR12_ECHO')).toBe('pages/jobs/job-detail|id=1&lang=zh|pages/x/x');
+    expect(field(probeRun.stdout, 'FR12_ECHO_AMP')).toBe('True');
+    // ④ 内部单引号按 `''` 转义（PowerShell 唯一规则），含空格的参数也原样到达
+    expect(field(probeRun.stdout, 'FR12_SQUOTE')).toBe('True');
+  });
+
+  test('FR13: 带参注入只在 -FullRepo 形态（日常形态逐字不变）', () => {
+    expect(field(probeRun.stdout, 'FR13_DONE')).toBe('1');
   });
 
   test('FR5: manifest 真落盘真读回，本轮对账与目录累计对账是两个结论', () => {
