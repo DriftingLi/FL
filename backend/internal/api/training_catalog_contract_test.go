@@ -114,12 +114,21 @@ func TestCatalogContract_Specialty(t *testing.T) {
 	}
 	specID := int(created["specialty_id"].(float64))
 
-	// 编码必填 / 重复编码 / 非法状态（校验收口在 service）
+	// 空编码自动生成 / 重复编码 / 非法状态（校验收口在 service）
 	rec = catalogRequest(t, r, token, "POST", "/api/admin/specialty", `{"name":"X"}`)
-	_, msg, _ := unpackData(t, rec, http.StatusBadRequest)
-	if msg != "专业方向编码不能为空" {
-		t.Fatalf("编码必填消息不符: %q", msg)
+	_, _, data = unpackData(t, rec, http.StatusCreated)
+	var autoCreated map[string]any
+	if err := json.Unmarshal([]byte(data), &autoCreated); err != nil {
+		t.Fatalf("解析自动生成响应失败: %v", err)
 	}
+	if code, _ := autoCreated["code"].(string); !strings.HasPrefix(code, "specialty_") {
+		t.Fatalf("空编码应由后端生成 specialty_ 前缀, got %q", code)
+	}
+	autoID := int(autoCreated["specialty_id"].(float64))
+	rec = catalogRequest(t, r, token, "DELETE", fmt.Sprintf("/api/admin/specialty/%d", autoID), "")
+	unpackData(t, rec, http.StatusOK)
+
+	var msg string
 	rec = catalogRequest(t, r, token, "POST", "/api/admin/specialty", `{"code":"operation","name":"重复"}`)
 	_, msg, _ = unpackData(t, rec, http.StatusBadRequest)
 	if msg != "专业方向编码已存在" {

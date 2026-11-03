@@ -1,7 +1,7 @@
-// 题库标签管理页组件测试：新增标签必填编码输入（bug 3 回归护栏）+ 正向创建流程。
+// 题库标签管理页组件测试：编码由后端自动生成（表单上已无编码输入）+ 正向创建流程。
 // seam：组件层，mock API 层。
 // 注：happy-dom 下 Element Plus 表单级 rules 校验不生效（最小复现亦如此），
-// 故校验行为改为断言「编码输入存在且必填」+ 创建 payload 正确性。
+// 故校验行为改为断言「编码输入不存在」+ 创建 payload 正确性。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { ElMessage } from 'element-plus'
@@ -57,7 +57,7 @@ beforeEach(() => {
 })
 
 describe('QuestionTags 新增标签', () => {
-  it('新增标签对话框包含必填的编码输入（bug 3 回归护栏）', async () => {
+  it('新增标签对话框不再出现编码输入（后端自动生成）', async () => {
     const wrapper = mountPage()
     await flushPromises()
 
@@ -66,14 +66,13 @@ describe('QuestionTags 新增标签', () => {
 
     const inputs = wrapper.findAll('.el-dialog input')
     const codeInput = inputs.find(i => (i.element as HTMLInputElement).placeholder.includes('编码'))
-    expect(codeInput).toBeTruthy()
-    // 编码输入位于「新增标签」对话框内（编码 prop 存在）
+    expect(codeInput).toBeFalsy()
     const formItems = wrapper.findAllComponents({ name: 'ElFormItem' })
     const codeItem = formItems.find(it => it.props('prop') === 'code')
-    expect(codeItem).toBeTruthy()
+    expect(codeItem).toBeFalsy()
   })
 
-  it('填写名称与编码后创建成功并携带编码', async () => {
+  it('填写名称后创建成功且不携带编码', async () => {
     const wrapper = mountPage()
     await flushPromises()
 
@@ -83,19 +82,14 @@ describe('QuestionTags 新增标签', () => {
     const inputs = wrapper.findAll('.el-dialog input')
     const nameInput = inputs.find(i => (i.element as HTMLInputElement).placeholder.includes('法规'))
     await nameInput!.setValue('制动')
-    const codeInput = inputs.find(i => (i.element as HTMLInputElement).placeholder.includes('编码'))
-    await codeInput!.setValue('brake')
     await wrapper.find('.el-dialog .el-button--primary').trigger('click')
     await flushPromises()
 
-    expect(trainingApi.createQuestionTag).toHaveBeenCalledWith({
-      name: '制动',
-      code: 'brake'
-    })
+    expect(trainingApi.createQuestionTag).toHaveBeenCalledWith({ name: '制动' })
     expect(successSpy).toHaveBeenCalled()
   })
 
-  it('编辑已有标签时回填编码', async () => {
+  it('编辑已有标签时回填名称', async () => {
     const wrapper = mountPage()
     await flushPromises()
 
@@ -105,8 +99,8 @@ describe('QuestionTags 新增标签', () => {
     await flushPromises()
 
     const inputs = wrapper.findAll('.el-dialog input')
-    const codeInput = inputs.find(i => (i.element as HTMLInputElement).placeholder.includes('编码'))
-    expect((codeInput!.element as HTMLInputElement).value).toBe('hydraulic')
+    const nameInput = inputs.find(i => (i.element as HTMLInputElement).placeholder.includes('法规'))
+    expect((nameInput!.element as HTMLInputElement).value).toBe('液压')
   })
 })
 

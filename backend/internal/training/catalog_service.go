@@ -71,13 +71,10 @@ func countByCode(db *gorm.DB, table, idCol, code string, excludeID int) (int64, 
 // ===== 目录实体 CRUD 轻量共享骨架 =====
 //
 // 四个目录实体（专业方向/课程等级/证书模板/题库标签）的 CRUD 同构：
-// 必填校验、撞码检查、删除、排序交换共享骨架，各实体保留字段映射薄入口。
+// 名称必填校验、撞码检查、删除、排序交换共享骨架，各实体保留字段映射薄入口。
 
-// validateCatalogCodeName 必填 code/name 校验。
-func validateCatalogCodeName(code, name, codeErr, nameErr string) error {
-	if code == "" {
-		return errors.New(codeErr)
-	}
+// validateCatalogName 必填 name 校验（编码在创建时为空则由引擎自动生成，故不再要求手填）。
+func validateCatalogName(name, nameErr string) error {
 	if name == "" {
 		return errors.New(nameErr)
 	}

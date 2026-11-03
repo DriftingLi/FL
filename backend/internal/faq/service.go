@@ -10,6 +10,7 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/dberr"
+	"forklift-training/internal/entcode"
 	"forklift-training/internal/model"
 )
 
@@ -168,7 +169,7 @@ func (s *Service) AdminListCategories() ([]AdminFaqCategoryDTO, error) {
 	return out, nil
 }
 
-// validateCategoryInput 分类写入口径校验。
+// validateCategoryInput 分类写入口径校验。编码为空时由调用方先生成（管理端不再手填）。
 func validateCategoryInput(in *FaqCategoryInput) error {
 	in.Code = strings.TrimSpace(in.Code)
 	in.Title = strings.TrimSpace(in.Title)
@@ -203,8 +204,15 @@ func validateEntryInput(in *FaqEntryInput) error {
 	return nil
 }
 
-// AdminCreateCategory 新建分类。
+// AdminCreateCategory 新建分类。编码为空时自动生成（管理端表单已不再要求手填）。
 func (s *Service) AdminCreateCategory(in FaqCategoryInput) (*AdminFaqCategoryDTO, error) {
+	if strings.TrimSpace(in.Code) == "" {
+		generated, err := entcode.Generate("faq")
+		if err != nil {
+			return nil, err
+		}
+		in.Code = generated
+	}
 	if err := validateCategoryInput(&in); err != nil {
 		return nil, err
 	}

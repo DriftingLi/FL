@@ -23,23 +23,20 @@ const emit = defineEmits<{
 }>()
 
 const nameRules = {
-  name: [{ required: true, message: '请输入名称', trigger: 'blur' }],
-  code: [{ required: true, message: '请输入唯一编码', trigger: 'blur' }]
+  name: [{ required: true, message: '请输入名称', trigger: 'blur' }]
 }
 
 // ===== 方向 =====
 const directionDialogVisible = ref(false)
 const directionFormRef = ref<FormInstance | null>(null)
-const directionForm = reactive<{ specialty_id: number | null; name: string; code: string }>({
+const directionForm = reactive<{ specialty_id: number | null; name: string }>({
   specialty_id: null,
-  name: '',
-  code: ''
+  name: ''
 })
 
 function openDirectionDialog(d?: CatalogDirectionNode | null) {
   directionForm.specialty_id = d?.specialty_id ?? null
   directionForm.name = d?.name ?? ''
-  directionForm.code = d?.code ?? ''
   directionDialogVisible.value = true
 }
 
@@ -50,12 +47,11 @@ async function submitDirection() {
     // trainingApi 已解包信封：成功即业务成功（拦截器保证 200/201 才 resolve）
     if (directionForm.specialty_id) {
       await trainingApi.updateDirection(directionForm.specialty_id, {
-        name: directionForm.name,
-        code: directionForm.code
+        name: directionForm.name
       })
       ElMessage.success('已更新')
     } else {
-      await trainingApi.createDirection({ name: directionForm.name, code: directionForm.code })
+      await trainingApi.createDirection({ name: directionForm.name })
       ElMessage.success('已创建')
     }
     directionDialogVisible.value = false
@@ -69,16 +65,14 @@ async function submitDirection() {
 // ===== 等级 =====
 const levelDialogVisible = ref(false)
 const levelFormRef = ref<FormInstance | null>(null)
-const levelForm = reactive<{ level_id: number | null; name: string; code: string }>({
+const levelForm = reactive<{ level_id: number | null; name: string }>({
   level_id: null,
-  name: '',
-  code: ''
+  name: ''
 })
 
 function openLevelDialog(l?: CatalogLevel | null) {
   levelForm.level_id = l?.level_id ?? null
   levelForm.name = l?.name ?? ''
-  levelForm.code = l?.code ?? ''
   levelDialogVisible.value = true
 }
 
@@ -88,10 +82,10 @@ async function submitLevel() {
   try {
     // trainingApi 已解包信封：成功即业务成功（拦截器保证 200/201 才 resolve）
     if (levelForm.level_id) {
-      await trainingApi.updateLevel(levelForm.level_id, { name: levelForm.name, code: levelForm.code })
+      await trainingApi.updateLevel(levelForm.level_id, { name: levelForm.name })
       ElMessage.success('已更新')
     } else {
-      await trainingApi.createLevel({ name: levelForm.name, code: levelForm.code })
+      await trainingApi.createLevel({ name: levelForm.name })
       ElMessage.success('已创建')
     }
     levelDialogVisible.value = false
@@ -107,17 +101,15 @@ const certificateDialogVisible = ref(false)
 const certificateLoading = ref(false)
 const certificateFormVisible = ref(false)
 const certificateFormRef = ref<FormInstance | null>(null)
-const certificateForm = reactive<{ id: number | null; name: string; code: string; validity_days: number; description: string }>({
+const certificateForm = reactive<{ id: number | null; name: string; validity_days: number; description: string }>({
   id: null,
   name: '',
-  code: '',
   validity_days: 365,
   description: ''
 })
 
 const certificateRules = {
   name: [{ required: true, message: '请输入模板名称', trigger: 'blur' }],
-  code: [{ required: true, message: '请输入唯一编码', trigger: 'blur' }],
   validity_days: [{ required: true, message: '请输入有效期', trigger: 'change' }]
 }
 
@@ -128,7 +120,6 @@ function openCertificateDialog() {
 function openCertificateForm(tpl?: CertificateTemplate | null) {
   certificateForm.id = tpl?.id ?? null
   certificateForm.name = tpl?.name ?? ''
-  certificateForm.code = tpl?.code ?? ''
   certificateForm.validity_days = tpl?.validity_days ?? 365
   certificateForm.description = tpl?.description ?? ''
   certificateFormVisible.value = true
@@ -141,7 +132,6 @@ async function submitCertificate() {
     // trainingApi 已解包信封：成功即业务成功（拦截器保证 200/201 才 resolve）
     const payload = {
       name: certificateForm.name,
-      code: certificateForm.code,
       validity_days: certificateForm.validity_days,
       description: certificateForm.description
     }
@@ -194,9 +184,6 @@ defineExpose({ openDirectionDialog, openLevelDialog, openCertificateDialog })
       <el-form-item label="名称" prop="name">
         <UiInput v-model="directionForm.name" placeholder="如：操作、维修、安全、电池" :maxlength="30" />
       </el-form-item>
-      <el-form-item label="编码" prop="code">
-        <UiInput v-model="directionForm.code" placeholder="唯一编码，如 OPERATE" :maxlength="30" />
-      </el-form-item>
     </el-form>
   </UiDialog>
 
@@ -205,9 +192,6 @@ defineExpose({ openDirectionDialog, openLevelDialog, openCertificateDialog })
     <el-form ref="levelFormRef" :model="levelForm" :rules="nameRules" label-width="80px">
       <el-form-item label="等级名称" prop="name">
         <UiInput v-model="levelForm.name" placeholder="如：入门、进阶、专项、认证" :maxlength="30" />
-      </el-form-item>
-      <el-form-item label="编码" prop="code">
-        <UiInput v-model="levelForm.code" placeholder="唯一编码，如 BEGINNER" :maxlength="30" />
       </el-form-item>
     </el-form>
   </UiDialog>
@@ -245,9 +229,6 @@ defineExpose({ openDirectionDialog, openLevelDialog, openCertificateDialog })
     <el-form ref="certificateFormRef" :model="certificateForm" :rules="certificateRules" label-width="110px">
       <el-form-item label="模板名称" prop="name">
         <UiInput v-model="certificateForm.name" placeholder="如：叉车维修技能培训合格证书" :maxlength="50" />
-      </el-form-item>
-      <el-form-item label="编码" prop="code">
-        <UiInput v-model="certificateForm.code" placeholder="唯一编码，如 FORKLIFT_MAINTENANCE_CERT" :maxlength="30" />
       </el-form-item>
       <el-form-item label="有效期(天)" prop="validity_days">
         <el-input-number v-model="certificateForm.validity_days" :min="1" :max="36500" style="width: 100%" />
