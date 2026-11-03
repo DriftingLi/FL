@@ -16,7 +16,7 @@ import { readdirSync, readFileSync, existsSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { decide, judgeVerdict, parseRemoveJson, findTargetTree, SCRIPT_REF_RE } from './lib/dev-close.mjs'
+import { decide, judgeVerdict, parseRemoveJson, findTargetTree, resolveTree, shortRef, SCRIPT_REF_RE } from './lib/dev-close.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(here, '..')
@@ -108,10 +108,13 @@ test('L4 机检读数行：执行干净才 ok，残留判红，dry-run 只报 pl
   assert.match(blocked.line, /verdict=blocked$/)
 })
 
-test('L5 认树认分支不认目录名，且站在要删的树里必须先离开', () => {
-  const list = ['worktree D:/FL', 'branch refs/heads/master', '', 'worktree D:/FL/wt-2174', 'branch refs/heads/feat/2174', ''].join('\n')
-  const found = findTargetTree(list, '2174')
-  assert.equal(found.registered, true, '按 refs/heads/feat/<票> 认，目录可被改名而分支不会')
+test('L5 认树：目录名 wt-<票号> 是入口（#2247 翻的面），且站在要删的树里必须先离开', () => {
+  // 旧口径是「按 refs/heads/feat/<票> 认」，它假设分支名由票号唯一决定 —— 血账见 #2247。
+  // 新口径的主判据与分支叫什么无关：入口只有「注册表里路径名为 wt-<票号> 的条目」这一条。
+  const renamed = ['worktree D:/FL', 'branch refs/heads/master', '', 'worktree D:/FL/wt-oldname', 'branch refs/heads/feat/2174', ''].join('\n')
+  const rr = resolveTree({ task: '2174', worktreeList: renamed })
+  assert.notEqual(rr.state, 'registered', '目录名不是 wt-2174 就不走主判据（主判据只认目录名）')
+  assert.equal(rr.state, 'legacy', '但分支仍叫 feat/2174 ⇒ 回退腿兜住，宽一期，并留 legacy 痕')
   const d = decide({ task: '2174', worktreeList: LIST_PRESENT, prState: 'MERGED', unmergedLog: '', cwd: 'D:\\FL\\wt-2174', execute: true })
   assert.equal(d.allow, false, '站在要删的树里删自己的树 = 删完 cwd 失效，后面每步都读不到东西')
   assert.equal(d.reason, 'cwd-inside-target')
@@ -132,7 +135,10 @@ test('L6 CLI 真执行：带 BOM 的 stdin 必须照读，坏 JSON 必须 fail-c
   assert.match(bad.stdout, /verdict=red reason=facts-unreadable/)
   const v = spawnSync(process.execPath, [core, '--verdict'], { input: '{"task":"2174","prState":"MERGED","mode":"dryrun","fetch":"ok","treeBefore":"absent","remove":{"ran":false},"residue":{"ran":false,"state":"na"}}', encoding: 'utf8' })
   assert.equal(v.status, 0, v.stdout + v.stderr)
-  assert.match(v.stdout, /^DEV_CLOSE_RESULT task=2174 .*verdict=planned$/m)
+  // #2247：verdict 之后可以跟 note=（无动作永不打 ok，absent+dry-run 必须自带标记）。
+  // 断言 verdict 这个词与值成对出现、且是最后一个 token 组的第一项，不依赖行尾（行尾已属 note）。
+  assert.match(v.stdout, /^DEV_CLOSE_RESULT task=2174 .*verdict=planned( |$)/m)
+  assert.match(v.stdout, /note=no-pending-action/, '「本次无任何待执行动作」必须落在读数上，否则空转像达成')
 })
 
 // #2188 补的第三族：production wire 形态重放。L4/L6 的 fixture 都是「预解析字段直喂 judgeVerdict」，
@@ -223,4 +229,175 @@ test('L7 wire 形态重放：raw 必须被判定层解析，residue 的 4/5/2/3 
   })
   assert.equal(cli.status, 0, cli.stdout + cli.stderr)
   assert.match(cli.stdout, / dir=ok reg=ok local_branch=removed remote_branch=absent wt_dirs=orphan:1 verdict=ok/)
+})
+
+// ---------------------------------------------------------------------------
+// #2247（spec B / #2233）：树身份重裁定。认树 = 路径名 wt-<票号>，身份 = 该条目登记的分支。
+// 这一族是血账的回归钉：wt-2230 挂 fix/2230-dead-subtab、wt-2189 挂 fix/2189-lint-brace-expansion，
+// 旧判据（按 refs/heads/feat/<票号> 认树）一律判「无树」⇒ 静默跳过全部动作，dry-run 还出一行
+// 「无待办」被读成已达成。下面每条都钉住「宽/严」的那一面，而不是只钉住 happy path。
+// ---------------------------------------------------------------------------
+
+// fix/* 形态的真机形状：票号的树挂着一条不以 feat/ 开头的分支。
+const LIST_FIX_SHAPE = [
+  'worktree D:/FL', 'branch refs/heads/master', '',
+  'worktree D:/FL/wt-2230', 'branch refs/heads/fix/2230-dead-subtab', '',
+  'worktree D:/FL/wt-2189', 'branch refs/heads/fix/2189-lint-brace-expansion', '',
+].join('\n')
+
+test('L8 认树看目录名、身份看登记分支：fix/* 形态的树必须被认出（#2247 血账）', () => {
+  const r = resolveTree({ task: '2230', worktreeList: LIST_FIX_SHAPE })
+  assert.equal(r.state, 'registered', '目录名 wt-2230 在册 ⇒ 是本票的树，与分支叫什么都不相干')
+  assert.equal(r.path, 'D:/FL/wt-2230')
+  assert.equal(r.identityBranch, 'refs/heads/fix/2230-dead-subtab', '身份 = 该条目登记的分支')
+  assert.equal(r.mismatch, false)
+  // 旧判据在这里判 absent —— 钉住它不再回来
+  assert.equal(decide({ task: '2230', worktreeList: LIST_FIX_SHAPE, prState: 'MERGED', unmergedLog: '', cwd: 'D:\\FL', execute: true }).treeState, 'registered')
+})
+
+test('L9 身份分支贯穿四类消费方；拆掉贯穿必红（变异留痕）', () => {
+  // 四类消费方 = PR 头查询 / 未合并对账 / 拆树调用 / 分支残留核对。它们都从同一个身份出发：
+  // 判定层给 identityBranch 与 probeBranch，ps1 侧与 verdict 行只许用它，不许自己拼 feat/<票号>。
+  const r = resolveTree({ task: '2189', worktreeList: LIST_FIX_SHAPE })
+  assert.equal(shortRef(r.identityBranch), 'fix/2189-lint-brace-expansion')
+  assert.equal(shortRef(r.probeBranch), 'fix/2189-lint-brace-expansion', '探测分支也必须是身份，不能是 feat/<票号>')
+
+  // 读数行带身份分支：一行就能看出收的是哪条分支
+  const v = judgeVerdict({
+    task: '2189', prState: 'MERGED', mode: 'execute', fetch: 'ok', treeBefore: 'present',
+    branch: r.identityBranch, localBranch: 'kept',
+    remove: { ran: true, exitCode: 0, raw: '{"dirRemoved":true,"regRemoved":true,"branchRemoved":false}' },
+    residue: { ran: true, exitCode: 0, raw: 'ABSENT  fix/2189-lint-brace-expansion' },
+  })
+  assert.match(v.line, / branch=fix\/2189-lint-brace-expansion /, '身份分支必须进读数行（' + v.line + '）')
+
+  // 变异：把身份换回写死的 feat/<票号> ⇒ 同一条链当场判红，而不是静默「已清干净」
+  const mutated = judgeVerdict({
+    task: '2189', prState: 'MERGED', mode: 'execute', fetch: 'ok', treeBefore: 'present',
+    branch: 'refs/heads/feat/2189', localBranch: 'kept',
+    remove: { ran: true, exitCode: 0, raw: '{"dirRemoved":true,"regRemoved":true,"branchRemoved":false}' },
+    residue: { ran: true, exitCode: 1, raw: 'RESIDUE   fix/2189-lint-brace-expansion  local' },
+  })
+  assert.equal(mutated.ok, false, '没删掉的分支不许被报成绿')
+  assert.match(mutated.line, /reason=branch-residue/)
+
+  // 贯穿的硬面在 ps1 源码：可执行行里不许再有自己拼的 feat/<Task>。
+  // 注释里提到谱系是允许的（那是记录血账），所以只扫非注释行。
+  const ps1 = readFileSync(join(here, 'dev-close.ps1'), 'utf8')
+  // 先整块剥掉 <# ... #> 帮助注释（谱系记录住在那里），再逐行去掉 # 行注释 —— 剩下的才是可执行行
+  const codeOnly = ps1.replace(/<#[\s\S]*?#>/g, '')
+  const codeLines = codeOnly.split(/\r?\n/).filter((l) => !/^\s*#/.test(l) && !/^\s*$/.test(l))
+  const hardcoded = codeLines.filter((l) => /feat\//.test(l))
+  assert.deepEqual(hardcoded, [], 'ps1 可执行行里不许再写死 feat/<票号>：' + hardcoded.join(' | '))
+  // 反证：ps1 必须真的把身份分支传下去（四处消费方都靠这一个变量）
+  assert.match(ps1, /'--resolve'/, '认树必须问判定层，不许在自己这侧重写一遍')
+  assert.match(ps1, /\$identBranch/, '身份分支必须是 ps1 里唯一的来源')
+  assert.match(ps1, /'-Branch', \$identBranch/, '拆树与残留核对都要按身份分支调用')
+})
+
+test('L10 回退腿：目录不在册但 refs/heads/feat/<票号> 仍在 ⇒ 命中并打 legacy-branch-match（WARN，宽一期）', () => {
+  // 老形态的树：目录名被改过（或历史上就叫别的），只剩分支还是 feat/<票号>。
+  const legacyList = [
+    'worktree D:/FL', 'branch refs/heads/master', '',
+    'worktree D:/FL/wt-renamed-old', 'branch refs/heads/feat/2231', '',
+  ].join('\n')
+  const r = resolveTree({ task: '2231', worktreeList: legacyList })
+  assert.equal(r.state, 'legacy', '主判据落空时才走回退腿')
+  assert.equal(r.legacy, true)
+  assert.equal(shortRef(r.identityBranch), 'feat/2231')
+
+  const d = decide({ task: '2231', worktreeList: legacyList, prState: 'MERGED', unmergedLog: '', cwd: 'D:\\FL', execute: true })
+  assert.equal(d.allow, true, '回退腿命中要能继续走，不是判红')
+  assert.equal(d.legacy, true, '但必须留痕，好让下一期收掉这条宽腿')
+
+  const v = judgeVerdict({
+    task: '2231', prState: 'MERGED', mode: 'dryrun', fetch: 'ok', treeBefore: 'present', legacy: true,
+    branch: r.identityBranch, remove: { ran: false }, residue: { ran: false, state: 'na' },
+  })
+  assert.match(v.line, /note=legacy-branch-match/, 'WARN 必须写在读数上，不能只活在调用栈里（' + v.line + '）')
+  assert.equal(v.verdict, 'planned', 'WARN 不升级成红')
+})
+
+test('L11 -Branch 覆盖与登记分支不一致 ⇒ 判红 branch-mismatch（不猜）', () => {
+  const d = decide({
+    task: '2230', worktreeList: LIST_FIX_SHAPE, branch: 'feat/2230',
+    prState: 'MERGED', unmergedLog: '', cwd: 'D:\\FL', execute: true,
+  })
+  assert.equal(d.allow, false, '覆盖参数与树身份冲突时不许二选一硬干')
+  assert.equal(d.reason, 'branch-mismatch')
+  assert.equal(d.skipRemove, true)
+  // 一致时放行（覆盖参数本身不是问题）
+  const ok = decide({
+    task: '2230', worktreeList: LIST_FIX_SHAPE, branch: 'fix/2230-dead-subtab',
+    prState: 'MERGED', unmergedLog: '', cwd: 'D:\\FL', execute: true,
+  })
+  assert.equal(ok.allow, true, '给了且与登记一致就该放行')
+  assert.equal(ok.reason, 'ok')
+})
+
+test('L12 detached 条目不参与票号判定：落 tree-branch-mismatch，不是「树不存在」', () => {
+  // 基座树 wtx-base 那种：注册表里有条目但没有 branch 行。
+  const detachedList = [
+    'worktree D:/FL', 'branch refs/heads/master', '',
+    'worktree D:/FL/wt-2232', 'detached', '',
+  ].join('\n')
+  const r = resolveTree({ task: '2232', worktreeList: detachedList })
+  assert.equal(r.state, 'tree-branch-mismatch', 'detached 不参与票号判定，但「目录在、判据没匹配上」必须可分辨')
+  assert.equal(r.reason, 'tree-branch-mismatch')
+
+  const d = decide({ task: '2232', worktreeList: detachedList, prState: 'MERGED', unmergedLog: '', cwd: 'D:\\FL', execute: true })
+  assert.equal(d.allow, false, '这一态不许当成幂等腿放行 —— 那正是静默空转的形状')
+  assert.equal(d.reason, 'tree-branch-mismatch')
+
+  // 对照：真不存在 ⇒ 幂等放行、但树态是 absent
+  const none = decide({ task: '2233', worktreeList: detachedList, prState: 'MERGED', unmergedLog: '', cwd: 'D:\\FL', execute: true })
+  assert.equal(none.allow, true)
+  assert.equal(none.reason, 'tree-absent')
+})
+
+test('L13 未注册野树点名 unregistered-tree，指回 -PruneOrphans（不接管）', () => {
+  const cleanList = ['worktree D:/FL', 'branch refs/heads/master', ''].join('\n')
+  const r = resolveTree({ task: '2234', worktreeList: cleanList, treeDirExists: true })
+  assert.equal(r.state, 'unregistered-tree', '磁盘上有 wt-2234 但注册表里没有 = 野树')
+  assert.equal(r.reason, 'unregistered-tree')
+  const d = decide({ task: '2234', worktreeList: cleanList, treeDirExists: true, prState: 'MERGED', unmergedLog: '', cwd: 'D:\\FL', execute: true })
+  assert.equal(d.allow, false, '野树不归单棵树这条链管，别替它做决定')
+  assert.equal(d.reason, 'unregistered-tree')
+})
+
+test('L14 三态行内可 grep、机检可分流（#2247 Review 补丁 / spec AC3）', () => {
+  // 三个 reason 必须是三个不同的字面量，且各自能被单独一行 Select-String 挑出来。
+  // 揉成一态就是「静默空转」被读成「已达成」的老病 —— 这里钉死它们不许再合流。
+  const detachedList = ['worktree D:/FL', 'branch refs/heads/master', '', 'worktree D:/FL/wt-2240', 'detached', ''].join('\n')
+  const cleanList = ['worktree D:/FL', 'branch refs/heads/master', ''].join('\n')
+  const three = {
+    'tree-branch-mismatch': decide({ task: '2240', worktreeList: detachedList, prState: 'MERGED', unmergedLog: '', cwd: 'D:\\FL' }).reason,
+    'unregistered-tree': decide({ task: '2241', worktreeList: cleanList, treeDirExists: true, prState: 'MERGED', unmergedLog: '', cwd: 'D:\\FL' }).reason,
+    'branch-mismatch': decide({ task: '2230', worktreeList: LIST_FIX_SHAPE, branch: 'feat/2230', prState: 'MERGED', unmergedLog: '', cwd: 'D:\\FL' }).reason,
+  }
+  const got = Object.values(three)
+  assert.deepEqual(got, ['tree-branch-mismatch', 'unregistered-tree', 'branch-mismatch'], '三态必须各归各位、互不吞并')
+  for (const [want, reason] of Object.entries(three)) {
+    const line = `DEV_CLOSE_RESULT task=2240 pr=MERGED mode=dryrun tree=absent reason=${reason} verdict=red`
+    assert.match(line, new RegExp(`reason=${want}\\b`), `单判据 grep 必须能挑出 ${want}`)
+  }
+  // 三者与「真不存在」的 absent 也必须是四个不同字面量（absent 那一态不带 reason 进入红）
+  assert.equal(new Set([...got, 'tree-absent']).size, 4)
+})
+
+test('L15 主树根问 git（--git-common-dir），不从脚本位置上溯；无身份即 branch=na', () => {
+  // 从 linked worktree 调用时 $PSScriptRoot 指的是**那棵树自己** ⇒ 上溯得到 wt-2247，
+  // 于是 wt-<票号> 目录对着自己找（unregistered-tree 永不触发）、-SyncMaster 也会合错树。
+  const ps1 = readFileSync(join(here, 'dev-close.ps1'), 'utf8')
+  assert.doesNotMatch(ps1, /\$root = Split-Path -Parent \$PSScriptRoot/, '不许再从脚本位置上溯推主树根')
+  assert.match(ps1, /Get-WtMainRoot/, '主树根必须走唯一实现（移动端 lib/wt-bootstrap.ps1）')
+  assert.match(ps1, /--git-common-dir|Get-WtMainRoot/, '判据来自 git，不是路径形状')
+
+  // 没有认出树就没有身份分支：读数行不许拿探测分支（feat/<票号>）冒充身份。
+  const v = judgeVerdict({
+    task: '9999', prState: 'NONE', mode: 'dryrun', fetch: 'ok', treeBefore: 'absent',
+    branch: '', remove: { ran: false }, residue: { ran: false, state: 'na' },
+  })
+  assert.match(v.line, / branch=na\b/, '无身份必须是 na，不能写成探测分支（' + v.line + '）')
+  assert.doesNotMatch(v.line, /branch=feat\//)
 })

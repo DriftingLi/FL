@@ -5,6 +5,7 @@ package config
 import (
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -29,9 +30,18 @@ type Config struct {
 	// LibreOfficeSidecarURL LibreOffice sidecar HTTP 地址(如 http://libreoffice:8000)。
 	// 为空时降级到本地 exec 调用(向后兼容)。
 	LibreOfficeSidecarURL string
-	// DiagnosisAssistantURL 外部诊断 RAG 助手（forklift-assistant 交付包）HTTP 地址。
+	// DiagnosisAssistantURL 外部诊断 RAG 助手（forklift-assistant 交付包）v2 基址。
 	// 为空时故障诊断功能经模型端口返回「未配置」友好错误（见 internal/aiassistant/diagnosis_adapter.go）。
+	// v1（lxc101 交付包）已退役，此地址只指向 v2 通道（票 2237）。
 	DiagnosisAssistantURL string
+	// DiagnosisV2APIKey 外部诊断助手 v2 的访问凭证（请求头 X-API-Key）。
+	// 为空 = 诊断功能不可用（adapter 直接返回「未配置」）；非空时 OSS 基准必填且须合法。
+	DiagnosisV2APIKey string
+	// DiagnosisV2OSSBase 外部诊断助手回答配图的 OSS 基准
+	// （如 https://<bucket>.oss-cn-beijing.aliyuncs.com/forklift/repair_img）。
+	// 只有 scheme=https、host 与 path 前缀都匹配的图片才会被改写成本站代理（ADR-0091）；
+	// 为空则所有回答配图降级为文字。
+	DiagnosisV2OSSBase string
 	// Storage 文件存储配置（local 本地磁盘 / r2 Cloudflare R2 对象存储）。
 	Storage StorageConfig
 	// AI 服务配置（OpenAI 兼容格式）。优先级：AI_* > DEEPSEEK_* > ZHIPU_* > OPENAI_API_KEY。
@@ -254,6 +264,9 @@ func setDefaults() {
 	viper.SetDefault("libreoffice_sidecar_url", "")
 	// 外部诊断 RAG 助手地址：测试/生产经 compose env 注入；未设置空串 → 功能不可用（友好报错）
 	viper.SetDefault("diagnosis_assistant_url", "")
+	// 助手 v2 凭证与回答配图 OSS 基准：默认空（v2 尚未联调、基址待 2243 确认）
+	viper.SetDefault("diagnosis_v2_api_key", "")
+	viper.SetDefault("diagnosis_v2_oss_base", "")
 	viper.SetDefault("storage_driver", "local")
 	viper.SetDefault("r2_account_id", "")
 	viper.SetDefault("r2_access_key_id", "")
@@ -341,6 +354,8 @@ func Load() (*Config, error) {
 		MaxContentLength:      int64(positiveInt("max_content_length_mb", 250)) * 1024 * 1024,
 		LibreOfficeSidecarURL: viper.GetString("libreoffice_sidecar_url"),
 		DiagnosisAssistantURL: viper.GetString("diagnosis_assistant_url"),
+		DiagnosisV2APIKey:     viper.GetString("diagnosis_v2_api_key"),
+		DiagnosisV2OSSBase:    viper.GetString("diagnosis_v2_oss_base"),
 		Storage: StorageConfig{
 			Driver:            viper.GetString("storage_driver"),
 			R2AccountID:       viper.GetString("r2_account_id"),
@@ -461,6 +476,12 @@ func (c *Config) Validate() error {
 	// 可信代理格式在所有环境都校验：gin 的 SetTrustedProxies 遇到非法条目时会返回
 	// 「已成功解析的前半截 + error」，只靠它兜底会留下一个半截的可信列表。
 	if err := validateTrustedProxies(c.TrustedProxies); err != nil {
+		return err
+	}
+	// 外部诊断 v2 通道：三个变量要么都没配（功能不可用，默认部署就是这态），
+	// 要么配齐且自洽。不合法一律启动失败——半个配置的后果是「图全消失但没有任何报错」，
+	// 那比起不来更难查（ADR-0091 决策 4）。
+	if err := validateDiagnosisV2(c.DiagnosisV2APIKey, c.DiagnosisV2OSSBase); err != nil {
 		return err
 	}
 	if c.AppEnv != "production" {
@@ -626,6 +647,45 @@ func validateTrustedProxies(proxies []string) error {
 		if net.ParseIP(p) == nil {
 			return fmt.Errorf("TRUSTED_PROXIES 条目 %q 不是合法 IP 或 CIDR", p)
 		}
+	}
+	return nil
+}
+
+// diagnosisOSSPathPrefix 外部诊断助手回答配图的 OSS 路径前缀（白名单只认这个前缀之下的路径）。
+// 与 fork 脚本的 OSS_BASE 同源（`.../forklift/repair_img/`），改这里要同步改对方部署。
+const diagnosisOSSPathPrefix = "/forklift/repair_img"
+
+// validateDiagnosisV2 校验外部诊断 v2 通道的凭证与配图基准是否自洽。
+//
+// 规则（ADR-0091 决策 4 + 票 2237 D 节）：
+//   - API Key 为空 ⇒ 通道未启用，不校验 OSS 基准（默认部署就是这态，不能因此起不来）；
+//   - API Key 非空 ⇒ OSS 基准必填、scheme 必须 https（学员浏览器经本站代理取图，
+//     上游明文 http 会把图片内容暴露在链路上）、host 非空、path 以 /forklift/repair_img 开头。
+func validateDiagnosisV2(apiKey, ossBase string) error {
+	if strings.TrimSpace(apiKey) == "" {
+		return nil
+	}
+	base := strings.TrimSuffix(strings.TrimSpace(ossBase), "/")
+	if base == "" {
+		return fmt.Errorf("已配置 DIAGNOSIS_V2_API_KEY 时必须同时配置 DIAGNOSIS_V2_OSS_BASE" +
+			"（回答配图的 OSS 基准，形如 https://<bucket>.oss-cn-beijing.aliyuncs.com" + diagnosisOSSPathPrefix + "）")
+	}
+	u, err := url.Parse(base)
+	if err != nil {
+		return fmt.Errorf("DIAGNOSIS_V2_OSS_BASE 不是合法 URL: %w", err)
+	}
+	if !strings.EqualFold(u.Scheme, "https") {
+		return fmt.Errorf("DIAGNOSIS_V2_OSS_BASE 必须是 https 地址（当前 scheme=%q）", u.Scheme)
+	}
+	if u.Host == "" {
+		return fmt.Errorf("DIAGNOSIS_V2_OSS_BASE 缺少主机名: %q", base)
+	}
+	// 前缀判定接受两种合法形状：恰好是前缀本身（部署默认值就是这形
+	// https://<bucket>.oss-cn-beijing.aliyuncs.com/forklift/repair_img），
+	// 或落在它之下（有人把桶内某个子目录直接当基准）。**不接受** `/forklift/repair_imgX`
+	// 这种擦边：白名单按「前缀 + /」折叠，擦边值会让所有图静默落选。
+	if u.Path != diagnosisOSSPathPrefix && !strings.HasPrefix(u.Path, diagnosisOSSPathPrefix+"/") {
+		return fmt.Errorf("DIAGNOSIS_V2_OSS_BASE 的路径必须以 %s 开头（当前 %q）", diagnosisOSSPathPrefix, u.Path)
 	}
 	return nil
 }

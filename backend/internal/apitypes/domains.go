@@ -745,7 +745,7 @@ var Domains = []Domain{
 		// 按决策 6 明确排除：它不走统一信封、没有 data 类型可指认，故**不登记**在端点表里
 		//（排除口径写在 Title，会渲染进生成物头部）。
 		Name:  "aiAssistant",
-		Title: "AI 助手信封面（/api/ai-assistant/*：模型 / 会话 / 消息 / 用户模型 / 诊断字典）；SSE 流式对话 POST /ai-assistant/chat 不走统一信封、事件 payload 不定型，不在本域生成面（ADR-0048 决策 6）",
+		Title: "AI 助手信封面（/api/ai-assistant/*：模型 / 会话 / 消息 / 用户模型 / 诊断配图）；SSE 流式对话 POST /ai-assistant/chat 不走统一信封、事件 payload 不定型，不在本域生成面（ADR-0048 决策 6）",
 		Roots: []string{
 			"aiassistant.ModelOption",
 			"aiassistant.AIAssistantModeModels",
@@ -754,8 +754,6 @@ var Domains = []Domain{
 			"aiassistant.AIChatMessageDTO",
 			"aiassistant.AISessionRenameResultDTO",
 			"aiassistant.AIImageUploadResultDTO",
-			"aiassistant.DiagnosisBrandOption",
-			"aiassistant.DiagnosisFaultCodePage",
 		},
 		Endpoints: []Endpoint{
 			{Method: "GET", Path: "/ai-assistant/models"},
@@ -769,11 +767,9 @@ var Domains = []Domain{
 			{Method: "PATCH", Path: "/ai-assistant/sessions/{id}/title"},
 			{Method: "GET", Path: "/ai-assistant/sessions/{id}/messages"},
 			{Method: "POST", Path: "/ai-assistant/upload-image"},
-			{Method: "GET", Path: "/ai-assistant/diagnosis/brands"},
-			{Method: "GET", Path: "/ai-assistant/diagnosis/models"},
-			{Method: "GET", Path: "/ai-assistant/diagnosis/fault-codes"},
-			// 手册静态资源是原样字节流（非信封），无 data 指认 —— 显式登记为有意无载荷。
-			{Method: "GET", Path: "/ai-assistant/diagnosis/manual/{filepath}", NoData: true},
+			// 回答配图是原样字节流（非信封），无 data 指认 —— 显式登记为有意无载荷。
+			// 品牌/车型/故障码/手册四条旧只读代理随 v1 通道退役删除（票 2237）。
+			{Method: "GET", Path: "/ai-assistant/diagnosis/ossimg/{filepath}", NoData: true},
 		},
 	},
 

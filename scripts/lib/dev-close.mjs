@@ -28,26 +28,106 @@ export function worktreeName(task) {
   return `wt-${t}`
 }
 
-/** git worktree list --porcelain → 该树是否在册 + 绝对路径 */
-export function parseWorktreeList(text) {
-  const out = new Map()
+/**
+ * git worktree list --porcelain → 每个条目一条记录。
+ * 条目里没有 branch 行就是 detached（基座树 wtx-base 那种）：它不是任何票号的树，
+ * 但**必须留下痕迹**——否则「目录在、判据没匹配上」会退化成「不存在」，#2247 正是要分开这两态。
+ */
+export function parseWorktreeEntries(text) {
+  const out = []
   let cur = null
   for (const raw of String(text ?? '').split(/\r?\n/)) {
     const line = raw.trimEnd()
-    if (line.startsWith('worktree ')) cur = line.slice(9).trim()
-    else if (line.startsWith('branch ') && cur) { out.set(cur, line.slice(7).trim()); cur = null }
+    if (line.startsWith('worktree ')) { cur = { path: line.slice(9).trim(), branch: '', detached: false }; out.push(cur) }
+    else if (line.startsWith('branch ') && cur) cur.branch = line.slice(7).trim()
+    else if (line === 'detached' && cur) cur.detached = true
     else if (line === '') cur = null
   }
   return out
 }
 
-/** 找到本票那棵树：按分支 refs/heads/feat/<task> 认，不按目录名猜（目录可被改名，分支不会） */
-export function findTargetTree(worktreeListText, task) {
-  const ref = `refs/heads/feat/${String(task).trim()}`
-  for (const [path, branch] of parseWorktreeList(worktreeListText)) {
-    if (branch === ref) return { path, branch, registered: true }
+/** 兼容形：路径 → 登记分支（detached 条目记空串，不再整条消失） */
+export function parseWorktreeList(text) {
+  const out = new Map()
+  for (const e of parseWorktreeEntries(text)) out.set(e.path, e.branch)
+  return out
+}
+
+function baseName(p) {
+  return String(p ?? '').replace(/[\\/]+$/, '').split(/[\\/]/).pop().toLowerCase()
+}
+
+/** `feat/2189` 与 `refs/heads/feat/2189` 都是同一分支的写法，用户与 git 各用各的 */
+export function toRef(name) {
+  const s = String(name ?? '').trim()
+  if (!s) return ''
+  return s.startsWith('refs/heads/') ? s : `refs/heads/${s}`
+}
+
+export function shortRef(ref) {
+  return String(ref ?? '').replace(/^refs\/heads\//, '')
+}
+
+/**
+ * 树身份解析（#2247，spec B / #2233）——本文件里**唯一**的认树判据。
+ *
+ * 旧判据（按 `refs/heads/feat/<票号>` 分支认树）的血账：树 `wt-2230` 挂在 `fix/2230-dead-subtab`、
+ * `wt-2189` 挂在 `fix/2189-lint-brace-expansion`，旧判据一律判 `tree=absent`，于是收尾静默跳过全部动作，
+ * dry-run 还照常出一行「无待办」而被读成已达成 —— 失败长得像成功。
+ *
+ * 新判据两层：入口 = 注册表里**路径名**为 `wt-<票号>` 的条目；身份 = 该条目实际登记的分支。
+ * 分支叫什么由闸门（new-worktree.ps1 -Branch）决定，不再由这里猜。
+ *
+ * 五态（互斥，行内各有一个可 grep 的 reason，见 #2247 Review 补丁）：
+ *   registered          主判据命中，身份 = 登记分支
+ *   legacy              主判据落空、但注册表里仍有条目持 `refs/heads/feat/<票号>` ⇒ 回退腿，宽一期
+ *   tree-branch-mismatch 目录在（注册表里有 wt-<票号> 条目）但没有 branch 行 —— detached 不参与票号判定，
+ *                       「目录在、判据没匹配上」必须与「不存在」分开，否则静默空转回来了
+ *   unregistered-tree   磁盘上有 wt-<票号> 目录、注册表里没有 ⇒ 野树，指回 -PruneOrphans（不接管）
+ *   absent              既没注册、磁盘也没有 ⇒ 真不存在（幂等腿）
+ */
+export function resolveTree(f) {
+  const task = String(f.task ?? '').trim()
+  const target = worktreeName(task)
+  const want = target.toLowerCase()
+  const entries = parseWorktreeEntries(f.worktreeList ?? '')
+  const argRef = toRef(f.branch)
+  const dirExists = Boolean(f.treeDirExists)
+  const wantLegacy = `refs/heads/feat/${task}`
+
+  let hit = null
+  let detachedHit = null
+  for (const e of entries) {
+    if (baseName(e.path) !== want) continue
+    if (e.branch) { hit = e; break }
+    if (!detachedHit) detachedHit = e
   }
-  return { path: '', branch: ref, registered: false }
+  const shape = (state, path, identityBranch, mismatch) => ({
+    state, path, identityBranch, mismatch, legacy: state === 'legacy',
+    dirExists, target, reason: state === 'registered' || state === 'legacy' ? (mismatch ? 'branch-mismatch' : '') : (state === 'absent' ? '' : state),
+    // 无树时没有身份可言，只剩「按惯例该叫什么」这一条可核：分支残留核对照旧核它（fail-closed 不放松），
+    // 但这只是探测目标、不是判定依据 —— 认树判据仍然只有上面那两级。
+    probeBranch: identityBranch || wantLegacy,
+  })
+
+  if (hit) return shape('registered', hit.path, hit.branch, Boolean(argRef) && argRef !== hit.branch)
+  if (detachedHit) return shape('tree-branch-mismatch', detachedHit.path, '', false)
+
+  // 野树先于回退腿：磁盘上立着 wt-<票号> 却没人注册它，它不是「老形态的树」，是没人管的目录
+  if (dirExists) return shape('unregistered-tree', '', '', false)
+
+  // 回退腿 = 旧判据原样保留（按 feat/<票号> 分支在注册表里认），只宽一期、只打 WARN
+  for (const e of entries) {
+    if (e.branch === wantLegacy) return shape('legacy', e.path, e.branch, Boolean(argRef) && argRef !== e.branch)
+  }
+  return shape('absent', '', '', false)
+}
+
+/** 找到本票那棵树：主判据（目录名）命中、否则回退腿；两者都没有就是没树 */
+export function findTargetTree(worktreeListText, task) {
+  const r = resolveTree({ task, worktreeList: worktreeListText })
+  const matched = r.state === 'registered' || r.state === 'legacy'
+  return { path: r.path, branch: r.identityBranch || `refs/heads/feat/${String(task).trim()}`, registered: matched }
 }
 
 /**
@@ -74,19 +154,22 @@ export function parsePrState(prJsonText) {
 /**
  * ① + ②：准不准拆 / 要不要 -Execute。
  * fail-closed 三处：unknown、NONE、OPEN/CLOSED —— 一律不拆。读不到 PR 状态**不是**放行理由。
+ * 认树／身份一律走 resolveTree（判据只有一份）；`f.branch` 是调用方的 -Branch 覆盖，只与身份比对、绝不取代它。
  */
 export function decide(f) {
   const task = String(f.task ?? '').trim()
   const target = worktreeName(task)
-  // 存在性与「站不站在要删的树里」都在这里算，ps1 不参与判断（判据一处，不在两侧各写一遍）
-  const found = findTargetTree(f.worktreeList ?? '', task)
-  const treeExists = found.registered
+  const tree = resolveTree({ task, worktreeList: f.worktreeList ?? '', branch: f.branch, treeDirExists: f.treeDirExists })
+  const treeExists = tree.state === 'registered' || tree.state === 'legacy'
   const normPath = (s) => String(s).replace(/[\\/]+$/, '').replace(/\\/g, '/').toLowerCase()
   const cwd = normPath(f.cwd ?? '')
-  const targetPath = normPath(found.path || '')
+  const targetPath = normPath(tree.path || '')
   const execute = Boolean(f.execute)
   const prState = f.prState || parsePrState(f.prJson)
-  const base = { task, target, treePath: found.path, prState, execute, passExecute: false, skipRemove: true, allow: false, reason: '' }
+  const base = {
+    task, target, treePath: tree.path, treeState: tree.state, branch: tree.identityBranch,
+    legacy: tree.legacy, prState, execute, passExecute: false, skipRemove: true, allow: false, reason: '',
+  }
 
   if (targetPath && cwd && (cwd === targetPath || cwd.startsWith(targetPath + '/'))) {
     // 站在要删的树里删自己的树：删完 cwd 失效，后面每一步都读不到东西 —— 先让人离开
@@ -94,9 +177,14 @@ export function decide(f) {
   }
 
   if (!treeExists) {
-    // 幂等腿：树已经没了（重复跑 / 已手工拆过）⇒ 不报错、不发起删除，但分支侧照核
-    return { ...base, allow: true, reason: 'tree-absent', skipRemove: true, passExecute: false }
+    // 两种「没树」必须分家（#2247 的血账就是它们被揉成一态、静默空转还被读成达成）：
+    //   目录在而判据没匹配上（detached / 野树）⇒ 判红点名，别让人以为已经收完了；
+    //   真不存在 ⇒ 幂等腿放行，但不发起删除。
+    if (tree.state === 'absent') return { ...base, allow: true, reason: 'tree-absent', skipRemove: true, passExecute: false }
+    return { ...base, reason: tree.reason || tree.state, skipRemove: true, passExecute: false }
   }
+  // -Branch 覆盖与树身份冲突：不猜、不二选一，直接判红让人看清楚（错配的收尾比没做更坏）
+  if (tree.mismatch) return { ...base, reason: 'branch-mismatch', skipRemove: true, passExecute: false }
   if (prState !== 'MERGED') {
     return { ...base, reason: prState === 'unknown' ? 'pr-state-unreadable' : 'pr-not-merged', skipRemove: true, passExecute: false }
   }
@@ -195,6 +283,15 @@ export function judgeVerdict(f) {
     : f.localBranch === 'absent' ? 'absent'
     : r.ran ? 'kept' : 'na'
   const dirs = !res.ran ? 'na' : res.dirs === 'orphan' ? `orphan:${res.orphans ?? 0}` : (res.dirs || 'na')
+  // 树身份进读数行（#2247）：读过一行就知道这次收的是哪条分支，不必回头翻注册表。
+  // 行是纯 ASCII（#2139）：分支名本身 ASCII，读不到就是 na —— 中文若进这一行会被采集链烤成 U+FFFD。
+  const branch = shortRef(f.branch) || 'na'
+  // 无动作永不打 ok（spec B）：absent + dry-run 的组合行必须自带一句「本次无任何待执行动作」，
+  // 否则「什么都没干」与「干完了」在读数上长得一样 —— 旧判据静默空转被读成达成正是这个形状。
+  // 中文不进机检行，用固定 ASCII token 承载，人读的中文由 ps1 侧照打。
+  const notes = []
+  if (f.legacy) notes.push('legacy-branch-match')
+  if (tree === 'absent' && mode === 'dryrun') notes.push('no-pending-action')
   const parts = [
     'DEV_CLOSE_RESULT',
     `task=${f.task}`,
@@ -202,14 +299,16 @@ export function judgeVerdict(f) {
     `mode=${mode}`,
     `fetch=${f.fetch || 'skipped'}`,
     `tree=${tree}`,
+    `branch=${branch}`,
     `dir=${ternary(r.dirRemoved, r.unknown)}`,
     `reg=${ternary(r.regRemoved, r.unknown)}`,
     `local_branch=${lb}`,
     `remote_branch=${res.state || (res.ran ? 'unknown' : 'na')}`,
     `wt_dirs=${dirs}`, ...(reason ? [`reason=${reason}`] : []),
     `verdict=${verdict}`,
+    ...(notes.length ? [`note=${notes.join(',')}`] : []),
   ]
-  return { line: parts.join(' '), ok: verdict === 'ok' || verdict === 'planned', verdict, reason }
+  return { line: parts.join(' '), ok: verdict === 'ok' || verdict === 'planned', verdict, reason, notes }
 }
 
 /**
@@ -238,6 +337,24 @@ if (invokedDirectly) {
     console.log('DEV_CLOSE_RESULT task=? verdict=red reason=facts-unreadable')
     process.exit(2)
   }
+  if (modeArg === '--resolve') {
+    // ps1 只采事实、不判（#2247）：认树与身份都在这里算完，它拿结果去查 PR 头／对账／拆树／核残留。
+    // 这一腿就是「三处 feat/<票号> 写死退场」的接线口——ps1 手里不再有自己拼的分支名。
+    const r = resolveTree(facts)
+    const env = [
+      'TREE_RESOLVE',
+      `state=${r.state}`,
+      `path=${r.path || 'na'}`,
+      `branch=${shortRef(r.identityBranch) || 'na'}`,
+      `probe_branch=${shortRef(r.probeBranch) || 'na'}`,
+      `legacy=${r.legacy}`,
+      `mismatch=${r.mismatch}`,
+      `reason=${r.reason || 'na'}`,
+    ]
+    console.log(env.join(' '))
+    // 只有认出树（registered/legacy）才让 ps1 继续往下走；其余态由 decide 判红并给 reason
+    process.exit(r.state === 'registered' || r.state === 'legacy' ? 0 : 1)
+  }
   if (modeArg === '--decide') {
     const d = decide(facts)
     console.log(`DECIDE allow=${d.allow} pr=${d.prState} skip_remove=${d.skipRemove} pass_execute=${d.passExecute} reason=${d.reason} target=${d.target} tree_path=${d.treePath}`)
@@ -248,6 +365,6 @@ if (invokedDirectly) {
     console.log(v.line)
     process.exit(v.ok ? 0 : 1)
   }
-  console.log('用法: node dev-close.mjs --decide|--verdict < facts.json')
+  console.log('用法: node dev-close.mjs --resolve|--decide|--verdict < facts.json')
   process.exit(2)
 }
