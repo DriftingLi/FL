@@ -142,13 +142,13 @@ const hitsMpWeixinFace = (f) => {
 //
 // 阶梯（ADR-0052 决策 3/4，兜底永远向上；判定不动 → 按最高档记）：
 //   full         全门：核心页前缀 / 公共目录 / App.uvue·main.uts / 三份 json / 非 modified 状态
-//                （新增·删除·改名）/ `.uts`（逻辑减配档未开）/ scope 根外的运行时文件 /
+//                （新增·删除·改名）/ `.uts`（逻辑档已退役，按全门）/ scope 根外的运行时文件 /
 //                patch 缺失或内容识别不出 / script 块、import、组件标签、数据与事件绑定
 //   lite-targeted2  非核心页 `.uvue`，diff 触到 DOM 结构、布局属性、安全区、导航栏、静态类名
 //   lite-exempt2    非核心页 `.uvue`，只有文本行与非布局样式值
 // PR 档 = 各文件最坏值（混档自动升全门由 max 聚合天然成立）。
 //
-// **代码级锁定**：名单 switches 在本波只读不生效。exemptionActive/logicLiteTierOpen
+// **代码级锁定**：名单 switches 在本波只读不生效。exemptionActive
 // 被翻真时不改判，只记 anomaly（波 3b 才接线）——「Shadow 期间不可能被提前打开」。
 // ============================================================================
 
@@ -167,7 +167,10 @@ export function parseCoreList(raw) {
   for (const k of ['corePagePrefixes', 'alwaysFullGateDirPrefixes', 'alwaysFullGateFilePrefixes']) {
     if (!Array.isArray(obj[k]) || obj[k].some((p) => typeof p !== 'string' || !p)) return null;
   }
-  if (!obj.switches || typeof obj.switches.exemptionActive !== 'boolean' || typeof obj.switches.logicLiteTierOpen !== 'boolean') return null;
+  if (!obj.switches || typeof obj.switches.exemptionActive !== 'boolean') return null;
+  // 已退役字段（#2228）：logicLiteTierOpen 不再被任何代码读取，名单里残留它时**不静默放过**——
+  // 否则「翻一个什么都不做的开关」这一隐患原样复现。不认 ⇒ 调用方按「名单不可用」fail-closed（只影响影子注记，errors 不经此路径）。
+  if ('logicLiteTierOpen' in obj.switches) return null;
   return obj;
 }
 
@@ -205,9 +208,10 @@ function classifyUvuePatch(patch, list) {
   return { tier: rank === 3 ? 'full' : rank === 2 ? 'lite-targeted2' : 'lite-exempt2', why };
 }
 
-// 正文档位声明：`- 档位：全门|模板减配|逻辑减配`（段内任意位置，半全角冒号都认）。
+// 正文档位声明：`- 档位：全门|模板减配`（段内任意位置，半全角冒号都认）。
+// 「逻辑减配」档已由 #2219 裁定退役（ADR-0052 ⑥ 节），声明值一并停认（#2228）。
 export function parseDeclaredTier(bodyText) {
-  const m = String(bodyText || '').match(/^\s*[-*]?\s*档位\s*[:：]\s*(全门|模板减配|逻辑减配)/m);
+  const m = String(bodyText || '').match(/^\s*[-*]?\s*档位\s*[:：]\s*(全门|模板减配)/m);
   return m ? m[1] : null;
 }
 
@@ -224,7 +228,6 @@ export function classifyTiering({ files, coreList, bodyText }) {
     return out;
   }
   if (list.switches.exemptionActive) out.anomalies.push('名单 exemptionActive=true，但波 2 校验器未接线 ⇒ 忽略开关、继续影子（转正属波 3b）');
-  if (list.switches.logicLiteTierOpen) out.anomalies.push('名单 logicLiteTierOpen=true，同上 ⇒ 逻辑改动仍按全门记录');
   const scope = list.scopeRoot.replace(/\/+$/, '') + '/';
   let rank = 0;
   for (const f of runtimeFiles) {
@@ -242,14 +245,13 @@ export function classifyTiering({ files, coreList, bodyText }) {
     if (inPrefixSegments(rel, list.alwaysFullGateDirPrefixes)) { put(3, '公共目录改动（核心依赖传播面）'); continue; }
     if (inPrefixSegments(rel, list.corePagePrefixes)) { put(3, '核心页模块'); continue; }
     if (!rel.startsWith('pages/')) { put(3, '不在名单覆盖面（页面外路径）⇒ fail-closed'); continue; }
-    if (rel.endsWith('.uts')) { put(3, '页面局部 .uts 逻辑（逻辑减配档未开）'); continue; }
+    if (rel.endsWith('.uts')) { put(3, '页面局部 .uts 逻辑（逻辑档已退役，按全门）'); continue; }
     if (rel.endsWith('.uvue')) { const r = classifyUvuePatch(f.patch, list); put(LITE_RANK[r.tier] || 3, r.why); continue; }
     put(3, '识别不出的文件形态 ⇒ fail-closed');
   }
   out.tier = rank === 3 ? 'full' : rank === 2 ? 'lite-targeted2' : 'lite-exempt2';
   // 核身（声明 vs 事实）：本波只记不符，不判红。声明高于事实=保守方向，接受。
   if (!declared) { out.verified = '未声明（影子按记录全门对待）'; }
-  else if (declared === '逻辑减配') { out.verified = '不符：逻辑减配档未开'; }
   else if (declared === '全门') { out.verified = out.tier === 'full' ? '符' : '保守方向声明（事实更轻，接受）'; }
   else if (declared === '模板减配') {
     out.verified = out.tier === 'lite-exempt2' ? '符'

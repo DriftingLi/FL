@@ -73,7 +73,6 @@ const coreList = JSON.parse(coreListBuf.toString('utf8'));
 const coreListHash = sha256(coreListBuf).slice(0, 12);
 const switches = {
   exemptionActive: coreList?.switches?.exemptionActive ?? null,
-  logicLiteTierOpen: coreList?.switches?.logicLiteTierOpen ?? null,
 };
 
 const { classifyTiering, isRuntimeFile, validatePrEvidence } = await import(pathToFileURL(VALIDATOR).href);
@@ -253,7 +252,7 @@ console.log(`② 读数行（真读数）：${withGate2.length}/${rt.length}；�
 console.log(`② 必过却无读数行：${rt.filter((r) => r.needs2Files.length && !r.gate2.length).map((r) => `#${r.number}`).join(' ') || '无'}`);
 console.log(`若转正（3b）少跑必过 ② 的 PR：${rt.filter((r) => r.tier !== 'full' && r.needs2Files.length).length}；少跑任意 ② 的 PR：${rt.filter((r) => r.tier !== 'full').length}`);
 console.log(`含公共目录改动的 PR：${rt.filter((r) => r.perFile.some((f) => f.why.includes('公共目录'))).length}；含新增/删除文件的 PR：${rt.filter((r) => r.perFile.some((f) => /状态 (?:added|removed)/.test(f.why))).length}`);
-const switchesText = `exemptionActive:${switches.exemptionActive},logicLiteTierOpen:${switches.logicLiteTierOpen}`;
+const switchesText = `exemptionActive:${switches.exemptionActive}`;
 console.log(`manifest：${MANIFEST}`);
 console.log(`REPLAY_MANIFEST validatorBlobSha=${validatorBlobSha} validatorCommitSha=${validatorCommitSha} coreListHash=${coreListHash} switches=${switchesText} prCount=${manifest.prCount} runtimeHitCount=${manifest.runtimeHitCount} shadowLineCount=${manifest.shadowLineCount} patchMissingCount=${manifest.patchMissingCount} anomalyCount=${manifest.anomalyCount} cacheHit=${manifest.cacheHitCount} cacheRebuilt=${manifest.cacheRebuiltCount}`);
 console.log(`明细：${OUT}`);

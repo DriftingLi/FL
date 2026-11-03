@@ -5,8 +5,7 @@
   "scopeRoot": "training-app/叉车维修培训学员端跨端应用",
   "matchRule": "目录前缀按路径段边界匹配（pages/exam 不命中 pages/exam-info）；路径相对 scopeRoot",
   "switches": {
-    "exemptionActive": false,
-    "logicLiteTierOpen": false
+    "exemptionActive": false
   },
   "corePagePrefixes": [
     "pages/login",
