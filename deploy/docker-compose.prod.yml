@@ -200,8 +200,13 @@ services:
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-127.0.0.1/32,172.19.0.1/32,192.168.240.1/32}
       # LibreOffice sidecar HTTP 地址(容器内服务名 + 端口)
       LIBREOFFICE_SIDECAR_URL: http://libreoffice:8000
-      # 外部诊断 RAG 助手（fault_diagnosis 功能）：pve-01 lxc101 上的 forklift-assistant 交付包
-      DIAGNOSIS_ASSISTANT_URL: ${DIAGNOSIS_ASSISTANT_URL:-http://172.17.1.23:8000}
+      # 外部诊断助手 v2 通道（fault_diagnosis 功能，票 2237 起为单轨；旧 pve-01 lxc101 交付包已退役）。
+      # DIAGNOSIS_ASSISTANT_URL 有意留空默认：v2 基址（域名还是 IP）待对方确认后由 CD 注入，
+      # 空串 = 该功能返回「未配置」友好错误，而不是回落到一个已死的地址。
+      DIAGNOSIS_ASSISTANT_URL: ${DIAGNOSIS_ASSISTANT_URL:-}
+      DIAGNOSIS_V2_API_KEY: ${DIAGNOSIS_V2_API_KEY:-}
+      # 回答配图的 OSS 基准：白名单只认这个前缀之下的图（ADR-0091），为空则配图一律降级为文字
+      DIAGNOSIS_V2_OSS_BASE: ${DIAGNOSIS_V2_OSS_BASE:-https://hrwai-guangzhou.oss-cn-beijing.aliyuncs.com/forklift/repair_img}
       # 文件存储：local=本地磁盘 / r2=S3 兼容对象存储（Cloudflare R2 或自建 RGW）
       # r2 模式下上传文件、PDF 报告、PPT 转图片均存到 bucket，本地 /data/uploads 与 /data/reports 仅用于 fallback
       STORAGE_DRIVER: ${STORAGE_DRIVER:-local}

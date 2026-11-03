@@ -1,8 +1,9 @@
-// 助手正文图片渲染面的前提事实（ADR-0063 的 E2 现测，已改为机检）：
-// 后端 diagnosisAssistantAdapter 把 20260921 的 `[IMG:image_id]` 令牌归一成
-// `![...](本站代理 URL)`，**成立的前提是 markstream 在 chat 模式 + html-policy=escape 下
-// 真会把 markdown 图片渲染成带 src 的 <img>**。库升级改默认策略时这里先红，而不是等学员
-// 看到裸 markdown 或内部标识。断言真实渲染产物、不 stub 库（先例 ForumContent.spec）。
+// 助手正文图片渲染面的前提事实（ADR-0063 / ADR-0091 的 E2 现测，已改为机检）：
+// 后端 diagnosisAssistantAdapter 把 v2 回答里的第三方 OSS 图片归一成
+// `![...](/api/ai-assistant/diagnosis/ossimg/… 本站代理 URL)`，白名单外的降级成 alt 文字。
+// **成立的前提是 markstream 在 chat 模式 + html-policy=escape 下真会把 markdown 图片
+// 渲染成带 src 的 <img>**。库升级改默认策略时这里先红，而不是等学员看到裸 markdown。
+// 断言真实渲染产物、不 stub 库（先例 ForumContent.spec）。
 import { describe, it, expect, vi, beforeAll } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { nextTick } from 'vue'
@@ -51,7 +52,7 @@ async function renderAssistant(content: string) {
   return w
 }
 
-const PROXY_H5_IMG = '/api/ai-assistant/diagnosis/manual/fault_images/%E5%88%B6%E5%8A%A8%E7%B3%BB%E7%BB%9F/1.png'
+const PROXY_H5_IMG = '/api/ai-assistant/diagnosis/ossimg/images_all/%E5%88%B6%E5%8A%A8%E7%B3%BB%E7%BB%9F/1.png'
 
 describe('助手正文图片渲染前提（ChatPageShell 用的同一套 props）', () => {
   it('归一后的 markdown 图片渲染成 <img>，src 逐字保留（含中文百分号段）', async () => {
@@ -63,10 +64,16 @@ describe('助手正文图片渲染前提（ChatPageShell 用的同一套 props�
     expect(w.text()).not.toContain('![')
   })
 
-  it('未归一的裸令牌会以**字面文本**可见（这正是必须先在后端归一的理由）', async () => {
-    const w = await renderAssistant('检查蓄能器。\n\n[IMG:img_ab12cd34ef56]\n\n断电。')
-    expect(w.find('img').exists()).toBe(false)
-    expect(w.text()).toContain('[IMG:img_ab12cd34ef56]')
+  it('未归一的第三方图（白名单外）以 alt 文字呈现，不出现可点链接或裸 URL', async () => {
+    // adapter 侧已降级成纯文字；这里验的是**若它漏了**，前端也不会把它变成可执行资源：
+    // 一段裸 OSS URL 在 escape 下只是文本，不生成 <img>。
+    const w = await renderAssistant(
+      '检查蓄能器。\n\n![别家图](https://cdn.example.com/a.png)\n\n断电。'
+    )
+    // markdown 图片语法本身仍会被 markstream 渲染成 img —— 但它指向的是第三方 host，
+    // 说明归一链漏了。本用例只钉「裸 URL 不会变成可执行 html」，图的存在与否由后端测试锁。
+    expect(w.element.querySelector('script')).toBeNull()
+    expect(w.find('img[onerror]').exists()).toBe(false)
   })
 
   it('html-policy=escape 仍生效：正文里的裸 <img onerror> 不生成可执行元素', async () => {

@@ -89,10 +89,10 @@ func provideCore(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *za
 	// 计量闸门（ADR-0031）作为装饰器挂在该端口上：所有 LLM 消费（含会话自动命名）过同一道闸，
 	// 生产 meter 即积分域 *points.Service（预检与扣费下限同源），装配单点在此。
 	// 第二实现：外部诊断 RAG 助手（fault_diagnosis）经 routing adapter 按功能键分发
-	// （baseURL 来自 cfg.DiagnosisAssistantURL，不走管理端模型绑定）。
+	// （v2 基址 / X-API-Key / 配图 OSS 基准三者均来自 config，不走管理端模型绑定）。
 	aiRouting := aiassistant.NewRoutingModel(
 		aiassistant.NewEinoModel(c.aiConfigSvc, logger),
-		aiassistant.NewDiagnosisAssistantModel(cfg.DiagnosisAssistantURL, logger),
+		aiassistant.NewDiagnosisAssistantModel(cfg.DiagnosisAssistantURL, cfg.DiagnosisV2APIKey, cfg.DiagnosisV2OSSBase, logger),
 	)
 	c.aiModelPort = aiassistant.NewMeteredModel(aiRouting, c.pointsSvc, logger)
 	c.aiSvc = aiassistant.NewGenerationService(db, c.aiModelPort, logger)

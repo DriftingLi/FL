@@ -1,5 +1,7 @@
 <template>
-  <!-- 诊断来源资料（ADR-0033）：默认折叠，图片懒加载；R1 原子类区：模板只用原子类 -->
+  <!-- 诊断来源资料（ADR-0033）：默认折叠。R1 原子类区：模板只用原子类。
+       v1 通道退役后（票 2237）这里**只回放文字**：<<IMAGE:…>> 标记指向的手册/案例资源
+       已随旧代理一起下线，历史行里的图不再可达，故标记一律剥掉而不是渲染成坏图。 -->
   <div>
     <SourcesFoldHeader
       v-if="!embedded"
@@ -14,14 +16,6 @@
         :key="source.id ?? si"
         class="mt-2.5 rounded-ctl border border-line bg-panel px-3 py-2.5 text-sm leading-[1.6] text-ink-2"
       >
-        <img
-          v-for="imagePath in sourceImages(source.text)"
-          :key="imagePath"
-          :src="aiAssistantApi.manualUrl(imagePath)"
-          class="mb-1.5 block max-h-[220px] w-auto max-w-full rounded-ctl border border-line"
-          alt="资料图片"
-          loading="lazy"
-        />
         <MarkdownRender
           mode="chat"
           :content="stripImageMarkers(source.text)"
@@ -33,13 +27,6 @@
         />
         <div class="mt-1.5 flex items-center gap-3 text-xs text-ink-3">
           <span v-if="source.metadata?.page_start">第 {{ source.metadata.page_start }}{{ source.metadata.page_end && source.metadata.page_end !== source.metadata.page_start ? '-' + source.metadata.page_end : '' }} 页</span>
-          <a
-            v-if="pdfProxyUrl(source)"
-            :href="pdfProxyUrl(source)"
-            target="_blank"
-            rel="noopener"
-            class="text-ui-soft-ink no-underline hover:underline"
-          >打开 PDF 来源</a>
           <span v-if="!source.metadata?.source_url && !source.metadata?.page_start">暂无来源资料</span>
         </div>
       </div>
@@ -48,13 +35,17 @@
 </template>
 
 <script setup lang="ts">
-// 诊断来源资料展示（逐轮回放 + 当轮面板共用）：IMAGE 标记解析与前缀 strip 单点。
-// 外部助手吐绝对路径（/assistant/static/manual/…，lxc101 取证）：strip 后再进后端代理。
+// 诊断来源资料展示（逐轮回放 + 当轮面板共用）：IMAGE 标记剥离单点。
+//
+// v1 代理退役（票 2237）后本组件不再产出任何 URL：
+//   - 溯源图 <<IMAGE:/assistant/static/manual/…>> 的上游已下线，渲染即坏图；
+//   - PDF 原文外链是助手内网路径，同一原因不可达。
+// v2 的回答配图**在正文里**（adapter 已归一成 /diagnosis/ossimg/* 站内代理），不经本组件。
 import { ref } from 'vue'
 import MarkdownRender from 'markstream-vue'
 import UiCollapse from '@/components/ui/UiCollapse.vue'
 import { MARKSTREAM_MERMAID_PROPS } from '@/utils/markstreamRuntime'
-import { aiAssistantApi, type DiagnosisSource } from '@/api/aiAssistant'
+import type { DiagnosisSource } from '@/api/aiAssistant'
 import SourcesFoldHeader from '@/components/ai-assistant/SourcesFoldHeader.vue'
 
 withDefaults(
@@ -68,37 +59,7 @@ withDefaults(
 
 const open = ref(false)
 
-const ASSISTANT_STATIC_RE = /^\/?(?:assistant\/static\/)?(?:manual\/)?/
-
-// lxc101 取证：IMAGE 标记为 /assistant/static/manual/<doc>/page_N.png（manual/ 段是
-// 目录名的一部分），strip 后交给后端拼 /assistant/static/manual/ 前缀。
-function stripAssistantPrefix(path: string): string {
-  return path.replace(ASSISTANT_STATIC_RE, '')
-}
-
 const IMAGE_RE = /<<IMAGE:([^>]+)>>/g
-
-// PDF 原文外链是助手内网路径（/assistant/static/manual/…pdf），公网不可达且登录态
-// 不同域——统一走本站手册代理，#page 锚点保留。
-function pdfProxyUrl(source: DiagnosisSource): string | undefined {
-  const url = source.metadata?.source_url
-  if (!url) return undefined
-  const m = url.match(/\/assistant\/static\/manual\/(.+?\.pdf)(#page=\d+)?/i)
-  return m ? aiAssistantApi.manualUrl(m[1]) + (m[2] ?? '') : url
-}
-
-// 交付方入库的标记可带 `| 描述:xxx` 后缀（其 postprocess 按第一个 `|` 截断取 URL），
-// 故这里同样只取 `|` 之前的部分当路径。
-function sourceImages(text: string): string[] {
-  const out: string[] = []
-  IMAGE_RE.lastIndex = 0
-  let m: RegExpExecArray | null
-  while ((m = IMAGE_RE.exec(text))) {
-    const path = stripAssistantPrefix(m[1].split('|')[0].trim())
-    if (path) out.push(path)
-  }
-  return out
-}
 
 function stripImageMarkers(text: string): string {
   IMAGE_RE.lastIndex = 0

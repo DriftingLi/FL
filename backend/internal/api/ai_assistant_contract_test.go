@@ -6,7 +6,7 @@
 //
 // 不在本锁范围（非统一信封，ADR-0048 决策 6）：
 //   - POST /api/ai-assistant/chat —— SSE 事件流，既不是信封也没有 data；
-//   - GET  /api/ai-assistant/diagnosis/manual/{filepath} —— 原样字节流（本文件只锁它「不是信封」）。
+//   - GET  /api/ai-assistant/diagnosis/ossimg/* —— 原样图片字节流（本文件只锁它「不是信封」）。
 package api
 
 import (
@@ -263,110 +263,79 @@ func TestAIAssistantEnvelopeContract(t *testing.T) {
 	}
 }
 
-// TestAIAssistantDiagnosisEnvelopeContract 诊断字典三个信封端点（外部助手代理）+ 手册字节流。
-// 本片给这 4 条此前**零注解**的路由补了完整注解块，故一并锁顶层 key。
-func TestAIAssistantDiagnosisEnvelopeContract(t *testing.T) {
+// TestAIAssistantDiagnosisImageProxy 回答配图代理（GET /diagnosis/ossimg/*）：白名单内透传字节流、
+// 白名单外 404、中文目录名往返。**非信封**（ADR-0048 决策 6）。
+// v1 的品牌/车型/故障码/手册四条代理随出口配图代理替换（票 2237 C 节）。
+func TestAIAssistantDiagnosisImageProxy(t *testing.T) {
 	t.Parallel()
 	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
 	stub := newDiagnosisStub(t)
 
-	cfg := &config.Config{JWTSecretKey: "ai-diagnosis-contract-secret", DiagnosisAssistantURL: stub.URL}
+	cfg := &config.Config{
+		JWTSecretKey:       "ai-diagnosis-image-secret",
+		DiagnosisV2OSSBase: stub.URL + "/forklift/repair_img",
+	}
 	r := NewRouter(NewDeps(cfg, db, &fakeUploadStorage{}, zap.NewNop(), nil))
 
-	// ---- GET /diagnosis/brands：data=[]aiassistant.DiagnosisBrandOption ----
-	env := aiOK(t, testutil.PerformRequest(r, http.MethodGet, "/api/ai-assistant/diagnosis/brands"))
-	brands := aiArray(t, env.Data)
-	if len(brands) != 2 {
-		t.Fatalf("品牌列表应有 2 条，got %s", string(env.Data))
-	}
-	aiWantKeys(t, aiKeys(t, brands[0]), "label", "value")
-
-	// ---- GET /diagnosis/models：data=[]string（标量数组，无根类型） ----
-	env = aiOK(t, testutil.PerformRequest(r, http.MethodGet, "/api/ai-assistant/diagnosis/models?brand=heli"))
-	var modelNames []string
-	if err := json.Unmarshal(env.Data, &modelNames); err != nil {
-		t.Fatalf("车型列表应为字符串数组: %v（%s）", err, string(env.Data))
-	}
-	if len(modelNames) != 2 || modelNames[0] != "CPCD30" {
-		t.Fatalf("车型列表 = %v，期望 [CPCD30 CPD15]", modelNames)
-	}
-
-	// ---- GET /diagnosis/fault-codes：data=aiassistant.DiagnosisFaultCodePage ----
-	env = aiOK(t, testutil.PerformRequest(r, http.MethodGet, "/api/ai-assistant/diagnosis/fault-codes?brand=heli&page=1&page_size=5"))
-	aiWantKeys(t, aiKeys(t, env.Data), "items", "total")
-	var page map[string]json.RawMessage
-	if err := json.Unmarshal(env.Data, &page); err != nil {
-		t.Fatalf("解析故障码分页失败: %v", err)
-	}
-	items := aiArray(t, page["items"])
-	if len(items) != 1 {
-		t.Fatalf("故障码 items 应有 1 条，got %s", string(page["items"]))
-	}
-	aiWantKeys(t, aiKeys(t, items[0]), "brand", "brand_cn", "causes", "fault_code", "fault_name",
-		"id", "model_series", "page_num", "part_numbers", "safety_warning", "sop_steps", "source_file", "symptom")
-
-	// ---- GET /diagnosis/manual/{filepath}：原样字节流（**非信封**）----
-	rec := testutil.PerformRequest(r, http.MethodGet, "/api/ai-assistant/diagnosis/manual/doc/page_1.png")
+	// ---- 白名单内：原样字节流 + Content-Type + 缓存头 ----
+	rec := testutil.PerformRequest(r, http.MethodGet, "/api/ai-assistant/diagnosis/ossimg/linde/a.png")
 	if rec.Code != http.StatusOK {
-		t.Fatalf("手册代理期望 200, got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("配图代理期望 200, got %d: %s", rec.Code, rec.Body.String())
 	}
-	if rec.Body.String() != "PNG-BYTES" {
-		t.Fatalf("手册代理应原样透传字节，got %q", rec.Body.String())
+	if rec.Body.String() != "OSS-PNG-BYTES" {
+		t.Fatalf("配图代理应原样透传字节，got %q", rec.Body.String())
 	}
 	if ct := rec.Header().Get("Content-Type"); ct != "image/png" {
-		t.Fatalf("手册代理应透传 Content-Type，got %q", ct)
+		t.Fatalf("配图代理应透传 Content-Type，got %q", ct)
+	}
+	if cc := rec.Header().Get("Cache-Control"); cc != "public, max-age=86400" {
+		t.Fatalf("配图代理应带一天缓存（不用 immutable——OSS 上是规范名不是内容哈希），got %q", cc)
 	}
 	if strings.HasPrefix(strings.TrimSpace(rec.Body.String()), "{") {
-		t.Fatal("手册代理是文件流、不是统一信封：响应体不应是 JSON 对象")
+		t.Fatal("配图代理是文件流、不是统一信封：响应体不应是 JSON 对象")
 	}
 
-	// ---- 案例配图（fault_images 根 + 中文段，客户端按段 encodeURIComponent）----
+	// ---- 中文目录名（客户端按段 encodeURIComponent）----
 	rec = testutil.PerformRequest(r, http.MethodGet,
-		"/api/ai-assistant/diagnosis/manual/fault_images/%E5%88%B6%E5%8A%A8%E7%B3%BB%E7%BB%9F/%E5%9B%BE_1.jpg")
+		"/api/ai-assistant/diagnosis/ossimg/images_all/%E5%88%B6%E5%8A%A8%E7%B3%BB%E7%BB%9F.png")
 	if rec.Code != http.StatusOK {
-		t.Fatalf("案例图代理期望 200, got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("中文目录配图期望 200, got %d: %s", rec.Code, rec.Body.String())
 	}
-	if rec.Body.String() != "CASE-JPG-BYTES" || rec.Header().Get("Content-Type") != "image/jpeg" {
-		t.Fatalf("案例图应原样透传字节与类型，got %q %q", rec.Body.String(), rec.Header().Get("Content-Type"))
+	if rec.Body.String() != "OSS-CN-BYTES" {
+		t.Fatalf("中文目录配图字节不符，got %q", rec.Body.String())
+	}
+
+	// ---- 白名单外 / 非法：404，且不触发上游 ----
+	for _, bad := range []string{
+		"/api/ai-assistant/diagnosis/ossimg/linde/a.pdf",
+		"/api/ai-assistant/diagnosis/ossimg/linde/%2e%2e/%2e%2e/etc.png",
+		"/api/ai-assistant/diagnosis/ossimg/linde/a",
+	} {
+		rec = testutil.PerformRequest(r, http.MethodGet, bad)
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("%s 期望 404, got %d", bad, rec.Code)
+		}
 	}
 }
 
-// newDiagnosisStub 外部诊断助手替身：只覆盖 proxy 消费的 4 条只读路径。
+// newDiagnosisStub 外部诊断助手配图源替身：只覆盖 ossimg 代理消费的路径。
+// 路径逐字匹配 ⇒ 同时钉住「客户端百分号编码 → 真实路由 → 代理解一次再逐段转义」这条链
+// 上游拿到的是解码后的中文段。
 func newDiagnosisStub(t *testing.T) *httptest.Server {
 	t.Helper()
 	mux := http.NewServeMux()
-	jsonBody := func(w http.ResponseWriter, body string) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(body))
-	}
-	mux.HandleFunc("/assistant/api/brands", func(w http.ResponseWriter, _ *http.Request) {
-		jsonBody(w, `{"code":0,"data":[{"value":"all","label":"全部"},{"value":"heli","label":"合力"}]}`)
-	})
-	mux.HandleFunc("/assistant/api/models", func(w http.ResponseWriter, _ *http.Request) {
-		jsonBody(w, `{"code":0,"data":["CPCD30","CPD15"]}`)
-	})
-	mux.HandleFunc("/assistant/api/fault-codes", func(w http.ResponseWriter, _ *http.Request) {
-		// image_refs 是 20260921 新增列（fault_codes 变 SELECT * 后随 items 透出）：
-		// 我们出站形状必须不受它影响（下方 aiWantKeys 逐键锁）。
-		jsonBody(w, `{"code":0,"data":{"items":[{"id":15,"brand":"heli","brand_cn":"合力","model_series":"CPCD",
-			"fault_code":"E15","fault_name":"起升异常","symptom":"不起升","causes":"油路","sop_steps":"检查油路",
-			"safety_warning":"断电","part_numbers":"P-1","source_file":"manual.pdf","page_num":3,
-			"image_refs":[{"image_id":"img_a1","url":"/assistant/static/fault_images/制动系统/a1.png"}]}],"total":1}}`)
-	})
-	mux.HandleFunc("/assistant/static/manual/", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/forklift/repair_img/linde/a.png", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "image/png")
-		_, _ = w.Write([]byte("PNG-BYTES"))
+		_, _ = w.Write([]byte("OSS-PNG-BYTES"))
 	})
-	// 20260921 新增静态根：图文案例配图，目录名是中文系统名。路径逐字匹配 ⇒ 同时钉住
-	// 「客户端百分号编码 → 真实路由 → 代理再转义」这条链上游拿到的是解码后的中文段。
-	mux.HandleFunc("/assistant/static/fault_images/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/assistant/static/fault_images/制动系统/图_1.jpg" {
+	mux.HandleFunc("/forklift/repair_img/images_all/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/forklift/repair_img/images_all/制动系统.png" {
 			http.NotFound(w, r)
 			return
 		}
-		w.Header().Set("Content-Type", "image/jpeg")
-		_, _ = w.Write([]byte("CASE-JPG-BYTES"))
+		w.Header().Set("Content-Type", "image/png")
+		_, _ = w.Write([]byte("OSS-CN-BYTES"))
 	})
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)

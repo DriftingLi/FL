@@ -482,6 +482,10 @@ jobs:
       R2_PUBLIC_DOMAIN: ${{ secrets.R2_PUBLIC_DOMAIN }}
       # EdgeOne 回源鉴权 token（#1746）：与门户侧 NUXT_API_ORIGIN_TOKEN 同值；缺省时前端容器拒绝启动
       EDGE_ORIGIN_TOKEN: ${{ secrets.EDGE_ORIGIN_TOKEN }}
+      # 外部诊断助手 v2（票 2237 单轨）：基址与 Key 都不在 deploy/env.defaults 里（基址待对方确认、
+      # Key 是密钥），故必须在这里显式映射 + 在下面的写文件段各写一行，循环覆盖不到它们。
+      DIAGNOSIS_ASSISTANT_URL: ${{ secrets.DIAGNOSIS_ASSISTANT_URL }}
+      DIAGNOSIS_V2_API_KEY: ${{ secrets.DIAGNOSIS_V2_API_KEY }}
       # Swagger 文档（C 方案：旗标 + BasicAuth；prod 默认 false，线上临时开启需同时注入 USER/PASS）
       SWAGGER_ENABLED: ${{ secrets.SWAGGER_ENABLED || vars.SWAGGER_ENABLED || 'false' }}
       SWAGGER_USER: ${{ secrets.SWAGGER_USER }}
@@ -697,6 +701,10 @@ jobs:
             printf 'export R2_BUCKET=%q\n' "${R2_BUCKET:-}"
             printf 'export R2_PUBLIC_DOMAIN=%q\n' "${R2_PUBLIC_DOMAIN:-}"
             printf 'export EDGE_ORIGIN_TOKEN=%q\n' "${EDGE_ORIGIN_TOKEN:-}"
+            # 外部诊断助手 v2（票 2237）：DIAGNOSIS_V2_OSS_BASE 由 deploy/env.defaults 提供默认值
+            # （上面 source 过），这里只补两个「默认必须为空」的——基址与 Key。
+            printf 'export DIAGNOSIS_ASSISTANT_URL=%q\n' "${DIAGNOSIS_ASSISTANT_URL:-}"
+            printf 'export DIAGNOSIS_V2_API_KEY=%q\n' "${DIAGNOSIS_V2_API_KEY:-}"
             printf 'export SWAGGER_USER=%q\n' "${SWAGGER_USER:-}"
             printf 'export SWAGGER_PASS=%q\n' "${SWAGGER_PASS:-}"
             printf 'export BACKUP_REMOTE_HOST=%q\n' "${BACKUP_REMOTE_HOST:-}"

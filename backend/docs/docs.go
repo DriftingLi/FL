@@ -7619,133 +7619,20 @@ const docTemplate = `{
                 }
             }
         },
-        "/ai-assistant/diagnosis/brands": {
+        "/ai-assistant/diagnosis/ossimg/{filepath}": {
             "get": {
-                "description": "可选认证；代理外部诊断助手的品牌选项（[{value,label}]，value=all 表示全部品牌）",
-                "consumes": [
-                    "application/json"
-                ],
+                "description": "可选认证；AI 生成正文里白名单内图片的回源代理（**非统一信封**：原样字节流 + Content-Type）。上游仅允许配置的 OSS 基准 host + /forklift/repair_img 前缀 + 图片扩展名，子路径按段白名单防 SSRF",
                 "produces": [
-                    "application/json"
+                    "image/png"
                 ],
                 "tags": [
                     "学员端-AI助手"
                 ],
-                "summary": "诊断品牌列表",
-                "responses": {
-                    "200": {
-                        "description": "success",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.R"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/definitions/aiassistant.DiagnosisBrandOption"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "500": {
-                        "description": "诊断服务不可用",
-                        "schema": {
-                            "$ref": "#/definitions/response.R"
-                        }
-                    }
-                }
-            }
-        },
-        "/ai-assistant/diagnosis/fault-codes": {
-            "get": {
-                "description": "可选认证；按品牌/关键词分页查询结构化故障码（page_size 上限 100）",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "学员端-AI助手"
-                ],
-                "summary": "诊断故障码分页查询",
+                "summary": "诊断回答配图（白名单代理）",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "品牌 value（all/空 = 全部品牌）",
-                        "name": "brand",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "关键词（故障码/名称/现象）",
-                        "name": "keyword",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "default": 1,
-                        "description": "页码",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "default": 20,
-                        "description": "每页条数（上限 100）",
-                        "name": "page_size",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "success",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.R"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/aiassistant.DiagnosisFaultCodePage"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "500": {
-                        "description": "诊断服务不可用",
-                        "schema": {
-                            "$ref": "#/definitions/response.R"
-                        }
-                    }
-                }
-            }
-        },
-        "/ai-assistant/diagnosis/manual/{filepath}": {
-            "get": {
-                "description": "可选认证；外部诊断助手静态文件的流式代理（**非统一信封**：原样字节流 + Content-Type），静态根仅 manual 与 fault_images，子路径按段白名单防 SSRF",
-                "produces": [
-                    "application/octet-stream"
-                ],
-                "tags": [
-                    "学员端-AI助手"
-                ],
-                "summary": "诊断静态资源（手册图片/PDF 与图文案例配图）",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "相对子路径（带扩展名，可带静态根；如 manual/xxx/page_1.png、fault_images/制动系统/图_1.png）",
+                        "description": "相对子路径（带图片扩展名；如 images_all/xxx.png、linde/型号__原名.jpg）",
                         "name": "filepath",
                         "in": "path",
                         "required": true
@@ -7753,65 +7640,13 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "静态文件字节流（非统一信封）",
+                        "description": "图片字节流（非统一信封）",
                         "schema": {
                             "type": "string"
                         }
                     },
                     "404": {
-                        "description": "资源不存在",
-                        "schema": {
-                            "$ref": "#/definitions/response.R"
-                        }
-                    }
-                }
-            }
-        },
-        "/ai-assistant/diagnosis/models": {
-            "get": {
-                "description": "可选认证；某品牌车型名称列表（brand 缺省/all 时返回全部车型）",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "学员端-AI助手"
-                ],
-                "summary": "诊断车型列表",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "品牌 value（all/空 = 全部车型）",
-                        "name": "brand",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "success",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.R"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "type": "string"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "500": {
-                        "description": "诊断服务不可用",
+                        "description": "图片不存在",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -24836,76 +24671,6 @@ const docTemplate = `{
             "properties": {
                 "message": {
                     "type": "string"
-                }
-            }
-        },
-        "aiassistant.DiagnosisBrandOption": {
-            "type": "object",
-            "properties": {
-                "label": {
-                    "type": "string"
-                },
-                "value": {
-                    "type": "string"
-                }
-            }
-        },
-        "aiassistant.DiagnosisFaultCodeItem": {
-            "type": "object",
-            "properties": {
-                "brand": {
-                    "type": "string"
-                },
-                "brand_cn": {
-                    "type": "string"
-                },
-                "causes": {
-                    "type": "string"
-                },
-                "fault_code": {
-                    "type": "string"
-                },
-                "fault_name": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "model_series": {
-                    "type": "string"
-                },
-                "page_num": {
-                    "type": "integer"
-                },
-                "part_numbers": {
-                    "type": "string"
-                },
-                "safety_warning": {
-                    "type": "string"
-                },
-                "sop_steps": {
-                    "type": "string"
-                },
-                "source_file": {
-                    "type": "string"
-                },
-                "symptom": {
-                    "type": "string"
-                }
-            }
-        },
-        "aiassistant.DiagnosisFaultCodePage": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/aiassistant.DiagnosisFaultCodeItem"
-                    },
-                    "x-nullable": true
-                },
-                "total": {
-                    "type": "integer"
                 }
             }
         },
