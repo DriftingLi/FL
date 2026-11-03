@@ -457,6 +457,13 @@ func (h *handler) StreamChat(c *gin.Context) {
 	}
 	// 诊断来源容器初始化（fault_diagnosis 响应 answer_sources 经此透传；其他功能恒空）
 	ctx = WithDiagnosisSources(ctx)
+	// 诊断元数据容器（徽章 + 耗时，v2 的 done 载荷；其他功能恒空）
+	ctx = WithDiagnosisMeta(ctx)
+	// 上游 status 立刻下沉成 SSE 事件：v2 在首个 delta 之前发的「正在检索…」要马上到前端，
+	// 不能等 Stream 返回（那时内容已经开始流了）。
+	ctx = WithDiagnosisStatusSink(ctx, func(text string) {
+		sendEvent("status", map[string]string{"text": text})
+	})
 
 	_, usage, err := h.svc.StreamChat(ctx, userID, req, func(content string) {
 		sendEvent("message", map[string]string{"content": content})
@@ -484,7 +491,13 @@ func (h *handler) StreamChat(c *gin.Context) {
 			sendEvent("error", map[string]string{"message": "积分不足"})
 		}
 	}
-	sendEvent("done", nil)
+	// done 载荷：诊断功能带 meta（徽章 + 耗时，票 2245 决策 5），其余功能保持 null
+	// （移动端手写映射逐字段取值，多出的键被忽略，故对旧客户端无破坏）。
+	var donePayload any
+	if meta, ok := DiagnosisMetaFrom(ctx); ok {
+		donePayload = map[string]any{"meta": meta}
+	}
+	sendEvent("done", donePayload)
 }
 
 // UploadImage 上传对话图片

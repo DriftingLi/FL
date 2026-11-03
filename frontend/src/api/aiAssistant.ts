@@ -20,9 +20,6 @@ import type {
   AIChatSessionDTO,
   AIImageUploadResultDTO,
   AISessionRenameResultDTO,
-  DiagnosisBrandOption,
-  DiagnosisFaultCodeItem,
-  DiagnosisFaultCodePage,
   DiagnosisSource,
   ModelOption,
   UserModelDTO
@@ -46,9 +43,6 @@ const client = createHttpClient({
 // ===== 类型 re-export（响应形状唯一事实源 = 生成物）=====
 export type {
   AIAssistantModeModels,
-  DiagnosisBrandOption,
-  DiagnosisFaultCodeItem,
-  DiagnosisFaultCodePage,
   DiagnosisSource,
   ModelOption,
   UserModelDTO
@@ -90,7 +84,9 @@ export interface StreamChatReq {
   custom_api_key?: string
   custom_base_url?: string
   custom_model?: string
-  // 智能维修诊断（fault_diagnosis）专用：品牌/车型过滤（结构化传参，不走文本注入）
+  // 智能维修诊断（fault_diagnosis）专用：品牌/车型。
+  // v2 单轨后**后端无消费方**（v2 请求体只有 content 一个文本通道），保留字段只为不破
+  // 已发布的前端契约；组句改由前端拼进 content（票 2241 的 diagnosisCompose）。
   brand?: string
   model?: string
   messages: Array<{ role: 'user' | 'assistant'; content: string; images?: string[] }>
@@ -103,6 +99,27 @@ export interface StreamUsageEvent {
   balance: number
   prompt_tokens?: number
   completion_tokens?: number
+}
+
+/**
+ * SSE done 事件 payload（**非生成面**，ADR-0048 决策 6）。
+ * 诊断功能带 meta（徽章 + 端到端耗时，票 2245 决策 5）；其余功能 done 的 data 仍是 null。
+ */
+export interface StreamDoneEvent {
+  meta?: DiagnosisMeta
+}
+
+/** 回答的能力徽章（v2 九种固定词表；三字段原样透出，前端的 emoji/cls 只用于渲染）。 */
+export interface DiagnosisBadge {
+  name: string
+  emoji: string
+  cls: string
+}
+
+/** 回答的附加产物：徽章 + 耗时。不含 trace —— 那是对方排查用的内窥信息，本仓刻意不收。 */
+export interface DiagnosisMeta {
+  badges?: DiagnosisBadge[]
+  elapsed?: number
 }
 
 // ===== API 方法 =====
@@ -195,27 +212,9 @@ export const aiAssistantApi = {
     return client.get<AIChatMessageDTO[]>(`/sessions/${id}/messages`)
   },
 
-  /** GET /api/ai-assistant/diagnosis/brands — 智能维修诊断品牌列表 */
-  listDiagnosisBrands() {
-    return client.get<DiagnosisBrandOption[]>('/diagnosis/brands')
-  },
-
-  /** GET /api/ai-assistant/diagnosis/models — 某品牌车型列表 */
-  listDiagnosisModels(brand?: string) {
-    return client.get<string[]>('/diagnosis/models', { params: brand ? { brand } : undefined })
-  },
-
-  /** GET /api/ai-assistant/diagnosis/fault-codes — 故障码分页查询 */
-  listDiagnosisFaultCodes(params: { brand?: string; keyword?: string; page?: number; page_size?: number }) {
-    return client.get<DiagnosisFaultCodePage>('/diagnosis/fault-codes', { params })
-  },
-
-  /** GET /api/ai-assistant/diagnosis/manual/* — 手册静态资源代理 URL（溯源图片；可选认证直接 <img>）。
-   * 该端点是**原样字节流（非统一信封）**，故只拼 URL、不经 client 解包。 */
-  manualUrl(subpath: string): string {
-    const segs = subpath.split('/').map(encodeURIComponent).join('/')
-    return `${API_BASE_URL}/diagnosis/manual/${segs}`
-  },
+  // 诊断周边只读端点（品牌 / 车型 / 故障码 / 手册资源）已随 v1 通道退役删除（票 2237）：
+  // 对外助手换成 v2 后这些端点不再存在，改动原则是**同步删调用点**，宁可诊断页暂时变素，
+  // 也不留一个「点了必 404」的中间态。按 v2 契约重接归票 2242，页面重适配归票 2244。
 
   /**
    * POST /api/ai-assistant/chat — 流式对话（SSE）
@@ -233,8 +232,10 @@ export const aiAssistantApi = {
     handlers: {
       /** SSE message 事件 payload：{content}（非生成面） */
       onChunk?: (content: string) => void
-      /** SSE done 事件（无 payload，非生成面） */
-      onDone?: () => void
+      /** SSE status 事件 payload：{text}（上游过程文案，如「正在检索维修知识库…」；非生成面） */
+      onStatus?: (text: string) => void
+      /** SSE done 事件 payload：{meta?}（诊断功能带徽章与耗时；非生成面） */
+      onDone?: (payload?: StreamDoneEvent) => void
       /** SSE error 事件 payload：{message} / 网络异常（非生成面） */
       onError?: (message: string) => void
       /** SSE usage 事件 payload（非生成面） */
@@ -285,6 +286,9 @@ export const aiAssistantApi = {
               if (evt.event === 'message') {
                 const content = (evt.data as { content?: string })?.content || ''
                 if (content) handlers.onChunk?.(content)
+              } else if (evt.event === 'status') {
+                const text = (evt.data as { text?: string })?.text || ''
+                if (text) handlers.onStatus?.(text)
               } else if (evt.event === 'usage') {
                 handlers.onUsage?.(evt.data as StreamUsageEvent)
               } else if (evt.event === 'sources') {
@@ -295,7 +299,7 @@ export const aiAssistantApi = {
                 handlers.onError?.(msg)
                 return
               } else if (evt.event === 'done') {
-                handlers.onDone?.()
+                handlers.onDone?.((evt.data ?? undefined) as StreamDoneEvent | undefined)
                 return
               }
             }

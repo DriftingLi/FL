@@ -104,8 +104,9 @@ type StreamChatReq struct {
 	CustomAPIKey  string        `json:"custom_api_key"` // 兼容旧：ModelSource="custom" 时临时输入
 	CustomBaseURL string        `json:"custom_base_url"`
 	CustomModel   string        `json:"custom_model"`
-	// Brand/Model 智能维修诊断（fault_diagnosis）专用可选参数：品牌/车型过滤（空 = 全部）。
-	// 经 ctx 透传到 diagnosis adapter（withDiagnosisParams），仅该功能消费；通用对话忽略。
+	// Brand/Model 智能维修诊断（fault_diagnosis）专用可选参数：品牌/车型过滤。
+	// v2 单轨后**无消费方**（v2 请求体只有 content 一个文本通道，组句责任在 Web 前端）——
+	// 保留字段只为不动已发布的前端契约；通用对话历来忽略。
 	Brand    string          `json:"brand,omitempty"`
 	Model    string          `json:"model,omitempty"`
 	Messages []StreamMessage `json:"messages"`
@@ -337,10 +338,18 @@ func (s *Service) maybeGenerateSessionTitle(ctx context.Context, userID, session
 		return
 	}
 
-	title, err := s.generateTitleWithModel(ctx, sel, userMsg.Content)
-	if err != nil {
-		s.logger.Warn("自动命名：调用模型失败", zap.Int("session_id", sessionID), zap.Error(err))
-		return
+	// 智能维修诊断的会话标题走本地截断：该功能的上游是外部 RAG 助手，一次命名调用就是
+	// 一次白烧别人的配额（且 v2 的 answer 动辄几千字，拿来当标题纯属浪费）。
+	title := ""
+	if sel.FeatureKey == FeatureFaultDiagnosis {
+		title = sanitizeTitle(userMsg.Content)
+	} else {
+		var err error
+		title, err = s.generateTitleWithModel(ctx, sel, userMsg.Content)
+		if err != nil {
+			s.logger.Warn("自动命名：调用模型失败", zap.Int("session_id", sessionID), zap.Error(err))
+			return
+		}
 	}
 	title = sanitizeTitle(title)
 	if title == "" || title == autoTitlePlaceholder {
@@ -543,10 +552,9 @@ func (s *Service) StreamChat(ctx context.Context, userID int, req StreamChatReq,
 	// 消息、怎么取文本）只允许有一份实现（prompt_chars.go）。多模态消息经
 	// buildImageUserMessage 重组，图片全部加载失败时注入的注记文本只存在于传输层消息——
 	// DTO 才是口径事实源，注记不参与计费（ADR-0031 / ADR-0053 §5）。
-	// 诊断参数（品牌/车型）经 ctx 透传到 diagnosis adapter（fault_diagnosis 消费）
-	if req.Brand != "" || req.Model != "" {
-		ctx = WithDiagnosisParams(ctx, req.Brand, req.Model)
-	}
+	// 诊断参数（品牌/车型）在 v2 下没有消费方：v2 的请求体只有 content 一个文本通道，
+	// 结构化过滤已退役，组句责任在 Web 前端（票 2241 的 diagnosisCompose）。
+	// 保留 DTO 字段是为了不动已发布的前端契约，但不再经 ctx 传给 adapter。
 
 	fullContent, usage, err := s.port.Stream(withAIPromptMessages(ctx, aiPromptMessagesFromDTO(req.Messages)), sel, msgs, onChunk)
 	if err != nil {

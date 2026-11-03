@@ -98,8 +98,8 @@ func TestEnvDefaultsNoDrift(t *testing.T) {
 	// 判据是**重叠子集**，不是双向全覆盖：
 	//   1. 变量名两侧都出现（运行期 viper 键按 AutomaticEnv 的口径大写成环境变量名，见 runtimeEnvDefaults）；
 	//   2. 两侧的默认值都非空 —— 任一侧为空是「本层不主张默认值、由另一层给」，
-	//      与部署侧「空默认不算漂移」同口径（TRUSTED_PROXIES 与 DIAGNOSIS_ASSISTANT_URL 即此形：
-	//      运行期空串 = 不信任任何代理 / RAG 功能不可用，是显式兜底而非漏写）；
+	//      与部署侧「空默认不算漂移」同口径（TRUSTED_PROXIES 与 DIAGNOSIS_V2_OSS_BASE 即此形：
+	//      运行期空串 = 不信任任何代理 / 配图一律降级为文字，是显式兜底而非漏写）；
 	//   3. 落在这本子集里的值必须逐字相等；不等又没登记在 layerDivergences 的即漂移。
 	//
 	// 运行期独有的键（RATE_LIMIT_RPS、REDIS_MIN_IDLE_CONNS …）与只在部署侧出现的卷名

@@ -1,18 +1,18 @@
-// 外部诊断 RAG 助手 adapter（计划 批次1）：
-// 第二个生产 ModelPort adapter（ADR-0029 T2，"单一端口、多实现"）——调用 forklift-assistant
-// 交付包（FastAPI + bge-m3 本地向量 RAG）的阻塞 JSON /chat 与 /chat/with-image，经 onChunk
-// 伪流式转译为 ModelPort.Stream 回调（助手不支持 SSE，2026-09-05 契约钉死）。
-// 特性：
-//   - 凭证不入 ConfigResolver：baseURL 来自 config.DiagnosisAssistantURL（直接注入），
-//     不走管理端模型绑定（端口签名只传 selector，解析全在 adapter 内部）。
-//   - 图片路径：复用 StreamChat 的多模态消息重组（text + base64 image part），adapter 从
-//     part 还原字节后 re-post multipart 到 /chat/with-image（无需新增转发端点）。
-//   - 图片表达归一：20260921 起正文图片是 [IMG:image_id] 裸令牌、URL 另在 data.answer_images[]，
-//     出站前统一成 ![...](本站代理 URL)（normalizeDiagnosisImages，ADR-0063）——契约事实源
-//     2026-09-05 首次钉死于 lxc101 openapi，2026-09-22 按 20260904/20260921 两版实包复核。
+// 外部诊断 RAG 助手 adapter（v2 单轨）：
+// 第二个生产 ModelPort adapter（ADR-0029 T2，"单一端口、多实现"）——调用外部
+// forklift-assistant 的 v2 流式端点 POST /api/v2/chat（SSE，X-API-Key 鉴权）。
+//
+// v1（lxc101 交付包的阻塞 JSON /chat 与 /chat/with-image 伪流式）已整体退役：旧端点不再部署，
+// 本适配器只认 v2（票 2237）。三条不变式：
+//   - 凭证不入 ConfigResolver：baseURL / API Key / OSS base 构造期注入，不走管理端模型绑定。
+//   - 请求只有 content 一个文本通道 + images（dataURL 数组）：品牌/型号等结构化过滤在 v2
+//     不存在，组句责任在 Web 前端（票 2241 的 diagnosisCompose）。
+//   - delta 只为观感、done 的 answer 为权威：归一链只跑在 done 的 answer 上，于是
+//     「SSE 中继出的最终正文 = 归一后的全文」这条不变式仍成立（票 2245 决策 4）。
 package aiassistant
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/base64"
@@ -20,45 +20,23 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"mime/multipart"
 	"net/http"
-	"net/url"
 	"regexp"
-	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/cloudwego/eino/schema"
 	"go.uber.org/zap"
 )
 
-// ---- ctx 透传通道：诊断参数（品牌/车型）与来源数据 ----
-
-// diagnosisParamsCtxKey ctx 键：诊断请求参数（品牌/车型），随调用声明。
-// 仿 withAIPromptChars 透传机制：StreamChatReq 的扩展字段经 ctx 到达 diagnosis adapter，
-// selector/端口签名零改动（eino 路径不感知）。
-type diagnosisParamsCtxKey struct{}
-
-type diagnosisParams struct {
-	brand string
-	model string
-}
-
-// WithDiagnosisParams 随调用声明诊断参数（仅 fault_diagnosis 消费；空值按助手默认 all/无）。
-func WithDiagnosisParams(ctx context.Context, brand, model string) context.Context {
-	return context.WithValue(ctx, diagnosisParamsCtxKey{}, diagnosisParams{brand: brand, model: model})
-}
-
-func diagnosisParamsFrom(ctx context.Context) diagnosisParams {
-	p, _ := ctx.Value(diagnosisParamsCtxKey{}).(diagnosisParams)
-	return p
-}
+// ---- ctx 透传通道：来源、过程状态与元数据 ----
 
 // diagnosisSourcesCtxKey ctx 键：诊断响应来源数据容器（可变指针——adapter 与调用方共享）。
-// ctx value 存指针容器是既有灰色地带的显式使用：ModelPort.Stream 返回签名固定
-// (string, *Usage, error)，sources 属助手专用产物，不污染通用端口语义——用 box 完成
-// adapter（写）→ handler（读）的跨层透传，并发安全。
+// ModelPort.Stream 返回签名固定 (string, *Usage, error)，sources 属助手专用产物，
+// 不污染通用端口语义——用 box 完成 adapter（写）→ handler（读）的跨层透传，并发安全。
+//
+// v2 的 done 事件不再带来源资料（只有 answer/badges/trace/elapsed），本容器现阶段恒空；
+// 保留它是因为历史行仍按 ADR-0033 回放来源。
 type diagnosisSourcesCtxKey struct{}
 
 type diagnosisSourcesBox struct {
@@ -71,7 +49,7 @@ func WithDiagnosisSources(ctx context.Context) context.Context {
 	return context.WithValue(ctx, diagnosisSourcesCtxKey{}, &diagnosisSourcesBox{})
 }
 
-// DiagnosisSourcesFrom 读取诊断来源（无容器/未写入时返回空切片；诊断功能以外的调用恒为空）。
+// DiagnosisSourcesFrom 读取诊断来源（无容器/未写入时返回空切片）。
 func DiagnosisSourcesFrom(ctx context.Context) []DiagnosisSource {
 	b, _ := ctx.Value(diagnosisSourcesCtxKey{}).(*diagnosisSourcesBox)
 	if b == nil {
@@ -88,28 +66,95 @@ func (b *diagnosisSourcesBox) set(s []DiagnosisSource) {
 	b.sources = append([]DiagnosisSource(nil), s...)
 }
 
-// ---- 助手 API 契约（2026-09-05 openapi 钉死）----
+// diagnosisStatusCtxKey ctx 键：上游 status 事件的下沉通道（「正在检索维修知识库…」这类过程文案）。
+// v2 在首个 delta 之前会先发 status，正好填住我方 8~15 秒只有加载点的空档。
+//
+// 用回调而不是「最后一条文案」的容器：status 必须**即刻**转给前端，等 Stream 返回再读，
+// 那时 delta 早已开始、文案没有意义了（票 2245 决策 5）。
+type diagnosisStatusCtxKey struct{}
+
+// WithDiagnosisStatusSink 注册状态下沉回调（handler 注入；sink 为 nil 即丢弃状态）。
+func WithDiagnosisStatusSink(ctx context.Context, sink func(text string)) context.Context {
+	if sink == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, diagnosisStatusCtxKey{}, sink)
+}
+
+func diagnosisStatusSinkFrom(ctx context.Context) func(string) {
+	sink, _ := ctx.Value(diagnosisStatusCtxKey{}).(func(string))
+	return sink
+}
+
+// DiagnosisBadge 能力徽章（v2 九种固定词表；原样存对方给的三字段，不压成逗号串——
+// 对方自己的回放把 emoji/cls 重建成了空串，是反面教材）。
+type DiagnosisBadge struct {
+	Name  string `json:"name"`
+	Emoji string `json:"emoji"`
+	Cls   string `json:"cls"`
+}
+
+// DiagnosisMeta 回答的附加产物（徽章 + 端到端耗时）。trace 刻意不收：契约自己写着
+// 「排查用，可不展示给用户」，且对方存了也从不回放（票 2245 决策 1）。
+type DiagnosisMeta struct {
+	Badges  []DiagnosisBadge `json:"badges,omitempty"`
+	Elapsed float64          `json:"elapsed,omitempty"`
+}
+
+// diagnosisMetaCtxKey ctx 键：元数据透传容器（adapter 写 → handler 发 done 载荷）。
+type diagnosisMetaCtxKey struct{}
+
+type diagnosisMetaBox struct {
+	mu   sync.Mutex
+	meta DiagnosisMeta
+	ok   bool
+}
+
+// WithDiagnosisMeta 初始化元数据容器（handler 注入）。
+func WithDiagnosisMeta(ctx context.Context) context.Context {
+	return context.WithValue(ctx, diagnosisMetaCtxKey{}, &diagnosisMetaBox{})
+}
+
+// DiagnosisMetaFrom 读取元数据（第二返回值为 false 表示本轮没有元数据）。
+func DiagnosisMetaFrom(ctx context.Context) (DiagnosisMeta, bool) {
+	b, _ := ctx.Value(diagnosisMetaCtxKey{}).(*diagnosisMetaBox)
+	if b == nil {
+		return DiagnosisMeta{}, false
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.meta, b.ok
+}
+
+func (b *diagnosisMetaBox) set(meta DiagnosisMeta) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.meta = meta
+	b.ok = true
+}
+
+// ---- 助手 API 契约（历史回放仍在用） ----
 
 // DiagnosisSourceMetadata 来源条目的元信息（PDF 原文外链 + 页码区间）。
-// 由内联匿名结构体定型：swag 对嵌套匿名对象只吐 properties（生成物渲染不出字段级形状），
-// 命名后进入 definitions 传递闭包 —— 序列化字节不变（同字段序、同 tag）。
+// 命名后进入 definitions 传递闭包——swag 对内联匿名对象只吐 properties，生成物渲染不出字段。
+//
+// v2 不再返回来源资料；这两个类型保留是因为历史消息行的 sources 列仍按 ADR-0033 回放。
 type DiagnosisSourceMetadata struct {
 	SourceURL string `json:"source_url"`
 	PageStart int    `json:"page_start"`
 	PageEnd   int    `json:"page_end"`
 }
 
-// DiagnosisSource 来源资料条目（answer_sources）：文本内嵌 <<IMAGE:/assistant/static/manual/...>>
-// 溯源标记；metadata.source_url 为 PDF 原文外链，page_start/end 为页码。
-// ID 兼容数字/字符串两态（实测结构化故障码来源吐 "fault-15" 字符串；数字仍原样透出）——
-// 出站恒为 JSON 字符串（DiagnosisSourceID 底层是 string，只自定义了 UnmarshalJSON）。
+// DiagnosisSource 来源资料条目（v1 的 answer_sources）：文本内嵌溯源标记，
+// metadata.source_url 为 PDF 原文外链，page_start/end 为页码。
+// ID 兼容数字/字符串两态（实测结构化故障码来源吐 "fault-15" 字符串）；出站恒为 JSON 字符串。
 type DiagnosisSource struct {
 	ID       DiagnosisSourceID       `json:"id"`
 	Text     string                  `json:"text"`
 	Metadata DiagnosisSourceMetadata `json:"metadata"`
 }
 
-// DiagnosisSourceID 来源 ID：数字与字符串两态（与 diagnosisCode 同形问题的同族修复）。
+// DiagnosisSourceID 来源 ID：数字与字符串两态。
 type DiagnosisSourceID string
 
 func (id *DiagnosisSourceID) UnmarshalJSON(raw []byte) error {
@@ -126,83 +171,49 @@ func (id *DiagnosisSourceID) UnmarshalJSON(raw []byte) error {
 	return nil
 }
 
-// diagnosisChatRequest 助手 /chat 请求体（chat_history 为 array）。
+// diagnosisChatRequest v2 请求体：content 是唯一文本通道，images 是 dataURL 数组。
 type diagnosisChatRequest struct {
-	Query       string              `json:"query"`
-	Brand       string              `json:"brand"`
-	Model       *string             `json:"model,omitempty"`
-	ChatHistory []diagnosisChatTurn `json:"chat_history,omitempty"`
+	Content string   `json:"content"`
+	Images  []string `json:"images,omitempty"`
 }
 
-// diagnosisChatTurn 助手会话轮次（role: user|assistant）。
-type diagnosisChatTurn struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
-
-// diagnosisChatResponse 助手响应（data 取消费字段：sop_text + answer_sources + answer_images）。
-// Code 容忍数字/字符串两态（外部服务实现漂移时 "200" 字符串仍放行）。
-type diagnosisChatResponse struct {
-	Code diagnosisCode `json:"code"`
-	Data struct {
-		SOPText       string                 `json:"sop_text"`
-		AnswerSources []DiagnosisSource      `json:"answer_sources"`
-		AnswerImages  []diagnosisAnswerImage `json:"answer_images"`
-	} `json:"data"`
-}
-
-// diagnosisAnswerImage 助手 20260921 新增的 data.answer_images 条目（**仅供入站归一，绝不出站**
-// —— 不是 DTO、不进 swagger/codegen 面，见 ADR-0048 决策 6）。
-// 刻意不读 file_path：实测它是交付方构建机的 Windows 绝对路径（E:\temp\assistant_delivery_…），
-// 既不是 URL 也不可访问。
-type diagnosisAnswerImage struct {
-	ImageID string `json:"image_id"`
-	URL     string `json:"url"`
-	Caption string `json:"caption"`
-}
-
-// diagnosisCode 业务码：数字 0/200 与字符串 "0"/"200" 同视为成功。
-type diagnosisCode int
-
-func (c *diagnosisCode) UnmarshalJSON(raw []byte) error {
-	var n int
-	if err := json.Unmarshal(raw, &n); err == nil {
-		*c = diagnosisCode(n)
-		return nil
-	}
-	var s string
-	if err := json.Unmarshal(raw, &s); err != nil {
-		return err
-	}
-	trimmed := strings.TrimSpace(s)
-	if trimmed == "" {
-		*c = 0
-		return nil
-	}
-	parsed, err := strconv.Atoi(trimmed)
-	if err != nil {
-		return err
-	}
-	*c = diagnosisCode(parsed)
-	return nil
+// diagnosisSSEEvent v2 SSE 单帧。注意：type 在 JSON 体内——没有 event: 行，
+// 与本站对外的 SSE 帧（event: X + data:）不同形，两者不可混用。
+type diagnosisSSEEvent struct {
+	Type    string           `json:"type"`
+	Text    string           `json:"text"`
+	Answer  string           `json:"answer"`
+	Badges  []DiagnosisBadge `json:"badges"`
+	Elapsed float64          `json:"elapsed"`
+	Message string           `json:"message"`
 }
 
 // diagnosisAssistantAdapter 诊断 RAG 助手 adapter（第二个生产 ModelPort 实现）。
-// 自有 HTTP client：baseURL 构造期注入（config），不经 resolver、无 client 签名缓存
-// （助手仅一个端点，无凭证切换）。
+// 自有 HTTP client：baseURL / apiKey / ossBase 均构造期注入，无凭证切换、无签名缓存。
 type diagnosisAssistantAdapter struct {
 	baseURL string
+	apiKey  string
+	ossBase string
 	client  *http.Client
 	logger  *zap.Logger
 }
 
-// NewDiagnosisAssistantModel 构建诊断 adapter。baseURL 为空时 Stream 返回「未配置」友好错误
-// （功能不可用不炸栈）。
-func NewDiagnosisAssistantModel(baseURL string, logger *zap.Logger) ModelPort {
+// NewDiagnosisAssistantModel 构建诊断 adapter。baseURL 或 apiKey 为空时 Stream 返回
+// 「未配置」友好错误（功能不可用不炸栈）；ossBase 为空时图片全部降级为文字（ADR-0091 决策 5）。
+func NewDiagnosisAssistantModel(baseURL, apiKey, ossBase string, logger *zap.Logger) ModelPort {
 	return &diagnosisAssistantAdapter{
 		baseURL: strings.TrimSuffix(baseURL, "/"),
-		client:  &http.Client{Timeout: aiStreamTimeout}, // 与 eino 流式 300s 纪律一致
-		logger:  logger,
+		apiKey:  apiKey,
+		ossBase: strings.TrimSuffix(ossBase, "/"),
+		// 不跟随重定向：白名单与凭证只对声明的上游主机成立，302 到别处必须显式失败
+		// （ADR-0091 决策 8）。
+		client: &http.Client{
+			Timeout: aiStreamTimeout, // 契约 §1.5：SSE 超时 180~300 秒
+			CheckRedirect: func(*http.Request, []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		},
+		logger: logger,
 	}
 }
 
@@ -213,278 +224,243 @@ func (a *diagnosisAssistantAdapter) Complete(_ string, _ []*schema.Message, _ Co
 	return "", errors.New("智能维修诊断不支持阻塞补全")
 }
 
-// Stream 阻塞调用助手 → 伪流式：整包响应到达后按段落切块经 onChunk 回调，
-// 返回完整回复与计量产出（nil——计量闸门在本 adapter 外层装饰器）。响应 answer_sources
-// 写入 ctx 来源容器（handler 发 SSE sources 事件）。
-func (a *diagnosisAssistantAdapter) Stream(ctx context.Context, sel ModelSelector, msgs []*schema.Message, onChunk func(string)) (string, *Usage, error) {
-	if a.baseURL == "" {
+// Stream 调 v2 SSE：delta 原样经 onChunk 透传（只为观感），done 的 answer 为权威全文并跑
+// 归一链，badges/elapsed 写入 ctx 元数据容器，status 写入状态容器。
+func (a *diagnosisAssistantAdapter) Stream(ctx context.Context, _ ModelSelector, msgs []*schema.Message, onChunk func(string)) (string, *Usage, error) {
+	if a.baseURL == "" || a.apiKey == "" {
 		return "", nil, errors.New("智能维修诊断服务未配置，请联系管理员")
 	}
 
-	// 最后一条用户消息 = 本轮 query（含文本/图片）；此前全部消息 = chat_history
-	query, history, imageBinary, imageName, err := a.buildDiagnosisPayload(msgs)
+	content, images, err := a.buildDiagnosisPayload(msgs)
 	if err != nil {
 		return "", nil, err
 	}
 
-	resp := &diagnosisChatResponse{}
-	if imageBinary != nil {
-		err = a.callWithImage(ctx, query, history, imageBinary, imageName, resp)
-	} else {
-		err = a.callText(ctx, query, history, resp)
-	}
+	answer, err := a.callSSE(ctx, content, images, onChunk)
 	if err != nil {
 		return "", nil, err
 	}
-
-	// 图片表达归一（20260921 的 [IMG:id] 令牌 / 旧内联 markdown）：必须在切块与写来源容器
-	// **之前**——切块拼接恒等于全文这条不变式，只有对归一后的正文成立才有意义。
-	// 同一份索引正文与来源共用（来源里的令牌换回两端认得的 <<IMAGE:>> 标记）。
-	imageIdx := diagnosisImageIndex(resp.Data.AnswerImages)
-	content := normalizeDiagnosisImages(resp.Data.SOPText, imageIdx)
-
-	// 请求标识透传（计费闸门消费）；来源写入共享容器
-	if b, _ := ctx.Value(diagnosisSourcesCtxKey{}).(*diagnosisSourcesBox); b != nil {
-		b.set(canonicalizeDiagnosisSources(resp.Data.AnswerSources, imageIdx))
+	if strings.TrimSpace(answer) == "" {
+		return "", nil, errors.New("诊断服务没有返回内容，请重试")
 	}
 
-	// 伪流式切块：按空行段落切（正文 markdown 分段结构），段落间补分隔符——
-	// 除末段外每段尾附 "\n\n"，各块拼接恒等于全文。空产出时至少落一个空块。
-	// 切块间加节奏间隔：外部助手阻塞返回整包，无间隔时全部 SSE 事件毫秒级到齐，
-	// 前端观感等同一次性出全文（伪流式形同虚设）。
-	if strings.TrimSpace(content) == "" {
-		if onChunk != nil {
-			onChunk("")
-		}
-		return "", nil, nil
-	}
-	paras := strings.Split(content, "\n\n")
-	chunks := make([]string, 0, len(paras))
-	for i, para := range paras {
-		para = strings.Trim(para, "\n")
-		if para == "" {
-			continue
-		}
-		chunk := para
-		if i < len(paras)-1 {
-			chunk += "\n\n"
-		}
-		chunks = append(chunks, chunk)
-	}
-	if onChunk != nil {
-		for i, chunk := range chunks {
-			onChunk(chunk)
-			if i < len(chunks)-1 {
-				select {
-				case <-ctx.Done():
-					return content, nil, ctx.Err()
-				case <-time.After(pseudoStreamChunkInterval):
-				}
-			}
-		}
-	}
-	return content, nil, nil
+	// 归一必须在返回与落库之前：SSE、历史回放、Web 与移动端读到的都是同一份归一后正文。
+	return normalizeDiagnosisImages(a.ossBase, answer, a.logger), nil, nil
 }
 
-// ---- 助手调用 ----
-
-func (a *diagnosisAssistantAdapter) callText(ctx context.Context, query string, history []diagnosisChatTurn, out *diagnosisChatResponse) error {
-	body := diagnosisChatRequest{Query: query, Brand: "all", ChatHistory: history}
-	if p := diagnosisParamsFrom(ctx); p.brand != "" {
-		body.Brand = p.brand
-	}
-	if p := diagnosisParamsFrom(ctx); p.model != "" {
-		body.Model = &p.model
-	}
-	return a.doCall(ctx, "/assistant/api/chat", func(req *http.Request) error {
-		req.Header.Set("Content-Type", "application/json")
-		raw, err := json.Marshal(body)
-		if err != nil {
-			return err
-		}
-		req.Body = io.NopCloser(bytes.NewReader(raw))
-		return nil
-	}, out)
-}
-
-func (a *diagnosisAssistantAdapter) callWithImage(ctx context.Context, query string, history []diagnosisChatTurn, imageBinary []byte, imageName string, out *diagnosisChatResponse) error {
-	return a.doCall(ctx, "/assistant/api/chat/with-image", func(req *http.Request) error {
-		var buf bytes.Buffer
-		w := multipart.NewWriter(&buf)
-		_ = w.WriteField("query", query)
-		brand, model := "all", ""
-		if p := diagnosisParamsFrom(ctx); p.brand != "" {
-			brand = p.brand
-		}
-		if p := diagnosisParamsFrom(ctx); p.model != "" {
-			model = p.model
-		}
-		_ = w.WriteField("brand", brand)
-		if model != "" {
-			_ = w.WriteField("model", model)
-		}
-		// 注意契约坑：with-image 的 chat_history 是 JSON 字符串（与 /chat 的 array 不一致）
-		if hb, err := json.Marshal(history); err == nil {
-			_ = w.WriteField("chat_history", string(hb))
-		}
-		if imageName == "" {
-			imageName = "scene.jpg"
-		}
-		part, err := w.CreateFormFile("image", imageName)
-		if err != nil {
-			return err
-		}
-		if _, err := part.Write(imageBinary); err != nil {
-			return err
-		}
-		_ = w.Close()
-		req.Header.Set("Content-Type", w.FormDataContentType())
-		req.Body = io.NopCloser(&buf)
-		return nil
-	}, out)
-}
-
-// doCall 统一执行助手请求：构造 → 发送（ctx 透传超时/取消）→ 非 200 提取 detail/message →
-// 解析 {code,data}。HTTP 层错误映射为友好中文文案（handler 直接进 SSE error 事件）。
-func (a *diagnosisAssistantAdapter) doCall(ctx context.Context, path string, build func(*http.Request) error, out *diagnosisChatResponse) error {
-	u, err := url.Parse(a.baseURL + path)
+// callSSE 发起 v2 流式请求并按帧消费；返回 done 的 answer（权威全文）。
+func (a *diagnosisAssistantAdapter) callSSE(ctx context.Context, content string, images []string, onChunk func(string)) (string, error) {
+	payload, err := json.Marshal(diagnosisChatRequest{Content: content, Images: images})
 	if err != nil {
-		return fmt.Errorf("智能维修诊断服务地址无效: %w", err)
+		return "", fmt.Errorf("构造诊断请求失败: %w", err)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, a.baseURL+"/api/v2/chat", bytes.NewReader(payload))
 	if err != nil {
-		return fmt.Errorf("构造诊断请求失败: %w", err)
+		return "", fmt.Errorf("构造诊断请求失败: %w", err)
 	}
-	if err := build(req); err != nil {
-		return fmt.Errorf("构造诊断请求失败: %w", err)
-	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "text/event-stream")
+	req.Header.Set("X-API-Key", a.apiKey)
 
 	resp, err := a.client.Do(req)
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			return err
+			return "", err
 		}
-		a.logger.Error("诊断助手调用失败", zap.String("path", path), zap.Error(err))
-		return errors.New("智能维修诊断服务暂时不可用，请稍后重试")
+		if a.logger != nil {
+			a.logger.Error("诊断助手调用失败", zap.String("path", "/api/v2/chat"), zap.Error(err))
+		}
+		return "", errors.New("智能维修诊断服务暂时不可用，请稍后重试")
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
-	raw, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return errors.New("读取诊断服务响应失败")
-	}
 	if resp.StatusCode != http.StatusOK {
-		// 兼容助手两种错误信封：{detail|message|error} 直接透出；否则截断原文
-		var env struct {
-			Detail  string `json:"detail"`
-			Message string `json:"message"`
-			Error   string `json:"error"`
+		return "", a.statusError(resp)
+	}
+
+	return a.consumeSSE(ctx, resp.Body, onChunk)
+}
+
+// consumeSSE 按契约 §1.5 铁律以空行切帧、逐帧读 data: 里的 JSON，按 type 分派。
+func (a *diagnosisAssistantAdapter) consumeSSE(ctx context.Context, body io.Reader, onChunk func(string)) (string, error) {
+	scanner := bufio.NewScanner(body)
+	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+
+	var data strings.Builder
+	answer := ""
+	done := false
+
+	// dispatch 处理单帧；返回 done=true 表示收到终帧。
+	dispatch := func(raw string) (bool, error) {
+		var ev diagnosisSSEEvent
+		if err := json.Unmarshal([]byte(raw), &ev); err != nil {
+			return false, nil // 非 JSON 帧忽略（SSE 允许注释帧）
 		}
-		if err := json.Unmarshal(raw, &env); err == nil {
-			for _, m := range []string{env.Detail, env.Message, env.Error} {
-				if m != "" {
-					return errors.New("诊断失败：" + m)
+		switch ev.Type {
+		case "status":
+			if sink := diagnosisStatusSinkFrom(ctx); sink != nil && ev.Text != "" {
+				sink(ev.Text)
+			}
+		case "delta":
+			// 只为观感：全文以 done 的 answer 为准，delta 不做归一。
+			if onChunk != nil && ev.Text != "" {
+				onChunk(ev.Text)
+			}
+		case "ping", "user_saved":
+			// 忽略：心跳与「用户图片已落盘」对学员端无展示价值
+		case "done":
+			answer = ev.Answer
+			if b, _ := ctx.Value(diagnosisMetaCtxKey{}).(*diagnosisMetaBox); b != nil {
+				if len(ev.Badges) > 0 || ev.Elapsed > 0 {
+					b.set(DiagnosisMeta{Badges: ev.Badges, Elapsed: ev.Elapsed})
 				}
 			}
-		}
-		return fmt.Errorf("诊断服务响应异常（HTTP %d）", resp.StatusCode)
-	}
-	if err := json.Unmarshal(raw, out); err != nil {
-		// 坏包分类 + 原始包截断日志（定位网关页/空包/截断包/契约漂移）。
-		// 截断包走宽容抢救：能抠出 sop_text 即降级可用（标记截断），抠不出才判死刑。
-		preview := truncateDiagnosisPreview(raw)
-		trimmed := bytes.TrimSpace(raw)
-		a.logger.Error("解析诊断响应失败",
-			zap.String("path", path),
-			zap.Int("bytes", len(raw)),
-			zap.String("preview", preview),
-			zap.Error(err))
-		switch {
-		case len(trimmed) == 0:
-			return errors.New("诊断服务返回了空响应，请重试")
-		case bytes.HasPrefix(trimmed, []byte("<")):
-			return errors.New("诊断服务网关异常（收到非 JSON 响应），请稍后重试")
-		default:
-			if salvaged, ok := salvageDiagnosisSOP(raw); ok {
-				a.logger.Warn("诊断响应截断，已抢救正文可用部分",
-					zap.String("path", path), zap.Int("bytes", len(raw)))
-				out.Code = 0
-				out.Data.SOPText = salvaged + "\n\n> 诊断报告传输不完整，以上为已收到的部分内容，可重试获取完整报告。"
-				out.Data.AnswerSources = nil
-				break
+			return true, nil
+		case "error":
+			msg := strings.TrimSpace(ev.Message)
+			if msg == "" {
+				msg = "诊断服务返回了错误，请重试"
 			}
-			return errors.New("诊断服务响应格式异常，请重试")
+			return false, errors.New(msg)
+		}
+		return false, nil
+	}
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line != "" {
+			if v, ok := strings.CutPrefix(line, "data:"); ok {
+				data.WriteString(strings.TrimPrefix(v, " "))
+			}
+			// 契约里没有 event: 行；即便出现也不消费（type 以 JSON 体内为准）。
+			continue
+		}
+		// 空行 = 一帧结束
+		raw := strings.TrimSpace(data.String())
+		data.Reset()
+		if raw == "" {
+			continue
+		}
+		finished, err := dispatch(raw)
+		if err != nil {
+			return "", err
+		}
+		if finished {
+			done = true
+			break
 		}
 	}
-	if out.Code != 0 && out.Code != 200 {
-		a.logger.Warn("诊断业务码异常", zap.String("path", path), zap.Int("code", int(out.Code)))
-		return fmt.Errorf("诊断失败（code %d），请重试", out.Code)
-	}
-	return nil
-}
-
-// salvageDiagnosisSOP 截断包宽容抢救：从未闭合的 JSON 原文中抠出 "sop_text" 的
-// 已到达部分（要求 ≥20 个 rune 才算可用，避免半句误导）。answer_sources 等结构化
-// 字段不抢救（截断即不可信，置空）。仅处理「解析失败但正文可见」一类坏包；空包、
-// 网关 HTML 页、code 类型漂移（已由 diagnosisCode 容忍）不在此处理。
-func salvageDiagnosisSOP(raw []byte) (string, bool) {
-	const key = `"sop_text"`
-	idx := bytes.LastIndex(raw, []byte(key))
-	if idx < 0 {
-		return "", false
-	}
-	rest := bytes.TrimSpace(raw[idx+len(key):])
-	if !bytes.HasPrefix(rest, []byte(":")) {
-		return "", false
-	}
-	rest = bytes.TrimSpace(rest[1:])
-	if !bytes.HasPrefix(rest, []byte(`"`)) {
-		return "", false
-	}
-	// 截断位置即字符串结尾：取最后一个完整转义边界之前的内容做 JSON 反转义。
-	body := rest[1:]
-	end := len(body)
-	if i := bytes.LastIndexByte(body, '\\'); i >= 0 && i == len(body)-1 {
-		end = i
-	}
-	var decoded string
-	if err := json.Unmarshal([]byte(`"`+string(body[:end])+`"`), &decoded); err != nil {
-		return "", false
-	}
-	decoded = strings.TrimSpace(decoded)
-	if len([]rune(decoded)) < 20 {
-		return "", false
-	}
-	return decoded, true
-}
-
-// truncateDiagnosisPreview 坏包日志预览（截断防爆日志；二进制/长包只留头部）。
-func truncateDiagnosisPreview(raw []byte) string {
-	const maxPreview = 512
-	preview := raw
-	if len(preview) > maxPreview {
-		preview = preview[:maxPreview]
-	}
-	return strings.Map(func(r rune) rune {
-		if r == '\n' || r == '\r' || r == '\t' {
-			return ' '
+	if err := scanner.Err(); err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return "", err
 		}
-		return r
-	}, strings.ToValidUTF8(string(preview), "�"))
+		if a.logger != nil {
+			a.logger.Error("读取诊断流失败", zap.Error(err))
+		}
+		return "", errors.New("读取诊断服务响应失败")
+	}
+	// 尾帧可能没有以空行收尾
+	if !done {
+		if raw := strings.TrimSpace(data.String()); raw != "" {
+			finished, err := dispatch(raw)
+			if err != nil {
+				return "", err
+			}
+			done = finished
+		}
+	}
+	if !done {
+		return "", errors.New("诊断服务未返回完整结果，请重试")
+	}
+	return answer, nil
+}
+
+// statusError 把 v2 的 HTTP 失败翻成中文人话（不回显对方原始 JSON）。
+// 403 的两种（Key 停用 / IP 不在白名单）只有错误体说得清时才分，分不出不猜（票 2237 A.5）。
+func (a *diagnosisAssistantAdapter) statusError(resp *http.Response) error {
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 8192))
+	detail := v2ErrorDetail(raw)
+	if a.logger != nil {
+		a.logger.Warn("诊断助手返回失败状态",
+			zap.Int("status", resp.StatusCode), zap.String("detail", detail))
+	}
+
+	switch resp.StatusCode {
+	case http.StatusUnauthorized:
+		return errors.New("智能维修诊断服务鉴权失败（API Key 缺失或无效），请联系管理员")
+	case http.StatusForbidden:
+		if strings.Contains(detail, "IP") || strings.Contains(detail, "白名单") {
+			return errors.New("访问被拒绝：服务器出口 IP 不在对方白名单内，请联系管理员")
+		}
+		if strings.Contains(detail, "停用") || strings.Contains(detail, "禁用") {
+			return errors.New("访问被拒绝：诊断服务 API Key 已停用，请联系管理员")
+		}
+		return errors.New("访问被拒绝（Key 或 IP 白名单），请联系管理员")
+	case http.StatusTooManyRequests:
+		return errors.New("诊断服务请求过于频繁，请稍后再试")
+	case http.StatusBadRequest:
+		if detail != "" {
+			return errors.New("诊断失败：" + detail)
+		}
+		return errors.New("诊断请求不被接受（可能图片过大），请重试")
+	case http.StatusRequestEntityTooLarge:
+		return errors.New("上传的图片过大，请压缩后重试")
+	case http.StatusBadGateway:
+		if detail != "" {
+			return errors.New("诊断失败：" + detail)
+		}
+		return errors.New("诊断服务上游异常，请稍后重试")
+	default:
+		return fmt.Errorf("诊断服务响应异常（HTTP %d），请稍后重试", resp.StatusCode)
+	}
+}
+
+// v2ErrorDetail 取 v2 错误体里的 detail：400/401/403/429/502 是字符串，
+// 422 是数组（契约 §1.4），两种情况都收成一行可读文本。
+func v2ErrorDetail(raw []byte) string {
+	var env struct {
+		Detail json.RawMessage `json:"detail"`
+	}
+	if err := json.Unmarshal(raw, &env); err != nil || len(env.Detail) == 0 {
+		return ""
+	}
+	var s string
+	if err := json.Unmarshal(env.Detail, &s); err == nil {
+		return strings.TrimSpace(s)
+	}
+	var arr []struct {
+		Msg string `json:"msg"`
+	}
+	if err := json.Unmarshal(env.Detail, &arr); err == nil {
+		parts := make([]string, 0, len(arr))
+		for _, item := range arr {
+			if item.Msg != "" {
+				parts = append(parts, item.Msg)
+			}
+		}
+		return strings.TrimSpace(strings.Join(parts, "；"))
+	}
+	return ""
 }
 
 // ---- 消息转译 ----
 
-// buildDiagnosisPayload 把端口消息转译为助手调用负载：
-//   - chat_history = 除最后一条用户消息外的全部 user/assistant 轮次（system 前缀忽略）
-//   - query = 最后一条用户消息的文本 part（空时对齐包前端默认话术；纯图片轮次也如此）；
-//     有历史时把近几轮折叠进 query（见 foldHistoryIntoQuery——外部助手实测忽略 chat_history）
-//   - imageBinary/imageName = 最后一条用户消息的 image part 还原字节（无图 → nil）
-func (a *diagnosisAssistantAdapter) buildDiagnosisPayload(msgs []*schema.Message) (query string, history []diagnosisChatTurn, imageBinary []byte, imageName string, err error) {
+// 对方单次最多收 3 张图、单张解码后上限 5MB（本站上传闸门是 20MB，故必须另判）。
+const (
+	diagnosisMaxImages   = 3
+	diagnosisMaxImageCap = 5 * 1024 * 1024
+)
+
+// buildDiagnosisPayload 把端口消息转译为 v2 请求负载：
+//   - content = 最后一条用户消息的文本（有历史时把近几轮折叠进来，见 foldHistoryIntoQuery）
+//   - images = 最后一条用户消息的 image part 还原成的 dataURL 数组（无图 → nil）
+//
+// 字节来源不变：service.buildImageUserMessage 已把文件读成 base64 塞进 part，这里只解回来，
+// 不二次拉文件。超过上限即拒绝/截断，并在正文尾补一行提示。
+func (a *diagnosisAssistantAdapter) buildDiagnosisPayload(msgs []*schema.Message) (content string, images []string, err error) {
 	if len(msgs) == 0 {
-		return "", nil, nil, "", errors.New("消息不能为空")
+		return "", nil, errors.New("消息不能为空")
 	}
-	// 定位最后一条用户消息：其后不应再跟有效内容（StreamChat 组装保证）
 	lastUserIdx := -1
 	for i := len(msgs) - 1; i >= 0; i-- {
 		if msgs[i] != nil && msgs[i].Role == schema.User {
@@ -493,13 +469,14 @@ func (a *diagnosisAssistantAdapter) buildDiagnosisPayload(msgs []*schema.Message
 		}
 	}
 	if lastUserIdx < 0 {
-		return "", nil, nil, "", errors.New("消息不能为空")
+		return "", nil, errors.New("消息不能为空")
 	}
 
-	// chat_history：最后一条用户消息之前的轮次（跳过 system prompt）
+	// 历史轮次（跳过 system prompt）
+	var history []diagnosisChatTurn
 	for i := 0; i < lastUserIdx; i++ {
 		m := msgs[i]
-		if m == nil || m.Role != schema.User && m.Role != schema.Assistant {
+		if m == nil || (m.Role != schema.User && m.Role != schema.Assistant) {
 			continue
 		}
 		if c := strings.TrimSpace(m.Content); c != "" {
@@ -508,56 +485,71 @@ func (a *diagnosisAssistantAdapter) buildDiagnosisPayload(msgs []*schema.Message
 	}
 
 	last := msgs[lastUserIdx]
+	var text string
+	received := 0
 	for _, part := range last.UserInputMultiContent {
 		switch part.Type {
 		case schema.ChatMessagePartTypeText:
-			query = part.Text
-		case schema.ChatMessagePartTypeImageURL:
-			if part.Image != nil && part.Image.Base64Data != nil {
-				b, derr := base64.StdEncoding.DecodeString(*part.Image.Base64Data)
-				if derr != nil || len(b) == 0 {
-					a.logger.Warn("诊断图片 base64 解码失败，跳过图片", zap.Error(derr))
-					continue
-				}
-				imageBinary = b
-				switch part.Image.MIMEType {
-				case "image/png":
-					imageName = "scene.png"
-				case "image/webp":
-					imageName = "scene.webp"
-				default:
-					imageName = "scene.jpg"
-				}
+			if part.Text != "" {
+				text = part.Text
 			}
+		case schema.ChatMessagePartTypeImageURL:
+			if part.Image == nil || part.Image.Base64Data == nil {
+				continue
+			}
+			received++
+			if len(images) >= diagnosisMaxImages {
+				continue
+			}
+			b, derr := base64.StdEncoding.DecodeString(*part.Image.Base64Data)
+			if derr != nil || len(b) == 0 {
+				if a.logger != nil {
+					a.logger.Warn("诊断图片 base64 解码失败，跳过图片", zap.Error(derr))
+				}
+				continue
+			}
+			if len(b) > diagnosisMaxImageCap {
+				return "", nil, fmt.Errorf("图片单张不能超过 %dMB，请压缩后重试", diagnosisMaxImageCap/1024/1024)
+			}
+			mime := part.Image.MIMEType
+			if mime == "" {
+				mime = "image/jpeg"
+			}
+			images = append(images, "data:"+mime+";base64,"+base64.StdEncoding.EncodeToString(b))
 		}
 	}
-	// eino schema.UserMessage 等纯文本消息走 Content 字段（无 multi-content part）
-	if query == "" {
-		query = last.Content
+	if text == "" {
+		text = last.Content
 	}
-	if query == "" && imageBinary != nil {
+	if text == "" && len(images) > 0 {
 		// 纯图片轮次：对齐包前端行为，默认走图片分析话术
-		query = "请根据现场图片进行分析"
+		text = "请根据现场图片进行分析"
 	}
-	// 外部助手为单轮 RAG QA：chat_history 参数实测被忽略（2026-09-07 lxc101 两轮验证，
-	// 追问命中「请提供故障信息」护栏）。有历史时折叠进 query，检索与生成才能续上上文。
-	if len(history) > 0 && strings.TrimSpace(query) != "" {
-		query = foldHistoryIntoQuery(history, query)
+	// v2 为单轮 RAG QA（契约 FAQ Q5：有意不支持多轮）：不折叠就真的没有上文。
+	if len(history) > 0 && strings.TrimSpace(text) != "" {
+		text = foldHistoryIntoQuery(history, text)
 	}
-	return query, history, imageBinary, imageName, nil
+	if received > len(images) {
+		text += fmt.Sprintf("\n\n> 本次随问附带了 %d 张图片，仅前 %d 张送达诊断服务。", received, len(images))
+	}
+	return text, images, nil
 }
 
 // ---- 上下文折叠 ----
 
-// 伪流式节奏：切块间隔（SSE 事件铺开到肉眼可见的渐进渲染）。
-const pseudoStreamChunkInterval = 60 * time.Millisecond
-
-// 折叠预算：轮次上限（近 3 组问答）、单轮截断、总字符预算——控制 token 与检索污染。
+// 折叠预算：轮次上限（近 6 条消息）、单轮截断、总字符预算——控制 token 与检索污染。
 const (
 	foldMaxTurns      = 6
 	foldMaxTurnRunes  = 300
 	foldMaxTotalRunes = 1200
 )
+
+// diagnosisChatTurn 会话轮次（role: user|assistant）——v2 请求体里没有 chat_history 字段，
+// 这里只作为 foldHistoryIntoQuery 的入参形状。
+type diagnosisChatTurn struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
 
 // foldHistoryIntoQuery 把近几轮历史折进 query 文本：
 //
@@ -603,204 +595,77 @@ func foldHistoryIntoQuery(history []diagnosisChatTurn, query string) string {
 	return b.String()
 }
 
-// ---- 图片表达归一（20260921 契约，ADR-0063）----
+// ---- 图片表达归一（ADR-0063 + ADR-0091）----
 
-// 助手正文里的图片表达有三种历史/现行形状，本函数族把它们统一成 `![alt](本站代理 URL)`：
-//   - `[IMG:image_id]` —— 20260921 起唯一形态，URL 只在 data.answer_images[] 里；
-//   - `<<IMAGE:url|描述:caption>>` —— 手册页图的入库形状（旧版正文曾直接内联过）；
-//   - `![alt](/assistant|app/static/…)` —— 20260904 正文内联 markdown，指向公网不可达的
-//     助手内网路径（ADR-0032 已下线 assistant 子域），历史上在学员端本就是坏图。
-//
-// 归一发生在伪流式切块与落库之前 ⇒ SSE、历史回放、Web 与移动端读到的都是同一份归一后
-// 正文，三端零改动（移动端正文是纯文本渲染，尤其需要裸令牌被抹掉）。未知 image_id
-// **丢令牌**而不是原样透出：宁可少一张图，也不把 img_ab12cd34 这种内部标识露给学员。
-// diagnosisAssetRoute 是归一后正文里图片的本站路径前缀，与 handler_diagnosis.go 注册的
-// `/api/ai-assistant/diagnosis/manual/*filepath` 同源（改路由要同时改这里，契约测试经真实
-// 路由命中该路径，会先红）。
-const diagnosisAssetRoute = "/api/ai-assistant/diagnosis/manual/"
+// diagnosisImageRoute 归一后正文里图片的本站路径前缀，与 handler_diagnosis.go 注册的
+// /api/ai-assistant/diagnosis/ossimg/*filepath 同源——改路由要同时改这里，
+// 契约测试经真实路由命中该路径，会先红。
+const diagnosisImageRoute = "/api/ai-assistant/diagnosis/ossimg/"
 
 var (
-	diagnosisIMGTokenRe = regexp.MustCompile(`\[IMG:\s*([^\[\]]+?)\s*\]`)
-	// 手册页图的入库形状，可带 `| 描述:xxx` 后缀（url 段以空白截断，故后缀前允许空格）。
-	diagnosisLegacyImageRe = regexp.MustCompile(`<<IMAGE:\s*([^|>\s]+)\s*(?:\|\s*(?:描述|caption)[:：]\s*([^>]*))?>>`)
-	// 正文里的 markdown 图片一律过静态路径判定（见 normalizeDiagnosisImages 第 3 步）。
+	// 正文里的 markdown 图片一律过白名单判定。
 	diagnosisMarkdownImgRe = regexp.MustCompile(`!\[([^\]]*)\]\(([^)\s]+)\)`)
 	// diagnosisAltSanitizer 剥掉会破坏 markdown 图片语法的字符。
 	diagnosisAltSanitizer = regexp.MustCompile("[\r\n\\[\\]`]")
 )
 
-// diagnosisImageRef 归一所需的最小图片信息（本站代理路径 + 助手侧原始静态 URL + 替代文本）。
-type diagnosisImageRef struct {
-	path    string // 本站代理 URL（正文图片用）
-	raw     string // 助手侧 /assistant/static/… URL（来源标记用——两端自行 strip 后拼代理）
-	caption string
-}
+// diagnosisFallbackAlt 图片降级成文字时使用的固定文案（与 ADR-0063 时期同词）。
+const diagnosisFallbackAlt = "诊断配图"
 
-// diagnosisImageIndex image_id → 图片引用；无法解析成合法静态路径的条目跳过。
-// 空索引返回 nil（调用侧按「无图」处理，比空 map 少一个分支）。
-func diagnosisImageIndex(imgs []diagnosisAnswerImage) map[string]diagnosisImageRef {
-	idx := make(map[string]diagnosisImageRef, len(imgs))
-	for _, im := range imgs {
-		id := strings.TrimSpace(im.ImageID)
-		if id == "" {
-			continue
-		}
-		path, ok := diagnosisStaticProxyPath(im.URL)
-		if !ok {
-			continue
-		}
-		raw, ok2 := diagnosisCanonicalStaticURL(im.URL)
-		if !ok2 {
-			continue
-		}
-		idx[id] = diagnosisImageRef{path: path, raw: raw, caption: im.Caption}
-	}
-	if len(idx) == 0 {
-		return nil
-	}
-	return idx
-}
-
-// diagnosisCanonicalStaticURL 把助手静态 URL 归成 `/assistant/static/<root>/…` 绝对形状。
-// 交付方入库代码有写 `/app/static/…` 的（pdf_manual_parser），也有写 `/assistant/static/…`
-// 的（markdown_fault_parser）—— 两者对客户端是同一资源，但两端的 strip 规则只认后者。
-func diagnosisCanonicalStaticURL(u string) (string, bool) {
-	s := strings.TrimSpace(u)
-	if s == "" {
-		return "", false
-	}
-	for _, prefix := range []string{"/app/static/", "app/static/"} {
-		if len(s) >= len(prefix) && strings.EqualFold(s[:len(prefix)], prefix) {
-			s = "/assistant/static/" + s[len(prefix):]
-			break
-		}
-	}
-	if !strings.HasPrefix(s, "/assistant/static/") {
-		return "", false
-	}
-	return s, true
-}
-
-// diagnosisStaticProxyPath 把助手内网静态路径转成本站代理 URL（逐段百分号转义，中文案例
-// 目录必此形）。接受 /assistant/static/<root>/… 、/app/static/<root>/… 与裸 <root>/…；
-// 首段不是已知静态根时归 manual（历史来源标记的既有形状）。静态根与段校验复用 proxy 侧
-// 同一套白名单（staticRoots / staticSegmentPattern / staticExtPattern），两端对「什么算
-// 合法静态路径」不可能漂移。
-func diagnosisStaticProxyPath(raw string) (string, bool) {
-	s := strings.TrimSpace(raw)
-	if s == "" {
-		return "", false
-	}
-	if i := strings.IndexAny(s, "?#"); i >= 0 {
-		s = s[:i] // PDF 的 #page 锚点由 metadata 单独承载，不属于资源路径
-	}
-	for _, prefix := range []string{"/assistant/static/", "assistant/static/", "/app/static/", "app/static/"} {
-		if len(s) >= len(prefix) && strings.EqualFold(s[:len(prefix)], prefix) {
-			s = s[len(prefix):]
-			break
-		}
-	}
-	segs := strings.Split(strings.Trim(s, "/"), "/")
-	if len(segs) == 0 || segs[0] == "" {
-		return "", false
-	}
-	for _, seg := range segs {
-		if !staticSegmentPattern.MatchString(seg) {
-			return "", false
-		}
-	}
-	if !staticExtPattern.MatchString(segs[len(segs)-1]) {
-		return "", false
-	}
-	if !staticRoots[segs[0]] {
-		segs = append([]string{"manual"}, segs...)
-	}
-	for i, seg := range segs {
-		segs[i] = url.PathEscape(seg)
-	}
-	return diagnosisAssetRoute + strings.Join(segs, "/"), true
-}
-
-// normalizeDiagnosisImages 归一正文中的三种图片表达（见本节首注释）。idx 为空时令牌与
-// 旧形状全部删除，仅保留已是本站路径的 markdown 图。
-func normalizeDiagnosisImages(sop string, idx map[string]diagnosisImageRef) string {
+// normalizeDiagnosisImages 归一正文里的图片：白名单内的第三方图改写成本站代理路径，
+// 白名单外的降级成一行 alt 文字（ADR-0091 决策 5）。
+//
+// 入口是 done 的 answer（delta 只为观感，不归一）：v2 的图片以 OSS 公网链接出现在 markdown
+// 里。白名单内→代理，于是学员浏览器不会直连第三方；白名单外→留字，宁少一张图也不让
+// AI 生成的正文驱动学员浏览器去请求任意主机（ADR-0063 决策 3 的原始动机）。
+func normalizeDiagnosisImages(ossBase, sop string, logger *zap.Logger) string {
 	if sop == "" {
 		return sop
 	}
-	out := diagnosisIMGTokenRe.ReplaceAllStringFunc(sop, func(m string) string {
-		g := diagnosisIMGTokenRe.FindStringSubmatch(m)
-		if len(g) < 2 {
-			return ""
-		}
-		if ref, ok := idx[g[1]]; ok {
-			return diagnosisMarkdownImage(ref.caption, ref.path)
-		}
-		return ""
-	})
-	out = diagnosisLegacyImageRe.ReplaceAllStringFunc(out, func(m string) string {
-		g := diagnosisLegacyImageRe.FindStringSubmatch(m)
-		if len(g) < 2 {
-			return ""
-		}
-		if path, ok := diagnosisStaticProxyPath(g[1]); ok {
-			return diagnosisMarkdownImage(g[2], path)
-		}
-		return ""
-	})
-	return diagnosisMarkdownImgRe.ReplaceAllStringFunc(out, func(m string) string {
+	return diagnosisMarkdownImgRe.ReplaceAllStringFunc(sop, func(m string) string {
 		g := diagnosisMarkdownImgRe.FindStringSubmatch(m)
 		if len(g) < 3 {
 			return ""
 		}
 		// 已归一的本站代理路径原样放行（防同一正文被二次改写）。
-		if strings.HasPrefix(g[2], diagnosisAssetRoute) {
+		if strings.HasPrefix(g[2], diagnosisImageRoute) {
 			return m
 		}
-		if path, ok := diagnosisStaticProxyPath(g[2]); ok {
+		if path, ok := diagnosisOSSProxyPath(ossBase, g[2]); ok {
 			return diagnosisMarkdownImage(g[1], path)
 		}
-		// 既不是助手静态资源、也不是本站代理 ⇒ 丢弃：AI 生成的正文不得驱动学员浏览器去
-		// 请求任意第三方主机（外链图 = 追踪面，且本站图片一律走代理，见 ADR-0032 收口）。
-		return ""
+		// 白名单外：同步降级为 alt 文字（决策 7 的一行日志，不打点、不进计量面）
+		if logger != nil {
+			logger.Info("诊断配图不在白名单内，降级为文字",
+				zap.String("host", diagnosisHostOf(g[2])),
+				zap.Bool("whitelisted", false),
+				zap.String("url_head", truncateRunes(g[2], 120)))
+		}
+		return diagnosisAltText(g[1])
 	})
 }
 
 // diagnosisMarkdownImage 拼一张本站代理图；alt 清洗后为空时给固定文案。
 func diagnosisMarkdownImage(alt, path string) string {
-	clean := strings.TrimSpace(diagnosisAltSanitizer.ReplaceAllString(alt, ""))
-	if clean == "" {
-		clean = "诊断配图"
-	}
-	return "![" + clean + "](" + path + ")"
+	return "![" + diagnosisAltText(alt) + "](" + path + ")"
 }
 
-// canonicalizeDiagnosisSources 把来源面收拢到两端已有的那一套形状：
-//   - `[IMG:id]` 令牌 → `<<IMAGE:/assistant/static/…>>` 标记。**实测必做**：结构化故障码来源
-//     （id 形如 fault-498）的 text 里就带着令牌（交付方 markdown parser 入库写的是 `[IMG:id]`），
-//     而 Web 的 IMAGE_RE 与移动端 aiSourcesDisplay 只认 `<<IMAGE:>>` ⇒ 不换形学员会在
-//     「资料来源」卡片里看到 img_120bc2b77e66；未知 image_id 同样丢令牌。
-//   - `/app/static/` 绝对前缀 → `/assistant/static/`：交付方 pdf_manual_parser 入库写的就是
-//     前者（实测当前 sources 已是后者），一旦漂进来两端都会拼出坏 URL。
-//
-// 两处都在此单点做，两端不必各自加规则。
-func canonicalizeDiagnosisSources(sources []DiagnosisSource, idx map[string]diagnosisImageRef) []DiagnosisSource {
-	for i := range sources {
-		text := diagnosisIMGTokenRe.ReplaceAllStringFunc(sources[i].Text, func(m string) string {
-			g := diagnosisIMGTokenRe.FindStringSubmatch(m)
-			if len(g) < 2 {
-				return ""
-			}
-			if ref, ok := idx[g[1]]; ok {
-				return "<<IMAGE:" + ref.raw + ">>"
-			}
-			return ""
-		})
-		sources[i].Text = strings.ReplaceAll(text, "/app/static/", "/assistant/static/")
-		if src := sources[i].Metadata.SourceURL; strings.Contains(src, "/app/static/") {
-			sources[i].Metadata.SourceURL = strings.ReplaceAll(src, "/app/static/", "/assistant/static/")
-		}
+// diagnosisAltText 把 alt 清洗成可安全嵌进 markdown 的一行文字。
+func diagnosisAltText(alt string) string {
+	clean := strings.TrimSpace(diagnosisAltSanitizer.ReplaceAllString(alt, ""))
+	if clean == "" {
+		return diagnosisFallbackAlt
 	}
-	return sources
+	return clean
+}
+
+// truncateRunes 截断日志字段（按 rune，不留半个字）。
+func truncateRunes(s string, max int) string {
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return string(r[:max])
 }
 
 // ---- routing adapter：按 FeatureKey 分发 ----

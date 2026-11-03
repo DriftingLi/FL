@@ -1,6 +1,6 @@
-// 诊断只读代理测试（计划 批次2）：httptest fake 助手覆盖
-// brands/models/fault-codes 解析、分页参数透传、手册资源代理与 SSRF/路径防御、
-// 未配置与失败降级。
+// 外部诊断回答配图白名单代理测试（ADR-0091 / 票 2237 B 节）：
+// 钉死五道闸（scheme+host+前缀 / 剥 ?# / 逐段白名单 / 图片扩展名 / 解一次再转义）
+// 与回源行为（不跟随重定向、非 200、未配置）。
 package aiassistant
 
 import (
@@ -9,183 +9,313 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"sync"
 	"testing"
 
 	"go.uber.org/zap"
 )
 
-func newProxyForTest(server *httptest.Server) *DiagnosisProxyService {
-	return NewDiagnosisProxyService(server.URL, zap.NewNop())
+const (
+	testOSSBasePath = "/forklift/repair_img"
+	testOSSHostPath = "hrwai-guangzhou.oss-cn-beijing.aliyuncs.com"
+)
+
+// newOSSFake 起一个假 OSS：任意路径都回 PNG 字节，并记录最近一次请求路径。
+func newOSSFake(t *testing.T) (*httptest.Server, *string) {
+	t.Helper()
+	var lastPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		lastPath = r.URL.Path
+		w.Header().Set("Content-Type", "image/png")
+		_, _ = w.Write([]byte("\x89PNG-bytes"))
+	}))
+	t.Cleanup(server.Close)
+	return server, &lastPath
 }
 
-// TestDiagnosisProxy_BrandsAndModels brands 解析为 {value,label}；models 透传 brand 并解析为数组。
-func TestDiagnosisProxy_BrandsAndModels(t *testing.T) {
-	var lastQuery string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		lastQuery = r.URL.RawQuery
-		w.Header().Set("Content-Type", "application/json")
-		switch r.URL.Path {
-		case "/assistant/api/brands":
-			_, _ = w.Write([]byte(`{"code":200,"data":[{"value":"all","label":"全部品牌"},{"value":"hangcha","label":"杭叉叉车"}]}`))
-		case "/assistant/api/models":
-			_, _ = w.Write([]byte(`{"code":200,"data":["全部车型","CBD15","CBD20"]}`))
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	defer server.Close()
-	proxy := newProxyForTest(server)
+// ossBaseFor 把假 OSS 的地址包成「https + 白名单前缀」形状的基准。
+// 假服务器是 http 的，故这里只用于测**路径折叠**：helper 直接调 diagnosisOSSProxyPath 时
+// 用纯字符串基准即可；回源测试走 OpenOSSImage 的 relative 分支。
+func ossBaseFor(server *httptest.Server) string {
+	return "https://" + testOSSHostPath + testOSSBasePath
+}
 
-	brands, err := proxy.ListBrands(context.Background())
-	if err != nil || len(brands) != 2 || brands[1].Value != "hangcha" || brands[1].Label != "杭叉叉车" {
-		t.Fatalf("brands 解析不符: %+v err=%v", brands, err)
+// TestDiagnosisOSSProxyPath_Whitelist 五道闸：正例与全部反例。
+func TestDiagnosisOSSProxyPath_Whitelist(t *testing.T) {
+	base := "https://" + testOSSHostPath + testOSSBasePath
+
+	ok := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "林德型号目录",
+			in:   "https://" + testOSSHostPath + testOSSBasePath + "/linde/Linde_A-005-01__image-20260824100446677.png",
+			want: diagnosisImageRoute + "linde/Linde_A-005-01__image-20260824100446677.png",
+		},
+		{
+			name: "中力规范名目录",
+			in:   "https://" + testOSSHostPath + testOSSBasePath + "/images_all/制动系统异响.png",
+			want: diagnosisImageRoute + "images_all/%E5%88%B6%E5%8A%A8%E7%B3%BB%E7%BB%9F%E5%BC%82%E5%93%8D.png",
+		},
+		{
+			name: "带查询串（剥掉）",
+			in:   "https://" + testOSSHostPath + testOSSBasePath + "/linde/a.jpg?v=1",
+			want: diagnosisImageRoute + "linde/a.jpg",
+		},
+		{
+			name: "百分号编码文件名（解一次再转义，不双重编码）",
+			in:   "https://" + testOSSHostPath + testOSSBasePath + "/linde/%E6%9E%97%E5%BE%B7__a.jpg",
+			want: diagnosisImageRoute + "linde/%E6%9E%97%E5%BE%B7__a.jpg",
+		},
+		{
+			name: "大写扩展名",
+			in:   "https://" + testOSSHostPath + testOSSBasePath + "/linde/a.PNG",
+			want: diagnosisImageRoute + "linde/a.PNG",
+		},
+		{
+			name: "webp 放行",
+			in:   "https://" + testOSSHostPath + testOSSBasePath + "/images_all/a.webp",
+			want: diagnosisImageRoute + "images_all/a.webp",
+		},
 	}
-	models, err := proxy.ListModels(context.Background(), "hangcha")
-	if err != nil || len(models) != 3 || models[2] != "CBD20" {
-		t.Fatalf("models 解析不符: %+v err=%v", models, err)
+	for _, c := range ok {
+		t.Run(c.name, func(t *testing.T) {
+			got, valid := diagnosisOSSProxyPath(base, c.in)
+			if !valid || got != c.want {
+				t.Fatalf("应放行并归一:\n got=%q valid=%v\nwant=%q", got, valid, c.want)
+			}
+		})
 	}
-	if !strings.Contains(lastQuery, "brand=hangcha") {
-		t.Fatalf("models 应透传 brand 查询: %q", lastQuery)
+
+	bad := []struct {
+		name string
+		in   string
+	}{
+		{"http 明文", "http://" + testOSSHostPath + testOSSBasePath + "/linde/a.png"},
+		{"同形异域", "https://evil-" + testOSSHostPath + testOSSBasePath + "/linde/a.png"},
+		{"别的 host", "https://example.com" + testOSSBasePath + "/linde/a.png"},
+		{"前缀外", "https://" + testOSSHostPath + "/create/linde/a.png"},
+		{"前缀只有父级", "https://" + testOSSHostPath + "/forklift/linde/a.png"},
+		{"前缀子串伪装", "https://" + testOSSHostPath + testOSSBasePath + "-evil/linde/a.png"},
+		{"穿越", "https://" + testOSSHostPath + testOSSBasePath + "/linde/../../etc/passwd.png"},
+		{"编码穿越（解一次后落网）", "https://" + testOSSHostPath + testOSSBasePath + "/linde/%2e%2e/%2e%2e/etc/passwd.png"},
+		{"二次编码残留 %", "https://" + testOSSHostPath + testOSSBasePath + "/linde/%252e%252e/a.png"},
+		{"pdf 不放行（图片语法里只会是坏图）", "https://" + testOSSHostPath + testOSSBasePath + "/linde/a.pdf"},
+		{"无扩展名", "https://" + testOSSHostPath + testOSSBasePath + "/linde/a"},
+		{"空路径", "https://" + testOSSHostPath},
+		{"相对路径", testOSSBasePath + "/linde/a.png"},
+		{"空串", ""},
 	}
-	// brand=all 不附加查询
-	_, _ = proxy.ListModels(context.Background(), "all")
-	if lastQuery != "" {
-		t.Fatalf("brand=all 不应携带查询参数: %q", lastQuery)
+	for _, c := range bad {
+		t.Run(c.name, func(t *testing.T) {
+			if got, valid := diagnosisOSSProxyPath(base, c.in); valid {
+				t.Fatalf("应拒绝，got %q", got)
+			}
+		})
+	}
+
+	// 基准为空/非法：一律不放行（配置没给 OSS 基准就没有任何图可服务）
+	for _, base := range []string{"", "   ", "http://" + testOSSHostPath + testOSSBasePath, "not-a-url"} {
+		t.Run("基准非法 "+base, func(t *testing.T) {
+			if _, valid := diagnosisOSSProxyPath(base, "https://"+testOSSHostPath+testOSSBasePath+"/linde/a.png"); valid {
+				t.Fatal("基准非法时应拒绝")
+			}
+		})
 	}
 }
 
-// TestDiagnosisProxy_FaultCodes 分页/筛选参数透传与 items/total 解析。
-func TestDiagnosisProxy_FaultCodes(t *testing.T) {
-	var lastQuery string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		lastQuery = r.URL.RawQuery
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"code":200,"data":{"total":33,"items":[{"id":1,"brand":"hangcha","brand_cn":"杭叉叉车","model_series":"CBD系列","fault_code":"05","fault_name":"提升接触器开路","symptom":"起升无反应","causes":"线圈脱落","sop_steps":"步骤1","safety_warning":"断电","part_numbers":"","source_file":"a.pdf","page_num":12}]}}`))
-	}))
-	defer server.Close()
-	proxy := newProxyForTest(server)
-
-	page, err := proxy.ListFaultCodes(context.Background(), "hangcha", "05", 2, 30)
-	if err != nil || page.Total != 33 || len(page.Items) != 1 {
-		t.Fatalf("fault-codes 解析不符: %+v err=%v", page, err)
+// TestDiagnosisOSSProxyPath_BaseWithSubpath 基准自带子路径时按它做前缀（不写死常量）。
+func TestDiagnosisOSSProxyPath_BaseWithSubpath(t *testing.T) {
+	base := "https://" + testOSSHostPath + "/other_prefix"
+	if got, valid := diagnosisOSSProxyPath(base, "https://"+testOSSHostPath+"/other_prefix/x/a.png"); !valid {
+		t.Fatalf("应按基准前缀放行，got %q", got)
 	}
-	it := page.Items[0]
-	if it.FaultCode != "05" || it.FaultName != "提升接触器开路" || it.SOPSteps != "步骤1" {
-		t.Fatalf("条目字段不符: %+v", it)
-	}
-	for _, want := range []string{"brand=hangcha", "keyword=05", "page=2", "page_size=30"} {
-		if !strings.Contains(lastQuery, want) {
-			t.Fatalf("fault-codes 查询应含 %q: %q", want, lastQuery)
-		}
+	if _, valid := diagnosisOSSProxyPath(base, "https://"+testOSSHostPath+testOSSBasePath+"/x/a.png"); valid {
+		t.Fatal("基准前缀之外的路径应拒绝")
 	}
 }
 
-// TestDiagnosisProxy_Manual 静态资源代理（20260921 双根）：三种合法形状各自解析到正确上游
-// 路径（含中文案例目录的原样与百分号编码两态），SSRF/穿越/绝对形状一律拒绝。
-func TestDiagnosisProxy_Manual(t *testing.T) {
-	var mu sync.Mutex
-	var got []string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		got = append(got, r.URL.Path)
-		mu.Unlock()
-		switch r.URL.Path {
-		case "/assistant/static/manual/ep_test/page_1.png",
-			"/assistant/static/fault_images/制动系统/图_1.png":
-			w.Header().Set("Content-Type", "image/png")
-			_, _ = w.Write([]byte("PNGDATA"))
-		default:
-			http.NotFound(w, r)
+// TestDiagnosisProxyOpenOSSImage 回源：路径折叠正确、Content-Type 透出、非法子路径不发请求。
+func TestDiagnosisProxyOpenOSSImage(t *testing.T) {
+	server, lastPath := newOSSFake(t)
+	// 假 OSS 是 http，直接构造 service 让它指向它（白名单判定已在上面单独覆盖）
+	svc := &DiagnosisProxyService{
+		ossBase: server.URL + testOSSBasePath,
+		client:  server.Client(),
+		logger:  zap.NewNop(),
+	}
+
+	body, ct, err := svc.OpenOSSImage(context.Background(), "linde/Linde_A-005-01__image.png")
+	if err != nil {
+		t.Fatalf("回源失败: %v", err)
+	}
+	defer func() { _ = body.Close() }()
+	raw, _ := io.ReadAll(body)
+	if !strings.HasPrefix(string(raw), "\x89PNG") {
+		t.Fatalf("字节不符: %q", raw)
+	}
+	if ct != "image/png" {
+		t.Fatalf("Content-Type 应透出，got %q", ct)
+	}
+	if want := testOSSBasePath + "/linde/Linde_A-005-01__image.png"; *lastPath != want {
+		t.Fatalf("上游路径不符:\n got=%q\nwant=%q", *lastPath, want)
+	}
+
+	// 中文目录名：入参是转义形态（handler 的 *filepath 带的是原始 path）。
+	// 上游 req.URL.Path 是 Go 解码后的形态，故这里比解码值（真正的转义发生在
+	// resolveOSSSubpath 的出参上，见 TestResolveOSSSubpathEscapes）。
+	*lastPath = ""
+	if _, _, err := svc.OpenOSSImage(context.Background(), "images_all/%E5%88%B6%E5%8A%A8.png"); err != nil {
+		t.Fatalf("中文目录回源失败: %v", err)
+	}
+	if want := testOSSBasePath + "/images_all/制动.png"; *lastPath != want {
+		t.Fatalf("中文目录上游路径不符:\n got=%q\nwant=%q", *lastPath, want)
+	}
+}
+
+// TestResolveOSSSubpathEscapes 出参必须是逐段转义形态（交给上游的恒为合法 URL 路径）。
+func TestResolveOSSSubpathEscapes(t *testing.T) {
+	ok := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"中文目录", "images_all/制动系统异响.png", "images_all/%E5%88%B6%E5%8A%A8%E7%B3%BB%E7%BB%9F%E5%BC%82%E5%93%8D.png"},
+		{"已是转义形态解一次再转义", "images_all/%E5%88%B6%E5%8A%A8.png", "images_all/%E5%88%B6%E5%8A%A8.png"},
+		{"普通名", "linde/Linde_A-005-01__image.png", "linde/Linde_A-005-01__image.png"},
+		{"前导斜杠被剥", "/linde/a.png", "linde/a.png"},
+	}
+	for _, c := range ok {
+		t.Run(c.name, func(t *testing.T) {
+			got, valid := resolveOSSSubpath(c.in)
+			if !valid || got != c.want {
+				t.Fatalf("got %q valid=%v want %q", got, valid, c.want)
+			}
+		})
+	}
+
+	bad := []struct {
+		name string
+		in   string
+	}{
+		{"空", ""},
+		{"只有斜杠", "/"},
+		{"穿越", "linde/../../etc/passwd.png"},
+		{"编码穿越", "linde/%2e%2e/%2e%2e/etc/passwd.png"},
+		{"二次编码残留 %", "linde/%252e%252e/a.png"},
+		{"pdf 不放行", "linde/a.pdf"},
+		{"无扩展名", "linde/a"},
+		// 已知代价（ADR-0091 决策 2 复用 staticSegmentPattern）：原名里的括号/空格不在
+		// 段白名单字符集内，这类图会被降级成文字。安全优先，记为已知损失而不是漏洞。
+		{"原名含括号", "linde/型号__原名(1).jpg"},
+		{"原名含空格", "images_all/带 空格.png"},
+	}
+	for _, c := range bad {
+		t.Run(c.name, func(t *testing.T) {
+			if got, valid := resolveOSSSubpath(c.in); valid {
+				t.Fatalf("应拒绝，got %q", got)
+			}
+		})
+	}
+}
+
+// TestDiagnosisProxyOpenOSSImage_Rejects 非法子路径与未配置：不发请求、给中文错误。
+func TestDiagnosisProxyOpenOSSImage_Rejects(t *testing.T) {
+	server, lastPath := newOSSFake(t)
+	svc := &DiagnosisProxyService{
+		ossBase: server.URL + testOSSBasePath,
+		client:  server.Client(),
+		logger:  zap.NewNop(),
+	}
+	for _, bad := range []string{"", "/", "linde/a.pdf", "linde/../../etc/passwd.png", "linde/%2e%2e/a.png", "linde/a"} {
+		*lastPath = ""
+		if _, _, err := svc.OpenOSSImage(context.Background(), bad); err == nil {
+			t.Fatalf("非法子路径应拒绝: %q", bad)
 		}
+		if *lastPath != "" {
+			t.Fatalf("非法子路径不应发上游请求: %q", bad)
+		}
+	}
+
+	unconf := &DiagnosisProxyService{logger: zap.NewNop()}
+	if _, _, err := unconf.OpenOSSImage(context.Background(), "linde/a.png"); err == nil || !strings.Contains(err.Error(), "未配置") {
+		t.Fatalf("未配置应给友好错误，got %v", err)
+	}
+}
+
+// TestDiagnosisProxyOpenOSSImage_UpstreamFail 上游非 200 与网络错误都收成中文人话。
+func TestDiagnosisProxyOpenOSSImage_UpstreamFail(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
 	}))
 	defer server.Close()
-	proxy := newProxyForTest(server)
-
-	upstream := func() []string {
-		mu.Lock()
-		defer mu.Unlock()
-		return append([]string(nil), got...)
+	svc := &DiagnosisProxyService{
+		ossBase: server.URL + testOSSBasePath,
+		client:  server.Client(),
+		logger:  zap.NewNop(),
 	}
-	// 无根旧形状恒归 manual（既有客户端与全部历史行的形状）；带根按原根透传。
-	for _, tc := range []struct{ in, want string }{
-		{"ep_test/page_1.png", "/assistant/static/manual/ep_test/page_1.png"},
-		{"manual/ep_test/page_1.png", "/assistant/static/manual/ep_test/page_1.png"},
-		{"/ep_test/page_1.png", "/assistant/static/manual/ep_test/page_1.png"},
-		{"fault_images/制动系统/图_1.png", "/assistant/static/fault_images/制动系统/图_1.png"},
-		{"fault_images/%E5%88%B6%E5%8A%A8%E7%B3%BB%E7%BB%9F/%E5%9B%BE_1.png",
-			"/assistant/static/fault_images/制动系统/图_1.png"},
+	if _, _, err := svc.OpenOSSImage(context.Background(), "linde/a.png"); err == nil || !strings.Contains(err.Error(), "不存在") {
+		t.Fatalf("非 200 应报不存在，got %v", err)
+	}
+}
+
+// TestDiagnosisProxyNoRedirect 302 不得被跟随（ADR-0091 决策 8：白名单只对声明的 host 成立）。
+func TestDiagnosisProxyNoRedirect(t *testing.T) {
+	// 目标服务器：若被跟随，就会在这里留下命中记录
+	var followed bool
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		followed = true
+		_, _ = w.Write([]byte("secret"))
+	}))
+	defer target.Close()
+
+	redirector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL+"/x.png", http.StatusFound)
+	}))
+	defer redirector.Close()
+
+	svc := &DiagnosisProxyService{
+		ossBase: redirector.URL + testOSSBasePath,
+		client: &http.Client{
+			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+		},
+		logger: zap.NewNop(),
+	}
+	if _, _, err := svc.OpenOSSImage(context.Background(), "linde/a.png"); err == nil {
+		t.Fatal("302 应作为非 200 失败，而不是被跟随")
+	}
+	if followed {
+		t.Fatal("不跟随重定向：目标服务器不应被命中")
+	}
+}
+
+// TestDiagnosisProxyOpenOSSImageEscapesConsistency 归一产物必须是本站路由参数能解回去的形状：
+// adapter 拼出的路径去掉前缀后，喂回 OpenOSSImage 得到同一上游路径（编码往返闭环）。
+func TestDiagnosisProxyOpenOSSImageEscapesConsistency(t *testing.T) {
+	base := "https://" + testOSSHostPath + testOSSBasePath
+	for _, name := range []string{
+		"linde/Linde_A-005-01__image.png",
+		"images_all/制动系统异响.png",
+		"linde/image-20260824100446677.jpg",
 	} {
-		mu.Lock()
-		got = nil
-		mu.Unlock()
-		body, ct, err := proxy.OpenManual(context.Background(), tc.in)
-		if err != nil {
-			t.Fatalf("打开静态资源失败 %q: %v", tc.in, err)
+		raw := base + "/" + name
+		proxyPath, ok := diagnosisOSSProxyPath(base, raw)
+		if !ok {
+			t.Fatalf("应放行: %q", name)
 		}
-		data, _ := io.ReadAll(body)
-		_ = body.Close()
-		if string(data) != "PNGDATA" || ct != "image/png" {
-			t.Fatalf("%q 内容/类型不符: %q %q", tc.in, data, ct)
+		sub := strings.TrimPrefix(proxyPath, diagnosisImageRoute)
+		back, ok := diagnosisOSSProxyPath(base, base+"/"+sub)
+		if !ok || back != proxyPath {
+			t.Fatalf("编码往返不闭环:\n name=%q\n proxy=%q\n back=%q ok=%v", name, proxyPath, back, ok)
 		}
-		if paths := upstream(); len(paths) != 1 || paths[0] != tc.want {
-			t.Fatalf("%q 上游路径不符: got=%v want=%s", tc.in, paths, tc.want)
+		// 路由参数（转义形态）经 resolveOSSSubpath 应还原成同一上游路径
+		upstream, ok := resolveOSSSubpath(sub)
+		if !ok {
+			t.Fatalf("路由参数应可解析: %q", sub)
 		}
-	}
-	// SSRF/穿越、无扩展名、空段与编码后穿越拒绝
-	for _, bad := range []string{
-		"../etc/passwd", "a/b", "/etc/passwd", "a;rm%20x.png", "?x=1/y.png",
-		"%2e%2e/x.png", `a\b.png`, "manual/", "", "ep_test/../x.png", "a\x00b.png",
-	} {
-		if _, _, err := proxy.OpenManual(context.Background(), bad); err == nil {
-			t.Fatalf("非法静态路径应拒绝: %q", bad)
+		if want := strings.TrimPrefix(proxyPath, diagnosisImageRoute); upstream != want {
+			t.Fatalf("子路径还原不符:\n got=%q\nwant=%q", upstream, want)
 		}
-	}
-	// 绝对路径必须被拒绝（strip 唯一在前端，后端收到即非法，不再兜底拼出双前缀）
-	for _, bad := range []string{
-		"/assistant/static/ep_test/page_1.png", "assistant/static/ep_test/page_1.png",
-		"/app/static/fault_images/制动系统/x.png",
-	} {
-		if _, _, err := proxy.OpenManual(context.Background(), bad); err == nil || err.Error() != "无效的手册资源路径" {
-			t.Fatalf("绝对路径应拒绝而非兜底 strip: %q err=%v", bad, err)
-		}
-	}
-	// 大写扩展名放行（白名单校验通过；远端 404 属资源不存在而非路径非法）
-	if _, _, err := proxy.OpenManual(context.Background(), "ep_test/PAGE_2.PNG"); err != nil && err.Error() == "无效的手册资源路径" {
-		t.Fatalf("大写扩展名应放行白名单: %v", err)
-	}
-	// 根名区分大小写：MANUAL/ 不是根 ⇒ 作为 manual 根下的子路径，不越界到别处
-	mu.Lock()
-	got = nil
-	mu.Unlock()
-	_, _, _ = proxy.OpenManual(context.Background(), "MANUAL/x.pdf")
-	if paths := upstream(); len(paths) != 1 || paths[0] != "/assistant/static/manual/MANUAL/x.pdf" {
-		t.Fatalf("非白名单根名应落在 manual 根下: got=%v", paths)
-	}
-}
-
-// TestDiagnosisProxy_Errors 未配置 baseURL、助手非 200、服务不可达的降级。
-func TestDiagnosisProxy_Errors(t *testing.T) {
-	// 未配置
-	unconf := NewDiagnosisProxyService("", zap.NewNop())
-	if _, err := unconf.ListBrands(context.Background()); err == nil || !strings.Contains(err.Error(), "未配置") {
-		t.Fatalf("未配置应返回友好错误: %v", err)
-	}
-	// 助手 503（detail 透出）
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusServiceUnavailable)
-		_, _ = w.Write([]byte(`{"detail":"knowledge offline"}`))
-	}))
-	defer server.Close()
-	if _, err := newProxyForTest(server).ListFaultCodes(context.Background(), "", "", 1, 20); err == nil || !strings.Contains(err.Error(), "knowledge offline") {
-		t.Fatalf("非 200 应透出 detail: %v", err)
-	}
-	// 信封 code 非 0/200
-	server2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{"code":500,"data":null}`))
-	}))
-	defer server2.Close()
-	if _, err := newProxyForTest(server2).ListBrands(context.Background()); err == nil || !strings.Contains(err.Error(), "code 500") {
-		t.Fatalf("code 非 0/200 应报错: %v", err)
 	}
 }

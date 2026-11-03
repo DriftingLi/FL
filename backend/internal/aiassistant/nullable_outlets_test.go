@@ -7,20 +7,17 @@
 // 登记处是 internal/apitypes/nullability_lock_test.go 的 nullableEvidenceSources
 // （它按**目录**收表：域包一行，见该锁 :115-176 的「一条事实一个证据」判据）。
 //
-// 本段三格的共同点：**集合那一格从来没有 make(...) 兜底**，所以「没有内容」那一档就是 Go 的
+// 本段两格的共同点：**集合那一格从来没有 make(...) 兜底**，所以「没有内容」那一档就是 Go 的
 // nil 切片，marshal 出来是 `null` 而不是 `[]`：
 //   - AIChatMessageDTO.images / .sources ⇒ 列是**字符串**存的 JSON，GetSessionMessages 只在
 //     列非空串时才 Unmarshal，「没图 / 没来源」那两档留 nil。同一份历史回放，两格两种缺席形状。
-//   - DiagnosisFaultCodePage.items ⇒ 代理把上游 body 直接 Decode 进结构体，一个 make 都没有。
-//     这一格的可空性**由对端进程决定**：上游省略 items 键或发 `null`，这里就是 `null`。
-//     出口用 httptest 假上游量的是「代理不兜底」这个事实（本仓改判不了对端发什么，
-//     所以它也改判不成 nonnil——那句 nonnil 会替对端撒一句本仓没资格替它作的保）。
+//
+// DiagnosisFaultCodePage.items 那一格随 v1 通道退役（票 2237）：故障码代理已删，
+// 该可空性不再有出口，登记与判据一并摘除。
 package aiassistant
 
 import (
 	"context"
-	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -35,9 +32,8 @@ import (
 // 新增一条 nullable 声明时必须同时在这里留一行，否则 apitypes 的判据 4 当场点名；
 // 反过来，把某条改判成 nonnil 而不删这里的键，会被「表里有键、字段却不是 nullable」那半边抓到。
 var nullableOutlets = map[string]func(t *testing.T) any{
-	"aiassistant.AIChatMessageDTO.images":      outletAIChatMessageWithoutImages,
-	"aiassistant.AIChatMessageDTO.sources":     outletAIChatMessageWithoutImages,
-	"aiassistant.DiagnosisFaultCodePage.items": outletFaultCodesUpstreamOmitsItems,
+	"aiassistant.AIChatMessageDTO.images":  outletAIChatMessageWithoutImages,
+	"aiassistant.AIChatMessageDTO.sources": outletAIChatMessageWithoutImages,
 }
 
 // nullableOutletTables 是域包这张 nullable 表的汇总点；runner 逐条执行它（理由同留驻侧
@@ -109,20 +105,4 @@ func outletAIChatMessageWithoutImages(t *testing.T) any {
 		t.Fatalf("回放取到 %d 条消息，期望 1 条——出口没落到要证的那一格", len(out))
 	}
 	return out[0]
-}
-
-// outletFaultCodesUpstreamOmitsItems 假上游只回 code=200 + data.total=0（省略 items 键，
-// 对端「这一页没有条目」的一种常见写法）⇒ 代理 Decode 后 Items 仍是 nil。
-func outletFaultCodesUpstreamOmitsItems(t *testing.T) any {
-	t.Helper()
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"code":200,"data":{"total":0}}`))
-	}))
-	defer server.Close()
-	page, err := newProxyForTest(server).ListFaultCodes(context.Background(), "", "", 1, 20)
-	if err != nil {
-		t.Fatalf("故障码分页失败: %v", err)
-	}
-	return page
 }

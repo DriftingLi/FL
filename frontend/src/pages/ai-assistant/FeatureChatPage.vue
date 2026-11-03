@@ -14,83 +14,10 @@
     @suggest="useSuggestion"
     @new-session="handleNewSession"
   >
-    <!-- 诊断筛选移入输入框上方工具栏（快捷问只留下方气泡，此处仅筛选胶囊） -->
-    <template #input-toolbar>
-      <div v-if="isDiagnosis" class="flex items-center gap-2 overflow-x-auto pb-2">
-        <UiCapsule
-          :label="filterSummary ? `⚙ 筛选：${filterSummary}` : '⚙ 筛选'"
-          :active="filterOpen"
-          @click="filterOpen = !filterOpen"
-        />
-      </div>
-      <!-- 折叠面板本体（挂输入区上方，随输入框居中/沉底；欢迎区不再渲染，避免撑爆空态）。
-           高度走 UiCollapse 的 0fr→1fr 过渡，不再 v-if 瞬间出现/消失。 -->
-      <UiCollapse v-if="isDiagnosis" :open="filterOpen" lazy>
-        <div class="diagnosis-panel">
-          <div class="diagnosis-catalog">
-            <div class="catalog-row">
-              <span class="catalog-label">品牌</span>
-              <UiSelect
-                v-model="selectedBrand"
-                size="small"
-                placeholder="选择品牌"
-                filterable
-                clearable
-                class="catalog-select"
-                :options="brands"
-                @change="onBrandChange($event as string)"
-              />
-              <span v-if="catalogLoading" class="catalog-loading">加载中...</span>
-            </div>
-            <div v-if="selectedBrand && selectedBrand !== 'all'" class="catalog-row">
-              <span class="catalog-label">车型</span>
-              <UiSelect
-                v-model="selectedModel"
-                size="small"
-                placeholder="选择车型"
-                filterable
-                clearable
-                class="catalog-select"
-                :options="modelOptions"
-                @change="onModelChange"
-              />
-            </div>
-            <div class="catalog-row" v-if="selectedBrand || faultTotal">
-              <span class="catalog-label">故障码</span>
-              <div class="catalog-fault-search">
-                <input
-                  v-model="faultKeyword"
-                  class="catalog-fault-input"
-                  placeholder="搜索故障码或故障名"
-                  @keyup.enter="loadFaultCodes(1)"
-                />
-                <button class="quick-option-chip" @click="loadFaultCodes(1)">查询</button>
-                <span v-if="faultTotal" class="catalog-fault-total">共 {{ faultTotal }} 条</span>
-              </div>
-              <div v-if="faultCodes.length" class="catalog-fault-list">
-                <button
-                  v-for="fc in faultCodes"
-                  :key="fc.id"
-                  class="catalog-fault-item"
-                  :title="fc.symptom"
-                  @click="useFaultCode(fc)"
-                >
-                  <b>{{ fc.fault_code }}</b>
-                  <span>{{ fc.fault_name }}</span>
-                </button>
-                <button
-                  v-if="faultTotal > faultCodes.length"
-                  class="quick-option-chip catalog-fault-more"
-                  @click="loadFaultCodes(faultPage + 1)"
-                >加载更多</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </UiCollapse>
-    </template>
+    <!-- 诊断筛选面板已随 v1 周边端点退役（票 2237）：品牌/车型/故障码三条数据源不再存在，
+         按 v2 契约重接归票 2242、页面重适配归票 2244。这里宁可暂时变素，也不留点了必 404 的 UI。 -->
 
-    <!-- 欢迎区差异内容：其余专项功能静态快捷选项（诊断筛选已搬入工具栏，此处不再渲染） -->
+    <!-- 欢迎区差异内容：其余专项功能静态快捷选项 -->
     <template #welcome-top>
       <!-- 其余专项功能：静态快捷选项 -->
       <div v-if="feature?.quickOptions?.length" class="quick-options-area">
@@ -161,18 +88,14 @@ import { ElMessage } from 'element-plus'
 import type { UploadFile } from 'element-plus'
 import { href } from '@/config/pages'
 import ChatPageShell from '@/components/ai-assistant/ChatPageShell.vue'
-import UiCollapse from '@/components/ui/UiCollapse.vue'
 import { useAIAssistantStore, type SendOptions } from '@/stores/aiAssistant'
 import {
   getAIFeatureByRoute,
   isDiagnosisFeature
 } from '@/config/aiFeatures'
-import { aiAssistantApi, type DiagnosisBrandOption, type DiagnosisFaultCodeItem } from '@/api/aiAssistant'
 import DiagnosisSources from '@/components/ai-assistant/DiagnosisSources.vue'
-import UiCapsule from '@/components/ai-assistant/UiCapsule.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiUpload from '@/components/ui/UiUpload.vue'
-import UiSelect, { type UiSelectOption } from '@/components/ui/UiSelect.vue'
 
 const store = useAIAssistantStore()
 const router = useRouter()
@@ -194,88 +117,10 @@ const inputPlaceholder = computed(() => {
     : '输入您的问题...'
 })
 
-// ===== 智能维修诊断：筛选折叠（T2 默认折叠，不再撑爆空态居中）=====
-const filterOpen = ref(false)
-const filterSummary = computed(() => {
-  const parts: string[] = []
-  if (selectedBrand.value && selectedBrand.value !== 'all') {
-    parts.push(brands.value.find(b => b.value === selectedBrand.value)?.label || selectedBrand.value)
-  }
-  if (selectedModel.value) parts.push(selectedModel.value)
-  return parts.join(' / ')
-})
-
-// ===== 智能维修诊断：品牌/车型联动（/diagnosis/brands|models 动态数据源）=====
-const brands = ref<DiagnosisBrandOption[]>([])
-const models = ref<string[]>([])
-
-/** 车型下拉：后端给的是字符串数组，UiSelect 要 {label,value} */
-const modelOptions = computed<UiSelectOption[]>(() => models.value.map((m) => ({ label: m, value: m })))
-const selectedBrand = ref('')
-const selectedModel = ref('')
-const catalogLoading = ref(false)
-
-async function loadBrands() {
-  catalogLoading.value = true
-  try {
-    brands.value = await aiAssistantApi.listDiagnosisBrands()
-  } catch {
-    // 数据源暂不可用时保持空目录（无级联依赖，页面其余功能不受影响）
-  } finally {
-    catalogLoading.value = false
-  }
-}
-
-async function onBrandChange(brand: string) {
-  selectedBrand.value = brand
-  selectedModel.value = ''
-  models.value = []
-  if (!brand || brand === 'all') return
-  try {
-    models.value = await aiAssistantApi.listDiagnosisModels(brand)
-  } catch {
-    models.value = []
-  }
-}
-
-function onModelChange() {
-  // 车型是最后一级筛选：选中即收起面板，输入框回到可点状态
-  if (selectedModel.value) filterOpen.value = false
-}
-
-// ===== 智能维修诊断：故障码快捷查询（直连 fault-codes 代理，精确命中秒回）=====
-const faultCodes = ref<DiagnosisFaultCodeItem[]>([])
-const faultTotal = ref(0)
-const faultPage = ref(1)
-const faultKeyword = ref('')
-const faultLoading = ref(false)
-
-async function loadFaultCodes(page = 1) {
-  if (faultLoading.value) return
-  faultLoading.value = true
-  try {
-    const data = await aiAssistantApi.listDiagnosisFaultCodes({
-      brand: selectedBrand.value && selectedBrand.value !== 'all' ? selectedBrand.value : undefined,
-      keyword: faultKeyword.value.trim() || undefined,
-      page,
-      page_size: 5
-    })
-    // 上游是外部诊断服务的 JSON，它可以整段省略 items（后端契约已按实测落 x-nullable）；
-    // 本组件的 faultCodes 语义是「这一页没有故障码」，所以在入口收一次，不在模板里到处 `|| []`。
-    faultCodes.value = data.items ?? []
-    faultTotal.value = data.total
-    faultPage.value = page
-  } catch {
-    // 查询失败静默（输入框仍可发起自由诊断）
-  } finally {
-    faultLoading.value = false
-  }
-}
-
-function useFaultCode(item: DiagnosisFaultCodeItem) {
-  inputText.value = `故障码 ${item.fault_code}（${item.fault_name}），怎么处理？`
-  handleSend()
-}
+// ===== 智能维修诊断：筛选面板已随 v1 周边端点退役（票 2237）=====
+// 品牌/车型/故障码三条数据源（/diagnosis/{brands,models,fault-codes}）在 v2 不存在，
+// 调用点已同步删除——宁可诊断页暂时只剩自由输入，也不留点了必 404 的中间态。
+// 按 v2 契约（intents/systems/faults/code_hint）重接归票 2242，页面重适配归票 2244。
 
 interface PendingImage {
   url: string          // 上传成功后的服务器 URL
@@ -302,7 +147,7 @@ function toggleOption(label: string, opt: string) {
   }
 }
 
-// 组装消息内容：预设选项作为前缀注入（智能维修诊断除外——品牌/车型走结构化参数）
+// 组装消息内容：预设选项作为前缀注入（智能维修诊断除外——它的筛选走前端组句，不注标签）
 function buildContent(text: string): string {
   if (isDiagnosis.value) return text
   const groups = feature.value?.quickOptions || []
@@ -322,12 +167,9 @@ async function handleSend() {
     return
   }
 
+  // 品牌/车型不再随请求发出：v2 的请求体只有 content 一个文本通道，后端已无消费方
+  // （票 2237）。组句改由前端拼进正文（票 2241 的 diagnosisCompose，待 2244 落地）。
   const opts: SendOptions = images.length > 0 ? { images } : {}
-  // 智能维修诊断：品牌/车型结构化过滤（不进正文）
-  if (isDiagnosis.value) {
-    opts.brand = selectedBrand.value && selectedBrand.value !== 'all' ? selectedBrand.value : undefined
-    opts.model = selectedModel.value || undefined
-  }
 
   inputText.value = ''
   pendingImages.value = []
@@ -388,9 +230,6 @@ function handleNewSession() {
 onMounted(() => {
   if (feature.value) {
     store.initFeature(feature.value.key)
-    if (isDiagnosis.value) {
-      loadBrands()
-    }
   } else {
     router.replace(href('AIAssistant'))
   }
@@ -449,118 +288,6 @@ onMounted(() => {
   background: var(--color-primary-soft);
   color: var(--color-primary-soft-ink);
   font-weight: 600;
-}
-
-/* ===== 智能维修诊断：品牌/车型联动 + 故障码面板（本页差异样式） ===== */
-.diagnosis-panel {
-  width: 100%;
-  max-width: 640px;
-  margin: 0 auto 24px;
-}
-
-.diagnosis-catalog {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 14px 16px;
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-lg);
-  background: var(--color-bg-card);
-}
-
-.catalog-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.catalog-label {
-  font-size: var(--text-sm);
-  color: var(--color-text-secondary);
-  font-weight: 600;
-  line-height: 28px;
-  min-width: 44px;
-}
-
-.catalog-select {
-  flex: 1;
-  min-width: 180px;
-}
-
-.catalog-loading {
-  font-size: var(--text-xs);
-  color: var(--color-text-tertiary);
-}
-
-.catalog-fault-search {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.catalog-fault-input {
-  width: 180px;
-  height: 28px;
-  padding: 0 10px;
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-md);
-  background: var(--color-bg-field, var(--color-bg-card));
-  color: var(--color-text-primary);
-  font-size: var(--text-sm);
-  outline: none;
-}
-
-.catalog-fault-input:focus {
-  border-color: var(--color-primary-400);
-}
-
-.catalog-fault-total {
-  font-size: var(--text-xs);
-  color: var(--color-text-tertiary);
-}
-
-.catalog-fault-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  width: 100%;
-}
-
-.catalog-fault-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-md);
-  background: var(--color-bg-card);
-  text-align: left;
-  cursor: pointer;
-  transition: border-color var(--duration-fast) var(--ease-default);
-}
-
-.catalog-fault-item:hover {
-  border-color: var(--color-primary-400);
-}
-
-.catalog-fault-item b {
-  color: var(--color-primary-soft-ink);
-  font-size: var(--text-sm);
-  min-width: 34px;
-}
-
-.catalog-fault-item span {
-  color: var(--color-text-secondary);
-  font-size: var(--text-sm);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.catalog-fault-more {
-  align-self: flex-start;
 }
 
 /* ===== 待发送图片（本页差异样式） ===== */

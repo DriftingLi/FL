@@ -1,11 +1,12 @@
-// 本文件：智能维修诊断周边只读代理（品牌/车型联动、故障码查询、手册静态资源），
-// 与 chat 同簇（/api/ai-assistant/diagnosis/*），鉴权沿用 OptionalAuth。
+// 本文件：智能维修诊断回答配图的回源代理（/api/ai-assistant/diagnosis/ossimg/*）。
+// 与 chat 同簇、鉴权沿用 OptionalAuth。ADR-0063 时期这里还有品牌/车型/故障码/手册四条
+// 只读代理，随 v1 通道退役一并删除（票 2237 C 节）：v2 不再提供这些周边端点，
+// 需要的能力由票 2242 按 v2 契约重新落地。
 package aiassistant
 
 import (
 	"io"
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 
@@ -14,8 +15,7 @@ import (
 	"forklift-training/pkg/response"
 )
 
-// diagnosisHandler 诊断周边代理 handler。
-// 数据源为外部 RAG 助手（DiagnosisProxyService 直连，绕过 nginx Basic Auth 层）。
+// diagnosisHandler 回答配图代理 handler。
 type diagnosisHandler struct {
 	proxy *DiagnosisProxyService
 }
@@ -25,100 +25,34 @@ func newDiagnosisHandler(proxy *DiagnosisProxyService) *diagnosisHandler {
 	return &diagnosisHandler{proxy: proxy}
 }
 
-// registerDiagnosisRoutes 注册 /api/ai-assistant/diagnosis 路由（均可选认证，与 chat 一致）。
+// registerDiagnosisRoutes 注册 /api/ai-assistant/diagnosis 路由（可选认证，与 chat 一致）。
 func registerDiagnosisRoutes(g *gin.RouterGroup, session *security.Session, proxy *DiagnosisProxyService) {
 	h := newDiagnosisHandler(proxy)
 	group := g.Group("/diagnosis")
 	group.Use(middleware.OptionalAuth(session))
-	group.GET("/brands", h.ListBrands)
-	group.GET("/models", h.ListModels)
-	group.GET("/fault-codes", h.ListFaultCodes)
-	group.GET("/manual/*filepath", h.OpenManual)
+	group.GET("/ossimg/*filepath", h.OpenOSSImage)
 }
 
-// ListBrands 品牌列表
-// @Summary 诊断品牌列表
-// @Description 可选认证；代理外部诊断助手的品牌选项（[{value,label}]，value=all 表示全部品牌）
+// OpenOSSImage 诊断回答配图
+// @Summary 诊断回答配图（白名单代理）
+// @Description 可选认证；AI 生成正文里白名单内图片的回源代理（**非统一信封**：原样字节流 + Content-Type）。上游仅允许配置的 OSS 基准 host + /forklift/repair_img 前缀 + 图片扩展名，子路径按段白名单防 SSRF
 // @Tags 学员端-AI助手
-// @Accept json
-// @Produce json
-// @Success 200 {object} response.R{data=[]aiassistant.DiagnosisBrandOption} "success"
-// @Failure 500 {object} response.R "诊断服务不可用"
-// @Router /ai-assistant/diagnosis/brands [get]
-// ListBrands GET /diagnosis/brands 品牌列表（全量，无级联依赖）。
-func (h *diagnosisHandler) ListBrands(c *gin.Context) {
-	brands, err := h.proxy.ListBrands(c.Request.Context())
-	if err != nil {
-		response.ServerErrorCause(c, "", err)
-		return
-	}
-	response.Success(c, brands)
-}
-
-// ListModels 车型列表
-// @Summary 诊断车型列表
-// @Description 可选认证；某品牌车型名称列表（brand 缺省/all 时返回全部车型）
-// @Tags 学员端-AI助手
-// @Accept json
-// @Produce json
-// @Param brand query string false "品牌 value（all/空 = 全部车型）"
-// @Success 200 {object} response.R{data=[]string} "success"
-// @Failure 500 {object} response.R "诊断服务不可用"
-// @Router /ai-assistant/diagnosis/models [get]
-// ListModels GET /diagnosis/models?brand= 某品牌车型列表；brand 缺省为全部（助手返回全量车型）。
-func (h *diagnosisHandler) ListModels(c *gin.Context) {
-	models, err := h.proxy.ListModels(c.Request.Context(), c.Query("brand"))
-	if err != nil {
-		response.ServerErrorCause(c, "", err)
-		return
-	}
-	response.Success(c, models)
-}
-
-// ListFaultCodes 故障码查询
-// @Summary 诊断故障码分页查询
-// @Description 可选认证；按品牌/关键词分页查询结构化故障码（page_size 上限 100）
-// @Tags 学员端-AI助手
-// @Accept json
-// @Produce json
-// @Param brand query string false "品牌 value（all/空 = 全部品牌）"
-// @Param keyword query string false "关键词（故障码/名称/现象）"
-// @Param page query int false "页码" default(1)
-// @Param page_size query int false "每页条数（上限 100）" default(20)
-// @Success 200 {object} response.R{data=aiassistant.DiagnosisFaultCodePage} "success"
-// @Failure 500 {object} response.R "诊断服务不可用"
-// @Router /ai-assistant/diagnosis/fault-codes [get]
-// ListFaultCodes GET /diagnosis/fault-codes?brand&keyword&page&page_size 故障码分页查询。
-func (h *diagnosisHandler) ListFaultCodes(c *gin.Context) {
-	page, _ := strconv.Atoi(c.Query("page"))
-	pageSize, _ := strconv.Atoi(c.Query("page_size"))
-	resp, err := h.proxy.ListFaultCodes(c.Request.Context(), c.Query("brand"), c.Query("keyword"), page, pageSize)
-	if err != nil {
-		response.ServerErrorCause(c, "", err)
-		return
-	}
-	response.Success(c, resp)
-}
-
-// OpenManual 助手静态资源
-// @Summary 诊断静态资源（手册图片/PDF 与图文案例配图）
-// @Description 可选认证；外部诊断助手静态文件的流式代理（**非统一信封**：原样字节流 + Content-Type），静态根仅 manual 与 fault_images，子路径按段白名单防 SSRF
-// @Tags 学员端-AI助手
-// @Produce application/octet-stream
-// @Param filepath path string true "相对子路径（带扩展名，可带静态根；如 manual/xxx/page_1.png、fault_images/制动系统/图_1.png）"
-// @Success 200 {string} binary "静态文件字节流（非统一信封）"
-// @Failure 404 {object} response.R "资源不存在"
-// @Router /ai-assistant/diagnosis/manual/{filepath} [get]
-// OpenManual GET /diagnosis/manual/* 静态资源流式代理（溯源图片 <<IMAGE:...>> 与案例图渲染面）。
-// 子路径白名单（防 SSRF）在 proxy 层；可选认证可达，缓存 1 天（静态文件不可变）。
-func (h *diagnosisHandler) OpenManual(c *gin.Context) {
+// @Produce image/png
+// @Param filepath path string true "相对子路径（带图片扩展名；如 images_all/xxx.png、linde/型号__原名.jpg）"
+// @Success 200 {string} binary "图片字节流（非统一信封）"
+// @Failure 404 {object} response.R "图片不存在"
+// @Router /ai-assistant/diagnosis/ossimg/{filepath} [get]
+// OpenOSSImage GET /diagnosis/ossimg/* 回答配图流式代理（ADR-0091）。
+// 子路径白名单（五道闸）在 proxy 层；缓存 1 天、不用 immutable —— OSS 上是规范名而非
+// 内容哈希，同名文件可能换内容（ADR-0091 决策 6）。
+func (h *diagnosisHandler) OpenOSSImage(c *gin.Context) {
 	subpath := c.Param("filepath")
-	body, contentType, err := h.proxy.OpenManual(c.Request.Context(), subpath)
+	body, contentType, err := h.proxy.OpenOSSImage(c.Request.Context(), subpath)
 	if err != nil {
 		response.NotFound(c, err.Error())
 		return
 	}
-	defer body.Close()
+	defer func() { _ = body.Close() }()
 	if contentType != "" {
 		c.Header("Content-Type", contentType)
 	}

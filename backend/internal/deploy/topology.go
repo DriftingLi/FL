@@ -39,7 +39,7 @@ var EnvVars = []EnvVar{
 	{Name: "BACKEND_IMAGE", Default: "forklift-backend:latest", Desc: "后端镜像"},
 	{Name: "COMPOSE_PROJECT_NAME", Default: "forklift-training", Desc: "Compose 项目名（固定以保留命名卷，ADR-0088）"},
 	{Name: "DB_USER", Default: "forklift", Desc: "Postgres 用户"},
-	{Name: "DIAGNOSIS_ASSISTANT_URL", Default: "http://172.17.1.23:8000", Desc: "外部诊断 RAG 服务地址（ADR-0032）"},
+	{Name: "DIAGNOSIS_V2_OSS_BASE", Default: "https://hrwai-guangzhou.oss-cn-beijing.aliyuncs.com/forklift/repair_img", Desc: "外部诊断助手回答配图的 OSS 基准（ADR-0091 白名单）"},
 	{Name: "DOMAIN", Default: "localhost", Desc: "主域名"},
 	{Name: "FRONTEND_IMAGE", Default: "forklift-frontend:latest", Desc: "前端镜像"},
 	{Name: "JWT_EXPIRES_HOURS", Default: "2", Desc: "access token 有效期（小时，ADR-0016）"},

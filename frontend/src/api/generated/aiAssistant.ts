@@ -1,5 +1,5 @@
 // 生成文件，勿手改（ADR-0019 契约 codegen 专项 / ADR-0048 按域解冻；spec #940 片五③、#952 片一）。
-// 域：AI 助手信封面（/api/ai-assistant/*：模型 / 会话 / 消息 / 用户模型 / 诊断字典）；SSE 流式对话 POST /ai-assistant/chat 不走统一信封、事件 payload 不定型，不在本域生成面（ADR-0048 决策 6）
+// 域：AI 助手信封面（/api/ai-assistant/*：模型 / 会话 / 消息 / 用户模型 / 诊断配图）；SSE 流式对话 POST /ai-assistant/chat 不走统一信封、事件 payload 不定型，不在本域生成面（ADR-0048 决策 6）
 // 唯一事实源：后端注解 → backend/docs/swagger.json（CI 有新鲜度锁：backend-lint 的 swagger 步骤）。
 // 再生成：cd backend && go run ./cmd/gen-apitypes
 // 同步契约：backend/internal/apitypes/codegen_test.go 把本文件与注解渲染结果全等比对。
@@ -16,12 +16,9 @@
 //   PATCH /ai-assistant/sessions/{id}/title
 //   GET  /ai-assistant/sessions/{id}/messages
 //   POST /ai-assistant/upload-image
-//   GET  /ai-assistant/diagnosis/brands
-//   GET  /ai-assistant/diagnosis/models
-//   GET  /ai-assistant/diagnosis/fault-codes
-//   GET  /ai-assistant/diagnosis/manual/{filepath}
+//   GET  /ai-assistant/diagnosis/ossimg/{filepath}
 //
-// 覆盖的 Go 类型：AIAssistantModeModels / AIChatMessageDTO / AIChatSessionDTO / AIImageUploadResultDTO / AISessionRenameResultDTO / DiagnosisBrandOption / DiagnosisFaultCodeItem / DiagnosisFaultCodePage / DiagnosisSource / DiagnosisSourceMetadata / ModelOption / UserModelDTO
+// 覆盖的 Go 类型：AIAssistantModeModels / AIChatMessageDTO / AIChatSessionDTO / AIImageUploadResultDTO / AISessionRenameResultDTO / DiagnosisSource / DiagnosisSourceMetadata / ModelOption / UserModelDTO
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -62,32 +59,6 @@ export interface AIImageUploadResultDTO {
 
 export interface AISessionRenameResultDTO {
   message: string
-}
-
-export interface DiagnosisBrandOption {
-  label: string
-  value: string
-}
-
-export interface DiagnosisFaultCodeItem {
-  brand: string
-  brand_cn: string
-  causes: string
-  fault_code: string
-  fault_name: string
-  id: number
-  model_series: string
-  page_num: number
-  part_numbers: string
-  safety_warning: string
-  sop_steps: string
-  source_file: string
-  symptom: string
-}
-
-export interface DiagnosisFaultCodePage {
-  items: DiagnosisFaultCodeItem[] | null
-  total: number
 }
 
 export interface DiagnosisSource {
