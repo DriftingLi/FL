@@ -20,7 +20,8 @@
  *     CTA/价格渲染单点被三处界面消费、购物车族死 UI 全仓零出现、章节 404 支「去解锁」且零兑换调用
  * 12) #1422：列表 DTO 迁出 is_hot（后端恒在字段）、/courses 消费 filter=hot 热门口径、
  *     dashboard 课程区 mock 族与 ¥ 绝迹、价格单点第三消费方接线收口（单点实现仍全仓唯一）
- * 13) #2196 防回归锁：课程页死标签三件套（filterTags/activeFilter/onFilterTap）代码面零出现；
+ * 13) #2196 / #2230 防回归锁：课程页死标签三件套（filterTags/activeFilter/onFilterTap）与子标签三件套
+ *     （subTabs/activeSubTab/onSubTabTap）代码面零出现；
  *     .filter-tag 为 #1951 免费/付费组共用的选择器，反向锁定不许被「顺手清理」误删
  */
 /** harness：读取层归一 + 模块归属面（ADR-0023 票 C 起，本文件不再自建 ROOT / read / walker） */
@@ -847,17 +848,26 @@ describe('#1422 首页课程区接真实数据：is_hot 迁出 · filter=hot 口
     expect(page).toMatch(/function onPaidTap[\s\S]*?loadCourses\(true\)/);
   });
 
-  it('#2196 防回归锁：死标签三件套不得在课程页复活，共用选择器不得被顺手误删', () => {
+  it('#2196 / #2230 防回归锁：死标签三件套不得在课程页复活，共用选择器不得被顺手误删', () => {
     const page = stripAll(read('pages/courses/courses.uvue'));
     // 病灶型态（#2196）= 控件只换高亮、参数从不下发；2026-11-02 裁定整组摘除。
     // 再引入这套名字而不接进 getCourseListApi 参数 ⇒ 本锁红。（stripAll 剥注释：只锁代码面）
     expect(page).not.toMatch(/\bfilterTags\b/);
     expect(page).not.toMatch(/\bactiveFilter\b/);
     expect(page).not.toMatch(/\bonFilterTap\b/);
+    // 病灶型态（#2230）= 同一页的子标签同款死 UI（「精品课 / 图书同步精讲」点了只换高亮、取数从不发生），
+    // 2026-11-03 同口径摘除；后端无图书维度，复活时接不回任何参数 ⇒ 本锁红。
+    expect(page).not.toMatch(/\bsubTabs\b/);
+    expect(page).not.toMatch(/\bactiveSubTab\b/);
+    expect(page).not.toMatch(/\bonSubTabTap\b/);
     // 保护面反向锁：.filter-tag 选择器是状态组与 #1951 paid 组共用（#2196 票面口径更正），删不许过界
     const raw = read('pages/courses/courses.uvue');
     expect(raw).toContain('.filter-tag');
     expect(raw).toContain('paidTags');
+    // #2230 反向锁：子标签摘除只许动 .sub-tab* 一族，分组标题与筛选栏必须原地保留
+    expect(raw).toContain('.section-card');
+    expect(raw).toContain('.section-card-title');
+    expect(raw).not.toContain('.sub-tab');
   });
 
   it('dashboard 课程区经 useDashboardFeeds 消费 filter 口径（#1608 §8⑤ 单轴透传）+ 当前证件显式下发', () => {
