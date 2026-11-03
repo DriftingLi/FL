@@ -1,0 +1,121 @@
+# #2249 行为腿全量基线 · 逐套件原始读数（2026-11-03，n=1）
+#
+# 命令：npm run test:behavior   （= jest --config jest.config.behavior.js -i）
+# 工作目录：training-app/叉车维修培训学员端跨端应用/
+# head sha：9f2419ca（feat/2249 起点，未改任何被测物）
+# 机器：12 逻辑核 / 8 物理核 i5-12450H，Windows，node v24.14.0，PS 7.6.9
+# 说明：本文件由 .scratch/2249/full-behavior-leg.log 抽取 JEST_SUITE 心跳行与 jest 汇总行，
+#       保留全部 106 行读数，未删任何套件；原始日志（含逐套件 PASS 输出）在拆树前已阅。
+
+JEST_SUITE i=1/106 status=PASS secs=25.0 elapsed=25.2 tests=33 failed=0 file=utils/styleLoopBehavior.test.js
+JEST_SUITE i=2/106 status=PASS secs=628.8 elapsed=654.0 tests=3 failed=0 file=utils/mpWeixinAuthSkipBehavior.test.js
+JEST_SUITE i=3/106 status=PASS secs=420.1 elapsed=1074.1 tests=5 failed=0 file=utils/mpWeixinGateResultLineBehavior.test.js
+JEST_SUITE i=4/106 status=PASS secs=72.4 elapsed=1146.5 tests=9 failed=0 file=utils/kotlinAllProcessCaptureBehavior.test.js
+JEST_SUITE i=5/106 status=PASS secs=54.4 elapsed=1200.9 tests=14 failed=0 file=utils/branchResidueBehavior.test.js
+JEST_SUITE i=6/106 status=PASS secs=37.4 elapsed=1238.3 tests=14 failed=0 file=utils/deviceCaptureTierBehavior.test.js
+JEST_SUITE i=7/106 status=PASS secs=37.7 elapsed=1276.0 tests=4 failed=0 file=utils/mpWeixinGateRetryBehavior.test.js
+<Objs Version="1.1.0.1" xmlns="http://schemas.microsoft.com/powershell/2004/04"><Obj S="information" RefId="0"><TN RefId="0"><T>System.Management.Automation.InformationRecord</T><T>System.Object</T></TN><ToString>[emulator-smoke] 安装基座 APK（1 MB）：C:\Users\ZHENG\AppData\Local\Temp\emu-tier-Q4wvL2\fake-base.apk</ToString><Props><Obj N="MessageData" RefId="1"><TN RefId="1"><T>System.Management.Automation.HostInformationMessage</T><T>System.Object</T></TN><ToString>[emulator-smoke] 安装基座 APK（1 MB）：C:\Users\ZHENG\AppData\Local\Temp\emu-tier-Q4wvL2\fake-base.apk</ToString><Props><S N="Message">[emulator-smoke] 安装基座 APK（1 MB）：C:\Users\ZHENG\AppData\Local\Temp\emu-tier-Q4wvL2\fake-base.apk</S><B N="NoNewLine">false</B><S N="ForegroundColor">Gray</S><S N="BackgroundColor">Black</S></Props></Obj><S N="Source">Write-Host</S><DT N="TimeGenerated">2026-11-03T22:12:36.328458+08:00</DT><Obj N="Tags" RefId="2"><TN RefId="2"><T>System.Collections.Generic.List`1[[System.String, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]</T><T>System.Object</T></TN><LST><S>PSHOST</S></LST></Obj><S N="User">DESKTOP-PMQDEEQ\ZHENG</S><S N="Computer">DESKTOP-PMQDEEQ</S><U32 N="ProcessId">24908</U32><U32 N="NativeThreadId">32372</U32><U32 N="ManagedThreadId">18</U32></Props></Obj><Obj S="information" RefId="3"><TNRef RefId="0" /><ToString>[emulator-smoke] ADB_TEXT_TIMEOUT call=adb -s emulator-5554 install -r -t C:\Users\ZHENG\AppData\Local\Temp\emu-tier-Q4wvL2\fake-base.apk callBudgetSeconds=5 seconds=5.1 tier=install —— 已终止整棵进程树，本次按「没拿到」回，调用方各按自己的分支判</ToString><Props><Obj N="MessageData" RefId="4"><TNRef RefId="1" /><ToString>[emulator-smoke] ADB_TEXT_TIMEOUT call=adb -s emulator-5554 install -r -t C:\Users\ZHENG\AppData\Local\Temp\emu-tier-Q4wvL2\fake-base.apk callBudgetSeconds=5 seconds=5.1 tier=install —— 已终止整棵进程树，本次按「没拿到」回，调用方各按自己的分支判</ToString><Props><S N="Message">[emulator-smoke] ADB_TEXT_TIMEOUT call=adb -s emulator-5554 install -r -t C:\Users\ZHENG\AppData\Local\Temp\emu-tier-Q4wvL2\fake-base.apk callBudgetSeconds=5 seconds=5.1 tier=install —— 已终止整棵进程树，本次按「没拿到」回，调用方各按自己的分支判</S><B N="NoNewLine">false</B><S N="ForegroundColor">Gray</S><S N="BackgroundColor">Black</S></Props></Obj><S N="Source">Write-Host</S><DT N="TimeGenerated">2026-11-03T22:12:41.561313+08:00</DT><Obj N="Tags" RefId="5"><TNRef RefId="2" /><LST><S>PSHOST</S></LST></Obj><S N="User">DESKTOP-PMQDEEQ\ZHENG</S><S N="Computer">DESKTOP-PMQDEEQ</S><U32 N="ProcessId">24908</U32><U32 N="NativeThreadId">32372</U32><U32 N="ManagedThreadId">18</U32></Props></Obj><Obj S="information" RefId="6"><TNRef RefId="0" /><ToString>[emulator-smoke] EMULATOR_SMOKE_RESULT=UNUSABLE</ToString><Props><Obj N="MessageData" RefId="7"><TNRef RefId="1" /><ToString>[emulator-smoke] EMULATOR_SMOKE_RESULT=UNUSABLE</ToString><Props><S N="Message">[emulator-smoke] EMULATOR_SMOKE_RESULT=UNUSABLE</S><B N="NoNewLine">false</B><S N="ForegroundColor">Gray</S><S N="BackgroundColor">Black</S></Props></Obj><S N="Source">Write-Host</S><DT N="TimeGenerated">2026-11-03T22:12:41.5759022+08:00</DT><Obj N="Tags" RefId="8"><TNRef RefId="2" /><LST><S>PSHOST</S></LST></Obj><S N="User">DESKTOP-PMQDEEQ\ZHENG</S><S N="Computer">DESKTOP-PMQDEEQ</S><U32 N="ProcessId">24908</U32><U32 N="NativeThreadId">32372</U32><U32 N="ManagedThreadId">18</U32></Props></Obj><Obj S="information" RefId="9"><TNRef RefId="0" /><ToString>[emulator-smoke]   基座 APK 安装失败：</ToString><Props><Obj N="MessageData" RefId="10"><TNRef RefId="1" /><ToString>[emulator-smoke]   基座 APK 安装失败：</ToString><Props><S N="Message">[emulator-smoke]   基座 APK 安装失败：</S><B N="NoNewLine">false</B><S N="ForegroundColor">Gray</S><S N="BackgroundColor">Black</S></Props></Obj><S N="Source">Write-Host</S><DT N="TimeGenerated">2026-11-03T22:12:41.5811499+08:00</DT><Obj N="Tags" RefId="11"><TNRef RefId="2" /><LST><S>PSHOST</S></LST></Obj><S N="User">DESKTOP-PMQDEEQ\ZHENG</S><S N="Computer">DESKTOP-PMQDEEQ</S><U32 N="ProcessId">24908</U32><U32 N="NativeThreadId">32372</U32><U32 N="ManagedThreadId">18</U32></Props></Obj></Objs>JEST_SUITE i=8/106 status=PASS secs=33.6 elapsed=1309.6 tests=7 failed=0 file=utils/mpWeixinPublishSettleBehavior.test.js
+JEST_SUITE i=9/106 status=PASS secs=29.5 elapsed=1339.1 tests=9 failed=0 file=utils/emulatorSmokeTierBehavior.test.js
+JEST_SUITE i=10/106 status=PASS secs=31.2 elapsed=1370.3 tests=4 failed=0 file=utils/wirelessDebugEnsureBehavior.test.js
+JEST_SUITE i=11/106 status=PASS secs=30.5 elapsed=1400.9 tests=8 failed=0 file=utils/prGatesBehavior.test.js
+JEST_SUITE i=12/106 status=PASS secs=29.4 elapsed=1430.3 tests=12 failed=0 file=utils/autoScreenshotStabilityBehavior.test.js
+JEST_SUITE i=13/106 status=PASS secs=22.7 elapsed=1452.9 tests=3 failed=0 file=utils/mpWeixinGatePortFallbackBehavior.test.js
+JEST_SUITE i=14/106 status=PASS secs=16.5 elapsed=1469.5 tests=5 failed=0 file=utils/mpWeixinBuildOnlyBehavior.test.js
+JEST_SUITE i=15/106 status=PASS secs=20.3 elapsed=1489.8 tests=41 failed=0 file=utils/kotlinAllStaleExportBehavior.test.js
+JEST_SUITE i=16/106 status=PASS secs=16.2 elapsed=1506.0 tests=8 failed=0 file=utils/levelDetectBehavior.test.js
+JEST_SUITE i=17/106 status=PASS secs=16.1 elapsed=1522.1 tests=5 failed=0 file=utils/wirelessDebugBoundedTextBehavior.test.js
+JEST_SUITE i=18/106 status=PASS secs=15.7 elapsed=1537.8 tests=5 failed=0 file=utils/mpWeixinGatePreprobeBehavior.test.js
+JEST_SUITE i=19/106 status=PASS secs=16.3 elapsed=1554.1 tests=4 failed=0 file=utils/prGatesTeeBehavior.test.js
+JEST_SUITE i=20/106 status=PASS secs=16.4 elapsed=1570.5 tests=15 failed=0 file=utils/mpWeixinGateDrainAndNoiseBehavior.test.js
+JEST_SUITE i=21/106 status=PASS secs=21.7 elapsed=1592.3 tests=6 failed=0 file=utils/hxNoopBehavior.test.js
+JEST_SUITE i=22/106 status=PASS secs=12.5 elapsed=1604.8 tests=6 failed=0 file=utils/frontierBehavior.test.js
+JEST_SUITE i=23/106 status=PASS secs=12.3 elapsed=1617.1 tests=7 failed=0 file=utils/behaviorLegWatchdogBehavior.test.js
+JEST_SUITE i=24/106 status=PASS secs=10.9 elapsed=1628.0 tests=1 failed=0 file=utils/wirelessDebugKeepRecoverBehavior.test.js
+JEST_SUITE i=25/106 status=PASS secs=7.9 elapsed=1635.8 tests=6 failed=0 file=utils/gateCommitBindingBehavior.test.js
+JEST_SUITE i=26/106 status=PASS secs=7.8 elapsed=1643.7 tests=10 failed=0 file=utils/capabilitySurfaceBehavior.test.js
+JEST_SUITE i=27/106 status=PASS secs=13.8 elapsed=1657.5 tests=11 failed=0 file=utils/gateErrorLinesBehavior.test.js
+JEST_SUITE i=28/106 status=PASS secs=10.6 elapsed=1668.1 tests=1 failed=0 file=utils/wirelessDebugStopReapBehavior.test.js
+JEST_SUITE i=29/106 status=PASS secs=9.6 elapsed=1677.7 tests=11 failed=0 file=utils/mpWeixinBuildFingerprintBehavior.test.js
+JEST_SUITE i=30/106 status=PASS secs=5.6 elapsed=1683.3 tests=9 failed=0 file=utils/wtBootstrapBehavior.test.js
+JEST_SUITE i=31/106 status=PASS secs=8.3 elapsed=1691.5 tests=5 failed=0 file=utils/emulatorSmokeBoundedTextBehavior.test.js
+JEST_SUITE i=32/106 status=PASS secs=7.8 elapsed=1699.3 tests=1 failed=0 file=utils/wirelessDebugStopHangBehavior.test.js
+JEST_SUITE i=33/106 status=PASS secs=4.5 elapsed=1703.8 tests=13 failed=0 file=utils/frontierRunPlan.test.js
+JEST_SUITE i=34/106 status=PASS secs=6.7 elapsed=1710.6 tests=33 failed=0 file=utils/mpWeixinGateContract.test.js
+JEST_SUITE i=35/106 status=PASS secs=5.3 elapsed=1715.9 tests=5 failed=0 file=utils/removeWorktreePruneBehavior.test.js
+JEST_SUITE i=36/106 status=PASS secs=6.4 elapsed=1722.3 tests=14 failed=0 file=utils/behaviorSubsetBehavior.test.js
+JEST_SUITE i=37/106 status=PASS secs=7.4 elapsed=1729.7 tests=4 failed=0 file=utils/gateStagesBehavior.test.js
+JEST_SUITE i=38/106 status=PASS secs=4.2 elapsed=1734.0 tests=5 failed=0 file=utils/evidenceGenContract.test.js
+JEST_SUITE i=39/106 status=PASS secs=6.0 elapsed=1740.0 tests=9 failed=0 file=utils/deviceCaptureHardeningBehavior.test.js
+JEST_SUITE i=40/106 status=PASS secs=5.8 elapsed=1745.8 tests=9 failed=0 file=utils/hxErrorLinesBehavior.test.js
+JEST_SUITE i=41/106 status=PASS secs=2.8 elapsed=1748.6 tests=6 failed=0 file=utils/mpWeixinPagesCoverageBehavior.test.js
+JEST_SUITE i=42/106 status=PASS secs=2.9 elapsed=1751.5 tests=5 failed=0 file=utils/mpWeixinGatePagesBehavior.test.js
+JEST_SUITE i=43/106 status=PASS secs=2.9 elapsed=1754.4 tests=4 failed=0 file=utils/hxLaunchDetachBehavior.test.js
+JEST_SUITE i=44/106 status=PASS secs=3.4 elapsed=1757.7 tests=4 failed=0 file=utils/evidenceSelfcheckBehavior.test.js
+JEST_SUITE i=45/106 status=PASS secs=2.6 elapsed=1760.3 tests=4 failed=0 file=utils/evidenceCaptureEncodingBehavior.test.js
+JEST_SUITE i=46/106 status=PASS secs=3.2 elapsed=1763.6 tests=5 failed=0 file=utils/deviceCaptureBoundedShotBehavior.test.js
+JEST_SUITE i=47/106 status=PASS secs=4.7 elapsed=1768.3 tests=39 failed=0 file=utils/devFinishContract.test.js
+JEST_SUITE i=48/106 status=PASS secs=3.9 elapsed=1772.2 tests=5 failed=0 file=utils/emulatorSmokeBoundedShotBehavior.test.js
+JEST_SUITE i=49/106 status=PASS secs=1.8 elapsed=1774.1 tests=5 failed=0 file=utils/contractTestPatternBehavior.test.js
+JEST_SUITE i=50/106 status=PASS secs=2.0 elapsed=1776.1 tests=6 failed=0 file=utils/jestSplitContract.test.js
+JEST_SUITE i=51/106 status=PASS secs=2.0 elapsed=1778.1 tests=3 failed=0 file=utils/levelDetectQuotepathBehavior.test.js
+JEST_SUITE i=52/106 status=PASS secs=1.4 elapsed=1779.6 tests=6 failed=0 file=utils/authOutlets401Behavior.test.js
+JEST_SUITE i=53/106 status=PASS secs=1.4 elapsed=1781.0 tests=15 failed=0 file=utils/autoScreenshotFullRepoBehavior.test.js
+JEST_SUITE i=54/106 status=PASS secs=2.2 elapsed=1783.2 tests=12 failed=0 file=utils/screenshotDiffBehavior.test.js
+JEST_SUITE i=55/106 status=PASS secs=1.0 elapsed=1784.2 tests=5 failed=0 file=utils/screenshotDiffSingleFileBehavior.test.js
+JEST_SUITE i=56/106 status=PASS secs=1.4 elapsed=1785.6 tests=8 failed=0 file=utils/hxTimingBehavior.test.js
+JEST_SUITE i=57/106 status=PASS secs=1.7 elapsed=1787.3 tests=7 failed=0 file=utils/pngDiffBehavior.test.js
+JEST_SUITE i=58/106 status=PASS secs=1.3 elapsed=1788.6 tests=27 failed=0 file=utils/markdownToolbarBehavior.test.js
+JEST_SUITE i=59/106 status=PASS secs=1.1 elapsed=1789.7 tests=19 failed=0 file=utils/concurrent401RefreshBehavior.test.js
+JEST_SUITE i=60/106 status=PASS secs=0.4 elapsed=1790.0 tests=11 failed=0 file=utils/apiBatchAOutletBehavior.test.js
+JEST_SUITE i=61/106 status=PASS secs=0.7 elapsed=1790.7 tests=13 failed=0 file=utils/chapterNotFoundBehavior.test.js
+JEST_SUITE i=62/106 status=PASS secs=0.5 elapsed=1791.3 tests=5 failed=0 file=utils/unauthorized401CertCleanupBehavior.test.js
+JEST_SUITE i=63/106 status=PASS secs=0.9 elapsed=1792.2 tests=28 failed=0 file=utils/recruiterResumeBehavior.test.js
+JEST_SUITE i=64/106 status=PASS secs=0.9 elapsed=1793.1 tests=21 failed=0 file=utils/namedKeyEnvelopeBehavior.test.js
+JEST_SUITE i=65/106 status=PASS secs=0.6 elapsed=1793.8 tests=13 failed=0 file=utils/forumFormatPreferenceBehavior.test.js
+JEST_SUITE i=66/106 status=PASS secs=0.8 elapsed=1794.6 tests=7 failed=0 file=utils/mpWeixinGateEnvBehavior.test.js
+JEST_SUITE i=67/106 status=PASS secs=1.0 elapsed=1795.6 tests=12 failed=0 file=utils/forumContentFormatBehavior.test.js
+JEST_SUITE i=68/106 status=PASS secs=1.1 elapsed=1796.7 tests=13 failed=0 file=utils/resumeNotFoundBehavior.test.js
+JEST_SUITE i=69/106 status=PASS secs=0.7 elapsed=1797.4 tests=2 failed=0 file=utils/mpWeixinArchiveSumBehavior.test.js
+JEST_SUITE i=70/106 status=PASS secs=1.0 elapsed=1798.4 tests=3 failed=0 file=utils/autoScreenshotAdbAgreementBehavior.test.js
+JEST_SUITE i=71/106 status=PASS secs=0.2 elapsed=1798.6 tests=26 failed=0 file=utils/favoritesLandingContract.test.js
+JEST_SUITE i=72/106 status=PASS secs=0.8 elapsed=1799.4 tests=14 failed=0 file=utils/forumImagePickerBehavior.test.js
+JEST_SUITE i=73/106 status=PASS secs=0.5 elapsed=1800.0 tests=46 failed=0 file=utils/landingLoginBehavior.test.js
+JEST_SUITE i=74/106 status=PASS secs=0.3 elapsed=1800.3 tests=29 failed=0 file=utils/recruitDisplayBehavior.test.js
+JEST_SUITE i=75/106 status=PASS secs=0.6 elapsed=1801.0 tests=28 failed=0 file=utils/markdownInlineBehavior.test.js
+JEST_SUITE i=76/106 status=PASS secs=0.6 elapsed=1801.6 tests=23 failed=0 file=utils/fallbackChainEnvelopeBehavior.test.js
+JEST_SUITE i=77/106 status=PASS secs=0.6 elapsed=1802.3 tests=5 failed=0 file=utils/courseBrowseReportBehavior.test.js
+JEST_SUITE i=78/106 status=PASS secs=0.7 elapsed=1802.9 tests=42 failed=0 file=utils/markdownSubsetBehavior.test.js
+JEST_SUITE i=79/106 status=PASS secs=0.3 elapsed=1803.2 tests=4 failed=0 file=utils/logoutRevokeBehavior.test.js
+JEST_SUITE i=80/106 status=PASS secs=0.9 elapsed=1804.1 tests=7 failed=0 file=utils/aiAnswerBodyBehavior.test.js
+JEST_SUITE i=81/106 status=PASS secs=0.9 elapsed=1805.0 tests=19 failed=0 file=utils/authPreRequestValidationBehavior.test.js
+JEST_SUITE i=82/106 status=PASS secs=0.4 elapsed=1805.4 tests=15 failed=0 file=utils/favoritesTagDrillContract.test.js
+JEST_SUITE i=83/106 status=PASS secs=0.4 elapsed=1805.8 tests=22 failed=0 file=utils/credentialGroupedBehavior.test.js
+JEST_SUITE i=84/106 status=PASS secs=0.3 elapsed=1806.2 tests=19 failed=0 file=utils/topicFeedBehavior.test.js
+JEST_SUITE i=85/106 status=PASS secs=0.2 elapsed=1806.4 tests=2 failed=0 file=utils/utsHarnessDedupContract.test.js
+JEST_SUITE i=86/106 status=PASS secs=0.3 elapsed=1806.7 tests=8 failed=0 file=utils/featuredLinks.test.js
+JEST_SUITE i=87/106 status=PASS secs=0.3 elapsed=1806.9 tests=56 failed=0 file=utils/aiSourcesDisplay.test.js
+JEST_SUITE i=88/106 status=PASS secs=0.4 elapsed=1807.3 tests=5 failed=0 file=utils/guardClassification.test.js
+JEST_SUITE i=89/106 status=PASS secs=0.3 elapsed=1807.7 tests=12 failed=0 file=utils/coursePointsRedeemBehavior.test.js
+JEST_SUITE i=90/106 status=PASS secs=0.2 elapsed=1807.9 tests=2 failed=0 file=utils/credentialSwitchBehavior.test.js
+JEST_SUITE i=91/106 status=PASS secs=0.3 elapsed=1808.2 tests=9 failed=0 file=utils/feedbackApiBehavior.test.js
+JEST_SUITE i=92/106 status=PASS secs=0.3 elapsed=1808.6 tests=8 failed=0 file=utils/noteImagesBehavior.test.js
+JEST_SUITE i=93/106 status=PASS secs=0.2 elapsed=1808.8 tests=3 failed=0 file=utils/aiAssistantSwallowBehavior.test.js
+JEST_SUITE i=94/106 status=PASS secs=0.2 elapsed=1809.0 tests=4 failed=0 file=utils/quickLoginBehavior.test.js
+JEST_SUITE i=95/106 status=PASS secs=0.2 elapsed=1809.3 tests=16 failed=0 file=utils/pagedListBehavior.test.js
+JEST_SUITE i=96/106 status=PASS secs=0.3 elapsed=1809.6 tests=10 failed=0 file=utils/aiModelSelectionBehavior.test.js
+JEST_SUITE i=97/106 status=PASS secs=0.1 elapsed=1809.7 tests=5 failed=0 file=utils/replyPanelLayoutBehavior.test.js
+JEST_SUITE i=98/106 status=PASS secs=0.2 elapsed=1809.8 tests=13 failed=0 file=utils/envelopeBehavior.test.js
+JEST_SUITE i=99/106 status=PASS secs=0.2 elapsed=1810.0 tests=4 failed=0 file=utils/requestLogSanitizeBehavior.test.js
+JEST_SUITE i=100/106 status=PASS secs=0.1 elapsed=1810.2 tests=9 failed=0 file=utils/examInfoTabs.test.js
+JEST_SUITE i=101/106 status=PASS secs=0.1 elapsed=1810.3 tests=6 failed=0 file=utils/dashboardNews.test.js
+JEST_SUITE i=102/106 status=PASS secs=0.2 elapsed=1810.5 tests=20 failed=0 file=utils/jobCredentialDisplayBehavior.test.js
+JEST_SUITE i=103/106 status=PASS secs=0.2 elapsed=1810.7 tests=11 failed=0 file=utils/coursePointsCtaBehavior.test.js
+JEST_SUITE i=104/106 status=PASS secs=0.1 elapsed=1810.8 tests=9 failed=0 file=utils/practiceModuleDisplay.test.js
+JEST_SUITE i=105/106 status=PASS secs=0.1 elapsed=1810.9 tests=7 failed=0 file=utils/externalLinkDispatchBehavior.test.js
+JEST_SUITE i=106/106 status=PASS secs=0.2 elapsed=1811.1 tests=14 failed=0 file=utils/wrongQuestionDisplayBehavior.test.js
+
+## jest 汇总行
+Test Suites: 106 passed, 106 total
+Tests:       1219 passed, 1219 total
+Time:        1811.079 s, estimated 2061 s
+WALL_SECS=1814
