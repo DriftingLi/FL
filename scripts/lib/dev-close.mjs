@@ -274,8 +274,10 @@ export function judgeVerdict(f) {
   }
   // 「无动作」与「干完了」必须长得不一样（#2251 / spec B）：执行腿上树本来就不存在 ⇒ 这趟什么都没拆，
   // 不许报 ok（ok 只留给真拆且对账通过的腿）。noop 不是红（重跑一张已收完的票是常态），但也不再是「达成」。
-  // 放在所有红分支之后：树不在却有分支残留仍照旧判红，noop 只承接「确实没事可做」。
-  else if (f.treeBefore === 'absent') { verdict = 'noop' }
+  // 写成「红分支链之后的独立判定」而不是链尾的 else if：出口码 4（分支侧已绿、仓里躺着别的会话的孤儿目录）
+  // 会进上一个 else if 却三个子分支都不设 verdict，verdict 仍是 ok —— 链尾 else if 就此被短路，
+  // 树不在的执行腿又报回 ok（#2251 code-review 实测）。条件收成 verdict === 'ok'，红的照样红。
+  if (verdict === 'ok' && f.treeBefore === 'absent') { verdict = 'noop' }
 
   // 三个 token 一律从事实来，不再从 verdict 反推（#2188 的三连漂：tree=kept、dir=na、local_branch=kept 都是编的）。
   const treeDone = r.dirRemoved === true && r.regRemoved === true
@@ -295,7 +297,10 @@ export function judgeVerdict(f) {
   // 中文不进机检行，用固定 ASCII token 承载，人读的中文由 ps1 侧照打。
   const notes = []
   if (f.legacy) notes.push('legacy-branch-match')
-  if (tree === 'absent') notes.push('no-pending-action')
+  // note 只属于「确实没事可做」的两态（dry-run 的 planned 与执行腿的 noop）。
+  // 曾经按「凡 tree=absent」挂，结果 branch-residue 的红行也带上「无任何待执行动作」——
+  // 有残留就是有动作要做，红行贴这句等于自认没活干（#2251 code-review 实测）。
+  if (tree === 'absent' && (verdict === 'planned' || verdict === 'noop')) notes.push('no-pending-action')
   const parts = [
     'DEV_CLOSE_RESULT',
     `task=${f.task}`,

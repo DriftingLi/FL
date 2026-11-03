@@ -486,3 +486,46 @@ test('L17 三态真走 CLI（真执行注入事实）：进程退出码与读数
   assert.match(blocked.stdout, /reason=tree-branch-mismatch/)
   assert.doesNotMatch(blocked.stdout, /no-pending-action/)
 })
+
+test('L18 对账分支不许绕过 noop，也不许把「无动作」贴到红行上（#2251 code-review 两处反例）', () => {
+  // 两个反例都来自同一类写法错误：把 noop 与 note 挂成「红分支链的 else / 只看 tree」。
+  // 判据来源：spec B「「无动作」永不打 verdict=ok」+ 本票 AC③「planned + tree=absent 必带 note」——
+  // 反过来说，note 只属于「确实没事可做」的那两态，红行挂着它等于自己打自己的脸。
+
+  // ① 出口码 4：分支侧已绿、仓里躺着别的会话的孤儿目录（check-branch-residue.ps1 的并发边界）。
+  //    它不进本票的红，但也绝不该因为树不存在就被算成「干完了」。
+  const orphanOnly = judgeVerdict({
+    task: '2250', prState: 'MERGED', mode: 'execute', fetch: 'ok', treeBefore: 'absent',
+    localBranch: 'absent', branch: '',
+    remove: { ran: false, exitCode: 0, raw: '' },
+    residue: { ran: true, exitCode: 4, state: 'orphan', dirs: 'orphan', orphans: 1 },
+  })
+  assert.equal(orphanOnly.verdict, 'noop', 'exit 4 不是红，但树不在就没有达成可称：' + orphanOnly.line)
+  assert.equal(orphanOnly.ok, true, 'noop 仍然是可重跑的非失败态')
+  assert.doesNotMatch(orphanOnly.line, /verdict=ok( |$)/, '树不在的执行腿永不许报 ok：' + orphanOnly.line)
+  assert.match(orphanOnly.line, /note=no-pending-action/)
+
+  // ② 真有分支残留：红行必须干净利落地是红，不许同时声称「无任何待执行动作」。
+  const residueRed = judgeVerdict({
+    task: '2250', prState: 'MERGED', mode: 'execute', fetch: 'ok', treeBefore: 'absent',
+    localBranch: 'kept', branch: 'refs/heads/feat/2250',
+    remove: { ran: false, exitCode: 0, raw: '' },
+    residue: { ran: true, exitCode: 1, state: 'dirty', dirs: 'clean' },
+  })
+  assert.equal(residueRed.verdict, 'red')
+  assert.equal(residueRed.ok, false)
+  assert.match(residueRed.line, /reason=branch-residue/)
+  assert.match(residueRed.line, /tree=absent/, '树确实不在，这一格照实报')
+  assert.doesNotMatch(residueRed.line, /no-pending-action/, '有残留就有关动作要做，红行不许贴无动作标记：' + residueRed.line)
+
+  // ③ 出口码 5（目录对账读不到）：同样不许被「树不在」洗成 noop。
+  const unreadable = judgeVerdict({
+    task: '2250', prState: 'MERGED', mode: 'execute', fetch: 'ok', treeBefore: 'absent',
+    localBranch: 'absent', branch: '',
+    remove: { ran: false, exitCode: 0, raw: '' },
+    residue: { ran: true, exitCode: 5, state: 'unknown' },
+  })
+  assert.equal(unreadable.verdict, 'red', '读不到就是 fail-closed 红')
+  assert.equal(unreadable.ok, false)
+  assert.doesNotMatch(unreadable.line, /no-pending-action/)
+})
