@@ -24857,7 +24857,7 @@ const docTemplate = `{
                     "x-nullable": true
                 },
                 "meta": {
-                    "description": "助手消息的能力徽章与耗时（票 2245；非诊断消息与 2242 之前的存量行为 null）",
+                    "description": "助手消息的能力徽章与耗时（票 2245；非诊断消息与存量行为 null）",
                     "allOf": [
                         {
                             "$ref": "#/definitions/aiassistant.AIChatMessageMeta"

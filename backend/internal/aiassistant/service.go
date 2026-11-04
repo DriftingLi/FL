@@ -66,16 +66,17 @@ type AIChatMessageMeta struct {
 }
 
 // AIChatMessageDTO 消息展示对象。
+//
+// meta 是**指针而非集合字段**，故它不带 nullability 标签：可空性锁（判据 3/4/5）只管集合，
+// 硬登记进 nullableOutlets 会被「不在射程内声明 nullable 的字段集里」当场判红。它的缺席形状
+// 由 ai_assistant_contract_test.go 的「无元数据消息 meta 为 null」一条实证。
 type AIChatMessageDTO struct {
-	ID      int               `json:"id"`
-	Role    string            `json:"role"`
-	Content string            `json:"content"`
-	Images  []string          `json:"images" extensions:"x-nullable" nullability:"nullable"`  // 用户消息附带的图片 URL（无图时键在、值为 null）
-	Sources []DiagnosisSource `json:"sources" extensions:"x-nullable" nullability:"nullable"` // 助手消息的诊断来源（T5 历史回放；无来源时键在、值为 null）
-	// meta 不是集合字段（它是指向 AIChatMessageMeta 的指针），可空性锁只管集合字段，
-	// 所以这里不带 nullability 标签；这份缺席形状的实证在 ai_assistant_contract_test.go
-	// 的「无徽章消息 meta 为 null」一条，而不是 nullableOutlets 表。
-	Meta      *AIChatMessageMeta `json:"meta" extensions:"x-nullable"` // 助手消息的能力徽章与耗时（票 2245；非诊断消息与 2242 之前的存量行为 null）
+	ID        int                `json:"id"`
+	Role      string             `json:"role"`
+	Content   string             `json:"content"`
+	Images    []string           `json:"images" extensions:"x-nullable" nullability:"nullable"`  // 用户消息附带的图片 URL（无图时键在、值为 null）
+	Sources   []DiagnosisSource  `json:"sources" extensions:"x-nullable" nullability:"nullable"` // 助手消息的诊断来源（T5 历史回放；无来源时键在、值为 null）
+	Meta      *AIChatMessageMeta `json:"meta" extensions:"x-nullable"`                           // 助手消息的能力徽章与耗时（票 2245；非诊断消息与存量行为 null）
 	CreatedAt time.Time          `json:"created_at"`
 }
 
