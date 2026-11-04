@@ -444,16 +444,16 @@ describe('uvue `white-space` 承载面契约（#1113）', () => {
   describe('③ 真实文件（全仓 .uvue）', () => {
     const scanned = FILES.map((file) => ({ file, ...scanWhiteSpace(file, readSource(file)) }));
 
-    it('扫描面自检：文件数、class→承载映射、本票 6 处被删点的映射都必须真的抓到了（防空跑假绿）', () => {
+    it('扫描面自检：文件数、class→承载映射、本票 5 处被删点的映射都必须真的抓到了（防空跑假绿）', () => {
       expect(FILES.length).toBeGreaterThan(100);
 
-      // 本票 6 处被删的 class 至今仍挂在 <scroll-view> 上 —— 若映射塌了，第 3 条测试的「零命中」就是假绿
+      // 本票 5 处被删的 class 至今仍挂在 <scroll-view> 上 —— 若映射塌了，第 3 条测试的「零命中」就是假绿
+      // （原 6 处含 ai-feature.uvue diag-chips，随 #2262 诊断面板摘除，类与模板一起删除，不再是登记条目）
       const removed = [
         ['pages/profile/favorites.uvue', 'filter-scroll'],
         ['pages/profile/records.uvue', 'filter-scroll'],
         ['pages/profile/practice-records.uvue', 'filter-scroll'],
         ['pages/featured/featured-list.uvue', 'filter-scroll'],
-        ['pages/ai-assistant/ai-feature.uvue', 'diag-chips'],
         ['pages/exam/mock-exam.uvue', 'palette-scroll'],
       ];
       for (const [file, cls] of removed) {
