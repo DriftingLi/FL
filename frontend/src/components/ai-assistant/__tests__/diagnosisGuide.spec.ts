@@ -143,14 +143,40 @@ describe('上游不可用：留空 + 不弹错', () => {
     expect(w.text()).toContain('没有匹配项')
   })
 
-  it('faults 502 时第三步留空并给可描述的退路', async () => {
+  it('faults 502 时第三步留空，并给一个能走通的出口（票 2280 缺陷二）', async () => {
     // 用 mockRejectedValue（不是 ...Once）：[brandId, secondId] 这个 watcher 在选完品牌与
     // 选完系统时各触发一次，只拒第一次的话第二次会拿到成功值，测不到降级
     api.listDiagnosisFaults.mockRejectedValue(new Error('502'))
     const w = mountGuide()
     await clickChip(w, '中力 EP')
     await clickChip(w, '电池_BMS系统')
-    expect(w.text()).toContain('没有可选项')
+    expect(w.text()).toContain('这个词表里没有匹配项')
+    // 关键是这个入口：没有它用户被困在第三步（textarea 在第 4 步、进第 4 步又要先选现象）
+    expect(w.findAll('button').some((b) => b.text().includes('直接描述故障现象'))).toBe(true)
+  })
+
+  it('词表为空时点「直接描述」能进确认步并写出用户自己描述的现象', async () => {
+    api.listDiagnosisFaults.mockResolvedValue({ items: [] })
+    const w = mountGuide()
+    await clickChip(w, '中力 EP')
+    await clickChip(w, '电池_BMS系统')
+
+    const freeformBtn = w.findAll('button').find((b) => b.text().includes('直接描述故障现象'))
+    expect(freeformBtn).toBeTruthy()
+    await freeformBtn!.trigger('click')
+    await flushPromises()
+
+    // 现象输入框出现且能写（第 4 步现在是两步 textarea：现象 + 补充）
+    const textareas = w.findAll('textarea')
+    expect(textareas.length).toBeGreaterThan(0)
+    await textareas[0].setValue('举升无力，空载也起不来')
+    await flushPromises()
+
+    const preview = w.find('.compose-preview')
+    expect(preview.exists()).toBe(true)
+    expect(preview.text()).toContain('举升无力，空载也起不来')
+    const send = w.findAll('button').find((b) => b.text().includes('发送'))
+    expect(send!.attributes('disabled')).toBeUndefined()
   })
 })
 
@@ -229,6 +255,60 @@ describe('预选（欢迎区点卡进来）', () => {
     // 现象是预设的，第 4 步的成句里应该已经在
     const preview = w.find('.compose-preview')
     expect(preview.exists() ? preview.text() : w.text()).toContain('举升无力')
+  })
+
+  // 票 2280 缺陷一：上面那条断言在 preview 不存在时会回退到 w.text()，而第三层选项列表里
+  // 本来就摆着这个词 —— 恒真。这里改成锁死「选完品牌/系统之后，确认步真的能用」。
+  it('预设现象的完整路径：选品牌 → 选系统 → 确认步可用且成句含该现象', async () => {
+    const w = mountGuide({ presetFault: '举升无力 / 不能起升' })
+    await flushPromises()
+    // 还在第一步：确认步不可点（现象有了，但没有品牌 → 成句不成立）
+    const confirmStep = () => w.findAll('.guide-steps button').find((b) => b.text().includes('4. 确认'))!
+
+    await clickChip(w, '中力 EP')
+    // 选完品牌：现象没被清掉，但还没到确认步
+    expect(w.text()).not.toContain('举升无力 / 不能起升')
+
+    await clickChip(w, '电池_BMS系统')
+    await flushPromises()
+
+    // 预选的现象在词表里 ⇒ 自动定为已选并直接进第 4 步，成句含现象
+    expect(w.find('.compose-preview').text()).toContain('举升无力 / 不能起升')
+    const send = w.findAll('button').find((b) => b.text().includes('发送'))
+    expect(send!.attributes('disabled')).toBeUndefined()
+    expect(confirmStep().attributes('disabled')).toBeUndefined()
+  })
+
+  it('换品牌后用户自己点的现象才作废（预选不算）', async () => {
+    api.listDiagnosisSystems.mockResolvedValue({ items: systems })
+    const w = mountGuide({ presetFault: '举升无力 / 不能起升' })
+    await flushPromises()
+    await clickChip(w, '中力 EP')
+    await clickChip(w, '电池_BMS系统')
+    expect(w.find('.compose-preview').text()).toContain('举升无力')
+
+    // 回去换品牌：现象必须失效（不能拿 A 品牌的现象去问 B 品牌）
+    await w.findAll('.guide-steps button')[0].trigger('click')
+    await flushPromises()
+    await clickChip(w, '林德 Linde')
+    expect(w.text()).not.toContain('举升无力 / 不能起升')
+  })
+
+  it('点过词表里的现象之后，换品牌不再把它带回来', async () => {
+    const w = mountGuide({ presetFault: '举升无力 / 不能起升' })
+    await flushPromises()
+    await clickChip(w, '中力 EP')
+    await clickChip(w, '电池_BMS系统')
+    // 预选在词表里 ⇒ 已自动进确认步；回第三步改选另一条现象
+    await w.findAll('.guide-steps button')[2].trigger('click')
+    await flushPromises()
+    await clickChip(w, '仪表报故障码')
+    expect(w.find('.compose-preview').text()).toContain('仪表报故障码')
+    // 换品牌：旧的自然失效，且预选（举升无力）也不该复活
+    await w.findAll('.guide-steps button')[0].trigger('click')
+    await flushPromises()
+    await clickChip(w, '林德 Linde')
+    expect(w.text()).not.toContain('举升无力 / 不能起升')
   })
 })
 

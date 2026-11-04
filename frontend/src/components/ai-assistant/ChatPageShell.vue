@@ -311,10 +311,16 @@
                 :fade="false"
               />
             </div>
-            <div v-else class="message-loading flex gap-1 py-1">
-              <span class="loading-dot h-2 w-2 rounded-pill bg-ui-400"></span>
-              <span class="loading-dot h-2 w-2 rounded-pill bg-ui-400"></span>
-              <span class="loading-dot h-2 w-2 rounded-pill bg-ui-400"></span>
+            <div v-else class="message-loading flex items-center gap-2 py-1 text-sm text-ink-3">
+              <span class="flex gap-1">
+                <span class="loading-dot h-2 w-2 rounded-pill bg-ui-400"></span>
+                <span class="loading-dot h-2 w-2 rounded-pill bg-ui-400"></span>
+                <span class="loading-dot h-2 w-2 rounded-pill bg-ui-400"></span>
+              </span>
+              <!-- 上游过程文案（票 2280 / 2245）：诊断服务的检索阶段会推「正在调取该系统的
+                   维修资料…」这类人话，把 8~15 秒只有三个点的空档填上。
+                   其它功能不推 status，这里就只剩三个点，与改造前一致。 -->
+              <span v-if="store.streamingStatus" class="loading-status">{{ store.streamingStatus }}</span>
             </div>
           </div>
         </div>

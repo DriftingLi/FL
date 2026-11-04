@@ -84,14 +84,18 @@
       <DiagnosisBadges v-if="isDiagnosis" :badges="message.meta?.badges || []" />
     </template>
 
-    <!-- 助手气泡下方：逐轮来源回放 + 耗时（ADR-0033；默认折叠，历史每轮独立展开）。
-         耗时并入来源折叠头右侧（票 2244 拍板）——只有耗时没有来源时退化为一行脚注。 -->
+    <!-- 助手气泡下方：逐轮来源回放 + 耗时（ADR-0033；默认折叠，历史每轮独立展开），
+         以及回答的复制动作（票 2280 缺陷五：2241 第 14 行要求保留，2244 曾误记为「已有」）。
+         两件事分两个组件，各自判断有无可渲染内容，互不牵连。 -->
     <template #assistant-extra="{ message }">
-      <DiagnosisSources
-        v-if="isDiagnosis && (message.sources?.length || message.meta?.elapsed)"
-        :sources="message.sources || []"
-        :elapsed="message.meta?.elapsed || 0"
-      />
+      <template v-if="isDiagnosis">
+        <DiagnosisSources
+          v-if="message.sources?.length || message.meta?.elapsed"
+          :sources="message.sources || []"
+          :elapsed="message.meta?.elapsed || 0"
+        />
+        <DiagnosisAnswerActions :content="message.content" />
+      </template>
     </template>
 
     <!-- 输入区差异内容：图片待发队列（诊断来源只在回答下方逐轮展示，不在输入框上方残留） -->
@@ -142,6 +146,7 @@ import {
   isDiagnosisFeature
 } from '@/config/aiFeatures'
 import DiagnosisSources from '@/components/ai-assistant/DiagnosisSources.vue'
+import DiagnosisAnswerActions from '@/components/ai-assistant/DiagnosisAnswerActions.vue'
 import DiagnosisBadges from '@/components/ai-assistant/DiagnosisBadges.vue'
 import DiagnosisWelcome from '@/components/ai-assistant/DiagnosisWelcome.vue'
 import DiagnosisGuide from '@/components/ai-assistant/DiagnosisGuide.vue'
@@ -310,10 +315,10 @@ async function handleImageSelect(file: UploadFile) {
     ElMessage.warning(`最多上传 ${maxImages.value} 张图片`)
     return
   }
-  // 压缩在选图时就做（票 2244）：传上去的已经是压好的那份，不浪费带宽也不让服务端重编码。
-  // 压缩失败会原样返回（见 utils/imageCompress.ts 的降级），不阻断上传。
-  const { file: toUpload } = await compressImage(raw)
-  const previewUrl = URL.createObjectURL(toUpload)
+  // 名额必须**同步**先占住（票 2280 缺陷三）：下面压缩与上传都在 await 后面，
+  // 多选 5 张时五个回调会各自读完同一个长度再各自入队 —— 上限形同虚设。
+  // 先 push 一个占位项，后续就地补 url，长度读的才是真实队列。
+  const previewUrl = URL.createObjectURL(raw)
   // 入队的是**代理本身**（票 #1358 / spec #1345 决策 #10）：push 裸对象时队列里读回的是
   // Vue 为它新建的代理，与局部变量身份不等 ⇒
   //  ① catch 分支「按身份摘掉失败项」的 `p !== pending` 恒成立，失败项永远摘不掉；
@@ -323,6 +328,10 @@ async function handleImageSelect(file: UploadFile) {
   const pending = reactive<PendingImage>({ url: '', previewUrl, uploading: true })
   pendingImages.value.push(pending)
   try {
+    // 压缩在选图时就做（票 2244）：传上去的已经是压好的那份，不浪费带宽也不让服务端重编码。
+    // 压缩失败会原样返回（见 utils/imageCompress.ts 的降级），不阻断上传。
+    const { file: toUpload } = await compressImage(raw)
+    // 压缩换不回更小的文件时会退回原图（previewUrl 仍指向原 blob，无需重建）
     pending.url = await store.uploadImage(toUpload)
   } catch (e: any) {
     ElMessage.error(e?.message || '图片上传失败')

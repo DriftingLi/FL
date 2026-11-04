@@ -321,6 +321,28 @@ describe('选图：先压缩再上传', () => {
     expect(store().uploadImage).toHaveBeenCalledTimes(3)
     expect(elMessage.warning).toHaveBeenCalledWith('最多上传 3 张图片')
   })
+
+  // 票 2280 缺陷三：原实现的名额检查在 `await compressImage()` 之前、入队在之后，
+  // 多选时五个回调各自读到同一个长度再各自入队 ⇒ 上限形同虚设（实测入队 5 张）。
+  it('一次多选 5 张只入队 3 张，第 4/5 张既不压缩也不上传', async () => {
+    mountPage()
+    await flushPromises()
+    const files = Array.from({ length: 5 }, (_, i) => ({
+      name: `p${i}.png`,
+      raw: new File([new Uint8Array(10)], `p${i}.png`, { type: 'image/png' })
+    }))
+    // 五个回调在同一个 tick 里连着触发（这正是「多选」的实际时序）
+    wrapper!.findComponent(UiUploadStub).vm.$emit('change', files[0])
+    wrapper!.findComponent(UiUploadStub).vm.$emit('change', files[1])
+    wrapper!.findComponent(UiUploadStub).vm.$emit('change', files[2])
+    wrapper!.findComponent(UiUploadStub).vm.$emit('change', files[3])
+    wrapper!.findComponent(UiUploadStub).vm.$emit('change', files[4])
+    await flushPromises()
+
+    expect(compress.compressImage).toHaveBeenCalledTimes(3)
+    expect(store().uploadImage).toHaveBeenCalledTimes(3)
+    expect(elMessage.warning).toHaveBeenCalledWith('最多上传 3 张图片')
+  })
 })
 
 describe('助手消息的元数据流到徽章与来源', () => {
@@ -344,10 +366,51 @@ describe('助手消息的元数据流到徽章与来源', () => {
     expect(wrapper!.find('.extra-host').text()).toContain('耗时 12.3 秒')
   })
 
-  it('没有 meta 的消息：徽章行空、来源块不渲染', async () => {
+  it('没有 meta 的消息：徽章行空、来源块不渲染，但复制动作仍在（票 2280 缺陷五）', async () => {
     mountPage({ fakeMessage: { id: 2, role: 'assistant', content: '答案', sources: [], meta: null } })
     await flushPromises()
     expect(wrapper!.find('.caps-host').findAll('[data-cap]')).toHaveLength(0)
-    expect(wrapper!.find('.extra-host').text()).toBe('')
+    // 来源与耗时都没有 ⇒ 来源块整块不渲染（只剩复制按钮这一行）
+    expect(wrapper!.find('.extra-host').find('.py-0\\.5').exists()).toBe(false)
+    expect(wrapper!.find('.extra-host').text()).not.toContain('耗时')
+    expect(wrapper!.find('.extra-host').text()).toContain('复制')
+  })
+
+  it('助手回答下方有复制按钮，点击写进剪贴板并提示成功', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    // jsdom 的 navigator.clipboard 只有 getter，必须用 defineProperty 覆盖
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+      writable: true
+    })
+
+    mountPage({ fakeMessage: { id: 3, role: 'assistant', content: '先查液压油位。', sources: [], meta: null } })
+    await flushPromises()
+
+    const copyBtn = wrapper!.find('.extra-host').findAll('button').find((b) => b.text().includes('复制'))
+    expect(copyBtn).toBeTruthy()
+    await copyBtn!.trigger('click')
+    await flushPromises()
+
+    expect(writeText).toHaveBeenCalledWith('先查液压油位。')
+    expect(elMessage.success).toHaveBeenCalledWith('已复制')
+  })
+
+  it('剪贴板不可用（内网 http 非安全上下文）时给出可行动的提示，不静默失败', async () => {
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: vi.fn().mockRejectedValue(new Error('NotAllowedError')) },
+      configurable: true,
+      writable: true
+    })
+
+    mountPage({ fakeMessage: { id: 4, role: 'assistant', content: '答案', sources: [], meta: null } })
+    await flushPromises()
+
+    const copyBtn = wrapper!.find('.extra-host').findAll('button').find((b) => b.text().includes('复制'))
+    await copyBtn!.trigger('click')
+    await flushPromises()
+
+    expect(elMessage.warning).toHaveBeenCalledWith('复制失败，请手动选择文字复制')
   })
 })

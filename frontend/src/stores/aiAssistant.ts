@@ -116,6 +116,12 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
   // 手写 DiagnosisMeta（两者字段都 optional）——快照进消息时就归一，消费方不必再判 undefined。
   const lastMeta: Ref<AIChatMessageMeta | null> = ref(null)
 
+  // ===== 智能维修诊断当轮过程文案（SSE status 事件；票 2245 决定，2280 落地）=====
+  // 上游在检索维修知识库时会推「已识别故障码所属系统：X，正在调取该系统的维修资料…」这类
+  // 过程文案。我方 8~15 秒的等待期原先只有三个点，这条通道把那段空档填上。
+  // **只描述当轮**：收尾即清空（不是消息字段，不落库、不回放）。
+  const streamingStatus = ref('')
+
   // ===== 登录状态（复用主体系 auth store）=====
   const authStore = useAuthStore()
   const isLoggedIn = computed(() => authStore.isLoggedIn)
@@ -218,6 +224,7 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     currentSessionId.value = null
     messages.value = []
     streamingContent.value = ''
+    streamingStatus.value = ''
     lastUsage.value = null
     lastSources.value = []
     lastMeta.value = null
@@ -238,6 +245,7 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     }
     streaming.value = false
     streamingContent.value = ''
+    streamingStatus.value = ''
     turnDraft = null
   }
 
@@ -348,8 +356,9 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
         }
       }
     }
-    // 一处复位当轮态：正文缓冲 / 在飞标记 / abort 句柄 / 重发载荷
+    // 一处复位当轮态：正文缓冲 / 过程文案 / 在飞标记 / abort 句柄 / 重发载荷
     streamingContent.value = ''
+    streamingStatus.value = ''
     streaming.value = false
     abortController = null
     turnDraft = null
@@ -430,6 +439,7 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
 
     streaming.value = true
     streamingContent.value = ''
+    streamingStatus.value = ''
     // 新一轮开始：清上一轮脚注/来源/元数据（usage/sources/meta 只描述当轮）
     lastUsage.value = null
     lastSources.value = []
@@ -458,6 +468,11 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
       // usage 进独立 state（当轮脚注由壳渲染），不再拼进消息正文
       onUsage: (data) => {
         if (turn === activeTurn) lastUsage.value = data
+      },
+      // 上游过程文案（票 2280）：壳的等待态读它 —— 三个点之外给一句人话，说明还没卡死。
+      // 不清 `turn === activeTurn` 之外的：迟到事件由轮次守卫丢弃。
+      onStatus: (text) => {
+        if (turn === activeTurn) streamingStatus.value = text
       },
       // 来源资料进独立 state（智能维修诊断；当轮来源面板由本页渲染）
       onSources: (sources) => {
@@ -516,6 +531,7 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     messages.value = []
     currentSessionId.value = null
     streamingContent.value = ''
+    streamingStatus.value = ''
     lastUsage.value = null
     lastSources.value = []
     lastMeta.value = null
@@ -558,6 +574,7 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     messagesLoading,
     streaming,
     streamingContent,
+    streamingStatus,
     canSend,
     lastUsage,
     lastTurnError,
