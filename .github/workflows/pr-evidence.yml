@@ -109,8 +109,46 @@ jobs:
               }
             };
 
+            // ==== ② 第 ③ 条：文件级内容扫描的正文读取 ====
+            // 复用同一个 readRepoFile（getContent），只为**改动到的** .uvue/.uts 取两侧正文，不做全仓扫描。
+            // 该 ref 下没有这个路径（新增 / 删除 / 重命名）是**正常情形** ⇒ 返 null 交给校验器判并集；
+            // 其他错误（限流、网络、鉴权）必须抛出 ⇒ 校验器 fail-closed 判命中，绝不静默当「未命中」。
+            const fetchFileText = async ({ path, ref }) => {
+              try {
+                return await readRepoFile(path, ref);
+              } catch (e) {
+                const status = e && (e.status || (e.response && e.response.status));
+                if (status === 404) return null;
+                throw e;
+              }
+            };
+            // 基线取 merge-base(PR base, PR head) —— 与本地预检 `git merge-base base HEAD` 同义，
+            // 不另立一套基线口径（拿不到就退回 base 分支 tip，方向偏保守：更容易判定命中）。
+            let baseRef = pr.base.sha;
+            try {
+              const mb = await github.rest.repos.compareCommits({ owner, repo, base: pr.base.sha, head: pr.head.sha });
+              const sha = mb.data && mb.data.merge_base_commit && mb.data.merge_base_commit.sha;
+              if (sha) baseRef = sha;
+            } catch (e) {
+              core.warning(`merge-base 取不到（${e && e.message ? e.message : e}）⇒ 文件级扫描退回 base 分支 tip=${String(pr.base.sha).slice(0, 7)}（偏保守）`);
+            }
+
+            // 只把校验器要的三个字段递进去：`previous_filename` 是文件级扫描回头读基线侧旧路径的唯一来源。
+            const validatorFiles = files.map((f) => ({
+              filename: f.filename,
+              patch: f.patch,
+              previousFilename: f.previous_filename || '',
+            }));
+
             const result = await validatePrEvidence({
-              files, body: pr.body || '', headSha: pr.head.sha, fetchCompare, coreList,
+              files: validatorFiles,
+              body: pr.body || '',
+              headSha: pr.head.sha,
+              fetchCompare,
+              coreList,
+              fetchFileText,
+              baseRef,
+              headRef: pr.head.sha,
             });
 
             await core.summary
