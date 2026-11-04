@@ -76,7 +76,8 @@ PUBLIC_API_URL=${WATCH_PUBLIC_API_URL:-https://api.gdyidao.cn/api/ai-assistant/m
 FE_HOST=${WATCH_FE_HOST:-api.gdyidao.cn}
 # disk_lxc：默认两段都清空 ⇒ 该面不适用。
 # lxc101（pve-01，VMID 101）是旧 v1 诊断助手的承载机，已于 2026-11-04 14:44 停机
-# （`pct status 101` ⇒ stopped）。停机前 7 天实测非 health 请求为 0，最后一次真实对话
+# （`pct status 101` ⇒ stopped）。停机前 7 天实测：真正的业务请求只有 13 条（11 条 chat +
+# 2 条 fault-codes），其余是 watchdog 的 health 探测与网关的 brands 目录查询；最后一次真实对话
 # 是 2026-11-03T13:54:43Z —— 停它不影响任何在用功能。
 # 将来若该机复活（`pct start 101`）并要观察其磁盘水位，在 env 文件里同时给 host 与 lxc 号即可，
 # 不必改脚本。
