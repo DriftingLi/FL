@@ -23,6 +23,9 @@
  *   ③ `DEVICE_MD_IMG` = 2026-09-24 小米真机（`192.168.0.212:37611`）`BMS` 一问**回答气泡**的
  *      `content-desc` 原文（`uiautomator dump` 17,542 B / sha256 `da126982…`，同一条里这样的
  *      串出现 **11 次**）—— 它证明「正文面移动端零改动即安全」这条票面假设不成立。
+ *      真机原文的 URL 段是 v1 的 `/diagnosis/manual/`；**#2262 起夹具按 v2 的
+ *      `/diagnosis/ossimg/` 换形**（v1 端点已被后端 #2237 硬删，拿必 404 的形状当基准没意义）。
+ *      形状差异不影响本套件的判据：这里守的是「`![alt](任意本站 URL)` 展开成 alt」这个行为。
  */
 const fs = require('fs');
 const os = require('os');
@@ -55,17 +58,20 @@ const FAULT_PATH = 'fault_images/制动系统/1721219449286.png';
 const CAPTIONED_MARKER =
   '<<IMAGE:/assistant/static/fault_images/制动系统/1721219449286.png | 描述:蓄能器接口>>';
 /**
- * 正文面的**现行**形状：后端 `normalizeDiagnosisImages` 出站前把三种图片表达统一成
- * `![alt](本站代理 URL)`（root ADR-0063 决策 1），SSE 与落库历史同一份。
+ * 正文面的**现行**形状：后端 `normalizeDiagnosisImages` 出站前把正文里的 markdown 图统一成
+ * `![alt](本站配图代理 URL)`（root ADR-0063 决策 1 + ADR-0091），SSE 与落库历史同一份。
  * 左串是真机无障碍树原文（见文件头 ③），alt 为后端缺省词「诊断配图」、URL 逐段百分号编码。
+ *
+ * **#2262 换形**：URL 段从 v1 的 `/diagnosis/manual/` 换成 v2 的 `/diagnosis/ossimg/`
+ * （v1 那四个只读端点已被 #2237 硬删，留着旧夹具等于拿一条线上必 404 的形状当基准）。
  */
 const DEVICE_MD_IMG =
-  '![诊断配图](/api/ai-assistant/diagnosis/manual/fault_images/%E7%94%B5%E6%B1%A0_BMS%E7%B3%BB%E7%BB%9F/1717077520211.png)';
+  '![诊断配图](/api/ai-assistant/diagnosis/ossimg/%E7%94%B5%E6%B1%A0_BMS%E7%B3%BB%E7%BB%9F/1717077520211.png)';
 /** 助手给了 caption 时后端把它放进 alt（清洗后不含 `[]`，见 `diagnosisAltSanitizer`） */
 const CAPTIONED_MD_IMG =
-  '![蓄能器接口](/api/ai-assistant/diagnosis/manual/fault_images/%E5%88%B6%E5%8A%A8%E7%B3%BB%E7%BB%9F/1721219449286.png)';
+  '![蓄能器接口](/api/ai-assistant/diagnosis/ossimg/%E5%88%B6%E5%8A%A8%E7%B3%BB%E7%BB%9F/1721219449286.png)';
 /** alt 为空（`![ ]`）：后端 alt 缺省词兜不住的历史行形状，移动端自己兜 */
-const EMPTY_ALT_MD_IMG = '![](/api/ai-assistant/diagnosis/manual/doc/page_1.png)';
+const EMPTY_ALT_MD_IMG = '![](/api/ai-assistant/diagnosis/ossimg/doc/page_1.png)';
 /** 20260904 的历史正文形状（内联助手内网路径）：ADR-0033 不回填 ⇒ 旧行永存 */
 const LEGACY_MD_IMG = '![接线图](/assistant/static/manual/ep_byd_pmw20_service_manual_en/page_85_643.png)';
 /** 同一页三张图（实测 source#6 / page 85 就是这样） */

@@ -48,7 +48,7 @@ export type AiSession = {
  */
 export type AiDiagnosisSource = {
     id : string
-    text : string               // 来源正文，含内嵌 `<<IMAGE:/assistant/static/manual/...>>` 标记
+    text : string               // 来源正文；历史行可能含 `<<IMAGE:/assistant/static/...>>`（ADR-0033 不回填）
     page_start ?: number        // 来源手册起始页（缺省不显示页码）
     page_end ?: number
     source_url ?: string        // 来源 PDF 的内网路径（本票不渲染，留作后续外链）
@@ -118,31 +118,3 @@ export type AIFunctionItem = {
     adapter : string
 }
 
-/** 诊断品牌选项（GET /ai-assistant/diagnosis/brands）：`value` 是过滤值，`value == 'all'` 表示全部品牌。 */
-export type AiDiagnosisBrandOption = {
-    value : string
-    label : string
-}
-
-/** 诊断故障码条目（GET /ai-assistant/diagnosis/fault-codes 的 `items[]`，字段与外部助手一致）。 */
-export type AiDiagnosisFaultCodeItem = {
-    id : number
-    brand : string
-    brand_cn : string
-    model_series : string
-    fault_code : string
-    fault_name : string
-    symptom : string
-    causes : string
-    sop_steps : string
-    safety_warning : string
-    part_numbers : string
-    source_file : string
-    page_num : number
-}
-
-/** 诊断故障码分页（`items` + `total`）。 */
-export type AiDiagnosisFaultCodePage = {
-    items : AiDiagnosisFaultCodeItem[]
-    total : number
-}
