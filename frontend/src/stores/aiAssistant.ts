@@ -286,6 +286,9 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
       content,
       images: null,
       sources,
+      // meta（徽章 + 耗时）的渲染归 2244；本轮只跟随后端 DTO 形状补位，
+      // 本地落点拿不到服务端回传的 meta，故恒 null。历史回放走的另一条路会带真值。
+      meta: null,
       created_at: new Date().toISOString()
     }
     messages.value.push(assistantMsg)
@@ -393,6 +396,8 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
       content: text,
       images: reqImages ?? null,
       sources: null,
+      // 用户轮次永远没有徽章/耗时（meta 只挂在助手消息上），与线格式同形给 null。
+      meta: null,
       created_at: new Date().toISOString()
     }
     messages.value.push(userMsg)

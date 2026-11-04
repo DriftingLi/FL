@@ -55,6 +55,7 @@ type AIChatMessage struct {
 	Content   string    `gorm:"column:content" json:"content"`
 	Images    string    `gorm:"column:images" json:"-"`  // JSON 数组字符串，用户消息附带的图片 URL
 	Sources   string    `gorm:"column:sources" json:"-"` // JSON 数组字符串，助手消息的诊断来源（T5 历史回放）
+	Meta      string    `gorm:"column:meta" json:"-"`    // JSON 对象字符串，助手消息的能力徽章与耗时（票 2245/2242）
 	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
 }
 

@@ -65,7 +65,8 @@ export const aiFeatureUI: Record<AIFeatureKey, AIFeatureUIDescriptor> = {
       '制动失灵如何应急处理？',
       '故障码 E102 是什么意思？'
     ],
-    // 无静态 quickOptions：品牌/车型由本页按 /diagnosis/brands|models 动态联动（包前端还原）
+    // 无静态 quickOptions：品牌/系统/故障现象三级点选归 2244 重适配（数据面已由
+    // GET /diagnosis/{intents,systems,faults,code-hint} 提供，本页尚未接）
     supportsImage: true,
     maxImages: 1
   }

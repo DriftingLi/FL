@@ -55,14 +55,28 @@ type AIChatSessionDTO struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
+// AIChatMessageMeta 单条助手消息的能力徽章与端到端耗时（v2 `done` 载荷的持久化形态，票 2245/2242）。
+//
+// 与 transport 层的 DiagnosisMeta 是同一份 JSON 形状的两个用途：那个住在 ctx 里、只为当次
+// 响应服务；这个住在 DTO 里、要能跨会话回放。分开命名是因为它们的生命周期不同——
+// ctx 容器随请求消失，DTO 要进数据库。
+type AIChatMessageMeta struct {
+	Badges  []DiagnosisBadge `json:"badges" nullability:"nonnil"` // 命中才出现的徽章；本次没命中时是空集而不是 null
+	Elapsed float64          `json:"elapsed"`                     // 端到端耗时（秒，上游原始精度）
+}
+
 // AIChatMessageDTO 消息展示对象。
 type AIChatMessageDTO struct {
-	ID        int               `json:"id"`
-	Role      string            `json:"role"`
-	Content   string            `json:"content"`
-	Images    []string          `json:"images" extensions:"x-nullable" nullability:"nullable"`  // 用户消息附带的图片 URL（无图时键在、值为 null）
-	Sources   []DiagnosisSource `json:"sources" extensions:"x-nullable" nullability:"nullable"` // 助手消息的诊断来源（T5 历史回放；无来源时键在、值为 null）
-	CreatedAt time.Time         `json:"created_at"`
+	ID      int               `json:"id"`
+	Role    string            `json:"role"`
+	Content string            `json:"content"`
+	Images  []string          `json:"images" extensions:"x-nullable" nullability:"nullable"`  // 用户消息附带的图片 URL（无图时键在、值为 null）
+	Sources []DiagnosisSource `json:"sources" extensions:"x-nullable" nullability:"nullable"` // 助手消息的诊断来源（T5 历史回放；无来源时键在、值为 null）
+	// meta 不是集合字段（它是指向 AIChatMessageMeta 的指针），可空性锁只管集合字段，
+	// 所以这里不带 nullability 标签；这份缺席形状的实证在 ai_assistant_contract_test.go
+	// 的「无徽章消息 meta 为 null」一条，而不是 nullableOutlets 表。
+	Meta      *AIChatMessageMeta `json:"meta" extensions:"x-nullable"` // 助手消息的能力徽章与耗时（票 2245；非诊断消息与 2242 之前的存量行为 null）
+	CreatedAt time.Time          `json:"created_at"`
 }
 
 // AISessionRenameResultDTO 会话重命名响应（PATCH /ai-assistant/sessions/{id}/title：
@@ -493,8 +507,22 @@ func (s *Service) GetSessionMessages(ctx context.Context, userID, sessionID int)
 			// 解析失败按无来源处理，不阻断消息列表
 			_ = json.Unmarshal([]byte(r.Sources), &sources)
 		}
+		var meta *AIChatMessageMeta
+		if r.Meta != "" {
+			// 解析失败按无元数据处理：徽章与耗时是附注，读不出来不该让整条历史回放失败
+			var m AIChatMessageMeta
+			if err := json.Unmarshal([]byte(r.Meta), &m); err == nil {
+				// 集合恒非 null（判据 5）：上游没命中徽章时落库的是 `[]`，
+				// 但真遇到坏数据（null）也要在回放时归一，不能把 null 递给前端。
+				if m.Badges == nil {
+					m.Badges = []DiagnosisBadge{}
+				}
+				meta = &m
+			}
+		}
 		out[i] = AIChatMessageDTO{
-			ID: r.ID, Role: r.Role, Content: r.Content, Images: imgs, Sources: sources, CreatedAt: r.CreatedAt,
+			ID: r.ID, Role: r.Role, Content: r.Content, Images: imgs, Sources: sources,
+			Meta: meta, CreatedAt: r.CreatedAt,
 		}
 	}
 	return out, nil
@@ -595,8 +623,23 @@ func (s *Service) StreamChat(ctx context.Context, userID int, req StreamChatReq,
 					s.logger.Warn("诊断来源序列化失败，按无来源落库", zap.Int("session_id", req.SessionID), zap.Error(err))
 				}
 			}
+			// 能力徽章与耗时随助手消息持久化（票 2245 决策：trace 不落库）。
+			// 只在该功能真产出元数据时写：通用对话的 done 载荷本来是 null，
+			// 落一个 `{"badges":[],"elapsed":0}` 会让「有元数据」这个判据失去区分力。
+			metaJSON := ""
+			if meta, ok := DiagnosisMetaFrom(ctx); ok {
+				if meta.Badges == nil {
+					meta.Badges = []DiagnosisBadge{}
+				}
+				if b, err := json.Marshal(meta); err == nil {
+					metaJSON = string(b)
+				} else {
+					s.logger.Warn("诊断元数据序列化失败，按无元数据落库", zap.Int("session_id", req.SessionID), zap.Error(err))
+				}
+			}
 			if err := s.db.WithContext(ctx).Create(&model.AIChatMessage{
-				SessionID: req.SessionID, Role: "assistant", Content: fullContent, Sources: sourcesJSON,
+				SessionID: req.SessionID, Role: "assistant", Content: fullContent,
+				Sources: sourcesJSON, Meta: metaJSON,
 			}).Error; err != nil {
 				return fullContent, usage, fmt.Errorf("保存助手消息失败: %w", err)
 			}

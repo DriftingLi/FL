@@ -199,6 +199,11 @@ definitions:
           type: string
         type: array
         x-nullable: true
+      meta:
+        allOf:
+        - $ref: '#/definitions/aiassistant.AIChatMessageMeta'
+        description: 助手消息的能力徽章与耗时（票 2245；非诊断消息与 2242 之前的存量行为 null）
+        x-nullable: true
       role:
         type: string
       sources:
@@ -207,6 +212,17 @@ definitions:
           $ref: '#/definitions/aiassistant.DiagnosisSource'
         type: array
         x-nullable: true
+    type: object
+  aiassistant.AIChatMessageMeta:
+    properties:
+      badges:
+        description: 命中才出现的徽章；本次没命中时是空集而不是 null
+        items:
+          $ref: '#/definitions/aiassistant.DiagnosisBadge'
+        type: array
+      elapsed:
+        description: 端到端耗时（秒，上游原始精度）
+        type: number
     type: object
   aiassistant.AIChatSessionDTO:
     properties:
@@ -254,6 +270,96 @@ definitions:
     properties:
       message:
         type: string
+    type: object
+  aiassistant.DiagnosisBadge:
+    properties:
+      cls:
+        type: string
+      emoji:
+        type: string
+      name:
+        type: string
+    type: object
+  aiassistant.DiagnosisCatalogItem:
+    properties:
+      icon:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+    type: object
+  aiassistant.DiagnosisCatalogItems:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/aiassistant.DiagnosisCatalogItem'
+        type: array
+    type: object
+  aiassistant.DiagnosisCodeHint:
+    properties:
+      fix:
+        description: 纠偏建议（应为这个写法）；无建议时空串
+        type: string
+      message:
+        type: string
+      samples:
+        description: 仅 format 状态返回，供点选填入
+        items:
+          type: string
+        type: array
+      status:
+        type: string
+    type: object
+  aiassistant.DiagnosisFAQ:
+    properties:
+      a:
+        type: string
+      q:
+        type: string
+    type: object
+  aiassistant.DiagnosisHealth:
+    properties:
+      app_configured:
+        description: 上游必填配置（Key / 工作流）齐全
+        type: boolean
+      ok:
+        description: 上游进程存活
+        type: boolean
+    type: object
+  aiassistant.DiagnosisIntentBrand:
+    properties:
+      cls:
+        description: 对方的样式类名（我方按自己的品牌色渲染，原样保留仅为对齐契约）
+        type: string
+      icon:
+        description: emoji 图标
+        type: string
+      id:
+        description: 品牌标识，调 /diagnosis/systems 时用作 brand 参数
+        type: string
+      name:
+        description: 展示名称
+        type: string
+      picker:
+        description: 第二层形态：system=选系统，model=选型号
+        type: string
+      tagline:
+        description: 一句话简介
+        type: string
+    type: object
+  aiassistant.DiagnosisIntents:
+    properties:
+      brands:
+        description: 空集而不是 null：前端直接 .length / v-for
+        items:
+          $ref: '#/definitions/aiassistant.DiagnosisIntentBrand'
+        type: array
+      faq:
+        description: 同上
+        items:
+          $ref: '#/definitions/aiassistant.DiagnosisFAQ'
+        type: array
     type: object
   aiassistant.DiagnosisSource:
     properties:
@@ -9041,6 +9147,134 @@ paths:
       summary: AI 流式对话（SSE）
       tags:
       - 学员端-AI助手
+  /ai-assistant/diagnosis/code-hint:
+    get:
+      consumes:
+      - application/json
+      description: 可选认证；代理 v2 `GET /api/v2/code_hint?q=`。status 五态：known（码表命中）/ unknown（格式对但未收录）/
+        format（格式不合法，samples 给出填法）/ none（没输入或太短）/ typo（形似字符笔误，fix 给出应改成什么）。不加缓存：跟着输入框逐字符变
+      parameters:
+      - description: 用户当前输入内容（空 = 尚未输入，上游回 status=none）
+        in: query
+        name: q
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/aiassistant.DiagnosisCodeHint'
+              type: object
+        "429":
+          description: 上游限流
+          schema:
+            $ref: '#/definitions/response.R'
+        "502":
+          description: 诊断服务不可用
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 诊断引导：故障码实时体检
+      tags:
+      - 学员端-AI助手
+  /ai-assistant/diagnosis/faults:
+    get:
+      consumes:
+      - application/json
+      description: 可选认证；代理 v2 `GET /api/v2/faults?brand=&second=`。second 为空时返回该品牌的根列表；条目是**现象入口**（如「仪表报故障码」），选中后把
+        name 拼进问题。集合恒非 null
+      parameters:
+      - description: 品牌标识
+        in: query
+        name: brand
+        required: true
+        type: string
+      - description: 第二层选中的 id（系统/型号）；空 = 品牌根列表
+        in: query
+        name: second
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/aiassistant.DiagnosisCatalogItems'
+              type: object
+        "400":
+          description: 缺少 brand
+          schema:
+            $ref: '#/definitions/response.R'
+        "429":
+          description: 上游限流
+          schema:
+            $ref: '#/definitions/response.R'
+        "502":
+          description: 诊断服务不可用
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 诊断引导：故障现象列表
+      tags:
+      - 学员端-AI助手
+  /ai-assistant/diagnosis/health:
+    get:
+      consumes:
+      - application/json
+      description: 可选认证；代理 v2 `GET /api/health`，**只投影两个字段**（ok / app_configured）——上游其余
+        18 个字段含 Key 指纹、数据目录与工作流 ID，属对方内部拓扑，不得出现在未登录可读的端点里。**永远 200**：连不上就是 ok=false，让前端拿到结构化结果而不是一句
+        errmsg
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success（上游不可达时 ok/app_configured 均为 false）
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/aiassistant.DiagnosisHealth'
+              type: object
+      summary: 诊断服务健康检查
+      tags:
+      - 学员端-AI助手
+  /ai-assistant/diagnosis/intents:
+    get:
+      consumes:
+      - application/json
+      description: 可选认证；代理 v2 `GET /api/v2/intents`。品牌卡带 picker（system=第二层选系统 / model=选型号），高频问题点一下即作为
+        content 发问。集合恒非 null（空集为 []）
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/aiassistant.DiagnosisIntents'
+              type: object
+        "429":
+          description: 上游限流
+          schema:
+            $ref: '#/definitions/response.R'
+        "502":
+          description: 诊断服务不可用
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 诊断引导：品牌卡与高频问题
+      tags:
+      - 学员端-AI助手
   /ai-assistant/diagnosis/ossimg/{filepath}:
     get:
       description: 可选认证；AI 生成正文里白名单内图片的回源代理（**非统一信封**：原样字节流 + Content-Type）。上游仅允许配置的
@@ -9063,6 +9297,45 @@ paths:
           schema:
             $ref: '#/definitions/response.R'
       summary: 诊断回答配图（白名单代理）
+      tags:
+      - 学员端-AI助手
+  /ai-assistant/diagnosis/systems:
+    get:
+      consumes:
+      - application/json
+      description: 可选认证；代理 v2 `GET /api/v2/systems?brand=`。中力的 brand 返回系统（带 icon），林德的返回型号（无
+        icon）。集合恒非 null
+      parameters:
+      - description: 品牌标识（zhongli / linde，取自 /diagnosis/intents 的 brands[].id）
+        in: query
+        name: brand
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/aiassistant.DiagnosisCatalogItems'
+              type: object
+        "400":
+          description: 缺少 brand
+          schema:
+            $ref: '#/definitions/response.R'
+        "429":
+          description: 上游限流
+          schema:
+            $ref: '#/definitions/response.R'
+        "502":
+          description: 诊断服务不可用
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 诊断引导：系统或型号列表
       tags:
       - 学员端-AI助手
   /ai-assistant/models:
