@@ -13,7 +13,8 @@
     本文件**不再自己拼 feat/<Task>**——那个写死曾是血账：树 wt-2230 挂在 fix/2230-dead-subtab、
     wt-2189 挂在 fix/2189-lint-brace-expansion，旧判据一律判「无树」而静默跳过全部动作。
     现在第 1 步先问判定层 `--resolve` 要身份分支，PR 头查询／未合并对账／拆树／分支残留核对
-    四处全部改用它。
+    四处全部改用它。裁定全文见 docs/adr/ADR-0092-树身份-目录为入口与登记分支为身份.md（动机、
+    被否备选、回退腿退役判据都在那里），本文件不重抄。
 
     并发边界（本票第一性约束）：只动 -Task 自己那一棵树。默认不 checkout、不 pull、不改主树分支状态 ——
     主树是多会话共享面（manifest.json / postcss.config.js 常年挂着别的会话的脏）。`git fetch --prune`
@@ -28,6 +29,7 @@
 
 .PARAMETER Task
     票号（纯数字）。认树入口 = <主树>/wt-<Task>；树身份 = 该条目登记的分支（由判定层解析，不由本文件假设）。
+    判据出处与来路见 docs/adr/ADR-0092-树身份-目录为入口与登记分支为身份.md。
 
 .PARAMETER Branch
     可选的覆盖：声明「我以为这棵树的身份分支是 X」。与登记分支不一致时**不猜、不二选一**，
@@ -93,6 +95,7 @@ function FactOf([string]$text, [string]$key) {
 # ---------- 1) 采集事实（只采集，不判断）----------
 $wtList = '' + (& git -C $root worktree list --porcelain 2>&1 | Out-String)
 $unmerged = ''
+$headInMaster = 'na'
 
 # 认树与树身份都问判定层（#2247）：本文件不再自己扫注册表、也不再自己拼 feat/<Task>。
 # 两处写死的分支名（认树那一处与 PR 头查询那一处）就是 wt-2230 / wt-2189 每次收尾必漏的根因。
@@ -130,6 +133,12 @@ if ($treePathHint -and (Test-Path -LiteralPath $treePathHint)) {
     if ($prHead) {
         # 只问「PR 头之后还有没有提交」：合并后被本地补提交的活，就是没进 PR 的活
         $unmerged = '' + (& git -C $treePathHint log --oneline "$prHead..HEAD" 2>&1 | Out-String)
+        # 祖先事实三态（#2253）：squash 会造同内容异 sha 的另一个提交，prHead..HEAD 对它是恒假红。
+        # 这里只采事实（yes/no/unreadable），用不用、怎么放行由判定层唯一的逃生阀判——本文件不留判据。
+        & git -C $treePathHint merge-base --is-ancestor HEAD origin/master 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 0) { $headInMaster = 'yes' }
+        elseif ($LASTEXITCODE -eq 1) { $headInMaster = 'no' }
+        else { $headInMaster = 'unreadable' }
     } else {
         # 读不到 PR 头就不许拆（fail-closed）：拿不到比对基准时，「看起来没活」不是放行理由
         $unmerged = 'pr-head-unreadable'
@@ -139,7 +148,7 @@ if ($treePathHint -and (Test-Path -LiteralPath $treePathHint)) {
 $dec = Invoke-Core '--decide' ([ordered]@{
     task = $Task; execute = [bool]$Yes; cwd = ('' + (Get-Location).Path)
     worktreeList = $wtList; unmergedLog = $unmerged; prJson = $prJsonText; branch = $Branch
-    treeDirExists = $taskDirExists
+    treeDirExists = $taskDirExists; headInMaster = $headInMaster
 })
 Write-Host $dec.Text
 $reason = FactOf $dec.Text 'reason'

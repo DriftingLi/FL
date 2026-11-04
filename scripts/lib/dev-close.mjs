@@ -71,20 +71,12 @@ export function shortRef(ref) {
 /**
  * 树身份解析（#2247，spec B / #2233）——本文件里**唯一**的认树判据。
  *
- * 旧判据（按 `refs/heads/feat/<票号>` 分支认树）的血账：树 `wt-2230` 挂在 `fix/2230-dead-subtab`、
- * `wt-2189` 挂在 `fix/2189-lint-brace-expansion`，旧判据一律判 `tree=absent`，于是收尾静默跳过全部动作，
- * dry-run 还照常出一行「无待办」而被读成已达成 —— 失败长得像成功。
+ * 判据与来路（为什么不再按 `feat/<票号>` 认、血账 `wt-2189`、回退腿退役条件）见
+ * docs/adr/ADR-0092-树身份-目录为入口与登记分支为身份.md —— 这里只留一句：入口看注册表路径名
+ * `wt-<票号>`，身份看该条目登记的分支，分支形态由闸门 new-worktree.ps1 -Branch 决定。
  *
- * 新判据两层：入口 = 注册表里**路径名**为 `wt-<票号>` 的条目；身份 = 该条目实际登记的分支。
- * 分支叫什么由闸门（new-worktree.ps1 -Branch）决定，不再由这里猜。
- *
- * 五态（互斥，行内各有一个可 grep 的 reason，见 #2247 Review 补丁）：
- *   registered          主判据命中，身份 = 登记分支
- *   legacy              主判据落空、但注册表里仍有条目持 `refs/heads/feat/<票号>` ⇒ 回退腿，宽一期
- *   tree-branch-mismatch 目录在（注册表里有 wt-<票号> 条目）但没有 branch 行 —— detached 不参与票号判定，
- *                       「目录在、判据没匹配上」必须与「不存在」分开，否则静默空转回来了
- *   unregistered-tree   磁盘上有 wt-<票号> 目录、注册表里没有 ⇒ 野树，指回 -PruneOrphans（不接管）
- *   absent              既没注册、磁盘也没有 ⇒ 真不存在（幂等腿）
+ * 五态由下方返回值逐态给出（`registered` / `legacy` / `tree-branch-mismatch` / `unregistered-tree` /
+ * `absent`），每态行内带可 grep 的 reason；用例见同目录 ../dev-close.test.mjs。
  */
 export function resolveTree(f) {
   const task = String(f.task ?? '').trim()
@@ -132,8 +124,10 @@ export function findTargetTree(worktreeListText, task) {
 
 /**
  * 未合并活：**PR 头之后**还有提交就算有活，绝不能拆。
- * 不许拿 origin/master..HEAD 当判据 —— 本仓走 squash 合并，功能分支的提交永远不是 master 祖先，
+ * 不许拿 origin/master..HEAD **当日判据** —— 本仓走 squash 合并，功能分支的提交永远不是 master 祖先，
  * 那样判在每一条已合并的 PR 上都会是「有未合并提交」（#2174 dogfood 实测踩中）。
+ * 唯一的例外是 decide 里的祖先逃生阀：log 范围恒假红，但「HEAD 是 origin/master 祖先」这个
+ * 祖先事实为真时内容必已进 master，方向相反、不冲突（#2253 wt-2170 同内容异 sha 实测）。
  */
 export function hasUnmergedCommits(logText) {
   return String(logText ?? '').split(/\r?\n/).some((l) => l.trim() !== '')
@@ -188,7 +182,10 @@ export function decide(f) {
   if (prState !== 'MERGED') {
     return { ...base, reason: prState === 'unknown' ? 'pr-state-unreadable' : 'pr-not-merged', skipRemove: true, passExecute: false }
   }
-  if (hasUnmergedCommits(f.unmergedLog ?? '')) {
+  // 三态逃生阀（#2253）：prHead..HEAD 非空时只认采集侧给的 headInMaster=yes（HEAD 已在 master 祖先链，
+  // 树上没有会丢的活）。no/unreadable/缺失一律维持 fail-closed —— 陈旧 origin/master 上成立 ⇒ 真实 master
+  // 上必成立，该事实单调安全，不会因 ref 落后误放。
+  if (hasUnmergedCommits(f.unmergedLog ?? '') && f.headInMaster !== 'yes') {
     return { ...base, reason: 'unmerged-commits', skipRemove: true, passExecute: false }
   }
   return { ...base, allow: true, reason: 'ok', skipRemove: false, passExecute: execute }

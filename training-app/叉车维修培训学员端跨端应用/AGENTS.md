@@ -17,7 +17,7 @@
 | 5 ② 改动页 | `npm run build:mp-weixin-check`（**② 微信开发者工具门 = 半自动门**，执行人允许「agent 执行」） | `MP_WEIXIN_RESULT` 整行 + `coverage=changed:N\|smoke:2\|none` | `none` = 覆盖判据不可用（git diff 取不到，只剩入口页；不会退化成冒烟集）**不阻断**，但须原样进正文；清单为空才跑冒烟两页；`publish` 每 PR **只一次**，重试不再编译 |
 | 6 证据 | — | 正文一行 `跑于 <sha7>`；门读数行**原样**跟在后面（A1 已无「结论」栏）；图只作附证 | 图不是判据；`anchors=0` 不判红（人看该页） |
 | 7 开 PR 与合并 | `pwsh scripts/preflight-pr.ps1`（**仓库根**跑）预检绿 → `pwsh scripts/submit-pr.ps1` 建 PR | 证据齐 → agent 直接合并 | 例外通道只认「已接受未验证风险」一句，**且由人合并** |
-| 8 收尾 | `pwsh scripts/dev-close.ps1 -Task <票号>`（仓库根；默认 dry-run，`-Yes` 执行） | `DEV_CLOSE_RESULT … verdict=ok`（dry-run 只 `verdict=planned`，别当已收尾） | `verdict=blocked reason=pr-not-merged` = 还没合并，本就不该拆；树被占用 ⇒ 关掉占用的工具再跑，别 kill |
+| 8 收尾 | `pwsh scripts/dev-close.ps1 -Task <票号>`（仓库根；默认 dry-run，`-Yes` 执行）；**认树看目录 `wt-<票号>`、身份看登记分支**（`fix/…` 也认，别按 `feat/<票号>` 猜；裁定见根 `docs/adr/ADR-0092-树身份-目录为入口与登记分支为身份.md`） | `DEV_CLOSE_RESULT … verdict=ok`（dry-run 只 `verdict=planned`、无动作是 `verdict=noop`，**都别当已收尾**） | `verdict=blocked reason=pr-not-merged` = 还没合并，本就不该拆；`tree-branch-mismatch` = 目录在但判据没匹配上（必红，别当无树）；树被占用 ⇒ 关掉占用的工具再跑，别 kill |
 
 **第 5 步的纪律面**：纯 `.uvue` / `.uts` 命中运行时面时，校验器对这一支**不判**（`needs2` 只认 MP-WEIXIN 面）。ADR-0043 决策 3 自 2026-11-02 起收窄（#2207）：**`needs2` 触发面必跑，非触发面默认跑、可跳过**——跳过时在正文写一行 `② 自选跳过 reason=<slug>`，别沉默跳过。
 
