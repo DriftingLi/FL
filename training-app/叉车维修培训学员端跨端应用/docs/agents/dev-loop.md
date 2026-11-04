@@ -19,6 +19,7 @@
 | 收口前只想跑**受影响**的行为套件（不付全量那笔钱） | 本地收口走行为腿子集 |
 | 判「这次到底要不要跑全量门」 | 全量 ③ 门该不该跑（C2 四档） |
 | 门在跑 / 跑完 / 跑红，怎么读数 | agent 判读纪律 |
+| 测试里 spawn pwsh 出中文乱码 / 要写探针 | 测试探针 spawn pwsh 时的中文编码 |
 | PR 面要一次跑完 ② 与 ④c（只取一次锁） | PR 面一次取锁串两门 |
 | 连真机做逐页取证 | 真机无线调试入口 |
 | 建树 / 用树遇到怪问题 | 工作树与会话坑位原文 |
@@ -361,6 +362,38 @@ L 系列钉 `-Mode` / `-Leg` 两维的机检可判读性（L1a–L1c 成对腿�
 门脚本的细节（字段怎么拼、重试几轮、锁怎么排队、退出码怎么透传）**不住这里**：判据住脚本与 ADR-0036，
 本节只负责「冷启动时读得懂现场」。上面每一条都点名了它的真源文件——**改判据请改脚本，别在本节加叙述**。
 分层口径见移动端 `AGENTS.md`「三层节奏」与本文件头部那句「引用本文件时引小节名，不引行号」。
+
+## 测试探针 spawn pwsh 时的中文编码（#2254，2026-11-04 立）
+
+**一句话**：测试里 `execFileSync` 起 pwsh，脚本体必须走 `utils/probeSpawn.js` 的 `encodeCommand()` /
+`withUtf8Discipline()` 前置两行自律行，否则本机 cp936 字节会被 `{encoding:'utf8'}` 误读成 U+FFFD，
+**在 jest 把结果写出去之前就烤进机检行**（#2139 台账 #27 的 B2 类型，不可逆）。
+
+- **为什么漏得掉**：`execFileSync(..., {encoding:'utf8'})` 只是「按 UTF-8 解码」，**不改变子进程吐什么字节**。
+  子进程按控制台码页（本机 cp936）吐中文 ⇒ 父进程照 UTF-8 读 ⇒ 乱码。两行自律行是唯一解：
+  `try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }` + `$OutputEncoding = [System.Text.Encoding]::UTF8`。
+- **三种形态各归各的**：`-EncodedCommand` 用 `encodeCommand(body)`；`-Command` 用 `withUtf8Discipline(body)`；
+  `-File` 形态**工具不收**（脚本体在 `scripts/` 侧）⇒ 去被调脚本**顶部**（花括号 depth==0）补钉。
+- **`execFileSync` 必须留在测试文件自身**：③ 门按文件有无代码级执行调用判腿，把它搬进工具会让用它的测试
+  退化成接线守护，`utils/guardClassification.test.js` 当场转红。工具只提供「脚本体构造」与选项常量。
+
+### 补钉补不了的那一半：参数绑定期
+
+`-File` 补钉只覆盖**信号能正常产出**的路径。**参数绑定错误发生在脚本体第一行执行之前** ——
+脚本顶部那两行轮不到执行，宿主自己按 cp936 吐报错。现测（#2254）：
+
+```
+style-loop.ps1 -MaxLineBytes 201   （[ValidateRange(40,200)] 拒收）
+  -File 直调          ⇒ stderr fffd=56、乱码
+  -Command 先钉码页再 & ⇒ stderr fffd=0、中文报错正确解出
+```
+
+⇒ 这类调用要钉在**调用边界**（宿主 `-Command` 里先置码页，再 `& 'script.ps1'` 派发），别指望脚本内补钉。
+`utils/styleLoopBehavior.test.js` 的 `entryCommand()` 是现成参考，三个坑写在它的注释里：
+参数名不能加引号、必须先置 `$LASTEXITCODE` 哨兵（绑定失败时它压根不被赋值）、值用单引号 + `''` 转义。
+
+**判据是谁**：别自己数 U+FFFD —— `node .github/scripts/check-evidence-encoding.mjs --root <树>`（诊断形态），
+加 `--since <ISO>` 只判该时刻之后写过的（判据比的是 mtime）。存量豁免口径见 `docs/agents/ledger.md` #27。
 
 ## ② 贴证前两核（#1845 实证，2026-10-24 立）
 

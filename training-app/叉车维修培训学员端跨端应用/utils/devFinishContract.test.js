@@ -141,6 +141,38 @@ describe('dev-finish.ps1 contract', () => {
     // $needsHx 必须把「quick + -Compile」算作需要 HBuilderX
     expect(src).toMatch(/\$needsHx\s*=\s*\(\$detectedLevel -ne 'quick'\)\s*-or\s*\$Compile/);
   });
+
+  // F12（#2254，2026-11-04）：钉码页失败必须**看得见**。
+  //
+  // 背景：这段 try/catch 从 #1526 起就在，但 catch 体是空的 ⇒ 设不上 UTF-8 时静默退回 cp936，
+  // 只在「失败摘要读不懂」时才暴露，而那时读者已经不知道该怀疑编码。票 #2254 的 Review 补丁段
+  // 要求两处同点发 `CONSOLE_CODEPAGE <值> fallback`：① 设置抛错走 catch；② 设置成功但读回
+  // 不等于 65001。判据是「降级对人可见」，不是「写了 try/catch」——所以断言盯的是那枚 token
+  // 出现的**次数与位置**，以及「空 catch」这个退化形态已经消失。
+  test('F12: 【#2254】codepage fallback is visible on BOTH failure paths', () => {
+    // 只看钉码页那一段（顶层，以 try { [Console]::OutputEncoding 开头），别扫全文件——
+    // 1080/1081 行的 `catch { }` 是杀进程的容错，与编码无关。
+    const blockStart = src.indexOf('[Console]::OutputEncoding = [System.Text.Encoding]::UTF8');
+    expect(blockStart).toBeGreaterThan(-1);
+    const block = src.slice(blockStart, src.indexOf('$ProjectDir =', blockStart));
+    expect(block).not.toMatch(/catch\s*\{\s*\}/);
+
+    // 只数**代码行**（注释里也会提到这个 token，不该算作告警）
+    const warnLines = src.split('\n').filter((l) => l.includes('CONSOLE_CODEPAGE') && !/^\s*#/.test(l));
+    // 两条失败路径各一行（catch 侧 + 读回校验不一致侧）
+    expect(warnLines.length).toBe(2);
+
+    // 读回校验：钉完必须真的读一次 CodePage，且和 65001 比
+    expect(src).toContain('[Console]::OutputEncoding.CodePage');
+    expect(src).toMatch(/\$consoleCodePage\s*-ne\s*65001/);
+
+    // 两条告警都点明「判定不受影响」——只 warn 不判红是本票的口径
+    warnLines.forEach((l) => {
+      expect(l).toContain('fallback');
+      expect(l).toContain('不受影响');
+      expect(l).toContain('Write-Host');
+    });
+  });
 });
 
 // ============================================================
@@ -336,6 +368,8 @@ function runSummaryScenarios() {
 
   const body = [
     '$ErrorActionPreference = \'Stop\'',
+    "try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }",
+    '$OutputEncoding = [System.Text.Encoding]::UTF8',
     'Set-StrictMode -Version Latest',
     `$spec = [System.IO.File]::ReadAllText('${inputPath}', [System.Text.Encoding]::UTF8) | ConvertFrom-Json`,
     '$src = [System.IO.File]::ReadAllText($spec.script, [System.Text.Encoding]::UTF8)',
@@ -810,6 +844,8 @@ function runUnitGateScenarios() {
 
   const body = [
     '$ErrorActionPreference = \'Stop\'',
+    "try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }",
+    '$OutputEncoding = [System.Text.Encoding]::UTF8',
     'Set-StrictMode -Version Latest',
     `$spec = [System.IO.File]::ReadAllText('${inputPath}', [System.Text.Encoding]::UTF8) | ConvertFrom-Json`,
     '$src = [System.IO.File]::ReadAllText($spec.script, [System.Text.Encoding]::UTF8)',
@@ -1408,6 +1444,8 @@ function runLocalModeScenarios() {
   }), 'utf8');
   const body = [
     '$ErrorActionPreference = \'Stop\'',
+    "try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }",
+    '$OutputEncoding = [System.Text.Encoding]::UTF8',
     'Set-StrictMode -Version Latest',
     `$spec = [System.IO.File]::ReadAllText('${inputPath}', [System.Text.Encoding]::UTF8) | ConvertFrom-Json`,
     '$src = [System.IO.File]::ReadAllText($spec.script, [System.Text.Encoding]::UTF8)',

@@ -30,6 +30,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const zlib = require('zlib');
+const { encodeCommand } = require('./probeSpawn.js');
 
 const ROOT = path.join(__dirname, '..');
 const SCREEN_DIFF = path.join(ROOT, 'scripts', 'lib', 'screenshot-diff.ps1');
@@ -233,7 +234,7 @@ function probe(ctx) {
     'Write-Output "PROBE_DONE=1"',
   ].join('\n');
 
-  const encoded = Buffer.from(script, 'utf16le').toString('base64');
+  const encoded = encodeCommand(script);
   try {
     const stdout = execFileSync('pwsh', psArgs(['-EncodedCommand', encoded]), {
       encoding: 'utf8',

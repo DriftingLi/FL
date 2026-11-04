@@ -24,6 +24,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { execFileSync } = require('child_process');
+const { withUtf8Discipline } = require('./probeSpawn.js');
 
 const ROOT = path.join(__dirname, '..');
 // ⚠️ 载体路径写成**本文件内的字面量**（③ 门分类器按文件自身的「执行调用 + 仓内载体引用」判类）
@@ -68,7 +69,7 @@ function runLib(steps, io) {
     '$out | ConvertTo-Json -Depth 6 -Compress'
   ].join('\r\n');
   try {
-    return execFileSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', script], {
+    return execFileSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', withUtf8Discipline(script)], {
       encoding: 'utf8', timeout: 120000, windowsHide: true, maxBuffer: 4 * 1024 * 1024
     });
   } finally {

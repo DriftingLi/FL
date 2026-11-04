@@ -30,6 +30,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { execFileSync } = require('child_process');
+const { withUtf8Discipline } = require('./probeSpawn.js');
 
 const ROOT = path.join(__dirname, '..');
 // ⚠️ 载体路径写成**本文件内的字面量**（判据面 + ③ 门分类器按文件自身的「执行调用 + 仓内载体引用」判类）
@@ -110,7 +111,7 @@ function probeLib(repo) {
     '$adverseReal = ($cp -eq 936) -and ($naiveSlash -eq 0) -and ($naiveFound -eq 0)',
     "[ordered]@{ cp = $cp; hit = $hit; miss = $miss; bad = $bad; naiveFound = $naiveFound; naiveSlash = $naiveSlash; adverseReal = $adverseReal; naiveSample = @($naive)[0] } | ConvertTo-Json -Depth 6 -Compress"
   ].join('\n');
-  const out = execFileSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', script], {
+  const out = execFileSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', withUtf8Discipline(script)], {
     cwd: ROOT,
     encoding: 'utf8',
     timeout: 120000,

@@ -30,6 +30,7 @@ const { execFileSync } = require('child_process');
 // 读取层归一（ADR-0019 / #1177）：变异腿要读判据库源码 —— 裸 readFileSync 在 core.autocrlf=true 的
 // Windows 检出上会让多行锚点撞 \r 匹配 0 次（本仓 scripts/check-contract-read.mjs 守这一条）。
 const { readText } = require('./utsHarness');
+const { withUtf8Discipline } = require('./probeSpawn.js');
 
 const ROOT = path.join(__dirname, '..');
 // ⚠️ 载体路径写成**本文件内的字面量**（③ 门分类器按文件自身的「执行调用 + 仓内载体引用」判类）
@@ -79,7 +80,7 @@ function probeLib(cases, timeoutMs, libPath) {
     '$out | ConvertTo-Json -Depth 6 -Compress'
   ].join('\r\n');
   try {
-    return execFileSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', script], {
+    return execFileSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', withUtf8Discipline(script)], {
       encoding: 'utf8', timeout: 120000, windowsHide: true, maxBuffer: 4 * 1024 * 1024
     });
   } finally {

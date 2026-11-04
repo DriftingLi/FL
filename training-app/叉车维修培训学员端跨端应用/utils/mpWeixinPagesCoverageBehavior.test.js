@@ -21,6 +21,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { execFileSync } = require('child_process');
+const { withUtf8Discipline } = require('./probeSpawn.js');
 
 const ROOT = path.join(__dirname, '..');
 const LIB_REL = 'scripts/lib/mp-weixin-pages.ps1';
@@ -96,7 +97,7 @@ function probe(repo) {
     '  raw = [ordered]@{ pages = $pages; docs = $docs; bad = $bad }',
     '} | ConvertTo-Json -Depth 6 -Compress'
   ].join('\n');
-  const out = execFileSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', script], {
+  const out = execFileSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', withUtf8Discipline(script)], {
     cwd: ROOT,
     encoding: 'utf8',
     timeout: 120000,

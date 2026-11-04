@@ -29,6 +29,7 @@ const { execFileSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { encodeCommand } = require('./probeSpawn.js');
 
 const ROOT = path.join(__dirname, '..');
 const AUTO_SHOT = path.join(ROOT, 'scripts', 'lib', 'auto-screenshot.ps1');
@@ -217,7 +218,7 @@ function probe(ctx) {
     "Write-Output ('FR8N_PNG=' + @(Get-ChildItem -Path $outN -Filter '*.png' -File -ErrorAction SilentlyContinue).Count)",
     'Write-Output "PROBE_DONE=1"',
   ].join('\n');
-  const encoded = Buffer.from(s, 'utf16le').toString('base64');
+  const encoded = encodeCommand(s);
   const env = Object.assign({}, process.env, {
     FR_AUTO_SHOT: AUTO_SHOT,
     FR_PAGES_JSON: PAGES_JSON,

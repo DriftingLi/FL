@@ -20,6 +20,7 @@
  */
 const { execFileSync } = require('child_process');
 const path = require('path');
+const { encodeCommand } = require('./probeSpawn.js');
 
 const ROOT = path.join(__dirname, '..');
 // 带引号的路径字面量：guardClassification 的 behavior refs 判据扫的是字符串 token，
@@ -40,7 +41,7 @@ function runProbe(probeLines) {
     'Set-StrictMode -Version Latest',
     '. "' + STAGES_LIB + '"',
   ].concat(probeLines).join('\n');
-  const encoded = Buffer.from(script, 'utf16le').toString('base64');
+  const encoded = encodeCommand(script);
   try {
     const stdout = execFileSync(powershellExe(), psArgs(['-EncodedCommand', encoded]), {
       encoding: 'utf8', timeout: 120000, windowsHide: true, maxBuffer: 8 * 1024 * 1024,

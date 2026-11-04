@@ -134,7 +134,19 @@ if ($PostToIssue -gt 0) { $PostToPr = $PostToIssue }
 # 就被按 GBK 解码：中文用例名与 `●` 标记变成乱码（#1526 实测：同一行原始字节 E2 97 8F 被解成
 # 「鈻犫暈」形态）。若不在这里修，失败摘要会把「看不见红」换成「看得见但读不懂」——比不写更坏。
 # 非控制台环境（CI、被重定向）设置可能抛 ⇒ try/catch 吞掉，行为退回改前。
-try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
+# #2254：吞掉之后**必须留下人读的一行**（`CONSOLE_CODEPAGE <值> fallback`）—— 钉码页失败是
+# 静默降级，不打印就等于「以为钉上了、其实按 cp936 解码」。只 warn 不判红（退出码与机检行
+# `TEST_*_RESULT` 字段一概不动），两类失败各发一次：抛错走 catch，设置成功但读回不是 65001 走 readback。
+try {
+    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+    $consoleCodePage = if ($null -ne [Console]::OutputEncoding) { [Console]::OutputEncoding.CodePage } else { -1 }
+    if ($consoleCodePage -ne 65001) {
+        Write-Host "  ⚠️ CONSOLE_CODEPAGE $consoleCodePage fallback 子进程中文输出可能乱码（UTF-8 设置后读回未生效，判定与机检行不受影响）" -ForegroundColor DarkYellow
+    }
+} catch {
+    $consoleCodePage = if ($null -ne [Console]::OutputEncoding) { [Console]::OutputEncoding.CodePage } else { -1 }
+    Write-Host "  ⚠️ CONSOLE_CODEPAGE $consoleCodePage fallback 子进程中文输出可能乱码（UTF-8 设置抛错，判定与机检行不受影响）" -ForegroundColor DarkYellow
+}
 
 $ProjectDir = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $started = Get-Date
