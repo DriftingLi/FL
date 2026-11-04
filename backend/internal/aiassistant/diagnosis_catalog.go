@@ -71,7 +71,7 @@ type DiagnosisCatalogItems struct {
 type DiagnosisCodeHint struct {
 	Status  string   `json:"status"`
 	Message string   `json:"message"`
-	Fix     string   `json:"fix"`     // 纠偏建议（应为这个写法）；无建议时空串
+	Fix     string   `json:"fix"`                          // 纠偏建议（应为这个写法）；无建议时空串
 	Samples []string `json:"samples" nullability:"nonnil"` // 仅 format 状态返回，供点选填入
 }
 
