@@ -110,13 +110,13 @@ func contactGrantOfMany(db *gorm.DB, recruiterID int, studentUserIDs []int) (map
 	for _, r := range rows {
 		cur, ok := out[r.StudentUserID]
 		state := ContactGrantState(r.Status)
-		switch {
-		case state == ContactGrantApproved:
+		switch state {
+		case ContactGrantApproved:
 			// approved 压过一切（approved 覆盖 pending），取最新一条 approved
 			if !ok || cur.State != ContactGrantApproved {
 				out[r.StudentUserID] = contactGrant{State: state, Source: ContactGrantSource(r.Source)}
 			}
-		case state == ContactGrantPending:
+		case ContactGrantPending:
 			if !ok {
 				out[r.StudentUserID] = contactGrant{State: state, Source: ContactGrantSource(r.Source)}
 			}

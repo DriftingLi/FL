@@ -501,31 +501,16 @@ func (s *Service) UpdateQuestion(id int, in QuestionUpdateInput, actorType strin
 // questionContentTouched 判定「内容与计分字段是否实际变化」（票 6 不变式谓词）：
 // 只比较请求提供的字段与库中现值；q 此刻尚未被本请求改写（answer 除外，由调用方传入判定结果）。
 func questionContentTouched(q *model.Question, in QuestionUpdateInput, answerChanged bool) bool {
-	touched := false
-	if in.Type != nil && *in.Type != q.Type {
-		touched = true
-	}
-	if in.Content != nil && *in.Content != q.Content {
-		touched = true
-	}
-	if in.Options != nil && !jsonEqualCompact(string(q.Options), effectiveOptions(*in.Options)) {
-		touched = true
-	}
-	if answerChanged {
-		touched = true
-	}
-	if in.Explanation != nil && *in.Explanation != q.Explanation {
-		touched = true
-	}
-	if in.ReferenceAnswer != nil && *in.ReferenceAnswer != q.ReferenceAnswer {
-		touched = true
-	}
-	if in.ScoringCriteria != nil && *in.ScoringCriteria != q.ScoringCriteria {
-		touched = true
-	}
-	if in.Score != nil && *in.Score != q.Score {
-		touched = true
-	}
+	// 一处 OR 链而不是「逐个 if 置 true」：判据是「有没有任一字段变了」，
+	// 链式写法让「全部未变 ⇒ false」直接由 return 表达，不必读到最后一行才知道初值。
+	touched := in.Type != nil && *in.Type != q.Type
+	touched = touched || (in.Content != nil && *in.Content != q.Content)
+	touched = touched || (in.Options != nil && !jsonEqualCompact(string(q.Options), effectiveOptions(*in.Options)))
+	touched = touched || answerChanged
+	touched = touched || (in.Explanation != nil && *in.Explanation != q.Explanation)
+	touched = touched || (in.ReferenceAnswer != nil && *in.ReferenceAnswer != q.ReferenceAnswer)
+	touched = touched || (in.ScoringCriteria != nil && *in.ScoringCriteria != q.ScoringCriteria)
+	touched = touched || (in.Score != nil && *in.Score != q.Score)
 	return touched
 }
 

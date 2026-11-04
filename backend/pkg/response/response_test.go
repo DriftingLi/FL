@@ -148,8 +148,8 @@ func TestServerError(t *testing.T) {
 
 // --- 5xx 不外发驱动原文（ADR-0064 决策 9）---
 
-// driverErr 驱动/ORM 原文的样本（与 internal/api 台账 leakyDriverText 认的那一族同形）。
-var driverErr = errors.New("SQL logic error: no such table: recruiter_users (1)")
+// errSampleSQL 驱动/ORM 原文的样本（与 internal/api 台账 leakyDriverText 认的那一族同形）。
+var errSampleSQL = errors.New("SQL logic error: no such table: recruiter_users (1)")
 
 // TestClientErrorText 4xx 回原文、5xx 保留前缀丢尾巴 —— 这条规则的唯一实现。
 func TestClientErrorText(t *testing.T) {
@@ -159,8 +159,8 @@ func TestClientErrorText(t *testing.T) {
 		prefix string
 		want   string
 	}{
-		{"4xx 保留错误原文（给调用方看的领域说明）", 400, "证件不存在: ", "证件不存在: " + driverErr.Error()},
-		{"4xx 无前缀", 404, "", driverErr.Error()},
+		{"4xx 保留错误原文（给调用方看的领域说明）", 400, "证件不存在: ", "证件不存在: " + errSampleSQL.Error()},
+		{"4xx 无前缀", 404, "", errSampleSQL.Error()},
 		{"5xx 保留前缀、丢掉尾巴", 500, "导出失败: ", "导出失败"},
 		{"5xx 前缀只有中文冒号", 500, "生成报告失败：", "生成报告失败"},
 		{"5xx 前缀只有分隔符", 500, " : ", "服务器内部错误"},
@@ -168,9 +168,9 @@ func TestClientErrorText(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := ClientErrorText(tc.status, driverErr, tc.prefix)
+			got := ClientErrorText(tc.status, errSampleSQL, tc.prefix)
 			if got != tc.want {
-				t.Errorf("ClientErrorText(%d, driverErr, %q) = %q，期望 %q", tc.status, tc.prefix, got, tc.want)
+				t.Errorf("ClientErrorText(%d, errSampleSQL, %q) = %q，期望 %q", tc.status, tc.prefix, got, tc.want)
 			}
 			if tc.status >= 500 && strings.Contains(got, "no such table") {
 				t.Errorf("5xx 文案漏出了驱动原文: %q", got)
@@ -183,7 +183,7 @@ func TestClientErrorText(t *testing.T) {
 func TestServerErrorCause(t *testing.T) {
 	var recorded []*gin.Error
 	r := setupRouter(func(c *gin.Context) {
-		ServerErrorCause(c, "导出失败: ", driverErr)
+		ServerErrorCause(c, "导出失败: ", errSampleSQL)
 		recorded = append(recorded, c.Errors...)
 	})
 	w := httptest.NewRecorder()
@@ -203,7 +203,7 @@ func TestServerErrorCause(t *testing.T) {
 	if len(recorded) != 1 {
 		t.Fatalf("c.Error 记账条数 = %d，期望 1", len(recorded))
 	}
-	if !errors.Is(recorded[0].Err, driverErr) {
+	if !errors.Is(recorded[0].Err, errSampleSQL) {
 		t.Errorf("记账的错误 = %v，期望原错误", recorded[0].Err)
 	}
 }

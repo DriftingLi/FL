@@ -164,39 +164,50 @@ func TestRefreshFamily_Role解析不被认证判定调用(t *testing.T) {
 	allowed := map[string]bool{"RefreshFamilyRole": true}
 
 	entry := token.NewFileSet()
-	// ParseDir 的 filter 返回 true 表示**收录**，所以这里要取反（把测试文件排除：
-	// 本文件自己就直调 accessRoleOf 做行为断言，收进来会让白名单假红）。
-	pkgs, err := parser.ParseDir(entry, ".", func(info os.FileInfo) bool {
-		return !strings.HasSuffix(info.Name(), "_test.go")
-	}, 0)
+	// 逐文件 ParseFile 而不是 parser.ParseDir：后者自 Go 1.25 起标记为废弃
+	// （它按目录名推包名，遇到 build tag 分叉的文件归属时给不出准确关系）。
+	// 白名单面是「本包非测试 .go」，与解析方式无关，逐文件收集等价。
+	entries, err := os.ReadDir(".")
 	if err != nil {
-		t.Fatalf("解析 security 包失败: %v", err)
+		t.Fatalf("读取 security 包目录失败: %v", err)
 	}
-	if len(pkgs) == 0 {
-		t.Fatal("解析到 0 个包：判据没找到输入，必须报错而不是空跑通过")
+	files := map[string]*ast.File{}
+	for _, de := range entries {
+		name := de.Name()
+		if de.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			// 排除测试文件是必须的：本文件自己就直调 accessRoleOf 做行为断言，
+			// 收进来会让白名单假红。
+			continue
+		}
+		f, parseErr := parser.ParseFile(entry, name, nil, 0)
+		if parseErr != nil {
+			t.Fatalf("解析 %s 失败: %v", name, parseErr)
+		}
+		files[name] = f
+	}
+	if len(files) == 0 {
+		t.Fatal("解析到 0 个文件：判据没找到输入，必须报错而不是空跑通过")
 	}
 
 	var callers []string
-	for _, pkg := range pkgs {
-		for file := range pkg.Files {
-			ast.Inspect(pkg.Files[file], func(n ast.Node) bool {
-				fn, ok := n.(*ast.FuncDecl)
+	for _, file := range files {
+		ast.Inspect(file, func(n ast.Node) bool {
+			fn, ok := n.(*ast.FuncDecl)
+			if !ok {
+				return true
+			}
+			ast.Inspect(fn.Body, func(inner ast.Node) bool {
+				call, ok := inner.(*ast.CallExpr)
 				if !ok {
 					return true
 				}
-				ast.Inspect(fn.Body, func(inner ast.Node) bool {
-					call, ok := inner.(*ast.CallExpr)
-					if !ok {
-						return true
-					}
-					if id, ok := call.Fun.(*ast.Ident); ok && id.Name == target {
-						callers = append(callers, fn.Name.Name)
-					}
-					return true
-				})
+				if id, ok := call.Fun.(*ast.Ident); ok && id.Name == target {
+					callers = append(callers, fn.Name.Name)
+				}
 				return true
 			})
-		}
+			return true
+		})
 	}
 	if len(callers) == 0 {
 		t.Fatalf("没找到任何 %s 调用点：判据失去输入，空跑不算绿", target)
