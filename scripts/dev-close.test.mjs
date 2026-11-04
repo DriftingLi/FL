@@ -65,6 +65,24 @@ test('L2a2 squash 仓判据：只能问 PR 头，不能问 origin/master（#2174
   assert.equal(d.allow, false, '读不到 PR 头必须 fail-closed，不许当成「没活」放行')
 })
 
+// wt-2170 实测事实（#2253）：squash 合并后本地 HEAD（7b1a331f）在 origin/master 祖先链上，
+// 与 PR headRefOid（1529863）tree 相同、无祖先关系 ⇒ prHead..HEAD 输出 1 行、旧判据恒拦。
+// 逃生阀只认 yes；no/unreadable/缺失一律维持 fail-closed。
+const LIST_2170 = ['worktree D:/FL', 'branch refs/heads/master', '', 'worktree D:/FL/wt-2170', 'branch refs/heads/feat/2170', ''].join('\n')
+test('L2a3 squash 同内容异 sha 误红：HEAD 已是 origin/master 祖先时不拦（#2253 wt-2170 实测）', () => {
+  const d = decide({ task: '2170', prState: 'MERGED', worktreeList: LIST_2170, cwd: 'D:\\FL', unmergedLog: '7b1a331f ci(gate): ADR-0052 wave2 (#2172)', headInMaster: 'yes', execute: true })
+  assert.equal(d.allow, true, 'HEAD 全在 master 祖先链 ⇒ 树里没有会丢的活，该放行拆树')
+  assert.equal(d.passExecute, true, '-Yes 照常透传')
+  for (const fact of ['no', 'unreadable', undefined, '']) {
+    const b = decide({ task: '2170', prState: 'MERGED', worktreeList: LIST_2170, cwd: 'D:\\FL', unmergedLog: '7b1a331f x', headInMaster: fact, execute: true })
+    assert.equal(b.allow, false, 'headInMaster=' + fact + ' 时不许拆（fail-closed 不放松）')
+    assert.equal(b.reason, 'unmerged-commits', '拦的理由仍是未合并对账，不许换成别的')
+  }
+  const ps1 = readFileSync(join(here, 'dev-close.ps1'), 'utf8')
+  assert.ok(ps1.includes('merge-base --is-ancestor HEAD origin/master'), 'ps1 采集侧必须问祖先事实（三态：yes/no/unreadable）')
+  assert.ok(/headInMaster\s*=/.test(ps1), 'ps1 必须把 headInMaster 事实递给 decide——判据在 node，采集在 ps1，两头都缺不了')
+})
+
 test('L2b dry-run 是默认，-Yes 才透传 -Execute', () => {
   const dry = decide({ task: '2174', prState: 'MERGED', worktreeList: LIST_PRESENT, unmergedLog: '', execute: false })
   assert.equal(dry.allow, true, '已合并且无未提交活 => 允许')
