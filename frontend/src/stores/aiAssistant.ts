@@ -10,6 +10,7 @@ import {
   type AIAssistantModeModels,
   type DiagnosisSource
 } from '@/api/aiAssistant'
+import type { AIChatMessageMeta } from '@/api/generated/aiAssistant'
 import { useAuthStore } from '@/stores/auth'
 
 /** 当轮计费消耗（SSE usage 事件负载；ADR-0023 tokens 后计量） */
@@ -102,6 +103,18 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
   // 与 usage 同策略：只描述当轮，历史回看不显示（后端未持久化 sources）。
   // 仅 store 内部消费（done 时快照进消息；页面读的是 message.sources），不对外导出。
   const lastSources: Ref<DiagnosisSource[]> = ref([])
+
+  // ===== 智能维修诊断当轮元数据（SSE done 事件的 meta：徽章 + 耗时；票 2245）=====
+  // **与 lastSources 完全同构，且刻意不复用它**：sources 可以在流中途分批到达、
+  // 语义是「这轮引了哪些资料」；meta 只在 done 那一刻一次性到齐、语义是「这轮用了哪些能力、
+  // 花了多久」。合并成一条通道会让「done 才有的值」与「中途可增的值」混在一个 ref 里，
+  // 清空时机也不同（meta 必须等到 done，sources 每帧都可能刷新）。
+  // 同样只在 store 内部消费：done 时快照进 message.meta，页面读的是消息字段。
+  // 历史回看走另一条路 —— 后端把 meta 落了库（迁移 000050），GET messages 直接带回。
+  //
+  // 存的形状用**线格式**（生成物 AIChatMessageMeta：badges 非空、elapsed 非空），不是 SSE 的
+  // 手写 DiagnosisMeta（两者字段都 optional）——快照进消息时就归一，消费方不必再判 undefined。
+  const lastMeta: Ref<AIChatMessageMeta | null> = ref(null)
 
   // ===== 登录状态（复用主体系 auth store）=====
   const authStore = useAuthStore()
@@ -207,6 +220,7 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     streamingContent.value = ''
     lastUsage.value = null
     lastSources.value = []
+    lastMeta.value = null
     lastTurnError.value = null
     turnDraft = null
     return true
@@ -237,6 +251,7 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     currentSessionId.value = null
     lastUsage.value = null
     lastSources.value = []
+    lastMeta.value = null
     lastTurnError.value = null
   }
 
@@ -249,11 +264,13 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     const previousMessages = messages.value
     const previousUsage = lastUsage.value
     const previousSources = lastSources.value
+    const previousMeta = lastMeta.value
     const previousTurnError = lastTurnError.value
     currentSessionId.value = id
-    // 切换会话即离开「当轮」上下文，上一轮脚注/来源/失败随之失效
+    // 切换会话即离开「当轮」上下文，上一轮脚注/来源/元数据/失败随之失效
     lastUsage.value = null
     lastSources.value = []
+    lastMeta.value = null
     lastTurnError.value = null
     messagesLoading.value = true
     try {
@@ -264,6 +281,7 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
       messages.value = previousMessages
       lastUsage.value = previousUsage
       lastSources.value = previousSources
+      lastMeta.value = previousMeta
       lastTurnError.value = previousTurnError
       throw new Error(e?.message || '加载会话消息失败，请重试')
     } finally {
@@ -278,17 +296,21 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     | { kind: 'error'; message: string }
     | { kind: 'aborted' }
 
-  /** 助手消息落点（三种终态共用）：sources 为当轮快照（ADR-0033 逐轮回放；失败/中断轮不带来源） */
-  function pushAssistantMessage(content: string, sources: DiagnosisSource[] | null) {
+  /** 助手消息落点（三种终态共用）：sources / meta 为当轮快照（ADR-0033 逐轮回放；失败/中断轮两者都不带） */
+  function pushAssistantMessage(
+    content: string,
+    sources: DiagnosisSource[] | null,
+    meta: AIChatMessageMeta | null
+  ) {
     const assistantMsg: ChatMessage = {
       id: turnMsgId,
       role: 'assistant',
       content,
       images: null,
       sources,
-      // meta（徽章 + 耗时）的渲染归 2244；本轮只跟随后端 DTO 形状补位，
-      // 本地落点拿不到服务端回传的 meta，故恒 null。历史回放走的另一条路会带真值。
-      meta: null,
+      // meta（徽章 + 耗时）：done 那一刻从 lastMeta 快照进来（票 2245 的通道，2244 渲染）。
+      // 失败/中断轮为 null —— 那时没收到 done，也就没有可信的耗时。
+      meta,
       created_at: new Date().toISOString()
     }
     messages.value.push(assistantMsg)
@@ -307,11 +329,15 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     const content = streamingContent.value
     if (outcome.kind === 'done') {
       if (content) {
-        pushAssistantMessage(content, lastSources.value.length ? [...lastSources.value] : null)
+        pushAssistantMessage(
+          content,
+          lastSources.value.length ? [...lastSources.value] : null,
+          lastMeta.value
+        )
       }
       lastTurnError.value = null
     } else {
-      if (content) pushAssistantMessage(content, null)
+      if (content) pushAssistantMessage(content, null, null)
       const draft = turnDraft
       if (draft) {
         lastTurnError.value = {
@@ -404,9 +430,10 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
 
     streaming.value = true
     streamingContent.value = ''
-    // 新一轮开始：清上一轮脚注/来源（usage/sources 仅描述当轮）
+    // 新一轮开始：清上一轮脚注/来源/元数据（usage/sources/meta 只描述当轮）
     lastUsage.value = null
     lastSources.value = []
+    lastMeta.value = null
 
     const req: any = {
       session_id: isLoggedIn.value ? currentSessionId.value ?? undefined : undefined,
@@ -436,7 +463,20 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
       onSources: (sources) => {
         if (turn === activeTurn) lastSources.value = sources
       },
-      onDone: () => finalizeTurn(turn, { kind: 'done' }),
+      // done 载荷里的 meta（徽章 + 耗时）进**独立的**元数据通道：与 sources 同构但不共用
+      // （sources 中途可增、meta 只在 done 到齐，清空时机与语义都不同）。
+      // done 之后才 finalizeTurn，所以快照拿到的就是这里刚写进去的值。
+      // 这里顺手把 SSE 的可选形状归一成线格式（badges 缺省 → 空数组、elapsed 缺省 → 0），
+      // 与后端 AIChatMessageMeta 的「必有键」对齐，避免下游到处 `?.`。
+      onDone: (payload) => {
+        if (turn === activeTurn && payload?.meta) {
+          lastMeta.value = {
+            badges: payload.meta.badges ?? [],
+            elapsed: payload.meta.elapsed ?? 0
+          }
+        }
+        finalizeTurn(turn, { kind: 'done' })
+      },
       onError: (message) => finalizeTurn(turn, { kind: 'error', message })
     })
     // 当轮 abort 句柄：收尾处（finalizeTurn）统一释放
@@ -478,6 +518,7 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     streamingContent.value = ''
     lastUsage.value = null
     lastSources.value = []
+    lastMeta.value = null
     lastTurnError.value = null
   }
 

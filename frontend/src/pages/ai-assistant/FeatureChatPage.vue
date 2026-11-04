@@ -14,13 +14,19 @@
     @suggest="useSuggestion"
     @new-session="handleNewSession"
   >
-    <!-- 诊断筛选面板已随 v1 周边端点退役（票 2237）：品牌/车型/故障码三条数据源不再存在，
-         按 v2 契约重接归票 2242、页面重适配归票 2244。这里宁可暂时变素，也不留点了必 404 的 UI。 -->
-
-    <!-- 欢迎区差异内容：其余专项功能静态快捷选项 -->
+    <!-- 欢迎区（诊断）：品牌卡 + 六张诉求卡 + FAQ。三件套超出首屏是必然的，
+         壳让欢迎区自身滚动来兜（票 2241 的布局硬约束）。上游未配置时三块都不渲染。 -->
     <template #welcome-top>
+      <DiagnosisWelcome
+        v-if="isDiagnosis"
+        :brands="brands"
+        :faq="faq"
+        @pick-brand="onPickBrand"
+        @pick-scene="onPickScene"
+        @ask="askDirectly"
+      />
       <!-- 其余专项功能：静态快捷选项 -->
-      <div v-if="feature?.quickOptions?.length" class="quick-options-area">
+      <div v-if="!isDiagnosis && feature?.quickOptions?.length" class="quick-options-area">
         <div v-for="group in feature.quickOptions" :key="group.label" class="quick-option-group">
           <span class="quick-option-label">{{ group.label }}</span>
           <div class="quick-option-chips">
@@ -38,11 +44,53 @@
       </div>
     </template>
 
-    <!-- 回答下方：逐轮来源回放（ADR-0033；默认折叠，历史每轮独立展开） -->
+    <!-- 欢迎区底部（诊断）：上游不可用时的唯一提示条。**不轮询**——只解决「打开就发现坏了」，
+         运营期的抖动交给发送失败时的 turn-error 条（壳的既有通道，同信号不画两遍）。 -->
+    <template #welcome-bottom>
+      <UiAlert
+        v-if="isDiagnosis && upstreamDown"
+        class="mx-auto mt-4 w-full max-w-[600px]"
+        type="warning"
+        :closable="false"
+        show-icon
+        title="智能诊断服务暂未启用，可以先自由描述故障；管理员启用后这里会出现品牌与常见现象入口。"
+      />
+    </template>
+
+    <!-- 输入区上方（诊断）：四步引导向导。形态是 UiCollapse（不是浮层）——
+         林德 87 个型号在浮层里会盖住聊天区，且我方壳没有浮层槽位。 -->
+    <template #input-toolbar>
+      <div v-if="isDiagnosis" class="mb-2">
+        <UiCapsule
+          :label="guideCapsuleLabel"
+          :icon="'list-checks'"
+          :active="guideOpen"
+          @click="guideOpen = !guideOpen"
+        />
+        <UiCollapse :open="guideOpen" lazy>
+          <DiagnosisGuide
+            :brands="brands"
+            :preset-brand-id="presetBrandId"
+            :preset-fault="presetFault"
+            :disabled="store.streaming"
+            @send="sendComposed"
+          />
+        </UiCollapse>
+      </div>
+    </template>
+
+    <!-- 助手气泡上方（诊断）：能力徽章行（票 2245 的 badges） -->
+    <template #assistant-caps="{ message }">
+      <DiagnosisBadges v-if="isDiagnosis" :badges="message.meta?.badges || []" />
+    </template>
+
+    <!-- 助手气泡下方：逐轮来源回放 + 耗时（ADR-0033；默认折叠，历史每轮独立展开）。
+         耗时并入来源折叠头右侧（票 2244 拍板）——只有耗时没有来源时退化为一行脚注。 -->
     <template #assistant-extra="{ message }">
       <DiagnosisSources
-        v-if="isDiagnosis && message.sources?.length"
-        :sources="message.sources"
+        v-if="isDiagnosis && (message.sources?.length || message.meta?.elapsed)"
+        :sources="message.sources || []"
+        :elapsed="message.meta?.elapsed || 0"
       />
     </template>
 
@@ -81,8 +129,8 @@
 <script setup lang="ts">
 import UiIcon from '@/components/ui/UiIcon.vue'
 // 专项功能聊天页（#398）：壳（顶栏/侧栏/消息/输入/滚底）收敛进 ChatPageShell，
-// 本页仅保留快捷选项、图片队列等功能差异；助手内容随壳统一 markstream escape 安全渲染。
-import { ref, computed, reactive, onMounted } from 'vue'
+// 本页只保留快捷选项、图片队列等功能差异；助手内容随壳统一 markstream escape 安全渲染。
+import { ref, computed, reactive, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { UploadFile } from 'element-plus'
@@ -94,8 +142,16 @@ import {
   isDiagnosisFeature
 } from '@/config/aiFeatures'
 import DiagnosisSources from '@/components/ai-assistant/DiagnosisSources.vue'
+import DiagnosisBadges from '@/components/ai-assistant/DiagnosisBadges.vue'
+import DiagnosisWelcome from '@/components/ai-assistant/DiagnosisWelcome.vue'
+import DiagnosisGuide from '@/components/ai-assistant/DiagnosisGuide.vue'
+import UiCapsule from '@/components/ai-assistant/UiCapsule.vue'
+import UiCollapse from '@/components/ui/UiCollapse.vue'
+import UiAlert from '@/components/ui/UiAlert.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiUpload from '@/components/ui/UiUpload.vue'
+import { aiAssistantApi, type DiagnosisFAQ, type DiagnosisIntentBrand } from '@/api/aiAssistant'
+import { compressImage } from '@/utils/imageCompress'
 
 const store = useAIAssistantStore()
 const router = useRouter()
@@ -105,7 +161,7 @@ const route = useRoute()
 const feature = computed(() => getAIFeatureByRoute(route.path))
 const supportsImage = computed(() => feature.value?.supportsImage === true)
 const maxImages = computed(() => feature.value?.maxImages ?? 4)
-// 智能维修诊断（fault_diagnosis）：品牌/车型联动 + 故障码面板 + 来源面板
+// 智能维修诊断（fault_diagnosis）：四级引导向导 + 欢迎区三件套 + 徽章/耗时回放
 const isDiagnosis = computed(() => isDiagnosisFeature(feature.value?.key))
 
 const inputText = ref('')
@@ -117,10 +173,67 @@ const inputPlaceholder = computed(() => {
     : '输入您的问题...'
 })
 
-// ===== 智能维修诊断：筛选面板已随 v1 周边端点退役（票 2237）=====
-// 品牌/车型/故障码三条数据源（/diagnosis/{brands,models,fault-codes}）在 v2 不存在，
-// 调用点已同步删除——宁可诊断页暂时只剩自由输入，也不留点了必 404 的中间态。
-// 按 v2 契约（intents/systems/faults/code_hint）重接归票 2242，页面重适配归票 2244。
+// ===== 智能维修诊断：引导数据（品牌 / FAQ / 上游健康）=====
+// 三个字典端点在上游未配置时回 502，health 恒 200 但 ok=false。
+// 页面**不轮询**：进页拉一次，失败就记成 upstreamDown 出一条提示条。
+const brands = ref<DiagnosisIntentBrand[]>([])
+const faq = ref<DiagnosisFAQ[]>([])
+const upstreamDown = ref(false)
+
+const guideOpen = ref(false)
+const presetBrandId = ref('')
+const presetFault = ref('')
+
+/** 胶囊文案：向导的当前状态一眼可见（未选 → 已选到哪一步）*/
+const guideCapsuleLabel = computed(() => {
+  if (presetFault.value) return `引导选诉求 · ${presetFault.value}`
+  return guideOpen.value ? '收起引导' : '引导选诉求'
+})
+
+async function loadDiagnosisIntents() {
+  if (!isDiagnosis.value) return
+  try {
+    const [health, intents] = await Promise.all([
+      aiAssistantApi.getDiagnosisHealth().catch(() => null),
+      aiAssistantApi.listDiagnosisIntents()
+    ])
+    // health 恒 200；ok=false 表示未配置或上游不可达 —— 两种都不该画点不动的卡片。
+    // 因此 ok=false 时连已拿到的字典一起丢掉：留着品牌卡而 health 说不通，会出现
+    // 「点得动、但点了就 502」的死入口（票 2244 拍板的降级是整块留白）。
+    upstreamDown.value = health ? !health.ok : true
+    brands.value = upstreamDown.value ? [] : intents?.brands ?? []
+    faq.value = upstreamDown.value ? [] : intents?.faq ?? []
+  } catch {
+    // 字典端点 502（未配置）：品牌与 FAQ 留空、欢迎区三件套整块不渲染，只出提示条
+    upstreamDown.value = true
+    brands.value = []
+    faq.value = []
+  }
+}
+
+function onPickBrand(brandId: string) {
+  presetBrandId.value = brandId
+  presetFault.value = ''
+  guideOpen.value = true
+}
+
+function onPickScene(faultName: string) {
+  presetFault.value = faultName
+  presetBrandId.value = ''
+  guideOpen.value = true
+}
+
+/** 向导组好句：直接发出去（不经过输入框，句子本身就是用户要发的那句话） */
+function sendComposed(sentence: string) {
+  guideOpen.value = false
+  presetFault.value = ''
+  sendText(sentence)
+}
+
+/** FAQ 点击 / 预设提示词点击：一句现成的话直接发 */
+function askDirectly(question: string) {
+  if (question) sendText(question)
+}
 
 interface PendingImage {
   url: string          // 上传成功后的服务器 URL
@@ -147,7 +260,7 @@ function toggleOption(label: string, opt: string) {
   }
 }
 
-// 组装消息内容：预设选项作为前缀注入（智能维修诊断除外——它的筛选走前端组句，不注标签）
+// 组装消息内容：预设选项作为前缀注入（智能维修诊断除外——诊断的品牌/型号走引导组句）
 function buildContent(text: string): string {
   if (isDiagnosis.value) return text
   const groups = feature.value?.quickOptions || []
@@ -167,15 +280,18 @@ async function handleSend() {
     return
   }
 
-  // 品牌/车型不再随请求发出：v2 的请求体只有 content 一个文本通道，后端已无消费方
-  // （票 2237）。组句改由前端拼进正文（票 2241 的 diagnosisCompose，待 2244 落地）。
-  const opts: SendOptions = images.length > 0 ? { images } : {}
-
   inputText.value = ''
   pendingImages.value = []
+  await sendText(buildContent(text), images.length > 0 ? { images } : {})
+}
+
+/** 发送单点：输入框发送 / 向导组句 / FAQ 点击都走这里 */
+async function sendText(text: string, opts: SendOptions = {}) {
+  // 品牌/车型不随请求发出：v2 的请求体只有 content 一个文本通道，后端已无消费方
+  // （票 2237）。引导选出来的品牌/型号已由 diagnosisCompose 拼进正文。
   try {
     // 发送编排与终态都在 store（#1104）：失败/中断走 store.lastTurnError，由壳渲染重试入口
-    await store.send(buildContent(text), opts)
+    await store.send(text, opts)
   } catch (e: any) {
     ElMessage.error(e?.message || '发送失败，请稍后再试')
   }
@@ -186,7 +302,7 @@ function useSuggestion(text: string) {
   handleSend()
 }
 
-// 图片选择：立即上传，本地 blob 先行预览
+// 图片选择：先本地压缩（长边 1400 / q0.82），再上传压缩后的那一份
 async function handleImageSelect(file: UploadFile) {
   const raw = file.raw
   if (!raw) return
@@ -194,7 +310,10 @@ async function handleImageSelect(file: UploadFile) {
     ElMessage.warning(`最多上传 ${maxImages.value} 张图片`)
     return
   }
-  const previewUrl = URL.createObjectURL(raw)
+  // 压缩在选图时就做（票 2244）：传上去的已经是压好的那份，不浪费带宽也不让服务端重编码。
+  // 压缩失败会原样返回（见 utils/imageCompress.ts 的降级），不阻断上传。
+  const { file: toUpload } = await compressImage(raw)
+  const previewUrl = URL.createObjectURL(toUpload)
   // 入队的是**代理本身**（票 #1358 / spec #1345 决策 #10）：push 裸对象时队列里读回的是
   // Vue 为它新建的代理，与局部变量身份不等 ⇒
   //  ① catch 分支「按身份摘掉失败项」的 `p !== pending` 恒成立，失败项永远摘不掉；
@@ -204,7 +323,7 @@ async function handleImageSelect(file: UploadFile) {
   const pending = reactive<PendingImage>({ url: '', previewUrl, uploading: true })
   pendingImages.value.push(pending)
   try {
-    pending.url = await store.uploadImage(raw)
+    pending.url = await store.uploadImage(toUpload)
   } catch (e: any) {
     ElMessage.error(e?.message || '图片上传失败')
     pendingImages.value = pendingImages.value.filter(p => p !== pending)
@@ -230,9 +349,15 @@ function handleNewSession() {
 onMounted(() => {
   if (feature.value) {
     store.initFeature(feature.value.key)
+    loadDiagnosisIntents()
   } else {
     router.replace(href('AIAssistant'))
   }
+})
+
+onBeforeUnmount(() => {
+  // 离开页面时释放还没发出去的预览 blob（否则每个未发送的缩略图都留一份内存）
+  pendingImages.value.forEach(p => URL.revokeObjectURL(p.previewUrl))
 })
 </script>
 

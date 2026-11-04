@@ -65,9 +65,11 @@ export const aiFeatureUI: Record<AIFeatureKey, AIFeatureUIDescriptor> = {
       '制动失灵如何应急处理？',
       '故障码 E102 是什么意思？'
     ],
-    // 无静态 quickOptions：品牌/系统/故障现象三级点选归 2244 重适配（数据面已由
-    // GET /diagnosis/{intents,systems,faults,code-hint} 提供，本页尚未接）
+    // 无静态 quickOptions：品牌/系统/故障现象三级点选由 DiagnosisGuide 走
+    // GET /diagnosis/{intents,systems,faults,code-hint}（票 2242 的数据面，票 2244 的界面）。
     supportsImage: true,
-    maxImages: 1
+    // 3 张：与外部诊断助手一致（其前端 MAX_IMGS=3，后端 adapter 的 diagnosisMaxImages 也是 3）。
+    // 超过 3 张后端会截断并在正文尾追加提示，前端与后端同值才不至于让用户白传。
+    maxImages: 3
   }
 }

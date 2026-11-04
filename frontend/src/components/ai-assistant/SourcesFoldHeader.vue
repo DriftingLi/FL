@@ -11,7 +11,11 @@
       >▶</span>
       {{ title }}<template v-if="count !== undefined">（{{ count }} 条）</template>
     </span>
-    <span class="whitespace-nowrap text-ui-soft-ink">{{ open ? '收起 ▴' : '展开 ▾' }}</span>
+    <span class="flex items-center gap-2 whitespace-nowrap">
+      <!-- 右侧附注（票 2244：诊断的端到端耗时挂这里，与来源同属「这轮的旁注」） -->
+      <span v-if="suffix" class="text-xs text-ink-3">{{ suffix }}</span>
+      <span class="text-ui-soft-ink">{{ open ? '收起 ▴' : '展开 ▾' }}</span>
+    </span>
   </div>
 </template>
 
@@ -22,8 +26,10 @@ withDefaults(
     title: string
     open: boolean
     count?: number
+    /** 右侧附注（耗时等）：与展开/收起同排，避免另起一行 */
+    suffix?: string
   }>(),
-  { count: undefined }
+  { count: undefined, suffix: '' }
 )
 
 const emit = defineEmits<{
