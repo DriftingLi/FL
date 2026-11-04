@@ -253,7 +253,7 @@ systemctl daemon-reload && systemctl restart forklift-watchdog.timer
 | 面 | 启用条件 | 为什么这样 |
 | --- | --- | --- |
 | `assistant_health` | env 文件里给 `WATCH_ASSISTANT_HEALTH_URL` | v2 未配置是**合法状态**（#2237：`DIAGNOSIS_ASSISTANT_URL` 默认留空即功能未启用），不该每 6 分钟发信。硬编码旧 lxc101 地址就是造第二个已退役面 |
-| `disk_lxc` | 同时给 `WATCH_REMOTE_HOST` 与 `WATCH_REMOTE_LXC` | lxc101（pve-01，VMID 101）是旧 v1 诊断助手的承载机，**已于 2026-11-04 14:44 停机**（`pct status 101` ⇒ `stopped`）。停机前 7 天实测非 health 请求为 0（最后一次真实对话 `2026-11-03T13:54:43Z`），停它不影响在用功能。该机 `onboot` 已置 0（pve-01 重启不会自动拉起），若 `pct start 101` 复活后要观察其磁盘水位，在 env 里给两个值即可，不必改脚本 |
+| `disk_lxc` | 同时给 `WATCH_REMOTE_HOST` 与 `WATCH_REMOTE_LXC` | lxc101（pve-01，VMID 101）是旧 v1 诊断助手的承载机，**已于 2026-11-04 14:44 停机**（`pct status 101` ⇒ `stopped`）。停机前 7 天实测：真正的业务请求只有 13 条（11 条 chat + 2 条 fault-codes），其余是 watchdog 的 health 探测与网关的 brands 目录查询；最后一次真实对话 `2026-11-03T13:54:43Z`，停它不影响在用功能。该机 `onboot` 已置 0（pve-01 重启不会自动拉起），若 `pct start 101` 复活后要观察其磁盘水位，在 env 里给两个值即可，不必改脚本 |
 | `install_drift` | `$DEPLOY_PATH/deploy/forklift-watchdog.sh` 存在 | 非部署宿主（开发机）上没有参考副本，该面不适用 |
 
 `public_api` 面盯的是 `/api/ai-assistant/models`。**不要**改回去盯诊断端点
