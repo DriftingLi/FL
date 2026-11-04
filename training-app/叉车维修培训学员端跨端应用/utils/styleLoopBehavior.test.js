@@ -46,7 +46,7 @@ const { execFileSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { encodeCommand } = require('./probeSpawn.js');
+const { encodeCommand, withUtf8Discipline } = require('./probeSpawn.js');
 
 const ROOT = path.join(__dirname, '..');
 const LIB = path.join(ROOT, 'scripts', 'lib', 'style-loop.ps1');
@@ -64,6 +64,29 @@ function psArgs(extra) {
 
 function psQuote(s) {
   return String(s).replace(/'/g, "''");
+}
+
+/**
+ * 把「脚本路径 + 参数数组」拼成一条可在宿主 `-Command` 里执行的调用串。
+ *
+ * 三个坑（都实测过，缺一个就红）：
+ *   1. 参数名不能加引号 —— `& 'x.ps1' '-DryRun'` 会把 `-DryRun` 当**位置字符串**，
+ *      入口落 usage 分支、E 组全套退出码错位；参数名原样输出，只给值加引号。
+ *   2. **必须先置 `$LASTEXITCODE` 哨兵再补 `exit $LASTEXITCODE`** —— `-Command` 下
+ *      `& 'x.ps1'` 不传递脚本退出码；更糟的是**参数绑定失败时 `$LASTEXITCODE` 压根不被赋值**
+ *      （报错发生在脚本体第一行之前），直接 `exit $LASTEXITCODE` 会读成沿用值/0 ⇒ E8
+ *      「非零」判据假红。置 -1 后实测三场景全对：GOOD=0 / BADPROJ=2 / BINDFAIL=-1（非零）。
+ *   3. 值用单引号 + `''` 转义（中文路径、含空格路径安全）。
+ * `psQuote` 只转义**不包裹**，引号由这里显式加——写成 `"& '" + q(x) + "'"` 才不会出双引号。
+ * 由 `withUtf8Discipline` 统一前置两行自律行——脚本体唯一来源仍是 probeSpawn。
+ */
+function entryCommand(args) {
+  const parts = ["& '" + psQuote(ENTRY) + "'"];
+  (args || []).forEach((a) => {
+    const s = String(a);
+    parts.push(/^-[A-Za-z][\w-]*$/.test(s) ? s : "'" + psQuote(s) + "'");
+  });
+  return withUtf8Discipline('$LASTEXITCODE = -1; ' + parts.join(' ') + '; exit $LASTEXITCODE');
 }
 
 function runPwshCommand(scriptText) {
@@ -86,9 +109,20 @@ function runPwshCommand(scriptText) {
   }
 }
 
-/** 真跑入口（父进程包装层）。返回退出码与完整 stdout。 */
+/**
+ * 真跑入口（父进程包装层）。返回退出码与完整 stdout。
+ *
+ * #2254：**必须走"宿主钉码页 + & 派发"，不能用 `-File` 直调**。
+ * style-loop.ps1 顶部确实有 UTF-8 自律行（脚本自身第 109 行），但**参数绑定发生在脚本体
+ * 第一行执行之前** —— E8（`-MaxLineBytes 201`，`[ValidateRange(40,200)]` 拒收）这类调用
+ * 的报错由 pwsh 宿主自己产出，脚本一行都没跑，顶部位钉码页根本轮不到执行。cp936 字节于是
+ * 直接进 stderr，被父进程 `{encoding:'utf8'}` 误读成 56 个 U+FFFD（既有漏洞，master 上同样复现）。
+ * 钉在宿主 `-Command` 里就早于被调脚本的参数绑定，实测同一非法参数 stderr fffd 56 → 0，
+ * 退出码与 stderr 正文一字不变。`$PSCommandPath` / `$PSScriptRoot` 在 `&` 下仍指向被调脚本，
+ * style-loop.ps1:422 的自我重启（`-File $PSCommandPath -Inner`）不受影响（已实测逐字相同）。
+ */
 function runEntry(args, timeoutMs) {
-  const full = psArgs(['-File', ENTRY].concat(args.map(String)));
+  const full = psArgs(['-Command', entryCommand(args)]);
   try {
     const stdout = execFileSync('pwsh', full, {
       encoding: 'utf8',
