@@ -182,17 +182,24 @@
          有消息：列表占满、输入框沉底 -->
     <main
       class="chat-main min-w-0 flex-1 bg-panel"
-      :class="isWelcome ? 'grid grid-rows-[1fr_auto_1fr] overflow-y-auto' : 'flex flex-col overflow-hidden'"
+      :class="isWelcome ? 'grid grid-rows-[1fr_auto_1fr] overflow-hidden' : 'flex flex-col overflow-hidden'"
     >
       <!-- 消息列表 -->
       <div
         ref="messageListRef"
         class="message-list mx-auto w-full p-6 max-[768px]:p-4"
-        :class="isWelcome ? 'row-start-1 max-w-[760px] self-end justify-self-center overflow-visible' : 'max-w-[1200px] flex-1 overflow-y-auto [scrollbar-gutter:stable]'"
+        :class="isWelcome ? 'row-start-1 max-w-[760px] self-end justify-self-center min-h-0 overflow-hidden' : 'max-w-[1200px] flex-1 overflow-y-auto [scrollbar-gutter:stable]'"
       >
         <!-- 空状态：欢迎区（图标左标题右横排；标题即一句话功能介绍，无副标题）。
-             定位：grid 第一行 + self-end 贴住输入框上沿，不把输入框往下推 -->
-        <div v-if="isWelcome" class="welcome-area w-full px-6 pb-3 pt-6 text-center">
+             定位：grid 第一行 + self-end 贴住输入框上沿，不把输入框往下推。
+             溢出：欢迎区可能比首屏高（诊断页会塞品牌卡 + 六张诉求卡 + FAQ，票 2241 已拍板），
+             此时**只让欢迎区自己滚**（max-height + overflow-y-auto），不能让 chat-main 滚 ——
+             否则矮屏下输入框被挤出视口，而输入框是这个页面的唯一出口。 -->
+        <div
+          v-if="isWelcome"
+          class="welcome-area w-full overflow-y-auto px-6 pb-3 pt-6 text-center"
+          style="max-height: 100%; scrollbar-width: thin"
+        >
           <div class="welcome-head mx-auto flex max-w-[760px] items-center justify-center gap-3 text-left">
             <div class="welcome-icon inline-flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-card bg-[linear-gradient(135deg,var(--color-violet-500,#6366f1),#8b5cf6)] text-white">
               <UiIcon :name="welcomeIcon" :size="28" />
@@ -271,6 +278,10 @@
               <div v-if="msg.content" class="message-text break-words rounded-card bg-ui-600 px-4 py-3 text-sm leading-[1.7] text-white">{{ msg.content }}</div>
             </template>
             <div v-else class="message-text markstream-vue break-words rounded-card border border-line bg-panel px-4 py-3 text-sm leading-[1.7] text-ink" @click="openImagePreview">
+              <!-- 能力徽章行：刻意在正文**之前**（对方 app.js:265 的 .caps 同样在 body 之前）——
+                   先把「这轮用了哪些能力」交代清楚，正文再展开。槽位独立于 assistant-extra：
+                   后者在正文之后、语义是「补充材料」（来源、耗时），两者不共用。 -->
+              <slot name="assistant-caps" :message="msg" />
               <MarkdownRender
                 mode="chat"
                 :content="msg.content"
