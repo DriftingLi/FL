@@ -30,6 +30,7 @@
  */
 const { execFileSync } = require('child_process');
 const path = require('path');
+const { encodeCommand } = require('./probeSpawn.js');
 
 const ROOT = path.join(__dirname, '..');
 const BUSY_LIB = path.join(ROOT, 'scripts', 'lib', 'hx-busy.ps1');
@@ -59,7 +60,7 @@ function runProbe(probeLines) {
     `. "${DEPLOY_LIB}"`,
   ].concat(probeLines).join('\n');
 
-  const encoded = Buffer.from(script, 'utf16le').toString('base64');
+  const encoded = encodeCommand(script);
   try {
     const stdout = execFileSync(powershellExe(), psArgs(['-EncodedCommand', encoded]), {
       encoding: 'utf8',

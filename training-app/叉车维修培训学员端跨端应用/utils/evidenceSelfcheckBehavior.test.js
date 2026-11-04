@@ -35,6 +35,7 @@ const { execFileSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { encodeCommand } = require('./probeSpawn.js');
 
 const ROOT = path.join(__dirname, '..');
 const LIB_CAPTURE = path.join(ROOT, 'scripts', 'lib', 'process-capture.ps1');
@@ -90,7 +91,7 @@ function drive(statements) {
     '$GbkBytes = [byte[]]@(' + ARRAY_BODY(GBK_BYTES) + ')',
   ];
   const script = prelude.concat(statements).join('; ');
-  const encoded = Buffer.from(script, 'utf16le').toString('base64');
+  const encoded = encodeCommand(script);
   return execFileSync('pwsh', psArgs(['-EncodedCommand', encoded]), {
     encoding: 'utf8',
     timeout: DRIVE_TIMEOUT_MS,

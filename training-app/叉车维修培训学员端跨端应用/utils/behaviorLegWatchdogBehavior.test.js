@@ -34,7 +34,7 @@ const CAPTURE_LIB = path.join(ROOT, 'scripts', 'lib', 'process-capture.ps1');
 const hasPwsh = (() => {
   if (process.platform !== 'win32') return false;
   try {
-    execFileSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', 'exit 0'], { stdio: 'ignore' });
+    execFileSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', withUtf8Discipline('exit 0')], { stdio: 'ignore' });
     return true;
   } catch {
     return false;
@@ -126,6 +126,8 @@ function runScenarios() {
 
   const body = [
     "$ErrorActionPreference = 'Stop'",
+    "try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }",
+    '$OutputEncoding = [System.Text.Encoding]::UTF8',
     'Set-StrictMode -Version Latest',
     `$spec = [System.IO.File]::ReadAllText('${inputPath}', [System.Text.Encoding]::UTF8) | ConvertFrom-Json`,
     '$src = [System.IO.File]::ReadAllText($spec.script, [System.Text.Encoding]::UTF8)',
@@ -259,6 +261,7 @@ describeWin('行为腿看门狗 / 总超时 / 断点续跑（#1994，假 jest + 
 describe('reporter 的全局序号接线（#1994）', () => {
   test('W6: env 给出 offset/total 时 JEST_SUITE 行按全局序号打印，PLAN 用全局总数；env 不在时退回本进程读数', () => {
     const Reporter = require('../scripts/jest-reporter-suite-progress.js');
+const { withUtf8Discipline } = require('./probeSpawn.js');
     const writes = [];
     const origWrite = process.stdout.write;
     process.stdout.write = (chunk) => { writes.push(String(chunk)); return true; };

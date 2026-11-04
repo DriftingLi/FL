@@ -26,6 +26,7 @@ const { execFileSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { encodeCommand } = require('./probeSpawn.js');
 
 const ROOT = path.join(__dirname, '..');
 const LIB_REL = path.join('scripts', 'lib', 'level-detect.ps1');
@@ -73,7 +74,7 @@ function psPrelude() {
  */
 function runInModule(statements) {
   const script = psPrelude().concat(statements).join('; ');
-  const encoded = Buffer.from(script, 'utf16le').toString('base64');
+  const encoded = encodeCommand(script);
   const exe = powershellExe();
   const args = psArgs(['-EncodedCommand', encoded]);
   try {
