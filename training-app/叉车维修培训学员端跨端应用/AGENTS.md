@@ -19,7 +19,7 @@
 | 7 开 PR 与合并 | `pwsh scripts/preflight-pr.ps1`（**仓库根**跑）预检绿 → `pwsh scripts/submit-pr.ps1` 建 PR | 证据齐 → agent 直接合并 | 例外通道只认「已接受未验证风险」一句，**且由人合并** |
 | 8 收尾 | `pwsh scripts/dev-close.ps1 -Task <票号>`（仓库根；默认 dry-run，`-Yes` 执行）；**认树看目录 `wt-<票号>`、身份看登记分支**（`fix/…` 也认，别按 `feat/<票号>` 猜；裁定见根 `docs/adr/ADR-0092-树身份-目录为入口与登记分支为身份.md`） | `DEV_CLOSE_RESULT … verdict=ok`（dry-run 只 `verdict=planned`、无动作是 `verdict=noop`，**都别当已收尾**） | `verdict=blocked reason=pr-not-merged` = 还没合并，本就不该拆；`tree-branch-mismatch` = 目录在但判据没匹配上（必红，别当无树）；树被占用 ⇒ 关掉占用的工具再跑，别 kill |
 
-**第 5 步的纪律面**：纯 `.uvue` / `.uts` 命中运行时面时，校验器对这一支**不判**（`needs2` 只认 MP-WEIXIN 面）。ADR-0043 决策 3 自 2026-11-02 起收窄（#2207）：**`needs2` 触发面必跑，非触发面默认跑、可跳过**——跳过时在正文写一行 `② 自选跳过 reason=<slug>`，别沉默跳过。
+**第 5 步的纪律面**：校验器对「纯 `.uvue` / `.uts`」这一支**不判**（`needs2` 只认 MP-WEIXIN 面）。② 三条判据**任一击中即必跑**：① `manifest.json` / `platformConfig.json` 改动；② 运行时面 diff 里增删了一条 MP-WEIXIN 条件编译**指令行**；③ 改动到的 `.uvue` / `.uts` **正文并集**（基线版 + 当前版）含该指令（#2284，2026-11-04）。三条均未命中 ⇒ **默认跳过**：正文不写读数行、也**不要**写跳过声明——那是**判定结果**，不是「允许你自己跳」（旧口径 `② 自选跳过 reason=<slug>` 自 #2284 起**不再是默认要求**：显式写「判断过但不跑」仍被识别，`needs2` 触发面写了判红）。正文扫描超预算（>40 个文件）/ 读取异常 / 两侧都读不到 ⇒ fail-closed 判命中。口径全文见 ADR-0008 顶部 2026-11-04 条。
 
 **成本尺**：常态 ≈12 min（同树）/ 17 min（新树）。超 2× 先查是不是在排队（HBuilderX 单实例，不是脚本慢）。
 
