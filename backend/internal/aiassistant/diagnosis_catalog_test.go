@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"go.uber.org/zap"
 )
@@ -307,6 +308,30 @@ func TestDiagnosisCatalogBadJSON(t *testing.T) {
 	}
 	if errors.Is(err, ErrDiagnosisRateLimited) || errors.Is(err, ErrDiagnosisNotConfigured) {
 		t.Fatalf("坏 JSON 不该被归进限流或未配置，got %v", err)
+	}
+}
+
+// TestDiagnosisCatalogTimeout 上游不响应时按 ctx 截止退出，错误不是「未配置」也不是「限流」——
+// handler 把它归进 502。这里不等满 10 秒的产品超时，用短 deadline 走同一条路径。
+func TestDiagnosisCatalogTimeout(t *testing.T) {
+	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done() // 永不回包，直到客户端放弃
+	}))
+	defer slow.Close()
+
+	svc := NewDiagnosisCatalogService(slow.URL, "test-key", zap.NewNop())
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	_, err := svc.Systems(ctx, "zhongli")
+	if err == nil {
+		t.Fatal("上游不响应时应报错")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("超时应透出 context.DeadlineExceeded 供 handler 归 502，got %v", err)
+	}
+	if errors.Is(err, ErrDiagnosisNotConfigured) || errors.Is(err, ErrDiagnosisRateLimited) {
+		t.Fatalf("超时不该被归进未配置或限流，got %v", err)
 	}
 }
 
