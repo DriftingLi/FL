@@ -9,9 +9,10 @@
 //   - AIChatMessageDTO.images / .sources ⇒ GetSessionMessages 里 `var imgs []string` 只在
 //     列非空串时才 Unmarshal，「没图 / 没来源」就是 nil ⇒ `null`。那句 `nullable` 是真的
 //     （已带 x-nullable，属批①-B 的消费端加宽，不是改判对象）。
-//   - DiagnosisFaultCodePage.items ⇒ ListFaultCodes 把上游助手的 JSON 直接 Decode 进结构体，
-//     没有任何 `make` 兜底 ⇒ 上游发 `{"items":null}` 或省略该键时这里就是 `null`。
-//     出口形状由对端进程决定，本仓改判不了它。
+//   - DiagnosisFaultCodePage.items ⇒ **随 v1 通道退役删除**（票 2237）：故障码代理已不存在，
+//     该可空性不再有出口，登记与判词一并摘除。本条只留作历史指针，别再照着它找代码。
+//     v2 引导面（票 2242）新增的四格集合反过来是 nonnil 的——它们在 service 里归一成空集，
+//     证据住在 internal/aiassistant/nonnil_outlets_test.go。
 //   - GenTaskStatus.results ⇒ pending 阶段 async_task.result 列还没写过，GetTaskStatus 只在
 //     `len(task.Result) > 0` 时才赋值 ⇒ 实测发 `null`（已带 x-nullable）。
 //   - MockExamSubmitDTO.details ⇒ Submit 那一侧是 `make(0,n)` 恒非 null，但同一条声明经

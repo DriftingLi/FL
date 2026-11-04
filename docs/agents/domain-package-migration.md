@@ -75,7 +75,7 @@
 | `backend/internal/api/errstatus_test.go`（`TestErrStatusTable_Snapshot_Points`）与 `backend/internal/api/course_fact_distinctness_test.go` 的**哨兵清单表** | 哨兵搬家（波 1b-0 把 `ErrCourseNotFound` / `ErrHrwaiUserNotFound` 贴进 `internal/model`）时，表里的 `service.X` 改 `model.X`（快照表按哨兵**值指针**与文案比对） | 红（不静默），但报的是「哨兵值不符」，容易被读成文案被改坏 |
 | 域包内**结构体字段**改名（波 0c：`OrphanSweepConfig` 的 `domain/ttl/list/referenced/keyOf/deleteFile/logger` → 导出名） | 包内**测试**里的复合字面量也用小写键（脚本的区间替换只覆盖包外 `<包>.OrphanSweepConfig{…}`）| `go vet` 报 `unknown field domain in struct literal`（不静默，但只在 vet 阶段）|
 
-方法论：**改名会让按名字/路径判定的锁静默失配**。删或重构 Go 符号后，除了 grep 残留引用（本机 golangci-lint 跑不了，见 `checks.md` 环境 A），还要 grep 一遍**按名字判定的锁**（清单名、白名单键、前缀计数）。
+方法论：**改名会让按名字/路径判定的锁静默失配**。删或重构 Go 符号后，除了 grep 残留引用（`golangci-lint` 本机自 2026-11-04 起可跑，见 `checks.md` 环境 A），还要 grep 一遍**按名字判定的锁**（清单名、白名单键、前缀计数）。
 
 ## 4. 契约测试的归属
 
@@ -143,7 +143,7 @@ func TestNonNilDeclaredOutletsNeverEmitNull(t *testing.T) {
 - 不搬契约测试（第 4 节）、不新建子目录分层（第 1 节）。
 - 不在域包 import `internal/api`；不在 `service.go` / `dto.go` import gin。
 - 不为了过守卫放宽射程或删判据：要改就改**计数常量**并同步注释里的算式（欠账表只准按人改的数字走）。
-- 不把「本机 golangci-lint 跑不了」当借口：那一条由 CI `backend-lint` 兜，提交前 grep 残留引用与按名字判定的锁。
+- 不再把「本机 golangci-lint 跑不了」当借口（**该限制已于 2026-11-04 随 #2266 消失，v2.15.0 与 CI 同源**）：删改 Go 符号后照样要 grep 残留引用与按名字判定的锁——lint 只抓得到 unused/staticcheck 那一层，抓不到「按名字判定的锁」失配。
 
 ## 9. 单域验收清单
 
@@ -229,7 +229,7 @@ func TestNonNilDeclaredOutletsNeverEmitNull(t *testing.T) {
 
 - **删掉定义后，同一文件里的其余裸引用要立刻 `replace_all`**：`internal/service/course_service.go` 的 `ErrCourseNotFound` 定义删掉后，函数体里还有三处裸名（:232/:330/:362），而 `go build` **一次只报前 10 条** `undefined`（先报 course_service，`points_service.go` / `real_exam_service.go` 的十几处要再跑一遍才看到）⇒ 别逐处点，删定义后就在该文件里对同名标识符做一次 `replace_all`。
 - **批量补 import 的命令要有「非空」校验**：`goimports -local forklift-training -w <文件列表>` 在列表**为空**时静默 `exit 0`（本波第一版把 `git status --porcelain` 的 `backend/…` 路径拿去给 cwd 已是 `backend/` 的 `Test-Path` 过滤，全被滤掉 ⇒ 看着「补过了」，`go build` 却全是 `undefined: entitlement`）。路径口径要对齐：`goimports` 收的是**相对模块根**（`internal/...`），`porcelain` 给的是**相对仓库根**（`backend/internal/...`）。
-- **本机 `golangci-lint` 已不可用，别信它报的错**：`%USERPROFILE%\go\bin\golangci-lint.exe` 配 `go1.27.1` 时刷一片 `typechecking error: … export data version 4 is greater than maximum supported version 2`（连 `unicode/utf8`、`internal/goarch` 都导不进来，还捎带一批与本次改动无关的假错）—— 它自带的 Go 比仓库工具链旧。波 0c 那条「本地三样全绿 ≠ CI 绿」的兜底只能靠**反向数私有件在新包内的引用数**（先剥注释），不能靠本机 lint。
+- **本机 `golangci-lint` 已不可用，别信它报的错**（⚠️ 此条写于 v1.64.8 时期，**2026-11-04 起已过期**：升到 v2.15.0 后本机可跑，见 `checks.md` 环境 A；下面的事实留作历史）：`%USERPROFILE%\go\bin\golangci-lint.exe` 配 `go1.27.1` 时刷一片 `typechecking error: … export data version 4 is greater than maximum supported version 2`（连 `unicode/utf8`、`internal/goarch` 都导不进来，还捎带一批与本次改动无关的假错）—— 它自带的 Go 比仓库工具链旧。波 0c 那条「本地三样全绿 ≠ CI 绿」的兜底只能靠**反向数私有件在新包内的引用数**（先剥注释），不能靠本机 lint。
 
 第六批（P2 波 1b：完整域 `points`，13 个 `git mv` + 172 处入边）再添四条：
 
@@ -257,7 +257,7 @@ func TestNonNilDeclaredOutletsNeverEmitNull(t *testing.T) {
 - **`git mv` 不会创建目标目录**：`git mv backend/internal/service/contribution_service.go backend/internal/contribution/service.go` 在目标目录不存在时报 `fatal: renaming 'backend/internal/service/contribution_service.go' failed: No such file or directory` ——**报的是源路径**，看着像源文件不存在。先 `New-Item -ItemType Directory -Force backend/internal/<域>`（计划里写的「目录由 `git mv` 自动创建」是错的）。
 - **一域两蓝图 ⇒ 注册函数一拆二之后，契约测试的测试路由器要把两个注册函数都调上**：只调 `RegisterRoutes` 时管理端端点**静默 404**，症状是「学员访问审核端点应 403, got 404」（`internal/api/contribution_contract_test.go:155`）——不是权限回归，是路由没注册。
 - **抽 helper 的 `extractFunc` 必须做花括号配对**：只按「遇到独立一行 `}` 停」会把单行函数（`func itoa(n int) string { return strconv.Itoa(n) }`）连同**下一个函数**一起吞进来，症状是 `go vet` 报 `undefined: QuestionBankService`（被吞进来的函数引用了别处的符号）。helper 依赖还是**传递的**（`assertShapeLock` 调用 `topLevelKeys`）⇒ 追加要迭代到不动点。
-- **拆出去的 handler 文件要按实际引用算 import**：`handler_admin.go` 里没有 `errors` 引用了，留着就是未使用符号（`unused` 只在 CI 的 backend-lint 报，本机 `golangci-lint` 不可用）⇒ 抽完文件先 `go build`/`go vet` 再逐组核 import。
+- **拆出去的 handler 文件要按实际引用算 import**：`handler_admin.go` 里没有 `errors` 引用了，留着就是未使用符号（`unused` 在 backend-lint 报；本机 `golangci-lint` 自 2026-11-04 起也能报，见 `checks.md` 环境 A）⇒ 抽完文件先 `go build`/`go vet` 再逐组核 import。
 - **`git grep` 的路径口径是仓库根**：worktree 里后端路径要写 `backend/internal/...`；只写 `internal/...` **静默零命中**，会被误读成「无残留」。本波差点据此提前收工。
 - **本机 `gofmt` 可能比 CI 宽松：判据要用 CI 口径的工具链**。本机 go1.27.1 的 `gofmt` **不再折叠顶层连续空行**，而 CI `backend-lint` 用 Go 1.26 的 `gofmt -l .`（`GO_VERSION: 1.26`）⇒ 本波 `internal/contribution/dto_shape_test.go` 手拼 helper 段留了两个空行，本机 `gofmt -l` 报干净、CI 红在 9 秒。本机已另装 CI 口径工具链：`%USERPROFILE%\sdk\go1.26.6\bin\gofmt.exe`（同目录还有 `go1.27.0`）⇒ 提交前跑 `& "$env:USERPROFILE\sdk\go1.26.6\bin\gofmt.exe" -l .`（workdir `backend/`）**并且**本机那份也要空，两手都空才算过。
 
@@ -315,7 +315,7 @@ func TestNonNilDeclaredOutletsNeverEmitNull(t *testing.T) {
 - **nullability 锁：域包要进 `sweptDirs`，但证据源表不能跟着加**：`internal/apitypes/nullability_lock_test.go` 的 `sweptDirs` 加 `"questionbank": "../questionbank"` 后判红即消；若同批把域包登记进 `nonNilEvidenceSources` / `nullableEvidenceSources`，锁会因「一条证据都收不到」Fatal —— 题库域**没有自己的证据表**，证据仍在 `internal/service/nonnil_outlets_catalog_test.go`。
 - **「纯顺序 diff」要按行多重集机检，而且头部注释行也算判定面**：本波三个前端生成物各 22/22/17 行改动，逐行排序后**唯一不等的行**是头部 `// 覆盖的 Go 类型：…`（`questionbank.QuestionDTO` 的排序键排到 `mockExam.*` 之前，整段随之上移）⇒ 结论要写成「除头部类型清单顺序外逐行相同」，不要笼统说「0 语义变化」。
 - **worktree 里前端 / 移动端依赖是 junction，缺了会伪装成代码红**：`npm run type-check` 报 `'vue-tsc' is not recognized as an internal or external command` 是 `frontend/node_modules` junction 缺失（`mklink /J` 指向主树后 `vue-tsc --noEmit` 0 + `vitest run` 142 文件 1303 用例全绿）；jest 必须用移动端子目录自己的 `training-app/叉车维修培训学员端跨端应用/node_modules/jest/bin/jest.js`（主树 `D:\FL\node_modules` 不存在，从 worktree 根写 `..\..\node_modules\jest` 必 `MODULE_NOT_FOUND`）。
-- **本机 `golangci-lint` 版本过旧，不能当判据**：它对 Go 1.25 的 export data 报 `cannot decode "internal/goarch", export data version 4 is greater than maximum supported version 2`，并连带产出 `internal/valuation/**` 的 `undefined: pgx`、`pkg/httpx/parse_test.go` 的 `missing type in composite literal` 等假红（`LINT_EXIT=3`）⇒ 本机验收以 `gofmt -l`（空）+ `go vet ./...`（0）+ `go test ./...`（只剩环境既有红）为准，lint 交给 CI 自带版本。
+- **本机 `golangci-lint` 版本过旧，不能当判据**（⚠️ **2026-11-04 起已过期**：升 v2.15.0 后本机可跑，见 `checks.md` 环境 A；以下留作历史）：它对 Go 1.25 的 export data 报 `cannot decode "internal/goarch", export data version 4 is greater than maximum supported version 2`，并连带产出 `internal/valuation/**` 的 `undefined: pgx`、`pkg/httpx/parse_test.go` 的 `missing type in composite literal` 等假红（`LINT_EXIT=3`）⇒ 本机验收以 `gofmt -l`（空）+ `go vet ./...`（0）+ `go test ./...`（只剩环境既有红）为准，lint 交给 CI 自带版本。
 - **留驻侧测试夹具按接缝就地内联，不许反向 import 域包测试**：`sampleQuestionForShape` 在 `internal/questionbank/dto_shape_test.go:45` 与 `internal/service/questionbank_fixture_test.go:36` 各留一份逐字副本（3b-2 先例），前者服务域内 shape 用例、后者服务 `internal/service/practice_mode_dto_shape_test.go:117` 等留驻用例；「搜索读路径 = 题库池口径」用例按接缝留在 `internal/service/question_pool_search_scope_test.go`（域包不能被 `internal/service` 反向 import）。
 
 第十六批（P2 波 3c-2：练习域搬成 `internal/practicemode` —— 4 个生产文件 + 1 个 HTTP 面 + 9 个随域测试，另把判分与会话内核随域搬）再添九条：

@@ -31,7 +31,7 @@
 | 复述型 | 把下一行逐字翻译（`// i++`、`// 遍历 items`） | 逐包甄别，无全仓自动判据 |
 | 装饰型 | `// =====` 分隔线、纯标题横幅 | 非测试 36 行 / 18 块，落点见报告 §5-B |
 | 重复型 | 相邻逐字重复的注释行 | 3 处（报告 §5-C） |
-| 失真包文档 | 文件头 `// Package <旧包名>` 与真实 `package` 子句不符 | **42 处**（报告 §5-A；CI 的 golangci-lint 只开 errcheck/gosimple/govet/ineffassign/staticcheck/unused，抓不到） |
+| 失真包文档 | 文件头 `// Package <旧包名>` 与真实 `package` 子句不符 | **42 处**（报告 §5-A；CI 的 golangci-lint 只开 errcheck/govet/ineffassign/staticcheck/unused——v2 起 `gosimple` 与 `stylecheck` 已被 `staticcheck` 吸收，抓不到） |
 | 失效指路 | 指向已删/已改名的文件、符号或行号 | 29 处 `file:line` 指路需人判（报告 §5-D） |
 | 空话型 | 「注意」「重要」「小心」而无具体后果 | 逐包甄别 |
 

@@ -20,6 +20,13 @@ import type {
   AIChatSessionDTO,
   AIImageUploadResultDTO,
   AISessionRenameResultDTO,
+  DiagnosisCatalogItem,
+  DiagnosisCatalogItems,
+  DiagnosisCodeHint,
+  DiagnosisFAQ,
+  DiagnosisHealth,
+  DiagnosisIntentBrand,
+  DiagnosisIntents,
   DiagnosisSource,
   ModelOption,
   UserModelDTO
@@ -43,6 +50,13 @@ const client = createHttpClient({
 // ===== 类型 re-export（响应形状唯一事实源 = 生成物）=====
 export type {
   AIAssistantModeModels,
+  DiagnosisCatalogItem,
+  DiagnosisCatalogItems,
+  DiagnosisCodeHint,
+  DiagnosisFAQ,
+  DiagnosisHealth,
+  DiagnosisIntentBrand,
+  DiagnosisIntents,
   DiagnosisSource,
   ModelOption,
   UserModelDTO
@@ -212,9 +226,37 @@ export const aiAssistantApi = {
     return client.get<AIChatMessageDTO[]>(`/sessions/${id}/messages`)
   },
 
-  // 诊断周边只读端点（品牌 / 车型 / 故障码 / 手册资源）已随 v1 通道退役删除（票 2237）：
-  // 对外助手换成 v2 后这些端点不再存在，改动原则是**同步删调用点**，宁可诊断页暂时变素，
-  // 也不留一个「点了必 404」的中间态。按 v2 契约重接归票 2242，页面重适配归票 2244。
+  // ===== 诊断引导面（v2 契约的只读投影，票 2242 落地；页面消费方是票 2244）=====
+  // 六个面都在 /diagnosis 组下：三个字典端点（intents / systems / faults）与 health 免登录、
+  // code-hint 免登录，ossimg 是图片代理（页面不直接调，由 MarkdownRender 里的 <img> 走）。
+  // 上游未配置时字典端点回 502、health 恒 200 + ok=false —— 调用方据此区分「没配」与「坏了」。
+
+  /** GET /api/ai-assistant/diagnosis/intents — 品牌卡与 FAQ（引导第一层） */
+  listDiagnosisIntents() {
+    return client.get<DiagnosisIntents>('/diagnosis/intents')
+  },
+
+  /** GET /api/ai-assistant/diagnosis/systems — 第二层（中力 14 系统 / 林德 87 型号） */
+  listDiagnosisSystems(brand: string) {
+    return client.get<DiagnosisCatalogItems>('/diagnosis/systems', { params: { brand } })
+  },
+
+  /** GET /api/ai-assistant/diagnosis/faults — 第三层（现象入口）；second 为空即品牌根列表 */
+  listDiagnosisFaults(brand: string, second?: string) {
+    return client.get<DiagnosisCatalogItems>('/diagnosis/faults', {
+      params: second ? { brand, second } : { brand }
+    })
+  },
+
+  /** GET /api/ai-assistant/diagnosis/code-hint — 故障码体检（五态 known/unknown/format/none/typo） */
+  checkDiagnosisCode(q: string) {
+    return client.get<DiagnosisCodeHint>('/diagnosis/code-hint', { params: { q } })
+  },
+
+  /** GET /api/ai-assistant/diagnosis/health — 上游健康（恒 200；ok=false 表示未配置或不可达） */
+  getDiagnosisHealth() {
+    return client.get<DiagnosisHealth>('/diagnosis/health')
+  },
 
   /**
    * POST /api/ai-assistant/chat — 流式对话（SSE）

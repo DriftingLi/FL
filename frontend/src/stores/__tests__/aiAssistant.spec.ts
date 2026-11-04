@@ -43,9 +43,10 @@ import { useAIAssistantStore } from '@/stores/aiAssistant'
 
 type Handlers = {
   onChunk?: (c: string) => void
+  onStatus?: (t: string) => void
   onUsage?: (d: { points_cost: number; total_tokens: number; balance: number }) => void
   onSources?: (s: Array<Record<string, unknown>>) => void
-  onDone?: () => void
+  onDone?: (p?: unknown) => void
   onError?: (m: string) => void
 }
 
@@ -181,6 +182,40 @@ describe('当轮终态（#1104：done / error / aborted 一处收尾）', () => 
     expect(store.streaming).toBe(false)
     expect(store.streamingContent).toBe('')
     expect(store.canSend).toBe(true)
+  })
+
+  // 票 2280 缺陷四：上游的 status 过程文案原先被 api 层解析出来后无处可去
+  // （streamChat 没传 onStatus），壳的等待态永远只有三个点。
+  it('status 事件写进独立的当轮文案通道，收尾即清空', async () => {
+    const store = createStore()
+    const { p, h } = await startSend(store, '带过程文案的一轮')
+    expect(store.streamingStatus).toBe('')
+
+    h.onStatus?.('已识别故障码所属系统：电池_BMS系统，正在调取该系统的维修资料…')
+    expect(store.streamingStatus).toBe('已识别故障码所属系统：电池_BMS系统，正在调取该系统的维修资料…')
+
+    h.onChunk?.('回答')
+    h.onDone?.()
+    await p
+    await flush()
+    // 过程文案只描述当轮，不落消息、不残留
+    expect(store.streamingStatus).toBe('')
+    expect(store.messages.some(m => String(m.content).includes('正在调取'))).toBe(false)
+  })
+
+  it('新一轮开始时清掉上一轮的过程文案（换轮不残留旧状态）', async () => {
+    const store = createStore()
+    const first = await startSend(store, '第一轮')
+    first.h.onStatus?.('第一轮的过程文案')
+    first.h.onDone?.()
+    await first.p
+    await flush()
+
+    const second = await startSend(store, '第二轮')
+    expect(store.streamingStatus).toBe('')
+    second.h.onDone?.()
+    await second.p
+    await flush()
   })
 
   it('error：部分正文照落且不拼失败后缀；原因与该轮输入进 lastTurnError（可重发）', async () => {

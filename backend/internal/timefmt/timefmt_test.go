@@ -35,7 +35,7 @@ func TestFormatISO(t *testing.T) {
 	// 偏移恒定 → 字典序即时间序（student_service 等处按字符串排序，依赖此性质）
 	early := FormatISO(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
 	late := FormatISO(time.Date(2026, 12, 31, 0, 0, 0, 0, time.UTC))
-	if !(early < late) {
+	if early >= late {
 		t.Errorf("字典序失效：%q 应 < %q", early, late)
 	}
 }

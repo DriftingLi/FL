@@ -1,18 +1,39 @@
-# golangci-lint 配置（v1 格式）
-# 与 CI backend-lint job 保持一致；显式列出默认检查集合，保证跨版本行为确定。
+# golangci-lint 配置（v2 格式）
+# 与 CI backend-lint job 保持一致；显式列出检查集合，保证跨版本行为确定。
+#
+# 升级注记（#2266）：v2 的 `staticcheck` 已把 v1 的 `gosimple` 与 `stylecheck` 并进来，
+# 所以 enable 列表里不再有 gosimple。`run.timeout` 在 v2 被忽略（默认不限时），
+# 总超时改由调用方的 `--timeout=5m` 传（Makefile 的 lint 目标与 ci.yml 都带着它）。
+version: "2"
+
 run:
-  timeout: 5m
   tests: true
 
 linters:
-  disable-all: true
+  default: none
   enable:
     - errcheck
-    - gosimple
     - govet
     - ineffassign
     - staticcheck
     - unused
+  exclusions:
+    # v1 的 `issues.exclude-use-default: true` 在 v2 里拆成这份 preset 清单。
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
 
-issues:
-  exclude-use-default: true
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

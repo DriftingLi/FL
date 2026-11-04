@@ -34,6 +34,7 @@ const { execFileSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { encodeCommand } = require('./probeSpawn.js');
 
 const IS_WIN = process.platform === 'win32';
 // 真挂死腿按预算到点（默认预算 2 / 5 秒）+ 真启动器开销 ⇒ 一条探针就要跑十几秒，默认 5 秒拦不住
@@ -174,7 +175,7 @@ Write-Output ("CALLS_COUNTER=" + $(LogHas 'ADB_TEXT_CALL_BUDGET'))
 Write-Output "EMUTEXT_PROBE_DONE=1"
 `.trim();
 
-  const encoded = Buffer.from(script, 'utf16le').toString('base64');
+  const encoded = encodeCommand(script);
   try {
     const stdout = execFileSync('pwsh', psArgs(['-EncodedCommand', encoded]), {
       encoding: 'utf8',

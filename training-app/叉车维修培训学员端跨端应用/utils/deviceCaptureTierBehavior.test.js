@@ -58,6 +58,7 @@ const { execFileSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { encodeCommand } = require('./probeSpawn.js');
 
 const IS_WIN = process.platform === 'win32';
 // 每条挂死腿都要真挂到点（档位在腿里给 2–3 秒）+ 真 cmd/node 启动开销；先例 utils/emulatorSmokeTierBehavior.test.js:42
@@ -181,7 +182,7 @@ ${body}
 Write-Output 'DCT_PROBE_DONE=1'
 `.trim();
 
-  const encoded = Buffer.from(script, 'utf16le').toString('base64');
+  const encoded = encodeCommand(script);
   const psArgs = ['-NoProfile', '-NonInteractive'];
   // -OutputFormat Text：否则 Write-Host 的 InformationRecord 在 stderr 上被序列化成 `#< CLIXML>`，
   // 取证读数整段不可读（先例 utils/deviceCaptureBoundedShotBehavior.test.js:58）

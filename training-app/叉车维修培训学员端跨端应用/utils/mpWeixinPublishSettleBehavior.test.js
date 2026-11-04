@@ -85,6 +85,8 @@ describe('S1–S5：产物收流判据（复用 mp-weixin-product 单点真源 +
     const runner = path.join(harnessDir, 'settle.ps1');
     fs.writeFileSync(runner, [
       "$ErrorActionPreference = 'Stop'",
+      "try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }",
+      '$OutputEncoding = [System.Text.Encoding]::UTF8',
       `. '${LIB.replace(/\\/g, '\\')}'`,
       '$r = Get-MpWeixinPublishSettle -Dist $args[0] -Since ([datetime]::Parse($args[1])) -QuietSeconds ([int]$args[2])',
       "Write-Output ('SETTLERESULT ' + ($r | ConvertTo-Json -Compress))",
@@ -197,6 +199,8 @@ describe('S6–S7：构建段等待的收流必须有界且不杀进程', () => 
     const runner = path.join(dir, `harness-${mode}.ps1`);
     fs.writeFileSync(runner, [
       "$ErrorActionPreference = 'Stop'",
+      "try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }",
+      '$OutputEncoding = [System.Text.Encoding]::UTF8',
       '$script:workDir = (Get-Location).Path',
       `. '${LIB.replace(/\\/g, '\\')}'`,
       'function Invoke-Process ' + body,

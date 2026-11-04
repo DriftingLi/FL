@@ -89,7 +89,7 @@ test: ## go test ./... -race -cover
 vet: ## go vet ./...
 	cd $(BACKEND) && $(GO) vet ./...
 
-lint: ## golangci-lint run（需本机可用的 golangci-lint）
+lint: ## golangci-lint run（版本与 CI 同源：v2.15.0）
 	cd $(BACKEND) && golangci-lint run --timeout=5m
 
 tidy: ## go mod tidy
@@ -98,7 +98,7 @@ tidy: ## go mod tidy
 fmt: ## go fmt + gofmt -s -w
 	cd $(BACKEND) && $(GO) fmt ./... && gofmt -s -w .
 
-check: vet test ## 提交前轻量检查（vet + test；lint 由 CI 兜底）
+check: vet test ## 提交前轻量检查（vet + test）
 	@echo vet + test 通过
 
 check-all: ## 后端 check + 前端 check（顺序执行）

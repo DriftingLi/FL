@@ -191,7 +191,7 @@ func TestAIAssistantEnvelopeContract(t *testing.T) {
 	if len(msgs) != 2 {
 		t.Fatalf("消息列表应有 2 条，got %s", string(env.Data))
 	}
-	aiWantKeys(t, aiKeys(t, msgs[0]), "content", "created_at", "id", "images", "role", "sources")
+	aiWantKeys(t, aiKeys(t, msgs[0]), "content", "created_at", "id", "images", "meta", "role", "sources")
 	var first map[string]json.RawMessage
 	if err := json.Unmarshal(msgs[0], &first); err != nil {
 		t.Fatalf("解析消息失败: %v", err)
@@ -199,6 +199,11 @@ func TestAIAssistantEnvelopeContract(t *testing.T) {
 	if string(first["images"]) != "null" || string(first["sources"]) != "null" {
 		t.Fatalf("无图/无来源消息的 images/sources 应为 null（键在、值 null），got images=%s sources=%s",
 			first["images"], first["sources"])
+	}
+	// meta 是 2242 新增的第三条可空键：存量行（与用户轮次）没有它，同样是「键在、值 null」。
+	// 它不是集合字段（*AIChatMessageMeta），所以不走 nullableOutlets 那张表，缺席形状在这里实证。
+	if string(first["meta"]) != "null" {
+		t.Fatalf("无元数据消息的 meta 应为 null（键在、值 null），got %s", first["meta"])
 	}
 	var second map[string]json.RawMessage
 	if err := json.Unmarshal(msgs[1], &second); err != nil {
@@ -317,6 +322,206 @@ func TestAIAssistantDiagnosisImageProxy(t *testing.T) {
 			t.Fatalf("%s 期望 404, got %d", bad, rec.Code)
 		}
 	}
+}
+
+// TestAIAssistantDiagnosisCatalogContract v2 引导只读面五条端点（票 2242）的信封契约：
+// 顶层 key 与 apitypes 声明一致、集合恒非 null、health 只投影两字段、缓存头只落在三个字典端点、
+// 上游故障映射成 502 / 限流映射成 429。
+func TestAIAssistantDiagnosisCatalogContract(t *testing.T) {
+	t.Parallel()
+	testutil.SetTestGinMode()
+	db := testutil.NewMemoryDB(t)
+	stub := newDiagnosisCatalogStub(t)
+	cfg := &config.Config{
+		JWTSecretKey:          "ai-catalog-contract-secret",
+		DiagnosisAssistantURL: stub.URL,
+		DiagnosisV2APIKey:     "test-key",
+	}
+	r := NewRouter(NewDeps(cfg, db, &fakeUploadStorage{}, zap.NewNop(), nil))
+
+	// ---- intents：brands[] 六字段透传（picker 决定第二层卡片形态）----
+	env := aiOK(t, testutil.PerformRequest(r, http.MethodGet, "/api/ai-assistant/diagnosis/intents"))
+	aiWantKeys(t, aiKeys(t, env.Data), "brands", "faq")
+	var intents map[string]json.RawMessage
+	if err := json.Unmarshal(env.Data, &intents); err != nil {
+		t.Fatalf("解析 intents 失败: %v", err)
+	}
+	brands := aiArray(t, intents["brands"])
+	if len(brands) != 2 {
+		t.Fatalf("brands 应有 2 条，got %s", string(intents["brands"]))
+	}
+	aiWantKeys(t, aiKeys(t, brands[0]), "cls", "icon", "id", "name", "picker", "tagline")
+	var firstBrand map[string]string
+	if err := json.Unmarshal(brands[0], &firstBrand); err != nil {
+		t.Fatalf("解析品牌卡失败: %v", err)
+	}
+	if firstBrand["picker"] != "system" {
+		t.Fatalf("picker 应原样透传（第二层渲系统卡还是型号卡靠它），got %q", firstBrand["picker"])
+	}
+
+	// ---- systems / faults：{items:[{id,name,icon?}]}，空集而不是 null ----
+	env = aiOK(t, testutil.PerformRequest(r, http.MethodGet, "/api/ai-assistant/diagnosis/systems?brand=zhongli"))
+	aiWantKeys(t, aiKeys(t, env.Data), "items")
+	var catalog map[string]json.RawMessage
+	if err := json.Unmarshal(env.Data, &catalog); err != nil {
+		t.Fatalf("解析 systems 失败: %v", err)
+	}
+	items := aiArray(t, catalog["items"])
+	if len(items) != 1 {
+		t.Fatalf("items 应有 1 条，got %s", string(catalog["items"]))
+	}
+	aiWantKeys(t, aiKeys(t, items[0]), "icon", "id", "name")
+	if cc := recordHeader(t, r, "/api/ai-assistant/diagnosis/systems?brand=zhongli", "Cache-Control"); cc != "public, max-age=300" {
+		t.Fatalf("字典端点应带 5 分钟缓存，got %q", cc)
+	}
+
+	// 缺 brand → 400（不是我方硬编码默认品牌）
+	rec := testutil.PerformRequest(r, http.MethodGet, "/api/ai-assistant/diagnosis/systems")
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("缺 brand 期望 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	env = aiOK(t, testutil.PerformRequest(r, http.MethodGet, "/api/ai-assistant/diagnosis/faults?brand=linde&second=E16"))
+	if arr := aiArray(t, mustKey(t, env.Data, "items")); len(arr) != 0 {
+		t.Fatalf("空故障现象列表应是 []，got %s", string(env.Data))
+	}
+
+	// ---- code-hint：五态原样透传，samples 恒为数组且不带缓存 ----
+	env = aiOK(t, testutil.PerformRequest(r, http.MethodGet, "/api/ai-assistant/diagnosis/code-hint?q=E1"))
+	aiWantKeys(t, aiKeys(t, env.Data), "fix", "message", "samples", "status")
+	if cc := recordHeader(t, r, "/api/ai-assistant/diagnosis/code-hint?q=E1", "Cache-Control"); cc != "" {
+		t.Fatalf("code-hint 跟着输入框逐字符变，不该带缓存，got %q", cc)
+	}
+
+	// ---- health：只投影两字段、永 200、不带缓存 ----
+	env = aiOK(t, testutil.PerformRequest(r, http.MethodGet, "/api/ai-assistant/diagnosis/health"))
+	aiWantKeys(t, aiKeys(t, env.Data), "app_configured", "ok")
+	if cc := recordHeader(t, r, "/api/ai-assistant/diagnosis/health", "Cache-Control"); cc != "" {
+		t.Fatalf("health 必须实时（它就是用来回答「现在通不通」），不该带缓存，got %q", cc)
+	}
+}
+
+// TestAIAssistantDiagnosisCatalogErrors 上游故障与限流的两条分支（票 2242 决策：429 透传、其余 502）。
+func TestAIAssistantDiagnosisCatalogErrors(t *testing.T) {
+	t.Parallel()
+	testutil.SetTestGinMode()
+
+	cases := []struct {
+		name       string
+		status     int
+		wantStatus int
+	}{
+		{"限流透传 429", http.StatusTooManyRequests, http.StatusTooManyRequests},
+		{"鉴权失败归 502", http.StatusUnauthorized, http.StatusBadGateway},
+		{"上游 5xx 归 502", http.StatusBadGateway, http.StatusBadGateway},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			db := testutil.NewMemoryDB(t)
+			stubURL := newFailingDiagnosisStub(t, c.status)
+			cfg := &config.Config{
+				JWTSecretKey:          "ai-catalog-err-secret",
+				DiagnosisAssistantURL: stubURL,
+				DiagnosisV2APIKey:     "test-key",
+			}
+			r := NewRouter(NewDeps(cfg, db, &fakeUploadStorage{}, zap.NewNop(), nil))
+			rec := testutil.PerformRequest(r, http.MethodGet, "/api/ai-assistant/diagnosis/intents")
+			if rec.Code != c.wantStatus {
+				t.Fatalf("期望 %d, got %d: %s", c.wantStatus, rec.Code, rec.Body.String())
+			}
+			// 5xx 不外发上游原文（ADR-0064 决策 9）：真实原因留在日志面。
+			if c.wantStatus == http.StatusBadGateway && strings.Contains(rec.Body.String(), "upstream detail") {
+				t.Fatalf("502 不应把上游 detail 原文透给前端，got %s", rec.Body.String())
+			}
+		})
+	}
+
+	// 未配置（默认部署态）：引导面 502，health 仍 200 且 ok=false。
+	db := testutil.NewMemoryDB(t)
+	r := NewRouter(NewDeps(&config.Config{JWTSecretKey: "ai-catalog-unset"}, db, &fakeUploadStorage{}, zap.NewNop(), nil))
+	if rec := testutil.PerformRequest(r, http.MethodGet, "/api/ai-assistant/diagnosis/intents"); rec.Code != http.StatusBadGateway {
+		t.Fatalf("未配置时期望 502, got %d", rec.Code)
+	}
+	env := aiOK(t, testutil.PerformRequest(r, http.MethodGet, "/api/ai-assistant/diagnosis/health"))
+	var health map[string]bool
+	if err := json.Unmarshal(env.Data, &health); err != nil {
+		t.Fatalf("解析 health 失败: %v", err)
+	}
+	if health["ok"] || health["app_configured"] {
+		t.Fatalf("未配置时 health 应两项皆 false，got %s", string(env.Data))
+	}
+}
+
+// newDiagnosisCatalogStub v2 引导面替身（票 2242）：五个 GET 各回一份契约形状的响应。
+// 路径与 query 逐字匹配 ⇒ 钉住「brand 走 query、second 可缺省、code_hint 的 q 为空不发」这几条。
+func newDiagnosisCatalogStub(t *testing.T) *httptest.Server {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v2/intents", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(t, w, `{"brands":[
+			{"id":"zhongli","name":"中力","tagline":"电动仓储车","icon":"🚜","cls":"cap-brand-zl","picker":"system"},
+			{"id":"linde","name":"林德","tagline":"德国进口","icon":"🏭","cls":"cap-brand-ld","picker":"model"}
+		],"faq":[{"q":"液压泵压力多少正常","a":"16~18MPa"}]}`)
+	})
+	mux.HandleFunc("/api/v2/systems", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("brand") != "zhongli" {
+			http.Error(w, "brand required", http.StatusBadRequest)
+			return
+		}
+		writeJSON(t, w, `{"items":[{"id":"hyd","name":"液压系统","icon":"🔧"}]}`)
+	})
+	mux.HandleFunc("/api/v2/faults", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("brand") != "linde" || r.URL.Query().Get("second") != "E16" {
+			http.Error(w, "unexpected query", http.StatusBadRequest)
+			return
+		}
+		writeJSON(t, w, `{"items":[]}`)
+	})
+	mux.HandleFunc("/api/v2/code_hint", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(t, w, `{"status":"typo","message":"疑似笔误","fix":"E16","samples":[]}`)
+	})
+	mux.HandleFunc("/api/health", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(t, w, `{"ok":true,"app_configured":true,"key_fp8":"a1b2c3d4","data_dir":"/data/x"}`)
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// newFailingDiagnosisStub 引导面替身：所有请求统一回指定状态码。
+func newFailingDiagnosisStub(t *testing.T, status int) string {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(`{"detail":"upstream detail"}`))
+	}))
+	t.Cleanup(srv.Close)
+	return srv.URL
+}
+
+func writeJSON(t *testing.T, w http.ResponseWriter, body string) {
+	t.Helper()
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write([]byte(body))
+}
+
+func mustKey(t *testing.T, raw json.RawMessage, key string) json.RawMessage {
+	t.Helper()
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatalf("解析对象失败: %v（%s）", err, string(raw))
+	}
+	v, ok := m[key]
+	if !ok {
+		t.Fatalf("对象里没有键 %q（%s）", key, string(raw))
+	}
+	return v
+}
+
+func recordHeader(t *testing.T, r *gin.Engine, path, header string) string {
+	t.Helper()
+	return testutil.PerformRequest(r, http.MethodGet, path).Header().Get(header)
 }
 
 // newDiagnosisStub 外部诊断助手配图源替身：只覆盖 ossimg 代理消费的路径。
