@@ -99,9 +99,31 @@ function repoSlug() {
 /** compare API → 校验器要的 files（带 patch，② 门的条件编译指令判据靠它）。 */
 export function toValidatorFiles(payload) {
   const raw = payload && Array.isArray(payload.files) ? payload.files : [];
-  const files = raw.map((f) => ({ filename: f.filename, patch: f.patch }));
+  // `previousFilename` 只在重命名时给：② 的文件级扫描要按它回头读基线侧的旧路径，
+  // 丢了它就漏掉「带 MP 指令的文件被改名 / 挪目录」这一类（新路径在基线不存在）。
+  const files = raw.map((f) => ({ filename: f.filename, patch: f.patch, previousFilename: f.previous_filename || '' }));
   // compare API 最多给 300 个文件；到顶就按截断处理，让校验器 fail-closed 而不是假装看全了。
   return { files, truncated: raw.length >= 300 };
+}
+
+/**
+ * ② 文件级扫描的正文读取（本地实现）：基线与当前版都走 `git show <ref>:<path>`。
+ * 复用预检已有的 `git()`，不新增基线管理机制；文件在该 ref 下不存在时返回 null（新增 / 删除 / 重命名）。
+ */
+export function makeFetchFileText() {
+  const cache = new Map();
+  return ({ path, ref }) => {
+    const key = `${ref}:${path}`;
+    if (cache.has(key)) return cache.get(key);
+    let text = null;
+    try {
+      text = git('show', `${ref}:${path}`);
+    } catch {
+      text = null; // 该 ref 下没有这个路径 ⇒ 正常情形（新增 / 删除 / 重命名），交给校验器判并集
+    }
+    cache.set(key, text);
+    return text;
+  };
 }
 
 function compareOf(repo, base, head) {
@@ -194,10 +216,10 @@ export function mergeEncodingLint(result, lint) {
 }
 
 /**
- * #2216：② 的非触发面允许「自选跳过」，但跳过必须留痕（移动端 ADR-0043 追加节 / #2207）。
+ * ② 默认策略：needs2 命中必跑；未命中**默认跳过**（2026-11-04 翻档，取代 #2207 的「默认跑、可自选跳过」）。
  * **只产提示、任何一支都不判红** —— 判据仍只有 gate-validator 的 ②④。
- * 三种形态：
- *   ① 命中运行时面、非 needs2、正文既无读数行也无跳过行 ⇒ 提醒留痕；
+ * 四种形态：
+ *   ① 命中运行时面、非 needs2、正文既无读数行也无跳过行 ⇒ 说清「默认跳过」这个实际判定（不是催人补声明）；
  *   ② 非 needs2、有跳过行但 reason 还是占位 `<slug>` ⇒ 提醒换真实 slug；
  *   ③ needs2 出现跳过行 ⇒ 跳过在触发面不生效（缺读数行时校验器本就会判红）。
  */
@@ -214,8 +236,10 @@ export function skipDeclarationHint({ body, needs2, runtimeHit }) {
       ? '② 触发面（needs2=true）不允许自选跳过：删掉 `② 自选跳过` 行，只留 `MP_WEIXIN_RESULT` 读数行（#2207）。'
       : '② 触发面（needs2=true）必跑：`② 自选跳过` 不构成 ② 证据，需贴 `MP_WEIXIN_RESULT` 读数行（#2207）。';
   }
+  // 未命中 needs2 ⇒ 默认跳过是**判定结果**，不需要任何人补字。这里只把判定与理由说出来，
+  // 免得正文空着让人以为「漏写了什么」。跑了 ② 的话贴读数行同样欢迎（不影响判绿）。
   if (!skipLine && !hasReading) {
-    return '② 非触发面：正文既无 `MP_WEIXIN_RESULT` 读数行，也无 `② 自选跳过 reason=<slug>` —— 没跑就补一行跳过声明，跑了就贴读数行（#2207）。';
+    return '② 未命中 MP-WEIXIN 面 ⇒ 默认跳过（不需要读数行，也不需要跳过声明；跑了就贴 `MP_WEIXIN_RESULT` 读数行，不影响判绿）。';
   }
   if (skipLine && /reason=\s*<slug>/.test(skipLine)) {
     return '② 自选跳过 的 `reason` 还是占位 `<slug>`：换成真实原因短 slug（`^[a-z0-9-]+$`）。';
@@ -280,7 +304,25 @@ async function main(argv) {
   const hasBody = Boolean(args.bodyFile || args.pr);
   const body = args.bodyFile ? readFileSync(args.bodyFile, 'utf8') : args.pr ? prBody(args.pr) : '';
   const fetchCompare = makeFetchCompare(repo);
-  const result = await validatePrEvidence({ files: compare.files, body, headSha: commit, fetchCompare, coreList: loadCoreList(git('rev-parse', '--show-toplevel').trim()) });
+  // ② 第 ③ 条（文件级扫描）要基线版与当前版正文：基线取 `merge-base(base, HEAD)`，
+  // 与「`跑于` 的祖先口径」同一个基线，不另立一套；当前版就是 HEAD。
+  const baseRef = (() => {
+    try {
+      return git('merge-base', baseApi, commit).trim();
+    } catch {
+      return ''; // 读不到基线 ⇒ 校验器如实记「扫描未执行」，不静默当未命中
+    }
+  })();
+  const result = await validatePrEvidence({
+    files: compare.files,
+    body,
+    headSha: commit,
+    fetchCompare,
+    coreList: loadCoreList(git('rev-parse', '--show-toplevel').trim()),
+    fetchFileText: makeFetchFileText(),
+    baseRef,
+    headRef: commit,
+  });
   // #2053：对 PR 正文跑引用完整性 lint（与证据段判据同层）；空正文无从判起，直接放行分支。
   const refLint = body
     ? await lintIssueReferences(body, { ...makeFsFacts(git('rev-parse', '--show-toplevel').trim()), resolveNumber: makeGhNumberResolver(repo, { run }) })
