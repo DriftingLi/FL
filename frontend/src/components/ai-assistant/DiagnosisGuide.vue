@@ -39,6 +39,11 @@
       >
         <span aria-hidden="true">{{ b.icon }}</span>{{ b.name }}
       </button>
+      <!-- 品牌字典为空时（上游挂掉 / 未配置）不能留一个空 div：让人对着空白发愣，
+           还以为是页面坏了。给一句能据以行动的退路。 -->
+      <span v-if="!brands.length" class="py-2 text-xs leading-[1.6] text-ink-3">
+        品牌列表暂时取不到，可以直接在输入框描述故障现象，或稍后重试。
+      </span>
     </div>
 
     <!-- 第 2 步：系统（中力 14）/ 型号（林德 87） -->
@@ -87,14 +92,32 @@
         >
           <span aria-hidden="true">{{ it.icon || '🔧' }}</span>{{ it.name }}
         </button>
-        <span v-if="!faultItems.length" class="py-2 text-xs text-ink-3">
-          {{ faultLoading ? '加载中…' : '没有可选项，可直接在下面描述' }}
+        <span v-if="!faultItems.length" class="py-2 text-xs leading-[1.6] text-ink-3">
+          {{ faultLoading ? '加载中…' : '这个词表里没有匹配项。' }}
         </span>
       </div>
+      <!-- 词表为空时的出口（票 2280 缺陷二）：原先这里只写「可直接在下面描述」，
+           而「下面」的输入框在第 4 步、进第 4 步又要先选一个现象 —— 死循环。
+           给一个明写的入口：跳过词表，直接描述。 -->
+      <button
+        v-if="!faultLoading"
+        type="button"
+        class="self-start cursor-pointer rounded-pill border border-line bg-transparent px-2.5 py-0.5 text-xs text-ink-2 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-default)] hover:border-ui-400 hover:text-ink"
+        @click="useFreeform"
+      >{{ faultItems.length ? '没有我要的，直接描述' : '直接描述故障现象' }}</button>
     </template>
 
     <!-- 第 4 步：确认并发送 -->
     <template v-else>
+      <!-- 自由描述模式（票 2280 缺陷二）：词表里没有用户要的现象时，现象由用户自己写。
+           这是「词表为空 / 不匹配」唯一能走通的路 —— 没有它，第三层空列表就是一个死循环。 -->
+      <UiInput
+        v-if="freeform"
+        v-model="faultName"
+        type="textarea"
+        :rows="2"
+        placeholder="描述故障现象，如：举升无力，空载也起不来"
+      />
       <!-- 命中率提示：这是对方实测出来的事实（现象描述在知识库里是抖动的，故障码直问最稳），
            与接口无关，直接成立。 -->
       <p class="m-0 text-xs leading-[1.6] text-ink-3">
@@ -171,9 +194,21 @@ const secondItems = ref<DiagnosisCatalogItem[]>([])
 const faultItems = ref<DiagnosisCatalogItem[]>([])
 const secondLoading = ref(false)
 const faultLoading = ref(false)
+/** 自由描述模式（票 2280 缺陷二）：第三层词表里没有用户要的现象时，现象由用户自己写 */
+const freeform = ref(false)
 
 const codeHintText = ref('')
 const codeHintKnown = ref(false)
+
+/**
+ * 欢迎区传进来的现象（诉求卡），**等待被兑现**的那一份。
+ *
+ * 为什么不能直接写进 `faultName`（票 2280 缺陷一）：下方两个取数 watcher 在品牌/系统变化时
+ * 会清空 `faultName`（换品牌后旧现象必须失效，这是对的），而诉求卡进来时品牌还没选 ——
+ * 用户一选品牌，预选就被那次清空抹掉了。所以预选存这里，由取数 watcher 在清空之后
+ * 再把它写回去；用户自己点了词表里的现象（或改用自由描述）才作废。
+ */
+const pendingFault = ref('')
 
 const brand = computed(() => props.brands.find((b) => b.id === brandId.value) ?? null)
 const isModelPicker = computed(() => pickerKindOf(brand.value) === 'model')
@@ -215,7 +250,10 @@ watch(brandId, async (id) => {
 // ===== 第三层取数：第二层一选就重拉 =====
 watch([brandId, secondId], async ([bid, sid]) => {
   faultItems.value = []
-  faultName.value = ''
+  // 清空上一轮的已选现象（换品牌/系统后旧现象必须失效），但**预选要留住**：
+  // 诉求卡进来时品牌还没定，清完立刻把 pendingFault 写回去（票 2280 缺陷一）。
+  faultName.value = pendingFault.value
+  freeform.value = false
   if (!bid) return
   faultLoading.value = true
   try {
@@ -225,6 +263,20 @@ watch([brandId, secondId], async ([bid, sid]) => {
     faultItems.value = []
   } finally {
     faultLoading.value = false
+    // 词表里没有预选的那条现象时，进第 4 步就得靠自由描述（否则成句不成立、
+    // 确认步永远灰着，用户看不出是为什么）。
+    if (!pendingFault.value) return
+    if (!faultItems.value.length) {
+      freeform.value = true
+      return
+    }
+    // 预选的现在**在词表里**：选完系统就把它定为已选并直接进确认步。
+    // 这是诉求卡的完整路径（点卡 → 选品牌 → 选系统 → 确认），中间不该再要人点一次
+    // 自己刚刚才在欢迎区点过的那个现象名。
+    if (secondId.value && faultItems.value.some((it) => it.name === pendingFault.value)) {
+      faultName.value = pendingFault.value
+      if (step.value === 2) step.value = 3
+    }
   }
 })
 
@@ -237,13 +289,16 @@ watch(
     const [oldBid, oldFault] = old ?? ['', '']
     if (bid === oldBid && fault === oldFault) return
     if (fault) {
-      // 诉求卡：现象已定，品牌未定 → 从第一步开始（品牌是 faults 的必填参数）
+      // 诉求卡：现象已定，品牌未定 → 从第一步开始（品牌是 faults 的必填参数）。
+      // 现象记进 pendingFault，由上方的取数 watcher 在清空后写回 faultName。
+      pendingFault.value = fault
       faultName.value = fault
       if (bid) brandId.value = bid
       step.value = brandId.value ? 1 : 0
       return
     }
     if (bid) {
+      pendingFault.value = ''
       brandId.value = bid
       step.value = 1
     }
@@ -308,6 +363,7 @@ function selectBrand(id: string) {
 }
 
 function selectSecond(item: DiagnosisCatalogItem) {
+  // 换系统 = 上一轮的现象作废（但欢迎区带来的预选要留着，由取数 watcher 再兑现）
   secondId.value = item.id
   secondName.value = item.name
   step.value = 2
@@ -315,6 +371,20 @@ function selectSecond(item: DiagnosisCatalogItem) {
 
 function selectFault(name: string) {
   faultName.value = name
+  // 用户自己点了一条：预选已被覆盖，换品牌时不该再冒出来
+  pendingFault.value = ''
+  freeform.value = false
+  step.value = 3
+}
+
+/**
+ * 跳过词表，自己描述（票 2280 缺陷二）：词表为空或不匹配时唯一的出口。
+ * 现象文本由第 4 步的 textarea 写（绑同一个 faultName），成句逻辑不变。
+ */
+function useFreeform() {
+  pendingFault.value = ''
+  faultName.value = ''
+  freeform.value = true
   step.value = 3
 }
 
@@ -325,6 +395,8 @@ function reset() {
   faultName.value = ''
   extra.value = ''
   secondFilter.value = ''
+  pendingFault.value = ''
+  freeform.value = false
   step.value = 0
 }
 
