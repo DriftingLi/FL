@@ -15,11 +15,24 @@
 # 自检（不发消息、不改状态）：/usr/local/bin/forklift-watchdog.sh --dry-run
 # 发信自检（真发一封、不改状态）：/usr/local/bin/forklift-watchdog.sh --test-mail  ← 装完必跑
 #
+# 装完之后不用再靠人记得重装：`install_drift` 这一面会把「跑着的副本」与
+# `$DEPLOY_PATH/deploy/forklift-watchdog.sh`（CD 每次部署都会刷新）逐字节比对，不一致就出声。
+# 2026-11-04（#2270）：这条是补上 #2127 剩下的半边——上传解决了「拿不到新文件」，
+# 没解决「新文件不生效」。redis 假告警（2026-10-29）与诊断端点假告警（2026-11-04）都是它。
+#
 # 配置（/etc/forklift-watchdog.env，root 600）：
 #   WATCH_TO_EMAIL   收件人，逗号分隔可多个
 #   SMTP_HOST/SMTP_PORT/SMTP_USERNAME/SMTP_PASSWORD/SMTP_FROM  与部署 .env 同一套凭据的副本
 #   可选覆盖：WATCH_FAIL_THRESHOLD(3) WATCH_COOLDOWN_MIN(60) WATCH_DISK_CRIT_PCT(85)
-#             WATCH_ASSISTANT_URL WATCH_PUBLIC_BRANDS_URL WATCH_FE_HOST WATCH_REMOTE_HOST WATCH_REMOTE_LXC
+#             WATCH_ASSISTANT_HEALTH_URL WATCH_PUBLIC_API_URL WATCH_FE_HOST
+#             WATCH_REMOTE_HOST WATCH_REMOTE_LXC WATCH_SCRIPT_REF
+#
+#   三个面默认「不适用」而不是「故障」：
+#     assistant_health  需要 WATCH_ASSISTANT_HEALTH_URL；留空 = v2 未配置，合法状态，不报警
+#     disk_lxc          需要 WATCH_REMOTE_HOST + WATCH_REMOTE_LXC；该机已于 2026-11-04 停机
+#     install_drift     需要 $DEPLOY_PATH/deploy/ 下存在参考副本（部署宿主上才有）
+#   「不适用」在 --dry-run 里逐面打「跳过」，不会混进告警数里。
+#
 # 发信失败 = 本单元失败（timer 的 OnFailure= 会再走一封），绝不静默跳过。
 # 已知边界：env 文件本身缺失/缺必需键时，兜底投递器用的是同一个文件 ⇒ 也发不出，只剩 journald。
 set -euo pipefail
@@ -47,14 +60,34 @@ STATE_FILE=${STATE_FILE:-/var/lib/forklift-watchdog/state}
 FAIL_THRESHOLD=${WATCH_FAIL_THRESHOLD:-3}
 COOLDOWN_S=$(( ${WATCH_COOLDOWN_MIN:-60} * 60 ))
 DISK_CRIT_PCT=${WATCH_DISK_CRIT_PCT:-85}
-ASSISTANT_URL=${WATCH_ASSISTANT_URL:-http://172.17.1.23:8000/assistant/api/health}
-BRANDS_URL=${WATCH_PUBLIC_BRANDS_URL:-https://api.gdyidao.cn/api/ai-assistant/diagnosis/brands}
+# ---- 三个可空面：留空 = 不适用，不是故障（#2270）----
+# assistant_health：v2 的健康检查要 DIAGNOSIS_ASSISTANT_URL + X-API-Key，而按 #2237 的口径
+# 「未配置」是合法状态（功能未启用），不该每 6 分钟发一封信。所以这里**没有默认值**：
+# 部署宿主上把 WATCH_ASSISTANT_HEALTH_URL 写进 env 文件才启用这一面。
+# 旧 lxc101 的 http://172.17.1.23:8000/assistant/api/health 探的是已下线的 v1 通道
+# （机器还在跑，但近 7 天零请求，见 #2243 勘察），写死它就是留一个已退役面。
+ASSISTANT_HEALTH_URL=${WATCH_ASSISTANT_HEALTH_URL:-}
+# public_api：探「后端活没活」，与诊断功能解耦。原 /diagnosis/brands 随 PR #2265 删除；
+# 换成 /api/ai-assistant/models——它仍在、仍走统一信封，且不依赖对方 OSS/上游可用性
+# （配图链路是外部依赖，不该让外部抖动把整个后端判红）。
+PUBLIC_API_URL=${WATCH_PUBLIC_API_URL:-https://api.gdyidao.cn/api/ai-assistant/models}
 # 反代探活的目标主机（#1760）：必须是**站群里的真实 Host**，不再是 localhost。
 # 留 WATCH_FE_HOST 覆盖口，是为了能在不打生产的前提下演练「探针失败必须变红」。
 FE_HOST=${WATCH_FE_HOST:-api.gdyidao.cn}
-REMOTE_HOST=${WATCH_REMOTE_HOST:-172.17.1.41}
-REMOTE_LXC=${WATCH_REMOTE_LXC:-101}
+# disk_lxc：默认两段都清空 ⇒ 该面不适用。
+# lxc101（pve-01，VMID 101）是旧 v1 诊断助手的承载机，已于 2026-11-04 14:44 停机
+# （`pct status 101` ⇒ stopped）。停机前 7 天实测：真正的业务请求只有 13 条（11 条 chat +
+# 2 条 fault-codes），其余是 watchdog 的 health 探测与网关的 brands 目录查询；最后一次真实对话
+# 是 2026-11-03T13:54:43Z —— 停它不影响任何在用功能。
+# 将来若该机复活（`pct start 101`）并要观察其磁盘水位，在 env 文件里同时给 host 与 lxc 号即可，
+# 不必改脚本。
+REMOTE_HOST=${WATCH_REMOTE_HOST:-}
+REMOTE_LXC=${WATCH_REMOTE_LXC:-}
 EXPECT_CONTAINERS=(forklift-frontend-prod forklift-backend-prod forklift-pg-prod forklift-libreoffice-prod)
+# install_drift：跑着的这份脚本 vs CD 上传到部署目录的参考副本。
+# SELF_PATH 用 $0 的真实路径（systemd 跑的是 /usr/local/bin/forklift-watchdog.sh）。
+SELF_PATH=${WATCH_SELF_PATH:-$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || printf '%s' "$0")}
+SCRIPT_REF=${WATCH_SCRIPT_REF:-${DEPLOY_PATH:-/opt/forklift-training}/deploy/forklift-watchdog.sh}
 
 MODE=check
 DRY_RUN=0
@@ -97,13 +130,20 @@ PY
   fi
 }
 
-# ---- 探测面：每个 probe_* 返回 0=正常；非 0=故障，并把原因写进全局 REASON ----
+# ---- 探测面：每个 probe_* 的三种返回 ----
+#   0 = 正常；1 = 故障（原因写进全局 REASON）；2 = 不适用（未配置/无参考副本，同样把原因写进 REASON）
+# 三态而不是两态是 #2270 的要点：「v2 没配」和「v2 配了但连不上」必须分开，前者是合法状态。
 REASON=""
 
 probe_assistant_health() {
   local body
-  body=$(curl -fsS -m 8 "$ASSISTANT_URL" 2>&1) || { REASON="助手内网 health 不可达：$body"; return 1; }
-  grep -q '"ok":true' <<<"$body" || { REASON="助手 health 非 ok：$body"; return 1; }
+  if [ -z "$ASSISTANT_HEALTH_URL" ]; then
+    REASON="未配置 WATCH_ASSISTANT_HEALTH_URL（诊断功能未启用即合法状态）"
+    return 2
+  fi
+  body=$(curl -fsS -m 8 "$ASSISTANT_HEALTH_URL" 2>&1) || { REASON="诊断服务 health 不可达（$ASSISTANT_HEALTH_URL）：$body"; return 1; }
+  # v2 的 /api/health 回 {"ok":true,...}；ok 为 false 时上游是可达但不可用，仍算故障。
+  grep -q '"ok":true' <<<"$body" || { REASON="诊断服务 health 非 ok：${body:0:200}"; return 1; }
 }
 
 probe_containers() {
@@ -123,10 +163,17 @@ probe_containers() {
   [ ${#bad[@]} -eq 0 ] || { REASON="容器异常：${bad[*]}"; return 1; }
 }
 
-probe_public_brands() {
+# 公网 «后端活着» 判据。原 /diagnosis/brands 随 PR #2265 删除（#2242 之后同形的引导面是
+# /diagnosis/intents，但它要 v2 上游 → 上游没配时 502，会让「后端活没活」被外部依赖绑架）。
+# 所以选 /api/ai-assistant/models：不必登录、恒走统一信封、只证明本站这一层。
+probe_public_api() {
   local body
-  body=$(curl -fsS -m 12 "$BRANDS_URL" 2>&1) || { REASON="公网诊断端点不可达：$body"; return 1; }
-  grep -qE '"code"[[:space:]]*:[[:space:]]*(0|200)' <<<"$body" || { REASON="公网诊断端点信封异常：${body:0:200}"; return 1; }
+  if [ -z "$PUBLIC_API_URL" ]; then
+    REASON="未配置 WATCH_PUBLIC_API_URL"
+    return 2
+  fi
+  body=$(curl -fsS -m 12 "$PUBLIC_API_URL" 2>&1) || { REASON="公网后端端点不可达（$PUBLIC_API_URL）：$body"; return 1; }
+  grep -qE '"code"[[:space:]]*:[[:space:]]*(0|200)' <<<"$body" || { REASON="公网后端端点信封异常：${body:0:200}"; return 1; }
 }
 
 # 前端「在跑」≠「在服务」：frontend 是 network_mode: host，compose 里 healthcheck 被显式
@@ -157,12 +204,39 @@ probe_disk_host() {
 
 probe_disk_lxc() {
   local out pct
+  if [ -z "$REMOTE_HOST" ] || [ -z "$REMOTE_LXC" ]; then
+    REASON="未配置 WATCH_REMOTE_HOST / WATCH_REMOTE_LXC（lxc101 已于 2026-11-04 停机）"
+    return 2
+  fi
   out=$(ssh -o BatchMode=yes -o ConnectTimeout=8 "$REMOTE_HOST" \
           "pct exec $REMOTE_LXC -- df -P /" 2>&1) || { REASON="跨机取 LXC$REMOTE_LXC df 失败：${out:0:120}"; return 1; }
   pct=$(awk 'NR==2{print $5}' <<<"$out")
   [ -n "$pct" ] || { REASON="LXC$REMOTE_LXC df 输出无水位列"; return 1; }
   pct=$(disk_pct_of "$pct")
   [ "$pct" -lt "$DISK_CRIT_PCT" ] || { REASON="LXC$REMOTE_LXC 根盘已用 ${pct}%（阈值 ${DISK_CRIT_PCT}%）"; return 1; }
+}
+
+# 安装漂移（#2270 选 B）：CD 每次部署都会把仓库里的脚本刷到 $DEPLOY_PATH/deploy/，
+# 而 /usr/local/bin 里那份只有人工 install 才会换。两者不一致 ⇒ 「跑着的判据不是仓库的判据」，
+# 这正是 redis 假告警（2026-10-29）与诊断端点假告警（2026-11-04）的共同成因。
+# 判据用 sha256 逐字节比：比 mtime 稳（上传会刷新 mtime，内容却可能没变 → 假红）。
+probe_install_drift() {
+  local self_sum ref_sum
+  if [ ! -r "$SCRIPT_REF" ]; then
+    REASON="部署目录里没有参考副本（$SCRIPT_REF）：本站不是部署宿主，该面不适用"
+    return 2
+  fi
+  if [ ! -r "$SELF_PATH" ]; then
+    REASON="读不到自身路径（$SELF_PATH）：漂移判据失去输入"
+    return 1
+  fi
+  self_sum=$(sha256sum "$SELF_PATH" 2>/dev/null | awk '{print $1}')
+  ref_sum=$(sha256sum "$SCRIPT_REF" 2>/dev/null | awk '{print $1}')
+  [ -n "$self_sum" ] && [ -n "$ref_sum" ] || { REASON="sha256sum 取不到摘要"; return 1; }
+  [ "$self_sum" = "$ref_sum" ] || {
+    REASON="巡检脚本与仓库不一致：跑着的 $SELF_PATH ($self_sum) ≠ $SCRIPT_REF ($ref_sum)；按 deploy/README.md「巡检脚本与 systemd 单元」重装一次"
+    return 1
+  }
 }
 
 # ---- 状态与告警 ----
@@ -183,16 +257,29 @@ run_check() {
   local -A probe_fn=(
     [assistant_health]=probe_assistant_health
     [containers]=probe_containers
-    [public_brands]=probe_public_brands
+    [public_api]=probe_public_api
     [frontend_health]=probe_frontend_health
     [disk_host]=probe_disk_host
     [disk_lxc]=probe_disk_lxc
+    [install_drift]=probe_install_drift
   )
-  local order=(assistant_health containers public_brands frontend_health disk_host disk_lxc)
-  local now=$(date +%s) down=() name fails alerted last reason
+  local order=(assistant_health containers public_api frontend_health disk_host disk_lxc install_drift)
+  local now=$(date +%s) down=() skipped=() name fails alerted last rc
   for name in "${order[@]}"; do
     REASON=""
-    if "${probe_fn[$name]}"; then
+    # 三态：2 = 不适用。绝不用「返回 2 也算过」这种含糊写法——它会把故障也吞掉。
+    rc=0
+    "${probe_fn[$name]}" || rc=$?
+    if [ "$rc" = 2 ]; then
+      log "跳过：$name（$REASON）"
+      skipped+=("$name")
+      # 不适用期间把该面的累计清零：否则「昨天真故障 2 次 + 今天不适用」会在恢复该面时
+      # 直接跨过阈值（1 次真故障就当第 3 次发信）。
+      read -r fails _ _ <<<"$(state_get "$name" || echo '0 0 0')"
+      [ "${fails:-0}" = 0 ] || state_set "$name" 0 0 0
+      continue
+    fi
+    if [ "$rc" = 0 ]; then
       read -r fails alerted last <<<"$(state_get "$name" || echo '0 0 0')"
       fails=${fails:-0}; alerted=${alerted:-0}; last=${last:-0}
       if [ "$alerted" = 1 ]; then
@@ -219,7 +306,9 @@ run_check() {
 判据来源：/usr/local/bin/forklift-watchdog.sh --dry-run
 状态文件：$STATE_FILE
 journald：journalctl -u forklift-watchdog.service --since '-30 min'
-探测面：助手内网 health / pve-02 生产容器 / 公网诊断端点 / 前端反代 $FE_HOST/health / 本机与 LXC$REMOTE_LXC 磁盘水位"
+探测面：诊断服务 health（未配置则跳过）/ pve-02 生产容器 / 公网后端 $PUBLIC_API_URL /
+       前端反代 $FE_HOST/health / 本机磁盘水位 / LXC 磁盘水位（未配置则跳过）/
+       巡检脚本与仓库副本是否一致"
           then
             log "已告警：$name"
             state_set "$name" "$fails" 1 "$now"
@@ -232,7 +321,7 @@ journald：journalctl -u forklift-watchdog.service --since '-30 min'
       fi
     fi
   done
-  log "巡检完成：达告警级别 ${#down[@]}/${#order[@]}（阈值：同一面连续 ${FAIL_THRESHOLD} 次）${down[*]:+ ⇒ ${down[*]}}"
+  log "巡检完成：达告警级别 ${#down[@]}/$(( ${#order[@]} - ${#skipped[@]} ))（不适用 ${#skipped[@]} 面：${skipped[*]:-无}；阈值：同一面连续 ${FAIL_THRESHOLD} 次）${down[*]:+ ⇒ ${down[*]}}"
 }
 
 case "$MODE" in

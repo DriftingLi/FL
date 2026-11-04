@@ -62,8 +62,11 @@ func (g *gormZapLogger) Error(_ context.Context, msg string, data ...any) {
 func (g *gormZapLogger) Trace(_ context.Context, begin time.Time, fc func() (string, int64), err error) {
 	elapsed := time.Since(begin)
 	sql, rows := fc()
+	// 先算出来再进 switch：`!(A && B)` 那种写法会被 staticcheck 要求改写成 De Morgan，
+	// 而改写后的 `!A || !B` 在「err 非 nil 且只是 RecordNotFound」这个主场景里反而更绕。
+	ignoredNotFound := err != nil && g.cfg.IgnoreRecordNotFoundError && errors.Is(err, gorm.ErrRecordNotFound)
 	switch {
-	case err != nil && !(errors.Is(err, gorm.ErrRecordNotFound) && g.cfg.IgnoreRecordNotFoundError):
+	case err != nil && !ignoredNotFound:
 		g.l.Error("gorm query error",
 			zap.String("sql", sql),
 			zap.Error(err),

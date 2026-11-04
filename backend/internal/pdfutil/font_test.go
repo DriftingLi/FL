@@ -15,9 +15,10 @@ func TestEmbeddedFontIsCompiledIn(t *testing.T) {
 	if len(embeddedFont) < 1_000_000 {
 		t.Errorf("内嵌字体过小 (%d 字节)，可能不是完整的 TTF 文件", len(embeddedFont))
 	}
-	if !(bytes.HasPrefix(embeddedFont, []byte{0x00, 0x01, 0x00, 0x00}) ||
-		bytes.HasPrefix(embeddedFont, []byte("true")) ||
-		bytes.HasPrefix(embeddedFont, []byte("ttcf"))) {
+	hasTTFHead := bytes.HasPrefix(embeddedFont, []byte{0x00, 0x01, 0x00, 0x00})
+	hasTrueHead := bytes.HasPrefix(embeddedFont, []byte("true"))
+	hasCollectionHead := bytes.HasPrefix(embeddedFont, []byte("ttcf"))
+	if !hasTTFHead && !hasTrueHead && !hasCollectionHead {
 		t.Errorf("内嵌字体不是合法 TTF 头: % x", embeddedFont[:4])
 	}
 	t.Logf("内嵌字体大小: %d 字节", len(embeddedFont))

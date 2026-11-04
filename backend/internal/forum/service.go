@@ -546,22 +546,25 @@ func (s *Service) ListTopics(in TopicListInput) (*ForumTopicPageResult, error) {
 			if category != "" {
 				q = q.Where("t.category = ?", category)
 			}
-			if solved == "solved" {
+			switch solved {
+			case "solved":
 				q = q.Where("t.accepted_reply_id IS NOT NULL")
-			} else if solved == "unsolved" {
+			case "unsolved":
 				q = q.Where("t.accepted_reply_id IS NULL")
 			}
 			// 精选过滤（#742）：与 scope/category 同一条 WHERE，不在应用层事后过滤。
-			if featured == "true" {
+			switch featured {
+			case "true":
 				q = q.Where("t.is_featured = TRUE")
-			} else if featured == "false" {
+			case "false":
 				q = q.Where("t.is_featured = FALSE")
 			}
 			// 经验认定过滤（ADR-0040）：同上，与 scope/category/solved/featured 共存在一条 WHERE。
 			// 经验 Tab 的唯一判据——**不要再改回 category=experience**（存量行已降级，过滤不出行）。
-			if isExperience == "true" {
+			switch isExperience {
+			case "true":
 				q = q.Where("t.is_experience = TRUE")
-			} else if isExperience == "false" {
+			case "false":
 				q = q.Where("t.is_experience = FALSE")
 			}
 			if keyword = strings.TrimSpace(keyword); keyword != "" {
@@ -647,9 +650,10 @@ func (s *Service) GetTopic(in TopicDetailInput) (*ForumTopicDetailDTO, error) {
 
 	// 回复游标方向：time/latest 默认正序（先发先排），hot 默认倒序。
 	dir := "ASC"
-	if order == "desc" {
+	switch order {
+	case "desc":
 		dir = "DESC"
-	} else if order == "" {
+	case "":
 		// 默认：time/latest 按正序（先发先排），hot 按热度倒序
 		if replySort == "hot" {
 			dir = "DESC"

@@ -9,6 +9,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import DiagnosisSources from '../DiagnosisSources.vue'
+import SourcesFoldHeader from '../SourcesFoldHeader.vue'
 import { epLite } from '@/test/element-lite'
 import type { DiagnosisSource } from '@/api/aiAssistant'
 
@@ -19,9 +20,9 @@ function source(id: string, text: string, sourceUrl = ''): DiagnosisSource {
   return { id, text, metadata: { source_url: sourceUrl, page_start: 0, page_end: 0 } }
 }
 
-function mountSources(sources: DiagnosisSource[]) {
+function mountSources(sources: DiagnosisSource[], over: Record<string, unknown> = {}) {
   return mount(DiagnosisSources, {
-    props: { sources, embedded: true },
+    props: { sources, embedded: true, ...over },
     global: { plugins: [epLite()] }
   })
 }
@@ -75,5 +76,41 @@ describe('DiagnosisSources：退役后只回放文字，不产出 URL', () => {
     const empty = mountSources([source('fault-3', '只有文字')])
     expect(empty.find('a').exists()).toBe(false)
     expect(empty.text()).toContain('暂无来源资料')
+  })
+})
+
+// ===== 耗时（票 2244）：与来源同属「这轮的旁注」，不单独占行 =====
+describe('DiagnosisSources：耗时挂折叠头', () => {
+  const s = [source('fault-5', '正文资料')]
+
+  it('有来源时耗时并入折叠头右侧，不另起一行', () => {
+    const w = mountSources(s, { embedded: false, elapsed: 12.34 })
+    const header = w.findComponent(SourcesFoldHeader)
+    expect(header.exists()).toBe(true)
+    expect(header.props('suffix')).toBe('耗时 12.3 秒')
+    // 折叠头下方没有额外的耗时脚注（有的话说明两处都渲染了）
+    expect(w.text().match(/耗时/g)).toHaveLength(1)
+  })
+
+  it('只有耗时、没有来源时不出折叠头，只给一行脚注（不留假入口）', () => {
+    const w = mountSources([], { embedded: false, elapsed: 8 })
+    expect(w.findComponent(SourcesFoldHeader).exists()).toBe(false)
+    expect(w.text()).toContain('耗时 8.0 秒')
+  })
+
+  it('elapsed 为 0 或缺省时不显示任何耗时文案', () => {
+    expect(mountSources(s, { embedded: false }).text()).not.toContain('耗时')
+    expect(mountSources(s, { embedded: false, elapsed: 0 }).text()).not.toContain('耗时')
+  })
+
+  it('embedded（当轮面板）不自作主张出头：不渲染折叠头也不渲染耗时脚注', () => {
+    const w = mountSources(s, { embedded: true, elapsed: 9.9 })
+    expect(w.findComponent(SourcesFoldHeader).exists()).toBe(false)
+    expect(w.text()).not.toContain('耗时')
+  })
+
+  it('一位小数：不把 12.3456 原样打出来', () => {
+    const w = mountSources(s, { embedded: false, elapsed: 12.3456 })
+    expect(w.findComponent(SourcesFoldHeader).props('suffix')).toBe('耗时 12.3 秒')
   })
 })

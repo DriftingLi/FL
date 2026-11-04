@@ -228,9 +228,12 @@ $COMPOSE up -d postgres
 但**不会**自动装进系统 —— 写入 `/usr/local/bin` 与 `/etc/systemd/system/` 是系统级动作，
 仍由人工执行（脚本头注释里有完整命令）。
 
-改了脚本或单元之后**必须重装一次**，否则机器上继续跑旧判据。2026-10-29 的实例：
-`forklift-redis-prod` 已从 compose 删除，而 `/usr/local/bin` 里的旧副本仍在盯它，
-连续 3 次判红并真的发出了告警邮件。
+**忘了重装现在会自己出声**（#2270）：巡检多了一面 `install_drift`，把「跑着的副本」与
+`$DEPLOY_PATH/deploy/forklift-watchdog.sh`（CD 每次部署都会刷新）按 sha256 逐字节比对，
+不一致就发一封「巡检脚本与仓库不一致」并继续巡检。它解决的是 #2127 之后剩下的半边：
+上传解决了「拿不到新文件」，没解决「新文件不生效」。历史上这个缺口发作过两次——
+2026-10-29 的 `forklift-redis-prod` 假告警（#2109 已从 compose 删除，旧副本继续盯它），
+2026-11-04 的诊断只读端点假告警（PR #2265 删端点，旧副本继续盯 `/diagnosis/brands`）。
 
 ```bash
 cd "$DEPLOY_PATH"
@@ -239,10 +242,23 @@ install -m 644 deploy/systemd/forklift-watchdog.service \
                deploy/systemd/forklift-watchdog.timer \
                deploy/systemd/forklift-alert@.service /etc/systemd/system/
 systemctl daemon-reload && systemctl restart forklift-watchdog.timer
-/usr/local/bin/forklift-watchdog.sh --dry-run   # 自检：应打「达告警级别 0/6」
+/usr/local/bin/forklift-watchdog.sh --dry-run   # 自检：应打「达告警级别 0/N（不适用 …）」
 # 注意用**安装后的路径**自检：仓库里的脚本是 100644（靠 install -m 755 赋执行位），
 # 直接跑 deploy/forklift-watchdog.sh 会 Permission denied。
 ```
+
+**三个面默认「不适用」而不是「故障」**（三态：0 正常 / 1 故障 / 2 不适用）。
+不适用会逐面打「跳过」并从分母里扣掉，不会混进告警数：
+
+| 面 | 启用条件 | 为什么这样 |
+| --- | --- | --- |
+| `assistant_health` | env 文件里给 `WATCH_ASSISTANT_HEALTH_URL` | v2 未配置是**合法状态**（#2237：`DIAGNOSIS_ASSISTANT_URL` 默认留空即功能未启用），不该每 6 分钟发信。硬编码旧 lxc101 地址就是造第二个已退役面 |
+| `disk_lxc` | 同时给 `WATCH_REMOTE_HOST` 与 `WATCH_REMOTE_LXC` | lxc101（pve-01，VMID 101）是旧 v1 诊断助手的承载机，**已于 2026-11-04 14:44 停机**（`pct status 101` ⇒ `stopped`）。停机前 7 天实测：真正的业务请求只有 13 条（11 条 chat + 2 条 fault-codes），其余是 watchdog 的 health 探测与网关的 brands 目录查询；最后一次真实对话 `2026-11-03T13:54:43Z`，停它不影响在用功能。该机 `onboot` 已置 0（pve-01 重启不会自动拉起），若 `pct start 101` 复活后要观察其磁盘水位，在 env 里给两个值即可，不必改脚本 |
+| `install_drift` | `$DEPLOY_PATH/deploy/forklift-watchdog.sh` 存在 | 非部署宿主（开发机）上没有参考副本，该面不适用 |
+
+`public_api` 面盯的是 `/api/ai-assistant/models`。**不要**改回去盯诊断端点
+（`/diagnosis/intents` 之类）：那类面要 v2 上游，上游没配就回 502，「后端活没活」会被
+外部依赖绑架，把一次外部抖动报成本站故障。配图链路（`/diagnosis/ossimg/*`）同理不单列。
 
 脚本里的 `EXPECT_CONTAINERS` 是容器判据：**部署面增减容器时必须同步它**（否则误报）。
 删掉某个服务（例如 #2109 的 redis）时，连它一起从这条清单里删。

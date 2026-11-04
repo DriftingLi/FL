@@ -100,8 +100,10 @@ jobs:
 
       - name: golangci-lint 代码检查
         run: |
-          # 固定版本安装，避免 @latest 随上游变动导致 CI 结果漂移
-          go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
+          # 固定版本安装，避免 @latest 随上游变动导致 CI 结果漂移。
+          # v2 起模块路径带 /v2（#2266）；配置格式也是 v2（backend/.golangci.yml 有 version: "2"），
+          # 本机跑 `make lint` 用的是同一个二进制版本，两边判据同源。
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
           golangci-lint run --timeout=5m
         working-directory: backend
 

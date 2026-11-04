@@ -60,9 +60,10 @@ func ListCourses(db *gorm.DB, page, pageSize int, opts CourseListOptions) (Cours
 				q = q.Where("points_price IS NULL OR points_price <= 0")
 			}
 		}
-		if opts.Filter == "hot" {
+		switch opts.Filter {
+		case "hot":
 			q = q.Where("is_hot = ?", true)
-		} else if opts.Filter == "featured" {
+		case "featured":
 			q = q.Where("is_featured = ?", true)
 		}
 		return q

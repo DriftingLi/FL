@@ -236,7 +236,7 @@ make build           # 编译二进制到 backend/bin/server
 make run             # go run ./cmd/server
 make test            # go test ./... -race -cover
 make vet             # go vet ./...
-make lint            # golangci-lint（本机 Windows 暂不可用，由 CI 兜底）
+make lint            # golangci-lint（v2.15.0，本机与 CI 同版本同配置）
 make check           # vet + test（提交前轻量检查）
 make fmt / tidy      # 格式化 / 整理依赖
 make swagger         # 重新生成 Swagger 文档
@@ -284,7 +284,7 @@ make check-all           # 后端 check + 前端 check
 
 > 权威版本在 [`docs/agents/checks.md`](./docs/agents/checks.md)（生成链顺序、PG 契约测试纪律、守卫清单与 CI 触发模型）。本节只留入口。
 
-- **后端**（`backend/`）：`gofmt -l .` → `go vet ./...` → `golangci-lint run ./...` → `go test ./...`。本机 Windows 暂时跑不了 `golangci-lint`，由 CI 的 `backend-lint` 兜底；WSL 下 Go 工具链在 `~/go/bin`
+- **后端**（`backend/`）：`gofmt -l .` → `go vet ./...` → `golangci-lint run ./...` → `go test ./...`。`golangci-lint` 用 **v2.15.0**，本机与 CI 同版本同配置（2026-11-04 #2266 起本机可跑，此前 v1 时代因工具链过旧只能靠 CI 兜底）；WSL 下 Go 工具链在 `~/go/bin`
 - **守卫**：改前端 UI / api 消费面 / 端点错误面 / 目录排序 / 图标字号后，跑对应的 `node scripts/check-*.mjs --all`；自检 `node --test scripts/*.test.mjs`
 - **前端**（`frontend/`）：`make frontend-typecheck`、`make frontend-test`
 - **部署配置**：`docker compose -f deploy/docker-compose.prod.yml config -q`；变更计划 `python3 deploy/deploy.py --plan`；判据测试见 `deploy/README.md`「判据物与本地校验」

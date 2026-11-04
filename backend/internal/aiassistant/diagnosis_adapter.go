@@ -370,12 +370,23 @@ func (a *diagnosisAssistantAdapter) consumeSSE(ctx context.Context, body io.Read
 }
 
 // statusError 把 v2 的 HTTP 失败翻成中文人话（不回显对方原始 JSON）。
-// 403 的两种（Key 停用 / IP 不在白名单）只有错误体说得清时才分，分不出不猜（票 2237 A.5）。
+// 判据本体在 v2StatusError：引导面（diagnosis_catalog.go）与对话面吃同一份错误语义，
+// 各写一遍必然在「403 的两种怎么分」这类细节上漂。
 func (a *diagnosisAssistantAdapter) statusError(resp *http.Response) error {
+	return v2StatusError(resp, a.logger)
+}
+
+// ErrDiagnosisRateLimited 上游限流（契约 §1.4：默认 60 次/分钟）。调用方据此回 429 而不是 5xx ——
+// 「等一会儿再试」与「服务坏了」对前端是两件不同的事。
+var ErrDiagnosisRateLimited = errors.New("诊断服务请求过于频繁，请稍后再试")
+
+// v2StatusError 读响应体取 detail，再按状态码翻成中文人话。
+// 403 的两种（Key 停用 / IP 不在白名单）只有错误体说得清时才分，分不出不猜（票 2237 A.5）。
+func v2StatusError(resp *http.Response, logger *zap.Logger) error {
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 8192))
 	detail := v2ErrorDetail(raw)
-	if a.logger != nil {
-		a.logger.Warn("诊断助手返回失败状态",
+	if logger != nil {
+		logger.Warn("诊断助手返回失败状态",
 			zap.Int("status", resp.StatusCode), zap.String("detail", detail))
 	}
 
@@ -391,7 +402,7 @@ func (a *diagnosisAssistantAdapter) statusError(resp *http.Response) error {
 		}
 		return errors.New("访问被拒绝（Key 或 IP 白名单），请联系管理员")
 	case http.StatusTooManyRequests:
-		return errors.New("诊断服务请求过于频繁，请稍后再试")
+		return ErrDiagnosisRateLimited
 	case http.StatusBadRequest:
 		if detail != "" {
 			return errors.New("诊断失败：" + detail)
