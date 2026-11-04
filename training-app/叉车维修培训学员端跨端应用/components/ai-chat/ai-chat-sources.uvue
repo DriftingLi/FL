@@ -7,15 +7,6 @@
 		</view>
 		<view v-if="open" class="sources-body">
 			<view v-for="(card, ci) in cards" :key="ci" class="source-card" :class="{ 'source-card-gap': ci > 0 }">
-				<image
-					v-for="(img, ii) in card.images"
-					:key="ii"
-					class="source-image"
-					:class="{ 'source-image-gap': ii > 0 }"
-					:src="img"
-					mode="widthFix"
-					@click="onPreview(card.images, img)"
-				/>
 				<text v-if="card.text.length > 0" class="source-text">{{ card.text }}</text>
 				<text v-if="card.page.length > 0" class="source-page">{{ card.page }}</text>
 			</view>
@@ -33,20 +24,21 @@
 	 *
 	 * 与 web 的差异（本票口径，见 issue #988「口径裁定记录」第 2 条）：
 	 * **不做** web 的「打开 PDF 来源」外链 —— 原生端没有内嵌 PDF 阅读器，站外跳转收益低。
-	 * 手册图片、页码、正文剥标记三条与 web 一致。
 	 *
-	 * `<<IMAGE:…>>` 标记解析、内网前缀剥离、页码标签一律走 `utils/aiSourcesDisplay.uts`
-	 * （展示层纯函数落 `utils/<域>Display.uts`，移动端 ADR-0007）—— 本组件只做「子路径 → 代理 URL」
-	 * 与折叠交互；纯函数留在 `.uvue` 里就不可测（jest 无法 import `.uvue`，守护只能退化成断言源码文本）。
+	 * **v1 代理退役后本组件不再产出任何 URL**（#2237 / #2262）：溯源图 `<<IMAGE:…>>` 指向的
+	 * 手册/案例资源已随旧代理一起下线，历史行里的图不再可达 ⇒ 标记一律**剥掉**而不是渲染成坏图。
+	 * v2 的回答配图在**正文里**（后端归一成 `/diagnosis/ossimg/*` 站内代理），不经本组件。
+	 *
+	 * `<<IMAGE:…>>` 标记剥离与页码标签一律走 `utils/aiSourcesDisplay.uts`
+	 * （展示层纯函数落 `utils/<域>Display.uts`，移动端 ADR-0007）—— 本组件只做折叠交互；
+	 * 纯函数留在 `.uvue` 里就不可测（jest 无法 import `.uvue`，守护只能退化成断言源码文本）。
 	 */
 	import { computed, ref } from 'vue'
-	import { aiManualUrl } from '../../api/aiAssistant'
-	import { extractImagePaths, stripImageMarkers, pageLabel } from '../../utils/aiSourcesDisplay'
+	import { stripImageMarkers, pageLabel } from '../../utils/aiSourcesDisplay'
 	import type { AiDiagnosisSource } from '../../types/index'
 
-	/** 单条来源的展示模型：图片 URL / 正文 / 页码在壳层一次算好，模板不重复解析 */
+	/** 单条来源的展示模型：正文 / 页码在壳层一次算好，模板不重复解析 */
 	type SourceCard = {
-		images : string[]
 		text : string
 		page : string
 	}
@@ -59,25 +51,12 @@
 
 	const open = ref<boolean>(false)
 
-	/**
-	 * 子路径 → 手册代理 URL（**组件层**负责拼 URL：`utils/aiSourcesDisplay` 只解析、不依赖 api）。
-	 */
-	function toManualUrls(text : string) : string[] {
-		const paths = extractImagePaths(text)
-		const urls : string[] = []
-		for (let i = 0; i < paths.length; i++) {
-			urls.push(aiManualUrl(paths[i]))
-		}
-		return urls
-	}
-
 	const cards = computed<SourceCard[]>(() : SourceCard[] => {
 		const list : SourceCard[] = []
 		const src = props.sources
 		for (let i = 0; i < src.length; i++) {
 			const s = src[i]
 			list.push({
-				images: toManualUrls(s.text),
 				text: stripImageMarkers(s.text),
 				page: pageLabel(s),
 			} as SourceCard)
@@ -91,15 +70,6 @@
 
 	function onToggle() : void {
 		open.value = !open.value
-	}
-
-	/** 点图看大图：`current` 传 URL 字符串（与 `chapter-view.uvue` 的本机先例一致，不用下标） */
-	function onPreview(urls : string[], url : string) : void {
-		if (urls.length == 0) return
-		uni.previewImage({
-			urls: urls,
-			current: url,
-		})
 	}
 </script>
 
@@ -144,16 +114,6 @@
 
 	.source-card-gap {
 		margin-top: 12rpx;
-	}
-
-	.source-image {
-		width: 480rpx;
-		border-radius: 8rpx;
-		background-color: #eeeeee;
-	}
-
-	.source-image-gap {
-		margin-top: 8rpx;
 	}
 
 	.source-text {
