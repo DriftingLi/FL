@@ -79,6 +79,7 @@ const path = require('path');
 /** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
 const { readText } = require('./utsHarness');
 const { execFileSync } = require('child_process');
+const { withUtf8Discipline } = require('./probeSpawn.js');
 
 const ROOT = path.join(__dirname, '..');
 const SCRIPT_REL = 'scripts/mp-weixin-check.ps1';
@@ -1573,7 +1574,7 @@ describe('C20：产物合法性判据（#1210）', () => {
     const cmd = `. '${lib}'; (Get-MpWeixinProductReport -Dist '${dist}') | ConvertTo-Json -Compress`;
     const args = ['-NoProfile', '-NonInteractive'];
     if (process.platform === 'win32') args.push('-ExecutionPolicy', 'Bypass');
-    args.push('-Command', cmd);
+    args.push('-Command', withUtf8Discipline(cmd));
     let stdout = '';
     try {
       stdout = execFileSync(powershellExe(), args, {

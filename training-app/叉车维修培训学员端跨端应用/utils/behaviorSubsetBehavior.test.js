@@ -19,6 +19,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { execFileSync, spawnSync } = require('node:child_process');
 const { readText } = require('./utsHarness');
+const { withUtf8Discipline } = require('./probeSpawn.js');
 
 const ROOT = path.resolve(__dirname, '..');
 const TOOL = path.join(ROOT, 'scripts', 'behavior-suite-deps.mjs');
@@ -45,7 +46,7 @@ function toolJson(changed) {
 const hasPwsh = (() => {
   if (process.platform !== 'win32') return false;
   try {
-    execFileSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', 'exit 0'], { stdio: 'ignore' });
+    execFileSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', withUtf8Discipline('exit 0')], { stdio: 'ignore' });
     return true;
   } catch {
     return false;
@@ -105,6 +106,8 @@ function runHarness() {
 
   const body = [
     "$ErrorActionPreference = 'Stop'",
+    "try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }",
+    '$OutputEncoding = [System.Text.Encoding]::UTF8',
     'Set-StrictMode -Version Latest',
     `$spec = [System.IO.File]::ReadAllText('${inputPath}', [System.Text.Encoding]::UTF8) | ConvertFrom-Json`,
     '$src = [System.IO.File]::ReadAllText($spec.script, [System.Text.Encoding]::UTF8)',

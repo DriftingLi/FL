@@ -92,6 +92,7 @@ const path = require('path');
 
 /** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
 const { readText } = require('./utsHarness');
+const { encodeCommand } = require('./probeSpawn.js');
 const ROOT = path.join(__dirname, '..');
 const LIB_REL = path.join('scripts', 'lib', 'process-capture.ps1');
 const GATE_REL = 'scripts/kotlin-all-check.ps1';
@@ -160,7 +161,7 @@ function drive(libAbs, statements) {
     `. ${q(libAbs)}`,
   ];
   const script = prelude.concat(statements).join('; ');
-  const encoded = Buffer.from(script, 'utf16le').toString('base64');
+  const encoded = encodeCommand(script);
   try {
     const stdout = execFileSync('pwsh', psArgs(['-EncodedCommand', encoded]), {
       encoding: 'utf8',

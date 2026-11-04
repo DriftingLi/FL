@@ -26,6 +26,7 @@ const { execFileSync } = require('child_process');
 const os = require('os');
 const path = require('path');
 const { readText } = require('./utsHarness');
+const { encodeCommand } = require('./probeSpawn.js');
 
 const ROOT = path.join(__dirname, '..');
 const LIB_REL = path.join('scripts', 'lib', 'frontier.ps1');
@@ -49,7 +50,7 @@ function runPs(body) {
     `. "${path.join(ROOT, LIB_REL)}"`,
     body,
   ].join('\n');
-  const encoded = Buffer.from(script, 'utf16le').toString('base64');
+  const encoded = encodeCommand(script);
   return String(execFileSync('pwsh', psArgs(['-EncodedCommand', encoded]), {
     encoding: 'utf8', timeout: 120000, windowsHide: true, maxBuffer: 8 * 1024 * 1024,
   })).split(/\r?\n/).map((l) => l.trim());

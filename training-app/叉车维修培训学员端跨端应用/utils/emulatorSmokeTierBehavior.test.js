@@ -36,6 +36,7 @@ const { execFileSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { encodeCommand } = require('./probeSpawn.js');
 
 const IS_WIN = process.platform === 'win32';
 // 每条腿都要真挂死到点（档位实参给 2–3 秒）+ 真 cmd/node 启动开销；先例 utils/hxLaunchDetachBehavior.test.js:47
@@ -140,7 +141,7 @@ ${body}
 Write-Output 'EMUTIER_PROBE_DONE=1'
 `.trim();
 
-  const encoded = Buffer.from(script, 'utf16le').toString('base64');
+  const encoded = encodeCommand(script);
   try {
     const stdout = execFileSync('pwsh', ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded], {
       encoding: 'utf8',

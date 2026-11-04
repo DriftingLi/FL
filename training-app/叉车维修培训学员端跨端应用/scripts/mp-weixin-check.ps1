@@ -348,6 +348,14 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# 自身输出强制 UTF-8（#2254，与 dev-finish / hx-run / kotlin-all-check / pr-gates / wt-bootstrap 逐字同款）：
+# 本脚本被测试以 `-File` 方式 spawn，且结果行与日志含 CJK。不钉的话 Windows 下控制台按 OEM 代码页
+# （本机 gb2312/cp936）吐字节，调用方的 `execFileSync(..., {encoding:'utf8'})` 会解出 U+FFFD。
+# 两条都要：① [Console] 管本脚本自己打出去的文本；② $OutputEncoding 管原生 CLI（HBuilderX / 微信
+# 开发者工具）stdin 那一路。**必须留在顶层**（函数体内只对 -DryRun 生效，等于没钉）。
+try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
+$OutputEncoding = [System.Text.Encoding]::UTF8
+
 # #1770：验收证据主键从 PR 号改成 commit sha。`-PostToIssue` 是正式名（票号），`-PostToPr` 是**别名**
 # （同值，一个版本后退役）—— 归一成一枚后，下文一律沿用旧字形 `$PostToPr`，不制造第二份来源。
 if ($PostToIssue -gt 0) { $PostToPr = $PostToIssue }

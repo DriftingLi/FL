@@ -16,6 +16,7 @@
  */
 const path = require('path');
 const { execFileSync } = require('child_process');
+const { withUtf8Discipline } = require('./probeSpawn.js');
 
 const ROOT = path.join(__dirname, '..');
 // ⚠️ 载体路径写成**本文件内的字面量**（判据面 + ③ 门分类器按文件自身的「执行调用 + 仓内载体引用」判类）
@@ -43,7 +44,7 @@ function probeLib() {
     '}',
     '$out | ConvertTo-Json -Compress'
   ].join('\n');
-  const out = execFileSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', script], {
+  const out = execFileSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', withUtf8Discipline(script)], {
     cwd: ROOT,
     encoding: 'utf8',
     timeout: 120000,

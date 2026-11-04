@@ -194,6 +194,8 @@ describe('F4：Invoke-Process 的收流必须有界（主进程退出后不许�
     // 切出来的函数单独成脚本：只喂给它一个可跑的最小上下文（$script:workDir + node 路径）
     const harness = [
       "$ErrorActionPreference = 'Stop'",
+      "try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }",
+      '$OutputEncoding = [System.Text.Encoding]::UTF8',
       '$script:workDir = (Get-Location).Path',
       // psFunctionBody 只回花括号体，函数头要自己补回来
       'function Invoke-Process ' + body,

@@ -32,6 +32,7 @@ const { execFileSync, spawn } = require('child_process');
 // 一样要归一）。2026-10-07 现测：run 37598814948 的 mobile-test 就红在这四条助手上（3074 条用例全绿，
 // 挂的是那一步独立检查）。顺带这也是真需求——Windows 上 keep.log 由 Add-Content 写成 CRLF。
 const { readText } = require('./utsHarness');
+const { withUtf8Discipline } = require('./probeSpawn.js');
 
 const IS_WIN = process.platform === 'win32';
 const ROOT = path.join(__dirname, '..');
@@ -147,7 +148,7 @@ const seedToolState = (fx, serial) => fs.writeFileSync(
 /** 进程还在不在（Windows 上问 pwsh，不用 process.kill 的 0 信号——它对已死/无权都抛）。 */
 const pidAlive = (pid) => {
   const out = execFileSync('pwsh', ['-NoProfile', '-Command',
-    `if (Get-Process -Id ${pid} -ErrorAction SilentlyContinue) { 'ALIVE' } else { 'GONE' }`],
+    withUtf8Discipline(`if (Get-Process -Id ${pid} -ErrorAction SilentlyContinue) { 'ALIVE' } else { 'GONE' }`)],
   { encoding: 'utf8', windowsHide: true });
   return String(out).trim().includes('ALIVE');
 };
@@ -162,7 +163,7 @@ function stubProcessPids(dir) {
     const cmd = `$n = '${dir.replace(/'/g, "''")}'; `
       + 'Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -and $_.CommandLine.Contains($n) } '
       + '| ForEach-Object { $_.ProcessId }';
-    const out = execFileSync('pwsh', ['-NoProfile', '-Command', cmd], { encoding: 'utf8', windowsHide: true });
+    const out = execFileSync('pwsh', ['-NoProfile', '-Command', withUtf8Discipline(cmd)], { encoding: 'utf8', windowsHide: true });
     return out.split(/\s+/).filter(Boolean).map(Number).filter((n) => Number.isInteger(n) && n > 0);
   }
   const out = execFileSync('ps', ['-eo', 'pid=,args='], { encoding: 'utf8' });

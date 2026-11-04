@@ -46,6 +46,7 @@ const { execFileSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { encodeCommand } = require('./probeSpawn.js');
 
 const ROOT = path.join(__dirname, '..');
 const LIB = path.join(ROOT, 'scripts', 'lib', 'style-loop.ps1');
@@ -66,7 +67,7 @@ function psQuote(s) {
 }
 
 function runPwshCommand(scriptText) {
-  const encoded = Buffer.from(scriptText, 'utf16le').toString('base64');
+  const encoded = encodeCommand(scriptText);
   try {
     const stdout = execFileSync('pwsh', psArgs(['-EncodedCommand', encoded]), {
       encoding: 'utf8',

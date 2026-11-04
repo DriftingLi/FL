@@ -125,6 +125,8 @@ function runHarness(ctx, cliExe) {
   const capFile = path.join(ctx.tmp, 'harness.capture.txt');
   const body = [
     "$ErrorActionPreference = 'Stop'",
+    "try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }",
+    '$OutputEncoding = [System.Text.Encoding]::UTF8',
     'Set-StrictMode -Version Latest',
     `$src = Get-Content -LiteralPath '${HX_RUN}' -Raw`,
     '$ast = [System.Management.Automation.Language.Parser]::ParseInput($src, [ref]$null, [ref]$null)',
