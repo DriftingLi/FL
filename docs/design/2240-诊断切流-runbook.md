@@ -10,16 +10,34 @@
 
 ## 0. 前置（全部为「是」才继续）
 
-| # | 判据 | 验法 | 现状（2026-11-04 14:20） |
+| # | 判据 | 验法 | 现状（2026-11-04 17:30，真实联调后） |
 | --- | --- | --- | --- |
-| 1 | 对方 v2 已部署且 `/api/v2/*` 可达 | `curl -s -o /dev/null -w '%{http_code}' <基址>/api/v2/health` ⇒ `200` | ❌ **404**（线上是 v1 的 15 条路径） |
-| 2 | 已拿到 32 位明文 `X-API-Key` | 对方私发；只存 GitHub Secrets | ❌ 未签发 |
-| 3 | 我方出口 IP 已登记进对方白名单 | 对方回执；`183.36.195.104` | ❌ 待确认是否需要 |
-| 4 | 图片 OSS 前缀已确认 | 与 `DIAGNOSIS_V2_OSS_BASE` 默认值比对 | ⚠️ `health.oss_base` 是 `…/create`，默认值是 `…/forklift/repair_img`，**两者不兼容** |
-| 5 | 代码已上线并含 v2 适配 | `git log --oneline -1 --stat \| grep diagnosis` | ✅ #2237 `28a9c474` / #2242 `403b52e7` / #2244 `97e4d3b2` 均已合并 |
+| 1 | 对方 v2 已部署且 `/api/v2/*` 可达 | `curl -s -o /dev/null -w '%{http_code}' <基址>/api/v2/intents` ⇒ `200` | ✅ **200**。注意基址（见 §1.2）与健康检查路径 |
+| 2 | 已拿到 32 位明文 `X-API-Key` | 对方私发；只存 GitHub Secrets | ✅ 已签发（32 位，写入对方 `src\forklift\data_ecs\forklift.db`，只存指纹） |
+| 3 | 我方出口 IP 已登记进对方白名单 | 对方回执；`<我方出口 IP>` | ✅ 已在册，限流 300 次/分钟 |
+| 4 | 图片 OSS 前缀已确认 | 与 `DIAGNOSIS_V2_OSS_BASE` 默认值比对 | ✅ 回包图片在 `…/forklift/repair_img/`，与默认值逐字一致 |
+| 5 | 代码已上线并含 v2 适配 | `git log --oneline -1 --stat \| grep diagnosis` | ✅ #2237 `28a9c474` / #2242 `403b52e7` / #2244 `97e4d3b2` / #2280 `37123d88` 均已合并 |
 | 6 | 生产当前是「未配置」态（起点干净） | `docker exec forklift-backend-prod printenv \| grep DIAGNOSIS` ⇒ 两个都为空 | ✅ 实测 `DIAGNOSIS_ASSISTANT_URL` len=0、`DIAGNOSIS_V2_API_KEY` len=0 |
+| 7 | 传输加密 | `<基址>` 的 scheme | ⚠️ **http 明文**。8080 不是 TLS、443 不通，Key 明文过公网 —— 遗留风险，见 §0.2 |
 
-**任何一条为 ❌ 就不要开始。** 尤其第 1 条 —— 现在就是 ❌，所以本 runbook 在对方交付前**只能是纸面准备**。
+**任何一条为 ❌ 就不要开始；第 7 条是 ⚠️ 不是 ❌，按用户 2026-11-04 拍板「先按 http 接上做联调，同时要求对方上 TLS」推进。**
+
+### 0.2 基址：v2 在 IP 上，不在 README 的域名上
+
+`docs/reference/外部AI助手/README.md:3` 写的 `https://forklift-repair-assistant.app.workbuddy.host` 是 **v1 旧实例**，不是 v2。实测对照（2026-11-04 17:30）：
+
+| 地址 | `/api/health` | `/api/v2/intents` | 结论 |
+| --- | --- | --- | --- |
+| `http://<v2 主机>:8080` | 200 `env=ecs` `port=8080` `data_dir=C:\forklift\data_ecs` | **200** | **真 v2，基址填这个** |
+| `https://forklift-repair-assistant.app.workbuddy.host` | 200 `env=local` `port=3000` `data_dir=/workspace/data` | 404 | v1 旧实例 |
+
+> 仓库是 public，**真实主机与出口 IP 一律不入库**（写在维护者本地 `.scratch/2243-真实地址-本地留存.md`，该目录被 `.gitignore` 忽略）。执行时把 `<v2 主机>` / `<我方出口 IP>` / `<lxc101 内网>` 换成真值。
+
+另注意：**v2 没有 `/api/v2/health`**（404），健康检查只有 `/api/health`（我方 `DiagnosisCatalogService.Health` 打的就是这个，无鉴权）。所以前置判据第 1 条的验法用 `/api/v2/intents`，别用 `/api/v2/health` —— 后者在任何情况下都 404，会把「已部署」误判成「未部署」。
+
+`/api/health` 里有两个长得像的字段：`oss_base` 是 `…/create`（建会话用），`image_base` 才是 `…/forklift/repair_img`（回答配图基准）。白名单只认后者。
+
+**遗留风险：传输是明文 http。** `https://<v2 主机>:8080` 报 `SSL routines::wrong version number`，443 端口不通 —— 也就是说 `X-API-Key` 会以明文过公网。它被 IP 白名单与 300 次/分钟限流挡了一层，但**不是加密**。用户 2026-11-04 拍板「先按 http 接上做联调，同时要求对方上 TLS」，所以这一条要跟着对外清单一起推，**别当成已解决**。对方上 TLS 后只需把 secret 换成 `https://…` 再部署一次，代码侧零改动（`validateDiagnosisV2` 只校验 OSS base 是 https，不校验基址）。
 
 ### 0.1 与票面的实质分歧：没有 `legacy` 可回退
 
@@ -31,13 +49,13 @@
 - `legacy` 关键字唯一的命中是 `backend/internal/aiassistant/config.go:433-444` 的 AI 模型配置回退（`ai_assistant` 多绑定兼容），与诊断通道无关。
 - 切流前后**只有一条通道**：`diagnosis_adapter.go` 的 `callSSE` → `POST {base}/api/v2/chat`。
 - v1 的四个只读端点与图片代理在 `28a9c474`（#2237）里被**物理删除**，不是被开关藏起来。
-- 那台 legacy 机器（pve-01 lxc101 `172.17.1.23:8000`）原先仍在运行，跑的是 `/assistant/api/*`；但我方代码里**已经没有任何路径指向它**（`grep -r "172.17.1.23\|/assistant/api/" backend/` ⇒ 0 命中）。**它已于 2026-11-04 14:44 停机**：
+- 那台 legacy 机器（pve-01 lxc101 `<lxc101 内网>:8000`）原先仍在运行，跑的是 `/assistant/api/*`；但我方代码里**已经没有任何路径指向它**（`grep -rE "172\.17\.1\.<lxc101 尾段>|/assistant/api/" backend/` ⇒ 0 命中）。**它已于 2026-11-04 14:44 停机**：
 
   ```text
   pct status 101         ⇒ stopped
   pct list               ⇒ 101  stopped  forklift-assistant
   pct config 101         ⇒ onboot: 0（已关，pve-01 重启不会自动拉起）
-  curl 172.17.1.23:8000  ⇒ rc=28（连接超时，端口不再响应）
+  curl <lxc101 内网>:8000  ⇒ rc=28（连接超时，端口不再响应）
   ```
 
   停机前取证（7 天窗口，`docker logs forklift-assistant --since 168h`，共 8,989 条访问）：
@@ -62,11 +80,13 @@
 ### 1.2 写入
 
 ```bash
-# 基址：按对方交付时给的地址填（域名 or IP:port，不带尾斜杠以外的路径）
-gh secret set DIAGNOSIS_ASSISTANT_URL --body 'https://forklift-repair-assistant.app.workbuddy.host'
+# 基址：填 IP:port（v2 在这里，不在 README 的域名上 —— 见 §0.2）。
+# 记得带 http:// 且不带尾斜杠以外的路径；协议是明文 http，见 §0.2 的遗留风险。
+# <v2 主机> 的真值见 .scratch/2243-真实地址-本地留存.md（不入库）。
+gh secret set DIAGNOSIS_ASSISTANT_URL --env production --body 'http://<v2 主机>:8080'
 
 # Key：从对方私发处复制，32 位。绝不写进仓库、绝不贴进工单
-gh secret set DIAGNOSIS_V2_API_KEY --body '<32 位明文>'
+gh secret set DIAGNOSIS_V2_API_KEY --env production --body '<32 位明文>'
 ```
 
 ⚠️ **不要手工改 `deploy/env.defaults` 或 `docker-compose.prod.yml`。**
@@ -143,7 +163,15 @@ curl -s "$B/faults?brand=zhongli&second=<某个系统id>" | node -e "const j=JSO
 右列这六个串**必须能在这份 faults 列表里找到**（或能被 code_hint/faults 命中）。找不到的那张卡就是空召回，
 记进票面 —— 这六串是对方 v1 语料的副本（`guide.js:84-89` + `guide.py:97-106`），v2 若改了语料就会对不上。
 
-- `code-hint?q=E41` 的 `status` 应是 `known`（v1 实测如此）。
+**2026-11-04 真实联调已验：六张卡全中。** `GET /api/v2/faults?brand=zhongli`（不带 `second`，即品牌根层）逐字返回：
+
+```
+仪表报故障码 | 整车无法启动 / 无法上电 | 不行走 / 无法行走 | 举升无力 / 不能起升 | 不能充电 / 充电异常 | 转向失灵 / 无转向
+```
+
+⚠️ 注意**带 `second` 时是另一份列表**（如 `second=controller` 回「不行走 / 无法行走 | 不举升 / 无法起升 | 无法转向 | 报驱动控制器故障码 | 仪表报故障码」）—— 六张卡走的是**品牌根层**那条路，比对时别选错。
+
+- `code-hint?q=E41` 的 `status` 应是 `known`（v1 实测如此）。真实联调另验了 `q=E01` ⇒ `known`、`q=E`（太短）与 `q=XYZ`（非码）⇒ `none`，与契约五态一致。
 
 ### 2.3 未登录访客走完四步
 
@@ -307,18 +335,20 @@ curl -s https://api.gdyidao.cn/api/ai-assistant/diagnosis/health
 
 | 现象 | 判据 | 处置 |
 | --- | --- | --- |
-| **后端起不来** | `docker logs forklift-backend-prod` 里有 `DIAGNOSIS_V2_OSS_BASE` 相关 `fmt.Errorf` | OSS 前缀与 `diagnosisOSSPathPrefix` 常量不符。两条路：① 按 §0 第 4 条的答复改常量（`config.go:656`）并发一次；② 先清空 `DIAGNOSIS_V2_API_KEY` 回到未配置态止损（**注意：不能「只填 Key 不填 OSS base」—— Key 非空才会触发校验，两者必须成对**） |
+| **后端起不来** | `docker logs forklift-backend-prod` 里有 `DIAGNOSIS_V2_OSS_BASE` 相关 `fmt.Errorf` | OSS 前缀与 `diagnosisOSSPathPrefix` 常量不符。两条路：① 按 §0 第 4 条改常量（`config.go:656`）并发一次；② 先清空 `DIAGNOSIS_V2_API_KEY` 回到未配置态止损（**注意：不能「只填 Key 不填 OSS base」—— Key 非空才会触发校验，两者必须成对**） |
 | 全端点 502 但 health 200 | `public_api` 通、`diagnosis/intents` 502 | 基址错 / Key 错 / 对方鉴权拒。看后端日志的 `v2StatusError` 分支（401 会区分「Key 停用」与「IP 未授权」） |
-| 403 且文案里有 IP | 对方 403 回显了 IP | 那是**对方看到的我方出口**，与 `183.36.195.104` 比对；不符则白名单登记错了 |
+| 403 且文案里有 IP | 对方 403 回显了 IP | 那是**对方看到的我方出口**，与 `<我方出口 IP>` 比对；不符则白名单登记错了 |
 | 图全是 alt 文字 | 日志里 `白名单外` 有行 | OSS 前缀判断偏，回到 §0 第 4 条 |
 | 429 频繁 | §4 的 429 计数偏高 | 去要提额；同时可以考虑前端把 `code-hint` 防抖拉长 |
 | 答案里出现 `{{IMG:` 之类令牌 | 肉眼可见 | `done.answer` 的清洗规则与预期不符，把原文贴进票面找对方核 |
+
+**基址填错时最常见的一种表现**：填成 `https://forklift-repair-assistant.app.workbuddy.host`（README 那个域名）。它 `/api/health` 也回 200、`app_configured` 也 true，所以**健康探测会骗过你**；但 `/api/v2/*` 全 404，于是引导面 502、对话 502。认这个坑的判据：`curl <基址>/api/v2/intents -H 'X-API-Key: …'` 回 404 而不是 200 —— 见 §0.2。
 
 ---
 
 ## 7. 完成定义
 
-- [ ] §0 六条前置全绿（含第 1 条 —— 它现在还是 ❌）
+- [ ] §0 七条前置全绿（第 7 条是 ⚠️ 明文 http，按 §0.2 的处置推进）
 - [ ] §1 两个 secret 写入且作用域正确、`printenv` 验到非空
 - [ ] §2 七项走查逐条有读数（不是「试了一下没问题」）
 - [ ] §3 历史会话回看符合修正后的判据

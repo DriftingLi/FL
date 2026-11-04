@@ -234,6 +234,9 @@ $COMPOSE up -d postgres
 上传解决了「拿不到新文件」，没解决「新文件不生效」。历史上这个缺口发作过两次——
 2026-10-29 的 `forklift-redis-prod` 假告警（#2109 已从 compose 删除，旧副本继续盯它），
 2026-11-04 的诊断只读端点假告警（PR #2265 删端点，旧副本继续盯 `/diagnosis/brands`）。
+**第三次是 2026-11-04 下午**：改脚本措辞（PR #2278「非 health 为 0」订正）后没重装，
+`/opt` 是新版、`/usr/local/bin` 是旧版，连续 69 轮报不一致，冷却期一过就发信。
+每次改完 `deploy/forklift-watchdog.sh` 都要走下面这段 —— 只改注释也算。
 
 ```bash
 cd "$DEPLOY_PATH"
@@ -245,6 +248,9 @@ systemctl daemon-reload && systemctl restart forklift-watchdog.timer
 /usr/local/bin/forklift-watchdog.sh --dry-run   # 自检：应打「达告警级别 0/N（不适用 …）」
 # 注意用**安装后的路径**自检：仓库里的脚本是 100644（靠 install -m 755 赋执行位），
 # 直接跑 deploy/forklift-watchdog.sh 会 Permission denied。
+
+# 装完核对 sha（不必等下一轮定时器）：
+sha256sum /usr/local/bin/forklift-watchdog.sh "$DEPLOY_PATH/deploy/forklift-watchdog.sh"
 ```
 
 **三个面默认「不适用」而不是「故障」**（三态：0 正常 / 1 故障 / 2 不适用）。

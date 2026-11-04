@@ -64,8 +64,8 @@ DISK_CRIT_PCT=${WATCH_DISK_CRIT_PCT:-85}
 # assistant_health：v2 的健康检查要 DIAGNOSIS_ASSISTANT_URL + X-API-Key，而按 #2237 的口径
 # 「未配置」是合法状态（功能未启用），不该每 6 分钟发一封信。所以这里**没有默认值**：
 # 部署宿主上把 WATCH_ASSISTANT_HEALTH_URL 写进 env 文件才启用这一面。
-# 旧 lxc101 的 http://172.17.1.23:8000/assistant/api/health 探的是已下线的 v1 通道
-# （机器还在跑，但近 7 天零请求，见 #2243 勘察），写死它就是留一个已退役面。
+# 旧 lxc101 的 http://<lxc101 内网>:8000/assistant/api/health 探的是已下线的 v1 通道
+# （机器已于 2026-11-04 停机，见 #2243 勘察），写死它就是留一个已退役面。
 ASSISTANT_HEALTH_URL=${WATCH_ASSISTANT_HEALTH_URL:-}
 # public_api：探「后端活没活」，与诊断功能解耦。原 /diagnosis/brands 随 PR #2265 删除；
 # 换成 /api/ai-assistant/models——它仍在、仍走统一信封，且不依赖对方 OSS/上游可用性

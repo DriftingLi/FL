@@ -156,11 +156,12 @@ test('#2216 跳过行 reason 还是占位 <slug> ⇒ 提示换真实 slug（不�
   assert.match(hint, /占位/);
 });
 
-test('#2216 非触发面既无读数也无跳过 ⇒ 提示补留痕，但校验器仍判绿', async () => {
+// 2026-11-04 翻档：非触发面从「默认跑、可自选跳过」改为「默认跳过」⇒ 空着不再算漏写，提示只复述判定。
+test('#2216 非触发面既无读数也无跳过 ⇒ 默认跳过（提示复述判定、不催留痕），校验器判绿', async () => {
   const body = '## 验收证据\n\n- ④ 跑于 `' + HEAD7 + '` · `' + KOTLIN + '`\n';
   const r = await validatePrEvidence({ files: uvueEdit(), body, headSha: HEAD, fetchCompare: async () => null });
   assert.equal(r.ok, true, '缺跳过行不该判红：' + r.errors.join(' | '));
-  assert.match(skipDeclarationHint({ body, needs2: false, runtimeHit: true }), /既无/);
+  assert.match(skipDeclarationHint({ body, needs2: false, runtimeHit: true }), /默认跳过/);
 });
 
 test('#2216 needs2 触发面只写跳过行 ⇒ 校验器红（跳过不构成 ② 证据）', async () => {
