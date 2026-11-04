@@ -29,7 +29,7 @@
 #
 #   三个面默认「不适用」而不是「故障」：
 #     assistant_health  需要 WATCH_ASSISTANT_HEALTH_URL；留空 = v2 未配置，合法状态，不报警
-#     disk_lxc          需要 WATCH_REMOTE_HOST + WATCH_REMOTE_LXC；lxc101 已随 #2237 退役
+#     disk_lxc          需要 WATCH_REMOTE_HOST + WATCH_REMOTE_LXC；该机已无流量、保留待清理
 #     install_drift     需要 $DEPLOY_PATH/deploy/ 下存在参考副本（部署宿主上才有）
 #   「不适用」在 --dry-run 里逐面打「跳过」，不会混进告警数里。
 #
@@ -64,7 +64,8 @@ DISK_CRIT_PCT=${WATCH_DISK_CRIT_PCT:-85}
 # assistant_health：v2 的健康检查要 DIAGNOSIS_ASSISTANT_URL + X-API-Key，而按 #2237 的口径
 # 「未配置」是合法状态（功能未启用），不该每 6 分钟发一封信。所以这里**没有默认值**：
 # 部署宿主上把 WATCH_ASSISTANT_HEALTH_URL 写进 env 文件才启用这一面。
-# 旧 lxc101 的 http://172.17.1.23:8000/assistant/api/health 已随 #2237 退役，写死它就是第二个 lxc101。
+# 旧 lxc101 的 http://172.17.1.23:8000/assistant/api/health 探的是已下线的 v1 通道
+# （机器还在跑，但近 7 天零请求，见 #2243 勘察），写死它就是留一个已退役面。
 ASSISTANT_HEALTH_URL=${WATCH_ASSISTANT_HEALTH_URL:-}
 # public_api：探「后端活没活」，与诊断功能解耦。原 /diagnosis/brands 随 PR #2265 删除；
 # 换成 /api/ai-assistant/models——它仍在、仍走统一信封，且不依赖对方 OSS/上游可用性
@@ -73,7 +74,9 @@ PUBLIC_API_URL=${WATCH_PUBLIC_API_URL:-https://api.gdyidao.cn/api/ai-assistant/m
 # 反代探活的目标主机（#1760）：必须是**站群里的真实 Host**，不再是 localhost。
 # 留 WATCH_FE_HOST 覆盖口，是为了能在不打生产的前提下演练「探针失败必须变红」。
 FE_HOST=${WATCH_FE_HOST:-api.gdyidao.cn}
-# disk_lxc：lxc101 已随 #2237 整体退役（2026-11-03 用户拍板），故两段默认值都清空 ⇒ 该面不适用。
+# disk_lxc：默认两段都清空 ⇒ 该面不适用。
+# 理由不是「机器已退役」——lxc101 仍在 pve-01 上运行（2026-11-04 上机实测 pct list 为 running），
+# 而是「已无流量、保留待清理」：近 7 天 /ai-assistant/chat 零请求。上机前以为它已下线是错的。
 # 将来若真有机型要跨机看水位，在 env 文件里同时给 host 与 lxc 号即可复活，不必改脚本。
 REMOTE_HOST=${WATCH_REMOTE_HOST:-}
 REMOTE_LXC=${WATCH_REMOTE_LXC:-}
@@ -199,7 +202,7 @@ probe_disk_host() {
 probe_disk_lxc() {
   local out pct
   if [ -z "$REMOTE_HOST" ] || [ -z "$REMOTE_LXC" ]; then
-    REASON="未配置 WATCH_REMOTE_HOST / WATCH_REMOTE_LXC（lxc101 已随 #2237 退役）"
+    REASON="未配置 WATCH_REMOTE_HOST / WATCH_REMOTE_LXC（lxc101 已无流量、保留待清理）"
     return 2
   fi
   out=$(ssh -o BatchMode=yes -o ConnectTimeout=8 "$REMOTE_HOST" \
