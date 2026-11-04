@@ -502,8 +502,8 @@ jobs:
       SSH_PORT: ${{ secrets.SSH_PORT || '2222' }}
       SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
       # SSH 跳板配置：两环境均直连 PVE 宿主机，无跳板（SSH_JUMP_HOST 已删除，留空走直连分支）
-      # production: 183.36.195.104:2222 → pve-02 宿主机
-      # testing:    183.36.195.104:2201 → pve-01 宿主机（ISP 侧端口映射）
+      # production: <生产出口 IP>:2222 → pve-02 宿主机
+      # testing:    <生产出口 IP>:2201 → pve-01 宿主机（ISP 侧端口映射）
       # ProxyJump 代码分支保留，供未来需要跳板时经 SSH_JUMP_HOST 重新启用
       SSH_JUMP_HOST: ${{ secrets.SSH_JUMP_HOST || '' }}
       # Volume 路径：两环境均在 PVE 宿主机直接运行 Docker 26+，named volume 正常工作
@@ -539,8 +539,8 @@ jobs:
       # --------------------------------------------------------
       # Step 2.1: 配置 SSH
       #   production/testing: 公网直连 PVE 宿主机 (SSH_HOST:SSH_PORT)
-      #           production=pve-02(183.36.195.104:2222)
-      #           testing=pve-01(183.36.195.104:2201, ISP 侧端口映射)
+      #           production=pve-02(<生产出口 IP>:2222)
+      #           testing=pve-01(<生产出口 IP>:2201, ISP 侧端口映射)
       #   若配置了 SSH_JUMP_HOST，则走 ProxyJump 跳板模式（当前两环境均未使用）
       # --------------------------------------------------------
       - name: 配置 SSH

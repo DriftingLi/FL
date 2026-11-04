@@ -415,7 +415,7 @@ main() {
     echo ""
     echo "  3. 在 GitHub 仓库 Settings → Secrets and variables →"
     echo "     Actions 中添加以下 Secrets:"
-    echo "       SSH_HOST          服务器公网 IP（如 183.36.195.104）"
+    echo "       SSH_HOST          服务器公网 IP（如 <生产出口 IP>）"
     echo "       SSH_USER          $DEPLOY_USER"
     echo "       SSH_PORT          2222"
     echo "       SSH_PRIVATE_KEY   SSH 私钥（完整内容，含 BEGIN/END）"

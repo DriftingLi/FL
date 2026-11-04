@@ -7,7 +7,8 @@ $LogFile = 'D:\FL\training-app\叉车维修培训学员端跨端应用\.kb-pipel
 $FailFile = 'D:\FL\training-app\叉车维修培训学员端跨端应用\.kb-ssh-fail.count'
 $TaskName = 'ef08d295'
 
-$sshCmd = 'ssh -o ConnectTimeout=15 -o StrictHostKeyChecking=no -i C:\Users\ZHENG\.ssh\pve-04-colleague -p 2204 root@183.36.195.104 "bash /root/kb_orchestrator.sh"'
+# 主机地址已脱敏（仓库公开）：真值见维护者本地 .scratch/2243-真实地址-本地留存.md
+$sshCmd = 'ssh -o ConnectTimeout=15 -o StrictHostKeyChecking=no -i C:\Users\ZHENG\.ssh\pve-04-colleague -p 2204 root@<pve-04 公网 IP> "bash /root/kb_orchestrator.sh"'
 $ts = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
 
 try {
