@@ -113,25 +113,101 @@ function touchesPackaging(files) {
   });
 }
 
-// ② 触发条件（ADR-0008，2026-09-15 修订 #1030）：命中 MP-WEIXIN **面**，不是「文本里出现了这个词」。
+// ② 触发条件（ADR-0008，2026-09-15 修订 #1030；2026-11-04 补第 ③ 条文件级判据）：
+// 命中 MP-WEIXIN **面**，不是「文本里出现了这个词」。三条并列：
 //   ① 文件清单：training-app 下的 manifest.json / platformConfig.json；
 //   ② 运行时面文件的 diff 里**增删了一条真正的条件编译指令行**（去掉 +/- 后行首、允许注释/引号包装，
 //      是 `#ifdef|#ifndef|#if`，且表达式里含 MP-WEIXIN）。表达式**之后**的部分不判 ——
 //      `// #ifdef APP-PLUS // 与 MP-WEIXIN 分支不同` 这类「真指令行 + 同行散文提及」不算命中（#1028 实证）。
-// 已知边界（写实）：第 ② 条读 `patch`，GitHub 对超大 diff / 二进制不给 `patch` ⇒ 该路径 fail-open。
+//   ③ **文件级内容扫描**（补 ② 的覆盖空洞）：`#ifdef MP-WEIXIN` 块早就存在的 `.uvue` / `.uts`，之后只改
+//      块内实现（例如块里的 `uni.*` 调用）时，diff 里没有指令行增删 ⇒ ② 永不点亮。ADR-0008 把这登记为
+//      「平台 API 包装不是可机检的触发面」，本条就是把它补成可机检的：对**改动到的** `.uvue` / `.uts`
+//      取基线版与当前版正文，任一侧出现指令行即命中。两版本取**并集**，所以新增文件（基线侧无）与删除
+//      文件（当前侧无）都覆盖得到；扫描面按「改了哪些运行时面文件」动态推导，**不写死文件名单**（新增
+//      的微信专属文件自动纳入），也不引入 AST —— 判据仍是一行正则 `MP_WEIXIN_DIRECTIVE`。
+//      `pages.json` 明确不在本判据内：它属 ④ / ④b 的面，且 `-Pages auto` 的清单只认 `pages/**/*.uvue`，
+//      只改 `pages.json` 时 ② 会去跑两个没被改的页（#2101 的「覆盖为零的绿」），加上来是纯成本。
+// 已知边界（写实）：第 ② 条读 `patch`，GitHub 对超大 diff / 二进制不给 `patch` ⇒ 该路径 fail-open；
+//   第 ③ 条要正文，调用方不注入 `fetchFileText` 时退化为第 ①② 条判据（本地预检与 CI 都注入，见两个调用点）。
 const MP_WEIXIN_FILES = ['manifest.json', 'platformConfig.json'];
 const MP_WEIXIN_DIRECTIVE = /^\s*(?:\/{2,}|\/\*|<!--|["'])?\s*#\s*(?:ifdef|ifndef|if)\s+[A-Za-z0-9_\s|&()!-]*\bMP-WEIXIN\b/;
+// 第 ③ 条的扫描面：只管 uni-app x 的两个源文件后缀，别的（含三份 json）归 ①② 条。
+const MP_SCAN_FILE = /\.(?:uvue|uts)$/;
+// 正文取一次的 API 预算：改动面超过这个数就不逐个取（见 scanMpFiles 的 fail-closed 分支）。
+const MP_SCAN_LIMIT = 40;
 const hasMpWeixinDirective = (patch) =>
   String(patch || '')
     .split('\n')
     .filter((line) => /^[+-]/.test(line) && !/^(?:\+\+\+|---)/.test(line))
     .map((line) => line.slice(1))
     .some((content) => MP_WEIXIN_DIRECTIVE.test(content));
+// 第 ③ 条复用同一条正则：判据只有一份，文件级与 diff 级不会漂成两套口径。
+const hasMpWeixinDirectiveInText = (text) =>
+  String(text || '')
+    .split('\n')
+    .some((line) => MP_WEIXIN_DIRECTIVE.test(line));
 const hitsMpWeixinFace = (f) => {
   const p = f.filename;
   if (p.startsWith('training-app/') && MP_WEIXIN_FILES.includes(p.split('/').pop())) return true;
   return isRuntimeFile(p) && hasMpWeixinDirective(f.patch);
 };
+
+// 第 ③ 条的正文扫描。只在第 ①② 条**没命中**时才调（已命中就不白花时间）。
+// 取不到正文的两种**正常**情形（该侧文件不存在 = 新增 / 删除 / 重命名）由调用方注入的函数返 null 表达；
+// 抛异常、或两侧都读不到 ⇒ 扫描失败 ⇒ 按命中处理（fail-closed：宁可多跑一次 ②，也不静默放过块内改动）。
+async function scanMpFiles({ files, fetchFileText, baseRef, headRef }) {
+  // 重命名要两面都算：`previous_filename` 是基线侧的旧路径，只扫 `filename` 会漏掉
+  // 「带 MP 指令的文件被改名/挪目录」这一类（改名后新路径在基线不存在、旧路径在 head 不存在）。
+  const targets = [];
+  for (const f of files) {
+    for (const p of [f.filename, f.previousFilename]) {
+      if (p && MP_SCAN_FILE.test(p) && !targets.includes(p)) targets.push(p);
+    }
+  }
+  if (targets.length === 0) return { hits: [], scanned: 0, skipped: '本次没有 `.uvue` / `.uts` 改动' };
+  if (typeof fetchFileText !== 'function' || !baseRef || !headRef) {
+    return { hits: [], scanned: 0, skipped: '调用方未注入正文读取（只剩文件清单与指令行两条判据）' };
+  }
+  if (targets.length > MP_SCAN_LIMIT) {
+    return {
+      hits: targets.slice(),
+      scanned: 0,
+      skipped: `改动 ${targets.length} 个 .uvue/.uts，超过 ${MP_SCAN_LIMIT} 个的正文预算 ⇒ 按命中处理`,
+    };
+  }
+  const hits = [];
+  for (const p of targets) {
+    // 并集：基线侧与当前侧**各读一次**（不因一侧缺失短路）。新增文件基线侧为 null、删除文件
+    // 当前侧为 null —— 后者正是「删掉了整个微信专属文件」那条需要点亮 ② 的路径。
+    const sides = [
+      { path: p, ref: headRef },
+      { path: p, ref: baseRef },
+    ];
+    let read = 0;
+    try {
+      for (const s of sides) {
+        let text;
+        try {
+          text = await fetchFileText({ path: s.path, ref: s.ref });
+        } catch (e) {
+          // 「这一侧没有这个文件」与「读取本身坏了」是两件事：前者正常（新增 / 删除），
+          // 后者必须 fail-closed。用调用方约定表达前者（返 null），异常一律当后者。
+          throw new Error(`${s.path}@${String(s.ref).slice(0, 7)}：${e && e.message ? e.message : e}`);
+        }
+        if (text !== null && text !== undefined) {
+          read += 1;
+          if (hasMpWeixinDirectiveInText(text)) { hits.push(p); break; }
+        }
+      }
+    } catch (e) {
+      return { hits: targets.slice(), scanned: 0, skipped: `正文扫描失败 ⇒ 按命中处理（${e.message}）` };
+    }
+    if (read === 0) {
+      return { hits: targets.slice(), scanned: 0, skipped: `两侧都读不到 ${p} 的正文 ⇒ 按命中处理` };
+    }
+  }
+  return { hits, scanned: targets.length, skipped: '' };
+}
 
 // ============================================================================
 // ADR-0052（移动端）② 门三档分层的**影子分档器** —— 波 2：只记录，不判红、不免除。
@@ -289,6 +365,7 @@ const shaMatches = (a, b) => Boolean(a) && Boolean(b) && (a.startsWith(b) || b.s
 
 export async function validatePrEvidence({
   files, body, headSha = '', fetchCompare = null, coreList = null,
+  fetchFileText = null, baseRef = '', headRef = '',
 }) {
   // 错误带上门归属：例外通道要按门豁免，字符串数组做不到「只清 ②、④ 照红」。
   // 返回给调用方前统一渲染成字符串（三个消费者的接口不变）。
@@ -298,9 +375,20 @@ export async function validatePrEvidence({
 
   const runtime = files.filter((f) => isRuntimeFile(f.filename)).map((f) => f.filename);
   const needs2Why = files.filter(hitsMpWeixinFace).map((f) => f.filename);
-  const needs2 = needs2Why.length > 0;
+  let needs2 = needs2Why.length > 0;
   const needs4b = touchesPackaging(files);
   const headLc = String(headSha || '').toLowerCase();
+
+  // ② 第 ③ 条（文件级内容扫描）：只在 ①② 条没命中、且本次确有运行时面改动时才花 API。
+  // 命中就直接算进 needs2 / needs2Why —— 对下游（门状态、errors、notes）与 ①② 条命中完全同形。
+  let mpScan = null;
+  if (!needs2 && runtime.length > 0) {
+    mpScan = await scanMpFiles({ files, fetchFileText, baseRef, headRef });
+    if (mpScan.hits.length > 0) {
+      needs2 = true;
+      needs2Why.push(...mpScan.hits);
+    }
+  }
 
   const gates = {
     '②': { required: needs2, bound: false, commit: '', reason: '', why: needs2 ? needs2Why.slice(0, 5) : [] },
@@ -317,6 +405,21 @@ export async function validatePrEvidence({
   }
 
   const clean = String(body || '').replace(/<!--[\s\S]*?-->/g, '');
+
+  // ② 第 ③ 条的读数只说事实：扫了几个、命中没命中、为什么没扫。沉默的「没命中」与「没扫」
+  // 在 PR 上看不出区别，而这正是 #2101「覆盖为零的绿」的成因。
+  if (mpScan) {
+    if (mpScan.hits.length > 0) {
+      notes.push(`② 文件级扫描命中（块内改动，diff 里没有指令行增删）：${mpScan.hits.slice(0, 5).join('、')}${mpScan.hits.length > 5 ? ' 等' : ''} ⇒ ② 必跑。`);
+      // fail-closed 兜底也会产生 hits，但它是「没读成 ⇒ 按命中处理」，必须把**为什么**说出来，
+      // 否则维护者无法区分「真命中」与「读取坏了」，也就无从修（用户约束③：不得静默判定）。
+      if (mpScan.skipped) notes.push(`② 文件级扫描未能给出确定结论：${mpScan.skipped}。`);
+    } else if (mpScan.skipped) {
+      notes.push(`② 文件级扫描未执行：${mpScan.skipped}。`);
+    } else {
+      notes.push(`② 文件级扫描：${mpScan.scanned} 个 \`.uvue\` / \`.uts\` 改动文件的基线版与当前版均无 MP-WEIXIN 条件编译指令。`);
+    }
+  }
 
   // ---- ADR-0052 影子分档（波 2）：算档、核身、planned 双证，全部只进 notes/tiering，
   // 不进 errors —— 本函数对 ok 的影响恒为「无」。----
@@ -410,7 +513,10 @@ export async function validatePrEvidence({
   for (const gate of GATE_EVIDENCE.gates) {
     const state = gates[gate.key];
     if (!state.required) {
-      notes.push(`${gate.key} ${gate.label}：未触发（${gate.requires === 'mpweixin' ? '未命中 MP-WEIXIN 面，ADR-0008' : '未命中运行时面'}）⇒ 免。`);
+      // 「默认跳过」是**判定结果**，不是「允许你自己跳」：#2207 的原口径是「非触发面默认跑、可自选跳过」，
+      // 2026-11-04 翻成「非触发面默认跳过」—— 普通 PR 不跑 ② 不再需要理由行，也不再被提示追着要。
+      // 补上第 ③ 条文件级扫描后，「没命中」才真的等价于「这个 PR 里没有 MP-WEIXIN 面的东西」。
+      notes.push(`${gate.key} ${gate.label}：未触发（${gate.requires === 'mpweixin' ? '未命中 MP-WEIXIN 面（文件清单 / 指令行增删 / 文件级扫描三条均未命中），ADR-0008' : '未命中运行时面'}）⇒ 默认跳过，不需要读数行，也不要写跳过声明。`);
       continue;
     }
     const where = `${gate.key} ${gate.label}`;

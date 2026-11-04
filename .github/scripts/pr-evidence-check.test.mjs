@@ -594,3 +594,96 @@ test('影子判据在 CI 的 new Function 路径同样成立（自包含约束�
   assert.equal(r.tiering.tier, 'lite-exempt2', 'eval 路径的分档与 import 路径不一致 ⇒ 自包含被打穿');
   assert.match(r.notes.join(), /SHADOW-0052 分档/);
 });
+
+/* ─────────────── ② 第 ③ 条：文件级内容扫描（2026-11-04，#2207 翻档配套） ───────────────
+ * 解决的缺口：块内改 `uni.*` 行为时 diff 里没有指令行增删 ⇒ 第 ② 条看不见（#2101 / ADR-0008 :202）。
+ * 判据是「基线与当前版的**并集**里，这个改动文件的正文含 MP-WEIXIN 条件编译指令」。
+ * 识别规则复用 MP_WEIXIN_DIRECTIVE（不另写一套）；读取不到就 fail-closed 判命中，绝不静默当未命中。
+ */
+
+const BASE = 'b'.repeat(40);
+const MP_TEXT = 'export const f = () => {\n  // #ifdef MP-WEIXIN\n  return uni.getMenuButtonBoundingClientRect()\n  // #endif\n}\n';
+const PLAIN_TEXT = 'export const f = () => {\n  return 1\n}\n';
+
+/** 按 `${ref}:${path}` 取正文的桩；未登记的键返回 null（= 该 ref 下没这个路径）。 */
+const fetchFrom = (map) => async ({ path, ref }) => (map[`${ref}:${path}`] === undefined ? null : map[`${ref}:${path}`]);
+const scanRun = (files, map, bodyText = onlyG4()) =>
+  validate({ files, body: bodyText, headSha: HEAD, fetchCompare: async () => null, fetchFileText: fetchFrom(map), baseRef: BASE, headRef: HEAD });
+
+test('③ 普通 .uvue 修改（两侧正文都无 MP 指令）⇒ 不触发 ②，且如实写出「扫过了」', async () => {
+  const f = uvue('pages/a/a.uvue', { patch: '@@ -1 +1 @@\n-<view/>\n+<view class="a"/>' });
+  const map = { [`${HEAD}:${f.filename}`]: PLAIN_TEXT, [`${BASE}:${f.filename}`]: PLAIN_TEXT };
+  const r = await scanRun([f], map);
+  assert.equal(r.gates['②'].required, false);
+  assert.equal(r.ok, true, r.errors.join(' | '));
+  // 沉默的「没命中」与「没扫」在 PR 上看不出区别 —— 正是 #2101 的成因，所以必须留下这一行。
+  assert.match(r.notes.join(), /② 文件级扫描：1 个/);
+});
+
+test('③ pages.json 改动 ⇒ 仍不触发 ②（-Pages auto 只认 pages/**/*.uvue，加进来只会跑没被改的页）', async () => {
+  const f = { filename: `${SCOPE}pages.json`, status: 'modified', patch: '@@ -1 +1 @@\n-{}\n+{"pages":[]}' };
+  const r = await scanRun([f], {});
+  assert.equal(r.gates['②'].required, false);
+  assert.equal(r.ok, true);
+});
+
+test('③ manifest.json 改动 ⇒ ② 必填（① 文件清单一如既往，不依赖扫描）', async () => {
+  const f = { filename: `${SCOPE}manifest.json`, status: 'modified', patch: '' };
+  const r = await scanRun([f], {});
+  assert.equal(r.gates['②'].required, true);
+  assert.equal(r.ok, false);
+});
+
+test('③ platformConfig.json 改动 ⇒ ② 必填', async () => {
+  const f = { filename: `${SCOPE}platformConfig.json`, status: 'modified', patch: '' };
+  const r = await scanRun([f], {});
+  assert.equal(r.gates['②'].required, true);
+});
+
+test('③ 已有 MP 文件里改 uni.* 行为（diff 无指令行）⇒ 扫描命中、② 必填', async () => {
+  const f = uvue('composables/useBiometric.uts', { patch: '@@ -10 +10 @@\n-  return true\n+  return false' });
+  const map = { [`${HEAD}:${f.filename}`]: MP_TEXT, [`${BASE}:${f.filename}`]: MP_TEXT };
+  const r = await scanRun([f], map);
+  assert.equal(r.gates['②'].required, true, '块内行为改动必须点亮 ②，否则 #2101 的覆盖空洞复发');
+  assert.match(r.notes.join(), /② 文件级扫描命中/);
+});
+
+test('③ 新增含 MP 指令的文件（基线侧不存在）⇒ 命中', async () => {
+  const f = uvue('pages/new/new.uvue', { status: 'added', patch: '@@ -0,0 +1 @@\n+<view/>' });
+  const r = await scanRun([f], { [`${HEAD}:${f.filename}`]: MP_TEXT });
+  assert.equal(r.gates['②'].required, true);
+});
+
+test('③ 删除含 MP 指令的文件（当前侧不存在）⇒ 仍命中（并集，不因一侧缺失短路）', async () => {
+  const f = uvue('pages/gone/gone.uvue', { status: 'removed', patch: '@@ -1 +0,0 @@\n-<view/>' });
+  const r = await scanRun([f], { [`${BASE}:${f.filename}`]: MP_TEXT });
+  assert.equal(r.gates['②'].required, true);
+});
+
+test('③ 重命名（新路径基线不存在、旧路径当前不存在）⇒ 按 previousFilename 回头读基线侧', async () => {
+  const from = uvue('pages/old/old.uvue');
+  const f = uvue('pages/moved/moved.uvue', { status: 'renamed', previousFilename: from.filename });
+  const r = await scanRun([f], { [`${BASE}:${from.filename}`]: MP_TEXT, [`${HEAD}:${f.filename}`]: MP_TEXT });
+  assert.equal(r.gates['②'].required, true, '丢了 previousFilename 就漏掉「带 MP 指令的文件被改名」');
+});
+
+test('③ 两侧正文都读不到 ⇒ fail-closed 判命中，并写明原因（不静默当未命中）', async () => {
+  const f = uvue('pages/x/x.uvue', { patch: '@@ -1 +1 @@\n-<view/>\n+<view class="x"/>' });
+  const r = await scanRun([f], {});
+  assert.equal(r.gates['②'].required, true);
+  assert.match(r.notes.join(), /按命中处理/);
+});
+
+test('③ 未注入 fetchFileText（如某些调用方）⇒ 如实记「扫描未执行」，不假装扫过', async () => {
+  const r = await validate({ files: [uvue()], body: onlyG4(), headSha: HEAD, fetchCompare: async () => null });
+  assert.equal(r.gates['②'].required, false);
+  assert.match(r.notes.join(), /② 文件级扫描未执行/);
+});
+
+test('③ 普通 PR 没有跳过声明 ⇒ 不判红（默认跳过是判定结果，不是待办事项）', async () => {
+  const f = uvue('pages/a/a.uvue', { patch: '@@ -1 +1 @@\n-<view/>\n+<view class="a"/>' });
+  const map = { [`${HEAD}:${f.filename}`]: PLAIN_TEXT, [`${BASE}:${f.filename}`]: PLAIN_TEXT };
+  const r = await scanRun([f], map);
+  assert.equal(r.ok, true, '空正文里没有跳过声明也必须判绿：' + r.errors.join(' | '));
+  assert.match(r.notes.join(), /默认跳过/);
+});
