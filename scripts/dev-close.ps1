@@ -96,6 +96,7 @@ function FactOf([string]$text, [string]$key) {
 $wtList = '' + (& git -C $root worktree list --porcelain 2>&1 | Out-String)
 $unmerged = ''
 $headInMaster = 'na'
+$headInPr = 'na'
 
 # 认树与树身份都问判定层（#2247）：本文件不再自己扫注册表、也不再自己拼 feat/<Task>。
 # 两处写死的分支名（认树那一处与 PR 头查询那一处）就是 wt-2230 / wt-2189 每次收尾必漏的根因。
@@ -139,6 +140,13 @@ if ($treePathHint -and (Test-Path -LiteralPath $treePathHint)) {
         if ($LASTEXITCODE -eq 0) { $headInMaster = 'yes' }
         elseif ($LASTEXITCODE -eq 1) { $headInMaster = 'no' }
         else { $headInMaster = 'unreadable' }
+        # 第二个祖先事实（#2289）：GitHub squash 合并若走了「update branch」，PR 头 = master merge + 原分支头
+        # 的合成提交（同内容异 sha），本地 HEAD 是它的**祖先** ⇒ 树上没有 PR 之外的活。只采事实，
+        # 放行与否由判定层逃生阀判——本文件不留判据。
+        & git -C $treePathHint merge-base --is-ancestor HEAD $prHead 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 0) { $headInPr = 'yes' }
+        elseif ($LASTEXITCODE -eq 1) { $headInPr = 'no' }
+        else { $headInPr = 'unreadable' }
     } else {
         # 读不到 PR 头就不许拆（fail-closed）：拿不到比对基准时，「看起来没活」不是放行理由
         $unmerged = 'pr-head-unreadable'
@@ -148,7 +156,7 @@ if ($treePathHint -and (Test-Path -LiteralPath $treePathHint)) {
 $dec = Invoke-Core '--decide' ([ordered]@{
     task = $Task; execute = [bool]$Yes; cwd = ('' + (Get-Location).Path)
     worktreeList = $wtList; unmergedLog = $unmerged; prJson = $prJsonText; branch = $Branch
-    treeDirExists = $taskDirExists; headInMaster = $headInMaster
+    treeDirExists = $taskDirExists; headInMaster = $headInMaster; headInPr = $headInPr
 })
 Write-Host $dec.Text
 $reason = FactOf $dec.Text 'reason'
