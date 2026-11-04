@@ -124,8 +124,10 @@ export function findTargetTree(worktreeListText, task) {
 
 /**
  * 未合并活：**PR 头之后**还有提交就算有活，绝不能拆。
- * 不许拿 origin/master..HEAD 当判据 —— 本仓走 squash 合并，功能分支的提交永远不是 master 祖先，
+ * 不许拿 origin/master..HEAD **当日判据** —— 本仓走 squash 合并，功能分支的提交永远不是 master 祖先，
  * 那样判在每一条已合并的 PR 上都会是「有未合并提交」（#2174 dogfood 实测踩中）。
+ * 唯一的例外是 decide 里的祖先逃生阀：log 范围恒假红，但「HEAD 是 origin/master 祖先」这个
+ * 祖先事实为真时内容必已进 master，方向相反、不冲突（#2253 wt-2170 同内容异 sha 实测）。
  */
 export function hasUnmergedCommits(logText) {
   return String(logText ?? '').split(/\r?\n/).some((l) => l.trim() !== '')
@@ -180,7 +182,10 @@ export function decide(f) {
   if (prState !== 'MERGED') {
     return { ...base, reason: prState === 'unknown' ? 'pr-state-unreadable' : 'pr-not-merged', skipRemove: true, passExecute: false }
   }
-  if (hasUnmergedCommits(f.unmergedLog ?? '')) {
+  // 三态逃生阀（#2253）：prHead..HEAD 非空时只认采集侧给的 headInMaster=yes（HEAD 已在 master 祖先链，
+  // 树上没有会丢的活）。no/unreadable/缺失一律维持 fail-closed —— 陈旧 origin/master 上成立 ⇒ 真实 master
+  // 上必成立，该事实单调安全，不会因 ref 落后误放。
+  if (hasUnmergedCommits(f.unmergedLog ?? '') && f.headInMaster !== 'yes') {
     return { ...base, reason: 'unmerged-commits', skipRemove: true, passExecute: false }
   }
   return { ...base, allow: true, reason: 'ok', skipRemove: false, passExecute: execute }
