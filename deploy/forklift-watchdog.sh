@@ -29,7 +29,7 @@
 #
 #   三个面默认「不适用」而不是「故障」：
 #     assistant_health  需要 WATCH_ASSISTANT_HEALTH_URL；留空 = v2 未配置，合法状态，不报警
-#     disk_lxc          需要 WATCH_REMOTE_HOST + WATCH_REMOTE_LXC；该机已无流量、保留待清理
+#     disk_lxc          需要 WATCH_REMOTE_HOST + WATCH_REMOTE_LXC；该机已于 2026-11-04 停机
 #     install_drift     需要 $DEPLOY_PATH/deploy/ 下存在参考副本（部署宿主上才有）
 #   「不适用」在 --dry-run 里逐面打「跳过」，不会混进告警数里。
 #
@@ -75,9 +75,11 @@ PUBLIC_API_URL=${WATCH_PUBLIC_API_URL:-https://api.gdyidao.cn/api/ai-assistant/m
 # 留 WATCH_FE_HOST 覆盖口，是为了能在不打生产的前提下演练「探针失败必须变红」。
 FE_HOST=${WATCH_FE_HOST:-api.gdyidao.cn}
 # disk_lxc：默认两段都清空 ⇒ 该面不适用。
-# 理由不是「机器已退役」——lxc101 仍在 pve-01 上运行（2026-11-04 上机实测 pct list 为 running），
-# 而是「已无流量、保留待清理」：近 7 天 /ai-assistant/chat 零请求。上机前以为它已下线是错的。
-# 将来若真有机型要跨机看水位，在 env 文件里同时给 host 与 lxc 号即可复活，不必改脚本。
+# lxc101（pve-01，VMID 101）是旧 v1 诊断助手的承载机，已于 2026-11-04 14:44 停机
+# （`pct status 101` ⇒ stopped）。停机前 7 天实测非 health 请求为 0，最后一次真实对话
+# 是 2026-11-03T13:54:43Z —— 停它不影响任何在用功能。
+# 将来若该机复活（`pct start 101`）并要观察其磁盘水位，在 env 文件里同时给 host 与 lxc 号即可，
+# 不必改脚本。
 REMOTE_HOST=${WATCH_REMOTE_HOST:-}
 REMOTE_LXC=${WATCH_REMOTE_LXC:-}
 EXPECT_CONTAINERS=(forklift-frontend-prod forklift-backend-prod forklift-pg-prod forklift-libreoffice-prod)
@@ -202,7 +204,7 @@ probe_disk_host() {
 probe_disk_lxc() {
   local out pct
   if [ -z "$REMOTE_HOST" ] || [ -z "$REMOTE_LXC" ]; then
-    REASON="未配置 WATCH_REMOTE_HOST / WATCH_REMOTE_LXC（lxc101 已无流量、保留待清理）"
+    REASON="未配置 WATCH_REMOTE_HOST / WATCH_REMOTE_LXC（lxc101 已于 2026-11-04 停机）"
     return 2
   fi
   out=$(ssh -o BatchMode=yes -o ConnectTimeout=8 "$REMOTE_HOST" \
