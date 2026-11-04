@@ -189,10 +189,14 @@ test('L7 wire 形态重放：raw 必须被判定层解析，residue 的 4/5/2/3 
   assert.match(a.line, /verdict=ok$/, '分支侧已绿 = 本次收尾干净，孤儿目录不是本票的债（' + a.line + '）')
 
   // B) 幂等腿重放：树已 absent、remove 未发起，local_branch 必须随 git branch --list 事实报 absent（验收第 3 条）。
+  //    #2251 翻面：execute + tree=absent = 本次什么都没拆 ⇒ 不许再报 verdict=ok（ok 只留给真拆且对账通过的腿），
+  //    改报 noop + note=no-pending-action —— 「已重跑过」与「刚干完」在读数上必须长得不一样。
   const b = wire({ treeBefore: 'absent', localBranch: 'absent', remove: { ran: false, exitCode: 0, raw: '' } })
   assert.match(b.line, /local_branch=absent/, '重跑不能谎报 kept（' + b.line + '）')
   assert.match(b.line, / dir=na/)
-  assert.match(b.line, /verdict=ok$/)
+  assert.match(b.line, /verdict=noop( |$)/, '无动作不许报 ok（' + b.line + '）')
+  assert.match(b.line, /note=no-pending-action/, '无动作必须自带「本次无任何待执行动作」（' + b.line + '）')
+  assert.equal(b.ok, true, 'noop 不是红：已收完的票重跑一次不该失败')
 
   // C) 真残留（exit 1）照旧红，reason 不变 —— 老语义的回归钉。
   const c = wire({ residue: { ran: true, exitCode: 1, raw: residueRaw1 } })
@@ -400,4 +404,128 @@ test('L15 主树根问 git（--git-common-dir），不从脚本位置上溯；�
   })
   assert.match(v.line, / branch=na\b/, '无身份必须是 na，不能写成探测分支（' + v.line + '）')
   assert.doesNotMatch(v.line, /branch=feat\//)
+})
+
+test('L16 dry-run 三态分离：无待办动作 / 确不存在 / 目录在但不匹配 —— 三行互斥、各自可 grep（#2251）', () => {
+  // #2251 的核心断言：这三种「没干活」必须长得不一样。B-1 之前 absent 一律 planned+no-pending-action，
+  // 于是「真没树」与「没什么可做」共用同一行 —— 空转被读成达成的老病就是这么回来的。
+  const cleanList = ['worktree D:/FL', 'branch refs/heads/master', ''].join('\n')
+  const detachedList = ['worktree D:/FL', 'branch refs/heads/master', '', 'worktree D:/FL/wt-2250', 'detached', ''].join('\n')
+
+  // ① no-pending-action：dry-run 且树不存在 —— 有标记、不报 ok
+  const dryAbsent = judgeVerdict({
+    task: '2250', prState: 'NONE', mode: 'dryrun', fetch: 'ok', treeBefore: 'absent',
+    branch: '', remove: { ran: false }, residue: { ran: false, state: 'na' },
+  })
+  assert.equal(dryAbsent.verdict, 'planned')
+  assert.ok(dryAbsent.ok, 'dry-run 永远不是红')
+  assert.match(dryAbsent.line, /note=no-pending-action/, dryAbsent.line)
+  assert.doesNotMatch(dryAbsent.line, /verdict=ok( |$)/, '无动作不许报 ok')
+
+  // ② absent 已消费：execute 重跑同一票 —— 报 noop，与 ① 靠 verdict 分家
+  const execAbsent = judgeVerdict({
+    task: '2250', prState: 'MERGED', mode: 'execute', fetch: 'ok', treeBefore: 'absent',
+    branch: '', remove: { ran: false, exitCode: 0, raw: '' }, residue: { ran: true, exitCode: 0, raw: 'ABSENT  x' },
+    localBranch: 'absent',
+  })
+  assert.equal(execAbsent.verdict, 'noop', '树已不存在时，执行腿也没干活')
+  assert.match(execAbsent.line, /note=no-pending-action/, execAbsent.line)
+
+  // ③ 目录在但不匹配：判红点名 —— 与 ①② 靠 verdict + reason 双重分家
+  const d = decide({ task: '2250', worktreeList: detachedList, prState: 'MERGED', unmergedLog: '', cwd: 'D:\\FL', execute: false })
+  const execMismatch = judgeVerdict({
+    task: '2250', prState: 'MERGED', mode: 'execute', fetch: 'ok', treeBefore: 'present',
+    branch: 'refs/heads/feat/2250', blockedReason: d.reason,
+    remove: { ran: false }, residue: { ran: false, state: 'na' },
+  })
+  assert.equal(execMismatch.verdict, 'blocked')
+  assert.equal(execMismatch.ok, false, '目录在而判据没匹配上不许放行')
+  assert.match(execMismatch.line, /reason=tree-branch-mismatch/, execMismatch.line)
+  assert.doesNotMatch(execMismatch.line, /no-pending-action/, '这一态必须与「没什么可做」分开')
+
+  // 互斥性：三行的 verdict 两两不同（任意两条都不许同形）
+  const verdicts = [dryAbsent.verdict, execAbsent.verdict, execMismatch.verdict]
+  assert.equal(new Set(verdicts).size, 3, '三态必须三个不同 verdict：' + verdicts.join(' / '))
+  // 各自可 grep：每条都有唯一可挑的判据 token
+  assert.match(dryAbsent.line, /verdict=planned .*note=no-pending-action/)
+  assert.match(execAbsent.line, /verdict=noop .*note=no-pending-action/)
+  assert.match(execMismatch.line, /reason=tree-branch-mismatch .*verdict=blocked/)
+
+  // ④ 「无待办动作」的 note 只属于 absent 腿，不许漏到真干活的腿上
+  const didWork = judgeVerdict({
+    task: '2250', prState: 'MERGED', mode: 'execute', fetch: 'ok', treeBefore: 'present',
+    branch: 'refs/heads/feat/2250', remove: { ran: true, exitCode: 0, dirRemoved: true, regRemoved: true, branchRemoved: true },
+    residue: { ran: true, exitCode: 0, state: 'clean' },
+  })
+  assert.equal(didWork.verdict, 'ok', '真拆完才是 ok')
+  assert.doesNotMatch(didWork.line, /no-pending-action/, '干过活的腿不许挂无动作标记')
+})
+
+test('L17 三态真走 CLI（真执行注入事实）：进程退出码与读数行同源，noop 不许变成失败退出', () => {
+  // L16 走的是函数内直调；这一条走生产形态 —— 判定层作为子进程真跑一次，
+  // 因为 ps1 只认 `exit $v.Code`：verdict 与退出码分家的话，人读到的行和链路的判断会不一致。
+  const core = join(here, 'lib', 'dev-close.mjs')
+  const cli = (facts) => spawnSync(process.execPath, [core, '--verdict'], { input: JSON.stringify(facts), encoding: 'utf8' })
+
+  // ① dry-run + absent：planned，退出 0
+  const dry = cli({ task: '2250', prState: 'NONE', mode: 'dryrun', fetch: 'ok', treeBefore: 'absent', branch: '', remove: { ran: false }, residue: { ran: false, state: 'na' } })
+  assert.equal(dry.status, 0, dry.stdout + dry.stderr)
+  assert.match(dry.stdout, /verdict=planned( |$)/)
+  assert.match(dry.stdout, /note=no-pending-action/)
+
+  // ② execute + absent：noop，退出 0（重跑已收完的票不该失败）
+  const exec = cli({ task: '2250', prState: 'MERGED', mode: 'execute', fetch: 'ok', treeBefore: 'absent', localBranch: 'absent', branch: '', remove: { ran: false, exitCode: 0, raw: '' }, residue: { ran: true, exitCode: 0, raw: 'ABSENT  x' } })
+  assert.equal(exec.status, 0, 'noop 不是红，退出码必须 0：' + exec.stdout + exec.stderr)
+  assert.match(exec.stdout, /verdict=noop( |$)/)
+  assert.match(exec.stdout, /note=no-pending-action/)
+
+  // ③ 目录在但不匹配：blocked，退出非 0
+  const blocked = cli({ task: '2250', prState: 'MERGED', mode: 'dryrun', fetch: 'ok', treeBefore: 'present', branch: 'refs/heads/feat/2250', blockedReason: 'tree-branch-mismatch', remove: { ran: false }, residue: { ran: false, state: 'na' } })
+  assert.notEqual(blocked.status, 0, '判红就必须真退出非 0，不能只在读数行上写着')
+  assert.match(blocked.stdout, /verdict=blocked/)
+  assert.match(blocked.stdout, /reason=tree-branch-mismatch/)
+  assert.doesNotMatch(blocked.stdout, /no-pending-action/)
+})
+
+test('L18 对账分支不许绕过 noop，也不许把「无动作」贴到红行上（#2251 code-review 两处反例）', () => {
+  // 两个反例都来自同一类写法错误：把 noop 与 note 挂成「红分支链的 else / 只看 tree」。
+  // 判据来源：spec B「「无动作」永不打 verdict=ok」+ 本票 AC③「planned + tree=absent 必带 note」——
+  // 反过来说，note 只属于「确实没事可做」的那两态，红行挂着它等于自己打自己的脸。
+
+  // ① 出口码 4：分支侧已绿、仓里躺着别的会话的孤儿目录（check-branch-residue.ps1 的并发边界）。
+  //    它不进本票的红，但也绝不该因为树不存在就被算成「干完了」。
+  const orphanOnly = judgeVerdict({
+    task: '2250', prState: 'MERGED', mode: 'execute', fetch: 'ok', treeBefore: 'absent',
+    localBranch: 'absent', branch: '',
+    remove: { ran: false, exitCode: 0, raw: '' },
+    residue: { ran: true, exitCode: 4, state: 'orphan', dirs: 'orphan', orphans: 1 },
+  })
+  assert.equal(orphanOnly.verdict, 'noop', 'exit 4 不是红，但树不在就没有达成可称：' + orphanOnly.line)
+  assert.equal(orphanOnly.ok, true, 'noop 仍然是可重跑的非失败态')
+  assert.doesNotMatch(orphanOnly.line, /verdict=ok( |$)/, '树不在的执行腿永不许报 ok：' + orphanOnly.line)
+  assert.match(orphanOnly.line, /note=no-pending-action/)
+
+  // ② 真有分支残留：红行必须干净利落地是红，不许同时声称「无任何待执行动作」。
+  const residueRed = judgeVerdict({
+    task: '2250', prState: 'MERGED', mode: 'execute', fetch: 'ok', treeBefore: 'absent',
+    localBranch: 'kept', branch: 'refs/heads/feat/2250',
+    remove: { ran: false, exitCode: 0, raw: '' },
+    residue: { ran: true, exitCode: 1, state: 'dirty', dirs: 'clean' },
+  })
+  assert.equal(residueRed.verdict, 'red')
+  assert.equal(residueRed.ok, false)
+  assert.match(residueRed.line, /reason=branch-residue/)
+  assert.match(residueRed.line, /tree=absent/, '树确实不在，这一格照实报')
+  assert.doesNotMatch(residueRed.line, /no-pending-action/, '有残留就有关动作要做，红行不许贴无动作标记：' + residueRed.line)
+
+  // ③ 出口码 5（目录对账读不到）：同样不许被「树不在」洗成 noop。
+  const unreadable = judgeVerdict({
+    task: '2250', prState: 'MERGED', mode: 'execute', fetch: 'ok', treeBefore: 'absent',
+    localBranch: 'absent', branch: '',
+    remove: { ran: false, exitCode: 0, raw: '' },
+    residue: { ran: true, exitCode: 5, state: 'unknown' },
+  })
+  assert.equal(unreadable.verdict, 'red', '读不到就是 fail-closed 红')
+  assert.equal(unreadable.ok, false)
+  assert.doesNotMatch(unreadable.line, /no-pending-action/)
 })
