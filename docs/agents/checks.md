@@ -9,7 +9,7 @@
 
 ## 后端（`backend/`）
 
-检查项四件套（两个环境任选其一；⚠️ **本机现在只能跑三条**——golangci-lint 与 go 1.27 不匹配，见「环境 A」，第四条由 CI `backend-lint` 兜）：
+检查项四件套（两个环境任选其一；⚠️ **Windows 本机的 golangci-lint 自 2026-11-04 起可以跑了**——升到 v2.15.0，与 go 1.27 匹配，见「环境 A」；CI 与本机同版本同配置，两边判据同源）：
 
 - `gofmt -l .`（应无输出）
 - `go vet ./...`
@@ -35,8 +35,8 @@
 
 **环境 A：Windows 本机（Git Bash）—— 2026-09-08 起实测可用，优先使用**
 
-- 工具链装在 Windows 本机并在 PATH：go **1.27.1** + golangci-lint v1.64.8；gofmt / go vet / go test 直接跑，**不依赖 WSL**。
-- ⚠️ **`golangci-lint` 本机目前跑不了**（2026-09-20 实测）：v1.64.8 是用 go 1.26.4 构建的，面对 1.27.1 的导出数据直接失败——`cannot decode "internal/goarch": export data version 4 is greater than maximum supported version 2`，且在**未改动的包**上报错，属环境性。四条检查本机实为三条 + CI 兜底（`backend-lint` job 跑 `golangci-lint run ./...`）。**补 CI 那条腿人工能做的**：删掉或重构 Go 代码后 grep 一遍被删符号的残留引用（历史上票6 残留的一个 `toIntDefault` 就是这么在 CI 才红的）。升级匹配本机 go 的 golangci-lint 前，别把「本地四件套全绿」当成事实。
+- 工具链装在 Windows 本机并在 PATH：go **1.27.1** + golangci-lint **v2.15.0**；gofmt / go vet / go test / golangci-lint 直接跑，**不依赖 WSL**。
+- **`golangci-lint` 本机已于 2026-11-04 可以跑了**（#2266）：v1.64.8 是用 go 1.26.4 构建的，面对 1.27 的导出数据会直接失败（`cannot decode "internal/goarch": export data version 4 is greater than maximum supported version 2`，且在**未改动的包**上报错，属环境性）；升到 **v2.15.0** 后消失。升 v2 连带的三件事已一起处理：配置迁到 v2 格式（`version: "2"` / `linters.default: none` / `formatters` 段；**`gosimple` 与 `stylecheck` 已被 v2 的 staticcheck 吸收，不再单列**）、CI 的 `go install` 行改 v2 模块路径（`github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0`）、以及把 v2 新扫出的 13 条既有告警一次修干净（QF1001/QF1002/QF1003/QF1007、ST1012、ST1023、SA1019）。**别把 v1 时期的「本地四件套实为三条」当事实**——它已过期。另注意 `run.timeout` 在 v2 配置里被忽略，总超时靠调用方的 `--timeout`（CI 传 `--timeout=5m`）。
 - 已知存量失败（与改动无关，可忽略；CI 为 Linux 不受影响）：`internal/logger` 的 `TestNew_FileOutput` / `TestRedactHook_AppliedByFactory`（Windows TempDir 文件锁）；`internal/deploy` 的 `TestDeployEnvChainPreservesProvidedValues`。
 - ⚠️ 全量 `go test ./...` 会在**仓库根**落下垃圾文件（形如 `C：Users...TestDeployEnvChain...deploy-env.sh`，其中的「：」是 U+F03A 私有区字符，按字面名 `rm` 删不掉）：每次跑完全量后用 `find . -maxdepth 1 -type f -name '*TestDeployEnvChain*' -delete` 清掉，别让它进 `git status` 或提交。
 

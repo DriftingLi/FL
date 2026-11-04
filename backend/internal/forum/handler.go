@@ -709,7 +709,7 @@ func (h *handler) report(c *gin.Context, kind string) {
 		ErrStatus.RenderError(c, err)
 		return
 	}
-	var v int64 = id
+	v := int64(id)
 	var body struct {
 		Reason string `json:"reason"`
 	}
