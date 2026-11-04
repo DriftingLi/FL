@@ -8,7 +8,7 @@
 | # | 判据 | 验法 |
 | --- | --- | --- |
 | 1 | 新域备案生效 | `curl -sI http://www.gdyidao.cn/` 不再 302 到 `dnspod.qcloud.com/static/webblock.html` |
-| 2 | 全部子域解析到生产机 | `api/training/mentor/manage/recruit/valuation/cdn/dify + 裸域 + www` 逐个 `Resolve-DnsName` ⇒ 183.36.195.104 |
+| 2 | 全部子域解析到生产机 | `api/training/mentor/manage/recruit/valuation/cdn/dify + 裸域 + www` 逐个 `Resolve-DnsName` ⇒ <生产出口 IP> |
 | 3 | 证书策略不需要人工证书 | GitHub secrets 里 `SSL_FULLCHAIN`/`SSL_PRIVKEY` 待删；`TLS_MODE` 由 CD 按环境注入 |
 | 4 | 门户回源目标已确定 | EdgeOne 控制台的 API 地址将改为 `https://api.<新域>`；`EDGE_ORIGIN_TOKEN` 两处同值 |
 | 5 | 微信后台域名已加 | 小程序 request 合法域名 / 业务域名；公众号 JS 安全域名 + 网页授权回调（App 与小程序**均未发布**，故不需过渡期） |
