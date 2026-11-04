@@ -135,6 +135,9 @@ var (
 		// #2070 / #2069：两个新域的集合字段（反馈图片、笔记图片）——证据住在各自域包里。
 		{"internal/feedback", "nonnilOutlets"},
 		{"internal/note", "nonnilOutlets"},
+		// #2242：v2 引导面的四格集合（intents.brands/.faq、catalog.items、code_hint.samples）
+		// 与消息元数据的 badges 一格——证据住在域包里，见 internal/aiassistant/nonnil_outlets_test.go。
+		{"internal/aiassistant", "nonnilOutlets"},
 	}
 )
 

@@ -12,6 +12,11 @@
 //   - AIChatMessageDTO.images / .sources ⇒ 列是**字符串**存的 JSON，GetSessionMessages 只在
 //     列非空串时才 Unmarshal，「没图 / 没来源」那两档留 nil。同一份历史回放，两格两种缺席形状。
 //
+// AIChatMessageDTO.meta（票 2242）**不在这张表里**：它是 `*AIChatMessageMeta`，不是集合字段，
+// 可空性锁（判据 3/4/5）只管集合——登记进来会被「证据表里的键不在射程内声明 nullable 的字段集里」
+// 当场判红。它的缺席形状改由 ai_assistant_contract_test.go 的
+// 「无徽章消息 meta 为 null」一条实证。
+//
 // DiagnosisFaultCodePage.items 那一格随 v1 通道退役（票 2237）：故障码代理已删，
 // 该可空性不再有出口，登记与判据一并摘除。
 package aiassistant

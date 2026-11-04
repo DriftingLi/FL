@@ -105,7 +105,7 @@ var routeRegistrars = []routeRegistrar{
 		Domain: "内容与 AI",
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
 			featured.RegisterRoutes(api, rd.Session, deps.FeaturedSvc, deps.FileSvc, uploadVditorImage)
-			aiassistant.RegisterRoutes(api, rd.Session, deps.AIAssistantSvc, deps.DiagnosisProxySvc)
+			aiassistant.RegisterRoutes(api, rd.Session, deps.AIAssistantSvc, deps.DiagnosisProxySvc, deps.DiagnosisCatalogSvc)
 		},
 	},
 	{

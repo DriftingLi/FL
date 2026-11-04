@@ -57,6 +57,28 @@ func Conflict(c *gin.Context, msg string) {
 	c.JSON(409, R{Code: 409, Message: msg, Data: nil})
 }
 
+// TooManyRequests 输出 429 上游限流响应（#2242 引入：诊断引导面把上游的限流转发成 429，
+// 让前端能区分「等一会儿再试」与「服务坏了」——后者是 502）。
+func TooManyRequests(c *gin.Context, msg string) {
+	c.JSON(429, R{Code: 429, Message: msg, Data: nil})
+}
+
+// BadGateway 输出 502 上游不可用响应（#2242 引入：我方是网关，锅在上游）。
+// ⚠️ 与 ServerError 同纪律：msg 必须是**固定文案**或上游自己的中文人话，
+// 不得外发驱动/网络错误的原文——需要带原文时用 BadGatewayWithCause。
+func BadGateway(c *gin.Context, msg string) {
+	c.JSON(502, R{Code: 502, Message: msg, Data: nil})
+}
+
+// BadGatewayWithCause 502 的一次做齐形态（与 ServerErrorCause 同构，只是状态码换成 502）：
+// **固定文案（保留前缀、丢尾巴）+ c.Error 记账**。判据仍是 ClientErrorText 一处。
+func BadGatewayWithCause(c *gin.Context, prefix string, err error) {
+	if err != nil {
+		_ = c.Error(err) //nolint:errcheck // gin 的 Error 只记账，返回值是链式用的
+	}
+	BadGateway(c, ClientErrorText(http.StatusBadGateway, err, prefix))
+}
+
 // ServerError 输出 500 服务器错误响应。
 // ⚠️ msg 必须是**固定文案**：5xx 不得外发驱动/ORM 原文（见 ClientErrorText 与 ServerErrorCause）。
 func ServerError(c *gin.Context, msg string) {

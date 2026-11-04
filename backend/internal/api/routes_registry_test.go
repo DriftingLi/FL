@@ -38,10 +38,12 @@ func TestRouteRegistryCoverage(t *testing.T) {
 	}
 }
 
-// expectedRouteCount 域注册表构出的路由总数基线（2026-11-03 #2237 外部诊断 v1 通道退役：
-// 删 4 条只读代理（GET /api/ai-assistant/diagnosis/{brands,models,fault-codes,manual/*}）、
-// 加 1 条回答配图代理（GET /api/ai-assistant/diagnosis/ossimg/*）→ 342）。
-// 历史：2026-10-28 #2070 新增 4 条反馈端点
+// expectedRouteCount 域注册表构出的路由总数基线（2026-11-04 #2242 v2 引导只读面落地：
+// 加 5 条（GET /api/ai-assistant/diagnosis/{intents,systems,faults,code-hint,health}）→ 347）。
+// 历史：2026-11-03 #2237 外部诊断 v1 通道退役：删 4 条只读代理
+// （GET /api/ai-assistant/diagnosis/{brands,models,fault-codes,manual/*}）、
+// 加 1 条回答配图代理（GET /api/ai-assistant/diagnosis/ossimg/*）→ 342。
+// 2026-10-28 #2070 新增 4 条反馈端点
 // （POST/GET /api/feedback、GET /api/admin/feedback、POST /api/admin/feedback/{id}/handle）→ 345；
 // 2026-10-28 #2065 新增 1 条浏览课程上报端点（POST /api/course/{course_id}/browse）→ 341；
 // 2026-10-28 #2064 新增 1 条商城在售列表端点（GET /api/points/shop/items）→ 340；
@@ -52,4 +54,4 @@ func TestRouteRegistryCoverage(t *testing.T) {
 // 2026-09-19 第十二波票 6 新增 POST /api/question-bank/questions/{id}/submit → 329；
 // 2026-09-14 全局搜索升级 #982 新增 GET /api/admin/search-facts/zero-results → 315；
 // 2026-09-17 学员笔记域 #1078 新增 4 条 → 319。
-const expectedRouteCount = 342
+const expectedRouteCount = 347

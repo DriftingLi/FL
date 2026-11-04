@@ -68,10 +68,13 @@ var studentReadableSurface = map[string]string{
 	"/api/questions/:question_id/knowledge": "题目考点（题目详情侧栏，池外题按不存在）",
 
 	// ===== 学员工作区功能面 =====
-	"/api/ai-assistant/models":               "AI 助手可选模型列表",
-	"/api/ai-assistant/modes":                "AI 助手模式列表",
-	"/api/ai-assistant/sessions":             "我的 AI 会话列表",
-	"/api/ai-assistant/user-models":          "我的自定义模型",
+	"/api/ai-assistant/models":      "AI 助手可选模型列表",
+	"/api/ai-assistant/modes":       "AI 助手模式列表",
+	"/api/ai-assistant/sessions":    "我的 AI 会话列表",
+	"/api/ai-assistant/user-models": "我的自定义模型",
+	// 票 2242：诊断引导面的可达性探针。它**永远 200**（连不上就是 ok=false），所以必然进 2xx 命中集；
+	// 另外四个引导端点在上游未配置时回 502、配好才 2xx，不进本台账（否则台账要求它恒定 2xx 会自相矛盾）。
+	"/api/ai-assistant/diagnosis/health":     "诊断服务可达性探针（只投影 ok / app_configured）",
 	"/api/forum/topics":                      "论坛主题列表（公开内容面）",
 	"/api/forum/my-topics":                   "我发的主题",
 	"/api/forum/my-replies":                  "我的回复",

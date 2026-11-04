@@ -31,11 +31,11 @@ func newHandler(svc *Service) *handler {
 	return &handler{svc: svc}
 }
 
-// RegisterRoutes 注册 /api/ai-assistant 蓝图（公开面 + 登录面）与诊断只读代理子组。
+// RegisterRoutes 注册 /api/ai-assistant 蓝图（公开面 + 登录面）与诊断只读子组。
 // 公开路由：GET /models、GET /modes、POST /chat、POST /upload-image（可选认证）。
 // 登录路由：sessions CRUD、user-models CRUD（JWTAuth + CapabilityRequired(authz.CapAIAssistantUse)）。
 // 诊断子组（/diagnosis/*）沿用 OptionalAuth，见 handler_diagnosis.go。
-func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, svc *Service, proxy *DiagnosisProxyService) {
+func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, svc *Service, proxy *DiagnosisProxyService, catalog *DiagnosisCatalogService) {
 	h := newHandler(svc)
 
 	g := rg.Group("/ai-assistant")
@@ -60,7 +60,7 @@ func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, svc *Service
 	authed.POST("/user-models", h.SaveUserModel)
 	authed.DELETE("/user-models/:id", h.DeleteUserModel)
 
-	registerDiagnosisRoutes(g, session, proxy)
+	registerDiagnosisRoutes(g, session, proxy, catalog)
 }
 
 // ===== Handler 方法 =====

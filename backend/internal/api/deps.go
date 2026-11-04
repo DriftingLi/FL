@@ -113,6 +113,7 @@ type Deps struct {
 	TrainingCatalogSvc   *training.Service
 	AIAssistantSvc       *aiassistant.Service
 	DiagnosisProxySvc    *aiassistant.DiagnosisProxyService
+	DiagnosisCatalogSvc  *aiassistant.DiagnosisCatalogService
 	QuestionCommentSvc   *questioninteraction.Service
 	NoteSvc              *note.Service
 	QuestionKnowledgeSvc *questioninteraction.KnowledgeService
