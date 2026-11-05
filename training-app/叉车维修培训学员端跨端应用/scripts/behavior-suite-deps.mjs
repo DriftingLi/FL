@@ -74,6 +74,34 @@ const TMP_WRITE_RE = /\bmkdtempSync\s*\(|\bwriteFileSync\s*\(/;
 /** 对源码文本做形状断言（b 类的特征）。 */
 const TEXT_ASSERT_RE = /\.(?:toContain|toMatch|toMatchInlineSnapshot)\s*\(/;
 
+/**
+ * 「读套件集合」的结构信号：套件以「有哪些行为套件 / 两腿怎么切 / jest 认得哪些套件」
+ * 为输入，改动一个 utils/*.test.js 就可能改变它的结论。
+ *
+ * 这些信号取的是**代码里出现的机制名**，不是手写名单 —— 名单会漂（审计 §6.1 的 11 个
+ * 里已有套件不再读集合、也有新套件加了进来）。派生式让「新增同类套件」自动纳入，
+ * 不会因忘登记而漏跑出假绿。判据朝宽的方向错（宁可多纳入一个），与全局边同风格。
+ *
+ * 注意：这些套件读的是套件集合本身，不是某个业务文件；故 suite-set 边命中时**只纳入它们**，
+ * 其余套件仍由 direct / import-closure / dir / bprime-always 各自的判据决定是否入选。
+ */
+const SUITE_SET_SIGNALS = [
+  /\blistTests\b/,                              // jest --listTests 的真实取数
+  /\bsplitSuites\b/,                            // 两腿切分真源 guard-split.js
+  /\bjest\.config\.(?:all|unit|behavior)\.js/, // 直接读腿的 config
+  /\btestMatch\b/,                              // 套件集合的枚举口径
+  /--runTestsByPath/,                           // 以套件清单为输入驱动 jest
+];
+
+/**
+ * 另一种读集合的形态：直接 `readdirSync(path.join(ROOT, 'utils')).filter(f => f.endsWith('.test.js'))`
+ * （frontierBehavior 等）。它不出现上面任何一个机制名，但结论同样依赖「utils 里有哪些测试」。
+ * 判据朝宽：只要同时出现 readdirSync + utils 目录 + .test.js 过滤就纳入。
+ */
+function readsSuiteSetEnum(code) {
+  return /\breaddirSync\s*\(/.test(code) && /utils/.test(code) && /\.test\.js/.test(code);
+}
+
 /** 取 basename 作为反查键（跨目录同名一起命中 ⇒ 过覆盖方向）。 */
 function key(p) {
   return path.basename(String(p).replace(/\\/g, '/'));
@@ -319,15 +347,18 @@ function globalEdges(changed) {
       files: gateScripts,
     });
   }
-  // 改测试文件本身：`jestSplitContract` 读的是**全部** `utils/*.test.js`（两腿切分、心跳契约、
-  // 套件并集完备都建立在「有哪些套件」上）。增删改一个套件就会改这张表 ⇒ 全跑。
-  // 这条边同时消掉「目录读取者」里最难判的一类：读取发生在子进程里，静态扫不到。
+  // 改测试文件本身：以「套件集合」为输入的套件（jestSplitContract / behaviorSubsetBehavior /
+  // 两腿切分 / jest.config 读者）会因「有哪些套件」变了而结论失效。旧写法命中即**全跑**，
+  // 而几乎每个功能 PR 都会动 utils/*.test.js ⇒ -Changed 恒退化为全量（审计 §5.1/§6.1，11/11 回放）。
+  // 现改为只纳入**读套件集合**的那几个：名单由 profileSuite 的 readsSuiteSet 派生，不写死，
+  // 新增同类套件自动纳入（防「忘登记 ⇒ 漏跑 ⇒ 假绿」）。其余套件仍走各自的 direct/dir/b′ 判据。
   const suiteFiles = norm.filter((c) => /(^|\/)utils\/[^/]+\.test\.js$/.test(c));
   if (suiteFiles.length) {
     reasons.push({
       edge: 'suite-set',
-      why: '改动 utils/*.test.js ⇒ 全跑（两腿切分与心跳契约以套件集合为输入）',
+      why: '改动 utils/*.test.js ⇒ 只纳入以套件集合为输入的套件（#2312；旧写法全跑，恒退化）',
       files: suiteFiles,
+      suites: true, // select() 见此标记 ⇒ 只对 readsSuiteSet 画像 add，不再对 map.profiles 全量 add
     });
   }
   // 页面集合变了：一批 d 类套件在**子进程**里扫 `pages/`（capabilitySurface / mpWeixinGatePages /
@@ -404,6 +435,11 @@ function profileSuite(mobileRoot, rel) {
   const tempCopy = TMP_WRITE_RE.test(code) && readsText;
   const mutated = tempCopy && loadUts;
 
+  // 是否以「套件集合」为输入（见 SUITE_SET_SIGNALS / readsSuiteSetEnum）。剥注释后再判，
+  // 避免注释里提到 `listTests` 就把套件误纳入（与 extractTokens/dirTokens 同一份去注释输入）。
+  const readsSuiteSet =
+    SUITE_SET_SIGNALS.some((re) => re.test(code)) || readsSuiteSetEnum(code);
+
   return {
     suite: rel,
     mode,
@@ -417,6 +453,7 @@ function profileSuite(mobileRoot, rel) {
     hasSurgery,
     tempCopy,
     mutated,
+    readsSuiteSet,
     dirs: dirTokens(code),
     tokens: extractTokens(src),
   };
@@ -489,7 +526,15 @@ function select(map, changed, opts = {}) {
   }
 
   for (const g of globalEdges(changed)) {
-    for (const p of map.profiles) add(p.suite, `${g.edge}:${g.files.map(key).join(',')}`);
+    const why = `${g.edge}:${g.files.map(key).join(',')}`;
+    if (g.suites) {
+      // suite-set：只纳入「读套件集合」的套件（名单由代码信号派生，见 SUITE_SET_SIGNALS）。
+      // 其余套件留给上面的 direct / import-closure / dir / bprime-always 判据决定。
+      for (const p of map.profiles) if (p.readsSuiteSet) add(p.suite, why);
+    } else {
+      // gate-script / page-set：结构性改动仍按原裁定全跑。
+      for (const p of map.profiles) add(p.suite, why);
+    }
   }
 
   const subset = [...reasons.keys()].sort();
