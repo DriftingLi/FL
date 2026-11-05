@@ -362,10 +362,11 @@ export function getDiagnosisIntentsApi() : Promise<DiagnosisIntents> {
 }
 
 /**
- * 第二层：系统列表（`brand` 必填，缺了后端回 400）。
+ * 第二层：系统 / 型号列表（`brand` 必填，缺了后端回 400）。
  *
- * ⚠️ **型号档也走这里之外的 `faults?brand=`（不带 second）**：林德那种 87 个型号的品牌，
- * 第二层是 `faults` 的**根层**列表，不是 `systems` —— 选错层会拿到另一份列表（比对即误判）。
+ * **两档都用这一个端点**（#2310）：中力 14 个系统（带 icon），林德 87 个型号（无 icon）。
+ * `faults?brand=`（不带 second）是「品牌根层」，不是型号列表 —— 林德只有 3 条故障项；
+ * Web 侧 `DiagnosisGuide.vue` 也是不分档统一调 systems。
  */
 export function getDiagnosisSystemsApi(brand : string) : Promise<DiagnosisCatalogItem[]> {
 	const params : UTSJSONObject = { brand: brand }
@@ -382,10 +383,11 @@ export function getDiagnosisSystemsApi(brand : string) : Promise<DiagnosisCatalo
 }
 
 /**
- * 第三层：现象 / 主题（也用于**型号档的第二层**：`second` 传空串即根层）。
+ * 第三层：现象 / 主题。`second` 传**第二层选中项的 id**（不是 name，传名字会静默回落根层）。
  *
- * 两层同一端点、两个不同列表：`second` 为空 = 该品牌的根层（型号 / 诉求），
- * 非空 = 该 (品牌, 系统|型号) 下的现象词表。**这不是两个接口**，是同一个接口的两种取法。
+ * 同一个端点两种取法：`second` 为空 = 品牌根层（中力 6 条诉求 / 林德 3 条故障项），
+ * 非空 = 该 (品牌, 系统|型号) 下的现象词表 / 林德的检测主题。
+ * **品牌根层只用于「品牌根层诉求卡」这一处，不再被当成型号列表**（#2310）。
  */
 export function getDiagnosisFaultsApi(brand : string, second : string) : Promise<DiagnosisCatalogItem[]> {
 	const params : UTSJSONObject = { brand: brand }
@@ -466,7 +468,12 @@ export type StreamChatCallbacks = {
 	// 且**不是**「诊断通道生效」的必要条件（见 #999 收尾评论的更正）。
 	onSources ?: (sources : AiDiagnosisSource[]) => void
 	onError ?: (msg : string) => void
-	onDone ?: () => void
+	/**
+	 * 终帧载荷（#2310）：`done` 的 data 可能是 `null`（非诊断功能），故参数可空。
+	 * `content` 是终端权威全文，出现时客户端须整体替换已累积的增量正文
+	 * （判据 `fullContent != streamed.String()`，见 backend/internal/aiassistant/handler.go）。
+	 */
+	onDone ?: (data : UTSJSONObject | null) => void
 }
 
 /** 触发 onError（若存在） */
@@ -534,8 +541,21 @@ function handleStreamSSEEvent(event : string, data : string, callbacks : StreamC
 		} catch (e) {}
 		emitStreamError(callbacks, msg)
 	} else if (event == 'done') {
+		// done 的 data 恒可空：非诊断功能后端直接发 `null`（#2308 §二.3）；
+		// 解析失败或不是对象时按「没有载荷」处理，不能把一个坏帧当权威全文。
+		let payload : UTSJSONObject | null = null
+		if (data.length > 0 && data != 'null') {
+			try {
+				const obj = JSON.parse(data) as UTSJSONObject
+				if (obj != null) {
+					payload = obj
+				}
+			} catch (e) {
+				console.error('[streamChat] parse done error:', e)
+			}
+		}
 		if (callbacks.onDone != null) {
-			callbacks.onDone()
+			callbacks.onDone(payload)
 		}
 	}
 }

@@ -160,14 +160,22 @@ describe('诊断引导面接线契约（#2296）', () => {
       expect(fn).toMatch(/if \(raw == null\) return \[\] as Array<UTSJSONObject>/);
     });
 
-    it('型号档第二层走 faults 根层，系统档走 systems（判据来自纯函数）', () => {
+    it('型号档恒给第二层搜索框（不靠「条目 >15」的隐式巧合，#2310）', () => {
+      const code = stripCodeComments(GUIDE_UI);
+      expect(code).toMatch(/isModelPicker \|\| secondItems\.length > 15/);
+      expect(code).toMatch(/pickerKindOf\(brand\.value\) == 'model'/);
+    });
+
+    it('两档第二层都走 systems（#2310：不再按 picker 分支到 faults 根层）', () => {
       const fn = fnBody(STATE, 'function secondSourceOf');
-      expect(fn).toMatch(/'faults-root'/);
       expect(fn).toMatch(/'systems'/);
+      expect(fn).not.toMatch(/'faults-root'/);
+      expect(fn).not.toMatch(/pickerKindOf/);
       const load = fnBody(COMPOSABLE, 'async function loadSecond');
-      expect(load).toMatch(/if \(src == 'faults-root'\) \{/);
-      expect(load).toMatch(/getDiagnosisFaultsApi\(brandId, ''\)/);
       expect(load).toMatch(/getDiagnosisSystemsApi\(brandId\)/);
+      // 旧锚：把 faults 根层当型号列表的那条分支必须消失
+      expect(load).not.toMatch(/getDiagnosisFaultsApi\(brandId, ''\)/);
+      expect(load).not.toMatch(/'faults-root'/);
     });
 
     it('检测器有牙：把健康探测删掉必须判红（否则会画出点不动的品牌卡）', () => {

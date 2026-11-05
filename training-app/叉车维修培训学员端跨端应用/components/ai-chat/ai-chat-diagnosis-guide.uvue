@@ -29,8 +29,9 @@
 
 		<!-- 第 2 步：系统（系统档）/ 型号（型号档，可能要搜） -->
 		<view v-else-if="stepIndex == 1" class="guide-body">
-			<!-- 搜索框只在条目多时出现：14 个系统不需要，87 个型号是一面长墙 -->
-			<input v-if="secondItems.length > 15" :value="secondFilter" class="guide-search" placeholder="搜型号 / 车型，如 E-322、牵引车" @input="onFilterInput" />
+			<!-- 型号档恒给搜索框（林德 87 个型号是一面长墙）；系统档只在条目多时给。
+			     判据取 picker 而不是只看条目数：mock / 降级场景下条目变少也不该把搜索弄丢（#2310）。 -->
+			<input v-if="isModelPicker || secondItems.length > 15" :value="secondFilter" class="guide-search" placeholder="搜型号 / 车型，如 E-322、牵引车" @input="onFilterInput" />
 			<scroll-view class="chip-scroll" scroll-y="true">
 				<view class="chip-wrap">
 					<view v-for="it in filteredSecond" :key="it.id" class="chip" :class="secondClass(it.id)" @click="onPickSecond(it)">

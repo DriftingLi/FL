@@ -21,7 +21,7 @@ import type { DiagnosisIntentBrand } from '../types/index'
 export type DiagnosisSelection = {
 	/** 品牌 id（`intents.brands[].id`） */
 	brandId : string
-	/** 第二层 id（`systems[].id` / 型号档的 `faults` 根层 id） */
+	/** 第二层 id（两档都取 `systems[].id`：系统 id 或型号 id） */
 	secondId : string
 	/** 第三层：现象名（系统档）或维修主题名（型号档）—— 用**名字**而不是 id，名字才是要进正文的词 */
 	faultName : string
@@ -49,7 +49,7 @@ export function faultStepTitle(brand : DiagnosisIntentBrand | null) : string {
 	return pickerKindOf(brand) == 'model' ? '选要查的维修部位 / 主题' : '选故障现象'
 }
 
-/** 第二层标题（型号档在 `faults` 根层给型号，系统档在 `systems` 给系统） */
+/** 第二层标题（两档都取 `systems?brand=`：型号档是型号，系统档是系统） */
 export function secondStepTitle(brand : DiagnosisIntentBrand | null) : string {
 	return pickerKindOf(brand) == 'model' ? '选型号' : '选系统'
 }

@@ -17,6 +17,7 @@
  * 这个是页面的分区归属（ADR-0013）。
  */
 import { ref, type Ref } from 'vue'
+import { toStr } from '../api/helpers'
 import {
 	getAiSessionsApi,
 	createAiSessionApi,
@@ -203,23 +204,32 @@ export function useAiChat(featureScope : Ref<string>) {
 				}
 			},
 			onError: (msg : string) => {
+				// 请求结束（失败 / 超时 / 服务不可用）⇒ 等待态就地结束，不残留到下一轮（#2298）。
 				thinking.value = false
 				assistantMsg.content += '\n[错误：' + msg + ']'
 				uni.showToast({ title: msg, icon: 'none' })
 				scrollToBottom()
 			},
-			onDone: () => {
+			onDone: (data : UTSJSONObject | null) => {
+				// `done.content` 是终端权威全文（#2310）：只要带非空 content 就**整体替换**
+				// 已累积的增量，不按「是不是配图轮」分支 —— 现网实测非配图轮两者同样不等
+				// （纯图轮追加兜底追问、E01 轮少尾部免责声明）。不带时保留累积增量。
+				if (data != null) {
+					const finalContent = data['content']
+					if (finalContent != null) {
+						const full = toStr(finalContent)
+						if (full.length > 0) {
+							assistantMsg.content = full
+						}
+					}
+				}
+				// 请求结束（成功）⇒ 等待态就地结束，不残留、不串到下一轮（#2298）。
 				thinking.value = false
 				scrollToBottom()
 			},
 		})
-
-		// 兜底：30 秒后仍未结束则重置 thinking（部分端 SSE 静默/异常时，避免会话卡死）
-		setTimeout(() => {
-			if (thinking.value) {
-				thinking.value = false
-			}
-		}, 30000)
+		// 不再挂固定 30 秒兜底计时器：它会在诊断长回答（实测 8~90 秒）上提前宣告完成、
+		// 留下空气泡，且与服务端 300 秒流式超时不同源（#2298）。等待态只在 onDone / onError 收尾。
 	}
 
 	/**
