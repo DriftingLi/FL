@@ -14,6 +14,24 @@
 		<!-- 会话区：本页**没有**宫格、没有档位横幅、没有模型选择器 —— 专项通道由管理端单绑定
 		     解析模型（见 buildBody 注释），用户在这一页没有可自选的东西。 -->
 		<scroll-view class="chat-scroll" scroll-y="true" :scroll-into-view="scrollIntoViewId" scroll-with-animation>
+			<!-- 空态欢迎区（仅诊断页且引导数据可用时渲染）：品牌快选 + 常见问题。
+			     取数失败 / health.ok=false 时 guideVisible 为 false ⇒ **整块不渲染**，
+			     页面退化为纯文字提问（票面判据：不留「点了必失败」的按钮）。 -->
+			<view v-if="isDiagnosis && guideVisible && messages.length == 0" class="welcome-area">
+				<view class="welcome-brand-row">
+					<view v-for="b in brands" :key="b.id" class="welcome-brand" @click="onPickBrandCard(b.id)">
+						<text class="welcome-brand-icon">{{ b.icon }}</text>
+						<text class="welcome-brand-name">{{ b.name }}</text>
+						<text v-if="b.tagline.length > 0" class="welcome-brand-tagline">{{ b.tagline }}</text>
+					</view>
+				</view>
+				<view v-if="faq.length > 0" class="welcome-faq">
+					<text class="welcome-faq-title">大家常问</text>
+					<view v-for="(f, idx) in faq" :key="idx" class="welcome-faq-row" @click="onPickFaq(f.q)">
+						<text class="welcome-faq-q">{{ f.q }}</text>
+					</view>
+				</view>
+			</view>
 			<view v-if="messages.length > 0" class="chat-area">
 				<AiChatBubble v-for="(msg, idx) in messages" :key="idx" :role="msg.role" :content="msg.content" :sources="msg.sources" :show-actions="msg.role == 'assistant'" :is-last="idx == messages.length - 1" @copy="onCopyText(msg.content)" @retry="onRetry" />
 				<view v-if="thinking" class="message-row assistant">
@@ -30,7 +48,30 @@
 		     也不留一个「点了必 404」的中间态。周边只读面按 v2 契约重接归票 2242，
 		     本页重适配归票 2244。 -->
 
-		<AiChatInput @send="onInputSend" @voice-click="onVoiceClick" />
+		<!-- 引导入口：只在诊断页且引导数据可用时出现（同样是 guideVisible 一个判据） -->
+		<view v-if="isDiagnosis && guideVisible" class="guide-entry" @click="openGuide">
+			<text class="guide-entry-text">{{ guideEntryLabel }}</text>
+		</view>
+
+		<AiChatInput :draft="draftText" @send="onInputSend" @voice-click="onVoiceClick" />
+
+		<AiChatDiagnosisGuide
+			:visible="guideOpen"
+			:brands="brands"
+			:state="guideState"
+			:second-items="secondItems"
+			:fault-items="faultItems"
+			:second-loading="secondLoading"
+			:fault-loading="faultLoading"
+			:sentence="sentence"
+			@close="closeGuide"
+			@pick-brand="pickBrand"
+			@pick-second="pickSecond"
+			@pick-fault="pickFault"
+			@update-extra="updateExtra"
+			@jump="jumpStep"
+			@confirm="onConfirmSentence"
+		/>
 
 		<!-- 左侧会话抽屉：本页**只列本功能区**的会话（list/create 都带本页键，见 useAiChat 的 featureScope）。
 		     它就是 ADR-0013「带键必有列它的界面」里的那个**界面** —— 缺了它，本页建的会话
@@ -42,16 +83,18 @@
 <script setup lang="uts">
 	import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
 	import { onLoad } from '@dcloudio/uni-app'
-	import { ref } from 'vue'
+	import { computed, ref } from 'vue'
 	import { useAuthStore } from '../../stores/auth'
 	import { useAiChat } from '../../composables/useAiChat'
 	import type { ChatBodyBuilder } from '../../composables/useAiChat'
 	import type { AiChatMessage, AIFunctionItem, AiSession } from '../../types/index'
 
-	import { FUNCTION_ITEMS } from './ai-assistant-constants'
+	import { FUNCTION_ITEMS, isDiagnosisFeature } from './ai-assistant-constants'
 	import AiChatBubble from '../../components/ai-chat/ai-chat-bubble.uvue'
 	import AiChatDrawerLeft from '../../components/ai-chat/ai-chat-drawer-left.uvue'
 	import AiChatInput from '../../components/ai-chat/ai-chat-input.uvue'
+	import AiChatDiagnosisGuide from '../../components/ai-chat/ai-chat-diagnosis-guide.uvue'
+	import { useDiagnosisGuide } from '../../composables/useDiagnosisGuide'
 
 	/**
 	 * 参数化专项页（ADR-0009 2026-09-15 修订 ②）：**1 个页面 + `featureKey` 参数**，形态照 web 的
@@ -101,13 +144,48 @@
 	// 根容器高度（同 ai-settings.uvue / 通用页）：给根节点一个确定高度，onLoad 里赋值
 	const pageHeight = ref<number>(0)
 
-	// ===== 诊断筛选：随 v1 通道退役下线（#2237 / #2262）=====
+	// ===== 诊断引导面（#2296）=====
 	//
-	// 原筛选面板的数据源是三个只读代理端点（brands / models / fault-codes），后端 #2237 已硬删，
-	// v2 单轨后无替代（周边只读面按 v2 契约重接归票 2242，本页重适配归票 2244）⇒ 面板整个摘掉、
-	// 本页退化为「只保留对话」。原先靠 `isDiagnosis` 单点判定面板显隐，面板没了它就没有消费方，
-	// 一并删掉（不留一个恒为真的死判据）。判据函数本身 `isDiagnosisFeature` 仍留在
-	// `ai-assistant-constants.uts`：它读注册表 `adapter` 列（ADR-0047 §7），是 #2244 重适配要用的单点。
+	// 「本页是不是诊断专项页」**只经一个判据函数**：`isDiagnosisFeature`（读注册表 `adapter` 列，
+	// ADR-0047 §7）。页面上任何诊断专有的渲染都挂在 `isDiagnosis` 上 —— **禁止**在这里写
+	// `featureKey == 'fault_diagnosis'` 之类的字面比较（换一个诊断类功能键就得全页改一遍）。
+	//
+	// 取数、留白判定、四步状态机与组句全在 `useDiagnosisGuide` 里；本页只做三件事：
+	// 渲染欢迎区、把选出来的句子写进输入框、把面板动作转给 composable。
+	const isDiagnosis = ref<boolean>(false)
+
+	/**
+	 * 灌进输入框的草稿（引导面板「填入输入框」用）。
+	 *
+	 * 为什么不直接改 `inputText`：那个是 `useAiChat` 的内部状态、不是双向绑定到组件上的
+	 * —— 组件的 `:value` 只在挂载时取一次，改 `inputText` 页面上**不会变**（这也是
+	 * `onRetry` 一直以来的隐性问题：它写 inputText 但发送时立刻清空，看不出差别）。
+	 * 草稿做成页面级 ref 并在发送后清空，语义与「预填一格文字」一致。
+	 */
+	const draftText = ref<string>('')
+
+	const {
+		brands,
+		faq,
+		guideVisible,
+		guideOpen,
+		state: guideState,
+		secondItems,
+		faultItems,
+		secondLoading,
+		faultLoading,
+		sentence,
+		loadIntents: loadDiagnosisIntents,
+		openGuide,
+		openGuideWithBrand,
+		openGuideWithFault,
+		closeGuide,
+		pickBrand,
+		pickSecond,
+		pickFault,
+		updateExtra,
+		jumpStep,
+	} = useDiagnosisGuide()
 
 	/**
 	 * 按键定位宫格项。清单是**移动端手写**的（ADR-0009 修订 ② 的配套口径），
@@ -143,6 +221,36 @@
 		}
 		params['feature_key'] = featureKey
 		return params
+	}
+
+	/** 引导入口的胶囊文案：一眼看出当前选到哪一步 */
+	const guideEntryLabel = computed<string>(() : string => {
+		if (guideState.value.selection.faultName.length > 0) {
+			return '引导选问题 · ' + guideState.value.selection.faultName
+		}
+		return guideOpen.value ? '收起引导' : '引导选问题'
+	})
+
+	/** 欢迎区点品牌卡：带品牌预选进面板，直接落到第二层 */
+	function onPickBrandCard(brandId : string) : void {
+		openGuideWithBrand(brandId)
+	}
+
+	/** 欢迎区点常见问题：直接填进输入框（FAQ 是现成的一句话，不经引导面） */
+	function onPickFaq(question : string) : void {
+		draftText.value = question
+	}
+
+	/**
+	 * 引导面板「填入输入框」：把组好的句子交给输入框，**不自动发送**。
+	 *
+	 * 票面判据是「输入框出现拼装好的问题句，学员可编辑后再发送」—— 组句模板的注释自己写着
+	 * 「补充说明（故障码 / 时机 / 异响位置）由用户自己写，那是唯一能补回一部分命中率的手段」，
+	 * 替人发出去就把这唯一手段废了。web 侧是直接发（点完即发），这里是**有意的差异**，见 ADR。
+	 */
+	function onConfirmSentence(text : string) : void {
+		draftText.value = text
+		closeGuide()
 	}
 
 	function onBack() : void {
@@ -181,6 +289,7 @@
 		const lastUserMsg = getLastUserMessage()
 		if (lastUserMsg.length > 0) {
 			inputText.value = lastUserMsg
+			draftText.value = ''
 			sendInput(featureTitle.value, buildBody, [], currentFeatureKey.value)
 		}
 	}
@@ -192,6 +301,8 @@
 	 */
 	function onInputSend(text : string) : void {
 		inputText.value = text
+		// 发出去之后草稿作废：下一次发送不能把同一句再塞回输入框（否则点两次发送像卡住）
+		draftText.value = ''
 		sendInput(featureTitle.value, buildBody, [], currentFeatureKey.value)
 	}
 
@@ -219,9 +330,16 @@
 		}
 		currentFeatureKey.value = item.featureKey
 		featureTitle.value = item.title
+		// 诊断专有判定的**单一入口**（不在这里比较功能键字面量）
+		isDiagnosis.value = isDiagnosisFeature(item.featureKey)
 
 		// **定位键之后**再拉本区会话（顺序在此承重：先列后定键会拉到遗留区，抽屉就列错区了）
 		loadSessions()
+
+		// 引导数据只在诊断页拉；非诊断页一次请求都不发（guideVisible 恒 false ⇒ 整块不渲染）
+		if (isDiagnosis.value) {
+			loadDiagnosisIntents()
+		}
 	})
 </script>
 
@@ -260,6 +378,85 @@
 		font-size: 34rpx;
 		font-weight: bold;
 		color: #222222;
+	}
+
+	.welcome-area {
+		flex-direction: column;
+		margin-bottom: 24rpx;
+	}
+
+	.welcome-brand-row {
+		flex-direction: row;
+		flex-wrap: wrap;
+	}
+
+	.welcome-brand {
+		flex-direction: column;
+		border-width: 1rpx;
+		border-style: solid;
+		border-color: $border-color;
+		border-radius: $radius-lg;
+		padding: 20rpx;
+		margin-right: 16rpx;
+		margin-bottom: 16rpx;
+		background-color: $card-bg;
+		min-width: 300rpx;
+	}
+
+	.welcome-brand-icon {
+		font-size: 40rpx;
+	}
+
+	.welcome-brand-name {
+		font-size: 28rpx;
+		font-weight: bold;
+		color: $text-color;
+		margin-top: 8rpx;
+	}
+
+	.welcome-brand-tagline {
+		font-size: 22rpx;
+		color: $text-color-placeholder;
+		margin-top: 4rpx;
+	}
+
+	.welcome-faq {
+		flex-direction: column;
+		margin-top: 8rpx;
+	}
+
+	.welcome-faq-title {
+		font-size: 24rpx;
+		color: $text-color-placeholder;
+		margin-bottom: 8rpx;
+	}
+
+	.welcome-faq-row {
+		border-width: 1rpx;
+		border-style: solid;
+		border-color: $border-color-light;
+		border-radius: $radius-md;
+		padding: 16rpx 20rpx;
+		margin-bottom: 12rpx;
+		background-color: $card-bg;
+	}
+
+	.welcome-faq-q {
+		font-size: 26rpx;
+		color: $text-color-secondary;
+	}
+
+	.guide-entry {
+		align-items: flex-start;
+		padding-left: 24rpx;
+		padding-right: 24rpx;
+		padding-top: 8rpx;
+		padding-bottom: 8rpx;
+	}
+
+	.guide-entry-text {
+		font-size: 24rpx;
+		color: $uni-color-primary;
 	}
 
 	.chat-scroll {

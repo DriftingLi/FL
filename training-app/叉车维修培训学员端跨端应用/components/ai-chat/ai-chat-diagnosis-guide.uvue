@@ -1,0 +1,476 @@
+<template>
+	<view v-if="visible" class="guide-mask" @click="onClose"></view>
+	<view v-if="visible" class="guide-sheet">
+		<view class="guide-head">
+			<text class="guide-title">按品牌选问题</text>
+			<text class="guide-close" @click="onClose">&#10005;</text>
+		</view>
+
+		<!-- 步骤条：已完成的步可点回去改，未完成的步点不动（否则是一张空屏） -->
+		<view class="guide-steps">
+			<view v-for="(s, idx) in steps" :key="s.key" class="guide-step-wrap">
+				<text v-if="idx > 0" class="guide-step-sep">&rsaquo;</text>
+				<view class="guide-step" :class="stepClass(idx)" @click="onJump(idx)">
+					<text class="guide-step-text" :class="stepIndex == idx ? 'guide-step-text-on' : ''">{{ idx + 1 }}. {{ s.label }}</text>
+				</view>
+			</view>
+		</view>
+
+		<!-- 第 1 步：品牌（取不到时整个组件不渲染 ⇒ 这一屏根本不会出现） -->
+		<view v-if="stepIndex == 0" class="guide-body">
+			<view class="chip-wrap">
+				<view v-for="b in brands" :key="b.id" class="chip" :class="brandClass(b.id)" @click="onPickBrand(b.id)">
+					<text class="chip-icon">{{ b.icon }}</text>
+					<text class="chip-text" :class="brandIdSel == b.id ? 'chip-text-on' : ''">{{ b.name }}</text>
+				</view>
+			</view>
+			<text class="guide-hint">不知道型号也能直接描述故障现象，引导只是省点打字。</text>
+		</view>
+
+		<!-- 第 2 步：系统（系统档）/ 型号（型号档，可能要搜） -->
+		<view v-else-if="stepIndex == 1" class="guide-body">
+			<!-- 搜索框只在条目多时出现：14 个系统不需要，87 个型号是一面长墙 -->
+			<input v-if="secondItems.length > 15" :value="secondFilter" class="guide-search" placeholder="搜型号 / 车型，如 E-322、牵引车" @input="onFilterInput" />
+			<scroll-view class="chip-scroll" scroll-y="true">
+				<view class="chip-wrap">
+					<view v-for="it in filteredSecond" :key="it.id" class="chip" :class="secondClass(it.id)" @click="onPickSecond(it)">
+						<text class="chip-icon">{{ it.icon.length > 0 ? it.icon : '📦' }}</text>
+						<text class="chip-text" :class="secondIdSel == it.id ? 'chip-text-on' : ''">{{ it.name }}</text>
+					</view>
+					<text v-if="filteredSecond.length == 0" class="guide-hint">{{ secondLoading ? '加载中…' : '没有匹配项' }}</text>
+				</view>
+			</scroll-view>
+		</view>
+
+		<!-- 第 3 步：现象 / 维修主题（词表里没有的，下一步自己写） -->
+		<view v-else-if="stepIndex == 2" class="guide-body">
+			<text class="guide-hint">{{ faultTitle }}——词表里没有的，可以直接在下一步描述。</text>
+			<scroll-view class="chip-scroll" scroll-y="true">
+				<view class="chip-wrap">
+					<view v-for="it in faultItems" :key="it.id" class="chip" :class="faultClass(it.name)" @click="onPickFault(it.name)">
+						<text class="chip-icon">{{ it.icon.length > 0 ? it.icon : '🔧' }}</text>
+						<text class="chip-text" :class="faultNameSel == it.name ? 'chip-text-on' : ''">{{ it.name }}</text>
+					</view>
+					<text v-if="faultItems.length == 0" class="guide-hint">{{ faultLoading ? '加载中…' : '这个词表里没有匹配项，下一步可直接写。' }}</text>
+				</view>
+			</scroll-view>
+			<view class="guide-secondary" @click="onFreeform">
+				<text class="guide-secondary-text">{{ faultItems.length > 0 ? '没有我要的，直接描述' : '直接描述故障现象' }}</text>
+			</view>
+		</view>
+
+		<!-- 第 4 步：确认（现象与补充都可改，预览实时跟着变） -->
+		<view v-else class="guide-body">
+			<text class="guide-hint">故障现象（可改写，写清楚一点命准率更高）：</text>
+			<textarea :value="faultNameSel" class="guide-textarea" placeholder="如：举升无力，空载也起不来" @input="onFaultInput" />
+			<textarea :value="extraText" class="guide-textarea" placeholder="补充：故障码 / 出现时机 / 部位（可不填）" @input="onExtraInput" />
+			<view class="guide-preview">
+				<text class="guide-preview-text">{{ sentence.length > 0 ? sentence : '把故障现象写上，这里会显示将要填入输入框的句子…' }}</text>
+			</view>
+			<view class="guide-cta" :class="sentence.length > 0 ? 'guide-cta-on' : 'guide-cta-off'" @click="onConfirm">
+				<text class="guide-cta-text" :class="sentence.length > 0 ? 'cta-text-on' : 'cta-text-off'">填入输入框</text>
+			</view>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+	import { computed, ref } from 'vue'
+	import type { ComputedRef } from 'vue'
+	import type { DiagnosisIntentBrand, DiagnosisCatalogItem } from '../../types/index'
+	import type { DiagnosisGuideState } from '../../utils/diagnosisGuide'
+	import { initialGuideState } from '../../utils/diagnosisGuide'
+	import { pickerKindOf } from '../../utils/diagnosisCompose'
+
+	/**
+	 * 诊断引导的半屏面板（#2296）。
+	 *
+	 * 形态取既有 `ai-chat-pro-sheet.uvue` 那一套（绝对定位遮罩 + 底部实色面板），
+	 * **不新增页面** ⇒ 不碰 pages.json、不触发打包面门。
+	 *
+	 * 本组件是**受控的**：选择态由 `state` 属性传入、动作只 emit 出去，组件自己只留
+	 * 一个纯展示用的搜索词。「关闭面板再进入不残留上次预选」因此是结构性的 ——
+	 * 组件里没有可残留的选择字段（web 侧 #2280 缺陷一那种「预选被 watcher 抹掉」
+	 * 也不存在：预选寄存与兑现全在纯函数状态机里）。
+	 */
+	const props = withDefaults(defineProps<{
+		visible?: boolean
+		brands?: DiagnosisIntentBrand[]
+		state?: DiagnosisGuideState
+		secondItems?: DiagnosisCatalogItem[]
+		faultItems?: DiagnosisCatalogItem[]
+		secondLoading?: boolean
+		faultLoading?: boolean
+		sentence?: string
+	}>(), {
+		visible: false,
+		brands: () => [] as DiagnosisIntentBrand[],
+		secondItems: () => [] as DiagnosisCatalogItem[],
+		faultItems: () => [] as DiagnosisCatalogItem[],
+		secondLoading: false,
+		faultLoading: false,
+		sentence: ''
+	})
+
+	const emit = defineEmits<{
+		(e : 'close') : void
+		(e : 'pick-brand', id : string) : void
+		(e : 'pick-second', item : DiagnosisCatalogItem) : void
+		(e : 'pick-fault', name : string) : void
+		(e : 'update-extra', extra : string) : void
+		(e : 'jump', i : number) : void
+		(e : 'confirm', sentence : string) : void
+	}>()
+
+	/** 第二层搜索词：纯展示态，不影响任何选择 */
+	const secondFilter = ref<string>('')
+
+	const steps = [
+		{ key: 'brand', label: '品牌' },
+		{ key: 'second', label: '系统 / 型号' },
+		{ key: 'fault', label: '现象 / 主题' },
+		{ key: 'confirm', label: '确认' }
+	]
+
+	/**
+	 * 取当前状态（**唯一入口**）。
+	 *
+	 * 为什么不在模板/脚本里直接读 `state.xxx`：`state` 是可选对象 prop，Kotlin 侧对 nullable
+	 * 接收者解析成员会失败（error18 找不到名称，先例见 `utils/utsAndroidCompile.test.js` 的 P 条）。
+	 * 故一律经这个函数取一次、判空后退化成初始态，再读成员。
+	 */
+	function st() : DiagnosisGuideState {
+		const s = props.state
+		if (s == null) return initialGuideState()
+		return s
+	}
+
+	/** 模板里用的四个标量（模板不直读可选对象的成员） */
+	const stepIndex = computed<number>(() : number => st().step)
+
+	const brandIdSel = computed<string>(() : string => st().brandId)
+
+	const secondIdSel = computed<string>(() : string => st().secondId)
+
+	const faultNameSel = computed<string>(() : string => st().selection.faultName)
+
+	const extraText = computed<string>(() : string => st().selection.extra)
+
+	const brand = computed<DiagnosisIntentBrand | null>(() : DiagnosisIntentBrand | null => {
+		const list = props.brands
+		const id = brandIdSel.value
+		for (let i = 0; i < list.length; i++) {
+			if (list[i].id == id) return list[i]
+		}
+		return null
+	})
+
+	const isModelPicker = computed<boolean>(() : boolean => {
+		return pickerKindOf(brand.value) == 'model'
+	})
+
+	const faultTitle = computed<string>(() : string => {
+		return isModelPicker.value ? '选要查的维修部位 / 主题' : '选故障现象'
+	})
+
+	/** 第二层过滤：判据是名字（学员搜的是他在车上看到的字，不是内部 id） */
+	const filteredSecond = computed<DiagnosisCatalogItem[]>(() : DiagnosisCatalogItem[] => {
+		const q = secondFilter.value.trim().toLowerCase()
+		const all = props.secondItems
+		if (q.length == 0) return all
+		const out : DiagnosisCatalogItem[] = []
+		for (let i = 0; i < all.length; i++) {
+			if (all[i].name.toLowerCase().indexOf(q) >= 0) out.push(all[i])
+		}
+		return out
+	})
+
+	function canJump(i : number) : boolean {
+		const cur = st()
+		if (i == cur.step) return true
+		if (i == 0) return true
+		if (i == 1) return cur.brandId.length > 0
+		if (i == 2) return cur.brandId.length > 0 && cur.secondId.length > 0
+		return cur.selection.faultName.length > 0
+	}
+
+	function stepClass(i : number) : string {
+		if (stepIndex.value == i) return 'guide-step guide-step-on'
+		return canJump(i) ? 'guide-step' : 'guide-step guide-step-off'
+	}
+
+	function brandClass(id : string) : string {
+		return brandIdSel.value == id ? 'chip chip-on' : 'chip'
+	}
+
+	function secondClass(id : string) : string {
+		return secondIdSel.value == id ? 'chip chip-on' : 'chip'
+	}
+
+	function faultClass(name : string) : string {
+		return faultNameSel.value == name ? 'chip chip-on' : 'chip'
+	}
+
+	function onClose() : void {
+		emit('close')
+	}
+
+	function onPickBrand(id : string) : void {
+		emit('pick-brand', id)
+	}
+
+	function onPickSecond(item : DiagnosisCatalogItem) : void {
+		emit('pick-second', item)
+	}
+
+	function onPickFault(name : string) : void {
+		emit('pick-fault', name)
+	}
+
+	function onFilterInput(e : InputEvent) : void {
+		secondFilter.value = e.detail.value
+	}
+
+	function onFaultInput(e : InputEvent) : void {
+		emit('pick-fault', e.detail.value)
+	}
+
+	function onExtraInput(e : InputEvent) : void {
+		emit('update-extra', e.detail.value)
+	}
+
+	/** 「直接描述」：跳到确认步，现象由那里的输入框写（不假装词表里有） */
+	function onFreeform() : void {
+		emit('jump', 3)
+	}
+
+	function onJump(i : number) : void {
+		if (!canJump(i)) return
+		emit('jump', i)
+	}
+
+	function onConfirm() : void {
+		if (props.sentence.length == 0) return
+		emit('confirm', props.sentence)
+	}
+</script>
+
+<style lang="scss">
+	.guide-mask {
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background-color: rgba(0, 0, 0, 0.4);
+		z-index: 300;
+	}
+
+	.guide-sheet {
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background-color: $card-bg;
+		border-top-left-radius: $radius-lg;
+		border-top-right-radius: $radius-lg;
+		padding: 32rpx;
+		z-index: 301;
+	}
+
+	.guide-head {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+	}
+
+	.guide-title {
+		font-size: 32rpx;
+		font-weight: bold;
+		color: $text-color;
+	}
+
+	.guide-close {
+		font-size: 32rpx;
+		color: $text-color-placeholder;
+		padding-left: 24rpx;
+		padding-right: 8rpx;
+	}
+
+	.guide-steps {
+		flex-direction: row;
+		align-items: center;
+		flex-wrap: wrap;
+		margin-top: 16rpx;
+	}
+
+	.guide-step-wrap {
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.guide-step-sep {
+		font-size: 22rpx;
+		color: $text-color-placeholder;
+		margin-left: 8rpx;
+		margin-right: 8rpx;
+	}
+
+	.guide-step {
+		border-radius: $radius-pill;
+		padding: 6rpx 16rpx;
+	}
+
+	.guide-step-on {
+		background-color: $primary-tint;
+	}
+
+	.guide-step-off {
+		opacity: 0.55;
+	}
+
+	.guide-step-text {
+		font-size: 22rpx;
+		color: $text-color-secondary;
+	}
+
+	.guide-step-text-on {
+		color: $uni-color-primary;
+		font-weight: bold;
+	}
+
+	.guide-body {
+		flex-direction: column;
+		margin-top: 20rpx;
+	}
+
+	.chip-scroll {
+		max-height: 420rpx;
+	}
+
+	.chip-wrap {
+		flex-direction: row;
+		flex-wrap: wrap;
+	}
+
+	.chip {
+		flex-direction: row;
+		align-items: center;
+		border-width: 1rpx;
+		border-style: solid;
+		border-color: $border-color;
+		border-radius: $radius-md;
+		padding: 12rpx 20rpx;
+		margin-right: 12rpx;
+		margin-bottom: 12rpx;
+		background-color: $card-bg;
+	}
+
+	.chip-on {
+		border-color: $uni-color-primary;
+		background-color: $primary-tint;
+	}
+
+	.chip-icon {
+		font-size: 24rpx;
+		margin-right: 8rpx;
+	}
+
+	.chip-text {
+		font-size: 26rpx;
+		color: $text-color-secondary;
+	}
+
+	.chip-text-on {
+		color: $uni-color-primary;
+		font-weight: bold;
+	}
+
+	.guide-hint {
+		font-size: 22rpx;
+		color: $text-color-placeholder;
+		line-height: 1.6;
+		margin-top: 8rpx;
+	}
+
+	.guide-search {
+		height: 64rpx;
+		font-size: 26rpx;
+		border-width: 1rpx;
+		border-style: solid;
+		border-color: $border-color;
+		border-radius: $radius-md;
+		padding-left: 16rpx;
+		padding-right: 16rpx;
+		margin-bottom: 16rpx;
+	}
+
+	.guide-secondary {
+		align-items: flex-start;
+		margin-top: 12rpx;
+	}
+
+	.guide-secondary-text {
+		font-size: 24rpx;
+		color: $uni-color-primary;
+	}
+
+	.guide-textarea {
+		width: 100%;
+		height: 120rpx;
+		font-size: 26rpx;
+		color: $text-color;
+		border-width: 1rpx;
+		border-style: solid;
+		border-color: $border-color;
+		border-radius: $radius-md;
+		padding: 16rpx;
+		margin-top: 12rpx;
+	}
+
+	.guide-preview {
+		border-width: 1rpx;
+		border-style: solid;
+		border-color: $border-color;
+		border-radius: $radius-md;
+		padding: 18rpx;
+		margin-top: 16rpx;
+		background-color: $bg-color;
+	}
+
+	.guide-preview-text {
+		font-size: 26rpx;
+		color: $text-color-secondary;
+		line-height: 1.6;
+	}
+
+	.guide-cta {
+		align-items: center;
+		justify-content: center;
+		border-radius: $radius-pill;
+		padding-top: 22rpx;
+		padding-bottom: 22rpx;
+		margin-top: 24rpx;
+	}
+
+	.guide-cta-on {
+		background-color: $uni-color-primary;
+	}
+
+	.guide-cta-off {
+		background-color: $border-color-light;
+	}
+
+	.guide-cta-text {
+		font-size: 28rpx;
+		font-weight: bold;
+	}
+
+	.cta-text-on {
+		color: $text-color-inverse;
+	}
+
+	.cta-text-off {
+		color: $text-color-placeholder;
+	}
+</style>

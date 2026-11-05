@@ -1,0 +1,336 @@
+/**
+ * 诊断引导取数 + 留白判定 + 组句（#2296）
+ *
+ * 这个 composable 把「取哪一层的哪个列表」和「整块留不留白」两件事收在一处，页面只消费结果。
+ *
+ * ## 留白判定（票面判据：引导数据取不到、或健康探测为否时，引导区**整块不渲染**）
+ *
+ * 一个布尔量 `guideVisible` 说了算，判据只有一条：
+ *   ① `health` 请求失败，或 `health.ok !== true`；或 ② `intents` 取数失败
+ *   ⇒ **整块不渲染**，且把已拿到的字典**一起丢掉**。
+ *
+ * 为什么 `health.ok=false` 时连字典也丢：上游没配置/不可达时字典端点会回 502，
+ * 留着品牌卡就是「点得动、点了就 502」的死入口（web 侧 #2244 决策① 的同款裁定）。
+ * 为什么不轮询：进页拉一次就够，失败就留白；轮询只会让挂掉的上游被反复敲门。
+ *
+ * ## 为什么它不自己发消息
+ *
+ * 组好的句子**回到页面**，由页面写进输入框（票面：「输入框出现拼装好的问题句，
+ * 学员可编辑后再发送」）。composable 只管数据与状态，不发请求 —— 发送路径全仓只有
+ * `useAiChat.sendInput` 一条，不能在这里开第二条。
+ */
+
+import { ref } from 'vue'
+import type { Ref } from 'vue'
+import {
+	getDiagnosisHealthApi,
+	getDiagnosisIntentsApi,
+	getDiagnosisSystemsApi,
+	getDiagnosisFaultsApi,
+} from '../api/aiAssistant'
+import type {
+	DiagnosisIntentBrand,
+	DiagnosisFaq,
+	DiagnosisCatalogItem,
+} from '../types/index'
+import { composeDiagnosisSentence } from '../utils/diagnosisCompose'
+import type { DiagnosisGuideState } from '../utils/diagnosisGuide'
+import {
+	initialGuideState,
+	openWithBrand,
+	openWithFault,
+	selectBrand,
+	applySecond,
+	selectFault,
+	setExtra,
+	secondSourceOf,
+	GUIDE_STEP_BRAND,
+	GUIDE_STEP_SECOND,
+	GUIDE_STEP_FAULT,
+	GUIDE_STEP_CONFIRM,
+} from '../utils/diagnosisGuide'
+
+/** useDiagnosisGuide 的返回值（显式类型：UTS 对返回对象的函数字段推断不可靠） */
+export type UseDiagnosisGuideResult = {
+	brands : Ref<DiagnosisIntentBrand[]>
+	faq : Ref<DiagnosisFaq[]>
+	/** 引导区是否渲染（**唯一**留白判据） */
+	guideVisible : Ref<boolean>
+	guideOpen : Ref<boolean>
+	state : Ref<DiagnosisGuideState>
+	secondItems : Ref<DiagnosisCatalogItem[]>
+	faultItems : Ref<DiagnosisCatalogItem[]>
+	secondLoading : Ref<boolean>
+	faultLoading : Ref<boolean>
+	sentence : Ref<string>
+	loadIntents : () => Promise<void>
+	openGuide : () => void
+	openGuideWithBrand : (brandId : string) => void
+	openGuideWithFault : (brandId : string, faultName : string) => void
+	closeGuide : () => void
+	pickBrand : (brandId : string) => Promise<void>
+	pickSecond : (item : DiagnosisCatalogItem) => Promise<void>
+	pickFault : (name : string) => void
+	updateExtra : (extra : string) => void
+	jumpStep : (i : number) => void
+	resetGuide : () => void
+}
+
+export function useDiagnosisGuide() {
+	const brands = ref<DiagnosisIntentBrand[]>([])
+	const faq = ref<DiagnosisFaq[]>([])
+	const guideVisible = ref<boolean>(false)
+	const guideOpen = ref<boolean>(false)
+	const state = ref<DiagnosisGuideState>(initialGuideState())
+	const secondItems = ref<DiagnosisCatalogItem[]>([])
+	const faultItems = ref<DiagnosisCatalogItem[]>([])
+	const secondLoading = ref<boolean>(false)
+	const faultLoading = ref<boolean>(false)
+	const sentence = ref<string>('')
+
+	/** 当前选中的品牌对象（判档与组句都要它；找不到 = null） */
+	function currentBrand() : DiagnosisIntentBrand | null {
+		const id = state.value.brandId
+		if (id.length == 0) return null
+		for (let i = 0; i < brands.value.length; i++) {
+			if (brands.value[i].id == id) return brands.value[i]
+		}
+		return null
+	}
+
+	/** 重算组句（任何一步变化后调用；成句与否由纯函数决定，本层不做判断） */
+	function refreshSentence() : void {
+		sentence.value = composeDiagnosisSentence(currentBrand(), state.value.secondName, state.value.selection)
+	}
+
+	/**
+	 * 进页拉一次：健康探测与引导字典**并发**，任一失败即整块留白。
+	 *
+	 * 顺序上 health 失败要能覆盖 intents 成功（连字典一起丢），故两个结果都等到再判 ——
+	 * 不能让 intents 先落地画出品牌卡、之后 health 才回 false。
+	 */
+	async function loadIntents() : Promise<void> {
+		guideVisible.value = false
+		brands.value = []
+		faq.value = []
+		let healthOk = false
+		let intentsOk = false
+		let gotBrands : DiagnosisIntentBrand[] = []
+		let gotFaq : DiagnosisFaq[] = []
+		try {
+			const h = await getDiagnosisHealthApi()
+			healthOk = h.ok
+		} catch (_e) {
+			// 传输层失败（断网 / 5xx）：与 ok=false 同义，都不该画点不动的卡片
+			healthOk = false
+		}
+		try {
+			const intents = await getDiagnosisIntentsApi()
+			gotBrands = intents.brands
+			gotFaq = intents.faq
+			intentsOk = true
+		} catch (_e) {
+			intentsOk = false
+		}
+		if (!healthOk || !intentsOk) {
+			// 整块留白：字典一并丢掉，不留死入口
+			brands.value = []
+			faq.value = []
+			guideVisible.value = false
+			return
+		}
+		brands.value = gotBrands
+		faq.value = gotFaq
+		// 有品牌才谈得上引导；品牌是空集时整块也不渲染（否则是一块空白面板）
+		guideVisible.value = gotBrands.length > 0
+	}
+
+	function openGuide() : void {
+		state.value = initialGuideState()
+		secondItems.value = []
+		faultItems.value = []
+		sentence.value = ''
+		guideOpen.value = true
+	}
+
+	function openGuideWithBrand(brandId : string) : void {
+		state.value = openWithBrand(initialGuideState(), brandId)
+		secondItems.value = []
+		faultItems.value = []
+		sentence.value = ''
+		guideOpen.value = true
+		loadSecond()
+	}
+
+	function openGuideWithFault(brandId : string, faultName : string) : void {
+		state.value = openWithFault(initialGuideState(), brandId, faultName)
+		secondItems.value = []
+		faultItems.value = []
+		sentence.value = ''
+		guideOpen.value = true
+		if (brandId.length > 0) loadSecond()
+	}
+
+	/** 关闭 = 丢掉状态对象（不「清字段」，没有可漏清的字段） */
+	function closeGuide() : void {
+		guideOpen.value = false
+		state.value = initialGuideState()
+		secondItems.value = []
+		faultItems.value = []
+		sentence.value = ''
+	}
+
+	/** 取第二层：型号档走 faults 根层（不带 second），系统档走 systems */
+	async function loadSecond() : Promise<void> {
+		secondItems.value = []
+		secondLoading.value = true
+		const brand = currentBrand()
+		const src = secondSourceOf(brand)
+		const brandId = state.value.brandId
+		if (src.length == 0) {
+			secondLoading.value = false
+			return
+		}
+		try {
+			if (src == 'faults-root') {
+				secondItems.value = await getDiagnosisFaultsApi(brandId, '')
+			} else {
+				secondItems.value = await getDiagnosisSystemsApi(brandId)
+			}
+		} catch (_e) {
+			// 上游 502：留空列表 + 空态文案兜底（不弹错 —— 弹错也改变不了没数据这件事）
+			secondItems.value = []
+		}
+		secondLoading.value = false
+	}
+
+	/** 取第三层现象词表（第二层已选 ⇒ 带 second；未选 ⇒ 根层） */
+	async function loadFaults() : Promise<DiagnosisCatalogItem[]> {
+		faultItems.value = []
+		faultLoading.value = true
+		const brandId = state.value.brandId
+		if (brandId.length == 0) {
+			faultLoading.value = false
+			return [] as DiagnosisCatalogItem[]
+		}
+		let list : DiagnosisCatalogItem[] = []
+		try {
+			list = await getDiagnosisFaultsApi(brandId, state.value.secondId)
+		} catch (_e) {
+			list = []
+		}
+		faultItems.value = list
+		faultLoading.value = false
+		return list
+	}
+
+	async function pickBrand(brandId : string) : Promise<void> {
+		state.value = selectBrand(state.value, brandId)
+		faultItems.value = []
+		refreshSentence()
+		await loadSecond()
+	}
+
+	async function pickSecond(item : DiagnosisCatalogItem) : Promise<void> {
+		// 先取词表再落状态：预选能否兑现取决于「它在不在词表里」，这个事实只能由取数给
+		const list = await loadFaults()
+		let inList = false
+		for (let i = 0; i < list.length; i++) {
+			if (list[i].name == state.value.pendingFault) {
+				inList = true
+				break
+			}
+		}
+		state.value = applySecond(state.value, item.id, item.name, inList)
+		refreshSentence()
+	}
+
+	function pickFault(name : string) : void {
+		state.value = selectFault(state.value, name)
+		refreshSentence()
+	}
+
+	function updateExtra(extra : string) : void {
+		state.value = setExtra(state.value, extra)
+		refreshSentence()
+	}
+
+	/** 回退/跳步：列表按目标层现取（回退到第二层时第三层词表不再适用） */
+	function jumpStep(i : number) : void {
+		if (i == GUIDE_STEP_BRAND) {
+			state.value = selectBrand(state.value, '')
+			secondItems.value = []
+			faultItems.value = []
+			refreshSentence()
+			return
+		}
+		if (i == GUIDE_STEP_SECOND) {
+			if (state.value.brandId.length == 0) return
+			const next = initialGuideState()
+			next.brandId = state.value.brandId
+			next.selection.brandId = state.value.brandId
+			next.step = GUIDE_STEP_SECOND
+			state.value = next
+			faultItems.value = []
+			refreshSentence()
+			loadSecond()
+			return
+		}
+		if (i == GUIDE_STEP_FAULT) {
+			if (state.value.brandId.length == 0 || state.value.secondId.length == 0) return
+			const next = initialGuideState()
+			next.brandId = state.value.brandId
+			next.secondId = state.value.secondId
+			next.secondName = state.value.secondName
+			next.selection.brandId = state.value.brandId
+			next.selection.secondId = state.value.secondId
+			next.step = GUIDE_STEP_FAULT
+			state.value = next
+			refreshSentence()
+			loadFaults()
+			return
+		}
+		// 目标 = 确认步：只有在已成句时才允许（否则是一步空屏）
+		if (state.value.selection.faultName.length > 0) {
+			const next = initialGuideState()
+			next.brandId = state.value.brandId
+			next.secondId = state.value.secondId
+			next.secondName = state.value.secondName
+			next.selection = state.value.selection
+			next.step = GUIDE_STEP_CONFIRM
+			state.value = next
+			refreshSentence()
+		}
+	}
+
+	function resetGuide() : void {
+		state.value = initialGuideState()
+		secondItems.value = []
+		faultItems.value = []
+		sentence.value = ''
+	}
+
+	return {
+		brands: brands,
+		faq: faq,
+		guideVisible: guideVisible,
+		guideOpen: guideOpen,
+		state: state,
+		secondItems: secondItems,
+		faultItems: faultItems,
+		secondLoading: secondLoading,
+		faultLoading: faultLoading,
+		sentence: sentence,
+		loadIntents: () => loadIntents(),
+		openGuide: () => openGuide(),
+		openGuideWithBrand: (brandId : string) => openGuideWithBrand(brandId),
+		openGuideWithFault: (brandId : string, faultName : string) => openGuideWithFault(brandId, faultName),
+		closeGuide: () => closeGuide(),
+		pickBrand: (brandId : string) => pickBrand(brandId),
+		pickSecond: (item : DiagnosisCatalogItem) => pickSecond(item),
+		pickFault: (name : string) => pickFault(name),
+		updateExtra: (extra : string) => updateExtra(extra),
+		jumpStep: (i : number) => jumpStep(i),
+		resetGuide: () => resetGuide(),
+	} as UseDiagnosisGuideResult
+}

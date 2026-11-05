@@ -67,6 +67,8 @@ function loadAi(raw, opt = {}) {
     decodePage: env.decodePage,
     toNumber: h.toNumber,
     toStr: h.toStr,
+    // #2296：诊断引导面新增 toBool（health 的 ok / app_configured 是布尔）——缺绑定由 utsHarness fail-closed 抓出
+    toBool: h.toBool,
     API_BASE_URL: 'https://example.test/api',
     AI_REQUEST_TIMEOUT: 60000,
     STORAGE_KEY_TOKEN: 'auth_token',
