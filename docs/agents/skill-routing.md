@@ -44,7 +44,7 @@
 | 审「是否符合本仓规范与 spec」 | `code-review`（显式给固定点） | 对实现做穷举式缺陷扫描 → `review-code`（六轮） |
 | 领域词汇 / ADR | `domain-modeling` + `docs/agents/domain.md` | ADR 文件名一律中文（本条在册裁定压过技能的英文命名习惯） |
 | 建隔离工作树 | **只走 `training-app/叉车维修培训学员端跨端应用/scripts/new-worktree.ps1 -Task <票号>`** | **禁止**裸用 `git worktree add`（含任何技能自带的兜底路径）—— 见根 `AGENTS.md`「建 worktree 一律走闸门」与移动端 `AGENTS.md`「Qoder 托管 worktree 的使用边界」 |
-| 临时产物 / handoff 落点 | `.scratch/` | 压过 `handoff` 技能文档里「存 OS 临时目录、不进工作区」那条 |
+| 临时产物 / handoff 落点 | `.scratch/`，且落**主树**（仓库根），不落 worktree | 压过 `handoff` 技能文档里「存 OS 临时目录、不进工作区」那条；主树限定是实测加的：`wt-*` 里没有 `.scratch/`（该目录已被 `.gitignore` 忽略），在 worktree 内落会静默落在未跟踪目录里、换个树就找不见 |
 | 不知道用哪个技能 | 先查本表 | 表里没有 → `ask-matt`（它带「仅人唤」标记，模型永远不会自己想起它） |
 
 ## 提问形态：本表对重型技能的落点做了改写

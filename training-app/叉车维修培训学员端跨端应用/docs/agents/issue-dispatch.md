@@ -69,7 +69,7 @@
 
 ## 6. 文档分层（写文档时）
 
-约定 / 决策进 `docs/adr/`、`docs/agents/`（**入库、只增不删**，过时用「取代」表达）；临时产物（handoff、探针、PR 正文草稿）进 `.scratch/`（不入库）。详见 `docs/agents/domain.md`。
+约定 / 决策进 `docs/adr/`、`docs/agents/`（**入库、只增不删**，过时用「取代」表达）；临时产物（handoff、探针、PR 正文草稿）进 `.scratch/`（不入库），且落**主树**（仓库根）不落 worktree —— `wt-*` 里没有该目录（已被 `.gitignore` 忽略），在 worktree 内落会静默落在未跟踪目录里、换个树就找不见。详见 `docs/agents/domain.md`。
 
 ## 什么时候用 wayfinder：判据是「能不能一手握住」，不是「任务大不大」（2026-10-10 两次改写）
 
