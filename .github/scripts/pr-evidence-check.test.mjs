@@ -83,7 +83,8 @@ test('A1 完整形状（②+④ 两行）⇒ 绿', async () => {
   const r = await run({ files: mpFiles, body: bothGates() });
   assert.deepEqual(r.errors, []);
   assert.equal(r.ok, true);
-  assert.equal(r.gates['②'].bound, true);
+  assert.equal(r.gates['②'].retired, true);
+  assert.equal(r.gates['②'].required, false);
   assert.equal(r.gates['④'].bound, true);
 });
 
@@ -91,31 +92,6 @@ test('证据只写在 HTML 注释里不算（模板注释不得骗过校验）',
   const r = await run({ body: `## 验收证据\n\n<!-- ${g4(HEAD7)} -->\n` });
   assert.equal(r.ok, false);
   assert.ok(r.errors.some((e) => e.includes('缺该行')));
-});
-
-/* ─────────────── `coverage=` 形态（#2101 / #2102） ─────────────── */
-
-test('coverage= 三值合法（changed:N / smoke:N / none）⇒ 都不判红', async () => {
-  for (const cov of ['changed:3', 'smoke:2', 'none']) {
-    const r = await run({ files: mpFiles, body: bothGates(HEAD7, `${MP} coverage=${cov}`) });
-    assert.deepEqual(r.errors, [], `coverage=${cov} 被误判`);
-  }
-});
-
-test('coverage= 写了但不是三值之一 ⇒ 红（形态校验，不是措辞校验）', async () => {
-  for (const bad of ['2', 'Changed:3', 'covered', 'changed:N']) {
-    const r = await run({ files: mpFiles, body: bothGates(HEAD7, `${MP} coverage=${bad}`) });
-    assert.equal(r.ok, false, `coverage=${bad} 应判红`);
-    assert.ok(r.errors.some((e) => /不是合法形态/.test(e)), `coverage=${bad} 的错误文案不对：${r.errors.join(' | ')}`);
-  }
-});
-
-test('coverage= 缺席不判红（-Pages <csv> / none 是合法跑法，没有覆盖语义）', async () => {
-  // #2102 原文写「校存在性」，落库时收窄为「校形态」：门只在 `-Pages auto` 下产出该字段，
-  // 强制出现会把「定向单验」和「旧导航组」两种合法跑法判成假红。
-  const r = await run({ files: mpFiles, body: bothGates() });
-  assert.deepEqual(r.errors, []);
-  assert.equal(r.ok, true);
 });
 
 test('未命中运行时面 ⇒ 不要求任何门行，也不要求段', async () => {
@@ -132,12 +108,11 @@ test('未命中 MP-WEIXIN 面 ⇒ ② 免：只写 ④ 行即绿', async () => {
   assert.equal(r.gates['②'].required, false);
 });
 
-test('diff 里增删真正的 MP-WEIXIN 条件编译指令行 ⇒ ② 必填，缺行即红', async () => {
+test('diff 里增删真正的 MP-WEIXIN 条件编译指令行 ⇒ ② 不再强制，缺行不红', async () => {
   const patch = '@@ -1,2 +1,3 @@\n+// #ifdef MP-WEIXIN\n const a = 1;\n+// #endif\n';
   const r = await run({ files: [uvue('pages/a/a.uvue', { patch })], body: onlyG4() });
-  assert.equal(r.gates['②'].required, true);
-  assert.equal(r.ok, false);
-  assert.ok(r.errors.some((e) => e.startsWith('②')));
+  assert.equal(r.gates['②'].required, false);
+  assert.equal(r.ok, true, r.errors.join(' | '));
 });
 
 test('#1030 负例：文档里写「未命中 MP-WEIXIN 面」这句话本身不点亮 ②', async () => {
@@ -155,9 +130,9 @@ test('#1030 负例：运行时面文件里的散文提及（非行首指令）�
   assert.equal(r.gates['②'].required, false);
 });
 
-test('manifest.json 改动 ⇒ ② 必填；frontend 下同名 json 不算运行时面', async () => {
+test('manifest.json 改动 ⇒ ② 仍退役；frontend 下同名 json 不算运行时面', async () => {
   const hit = await run({ files: mpFiles, body: onlyG4() });
-  assert.equal(hit.gates['②'].required, true);
+  assert.equal(hit.gates['②'].required, false);
   const miss = await run({
     files: [uvue(), { filename: 'frontend/manifest.json', status: 'modified', patch: '' }],
     body: onlyG4(),
@@ -183,10 +158,10 @@ test('④b 打包面命中：不判红，但 notes 里必须留发版提醒', as
 
 /* ─────────────── 行形态：读数行 + 跑于 ─────────────── */
 
-test('② 行缺 MP_WEIXIN_RESULT 读数行 ⇒ 红（禁止「已验证」式自然语言）', async () => {
-  const r = await run({ files: mpFiles, body: body(`- ② 跑于 \`${HEAD7}\` · 入口页无报错`, g4()) });
-  assert.equal(r.ok, false);
-  assert.ok(r.errors.some((e) => e.includes('MP_WEIXIN_RESULT')));
+test('② 已退役：整行缺席也不红（只写 ④ 即绿）', async () => {
+  const r = await run({ files: mpFiles, body: body(g4(HEAD7)) });
+  assert.equal(r.ok, true, r.errors.join(' | '));
+  assert.equal(r.gates['②'].required, false);
 });
 
 test('④ 行缺读数行 ⇒ 红', async () => {
@@ -331,14 +306,15 @@ test('点名了但该门没缺项 ⇒ 记 note（多写了），不假装豁免�
 
 /* ─────────────── 结构化字段（预检/渲染消费） ─────────────── */
 
-test('gates 结构化字段：required / bound / commit / why', async () => {
+test('gates 结构化字段：② 已退役（required=false/retired=true），④ 仍绑定', async () => {
   const r = await run({ files: mpFiles, body: bothGates() });
   assert.deepEqual(Object.keys(r.gates).sort(), ['②', '④'].sort());
-  for (const k of ['②', '④']) {
-    assert.equal(r.gates[k].required, true);
-    assert.equal(r.gates[k].bound, true);
-    assert.equal(r.gates[k].commit, HEAD7);
-  }
+  assert.equal(r.gates['②'].required, false);
+  assert.equal(r.gates['②'].retired, true);
+  assert.equal(r.gates['②'].bound, false);
+  assert.equal(r.gates['④'].required, true);
+  assert.equal(r.gates['④'].bound, true);
+  assert.equal(r.gates['④'].commit, HEAD7);
   assert.ok(Array.isArray(r.gates['④'].why));
 });
 
@@ -378,6 +354,7 @@ test('模板必须给出可照抄的门行形状（光堵假绿不够，人得�
   const tpl = readFileSync(templatePath, 'utf8');
   const section = (tpl.split('## 验收证据')[1] || '').replace(/<!--[\s\S]*?-->/g, '');
   for (const gate of GATE_EVIDENCE.gates) {
+    if (gate.retired) continue; // #2320：② 已退役，模板不再给 ② 行
     const line = section.split('\n').find((l) => l.replace(/^\s*[-*]\s+/, '').startsWith(gate.key));
     assert.ok(line, `模板里没有 ${gate.key} 行 —— 照模板写的人不知道要写哪一行`);
     assert.ok(gate.tokens.some((t) => line.includes(t)), `模板的 ${gate.key} 行没提示读数行 token`);
@@ -627,50 +604,50 @@ test('③ pages.json 改动 ⇒ 仍不触发 ②（-Pages auto 只认 pages/**/*
   assert.equal(r.ok, true);
 });
 
-test('③ manifest.json 改动 ⇒ ② 必填（① 文件清单一如既往，不依赖扫描）', async () => {
+test('③ manifest.json 改动 ⇒ ② 仍退役（① 文件清单一如既往，不依赖扫描）', async () => {
   const f = { filename: `${SCOPE}manifest.json`, status: 'modified', patch: '' };
   const r = await scanRun([f], {});
-  assert.equal(r.gates['②'].required, true);
-  assert.equal(r.ok, false);
+  assert.equal(r.gates['②'].required, false);
+  assert.equal(r.ok, true, r.errors.join(' | '));
 });
 
-test('③ platformConfig.json 改动 ⇒ ② 必填', async () => {
+test('③ platformConfig.json 改动 ⇒ ② 仍退役', async () => {
   const f = { filename: `${SCOPE}platformConfig.json`, status: 'modified', patch: '' };
   const r = await scanRun([f], {});
-  assert.equal(r.gates['②'].required, true);
+  assert.equal(r.gates['②'].required, false);
 });
 
-test('③ 已有 MP 文件里改 uni.* 行为（diff 无指令行）⇒ 扫描命中、② 必填', async () => {
+test('③ 已有 MP 文件里改 uni.* 行为（diff 无指令行）⇒ 扫描命中但 ② 不再强制', async () => {
   const f = uvue('composables/useBiometric.uts', { patch: '@@ -10 +10 @@\n-  return true\n+  return false' });
   const map = { [`${HEAD}:${f.filename}`]: MP_TEXT, [`${BASE}:${f.filename}`]: MP_TEXT };
   const r = await scanRun([f], map);
-  assert.equal(r.gates['②'].required, true, '块内行为改动必须点亮 ②，否则 #2101 的覆盖空洞复发');
+  assert.equal(r.gates['②'].required, false, '② 已退役，文件级扫描只留 note（#2320）');
   assert.match(r.notes.join(), /② 文件级扫描命中/);
 });
 
 test('③ 新增含 MP 指令的文件（基线侧不存在）⇒ 命中', async () => {
   const f = uvue('pages/new/new.uvue', { status: 'added', patch: '@@ -0,0 +1 @@\n+<view/>' });
   const r = await scanRun([f], { [`${HEAD}:${f.filename}`]: MP_TEXT });
-  assert.equal(r.gates['②'].required, true);
+  assert.equal(r.gates['②'].required, false);
 });
 
 test('③ 删除含 MP 指令的文件（当前侧不存在）⇒ 仍命中（并集，不因一侧缺失短路）', async () => {
   const f = uvue('pages/gone/gone.uvue', { status: 'removed', patch: '@@ -1 +0,0 @@\n-<view/>' });
   const r = await scanRun([f], { [`${BASE}:${f.filename}`]: MP_TEXT });
-  assert.equal(r.gates['②'].required, true);
+  assert.equal(r.gates['②'].required, false);
 });
 
 test('③ 重命名（新路径基线不存在、旧路径当前不存在）⇒ 按 previousFilename 回头读基线侧', async () => {
   const from = uvue('pages/old/old.uvue');
   const f = uvue('pages/moved/moved.uvue', { status: 'renamed', previousFilename: from.filename });
   const r = await scanRun([f], { [`${BASE}:${from.filename}`]: MP_TEXT, [`${HEAD}:${f.filename}`]: MP_TEXT });
-  assert.equal(r.gates['②'].required, true, '丢了 previousFilename 就漏掉「带 MP 指令的文件被改名」');
+  assert.equal(r.gates['②'].required, false, '丢了 previousFilename 就漏掉「带 MP 指令的文件被改名」');
 });
 
-test('③ 两侧正文都读不到 ⇒ fail-closed 判命中，并写明原因（不静默当未命中）', async () => {
+test('③ 两侧正文都读不到 ⇒ 参考命中，并写明原因（不静默当未命中）', async () => {
   const f = uvue('pages/x/x.uvue', { patch: '@@ -1 +1 @@\n-<view/>\n+<view class="x"/>' });
   const r = await scanRun([f], {});
-  assert.equal(r.gates['②'].required, true);
+  assert.equal(r.gates['②'].required, false);
   assert.match(r.notes.join(), /按命中处理/);
 });
 

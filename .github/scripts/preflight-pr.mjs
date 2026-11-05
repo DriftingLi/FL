@@ -216,35 +216,17 @@ export function mergeEncodingLint(result, lint) {
 }
 
 /**
- * ② 默认策略：needs2 命中必跑；未命中**默认跳过**（2026-11-04 翻档，取代 #2207 的「默认跑、可自选跳过」）。
- * **只产提示、任何一支都不判红** —— 判据仍只有 gate-validator 的 ②④。
- * 四种形态：
- *   ① 命中运行时面、非 needs2、正文既无读数行也无跳过行 ⇒ 说清「默认跳过」这个实际判定（不是催人补声明）；
- *   ② 非 needs2、有跳过行但 reason 还是占位 `<slug>` ⇒ 提醒换真实 slug；
- *   ③ needs2 出现跳过行 ⇒ 跳过在触发面不生效（缺读数行时校验器本就会判红）。
+ * ② 微信开发者工具门已于 #2320（2026-11-05）退役：不再要求 `MP_WEIXIN_RESULT` 读数行，也不再要求跳过声明。
+ * 本函数只产提示、不判红 —— 判据仍只有 gate-validator 的 ④。
+ * 正文里仍留着 ② 行的旧 PR：提示可以删掉，避免读的人以为还有一道门。
  */
-// 注意：不能用 \b —— 中文与空格之间不构成 ASCII 词边界，`② 自选跳过` 后面接空白时 \b 永不成立（#2216 实测）。
-const SKIP_LINE_RE = /^[ \t]*[-*][ \t]*②[ \t]*自选跳过[^\n]*/m;
-export function skipDeclarationHint({ body, needs2, runtimeHit }) {
+const SKIP_LINE_RE = /^[ \t]*[-*][ \t]*②/m;
+export function skipDeclarationHint({ body, runtimeHit }) {
   if (!runtimeHit) return null;
   const text = String(body || '').replace(/<!--[\s\S]*?-->/g, '');
-  const hasReading = /\bMP_WEIXIN_RESULT\b/.test(text);
-  const skipLine = (text.match(SKIP_LINE_RE) || [])[0] || null;
-  if (needs2) {
-    if (!skipLine) return null;
-    return hasReading
-      ? '② 触发面（needs2=true）不允许自选跳过：删掉 `② 自选跳过` 行，只留 `MP_WEIXIN_RESULT` 读数行（#2207）。'
-      : '② 触发面（needs2=true）必跑：`② 自选跳过` 不构成 ② 证据，需贴 `MP_WEIXIN_RESULT` 读数行（#2207）。';
-  }
-  // 未命中 needs2 ⇒ 默认跳过是**判定结果**，不需要任何人补字。这里只把判定与理由说出来，
-  // 免得正文空着让人以为「漏写了什么」。跑了 ② 的话贴读数行同样欢迎（不影响判绿）。
-  if (!skipLine && !hasReading) {
-    return '② 未命中 MP-WEIXIN 面 ⇒ 默认跳过（不需要读数行，也不需要跳过声明；跑了就贴 `MP_WEIXIN_RESULT` 读数行，不影响判绿）。';
-  }
-  if (skipLine && /reason=\s*<slug>/.test(skipLine)) {
-    return '② 自选跳过 的 `reason` 还是占位 `<slug>`：换成真实原因短 slug（`^[a-z0-9-]+$`）。';
-  }
-  return null;
+  const hasTwoLine = SKIP_LINE_RE.test(text) || text.includes('MP_WEIXIN_RESULT');
+  if (!hasTwoLine) return null;
+  return '② 微信开发者工具门已退役（#2320）：不再需要 `MP_WEIXIN_RESULT` 读数行，也不需要 `② 自选跳过` 声明；这行可以删掉。';
 }
 
 /** 分支点时刻 = merge-base(HEAD, base) 的提交时刻；读不到返回 0，调用方据此跳过并在 notes 说明。 */
@@ -335,10 +317,9 @@ async function main(argv) {
     ? classifyForPreflight(scanEvidenceLogs({ root: git('rev-parse', '--show-toplevel').trim(), sinceMs }))
     : { ok: true, reds: [], notes: ['证据日志可读性：跳过（读不到分支点基线）'] };
   const final = mergeEncodingLint(refMerged, encLint);
-  // #2216：② 非触发面的跳过留痕提示（只进 notes，不参与 ok —— 判据仍是 gate-validator）。
+  // #2216 / #2320：② 的跳过留痕提示（只进 notes，不参与 ok —— 判据仍是 gate-validator）。
   const skipHint = skipDeclarationHint({
     body,
-    needs2: Boolean(final.gates && final.gates['②'] && final.gates['②'].required),
     runtimeHit: Boolean(final.gates && final.gates['④'] && final.gates['④'].required),
   });
   if (skipHint) final.notes.push(skipHint);

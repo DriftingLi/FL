@@ -4,7 +4,7 @@
  * 做法沿用 #1403 的成对断言（**判别力**口径）：dot-source 真模块 → 真跑 `New-Evidence` 出文本 →
  * 取真校验器 `validatePrEvidence`（单一来源 `.github/scripts/lib/gate-validator.mjs`）→ 把产物喂进去。
  *
- * A1 后要锁的四件事：
+ * A1 后要锁的四件事（② 于 #2320 退役，本文件只锁 ④）：
  *   ① 有读数 ⇒ 生成的行能被校验器认成「已绑 sha、有读数」⇒ 绿（必不红对照组）。
  *   ② 没读数 ⇒ 仍然给出**对的行形状**（行首 + `跑于`），红因是「缺读数」而**不是「缺该行」**
  *      —— 锁住「形状对、只差填值」这个态。一旦有人把行改回多行块，③ 会红。
@@ -44,7 +44,6 @@ const validate = loadValidator();
 
 const SHA7 = 'abc1234';
 const HEAD = `${SHA7}${'0'.repeat(33)}`; // 40 位；sha7 是它的前缀 ⇒ 绑定成立且不打 compare
-const MP_LINE = 'MP_WEIXIN_RESULT appid=wx1 pageStack=2 entry=pages/index/index errorsTotal=0 exceptionsTotal=0 shots=2 navigation=ok';
 const KOTLIN_LINE = 'KOTLIN_ALL_RESULT errors=0 classes=1261 files=88 freshness=fresh';
 
 const RUNTIME_FILES = [
@@ -79,18 +78,19 @@ function runGen(level, extraArgs = []) {
 
 const validateWith = (files, body) => validate({ files, body, headSha: HEAD, fetchCompare: async () => null });
 
-test('① 有读数 ⇒ 生成两行（②④），校验器判绿', async () => {
-  const r = runGen('standard', [`-MpResult ${JSON.stringify(MP_LINE).replace(/"/g, "'")}`, `-CompileResult ${JSON.stringify(KOTLIN_LINE).replace(/"/g, "'")}`, `-Sha7 ${SHA7}`]);
+test('④ 有读数 ⇒ 生成一行，校验器判绿（② 已退役，不再生成）', async () => {
+  const r = runGen('standard', [`-CompileResult ${JSON.stringify(KOTLIN_LINE).replace(/"/g, "'")}`, `-Sha7 ${SHA7}`]);
   expect(r.status).toBe(0);
   expect(r.text).toContain('## 验收证据');
   expect(r.text).toContain(`跑于 \`${SHA7}\``);
-  expect(r.text).toContain('MP_WEIXIN_RESULT');
+  expect(r.text).not.toContain('MP_WEIXIN_RESULT');
   expect(r.text).toContain('KOTLIN_ALL_RESULT');
 
   const v = await validateWith(MP_FILES, r.text);
   expect(v.errors).toEqual([]);
   expect(v.ok).toBe(true);
-  expect(v.gates['②'].commit).toBe(SHA7);
+  expect(v.gates['②'].retired).toBe(true);
+  expect(v.gates['②'].required).toBe(false);
   expect(v.gates['④'].commit).toBe(SHA7);
 });
 
@@ -103,7 +103,7 @@ test('①b 只给 ④ 读数且未命中 MP-WEIXIN 面 ⇒ 一行即绿（② �
   expect(v.gates['②'].required).toBe(false);
 });
 
-test('② 没读数 ⇒ 形状仍对：红因是「缺读数」，不是「缺该行」', async () => {
+test('④ 没读数 ⇒ 形状仍对：红因是「缺读数」，不是「缺该行」', async () => {
   const r = runGen('standard', [`-Sha7 ${SHA7}`]);
   expect(r.status).toBe(0);
   const v = await validateWith(RUNTIME_FILES, r.text);

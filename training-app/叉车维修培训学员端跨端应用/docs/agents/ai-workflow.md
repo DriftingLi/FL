@@ -65,7 +65,7 @@ Matt 负责「把一件事做对」，tstack 只提供措辞与交接规范，FL
 
 - 触发：明确要接手**别人的** PR / 分支 / agent 线程（不是自己刚开的那张）。
 - 接手前先读：票 + 对应 ADR + 移动端 `AGENTS.md`；确认工作树归属（`git worktree list`），**别在宿主树里改**。
-- 并发约束：HBuilderX 是**单实例串行资源**——别在别人正跑 ②/④ 时抢设备；锁与时间预算见 [`concurrency.md`](concurrency.md)。
+- 并发约束：HBuilderX 是**单实例串行资源**——别在别人正跑手动 ② 诊断或 ④ 编译门时抢设备；锁与时间预算见 [`concurrency.md`](concurrency.md)。② 门已退役（#2320），日常 PR 不再跑它。
 - **不得**：重开已合并的 PR、替别人决定合并、清理别人的 worktree（拆树只走 `remove-worktree.ps1` 该票对应的那棵）。
 
 ## `full-stop` / `full-send` 在本线的语义
@@ -79,5 +79,5 @@ Matt 负责「把一件事做对」，tstack 只提供措辞与交接规范，FL
 1. **明写栈**：prompt 里注明「移动端（`training-app/叉车维修培训学员端跨端应用/`）」，否则子 agent 可能按前端/后端流程走。
 2. **明写边界**：子 agent 只做被派的**那一步**（读票、定位、改代码、跑某一腿）；**不得**自行开 PR、合并、拆树、提分支——交付动作留在主会话按八步执行。
 3. **隔离**：一会话一分支一树（[`../../../../docs/agents/multi-agent-git.md`](../../../../docs/agents/multi-agent-git.md)）；`git add` 只加明确列出的文件，**禁 `git add -A` / `git add .`**。
-4. **设备串行**：同一个 HBuilderX 实例下**不得并行**派两个要跑 ②/④ 的子 agent；要并行就各走各树、设备排队。
+4. **设备串行**：同一个 HBuilderX 实例下**不得并行**派两个要跑手动 ② 诊断或 ④ 的子 agent；要并行就各走各树、设备排队。
 5. **回报读数**：子 agent 回的是**读数行原文**（`TEST_*_RESULT` / `MP_WEIXIN_RESULT` 等），不是「应该没问题」。

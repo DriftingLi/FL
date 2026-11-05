@@ -2,7 +2,8 @@
 // pr-evidence 校验器 —— 判据的**单一来源**（#1770）
 //
 // **A1 形态（2026-10-29，#2100 裁定）**：证据主键 = PR 正文里的**一行**。
-//   行里写 `跑于 <sha7>` + 门自带的机读读数行（`MP_WEIXIN_RESULT` / `KOTLIN_ALL_RESULT` / `COMPILE_RESULT`）。
+//   行里写 `跑于 <sha7>` + 门自带的机读读数行（`KOTLIN_ALL_RESULT` / `COMPILE_RESULT`）；② 的
+//   `MP_WEIXIN_RESULT` 已于 2026-11-05 随门退役（#2320），不再要求、写了也只当备注。
 //   退役的四样（本文件不再有任何代码路径）：sha 绑定门评论、三候选集（PR / commit / 票评论）、
 //   marker 与展示副本、①③④b 的字段签核。
 //
@@ -52,22 +53,14 @@ export const GATE_EVIDENCE = {
     "source": "[A-Za-z_][\\w.-]*\\s*=\\s*\\S+",
     "hint": "token 后面必须跟着门真打出来的键值对（如 `errors=0` / `pages=3`），只写 token 或写 `...` 都是占位"
   },
-  "coverage": {
-    "field": {
-      "source": "(?:^|\\s)coverage=([^\\s\\x60]+)"
-    },
-    "value": {
-      "source": "^(?:changed|smoke):\\d+$|^none$"
-    },
-    "hint": "`coverage=` 只认 `changed:<N>` / `smoke:<N>` / `none` 三值（门在 `-Pages auto` 下产出，见 ADR-0008 ② 段）"
-  },
   "gates": [
     {
       "key": "②",
       "label": "微信开发者工具无报错",
       "requires": "mpweixin",
+      "retired": true,
       "tokens": ["MP_WEIXIN_RESULT"],
-      "tokenHint": "门自带的 `MP_WEIXIN_RESULT` 读数行"
+      "tokenHint": "门自带的 `MP_WEIXIN_RESULT` 读数行（已退役，不再要求）"
     },
     {
       "key": "④",
@@ -83,7 +76,7 @@ export const GATE_EVIDENCE = {
 const toRe = (spec) => new RegExp(spec.source, spec.flags || '');
 
 // 报错文案里给一行可照抄的形状（判据与提示同源，别在两处各写一份）。
-const EVIDENCE_LINE_HINT = '跑于 `<sha7>` · <门读数行原样>（图可选，附在行尾）';
+const EVIDENCE_LINE_HINT = '跑于 `<sha7>` · <门读数行原样>（已退役的 ② 不要求；截图不再作为证据）';
 
 // 「这张改动单算不算碰了交付形态」——运行时面与 ② 触发面共用同一判据，
 // 免得「门被点亮的理由」和「门证据的失效条件」两套口径各走一路。
@@ -391,7 +384,7 @@ export async function validatePrEvidence({
   }
 
   const gates = {
-    '②': { required: needs2, bound: false, commit: '', reason: '', why: needs2 ? needs2Why.slice(0, 5) : [] },
+    '②': { required: false, retired: true, hit: needs2, bound: false, commit: '', reason: '', why: needs2 ? needs2Why.slice(0, 5) : [] },
     '④': { required: runtime.length > 0, bound: false, commit: '', reason: '', why: runtime.slice(0, 5) },
   };
 
@@ -410,7 +403,7 @@ export async function validatePrEvidence({
   // 在 PR 上看不出区别，而这正是 #2101「覆盖为零的绿」的成因。
   if (mpScan) {
     if (mpScan.hits.length > 0) {
-      notes.push(`② 文件级扫描命中（块内改动，diff 里没有指令行增删）：${mpScan.hits.slice(0, 5).join('、')}${mpScan.hits.length > 5 ? ' 等' : ''} ⇒ ② 必跑。`);
+      notes.push(`② 文件级扫描命中（块内改动，diff 里没有指令行增删；仅供参考，门已退役 #2320）：${mpScan.hits.slice(0, 5).join('、')}${mpScan.hits.length > 5 ? ' 等' : ''}。`);
       // fail-closed 兜底也会产生 hits，但它是「没读成 ⇒ 按命中处理」，必须把**为什么**说出来，
       // 否则维护者无法区分「真命中」与「读取坏了」，也就无从修（用户约束③：不得静默判定）。
       if (mpScan.skipped) notes.push(`② 文件级扫描未能给出确定结论：${mpScan.skipped}。`);
@@ -461,8 +454,6 @@ export async function validatePrEvidence({
   const LIST_ITEM_PREFIX = new RegExp(GATE_EVIDENCE.listItem.prefixStrip);
   const RAN_AT = toRe(GATE_EVIDENCE.ranAt);
   const READING_VALUE = toRe(GATE_EVIDENCE.readingValue);
-  const COVERAGE_FIELD = toRe(GATE_EVIDENCE.coverage.field);
-  const COVERAGE_VALUE = toRe(GATE_EVIDENCE.coverage.value);
 
   // ④ 全家（④ / ④a / ④b / ④c）都含「④」⇒ 按行首编号匹配，④a / ④b 行不能顶替 ④ 行。
   const matchesGate = (line, gate) => {
@@ -512,6 +503,12 @@ export async function validatePrEvidence({
   const lines = section.split('\n').filter((l) => LIST_ITEM.test(l));
   for (const gate of GATE_EVIDENCE.gates) {
     const state = gates[gate.key];
+    if (gate.retired) {
+      // #2320（2026-11-05 裁定）：② 微信开发者工具门退役 —— 不再要求 MP_WEIXIN_RESULT 读数行。
+      // 命中面仍如实记进 notes（可见、可审计），但不再产生 errors；手动运行时诊断脚本保留。
+      notes.push(`② ${gate.label}：已退役（#2320）⇒ 默认跳过，不再要求读数行，也不要求跳过声明；本 PR 是否命中 MP-WEIXIN 面见下方提示。`);
+      continue;
+    }
     if (!state.required) {
       // 「默认跳过」是**判定结果**，不是「允许你自己跳」：#2207 的原口径是「非触发面默认跑、可自选跳过」，
       // 2026-11-04 翻成「非触发面默认跳过」—— 普通 PR 不跑 ② 不再需要理由行，也不再被提示追着要。
@@ -536,20 +533,7 @@ export async function validatePrEvidence({
         err(gate.key, `${where}：${gate.tokenHint} 后面没有实际读数 —— ${GATE_EVIDENCE.readingValue.hint}。`);
       }
     }
-    // `coverage=` 形态校验（#2101/#2102）。**只校「出现即合法」，不校「必须出现」**：
-    // #2102 原文写「校存在性」，但门只在 `-Pages auto` 下产出该字段 —— `-Pages <csv>`（定向单验）与
-    // `-Pages none`（旧导航组）是合法跑法且没有「改动页覆盖」语义，强制出现会把它们判成假红。
-    // 这与本票「删格式税」的立场一致：能判红的只剩「写了但写错」，不是「少写了一个自报字段」。
-    if (gate.key === '②') {
-      const cov = line.match(COVERAGE_FIELD);
-      if (cov) {
-        // 读数通常被反引号包着（`… coverage=changed:2`），截到反引号前；再兜一刀剥尾反引号
-        const v = cov[1].replace(/`+$/, '');
-        if (!COVERAGE_VALUE.test(v)) {
-          err(gate.key, `${where}：\`coverage=${v}\` 不是合法形态 —— ${GATE_EVIDENCE.coverage.hint}。`);
-        }
-      }
-    }
+    // `coverage=` 是 ② 的字段；② 于 #2320 退役后该形态校验一并消失。
     const m = line.match(RAN_AT);
     if (!m) {
       err(gate.key, `${where}：缺 \`跑于 <sha7>\`（门是在哪个 commit 上跑的，写它的前 7 位）。`);
@@ -571,7 +555,7 @@ export async function validatePrEvidence({
   }
 
   if (needs2) {
-    notes.push(`② 触发面命中（MP-WEIXIN 面，ADR-0043 起为常态主门、无低风险减免）：${needs2Why.slice(0, 5).join('、')}${needs2Why.length > 5 ? ' 等' : ''}。`);
+    notes.push(`② 命中 MP-WEIXIN 面（仅供参考，门已退役 #2320）：${needs2Why.slice(0, 5).join('、')}${needs2Why.length > 5 ? ' 等' : ''}。`);
   }
   if (needs4b) {
     notes.push('④b 打包面命中（三份 json / utssdk 原生面 / *.aar / libs/*.jar）：A1 下不判红、正文不写 ④b 行，但**发版前必须跑** release 云打包（ADR-0008）。');

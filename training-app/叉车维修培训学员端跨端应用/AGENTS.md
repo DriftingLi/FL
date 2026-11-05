@@ -14,12 +14,12 @@
 | 2 改完自检 | `npm run hx:compile-only` | 无 `ERROR` | 四条红线见下；这一步**不碰设备**，别拿真机验编译期的事 |
 | 3 ③ 两腿 | `npm run test:unit:changed`（接线全量 + 行为**受影响子集**；全量两腿走 `npm run test:unit:gate`） | `TEST_UNIT_CHANGED_RESULT` / `TEST_BEHAVIOR_CHANGED_RESULT … mode=changed planned=N` | 子集红而 CI 绿 → 先自查，**不当 flake**；选错腿的 config = 0 套件假绿 |
 | 4 ④c（+④a） | `npm run build:kotlin-all`；命中三份 json / 新增页 / 模块手术再加 `npm run build:compile` | 退出码 0 | ④a 命中**必须清缓存**：`pages.json` 改一行不清 = 产物没更新还报编译成功 |
-| 5 ② 改动页 | `npm run build:mp-weixin-check`（**② 微信开发者工具门 = 半自动门**，执行人允许「agent 执行」） | `MP_WEIXIN_RESULT` 整行 + `coverage=changed:N\|smoke:2\|none` | `none` = 覆盖判据不可用（git diff 取不到，只剩入口页；不会退化成冒烟集）**不阻断**，但须原样进正文；清单为空才跑冒烟两页；`publish` 每 PR **只一次**，重试不再编译 |
-| 6 证据 | — | 正文一行 `跑于 <sha7>`；门读数行**原样**跟在后面（A1 已无「结论」栏）；图只作附证 | 图不是判据；`anchors=0` 不判红（人看该页） |
+| 5 可选运行时诊断（② 已退役） | 需要时手动跑 `npm run build:mp-weixin-check`（**不是门**，#2320 起不要求、不判红） | 无门禁判据；结果行只作人工诊断读数 | 日常**不要**为凑证据跑 ② 或启动微信开发者工具；只有真要诊断时才手动启，截图仅作手边诊断参考、不进验收证据 |
+| 6 证据 | — | 正文一行 `跑于 <sha7>`；**④ 读数行原样**跟在后面（② 已退役，#2320 不再要求；A1 已无「结论」栏）；不要求截图 | 图不作证据（#2320）；`anchors=0` 不判红（人看该页） |
 | 7 开 PR 与合并 | `pwsh scripts/preflight-pr.ps1`（**仓库根**跑）预检绿 → `pwsh scripts/submit-pr.ps1` 建 PR | 证据齐 → agent 直接合并 | 例外通道只认「已接受未验证风险」一句，**且由人合并** |
 | 8 收尾 | `pwsh scripts/dev-close.ps1 -Task <票号>`（仓库根；默认 dry-run，`-Yes` 执行）；**认树看目录 `wt-<票号>`、身份看登记分支**（`fix/…` 也认，别按 `feat/<票号>` 猜；裁定见根 `docs/adr/ADR-0092-树身份-目录为入口与登记分支为身份.md`） | `DEV_CLOSE_RESULT … verdict=ok`（dry-run 只 `verdict=planned`、无动作是 `verdict=noop`，**都别当已收尾**） | `verdict=blocked reason=pr-not-merged` = 还没合并，本就不该拆；`tree-branch-mismatch` = 目录在但判据没匹配上（必红，别当无树）；树被占用 ⇒ 关掉占用的工具再跑，别 kill |
 
-**第 5 步的纪律面**：校验器对「纯 `.uvue` / `.uts`」这一支**不判**（`needs2` 只认 MP-WEIXIN 面）。② 三条判据**任一击中即必跑**：① `manifest.json` / `platformConfig.json` 改动；② 运行时面 diff 里增删了一条 MP-WEIXIN 条件编译**指令行**；③ 改动到的 `.uvue` / `.uts` **正文并集**（基线版 + 当前版）含该指令（#2284，2026-11-04）。三条均未命中 ⇒ **默认跳过**：正文不写读数行、也**不要**写跳过声明——那是**判定结果**，不是「允许你自己跳」（旧口径 `② 自选跳过 reason=<slug>` 自 #2284 起**不再是默认要求**：显式写「判断过但不跑」仍被识别，`needs2` 触发面写了判红）。正文扫描超预算（>40 个文件）/ 读取异常 / 两侧都读不到 ⇒ fail-closed 判命中。口径全文见 ADR-0008 顶部 2026-11-04 条。
+**第 5 步的纪律面（#2320，2026-11-05 退役）**：② 微信开发者工具门**已整体退役**——不再有 `needs2` 触发面、不再要求 `MP_WEIXIN_RESULT` 读数行、不再要求截图，也不再有「自选跳过 reason」。日常 PR **不跑 ②**；需要看小程序运行时（console error / exception / 白屏）时，才手动跑一次作为诊断，结果只进日志、不判红。风险已接受：PR 粒度不再有 IDE 自动检查，该风险由发版前真机冒烟（ADR-0043）兜底。口径全文见 ADR-0008 顶部 2026-11-05 条。
 
 **成本尺**：常态 ≈12 min（同树）/ 17 min（新树）。超 2× 先查是不是在排队（HBuilderX 单实例，不是脚本慢）。
 
@@ -27,11 +27,11 @@
 
 ## 验收门与合并纪律
 
-- **证据 = PR 正文一行 `跑于 <sha7>` + 门读数行原样**（A1 形态）。sha 绑定门评论 / 三候选集 / `-PostToIssue` / 展示副本**全退役**；图走 GitHub 附件、只作附证。判据全文与来路见 [`docs/adr/0008-移动端验收门与证据.md`](docs/adr/0008-移动端验收门与证据.md)（**写全路径**）。
+- **证据 = PR 正文一行 `跑于 <sha7>` + 门读数行原样**（A1 形态）。sha 绑定门评论 / 三候选集 / `-PostToIssue` / 展示副本**全退役**；日常 PR 不产出截图、图不作证据（#2320）。判据全文与来路见 [`docs/adr/0008-移动端验收门与证据.md`](docs/adr/0008-移动端验收门与证据.md)（**写全路径**）。
 - **红是「看见」不是「拦截」**：ruleset 必检只有 `ci-summary`，`pr-evidence` 不在必检 ⇒ 证据体系是荣誉制，别人不替你兜底。
 - **① 整门退役**：①a 降为发版前一次（发版冒烟）；①b 与能力面人签**已整体退役**——命中能力面的 PR 合并前**零人签**、不要求设备在线，正文命中才写一行 `能力面：<类别> · 已记入发版冒烟`。发版冒烟的人工场景清单**固定全做、不按 diff 生成**（5 条 = 3 条常态必做 + 2 条条件项），载体是移动端 ADR `docs/adr/0043-真机门降级常态化与发版冒烟（2026-10-23 裁定）.md`「发版冒烟固定人工场景清单」段——它管**能力场景人工操作**，与决策 5「按 diff 选改动页」的人看范围（管**页级视觉**）是两个不同对象；ADR-0048 ③ 已裁定清单不进本页。
 - **③④ 照旧必过**；云打包按打包面触发（三份 json / `uni_modules` app-android / 新增 aar·jar），正式发版前必跑并装机自测。门脚本须**全访问权限**执行。
-- **⑤ 不门化（2026-10-29，#2130）**：改的命中运行时面、而 ② 命中位未命中时（`manifest.json` / `platformConfig.json` 未改且 diff 无 MP-WEIXIN 指令行），PR 前**建议**跑一次 `npm run build:mp-weixin-buildonly`——可选、不判红；`build=skipped(fingerprint)` 也算编译过。
+- **⑤ 不门化（2026-10-29，#2130；② 退役后仍不变）**：改的命中运行时面时，PR 前**建议**跑一次 `npm run build:mp-weixin-buildonly`——可选、不判红；`build=skipped(fingerprint)` 也算编译过。它是构建面检查，不启动微信开发者工具、也不产生截图。
 - 非运行时面 PR（纯文档 / 测试 / CI 配置）agent 自行合并；例外通道仍由人合并。
 
 ## 开发内循环（移动端 UI 迭代）
