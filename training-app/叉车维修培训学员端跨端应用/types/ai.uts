@@ -118,3 +118,48 @@ export type AIFunctionItem = {
     adapter : string
 }
 
+/**
+ * 诊断引导：品牌（`GET /ai-assistant/diagnosis/intents` 的 `brands[]`，对齐后端 `DiagnosisIntentBrand`）。
+ *
+ * `picker` 是**第二层形态的唯一判据**：`'model'` ⇒ 型号档，其余与空值一律按系统档
+ * （根仓库 ADR 与 web 侧 `pickerKindOf` 同口径）。引入第三个取值时按系统档处理，不报警。
+ * `cls` 是对方样式类名，我方按自己的视觉渲染，仅为契约留位。
+ */
+export type DiagnosisIntentBrand = {
+    id : string
+    name : string
+    tagline : string
+    icon : string
+    cls : string
+    picker : string
+}
+
+/** 诊断引导：常见问题（`intents.faq[]`） */
+export type DiagnosisFaq = {
+    q : string
+    a : string
+}
+
+/**
+ * 诊断引导：品牌与常见问题。
+ *
+ * 集合**恒非空数组**（后端已归一）：空即空数组，调用方直接 `.length` / 遍历，
+ * 不需要再判 null —— 留白判定看的是 health 与取数失败，不是「数组为空」。
+ */
+export type DiagnosisIntents = {
+    brands : DiagnosisIntentBrand[]
+    faq : DiagnosisFaq[]
+}
+
+/** 诊断引导：第二层与第三层的条目（`systems` / `faults` 的 `items[]`） */
+export type DiagnosisCatalogItem = {
+    id : string
+    name : string
+    icon : string
+}
+
+/** 诊断引导：上游健康（`GET /diagnosis/health`，**永远 200**，`ok=false` 表示未配置或不可达） */
+export type DiagnosisHealth = {
+    ok : boolean
+    app_configured : boolean
+}

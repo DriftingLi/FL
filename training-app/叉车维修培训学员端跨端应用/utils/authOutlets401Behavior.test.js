@@ -175,6 +175,8 @@ function buildApp(opts) {
     decodeList: (d) => d,
     decodePage: (d) => d,
     toNumber: (v) => Number(v),
+    // #2296：诊断引导面新增 toBool —— 缺绑定由 utsHarness fail-closed 抓出（不是本套件要测的面）
+    toBool: (v, d) => (v == null ? d : (String(v).toLowerCase() === 'true' || String(v) === '1')),
     toStr: (v) => String(v),
     API_BASE_URL: 'http://127.0.0.1:8080',
     AI_REQUEST_TIMEOUT: 60000,

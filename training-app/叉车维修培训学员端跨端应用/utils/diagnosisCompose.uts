@@ -1,0 +1,86 @@
+/**
+ * 诊断引导的组句纯函数（#2296）—— **1:1 镜像** web 侧 `frontend/src/utils/diagnosisCompose.ts`。
+ *
+ * 为什么是纯函数：v2 契约里**没有 compose 端点**（七个接口只有 chat / intents / systems /
+ * faults / code_hint / health），`content` 是唯一文本通道 ⇒ 品牌与型号只能进正文，
+ * 组句在前端。见根仓库 web 侧同文件的注释与 #2241 的裁定。
+ *
+ * 为什么必须镜像而不是各写一份：两端各写一份 = 一处改、另一处不知道 ⇒ 同一个学员换个屏幕
+ * 拿到两套问法。跨栈守护 `utils/diagnosisComposeParityContract.test.js` 读 web 文件的
+ * 模板字面量逐条比对**本文件源码**，任一端改字必然红。
+ *
+ * **能力边界（不要假装等价）**：对方的 compose 还会往句子里注入语料特征词
+ * （`_linde_topic_term()` / `_zhongli_topic_term()`），那两份词表来自对方的维修手册语料，
+ * 我方拿不到。这里只拼**朴素句子** ⇒ 命中率低于对方，验收不得声称等价。
+ * 补充说明（故障码 / 出现时机 / 异响位置）由学员自己写，那是唯一能补回一部分命中率的手段。
+ */
+
+import type { DiagnosisIntentBrand } from '../types/index'
+
+/** 引导面板里的已选状态；任一层为空即未成句 */
+export type DiagnosisSelection = {
+	/** 品牌 id（`intents.brands[].id`） */
+	brandId : string
+	/** 第二层 id（`systems[].id` / 型号档的 `faults` 根层 id） */
+	secondId : string
+	/** 第三层：现象名（系统档）或维修主题名（型号档）—— 用**名字**而不是 id，名字才是要进正文的词 */
+	faultName : string
+	/** 补充说明：故障码 / 出现时机 / 异响位置，可空 */
+	extra : string
+}
+
+/** 一个空的已选状态（每次进面板都从它开始 ⇒ 「点选到一半退出不残留」靠这个，不靠页面上清字段） */
+export function emptyDiagnosisSelection() : DiagnosisSelection {
+	const s : DiagnosisSelection = { brandId: '', secondId: '', faultName: '', extra: '' }
+	return s
+}
+
+/**
+ * 第二层该渲染「系统档」还是「型号档」—— 由 `intents.brands[].picker` 决定（值 `system` / `model`）。
+ * 契约没写的取值**一律按系统解释**：中力 14 个系统是默认形态。
+ */
+export function pickerKindOf(brand : DiagnosisIntentBrand | null) : string {
+	if (brand == null) return 'system'
+	return brand.picker == 'model' ? 'model' : 'system'
+}
+
+/** 第三层标题：型号档选的是「维修部位 / 主题」，系统档选的是「故障现象」（对方同口径） */
+export function faultStepTitle(brand : DiagnosisIntentBrand | null) : string {
+	return pickerKindOf(brand) == 'model' ? '选要查的维修部位 / 主题' : '选故障现象'
+}
+
+/** 第二层标题（型号档在 `faults` 根层给型号，系统档在 `systems` 给系统） */
+export function secondStepTitle(brand : DiagnosisIntentBrand | null) : string {
+	return pickerKindOf(brand) == 'model' ? '选型号' : '选系统'
+}
+
+/**
+ * 把「品牌 → 第二层 → 现象 → 补充」拼成一句发给诊断服务的话。
+ *
+ * @param brand       `intents.brands[]` 里选中的那一项（要 `name` 与 `picker`）
+ * @param secondName  第二层选中项的**名字**（系统名 / 型号名）
+ * @param selection   已选状态（`faultName` / `extra` 用这里的）
+ * @returns 拼好的句子；第三层（现象）为空时返回空串 —— 那是「还没选完」，不是错误
+ */
+export function composeDiagnosisSentence(brand : DiagnosisIntentBrand | null, secondName : string, selection : DiagnosisSelection) : string {
+	const fault = selection.faultName.trim()
+	if (brand == null || fault.length == 0) return ''
+	const extra = selection.extra.trim()
+	// 第二层名按契约是可选（`faults?brand=&second=` 的 second 可缺省），缺了就不写「型号：」
+	const second = secondName.trim()
+
+	// 林德语料是维修手册不是故障码库：问法必须跟着换，否则检索不到东西（对方同理由）
+	if (brand.picker == 'model') {
+		let s = `我的${brand.name}叉车，型号：${second.length > 0 ? second : '（未选）'}，请按该型号维修手册说明「${fault}」的检查确认步骤、拆装顺序、所需工具和扭矩要求。`
+		if (extra.length > 0) s += `补充：${extra}。`
+		s += '请按手册给出安全注意事项。'
+		return s
+	}
+
+	// 中力走故障码库：系统名进括号、现象进主句
+	const head = second.length > 0 ? `我的${brand.name}叉车（${second}）` : `我的${brand.name}叉车`
+	let s = `${head}出现故障现象：${fault}。`
+	if (extra.length > 0) s += `补充：${extra}。`
+	s += '请给我排查步骤、根因分析和维修方案。'
+	return s
+}

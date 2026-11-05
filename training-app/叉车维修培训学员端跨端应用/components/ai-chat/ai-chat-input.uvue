@@ -2,7 +2,7 @@
 	<view class="input-card">
 		<!-- 上排：占位符 + 发送 -->
 		<view class="input-top">
-			<input v-model="inputText" class="chat-input" :placeholder="placeholder" confirm-type="send" @confirm="onSend" />
+			<input :value="inputText" class="chat-input" :placeholder="placeholder" confirm-type="send" @input="onInputChange" @confirm="onSend" />
 			<text class="send-btn" :class="{ disabled: inputText.length == 0 || disabled }" @click="onSend">&#10148;</text>
 		</view>
 		<!-- 下排：模型芯片 + 动作按钮 -->
@@ -26,7 +26,9 @@
 </template>
 
 <script setup lang="uts">
-	withDefaults(defineProps<{
+	import { computed, ref, watch } from 'vue'
+
+	const props = withDefaults(defineProps<{
 		placeholder?: string
 		showModelBar?: boolean
 		modelName?: string
@@ -34,6 +36,8 @@
 		modelReadonly?: boolean
 		disabled?: boolean
 		showImageButton?: boolean
+		/** 外部塞进输入框的草稿（诊断引导组好句后由页面写入；改它就等于预填输入框） */
+		draft?: string
 	}>(), {
 		placeholder: '提出你想要知道的问题',
 		showModelBar: false,
@@ -41,12 +45,33 @@
 		modelDesc: '',
 		modelReadonly: false,
 		disabled: false,
-		showImageButton: false
+		showImageButton: false,
+		draft: ''
 	})
 
 	const emit = defineEmits(['send', 'modelClick', 'imageClick', 'voiceClick'])
 
 	const inputText = ref<string>('')
+
+	// 外部草稿写进来（诊断引导「填入输入框」）：只**预填**、不发送 —— 学员可改完再发
+	// （票面判据：可编辑后再发送；替人发出去会把「补一句故障码」这唯一提命中率的手段废掉）。
+	const draftText = computed<string>(() : string => {
+		const d = props.draft
+		if (d == null) return ''
+		return d as string
+	})
+
+	// Kotlin 侧对 watch 回调参数推不出类型（cannot infer type / unresolved reference），
+	// 故显式标注 + 经一个 typed computed 取源（#2296 实测 ④c 抓出）。
+	watch(draftText, (v : string) => {
+		if (v.length > 0) {
+			inputText.value = v
+		}
+	})
+
+	function onInputChange(e : InputEvent) : void {
+		inputText.value = e.detail.value
+	}
 
 	function onSend() : void {
 		const text = inputText.value.trim()
