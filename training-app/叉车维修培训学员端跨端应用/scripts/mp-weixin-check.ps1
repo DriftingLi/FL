@@ -15,14 +15,14 @@
       → cli.bat auto --auto-port <Port> --trust-project（开自动化端口）
       → node scripts/mp-weixin-ready.mjs（**就绪闸门**：等端口接受连接 + Tool.getInfo 带 SDKVersion
         + App.getPageStack 开始应答，再把端点交给 automator —— 2026-09-13 实测新增，缺它 ② 时好时坏）
-      → node scripts/mp-weixin-probe.mjs（miniprogram-automator 连上：读 pageStack / console / exceptions + 截图）
+      → node scripts/mp-weixin-probe.mjs（miniprogram-automator 连上：读 pageStack / console / exceptions）
 
     **三条实测坑位（勿删，ADR-0008 已录）**：
       1. `pageStack` 为空会让**所有 page 级 API** 报同一个误导弹错
          `Cannot destructure property 'rawPath' of 't.getPageMetaByWebviewId(...)' as it is null`
          —— 根因是自动化会话里没有页面被打开，不是版本不兼容。处置 = 先 `cli.bat close` 再 `cli.bat auto`
          （本脚本把这一步写死），并把「pageStack 非空」作为**前置断言**（探针里判 exit 2 环境不可用）。
-      2. `mp.screenshot()` 挂在 **MiniProgram** 上，不在 Page 上（`page.screenshot is not a function`），
+      2. （历史存档：#2320 阶段二起本门不再截图，此条只作 automator API 事实备查）`mp.screenshot()` 挂在 **MiniProgram** 上，不在 Page 上（`page.screenshot is not a function`），
          且不返回内容 ⇒ 产物只能靠落盘 PNG 取。
       3. `page.$()` 元素级断言 2026-09-18 原测判不可用（就绪闸门早跑窗口的产物）→ 2026-10-25 #1917 裁决
          证伪（`page.$('.app-title')` 8ms 可用）→ #1919 落锁收窄：`page.waitFor(选择器)` 与导航 API 仍禁；
@@ -87,9 +87,6 @@
           手动 open→auto 均无效，且当时工具已是 `2.02`（b 的版本判据解释不了）。用户在开发者工具里
           **关闭 GPU 加速**后通道即恢复。⇒ 判据修正：端口起而 Tool 通道假死时，**先关 GPU 加速**，
           再核残留会话（a），最后才核对工具版本（b）。
-       d) 顺带修掉一处真缺陷：无截图（失败路径）时 `Publish-ScreenshotArchive` 在 StrictMode 下抛
-         「在此对象上找不到属性"Sum"」（`Measure-Object` 对空管道不产出对象）⇒ 收成空安全的 `Get-MadeTotalBytes`；
-         它只 warning、不影响门结论，但会把整段入库打成异常。
 
     **导航不可用时诚实降级（2026-09-12 复测，**不许假绿**）**：本机 `miniprogram-automator@0.12.1` 下
     `mp.reLaunch` / `mp.navigateTo` **恒报 `Uncaught [object Object]`**，而 `mp.connect` / `mp.pageStack` 正常
@@ -112,7 +109,7 @@
     = 入口页 + 本 PR 改动页（git diff 命中 `pages/**/*.uvue`）；**清单为空**（改 `components/` / `utils/*.uts` /
     `App.uvue` / `pages.json`）时退**固定冒烟集两页**、结果行给 `coverage=smoke:2`（#2101：否则只跑入口页一张 =
     覆盖为零的绿），git 判据不可用 ⇒ `coverage=none` 且**不**退化冒烟集；`-Pages none` 关闭直达走旧导航组；`-Pages <csv>` 指定清单。
-    每页取证 = 截图（落日志目录；只有显式 `-Archive` 才另存一份到 `docs/verification/<模块>/<号码>/`）+ 该页 console error/exception
+    每页取证 = 该页 console error/exception
     读数（`errorsTotal` 语义不变：逐页累加，重试不重复计数）。未达成页**逐页**记入 `navigation.pages`（#1816），组级形态：
     全部达成 ⇒ `ok`、部分达成 ⇒ `partial(ok=<N>,skip=<M>)`（已达成页读数照常计入，**不得**被未达成页整组塌缩）、
     全部未达成 ⇒ `navigation=skip(reason=…)`（reason ∈ direct-page-unsupported / page-not-in-build / app-json-invalid），
@@ -161,11 +158,11 @@
 
     **build-only 模式 `-BuildOnly`（#1861 第一段）**：同一条 ② 链路的**构建面**载体 —— 跑到「publish 成功行 +
     产物合法性（#1210）+ 指纹落盘」为止，**会话段整段跳过**（pre-flight quit / close→open→auto 重试单元 /
-    就绪闸门 / 探针 / 截图入库 / 贴门评论），不打开自动化会话、不等页面就绪。入口
+    就绪闸门 / 探针 / 贴门评论），不打开自动化会话、不等页面就绪。入口
     `npm run build:mp-weixin-buildonly`；形态沿 ④a 的 `hx-run.ps1 -CompileOnly`（官方语义「仅编译代码」，
     同族范式：开关 + 真跑 + 真跳过，不抽库、不建薄壳）。
     补的是 #1670 盲格：纯 `.uvue` / `.uts` 改动（没有 MP-WEIXIN 行、没有三份 json）时 ② 的判据认不出编译面，
-    ADR-0043 决策 3 只写了「靠纪律」。**它不是 ② 的替代** —— console error / exception / pageStack / 截图
+    ADR-0043 决策 3 只写了「靠纪律」。**它不是 ② 的替代** —— console error / exception / pageStack
     一概未取证 ⇒ 建成它**不构成**降频 ② 的理由（#1861「边界（已裁定）」段；C1 裁定不删门）。
     三条与 ② 不同的处置（#1861 2026-10-28 裁定）：
       ① **不跑 appid 断言**（源 manifest 那条 fail-closed 与产物 appid 那条都跳过）。理由：不上传 ⇒ 产物落
@@ -254,21 +251,13 @@
     > 0 时，**仅在门通过（exit 0）分支**把证据块**打印到终端** —— A1（#2100）起**不再贴任何评论**。
     打印出来的块就是该粘进 PR `## 验收证据` 段的那一段：结论行（含 MP_WEIXIN_RESULT）与产物路径 + 复现命令。
     校验器只读 PR 正文（一行 `跑于 <sha7>` + 门读数行），「贴在哪个 sha 上」不再参与判定，
-    因此不再校验 sha 可达性、不发任何 gh 写请求；号码只作**批次标识**（以及 `-Archive` 时的归档目录键）。
+    因此不再校验 sha 可达性、不发任何 gh 写请求；号码只作**批次标识**。
     投递退役不是失败：不打印警告，**不影响门的结论**（退出码 0/1/2 语义不变）。**本参数无写副作用**。
 
 .PARAMETER PostToPr
     `-PostToIssue` 的**别名**（同值，一个版本后退役）。
 
-.PARAMETER Archive
-    **显式开启截图入库**（默认关闭）。开启后门通过时把截图压缩后 `git add` + `commit` + push 到
-    `docs/verification/<模块>/<号码>/`，即**门自己会给分支造一个 commit 并挪走 head sha**。
-    A1（#2100）的裁定是「门证据不入库、图按需贴」，所以这件事必须是显式动作，不能由传号码顺带发生
-    —— 否则正文里的 `跑于 <sha7>` 会从 head 变成祖先。只是要证据块的话**不要**加这个开关。
-    入库任何失败都只警告，不影响门的结论（维护者 2026-09-12 要求）。
 
-.PARAMETER NoArchive
-    `-Archive` 的**反向逃生开关**（优先级更高）：同时给 `-Archive -NoArchive` 时以 `-NoArchive` 为准。
 
 .PARAMETER IdeUserDataRoot
     预探（#1860）的 `.ide` 端口文件用户目录根**注入点**（行为守护与楔死态验收用）。
@@ -285,7 +274,6 @@
     pwsh -NoProfile -File scripts/mp-weixin-check.ps1 -SkipBuild
     pwsh -NoProfile -File scripts/mp-weixin-check.ps1 -Routes 'pages/index/index,pages/login/login'
     pwsh -NoProfile -File scripts/mp-weixin-check.ps1 -PostToPr 884          # 只打印证据块，不写盘
-    pwsh -NoProfile -File scripts/mp-weixin-check.ps1 -PostToPr 884 -Archive  # 显式开截图入库（会造 commit）
     pwsh -NoProfile -File scripts/mp-weixin-check.ps1 -DryRun
     npm run build:mp-weixin-buildonly          # = -BuildOnly：只跑构建面（#1861）
 #>
@@ -319,11 +307,6 @@ param(
     [int]$AutoRetryDelaySeconds = 20,
     [int]$OpenTimeoutSeconds = 120,
     [int]$PortWaitSeconds = 180,
-    [string]$Module = 'mp-weixin',
-    [switch]$NoArchive,
-    # A1（#2100）之后：截图入库从「传号码就发生」改成「显式 -Archive 才发生」。
-    # 旧默认下为了拿证据块**必须**传 -PostToPr，于是「正常拿证据」会顺手 commit + push 挪走 head sha。
-    [switch]$Archive,
     [int]$HxWaitSeconds = 600,
     [switch]$HxNoWait,
     [int]$ProbeTimeoutSeconds = 180,
@@ -1095,11 +1078,12 @@ function Write-Log {
     param([string]$Text)
     Add-Content -LiteralPath $logPath -Value $Text -Encoding utf8
     # #2162：行首结果行**原样透传** stdout —— 通过分支的裸行此前被「✅ ② 通过：<行>」的中文前缀
-    # 遮住（行首判据匹配不上），环境受阻分支则一个字都不打 ⇒ pr-gates 的 mp= 只能读成 no-line。
+    # 遮住（行首判据匹配不上），环境受阻分支则一个字都不打 ⇒ 按行首认读数的入口只能读成 no-line
+    # （原调用方 pr-gates 的 `mp=` 自 #2320 起不再跑本门，但「裸行才可读」这条契约对手动运行同样成立）。
     # 覆盖三种结果行（通过/门未过/env-blocked，互斥由构造器保证）与 -BuildOnly 的独立 token；
     # 日志文件仍是字节级真源，透传逐字节 = 日志里那行，非结果行维持「只进文件」原语义。
     # 排除 `comment=`（投递诊断行，#2830 先例）：它同样以裸 token 开头但**不是读数行** ——
-    # pr-gates 取**最后**一条行首匹配（pr-gates.ps1:239），绿跑后若投递失败，诊断行会顶掉真读数。
+    # 调用方取**最后**一条行首匹配（原 pr-gates 口径），绿跑后若投递失败，诊断行会顶掉真读数。
     foreach ($ln in ($Text -split "`r?`n")) {
         if ($ln -match '^MP_WEIXIN(_BUILDONLY)?_RESULT(\s|$)' -and $ln -notmatch ' comment=') { Write-Host $ln }
     }
@@ -1611,9 +1595,6 @@ function Invoke-AuthInject {
 # 切片）。共享库头部写明了准入门槛：只有「逐字节相同」**且**「未被 utils/*Contract.test.js 作为字面量锚点
 # pin 住」的代码才允许搬进去 —— 本仓守护断言的是**源码文本**，搬走被 pin 的代码等于逼着后续放宽守护。
 . (Join-Path $PSScriptRoot 'lib\gate-common.ps1')
-# 截图入库的判据面（`Get-MadeTotalBytes` 的空安全）：**必须 dot-source 才可用**，
-# 而 `Publish-ScreenshotArchive` 在 main 流程里才被调用 ⇒ 这里（main 之前）是它唯一可靠的落点。
-. (Join-Path $PSScriptRoot 'lib\mp-weixin-archive.ps1')
 # 环境性失败三分的分类与结果行构造（#1655 / ADR-0036 处置二）：判据面单点真源 ——
 # :1535 一带的分类、env-blocked/门未过两种结果行的形状都出自它，
 # 守护用夹具**真执行**这些函数（utils/mpWeixinGateEnvBehavior.test.js / mpWeixinGateResultLineBehavior.test.js），
@@ -1633,8 +1614,6 @@ function Publish-GateComment {
         [string]$ResultLine,
         [string]$LogRelative,
         [string]$ReproCommand,
-        [string[]]$ArchivedRel = @(),
-        [string[]]$ArchiveNotes = @(),
         [bool]$NavSkipped = $false,
         [string]$NavReason = '',
         [string[]]$DirectPageLines = @()
@@ -1650,19 +1629,6 @@ function Publish-GateComment {
     $sha = $binding.Sha
     $short = $sha.Substring(0, [Math]::Min(7, $sha.Length))
     # 正文格式被 .github/workflows/pr-evidence.yml 认（标记 ② + commit sha），改动前先看那边的注释
-    # #1682 核验补记①：-NoArchive / 未入库时调用点传 @(Get-Prop $null 'Rel') = @($null)——
-    # 单元素数组（元素是 null）Count=1，不过滤会渲染成「一条空反引号条目」的假入库清单，
-    # 设计好的兜底文案反而永不出现。先滤掉 null/空再决定走清单还是兜底。
-    $archRels = @(@($ArchivedRel) | Where-Object { $_ })
-    $archNotes = @(@($ArchiveNotes) | Where-Object { $_ })
-    $archLines = @()
-    if ($archRels.Count -gt 0) {
-        $archLines += '- 入库截图（仓库内相对路径，GitHub 可点开预览）：'
-        foreach ($r in $archRels) { $archLines += ('  - ``' + $r + '``') }
-    } else {
-        $archLines += '- 入库截图：（无 —— 见脚本输出的 [archive] 说明，未入库不影响门结论）'
-    }
-    if ($archNotes.Count -gt 0) { $archLines += ('- 入库说明：' + ($archNotes -join '；')) }
     # 降级必须**显式写明**（不许假绿）：评论里不写清楚，读评论的人会把「可验证子集通过」当成「逐页都过了」。
     # #1682：直达探针（cold-start-direct）的 SKIP 与旧导航组的 SKIP 是**两种成因**，措辞分开——
     # 前者是「某页冷启动后落地页 ≠ 目标路由」，后者才是「导航 API 本机恒不可用」。
@@ -1690,7 +1656,7 @@ function Publish-GateComment {
         "- commit: $sha",
         "- 结论（含产物）：``$ResultLine``；日志 ``$LogRelative``",
         '- 非等价声明：② ≠ ① 真机门，也 ≠ ④b 云打包门（content:// / 生物识别 / 第三方 SDK / 真机性能 挡不住）。'
-    ) + @($binding.NoteLines) + $navLines + $directOut + $archLines + @(
+    ) + @($binding.NoteLines) + $navLines + $directOut + @(
         "- 复现：``$ReproCommand``"
     )
     $body = $body -join "`n"
@@ -1705,205 +1671,6 @@ function Publish-GateComment {
     } catch {
         Write-Host "[warn] 门评论投递异常（门结论不受影响）：$_" -ForegroundColor Yellow
     }
-}
-# ---------- 截图入库（P2：② 的截图自动压缩提交到 PR 分支）----------
-# 约束（维护者 2026-09-12 追加）：优先 WebP q75（探测 cwebp / ffmpeg / magick，择一），没有就退 JPEG q75
-# （.NET System.Drawing，Windows 自带）；宽度上限 720px（等比、不放大）；每 PR ≤10 张、单张 ≤150KB、合计 ≤1.5MB；
-# 超限先降质 → 再缩尺 → 再减图（减图必须在评论里写明省了哪几页）。
-# **不得让门因此失败**：任何一步出错只打印警告 + 给出待执行的 git 命令。
-$script:ArchiveMaxCount = 10
-$script:ArchiveMaxBytes = 150KB
-$script:ArchiveMaxTotal = 1.5MB
-$script:ArchiveMaxWidth = 720
-$script:ArchiveFail = $null
-
-function Get-ImageCodec { return [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object { $_.MimeType -eq 'image/jpeg' } | Select-Object -First 1 }
-
-function Get-WebpEncoder {
-    foreach ($t in @('cwebp', 'ffmpeg', 'magick')) {
-        $c = Get-Command $t -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($c) { return @{ Name = $t; Path = $c.Source } }
-    }
-    return $null
-}
-
-function Save-Jpeg {
-    param($Bitmap, [string]$Path, [int]$Quality)
-    $codec = Get-ImageCodec
-    $eps = [System.Drawing.Imaging.EncoderParameters]::new(1)
-    $eps.Param[0] = [System.Drawing.Imaging.EncoderParameter]::new([System.Drawing.Imaging.Encoder]::Quality, [int64]$Quality)
-    $bmp2 = [System.Drawing.Bitmap]::new($Bitmap.Width, $Bitmap.Height, [System.Drawing.Imaging.PixelFormat]::Format24bppRgb)
-    $g = [System.Drawing.Graphics]::FromImage($bmp2)
-    $g.Clear([System.Drawing.Color]::White)   # JPEG 无 alpha：先把透明底填白，免得出现黑块
-    $g.DrawImage($Bitmap, 0, 0, $Bitmap.Width, $Bitmap.Height)
-    $g.Dispose()
-    try { $bmp2.Save($Path, $codec, $eps) } finally { $bmp2.Dispose(); $eps.Dispose() }
-}
-
-function Invoke-WebpEncode {
-    param([string]$Tool, [string]$EncoderPath, [string]$PngPath, [string]$OutPath, [int]$Quality)
-    switch ($Tool) {
-        'cwebp' { $r = Invoke-Process -FilePath $EncoderPath -Arguments @('-q', "$Quality", '-quiet', $PngPath, '-o', $OutPath) -TimeoutSeconds 120 -Tag 'cwebp' }
-        'ffmpeg' { $r = Invoke-Process -FilePath $EncoderPath -Arguments @('-y', '-loglevel', 'error', '-i', $PngPath, '-quality', "$Quality", $OutPath) -TimeoutSeconds 120 -Tag 'ffmpeg' }
-        'magick' { $r = Invoke-Process -FilePath $EncoderPath -Arguments @($PngPath, '-quality', "$Quality", $OutPath) -TimeoutSeconds 120 -Tag 'magick' }
-    }
-    return (Test-Path -LiteralPath $OutPath)
-}
-
-function Export-ArchiveImage {
-    param([string]$SourcePng, [string]$OutBase, [int]$MaxWidth, $Encoder, [int]$Quality)
-    # 返回 @{ Path, Bytes, Width, Height, Format } 或 $null
-    $src = $null
-    try { $src = [System.Drawing.Image]::FromFile($SourcePng) } catch { return $null }
-    try {
-        $w = $src.Width; $h = $src.Height
-        if ($w -gt $MaxWidth) { $h = [int][Math]::Round($h * ($MaxWidth / [double]$w)); $w = $MaxWidth }
-        $scaled = [System.Drawing.Bitmap]::new($w, $h, [System.Drawing.Imaging.PixelFormat]::Format24bppRgb)
-        $g = [System.Drawing.Graphics]::FromImage($scaled)
-        $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-        $g.Clear([System.Drawing.Color]::White)
-        $g.DrawImage($src, 0, 0, $w, $h)
-        $g.Dispose()
-        $out = "$OutBase.jpg"; $format = 'jpeg'
-        try {
-            if ($Encoder) {
-                $tmpPng = "$OutBase.tmp.png"
-                $scaled.Save($tmpPng, [System.Drawing.Imaging.ImageFormat]::Png)
-                $out = "$OutBase.webp"
-                if (Invoke-WebpEncode -Tool $Encoder.Name -EncoderPath $Encoder.Path -PngPath $tmpPng -OutPath $out -Quality $Quality) {
-                    $format = 'webp'
-                } else {
-                    $out = "$OutBase.jpg"; $format = 'jpeg'
-                    Save-Jpeg -Bitmap $scaled -Path $out -Quality $Quality
-                }
-                Remove-Item -LiteralPath $tmpPng -Force -ErrorAction SilentlyContinue
-            } else {
-                Save-Jpeg -Bitmap $scaled -Path $out -Quality $Quality
-            }
-        } finally { $scaled.Dispose() }
-        if (-not (Test-Path -LiteralPath $out)) { return $null }
-        return @{ Path = $out; Bytes = (Get-Item -LiteralPath $out).Length; Width = $w; Height = $h; Format = $format }
-    } finally { $src.Dispose() }
-}
-
-<#
- 入库图合计字节（`Get-MadeTotalBytes`）：判据面已抽到 `scripts/lib/mp-weixin-archive.ps1`（**空安全**）——
- 为什么抽出去：`Measure-Object` 对空管道不产出对象，直接取 `.Sum` 在 StrictMode 下抛
- 「在此对象上找不到属性"Sum"」，而这条路径要「真 git 仓库 + 真 PR + 干净工作树」才走得到 ⇒
- 内联在这里就只能靠人眼；抽成库后由 `utils/mpWeixinArchiveSumBehavior.test.js` **真执行**它。
- 本脚本在 main 流程里 dot-source 该库（见 `lib\mp-weixin-archive.ps1` 那行）。
-#>
-
-function Publish-ScreenshotArchive {
-    param([int]$PrNumber, [string]$Module, [string]$ShotDir, $ProbeJson, [string]$RepoRoot)
-    # 目标：docs/verification/<模块>/<号码>/<页名>-after.<ext>（#1770 起号码 = 票号，旧 PR 号目录同段仍被接受）；
-    # 仅当「HEAD 在远端可达」且「工作树除本次改动外无其他改动」时才提交；其余情况只警告 + 给命令。
-    #
-    # ⚠️ **每个 return 必须是同一形状**（本函数所有分支都要带 `Rel`，取值用 @() 兜底）——
-    #    #1209 血账：此前只有成功路径带 `Rel`，而调用点在 Set-StrictMode 下读 `$archive.Rel`，
-    #    于是「未入库」分支（如"工作树有本次之外的改动"）**抛异常**，把贴 sha 绑定评论那一步打断：
-    #    门明明通过却 exit 1，且证据评论根本没贴上。守护 C19 现在按「逐个 return 都带 Rel」拦它。
-    $notes = [System.Collections.Generic.List[string]]::new()
-    $cmdLines = [System.Collections.Generic.List[string]]::new()
-    if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { return @{ Notes = @('未入库：找不到 gh CLI'); Commands = @(); Rel = @() } }
-    if (-not (Get-Command git -ErrorAction SilentlyContinue)) { return @{ Notes = @('未入库：找不到 git'); Commands = @(); Rel = @() } }
-
-    $root = $RepoRoot
-    $dirty = @()
-    try { $dirty = @(& git -C $root status --porcelain 2>$null | Where-Object { $_ -and $_.Trim() }) } catch { }
-
-    # #1770：归档不再依赖 PR —— 「这是不是 PR 的 head 分支 / PR 是否仍 OPEN」已无从问起（新流程是**证据齐了
-    # 再开 PR**，跑门时 PR 往往还不存在）。改为问一句离线可答的：HEAD 在远端可达吗？归档提交要能推上去、
-    # 评论里的 `- commit:` 才在 GitHub 上点得开（#1695）；不可达就跳过入库、只写说明 —— 门结论不变。
-    $headSha = ''
-    try { $headSha = (& git -C $root rev-parse HEAD 2>$null | Select-Object -First 1) } catch { }
-    $headSha = ("$headSha").Trim()
-    if (-not $headSha) { return @{ Notes = @('未入库：取不到 HEAD sha'); Commands = @(); Rel = @() } }
-    if (-not (Test-ShaReachable -ProjectDir $root -Sha $headSha)) {
-        return @{ Notes = @("未入库：HEAD $($headSha.Substring(0, 7)) 不在远端可达（还没推上去？）"); Commands = @(); Rel = @() }
-    }
-    $allowed = @("docs/verification/$Module/$PrNumber/")
-    $blocking = @($dirty | Where-Object { $p = ($_ -replace '^..\s+', '').Trim('"'); -not ($allowed | Where-Object { $p.StartsWith($_) }) })
-    if ($blocking.Count -gt 0) {
-        return @{ Notes = @("未入库：工作树有本次之外的改动（$($blocking.Count) 项），为免夹带不做提交"); Commands = @(); Rel = @() }
-    }
-
-    $module = if ($Module) { $Module } else { 'mp-weixin' }
-    $destDir = Join-Path $root ("docs/verification/$module/$PrNumber" -replace '/', '\')
-    New-Item -ItemType Directory -Force -Path $destDir | Out-Null
-    $encoder = Get-WebpEncoder
-    if (-not $encoder) { $notes.Add('本机无 cwebp / ffmpeg / magick：按纪律退到 JPEG q75（System.Drawing）') }
-    else { $notes.Add("WebP 编码器：$($encoder.Name)") }
-
-    # #2320：门不再产出截图；归档函数保留到阶段二，调用点恒传空集，避免 StrictMode 读不存在的 shots。
-    $shots = @()
-    # 超限处置顺序：先降质 → 再缩尺 → 再减图（减图写进评论）
-    $plan = @(
-        @{ MaxWidth = $script:ArchiveMaxWidth; Quality = 75 },
-        @{ MaxWidth = $script:ArchiveMaxWidth; Quality = 55 },
-        @{ MaxWidth = 560; Quality = 60 },
-        @{ MaxWidth = 420; Quality = 55 }
-    )
-    $made = @()
-    $skipped = @()
-    foreach ($p in $plan) {
-        if ($made.Count -ge [Math]::Min($shots.Count, $script:ArchiveMaxCount)) { break }
-        Remove-Item -LiteralPath (Join-Path $destDir '*') -Force -ErrorAction SilentlyContinue
-        $made = @()
-        foreach ($s in $shots) {
-            if ($made.Count -ge $script:ArchiveMaxCount) { break }
-            $base = [System.IO.Path]::GetFileNameWithoutExtension($s.name)
-            $outBase = Join-Path $destDir "$base-after"
-            $r = Export-ArchiveImage -SourcePng $s.path -OutBase $outBase -MaxWidth $p.MaxWidth -Encoder $encoder -Quality $p.Quality
-            if (-not $r) { continue }
-            if ($r.Bytes -gt $script:ArchiveMaxBytes) { Remove-Item -LiteralPath $r.Path -Force -ErrorAction SilentlyContinue; continue }
-            $made += $r
-        }
-        if ((Get-MadeTotalBytes $made) -le $script:ArchiveMaxTotal) { break }
-    }
-    # 仍超上限的图（按字节从大到小丢），并记下省了哪几页
-    while ((Get-MadeTotalBytes $made) -gt $script:ArchiveMaxTotal -and $made.Count -gt 1) {
-        $biggest = $made | Sort-Object -Property Bytes -Descending | Select-Object -First 1
-        Remove-Item -LiteralPath $biggest.Path -Force -ErrorAction SilentlyContinue
-        $skipped += ([System.IO.Path]::GetFileName($biggest.Path) + "（超合计上限）")
-        $made = @($made | Where-Object { $_.Path -ne $biggest.Path })
-    }
-    if ($made.Count -eq 0) { return @{ Notes = @('未入库：压缩后没有任何图满足体积上限'); Commands = @(); Rel = @() } }
-    if ($shots.Count -gt $script:ArchiveMaxCount) {
-        $skipped += ($shots[$script:ArchiveMaxCount..($shots.Count - 1)] | ForEach-Object { $_.name })
-    }
-
-    $rel = $made | ForEach-Object { ('docs/verification/' + $module + '/' + $PrNumber + '/' + [System.IO.Path]::GetFileName($_.Path)) }
-    foreach ($m in $made) {
-        $notes.Add(("入库图：{0} {1}x{2} {3} {4}B" -f [System.IO.Path]::GetFileName($m.Path), $m.Width, $m.Height, $m.Format, $m.Bytes))
-    }
-    if ($skipped.Count -gt 0) { $notes.Add('省了这些页（体积/数量上限）：' + ($skipped -join '、')) }
-
-    # 提交（只 add 本次入库的目录）
-    try {
-        & git -C $root add -- ("docs/verification/$module/$PrNumber") 2>$null | Out-Null
-        & git -C $root commit -m "docs(verification): ② 微信开发者工具门截图（PR #$PrNumber）" --no-verify 2>&1 | Out-Null
-        $sha2 = (& git -C $root rev-parse HEAD 2>$null | Select-Object -First 1)
-        $notes.Add("已提交入库：$($sha2.Substring(0,7))（未用 [skip ci]：CI 会为新 sha 重跑，PR head 仍需挂在成功 run 上）")
-    } catch {
-        $notes.Add("入库提交失败：$_")
-        $cmdLines.Add("git add docs/verification/$module/$PrNumber")
-        $cmdLines.Add("git commit -m `"docs(verification): ② 门截图（PR #$PrNumber）`"")
-    }
-
-    # #1695：归档提交必须**先推上去**，评论里 `- commit:` 的 sha 才在 GitHub 上点得开（验收①）。
-    # 推不动（分支保护 / 权限 / 离线）时**不假装成功**：如实记进入库说明 + 复现命令，
-    # 由 Publish-GateComment 的绑定口径把评论降级成「绑远端 tip」或「如实标注未推送」（验收②）。
-    $archBranch = (& git -C $root rev-parse --abbrev-ref HEAD 2>$null | Select-Object -First 1)
-    $push = Push-ArchiveCommit -ProjectDir $root -Branch $archBranch
-    if ($push.Pushed) {
-        $notes.Add("已推送 $archBranch（#1695：sha 绑定评论只引远端可达的提交）")
-    }
-    else {
-        $notes.Add("未推送 $archBranch：$($push.Reason) —— 本次归档 sha 仅本地（#1695）")
-        $cmdLines.Add("git push origin HEAD:refs/heads/$archBranch")
-    }
-    return @{ Notes = $notes; Commands = $cmdLines; Rel = $rel }
 }
 
 # ---------- 主流程 ----------
@@ -2127,7 +1894,7 @@ try {
     # ---------- -BuildOnly 的收口（#1861 第一段）----------
     # 切点 = 上面「产物合法性 + 指纹落盘」之后、会话段之前（`Start-GateStage -Name 'automation'` 是唯一分界）。
     # 走到这里说明构建面的三条判据都成立：publish 成功行已解析、产物合法性（#1210）已过、指纹已落盘。
-    # 之后整段（pre-flight quit / close→open→auto 重试 / 就绪闸门 / 探针 / 截图入库 / 贴门评论）**不执行** ——
+    # 之后整段（pre-flight quit / close→open→auto 重试 / 就绪闸门 / 探针 / 贴门评论）**不执行** ——
     # build-only 的全部价值就是「拿编译面判据而不付会话成本」，跑进去等于又变成 ②。
     # ⚠️ 两条必须继承的东西仍在：`finally` 的 `Invoke-DevToolsClose`（publish 尾段 5–6 ms 内**必自启**微信
     # 开发者工具，收掉那个自启实例靠的就是这条 finally —— 抽库/薄壳方案没有它）与 `Release-HxLock`（同 finally）。
@@ -2152,10 +1919,10 @@ try {
         Write-Host ''
         Write-Host "✅ mp-weixin build-only 通过（构建面）：$buildOnlyLine" -ForegroundColor Green
         Write-Host '   非等价声明：build-only 只证明「publish 成功 + 产物合法」，**不是** ② 的替代 ——' -ForegroundColor Yellow
-        Write-Host '   console error / exception / pageStack / 截图一概未取证（ADR-0043 决策 3 不动：建成它不构成降频 ② 的理由）。' -ForegroundColor Yellow
+        Write-Host '   console error / exception / pageStack 一概未取证（ADR-0043 决策 3 不动：建成它不构成降频 ② 的理由）。' -ForegroundColor Yellow
         if ($PostToPr -gt 0) {
-            Write-Host '   注意：-BuildOnly 不产出 ② 门证据块（-PostToIssue 在本模式下被忽略）；本模式也不入库（-Archive 同样不生效）。' -ForegroundColor Yellow
-            Write-Log 'build-only: -PostToIssue / -Archive 忽略（本模式不产出门证据、不入库）'
+            Write-Host '   注意：-BuildOnly 不产出 ② 门证据块（-PostToIssue 在本模式下被忽略）。' -ForegroundColor Yellow
+            Write-Log 'build-only: -PostToIssue 忽略（本模式不产出门证据）'
         }
         exit 0
     }
@@ -2267,7 +2034,7 @@ try {
         exit 2
     }
 
-    # 6) 探针：pageStack 前置断言 + 入口页/被改页导航 + console/exception + 截图
+    # 6) 探针：pageStack 前置断言 + 入口页/被改页导航 + console/exception
     #    先确保 miniprogram-automator 可用：装到**项目外**的临时根（--no-save + --ignore-scripts），
     #    不动仓库的 package.json / package-lock.json；探针用 --require-root 指过去解析。
     #    $autoRoot 在取计划时已算好（计划里的 --require-root 用它），此处只装配。
@@ -2722,29 +2489,6 @@ try {
         Write-Host "    $partialLine" -ForegroundColor Yellow
     }
 
-    # 截图**入库**（把图提交进 git）是显式动作（`-Archive`），默认不发生。
-    # A1（#2100）之前它是「传了号码就入库」，而 A1 之后为了拿证据块**必须**传号码 ⇒ 「正常取证」
-    # 会顺手 commit + push，把 head sha 挪走、让正文里的 `跑于 <sha7>` 从 head 变成祖先。
-    # 任何失败都只警告 + 给命令，**不让门因此失败**（维护者 2026-09-12 要求）。
-    $archive = $null
-    if ($Archive -and -not $NoArchive -and $PostToPr -gt 0) {
-        try {
-            $archive = Publish-ScreenshotArchive -PrNumber $PostToPr -Module $Module -ShotDir $logDir -ProbeJson $probeJson -RepoRoot $Project
-        } catch {
-            Write-Host "[warn] 截图入库失败（不影响门结论）：$_" -ForegroundColor Yellow
-            $archive = @{ Notes = @("入库异常：$_"); Commands = @() }
-        }
-        foreach ($an in @($archive.Notes)) { Write-Host "   [archive] $an"; Write-Log "archive: $an" }
-        if (@($archive.Commands).Count -gt 0) {
-            Write-Host "   [archive] 请手动执行：" -ForegroundColor Yellow
-            foreach ($ac in @($archive.Commands)) { Write-Host "     $ac" -ForegroundColor Yellow }
-        }
-    } elseif ($NoArchive) {
-        Write-Host "   [archive] -NoArchive：跳过截图入库" -ForegroundColor Yellow
-    } elseif ($PostToPr -gt 0) {
-        Write-Host "   [archive] 未开 -Archive：截图不入库（A1：图按需贴 PR，需要存档时加 -Archive）" -ForegroundColor DarkGray
-    }
-
     $failed = @($probeJson.failures)
     if ($probeJson.probeOk -and $failed.Count -eq 0) {
         Write-Host ''
@@ -2804,21 +2548,13 @@ try {
 
 # P1：仅门通过时贴「sha 绑定」评论（门结果免手抄；gh 不可用/取不到 sha 只警告，不改门结论）
 if ($exitCode -eq 0 -and $PostToPr -gt 0) {
-    # ⚠️ 续行符一个都不能少：本调用此前在 `-ArchivedRel … -ReproCommand …` 一行**漏了行尾反引号**，
-    #    于是 `-ArchivedRel` / `-ArchiveNotes` 被解析成**一条新命令**（运行到贴评论后会 CommandNotFound），
-    #    入库截图清单也就从来没进过评论。守护测试 C14 现在按「以 `-参数名` 单独起行」拦这类断链。
-    #
-    # ⚠️ #1209 两条纪律（守护 C19）：
-    #    (1) 归档结果一律用 **Get-Prop** 取值 —— Set-StrictMode 下访问不存在的属性会抛异常，
-    #        而归档函数「未入库」分支曾返回不带 `Rel` 的对象 ⇒ 这里抛异常 ⇒ **贴评论被打断**，
-    #        门明明通过却 exit 1、证据评论也没贴上（真实事故，本会话 #1199 就是这么绕过去的）；
-    #    (2) 整段贴评论包 try/catch：它是**报告层**，门结论在上面已经定了 ——
-    #        崩了要**响亮地警告 + 记日志**，但不得改变退出码、更不得让证据悄悄消失（禁止静默例外）。
+    # ⚠️ 续行符一个都不能少：本调用曾因参数行漏了行尾反引号被解析成**一条新命令**
+    #    （跑完贴评论后报 CommandNotFound）⇒ 守护测试 C14 按「以 `-参数名` 单独起行」拦这类断链。
+    # ⚠️ #1209 纪律（守护 C19）：整段贴评论包 try/catch —— 它是**报告层**，门结论在上面已经定了；
+    #    崩了要响亮地警告 + 记日志，但不得改变退出码、更不得让证据悄悄消失（禁止静默例外）。
     try {
         Publish-GateComment -PrNumber $PostToPr -ResultLine $resultLine -LogRelative $logRelative `
             -ReproCommand 'npm run build:mp-weixin-check' `
-            -ArchivedRel @(Get-Prop $archive 'Rel') `
-            -ArchiveNotes @(Get-Prop $archive 'Notes') `
             -NavSkipped ([bool]$navSkip) -NavReason $navReason `
             -DirectPageLines @($directLines)
     } catch {

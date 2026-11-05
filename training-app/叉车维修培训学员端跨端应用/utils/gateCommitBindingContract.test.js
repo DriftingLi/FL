@@ -34,8 +34,9 @@ const BINDING_CALLERS = [
 ];
 
 /** 会产生「本地归档提交」的脚本：必须有真推这一步（推不动由 lib 如实回报，不许假装成功）。 */
+// #2320 阶段二：mp-weixin-check.ps1 不再归档（Publish-ScreenshotArchive 已删）⇒ 移出本组；
+// 留下的是**仍会真推证据**的两条采集链（发版前真机冒烟 / 仿真机冒烟），它们的行为不变。
 const ARCHIVE_CALLERS = [
-  'scripts/mp-weixin-check.ps1',
   'scripts/device-capture.ps1',
   'scripts/emulator-smoke.ps1',
 ];
