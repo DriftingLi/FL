@@ -42,6 +42,29 @@ function fnBody(src, sig) {
   throw new Error('大括号未配平: ' + sig);
 }
 
+/** 取页面上每个 `setInterval(…)` / `setTimeout(…)` 的调用实参（圆括号配平） */
+function timerCalls(src) {
+  const out = [];
+  const re = /set(?:Interval|Timeout)\(/g;
+  let m = re.exec(src);
+  while (m !== null) {
+    const open = src.indexOf('(', m.index);
+    let depth = 0;
+    for (let i = open; i < src.length; i++) {
+      if (src[i] === '(') depth += 1;
+      else if (src[i] === ')') {
+        depth -= 1;
+        if (depth === 0) {
+          out.push(src.slice(open, i + 1));
+          break;
+        }
+      }
+    }
+    m = re.exec(src);
+  }
+  return out;
+}
+
 /** 去模板/JS 注释：「注释里提到某个字段」不等于「代码里用了它」 */
 function stripCodeComments(text) {
   return text
@@ -97,9 +120,20 @@ describe('诊断引导面接线契约（#2296）', () => {
       expect(fn).toMatch(/guideVisible\.value = false/);
     });
 
-    it('进页拉一次、不轮询（没有 setInterval / 定时重拉）', () => {
+    it('进页拉一次、不轮询（没有定时重拉引导）', () => {
+      // 组合层：引导取数自己的文件里一个定时器都不许有（轮询只会长在这里）
       expect(COMPOSABLE).not.toMatch(/setInterval/);
-      expect(PAGE).not.toMatch(/setInterval/);
+      // 页面上「有定时器」本身不是违规 —— #2298 的等待秒数每秒跳 +1 就是一个正常的 setInterval。
+      // 本判据要的是「不许定时重拉引导」，所以只扫每个定时回调的实参：
+      // 里面出现引导取数（loadDiagnosisIntents / getDiagnosis*Api）才算轮询。
+      for (const body of timerCalls(PAGE)) {
+        expect(body).not.toContain('loadDiagnosisIntents');
+        expect(body).not.toContain('getDiagnosis');
+      }
+      // 有牙自证：把同一判据套到注入轮询的样本上，必须当场判红（存在性断言不算证据）
+      const polled = PAGE + "\nsetInterval(() : void => { loadDiagnosisIntents() }, 5000)\n";
+      const polling = timerCalls(polled).filter((b) => b.includes('loadDiagnosisIntents'));
+      expect(polling.length).toBe(1);
     });
 
     it('非诊断页不发引导请求（不白打四个 GET）', () => {

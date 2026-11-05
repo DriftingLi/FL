@@ -183,7 +183,12 @@ describe('#2310 done.content 是终端权威全文（行为级，端到端真执
       const file = path.join(dir, 'aiAssistant.uts');
       fs.writeFileSync(file, broken);
       const { chat } = loadPair({ apiFile: file, sse: sseOf(['增量A'], { content: '权威全文' }) });
-      expect(assistantText(await sendOne(chat))).toBe('增量A'); // 坏实现：没替换
+      const text = assistantText(await sendOne(chat));
+      // 坏实现：权威全文没被替换。**只钉这一件事** —— 自 #2298 起，「没解析出 done 载荷」
+      // 同时意味着收尾帧没被识别，通道会再补一条「回答未完整返回」的收尾文案（这是正确行为），
+      // 所以这里不能用整串相等，否则两条各自正确的守护会互相判红。
+      expect(text.startsWith('增量A')).toBe(true);
+      expect(text).not.toContain('权威全文');
     });
   });
 });
