@@ -2,7 +2,8 @@
  * 行为腿「受影响子集」的接线与判据（#2034，ADR-0046 步骤 3）—— 行为守护。
  *
  * 为什么真执行：本票要的不是「源码里出现了 `--changed-json`」，而是
- *   ① 映射真能算出子集、四条兜底边真能把「结构性改动」放大成全跑；
+ *   ① 映射真能算出子集、两条结构性兜底边（page-set / gate-script）能把「结构性改动」放大成全跑，
+ *      而 suite-set 边自 #2312 起只纳入读套件集合者（不再随改测试文件退化成全量）；
  *   ② 子集交给 `Invoke-BehaviorLeg -OnlySuites` 后**只起这几个套件**、且名字对不上时**当场判非绿**；
  *   ③ 子集跑法的机检行**不是** ③ 门全量那一行（`mode=changed` 独立首 token）；
  *   ④ 改动清单的取法能看见**未跟踪**文件（新写的 `.uts` 常常还没 `git add`）。
@@ -218,11 +219,10 @@ describe('#2034 行为腿受影响子集：映射（node 工具真跑，JSON 面
     expect(flat.some((r) => r.includes('direct:markdown.uts') || r.includes('import-closure:markdown.uts'))).toBe(true);
   });
 
-  test('M2: 三条结构性兜底边逐条放大成全跑（pages.json / 门脚本 / 套件集合），且原因行点名是哪条边', () => {
+  test('M2: 两条结构性兜底边逐条放大成全跑（pages.json / 门脚本），且原因行点名是哪条边', () => {
     const cases = [
       ['pages.json', 'page-set'],
       ['scripts/dev-finish.ps1', 'gate-script'],
-      ['utils/jestSplitContract.test.js', 'suite-set'],
     ];
     for (const [file, edge] of cases) {
       const { status, json } = toolJson([file]);
@@ -232,6 +232,38 @@ describe('#2034 行为腿受影响子集：映射（node 工具真跑，JSON 面
       const flat = Object.values(json.reasons).flat();
       expect(`${file}:${flat.some((r) => r.startsWith(edge + ':'))}`).toBe(`${file}:true`);
     }
+  });
+
+  // #2312：旧 suite-set 边命中任何 utils/*.test.js 即全跑，令 -Changed 恒退化为全量
+  // （审计 §5.1 回放 11/11 全量）。现改为只纳入「以套件集合为输入」的套件：
+  //  ① 读集合的套件全部入选；② 子集严格小于全量（不再退化）；③ 子集非空（不以「没跑」当绿）；
+  //  ④ bprime-always 仍在（防「关 b′ 换小子集」的假绿回归）。
+  test('M2b: 改 utils/*.test.js ⇒ 只纳入读套件集合的套件，不再退化成全量（#2312）', () => {
+    const { status, json } = toolJson(['utils/format.test.js']);
+    expect(status).toBe(0);
+    expect(json.total).toBeGreaterThan(0);
+    expect(json.subset.length).toBeGreaterThan(0);          // 非空
+    expect(json.subset.length).toBeLessThan(json.total);    // 不再全量
+    const tagged = Object.entries(json.reasons)
+      .filter(([, rs]) => rs.some((r) => r.startsWith('suite-set:')))
+      .map(([s]) => s);
+    expect(tagged.length).toBeGreaterThan(0);
+    // 读集合者（现测名单，不写死数量）：两腿切分 / 子集映射 / 看门狗 / pattern / 接线契约 / 引导 / 套件集合枚举
+    for (const s of tagged) expect(json.subset).toContain(s);
+    // 每条 suite-set 理由都点名被改的那个文件，且被改文件本身不是读集合者时不进子集
+    const flat = Object.values(json.reasons).flat();
+    expect(flat.some((r) => r.startsWith('suite-set:format.test.js'))).toBe(true);
+    expect(json.subset).not.toContain('utils/format.test.js');
+    // b′ 常驻仍在（对照实验：关掉 b′ 会让某些改动集子集归零 ⇒ 假绿）
+    expect(flat.some((r) => r.startsWith('bprime-always:'))).toBe(true);
+  });
+
+  test('M2c: 改读集合套件自身 ⇒ 它入选且仍不全量（名单由代码信号派生，不写死文件）', () => {
+    const { status, json } = toolJson(['utils/jestSplitContract.test.js']);
+    expect(status).toBe(0);
+    expect(json.subset.length).toBeLessThan(json.total);
+    expect(json.subset).toContain('utils/jestSplitContract.test.js');
+    expect(json.subset.length).toBeGreaterThan(0);
   });
 
   test('M3: 空改动清单 ⇒ 非零退出且 stdout 为空（0 套件不许长得像绿）', () => {

@@ -308,8 +308,12 @@ L 系列钉 `-Mode` / `-Leg` 两维的机检可判读性（L1a–L1c 成对腿�
   `direct:` / `import-closure:` / `bprime-always:` / 兜底边（`gate-script:` / `suite-set:` / `page-set:`）。
   映射**不缓存成文件**（`docs/design/2019-…报告.md` §11 的建议 3：缓存件没人会去重算，一漂就静默假绿；
   同一份报告的 §2 已记过「四天七个套件数」那种漂移）。
-- **四条兜底边是判据、不是建议**：改门脚本/`scripts/**`、改 `utils/*.test.js`、改 `pages.json`/`manifest.json`、
-  b′ 名单常驻 —— 前三条命中即**全跑**。判定住在工具里，本仓没有第二份实现；`-Changed` 只接线。
+- **兜底边是判据、不是建议**：改门脚本/`scripts/**`（`gate-script:`）、改 `pages.json`/`manifest.json`
+  （`page-set:`）命中即**全跑**；b′ 名单常驻（`bprime-always:`）。判定住在工具里，本仓没有第二份实现；`-Changed` 只接线。
+  **`suite-set:` 自 #2312 起不再全跑**：改 `utils/*.test.js` 只纳入「以套件集合为输入」的套件（名单由
+  `behavior-suite-deps.mjs` 的代码信号派生、不写死文件名），其余套件仍走 `direct:` / `import-closure:` /
+  `dir:` / `bprime-always:` 各自的判据。旧写法命中即全跑，而几乎每个功能 PR 都改测试 ⇒ `-Changed` 恒退化成全量
+  （审计 §5.1 回放 11/11；现测 11/11 → 1/11）。**b′ 不可关**：关掉后某些改动集子集归零 ⇒ 假绿。
 - **`-i` 不是可选项**：子集仍走 `npm run test:behavior --`（package.json 那条自带 `-i`），逐套件起进程。
   腿内并行禁令归 ADR-0042，本模式不动它。
 - **判据**：子集跑绿；全量只看**有没有新红** —— 本地全量本来就有环境噪声红（依赖 HBuilderX / 微信开发者工具 / 时序），
