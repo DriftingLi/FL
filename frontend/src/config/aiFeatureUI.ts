@@ -59,12 +59,10 @@ export const aiFeatureUI: Record<AIFeatureKey, AIFeatureUIDescriptor> = {
   fault_diagnosis: {
     entryDesc: '基于维修手册生成排查 SOP',
     icon: 'briefcase-medical',
-    suggestions: [
-      '叉车无法行驶且仪表报警，怎么排查？',
-      '货叉提升缓慢且伴随异响，可能是什么原因？',
-      '制动失灵如何应急处理？',
-      '故障码 E102 是什么意思？'
-    ],
+    // 预设提示词**空**（票 2305）：诊断页的欢迎区已经有品牌卡 + 六张诉求卡 + 上游 FAQ 三件套，
+    // 而这 4 条静态句子里三条与它们同义（「仪表报警」「举升慢」「故障码含义」分别撞诉求卡与 FAQ），
+    // 并排两份既重复又让欢迎区更高。对话页因此不渲染翻页气泡；其余功能页的提示词不受影响。
+    suggestions: [],
     // 无静态 quickOptions：品牌/系统/故障现象三级点选由 DiagnosisGuide 走
     // GET /diagnosis/{intents,systems,faults,code-hint}（票 2242 的数据面，票 2244 的界面）。
     supportsImage: true,

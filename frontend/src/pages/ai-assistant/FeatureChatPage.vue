@@ -7,6 +7,7 @@
     :welcome-icon="feature?.icon || 'message-circle'"
     :welcome-title="feature?.title || ''"
     :suggestions="feature?.suggestions || []"
+    :dock-input="isDiagnosis"
     :input-placeholder="inputPlaceholder"
     :can-send="draftReady"
     v-model:input-text="inputText"
