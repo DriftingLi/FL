@@ -107,7 +107,7 @@ const PLAN_SEQUENCE = [
 // 结果行必填字段（顺序即输出顺序；可选字段单列，见 C13）
 const RESULT_MANDATORY = [
   'appid', 'pageStack', 'entry', 'errorsTotal', 'exceptionsTotal', 'logsTotal',
-  'shots', 'navigation', 'ready', 'sdk', 'ide', 'log'
+  'navigation', 'ready', 'sdk', 'ide', 'log'
 ];
 // 可选字段（只在对应情形出现时才写；顺序 = 出现时的相对顺序）
 // noise：平台层噪音白名单放行的 console error 条数（2026-10-29 F3）。**只在 noise>0 时出现** ——
@@ -426,8 +426,8 @@ function scanPlan(plan) {
     must(dpArgv.includes('<page>'), 'C24', '直达探针 argv 模板缺 <page> 占位（页清单由执行路径传入，计划不写死页）');
     const wsAt = dpArgv.indexOf('--ws');
     must(wsAt >= 0 && dpArgv[wsAt + 1] === plan.endpoint.ws, 'C24', 'directPages.probeArgv 的 --ws 值与 endpoint.ws 不一致');
-    const shotAt = dpArgv.indexOf('--shot-dir');
-    must(shotAt >= 0 && dpArgv[shotAt + 1] === plan.paths.logDir, 'C24', 'directPages.probeArgv 的 --shot-dir 值与 paths.logDir 不一致');
+    // #2320：② 门不再截图 —— directPages.probeArgv 不得再带 --shot-dir（截图只作手动诊断）。
+    must(!dpArgv.includes('--shot-dir'), 'C24', 'directPages.probeArgv 仍带 --shot-dir（#2320 已退役 ② 自动截图）');
     const rootAt = dpArgv.indexOf('--require-root');
     must(rootAt >= 0 && dpArgv[rootAt + 1] === plan.paths.automatorRoot, 'C24', 'directPages.probeArgv 的 --require-root 值与 paths.automatorRoot 不一致');
     const msAt = dpArgv.indexOf('--timeout-ms');
@@ -552,19 +552,8 @@ function scanContract(sources) {
   // 锚点参数入口被拆 ⇒ 红（--assert-selector / --assert-text 是锚点断言的唯一入口）
   must(probe.includes("'--assert-selector'") && probe.includes("'--assert-text'"), 'C3', '探针缺 --assert-selector/--assert-text 解析（#1919 锚点断言入口被拆）');
 
-  // ---- C29（#2097）：逐屏取证的滚动机制必须走 scroll-view 元素 API ----
-  // 血账（2026-10-29 真跑实测）：第一版判停读 getCurrentPages() 末页的 p.scrollTop —— 小程序 Page 没有
-  // 这个属性，读不到即落到 0 ⇒ 首次滚动后立刻判「已到页尾」，三页全只出 -p1 且无任何报错。且本仓页面
-  // 都在 <scroll-view> 里滚，页级 wx.pageScrollTo 恒无效。故：量 scrollHeight、scrollTo 驱动、property 回读。
-  // ⚠️ 判据必须吃**块注释也抹净**的视图：血账原文写在函数文档里，只抹 // 会被自己的注释绊红。
-  {
-    const probeCode = probe.replace(/\/\*[\s\S]*?\*\//g, '');
-    must(probeCode.includes('scrollHeight('), 'C29', '逐屏取证没量滚动容器内容高度（算不出该拍几屏）');
-    must(probeCode.includes('.scrollTo('), 'C29', '逐屏取证没经 scroll-view 元素的 scrollTo 驱动滚动');
-    must(probeCode.includes("property('scrollTop')"), 'C29', '逐屏取证没回读实际 scrollTop（证明不了真滚了）');
-    must(!/getCurrentPages\(\)[\s\S]{0,120}?scrollTop/.test(probeCode), 'C29', '仍从 getCurrentPages() 末页读 scrollTop 判停（该属性不存在 ⇒ 恒判已到页尾，#2097 血账）');
-    must(probeCode.includes('shotWarning'), 'C29', '没有滚动容器 / 滚动无效时的降级没有留名（会冒充「已逐屏」）');
-  }
+  // ---- C29（#2097）逐屏取证滚动机制：2026-11-05 #2320 随 ② 自动截图一并退役 ----
+  // 探针不再截图、不再量 scrollHeight / 驱动 scroll-view；本条守护与对应变异用例已删。
   probe.split(/\r?\n/).forEach((line, idx) => {
     if (/^\s*\/\//.test(line)) return; // 注释里提 API 名是允许的；本守护守的是「别用」
     if (/page\.waitFor\(\s*['"`]/.test(line)) {
@@ -616,12 +605,11 @@ function scanContract(sources) {
   if (finallyAt !== -1) must(s.slice(finallyAt).includes('Invoke-DevToolsClose'), 'C7', 'finally 路径里没有 `cli.bat close`（会残留端口/会话）');
   must(s.includes('$script:closed'), 'C7', 'close 未做幂等保护（$script:closed）');
 
-  // C8 非等价声明 + 源 manifest appid 前置断言
+  // C8 非等价声明 + 源 manifest appid 前置断言（#2320：探针不再截图，#883 坑位 2 的截图说明已删）
   must(s.includes('非等价'), 'C8', '缺「非等价声明」（② ≠ ① 真机门 / ② ≠ ④b 云打包门）');
   must(s.includes('checkIsSupportSoterAuthentication'), 'C8', '未列出挡不住的类别（生物识别实测在开发者工具不可用）');
   must(s.includes('manifest-appid'), 'C8', '源 manifest appid 不匹配时未判门不过（fail-closed 缺一路径）');
   must(/mp-weixin"\\s\*:\\s\*\\{/.test(s) || s.includes('mp-weixin"'), 'C8', '缺源 manifest appid 前置断言（HBuilderX 首次导入会回写 manifest 置 null）');
-  must(s.includes('不在 Page 上') || s.includes('Page 上'), 'C8', '未记录 screenshot 挂在 MiniProgram 而非 Page（#883 坑位 2）');
 
   // C9 截图入库纪律
   must(s.includes("$script:ArchiveMaxCount = 10"), 'C9', '入库张数上限未写死为 10');
@@ -692,11 +680,10 @@ function scanContract(sources) {
 
   // C13 导航不可用时诚实降级：SKIP，不得写成 PASS；且必须写进结果行与门评论
   must(probe.includes('navigation-api-unsupported'), 'C13', '探针未记录降级原因 `navigation-api-unsupported`');
-  must(/NAV_SKIP_ASSERTIONS/.test(probe), 'C13', '探针未声明「降级涉及哪几条断言」（allRoutesVisited / screenshotsProduced）');
+  must(/NAV_SKIP_ASSERTIONS/.test(probe), 'C13', '探针未声明「降级涉及哪几条断言」（allRoutesVisited）');
   must(/'skip'/.test(probe), 'C13', '探针未把降级断言记为 SKIP（字符串 skip），有假绿风险');
   must(/if \(v === false\)/.test(probe), 'C13', '探针的 failures 不是「只由明确 false（可验证子集不过）」产生（SKIP 会被算成失败或 PASS 混入）');
   must(/isNavigationUnsupported/.test(probe), 'C13', '探针未区分「导航 API 不支持」与真失败（TIMEOUT 之类不得被降级吞掉）');
-  must(probe.includes('currentPageScreenshot') || probe.includes('current.png'), 'C13', '探针降级后没有取「当前页」截图（可验证子集要求 ≥1 张）');
   must(s.includes('navigation = "$navField"'), 'C13', '结果行没有把 navigation 字段绑到 $navField（字段清单在计划里，取值在这里）');
   must(s.includes('navigation=SKIP reason='), 'C13', '日志缺 `navigation=SKIP reason=…` 行（降级必须写进日志）');
   must(!/navigation=PASS/.test(s), 'C13', '把导航降级写成了 PASS（降级不等于通过）');
@@ -868,17 +855,16 @@ function scanContract(sources) {
   // 且冷启动前处于 guest 相（无会话）；「吃主会话」旧口径把主会话落地页冒充入口页取证。
   must(!s.includes('if ($pg -ne $entryRoute)'), 'C24', '直达循环回退成「入口页跳过换页吃主会话」旧口径（#1690：主会话落地页 ≠ 入口页取证）');
   must(s.includes('port-held-after-quit'), 'C24', '直达冷启动缺「端口被垂死实例占住」判据（#1690 run5：open 骑旧会话 ⇒ 假 miss；归零后必须等端口收摊）');
-  must(probe.includes('shotErr'), 'C24', '直达截图缺重试壳（#1690 run5：冷启动后渲染服务未热，mp.screenshot 撞 automator 15s 应答超时 ⇒ 重试一次再记错）');
+  must(!probe.includes('mp.screenshot'), 'C24', '探针仍有 mp.screenshot 调用（#2320 已退役 ② 自动截图，探针只保留运行时读数）');
   must(s.includes('键序轮转'), 'C24', '换页写入缺「键序轮转」保证（#1690 run6：pages[0] 未变时字节不变 ⇒ IDE 不重编译、窗口停在上一页 ⇒ 入口页假 miss）');
   must(s.includes('-ne @($re.pages).Count'), 'C24', '换页读回复验缺「路由唯一性」判据（#1690 run7-10：重复路由让构建器拒启模拟器，症状伪装成 page-stack-not-answering）');
   must(s.includes("-Mode 'guest'"), 'C24', '直达循环缺 guest 相（入口页冷启动前必须清会话——#1478 welcome 页「已登录无条件落 dashboard」业务不变量，有会话的 index 冷启动必 miss，run4/6/11/12 实证）');
   must(s.includes('$isEntry = ($pg -eq $entryRoute)'), 'C24', '直达循环缺「入口页 == guest 相」分相判据（两相序真源，#1690 run12）');
   must(s.includes('入口漂移自愈'), 'C24', '缺「入口漂移自愈」判据（#1690 run14：上次强杀遗留换页 ⇒ 孤儿页被当入口静默取证，index 漏测还判 ✅）');
-  // #1682 核验补记③：入库数据流必须钉住——AC1「每被改页 ≥1 张入仓截图」全靠直达截图并入聚合
-  // shots、再写回 probeJson（Publish-ScreenshotArchive 只遍历 probeJson.shots）。拆掉这条接线，
-  // 门照样绿、入库目录却静默退化成「只有入口页 1 张」——正是核验时抓到的那个缺口。
-  must(s.includes('$agg.shots += @($pj.shots)'), 'C24', '直达组截图未并入聚合 shots ⇒ AC1 入库链断（Publish-ScreenshotArchive 只遍历 probeJson.shots）');
-  must(s.includes('shots = @($agg.shots)'), 'C24', '聚合 shots 未写回 probeJson ⇒ 入库与结果行不再共用同一清单');
+  // #2320（2026-11-05）：② 门退役自动截图 —— 直达循环不得再把 shots 并入聚合 / 写回 probeJson；
+  // 探针也不再带 --shot-dir，截图调用与截图表单已整体移除。
+  must(!s.includes('$agg.shots += @($pj.shots)'), 'C24', '直达循环仍在聚合 shots（#2320 已删自动截图）');
+  must(!s.includes('shots = @($agg.shots)'), 'C24', 'probeJson 仍在写 shots（#2320 已删自动截图）');
   // #1682 核验补记①：评论渲染必须过滤 null 条目——@(Get-Prop $null 'Rel') = @($null)（单元素= null），
   // 不过滤会把 -NoArchive / 未入库渲染成一条空反引号条目，兜底文案永不出现。
   const gateCommentBody = psFunctionBody(code, 'function Publish-GateComment');
@@ -931,7 +917,7 @@ function scanContract(sources) {
   // A1（#2100）：模板的证据形态是「正文一行 `跑于 <sha7>` + 门读数行」，
   // 不再要求写 marker / `-PostToPr` 评论承载 —— 那套载体已随 A1 整体退役。
   must(template.includes('跑于'), 'C10', 'PR 模板未写明 A1 证据形态（正文一行 `跑于 <sha7>`）');
-  must(agents.includes('人工门只剩') || agents.includes('② 微信开发者工具门 = 半自动门'), 'C10', '移动端 AGENTS.md 未把 ② 移出人工门清单并写明运行前提');
+  must(agents.includes('已整体退役') || agents.includes('② 已退役'), 'C10', '移动端 AGENTS.md 未写明 ② 微信开发者工具门已退役（#2320）');
 
   return violations;
 }
@@ -1219,11 +1205,7 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
       ['C10', { ...real, pkg: real.pkg.replace('build:mp-weixin-check', 'build:mp-x') }],
       // C28 必红：入口在、但没带 -BuildOnly（那是一个「能跑 ② 全量」的同名入口，不是构建面模式）
       ['C28', { ...real, pkg: real.pkg.replace('scripts/mp-weixin-check.ps1 -BuildOnly', 'scripts/mp-weixin-check.ps1') }],
-      // C29 必红四条：删掉内容高度测量 / 改掉回读属性名 / 把无效判停塞回代码 / 抹掉降级留名
-      ['C29', { ...real, probe: real.probe.replace(/scrollHeight\(/g, 'scrollHeightX(') }],
-      ['C29', { ...real, probe: real.probe.replace(/property\('scrollTop'\)/g, "property('scrollTopX')") }],
-      ['C29', { ...real, probe: real.probe.replace('const actual = await readScrollTop(container);', 'const actual = (getCurrentPages().pop() || {}).scrollTop;') }],
-      ['C29', { ...real, probe: real.probe.replace(/step\.shotWarning/g, 'step.warnX') }],
+      // C29 逐屏取证守护已随 #2320 截图退役删除（2026-11-05）
       ['C10', { ...real, adr: real.adr.replace(/半自动/g, '全自动') }],
       ['C10', { ...real, template: real.template.replace(/跑于/g, '跑过') }],
       ['C10', { ...real, agents: '人工门清单（无 ② 条目）' }],
@@ -1301,11 +1283,9 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
       ['C24', { ...real, script: real.script.replace(/-Mode 'guest'/g, "-Mode 'auth'") }],
       ['C24', { ...real, script: real.script.replace('$isEntry = ($pg -eq $entryRoute)', '$isEntry = $false') }],
     ['C24', { ...real, script: real.script.replace(/入口漂移自愈/g, 'x') }],
-      ['C24', { ...real, probe: real.probe.replace(/shotErr/g, 'x') }],
+      ['C24', { ...real, probe: real.probe + '\nconst legacyShot = mp.screenshot;\n' }],
       ['C24', { ...real, script: real.script.replace("if (@($re.pages | Select-Object -Unique).Count -ne @($re.pages).Count) { return 'app-json-invalid' }").replace(/\n *# 唯一性复验[^\n]*/g, '') }],
-      // C24 入库数据流（#1682 核验补记③）与评论渲染 null 过滤（核验补记①）：拆接线必须被抓
-      ['C24', { ...real, script: real.script.replace('$agg.shots += @($pj.shots)', '') }],
-      ['C24', { ...real, script: real.script.replace('shots = @($agg.shots)', 'shots = @()') }],
+      // 评论渲染 null 过滤（核验补记①）：拆掉过滤必须被抓（截图入库链已在 #2320 整体退役）
       ['C24', { ...real, script: real.script.replace('@(@($ArchivedRel) | Where-Object { $_ })', '@($ArchivedRel)') }],
       // C26：结果行/日志的 partial 形态被拆（部分达成退回「整组 skip 或说不清」）
       ['C26', { ...real, script: real.script.replace('partial(ok=$navOkCount,skip=$navSkipCount)', 'partial') }],
@@ -1434,7 +1414,7 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
     expect(real.adr).toContain('#883');
     expect(real.adr).toContain('mp-weixin-check.ps1');
     expect(real.template).toContain('跑于');
-    expect(real.agents).toContain('② 微信开发者工具门 = 半自动门');
+    expect(real.agents).toContain('已整体退役');
   });
 
   it('C6：仅门通过（exit 0）分支贴 sha 绑定评论', () => {
@@ -1463,8 +1443,10 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
     expect(real.script).not.toMatch(/navigation=PASS/);
     // 可验证子集写在脚本头里（门只对它作结论）
     expect(real.script).toContain('可验证子集');
-    expect(real.script).toContain('currentPageScreenshot');
-    expect(real.probe).toContain('currentPageScreenshot');
+    // #2320：② 门不再把截图算进可验证子集；探针也不再截图（只留运行时读数）。
+    expect(real.script).not.toContain('currentPageScreenshot');
+    expect(real.probe).not.toContain('currentPageScreenshot');
+    expect(real.probe).not.toContain('mp.screenshot');
   });
 
   it('C13：SKIP 不产生 failures，failures 只由可验证子集（明确 false）产生', () => {

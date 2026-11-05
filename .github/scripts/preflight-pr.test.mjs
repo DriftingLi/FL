@@ -136,53 +136,56 @@ test('#2044 三方形态文本钉：校验器 / pr-evidence 工作流 / 预检 C
   assert.throws(() => read('../workflows/mobile-gates.yml'), /ENOENT/);
 });
 
-// ── #2216：② 非触发面的「自选跳过」留痕 —— 只提示、不判红 ──────────────────────
+// ── #2320：② 微信开发者工具门已退役 —— 只提示、不判红，也不再看 needs2 ─────────
 const MP_OK = 'MP_WEIXIN_RESULT appid=wx1234567890abcdef stack=3 entry=pages/index/index errorsTotal=0 exceptionsTotal=0 shots=2 navigation=ok';
-const uvueEdit = () => [{ filename: uvue.filename, status: 'modified', patch: '@@ -1 +1 @@\n-<view/>\n+<view class=\"a\"/>' }];
+const uvueEdit = () => [{ filename: uvue.filename, status: 'modified', patch: '@@ -1 +1 @@\n-<view/>\n+<view class="a"/>' }];
 const manifestEdit = () => [{ filename: 'training-app/叉车维修培训学员端跨端应用/manifest.json', status: 'modified', patch: '@@ -1 +1 @@' }];
 const skipOnly = (reason, sha7 = HEAD7) => '## 验收证据\n\n- ② 自选跳过 reason=' + reason + '\n- ④ 跑于 `' + sha7 + '` · `' + KOTLIN + '`\n';
 const readingBody = (sha7 = HEAD7) => '## 验收证据\n\n- ② 跑于 `' + sha7 + '` · `' + MP_OK + '`\n- ④ 跑于 `' + sha7 + '` · `' + KOTLIN + '`\n';
 
-test('#2216 非触发面只写跳过行 ⇒ 校验器判绿（② 门不检查），提示为空', async () => {
+test('#2320 ② 已退役：非触发面只写跳过行 ⇒ 校验器判绿，门 required=false，只提示可删', async () => {
   const body = skipOnly('dev-loop-latency');
   const r = await validatePrEvidence({ files: uvueEdit(), body, headSha: HEAD, fetchCompare: async () => null });
   assert.equal(r.ok, true, r.errors.join(' | '));
-  assert.equal(r.gates['②'].required, false, '② 非触发面不 required');
-  assert.equal(skipDeclarationHint({ body, needs2: false, runtimeHit: true }), null);
+  assert.equal(r.gates['②'].required, false, '② 已退役，任何面都不 required');
+  assert.equal(r.gates['②'].retired, true);
+  assert.match(skipDeclarationHint({ body, runtimeHit: true }), /已退役/);
 });
 
-test('#2216 跳过行 reason 还是占位 <slug> ⇒ 提示换真实 slug（不判红）', () => {
-  const hint = skipDeclarationHint({ body: skipOnly('<slug>'), needs2: false, runtimeHit: true });
-  assert.match(hint, /占位/);
+test('#2320 ② 已退役：占位 reason 不再提示换 slug，只复述退役', () => {
+  const hint = skipDeclarationHint({ body: skipOnly('<slug>'), runtimeHit: true });
+  assert.match(hint, /已退役/);
+  assert.doesNotMatch(hint, /占位/);
 });
 
-// 2026-11-04 翻档：非触发面从「默认跑、可自选跳过」改为「默认跳过」⇒ 空着不再算漏写，提示只复述判定。
-test('#2216 非触发面既无读数也无跳过 ⇒ 默认跳过（提示复述判定、不催留痕），校验器判绿', async () => {
+test('#2320 ② 已退役：正文完全没有 ② 行 ⇒ 判绿且不产提示', async () => {
   const body = '## 验收证据\n\n- ④ 跑于 `' + HEAD7 + '` · `' + KOTLIN + '`\n';
   const r = await validatePrEvidence({ files: uvueEdit(), body, headSha: HEAD, fetchCompare: async () => null });
-  assert.equal(r.ok, true, '缺跳过行不该判红：' + r.errors.join(' | '));
-  assert.match(skipDeclarationHint({ body, needs2: false, runtimeHit: true }), /默认跳过/);
+  assert.equal(r.ok, true, r.errors.join(' | '));
+  assert.equal(skipDeclarationHint({ body, runtimeHit: true }), null);
 });
 
-test('#2216 needs2 触发面只写跳过行 ⇒ 校验器红（跳过不构成 ② 证据）', async () => {
+test('#2320 ② 已退役：needs2 面（manifest.json）只写跳过行也判绿', async () => {
   const body = skipOnly('dev-loop-latency');
   const files = manifestEdit().concat(uvueEdit());
   const r = await validatePrEvidence({ files, body, headSha: HEAD, fetchCompare: async () => null });
-  assert.equal(r.gates['②'].required, true, 'manifest.json 命中触发面');
-  assert.equal(r.ok, false, 'needs2 面跳过行不能替代读数行');
-  assert.match(skipDeclarationHint({ body, needs2: true, runtimeHit: true }), /必跑/);
+  assert.equal(r.gates['②'].retired, true);
+  assert.equal(r.gates['②'].required, false, 'needs2 也不再要求 ② 读数行');
+  assert.equal(r.ok, true, r.errors.join(' | '));
+  assert.match(skipDeclarationHint({ body, runtimeHit: true }), /已退役/);
 });
 
-test('#2216 needs2 触发面贴了读数行 ⇒ 仍判绿（跳过条款不干扰既有判据）', async () => {
+test('#2320 ② 已退役：needs2 面贴了读数行 ⇒ 仍判绿（旧读数行不碍事）', async () => {
   const files = manifestEdit().concat(uvueEdit());
   const r = await validatePrEvidence({ files, body: readingBody(), headSha: HEAD, fetchCompare: async () => null });
   assert.equal(r.ok, true, r.errors.join(' | '));
 });
 
-test('#2216 needs2 里跳过行排在读数行前 ⇒ 被 lines.find 抢先、仍判红（模板据此要求二选一）', async () => {
+test('#2320 ② 已退役：跳过行排在读数行前 ⇒ 不再有「抢先」判红，仍绿', async () => {
   const body = '## 验收证据\n\n- ② 自选跳过 reason=dev-loop-latency\n- ② 跑于 `' + HEAD7 + '` · `' + MP_OK + '`\n- ④ 跑于 `' + HEAD7 + '` · `' + KOTLIN + '`\n';
   const files = manifestEdit().concat(uvueEdit());
   const r = await validatePrEvidence({ files, body, headSha: HEAD, fetchCompare: async () => null });
-  assert.equal(r.ok, false, '段内第一条 ② 行是跳过行 ⇒ 不认后面那条读数行');
+  assert.equal(r.ok, true, r.errors.join(' | '));
+  assert.match(skipDeclarationHint({ body, runtimeHit: true }), /已退役/);
 });
 

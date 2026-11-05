@@ -92,14 +92,14 @@
          它只 warning、不影响门结论，但会把整段入库打成异常。
 
     **导航不可用时诚实降级（2026-09-12 复测，**不许假绿**）**：本机 `miniprogram-automator@0.12.1` 下
-    `mp.reLaunch` / `mp.navigateTo` **恒报 `Uncaught [object Object]`**，而 `mp.connect` / `mp.pageStack` /
-    `mp.screenshot` 正常 ⇒ 「逐页导航 + 每页截图」这组断言在此环境**不可能成立**。处置是探针把这组记成
+    `mp.reLaunch` / `mp.navigateTo` **恒报 `Uncaught [object Object]`**，而 `mp.connect` / `mp.pageStack` 正常
+    ⇒ 「逐页导航」这组断言在此环境**不可能成立**。处置是探针把这组记成
     **SKIP（reason=navigation-api-unsupported）**：既不算通过、也不算失败，并在结果行显式写出
     `navigation=skip(unsupported)`，PR 评论同步写明。门只对**可验证子集**作结论，即探针 assertions 里的：
     `connected` + `pageStackNonEmpty` + `entryPageInStack` + `noConsoleErrors` + `noExceptions`
-    + `currentPageScreenshot`（**至少 1 张当前页截图**）；**降级时** `failures=` 只由这几条产生
-    （`allRoutesVisited` / `screenshotsProduced` 在降级时值为字符串 `skip`，**不得**写成 `true`，见守护测试 C13；
-    导航在可用机器上时这两条按「每步导航后当前页 == 目标页」判，**不拿导航前读到的 pageStack 去比所有路由**——
+    （#2320 起 **不含截图**：② 门不再截图，截图仅作手动诊断参考、不进证据）；**降级时** `failures=` 只由这几条产生
+    （`allRoutesVisited` 在降级时值为字符串 `skip`，**不得**写成 `true`，见守护测试 C13；
+    导航在可用机器上时这条按「每步导航后当前页 == 目标页」判，**不拿导航前读到的 pageStack 去比所有路由**——
     那样恒假、会让健康机器上的门永远过不去）。
     结果行的 `navigation=` 取值域：`ok`（逐页导航可用，或直达探针全部达成）/ `partial(ok=<N>,skip=<M>)`（直达探针部分达成：
     N 页达成、M 页未达成——未达成页的读数不得连累已达成页，见 #1816）/ `skip(reason)`（降级）/ `n/a`（环境早退，没走到导航）。
@@ -299,12 +299,8 @@ param(
     [int]$Port = 9420,
     [string]$Routes = 'pages/index/index,pages/login/login',
     [string]$Pages = 'auto',
-    # #2097：截前滚动位置（px）。目标区在首屏之下时必给 —— 否则截图拍的是标题、改动在屏幕外，
-    # 那种「证据」不成立（#1939 已踩一次）。只对直达冷启动分支生效，整屏滚动（wx.pageScrollTo）。
-    [int]$PageScrollTop = 0,
-    # #2097：逐页截图模式。'full'（默认）= 逐屏滚到页尾各截一张（-p1/-p2/…），
-    # 让「改动落在第几屏」不再决定证据有没有用；'single' = 旧行为（只拍首屏）。
-    [ValidateSet('full', 'single')][string]$Shots = 'full',
+    # #2320（2026-11-05）：② 门不再截图，-PageScrollTop / -Shots 两个截图旋钮一并删除。
+    # 需要运行时报错/白屏读数时手动跑探针；本脚本不再提供截图旋钮，也不把图当判据。
     # 会话注入（#1690）：auto = 直达循环前与每页冷启动后注入登录态（幂等，已登录即 existing）；off = 不注入。
     [string]$Auth = 'auto',
     [switch]$SkipBuild,
@@ -607,9 +603,7 @@ function New-GatePlan {
         [bool]$Doctor,
         [bool]$BuildOnly,
         [int]$PostToPr,
-        [string]$PagesMode,
-        [int]$PageScrollTop = 0,
-        [string]$Shots = 'full'
+        [string]$PagesMode
     )
     $ws = "ws://127.0.0.1:$Port"
     $entryUrl = if (@($RouteList).Count -gt 0) { $RouteList[0] } else { '' }
@@ -754,7 +748,7 @@ function New-GatePlan {
         id = 'automator-probe'
         tag = 'automator-probe'
         exec = 'node'
-        argv = @($ProbePath, '--ws', $ws, '--routes', ($RouteList -join ','), '--entry-url', $entryUrl, '--shot-dir', $LogDir, '--require-root', $AutoRoot, '--timeout-ms', "$ProbeTimeoutMs")
+        argv = @($ProbePath, '--ws', $ws, '--routes', ($RouteList -join ','), '--entry-url', $entryUrl, '--require-root', $AutoRoot, '--timeout-ms', "$ProbeTimeoutMs")
         timeoutSeconds = $ProbeTimeoutSeconds
         attempts = $ProbeAttempts
         retryDelaySeconds = $ProbeRetryDelaySeconds
@@ -781,7 +775,7 @@ function New-GatePlan {
     }
 
     # 结果行字段清单：执行路径**按这份清单**拼结果行（Format-GateMetricLine），所以它与实际输出同一真源。
-    # -BuildOnly 是**另一套字段**（#1861）：会话段那些读数（pageStack / entry / shots / sdk / ide …）本轮
+    # -BuildOnly 是**另一套字段**（#1861）：会话段那些读数（pageStack / entry / sdk / ide …）本轮
     # 根本不存在，列着就是逼执行路径填假值；build-only 只声明它真能读到的六项。
     $resultFields = @()
     if ($BuildOnly) {
@@ -791,7 +785,7 @@ function New-GatePlan {
             $resultFields += [ordered]@{ name = $n }
         }
     } else {
-        foreach ($n in @('appid', 'pageStack', 'entry', 'errorsTotal', 'exceptionsTotal', 'logsTotal', 'shots', 'navigation', 'ready', 'sdk', 'ide')) {
+        foreach ($n in @('appid', 'pageStack', 'entry', 'errorsTotal', 'exceptionsTotal', 'logsTotal', 'navigation', 'ready', 'sdk', 'ide')) {
             $resultFields += [ordered]@{ name = $n }
         }
         # 覆盖判据（#2101）：`coverage=changed:N|smoke:N|none`，**只在 `-Pages auto` 下产出**。
@@ -845,9 +839,9 @@ function New-GatePlan {
             swapNote = '只换构建产物 app.json 的 pages 首项；不动源头 pages.json（运行时面判据来源，ADR-0038 决策 2）'
             restore = 'finally'
             exec = 'node'
-            probeArgv = @($ProbePath, '--ws', $ws, '--expect-page', '<page>', '--shot-dir', $LogDir, '--require-root', $AutoRoot, '--timeout-ms', "$ProbeTimeoutMs", '--scroll-top', "$PageScrollTop", '--shots', "$Shots")
-            scrollTop = $PageScrollTop
-            shots = $Shots
+            # #2320：门不再截图 —— argv 里没有 --shot-dir/--scroll-top/--shots，也不再往结果行写 shots。
+            # 截图属于手动诊断（#2320 起不再提供门内截图旋钮），不构成 ② 判据，也不阻断验收。
+            probeArgv = @($ProbePath, '--ws', $ws, '--expect-page', '<page>', '--require-root', $AutoRoot, '--timeout-ms', "$ProbeTimeoutMs")
             # 逐页冷启动的整段重试次数**固定 2**，与 `-AutoAttempts`（auto 段，默认 3）**不是同一个值**：
             # #2101 票面原写「逐页冷启动共用此值」，落库时按实测语义拆开 —— auto 段 3 次是冷起点/IDE 重启的
             # 排障余量（单发必红的那个坑），逐页失败只落该页 skip（`landed-elsewhere` / `auth-session-unavailable`）
@@ -915,7 +909,7 @@ function New-GatePlan {
                 '换前 ConvertFrom-Json 校验、换后读回复验首项；用毕从备份还原 app.json 并复验（finally 路径）',
                 '机制不成立 ⇒ navigation=skip(reason=…) 显式记录：不冒充门失败、不冒充取证成立；console error 照常进 failures',
                 '部分达成（有页达成、有页未达成）⇒ navigation=partial(ok=<N>,skip=<M>)：已达成页读数照常计入门结论，未达成页逐页记入 navigation.pages，不得塌缩成整组 skip（#1816）',
-                '逐页读数（reached/errors/exceptions/logs/shot/elapsed）写进日志与 sha 绑定评论，供 0039 窗口主门成本校准',
+                '逐页读数（reached/errors/exceptions/logs/elapsed）写进日志与 sha 绑定评论，供 0039 窗口主门成本校准',
                 '会话分相判据 = 入口页 ∪ 游客页族（guestPhase.routes），不得用「是否入口页」单相判据：游客页被注 auth 会话会自己跳走，落地页 ≠ 目标页（#1817）',
                 '未达成页若落地到别处，页级 reason 记 landed-elsewhere(<落地页>)，不得一律记 direct-page-unsupported（#1817）',
                 '带参页 ② = SKIP 定案（#2110，2026-10-29）：编译条件两入口（CLI --compile-condition 被静默吞参 / 私有配置 condition 段不生效）都带不了 query ⇒ 依赖入口参数的页直达内容形态结构不可得，不得用空壳或「加载中…」截图充当证据；内容取证落 ①（真机 --pagePath + --pageQuery）或发版冒烟',
@@ -1045,7 +1039,7 @@ function New-ThisGatePlan {
         -ProbeTimeoutSeconds $ProbeTimeoutSeconds -ProbeAttempts $ProbeAttempts `
         -ProbeRetryDelaySeconds $ProbeRetryDelaySeconds -PublishTimeoutSeconds $PublishTimeoutSeconds `
         -SkipBuild ([bool]$SkipBuild) -Doctor ([bool]$Doctor) -BuildOnly ([bool]$BuildOnly) -PostToPr $PostToPr `
-        -PagesMode $Pages -PageScrollTop $PageScrollTop -Shots $Shots
+        -PagesMode $Pages
 }
 $script:GatePlan = New-ThisGatePlan -UsePort $Port
 
@@ -1638,7 +1632,6 @@ function Publish-GateComment {
         [int]$PrNumber,
         [string]$ResultLine,
         [string]$LogRelative,
-        [string]$ShotRelative,
         [string]$ReproCommand,
         [string[]]$ArchivedRel = @(),
         [string[]]$ArchiveNotes = @(),
@@ -1680,8 +1673,8 @@ function Publish-GateComment {
             $navLines += '- 带参页口径（#2110 定案，2026-10-29）：依赖入口 query 的页（featured-detail / ai-feature / job-detail / resume-detail 等）在编译条件下直达内容形态结构不可得（CLI 参数被静默吞、私有配置 condition 段不生效，单验读数 .ci-verify/2110）⇒ ② 记 SKIP，**不得用空壳 / 「加载中…」截图充当该页证据**；内容取证落 ①（真机 --pagePath + --pageQuery）或发版冒烟。'
             $navLines += '- 门只对**可验证子集**作结论：已达成页逐页 console/exception 读数 + 入口页 `pageStack` 落地判据；**未取证的页**见下面的逐页读数与日志 ``' + $LogRelative + '``。'
         } else {
-            $navLines += "- ⚠️ 降级（SKIP，非 PASS）：逐页导航 + 每页截图 = SKIP（reason=$($NavReason)）——本机 ``miniprogram-automator@0.12.1`` 的 ``mp.reLaunch`` / ``mp.navigateTo`` 恒报 ``Uncaught [object Object]``，该组断言在此环境不成立。"
-            $navLines += '- 门只对**可验证子集**作结论：`connected=true` + `pageStack` 非空 + 入口页在栈内 + `errorsTotal==0 && exceptionsTotal==0` + 至少 1 张当前页截图；**未取证的页**见上面的 `navigation=` 字段与日志 ``' + $LogRelative + '``。'
+            $navLines += "- ⚠️ 降级（SKIP，非 PASS）：逐页导航 = SKIP（reason=$($NavReason)）——本机 ``miniprogram-automator@0.12.1`` 的 ``mp.reLaunch`` / ``mp.navigateTo`` 恒报 ``Uncaught [object Object]``，该组断言在此环境不成立。"
+            $navLines += '- 门只对**可验证子集**作结论：`connected=true` + `pageStack` 非空 + 入口页在栈内 + `errorsTotal==0 && exceptionsTotal==0`；**未取证的页**见上面的 `navigation=` 字段与日志 ``' + $LogRelative + '``。'
             $navLines += '- **未证实**：是否为版本组合（automator 0.12.1 × 开发者工具 Stable v2.01.2510290）问题，留给后续排查；本条不宣称已定位根因，**首跑须人工核对 `navigation=` 字段**。'
         }
     }
@@ -1695,7 +1688,7 @@ function Publish-GateComment {
         '<!-- gate-evidence:② -->',
         '**② 微信开发者工具无报错（半自动，agent 执行）**',
         "- commit: $sha",
-        "- 结论（含产物）：``$ResultLine``；本地截图 ``$ShotRelative``；日志 ``$LogRelative``",
+        "- 结论（含产物）：``$ResultLine``；日志 ``$LogRelative``",
         '- 非等价声明：② ≠ ① 真机门，也 ≠ ④b 云打包门（content:// / 生物识别 / 第三方 SDK / 真机性能 挡不住）。'
     ) + @($binding.NoteLines) + $navLines + $directOut + $archLines + @(
         "- 复现：``$ReproCommand``"
@@ -1842,7 +1835,8 @@ function Publish-ScreenshotArchive {
     if (-not $encoder) { $notes.Add('本机无 cwebp / ffmpeg / magick：按纪律退到 JPEG q75（System.Drawing）') }
     else { $notes.Add("WebP 编码器：$($encoder.Name)") }
 
-    $shots = @($ProbeJson.shots | Where-Object { (Get-Prop $_ 'isPng') -and (Test-Path -LiteralPath $_.path) })
+    # #2320：门不再产出截图；归档函数保留到阶段二，调用点恒传空集，避免 StrictMode 读不存在的 shots。
+    $shots = @()
     # 超限处置顺序：先降质 → 再缩尺 → 再减图（减图写进评论）
     $plan = @(
         @{ MaxWidth = $script:ArchiveMaxWidth; Quality = 75 },
@@ -2424,7 +2418,7 @@ try {
         # 不再写第二处 -Id 字面量——守护 C12/C18 的注入判据按「首个取用点」定位，重复取用会让注入失配）
         $coldSteps = [ordered]@{ open = $openStep; auto = $autoStep; port = $portStep; ready = $readyStep }
         $directStart = Get-Date
-        $agg = @{ errors = 0; exceptions = 0; logs = 0; shots = @(); steps = @(); failures = @(); anchorsTotal = 0; noise = 0 }
+        $agg = @{ errors = 0; exceptions = 0; logs = 0; steps = @(); failures = @(); anchorsTotal = 0; noise = 0 }
         $firstJson = $null
         $missReason = ''
         $missPages = @()
@@ -2476,8 +2470,8 @@ try {
                         # SKIP、**不换页不冷启动不探针**，不得让 navigation=ok 全绿。guest 相不在此列：
                         # 游客页无会话才是合法落地态，由落地判据兜（#1817）。
                         Write-Log "direct-page $pg reached=skip(reason=auth-session-unavailable) (page not launched: auth inject failed reason=$($ai.reason) detail=$($ai.detail))"
-                        $directLines += "direct-page $pg reached=skip(reason=auth-session-unavailable) errors=- exceptions=- logs=- shot=- elapsed=-"
-                        $pageReports += [pscustomobject]@{ page = $pg; status = 'skip'; reason = 'auth-session-unavailable'; shot = ''; elapsedSeconds = 0 }
+                        $directLines += "direct-page $pg reached=skip(reason=auth-session-unavailable) errors=- exceptions=- logs=- elapsed=-"
+                        $pageReports += [pscustomobject]@{ page = $pg; status = 'skip'; reason = 'auth-session-unavailable'; elapsedSeconds = 0 }
                         if (-not $missReason) { $missReason = 'auth-session-unavailable' }
                         $missPages += $pg
                         continue
@@ -2488,8 +2482,8 @@ try {
             if ($sw) {
                 # 页不在构建产物 / 产物 JSON 坏 ⇒ 该页记 SKIP 不 launch（诚实降级），其余页照跑
                 Write-Log "direct-page $pg reached=skip(reason=$sw) (page not launched)"
-                $directLines += "direct-page $pg reached=skip(reason=$sw) errors=- exceptions=- logs=- shot=- elapsed=-"
-                $pageReports += [pscustomobject]@{ page = $pg; status = 'skip'; reason = "$sw"; shot = ''; elapsedSeconds = 0 }
+                $directLines += "direct-page $pg reached=skip(reason=$sw) errors=- exceptions=- logs=- elapsed=-"
+                $pageReports += [pscustomobject]@{ page = $pg; status = 'skip'; reason = "$sw"; elapsedSeconds = 0 }
                 if (-not $missReason) { $missReason = $sw }
                 $missPages += $pg
                 continue
@@ -2524,18 +2518,15 @@ try {
             $agg.noise += [int](Get-Prop $pj 'noiseTotal')
             $agg.exceptions += [int]$pj.exceptionsTotal
             $agg.logs += [int]$pj.logsTotal
-            $agg.shots += @($pj.shots)
             $agg.steps += @($pj.steps)
             $agg.failures += @($pj.failures)
             # 锚点执行数聚合（#1919）：旧导航组路径的探针 JSON 无 anchors 字段 ⇒ Get-Prop 回 null → 0
             $agg.anchorsTotal += [int](Get-Prop (Get-Prop $pj 'anchors') 'total')
             $navOne = Get-Prop $pj 'navigation'
             $reached = ("$(Get-Prop $navOne 'status')" -eq 'ok')
-            $pngOne = @($pj.shots | Where-Object { Get-Prop $_ 'isPng' })
-            $shotLeaf = $(if ($pngOne.Count -gt 0) { Split-Path (@($pngOne)[-1]).path -Leaf } else { '' })
             $emOne = Get-Prop $pj 'elapsedMs'
             if ($null -eq $emOne) { $emOne = 0 }
-            $line = "direct-page $pg reached=$([bool]$reached) errors=$($pj.errorsTotal) noise=$([int](Get-Prop $pj 'noiseTotal')) exceptions=$($pj.exceptionsTotal) logs=$($pj.logsTotal) shot=$shotLeaf elapsed=$([int]([double]$emOne / 1000))s"
+            $line = "direct-page $pg reached=$([bool]$reached) errors=$($pj.errorsTotal) noise=$([int](Get-Prop $pj 'noiseTotal')) exceptions=$($pj.exceptionsTotal) logs=$($pj.logsTotal) elapsed=$([int]([double]$emOne / 1000))s"
             Write-Log $line
             $directLines += $line
             $pageReason = ''
@@ -2557,7 +2548,6 @@ try {
                 page = $pg
                 status = $(if ($reached) { 'ok' } else { 'skip' })
                 reason = $pageReason
-                shot = $shotLeaf
                 elapsedSeconds = [int]([double]$emOne / 1000)
             }
         }
@@ -2590,7 +2580,7 @@ try {
             # **不得**塌缩成整组 skip（否则一页 miss 吞掉同组其它页的成功读数）
             $navAgg = [pscustomobject]@{ status = 'partial'; reason = $missReason; detail = 'cold-start-direct-partial'; at = "direct-loop(ok=$($okPageList.Count),skip=$($skipPageList.Count))"; skippedAssertions = @('allRoutesVisited'); skippedSteps = @($missPages); pages = @($pageReports) }
         } else {
-            $navAgg = [pscustomobject]@{ status = 'skip'; reason = $missReason; detail = $missReason; at = 'direct-loop'; skippedAssertions = @('allRoutesVisited', 'screenshotsProduced'); skippedSteps = @($missPages); pages = @($pageReports) }
+            $navAgg = [pscustomobject]@{ status = 'skip'; reason = $missReason; detail = $missReason; at = 'direct-loop'; skippedAssertions = @('allRoutesVisited'); skippedSteps = @($missPages); pages = @($pageReports) }
         }
         $probeJson = [pscustomobject]@{
             connected = (-not $directEnv)
@@ -2601,7 +2591,6 @@ try {
             noiseTotal = $agg.noise
             exceptionsTotal = $agg.exceptions
             logsTotal = $agg.logs
-            shots = @($agg.shots)
             steps = @($agg.steps)
             failures = @($agg.failures)
             navigation = $navAgg
@@ -2652,12 +2641,11 @@ try {
     }
 
     $stackLen = @($probeJson.pageStack).Count
-    $shotPng = @($probeJson.shots | Where-Object { Get-Prop $_ 'isPng' })
-    $shotNames = (@($shotPng | ForEach-Object { Split-Path $_.path -Leaf }) -join ',')
-    # 导航降级（诚实降级，不许假绿）：探针把「逐页导航 + 每页截图」记成 SKIP ⇒ 结果行显式写出
+    # #2320：② 门已退役截图 —— 不再从 probeJson 取 shots，也不把截图当成可验证子集的一部分。
+    # 导航降级（诚实降级，不许假绿）：探针把「逐页导航」记成 SKIP ⇒ 结果行显式写出
     # navigation=skip(unsupported) + navigationSkipReason=navigation-api-unsupported，
     # **既不当通过也不当失败**；门只对可验证子集（connected / pageStack 非空 / 入口页在栈内 /
-    # errorsTotal==0 && exceptionsTotal==0 / ≥1 张当前页截图）作结论，failures= 只在可验证子集不过时非空。
+    # errorsTotal==0 && exceptionsTotal==0）作结论，failures= 只在可验证子集不过时非空。
     $nav = Get-Prop $probeJson 'navigation'
     $navStatus = "$(Get-Prop $nav 'status')"
     $navSkip = ($navStatus -eq 'skip')
@@ -2676,7 +2664,6 @@ try {
         errorsTotal = "$($probeJson.errorsTotal)"
         exceptionsTotal = "$($probeJson.exceptionsTotal)"
         logsTotal = "$($probeJson.logsTotal)"
-        shots = "$($shotPng.Count)"
         navigation = "$navField"
         ready = "${readySeconds}s"
         sdk = "$sdkVersion"
@@ -2704,16 +2691,15 @@ try {
     $resultLine = "$($script:GatePlan.resultLine.prefix) $metricLine"
     Write-Log "`n$resultLine"
     Stop-GateStageIfOpen
-    Write-Log ("shots: " + (@($shotPng | ForEach-Object { "$($_.path) $(Get-Prop $_ 'width')x$(Get-Prop $_ 'height') $(Get-Prop $_ 'bytes')B" }) -join ' | '))
     if ($navSkip) {
         $skipLine = "navigation=SKIP reason=$navReason skippedAssertions=$((@(Get-Prop (Get-Prop $probeJson 'navigation') 'skippedAssertions') -join ',')) " +
             "skippedSteps=$((@(Get-Prop (Get-Prop $probeJson 'navigation') 'skippedSteps') -join ','))"
         Write-Log $skipLine
         Write-Host ''
         if ($navReason -eq 'navigation-api-unsupported') {
-            Write-Host "⚠️  降级：逐页导航 + 每页截图 = SKIP（reason=$navReason）" -ForegroundColor Yellow
+            Write-Host "⚠️  降级：逐页导航 = SKIP（reason=$navReason）" -ForegroundColor Yellow
             Write-Host '    本机 miniprogram-automator@0.12.1 的 mp.reLaunch / mp.navigateTo 恒报 `Uncaught [object Object]`；' -ForegroundColor Yellow
-            Write-Host '    门只对可验证子集（连通 + pageStack 非空 + 入口页在栈内 + 无 error/exception + ≥1 张当前页截图）作结论。' -ForegroundColor Yellow
+            Write-Host '    门只对可验证子集（连通 + pageStack 非空 + 入口页在栈内 + 无 error/exception）作结论。' -ForegroundColor Yellow
             Write-Host '    未证实是否为版本组合问题（留给后续排查）；首跑请人工核对结果行的 navigation= 字段。' -ForegroundColor Yellow
         } else {
             Write-Host "⚠️  降级：任意页直达探针（#1682）有页未达成 = SKIP（reason=$navReason）" -ForegroundColor Yellow
@@ -2731,7 +2717,7 @@ try {
         Write-Log $partialLine
         Write-Host ''
         Write-Host "⚠️  部分达成：直达探针 $navOkCount 页已取证 / $navSkipCount 页未达成 = PARTIAL（#1816）" -ForegroundColor Yellow
-        Write-Host '    已达成页的 console/exception 读数与截图**照常计入**门结论，不得被未达成页整组塌缩。' -ForegroundColor Yellow
+        Write-Host '    已达成页的 console/exception 读数**照常计入**门结论，不得被未达成页整组塌缩。' -ForegroundColor Yellow
         Write-Host '    未达成页的页级原因见 navigation.pages 与日志的 direct-page 读数行；**不得**把 PARTIAL 当 PASS。' -ForegroundColor Yellow
         Write-Host "    $partialLine" -ForegroundColor Yellow
     }
@@ -2769,7 +2755,7 @@ try {
         } else {
             Write-Host "✅ ② 通过：$resultLine" -ForegroundColor Green
         }
-        Write-Host "   截图：$shotNames（日志 $logPath）" -ForegroundColor Green
+        Write-Host "   日志：$logPath" -ForegroundColor Green
         Write-Host '   非等价声明：② ≠ ① 真机门，也 ≠ ④b 云打包门；content:// / 生物识别 / 第三方 SDK / 真机性能 挡不住。' -ForegroundColor Yellow
         Write-Host '   注意：不得由 agent 代填 ② 的「执行人」、不得由 agent 写「已通过」——本脚本只产出证据。' -ForegroundColor Yellow
         $exitCode = 0
@@ -2818,7 +2804,7 @@ try {
 
 # P1：仅门通过时贴「sha 绑定」评论（门结果免手抄；gh 不可用/取不到 sha 只警告，不改门结论）
 if ($exitCode -eq 0 -and $PostToPr -gt 0) {
-    # ⚠️ 续行符一个都不能少：本调用此前在 `-ShotRelative … -ReproCommand …` 一行**漏了行尾反引号**，
+    # ⚠️ 续行符一个都不能少：本调用此前在 `-ArchivedRel … -ReproCommand …` 一行**漏了行尾反引号**，
     #    于是 `-ArchivedRel` / `-ArchiveNotes` 被解析成**一条新命令**（运行到贴评论后会 CommandNotFound），
     #    入库截图清单也就从来没进过评论。守护测试 C14 现在按「以 `-参数名` 单独起行」拦这类断链。
     #
@@ -2830,7 +2816,7 @@ if ($exitCode -eq 0 -and $PostToPr -gt 0) {
     #        崩了要**响亮地警告 + 记日志**，但不得改变退出码、更不得让证据悄悄消失（禁止静默例外）。
     try {
         Publish-GateComment -PrNumber $PostToPr -ResultLine $resultLine -LogRelative $logRelative `
-            -ShotRelative ".ci-verify/$shotNames" -ReproCommand 'npm run build:mp-weixin-check' `
+            -ReproCommand 'npm run build:mp-weixin-check' `
             -ArchivedRel @(Get-Prop $archive 'Rel') `
             -ArchiveNotes @(Get-Prop $archive 'Notes') `
             -NavSkipped ([bool]$navSkip) -NavReason $navReason `
