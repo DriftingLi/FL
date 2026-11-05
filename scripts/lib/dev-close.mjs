@@ -182,10 +182,14 @@ export function decide(f) {
   if (prState !== 'MERGED') {
     return { ...base, reason: prState === 'unknown' ? 'pr-state-unreadable' : 'pr-not-merged', skipRemove: true, passExecute: false }
   }
-  // 三态逃生阀（#2253）：prHead..HEAD 非空时只认采集侧给的 headInMaster=yes（HEAD 已在 master 祖先链，
-  // 树上没有会丢的活）。no/unreadable/缺失一律维持 fail-closed —— 陈旧 origin/master 上成立 ⇒ 真实 master
-  // 上必成立，该事实单调安全，不会因 ref 落后误放。
-  if (hasUnmergedCommits(f.unmergedLog ?? '') && f.headInMaster !== 'yes') {
+  // 三态逃生阀（#2253）：prHead..HEAD 非空时只认采集侧给的祖先事实（树上没有会丢的活）：
+  //   headInMaster=yes —— HEAD 已在 master 祖先链（#2253 wt-2170 同内容异 sha 实测）；
+  //   headInPr=yes     —— HEAD 已在 PR 头祖先链（#2289：GitHub squash 走「update branch」时 PR 头被
+  //                       换成 master merge + 原分支头的合成提交，本地 HEAD 落后它 ⇒ log prHead..HEAD
+  //                       把本地独有 sha 恒假红；HEAD 是 PR 头祖先 ⇒ 本地没有 PR 之外的活）。
+  // no/unreadable/缺失一律维持 fail-closed —— 祖先事实单调安全，不会因 ref 落后误放。
+  const ancestorClear = f.headInMaster === 'yes' || f.headInPr === 'yes'
+  if (hasUnmergedCommits(f.unmergedLog ?? '') && !ancestorClear) {
     return { ...base, reason: 'unmerged-commits', skipRemove: true, passExecute: false }
   }
   return { ...base, allow: true, reason: 'ok', skipRemove: false, passExecute: execute }

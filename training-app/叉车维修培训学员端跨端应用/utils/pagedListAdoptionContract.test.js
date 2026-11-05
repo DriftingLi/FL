@@ -34,10 +34,11 @@ const MODULE_FILE = 'composables/usePagedList.uts';
 
 /**
  * 手写载体的实测基线（2026-09-27，ADR-0027 立项时现测；#1610 删 my-forum 孤儿页 22→21；
- * #1733 让 `composables/useTopicFeed.uts` 内部改持 `usePagedList` ⇒ 21→20）。
+ * #1733 让 `composables/useTopicFeed.uts` 内部改持 `usePagedList` ⇒ 21→20；
+ * #2262 摘除 ai-feature.uvue 诊断面板（faultPage + loadFaultCodes 随面板删除）⇒ 20→19）。
  * 迁移一页 ⇒ **同一 PR 下调本数**；新增一页 ⇒ 判红。
  */
-const HAND_ROLLED_BASELINE = 20;
+const HAND_ROLLED_BASELINE = 19;
 
 /** 页码游标：`page = ref` / `replyPage = ref` / `faultPage = ref<number>(1)` … */
 const CURSOR_RE = /\b\w*[Pp]age\s*=\s*ref/;

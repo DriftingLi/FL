@@ -10,8 +10,10 @@
  * 本模块因此必须保持「零运行期依赖」：只允许 `import type`，一旦 import 了真依赖，测试就得注入夹具
  * （先例：`utils/recruitDisplay.uts` / `utils/forumBody.uts`）。
  *
- * 层次：本模块**不**拼 URL —— 解析只吐子路径，URL 由 `api/aiAssistant.uts` 的 `aiManualUrl()` 负责
- * （utils 不依赖 api）。
+ * 层次：本模块**只做文本解析，不拼任何 URL** —— 解析吐子路径，不做 base 拼接，也不依赖 `api/`
+ * （utils 不依赖 api）。**v1 代理退役后全仓已无 URL 产出方**（#2237 删了 `manual/*filepath` 端点、
+ * 移动端 #2262 删了 `api/aiAssistant.uts` 的 `aiManualUrl()`）：来源面板自那以后只显示文字摘要 + 页码，
+ * 手册图在 v2 体系下没有对应物；回答正文配图由后端归一成站内 `/ai-assistant/diagnosis/ossimg/*`。
  *
  * 图片表达解析（来源面的 `<<IMAGE:…>>`、正文面的 `![alt](url)`）**不用正则**：全仓 `.uts`
  * 无 RegExp 字面量先例（Kotlin 目标下不可靠），按 `indexOf` / `substring` 走，

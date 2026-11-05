@@ -175,7 +175,8 @@ describe('§1.6 白名单文件自检', () => {
       'pages/forgot-password/forgot-password.uvue', 'pages/profile-setup/profile-setup.uvue',
       'pages/search/search.uvue', 'pages/mall/mall.uvue',
     ];
-    const all = PAGES.concat(BATCH2_PAGES, BATCH4_PAGES, BATCH5_PAGES, BATCH6_PAGES)
+    // #2262 摘除 ai-feature 诊断面板后，#6DB8E8 唯一承载移至 components/ai-chat/ai-chat-input.uvue —— 扫描面随之补入组件文件
+    const all = PAGES.concat(BATCH2_PAGES, BATCH4_PAGES, BATCH5_PAGES, BATCH6_PAGES, ['components/ai-chat/ai-chat-input.uvue'])
       .map((p) => styleBlock(read(p)).toUpperCase())
       .join('\n');
     for (const value of Object.keys(WHITELIST)) {

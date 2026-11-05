@@ -196,7 +196,7 @@ describe('#988 诊断来源资料消费契约', () => {
       // 断言**源码文本**（改坏行为、文本还在，测试照样绿）。抽到 utils 后行为由**真执行**的
       // 单测守（`utils/aiSourcesDisplay.test.js` 经 `loadUts` 跑 `.uts` 本体），
       // 本组只守「组件没有长出第二实现」。
-      expect(SOURCES).toContain("import { extractImagePaths, stripImageMarkers, pageLabel } from '../../utils/aiSourcesDisplay'");
+      expect(SOURCES).toContain("import { stripImageMarkers, pageLabel } from '../../utils/aiSourcesDisplay'");
       expect(SOURCES).not.toContain('function stripAssistantPrefix');
       expect(SOURCES).not.toContain('function extractImagePaths');
       expect(SOURCES).not.toContain('function stripImageMarkers');
@@ -220,15 +220,22 @@ describe('#988 诊断来源资料消费契约', () => {
       // 「有没有真执行」由 `guardClassification.test.js`（H5 迁移台账）+ 分类器判，不归本文件。
     });
 
-    it('子路径 → URL 走 aiManualUrl（组件不手拼 base）', () => {
-      expect(SOURCES).toContain("import { aiManualUrl } from '../../api/aiAssistant'");
-      expect(SOURCES).toContain('aiManualUrl(paths[i])');
-      expect(SOURCES).not.toMatch(/API_BASE_URL\s*\+/);     // 页面/组件里不许自己拼 base
+    // ── #2262：来源面**不再产出任何 URL**（v1 代理端点随 #2237 退役）──────────────
+    it('来源组件不 import 任何 URL 构造器，也不自己拼 base', () => {
+      // 反向守：`aiManualUrl` 已随 v1 代理端点退役删除（`api/aiAssistant.uts` 里也没有了），
+      // 谁把它引回来（或自己拼 `API_BASE_URL + …`）就等于复活一个「点了必 404」的中间态。
+      expect(SOURCES).not.toContain('aiManualUrl');
+      expect(SOURCES).not.toContain('API_BASE_URL');
+      expect(SOURCES).not.toMatch(/API_BASE_URL\s*\+/);
+      expect(API).not.toContain('aiManualUrl');
+      expect(API).not.toContain('/diagnosis/manual');
     });
 
-    it('图片可点开大图（uni.previewImage）', () => {
-      expect(SOURCES).toContain('uni.previewImage(');
-      expect(SOURCES).toContain('current: url');
+    it('来源面板只出文字 + 页码：没有图片渲染、没有大图预览', () => {
+      expect(SOURCES).not.toMatch(/<image\b/);
+      expect(SOURCES).not.toContain('uni.previewImage');
+      expect(SOURCES).toContain('{{ card.text }}');
+      expect(SOURCES).toContain('{{ card.page }}');
     });
 
     // ── #1279：正文标记展开（气泡是纯文本直出，标记成形即把内网路径露给学员）──────
@@ -278,102 +285,6 @@ describe('#988 诊断来源资料消费契约', () => {
   });
 
   // ────────────────────────────────────────────────────────────────
-  describe('⑦ 手册代理 URL：断言**产物**，不是片段（复盘：片段断言放过过一个 404）', () => {
-    /**
-     * 检测器：`aiManualUrl` 是否拼了**完整**路径段。
-     * 提成纯函数是为了让「注入变异必须判红」能真的验证这个判据本身 —— 只断言片段存在
-     * （旧版写 `expect(body).toContain("'/diagnosis/manual/'")`）对**丢段**完全无感：
-     * 少了 `/ai-assistant` 的坏实现照样满足它，而线上每张手册图都 404。
-     */
-    function manualSegmentIsComplete(src) {
-      const body = fnBody(src, 'export function aiManualUrl');
-      return body.includes("API_BASE_URL + '/ai-assistant/diagnosis/manual/'");
-    }
-
-    it('锚点：`API_BASE_URL` 不含 `/ai-assistant` ⇒ 构造器必须自己带上这一段', () => {
-      const env = read('config/env.uts');
-      // 域名口径：ADR-0077 决策 2「API 入口独立成 api.<domain>」；旧域 www.gccsmile.com
-      // 2026-10-23 硬切退役（A 记录不存在，#1802 实测 DNS 名称不存在）。
-      expect(env).toContain("const DEV_API_BASE_URL = 'https://api.gdyidao.cn/api'");
-      expect(env).toContain("const PROD_API_BASE_URL = 'https://api.gdyidao.cn/api'");
-      // 若哪天 base 自带 /ai-assistant，这条会红 —— 那时才允许改构造器（并同步本组）。
-      expect(env).not.toContain('/api/ai-assistant');
-      // 反向：退役域不得再回到基址（#1802 的判据本身就是「活引用归零」）。
-      expect(env).not.toContain('gccsmile.com');
-    });
-
-    it('`aiManualUrl` 拼出 `/ai-assistant/diagnosis/manual/` **全段**', () => {
-      expect(manualSegmentIsComplete(API)).toBe(true);
-    });
-
-    it('⑦a 检测器自检：改回「丢 /ai-assistant」的历史写法必须判红', () => {
-      const body = fnBody(API, 'export function aiManualUrl');
-      const mutated = API.replace(body, body.replace(
-        "'/ai-assistant/diagnosis/manual/'", "'/diagnosis/manual/'"));
-      expect(manualSegmentIsComplete(mutated)).toBe(false);   // 判据真的能判红，不是空跑
-    });
-
-    it('产物形状：三片拼起来 == 直连实测可用的那条 URL', () => {
-      // 三片 = base（config/env.uts 的常量） + 段（构造器自己拼） + 已编码子路径。
-      const BASE = 'https://api.gdyidao.cn/api';
-      const SEGMENT = '/ai-assistant/diagnosis/manual/';
-      const SUBPATH = 'ep_byd_pmw20_service_manual_en/page_85_643.png';
-      // 这条 URL 直连生产验过：带段 → 200 / image/png；丢段 → 404。
-      // 换域后重新实测（2026-10-23，新域 api.gdyidao.cn）：
-      //   HTTP 200 / content-type: image/png / 109,488 bytes —— 与旧域读数逐字一致。
-      expect(BASE + SEGMENT + SUBPATH).toBe(
-        'https://api.gdyidao.cn/api/ai-assistant/diagnosis/manual/ep_byd_pmw20_service_manual_en/page_85_643.png');
-      const body = fnBody(API, 'export function aiManualUrl');
-      expect(body).toContain("API_BASE_URL + '" + SEGMENT + "'");   // 与上面同一个 SEGMENT 常量
-      expect(body).toContain("segs.join('/')");                     // 子路径那一片
-      expect(body).toContain('encodeURIComponent(');
-      expect(body).toContain("split('/')");
-    });
-
-    it('⑦b 检测器自检：去掉 encodeURIComponent 后必须判红（中文目录名会 400）', () => {
-      const body = fnBody(API, 'export function aiManualUrl');
-      const mutated = API.replace(body, body.replace('encodeURIComponent(p)', 'p'));
-      expect(fnBody(mutated, 'export function aiManualUrl')).not.toContain('encodeURIComponent(');
-    });
-
-    it('⑦c 回归守护：`encodeURIComponent` 在 UTS 返回 `String?`，直接 push 进 string[] 会编译失败', () => {
-      // 这不是假想：本票第一次 ④c（`build:kotlin-all`）就死在这里 ——
-      // `index.kt:16553: error: argument type mismatch: actual type is 'String?', but 'String' was expected.`
-      const lines = API.split('\n').filter((l) => l.includes('.push(encodeURIComponent('));
-      expect(lines.length).toBeGreaterThan(0);              // 锚点：该写法仍在，别退化成空跑
-      for (const l of lines) {
-        expect(l).toMatch(/\?\?/);                          // 必须有非空兜底
-      }
-    });
-
-    // ── #1279：20260921 第二根（中文案例目录）与 `| 描述:` 后缀的产物形状 ──────────
-    it('⑦d 产物形状：中文案例目录逐段转义后 == 2026-09-24 直连生产 200 的那条 URL', () => {
-      // 来源正文经后端换形后长这样（逐字取自 `diagnosis_wire_fixture_test.go:160`）：
-      //   `<<IMAGE:/assistant/static/fault_images/制动系统/1721219449286.png>>`
-      // strip 之后留给代理的是**带根**形状 `fault_images/<中文目录>/<文件名>` —— 后端
-      // `resolveStaticSubpath` 的 staticRoots 认它（绝对形状一律拒）。
-      // strip 本身的行为面在 `aiSourcesDisplay.test.js`（真单测），这里只钉三片拼出的产物。
-      const BASE = 'https://api.gdyidao.cn/api';
-      const SEGMENT = '/ai-assistant/diagnosis/manual/';
-      const SUBPATH = 'fault_images/制动系统/1721219449286.png';
-      const encoded = SUBPATH.split('/').map((s) => encodeURIComponent(s)).join('/');
-      // 实测值（2026-10-23 新域复测）：HTTP 200 / image/png / 92,929 bytes（旧口径丢段 → 404）。
-      expect(BASE + SEGMENT + encoded).toBe(
-        'https://api.gdyidao.cn/api/ai-assistant/diagnosis/manual/'
-        + 'fault_images/%E5%88%B6%E5%8A%A8%E7%B3%BB%E7%BB%9F/1721219449286.png');
-    });
-
-    it('⑦e 产物形状：`| 描述:xxx` 漏进路径就是越界形状（后端逐段白名单判非法）', () => {
-      // 钉「为什么必须截断」而不是「截断存在」：不截断时 `|`、空格、全角冒号会一起编进 URL，
-      // 后端 `^[\p{L}\p{N}][\p{L}\p{N}_\-.]*$` 直接拒 ⇒ 实测 `404 {"message":"无效的手册资源路径"}`
-      // ⇒ 图**静默消失**。截断的行为面见 `aiSourcesDisplay.test.js` 的 #1279 用例组。
-      const leaked = encodeURIComponent('1721219449286.png | 描述:蓄能器接口');
-      expect(leaked).toContain('%7C');                                  // `|` 进了 URL = 非法
-      expect(encodeURIComponent('1721219449286.png')).not.toContain('%7C');
-    });
-  });
-
-  // ────────────────────────────────────────────────────────────────
   describe('⑧ uvue 约束：新组件的样式块不得踩原生端不支持的写法', () => {
     it('`<style>` 声明 lang="scss"', () => {
       expect(SOURCES).toMatch(/<style lang="scss">/);
@@ -395,7 +306,6 @@ describe('#988 诊断来源资料消费契约', () => {
     it('间距用子元素 margin class（对齐 `gap` 替换模式）', () => {
       expect(styleBlock(SOURCES)).toContain('margin-top');
       expect(SOURCES).toContain("'source-card-gap': ci > 0");
-      expect(SOURCES).toContain("'source-image-gap': ii > 0");
     });
   });
 

@@ -44,7 +44,7 @@ module.exports = {
     '#FFD700': 'pages/points/task-center.uvue 金币卡渐变起色——金币金，token 表无对应',
     '#222222': 'batch2 ai-assistant 两页/practice-report 重文字——$text-color(#333333) 近似但值不等，历史深灰，待文字 token 收敛裁',
     '#6B6B6B': 'pages/ai-assistant/ai-feature.uvue panel-icon 边框/线条——icon 专用灰（#947 血账配套视觉），token 表无对应',
-    '#6DB8E8': 'pages/ai-assistant/ai-feature.uvue AI 主题浅蓝强调——AI 模块品牌色，token 表无对应',
+    '#6DB8E8': 'components/ai-chat/ai-chat-input.uvue 发送按钮浅蓝强调——AI 模块品牌色（ai-feature 诊断面板 4 处承载随 #2262 面板摘除退役），token 表无对应',
     '#DFEFFB': 'pages/ai-assistant/ai-feature.uvue .page 背景——AI 模块浅蓝页面底（非中性白），token 表无对应',
     '#F5F6F8': 'batch2 ai-assistant 两页页面底——$bg-color(#F8F8F8) 近似但值不等，待真机裁',
     '#4CAF50': 'batch2 practice-report/practice-do 正确/成功绿 + 批4 chapter-view/practice-records/mock-exam-records 通过/已完成状态绿（批4 #1607 并入，同值只立一行）——$success-color(#4cd964) 偏荧光语义不符（同批1 #22A45D 判例），material 绿待成功系 token 票裁',

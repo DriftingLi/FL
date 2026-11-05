@@ -9,7 +9,8 @@
  *   ② 展示名：每一项的 title == 注册表该键的 `label`（「故障咨询」→「智能维修诊断」即此条）。
  *   ③ 限免位：每一项的 `freePreview` == 注册表该行的 `freePreview` 声明（缺省 false）。
  *   ④ 传输适配器：每一项的 `adapter` == 注册表该行的 `adapter`（ADR-0047 §7）。**这是「专用 UI」的
- *      唯一判据** —— 诊断筛选就按它判定（见 `aiFeatureDiagnosisFilterContract.test.js`）。手写清单若把
+ *      唯一判据** —— 诊断页当年就按它判定（原 `aiFeatureDiagnosisFilterContract.test.js` 现已由
+ *      #2262 删除：那套筛选面板随 v1 只读端点退役；本文件继续锁 `adapter` 列本身，重适配归 #2244）。
  *      adapter 写错，#1042 那种「诊断专有 UI」会**静默**出现在错误的页面上（或该出现的不出现），
  *      两端都不报错，只有这条测试拦得住。
  *

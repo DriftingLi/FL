@@ -83,6 +83,24 @@ test('L2a3 squash 同内容异 sha 误红：HEAD 已是 origin/master 祖先时�
   assert.ok(/headInMaster\s*=/.test(ps1), 'ps1 必须把 headInMaster 事实递给 decide——判据在 node，采集在 ps1，两头都缺不了')
 })
 
+// #2289 实测事实（wt-2262）：GitHub squash 合并若走了「update branch」，PR headRefOid 被换成
+// master merge + 原分支头的合成提交（tree 与 master 上 squash commit 完全一致），本地 HEAD 是它的
+// **祖先** ⇒ log prHead..HEAD 把本地独有 sha 恒假红。headInPr=yes 与 headInMaster=yes 同一安全方向。
+const LIST_2262 = ['worktree D:/FL', 'branch refs/heads/master', '', 'worktree D:/FL/wt-2262', 'branch refs/heads/feat/2262', ''].join('\n')
+test('L2a4 squash update-branch 误红：HEAD 已是 PR 头祖先时不拦（#2289 wt-2262 实测）', () => {
+  const d = decide({ task: '2262', prState: 'MERGED', worktreeList: LIST_2262, cwd: 'D:\\FL', unmergedLog: 'bbe28c01 fix(gates): gate-tee 收流窗口按仍在出数据重置（#2262）', headInMaster: 'no', headInPr: 'yes', execute: true })
+  assert.equal(d.allow, true, 'HEAD 全在 PR 头祖先链 ⇒ 树里没有 PR 之外的活，该放行拆树')
+  assert.equal(d.passExecute, true, '-Yes 照常透传')
+  for (const fact of ['no', 'unreadable', undefined, '']) {
+    const b = decide({ task: '2262', prState: 'MERGED', worktreeList: LIST_2262, cwd: 'D:\\FL', unmergedLog: 'bbe28c01 x', headInMaster: 'no', headInPr: fact, execute: true })
+    assert.equal(b.allow, false, 'headInPr=' + fact + ' 时不许拆（fail-closed 不放松）')
+    assert.equal(b.reason, 'unmerged-commits', '拦的理由仍是未合并对账，不许换成别的')
+  }
+  const ps1 = readFileSync(join(here, 'dev-close.ps1'), 'utf8')
+  assert.ok(ps1.includes('merge-base --is-ancestor HEAD $prHead'), 'ps1 采集侧必须问 PR 头祖先事实（三态：yes/no/unreadable）')
+  assert.ok(/headInPr\s*=/.test(ps1), 'ps1 必须把 headInPr 事实递给 decide——判据在 node，采集在 ps1，两头都缺不了')
+})
+
 test('L2b dry-run 是默认，-Yes 才透传 -Execute', () => {
   const dry = decide({ task: '2174', prState: 'MERGED', worktreeList: LIST_PRESENT, unmergedLog: '', execute: false })
   assert.equal(dry.allow, true, '已合并且无未提交活 => 允许')

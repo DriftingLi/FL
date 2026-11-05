@@ -40,6 +40,7 @@ function Invoke-GateTee {
         [AllowEmptyCollection()][string[]]$Arguments = @(),
         [string]$LogPath,
         [int]$DrainMs = 5000,
+        [int]$MaxDrainResets = 12,
         [string]$WorkingDirectory
     )
     $psi = [System.Diagnostics.ProcessStartInfo]::new()
@@ -79,6 +80,7 @@ function Invoke-GateTee {
     $outTask = $p.StandardOutput.ReadLineAsync()
     $errTask = $p.StandardError.ReadLineAsync()
     $drainSw = $null
+    $drainResets = 0
     $abandoned = $false
     while ($true) {
         $pending = [System.Collections.Generic.List[System.Threading.Tasks.Task]]::new()
@@ -88,6 +90,13 @@ function Invoke-GateTee {
         $idx = -1
         try { $idx = [System.Threading.Tasks.Task]::WaitAny([System.Threading.Tasks.Task[]]$pending.ToArray(), 250) } catch { $idx = -1 }
         if ($idx -ge 0) {
+            # 只要本轮真收到了行，就说明流还活着在出数据（不是 #2147 那种「握住不放、无输出」形态）
+            # ⇒ 重置收尾窗口：CI 低核 runner 上 250ms 轮询粒度 + 调度延迟会把 5s 墙钟吃掉，
+            #    行与行之间隔得比窗口宽就会把已打出的结果行冤枉成 abandoned（R10 CI 红的成因，#2262 实测）。
+            # 有界性兜底：窗口重置只在前 $MaxDrainResets 次（默认 12 ≈ 最长再等 1 分钟）内有效，
+            # 防「孙进程周期性打一行心跳」把 #2147 的有界放弃退化成无限收流。
+            if ($drainResets -lt $MaxDrainResets) { $drainResets++; $drainSw = $null }
+            else { $abandoned = $true; break }
             $done = $pending[$idx]
             $line = $null
             try { $line = $done.Result } catch { $line = $null }
