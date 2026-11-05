@@ -29,7 +29,8 @@ const LINDE = { id: 'linde', name: '林德', tagline: '内燃叉车', icon: '�
 const FAQ = [{ q: '举升无力怎么查', a: '' }, { q: '电池报警怎么办', a: '' }];
 
 const BRAND_ITEMS = [{ id: 'battery', name: '电池系统', icon: '' }, { id: 'brake', name: '制动系统', icon: '' }];
-const MODEL_ITEMS = [{ id: 'e322', name: 'E-322', icon: '' }];
+const MODEL_ITEMS = [{ id: 'e322', name: 'E-322', icon: '' }, { id: 'a005', name: 'A-005-01 内燃平衡重', icon: '' }];
+const ROOT_FAULT_ITEMS = [{ id: 'l_conn', name: '插头 / 连接器（触点退针、壳体损坏）', icon: '' }];
 const FAULT_ITEMS = [{ id: 'f1', name: '举升无力', icon: '' }];
 
 /**
@@ -42,7 +43,7 @@ function loadCompose(scenario) {
     emptyDiagnosisSelection: compose.emptyDiagnosisSelection,
     pickerKindOf: compose.pickerKindOf,
   });
-  const calls = { health: 0, intents: 0, systems: 0, faults: 0 };
+  const calls = { health: 0, intents: 0, systems: 0, faults: 0, systemBrands: [], faultQueries: [] };
   const mod = loadUts(COMPOSABLE_UTS, {
     ref: miniRef,
     // 状态机：真源导出，逐条注入（导出的名字取自 guide 模块本身）
@@ -71,12 +72,17 @@ function loadCompose(scenario) {
       if (scenario.intentsThrows) return Promise.reject(new Error('502'));
       return Promise.resolve({ brands: scenario.brands || [], faq: FAQ });
     },
-    getDiagnosisSystemsApi: () => {
+    getDiagnosisSystemsApi: (brand) => {
       calls.systems += 1;
+      calls.systemBrands.push(brand);
       return Promise.resolve(scenario.systems || BRAND_ITEMS);
     },
     getDiagnosisFaultsApi: (brand, second) => {
       calls.faults += 1;
+      calls.faultQueries.push({ brand, second });
+      // 根层（second 为空）与带 second 的词表是**两份不同的列表**：
+      // 林德根层 3 条故障项，带 second 才给 6 条检测主题。分开返回才能钉住时序缺陷。
+      if (!second) return Promise.resolve(scenario.rootFaults || ROOT_FAULT_ITEMS);
       return Promise.resolve(scenario.faults || FAULT_ITEMS);
     },
   });
@@ -133,24 +139,40 @@ describe('诊断引导 composable（#2296）', () => {
     });
   });
 
-  describe('② 取数：第二层按档位走对端点', () => {
-    it('系统档（中力）⇒ systems 被调用一次', async () => {
+  describe('② 取数：两档第二层都走 systems（#2310，行为层覆盖两个品牌）', () => {
+    it('系统档（中力）⇒ systems?brand=zhongli 被调用一次，拿到 14 条带 icon 的系统', async () => {
       const { mod, calls } = loadCompose({ brands: [ZHONGLI] });
       await mod.loadIntents();
       mod.openGuideWithBrand('zhongli');
       await new Promise((r) => setImmediate(r));
       expect(calls.systems).toBe(1);
+      expect(calls.systemBrands).toEqual(['zhongli']);
+      expect(calls.faults).toBe(0);
       expect(mod.secondItems.value.length).toBe(2);
     });
 
-    it('型号档（林德）⇒ 第二层走 faults 根层（不带 second），不碰 systems', async () => {
-      const { mod, calls } = loadCompose({ brands: [LINDE], faults: MODEL_ITEMS });
+    it('型号档（林德）⇒ 同样走 systems?brand=linde，拿到 87 个型号；不碰 faults 根层', async () => {
+      const { mod, calls } = loadCompose({ brands: [LINDE], systems: MODEL_ITEMS });
       await mod.loadIntents();
       mod.openGuideWithBrand('linde');
       await new Promise((r) => setImmediate(r));
-      expect(calls.systems).toBe(0);
-      expect(calls.faults).toBeGreaterThanOrEqual(1);
+      expect(calls.systems).toBe(1);
+      expect(calls.systemBrands).toEqual(['linde']);
+      expect(calls.faults).toBe(0);
       expect(mod.secondItems.value[0].name).toBe('E-322');
+      expect(mod.secondItems.value[1].name).toBe('A-005-01 内燃平衡重');
+    });
+
+    it('第三层带的是第二层 id，不是空串 ⇒ 林德不会「再取回同一份 3 条根层」', async () => {
+      const { mod, calls } = loadCompose({ brands: [LINDE], systems: MODEL_ITEMS });
+      await mod.loadIntents();
+      mod.openGuideWithBrand('linde');
+      await new Promise((r) => setImmediate(r));
+      await mod.pickSecond(MODEL_ITEMS[0]);
+      expect(calls.faults).toBe(1);
+      expect(calls.faultQueries).toEqual([{ brand: 'linde', second: 'e322' }]);
+      // 第三层拿的是带 second 的词表，不是根层那 3 条故障项
+      expect(mod.faultItems.value[0].name).toBe('举升无力');
     });
 
     it('组句拿的是真源纯函数：选完三层后 sentence 就是那句话', async () => {

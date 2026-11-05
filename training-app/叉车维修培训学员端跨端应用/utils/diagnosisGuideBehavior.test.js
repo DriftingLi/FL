@@ -3,7 +3,7 @@
  *
  * 为什么是行为而不是源码文本：票面验收写的是「四步状态机与拼句逻辑有**真执行**的行为测试
  * （不是读源码字面量）」。源码文本契约证明不了「换品牌后旧现象真的失效」「关闭再进真的没残留」
- * 「型号档的第二层真的去 faults 根层」——这些只有把状态往前推一遍才看得见
+ * 「两档第二层真的都去 systems」——这些只有把状态往前推一遍才看得见
  * （判据与分类见 `docs/agents/guards.md`）。
  *
  * 缝：`utils/utsHarness.js` 的 `loadUts`。**两层都是真执行出来的源**：
@@ -11,7 +11,7 @@
  * ——镜像会让「真源改了而镜子没改」静默变绿（#1273 先例）。
  *
  * 成对取证：末组用注入变异的副本证明上面的判据**有牙**（两种真实坏实现：
- * ① 换品牌不清第二层/现象；② 型号档也走 systems）。
+ * ① 换品牌不清第二层/现象；② 型号档被改回按 picker 分支到 faults 根层）。
  */
 const path = require('path');
 const { loadUts, readText } = require('./utsHarness');
@@ -37,13 +37,13 @@ const WEIRD = { id: 'x', name: '某品牌', tagline: '', icon: '', cls: '', pick
 describe('诊断引导状态机（#2296）', () => {
   const { compose, guide } = loadGuide();
 
-  describe('① 判档：第二层走 systems 还是 faults 根层', () => {
-    it('系统档（中力）⇒ systems；型号档（林德）⇒ faults 根层', () => {
+  describe('① 判档：两档第二层都走 systems（#2310，picker 不决定端点）', () => {
+    it('系统档（中力）与型号档（林德）都取 systems；林德 87 型号不再被当成 3 条故障项', () => {
       expect(guide.secondSourceOf(ZHONGLI)).toBe('systems');
-      expect(guide.secondSourceOf(LINDE)).toBe('faults-root');
+      expect(guide.secondSourceOf(LINDE)).toBe('systems');
     });
 
-    it('品牌未定 / picker 是未知取值 ⇒ 没有可取列表 / 按系统档', () => {
+    it('品牌未定 / picker 是未知取值 ⇒ 没有可取列表 / 仍走 systems', () => {
       expect(guide.secondSourceOf(null)).toBe('');
       expect(compose.pickerKindOf(WEIRD)).toBe('system');
       expect(guide.secondSourceOf(WEIRD)).toBe('systems');
@@ -268,17 +268,20 @@ describe('诊断引导状态机（#2296）', () => {
       expect(switched.selection.faultName).toBe('举升无力'); // 坏实现：残留
     });
 
-    it('把型号档也改走 systems ⇒ ① 组判档断言必须判红', () => {
+    it('把型号档改回按 picker 分支到 faults 根层 ⇒ ① 组判档断言必须判红', () => {
+      // #2310 修复恰好是「型号档也走 systems」；这条变异守护要反过来钉住「别再分支回去」。
       const src = readText(GUIDE_UTS);
+      const anchor = "export function secondSourceOf(brand : DiagnosisIntentBrand | null) : string {";
+      expect(src.includes(anchor)).toBe(true);
       const broken = src.replace(
-        "return pickerKindOf(brand) == 'model' ? 'faults-root' : 'systems'",
-        "return 'systems'"
+        "	return 'systems'\n}",
+        "	return pickerKindOf(brand) == 'model' ? 'faults-root' : 'systems'\n}"
       );
-      expect(broken).not.toBe(src);
+      expect(broken).not.toBe(src); // 变异必须真落上
       const tmp = path.join(require('os').tmpdir(), 'diagnosisGuideMutated2.uts');
       fs.writeFileSync(tmp, broken);
       const mutated = loadGuide(tmp).guide;
-      expect(mutated.secondSourceOf(LINDE)).toBe('systems'); // 坏实现
+      expect(mutated.secondSourceOf(LINDE)).toBe('faults-root'); // 坏实现：又按 picker 分支
     });
   });
 });

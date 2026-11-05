@@ -7,11 +7,11 @@
  *
  * 四步：0 品牌 → 1 系统/型号 → 2 现象/主题 → 3 确认。
  *
- * **第二层的取法由档位决定**（`pickerKindOf`）：
- *   - 系统档（中力）：`systems?brand=` 给系统，`faults?brand=&second=` 给现象；
- *   - 型号档（林德）：第二层是 `faults?brand=`（**不带 second**）给的型号根层，
- *     第三层才是 `faults?brand=&second=`。
- * 两种形态**不能共用一份列表** —— 选错层会拿到另一份词表（比对即误判，联调已实测过）。
+ * **两档第二层都取 `systems?brand=`**（#2310）：中力给 14 个系统（带 icon），
+ * 林德给 87 个型号（无 icon、要能搜）。`picker` 只决定「要不要搜索框」与第三层标题，
+ * **不决定端点** —— 与 Web 侧 `DiagnosisGuide.vue` 的一致。
+ * `faults?brand=` 不带 `second` 是「品牌根层」（中力 6 条 / 林德 3 条），**不是型号列表**；
+ * 选错层会拿到另一份词表（比对即误判，2026-11-05 生产实测）。
  *
  * 状态迁移一律**返回新对象、不改入参**：面板「关闭即丢弃」时只需要丢掉那个对象，
  * 不存在「某个字段忘了清」的残留（票面判据：点选到一半关闭再进入不残留上次预选）。
@@ -19,7 +19,7 @@
 
 import type { DiagnosisIntentBrand } from '../types/index'
 import type { DiagnosisSelection } from './diagnosisCompose'
-import { emptyDiagnosisSelection, pickerKindOf } from './diagnosisCompose'
+import { emptyDiagnosisSelection } from './diagnosisCompose'
 
 /** 四步序号（不导出枚举：UTS 侧枚举是编译期风险，用数字常量最稳） */
 export const GUIDE_STEP_BRAND : number = 0
@@ -78,19 +78,23 @@ function copyState(s : DiagnosisGuideState) : DiagnosisGuideState {
 }
 
 /**
- * 第二层该走哪个取数：`'systems'` 还是 `'faults-root'`。
+ * 第二层该走哪个取数：**恒为 `'systems'`**（#2310）。
  *
- * 由 `pickerKindOf(brand)` 决定 —— **不是**按功能键、也不是按品牌 id 字面比较。
+ * 曾经按 `pickerKindOf(brand)` 把型号档分到 `'faults-root'`，那是把
+ * `faults?brand=`（不带 second）的品牌根层当成了型号列表：林德只回 3 条故障项，
+ * 87 个型号实际在 `systems?brand=linde`。Web 侧不分档统一调 systems，行为是对的。
+ * 保留这个纯函数（而不是在 composable 里直接写死字符串）是为了让「两档同端点」
+ * 有**真执行**的行为用例守住，防止再按 picker 分支回去。
+ *
  * 品牌未定时返回 `''`（还没有可取的列表）。
  */
 export function secondSourceOf(brand : DiagnosisIntentBrand | null) : string {
 	if (brand == null || brand.id.length == 0) return ''
-	return pickerKindOf(brand) == 'model' ? 'faults-root' : 'systems'
+	return 'systems'
 }
 
 /**
  * 第三层该带不带 `second`：第二层已选 ⇒ 带（现象词表）；未选 ⇒ 不带（根层）。
- * 型号档的第二层本身就是「不带 second 的根层」列表，故第三层必须带，否则会取回同一份型号表。
  */
 export function faultQuerySecondOf(s : DiagnosisGuideState) : string {
 	return s.secondId

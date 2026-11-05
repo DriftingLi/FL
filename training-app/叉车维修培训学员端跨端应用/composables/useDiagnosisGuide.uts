@@ -145,7 +145,11 @@ export function useDiagnosisGuide() {
 		guideVisible.value = gotBrands.length > 0
 	}
 
-	/** 取第二层：型号档走 faults 根层（不带 second），系统档走 systems */
+	/**
+	 * 取第二层：**两档都走 `systems?brand=`**（#2310）。
+	 * 中力给 14 个系统（带 icon），林德给 87 个型号（无 icon、要能搜）；
+	 * `faults?brand=` 根层是「品牌根层诉求/故障项」，不是型号列表。
+	 */
 	async function loadSecond() : Promise<void> {
 		secondItems.value = []
 		secondLoading.value = true
@@ -157,11 +161,7 @@ export function useDiagnosisGuide() {
 			return
 		}
 		try {
-			if (src == 'faults-root') {
-				secondItems.value = await getDiagnosisFaultsApi(brandId, '')
-			} else {
-				secondItems.value = await getDiagnosisSystemsApi(brandId)
-			}
+			secondItems.value = await getDiagnosisSystemsApi(brandId)
 		} catch (_e) {
 			// 上游 502：留空列表 + 空态文案兜底（不弹错 —— 弹错也改变不了没数据这件事）
 			secondItems.value = []
@@ -205,8 +205,12 @@ export function useDiagnosisGuide() {
 	}
 
 
-	/** 取第三层现象词表（第二层已选 ⇒ 带 second；未选 ⇒ 根层） */
-	async function loadFaults() : Promise<DiagnosisCatalogItem[]> {
+	/**
+	 * 取第三层现象词表：`second` 必须传本次选中的**第二层 id**（不是 name）。
+	 * 显式传参而不是从 state 现读：调用方 `pickSecond` 会先把新 id 落进状态再取数，
+	 * 从 state 读容易在「先取数后落状态」的旧时序下取回根层（#2310 现象二）。
+	 */
+	async function loadFaults(secondId : string) : Promise<DiagnosisCatalogItem[]> {
 		faultItems.value = []
 		faultLoading.value = true
 		const brandId = state.value.brandId
@@ -216,7 +220,7 @@ export function useDiagnosisGuide() {
 		}
 		let list : DiagnosisCatalogItem[] = []
 		try {
-			list = await getDiagnosisFaultsApi(brandId, state.value.secondId)
+			list = await getDiagnosisFaultsApi(brandId, secondId)
 		} catch (_e) {
 			list = []
 		}
@@ -233,8 +237,12 @@ export function useDiagnosisGuide() {
 	}
 
 	async function pickSecond(item : DiagnosisCatalogItem) : Promise<void> {
-		// 先取词表再落状态：预选能否兑现取决于「它在不在词表里」，这个事实只能由取数给
-		const list = await loadFaults()
+		// 先把第二层选中项落进状态（含 secondId），再取第三层词表：
+		// 旧实现反过来 —— 取词表时 secondId 还是空 ⇒ 落到 `faults?brand=` 根层，
+		// 林德就会「第三层再取回同一份 3 条」（#2310）。
+		state.value = applySecond(state.value, item.id, item.name, false)
+		const list = await loadFaults(item.id)
+		// 预选能否兑现取决于「它在不在**这次的**词表里」，这个事实只能由取数给
 		let inList = false
 		for (let i = 0; i < list.length; i++) {
 			if (list[i].name == state.value.pendingFault) {
@@ -242,7 +250,10 @@ export function useDiagnosisGuide() {
 				break
 			}
 		}
-		state.value = applySecond(state.value, item.id, item.name, inList)
+		if (inList) {
+			// 兑现：复用纯函数，保证与「无预选」路径落在同一个状态机出口
+			state.value = applySecond(state.value, item.id, item.name, true)
+		}
 		refreshSentence()
 	}
 
@@ -288,7 +299,7 @@ export function useDiagnosisGuide() {
 			next.step = GUIDE_STEP_FAULT
 			state.value = next
 			refreshSentence()
-			loadFaults()
+			loadFaults(state.value.secondId)
 			return
 		}
 		// 目标 = 确认步：只有在已成句时才允许（否则是一步空屏）
