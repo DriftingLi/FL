@@ -36,7 +36,7 @@
 				<AiChatBubble v-for="(msg, idx) in messages" :key="idx" :role="msg.role" :content="msg.content" :sources="msg.sources" :show-actions="msg.role == 'assistant'" :is-last="idx == messages.length - 1" @copy="onCopyText(msg.content)" @retry="onRetry" />
 				<view v-if="thinking" class="message-row assistant">
 					<view class="message-bubble thinking">
-						<text class="message-text">思考中...</text>
+						<text class="message-text">{{ thinkingLabel }}</text>
 					</view>
 				</view>
 			</view>
@@ -82,8 +82,8 @@
 
 <script setup lang="uts">
 	import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
-	import { onLoad } from '@dcloudio/uni-app'
-	import { computed, ref } from 'vue'
+	import { onLoad, onUnload } from '@dcloudio/uni-app'
+	import { computed, ref, watch } from 'vue'
 	import { useAuthStore } from '../../stores/auth'
 	import { useAiChat } from '../../composables/useAiChat'
 	import type { ChatBodyBuilder } from '../../composables/useAiChat'
@@ -153,6 +153,63 @@
 	// 取数、留白判定、四步状态机与组句全在 `useDiagnosisGuide` 里；本页只做三件事：
 	// 渲染欢迎区、把选出来的句子写进输入框、把面板动作转给 composable。
 	const isDiagnosis = ref<boolean>(false)
+
+	// ===== 等待态（#2298）=====
+	//
+	// 只服务一条判据：学员看到的「在等」必须是真的在等。三件事一块做，缺一件都会破：
+	// 1) 已等秒数 —— 等待期间每秒 +1，让「在跑」和「卡住」在界面上可区分（规格决策 17）；
+	// 2) 诊断页常亮 —— 微信「切后台 5 秒未结束即 fail interrupted」与 timeout 取值无关，
+	//    能挡的只有屏息（调研 `docs/design/20261106-移动端长请求超时上限调研.md`）；
+	// 3) 计时器跟着等待态关 —— 请求结束（成功 / 失败 / 超时 / 截断）后不能继续跳秒，
+	//    更不能串到下一轮（验收第 5 条）。
+	const thinkingSeconds = ref<number>(0)
+	const thinkingLabel = computed<string>(() : string => {
+		if (thinkingSeconds.value <= 0) {
+			return '思考中...'
+		}
+		return `思考中... 已等 ${thinkingSeconds.value} 秒`
+	})
+	let thinkingTimer : number | null = null
+	let keepScreenOnByThinking : boolean = false
+
+	function stopThinkingTimer() : void {
+		const t = thinkingTimer
+		if (t != null) {
+			clearInterval(t)
+			thinkingTimer = null
+		}
+	}
+
+	function restoreScreenOn() : void {
+		if (keepScreenOnByThinking) {
+			keepScreenOnByThinking = false
+			uni.setKeepScreenOn({ keepScreenOn: false })
+		}
+	}
+
+	watch(thinking, (active : boolean) : void => {
+		// 每一轮先收旧计时器：上一轮的 interval 若还在跑，秒数会从上一轮的值接着涨（串轮）
+		stopThinkingTimer()
+		if (!active) {
+			thinkingSeconds.value = 0
+			restoreScreenOn()
+			return
+		}
+		thinkingSeconds.value = 0
+		if (isDiagnosis.value && !keepScreenOnByThinking) {
+			keepScreenOnByThinking = true
+			uni.setKeepScreenOn({ keepScreenOn: true })
+		}
+		thinkingTimer = setInterval(() : void => {
+			thinkingSeconds.value = thinkingSeconds.value + 1
+		}, 1000)
+	})
+
+	// 离开页面（含返回上一层）就停：uni-app x 没有 Vue 的 onUnmounted，页面卸载钩子是 onUnload
+	onUnload(() : void => {
+		stopThinkingTimer()
+		restoreScreenOn()
+	})
 
 	/**
 	 * 灌进输入框的草稿（引导面板「填入输入框」用）。

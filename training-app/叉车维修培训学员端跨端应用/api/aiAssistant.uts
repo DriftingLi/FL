@@ -476,6 +476,19 @@ export type StreamChatCallbacks = {
 	onDone ?: (data : UTSJSONObject | null) => void
 }
 
+/**
+ * 三类失败的**可行动**文案（#2298 验收第 3 条）。
+ *
+ * 判据不是「有错就行」，而是「学员读完知道下一步做什么」：
+ * 超时 ⇒ 稍后重试；网络失败 ⇒ 检查网络后重试；服务不可用 ⇒ 稍后重试（不要反复点）。
+ * 因此**不把平台原始 `errMsg` 当文案透出**（旧实现里 `request:fail` 这类英文串会直接上屏）。
+ */
+const STREAM_MSG_TIMEOUT = '回答超时了，请稍后重试'
+const STREAM_MSG_NETWORK = '网络连接失败，请检查网络后重试'
+const STREAM_MSG_SERVICE_DOWN = '服务暂不可用，请稍后重试'
+/** 200 但流里没有 `done` / `error`（应答被截断）：请求已结束、内容却未收口，必须显式收尾 */
+const STREAM_MSG_INCOMPLETE = '回答未完整返回，请重试'
+
 /** 触发 onError（若存在） */
 function emitStreamError(callbacks : StreamChatCallbacks, msg : string) : void {
 	console.error('[streamChat] error:', msg)
@@ -484,11 +497,18 @@ function emitStreamError(callbacks : StreamChatCallbacks, msg : string) : void {
 	}
 }
 
-/** 简单解析 SSE 文本（兼容后端 message / sources / error / done 事件） */
-function parseStreamSSE(text : string, callbacks : StreamChatCallbacks) : void {
+/**
+ * 简单解析 SSE 文本（兼容后端 message / sources / error / done 事件）
+ *
+ * @returns 是否见到**终止帧**（`done` 或 `error`）。`uni.request` 是整包回调，
+ *          200 也可能只收到半截流（连接中途断、body 为空）—— 那种情况既没有 done 也没有
+ *          error，调用方必须自己收尾，否则等待态会一直转（#2298 验收第 5 条）。
+ */
+function parseStreamSSE(text : string, callbacks : StreamChatCallbacks) : boolean {
 	const lines = text.split('\n')
 	let event = ''
 	let data = ''
+	let terminated = false
 	for (let i = 0; i < lines.length; i++) {
 		const line = lines[i].trim()
 		if (line.startsWith('event:')) {
@@ -497,18 +517,24 @@ function parseStreamSSE(text : string, callbacks : StreamChatCallbacks) : void {
 			data = line.substring(5).trim()
 		} else if (line.length == 0) {
 			if (event.length > 0) {
-				handleStreamSSEEvent(event, data, callbacks)
+				if (handleStreamSSEEvent(event, data, callbacks)) {
+					terminated = true
+				}
 			}
 			event = ''
 			data = ''
 		}
 	}
 	if (event.length > 0) {
-		handleStreamSSEEvent(event, data, callbacks)
+		if (handleStreamSSEEvent(event, data, callbacks)) {
+			terminated = true
+		}
 	}
+	return terminated
 }
 
-function handleStreamSSEEvent(event : string, data : string, callbacks : StreamChatCallbacks) : void {
+/** @returns 该事件是否是终止帧（`done` / `error`） */
+function handleStreamSSEEvent(event : string, data : string, callbacks : StreamChatCallbacks) : boolean {
 	if (event == 'message') {
 		try {
 			const obj = JSON.parse(data) as UTSJSONObject
@@ -540,6 +566,7 @@ function handleStreamSSEEvent(event : string, data : string, callbacks : StreamC
 			}
 		} catch (e) {}
 		emitStreamError(callbacks, msg)
+		return true
 	} else if (event == 'done') {
 		// done 的 data 恒可空：非诊断功能后端直接发 `null`（#2308 §二.3）；
 		// 解析失败或不是对象时按「没有载荷」处理，不能把一个坏帧当权威全文。
@@ -557,7 +584,9 @@ function handleStreamSSEEvent(event : string, data : string, callbacks : StreamC
 		if (callbacks.onDone != null) {
 			callbacks.onDone(payload)
 		}
+		return true
 	}
+	return false
 }
 
 /**
@@ -614,11 +643,12 @@ function sendStream(params : UTSJSONObject, callbacks : StreamChatCallbacks, isR
 				return
 			}
 			if (statusCode < 200 || statusCode >= 300) {
-				let msg = `请求失败 (${statusCode})`
+				// 服务不可用（5xx）有专门的行动文案；4xx 保留状态码，便于客服定位是哪个入口打错
+				let msg = statusCode >= 500 ? STREAM_MSG_SERVICE_DOWN : `请求失败 (${statusCode})`
 				try {
 					const bodyObj = res.data as UTSJSONObject
 					const bm = bodyObj['message']
-					if (bm != null) msg = bm as string
+					if (bm != null && `${bm}`.length > 0) msg = `${bm}`
 				} catch (e) {}
 				emitStreamError(callbacks, msg)
 				return
@@ -638,17 +668,18 @@ function sendStream(params : UTSJSONObject, callbacks : StreamChatCallbacks, isR
 			if (raw.length == 0) {
 				raw = `${res.data}`
 			}
-			parseStreamSSE(raw, callbacks)
+			// 200 不等于「答完了」：整包解析后必须见到 done / error 才算收口。
+			// 截断（无终止帧）时显式收尾，否则等待态一直转 —— 这正是 #2298 验收第 5 条要挡的残留态。
+			const terminated = parseStreamSSE(raw, callbacks)
+			if (!terminated) {
+				emitStreamError(callbacks, STREAM_MSG_INCOMPLETE)
+			}
 		},
 		fail: (err) => {
+			// 平台原始 errMsg（`request:fail ...`）只进日志，不上屏：它不是可行动文案（#2298 验收第 3 条）
 			console.error('[streamChat] fail:', err.errMsg)
-			let msg = '网络请求失败'
 			const errMsg = err.errMsg ?? ''
-			if (errMsg.indexOf('timeout') >= 0) {
-				msg = '请求超时，请稍后重试'
-			} else if (errMsg.length > 0) {
-				msg = errMsg
-			}
+			const msg = errMsg.indexOf('timeout') >= 0 ? STREAM_MSG_TIMEOUT : STREAM_MSG_NETWORK
 			emitStreamError(callbacks, msg)
 		},
 	})
