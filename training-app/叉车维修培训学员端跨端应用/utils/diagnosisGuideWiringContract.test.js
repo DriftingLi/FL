@@ -127,7 +127,9 @@ describe('诊断引导面接线契约（#2296）', () => {
     it('草稿经 AiChatInput 的 draft 属性送到输入框（不是直接改 useAiChat 的 inputText）', () => {
       expect(PAGE).toMatch(/<AiChatInput :draft="draftText"/);
       expect(INPUT).toMatch(/draft\?: string/);
-      expect(INPUT).toMatch(/watch\(\(\) => props\.draft/);
+      // 判据是「草稿变化会写进输入框」这条语义，不钉具体的取源写法（typed computed 是 ④c 逼出来的）
+      expect(INPUT).toMatch(/const draftText = computed<string>/);
+      expect(INPUT).toMatch(/watch\(draftText, \(v : string\) => \{/);
     });
 
     it('发出去之后草稿作废（否则同一句会被反复塞回输入框）', () => {

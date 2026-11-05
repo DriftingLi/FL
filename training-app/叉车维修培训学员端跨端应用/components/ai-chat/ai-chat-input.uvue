@@ -26,9 +26,9 @@
 </template>
 
 <script setup lang="uts">
-	import { ref, watch } from 'vue'
+	import { computed, ref, watch } from 'vue'
 
-	withDefaults(defineProps<{
+	const props = withDefaults(defineProps<{
 		placeholder?: string
 		showModelBar?: boolean
 		modelName?: string
@@ -55,7 +55,15 @@
 
 	// 外部草稿写进来（诊断引导「填入输入框」）：只**预填**、不发送 —— 学员可改完再发
 	// （票面判据：可编辑后再发送；替人发出去会把「补一句故障码」这唯一提命中率的手段废掉）。
-	watch(() => props.draft, (v) => {
+	const draftText = computed<string>(() : string => {
+		const d = props.draft
+		if (d == null) return ''
+		return d as string
+	})
+
+	// Kotlin 侧对 watch 回调参数推不出类型（cannot infer type / unresolved reference），
+	// 故显式标注 + 经一个 typed computed 取源（#2296 实测 ④c 抓出）。
+	watch(draftText, (v : string) => {
 		if (v.length > 0) {
 			inputText.value = v
 		}

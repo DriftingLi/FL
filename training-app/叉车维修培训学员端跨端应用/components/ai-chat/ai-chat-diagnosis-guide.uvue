@@ -141,8 +141,12 @@
 	 */
 	function st() : DiagnosisGuideState {
 		const s = props.state
-		if (s == null) return initialGuideState()
-		return s
+		if (s == null) {
+			const empty : DiagnosisGuideState = initialGuideState()
+			return empty
+		}
+		// props 成员在 Kotlin 侧被当成 Any：必须显式强转回目标类型（④c 实测 error）
+		return s as DiagnosisGuideState
 	}
 
 	/** 模板里用的四个标量（模板不直读可选对象的成员） */

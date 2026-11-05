@@ -145,6 +145,30 @@ export function useDiagnosisGuide() {
 		guideVisible.value = gotBrands.length > 0
 	}
 
+	/** 取第二层：型号档走 faults 根层（不带 second），系统档走 systems */
+	async function loadSecond() : Promise<void> {
+		secondItems.value = []
+		secondLoading.value = true
+		const brand = currentBrand()
+		const src = secondSourceOf(brand)
+		const brandId = state.value.brandId
+		if (src.length == 0) {
+			secondLoading.value = false
+			return
+		}
+		try {
+			if (src == 'faults-root') {
+				secondItems.value = await getDiagnosisFaultsApi(brandId, '')
+			} else {
+				secondItems.value = await getDiagnosisSystemsApi(brandId)
+			}
+		} catch (_e) {
+			// 上游 502：留空列表 + 空态文案兜底（不弹错 —— 弹错也改变不了没数据这件事）
+			secondItems.value = []
+		}
+		secondLoading.value = false
+	}
+
 	function openGuide() : void {
 		state.value = initialGuideState()
 		secondItems.value = []
@@ -180,29 +204,6 @@ export function useDiagnosisGuide() {
 		sentence.value = ''
 	}
 
-	/** 取第二层：型号档走 faults 根层（不带 second），系统档走 systems */
-	async function loadSecond() : Promise<void> {
-		secondItems.value = []
-		secondLoading.value = true
-		const brand = currentBrand()
-		const src = secondSourceOf(brand)
-		const brandId = state.value.brandId
-		if (src.length == 0) {
-			secondLoading.value = false
-			return
-		}
-		try {
-			if (src == 'faults-root') {
-				secondItems.value = await getDiagnosisFaultsApi(brandId, '')
-			} else {
-				secondItems.value = await getDiagnosisSystemsApi(brandId)
-			}
-		} catch (_e) {
-			// 上游 502：留空列表 + 空态文案兜底（不弹错 —— 弹错也改变不了没数据这件事）
-			secondItems.value = []
-		}
-		secondLoading.value = false
-	}
 
 	/** 取第三层现象词表（第二层已选 ⇒ 带 second；未选 ⇒ 根层） */
 	async function loadFaults() : Promise<DiagnosisCatalogItem[]> {
