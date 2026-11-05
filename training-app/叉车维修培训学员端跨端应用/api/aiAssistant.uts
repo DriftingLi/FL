@@ -25,6 +25,7 @@ import type {
 	DiagnosisIntents,
 	DiagnosisCatalogItem,
 	DiagnosisHealth,
+	DiagnosisCodeHint,
 } from '../types/index'
 
 
@@ -403,6 +404,40 @@ export function getDiagnosisFaultsApi(brand : string, second : string) : Promise
 			out.push(it)
 		}
 		return out
+	})
+}
+
+/** 故障码体检的 wire 形状 → 类型（`samples` 归一成数组：上游对非 format 态给 null/缺字段） */
+function buildCodeHint(data : UTSJSONObject) : DiagnosisCodeHint {
+	const samples : string[] = []
+	const raw = data['samples']
+	if (raw != null) {
+		const arr = raw as Array<string>
+		for (let i = 0; i < arr.length; i++) {
+			const s = `${arr[i]}`
+			if (s.length > 0) samples.push(s)
+		}
+	}
+	const hint : DiagnosisCodeHint = {
+		status: toStr(data['status']),
+		message: toStr(data['message']),
+		fix: toStr(data['fix']),
+		samples: samples,
+	}
+	return hint
+}
+
+/**
+ * 故障码实时体检（#2297）：`q` = 输入框当前内容（空 = 还没输入，上游回 `status=none`）。
+ *
+ * 不打缓存、不复用（后端也不加 Cache-Control）：跟着输入框逐字符变。
+ * **失败原样上抛**（ADR-0037 ③）——「静默」是呈现层的事（`useDiagnosisCodeHint` 把失败折成
+ * 「这一行不出现」），不是把 errmsg 吞成「没有这个故障码」。
+ */
+export function checkDiagnosisCodeApi(q : string) : Promise<DiagnosisCodeHint> {
+	const params : UTSJSONObject = { q: q }
+	return getMapped<DiagnosisCodeHint>('/ai-assistant/diagnosis/code-hint', params, (data : UTSJSONObject) : DiagnosisCodeHint => {
+		return buildCodeHint(data)
 	})
 }
 

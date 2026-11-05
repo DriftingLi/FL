@@ -1,0 +1,118 @@
+/**
+ * 故障码体检：上游五态 → 屏幕上那一行（#2297）—— 纯函数，可被 `utils/utsHarness.js` **真执行**。
+ *
+ * 为什么必须是纯函数：票面判据是「『状态 → 展示什么』的映射有**真执行**的行为测试」。
+ * 读源码文本只能证明「有个 `status == 'known'` 分支」，证明不了「unknown 真的不渲染」——
+ * 后者只有把五种状态各喂一遍才看得见（判据见 `docs/agents/guards.md`）。
+ *
+ * ## 口径（2026-11-05 维护者拍板：票面 AC 覆盖 #2295 用户故事 10 / 决策 10 的「只渲染 known」）
+ *
+ *   known  → 一行说明 + 可点追问（追问句带规范码；点一下**替换**输入框内容，不自动发送）
+ *   typo   → 指出该改成什么（`fix`；`message` 里已含 fix 时不重复，免得「你要输 E01，应该是 E01」）
+ *   format → 指出怎么填（`message` + `samples` 最多 3 条）
+ *   其余（unknown / none / 上游将来新增的态 / 取数失败）→ 整行**不渲染**，安静不打扰
+ *
+ * 为什么 format 只取前 3 条 samples：这一行在输入框正上方，撑到两行就把输入区推走；
+ * 3 条足够给出「E01 / E41 / E101」这种写法示范。
+ */
+import type { DiagnosisCodeHint } from '../types/index'
+
+/** 防抖：停手多久才发查询（与 Web 侧 `DiagnosisGuide.vue` 同为 250ms） */
+export const CODE_HINT_DEBOUNCE_MS : number = 250
+
+/** 太短的输入不当故障码：本层先挡住，省一次请求（与 Web 侧 `trim().length < 2` 同口径） */
+export const CODE_HINT_MIN_LEN : number = 2
+
+/** format 态最多展示几条写法示例 */
+export const CODE_HINT_MAX_SAMPLES : number = 3
+
+/** 「状态 → 展示什么」的唯一产物：页面只读它，不自己判 `status` */
+export type DiagnosisCodeHintView = {
+	/** 是否渲染这一行（五态里只有 3 态为 true） */
+	visible : boolean
+	/** known / typo / format；不可见时为空串 */
+	kind : string
+	/** 那一行的正文 */
+	text : string
+	/** 可点追问的句子；空串 = 这一行不可点（只有 known 有） */
+	followUp : string
+}
+
+/** 不可见：未收录 / 还没输入 / 取数失败 / 上游加的新态，全归它 */
+export function emptyHintView() : DiagnosisCodeHintView {
+	const v : DiagnosisCodeHintView = {
+		visible: false,
+		kind: '',
+		text: '',
+		followUp: '',
+	}
+	return v
+}
+
+/** 追问句模板：码 + 固定问法。学员点一下**替换**输入框内容，仍可编辑后再发 */
+export function followUpOf(code : string) : string {
+	const c = code.trim()
+	if (c.length == 0) return ''
+	return c + ' 这个故障码是什么故障、怎么排查？'
+}
+
+function visibleView(kind : string, text : string, followUp : string) : DiagnosisCodeHintView {
+	const v : DiagnosisCodeHintView = {
+		visible: true,
+		kind: kind,
+		text: text,
+		followUp: followUp,
+	}
+	return v
+}
+
+/** format 的写法示例：最多 3 条，用 ` / ` 串起来（空条目跳过） */
+function samplesText(samples : string[]) : string {
+	let out = ''
+	let n = 0
+	for (let i = 0; i < samples.length; i++) {
+		const s = samples[i].trim()
+		if (s.length == 0) continue
+		if (n >= CODE_HINT_MAX_SAMPLES) break
+		out = n == 0 ? s : out + ' / ' + s
+		n++
+	}
+	return out
+}
+
+/**
+ * 上游结果 → 展示描述。
+ *
+ * @param hint 取数结果；`null` = 取数失败（调用方兜底）—— 静默，不渲染
+ * @param typed 学员当前输入（known 缺 `fix` 时拿它兜追问句）
+ */
+export function hintViewOf(hint : DiagnosisCodeHint | null, typed : string) : DiagnosisCodeHintView {
+	if (hint == null) return emptyHintView()
+	const status = hint.status
+	const message = hint.message.trim()
+	const fix = hint.fix.trim()
+	if (status == 'known') {
+		const code = fix.length > 0 ? fix : typed.trim()
+		const text = message.length > 0 ? message : '已收录这个故障码：' + code
+		return visibleView('known', text, followUpOf(code))
+	}
+	if (status == 'typo') {
+		// 「提示应改成什么」是这条 AC 的正文：fix 有就必须出现在文案里；message 已含 fix 时不重复
+		let text = message
+		if (fix.length > 0 && text.indexOf(fix) < 0) {
+			text = text.length > 0 ? text + '，应该是 ' + fix : '是不是要输入 ' + fix + '？'
+		}
+		if (text.length == 0) return emptyHintView()
+		return visibleView('typo', text, '')
+	}
+	if (status == 'format') {
+		const samples = samplesText(hint.samples)
+		let text = message.length > 0 ? message : '格式不对'
+		if (samples.length > 0) {
+			text = text + '，可这样填：' + samples
+		}
+		return visibleView('format', text, '')
+	}
+	// unknown / none / 未来新增态：静默（票面 AC：未收录、还没输入 ⇒ 不渲染任何提示，也不报错）
+	return emptyHintView()
+}

@@ -160,6 +160,7 @@ const MODULES = {
       'components/ai-chat/ai-chat-sources.uvue',
       'composables/useAiChat.uts',
       'composables/useDiagnosisGuide.uts',
+      'composables/useDiagnosisCodeHint.uts',
       'composables/useAiModelSelection.uts',
       'composables/useAiPro.uts',
       'pages/ai-assistant/ai-assistant-constants.uts',

@@ -158,6 +158,20 @@ export type DiagnosisCatalogItem = {
     icon : string
 }
 
+/**
+ * 故障码实时体检（`GET /ai-assistant/diagnosis/code-hint`，对齐后端 `DiagnosisCodeHint`，#2297）。
+ *
+ * `status` 五态：`known`（码表命中）/ `unknown`（格式对但未收录）/ `format`（格式不合法，
+ * `samples` 给出填法）/ `none`（没输入或太短）/ `typo`（形似笔误，`fix` 给出该改成什么）。
+ * `samples` 恒为数组（后端已把 nil 归一），`fix` 无建议时空串 —— 调用方按空串处理，别当 null。
+ */
+export type DiagnosisCodeHint = {
+    status : string
+    message : string
+    fix : string
+    samples : string[]
+}
+
 /** 诊断引导：上游健康（`GET /diagnosis/health`，**永远 200**，`ok=false` 表示未配置或不可达） */
 export type DiagnosisHealth = {
     ok : boolean
