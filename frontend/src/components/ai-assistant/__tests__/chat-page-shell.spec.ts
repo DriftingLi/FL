@@ -165,6 +165,35 @@ describe('ChatPageShell 槽位', () => {
     expect(chatting.find('.chat-input-area').classes()).toContain('max-w-[1200px]')
   })
 
+  it('dockInput：空态也走 flex 列、输入框贴底，且首问前后位置不跳变（票 2305）', () => {
+    // 默认（其它功能页/助手主页）仍是居中态
+    expect(mountShell({}).find('.chat-main').classes()).toContain('grid-rows-[1fr_auto_1fr]')
+
+    const docked = mountShell({ dockInput: true })
+    const mainEl = docked.find('.chat-main')
+    expect(mainEl.classes()).toContain('flex')
+    expect(mainEl.classes()).toContain('flex-col')
+    expect(mainEl.classes()).not.toContain('grid')
+    expect(mainEl.classes()).not.toContain('grid-rows-[1fr_auto_1fr]')
+    // 空态时列表已是 flex-1 滚动容器，欢迎区不再自己滚（避免双滚动条）
+    const list = docked.find('.message-list')
+    expect(list.classes()).toContain('flex-1')
+    expect(list.classes()).toContain('overflow-y-auto')
+    expect(list.classes()).not.toContain('row-start-1')
+    expect(docked.find('.welcome-area').classes()).not.toContain('overflow-y-auto')
+    // 输入区不再占 grid 行、不再居中
+    const inputArea = docked.find('.chat-input-area')
+    expect(inputArea.classes()).not.toContain('row-start-2')
+    expect(inputArea.classes()).toContain('max-w-[760px]')
+    expect(inputArea.classes()).toContain('shrink-0')
+
+    // 有消息后仍是同一套 flex 列 —— 输入框不会在首问之后换位置
+    mocks.store.messages = [{ id: 2, role: 'user', content: 'hi' }]
+    const chatting = mountShell({ dockInput: true })
+    expect(chatting.find('.chat-main').classes()).not.toContain('grid-rows-[1fr_auto_1fr]')
+    expect(chatting.find('.chat-input-area').classes()).toContain('shrink-0')
+  })
+
   it('input-toolbar 与 input-above 共存：工具栏在上、图片队列在下（图纸/习题页无挤占回归）', () => {
     const w = mountShell({}, {
       'input-toolbar': '<div class="toolbar-slot">胶囊</div>',
