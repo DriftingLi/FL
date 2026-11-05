@@ -449,13 +449,8 @@ func sanitizeTitle(raw string) string {
 
 // DeleteSession 删除会话及其消息（校验归属，ON DELETE CASCADE 自动删消息）。
 func (s *Service) DeleteSession(ctx context.Context, userID, sessionID int) error {
-	var session model.AIChatSession
-	if err := s.db.WithContext(ctx).Where("id = ? AND user_id = ?", sessionID, userID).
-		Limit(1).Find(&session).Error; err != nil {
+	if err := s.ensureSessionOwned(ctx, userID, sessionID); err != nil {
 		return err
-	}
-	if session.ID == 0 {
-		return gorm.ErrRecordNotFound
 	}
 	return s.db.WithContext(ctx).Delete(&model.AIChatSession{}, sessionID).Error
 }
@@ -481,15 +476,42 @@ func (s *Service) ListSessions(ctx context.Context, userID int, featureKey strin
 	return out, nil
 }
 
-// GetSessionMessages 返回指定会话的消息列表（按时间升序，校验归属）。
-func (s *Service) GetSessionMessages(ctx context.Context, userID, sessionID int) ([]AIChatMessageDTO, error) {
+// EnsureSessionOwned 供 HTTP 层前置校验用：会话存在且属于该用户，否则 gorm.ErrRecordNotFound。
+//
+// 流式对话必须**在写 SSE 响应头之前**调它：一旦开始推流，失败就只剩 SSE 的 error 事件
+// 这一条路，而那时的错误语义会和「上游模型失败」混在一起，客户端无法区分。
+// 未登录（userID <= 0）或没指定会话（sessionID <= 0）时不落库，也就不需要校验，直接放行。
+func (s *Service) EnsureSessionOwned(ctx context.Context, userID, sessionID int) error {
+	if userID <= 0 || sessionID <= 0 {
+		return nil
+	}
+	return s.ensureSessionOwned(ctx, userID, sessionID)
+}
+
+// ensureSessionOwned 判定会话存在且属于该用户，否则返回 gorm.ErrRecordNotFound。
+//
+// 会话归属判定**唯一实现**（票 2313）：读消息、改名、删除、自动命名、流式对话的持久化
+// 五处共用这一句。此前写入侧各写一遍「登录了 + 给了 id」，漏掉了 user_id 那半个条件，
+// 导致登录用户 A 传 B 的 session_id 就能把消息写进对方会话并刷新 updated_at。
+//
+// userID <= 0（未登录）或 sessionID <= 0（没指定会话）视为「不需要归属判定」，
+// 调用方据此走不落库/不校验的既有路径。
+func (s *Service) ensureSessionOwned(ctx context.Context, userID, sessionID int) error {
 	var session model.AIChatSession
 	if err := s.db.WithContext(ctx).Where("id = ? AND user_id = ?", sessionID, userID).
 		Limit(1).Find(&session).Error; err != nil {
-		return nil, err
+		return err
 	}
 	if session.ID == 0 {
-		return nil, gorm.ErrRecordNotFound
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+// GetSessionMessages 返回指定会话的消息列表（按时间升序，校验归属）。
+func (s *Service) GetSessionMessages(ctx context.Context, userID, sessionID int) ([]AIChatMessageDTO, error) {
+	if err := s.ensureSessionOwned(ctx, userID, sessionID); err != nil {
+		return nil, err
 	}
 	var rows []model.AIChatMessage
 	if err := s.db.WithContext(ctx).Where("session_id = ?", sessionID).
@@ -528,6 +550,31 @@ func (s *Service) GetSessionMessages(ctx context.Context, userID, sessionID int)
 	}
 	return out, nil
 }
+
+// persistError 面向用户的落库失败错误：Error() 只回人话，数据库原文留在 cause 里给日志。
+//
+// 为什么需要它：持久化失败的错误会经 handler 的 SSE error 事件直接透给浏览器
+// （`sendEvent("error", map[string]string{"message": err.Error()})`）。用 fmt.Errorf 包装
+// 会把驱动原文一并带出去 —— 实测能看到
+// `保存用户消息失败: ERROR: insert or update on table "ai_chat_messages" violates
+// foreign key constraint "ai_chat_messages_session_id_fkey" (SQLSTATE 23503)`
+// 完整出现在浏览器上（票 2313）。这条路径连 HTTP 状态码都没有，只有 SSE 帧，
+// 所以不能靠 response.ClientErrorText 那条「4xx 回原文 / 5xx 不回」的判据兜底。
+type persistError struct {
+	msg   string
+	cause error
+}
+
+func (e *persistError) Error() string { return e.msg }
+
+func (e *persistError) Unwrap() error { return e.cause }
+
+// 持久化失败的对外文案（固定，不含驱动细节）。
+const (
+	persistUserMsgFailed      = "消息保存失败，请稍后重试"
+	persistAssistantMsgFailed = "回复保存失败，请稍后重试"
+	persistSessionTouchFailed = "会话时间更新失败，请稍后重试"
+)
 
 // StreamChat 流式对话。
 // onChunk 回调用于推送增量内容；返回完整回复内容与计量产出（*Usage，闸门在端口装饰器
@@ -613,7 +660,8 @@ func (s *Service) StreamChat(ctx context.Context, userID int, req StreamChatReq,
 			if err := s.db.WithContext(ctx).Create(&model.AIChatMessage{
 				SessionID: req.SessionID, Role: "user", Content: lastUserMsg, Images: imagesJSON,
 			}).Error; err != nil {
-				return fullContent, usage, fmt.Errorf("保存用户消息失败: %w", err)
+				s.logger.Error("保存用户消息失败", zap.Int("session_id", req.SessionID), zap.Int("user_id", userID), zap.Error(err))
+				return fullContent, usage, &persistError{msg: persistUserMsgFailed, cause: err}
 			}
 			// T5：诊断来源随助手消息持久化（ctx 容器→ JSON 列；非诊断/空来源存空串）
 			sourcesJSON := ""
@@ -642,12 +690,14 @@ func (s *Service) StreamChat(ctx context.Context, userID int, req StreamChatReq,
 				SessionID: req.SessionID, Role: "assistant", Content: fullContent,
 				Sources: sourcesJSON, Meta: metaJSON,
 			}).Error; err != nil {
-				return fullContent, usage, fmt.Errorf("保存助手消息失败: %w", err)
+				s.logger.Error("保存助手消息失败", zap.Int("session_id", req.SessionID), zap.Int("user_id", userID), zap.Error(err))
+				return fullContent, usage, &persistError{msg: persistAssistantMsgFailed, cause: err}
 			}
 			if err := s.db.WithContext(ctx).Model(&model.AIChatSession{}).
 				Where("id = ?", req.SessionID).
 				Updates(map[string]any{"updated_at": now}).Error; err != nil {
-				return fullContent, usage, fmt.Errorf("更新会话时间失败: %w", err)
+				s.logger.Error("更新会话时间失败", zap.Int("session_id", req.SessionID), zap.Int("user_id", userID), zap.Error(err))
+				return fullContent, usage, &persistError{msg: persistSessionTouchFailed, cause: err}
 			}
 
 			// 异步生成会话标题：仅当标题为占位符"新会话"时（首次对话）
