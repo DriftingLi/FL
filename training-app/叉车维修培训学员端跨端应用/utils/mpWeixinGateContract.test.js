@@ -17,7 +17,10 @@
  *      但已不能证明「有评论被贴出」。待随投递面清理一并对齐（见 PR #2131 遗留段）。
  *   C7 `cli.bat close` 在 finally 路径里执行 + 幂等保护（避免端口/会话残留）
  *   C8 非等价声明 + 挡不住的类别 + **源 manifest appid 前置断言**（HBuilderX 首次导入会回写 manifest 置 null）
- *   C9 截图入库纪律（P2）：WebP→JPEG 回退、宽 ≤720、单张 ≤150KB、合计 ≤1.5MB、-NoArchive、失败不阻塞门
+ *   C9 ~~截图入库纪律（P2）~~ **已随 #2320 阶段二删除**（2026-11-05）：改为**反向守卫** —— 脚本里不得再出现
+ *      归档标识符（Publish-ScreenshotArchive / Export-ArchiveImage / Get-MadeTotalBytes / $script:ArchiveMax* /
+ *      mp-weixin-archive.ps1 / -NoArchive / [switch]$Archive）。采集链（device-capture.ps1 / emulator-smoke.ps1）
+ *      是另一条链、仍服务发版前真机冒烟，本守卫不涉及它们。
  *   C10 注册与文档：package.json 脚本、ADR-0008、PR 模板、移动端 AGENTS.md 的人工门清单
  *   C11 HBuilderX 忙检测：必须 dot-source scripts/lib/hx-busy.ps1、等它给结论、**绝不 kill 主程序**
  *   C12 **② 的时序三步写死**（2026-09-12 复测）：`close → open --project <dist> → auto`；
@@ -25,7 +28,7 @@
  *   C13 **导航不可用时诚实降级**（2026-09-12 复测）：探针把「逐页导航 + 每页截图」记 SKIP
  *       （reason=navigation-api-unsupported）、SKIP **不得写成 PASS**、必须写进结果行与门评论；
  *       门只对可验证子集作结论（failures 只由该子集产生）；结果行字段清单落在门计划里（见 C18）
- *   C14 贴评论调用**不得断链**：语句续行符缺失会让 `-ArchivedRel …` 变成另一条命令（曾真实存在）。
+ *   C14 贴评论调用**不得断链**：语句续行符缺失会把 `-参数 …` 变成另一条命令（曾真实存在）。
  *       **2026-09-13 收窄（#914）**：只对**代码行**判 —— 帮助文本里的 bullet（`-Pages` / `-AllowAppStart`
  *       这类）根本不是续行参数，旧口径在 device-capture.ps1 上误报 3 条
  *   C15 **就绪闸门**（2026-09-13 实测定位）：`auto` 之后、探针之前必须先用 `scripts/mp-weixin-ready.mjs`
@@ -33,7 +36,7 @@
  *       `-ProbeTimeoutMs`；结果行必须带 `ready=` / `sdk=` / `ide=`
  *   C16 失败**归因**：探针必须用 `connectError.kind` 把「会话未就绪」与「端口连不上」分开报；
  *       脚本不得再把「自动化端口连不上」当作「重试无益」——那一类恰恰是**短暂**的（实测 24–34s 才就绪）
- *   C17 `-Doctor` 体检模式：只体检、不构建、不跑探针、不贴评论、不入库、**不产出门的通过结论**；
+ *   C17 `-Doctor` 体检模式：只体检、不构建、不跑探针、不贴评论、**不产出门的通过结论**；
  *       逐层 OK/WARN/FAIL + 独立退出码，报告必须在 finally 里打印（早期 exit 也要有结论）
  *   C18 **门计划是「步骤序列 / 每步参数与判据 / 超时预算与 exit 2 归属 / 结果行字段清单」的唯一真源**
  *       （#914 收束）：这四类不变量集中在脚本的 `New-GatePlan` 一处声明，执行路径按 id 取用
@@ -43,8 +46,9 @@
  *       cold-start-direct，构建产物 app.json 首项临时换页 + plain 冷启动、finally 还原、SKIP reason 值域、
  *       探针 argv 模板）；执行路径必须消费 `<page>` 占位与 auto 页清单判据，且任何代码行不得回写源头
  *       pages.json（运行时面判据来源，ADR-0038 决策 2 红线）。核验补记（2026-10-13）后另钉两件事：
- *       **入库数据流**（直达截图 → 聚合 shots → probeJson.shots → 归档，AC1 的链条，拆了门照样绿）与
- *       **评论渲染的 null 过滤**（-NoArchive 时 @(Get-Prop $null 'Rel') 不得渲染成空条目假清单）。
+ *       ~~入库数据流~~（直达截图 → 聚合 shots → probeJson.shots → 归档）与**评论渲染的 null 过滤**
+ *       （-NoArchive 时 @(Get-Prop $null 'Rel') 不得渲染成空条目假清单）已随 #2320 阶段二连同归档链删除；
+ *       现由 C9 反向守卫「不得复活」，C24 只守直达探针本身（换页机制 / SKIP 值域 / 不回写 pages.json）。
  *   C25 **登录态会话注入**（#1690）：门计划必须有 auth-inject 步（ready-gate 之后、探针之前，exec=node，
  *   直达循环两相（run12/run13）：入口页 = guest 相（--mode guest 游客盖帽——auth_user 写非 JSON + token 清空，
  *       removeStorageSync 实测不跨重启落盘、setStorageSync 落盘，run13 实证不对称；#1478 welcome 有会话必弹 dashboard）、
@@ -611,31 +615,16 @@ function scanContract(sources) {
   must(s.includes('manifest-appid'), 'C8', '源 manifest appid 不匹配时未判门不过（fail-closed 缺一路径）');
   must(/mp-weixin"\\s\*:\\s\*\\{/.test(s) || s.includes('mp-weixin"'), 'C8', '缺源 manifest appid 前置断言（HBuilderX 首次导入会回写 manifest 置 null）');
 
-  // C9 截图入库纪律
-  must(s.includes("$script:ArchiveMaxCount = 10"), 'C9', '入库张数上限未写死为 10');
-  must(s.includes('$script:ArchiveMaxBytes = 150KB'), 'C9', '单张体积上限未写死为 150KB');
-  must(s.includes('$script:ArchiveMaxTotal = 1.5MB'), 'C9', '合计体积上限未写死为 1.5MB');
-  must(s.includes('$script:ArchiveMaxWidth = 720'), 'C9', '宽度上限未写死为 720');
-  must(s.includes('docs/verification/'), 'C9', '入库落点不是 docs/verification/<模块>/<PR号>/');
-  must(s.includes('-NoArchive'), 'C9', '缺 -NoArchive 逃生开关');
-  must(/Get-WebpEncoder/.test(s) && /cwebp/.test(s) && /ffmpeg/.test(s) && /magick/.test(s), 'C9', '未探测 WebP 编码器（cwebp / ffmpeg / magick）');
-  must(s.includes('System.Drawing') || s.includes('[System.Drawing.'), 'C9', '缺 JPEG 回退实现（System.Drawing）');
-  must(/Save-Jpeg/.test(s) && /Quality/.test(s), 'C9', '缺 JPEG 质量控制（q75）');
-  must(s.includes('不得让门因此失败') || s.includes('不影响门结论'), 'C9', '入库失败未声明「不得让门失败」');
-  must(/^.*-after/s.test(s) || s.includes('-after'), 'C9', '产物命名缺 -after 后缀');
-  must(s.includes('省了'), 'C9', '减图时未要求在评论里写明省了哪几页');
-  must(s.includes('入库截图'), 'C9', '评论未用仓库内相对路径列出入库截图');
-
-  // C9b 入库触发面（2026-10-29 A1 收尾）：入库必须是**显式** `-Archive` 才发生。
-  // 为什么单独钉：A1 之后「拿证据块」必须传 `-PostToPr`，若入库仍由号码触发，正常取证会顺手
-  // `git add`+`commit`+push ⇒ 门给分支造一个 commit、head sha 被挪走，正文 `跑于 <sha7>` 从 head 变祖先。
-  // 三条一起钉（开关在 / 旧条件消失 / 守卫在调用之前）：任一条单独都能被「保留开关但仍由号码触发」绕过。
-  must(/\[switch\]\$Archive\b/.test(s), 'C9b', '缺 [switch]$Archive（截图入库必须是显式动作，不能由号码顺带触发）');
-  must(!s.includes('if ($PostToPr -gt 0 -and -not $NoArchive)'), 'C9b', '入库触发退回旧条件（只要有号码就 commit + push ⇒ 挪走 head sha）');
-  const archGuardAt = s.indexOf('if ($Archive');
-  const archCallAt = s.indexOf('Publish-ScreenshotArchive -PrNumber');
-  must(archGuardAt !== -1 && archCallAt !== -1 && archGuardAt < archCallAt, 'C9b',
-    '$Archive 守卫不在 Publish-ScreenshotArchive 调用之前（守卫与调用脱节 ⇒ 开关形同虚设）');
+  // C9（#2320 阶段二，2026-11-05 删除归档链）：**反向守卫** —— 截图入库链不得借尸还魂。
+  // 为什么是反向：这七项原样保留就等于把「删掉的链」重新焊回日常流程（② 已退役，没有人再需要它）；
+  // 判据是「源码里连标识符都不许出现」，比「行为没接上」更早挡住复活。
+  ['Publish-ScreenshotArchive', 'Export-ArchiveImage', 'Get-MadeTotalBytes', '$script:ArchiveMaxCount',
+    'mp-weixin-archive.ps1', '-NoArchive'].forEach((tok) => {
+    must(!s.includes(tok), 'C9', '归档链残留：' + tok + '（#2320 阶段二已删，不得复活）');
+  });
+  must(!/\[switch\]\$Archive\b/.test(s), 'C9', '残留 [switch]$Archive（归档开关已随链删除）');
+  // 采集链仍在用（发版前真机冒烟），这条守的是「别把两条链一起当成退役对象删掉」。
+  must(s.includes('$logDir'), 'C9', '日志/截图目录变量被误删（采集与日志仍要用它）');
 
   // C30 覆盖判据（#2101 落库，2026-10-29）：`-Pages auto` 只认 `pages/**/*.uvue`，改 `components/` / `utils/*.uts` /
   // `App.uvue` / `pages.json` 时清单为空 ⇒ 只跑入口页一张 = **覆盖为零的绿**（#2099 盘点出的洞）。
@@ -716,10 +705,7 @@ function scanContract(sources) {
     if (idx === 0 || /`\s*$/.test(codeLines[idx - 1])) return;
     violations.push('C14 第 ' + (idx + 1) + ' 行以 `' + line.trim().split(/\s+/)[0] + '` 起行，但上一行没有续行反引号（语句断链，参数不会生效）');
   });
-  if (callAt !== -1) {
-    const callBlock = s.slice(callAt, s.indexOf('exit $exitCode'));
-    must(callBlock.includes('-ArchivedRel') && callBlock.includes('-ArchiveNotes'), 'C14', 'Publish-GateComment 调用未传 -ArchivedRel / -ArchiveNotes（入库截图清单进不了评论）');
-  }
+  // #2320 阶段二：调用点不再传 -ArchivedRel / -ArchiveNotes（归档链已删），续行判据靠上面那条通用检查。
 
   // C15 执行侧：就绪闸门脚本与结果行的取值绑定（顺序/参数/判据由 scanPlan 断言计划）
   must(s.includes("$ReadyRelative = 'scripts\\mp-weixin-ready.mjs'"), 'C15', '未引用就绪闸门 scripts/mp-weixin-ready.mjs');
@@ -769,11 +755,9 @@ function scanContract(sources) {
   must(doctorExitIdx !== -1, 'C17', '体检模式未在就绪判定后退出');
   if (doctorExitIdx !== -1) {
     const probeUseIdx = s.indexOf("-Id 'automator-probe'");
-    const archiveCallIdx = s.indexOf('Publish-ScreenshotArchive -PrNumber');
     must(probeUseIdx !== -1, 'C17', '执行路径里没有按 id 取用探针步骤（取不到就判不出体检是否越界）');
     if (probeUseIdx !== -1) must(doctorExitIdx < probeUseIdx, 'C17', '-Doctor 会继续跑探针（体检不该产出门结论）');
     must(doctorExitIdx < callAt, 'C17', '-Doctor 会贴 PR 评论');
-    must(archiveCallIdx === -1 || doctorExitIdx < archiveCallIdx, 'C17', '-Doctor 会做截图入库');
   }
   must(/"build:mp-weixin-doctor"\s*:\s*"[^"]*-Doctor"/.test(pkg), 'C17', 'package.json 未注册 build:mp-weixin-doctor');
 
@@ -808,18 +792,8 @@ function scanContract(sources) {
   //   事故：Publish-ScreenshotArchive 只有成功路径带 `Rel`，调用点在 Set-StrictMode 下读 `$archive.Rel`
   //   ⇒ 「未入库」分支（如"工作树有本次之外的改动"）抛异常 ⇒ 贴 sha 绑定评论那步被打断：
   //   门明明通过却 exit 1，PR 上也没有证据评论（#1199 的 ② 就是这么被手工绕过去的）。
-  const archiveBody = psFunctionBody(code, 'function Publish-ScreenshotArchive');
-  must(archiveBody.length > 0, 'C19', '定位不到 Publish-ScreenshotArchive 函数体（无法核对返回形状）');
-  if (archiveBody.length > 0) {
-    const returns = archiveBody.match(/return @\{[^}]*\}/g) || [];
-    must(returns.length >= 2, 'C19', `Publish-ScreenshotArchive 的 return 分支只有 ${returns.length} 个（判据可能已空跑）`);
-    returns.forEach((r, i) => {
-      must(/Rel\s*=/.test(r), 'C19',
-        `Publish-ScreenshotArchive 第 ${i + 1} 个 return 缺 Rel ⇒ 未入库分支返回不同形状（Set-StrictMode 下调用点读取即抛异常，曾把「门通过」变成 exit 1 且贴不出证据评论）`);
-    });
-  }
-  must(!/\$archive\.Rel\b/.test(code), 'C19', '调用点直接读 $archive.Rel（须走 Get-Prop，否则未入库分支抛异常）');
-  must(/Get-Prop \$archive 'Rel'/.test(code), 'C19', '调用点未用 Get-Prop 安全取 Rel');
+  // #2320 阶段二：$archive 与 Publish-ScreenshotArchive 已删，原「返回形状 / Get-Prop 取 Rel」三条判据随之退役；
+  // 保留的是**报告层纪律本身**（try-catch + 响亮警告 + 记日志），它才是 #1209 血账的可迁移部分。
   must(/贴 ② 门评论失败（门结论不受影响/.test(code), 'C19', '贴评论失败时缺「不改结论」的响亮警告（报告层崩溃会静默吞掉证据）');
   const commentCallIdx = code.indexOf('Publish-GateComment -PrNumber $PostToPr');
   must(commentCallIdx !== -1, 'C19', '定位不到贴评论调用点（报告层是否受保护无法核对）');
@@ -865,11 +839,8 @@ function scanContract(sources) {
   // 探针也不再带 --shot-dir，截图调用与截图表单已整体移除。
   must(!s.includes('$agg.shots += @($pj.shots)'), 'C24', '直达循环仍在聚合 shots（#2320 已删自动截图）');
   must(!s.includes('shots = @($agg.shots)'), 'C24', 'probeJson 仍在写 shots（#2320 已删自动截图）');
-  // #1682 核验补记①：评论渲染必须过滤 null 条目——@(Get-Prop $null 'Rel') = @($null)（单元素= null），
-  // 不过滤会把 -NoArchive / 未入库渲染成一条空反引号条目，兜底文案永不出现。
-  const gateCommentBody = psFunctionBody(code, 'function Publish-GateComment');
-  must(gateCommentBody.length > 0, 'C24', '定位不到 Publish-GateComment 函数体（无法核对入库清单渲染的 null 过滤）');
-  must(gateCommentBody.includes('@(@($ArchivedRel) | Where-Object { $_ })'), 'C24', 'Publish-GateComment 未过滤 null 入库条目 ⇒ -NoArchive 渲染成空条目假清单（#1682 核验补记①回归）');
+  // #1682 核验补记①（-NoArchive 时 @(Get-Prop $null 'Rel') 的空条目假清单）随归档链于 #2320 阶段二退役：
+  // 评论里不再有「入库截图」这一段，null 过滤失去守卫对象。
   stripCommentLines(s).filter((l) => /Set-Content|Out-File/.test(l)).forEach((l) => {
     must(!l.includes('pages.json'), 'C24', `代码行回写源头 pages.json（ADR-0038 决策 2 红线）：${l.trim()}`);
   });
@@ -1189,11 +1160,9 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
       ['C7', { ...real, script: real.script.replace(/\$script:closed/g, '$closedX') }],
       ['C8', { ...real, script: real.script.replace(/非等价/g, '等价性待定') }],
       ['C8', { ...real, script: real.script.replace(/manifest-appid/g, 'manifest-x') }],
-      ['C9', { ...real, script: real.script.replace('$script:ArchiveMaxBytes = 150KB', '$script:ArchiveMaxBytes = 900KB') }],
-      ['C9', { ...real, script: real.script.replace(/-NoArchive/g, '-ArchiveAll') }],
-      // C9b：把入库触发退回「有号码就入库」（A1 后正常取证会挪走 head sha）/ 删掉显式开关本身
-      ['C9b', { ...real, script: real.script.replace('if ($Archive -and -not $NoArchive -and $PostToPr -gt 0) {', 'if ($PostToPr -gt 0 -and -not $NoArchive) {') }],
-      ['C9b', { ...real, script: real.script.replace(/\[switch\]\$Archive,/, '') }],
+      // C9（#2320 阶段二）：归档链复活必须变红 —— 函数回来 / 开关回来
+      ['C9', { ...real, script: real.script + '\nfunction Publish-ScreenshotArchive { }\n' }],
+      ['C9', { ...real, script: real.script + '\n[switch]$Archive,\n' }],
       // C30：冒烟集被清空 / 判据库没接线 / 读数自己算第二份 / 字段不注入 / 自报框回到模板
       ['C30', { ...real, script: real.script.replace("smokePages = @('pages/dashboard/dashboard', 'pages/profile/profile')", 'smokePages = @()') }],
       ['C30', { ...real, script: real.script.replace('Resolve-MpWeixinDirectCoverage -AutoPages $autoPages', 'Get-NoSuchResolver -AutoPages $autoPages') }],
@@ -1249,9 +1218,7 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
       ['C18', { ...real, script: real.script.replace('-Arguments $readyStep.argv', '-Arguments $readyArgs') }],
       ['C18', { ...real, script: real.script.replace('$portStep.waitSeconds', '180') }],
       // C19：报告层（归档形状统一 / 安全取值 / try-catch / 响亮警告）—— #1209 血账
-      ['C19', { ...real, script: real.script.replace("未入库：找不到 gh CLI'); Commands = @(); Rel = @() }", "未入库：找不到 gh CLI'); Commands = @() }") }],
-      ['C19', { ...real, script: real.script + "\n$relProbe = $archive.Rel\n" }],
-      ['C19', { ...real, script: real.script.replace("-ArchivedRel @(Get-Prop $archive 'Rel')", "-ArchivedRel @($archive.Rel)") }],
+      // #2320 阶段二：归档形状/取值三个变异体随 Publish-ScreenshotArchive 一起删除，保留报告层两条。
       ['C19', { ...real, script: real.script.replace("try {\n        Publish-GateComment -PrNumber $PostToPr", "Publish-GateComment -PrNumber $PostToPr") }],
       ['C19', { ...real, script: real.script.replace("贴 ② 门评论失败（门结论不受影响", "贴评论失败") }],
       // C22：执行侧拆掉 pre-flight（不再按 id 取用 quit / 轮询改 kill —— kill 是 ADR-0008 红线）
@@ -1285,8 +1252,7 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
     ['C24', { ...real, script: real.script.replace(/入口漂移自愈/g, 'x') }],
       ['C24', { ...real, probe: real.probe + '\nconst legacyShot = mp.screenshot;\n' }],
       ['C24', { ...real, script: real.script.replace("if (@($re.pages | Select-Object -Unique).Count -ne @($re.pages).Count) { return 'app-json-invalid' }").replace(/\n *# 唯一性复验[^\n]*/g, '') }],
-      // 评论渲染 null 过滤（核验补记①）：拆掉过滤必须被抓（截图入库链已在 #2320 整体退役）
-      ['C24', { ...real, script: real.script.replace('@(@($ArchivedRel) | Where-Object { $_ })', '@($ArchivedRel)') }],
+      // #2320 阶段二：评论渲染 null 过滤变异体随「入库截图」段一起删除（无守卫对象）。
       // C26：结果行/日志的 partial 形态被拆（部分达成退回「整组 skip 或说不清」）
       ['C26', { ...real, script: real.script.replace('partial(ok=$navOkCount,skip=$navSkipCount)', 'partial') }],
       ['C26', { ...real, script: real.script.replace('navigation=PARTIAL', 'navigation=SKIP') }],
@@ -1322,18 +1288,15 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
     expect(real.probe).toContain('probeOk');
   });
 
-  it('C19：报告层不改门结论、不丢证据（归档形状统一 / Get-Prop 取值 / try-catch / 响亮警告）', () => {
+  it('C19：报告层不改门结论、不丢证据（try-catch / 响亮警告）', () => {
+    // #2320 阶段二：归档返回形状与 Get-Prop 取值判据随 $archive 一起删除；
+    // 剩下的是**报告层纪律**（#1209 血账的可迁移部分）—— 门结论先定，贴评论崩了只能警告。
     const code = stripCommentLines(real.script).join('\n');
-    expect(code).toMatch(/Get-Prop \$archive 'Rel'/);
-    expect(code).not.toMatch(/\$archive\.Rel/);
     expect(code).toContain('贴 ② 门评论失败（门结论不受影响');
     const callIdx = code.indexOf('Publish-GateComment -PrNumber $PostToPr');
     expect(callIdx).toBeGreaterThan(-1);
     expect(code.slice(Math.max(0, callIdx - 200), callIdx)).toMatch(/try\s*\{/);
-    const body = psFunctionBody(code, 'function Publish-ScreenshotArchive');
-    const returns = body.match(/return @\{[^}]*\}/g) || [];
-    expect(returns.length).toBeGreaterThanOrEqual(2);
-    returns.forEach((r) => expect(r).toMatch(/Rel\s*=/));
+    expect(code.slice(callIdx, callIdx + 1200)).toMatch(/catch\s*\{/);
   });
 
   it('C22：pre-flight quit 清场在计划里先于一切会话步骤（#1634 白屏病根；#1860 起计划第一步是只读预探）', () => {
@@ -1424,11 +1387,13 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
     expect(real.script.indexOf('exit $exitCode')).toBeGreaterThan(callAt);
   });
 
-  it('C9：入库上限写死在脚本里（10 张 / 150KB / 1.5MB / 720px）', () => {
-    expect(real.script).toContain('$script:ArchiveMaxCount = 10');
-    expect(real.script).toContain('$script:ArchiveMaxBytes = 150KB');
-    expect(real.script).toContain('$script:ArchiveMaxTotal = 1.5MB');
-    expect(real.script).toContain('$script:ArchiveMaxWidth = 720');
+  it('C9：截图入库链已删除（#2320 阶段二）—— 标识符不得复活', () => {
+    // 反向断言：这七项全部消失才算删干净（保留任一项 = 把退役的链重新焊回日常流程）。
+    ['Publish-ScreenshotArchive', 'Export-ArchiveImage', 'Get-MadeTotalBytes', '$script:ArchiveMaxCount',
+      'mp-weixin-archive.ps1', '-NoArchive'].forEach((tok) => expect(real.script).not.toContain(tok));
+    expect(real.script).not.toMatch(/\[switch\]\$Archive\b/);
+    // 采集链仍在（发版前真机冒烟用），别把两条链一起删掉。
+    expect(real.script).toContain('$logDir');
   });
 
   it('C13：导航不可用时降级为 SKIP（不是 PASS），且写进结果行 / 日志 / 门评论', () => {
@@ -1458,17 +1423,18 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
     expect(finishBody).not.toMatch(/v\)\s*\{\s*result\.failures/); // 旧的 `if (!v)` 形态（会把 SKIP 算成失败）
   });
 
-  it('C14：贴评论调用是一条语句（续行反引号不缺，-ArchivedRel/-ArchiveNotes 在语句内）—— 只对代码行判', () => {
+  it('C14：贴评论调用是一条语句（续行反引号不缺）—— 只对代码行判', () => {
     const lines = stripCommentLines(real.script);
     lines.forEach((line, idx) => {
       if (!/^\s+-[A-Za-z][\w]*\b/.test(line)) return;
       if (idx === 0) return;
       expect(lines[idx - 1]).toMatch(/`\s*$/); // 上一行必须以续行反引号结尾
     });
+    // #2320 阶段二：调用点不再传 -ArchivedRel / -ArchiveNotes（归档链已删）；本条只守「一条语句不断链」。
     const callAt = real.script.indexOf('Publish-GateComment -PrNumber');
     const callBlock = real.script.slice(callAt, real.script.indexOf('exit $exitCode'));
-    expect(callBlock).toContain('-ArchivedRel');
-    expect(callBlock).toContain('-ArchiveNotes');
+    expect(callBlock).toContain('-ReproCommand');
+    expect(callBlock).toContain('-DirectPageLines');
   });
 
   it('C14：帮助文本里的 bullet（device-capture.ps1 那类）不再误报，真断链仍被抓', () => {
@@ -1517,7 +1483,7 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
     expect(real.probe).toContain("'unreachable'");
   });
 
-  it('C17：-Doctor 只体检（不构建 / 不跑探针 / 不贴评论 / 不入库），报告在 finally 打印', () => {
+  it('C17：-Doctor 只体检（不构建 / 不跑探针 / 不贴评论），报告在 finally 打印', () => {
     const s = real.script;
     const doctorExitIdx = s.indexOf('exit (Get-DoctorExitCode)');
     expect(s).toContain('[switch]$Doctor');
@@ -1526,7 +1492,7 @@ describe('② 微信开发者工具门契约（#883 / 2026-09-12 半自动 / 202
     expect(doctorExitIdx).toBeGreaterThan(-1);
     expect(doctorExitIdx).toBeLessThan(s.indexOf("-Id 'automator-probe'"));
     expect(doctorExitIdx).toBeLessThan(s.indexOf('Publish-GateComment -PrNumber'));
-    expect(doctorExitIdx).toBeLessThan(s.indexOf('Publish-ScreenshotArchive -PrNumber'));
+    // #2320 阶段二：-Doctor 不再需要「先于截图入库」判据（归档链已删）。
     expect(s).toContain('不产出 ② 门的通过结论');
     expect(s).toContain('Get-DoctorExitCode');
   });

@@ -1,9 +1,14 @@
 <#
 .SYNOPSIS
-    PR 面一次取锁串 ② 与 ④c：一个 `Wait-HxFree` 覆盖两道需要 HBuilderX 主程序的门（#2112）。
+    PR 面取一次 HBuilderX 锁跑 ④c（`kotlin-all-check.ps1`）。② 已于 2026-11-05 整体退役（#2320），
+    本脚本不再调 `mp-weixin-check.ps1`；`PR_GATES` 结果行的 `mp=` 字段保留、恒为 `skipped`。
 
 .DESCRIPTION
     来路：地图 #2098 / 票「机器时间：PR 粒度选档」(#2104) 的工程半句。
+
+    **② 已于 2026-11-05 整体退役（#2320）**：日常 PR 不再启动微信开发者工具，本脚本因此只剩
+    ④c 一门可跑。**协议不破**：`PR_GATES` 结果行的字段形状一字不改（`mp=` 恒 `skipped`，靠下面的
+    `$results.Contains('mp')` 兜底），参数 `-Pages` / `-MpArgs` / `-MpScript` 保留为兼容位。
 
     **改的是什么**：现在 ② (`mp-weixin-check.ps1`) 与 ④c (`kotlin-all-check.ps1`) 各取一次
     `scripts/lib/hx-busy.ps1` 的 agent 互斥锁（两门的 `publish` 段都要 HBuilderX 主程序可达）
@@ -26,9 +31,9 @@
       · 排队行（`等待另一个 agent 会话释放 HBuilderX 锁`）只可能来自父进程这一次；子进程走
         `inherited` 分支，早于排队逻辑返回。
 
-    **顺序与失败语义**：永远 ② → ④c，**两门都跑**。第一门红也继续跑第二门 —— 否则「没跑」
-    会被读成「这一半没问题」（同 `dev-finish.ps1 -UnitGate` 两腿的先例）。退出码取**最重者**：
-    2（环境受阻）> 1（门未过）> 0。
+    **失败语义**：② 退役后只剩 ④c 一门，但判读规则原样保留（`Invoke-Gate` 不按退出码单独判绿：
+    0 而缺结果行 ⇒ `no-line`，按环境受阻算）。退出码仍是 2（环境受阻）> 1（门未过）> 0。
+    「两门都跑、第一门红也继续跑第二门」这条随 ② 一起失去适用对象，不再适用于任何一门。
 
     **边界（票面「不要做」）**：不改两门内部判据、不改 ③ 的 `-i` 串行、不碰移动端 ADR-0046 的
     选档规则、不投工具链大修。本脚本只决定**先后与取锁次数**。
@@ -50,34 +55,33 @@
     HBuilderX 安装根（透传给两门）。与 `-Cli` 二选一，`-Cli` 优先。
 
 .PARAMETER Pages
-    透传给 ② 的 `-Pages`（缺省 `auto` = 入口页 + 本 PR 改动页；见 #2101 / ADR-0039）。
+    ② 退役（#2320）后为兼容位：仍接受并进 `-DryRun` 的计划打印，但不再执行。
 
 .PARAMETER HxWaitSeconds
-    唯一那次 `Wait-HxFree` 的等待上限（默认 1800 秒）。**比单门默认值宽**：这一次租约要覆盖两门，
-    上限应覆盖「两门之和」而不是单门。
+    唯一那次 `Wait-HxFree` 的等待上限（默认 1800 秒）。② 退役（#2320）后只剩 ④c 一门，本值本就宽于
+    单门默认值，保留（宽上限只是排队更耐等，不改变判据）。
 
 .PARAMETER MpArgs / KotlinArgs
-    追加给对应门的参数（原样拼在末尾，可覆盖前面的同名参数，例如 `-MpArgs '-SkipBuild'`）。
+    追加给对应门的参数（原样拼在末尾，可覆盖前面的同名参数）。`-MpArgs` 自 #2320 起为兼容位（② 不执行）。
 
 .PARAMETER TempRoot
-    **测试/排障专用**：把锁目录换成该根（`$env:TEMP` 在取锁之前被改写，两门作为子进程继承同一个
+    **测试/排障专用**：把锁目录换成该根（`$env:TEMP` 在取锁之前被改写，子门继承同一个
     根）。用途是让行为测试用**自己的** `hx-agent.lock`，不去撞维护者正在跑的 HBuilderX 会话。
     日常运行不要给。
 
 .PARAMETER MpScript / KotlinScript
-    **测试/排障专用**：门载体覆盖（缺省即真的两门）。同 `dev-finish.ps1 -BehaviorExecutor` 的先例，
-    供行为守护用假门验证「一次取锁 + 两门串联」这条接线，不必真编译。
+    **测试/排障专用**：门载体覆盖（缺省即真门）。同 `dev-finish.ps1 -BehaviorExecutor` 的先例。
+    `-MpScript` 自 #2320 起降为兼容位：仍接受，但只出现在 `-DryRun` 的计划打印里，不再被执行。
 
 .PARAMETER LogPath
-    本脚本的日志（默认 `<项目>/.ci-verify/pr-gates.log`）。两门的 stdout 都 tee 到这里。
+    本脚本的日志（默认 `<项目>/.ci-verify/pr-gates.log`）。门的 stdout 原样 tee 到这里。
 
 .PARAMETER DryRun
-    只打印将要跑的两条命令行，**不取锁、不调 CLI、不写日志**（任何机器上都能跑）。
+    只打印将要跑的命令行，**不取锁、不调 CLI、不写日志**（任何机器上都能跑）。
 
 .EXAMPLE
     npm run gates:pr
     pwsh -NoProfile -File scripts/pr-gates.ps1 -DryRun
-    pwsh -NoProfile -File scripts/pr-gates.ps1 -Pages pages/dashboard/dashboard,pages/profile/profile
 #>
 [CmdletBinding()]
 param(
@@ -132,7 +136,7 @@ if (-not $pwshExe) { $pwshExe = 'pwsh' }
 . (Join-Path $PSScriptRoot 'lib\gate-tee.ps1')
 $TeeDrainMs = 5000
 
-# ---------- 两门的命令行（**唯一的参数拼装处**：DryRun 与真跑共用这一份）----------
+# ---------- 门的命令行（**唯一的参数拼装处**：DryRun 与真跑共用这一份；mp 侧现在只喂 DryRun 打印）----------
 $shared = @{}
 if ($Cli) { $shared['Cli'] = $Cli }
 if ($HBuilderX) { $shared['HBuilderX'] = $HBuilderX }
@@ -159,10 +163,10 @@ if ($DryRun) {
     Write-Host ("project  = {0}" -f $Project)
     Write-Host ("cli      = {0}" -f $planCli)
     Write-Host ("log      = {0}   # 正式运行才写" -f $LogPath)
-    Write-Host ("wait     = 唯一一次 Wait-HxFree，上限 {0} 秒（覆盖两门之和）" -f $HxWaitSeconds)
-    Write-Host ("mp       : {0}" -f (Format-Plan -Name 'mp-weixin-check.ps1' -ScriptPath $MpScript -Argv $mpArgv))
+    Write-Host ("wait     = 唯一一次 Wait-HxFree，上限 {0} 秒（② 退役后只覆盖 ④c）" -f $HxWaitSeconds)
+    Write-Host ("mp       : （已退役 #2320，不执行；原计划 = {0}）" -f (Format-Plan -Name 'mp-weixin-check.ps1' -ScriptPath $MpScript -Argv $mpArgv))
     Write-Host ("kotlin   : {0}" -f (Format-Plan -Name 'kotlin-all-check.ps1' -ScriptPath $KotlinScript -Argv $kotlinArgv))
-    Write-Host '  （顺序固定 ② → ④c；两门都跑，退出码取最重者 2 > 1 > 0）'
+    Write-Host '  （② 已于 #2320 退役：本脚本只跑 ④c；退出码仍按 2 > 1 > 0 取最重者）'
     Write-Host 'PR_GATES mode=dryrun exit=ok'
     exit 0
 }
@@ -188,10 +192,10 @@ if (-not $cliExe) {
 $logDir = Split-Path -Parent $LogPath
 if ($logDir) { New-Item -ItemType Directory -Force -Path $logDir | Out-Null }
 Set-Content -LiteralPath $LogPath -Encoding utf8 -Value @(
-    "# pr-gates 开始 $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')（#2112：PR 面一次取锁串 ② 与 ④c）",
+    "# pr-gates 开始 $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')（#2112 一次取锁；② 已于 #2320 退役 ⇒ 只跑 ④c）",
     "# project = $Project",
     "# cli = $cliExe",
-    "# 两门的 stdout 原样 tee 在本文件；结果行不加前缀、不改写"
+    "# 门的 stdout 原样 tee 在本文件；结果行不加前缀、不改写"
 )
 
 Write-Host ''
@@ -252,14 +256,13 @@ function Invoke-Gate {
 }
 
 try {
-    $mp = Invoke-Gate -Name 'mp' -ScriptPath $MpScript -Argv $mpArgv -Token $MpToken -LogPath $LogPath
-    $results['mp'] = $mp.State
-
+    # ② 已于 #2320 退役：这里原本先跑 mp-weixin-check.ps1。字段 `mp` 不再写入 $results，
+    # 结果行因此恒落 `mp=skipped`（下面 `$results.Contains('mp')` 兜底），协议形状不变。
     $kotlin = Invoke-Gate -Name 'kotlin' -ScriptPath $KotlinScript -Argv $kotlinArgv -Token $KotlinToken -LogPath $LogPath
     $results['kotlin'] = $kotlin.State
 
     # 退出码取最重者：环境受阻压过门未过，门未过压过通过。no-line 按环境受阻算（别把「崩了」读成「过了」）。
-    $states = @($mp.State, $kotlin.State)
+    $states = @($kotlin.State)
     $exitState = if ($states -contains 'env' -or $states -contains 'no-line') { 'env' }
                  elseif ($states -contains 'fail') { 'fail' }
                  else { 'ok' }
@@ -293,6 +296,7 @@ if ($freeCount -ne $expected) {
 
 $seconds = [int]((Get-Date) - $startedAt).TotalSeconds
 # 缺字段落 skipped 而不是空串：结果行是机器读的，「没跑到」必须有自己的取值（空字段会被读成「忘了填」）。
+# `mp` 自 #2320 起不再进 $results ⇒ 这行恒给 'skipped'：字段保留（调用方按固定字段位置读），值如实。
 $mpState = if ($results.Contains('mp')) { $results['mp'] } else { 'skipped' }
 $kotlinState = if ($results.Contains('kotlin')) { $results['kotlin'] } else { 'skipped' }
 $line = 'PR_GATES mode=run mp={0} kotlin={1} exit={2} locks={3} acquire={4} seconds={5} log={6}' -f `

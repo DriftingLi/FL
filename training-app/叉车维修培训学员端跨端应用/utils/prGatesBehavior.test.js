@@ -167,7 +167,7 @@ describe('pr-gates：PR 面一次取锁串 ② 与 ④c（#2112）', () => {
     ];
   }
 
-  it('R1/R2/R3：绿跑 ⇒ exit 0、单租约（free×1 + inherited×2）、两门结果行原样', () => {
+  it('R1/R2/R3：绿跑（② 退役后只剩 ④c）⇒ exit 0、单租约（free×1 + inherited×1）、结果行原样、mp=skipped', () => {
     const project = makeProject(tmpRoot);
     const mpLine = 'MP_WEIXIN_RESULT errorsTotal=0 shots=2 pages=pages/index/index coverage=smoke:2';
     const ktLine = 'KOTLIN_ALL_RESULT errors=0 classes=1505 files=120 freshness=fresh';
@@ -177,54 +177,53 @@ describe('pr-gates：PR 面一次取锁串 ② 与 ④c（#2112）', () => {
     const { code, out } = runPrGates(baseArgs(project, mp, kt));
 
     expect(code).toBe(0);
-    expect(resultLine(out)).toMatch(/^PR_GATES mode=run mp=ok kotlin=ok exit=ok locks=1 acquire=free /);
+    // #2320：② 退役 ⇒ mp 这一段恒 skipped（字段保留，形状不破）
+    expect(resultLine(out)).toMatch(/^PR_GATES mode=run mp=skipped kotlin=ok exit=ok locks=1 acquire=free /);
 
-    // R2 单租约：本票的主旨 —— 真取锁一次，两个子门都是「继承」
+    // R2 单租约：真取锁一次，唯一的子门是「继承」
     expect(countLines(out, /HX_BUSY wait=\d+ result=free/)).toBe(1);
-    expect(countLines(out, /HX_BUSY wait=0 result=inherited/)).toBe(2);
+    expect(countLines(out, /HX_BUSY wait=0 result=inherited/)).toBe(1);
 
-    // 子门看到的持有者 == 锁文件里的 pid（且非空）⇒ 是「复用」而不是「各自加锁」
-    const ownerMp = out.match(/FAKE_MP_OWNER=(\d+)/);
-    const pidMp = out.match(/FAKE_MP_LOCKPID=(\d+)/);
+    // 子门看到的持有者 == 锁文件里的 pid（且非空）⇒ 是「复用」而不是「自己加锁」
+    const pidKt = out.match(/FAKE_KT_LOCKPID=(\d+)/);
     const ownerKt = out.match(/FAKE_KT_OWNER=(\d+)/);
-    expect(ownerMp).not.toBeNull();
-    expect(pidMp).not.toBeNull();
-    expect(ownerMp[1]).toBe(pidMp[1]);
-    expect(ownerKt[1]).toBe(pidMp[1]);
+    expect(ownerKt).not.toBeNull();
+    expect(pidKt).not.toBeNull();
+    expect(ownerKt[1]).toBe(pidKt[1]);
 
     // R3 结果行**内容**逐字节原样（没有前缀、没有后缀、没有被改写）。
     // 行尾的 CR 不算改写：那是子进程 CRLF 与 pwsh 回显叠加出来的**行尾符**，不是本文具对内容的加工。
-    const lines = out.split(/\r?\n/).map((l) => l.replace(/\s+$/, ''));
-    expect(lines).toContain(mpLine);
+    const outLines = out.split(/\r?\n/).map((l) => l.replace(/\s+$/, ''));
+    expect(outLines).toContain(ktLine);
 
-    // R4 顺序：② 在 ④c 之前
-    expect(out.indexOf(mpLine)).toBeGreaterThan(-1);
-    expect(out.indexOf(ktLine)).toBeGreaterThan(out.indexOf(mpLine));
+    // #2320 的承重判据：-MpScript 是活载体（文件存在、能跑），但它已经**不会被调起** ——
+    // 否则「日常 gates:pr 不再启动微信开发者工具」只是口头承诺。
+    expect(out).not.toContain(mpLine);
+    expect(out).not.toContain('FAKE_MP_OWNER');
 
     // R6 锁已释放
     expect(fs.existsSync(path.join(tmpRoot, 'hx-agent.lock'))).toBe(false);
   });
 
-  it('R4/R5：② 红 ⇒ exit 1，且 ④c 照跑（不截断）', () => {
+  it('R4/R5：④c 红 ⇒ exit 1（判读不改；② 已退役故 mp=skipped）', () => {
     const project = makeProject(tmpRoot);
     const mp = makeFakeGate(tmpRoot, {
       name: 'MP', token: 'MP_WEIXIN_RESULT', code: 1,
       line: 'MP_WEIXIN_RESULT errors=2 failures=consoleErrors'
     });
     const kt = makeFakeGate(tmpRoot, {
-      name: 'KT', token: 'KOTLIN_ALL_RESULT', code: 0, line: 'KOTLIN_ALL_RESULT errors=0 classes=1505'
+      name: 'KT', token: 'KOTLIN_ALL_RESULT', code: 1, line: 'KOTLIN_ALL_RESULT errors=3 classes=1505'
     });
 
     const { code, out } = runPrGates(baseArgs(project, mp, kt));
 
     expect(code).toBe(1);
-    expect(resultLine(out)).toMatch(/mp=fail kotlin=ok exit=fail/);
-    // 「没跑」不许被读成「这一半没问题」：第二门的结果行必须在
-    expect(out).toContain('KOTLIN_ALL_RESULT errors=0 classes=1505');
+    expect(resultLine(out)).toMatch(/mp=skipped kotlin=fail exit=fail/);
+    expect(out).toContain('KOTLIN_ALL_RESULT errors=3 classes=1505');
     expect(fs.existsSync(path.join(tmpRoot, 'hx-agent.lock'))).toBe(false);
   });
 
-  it('R5：环境受阻压过门未过（② 红 + ④c env ⇒ exit 2）', () => {
+  it('R5：环境受阻 ⇒ exit 2（② 退役后这条语义只剩 ④c 一门承载）', () => {
     const project = makeProject(tmpRoot);
     const mp = makeFakeGate(tmpRoot, {
       name: 'MP', token: 'MP_WEIXIN_RESULT', code: 1, line: 'MP_WEIXIN_RESULT errors=1 failures=exceptions'
@@ -236,7 +235,7 @@ describe('pr-gates：PR 面一次取锁串 ② 与 ④c（#2112）', () => {
     const { code, out } = runPrGates(baseArgs(project, mp, kt));
 
     expect(code).toBe(2);
-    expect(resultLine(out)).toMatch(/mp=fail kotlin=env exit=env/);
+    expect(resultLine(out)).toMatch(/mp=skipped kotlin=env exit=env/);
     expect(fs.existsSync(path.join(tmpRoot, 'hx-agent.lock'))).toBe(false);
   });
 
@@ -246,39 +245,38 @@ describe('pr-gates：PR 面一次取锁串 ② 与 ④c（#2112）', () => {
       name: 'MP', token: 'MP_WEIXIN_RESULT', code: 0, line: '', emit: false
     });
     const kt = makeFakeGate(tmpRoot, {
-      name: 'KT', token: 'KOTLIN_ALL_RESULT', code: 0, line: 'KOTLIN_ALL_RESULT errors=0'
+      name: 'KT', token: 'KOTLIN_ALL_RESULT', code: 0, line: '', emit: false
     });
 
     const { code, out } = runPrGates(baseArgs(project, mp, kt));
 
     expect(code).toBe(2);
-    expect(resultLine(out)).toMatch(/mp=no-line kotlin=ok exit=env/);
+    expect(resultLine(out)).toMatch(/mp=skipped kotlin=no-line exit=env/);
   });
 
-  it('R8：② 退出后孙进程仍握 stdout 句柄 ⇒ 入口照样返回，且 ④c 照跑（#2147）', () => {
+  it('R8：子门退出后孙进程仍握 stdout 句柄 ⇒ 入口照样返回（#2147）', () => {
     const project = makeProject(tmpRoot);
-    const mpLine = 'MP_WEIXIN_RESULT errors=1 failures=noConsoleErrors';
     const ktLine = 'KOTLIN_ALL_RESULT errors=0 classes=1560 files=126';
-    const mp = makeFakeGate(tmpRoot, {
-      name: 'MP', token: 'MP_WEIXIN_RESULT', code: 1, line: mpLine, holdStdout: true
+    const mp = makeFakeGate(tmpRoot, { name: 'MP', token: 'MP_WEIXIN_RESULT', code: 0, line: 'MP_WEIXIN_RESULT x=1' });
+    const kt = makeFakeGate(tmpRoot, {
+      name: 'KT', token: 'KOTLIN_ALL_RESULT', code: 1, line: ktLine, holdStdout: true
     });
-    const kt = makeFakeGate(tmpRoot, { name: 'KT', token: 'KOTLIN_ALL_RESULT', code: 0, line: ktLine });
 
     const { code, out } = runPrGates(baseArgs(project, mp, kt));
 
     expect(code).toBe(1);
     const line = resultLine(out);
-    expect(line).toMatch(/mp=fail kotlin=ok exit=fail/);
+    expect(line).toMatch(/mp=skipped kotlin=fail exit=fail/);
     // 承重判据 = **收流被放弃这件事在日志里可读**（不是墙钟阈值）：门自己打 drain=abandoned ⇒ 它确实
     // 撞上了「子进程已退出但句柄未释放」，并且选择放弃剩余输出继续跑，而不是等 EOF。
-    // ⚠️ 不再用「seconds < 12」这类贴边时序断言：门本身基线 8 s + DrainMs 5 s 已贴近 holder 存活量级，
+    // ⚠️ 不再用「seconds < 12」这类贴边时序断言（门本身基线 8 s + DrainMs 5 s 已贴近 holder 存活量级，
     // 单跑/整文件跑读数会在阈值两侧摆（实测 13–16 s），那是环境敏感守护（guards.md 末节 Q4 / #2078 同族）。
     expect(out).toContain('drain=abandoned');
     // 粗上界只兜「真挂死」：holder 活 15 s，一旦在它自然退出后才收口，读数会明显更大
     const secs = Number((line.match(/seconds=(\d+)/) || [])[1]);
     expect(Number.isFinite(secs)).toBe(true);
     expect(secs).toBeLessThan(60);
-    // 「没跑」不许被读成「这一半没问题」：② 红时 ④c 仍必须跑到并打出结果行
+    // 门自己的结果行仍要打出来（放弃剩余输出不等于丢掉已收到的那行）
     expect(out).toContain(ktLine);
     expect(fs.existsSync(path.join(tmpRoot, 'hx-agent.lock'))).toBe(false);
   });
@@ -293,6 +291,7 @@ describe('pr-gates：PR 面一次取锁串 ② 与 ④c（#2112）', () => {
 
     expect(code).toBe(0);
     expect(out).toContain('PR_GATES mode=dryrun exit=ok');
+    // ② 退役后这一行仍列出原计划，但明说「不执行」（参数保留为兼容位）
     expect(out).toContain('mp-weixin-check.ps1');
     expect(fs.existsSync(path.join(tmpRoot, 'hx-agent.lock'))).toBe(false);
     expect(fs.existsSync(logPath)).toBe(false);
@@ -317,16 +316,18 @@ describe('pr-gates：PR 面一次取锁串 ② 与 ④c（#2112）', () => {
     }
   });
 
-  it('R10（#2162）：假门按**旧真门形**只打中文前缀行 ⇒ 入口判 mp=no-line、exit=env —— 成因钉成反例', () => {
+  it('R10（#2162）：假门按**旧真门形**只打中文前缀行 ⇒ 入口判 kotlin=no-line、exit=env —— 成因钉成反例', () => {
     const project = makeProject(tmpRoot);
-    const mpLine = 'MP_WEIXIN_RESULT errorsTotal=0 shots=1 coverage=smoke:2';
-    const mp = makeFakeGate(tmpRoot, { name: 'MP', token: 'MP_WEIXIN_RESULT', code: 0, line: mpLine, legacyChineseOnly: true });
-    const kt = makeFakeGate(tmpRoot, { name: 'KT', token: 'KOTLIN_ALL_RESULT', code: 0, line: 'KOTLIN_ALL_RESULT errors=0 classes=1 files=1' });
+    const mp = makeFakeGate(tmpRoot, { name: 'MP', token: 'MP_WEIXIN_RESULT', code: 0, line: 'MP_WEIXIN_RESULT x=1' });
+    const kt = makeFakeGate(tmpRoot, {
+      name: 'KT', token: 'KOTLIN_ALL_RESULT', code: 0,
+      line: 'KOTLIN_ALL_RESULT errors=0 classes=1 files=1', legacyChineseOnly: true
+    });
 
     const { code, out } = runPrGates(baseArgs(project, mp, kt));
 
-    expect(resultLine(out)).toMatch(/mp=no-line/);
-    expect(resultLine(out)).toMatch(/kotlin=ok/);
+    expect(resultLine(out)).toMatch(/kotlin=no-line/);
+    expect(resultLine(out)).toMatch(/mp=skipped/);
     expect(code).toBe(2); // no-line 按环境受阻算：别把「读不到」放成「过了」
     expect(fs.existsSync(path.join(tmpRoot, 'hx-agent.lock'))).toBe(false);
   });

@@ -49,20 +49,21 @@
 
 > **#2320（2026-11-05）**：② 微信开发者工具门已整体退役，本节「两门」中的 ② 只作历史与手动诊断。
 > **日常 PR 不要再跑 `gates:pr` 凑 ② 证据**——④c 直接用 `npm run build:kotlin-all`（或 `dev:finish`），
-> 证据只写 ④ 的读数行。`scripts/pr-gates.ps1` 暂留（阶段二清理），它仍会跑 ②，属手动工具、不参与判绿。
+> 证据只写 ④ 的读数行。`scripts/pr-gates.ps1` 于 #2320 **阶段二**收口：它只跑 ④c，**不再启动微信开发者工具**，
+> 结果行的 `mp=` 字段保留、恒为 `skipped`（协议不破）；`-Pages` / `-MpArgs` / `-MpScript` 降为兼容位。
 
-`npm run gates:pr`（`scripts/pr-gates.ps1`）= **一个** `Wait-HxFree` 覆盖 ② 与 ④c：父进程取锁 →
-`Set-HxLockOwnerEnv` 交接 → 依次跑两门（② → ④c，两门都跑，退出码取最重者 2 > 1 > 0）→ `finally` 释放。
-形态与 `hx-run` 的 A-3 临界区同源，未造新协议。
+`npm run gates:pr`（`scripts/pr-gates.ps1`）**现在只跑 ④c**：父进程照旧取一次 `Wait-HxFree` →
+`Set-HxLockOwnerEnv` 交接 → 跑 `kotlin-all-check.ps1` → `finally` 释放。壳、tee 与结果行协议完整保留；
+「一个租约串两门」的主旨在 ② 退役后已无对象，日常 ④c 直接用 `npm run build:kotlin-all` 更省一步。
 
-机检行 `PR_GATES mode=run mp=<ok|fail|env|no-line> kotlin=<…> exit=<ok|fail|env> locks=<n> acquire=<free|inherited> seconds=<n> log=<path>`。
+机检行 `PR_GATES mode=run mp=skipped kotlin=<ok|fail|env|no-line> exit=<ok|fail|env> locks=<n> acquire=<free|inherited> seconds=<n> log=<path>`
+（`mp` 字段按**固定字段位置**保留：② 退役后它恒为 `skipped`，缺字段才落 `skipped` 的兜底仍留在代码里）。
 `locks=` 是日志里 `HX_BUSY … result=free` 的条数，**期望 1**（子门走 `inherited`，不算取锁）；不等于期望值时只喊一声、不改退出码
 —— 门的结论由门定，取锁次数是本文具的不变量。`no-line`（退出码 0 却没打结果行）按环境受阻算，别把「崩了」读成「过了」。
 
-**收益与代价都写实**：中位收益 ≈ 0（本机 125 次取锁实测 89 次 `wait=0`、中位 0 s），真收益在尾部
-（454 / 501 / 592 s 各一次、120 s 超时一次）—— 取锁次数减半 = 这四种尾部事件的暴露面减半；
-代价 = 一次租约的**持有时间 = 两门之和**，两门之间那个几秒的空档不再让给别人排队。若真观察到排队变长，
-先改这个入口、别动门。
+**历史收益（#2112 当时）**：中位收益 ≈ 0（本机 125 次取锁实测 89 次 `wait=0`、中位 0 s），真收益在尾部
+（454 / 501 / 592 s 各一次、120 s 超时一次）—— 取锁次数减半 = 这四种尾部事件的暴露面减半。
+② 退役后「减半」已无对象（一门一次取锁），这段只作当初为什么建这个入口的来路。
 
 ## 真运行会话常驻与收口（原文，2026-09-13 实测）
 
@@ -132,8 +133,8 @@
 - 数字全部取自那一跑自己的 `Test Suites:` / `Tests:` / `Time:` 汇总行 ⇒ 拿同一份日志能复算出同一串
 
 ⚠️ `.ci-verify/` 是 gitignored，且**随工作树回收一起消失**（见上面「三条原因的实测原文」第 3 条）⇒ 能被下一个
-会话引用的出口只剩两条，**且两条都要人主动走**：① 判据输入当场拷到树外，截图/产物要留档就显式加 `-Archive`
-（入库 `docs/verification/<模块>/<号码>/`，默认**不**入库）；② 门读数行粘进 PR 正文（`-PostToIssue` 打印的就是
+会话引用的出口只剩两条，**且两条都要人主动走**：① 判据输入当场拷到树外（② 退役后门不再产出截图，`-Archive`
+入库连同归档链已于 #2320 阶段二整体删除）；② 门读数行粘进 PR 正文（`-PostToIssue` 打印的就是
 那一段，A1 起**不再贴评论**）。「日志还在」的前提是**树还在**。
 
 守护：`utils/devFinishContract.test.js` 的 U 系列 —— U1–U10 钉 #1546 那件产物的形状与可复算性，
