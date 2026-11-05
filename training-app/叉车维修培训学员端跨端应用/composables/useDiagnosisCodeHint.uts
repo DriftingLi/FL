@@ -1,0 +1,98 @@
+/**
+ * 故障码体检的防抖查询（#2297）—— 页面只把输入框的每次变化喂进来，等结果。
+ *
+ * ## 防抖
+ * 判据是「停止输入后才发起查询（连续敲键不逐字发请求）」。这里用**一个计时器 + 一个序号**：
+ *   - 每来一次输入：`seq++`、取消上一发计时器、按 250ms 重新排一发；
+ *   - 计时器到点：序号还等于当前值才真发（连打 6 个字符 ⇒ 只有最后一发被认领）。
+ * 用假计时器的行为用例因此能**直接数出**「请求只发了一次」，不用去观测 clearTimeout 有没有被调用。
+ *
+ * ## 为什么还要序号（不是只靠取消计时器）
+ * 已发出的请求可能**乱序返回**：先查 `E01`、再改 `E012`，旧的先回来也不能拿它去解释新输入。
+ * 每发带自己的序号，回来时序号不等就丢掉。
+ *
+ * ## 失败与清空
+ * 取数失败 ⇒ 这一行不出现（静默：不 toast、不打断输入）。ADR-0037 ③ 的「不吞错」在 API 层
+ * 仍是原样上抛，**静默只发生在呈现层**。输入一变 ⇒ 旧结果立刻作废；清空 / 太短 ⇒ 不发请求、立即隐藏。
+ *
+ * ## 计时器挂在生命周期上
+ * `dispose()` 取消尚未到点的计时器，由页面 `onUnload` 调用（本仓反模式：裸 `setTimeout` 不管生命周期）。
+ *
+ * 查询函数由页面注入（`checkDiagnosisCodeApi`），本层不 import API —— 行为用例因此能注入假取数。
+ */
+import { ref } from 'vue'
+import type { Ref } from 'vue'
+import type { DiagnosisCodeHint } from '../types/index'
+import { hintViewOf, emptyHintView, CODE_HINT_DEBOUNCE_MS, CODE_HINT_MIN_LEN } from '../utils/diagnosisCodeHint'
+import type { DiagnosisCodeHintView } from '../utils/diagnosisCodeHint'
+
+/** useDiagnosisCodeHint 的返回值（显式类型：UTS 对返回对象的函数字段推断不可靠） */
+export type UseDiagnosisCodeHintResult = {
+	view : Ref<DiagnosisCodeHintView>
+	onInput : (text : string) => void
+	clear : () => void
+	dispose : () => void
+}
+
+export function useDiagnosisCodeHint(fetchHint : (q : string) => Promise<DiagnosisCodeHint>) {
+	const view = ref<DiagnosisCodeHintView>(emptyHintView())
+	let seq : number = 0
+	let timer : number = 0
+
+	/** 取消尚未到点的那一发（到点的计时器会把自己归零） */
+	function cancelTimer() : void {
+		if (timer != 0) {
+			clearTimeout(timer)
+			timer = 0
+		}
+	}
+
+	/** 真正发查询：结果只在「序号还是当前」时落地，过期的一律丢 */
+	function probe(q : string, mySeq : number) : void {
+		fetchHint(q).then((hint : DiagnosisCodeHint) : void => {
+			if (mySeq != seq) return
+			view.value = hintViewOf(hint, q)
+		}).catch((e : any | null) : void => {
+			// 查询失败静默（票面 AC）：不弹提示、不打断输入，只是这一行不出现
+			if (mySeq != seq) return
+			view.value = emptyHintView()
+		})
+	}
+
+	/** 清空：作废在途结果、取消计时器、立刻隐藏这一行 */
+	function clear() : void {
+		seq++
+		cancelTimer()
+		view.value = emptyHintView()
+	}
+
+	/** 输入框每次变化：太短直接隐藏；否则重排一发防抖计时器 */
+	function onInput(text : string) : void {
+		const q = text.trim()
+		if (q.length < CODE_HINT_MIN_LEN) {
+			clear()
+			return
+		}
+		seq++
+		const mySeq = seq
+		// 输入一变，旧提示立刻作废（不能拿上一段的说明去解释这一段）
+		view.value = emptyHintView()
+		cancelTimer()
+		timer = setTimeout(() => {
+			timer = 0
+			if (mySeq != seq) return
+			probe(q, mySeq)
+		}, CODE_HINT_DEBOUNCE_MS)
+	}
+
+	function dispose() : void {
+		clear()
+	}
+
+	return {
+		view: view,
+		onInput: (text : string) => onInput(text),
+		clear: () => clear(),
+		dispose: () => dispose(),
+	} as UseDiagnosisCodeHintResult
+}
