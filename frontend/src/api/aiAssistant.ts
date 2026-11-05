@@ -118,9 +118,14 @@ export interface StreamUsageEvent {
 /**
  * SSE done 事件 payload（**非生成面**，ADR-0048 决策 6）。
  * 诊断功能带 meta（徽章 + 端到端耗时，票 2245 决策 5）；其余功能 done 的 data 仍是 null。
+ *
+ * content 只在「终端权威全文 ≠ 已推增量」时出现：诊断配图归一（白名单外降级成文字，
+ * ADR-0091 决策 5）发生在 adapter 返回时，增量里仍是第三方原始 URL。收到它就**替换**
+ * 累积正文，而不是追加 —— 增量只为观感，done 的全文才是权威。
  */
 export interface StreamDoneEvent {
   meta?: DiagnosisMeta
+  content?: string
 }
 
 /** 回答的能力徽章（v2 九种固定词表；三字段原样透出，前端的 emoji/cls 只用于渲染）。 */

@@ -188,7 +188,7 @@
       <div
         ref="messageListRef"
         class="message-list mx-auto w-full p-6 max-[768px]:p-4"
-        :class="isWelcome ? 'row-start-1 max-w-[760px] self-end justify-self-center min-h-0 overflow-hidden' : 'max-w-[1200px] flex-1 overflow-y-auto [scrollbar-gutter:stable]'"
+        :class="isWelcome ? 'row-start-1 h-full max-w-[760px] self-end justify-self-center min-h-0 overflow-hidden' : 'max-w-[1200px] flex-1 overflow-y-auto [scrollbar-gutter:stable]'"
       >
         <!-- 空状态：欢迎区（图标左标题右横排；标题即一句话功能介绍，无副标题）。
              定位：grid 第一行 + self-end 贴住输入框上沿，不把输入框往下推。

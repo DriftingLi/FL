@@ -465,7 +465,12 @@ func (h *handler) StreamChat(c *gin.Context) {
 		sendEvent("status", map[string]string{"text": text})
 	})
 
-	_, usage, err := h.svc.StreamChat(ctx, userID, req, func(content string) {
+	// 累积下行增量：用来判断「终端权威全文」是否与已推给浏览器的增量一致。
+	// 诊断功能会在 done 前把正文里的图片归一（白名单外降级成文字，ADR-0091 决策 5），
+	// 那一步在 adapter 返回时做，增量里仍是第三方原始 URL —— 只有比对才能知道要不要补发全文。
+	var streamed strings.Builder
+	fullContent, usage, err := h.svc.StreamChat(ctx, userID, req, func(content string) {
+		streamed.WriteString(content)
 		sendEvent("message", map[string]string{"content": content})
 	})
 
@@ -493,9 +498,24 @@ func (h *handler) StreamChat(c *gin.Context) {
 	}
 	// done 载荷：诊断功能带 meta（徽章 + 耗时，票 2245 决策 5），其余功能保持 null
 	// （移动端手写映射逐字段取值，多出的键被忽略，故对旧客户端无破坏）。
+	//
+	// content 只在「终端权威全文 ≠ 已推增量」时出现，目前唯一来源是诊断配图归一
+	// （adapter 在 done 前把白名单外的第三方图降级成文字）。普通对话两者恒等，不多发一个字节。
 	var donePayload any
-	if meta, ok := DiagnosisMetaFrom(ctx); ok {
-		donePayload = map[string]any{"meta": meta}
+	meta, hasMeta := DiagnosisMetaFrom(ctx)
+	finalContent := ""
+	if fullContent != "" && fullContent != streamed.String() {
+		finalContent = fullContent
+	}
+	if hasMeta || finalContent != "" {
+		payload := map[string]any{}
+		if hasMeta {
+			payload["meta"] = meta
+		}
+		if finalContent != "" {
+			payload["content"] = finalContent
+		}
+		donePayload = payload
 	}
 	sendEvent("done", donePayload)
 }
