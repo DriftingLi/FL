@@ -53,7 +53,15 @@
 			<text class="guide-entry-text">{{ guideEntryLabel }}</text>
 		</view>
 
-		<AiChatInput :draft="draftText" @send="onInputSend" @voice-click="onVoiceClick" />
+		<!-- 故障码体检（#2297）：输入框正上方一行。五态里只渲染 known / typo / format；
+		     未收录、还没输入、取数失败都**整行不渲染**（安静不打扰是判据）。
+		     点这一行 = 把追问句替换进输入框（不自动发送），随后收掉。 -->
+		<view v-if="isDiagnosis && codeHintView.visible" class="code-hint" @click="onCodeHintTap">
+			<text :class="codeHintView.kind == 'known' ? 'code-hint-text' : 'code-hint-text code-hint-text-warn'">{{ codeHintView.text }}</text>
+			<text v-if="codeHintView.followUp.length > 0" class="code-hint-action">追问 ›</text>
+		</view>
+
+		<AiChatInput :draft="draftText" @text-change="onDraftInput" @send="onInputSend" @voice-click="onVoiceClick" />
 
 		<AiChatDiagnosisGuide
 			:visible="guideOpen"
@@ -82,12 +90,12 @@
 
 <script setup lang="uts">
 	import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
-	import { onLoad } from '@dcloudio/uni-app'
+	import { onLoad, onUnload } from '@dcloudio/uni-app'
 	import { computed, ref } from 'vue'
 	import { useAuthStore } from '../../stores/auth'
 	import { useAiChat } from '../../composables/useAiChat'
 	import type { ChatBodyBuilder } from '../../composables/useAiChat'
-	import type { AiChatMessage, AIFunctionItem, AiSession } from '../../types/index'
+	import type { AiChatMessage, AIFunctionItem, AiSession, DiagnosisCodeHint } from '../../types/index'
 
 	import { FUNCTION_ITEMS, isDiagnosisFeature } from './ai-assistant-constants'
 	import AiChatBubble from '../../components/ai-chat/ai-chat-bubble.uvue'
@@ -95,6 +103,8 @@
 	import AiChatInput from '../../components/ai-chat/ai-chat-input.uvue'
 	import AiChatDiagnosisGuide from '../../components/ai-chat/ai-chat-diagnosis-guide.uvue'
 	import { useDiagnosisGuide } from '../../composables/useDiagnosisGuide'
+	import { useDiagnosisCodeHint } from '../../composables/useDiagnosisCodeHint'
+	import { checkDiagnosisCodeApi } from '../../api/aiAssistant'
 
 	/**
 	 * 参数化专项页（ADR-0009 2026-09-15 修订 ②）：**1 个页面 + `featureKey` 参数**，形态照 web 的
@@ -163,6 +173,40 @@
 	 * 草稿做成页面级 ref 并在发送后清空，语义与「预填一格文字」一致。
 	 */
 	const draftText = ref<string>('')
+
+	/**
+	 * 故障码体检（#2297）：输入框正上方那一行。
+	 *
+	 * 分工：五态 → 文案在纯函数 `utils/diagnosisCodeHint.uts`（有真执行的行为用例）；
+	 * 防抖 / 过期丢弃 / 失败静默在 `useDiagnosisCodeHint`；本页只做三件事 ——
+	 * 把输入框的变化喂进去、渲染那一行、点击回填追问句。
+	 *
+	 * 查询函数由本页注入（composable 自己不 import API），行为用例才能注入假取数。
+	 */
+	// 传 lambda 而不是裸函数名：UTS 对「函数值」推断不可靠（error17/error18 一类），包一层最稳
+	const { view: codeHintView, onInput: onCodeHintInput, clear: clearCodeHint, dispose: disposeCodeHint } = useDiagnosisCodeHint((q : string) : Promise<DiagnosisCodeHint> => checkDiagnosisCodeApi(q))
+
+	/**
+	 * 输入框每敲一下都进来（本页唯一的「正在输入」信号）。
+	 *
+	 * ① 非诊断页一次查询都不发（`codeHintView` 恒不可见，喂进去也没有去处）；
+	 * ② 顺带把输入内容镜像进 `draftText`：输入框由「外部草稿」驱动，若页面不跟着走，
+	 *    学员删光后再点**同一条**提示，`draftText` 没有变化 ⇒ 组件里那个 watch 不触发
+	 *    ⇒ 输入框不会回填（同值不触发是 watch 的语义，不是缺陷）。
+	 */
+	function onDraftInput(value : string) : void {
+		draftText.value = value
+		if (!isDiagnosis.value) return
+		onCodeHintInput(value)
+	}
+
+	/** 点提示行：追问句**替换**输入框内容（不自动发送，学员可改），随后收掉这一行 */
+	function onCodeHintTap() : void {
+		const followUp = codeHintView.value.followUp
+		if (followUp.length == 0) return
+		draftText.value = followUp
+		clearCodeHint()
+	}
 
 	const {
 		brands,
@@ -239,6 +283,8 @@
 	/** 欢迎区点常见问题：直接填进输入框（FAQ 是现成的一句话，不经引导面） */
 	function onPickFaq(question : string) : void {
 		draftText.value = question
+		// 换了一句话，上一句的体检结果不再是「当前这句」的说明
+		clearCodeHint()
 	}
 
 	/**
@@ -250,6 +296,7 @@
 	 */
 	function onConfirmSentence(text : string) : void {
 		draftText.value = text
+		clearCodeHint()
 		closeGuide()
 	}
 
@@ -290,6 +337,7 @@
 		if (lastUserMsg.length > 0) {
 			inputText.value = lastUserMsg
 			draftText.value = ''
+			clearCodeHint()
 			sendInput(featureTitle.value, buildBody, [], currentFeatureKey.value)
 		}
 	}
@@ -303,6 +351,8 @@
 		inputText.value = text
 		// 发出去之后草稿作废：下一次发送不能把同一句再塞回输入框（否则点两次发送像卡住）
 		draftText.value = ''
+		// 发送后输入框清空 ⇒ 那一行体检结果必须一起消失（票面 AC：清空输入后提示消失）
+		clearCodeHint()
 		sendInput(featureTitle.value, buildBody, [], currentFeatureKey.value)
 	}
 
@@ -340,6 +390,11 @@
 		if (isDiagnosis.value) {
 			loadDiagnosisIntents()
 		}
+	})
+
+	/** 页面卸载：取消还没到点的体检计时器，别让它在页面销毁后落地（本仓反模式：裸 setTimeout 不管生命周期） */
+	onUnload(() => {
+		disposeCodeHint()
 	})
 </script>
 
@@ -457,6 +512,32 @@
 	.guide-entry-text {
 		font-size: 24rpx;
 		color: $uni-color-primary;
+	}
+
+	/* 故障码体检那一行（#2297）：贴在输入框正上方，整行可点（点 = 追问句填进输入框） */
+	.code-hint {
+		flex-direction: row;
+		align-items: center;
+		padding: 12rpx 28rpx;
+	}
+
+	/* 文字样式落 <text>（落 <view> 上原生端静默忽略并逐处打 error，见 uvueFontCarrierContract） */
+	.code-hint-text {
+		flex: 1;
+		font-size: 24rpx;
+		line-height: 1.5;
+		color: $text-color-secondary;
+	}
+
+	/* typo / format：这两态是「你填得不对」，用警示色；known 才用次级文字色 */
+	.code-hint-text-warn {
+		color: $warning-color;
+	}
+
+	.code-hint-action {
+		font-size: 24rpx;
+		color: $uni-color-primary;
+		margin-left: 12rpx;
 	}
 
 	.chat-scroll {

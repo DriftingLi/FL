@@ -49,7 +49,9 @@
 		draft: ''
 	})
 
-	const emit = defineEmits(['send', 'modelClick', 'imageClick', 'voiceClick'])
+	// `text-change`：把用户的每一次输入抛给页面（故障码体检要「正在输入」这个信号，#2297）。
+	// 不叫 `input`：组件里那个名字属于内层原生输入的冒泡面，同名会分不清是哪个源。
+	const emit = defineEmits(['send', 'modelClick', 'imageClick', 'voiceClick', 'text-change'])
 
 	const inputText = ref<string>('')
 
@@ -71,6 +73,8 @@
 
 	function onInputChange(e : InputEvent) : void {
 		inputText.value = e.detail.value
+		// 把「用户正在输入」这件事抛给页面（页面据此决定要不要给故障码体检排一发查询）
+		emit('text-change', inputText.value)
 	}
 
 	function onSend() : void {
