@@ -203,6 +203,32 @@ describe('当轮终态（#1104：done / error / aborted 一处收尾）', () => 
     expect(store.messages.some(m => String(m.content).includes('正在调取'))).toBe(false)
   })
 
+  // done 载荷带权威全文时**替换**累积正文（票 2312：诊断配图归一在白名单外把图降级成文字，
+  // 增量里仍是第三方原始 URL；不替换就等于让学员浏览器直连那台主机，ADR-0091 决策 5 落空）。
+  it('done 带 content 时替换累积正文，而不是追加', async () => {
+    const store = createStore()
+    const { p, h } = await startSend(store, '带归一全文的一轮')
+    h.onChunk?.('增量里是 ![图](https://cdn.example.com/a.png)')
+    h.onDone?.({ content: '增量里是 图（已降级）', meta: { badges: [], elapsed: 1.5 } })
+    await p
+    await flush()
+
+    expect(store.messages.filter(m => m.role === 'assistant')[0].content).toBe('增量里是 图（已降级）')
+    expect(store.messages.filter(m => m.role === 'assistant')[0].meta).toEqual({ badges: [], elapsed: 1.5 })
+  })
+
+  it('done 不带 content 时保留累积正文（普通对话不多发一个字节）', async () => {
+    const store = createStore()
+    const { p, h } = await startSend(store, '普通一轮')
+    h.onChunk?.('第一段')
+    h.onChunk?.('第二段')
+    h.onDone?.()
+    await p
+    await flush()
+
+    expect(store.messages.filter(m => m.role === 'assistant')[0].content).toBe('第一段第二段')
+  })
+
   it('新一轮开始时清掉上一轮的过程文案（换轮不残留旧状态）', async () => {
     const store = createStore()
     const first = await startSend(store, '第一轮')

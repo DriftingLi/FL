@@ -490,6 +490,11 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
             elapsed: payload.meta.elapsed ?? 0
           }
         }
+        // 终端权威全文：诊断配图归一在白名单外会把图降级成文字，增量里仍是第三方原始 URL。
+        // 有就给**替换**（不是追加）—— 否则浏览器会继续直连那台第三方主机（ADR-0091 决策 5）。
+        if (turn === activeTurn && typeof payload?.content === 'string' && payload.content) {
+          streamingContent.value = payload.content
+        }
         finalizeTurn(turn, { kind: 'done' })
       },
       onError: (message) => finalizeTurn(turn, { kind: 'error', message })
