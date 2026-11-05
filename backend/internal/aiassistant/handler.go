@@ -451,6 +451,23 @@ func (h *handler) StreamChat(c *gin.Context) {
 		return
 	}
 
+	// 会话归属前置校验（票 2313）：登录用户指定了 session_id 时，必须确认这个会话属于他。
+	//
+	// 为什么必须在这里、而不是持久化那一步：一旦写出第一个 SSE 字节，响应就成了 200 + 流，
+	// 后面的失败只能以 `error` 事件表达——那时「会话不是你的」和「上游模型挂了」在客户端
+	// 看来是同一种东西。放在写头之前才能回 404 信封，和另外三个 400 分支同形。
+	//
+	// 未登录（userID=0）或没给 session_id（=0）不落库，也就不需要校验，行为与从前一致
+	// —— 这条规则由 EnsureSessionOwned 自己判定，调用点不再重复一次。
+	if err := h.svc.EnsureSessionOwned(c.Request.Context(), userID, req.SessionID); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			response.NotFound(c, "会话不存在")
+			return
+		}
+		response.ServerErrorCause(c, "会话信息读取失败", err)
+		return
+	}
+
 	writeSSEHeaders(c)
 
 	sendEvent := func(event string, data any) {
