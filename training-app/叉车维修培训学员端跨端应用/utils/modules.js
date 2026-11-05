@@ -149,6 +149,7 @@ const MODULES = {
     files: [
       'api/aiAssistant.uts',
       'components/ai-chat/ai-chat-bubble.uvue',
+      'components/ai-chat/ai-chat-diagnosis-guide.uvue',
       'components/ai-chat/ai-chat-custom-form.uvue',
       'components/ai-chat/ai-chat-drawer-left.uvue',
       'components/ai-chat/ai-chat-drawer-right.uvue',
@@ -158,6 +159,7 @@ const MODULES = {
       'components/ai-chat/ai-chat-pro-sheet.uvue',
       'components/ai-chat/ai-chat-sources.uvue',
       'composables/useAiChat.uts',
+      'composables/useDiagnosisGuide.uts',
       'composables/useAiModelSelection.uts',
       'composables/useAiPro.uts',
       'pages/ai-assistant/ai-assistant-constants.uts',

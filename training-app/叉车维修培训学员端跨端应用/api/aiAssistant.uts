@@ -9,7 +9,7 @@
  *       uni.request 不支持增量流式回调，这里整包接收后解析 delta 文本。
  */
 import { del, getMapped, postMapped, patchMapped, uploadFile, renewOrExpire, AUTH_EXPIRED_MESSAGE } from './request'
-import { toNumber, toStr } from './helpers'
+import { toBool, toNumber, toStr } from './helpers'
 import { API_BASE_URL, AI_REQUEST_TIMEOUT } from '../config/env'
 import { STORAGE_KEY_TOKEN } from '../constants/app'
 import { getStorage } from '../utils/storage'
@@ -20,6 +20,11 @@ import type {
 	AiSession,
 	AiSessionMessage,
 	AiDiagnosisSource,
+	DiagnosisIntentBrand,
+	DiagnosisFaq,
+	DiagnosisIntents,
+	DiagnosisCatalogItem,
+	DiagnosisHealth,
 } from '../types/index'
 
 
@@ -277,14 +282,127 @@ export function getAiSessionMessagesApi(id : number) : Promise<AiSessionMessage[
 	})
 }
 
-// ===== 智能维修诊断周边只读代理：已随 v1 通道退役（#2237 / 移动端 #2262）=====
+// ===== 智能维修诊断：引导只读面（v2 契约，#2296）=====
 //
-// 原 brand/model/fault-codes/manual 四个只读端点（`/api/ai-assistant/diagnosis/*`）由后端
-// #2237 硬删：v2 单轨后外部助手只提供 `POST /api/v2/chat` 与图片代理 `GET /diagnosis/ossimg/*`
-// （根仓库 ADR-0091），品牌/车型/故障码的周边只读面**归票 2242 按 v2 契约重新落地**。
+// 背景：v1 的四个只读端点（brands / models / fault-codes / manual）已随 #2237 硬删，
+// 本段是**按 v2 契约重新接上**的那一面（五个 GET 在 #2273 落地，移动端消费归 #2296）。
 //
-// 改动原则（同 web 侧 #2237 的裁定）：**同步删调用点**，宁可诊断页暂时变素，也不留一个
-// 「点了必 404」的中间态。诊断页重适配归票 2244。
+// 三条出站口径（照做，不是自由发挥）：
+//   ① **集合恒非空数组** —— 后端已把 `brands` / `faq` / `items` 归一成 `[]`，
+//      这里再兜一次：拿不到数组就返回空数组，绝不让调用方去判 null。
+//   ② `health` **永远 200**，`ok=false` 表示「上游未配置 / 不可达」—— 那是**业务状态不是错误**，
+//      故不抛异常；调用方据此整块留白（不留「点得动、点了就 502」的死入口）。
+//   ③ 错误映射在后端：429 透传、其余一律 502 固定文案 ⇒ 这里只把 `message` 交上去，
+//      客户端**不拼状态码、不猜上游原文**（ADR-0064 决策 9）。
+
+/** 解析引导品牌（`picker` 缺失/空串一律归一成空串，判档交给 `pickerKindOf`） */
+function buildIntentBrand(obj : UTSJSONObject) : DiagnosisIntentBrand {
+	return {
+		id: toStr(obj['id']),
+		name: toStr(obj['name']),
+		tagline: toStr(obj['tagline']),
+		icon: toStr(obj['icon']),
+		cls: toStr(obj['cls']),
+		picker: toStr(obj['picker']),
+	} as DiagnosisIntentBrand
+}
+
+/** 解析目录条目（`systems` / `faults` 的 items） */
+function buildCatalogItem(obj : UTSJSONObject) : DiagnosisCatalogItem {
+	return {
+		id: toStr(obj['id']),
+		name: toStr(obj['name']),
+		icon: toStr(obj['icon']),
+	} as DiagnosisCatalogItem
+}
+
+/** 从响应里取数组（缺失即空数组；**不抛**——空集合是合法业务态） */
+function asObjectArray(raw : any | null) : Array<UTSJSONObject> {
+	if (raw == null) return [] as Array<UTSJSONObject>
+	try {
+		return raw as Array<UTSJSONObject>
+	} catch (_e) {
+		return [] as Array<UTSJSONObject>
+	}
+}
+
+/** 上游健康（`{ok, app_configured}`；永远 200，故失败只可能在传输层） */
+export function getDiagnosisHealthApi() : Promise<DiagnosisHealth> {
+	return getMapped<DiagnosisHealth>('/ai-assistant/diagnosis/health', null, (data : UTSJSONObject) : DiagnosisHealth => {
+		const h : DiagnosisHealth = {
+			ok: toBool(data['ok'], false),
+			app_configured: toBool(data['app_configured'], false),
+		}
+		return h
+	})
+}
+
+/** 品牌与常见问题（`{brands, faq}`，两个集合恒非 null） */
+export function getDiagnosisIntentsApi() : Promise<DiagnosisIntents> {
+	return getMapped<DiagnosisIntents>('/ai-assistant/diagnosis/intents', null, (data : UTSJSONObject) : DiagnosisIntents => {
+		const rawBrands = asObjectArray(data['brands'])
+		const brands : DiagnosisIntentBrand[] = []
+		for (let i = 0; i < rawBrands.length; i++) {
+			const b = buildIntentBrand(rawBrands[i])
+			// 没有 id 或没有名字的品牌卡对用户无意义，且点下去也调不动 systems（brand 必填）
+			if (b.id.length == 0 || b.name.length == 0) continue
+			brands.push(b)
+		}
+		const rawFaq = asObjectArray(data['faq'])
+		const faq : DiagnosisFaq[] = []
+		for (let i = 0; i < rawFaq.length; i++) {
+			const q = toStr(rawFaq[i]['q'])
+			if (q.length == 0) continue
+			const f : DiagnosisFaq = { q: q, a: toStr(rawFaq[i]['a']) }
+			faq.push(f)
+		}
+		const out : DiagnosisIntents = { brands: brands, faq: faq }
+		return out
+	})
+}
+
+/**
+ * 第二层：系统列表（`brand` 必填，缺了后端回 400）。
+ *
+ * ⚠️ **型号档也走这里之外的 `faults?brand=`（不带 second）**：林德那种 87 个型号的品牌，
+ * 第二层是 `faults` 的**根层**列表，不是 `systems` —— 选错层会拿到另一份列表（比对即误判）。
+ */
+export function getDiagnosisSystemsApi(brand : string) : Promise<DiagnosisCatalogItem[]> {
+	const params : UTSJSONObject = { brand: brand }
+	return getMapped<DiagnosisCatalogItem[]>('/ai-assistant/diagnosis/systems', params, (data : UTSJSONObject) : DiagnosisCatalogItem[] => {
+		const raw = asObjectArray(data['items'])
+		const out : DiagnosisCatalogItem[] = []
+		for (let i = 0; i < raw.length; i++) {
+			const it = buildCatalogItem(raw[i])
+			if (it.id.length == 0 && it.name.length == 0) continue
+			out.push(it)
+		}
+		return out
+	})
+}
+
+/**
+ * 第三层：现象 / 主题（也用于**型号档的第二层**：`second` 传空串即根层）。
+ *
+ * 两层同一端点、两个不同列表：`second` 为空 = 该品牌的根层（型号 / 诉求），
+ * 非空 = 该 (品牌, 系统|型号) 下的现象词表。**这不是两个接口**，是同一个接口的两种取法。
+ */
+export function getDiagnosisFaultsApi(brand : string, second : string) : Promise<DiagnosisCatalogItem[]> {
+	const params : UTSJSONObject = { brand: brand }
+	if (second.length > 0) {
+		params['second'] = second
+	}
+	return getMapped<DiagnosisCatalogItem[]>('/ai-assistant/diagnosis/faults', params, (data : UTSJSONObject) : DiagnosisCatalogItem[] => {
+		const raw = asObjectArray(data['items'])
+		const out : DiagnosisCatalogItem[] = []
+		for (let i = 0; i < raw.length; i++) {
+			const it = buildCatalogItem(raw[i])
+			if (it.id.length == 0 && it.name.length == 0) continue
+			out.push(it)
+		}
+		return out
+	})
+}
 
 /**
  * 解析 SSE 文本，拼接所有 delta 内容
