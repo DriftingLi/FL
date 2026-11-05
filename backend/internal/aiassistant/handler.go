@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -402,12 +403,23 @@ func (h *handler) GetSessionMessages(c *gin.Context) {
 }
 
 // writeSSEHeaders SSE 响应头（唯一写点：预检阻断分支与主路径共用，禁用 nginx 缓冲）。
+//
+// 同时把本次写超时拉到 aiStreamTimeout：`main.go` 给 http.Server 设的是 60 秒全局
+// WriteTimeout（挡慢速写攻击），而诊断链路的流式上限是 aiStreamTimeout（300 秒）。
+// 不拉长的话，权威全文在 60 秒后根本写不出去 —— 表现是「上游成功、浏览器 network error」，
+// 且日志里那条 access 记录仍是 200（状态码在超时前已写出）。两者必须一致。
+// 拉长只影响这一条连接，全局保护不变。
 func writeSSEHeaders(c *gin.Context) {
 	c.Writer.Header().Set("Content-Type", "text/event-stream")
 	c.Writer.Header().Set("Cache-Control", "no-cache")
 	c.Writer.Header().Set("Connection", "keep-alive")
 	c.Writer.Header().Set("X-Accel-Buffering", "no")
 	c.Writer.WriteHeader(http.StatusOK)
+	// gin 的 responseWriter 实现了 Unwrap（gin >= 1.10），ResponseController 会一路摸到底层连接。
+	if err := http.NewResponseController(c.Writer).SetWriteDeadline(time.Now().Add(aiStreamTimeout)); err != nil {
+		// 拿不到底层连接（已被中间件包装掉）时降级为旧行为，不阻断本次生成。
+		c.Writer.Header().Set("X-SSE-Deadline", "unset")
+	}
 }
 
 // StreamChat 流式对话
