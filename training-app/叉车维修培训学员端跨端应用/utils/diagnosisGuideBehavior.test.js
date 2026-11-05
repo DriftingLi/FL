@@ -14,7 +14,7 @@
  * ① 换品牌不清第二层/现象；② 型号档也走 systems）。
  */
 const path = require('path');
-const { loadUts } = require('./utsHarness');
+const { loadUts, readText } = require('./utsHarness');
 
 const COMPOSE_UTS = path.join(__dirname, 'diagnosisCompose.uts');
 const GUIDE_UTS = path.join(__dirname, 'diagnosisGuide.uts');
@@ -251,7 +251,7 @@ describe('诊断引导状态机（#2296）', () => {
     const fs = require('fs');
 
     it('把「换品牌清现象」删掉 ⇒ ③ 组第一类断言必须判红', () => {
-      const src = fs.readFileSync(GUIDE_UTS, 'utf8');
+      const src = readText(GUIDE_UTS);
       const broken = src.replace(
         'next.selection.faultName = \'\'\n\tnext.step = GUIDE_STEP_SECOND',
         'next.step = GUIDE_STEP_SECOND'
@@ -269,7 +269,7 @@ describe('诊断引导状态机（#2296）', () => {
     });
 
     it('把型号档也改走 systems ⇒ ① 组判档断言必须判红', () => {
-      const src = fs.readFileSync(GUIDE_UTS, 'utf8');
+      const src = readText(GUIDE_UTS);
       const broken = src.replace(
         "return pickerKindOf(brand) == 'model' ? 'faults-root' : 'systems'",
         "return 'systems'"
