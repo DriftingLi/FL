@@ -15,7 +15,6 @@
     "utils/wirelessDebugEnsureBehavior.test.js": 14.071,
     "utils/frontierBehavior.test.js": 9.861,
     "utils/emulatorSmokeBoundedTextBehavior.test.js": 8.87,
-    "utils/mpWeixinGateContract.test.js": 7.526,
     "utils/frontierRunPlan.test.js": 6.486,
     "utils/devFinishContract.test.js": 5.183
   }

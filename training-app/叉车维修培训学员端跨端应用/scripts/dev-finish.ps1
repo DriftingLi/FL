@@ -103,7 +103,9 @@ param(
     # 继续下一套件，并让 `-BehaviorResumeFrom` 有「第 i 个」这个稳定起点。
     # 套件级 stall 阈值 = 该套件**上次输出**之后允许的静默秒数（reporter 的心跳行 / 任何 stdout
     # 都算一次心跳）。默认 900 s 是保守值：2026-10-18 实测最长单套件 ≈ 480 s
-    # （utils/mpWeixinGateResultLineBehavior.test.js ≈ 8 分钟）⇒ 留近两倍余量，不把「慢」误判成「卡死」。
+    # （当时最长单套件 utils/mpWeixinGateResultLineBehavior.test.js ≈ 8 分钟，已随 #2326 删除）
+    # ⇒ 900 s 对现存最慢套件（mpWeixinBuildFingerprint ≈ 31 s）已是过宽余量，暂不收紧：收紧阈值
+    # 会把「慢」误判成「卡死」，而本参数存在的意义恰恰是区分这两者。
     # 参数化是为了让假套件在秒级验证（阈值 2–3 s），而不是把真门调紧。
     [ValidateRange(1, 86400)]
     [int]$BehaviorStallSeconds = 900,

@@ -8,8 +8,9 @@
  *   jest 对**慢套件**才打印 `PASS utils/x.test.js (12.3 s)`，故这份表天然只含慢套件；
  *   其余套件由 `--default-seconds`（默认 1s）代表。表里没列到的套件在分片器里按默认权重计。
  * - `--json <file>`（**本机口径，慎用**）：file = 本机 `jest --json --outputFile` 的产物，含**全部**
- *   套件精确耗时。⚠️ 本机数字与 CI 不可混用：实测同一套件（`utils/mpWeixinGateResultLineBehavior.test.js`）
- *   本机 503s、CI 里根本进不了 ≥5s 名单（本机受会话并发 / 杀毒 / 磁盘影响），拿它当 CI 权重会把片切歪。
+ *   套件精确耗时。⚠️ 本机数字与 CI 不可混用：当年实测同一套件
+ *   （`utils/mpWeixinGateResultLineBehavior.test.js`，已随 #2326 删除）本机 503s、CI 里根本进不了 ≥5s
+ *   名单（本机受会话并发 / 杀毒 / 磁盘影响），拿它当 CI 权重会把片切歪。
  *
  * ## 为什么要脚本而不是手改
  *
