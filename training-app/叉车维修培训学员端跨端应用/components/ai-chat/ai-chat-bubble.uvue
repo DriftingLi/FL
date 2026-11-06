@@ -3,14 +3,14 @@
 		<view class="message-bubble">
 			<!-- 用户消息：文字仍保持纯文本、逐字节不变（#1443）；纯图轮次没有文字，故有字才渲染这一行。
 			     附图（#2299）：缩略图一行、点开走 `uni.previewImage`；URL 是站内地址，原样当 src 用。 -->
-			<text v-if="role == 'user' && content.length > 0" class="message-text">{{ displayContent(content) }}</text>
+			<text v-if="role == 'user' && messageContent.length > 0" class="message-text">{{ displayContent(messageContent) }}</text>
 			<view v-if="role == 'user' && userImages.length > 0" class="user-images">
 				<image v-for="(u, idx) in userImages" :key="u" class="user-image" :src="u" mode="aspectFill" @click="onPreviewImage(idx)" />
 			</view>
 			<!-- 助手消息：markdown 块渲染（#1443，ADR-0046 决定 6 已回填）。解析在壳层
 			     `utils/aiAnswerBody.uts`（唯一真源 parseMarkdown + #1279 展开前置，均不在本处重写）；
 			     模板只消费本地 computed —— 直调 import 函数会编成 .invoke()（见脚本注释）。 -->
-			<view v-else class="md-body">
+			<view v-if="role != 'user'" class="md-body">
 				<view v-for="(block, idx) in assistantBlocks" :key="idx" class="md-block">
 					<text v-if="block.type == 'heading'" :class="['md-heading', 'md-h' + block.level]">{{ block.text }}</text>
 					<view v-else-if="block.type == 'code'" class="md-code-wrap"><text class="md-code">{{ block.text }}</text></view>
@@ -28,7 +28,7 @@
 		</view>
 		<!-- 诊断来源资料（#988）：位置对齐 web 的 `#assistant-extra`（回答下方、操作按钮上方）。
 		     仅助手消息且有来源才出现；调用方不传 `sources` 时行为与从前完全一致。 -->
-		<AiChatSources v-if="role == 'assistant' && sources.length > 0" :sources="sources" />
+		<AiChatSources v-if="role == 'assistant' && messageSources.length > 0" :sources="messageSources" />
 		<view v-if="showActions" class="message-actions">
 			<text class="action-btn" @click="onCopy">&#x1F4CB; 复制</text>
 			<text v-if="isLast" class="action-btn" @click="onRetry">&#x1F504; 重试</text>
@@ -82,6 +82,29 @@
 		return v
 	})
 
+	/**
+	 * 用户正文的**空值归一**（#2328）：服务端映射走 `toStr` 本应恒为字符串，
+	 * 但可空 prop 只要落一次 null，模板里的 `.length` 就会把整帧渲染打断
+	 * （症状 = 发了消息不回复）。收敛到这里，模板只认字符串。
+	 */
+	const messageContent = computed<string>(() : string => {
+		const v = props.content
+		if (v == null) return ''
+		return `${v}`
+	})
+
+	/**
+	 * 诊断来源的**空值归一**（#2328）：`sources` 确实会是 null —— 历史消息映射
+	 * （`api/aiAssistant.uts` 的 `buildSessionMessage`）与发消息时的助手占位消息
+	 * 都把它显式填成 null，而 Vue 的 prop default 只对 undefined 生效。
+	 * 模板读 `.length` 前必须先过这里。
+	 */
+	const messageSources = computed<AiDiagnosisSource[]>(() : AiDiagnosisSource[] => {
+		const v = props.sources
+		if (v == null) return [] as AiDiagnosisSource[]
+		return v
+	})
+
 	/** 用户附图预览：口径单点在 `utils/forumDetailDisplay.previewImages`，本处只包本地名（.invoke 雷同） */
 	function onPreviewImage(index : number) : void {
 		previewImages(userImages.value, index)
@@ -90,12 +113,13 @@
 	/**
 	 * 助手气泡的渲染块（#1443）：全部口径（#1279 展开前置、论坛档位、降级形状）
 	 * 住在唯一壳层 `utils/aiAnswerBody.uts`，本处只包一层本地名供模板消费（.invoke 雷同上）。
-	 * 模板的 v-if/v-else 已把用户消息分流出去，这里不再判 role。
+	 * 模板的 v-if 已把用户消息分流出去（#2328：原来是 v-else，被附图分支抢走了，
+	 * 用户文字气泡于是多渲染一遍 markdown 正文），这里不再判 role。
 	 */
 	const assistantBlocks = computed<MarkdownBlock[]>(() : MarkdownBlock[] => {
 		// 脚本作用域取 props 必须 `props.` 前缀（forum-topic-body 同例）；模板里裸名可用，
 		// 但编译到 Kotlin 后脚本里的裸名是 unresolved reference（④c 实测：content 报错）。
-		return aiAnswerBlocks(props.content)
+		return aiAnswerBlocks(messageContent.value)
 	})
 
 	function onCopy() : void {

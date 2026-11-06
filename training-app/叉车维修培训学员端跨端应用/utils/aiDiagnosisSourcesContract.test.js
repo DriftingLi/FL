@@ -243,7 +243,9 @@ describe('#988 诊断来源资料消费契约', () => {
       expect(BUBBLE).toContain("import { expandImageMarkers } from '../../utils/aiSourcesDisplay'");
       // 断言**产物形状**：`{{ }}` 里真的调了包装函数。只断「import 在」会放过「import 了但模板
       // 仍直出 `{{ content }}`」这种坏实现（本仓反复踩的「片段断言放过 404」同款）。
-      expect(BUBBLE).toMatch(/\{\{\s*displayContent\(content\)\s*\}\}/);
+      // #2328 起插值吃的是**归一后的** `messageContent`（可空 prop 落 null 会把整帧渲染打断）；
+      // 断言形状不变：`{{ }}` 里真的调了包装函数，而不是直出正文。
+      expect(BUBBLE).toMatch(/\{\{\s*displayContent\(messageContent\)\s*\}\}/);
       expect(BUBBLE).not.toMatch(/\{\{\s*content\s*\}\}/);
       // 包装必须**真的转发**给 utils（否则「包一层」会变成「把展开悄悄丢掉」）。
       expect(BUBBLE).toContain('return expandImageMarkers(value)');
@@ -253,8 +255,8 @@ describe('#988 诊断来源资料消费契约', () => {
     });
 
     it('⑥c 检测器自检：插值改回直出、或包装不再转发，都必须判红', () => {
-      const reverted = BUBBLE.replace('{{ displayContent(content) }}', '{{ content }}');
-      expect(/\{\{\s*displayContent\(content\)\s*\}\}/.test(reverted)).toBe(false);
+      const reverted = BUBBLE.replace('{{ displayContent(messageContent) }}', '{{ content }}');
+      expect(/\{\{\s*displayContent\(messageContent\)\s*\}\}/.test(reverted)).toBe(false);
       expect(/\{\{\s*content\s*\}\}/.test(reverted)).toBe(true);   // 反例形状确实长这样
       const stubbed = BUBBLE.replace('return expandImageMarkers(value)', 'return value');
       expect(stubbed).not.toContain('return expandImageMarkers(value)');
@@ -270,7 +272,11 @@ describe('#988 诊断来源资料消费契约', () => {
 
     it('气泡在助手消息且有来源时才渲染来源组件', () => {
       expect(BUBBLE).toContain("import AiChatSources from './ai-chat-sources.uvue'");
-      expect(BUBBLE).toMatch(/v-if="role == 'assistant' && sources\.length > 0"/);
+      // #2328：`sources` 是 nullable（历史映射与助手占位消息都填 null），模板只能读归一后的
+      // `messageSources` —— 直接 `sources.length` 就是那次「发消息不回复」的崩溃本位。
+      expect(BUBBLE).toMatch(/v-if="role == 'assistant' && messageSources\.length > 0"/);
+      expect(BUBBLE).toContain(':sources="messageSources"');
+      expect(BUBBLE).not.toMatch(/\bsources\.length\b/);
       expect(BUBBLE).toContain('<AiChatSources');
     });
 
