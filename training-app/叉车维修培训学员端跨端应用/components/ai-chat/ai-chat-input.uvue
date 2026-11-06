@@ -3,7 +3,7 @@
 		<!-- 上排：占位符 + 发送 -->
 		<view class="input-top">
 			<input :value="inputText" class="chat-input" :placeholder="placeholder" confirm-type="send" @input="onInputChange" @confirm="onSend" />
-			<text class="send-btn" :class="{ disabled: inputText.length == 0 || disabled }" @click="onSend">&#10148;</text>
+			<text class="send-btn" :class="{ disabled: !sendEnabled || disabled }" @click="onSend">&#10148;</text>
 		</view>
 		<!-- 下排：模型芯片 + 动作按钮 -->
 		<view class="input-bottom">
@@ -16,6 +16,7 @@
 			<view class="action-group">
 				<view v-if="showImageButton" class="action-btn" @click="onImageClick">
 					<text class="action-icon">&#128206;</text>
+					<text v-if="imageCount > 0" class="action-badge">{{ imageCount }}</text>
 				</view>
 				<view class="action-btn" @click="onVoiceClick">
 					<text class="action-icon">&#128266;</text>
@@ -27,6 +28,7 @@
 
 <script setup lang="uts">
 	import { computed, ref, watch } from 'vue'
+	import { canSend } from '../../utils/aiImageQuota'
 
 	const props = withDefaults(defineProps<{
 		placeholder?: string
@@ -36,6 +38,8 @@
 		modelReadonly?: boolean
 		disabled?: boolean
 		showImageButton?: boolean
+		/** 已选待发图片张数（#2299）：>0 时输入框为空也允许发送（纯图轮次） */
+		imageCount?: number
 		/** 外部塞进输入框的草稿（诊断引导组好句后由页面写入；改它就等于预填输入框） */
 		draft?: string
 	}>(), {
@@ -46,6 +50,7 @@
 		modelReadonly: false,
 		disabled: false,
 		showImageButton: false,
+		imageCount: 0,
 		draft: ''
 	})
 
@@ -77,9 +82,15 @@
 		emit('text-change', inputText.value)
 	}
 
+	// 发送可用态 = 唯一判据 `canSend`（有字 ∨ 有图）—— 早退与按钮灰态同源，
+	// 免得「按钮可点、发出去被 sendInput 早退吞掉」（#2299 验收第 2 条：有图无字也能发）。
+	const sendEnabled = computed<boolean>(() : boolean => {
+		return canSend(inputText.value, props.imageCount)
+	})
+
 	function onSend() : void {
 		const text = inputText.value.trim()
-		if (text.length == 0) return
+		if (!canSend(text, props.imageCount)) return
 		emit('send', text)
 		inputText.value = ''
 	}
@@ -187,5 +198,14 @@
 	.action-icon {
 		font-size: 30rpx;
 		color: #8a8a8a;
+	}
+
+	.action-badge {
+		font-size: 18rpx;
+		color: #ffffff;
+		background-color: #6db8e8;
+		border-radius: 14rpx;
+		padding: 0 6rpx;
+		margin-left: 2rpx;
 	}
 </style>

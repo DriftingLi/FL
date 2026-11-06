@@ -26,6 +26,7 @@ import {
 	streamChatApi,
 } from '../api/aiAssistant'
 import type { AiSession, AiSessionMessage, AiChatMessage, AiDiagnosisSource } from '../types/index'
+import { canSend } from '../utils/aiImageQuota'
 
 /** 构造差异化请求体：基础版固定 admin，专业版按 model_source 分支 */
 export type ChatBodyBuilder = (history : AiChatMessage[], sessionID : number, featureKey : string) => UTSJSONObject
@@ -247,7 +248,8 @@ export function useAiChat(featureScope : Ref<string>) {
 	 */
 	function sendInput(sessionTag : string, buildBody : ChatBodyBuilder, images : string[], featureKey : string) : void {
 		const text = inputText.value.trim()
-		if (text.length == 0) return
+		// 早退判据只有一个（`canSend`）：有图无字的轮次必须放行，否则托盘里的图会被静默吞掉（#2299）
+		if (!canSend(text, images.length)) return
 		if (thinking.value) {
 			uni.showToast({ title: '请等待当前回复完成', icon: 'none' })
 			return

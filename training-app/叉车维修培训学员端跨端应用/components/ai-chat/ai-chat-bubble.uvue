@@ -1,8 +1,12 @@
 <template>
 	<view class="message-row" :class="role">
 		<view class="message-bubble">
-			<!-- 用户消息：保持纯文本，逐字节不变（#1443 刻意不改这一支，学员自己打进去的原始文本不该被二次解析）。 -->
-			<text v-if="role == 'user'" class="message-text">{{ displayContent(content) }}</text>
+			<!-- 用户消息：文字仍保持纯文本、逐字节不变（#1443）；纯图轮次没有文字，故有字才渲染这一行。
+			     附图（#2299）：缩略图一行、点开走 `uni.previewImage`；URL 是站内地址，原样当 src 用。 -->
+			<text v-if="role == 'user' && content.length > 0" class="message-text">{{ displayContent(content) }}</text>
+			<view v-if="role == 'user' && userImages.length > 0" class="user-images">
+				<image v-for="(u, idx) in userImages" :key="u" class="user-image" :src="u" mode="aspectFill" @click="onPreviewImage(idx)" />
+			</view>
 			<!-- 助手消息：markdown 块渲染（#1443，ADR-0046 决定 6 已回填）。解析在壳层
 			     `utils/aiAnswerBody.uts`（唯一真源 parseMarkdown + #1279 展开前置，均不在本处重写）；
 			     模板只消费本地 computed —— 直调 import 函数会编成 .invoke()（见脚本注释）。 -->
@@ -36,6 +40,7 @@
 	import { computed } from 'vue'
 	import AiChatSources from './ai-chat-sources.uvue'
 	import { expandImageMarkers } from '../../utils/aiSourcesDisplay'
+	import { previewImages } from '../../utils/forumDetailDisplay'
 	import { aiAnswerBlocks } from '../../utils/aiAnswerBody'
 	import type { AiDiagnosisSource, MarkdownBlock } from '../../types/index'
 
@@ -45,12 +50,15 @@
 		showActions?: boolean
 		isLast?: boolean
 		sources?: AiDiagnosisSource[]
+		/** 用户消息附图（#2299）：站内 URL；历史回显与刚发出的同一形状 */
+		images?: string[]
 	}>(), {
 		role: 'assistant',
 		content: '',
 		showActions: false,
 		isLast: false,
-		sources: () => [] as AiDiagnosisSource[]
+		sources: () => [] as AiDiagnosisSource[],
+		images: () => [] as string[]
 	})
 
 	const emit = defineEmits(['copy', 'retry'])
@@ -62,6 +70,21 @@
 	 */
 	function displayContent(value : string) : string {
 		return expandImageMarkers(value)
+	}
+
+	/**
+	 * 用户附图的**空值归一**：历史消息的 `images` 是 nullable（后端空数组可能落成 null），
+	 * 模板直接 `.length` 会在 null 上炸；收敛到这里，其余分支只认数组。
+	 */
+	const userImages = computed<string[]>(() : string[] => {
+		const v = props.images
+		if (v == null) return [] as string[]
+		return v
+	})
+
+	/** 用户附图预览：口径单点在 `utils/forumDetailDisplay.previewImages`，本处只包本地名（.invoke 雷同） */
+	function onPreviewImage(index : number) : void {
+		previewImages(userImages.value, index)
 	}
 
 	/**
@@ -120,6 +143,20 @@
 
 	.message-row.user .message-text {
 		color: #ffffff;
+	}
+
+	.user-images {
+		flex-direction: row;
+		flex-wrap: wrap;
+		margin-top: 10rpx;
+	}
+
+	.user-image {
+		width: 156rpx;
+		height: 156rpx;
+		border-radius: 12rpx;
+		margin-right: 10rpx;
+		margin-bottom: 8rpx;
 	}
 
 	.message-actions {

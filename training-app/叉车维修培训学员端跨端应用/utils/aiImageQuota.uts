@@ -1,0 +1,40 @@
+/**
+ * 随问图片的**名额与轮次判定**（#2299）：纯函数，唯一真源
+ *
+ * 为什么单独成件：张数上限、超限文案、删图归还名额，以及「有图无字也能发」这条轮次判定，
+ * 全都要**真执行**才看得见（`utils/aiImagePickerBehavior.test.js` 跑的就是它 + picker）。
+ * 上限取值只有一处：`config/env.uts` 的 `AI_MAX_IMAGES`；它与后端
+ * `backend/internal/aiassistant/diagnosis_adapter.go` 的 `diagnosisMaxImages` 同值，
+ * 由 `utils/aiImageLimitParityContract.test.js` 跨栈锁死（改一边不改另一边必红）。
+ */
+
+/** 剩余名额：越界一律按 0（闸门只会更严，不会放行） */
+export function remainingSlots(max : number, count : number) : number {
+    const left = max - count
+    if (left < 0) return 0
+    return left
+}
+
+/** 超限时的**可读文案**（按该面的上限说话，不写死 3） */
+export function capNotice(max : number) : string {
+    return '最多上传 ' + max + ' 张图片'
+}
+
+/** 删除按位置：返回新数组，不原地 splice（与既有写法同形） */
+export function removeAt(list : string[], index : number) : string[] {
+    const next : string[] = []
+    for (let i = 0; i < list.length; i++) {
+        if (i != index) next.push(list[i])
+    }
+    return next
+}
+
+/**
+ * 本轮能不能发（**纯图轮次判定**）：文本非空 ⇒ 能；文本为空但带图 ⇒ 也能（后端补默认话术）。
+ * 两处消费（`composables/useAiChat.sendInput` 的早退、输入组件发送按钮的可用态）都取这一处，
+ * 免得「输入框能点、发出去却被早退吞掉」这类两处各判一次的缺陷（#2299 验收第 2 条）。
+ */
+export function canSend(text : string, imageCount : number) : boolean {
+    if (text.trim().length > 0) return true
+    return imageCount > 0
+}
