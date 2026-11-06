@@ -14,7 +14,7 @@
  * 「不可知」换成「我覆盖了冒烟集」= 把不知道包装成已覆盖，那正是要消灭的假绿形态。
  *
  * 夹具布局：仓根是 ASCII 临时目录，中文目录段放在**仓内相对路径**里（与本仓 `training-app/叉车…/pages/…`
- * 同构）——理由同 utils/mpWeixinGatePagesBehavior.test.js 头的「夹具布局铁律」（git 输出是仓根相对路径）。
+ * 同构）——同本仓实际布局（git 输出是仓根相对路径，中文段必须落在仓内而不是临时目录里）。原先同面的 utils/mpWeixinGatePagesBehavior.test.js 已随 ② 退役删除（#2326）。
  */
 
 const fs = require('fs');
@@ -119,13 +119,17 @@ describe('② -Pages auto 覆盖判据（真执行：changed / smoke / none 三�
     }
   }, 180000);
 
-  it('接线：门脚本 dot-source 判据库、在 auto 分支取用、并把读数原样送进结果行', () => {
+  it('接线（反向）：会话侧覆盖判据已随 ② 退役摘除 ⇒ 门脚本不得再 dot-source 本判据库', () => {
+    // #2326：原用例正向断言「门脚本 dot-source 判据库 / 在 auto 分支取用 / 读数进结果行」——
+    // 那三项判据全绑在 ② 的 auto 分支与 directPages 计划字段上，随会话段一并退役，正向断言不可能再成立。
+    // 保留为反向断言（fail-closed，不删）：若有人把会话侧覆盖判据重新接回这个已退役的门脚本，
+    // 等于把 ② 复活成第二个运行时取证入口（#2320 退役的决定面）⇒ 这条当场红。
     const gate = fs.readFileSync(path.join(ROOT, GATE_REL), 'utf8');
-    expect(gate).toContain(". (Join-Path $PSScriptRoot 'lib\\mp-weixin-pages.ps1')");
-    expect(gate).toContain('Resolve-MpWeixinDirectCoverage -AutoPages $autoPages');
-    expect(gate).toContain('$coverageField = "$($resolution.Coverage)"');
-    // 冒烟集真源必须在门计划里（`smoke:2` 的 2 不是写死的，是这份清单的条数）
-    expect(gate).toMatch(/smokePages\s*=\s*@\('pages\/dashboard\/dashboard',\s*'pages\/profile\/profile'\)/);
+    expect(gate).not.toContain('lib\\mp-weixin-pages.ps1');
+    expect(gate).not.toContain('Resolve-MpWeixinDirectCoverage');
+    expect(gate).not.toContain('smokePages');
+    // 判据库本身仍由本套件真执行钉住（changed / smoke / none 三分支）：唯一消费者是这里，不是门脚本。
+    expect(fs.existsSync(path.join(ROOT, LIB_REL))).toBe(true);
   });
 
   it('changed:N —— 改了 .uvue 页 ⇒ 跑改动页，读数取改动页条数（不混冒烟集）', () => {

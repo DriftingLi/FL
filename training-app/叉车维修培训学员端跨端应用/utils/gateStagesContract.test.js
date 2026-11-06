@@ -10,8 +10,9 @@
  *  C4 ④c kotlin-all-check.ps1 五段齐全：hx-wait/publish/collect/toolchain/kotlinc；
  *      hx-wait 与 publish 都落在 -SkipPublish 不生效的分支内（顺序判据：publish 在
  *      if (-not $SkipPublish) { 之后、hx-wait 在其 else 分支且先于 Wait-HxFree）。
- *  C5 ② mp-weixin-check.ps1 四段齐全：wait-hx/publish/automation/auto-probe；
- *      wait-hx 在第一个 if (-not $SkipBuild) { 内且先于 Wait-HxFree、publish 在第二个该分支之后。
+ *  C5 ② mp-weixin-check.ps1 两段齐全：wait-hx/publish（automation / auto-probe 已随 ② 会话段
+ *      退役删除，#2320/#2326 ⇒ 反向判据：那两段名不得再出现）；wait-hx 在 Wait-HxFree 所在分支内
+ *      且先于它、publish 紧随其后。
  *  C6 三份门脚本都恰好一次 Stop-GateStage（STAGE_SUMMARY 只出一行）。#1861 起 ② 的两个收尾点
  *      （主通过路径与 -BuildOnly 的构建面收口）都经脚本内的幂等包装 `Stop-GateStageIfOpen` 调用，
  *      字面量仍只有函数体里一处 —— 判据不变，变的是「为什么它还能是 1」。
@@ -80,10 +81,13 @@ function scanContract(sources) {
   must(cElse !== -1 && startIdx(c, 'hx-wait') > cElse && startIdx(c, 'hx-wait') < cWait,
     'C4', '④c hx-wait 不在 Wait-HxFree 所在分支内');
 
-  // C5 ②：四段齐全 + 分支归属（顺序判据）
+  // C5 ②：构建面两段齐全 + 分支归属（#2326：automation / auto-probe 随会话段退役，改判反向缺席）
   const w = sources.scripts.w;
-  for (const name of ['wait-hx', 'publish', 'automation', 'auto-probe']) {
+  for (const name of ['wait-hx', 'publish']) {
     must(startIdx(w, name) !== -1, 'C5', '② 缺 ' + name + ' 段');
+  }
+  for (const name of ['automation', 'auto-probe']) {
+    must(startIdx(w, name) === -1, 'C5', '② 不该再有 ' + name + ' 段（会话面已退役）');
   }
   const wIfs = [...w.matchAll(/if \(-not \$SkipBuild\) \{/g)].map((m) => m.index);
   const wWait = w.indexOf('$hx = Wait-HxFree -CliExe $cliExe');
@@ -121,7 +125,7 @@ describe('gate-stages 接线守护（#2001）', () => {
       ['C2', { ...real, scripts: { ...real.scripts, a: real.scripts.a.replace(/Initialize-GateStageRecorder/g, 'Removed-Recorder') } }],
       ['C3', { ...real, scripts: { ...real.scripts, a: real.scripts.a.replace(/['\"]compile-launch['\"]/g, "'removed-seg'") } }],
       ['C4', { ...real, scripts: { ...real.scripts, c: real.scripts.c.replace(/['\"]kotlinc['\"]/g, "'removed-seg'") } }],
-      ['C5', { ...real, scripts: { ...real.scripts, w: real.scripts.w.replace(/['\"]auto-probe['\"]/g, "'removed-seg'") } }],
+      ['C5', { ...real, scripts: { ...real.scripts, w: real.scripts.w.replace(/['\"]publish['\"]/g, "'removed-seg'") } }],
       ['C6', { ...real, scripts: { ...real.scripts, a: real.scripts.a.replace(/Stop-GateStage/g, 'RemovedStageStop') } }],
     ];
     for (const [rule, injected] of cases) {

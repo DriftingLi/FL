@@ -344,9 +344,16 @@ L 系列钉 `-Mode` / `-Leg` 两维的机检可判读性（L1a–L1c 成对腿�
 
 ### ② 门的 env-blocked：三分语义与处置（历史账；② 已于 #2320 退役）
 
-> 以下只适用于仍手动跑 `npm run build:mp-weixin-check` 时的读数；日常 PR 不再触发 ②、不判红。
+> 以下是**历史读数指南**：入口脚本名 `build:mp-weixin-check` 已随 #2326 删除，现役入口是
+> `npm run build:mp-weixin-buildonly`（**只产构建面结果行** `MP_WEIXIN_BUILDONLY_RESULT`）。本节三分语义与
+> `reason=` 值域来自 ② 会话段的探针文案锚（`scripts/mp-weixin-probe.mjs` 亦已删除）⇒ **构建面产出的读数不在
+> 这个值域里**：现役 reason 只有 `scripts/mp-weixin-check.ps1` 自己打的那几枚（唯一真源=该脚本的 `reason=`
+> 出现处，本节不抄，抄了就是第二份真相），按构建面读数判即可，别拿本节的 env 三分去解释它。
+> 日常 PR 不触发 ②、不判红。
 
 判据源 = `scripts/lib/mp-weixin-env.ps1`（结论行由它的两个构造器产出，**互斥由构造器保证，不靠调用方自觉**）。
+⚠️ 该文件与 `mp-weixin-preprobe.ps1` 已随 **#2326 删除**（② 会话段删光后两者零 dot-source、零守护覆盖）⇒ 以下读法**只用于解释历史读数**，
+今后无法再由代码复现；原文与判据见 `git log -- training-app/…/scripts/lib/mp-weixin-env.ps1`。
 本节只给读法：
 
 - **通过** = metric 行里**没有** `errors=` 这枚 token（判别靠**缺席**），exit 0。

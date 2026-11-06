@@ -19,7 +19,9 @@
  `routeTo appLaunch timeout`）把真正的病根藏起来。
 
  为什么单独成库而不是写成门脚本里的内联块：判据必须能被**真执行** —— 守护
- `utils/mpWeixinGateContract.test.js` 的 C20 段用**好 / 坏产物夹具**直接调 `Get-MpWeixinProductReport`，
+ `utils/mpWeixinGateContract.test.js`（已随 ② 退役删除，#2326）的 C20 段用**好 / 坏产物夹具**直接调 `Get-MpWeixinProductReport`，
+ 现役的同款真执行覆盖在 `utils/mpWeixinBuildOnlyBehavior.test.js` 的 G3（非法产物 ⇒ exit 1）与
+ `utils/mpWeixinPublishSettleBehavior.test.js`，
  而不是断言源码文本（文本断言在「判据被摘掉、只留一句字面量」时照样绿）。
 #>
 

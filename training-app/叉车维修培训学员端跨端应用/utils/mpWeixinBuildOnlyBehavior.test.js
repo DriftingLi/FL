@@ -84,10 +84,11 @@ describe('-BuildOnly（#1861）：只跑构建面，会话段真不跑', () => {
       expect(plan.resultLine.prefix).toBe('MP_WEIXIN_BUILDONLY_RESULT');
       // ② 字段：只声明这一轮真能读到的六项（会话段那些读数本轮根本不存在，列着就是逼执行路径填假值）
       expect(plan.resultLine.fields.map((f) => f.name)).toEqual(['appid', 'pages', 'product', 'build', 'elapsed', 'log']);
-      // ③ 步骤：只剩构建面仍要用的两步；会话段（quit / open / auto / 就绪闸门 / 探针）整段不在计划里
-      expect(plan.steps.map((s) => s.id)).toEqual(['env-preprobe', 'devtools-close']);
-      // ④ exit 2 归属只声明给计划里真有的步骤（摊平后自动收敛，不是另写一份清单）
-      expect(plan.exit2.map((e) => e.step)).toEqual(['env-preprobe']);
+      // ③ 步骤：只剩构建面仍要用的收尾 close；会话段（quit / open / auto / 就绪闸门 / 探针）整段已随
+      //    #2326 删除，env-preprobe（IDE 楔死预探）也随之删除
+      expect(plan.steps.map((s) => s.id)).toEqual(['devtools-close']);
+      // ④ exit 2 归属只声明给计划里真有的步骤：devtools-close 失败只警告 ⇒ 归属清单为空
+      expect(plan.exit2).toEqual([]);
       // ⑤ 模式位：守护在 -DryRun 上就能区分三种 mode，不用真跑
       expect(plan.mode.buildOnly).toBe(true);
       expect(plan.mode.skipBuild).toBe(false);
@@ -171,17 +172,69 @@ describe('-BuildOnly（#1861）：只跑构建面，会话段真不跑', () => {
     } finally { rmFixture(fixture.dir); }
   });
 
-  it('非 Windows：build-only 在 POSIX 上 fail-closed（真断言，不静默跳过）', async () => {
+  it('G5a 静态：构建面用到的顶层常量必须有顶格定义（装配漏抽常量块的直接后验）', () => {
+    // 为什么存在（#2326 实测）：装配器按**行区间**从旧文件抽构建面段落，旧 340–353 的常量块整段落在
+    // 所有切割区间之外 ⇒ `$WxDevToolsPatterns` 的定义被丢掉，而 `Resolve-DevToolsCli` 仍在 foreach 它。
+    // Set-StrictMode 下这一支只在**不传 -DevToolsCli** 时走到；而 G2–G4 每条都传 ⇒ 套件全绿、
+    // 真实 `npm run build:mp-weixin-buildonly` 当场 exit 1。⇒ 光跑套件不够，得把常量清单钉住。
+    const lines = fs.readFileSync(SCRIPT, 'utf8').split(/\r?\n/);
+    const definedAtTopLevel = (name) => lines.some((l) => l.startsWith('$' + name + ' ='));
+    // 清单 = 构建面（publish / 产物 / 指纹 / 结果行 / 收尾 close）真用到的顶层常量，逐字对照 HEAD 的定义点
+    const REQUIRED = [
+      'DistRelative',        // 产物目录（旧 342 行）
+      'WxDevToolsPatterns',  // 开发者工具候选路径（旧 346 行）⇒ Resolve-DevToolsCli 的枚举源
+      'Doctor'               // 已退役开关的常量兜底（指纹段判定式仍取反它）
+    ];
+    for (const name of REQUIRED) {
+      expect({ name, defined: definedAtTopLevel(name) }).toEqual({ name, defined: true });
+    }
+    // 定义存在还必须真被使用，否则就是长回来的第二份真相
+    expect(fs.readFileSync(SCRIPT, 'utf8')).toContain('foreach ($p in $WxDevToolsPatterns)');
+  });
+
+  it('G5b 真实入口形态：`-BuildOnly -DryRun` 必须能跑起来（npm 那条 argv 的形状）', () => {
+    // 为什么这条必须存在：npm 入口是 `pwsh -File scripts/mp-weixin-check.ps1 -BuildOnly`——**只有这一枚**
+    // 开关，不带 -Project / -DevToolsCli。而 G1–G4 全部经 H.gateArgs 传 -Project 与 -DevToolsCli ⇒
+    // 「默认项目根 + 候选枚举」这条真实形状从来没被执行过：装配器漏抽旧 340–353 常量块时套件照样全绿，
+    // 真实入口却当场炸（#2326 实测）。⇒ 这里按真实 argv 形状跑一次。
+    //
+    // 为什么用 -DryRun 而不是真跑到 no-dist：后者会命中本机**真装着**的 cli.bat，使 finally 的 close
+    // 把微信开发者工具拉起来再关掉（实测「IDE server has started」）；在无头管道下那还会把 stdout 写满、
+    // 卡到超时。启动常驻 IDE 不属于本套件的职责（② 已退役、日常不启工具，#2320）。
+    const out = execFileSync('pwsh', [
+      '-NoProfile', '-NonInteractive', '-OutputFormat', 'Text', '-File', SCRIPT, '-BuildOnly', '-DryRun'
+    ], { cwd: H.ROOT, encoding: 'utf8', timeout: 120000, windowsHide: true, maxBuffer: 16 * 1024 * 1024 });
+    const line = out.split(/\r?\n/).find((l) => l.startsWith('GATE_PLAN '));
+    expect(line).toBeTruthy();
+    const plan = JSON.parse(line.slice('GATE_PLAN '.length));
+    // 计划能装配出来 = 顶层常量全部就位；root 取的是**默认项目根**（不传 -Project 的那一支）
+    expect(plan.mode.buildOnly).toBe(true);
+    expect(plan.project.root).toBe(path.resolve(H.ROOT));
+    expect(plan.resultLine.prefix).toBe('MP_WEIXIN_BUILDONLY_RESULT');
+  });
+
+  it('非 Windows：构建面在 POSIX 上 fail-closed（真断言，不静默跳过）', async () => {
     if (H.IS_WIN) return;
     const fixture = H.makeFixture();
     try {
       const fakeCli = H.makeFakeDevTools(fixture.dir);
       const port = await H.freePort();
-      const r = runGate(fixture, fakeCli, port, ['-BuildOnly']);
-      // 真断言的是「在 POSIX 上 ② 链路根本走不到结果行」：端口面用 Windows 专有的 Get-NetTCPConnection，
-      // 它排在环境检查与日志初始化之前 ⇒ 非零退出、且 build-only 与 ② 两个 token 都不出现。
-      // 这条不是「跳过」：一旦脚本将来在 POSIX 上真能跑通（例如端口面被跨平台化），它会当场提醒改写成真判据。
-      expect(r.status).not.toBe(0);
+      const base = H.gateArgs(SCRIPT, fixture, fakeCli, port, ['-BuildOnly']);
+      const skipAt = base.indexOf('-SkipBuild');
+      const args = base.slice(0, skipAt).concat(base.slice(skipAt + 1));
+      let status;
+      try {
+        execFileSync('pwsh', args, { cwd: H.ROOT, encoding: 'utf8', timeout: 120000, windowsHide: true, maxBuffer: 16 * 1024 * 1024 });
+        status = 0;
+      } catch (e) {
+        status = e.status;
+      }
+      // 判据原文由 CI 实测钉住（2026-10-28 纠正）：POSIX 上 ②/构建面链路**走不到结果行** ⇒
+      // 非零退出 + 两个 token 都不出现。#2326 曾把它改回「exit 2 + reason=hbuilderx-not-found」，
+      // 那是本会话在 Windows 上的推断、未经 Linux 复验 ⇒ CI 当场判红（2026-11-06 实测 Expected 2 /
+      // Received 1，并伴随 gate-stages「无未闭段」异常）⇒ 恢复被 CI 验过的那条，不再拿推断当判据。
+      // 这条不是「跳过」：一旦端口面/构建面真被跨平台化、在 POSIX 上能跑出结果行，它会当场提醒改写成真判据。
+      expect(status).not.toBe(0);
       const log = H.gateLog(fixture);
       expect(log).not.toMatch(/^MP_WEIXIN_BUILDONLY_RESULT /m);
       expect(log).not.toMatch(/^MP_WEIXIN_RESULT /m);

@@ -19,7 +19,8 @@
  *   H8  空改动集 / 不存在的文件不崩（Set-StrictMode -Latest 下的数组语义）
  *
  * 运行前提：需要 `pwsh`（PowerShell 7）。**不可用时 fail-closed 抛错，不 skip** ——
- * 与仓库先例 `levelDetectBehavior.test.js` / `mpWeixinGateContract.test.js:143` 一致；静默跳过等于假绿。
+ * 与仓库先例 `levelDetectBehavior.test.js` 一致；静默跳过等于假绿。（原并列的
+ * `mpWeixinGateContract.test.js:143` 已随 ② 退役删除，#2326。）
  */
 const { execFileSync } = require('child_process');
 const fs = require('fs');

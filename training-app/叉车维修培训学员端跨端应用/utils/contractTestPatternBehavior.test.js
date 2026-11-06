@@ -16,7 +16,8 @@
  *     ③ 两个调用方都**没有**再抄一份自己的 pattern 字面量（漂移的来源）。
  *
  * 运行前提：需要 `pwsh`（PowerShell 7）。**不可用时 fail-closed 抛错，不 skip** ——
- * 与仓库先例 mpWeixinGateContract.test.js:143 一致；静默跳过等于假绿。
+ * 与仓库先例 `levelDetectBehavior.test.js` 一致（该先例与本文件同款 pwsh fail-closed）；
+ * 静默跳过等于假绿。原引用的 mpWeixinGateContract.test.js 已随 ② 退役删除（#2326）。
  */
 const { execFileSync } = require('child_process');
 const path = require('path');
