@@ -40,6 +40,8 @@ const CONSTANTS = read('pages/ai-assistant/ai-assistant-constants.uts');
 const PAGE = read('pages/ai-assistant/ai-assistant.uvue');
 const FEATURE_PAGE = read('pages/ai-assistant/ai-feature.uvue');
 const CHAT = read('composables/useAiChat.uts');
+/** #2299 起专项页的唯一选图入口（ADR-0055 放宽 ADR-0009 修订 ②） */
+const AI_PICKER = read('composables/useAiImagePicker.uts');
 const API = read('api/aiAssistant.uts');
 const TYPES = read('types/ai.uts');
 const PAGES_JSON = JSON.parse(read('pages.json'));
@@ -380,9 +382,11 @@ describe('宫格入口 → 参数化专项页 接线（#1040）契约', () => {
       expect(stripCodeComments(FEATURE_PAGE)).not.toMatch(/custom_api_key/);
     });
 
-    it('发送用页面级常量键（没有轮次状态可漏）', () => {
+    it('发送用页面级常量键（没有轮次状态可漏），附图取自统一 picker（#2299）', () => {
       const fn = fnBody(FEATURE_PAGE, 'function onInputSend');
-      expect(fn).toMatch(/sendInput\(featureTitle\.value, buildBody, \[\], currentFeatureKey\.value\)/);
+      // 附图不是写死的 []：从 pickImages 取值并原样上送（托盘与发送同源）
+      expect(fn).toMatch(/const picked : string\[\] = pickImages\.value/);
+      expect(fn).toMatch(/sendInput\(featureTitle\.value, buildBody, picked, currentFeatureKey\.value\)/);
       expect(FEATURE_PAGE).toMatch(/const currentFeatureKey = ref<string>\(''\)/);
     });
 
@@ -417,8 +421,17 @@ describe('宫格入口 → 参数化专项页 接线（#1040）契约', () => {
       expect(PAGE).not.toMatch(/mode\s*:\s*'(normal|expert)'/);
     });
 
-    it('专项页不含用户上传图片（ADR-0009 修订 ② 已排除；#1042 只加了检索/筛选，图片仍不做）', () => {
-      expect(FEATURE_PAGE).not.toMatch(/chooseImage|uploadAiImageApi|showImageButton/);
+    it('专项页**含**用户上传图片（#2299；ADR-0055 放宽 ADR-0009 修订 ②）—— 肯定式判据', () => {
+      // 放宽不是「删掉旧断言」了事：入口必须真的接上（入口开、托盘在、状态来自统一 picker）
+      expect(FEATURE_PAGE).toMatch(/AiChatImageTray/);
+      expect(FEATURE_PAGE).toMatch(/show-image-button="isDiagnosis"/);
+      expect(FEATURE_PAGE).toMatch(/useAiImagePicker/);
+      expect(FEATURE_PAGE).toMatch(/:images="msg\.images"/);
+      // 「选图只经统一入口」：页面自己不得直调平台选图（否则等于又开一条上传路径）
+      expect(FEATURE_PAGE).not.toMatch(/uni\.chooseImage\s*\(/);
+      // 平台选图在仓内只剩 picker 这一处，且不得复用论坛上传端点
+      expect(AI_PICKER).toMatch(/uni\.chooseImage\s*\(/);
+      expect(AI_PICKER).not.toMatch(/uploadForumImageApi/);
     });
   });
 });

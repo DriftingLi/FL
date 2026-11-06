@@ -1,0 +1,119 @@
+/**
+ * 随问图片的**唯一选图 / 上传入口**（#2299；决策记录 = 移动端 ADR-0055，放宽 ADR-0009 修订 ②）。
+ *
+ * 与论坛 `useForumImagePicker.uts` 的分工：名额闸门 / 超限文案 / 删除归还名额的**判据**住
+ * `utils/aiImageQuota.uts`（纯函数，两个 picker 共用同一套语义）；本件只编排 AI 侧独有的四步：
+ * 选图 →（压缩不可用 ⇒ 原样上传）→ 逐张上传换站内 URL → 交托盘待发。
+ *
+ * 为什么压缩是「不可用 ⇒ 原样上传」：uni-app x 的类型面里没有 `uni.compressImage`
+ * （#2299 现测：`@dcloudio/types` 零命中），强写平台调用连编译都过不去；服务端
+ * 20MB 上传闸门 + 3 张 + 5MB 三道闸兜底，且**不因压缩缺失阻断发送**（票面备注）。
+ *
+ * 页面只许经本件选图：直调 `uni.chooseImage` = 又开一条上传路径，
+ * 由 `utils/aiFeatureEntryWiringContract.test.js` 与 `utils/aiImageLimitParityContract.test.js` 双向锁。
+ */
+import { ref, computed } from 'vue'
+import type { Ref, ComputedRef } from 'vue'
+import { uploadAiImageApi } from '../api/aiAssistant'
+import { previewImages } from '../utils/forumDetailDisplay'
+import { resolveFileUrl } from '../utils/forumDisplay'
+import { AI_MAX_IMAGES } from '../config/env'
+import { remainingSlots, capNotice, removeAt } from '../utils/aiImageQuota'
+
+export type UseAiImagePickerResult = {
+    /** 已上传完成的**站内 URL**（随消息原样上送；托盘展示用 previewList） */
+    images : Ref<string[]>
+    /** 展示用 URL（预解析：模板不直调 import 函数，规避 error18） */
+    previewList : ComputedRef<string[]>
+    /** 正在上传的张数（托盘据此给可见占位；0 = 没在传） */
+    uploadingCount : Ref<number>
+    onAddImage : () => void
+    onRemoveImage : (index : number) => void
+    onPreviewImage : (index : number) => void
+    clear : () => void
+}
+
+export function useAiImagePicker() : UseAiImagePickerResult {
+    const images = ref<string[]>([])
+    const uploadingCount = ref<number>(0)
+
+    const previewList = computed<string[]>(() : string[] => {
+        const urls : string[] = []
+        for (let i = 0; i < images.value.length; i++) {
+            urls.push(resolveFileUrl(images.value[i]))
+        }
+        return urls
+    })
+
+    /** 逐张上传（声明在 onAddImage 之前，避免 Kotlin 局部函数前向引用 error18） */
+    async function uploadPicked(paths : string[]) : Promise<void> {
+        let failed = 0
+        for (let i = 0; i < paths.length; i++) {
+            // 上传循环里的第二道闸门：并发多选时也不会越过上限（票面「第 4 张当场拦住」）
+            if (remainingSlots(AI_MAX_IMAGES, images.value.length) <= 0) break
+            uploadingCount.value = uploadingCount.value + 1
+            try {
+                const url = await uploadAiImageApi(paths[i])
+                images.value.push(url)
+            } catch (e) {
+                console.error('[ai-image] upload failed:', e)
+                failed = failed + 1
+            }
+            uploadingCount.value = uploadingCount.value - 1
+        }
+        if (failed > 0) {
+            uni.showToast({ title: failed + ' 张图片上传失败，请重试', icon: 'none' })
+        }
+    }
+
+    /**
+     * 选图：**单一入口** —— 弹系统选择器，相册 / 相机两个来源都由系统给；
+     * `count` 与「已满」提示都按**剩余名额**算（不写死上限，改 env 常量即改行为）。
+     */
+    function onAddImage() : void {
+        if (uploadingCount.value > 0) return
+        if (remainingSlots(AI_MAX_IMAGES, images.value.length) <= 0) {
+            uni.showToast({ title: capNotice(AI_MAX_IMAGES), icon: 'none' })
+            return
+        }
+        uni.chooseImage({
+            count: remainingSlots(AI_MAX_IMAGES, images.value.length),
+            sizeType: ['compressed'],
+            sourceType: ['album', 'camera'],
+            success: (res) => {
+                const paths = res.tempFilePaths as string[]
+                if (paths.length == 0) return
+                uploadPicked(paths)
+            },
+            fail: (err) => {
+                console.log('[ai-image] chooseImage canceled/failed:', err)
+            },
+        })
+    }
+
+    /** 删除已选图片（按位置删，返回新数组而不是原地 splice） */
+    function onRemoveImage(index : number) : void {
+        images.value = removeAt(images.value, index)
+    }
+
+    /** 预览已选图片（URL 解析幂等，口径单点在 `utils/forumDetailDisplay.previewImages`） */
+    function onPreviewImage(index : number) : void {
+        previewImages(images.value, index)
+    }
+
+    /** 发送成功 / 换会话后清空待发图（名额一并归还） */
+    function clear() : void {
+        images.value = []
+        uploadingCount.value = 0
+    }
+
+    return {
+        images: images,
+        previewList: previewList,
+        uploadingCount: uploadingCount,
+        onAddImage: () => onAddImage(),
+        onRemoveImage: (index : number) => onRemoveImage(index),
+        onPreviewImage: (index : number) => onPreviewImage(index),
+        clear: () => clear(),
+    } as UseAiImagePickerResult
+}

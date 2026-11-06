@@ -33,7 +33,7 @@
 				</view>
 			</view>
 			<view v-if="messages.length > 0" class="chat-area">
-				<AiChatBubble v-for="(msg, idx) in messages" :key="idx" :role="msg.role" :content="msg.content" :sources="msg.sources" :show-actions="msg.role == 'assistant'" :is-last="idx == messages.length - 1" @copy="onCopyText(msg.content)" @retry="onRetry" />
+				<AiChatBubble v-for="(msg, idx) in messages" :key="idx" :role="msg.role" :content="msg.content" :sources="msg.sources" :images="msg.images" :show-actions="msg.role == 'assistant'" :is-last="idx == messages.length - 1" @copy="onCopyText(msg.content)" @retry="onRetry" />
 				<view v-if="thinking" class="message-row assistant">
 					<view class="message-bubble thinking">
 						<text class="message-text">{{ thinkingLabel }}</text>
@@ -61,7 +61,10 @@
 			<text v-if="codeHintView.followUp.length > 0" class="code-hint-action">追问 ›</text>
 		</view>
 
-		<AiChatInput :draft="draftText" @text-change="onDraftInput" @send="onInputSend" @voice-click="onVoiceClick" />
+		<!-- 待发图片托盘（#2299）：只在诊断页、且有内容/上传中出现；发送后由 picker.clear() 收空 -->
+		<AiChatImageTray v-if="isDiagnosis" :images="pickImages" :uploading-count="pickUploading" :max-images="aiMaxImages" @remove="onRemoveImage" @preview="onPreviewImage" />
+
+		<AiChatInput :draft="draftText" :show-image-button="isDiagnosis" :image-count="pickImages.length" @text-change="onDraftInput" @send="onInputSend" @voice-click="onVoiceClick" @image-click="onImageClick" />
 
 		<AiChatDiagnosisGuide
 			:visible="guideOpen"
@@ -102,7 +105,11 @@
 	import AiChatDrawerLeft from '../../components/ai-chat/ai-chat-drawer-left.uvue'
 	import AiChatInput from '../../components/ai-chat/ai-chat-input.uvue'
 	import AiChatDiagnosisGuide from '../../components/ai-chat/ai-chat-diagnosis-guide.uvue'
+	import AiChatImageTray from '../../components/ai-chat/ai-chat-image-tray.uvue'
 	import { useDiagnosisGuide } from '../../composables/useDiagnosisGuide'
+	import { useAiImagePicker } from '../../composables/useAiImagePicker'
+	import { canSend } from '../../utils/aiImageQuota'
+	import { AI_MAX_IMAGES } from '../../config/env'
 	import { useDiagnosisCodeHint } from '../../composables/useDiagnosisCodeHint'
 	import { checkDiagnosisCodeApi } from '../../api/aiAssistant'
 
@@ -244,6 +251,15 @@
 	const { view: codeHintView, onInput: onCodeHintInput, clear: clearCodeHint, dispose: disposeCodeHint } = useDiagnosisCodeHint((q : string) : Promise<DiagnosisCodeHint> => checkDiagnosisCodeApi(q))
 
 	/**
+	 * 随问图片（#2299）：选图 / 逐张上传 / 托盘的**状态全在 picker 里**，本页只转发动作。
+	 * 顶层 ref 才能在模板里自动解包（嵌套在对象里不会），故三个值拆出来一份引用。
+	 */
+	const imagePicker = useAiImagePicker()
+	const pickImages = imagePicker.images
+	const pickUploading = imagePicker.uploadingCount
+	const aiMaxImages = AI_MAX_IMAGES
+
+	/**
 	 * 输入框每敲一下都进来（本页唯一的「正在输入」信号）。
 	 *
 	 * ① 非诊断页一次查询都不发（`codeHintView` 恒不可见，喂进去也没有去处）；
@@ -380,6 +396,20 @@
 		uni.showToast({ title: '语音输入开发中', icon: 'none' })
 	}
 
+	/** 附件入口（📎）：只在诊断页出现；选图只经统一入口 useAiImagePicker */
+	function onImageClick() : void {
+		if (!isDiagnosis.value) return
+		imagePicker.onAddImage()
+	}
+
+	function onRemoveImage(index : number) : void {
+		imagePicker.onRemoveImage(index)
+	}
+
+	function onPreviewImage(index : number) : void {
+		imagePicker.onPreviewImage(index)
+	}
+
 	function getLastUserMessage() : string {
 		for (let i = messages.value.length - 1; i >= 0; i--) {
 			if (messages.value[i].role == 'user') {
@@ -405,12 +435,17 @@
 	 * 在这里既无需要也无意义（本页压根不加载模型列表）。
 	 */
 	function onInputSend(text : string) : void {
+		// 有图无字也放行（票面验收第 2 条）：判定与 sendInput 的早退同源（`canSend` 单一判据）
+		const picked : string[] = pickImages.value
+		if (!canSend(text, picked.length)) return
 		inputText.value = text
 		// 发出去之后草稿作废：下一次发送不能把同一句再塞回输入框（否则点两次发送像卡住）
 		draftText.value = ''
 		// 发送后输入框清空 ⇒ 那一行体检结果必须一起消失（票面 AC：清空输入后提示消失）
 		clearCodeHint()
-		sendInput(featureTitle.value, buildBody, [], currentFeatureKey.value)
+		sendInput(featureTitle.value, buildBody, picked, currentFeatureKey.value)
+		// 图已随本轮发出 ⇒ 待发托盘清空、名额归还
+		imagePicker.clear()
 	}
 
 	// 生命周期

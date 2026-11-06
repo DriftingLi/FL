@@ -35,6 +35,8 @@ const HELPERS_UTS = path.join(ROOT, 'api', 'helpers.uts');
 const ENVELOPE_UTS = path.join(ROOT, 'api', 'envelope.uts');
 const API_UTS = path.join(ROOT, 'api', 'aiAssistant.uts');
 const CHAT_UTS = path.join(ROOT, 'composables', 'useAiChat.uts');
+/** #2299 起 useAiChat 的早退判据 `canSend` 住这里；按**真件**注入（不是手抄一份等价逻辑） */
+const QUOTA_UTS = path.join(ROOT, 'utils', 'aiImageQuota.uts');
 
 /** `data: <json>` 的 SSE 帧；doneData 为 null 时写 `null`（非诊断轮的真实形态） */
 function sseOf(chunks, doneData) {
@@ -56,6 +58,7 @@ function sseOf(chunks, doneData) {
 function loadPair(options) {
   const opt = options || {};
   const h = loadUts(HELPERS_UTS, {});
+  const quota = loadUts(QUOTA_UTS, {});
   const envelope = loadUts(ENVELOPE_UTS, {
     getMapped: () => Promise.resolve({}),
     postMapped: () => Promise.resolve({}),
@@ -105,6 +108,8 @@ function loadPair(options) {
     getAiSessionMessagesApi: () => Promise.resolve([]),
     streamChatApi: api.streamChatApi,
     toStr: h.toStr,
+    // #2299 起 useAiChat 的早退判据是 `canSend`（有字 ∨ 有图）—— 依赖注入按真件补
+    canSend: quota.canSend,
     uni: uni,
     setTimeout: () => {},
     console: console,
