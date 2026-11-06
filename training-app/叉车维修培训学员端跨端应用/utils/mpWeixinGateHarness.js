@@ -1,8 +1,9 @@
 /**
- * ② 门**行为守护**的共享夹具（`utils/mpWeixinGate*Behavior.test.js` 共用）。
+ * ② 门**行为守护**的共享夹具（现存活体：`utils/mpWeixinBuildOnlyBehavior.test.js` /
+ * `utils/mpWeixinPublishSettleBehavior.test.js` —— 原 `mpWeixinGate*Behavior` 九条已随 ② 退役删除，#2326）。
  *
- * 为什么抽出来：行为守护要「真跑门」，而真跑门需要三样东西 —— ① 一份**合法**的 mp-weixin 产物夹具、
- * ② 一个**假开发者工具**（记下每次被调用的 argv，永不监听端口）、③ 空闲/被占端口。两份测试各抄一遍
+ * 为什么抽出来：行为守护要「真跑门」，而真跑门需要两样东西 —— ① 一份**合法**的 mp-weixin 产物夹具、
+ * ② 一个**假开发者工具**（记下每次被调用的 argv，永不监听端口）。两份测试各抄一遍
  * 会漂移（本仓的天条：判据/夹具只留一处真源，复制品会悄悄分叉）⇒ 收在这里。
  *
  * ⚠️ **执行调用（`execFileSync`）刻意留在各测试文件里，不搬进本夹具**：
@@ -11,7 +12,7 @@
  * `utils/guardClassification.test.js` 的 H4 当场转红（本轮实测踩到过）。本夹具只提供
  * 「夹具 + 参数拼装（`gateArgs`）+ 记录读取」，**谁跑子进程谁自己 `execFileSync`**。
  *
- * 平台边界：门的运行时路径依赖 Windows 专有的 `Get-NetTCPConnection` 与 `cli.bat` ⇒ 夹具在 Windows 上
+ * 平台边界（#2326 订正）：会话段已随 ② 退役删除，门脚本不再读 `Get-NetTCPConnection`；夹具仍在 Windows 上
  * 造 `.bat`，在 POSIX 上造带 shebang 的可执行文件；**非 Windows 分支由各测试自己真断言**（不静默跳过）。
  */
 const fs = require('fs');
@@ -33,8 +34,6 @@ function writeFile(p, text, mode) {
 function makeFixture() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mp-weixin-gate-'));
   writeFile(path.join(dir, 'manifest.json'), JSON.stringify({ name: 'fixture', 'mp-weixin': { appid: APPID } }));
-  // 门只做存在性校验；行为守护在端口面就退出，探针不会被执行
-  writeFile(path.join(dir, 'scripts', 'mp-weixin-probe.mjs'), '// fixture\n');
   const dist = path.join(dir, 'unpackage', 'dist', 'build', 'mp-weixin');
   writeFile(path.join(dist, 'project.config.json'), JSON.stringify({ appid: APPID, projectname: 'fixture' }));
   writeFile(path.join(dist, 'app.json'), JSON.stringify({ pages: ['pages/index/index'] }));
@@ -102,15 +101,12 @@ function occupyPort() {
  * 行为守护只关心调用序列与结果行。**只拼参数、不起进程**（见文件头那条：执行留在测试文件里）。
  */
 function gateArgs(scriptPath, fixture, fakeCli, port, extraArgs) {
+  // #2326：② 会话段退役后脚本只剩构建面 —— 端口 / open / auto / 就绪 / probe / 探针桩相关参数
+  // 全部随会话段删除，argv 只剩构建面真用得上的这几枚（多传会被 pwsh 判参数绑定错误）。
   return [
     '-NoProfile', '-NonInteractive', '-OutputFormat', 'Text', '-File', scriptPath,
     '-Project', fixture.dir, '-SkipBuild', '-DevToolsCli', fakeCli,
-    // #1860 预探的 .ide 用户目录根注入：指向夹具内**不存在的空根** ⇒ 门预探只会看到
-    // 「端口文件不存在（冷起点）⇒ 放行」。不注这个，门会读本机真实用户目录 —— 开发机上
-    // IDE 开着 / 残留崩溃 .ide 都会让行为随环境漂移（守护必须密封，不随环境变红变绿）。
-    '-IdeUserDataRoot', path.join(fixture.dir, 'ide-root'),
-    '-Port', String(port), '-PortWaitSeconds', '1', '-OpenTimeoutSeconds', '20',
-    '-AutoTimeoutSeconds', '20', '-AutoRetryDelaySeconds', '0', '-HxNoWait'
+    '-HxNoWait'
   ].concat(extraArgs || []);
 }
 
@@ -146,7 +142,7 @@ function resetCalls(fakeCli) {
 
 /**
  * 读门自己写的日志（`<项目>/.ci-verify/mp-weixin.log`，UTF-8）。
- * 结论行（`MP_WEIXIN_RESULT`）与门自己打印的说明行只进日志、不进 stdout；且 stdout 在中文 Windows 上
+ * 结论行（`MP_WEIXIN_RESULT` / `MP_WEIXIN_BUILDONLY_RESULT`）与门自己打印的说明行只进日志、不进 stdout；且 stdout 在中文 Windows 上
  * 受子进程控制台代码页影响会乱码 ⇒ **判据一律取日志文件**，不对 stdout 断言中文。
  */
 function gateLog(fixture) {
@@ -154,76 +150,8 @@ function gateLog(fixture) {
   return fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : '';
 }
 
-// ---------- 直达循环的三个桩脚本与两份合格 JSON（#1690 会话注入走通直达循环的行为守护共用）----------
-// 为什么收进夹具：mpWeixinGateResultLineBehavior（#1655 三分）与 mpWeixinAuthSkipBehavior（#1863）
-// 都要把门真推进直达循环 —— 三个外部被调脚本（probe / ready / auth）各需要一份桩，两份测试各抄一遍
-// 会漂移（本夹具头注释的天条）⇒ 收在这里。执行调用仍留在各测试文件（见文件头 H4 纪律）。
-
-/** 把探针桩重写成「输出一条 MP_WEIXIN_PROBE JSON 行」的形状（fixture 默认桩是注释，跑不出结果）。 */
-function writeProbeStub(dir, probeJson) {
-  fs.writeFileSync(
-    path.join(dir, 'scripts', 'mp-weixin-probe.mjs'),
-    `console.log('MP_WEIXIN_PROBE ' + JSON.stringify(${JSON.stringify(probeJson)}));\n`,
-    'utf8'
-  );
-}
-
-/** 就绪闸门桩：门在 ready-gate 步骤用 node 执行 scripts/mp-weixin-ready.mjs（--ws 指向桩端口）。 */
-function writeReadyStub(dir, readyJson) {
-  fs.writeFileSync(
-    path.join(dir, 'scripts', 'mp-weixin-ready.mjs'),
-    `console.log('MP_WEIXIN_READY ' + JSON.stringify(${JSON.stringify(readyJson)}));\n`,
-    'utf8'
-  );
-}
-
-/**
- * 会话注入脚本桩：门在直达循环按页调 scripts/mp-weixin-auth.mjs（--mode guest|auth），判据只看
- * MP_WEIXIN_AUTH 结果行。桩忽略全部参数、恒打印同一份 payload —— guest 相与 auth 相吃同一份读数
- * （#1863 的用例正好要「guest 失败只告警、auth 失败记 SKIP」的不同消费侧行为，桩无需区分模式）。
- */
-function writeAuthStub(dir, authJson) {
-  fs.writeFileSync(
-    path.join(dir, 'scripts', 'mp-weixin-auth.mjs'),
-    `console.log('MP_WEIXIN_AUTH ' + JSON.stringify(${JSON.stringify(authJson)}));\n`,
-    'utf8'
-  );
-}
-
-/** 三分/直达共用的探针 JSON 骨架（failures 空 ⇒ 通过；纯断言失败 ⇒ 门未过；带前缀 ⇒ 环境受阻）。
- *  connected 必给：真探针顶层 result 恒有该字段（scripts/mp-weixin-probe.mjs 的初始化），
- *  直达分支的重试判据读它（mp-weixin-check.ps1 的 Invoke-DirectProbe）——桩缺字段 ⇒ StrictMode 抛。
- *  navigation 取直达形状（status ok/cold-start-direct）：Pages=auto 默认走直达分支，
- *  真探针在直达 argv 下只会写 ok 或 skip(direct-page-unsupported)（probe.mjs 的 direct 段），不再 n/a。 */
-function probeFixture(failures) {
-  return {
-    probeOk: failures.length === 0,
-    connected: true,
-    entryPage: 'pages/index/index',
-    pageStack: ['pages/index/index'],
-    errorsTotal: 0,
-    exceptionsTotal: 0,
-    logsTotal: 0,
-    shots: [{ path: 'x.png', isPng: true, width: 10, height: 10, bytes: 99 }],
-    navigation: { status: 'ok', reason: '', detail: 'cold-start-direct', at: 'direct:pages/index/index', skippedAssertions: [], skippedSteps: [] },
-    failures,
-    steps: []
-  };
-}
-
-/** 就绪闸门合格 JSON（ok:true 才能过就绪闸门；sdkVersion/ideVersion 进 metric 行）。 */
-function readyFixture() {
-  return {
-    ws: 'ws://127.0.0.1:0', ok: true, reason: null, detail: null,
-    portReadyAt: 0.1, sdkReadyAt: 0.2, pageStackAt: 0.3,
-    ideVersion: '1.06.2412050', sdkVersion: '3.8.10',
-    pageStack: ['pages/index/index'], elapsedMs: 300, timeline: [], requireStack: true, requireRoot: true
-  };
-}
-
 module.exports = {
   ROOT, APPID, IS_WIN,
-  makeFixture, makeFakeDevTools, freePort, occupyPort,
-  gateArgs, callsOf, verbsOf, lastFlagValue, resetCalls, gateLog,
-  writeProbeStub, writeReadyStub, writeAuthStub, probeFixture, readyFixture
+  makeFixture, makeFakeDevTools, freePort,
+  gateArgs, callsOf, verbsOf, gateLog
 };

@@ -20,11 +20,12 @@ const path = require('path');
 const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 const LIB_REL = 'scripts/lib/gate-common.ps1';
-// 三份曾各自定义 Get-HeadSha 的门脚本（compile-check / kotlin-all-check / mp-weixin-check）
+// 两份仍取 sha 的门脚本（compile-check / kotlin-all-check）。
+// #2326：mp-weixin-check.ps1 移出本组 —— 它唯一用到共享库的那函数是 Get-HeadSha（评论 sha 用），
+// 而贴评论已随 ② 退役删除 ⇒ 现版本不引用本库。同款处置见 gateCommitBinding 的 ARCHIVE_CALLERS 注记。
 const CALLERS = [
   'scripts/compile-check.ps1',
   'scripts/kotlin-all-check.ps1',
-  'scripts/mp-weixin-check.ps1',
 ];
 
 function readSource(rel) {
@@ -77,7 +78,7 @@ describe('门脚本共享库契约（scripts/lib/gate-common.ps1）', () => {
         ...real,
         callers: {
           ...real.callers,
-          'scripts/mp-weixin-check.ps1': real.callers['scripts/mp-weixin-check.ps1']
+          'scripts/kotlin-all-check.ps1': real.callers['scripts/kotlin-all-check.ps1']
             + '\nfunction Get-HeadSha { return "" }\n',
         },
       }],
@@ -96,7 +97,7 @@ describe('门脚本共享库契约（scripts/lib/gate-common.ps1）', () => {
     expect(scanContract(real)).toEqual([]);
   });
 
-  it('G2：三个调用方都只用共享库那一份，各自不再定义', () => {
+  it('G2：每个调用方都只用共享库那一份，各自不再定义', () => {
     for (const rel of CALLERS) {
       const t = real.callers[rel];
       expect(t).toMatch(/lib[\\/]gate-common\.ps1/);

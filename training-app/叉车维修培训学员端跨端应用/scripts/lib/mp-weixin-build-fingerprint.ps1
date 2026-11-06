@@ -31,7 +31,7 @@
  作用域 = 当前树（票面）：指纹文件在产物目录里 —— 跨 worktree 不共享（白烧场景即同树重跑），
  产物被干净重建（Remove-Item dist / publish 清目录）时指纹随目录一起消失，自然失效。
 
- 为什么单独成库：同 mp-weixin-env.ps1（#1655）/ mp-weixin-pages.ps1（#1853）/ mp-weixin-preprobe.ps1
+ 为什么单独成库：同 mp-weixin-pages.ps1（#1853）的理由（env / preprobe 两份已随 #2326 删除）
  （#1860）的理由 —— 判据必须能被**真执行**：行为守护（utils/mpWeixinBuildFingerprintBehavior.test.js）
  用夹具项目 + 产物真改真比对，钉住「输入变 ⇒ 不命中 / 产物变 ⇒ 不命中 / 版本变 ⇒ 不命中 /
  命令变 ⇒ 不命中 / 命令未记录 ⇒ 不命中 / 本轮命令缺失 ⇒ 不命中 / 什么都不变 ⇒ 命中 /

@@ -3,7 +3,7 @@
 
     为什么有准入门槛（2026-09-13 实测，勿放宽）：
       本仓的契约守护（utils/*Contract.test.js）仍在**文本面**断言门脚本的源码字面量：例如
-      mpWeixinGateContract 曾直接 pin 住 `Invoke-Process -FilePath $devTools -Arguments @('auto'`、
+      mpWeixinGateContract（已随 ② 退役删除，#2326）曾直接 pin 住 `Invoke-Process -FilePath $devTools -Arguments @('auto'`、
       `Invoke-Process -FilePath $devTools -Arguments @('open', '--project', $dist)`、
       `Write-Log "`n>>> devtools-open`、`$ProbeTimeoutMs = ` 等原文。
       把这类代码搬进共享库，守护会立刻失配，而唯一的「修法」是放宽守护 —— 那等于把防护拆掉。

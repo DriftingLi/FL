@@ -24,8 +24,9 @@ const ROOT = path.join(__dirname, '..');
 const LIB_REL = 'scripts/lib/gate-commit.ps1';
 
 /** 凡贴 sha 绑定评论（`- commit: <sha>`）的脚本 —— 门与同族取证脚本。新增此类脚本必须进本清单。 */
+// #2326：mp-weixin-check.ps1 不再贴 sha 绑定评论（贴评论属 ② 的取证面，随 #2320 退役、#2326 删除）⇒ 移出本组。
+// 同款先例见下面 ARCHIVE_CALLERS 的 #2320 阶段二注记。留着它只会让 K0 恒红。
 const BINDING_CALLERS = [
-  'scripts/mp-weixin-check.ps1', // ② 微信开发者工具门（-PostToPr）
   'scripts/device-capture.ps1', // ①a 真机逐页取证（prefilter 评论）
   'scripts/dev-finish.ps1', // ③ 全量单测门
   'scripts/compile-check.ps1', // ④a 编译门
@@ -243,7 +244,7 @@ describe('门评论 sha 绑定口径接线（#1695）', () => {
       ['K2', patchCaller('scripts/compile-check.ps1', (t) => t.replace(/lib[\\/]gate-commit\.ps1/g, 'lib\\gate-other.ps1'))],
       ['K2', patchCaller('scripts/dev-finish.ps1', (t) => t.replace(/Resolve-CommitBinding/g, 'ResolveBindingX'))],
       ['K2', patchCaller('scripts/kotlin-all-check.ps1', (t) => t.replace(/\$sha\s*=\s*\$binding\.Sha/, '$sha = $sha') )],
-      ['K3', patchCaller('scripts/mp-weixin-check.ps1', (t) => t.replace(/- commit: \$sha/g, '- sha: $sha'))],
+      ['K3', patchCaller('scripts/kotlin-all-check.ps1', (t) => t.replace(/- commit: \$sha/g, '- sha: $sha'))],
       ['K4', patchCaller('scripts/device-capture.ps1', (t) => t.replace(/Push-ArchiveCommit/g, 'PushArchiveX'))],
       ['K5', patchCaller('scripts/emulator-smoke.ps1', (t) => t + "\nfunction Get-HeadSha { param([string]$ProjectDir) return '' }\n")],
       // #1770：旧名别名被删 / 门评论退回 gh pr comment / lib 的口径函数被改名，都必须被抓
