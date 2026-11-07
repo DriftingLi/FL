@@ -122,7 +122,9 @@ module.exports = {
     '#F0F1F5': 'pages/register/register.uvue、pages/forgot-password/forgot-password.uvue mode-tab 未选中底——分段控件中性浅灰，$bg-color 近似但值不等（与批5 #EEF1F5 轨道灰用途不同，各守各点不并条）',
     '#FF4D4F': 'pages/mall/mall.uvue product-price 价格红——与页面私有子组件 mall-category-sidebar 同值，本批只收页头不扩面改色；$danger-color(#ff3b30) 值不等（同批2 #F44336 判例），待红系 token 票裁',
     // '#1A1A1A' 已于 #2352 收敛为 $text-strong（#2338 裁定：新增 token，值来自现状 .md-heading 裸 hex）：
-    // 值成了 token 值 ⇒ 白名单行必须删（§1.6 自检：白名单值不得与 token 值重叠）。裸字面仍散在 5 处
-    // （courses.uvue ×2 / job-list.uvue / resume.uvue / ai-chat-bubble.uvue），渲染面迁移随 #2353–#2356；
+    // 值成了 token 值 ⇒ 白名单行必须删（§1.6 自检：白名单值不得与 token 值重叠）。裸字面仍散在 4 处
+    // （courses.uvue ×2 / job-list.uvue / resume.uvue），渲染面迁移随 #2353–#2356；
     // 声明位判据不再拦它们（值 ∈ token 值）。
+    // #2354 已把 ai-chat-bubble.uvue 从这份清单里划掉：气泡的 .md-* 整段删除、正文块改由
+    // components/markdown/markdown-blocks.uvue 渲染，该文件里的 #1a1a1a 随之消失。
 }

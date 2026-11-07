@@ -7,28 +7,14 @@
 			<view v-if="role == 'user' && userImages.length > 0" class="user-images">
 				<image v-for="(u, idx) in userImages" :key="u" class="user-image" :src="u" mode="aspectFill" @click="onPreviewImage(idx)" />
 			</view>
-			<!-- 助手消息：markdown 块渲染（#1443，ADR-0046 决定 6 已回填）。解析在壳层
-			     `utils/aiAnswerBody.uts`（唯一真源 parseMarkdown + #1279 展开前置，均不在本处重写）；
-			     模板只消费本地 computed —— 直调 import 函数会编成 .invoke()（见脚本注释）。 -->
-			<view v-if="role != 'user'" class="md-body">
-				<view v-for="(block, idx) in assistantBlocks" :key="idx" class="md-block">
-					<text v-if="block.type == 'heading'" :class="['md-heading', 'md-h' + block.level]">{{ block.text }}</text>
-					<view v-else-if="block.type == 'code'" class="md-code-wrap"><text class="md-code">{{ block.text }}</text></view>
-					<view v-else-if="block.type == 'list'" class="md-list">
-						<view v-for="(item, li) in block.items" :key="li" class="md-list-item">
-							<text class="md-list-bullet">&#8226;</text>
-							<text class="md-list-text">{{ item }}</text>
-						</view>
-					</view>
-					<view v-else-if="block.type == 'quote'" class="md-quote"><text class="md-quote-text">{{ block.text }}</text></view>
-					<view v-else-if="block.type == 'divider'" class="md-divider"></view>
-					<!-- 诊断配图（#2362 / 移动端 ADR 0056）：只有站内代理图会走到这里（壳层已过滤），
-					     宽度受气泡约束（widthFix + 100%），点开走全屏预览、同消息可左右翻。 -->
-					<image v-else-if="block.type == 'image'" class="md-image" :src="block.text" mode="widthFix"
-						@click="onPreviewAssistantImageAt(idx)"></image>
-					<text v-else class="md-paragraph">{{ block.text }}</text>
-				</view>
-			</view>
+			<!-- 助手消息：块怎么排一律交给四面共用的 `components/markdown/markdown-blocks.uvue`
+			     （#2354 决议 D1：气泡不再自排块）。解析仍在壳层 `utils/aiAnswerBody.uts`
+			     （唯一真源 parseMarkdown + #1279 展开前置，均不在本处重写）；模板只消费本地 computed
+			     —— 直调 import 函数会编成 .invoke()（见脚本注释）。
+			     本票之前这里自带一份 8 条分支的模板与一整套 .md-* 样式，与课程章节面各排各的，
+			     于是「一套刻度」在气泡里永远是第二份事实；现在同一段正文换个入口不再换一种疏密。 -->
+			<MarkdownBlocks v-if="role != 'user'" :blocks="assistantBlocks" :caps="AI_ANSWER_CAPS"
+				@image-click="onPreviewAssistantImageAt" />
 		</view>
 		<!-- 诊断来源资料（#988）：位置对齐 web 的 `#assistant-extra`（回答下方、操作按钮上方）。
 		     仅助手消息且有来源才出现；调用方不传 `sources` 时行为与从前完全一致。 -->
@@ -43,10 +29,27 @@
 <script setup lang="uts">
 	import { computed } from 'vue'
 	import AiChatSources from './ai-chat-sources.uvue'
+	import MarkdownBlocks from '../markdown/markdown-blocks.uvue'
 	import { expandImageMarkers } from '../../utils/aiSourcesDisplay'
 	import { previewImages } from '../../utils/forumDetailDisplay'
 	import { aiAnswerBlocks, aiAnswerImageUrls, aiAnswerImageIndexAt } from '../../utils/aiAnswerBody'
-	import type { AiDiagnosisSource, MarkdownBlock } from '../../types/index'
+	import type { AiDiagnosisSource, MarkdownBlock, MarkdownImageClick } from '../../types/index'
+
+	/**
+	 * AI 回答面的能力位（#2354 决议 D2）：**七位**，与 `chapter-markdown.uvue` 的 `CHAPTER_CAPS` 同形
+	 * （常量写在壳件脚本里，不散进模板字面量）。
+	 *
+	 * - 与 `SUBSET_MEMBERS_AI_ANSWER` 的差集只有一处：多一个 `paragraph`。它是**段落地板**，
+	 *   从来没进过解析器那边的声明表（`markdownContract.test.js` 有一条
+	 *   `not.toContain('MEMBER_PARAGRAPH')` 钉着），但公共件的 paragraph 分支靠 `cap('paragraph')`
+	 *   开 —— 不传这一位，整条回答只剩标题与列表，正文整体消失。
+	 * - **不传 `table`**：AI 档本来就不声明它，窄气泡里表格按行退回原始文本是既定口径。
+	 * - 这两处天然是**两份事实**（声明表 vs 这里的手写清单），所以 `markdownContract` 套件里
+	 *   有一条源守卫钉「每一项 ∈ 声明表 ∪ {paragraph}」，防「AI 档日后加成员而 caps 不跟」。
+	 */
+	const AI_ANSWER_CAPS : string[] = [
+		'heading', 'paragraph', 'code', 'list', 'quote', 'divider', 'image'
+	]
 
 	const props = withDefaults(defineProps<{
 		role?: string
@@ -134,9 +137,16 @@
 		return aiAnswerImageUrls(assistantBlocks.value)
 	})
 
-	/** 回答配图预览：按**块序号**换算图集下标（不按 URL 反查），与渲染顺序同源 */
-	function onPreviewAssistantImageAt(blockIndex : number) : void {
-		previewImages(assistantImageUrls.value, aiAnswerImageIndexAt(assistantBlocks.value, blockIndex))
+	/**
+	 * 回答配图预览：按**块序号**换算图集下标（不按 URL 反查），与渲染顺序同源。
+	 *
+	 * 载荷自 #2354 起是单对象 `MarkdownImageClick`（公共件的接口，决议 D4）：`index` 是图所在
+	 * **块的序号**，由公共件随点击下发。为什么要这么绕 —— 同一张图在同一条回答里出现两次时，
+	 * 按 URL 值反查永远命中第一张，预览起点就会错（#2362 明写「不按 URL 反查」）；块序号是唯一
+	 * 能分辨「第几次出现」的信息，而它只有渲染方能给出，故必须随事件送出来。
+	 */
+	function onPreviewAssistantImageAt(payload : MarkdownImageClick) : void {
+		previewImages(assistantImageUrls.value, aiAnswerImageIndexAt(assistantBlocks.value, payload.index))
 	}
 
 	function onCopy() : void {
@@ -212,99 +222,16 @@
 		padding: 4rpx 0;
 	}
 
-	/* 助手气泡 markdown 块（#1443）：气泡底 #fff，文字取深色；字号跟 message-text 同基准。 */
-	.md-body {
-		flex-direction: column;
-	}
+	/* 助手气泡的 .md-* 样式自 #2354 起**整段删除**：正文块改由四面共用的
+	   `components/markdown/markdown-blocks.uvue` 渲染，字号 / 行高 / 间距 / 配色全部来自
+	   `uni.scss` 的 `$md-*` 段（一套刻度只有一处定义）。
 
-	.md-block {
-		flex-direction: column;
-	}
+	   为什么删而不是留：uni-app x 的样式隔离策略 2.0 + 本仓全部 `.uvue` 均非 `<style scoped>`
+	   ⇒ 留着这些同名类（`.md-body` / `.md-block` / `.md-paragraph` / `.md-code` …）就是**死代码**，
+	   而且是与公共件**同名**的死代码：哪天有人给公共件补一条样式，会以为这边也有一份。
+	   删干净是让「气泡不再有第二份刻度」成为可读出来的事实。
 
-	.md-heading {
-		font-size: 30rpx;
-		font-weight: bold;
-		color: #1a1a1a;
-		margin-top: 12rpx;
-		margin-bottom: 6rpx;
-	}
-
-	.md-h1 { font-size: 36rpx; }
-	.md-h2 { font-size: 32rpx; }
-	.md-h3 { font-size: 30rpx; }
-
-	/* 诊断配图（#2362）：宽度吃满气泡内容宽（widthFix 只定高）。
-	   数值取**章节面**那套（chapter-markdown 的 12rpx 圆角 / 上下 16rpx），
-	   与精选面的 8rpx/8rpx 是历史差异，不在本票收敛 —— 别再自创第三套数值。 */
-	.md-image {
-		width: 100%;
-		border-radius: 12rpx;
-		margin-top: 16rpx;
-		margin-bottom: 16rpx;
-	}
-
-	.md-paragraph {
-		font-size: 28rpx;
-		color: #333333;
-		line-height: 1.6;
-	}
-
-	.md-code-wrap {
-		background-color: #f5f5f5;
-		border-radius: 8rpx;
-		padding: 16rpx;
-		margin-top: 8rpx;
-		margin-bottom: 8rpx;
-	}
-
-	.md-code {
-		font-size: 24rpx;
-		color: #444444;
-	}
-
-	.md-list {
-		flex-direction: column;
-		margin-top: 4rpx;
-		margin-bottom: 4rpx;
-	}
-
-	.md-list-item {
-		flex-direction: row;
-		align-items: flex-start;
-	}
-
-	.md-list-bullet {
-		font-size: 28rpx;
-		color: #333333;
-		margin-right: 10rpx;
-	}
-
-	.md-list-text {
-		flex: 1;
-		font-size: 28rpx;
-		color: #333333;
-		line-height: 1.6;
-	}
-
-	.md-quote {
-		border-left-width: 6rpx;
-		border-left-color: #d0d0d0;
-		border-left-style: solid;
-		padding-left: 16rpx;
-		margin-top: 6rpx;
-		margin-bottom: 6rpx;
-	}
-
-	.md-quote-text {
-		font-size: 28rpx;
-		color: #666666;
-		line-height: 1.6;
-	}
-
-	.md-divider {
-		height: 1rpx;
-		background-color: #e0e0e0;
-		margin-top: 12rpx;
-		margin-bottom: 12rpx;
-	}
+	   保留不动的三样：用户消息的 `.message-text`（#1443 纯文本逐字节不变）、
+	   `.message-bubble` 外壳（max-width 600rpx / padding 20rpx 24rpx / 圆角 16rpx）、
+	   以及 `.message-actions` —— 本票只换**正文块怎么排**，不碰外壳。 */
 </style>

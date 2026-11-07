@@ -29,3 +29,20 @@ export type MarkdownBlock = {
     text : string      // 文本内容（table 块为整行单元格的纯文本投影）
     items : string[]   // 列表项（仅 list 类型）；table 块为该行的各列单元格
 }
+
+/**
+ * 块级渲染组件的图片点击载荷（#2354 决议 D4：单对象载荷，不走两参数 emit）。
+ *
+ * 为什么是对象而不是 `emit('imageClick', url, index)`：官方文档与 uni-ui 全站**零多参数示例**、
+ * 父侧声明两个形参且都收到值**未验证**；app-android 的 methods 不支持剩余参数（写不出 `(...args)`
+ * 兜底），元数错位若表现为「第二参静默 null」只有真机看得见。单对象载荷在本仓有先例
+ * （`emit('courseOpen', course)` / `emit('select', item)`），不构成「全仓第一个」。
+ * 一手结论见 `.scratch/research/2354-uvue-emit多参数.md`。
+ *
+ * ⚠️ **不得加数组字段**：给自定义类型加「自定义类型的数组字段」会被 UTS 在编译期改名，整模块编译红
+ * （#905 血账 / 根 ADR-0046 决定 6 的 kotlinc 改名）。本类型只允许这两个标量字段。
+ */
+export type MarkdownImageClick = {
+    url : string     // 图片地址（壳层已归一过站内前缀 / 绝对形）
+    index : number   // **该图所在块的序号**（不是图集下标）；换算成图集下标是消费方的事
+}

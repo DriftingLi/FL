@@ -714,24 +714,108 @@ describe('ADR-0046 / API.md 的移动端登记（本票的口径落点）', () =
     expect(shell).toContain('SUBSET_AI_ANSWER');
   });
 
-  it('AI 回答面的配图接线（#2362 / 移动端 ADR 0056）：闸在壳层、画在气泡、预览走同一点', () => {
+  it('AI 回答面的配图接线（#2362 / 移动端 ADR 0056）：闸在壳层、画在公共件、预览走同一点', () => {
     const shell = readText(path.join(__dirname, 'aiAnswerBody.uts'));
     expect(shell).toContain("export const AI_ANSWER_IMAGE_PREFIX = '/api/ai-assistant/diagnosis/ossimg/'");
     expect(shell).toContain('resolveFileUrl');
     expect(shell).toContain('expandLegacyImageMarkers');
+    // #2354（决议 D5）：AI 回答的**渲染**从气泡搬进四面共用的块渲染件 ⇒ 这一组里凡是
+    // 「怎么把一个 image 块画出来」的三条（image 分支 / md-image 类 / 点击回调）随承载件改指，
+    // 一条不删；而「闸在壳层」「图集与下标换算住纯函数层」「气泡接的仍是这两个纯函数」
+    // 「预览起点不按 URL 反查」四条**语义未变**，仍钉在气泡与壳层上。
+    const blocks = read('components/markdown/markdown-blocks.uvue');
+    expect(blocks).toContain("block.type == 'image'");
+    expect(blocks).toContain('md-image');
+    expect(blocks).toContain('onImageTap');
     const bubble = read('components/ai-chat/ai-chat-bubble.uvue');
-    expect(bubble).toContain("block.type == 'image'");
-    expect(bubble).toContain('md-image');
     expect(bubble).toContain('previewImages');
     // 图集与下标换算住在纯函数层（行为面真执行），模板只调本地名：
     // 按 URL 值反查会让「同图重复出现」的第二张永远从第一张翻起。
-    expect(bubble).toContain('onPreviewAssistantImageAt(idx)');
+    expect(bubble).toContain('onPreviewAssistantImageAt');
     expect(bubble).toContain('aiAnswerImageUrls(');
     expect(bubble).toContain('aiAnswerImageIndexAt(');
     expect(bubble).not.toContain('urls.indexOf(');
+    // #2354 新增：气泡把公共件接上，且**按块序号**（payload.index）换算 —— 这是 #2362
+    // 「不按 URL 反查」在换件之后仍然成立的唯一证据：载荷里若只剩 url，换算必然退回反查。
+    expect(bubble).toContain('MarkdownBlocks');
+    expect(bubble).toContain('@image-click="onPreviewAssistantImageAt"');
+    expect(bubble).toContain('payload.index');
     // 本票只动 AI 回答面：论坛正文仍图文分离（块数组与渲染分支都不许长出 image）
     const forumMd = read('pages/forum/components/forum-markdown-blocks.uvue');
     expect(forumMd).not.toContain("block.type == 'image'");
+  });
+
+  it('AI 气泡接的是同一套刻度（#2354 决议 D1/D2/D5）：换件、caps 七位、不再自排块', () => {
+    const bubble = read('components/ai-chat/ai-chat-bubble.uvue');
+    // D1：助手正文整体换成公共件；气泡自带的 8 条分支模板必须绝迹（否则「一套刻度」是假的）
+    expect(bubble).toContain("import MarkdownBlocks from '../markdown/markdown-blocks.uvue'");
+    expect(bubble).toContain(':blocks="assistantBlocks"');
+    expect(bubble).toContain(':caps="AI_ANSWER_CAPS"');
+    // 「不再自排块」的判据：整份源码里不出现按块类型分叉的写法
+    expect(bubble).not.toContain("block.type ==");
+    // D2：caps 常量写在壳件脚本里（与 chapter-markdown 的 CHAPTER_CAPS 同形），不进模板字面量
+    expect(bubble).toContain('const AI_ANSWER_CAPS : string[] = [');
+    // 公共件的 caps 是**必填**：少传等于整面空渲染，所以「传了」这件事本身要钉
+    const blocksSrc = read('components/markdown/markdown-blocks.uvue');
+    expect(blocksSrc).toMatch(/caps\s*:\s*string\[\]/);
+    expect(blocksSrc).not.toMatch(/caps\s*\?:\s*string\[\]/);
+  });
+
+  /**
+   * D2 的源守卫：`AI_ANSWER_CAPS` 的每一项都必须 ∈ `SUBSET_MEMBERS_AI_ANSWER` ∪ `{paragraph}`。
+   *
+   * 为什么需要它：这两处天然是**两份事实** —— 声明表在 `utils/markdown.uts`（决定解析器产什么块），
+   * caps 在气泡壳件（决定渲染器画什么块）。少一位，那一档在气泡里静默消失；多一位（比如顺手
+   * 加个 table），就是渲染一条永远不可达的分支、并掩盖「档位被换错」。两者之间没有别的机检。
+   *
+   * 为什么 `paragraph` 要单列：它是段落地板，从来没进过声明表（同一个文件里有一条
+   * `not.toContain('MEMBER_PARAGRAPH')` 钉着），但公共件的 paragraph 分支靠 `cap('paragraph')` 开
+   * —— 不传这一位，整条回答只剩标题与列表。
+   */
+  it('AI 气泡的 caps 与解析器声明表同源（差集只许是段落地板 paragraph）', () => {
+    const CAPS = read('components/ai-chat/ai-chat-bubble.uvue')
+      .match(/const AI_ANSWER_CAPS : string\[\] = \[([\s\S]*?)\]/);
+    expect(CAPS).not.toBe(null);
+    const declared = (CAPS[1].match(/'[a-z]+'/g) || []).map((x) => x.replace(/'/g, ''));
+    // 解析器那边的声明表：以 .uts 源里的字面量为准（.uts 不能在 jest 里 import，本文件全程如此）。
+    // ⚠️ 用正则取数组体、不要拿 indexOf(']') 切：类型标注里的 `string[]` 自带一个 `]`，
+    // 按它切会得到空串，而「空串 → 成员列表为空 → 循环体一条都不跑」正是最典型的假绿。
+    const mdSrc = read('utils/markdown.uts');
+    const table = mdSrc.match(/export const SUBSET_MEMBERS_AI_ANSWER : string\[\] = \[([\s\S]*?)\]/);
+    expect(table).not.toBe(null);
+    const members = (table[1].match(/MEMBER_[A-Z_]+/g) || [])
+      .map((c) => c.replace('MEMBER_', '').toLowerCase());
+    expect(members.length).toBeGreaterThan(0);
+    // 每一项都要是「声明表成员」或段落地板；一条不满足就是静默消失 / 不可达分支
+    for (const c of declared) {
+      expect([c, c === 'paragraph' || members.indexOf(c) >= 0]).toEqual([c, true]);
+    }
+    // 反向：声明表里的每一档都得被渲染（少一位 = 该档在气泡里静默消失）
+    for (const m of members) {
+      expect([m, declared.indexOf(m) >= 0]).toEqual([m, true]);
+    }
+    // 段落地板恰好一位，且 table 不在（AI 档本来就不声明它）
+    expect(declared).toContain('paragraph');
+    expect(declared).not.toContain('table');
+    // 七位：六个声明档 + paragraph
+    expect(declared.length).toBe(members.length + 1);
+  });
+
+  it('公共件根节点不带宽度 / 内边距（#2354 AC 第 2 条：气泡正文内宽不被换件改变）', () => {
+    // 气泡的正文内宽完全由 `.message-bubble` 的 padding（20rpx 24rpx）与 max-width（600rpx）决定。
+    // 公共件一旦自己带上 width / padding / margin，窄气泡里的内宽就会被二次收窄 —— 这是换件时
+    // 最容易悄悄发生的一处几何回归（#2353 调研补记 R3 的硬约束，本票 AC 第 2 条按此判）。
+    const blocksSrc = read('components/markdown/markdown-blocks.uvue');
+    const bodyRule = blocksSrc.match(/\.md-body\s*\{([^}]*)\}/);
+    expect(bodyRule).not.toBe(null);
+    for (const prop of ['width', 'padding', 'margin']) {
+      expect([prop, new RegExp('(^|[;\\s])' + prop + '\\s*:').test(bodyRule[1])]).toEqual([prop, false]);
+    }
+    // 气泡外壳本票不动（三条一起钉，改了就是越界）
+    const bubbleSrc = read('components/ai-chat/ai-chat-bubble.uvue');
+    expect(bubbleSrc).toContain('max-width: 600rpx;');
+    expect(bubbleSrc).toContain('padding: 20rpx 24rpx;');
+    expect(bubbleSrc).toContain('border-radius: 16rpx;');
   });
 
   it('跨栈判据：站内配图前缀与后端 \`diagnosisImageRoute\` 逐字同源（改一边必红）', () => {
