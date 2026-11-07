@@ -37,6 +37,16 @@ export const SUBSET_FEATURED = 'featured'
  * 「按端分档」的含义就是：**两端可以不同，且各自声明**。
  */
 export const SUBSET_FORUM = 'forum'
+/**
+ * 子集档位：AI 助手回答（移动端 ADR 0056 / #2362 第四档）。
+ *
+ * 与论坛档的**唯一差别是 image**：回答正文由模型回串，配图经后端归一成站内代理路径
+ * （`/api/ai-assistant/diagnosis/ossimg/*`），手机端要**看见图**而不是「诊断配图」四个字。
+ * ⚠️ **不声明 inline**：气泡模板直出块文本（`{{ block.text }}`，无 runs），声明 inline 会让句内
+ * `![alt](url)` 原样留在段落里 —— URL 外露正是 #1279 当年挡的那件事。不声明则解析器按
+ * `stripInlinePlain` 只留 alt。表格同理不声明（窄气泡里按行退回原始文本）。
+ */
+export const SUBSET_AI_ANSWER = 'ai-answer'
 
 /**
  * 子集**成员名** —— 声明表与解析器共用的唯一词汇表（ADR-0025 决策⑤：声明与解析同源，
@@ -93,6 +103,11 @@ export const SUBSET_MEMBERS_FORUM : string[] = [
 	MEMBER_HEADING, MEMBER_LIST, MEMBER_QUOTE,
 	MEMBER_CODE, MEMBER_DIVIDER, MEMBER_INLINE,
 ]
+/** AI 回答档声明（移动端 ADR 0056）：论坛档的文本面 **+ image、- inline**（理由见档位常量的注释） */
+export const SUBSET_MEMBERS_AI_ANSWER : string[] = [
+	MEMBER_HEADING, MEMBER_LIST, MEMBER_QUOTE,
+	MEMBER_CODE, MEMBER_DIVIDER, MEMBER_IMAGE,
+]
 
 /**
  * 取某档的成员声明表。未知档位退到**章节档** —— 与 `parseMarkdown` 的缺省档一致
@@ -101,6 +116,7 @@ export const SUBSET_MEMBERS_FORUM : string[] = [
 export function subsetMembers(subset : string) : string[] {
 	if (subset == SUBSET_FEATURED) return SUBSET_MEMBERS_FEATURED
 	if (subset == SUBSET_FORUM) return SUBSET_MEMBERS_FORUM
+	if (subset == SUBSET_AI_ANSWER) return SUBSET_MEMBERS_AI_ANSWER
 	return SUBSET_MEMBERS_CHAPTER
 }
 

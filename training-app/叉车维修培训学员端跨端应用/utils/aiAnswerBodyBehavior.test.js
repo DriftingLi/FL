@@ -6,9 +6,13 @@
  * `.uvue` 里出现过 `aiAnswerBody` 是接线守护，壳层被改坏（档位拿错、展开被摘）它照样绿
  * （判据与分类见 `docs/agents/guards.md`）。
  *
- * 缝：`utils/utsHarness.js` 的 `loadUts`。注入的**两层都是真执行出来的源**——解析器与档位常量
- * 取 `utils/markdown.uts`、`expandImageMarkers` 取 `utils/aiSourcesDisplay.uts`——不是手抄镜像；
- * 镜像会让「真源改了而镜子没改」静默变绿（#1273 先例：三层链只换坏的那层、其余取真源）。
+ * 缝：`utils/utsHarness.js` 的 `loadUts`。注入的**各层都是真执行出来的源**——解析器与档位常量
+ * 取 `utils/markdown.uts`、`expandLegacyImageMarkers` 取 `utils/aiSourcesDisplay.uts`、
+ * `resolveFileUrl` 取 `utils/format.uts`——不是手抄镜像；镜像会让「真源改了而镜子没改」静默变绿
+ * （#1273 先例：三层链只换坏的那层、其余取真源）。
+ *
+ * #2362 追加判据（移动端 ADR 0056）：独行站内图 → `image` 块（text 为**绝对**本站 URL）；
+ * 句内图 → 只留 alt（未声明 inline ⇒ 解析器剥掉语法）；站外图 → 退化成 alt 文字、绝不产 image 块。
  *
  * 成对取证（③ 判据③）：末组用注入变异的副本证明上面的判据**有牙**，两种真实坏实现——
  * ① 摘掉 #1279 的展开前置（百分号编码的内网路径进正文）；② 档位拿错（论坛档换成章节档，
@@ -25,7 +29,12 @@ const DISPLAY_UTS = path.join(__dirname, 'aiSourcesDisplay.uts');
 
 /** 三层真源里壳层需要的名字（importedNames 收**源码串**不收路径 —— 传错会静默得空清单，
  *  连带把注入绑定掏空，一处错让本套件全红且看不出根因） */
-const SHELL_IMPORTS = ['parseMarkdown', 'SUBSET_FORUM', 'expandImageMarkers'];
+const FORMAT_UTS = path.join(__dirname, 'format.uts');
+
+/** 站内基址只在这一处夹具出现：拼接口径归 `utils/format.resolveFileUrl`，本套件不重复实现它 */
+const API_BASE = 'https://api.gdyidao.cn/api';
+
+const SHELL_IMPORTS = ['expandLegacyImageMarkers', 'parseMarkdown', 'resolveFileUrl', 'SUBSET_AI_ANSWER'];
 const SHELL_SRC = readText(SHELL_UTS);
 
 const ANSWER = [
@@ -44,12 +53,22 @@ const ANSWER = [
 const TABLE = '| 故障码 | 含义 |\n| --- | --- |\n| E01 | 电压过低 |';
 const MARKER = '先排空。<<IMAGE:/assistant/static/fault_images/制动系统/1721219449286.png | 描述:蓄能器接口>>再目视。';
 
+/** 独行站内图 = 后端归一后的现行形状（root ADR-0091：白名单内改写成本站代理路径） */
+const SITE_IMG = '![蓄能器](/api/ai-assistant/diagnosis/ossimg/linde/Linde_A-005-01.png)';
+const SITE_IMG_ABS = API_BASE + '/ai-assistant/diagnosis/ossimg/linde/Linde_A-005-01.png';
+/** 句内图：未声明 inline 的档要在解析器里被剥成 alt（URL 不外露） */
+const INLINE_SITE_IMG = '见 ![故障图](/api/ai-assistant/diagnosis/ossimg/a/b.png) 这张';
+/** 站外图：后端本该降级成文字；客户端再兜一道（不猜地址、不去第三方取图） */
+const FOREIGN_IMG = '![别家图](https://cdn.example.com/x/y.png)';
+
 function markdownBindings() {
   const m = loadUts(MD_UTS, {});
   const names = importedNames(SHELL_SRC);
   const bind = {};
   for (const n of names) {
-    if (n === 'expandImageMarkers') continue;
+    // 壳层 import 的四个名字里只有解析器与档位常量出自 `markdown.uts`；
+    // 展开器出自 `aiSourcesDisplay.uts`、拼接出自 `format.uts` —— 各取真源，不留镜像。
+    if (n === 'expandLegacyImageMarkers' || n === 'resolveFileUrl') continue;
     bind[n] = m[n];
   }
   return bind;
@@ -61,7 +80,9 @@ function shellBindings() {
   const m = loadUts(MD_UTS, {});
   return Object.assign(markdownBindings(), {
     SUBSET_CHAPTER: m.SUBSET_CHAPTER,
-    expandImageMarkers: loadUts(DISPLAY_UTS, {}).expandImageMarkers,
+    SUBSET_FORUM: m.SUBSET_FORUM,
+    expandLegacyImageMarkers: loadUts(DISPLAY_UTS, {}).expandLegacyImageMarkers,
+    resolveFileUrl: loadUts(FORMAT_UTS, { API_BASE_URL: API_BASE }).resolveFileUrl,
   });
 }
 
@@ -104,6 +125,41 @@ describe('aiAnswerBody 壳层（真执行）', () => {
   it('空回答 ⇒ 空数组（渲染出空气泡，与旧纯文本行为等价）', () => {
     expect(shell().aiAnswerBlocks('')).toEqual([]);
   });
+
+  it('独行站内图 ⇒ image 块，且 text 是**绝对**本站 URL（拼接归 `resolveFileUrl`）', () => {
+    const blocks = shell().aiAnswerBlocks(SITE_IMG);
+    expect(blocks.map((b) => b.type)).toEqual(['image']);
+    expect(blocks[0].text).toBe(SITE_IMG_ABS);
+    expect(blocks[0].items).toEqual(['蓄能器']);        // alt 留着：图挂了仍读得出讲的是什么
+    expect(blocks[0].text).not.toContain('cdn.example.com');
+  });
+
+  it('句内站内图 ⇒ 只留 alt（未声明 inline ⇒ 解析器剥语法，URL 不出现在任何块里）', () => {
+    const blocks = shell().aiAnswerBlocks(INLINE_SITE_IMG);
+    expect(blocks.map((b) => b.type)).toEqual(['paragraph']);
+    expect(blocks[0].text).toBe('见 故障图 这张');
+    expect(JSON.stringify(blocks)).not.toContain('/api/ai-assistant/');
+  });
+
+  it('站外图 ⇒ 退化成 alt 文字，绝不产 image 块（客户端不猜地址、不去第三方取图）', () => {
+    const blocks = shell().aiAnswerBlocks(FOREIGN_IMG);
+    expect(blocks.map((b) => b.type)).not.toContain('image');
+    expect(blocks[0].text).toBe('别家图');
+    expect(JSON.stringify(blocks)).not.toContain('cdn.example.com');
+  });
+
+  it('站外图且 alt 为空 ⇒ 不产任何块（没有可读内容时宁可不画，也不留 URL 或空壳）', () => {
+    expect(shell().aiAnswerBlocks('![](https://cdn.example.com/x/y.png)')).toEqual([]);
+  });
+
+  it('站内 + 站外同屏：只画站内那张，站外那张退成文字，顺序不变', () => {
+    const blocks = shell().aiAnswerBlocks([SITE_IMG, FOREIGN_IMG].join('\n\n'));
+    expect(blocks.map((b) => b.type)).toEqual(['image', 'paragraph']);
+    expect(blocks[1].text).toBe('别家图');
+  });
+
+  // ── #2362 / 移动端 ADR 0056：配图可见（只走站内代理出口）──────────────────────
+
 });
 
 describe('成对取证（必红）：本套件的判据在坏实现上确实会红', () => {
@@ -121,15 +177,22 @@ describe('成对取证（必红）：本套件的判据在坏实现上确实会�
   }
   const loadMutated = (replacements) => loadUts(mutatedCopy(replacements), shellBindings());
 
-  it('必红 · 摘掉 #1279 的展开前置 ⇒ 路径泄漏判据必然判红（百分号内网路径进正文）', () => {
-    const broken = loadMutated([['parseMarkdown(expandImageMarkers(raw), SUBSET_FORUM)', 'parseMarkdown(raw, SUBSET_FORUM)']]);
+  it('必红 · 摘掉历史标记的展开前置 ⇒ 内网路径泄漏判据必然判红（百分号内网路径进正文）', () => {
+    const broken = loadMutated([['expandLegacyImageMarkers(raw)', 'raw']]);
     const all = JSON.stringify(broken.aiAnswerBlocks(MARKER));
     // 展开被摘后：标记与路径原样留在段落文本里 —— 正是 #1279 挡的那件事
     expect(all).toContain('fault_images/');
   });
 
-  it('必红 · 档位拿错（论坛档→章节档）⇒ 表格被渲成 table 块，「两面同档」判据必然判红', () => {
-    const broken = loadMutated([['parseMarkdown(expandImageMarkers(raw), SUBSET_FORUM)', 'parseMarkdown(expandImageMarkers(raw), SUBSET_CHAPTER)']]);
+  it('必红 · 档位拿错（AI 回答档→章节档）⇒ 表格被渲成 table 块，「窄气泡不画表格」判据必然判红', () => {
+    const broken = loadMutated([['parseMarkdown(expandLegacyImageMarkers(raw), SUBSET_AI_ANSWER)', 'parseMarkdown(expandLegacyImageMarkers(raw), SUBSET_CHAPTER)']]);
     expect(broken.aiAnswerBlocks(TABLE).some((b) => b.type === 'table')).toBe(true);
+  });
+
+  it('必红 · 摘掉站内前缀闸 ⇒ 站外图变成 image 块，图片请求直连第三方主机', () => {
+    // 坏实现 = 完全信任后端归一、客户端不设闸（ADR-0063 决策 3 的原始动机在这里失守）
+    // 变异成空前缀 = 任何 URL 都放行（`startsWith('')` 恒真），等于这道闸不存在
+    const broken = loadMutated([["'/api/ai-assistant/diagnosis/ossimg/'", "''"]]);
+    expect(broken.aiAnswerBlocks(FOREIGN_IMG).some((b) => b.type === 'image')).toBe(true);
   });
 });
