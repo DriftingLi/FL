@@ -52,8 +52,9 @@ const MARKDOWN_IMG_OPEN = '!['
 const MARKDOWN_IMG_MID = ']('
 const MARKDOWN_IMG_CLOSE = ')'
 
-/** 无描述时的图片占位词（与后端 `normalizeDiagnosisImages` 的 alt 缺省同词，三端一致） */
-const IMAGE_ALT_FALLBACK = '诊断配图'
+/** 无描述时的图片占位词（与后端 `normalizeDiagnosisImages` 的 alt 缺省同词，三端一致）。
+ *  #2362 起因 AI 回答面的降级分支也要用同一个词，故导出（仍只此一处字面量）。 */
+export const IMAGE_ALT_FALLBACK = '诊断配图'
 
 /**
  * 取标记内容 `|` 之前的路径段（对齐 Web `DiagnosisSources.vue` 的 `split('|')[0]`）。
@@ -153,7 +154,7 @@ function earlierAt(a : number, b : number) : number {
  * **不 trim 整体**：不含图片表达的文本（每条用户消息、以及无图回答）逐字节不变。
  * 不成形的 `![`（后面没有 `](`…`)`）原样保留 —— 宁可不展开，也不吞掉正文。
  */
-export function expandImageMarkers(text : string) : string {
+function expandImageText(text : string, keepMarkdownImages : boolean) : string {
 	let out = ''
 	let from = 0
 	while (true) {
@@ -183,12 +184,37 @@ export function expandImageMarkers(text : string) : string {
 			from = start + MARKDOWN_IMG_OPEN.length
 			continue
 		}
+		// `keepMarkdownImages`（#2362 / 移动端 ADR 0056）：AI 回答面要把 `![alt](url)` 交给解析器
+		// 渲成图片块，故原样放行；纯文本面（用户气泡）仍按 alt 展开。
+		if (keepMarkdownImages) {
+			out += text.substring(from, tail + MARKDOWN_IMG_CLOSE.length)
+			from = tail + MARKDOWN_IMG_CLOSE.length
+			continue
+		}
 		out += text.substring(from, start)
 		const alt = text.substring(start + MARKDOWN_IMG_OPEN.length, mid).trim()
 		out += alt.length > 0 ? alt : IMAGE_ALT_FALLBACK
 		from = tail + MARKDOWN_IMG_CLOSE.length
 	}
 	return out
+}
+
+/** {@link expandImageText} 的纯文本面：两种形状都抹成说明文字（#1279） */
+export function expandImageMarkers(text : string) : string {
+	return expandImageText(text, false)
+}
+
+/**
+ * 只展开**历史**标记 `<<IMAGE:…>>`，`![alt](url)` 原样放行（#2362 / 移动端 ADR 0056）。
+ *
+ * 为什么需要第二条入口：AI 回答面的解析器负责把独行图渲成图片块，展开器若先一步吃掉 URL，
+ * 图就永远看不见（URL 到不了解析器）。句内图仍然安全 —— 回答档不声明 `inline`，
+ * 解析器的 `stripInlinePlain` 会把 `![alt](url)` 剥成 alt。
+ *
+ * 两条入口共用**同一条扫描循环**（`expandImageText`）：各写一条循环就是两条展开口径，会各自漂移。
+ */
+export function expandLegacyImageMarkers(text : string) : string {
+	return expandImageText(text, true)
 }
 
 /** 页码标签（对齐 web「第 N 页 / 第 N-M 页」）；起始页缺失或为 0 时不显示 */
