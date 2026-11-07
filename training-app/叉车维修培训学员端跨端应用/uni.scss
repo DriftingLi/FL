@@ -197,6 +197,7 @@ $md-space-0: 0rpx; /* mt-0：首块（即使它是分隔线） */
 $md-space-16: 16rpx; /* mt-16：紧跟标题的块 / 分隔线自身与后继 */
 $md-space-24: 24rpx; /* mt-24：标题紧跟标题 / 其余块 */
 $md-space-40: 40rpx; /* mt-40：标题块自身 */
+$md-space-list-item: 12rpx; /* 列表项之间（spec「列表」条目：块间距 24、项间 12）；不是四态的一档 */
 
 /* 几何：引用 / 代码 / 分隔线（#2338 色彩口径 + #2340 刻度） */
 $md-quote-bar: 8rpx; /* 引用左竖线（不铺底色） */
@@ -207,3 +208,10 @@ $md-code-radius: 12rpx;
 $md-code-inline-bg: $border-color-light;
 $md-code-inline-radius: $radius-sm;
 $md-divider-line: 1rpx; /* 规格按「不小于 1 物理像素」理解：2 倍屏上 1rpx 恰为 1 像素 */
+/* 表格的字号与内边距（**不属阅读刻度**：表格窄屏怎么读属地图 #2334 的 Out of scope，渲染口径按 ADR-0046 原样保留，
+ * 值 = 迁移前 `chapter-markdown.uvue` 的那一套）。收在这里只为「渲染面不出现字号 / 间距裸字面量」（#2353 AC）；
+ * 表格的边框宽度、边框色、圆角不属字号/间距，仍留在组件里写字面量。 */
+$md-table-size: 26rpx;
+$md-table-line: 40rpx;
+$md-table-padding-y: 16rpx;
+$md-table-padding-x: 20rpx;
