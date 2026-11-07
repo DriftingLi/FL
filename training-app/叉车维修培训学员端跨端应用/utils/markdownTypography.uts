@@ -1,0 +1,137 @@
+/**
+ * Markdown 块 → 阅读档位（排版解析器 · #2352「一套值，一个纯函数」）
+ *
+ * 这一层只做**分类**，不含任何数值。#2352 的决议 D2 已裁定「纯函数只返回档位名」：
+ * 字号 / 行高 / 字色 / 字重四类值只在 `uni.scss` 的 `$md-*` 段出现一次（决议 D1），
+ * 渲染层拿 `size` / `space` 两个令牌去取类名与刻度变量。返回数值就等于让同一个 40/56
+ * 在 CSS 再来一份 —— 那正是本票要消灭的「两处定义」。
+ *
+ * 为什么是纯函数而不是写在模板里：块间距由**位置**决定（首块 / 标题后 / 分隔线后 / 其余），
+ * 写在 `.uvue` 里就只能靠读源码文本的接线守护去守，而 `docs/agents/guards.md` 明说接线守护
+ * **不构成 ③ 门证据**（算法被改坏而字面量还在时它不红）。抽到 `utils/` 后它被
+ * `utils/utsHarness.js` 的 `loadUts` **真执行**：`utils/markdownTypographyBehavior.test.js`
+ * 断言的是跑起来的产出物，不是字面量。
+ *
+ * **形状红线（#905 血账，别改成嵌套类型）**：返回与输入 **1:1 对齐**的扁平投影，
+ * 每项只有两个字符串字段。给自定义类型加「数组字段」会被 UTS 在编译期改名
+ * （`utils/markdown.uts:11-17` 的 kotlinc 60 条 unresolved reference / 根 ADR-0046 决定 6）。
+ *
+ * **间距优先序**（#2352 决议 D3「首块与标题优先」，自上而下先命中先返回）：
+ *
+ *   1. 本块是首块（即使它就是分隔线）       → `mt-0`
+ *   2. 本块是标题，且前一块也是标题         → `mt-24`
+ *   3. 本块是标题（前一块不是标题，含前一块是分隔线）→ `mt-40`
+ *   4. 本块是分隔线                         → `mt-16`
+ *   5. 前一块是分隔线（含上一条命中的情形） → `mt-16`
+ *   6. 前一块是标题                         → `mt-16`
+ *   7. 本块是 `table` 行，且前一块也是 `table` 行 → `mt-0`
+ *   8. 其余                                 → `mt-24`
+ *
+ * 三条容易写错的：
+ * - **第 3 行压过第 5 行**：标题紧跟分隔线取 `mt-40`。标题的 40 是「这一节的呼吸」，
+ *   让给分隔线的 16 会把节头压扁（D3 选 A 而非 B 的那一格）。
+ * - **第 7 行排在四态之后**：一张表的**第一行**仍取四态值（紧跟标题就是 16、否则 24），
+ *   只有「表内续行」归零 —— 否则同一张表会被切开（根 ADR-0046 的归零口径）。
+ * - **分隔线合计 32 不靠叠加**：自身 16 + 后继块 16（margin-top-only 模型、`margin-bottom` 恒 0）。
+ *
+ * **已知边界（本轮不做，别在这里补）**：`table` / `image` 的**排版特性**（表格窄屏怎么读、
+ * 图片与图注）属地图 #2334 划出的 Out of scope ⇒ 这里只把它们折到 `body` + 常规间距，
+ * 渲染分支原样归 #2353。`codeInline` / `listBullet` 是**块内子元素**的档（行内码、列表符号），
+ * 不由本函数产出，同属 `$md-*` 那套刻度。
+ *
+ * @note 不依赖 DOM API，跨端通用（App / 小程序 / H5）
+ */
+import type { MarkdownBlock } from '../types/index'
+
+/** 一块的阅读档位：字号档 + 间距档（两个**令牌**，不含数值） */
+export type MarkdownTier = {
+	size : string
+	space : string
+}
+
+/** 间距档令牌：与 #2337 定的块级 class 选择器同名（渲染侧不再建第二张映射表） */
+export const SPACE_NONE : string = 'mt-0'
+/** 紧跟标题的块 / 分隔线自身与后继 —— 「紧」的那一档，不是「小」的那一档 */
+export const SPACE_TIGHT : string = 'mt-16'
+/** 标题紧跟标题 / 其余块 */
+export const SPACE_BLOCK : string = 'mt-24'
+/** 标题块自身的段前呼吸 */
+export const SPACE_SECTION : string = 'mt-40'
+
+/** 字号档令牌：本函数能产出的那一组（`codeInline` / `listBullet` 属块内子元素，不在此列） */
+const SIZE_H1 : string = 'h1'
+const SIZE_H2 : string = 'h2'
+const SIZE_H3 : string = 'h3'
+const SIZE_H4 : string = 'h4'
+const SIZE_BODY : string = 'body'
+const SIZE_QUOTE : string = 'quote'
+const SIZE_CODE : string = 'code'
+const SIZE_LIST_TEXT : string = 'listText'
+const SIZE_DIVIDER : string = 'divider'
+
+/** 块类型：标题（层级在 `level` 的 1–6） */
+const TYPE_HEADING : string = 'heading'
+const TYPE_QUOTE : string = 'quote'
+const TYPE_CODE : string = 'code'
+const TYPE_LIST : string = 'list'
+const TYPE_DIVIDER : string = 'divider'
+const TYPE_TABLE : string = 'table'
+
+/**
+ * 字号档：只由 `type` + `level` 派生。
+ *
+ * 标题收成**四档**：h1 / h2 / h3 / h4（h4–h6 同款 26/40 700）。层级越界不炸也不漏：
+ * `<= 1` 折到 h1、`> 3` 折到 h4 —— 解析器的 `level` 是 `#` 的个数，理论上恒在 1–6，
+ * 但本函数不吃「理论上」。
+ */
+function sizeTierOf(block : MarkdownBlock) : string {
+	if (block.type == TYPE_HEADING) {
+		if (block.level <= 1) return SIZE_H1
+		if (block.level == 2) return SIZE_H2
+		if (block.level == 3) return SIZE_H3
+		return SIZE_H4
+	}
+	if (block.type == TYPE_QUOTE) return SIZE_QUOTE
+	if (block.type == TYPE_CODE) return SIZE_CODE
+	if (block.type == TYPE_LIST) return SIZE_LIST_TEXT
+	if (block.type == TYPE_DIVIDER) return SIZE_DIVIDER
+	// paragraph / table / image / 未知类型：一律正文档（表格与图片的排版不在本轮）
+	return SIZE_BODY
+}
+
+/**
+ * 间距档：按上面的八行优先序判。`index` 决定「是不是首块」，`prevType` 给前一块的类型
+ * （首块传空串，不用可空类型 —— UTS 侧少一层判空）。
+ */
+function spaceTierOf(block : MarkdownBlock, prevType : string, index : number) : string {
+	if (index == 0) return SPACE_NONE
+	const isHeading = block.type == TYPE_HEADING
+	const prevIsHeading = prevType == TYPE_HEADING
+	if (isHeading && prevIsHeading) return SPACE_BLOCK
+	if (isHeading) return SPACE_SECTION
+	if (block.type == TYPE_DIVIDER) return SPACE_TIGHT
+	if (prevType == TYPE_DIVIDER) return SPACE_TIGHT
+	if (prevIsHeading) return SPACE_TIGHT
+	if (block.type == TYPE_TABLE && prevType == TYPE_TABLE) return SPACE_NONE
+	return SPACE_BLOCK
+}
+
+/**
+ * 排版解析器：块数组 → 每块的档位与间距档（与输入 **1:1 对齐**，顺序不变）。
+ *
+ * @param blocks 既有解析器（`parseMarkdown`）产出的块数组；空数组 ⇒ 空数组
+ * @returns 每块一个 {@link MarkdownTier}；只读 `type` / `level` 与前一块的 `type`，
+ *          不读 `text` / `items`，不碰组件实例、不读样式
+ */
+export function markdownTiers(blocks : MarkdownBlock[]) : MarkdownTier[] {
+	const tiers : MarkdownTier[] = []
+	for (let i = 0; i < blocks.length; i++) {
+		const block = blocks[i]
+		const prevType : string = i > 0 ? blocks[i - 1].type : ''
+		tiers.push({
+			size: sizeTierOf(block),
+			space: spaceTierOf(block, prevType, i),
+		} as MarkdownTier)
+	}
+	return tiers
+}

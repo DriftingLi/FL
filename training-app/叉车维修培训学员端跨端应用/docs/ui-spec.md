@@ -85,6 +85,7 @@
 | `$text-color-secondary` | `#666666` | 次要文字（描述、副标题、结果片段） |
 | `$text-color-placeholder` | `#999999` | 辅助文字（日期、placeholder） |
 | `$text-disabled` | `#cccccc` | 禁用 / 弱化文字 |
+| `$text-strong` | `#1a1a1a` | 强调文字黑（标题 / 选中态文字；阅读刻度的 h1–h3 引它，#2338 裁定） |
 | `$text-color-inverse` | `#ffffff` | 反色文字（深色背景上） |
 
 ### 1.5 表面与边框
@@ -138,6 +139,54 @@
 | `$font-size-xl` | `36rpx` | 页面标题（居中大标题） |
 
 > `$font-size-xxl`（`uni.scss:128`，44rpx）**全站零消费** ⇒ **删定义留注释占位**（#1597 Z7/C4，执行票承接）。
+
+### 4.1 阅读刻度（Markdown 正文 · #2352）
+
+四面（课程章节 / 内容精选 / 论坛 / AI 气泡）共用的刻度，**值只有 `uni.scss` 这一处**（`$md-*` 段）；
+块级渲染组件的类名与 `utils/markdownTypography.uts` 的档位令牌一一对应 —— `$md-size-<档位>` 对
+`size` 令牌，`$md-space-<值>` 对 `space` 令牌（`mt-0` / `mt-16` / `mt-24` / `mt-40`，与 #2337 定的
+块级 class 选择器同名）。§4 上表的全局字号阶梯**不收编**本组：30 / 26 / 34 / 40rpx 不在
+20 / 24 / 28 / 32 / 36 之内，硬塞会牵动阅读面以外的百余处界面字号。
+
+| Token | 值 | 用途 |
+|---|---|---|
+| `$md-color-text` | `$text-color` | 正文（30/48，#333） |
+| `$md-color-heading` | `$text-strong` | 标题 h1–h3（#1a1a1a） |
+| `$md-color-muted` | `$text-color-secondary` | 引用文字、列表符号（#666） |
+| `$md-color-divider` | `$border-color` | 分隔线（#e5e5e5，线宽见 `$md-divider-line`） |
+| `$md-weight-heading` | `700` | 标题字重（四档一律 700） |
+| `$md-size-h1` | `40rpx` | h1 字号 |
+| `$md-line-h1` | `56rpx` | h1 行高 |
+| `$md-size-h2` | `34rpx` | h2 字号 |
+| `$md-line-h2` | `48rpx` | h2 行高 |
+| `$md-size-h3` | `30rpx` | h3 字号（与正文同号是刻意的） |
+| `$md-line-h3` | `48rpx` | h3 行高 |
+| `$md-size-h4` | `26rpx` | h4 / h5 / h6 字号（三档同款） |
+| `$md-line-h4` | `40rpx` | h4–h6 行高 |
+| `$md-size-body` | `30rpx` | 正文字号 |
+| `$md-line-body` | `48rpx` | 正文行高（倍率 1.6） |
+| `$md-size-quote` | `30rpx` | 引用字号（与正文同号） |
+| `$md-line-quote` | `48rpx` | 引用行高 |
+| `$md-size-code` | `26rpx` | 代码块字号 |
+| `$md-line-code` | `40rpx` | 代码块行高 |
+| `$md-font-code` | `monospace` | 代码块等宽族（只写单一 `monospace`） |
+| `$md-size-code-inline` | `26rpx` | 行内码字号（块内子元素，不由档位函数产出） |
+| `$md-size-list-text` | `30rpx` | 列表项文字 |
+| `$md-line-list-text` | `48rpx` | 列表项行高 |
+| `$md-size-list-bullet` | `30rpx` | 列表符号 |
+| `$md-gap-list-bullet` | `16rpx` | 符号右外边距 |
+| `$md-space-0` | `0rpx` | 间距档 `mt-0`：首块（即使它是分隔线） |
+| `$md-space-16` | `16rpx` | 间距档 `mt-16`：紧跟标题的块 / 分隔线自身与后继 |
+| `$md-space-24` | `24rpx` | 间距档 `mt-24`：标题紧跟标题 / 其余块 |
+| `$md-space-40` | `40rpx` | 间距档 `mt-40`：标题块自身 |
+| `$md-quote-bar` | `8rpx` | 引用左竖线宽（不铺底色） |
+| `$md-quote-padding-left` | `24rpx` | 引用左内边距 |
+| `$md-code-bg` | `$bg-color` | 代码块底（#f8f8f8） |
+| `$md-code-padding` | `24rpx` | 代码块内边距 |
+| `$md-code-radius` | `12rpx` | 代码块圆角 |
+| `$md-code-inline-bg` | `$border-color-light` | 行内码底（#f0f0f0） |
+| `$md-code-inline-radius` | `$radius-sm` | 行内码圆角（8rpx） |
+| `$md-divider-line` | `1rpx` | 分隔线宽（规格按「不小于 1 物理像素」：2 倍屏上 1rpx 恰为 1 像素） |
 
 ---
 
