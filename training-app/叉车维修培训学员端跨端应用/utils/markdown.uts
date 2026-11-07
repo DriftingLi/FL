@@ -292,7 +292,7 @@ function normalizeTableRow(raw : string[], width : number, keepInline : boolean)
  * 解析 markdown 文本为块数组
  * @param markdown 原始 markdown 文本
  * @param subset 子集档位：`chapter`（缺省，章节正文）/ `featured`（内容精选，三端交集）/
- *               `forum`（论坛正文，ADR-0025 第三档）
+ *               `forum`（论坛正文，ADR-0025 第三档）/ `ai-answer`（AI 回答，移动端 ADR 0056 第四档）
  * @returns MarkdownBlock[] 渲染块列表
  */
 export function parseMarkdown(markdown : string, subset : string = SUBSET_CHAPTER) : MarkdownBlock[] {

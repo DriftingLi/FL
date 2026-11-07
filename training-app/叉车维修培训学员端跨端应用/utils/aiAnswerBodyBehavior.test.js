@@ -34,7 +34,7 @@ const FORMAT_UTS = path.join(__dirname, 'format.uts');
 /** 站内基址只在这一处夹具出现：拼接口径归 `utils/format.resolveFileUrl`，本套件不重复实现它 */
 const API_BASE = 'https://api.gdyidao.cn/api';
 
-const SHELL_IMPORTS = ['expandLegacyImageMarkers', 'parseMarkdown', 'resolveFileUrl', 'SUBSET_AI_ANSWER'];
+const SHELL_IMPORTS = ['IMAGE_ALT_FALLBACK', 'expandLegacyImageMarkers', 'parseMarkdown', 'resolveFileUrl', 'SUBSET_AI_ANSWER'];
 const SHELL_SRC = readText(SHELL_UTS);
 
 const ANSWER = [
@@ -66,9 +66,9 @@ function markdownBindings() {
   const names = importedNames(SHELL_SRC);
   const bind = {};
   for (const n of names) {
-    // 壳层 import 的四个名字里只有解析器与档位常量出自 `markdown.uts`；
-    // 展开器出自 `aiSourcesDisplay.uts`、拼接出自 `format.uts` —— 各取真源，不留镜像。
-    if (n === 'expandLegacyImageMarkers' || n === 'resolveFileUrl') continue;
+    // 壳层 import 的五名里只有解析器与档位常量出自 `markdown.uts`；
+    // 展开器与占位词出自 `aiSourcesDisplay.uts`、拼接出自 `format.uts` —— 各取真源，不留镜像。
+    if (n === 'expandLegacyImageMarkers' || n === 'resolveFileUrl' || n === 'IMAGE_ALT_FALLBACK') continue;
     bind[n] = m[n];
   }
   return bind;
@@ -78,10 +78,12 @@ function shellBindings() {
   // SUBSET_CHAPTER 不在真 import 清单里，但**变异体**要用它（档位拿错的坏实现必须能跑起来，
   // 否则报 ReferenceError 而不是「判据红」—— 那测的是夹具环，不是牙齿）。先例：forumBodyBehavior。
   const m = loadUts(MD_UTS, {});
+  const display = loadUts(DISPLAY_UTS, {});
   return Object.assign(markdownBindings(), {
     SUBSET_CHAPTER: m.SUBSET_CHAPTER,
     SUBSET_FORUM: m.SUBSET_FORUM,
-    expandLegacyImageMarkers: loadUts(DISPLAY_UTS, {}).expandLegacyImageMarkers,
+    expandLegacyImageMarkers: display.expandLegacyImageMarkers,
+    IMAGE_ALT_FALLBACK: display.IMAGE_ALT_FALLBACK,
     resolveFileUrl: loadUts(FORMAT_UTS, { API_BASE_URL: API_BASE }).resolveFileUrl,
   });
 }
@@ -134,6 +136,12 @@ describe('aiAnswerBody 壳层（真执行）', () => {
     expect(blocks[0].text).not.toContain('cdn.example.com');
   });
 
+  it('**绝对**站内图（已带基址）⇒ 同样是 image 块，URL 原样（归一幂等，两种入路同一条判据）', () => {
+    const blocks = shell().aiAnswerBlocks('![' + '蓄能器' + '](' + SITE_IMG_ABS + ')');
+    expect(blocks.map((b) => b.type)).toEqual(['image']);
+    expect(blocks[0].text).toBe(SITE_IMG_ABS);
+  });
+
   it('句内站内图 ⇒ 只留 alt（未声明 inline ⇒ 解析器剥语法，URL 不出现在任何块里）', () => {
     const blocks = shell().aiAnswerBlocks(INLINE_SITE_IMG);
     expect(blocks.map((b) => b.type)).toEqual(['paragraph']);
@@ -148,8 +156,22 @@ describe('aiAnswerBody 壳层（真执行）', () => {
     expect(JSON.stringify(blocks)).not.toContain('cdn.example.com');
   });
 
-  it('站外图且 alt 为空 ⇒ 不产任何块（没有可读内容时宁可不画，也不留 URL 或空壳）', () => {
-    expect(shell().aiAnswerBlocks('![](https://cdn.example.com/x/y.png)')).toEqual([]);
+  it('站外图且 alt 为空 ⇒ 退回占位词「诊断配图」，**不丢内容也不留 URL**（段落地板）', () => {
+    const blocks = shell().aiAnswerBlocks('![](https://cdn.example.com/x/y.png)');
+    expect(blocks.map((b) => b.type)).toEqual(['paragraph']);
+    expect(blocks[0].text).toBe('诊断配图');
+    expect(JSON.stringify(blocks)).not.toContain('cdn.example.com');
+  });
+
+  it('图集与下标换算（纯函数）：按块序收集；同图重复出现时第二张的下标是 1', () => {
+    const s = shell();
+    const blocks = s.aiAnswerBlocks([SITE_IMG, '中间一段话', SITE_IMG, FOREIGN_IMG].join('\n\n'));
+    expect(s.aiAnswerImageUrls(blocks)).toEqual([SITE_IMG_ABS, SITE_IMG_ABS]);
+    // 第二张图的块序号 → 图序号必须是 1（按 URL 值反查会得到 0，预览会从第一张翻起）
+    const secondImageBlock = blocks.length - 2;
+    expect(blocks[secondImageBlock].type).toBe('image');
+    expect(s.aiAnswerImageIndexAt(blocks, secondImageBlock)).toBe(1);
+    expect(s.aiAnswerImageIndexAt(blocks, 0)).toBe(0);
   });
 
   it('站内 + 站外同屏：只画站内那张，站外那张退成文字，顺序不变', () => {

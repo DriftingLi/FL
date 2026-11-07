@@ -52,8 +52,9 @@ const MARKDOWN_IMG_OPEN = '!['
 const MARKDOWN_IMG_MID = ']('
 const MARKDOWN_IMG_CLOSE = ')'
 
-/** 无描述时的图片占位词（与后端 `normalizeDiagnosisImages` 的 alt 缺省同词，三端一致） */
-const IMAGE_ALT_FALLBACK = '诊断配图'
+/** 无描述时的图片占位词（与后端 `normalizeDiagnosisImages` 的 alt 缺省同词，三端一致）。
+ *  #2362 起因 AI 回答面的降级分支也要用同一个词，故导出（仍只此一处字面量）。 */
+export const IMAGE_ALT_FALLBACK = '诊断配图'
 
 /**
  * 取标记内容 `|` 之前的路径段（对齐 Web `DiagnosisSources.vue` 的 `split('|')[0]`）。

@@ -88,11 +88,12 @@ describe('aiSourcesDisplay：执行器自检', () => {
     expect(() => loadUts(UTS, {})).not.toThrow();
   });
 
-  it('八个导出全部回读得到（少一个就是 `loadUts` 静默丢名字）', () => {
+  it('九个导出全部回读得到（少一个就是 `loadUts` 静默丢名字）', () => {
     const m = display();
     expect(exportedNames(SRC).sort()).toEqual([
-      'IMAGE_CLOSE', 'IMAGE_OPEN', 'expandImageMarkers', 'expandLegacyImageMarkers',
-      'extractImagePaths', 'pageLabel', 'stripAssistantPrefix', 'stripImageMarkers',
+      'IMAGE_ALT_FALLBACK', 'IMAGE_CLOSE', 'IMAGE_OPEN', 'expandImageMarkers',
+      'expandLegacyImageMarkers', 'extractImagePaths', 'pageLabel', 'stripAssistantPrefix',
+      'stripImageMarkers',
     ]);
     expect(Object.keys(m).sort()).toEqual(exportedNames(SRC).sort());
   });
@@ -364,10 +365,12 @@ describe('aiSourcesDisplay：结构约束（接线面，行为由上面各组真
     // 两种形状共用**同一个**扫描循环（各写一条循环 = 两条展开口径会各自漂移）。
     // #2362 起多了第二条**入口**（markdown 图放行，供 AI 回答面把图渲成块），但它必须是
     // 同一条循环的开关 —— 判据因此钉循环，不钉导出个数。
-    expect(SRC.match(/const legacy = text\.indexOf\(IMAGE_OPEN, from\)/g)).toHaveLength(1);
-    expect(SRC).toContain('function expandImageText(text : string, keepMarkdownImages : boolean) : string');
-    expect(SRC).toContain('return expandImageText(text, false)');
-    expect(SRC).toContain('return expandImageText(text, true)');
+    // 只钉调用面：一个共享实现 + 两处开关相反的调用（参数名/签名细节留给实现自由，
+    // 两入路的**行为**差异由上面那组用例真执行兜底）。
+    expect(SRC.match(/function expandImageText\(/g)).toHaveLength(1);
+    expect(SRC.match(/return expandImageText\(text, (?:true|false)\)/g)).toHaveLength(2);
+    expect(SRC).toMatch(/return expandImageText\(text, false\)/);
+    expect(SRC).toMatch(/return expandImageText\(text, true\)/);
     // 接线面（气泡有没有真的调用它）归 `aiDiagnosisSourcesContract.test.js` ⑥：
     // 那是契约缝的活，放这儿会变成「单测替接线背书」——而接线守护不算 ③ 证据。
   });

@@ -714,9 +714,25 @@ describe('ADR-0046 / API.md 的移动端登记（本票的口径落点）', () =
     expect(bubble).toContain("block.type == 'image'");
     expect(bubble).toContain('md-image');
     expect(bubble).toContain('previewImages');
+    // 图集与下标换算住在纯函数层（行为面真执行），模板只调本地名：
+    // 按 URL 值反查会让「同图重复出现」的第二张永远从第一张翻起。
+    expect(bubble).toContain('onPreviewAssistantImageAt(idx)');
+    expect(bubble).toContain('aiAnswerImageUrls(');
+    expect(bubble).toContain('aiAnswerImageIndexAt(');
+    expect(bubble).not.toContain('urls.indexOf(');
     // 本票只动 AI 回答面：论坛正文仍图文分离（块数组与渲染分支都不许长出 image）
     const forumMd = read('pages/forum/components/forum-markdown-blocks.uvue');
     expect(forumMd).not.toContain("block.type == 'image'");
+  });
+
+  it('跨栈判据：站内配图前缀与后端 \`diagnosisImageRoute\` 逐字同源（改一边必红）', () => {
+    // 手机端唯一的跨栈判据就在这里：后端换路由而移动端漏改时，
+    // 配图会整体静默退化成 alt 文字（AC1 无声失效），所以必须逐字钉住。
+    const shell = readText(path.join(__dirname, 'aiAnswerBody.uts'));
+    const backend = readText(path.join(REPO_ROOT, 'backend', 'internal', 'aiassistant', 'diagnosis_adapter.go'));
+    const goRoute = backend.match(/const diagnosisImageRoute = "([^"]+)"/);
+    expect(goRoute).not.toBe(null);
+    expect(shell).toContain("export const AI_ANSWER_IMAGE_PREFIX = '" + goRoute[1] + "'");
   });
 
   it('已知限制里的移动端一行已随本票更新（旧口径不再残留）', () => {

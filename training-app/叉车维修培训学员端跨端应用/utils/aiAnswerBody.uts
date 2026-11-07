@@ -26,15 +26,47 @@
  * @note 不依赖 DOM API，跨端通用（App / 小程序 / H5）
  */
 import { parseMarkdown, SUBSET_AI_ANSWER } from './markdown'
-import { expandLegacyImageMarkers } from './aiSourcesDisplay'
+import { expandLegacyImageMarkers, IMAGE_ALT_FALLBACK } from './aiSourcesDisplay'
 import { resolveFileUrl } from './format'
 import type { MarkdownBlock } from '../types/index'
 
 /**
  * 站内配图唯一出口（后端 `diagnosisImageRoute` 同源，ADR-0091 归一链的产物前缀）。
- * 改路由要同时改这里与后端常量；契约测试经真实路由命中该路径，会先红。
+ * ⚠️ 改路由要**同批**改这里与后端常量：手机端唯一的跨栈判据在
+ * `utils/markdownContract.test.js`（逐字比对后端常量），它红之前不会有别的提示。
  */
 export const AI_ANSWER_IMAGE_PREFIX = '/api/ai-assistant/diagnosis/ossimg/'
+
+/**
+ * 同一前缀的**绝对**形：相对形经 `resolveFileUrl` 归一后与它比对 —— 于是「站内相对路径 /
+ * 绝对站内路径」两条入路走同一条判据（票面 AC5），不需要第二个分支。
+ */
+const SITE_IMAGE_ABS_PREFIX = resolveFileUrl(AI_ANSWER_IMAGE_PREFIX)
+
+/**
+ * 回答正文的图集（按**块序**）：渲染集合与全屏预览集合共用这一份，模板不各自拼列表。
+ *
+ * @param blocks 已过 `aiAnswerBlocks` 的块数组（image 块的 text 已是绝对站内 URL）
+ */
+export function aiAnswerImageUrls(blocks : MarkdownBlock[]) : string[] {
+	const out : string[] = []
+	for (let i = 0; i < blocks.length; i++) {
+		if (blocks[i].type == 'image') out.push(blocks[i].text)
+	}
+	return out
+}
+
+/**
+ * 块序号 → 图序号（#2362）：预览起点按**位置**换算，不按 URL 值反查 ——
+ * 同一条回答里同一张图出现两次时，反查永远命中第一张（预览位置 ≠ 渲染位置）。
+ */
+export function aiAnswerImageIndexAt(blocks : MarkdownBlock[], blockIndex : number) : number {
+	let n = 0
+	for (let i = 0; i < blockIndex && i < blocks.length; i++) {
+		if (blocks[i].type == 'image') n++
+	}
+	return n
+}
 
 /**
  * 助手回答的渲染块：先抹历史标记，再按 **AI 回答档**解析，最后过站内闸与 URL 拼接。
@@ -50,24 +82,25 @@ export function aiAnswerBlocks(raw : string) : MarkdownBlock[] {
 			out.push(b)
 			continue
 		}
-		if (!b.text.startsWith(AI_ANSWER_IMAGE_PREFIX)) {
-			// 站外 / 未知前缀：退化成 alt 文字。alt 也空时就丢掉 —— 既没有可读内容，
-			// 也不能为了「不丢内容」把 URL 画出来（那是 #1279 修掉的形态，不是能力）。
+		// 先归一再判前缀：绝对站内形原样通过（拼接幂等），相对站内形归一后命中，
+		// 站外绝对形归一后仍是第三方主机 ⇒ 落到下面的降级分支。
+		const resolved = resolveFileUrl(b.text)
+		if (!resolved.startsWith(SITE_IMAGE_ABS_PREFIX)) {
+			// 站外 / 未知前缀：退化成 alt 文字。alt 为空时退回占位词，**绝不整块丢弃** ——
+			// 「声明里没有 ⇒ 内容消失」是段落地板明令禁止的形态，用户至少要读得出「这里有过一张图」。
 			const alt = b.items.length > 0 ? b.items[0] : ''
-			if (alt.length > 0) {
-				out.push({
-					type: 'paragraph',
-					level: 0,
-					text: alt,
-					items: [] as string[],
-				} as MarkdownBlock)
-			}
+			out.push({
+				type: 'paragraph',
+				level: 0,
+				text: alt.length > 0 ? alt : IMAGE_ALT_FALLBACK,
+				items: [] as string[],
+			} as MarkdownBlock)
 			continue
 		}
 		out.push({
 			type: 'image',
 			level: 0,
-			text: resolveFileUrl(b.text),
+			text: resolved,
 			items: b.items,
 		} as MarkdownBlock)
 	}
