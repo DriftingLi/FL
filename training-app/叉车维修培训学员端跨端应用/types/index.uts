@@ -3,7 +3,7 @@
  * 域类型已拆分到独立文件，此文件做统一 re-export 保持向后兼容
  * 消费方可逐步迁移到直接 import 域文件（如 types/forum）
  */
-export { type ApiResponse, type GridItem, type MarkdownBlock } from './common'
+export { type ApiResponse, type GridItem, type MarkdownBlock, type MarkdownImageClick } from './common'
 export { type UserInfo, type LoginParams, type CodeLoginParams, type LoginResult, type RefreshTokenResult, type WechatLoginResult, type RegisterParams, type EmailRegisterParams, type UpdateProfileParams, type ProfileChangeRequest, type UploadAvatarResult, type AuthStore } from './auth'
 export { type ForumTopic, type ForumReply, type ForumTopicDetail, type LikeTopicResult, type MyRepliesResult } from './forum'
 export { type CourseItem, type SpecialtyItem, type LevelItem, type CourseListResult, type ChapterItem, type ChapterFile, type ChapterDetail, type CourseDetail, type CoursePrereq, type MaterialItem, type MaterialDownloadInfo, type TagItem } from './course'

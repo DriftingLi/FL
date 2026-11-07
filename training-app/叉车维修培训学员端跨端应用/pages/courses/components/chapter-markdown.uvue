@@ -12,7 +12,7 @@
 </template>
 
 <script setup lang="uts">
-    import type { MarkdownBlock } from '../../../types/index'
+    import type { MarkdownBlock, MarkdownImageClick } from '../../../types/index'
     import MarkdownBlocks from '../../../components/markdown/markdown-blocks.uvue'
 
     /** 章节面的能力位：章节子集（`utils/markdown.uts` 的缺省档）声明的全部块类型 */
@@ -28,8 +28,14 @@
 
     const emit = defineEmits(['imageClick'])
 
-    function onImageTap(url : string) : void {
-        emit('imageClick', url)
+    /**
+     * 公共件的图片点击是**单对象载荷**（#2354 决议 D4），本壳件在这里**降级转发**成裸 URL：
+     * 章节面不需要块序号（章节里点开一张图就是只看那一张，`chapter-view` 的
+     * `onImageClick(url)` 与 `utils/coursesContract.test.js` 的 WIRING 行一个字不动）。
+     * 要按位置换算预览起点的面（AI 气泡）自己接对象、自己换算，不在这层开第二条接口。
+     */
+    function onImageTap(payload : MarkdownImageClick) : void {
+        emit('imageClick', payload.url)
     }
 </script>
 

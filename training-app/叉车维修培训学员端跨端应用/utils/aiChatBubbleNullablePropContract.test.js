@@ -81,12 +81,20 @@ describe('气泡对可空 prop 的归一契约（#2328）', () => {
    * 钉住：助手块从此走显式条件，别再靠 v-else 承接。
    */
   describe('助手块的分流条件是显式的，不靠 v-else 承接', () => {
+    /**
+     * #2354（决议 D5 第 1 条）：气泡自带的 8 条分支模板搬进了四面共用的
+     * `components/markdown/markdown-blocks.uvue`，于是原来的 `<view … class="md-body">`
+     * 这一行**物理消失**了。这条断言守的语义是「助手块用显式条件、不靠 v-else 承接」，
+     * 与承载它的标签名无关 ⇒ 按 ADR-0007「可更新文件路径指向，禁删 / 弱化断言」**等价改写**：
+     * 断言的仍然是**同一个 v-if 条件**，只是跟着承载要素搬到了 `<MarkdownBlocks>` 上。
+     */
     it('助手块用 v-if="role != \'user\'"', () => {
-      expect(template).toContain('<view v-if="role != \'user\'" class="md-body">');
+      expect(template).toContain('<MarkdownBlocks v-if="role != \'user\'"');
     });
 
-    it('不再有 `<view v-else class="md-body">`', () => {
+    it('不再有 `<view v-else class="md-body">`，也不再有 v-else 承接助手块', () => {
       expect(template).not.toContain('<view v-else class="md-body">');
+      expect(template).not.toMatch(/<MarkdownBlocks\s+v-else/);
     });
   });
 });

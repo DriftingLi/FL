@@ -10,6 +10,9 @@
          块间距 = **margin-top-only**：间距只由后一块的 `mt-*` 提供，块自身 `margin-bottom` 恒 0（四态 16/24/40 不叠加，
          分隔线上下 32 = 自身 16 + 后继块 16）。uvue 是 flex 布局、相邻 margin 不折叠，这个模型才成立。
 
+         图片点击的载荷是**单对象** `MarkdownImageClick`（#2354 决议 D4）：`{ url, index }`，`index` 是该图所在
+         **块的序号**（不是图集下标）。需要按位置换算预览起点的面（AI 气泡）自己换算，其余面只取 `url`。
+
          行内 runs 本轮未启用（`inlineAxis` 见 #2353 决议 D5）：章节子集不声明 `inline`，解析器已剥掉记号，
          故本章面整段直出 `block.text` 是正确的；精选 / 论坛的行内 runs 由 #2355 / #2356 各自补落。 -->
     <view class="md-body">
@@ -45,7 +48,7 @@
             <view v-else-if="cap('divider') && block.type == 'divider'" class="md-divider"></view>
             <!-- 图片（点击向页面 emit，previewImage 仍留在页面壳层） -->
             <image v-else-if="cap('image') && block.type == 'image'" class="md-image" :src="block.text" mode="widthFix"
-                @click="onImageTap(block.text)"></image>
+                @click="onImageTap(idx, block.text)"></image>
             <!-- 表格（ADR-0046：章节正文渲染成表格；解析器按行出块，表头行 level=1；行间归零由 mt-0 档承担） -->
             <view v-else-if="cap('table') && block.type == 'table'" class="md-table-row">
                 <view v-for="(cell, ci) in block.items" :key="ci"
@@ -59,7 +62,7 @@
 
 <script setup lang="uts">
     import { computed } from 'vue'
-    import type { MarkdownBlock } from '../../types/index'
+    import type { MarkdownBlock, MarkdownImageClick } from '../../types/index'
     import { markdownTiers } from '../../utils/markdownTypography'
     import type { MarkdownTier } from '../../utils/markdownTypography'
 
@@ -120,8 +123,16 @@
         return cls
     }
 
-    const onImageTap = (url : string) : void => {
-        emit('imageClick', url)
+    /**
+     * 图片点击（#2354 决议 D4）：载荷是**单对象**，块序号随行下发。
+     *
+     * 为什么要把序号一起送出去：四处渲染面里只有 AI 气泡需要「预览起点按位置换算」——
+     * 按 URL 值反查会让同一张图在同一条回答里出现两次时永远从第一张翻起（#2362）。
+     * 序号在这里是**块的序号**（`v-for` 的 `idx`），不是图集下标：图集只有消费方知道。
+     * 其余壳件（章节面）只取 `url`、把第二个字段丢掉即可，对外接口不变。
+     */
+    const onImageTap = (blockIndex : number, url : string) : void => {
+        emit('imageClick', { url: url, index: blockIndex } as MarkdownImageClick)
     }
 </script>
 
