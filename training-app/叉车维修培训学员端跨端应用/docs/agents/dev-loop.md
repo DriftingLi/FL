@@ -312,7 +312,7 @@ L 系列钉 `-Mode` / `-Leg` 两维的机检可判读性（L1a–L1c 成对腿�
 
 - **为什么是这个子集，会打印出来**：前置步骤跑 `node scripts/behavior-suite-deps.mjs --changed-json`
   （改动清单 = `git diff HEAD` + **未跟踪**文件），把工具那份人读报告**原样**打在最前 —— 每条套件后面挂着
-  `direct:` / `import-closure:` / `bprime-always:` / 兜底边（`gate-script:` / `suite-set:` / `page-set:`）。
+  `direct:` / `import-closure:` / `dir:` / `bprime-always:` / 兜底边（`gate-script:` / `suite-set:` / `page-set:`）。
   映射**不缓存成文件**（`docs/design/2019-…报告.md` §11 的建议 3：缓存件没人会去重算，一漂就静默假绿；
   同一份报告的 §2 已记过「四天七个套件数」那种漂移）。
 - **兜底边是判据、不是建议**：改门脚本/`scripts/**`（`gate-script:`）、改 `pages.json`/`manifest.json`
