@@ -41,6 +41,7 @@ const TABLE = '| 故障码 | 含义 |\n| --- | --- |\n| E01 | 电压过低 |';
 const SUBSET_CHAPTER = 'chapter';
 const SUBSET_FEATURED = 'featured';
 const SUBSET_FORUM = 'forum';
+const SUBSET_AI_ANSWER = 'ai-answer';
 const MEMBER_HEADING = 'heading';
 const MEMBER_LIST = 'list';
 const MEMBER_QUOTE = 'quote';
@@ -52,10 +53,13 @@ const MEMBER_INLINE = 'inline';
 const SUBSET_MEMBERS_CHAPTER = [MEMBER_HEADING, MEMBER_LIST, MEMBER_QUOTE, MEMBER_CODE, MEMBER_DIVIDER, MEMBER_IMAGE, MEMBER_TABLE];
 const SUBSET_MEMBERS_FEATURED = [MEMBER_HEADING, MEMBER_LIST, MEMBER_QUOTE, MEMBER_CODE, MEMBER_DIVIDER, MEMBER_IMAGE, MEMBER_INLINE];
 const SUBSET_MEMBERS_FORUM = [MEMBER_HEADING, MEMBER_LIST, MEMBER_QUOTE, MEMBER_CODE, MEMBER_DIVIDER, MEMBER_INLINE];
+/** 移动端 ADR 0056 第四档：论坛档的文本面 + image、- inline */
+const SUBSET_MEMBERS_AI_ANSWER = [MEMBER_HEADING, MEMBER_LIST, MEMBER_QUOTE, MEMBER_CODE, MEMBER_DIVIDER, MEMBER_IMAGE];
 /** 镜像 `subsetMembers`：未知档位退到章节档（与 parseMarkdown 的缺省档同向） */
 function subsetMembers(subset) {
   if (subset === SUBSET_FEATURED) return SUBSET_MEMBERS_FEATURED;
   if (subset === SUBSET_FORUM) return SUBSET_MEMBERS_FORUM;
+  if (subset === SUBSET_AI_ANSWER) return SUBSET_MEMBERS_AI_ANSWER;
   return SUBSET_MEMBERS_CHAPTER;
 }
 const TABLE_LEVEL_HEAD = 1;
@@ -479,7 +483,7 @@ describe('镜像同步：utils/markdown.uts 与本文件镜像逐条一致', () 
     expect(MD_SRC).toContain("export const SUBSET_FORUM = 'forum'");
     expect(MD_SRC).toContain('export function subsetMembers(subset : string) : string[]');
     expect(MD_SRC).toContain('export function subsetHasMember(subset : string, member : string) : boolean');
-    for (const name of ['CHAPTER', 'FEATURED', 'FORUM']) {
+    for (const name of ['CHAPTER', 'FEATURED', 'FORUM', 'AI_ANSWER']) {
       expect(MD_SRC).toContain(`export const SUBSET_MEMBERS_${name} : string[] = [`);
     }
     // 每个成员都必须真的被解析器问过；段落**不在**声明表里（它是降级可读的地板，不设闸门）
@@ -707,7 +711,37 @@ describe('ADR-0046 / API.md 的移动端登记（本票的口径落点）', () =
     // `utils/aiAnswerBodyBehavior.test.js` 真执行，本处只登记接线不漂）
     const shell = readText(path.join(__dirname, 'aiAnswerBody.uts'));
     expect(shell).toContain("from './markdown'");
-    expect(shell).toContain('SUBSET_FORUM');
+    expect(shell).toContain('SUBSET_AI_ANSWER');
+  });
+
+  it('AI 回答面的配图接线（#2362 / 移动端 ADR 0056）：闸在壳层、画在气泡、预览走同一点', () => {
+    const shell = readText(path.join(__dirname, 'aiAnswerBody.uts'));
+    expect(shell).toContain("export const AI_ANSWER_IMAGE_PREFIX = '/api/ai-assistant/diagnosis/ossimg/'");
+    expect(shell).toContain('resolveFileUrl');
+    expect(shell).toContain('expandLegacyImageMarkers');
+    const bubble = read('components/ai-chat/ai-chat-bubble.uvue');
+    expect(bubble).toContain("block.type == 'image'");
+    expect(bubble).toContain('md-image');
+    expect(bubble).toContain('previewImages');
+    // 图集与下标换算住在纯函数层（行为面真执行），模板只调本地名：
+    // 按 URL 值反查会让「同图重复出现」的第二张永远从第一张翻起。
+    expect(bubble).toContain('onPreviewAssistantImageAt(idx)');
+    expect(bubble).toContain('aiAnswerImageUrls(');
+    expect(bubble).toContain('aiAnswerImageIndexAt(');
+    expect(bubble).not.toContain('urls.indexOf(');
+    // 本票只动 AI 回答面：论坛正文仍图文分离（块数组与渲染分支都不许长出 image）
+    const forumMd = read('pages/forum/components/forum-markdown-blocks.uvue');
+    expect(forumMd).not.toContain("block.type == 'image'");
+  });
+
+  it('跨栈判据：站内配图前缀与后端 \`diagnosisImageRoute\` 逐字同源（改一边必红）', () => {
+    // 手机端唯一的跨栈判据就在这里：后端换路由而移动端漏改时，
+    // 配图会整体静默退化成 alt 文字（AC1 无声失效），所以必须逐字钉住。
+    const shell = readText(path.join(__dirname, 'aiAnswerBody.uts'));
+    const backend = readText(path.join(REPO_ROOT, 'backend', 'internal', 'aiassistant', 'diagnosis_adapter.go'));
+    const goRoute = backend.match(/const diagnosisImageRoute = "([^"]+)"/);
+    expect(goRoute).not.toBe(null);
+    expect(shell).toContain("export const AI_ANSWER_IMAGE_PREFIX = '" + goRoute[1] + "'");
   });
 
   it('已知限制里的移动端一行已随本票更新（旧口径不再残留）', () => {

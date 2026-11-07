@@ -88,11 +88,12 @@ describe('aiSourcesDisplay：执行器自检', () => {
     expect(() => loadUts(UTS, {})).not.toThrow();
   });
 
-  it('七个导出全部回读得到（少一个就是 `loadUts` 静默丢名字）', () => {
+  it('九个导出全部回读得到（少一个就是 `loadUts` 静默丢名字）', () => {
     const m = display();
     expect(exportedNames(SRC).sort()).toEqual([
-      'IMAGE_CLOSE', 'IMAGE_OPEN', 'expandImageMarkers', 'extractImagePaths',
-      'pageLabel', 'stripAssistantPrefix', 'stripImageMarkers',
+      'IMAGE_ALT_FALLBACK', 'IMAGE_CLOSE', 'IMAGE_OPEN', 'expandImageMarkers',
+      'expandLegacyImageMarkers', 'extractImagePaths', 'pageLabel', 'stripAssistantPrefix',
+      'stripImageMarkers',
     ]);
     expect(Object.keys(m).sort()).toEqual(exportedNames(SRC).sort());
   });
@@ -288,6 +289,37 @@ describe('aiSourcesDisplay：标记解析（真行为）', () => {
     });
   });
 
+  // ── #2362：只展开**历史**标记；markdown 图必须活着穿过（AI 回答要把它渲成图片块）──
+  describe('expandLegacyImageMarkers：只展开历史标记，markdown 图原样放行', () => {
+    const { expandLegacyImageMarkers, expandImageMarkers } = display();
+
+    it('历史标记照旧展开（带描述留描述、无描述退占位词）', () => {
+      expect(expandLegacyImageMarkers('先排空。' + CAPTIONED_MARKER + '再目视。')).toBe('先排空。蓄能器接口再目视。');
+      expect(expandLegacyImageMarkers('见' + FAULT_MARKER)).toBe('见诊断配图');
+    });
+
+    it('markdown 图**逐字节放行** —— 与 `expandImageMarkers` 的差别就在这里', () => {
+      // 这是 #2362 的承重件：展开器早一步把 `![alt](url)` 抹成 alt，解析器就永远出不了 image 块。
+      expect(expandLegacyImageMarkers(CAPTIONED_MD_IMG)).toBe(CAPTIONED_MD_IMG);
+      expect(expandLegacyImageMarkers(DEVICE_MD_IMG)).toBe(DEVICE_MD_IMG);
+      expect(expandImageMarkers(CAPTIONED_MD_IMG)).toBe('蓄能器接口');   // 旧口径仍在用户气泡那条路上
+    });
+
+    it('两种形状混排：只动历史标记，markdown 图不动', () => {
+      expect(expandLegacyImageMarkers(CAPTIONED_MARKER + ' 与 ' + CAPTIONED_MD_IMG))
+        .toBe('蓄能器接口 与 ' + CAPTIONED_MD_IMG);
+    });
+
+    it('残缺的左定界符原样保留，不吞后文', () => {
+      expect(expandLegacyImageMarkers('a<<IMAGE:/assistant/static/manual/x/')).toBe('a<<IMAGE:/assistant/static/manual/x/');
+    });
+
+    it('**无标记时逐字节不变**（含首尾空白），无图回答零 diff', () => {
+      expect(expandLegacyImageMarkers('  纯文本  \n')).toBe('  纯文本  \n');
+      expect(expandLegacyImageMarkers('')).toBe('');
+    });
+  });
+
   describe('pageLabel：页码标签', () => {
     const { pageLabel } = display();
 
@@ -330,8 +362,15 @@ describe('aiSourcesDisplay：结构约束（接线面，行为由上面各组真
 
   it('正文展开的实现只在 utils 单点（组件/页面不得长出第二实现）', () => {
     expect(SRC).toContain('const caption = captionSegmentOf(');
-    // 两种形状共用**同一个**扫描循环（各写一个函数 = 两条展开口径会各自漂移）
-    expect(SRC.match(/export function expand/g)).toHaveLength(1);
+    // 两种形状共用**同一个**扫描循环（各写一条循环 = 两条展开口径会各自漂移）。
+    // #2362 起多了第二条**入口**（markdown 图放行，供 AI 回答面把图渲成块），但它必须是
+    // 同一条循环的开关 —— 判据因此钉循环，不钉导出个数。
+    // 只钉调用面：一个共享实现 + 两处开关相反的调用（参数名/签名细节留给实现自由，
+    // 两入路的**行为**差异由上面那组用例真执行兜底）。
+    expect(SRC.match(/function expandImageText\(/g)).toHaveLength(1);
+    expect(SRC.match(/return expandImageText\(text, (?:true|false)\)/g)).toHaveLength(2);
+    expect(SRC).toMatch(/return expandImageText\(text, false\)/);
+    expect(SRC).toMatch(/return expandImageText\(text, true\)/);
     // 接线面（气泡有没有真的调用它）归 `aiDiagnosisSourcesContract.test.js` ⑥：
     // 那是契约缝的活，放这儿会变成「单测替接线背书」——而接线守护不算 ③ 证据。
   });

@@ -60,17 +60,28 @@ const PROBES = {
 /** 该探针在给定块上是否成立（块类看类型，语义类看 holds） */
 const probeFires = (probe, blocks) => (probe.holds ? probe.holds(blocks) : types(blocks).includes(probe.type));
 
-const SUBSETS = ['chapter', 'featured', 'forum'];
+const SUBSETS = ['chapter', 'featured', 'forum', 'ai-answer'];
 const types = (blocks) => blocks.map((b) => b.type);
 const declared = (m, subset) => m.subsetMembers(subset);
 
 // ===== ① 声明表本身：可枚举、按档取值 =====
 
 describe('子集声明表：三档可枚举，未知档退到章节档', () => {
-  it('`SUBSET_FORUM` 是第三档，且三档名字互不相同', () => {
+  it('四档名字互不相同（章节 / 内容精选 / 论坛 / AI 回答）', () => {
     const m = md();
     expect(m.SUBSET_FORUM).toBe('forum');
-    expect(new Set([m.SUBSET_CHAPTER, m.SUBSET_FEATURED, m.SUBSET_FORUM]).size).toBe(3);
+    expect(m.SUBSET_AI_ANSWER).toBe('ai-answer');
+    expect(new Set([m.SUBSET_CHAPTER, m.SUBSET_FEATURED, m.SUBSET_FORUM, m.SUBSET_AI_ANSWER]).size).toBe(4);
+  });
+
+  it('AI 回答档：声明 image，不声明 inline 与 table（移动端 ADR 0056）', () => {
+    // 声明 image 是「配图可见」的前提；不声明 inline 是因为气泡模板直出块文本，
+    // 句内图会连 URL 一起外露（#2362 实跑读数），不声明 table 沿用「按行退回原始文本」的段落地板。
+    const m = md();
+    const members = declared(m, m.SUBSET_AI_ANSWER);
+    expect(members).toContain(m.MEMBER_IMAGE);
+    expect(members).not.toContain(m.MEMBER_INLINE);
+    expect(members).not.toContain(m.MEMBER_TABLE);
   });
 
   it('章节档声明含表格；内容精选与论坛两档都不含（各自的理由见 ADR-0046 / ADR-0025）', () => {

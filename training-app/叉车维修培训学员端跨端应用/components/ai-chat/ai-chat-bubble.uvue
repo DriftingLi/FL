@@ -22,6 +22,10 @@
 					</view>
 					<view v-else-if="block.type == 'quote'" class="md-quote"><text class="md-quote-text">{{ block.text }}</text></view>
 					<view v-else-if="block.type == 'divider'" class="md-divider"></view>
+					<!-- 诊断配图（#2362 / 移动端 ADR 0056）：只有站内代理图会走到这里（壳层已过滤），
+					     宽度受气泡约束（widthFix + 100%），点开走全屏预览、同消息可左右翻。 -->
+					<image v-else-if="block.type == 'image'" class="md-image" :src="block.text" mode="widthFix"
+						@click="onPreviewAssistantImageAt(idx)"></image>
 					<text v-else class="md-paragraph">{{ block.text }}</text>
 				</view>
 			</view>
@@ -41,7 +45,7 @@
 	import AiChatSources from './ai-chat-sources.uvue'
 	import { expandImageMarkers } from '../../utils/aiSourcesDisplay'
 	import { previewImages } from '../../utils/forumDetailDisplay'
-	import { aiAnswerBlocks } from '../../utils/aiAnswerBody'
+	import { aiAnswerBlocks, aiAnswerImageUrls, aiAnswerImageIndexAt } from '../../utils/aiAnswerBody'
 	import type { AiDiagnosisSource, MarkdownBlock } from '../../types/index'
 
 	const props = withDefaults(defineProps<{
@@ -122,6 +126,19 @@
 		return aiAnswerBlocks(messageContent.value)
 	})
 
+	/**
+	 * 回答正文的图集（#2362）：渲染与预览共用同一份，口径住在纯函数层
+	 * （`utils/aiAnswerBody.aiAnswerImageUrls`，行为面有真执行用例），模板只读本地名。
+	 */
+	const assistantImageUrls = computed<string[]>(() : string[] => {
+		return aiAnswerImageUrls(assistantBlocks.value)
+	})
+
+	/** 回答配图预览：按**块序号**换算图集下标（不按 URL 反查），与渲染顺序同源 */
+	function onPreviewAssistantImageAt(blockIndex : number) : void {
+		previewImages(assistantImageUrls.value, aiAnswerImageIndexAt(assistantBlocks.value, blockIndex))
+	}
+
 	function onCopy() : void {
 		emit('copy')
 	}
@@ -131,7 +148,7 @@
 	}
 </script>
 
-<style>
+<style lang="scss">
 	.message-row {
 		flex-direction: column;
 		margin-bottom: 20rpx;
@@ -215,6 +232,16 @@
 	.md-h1 { font-size: 36rpx; }
 	.md-h2 { font-size: 32rpx; }
 	.md-h3 { font-size: 30rpx; }
+
+	/* 诊断配图（#2362）：宽度吃满气泡内容宽（widthFix 只定高）。
+	   数值取**章节面**那套（chapter-markdown 的 12rpx 圆角 / 上下 16rpx），
+	   与精选面的 8rpx/8rpx 是历史差异，不在本票收敛 —— 别再自创第三套数值。 */
+	.md-image {
+		width: 100%;
+		border-radius: 12rpx;
+		margin-top: 16rpx;
+		margin-bottom: 16rpx;
+	}
 
 	.md-paragraph {
 		font-size: 28rpx;

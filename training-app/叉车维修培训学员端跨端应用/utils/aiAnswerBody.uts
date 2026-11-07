@@ -10,26 +10,99 @@
  * - **恒走解析**：AI 回答没有「作者声明格式」这条轴（论坛的 `content_format` 在这里不存在），
  *   模型回串按 Markdown 呈现就是本票的裁定（用户翻案决定：回答大量含列表/代码/引用，纯文本难读）；
  *   空串由 `parseMarkdown` 自然产出空数组，渲染出空气泡 —— 与旧纯文本行为等价，不设特判。
- * - **档位 = `SUBSET_FORUM`**（heading / list / quote / code / divider 五成员 + 段落地板）：
- *   与论坛正文同档。表格按行退回原始文本、公式源码原样（「降级仍可读」），`![alt](url)` 在展开后
- *   成 image 块（**不在**该档声明里 ⇒ 退化 alt 文本，#1279 语义原样保留）。
- * - **顺序是硬的**：`expandImageMarkers` 必须在 `parseMarkdown` **之前**（#1279 在先：`![alt](url)`
- *   与 `<<IMAGE:…>>` 直出的内网百分号编码路径不能进任何渲染器）。写反的形态由行为测试的成对变异钉死。
+ * - **档位 = `SUBSET_AI_ANSWER`**（移动端 ADR 0056 第四档）：heading / list / quote / code / divider
+ *   **+ image**，不含 inline 与 table。声明 image 是「配图可见」的前提；不声明 inline 是因为气泡模板
+ *   直出块文本（无 runs），句内 `![alt](url)` 会连 URL 一起外露（#2362 实跑读数）。
+ * - **展开器只抹历史标记**：`expandLegacyImageMarkers` 只处理 `<<IMAGE:…>>`，`![alt](url)` 原样
+ *   交给解析器 —— 用 `expandImageMarkers`（两种形状都抹成 alt）会让 URL 到不了解析器，图永远出不来。
+ * - **站内闸**：`image` 块只放行后端归一后的本站代理前缀，其余退化成 alt 文字。后端回归时手机上
+ *   先兜住，不让 AI 生成的正文驱动学员的浏览器去请求任意主机（ADR-0063 决策 3 的原始动机）。
+ * - **拼接单点**：块里的相对路径在这里过 `resolveFileUrl`（`utils/format`），模板与全屏预览吃绝对值，
+ *   不在模板里散写拼接（#2362 验收第 5 条）。
  *
- * 层次约束：本模块**不 import `.uvue`**、不依赖 DOM；`expandImageMarkers` 取真源
- * `utils/aiSourcesDisplay.uts`（loadUts 真执行时需同时注入 markdown 与 display 两层的真绑定）。
+ * 层次约束：本模块**不 import `.uvue`**、不依赖 DOM；`expandLegacyImageMarkers` 取真源
+ * `utils/aiSourcesDisplay.uts`（loadUts 真执行时需同时注入 markdown / display / format 三层的真绑定）。
  *
  * @note 不依赖 DOM API，跨端通用（App / 小程序 / H5）
  */
-import { parseMarkdown, SUBSET_FORUM } from './markdown'
-import { expandImageMarkers } from './aiSourcesDisplay'
+import { parseMarkdown, SUBSET_AI_ANSWER } from './markdown'
+import { expandLegacyImageMarkers, IMAGE_ALT_FALLBACK } from './aiSourcesDisplay'
+import { resolveFileUrl } from './format'
 import type { MarkdownBlock } from '../types/index'
 
 /**
- * 助手回答的渲染块：先展开图片表达（#1279），再按**论坛档**解析（#1443）。
+ * 站内配图唯一出口（后端 `diagnosisImageRoute` 同源，ADR-0091 归一链的产物前缀）。
+ * ⚠️ 改路由要**同批**改这里与后端常量：手机端唯一的跨栈判据在
+ * `utils/markdownContract.test.js`（逐字比对后端常量），它红之前不会有别的提示。
+ */
+export const AI_ANSWER_IMAGE_PREFIX = '/api/ai-assistant/diagnosis/ossimg/'
+
+/**
+ * 同一前缀的**绝对**形：相对形经 `resolveFileUrl` 归一后与它比对 —— 于是「站内相对路径 /
+ * 绝对站内路径」两条入路走同一条判据（票面 AC5），不需要第二个分支。
+ */
+const SITE_IMAGE_ABS_PREFIX = resolveFileUrl(AI_ANSWER_IMAGE_PREFIX)
+
+/**
+ * 回答正文的图集（按**块序**）：渲染集合与全屏预览集合共用这一份，模板不各自拼列表。
+ *
+ * @param blocks 已过 `aiAnswerBlocks` 的块数组（image 块的 text 已是绝对站内 URL）
+ */
+export function aiAnswerImageUrls(blocks : MarkdownBlock[]) : string[] {
+	const out : string[] = []
+	for (let i = 0; i < blocks.length; i++) {
+		if (blocks[i].type == 'image') out.push(blocks[i].text)
+	}
+	return out
+}
+
+/**
+ * 块序号 → 图序号（#2362）：预览起点按**位置**换算，不按 URL 值反查 ——
+ * 同一条回答里同一张图出现两次时，反查永远命中第一张（预览位置 ≠ 渲染位置）。
+ */
+export function aiAnswerImageIndexAt(blocks : MarkdownBlock[], blockIndex : number) : number {
+	let n = 0
+	for (let i = 0; i < blockIndex && i < blocks.length; i++) {
+		if (blocks[i].type == 'image') n++
+	}
+	return n
+}
+
+/**
+ * 助手回答的渲染块：先抹历史标记，再按 **AI 回答档**解析，最后过站内闸与 URL 拼接。
  *
  * @param raw 模型回串原文（未做任何预处理；空串 ⇒ 空数组）
  */
 export function aiAnswerBlocks(raw : string) : MarkdownBlock[] {
-	return parseMarkdown(expandImageMarkers(raw), SUBSET_FORUM)
+	const parsed = parseMarkdown(expandLegacyImageMarkers(raw), SUBSET_AI_ANSWER)
+	const out : MarkdownBlock[] = []
+	for (let i = 0; i < parsed.length; i++) {
+		const b = parsed[i]
+		if (b.type != 'image') {
+			out.push(b)
+			continue
+		}
+		// 先归一再判前缀：绝对站内形原样通过（拼接幂等），相对站内形归一后命中，
+		// 站外绝对形归一后仍是第三方主机 ⇒ 落到下面的降级分支。
+		const resolved = resolveFileUrl(b.text)
+		if (!resolved.startsWith(SITE_IMAGE_ABS_PREFIX)) {
+			// 站外 / 未知前缀：退化成 alt 文字。alt 为空时退回占位词，**绝不整块丢弃** ——
+			// 「声明里没有 ⇒ 内容消失」是段落地板明令禁止的形态，用户至少要读得出「这里有过一张图」。
+			const alt = b.items.length > 0 ? b.items[0] : ''
+			out.push({
+				type: 'paragraph',
+				level: 0,
+				text: alt.length > 0 ? alt : IMAGE_ALT_FALLBACK,
+				items: [] as string[],
+			} as MarkdownBlock)
+			continue
+		}
+		out.push({
+			type: 'image',
+			level: 0,
+			text: resolved,
+			items: b.items,
+		} as MarkdownBlock)
+	}
+	return out
 }
