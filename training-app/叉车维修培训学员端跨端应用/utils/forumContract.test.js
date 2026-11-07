@@ -15,6 +15,20 @@
  * 5) 页面与域 api 机械坑位（catch : any / .detail 直取）：本文件不再写这类锁——#654 起豁免面已删，
  *    执法点只有全工程守护 `utils/utsAndroidCompile.test.js` 规则 H/I 一处
  */
+/**
+ * #2332：本文件**全部条目都是接线守护**（`docs/agents/guards.md` 两分法里的第二类 —— 守接线没被拆）。
+ *
+ * 判据是对每条断言问两问（2026-11-07 用户裁定为 A 口径）：
+ *   ① 破坏行为时它会红吗 —— 源码文本锁**不一定红**，这是接线守护的已知边界，不是缺陷；
+ *   ② 等价改写时它会红吗 —— 会红（锁写法）本是接线守护的本分；判据② **只施加于自称「验证行为」的断言**。
+ * 于是处置只有两条路：接线锁**保留并显式标注**（不构成 ③ 门证据）；
+ * 自称行为的条目**改标题、不再自称行为**，真行为判据移到行为腿（如 `utils/forumReplyLikeBehavior.test.js`）
+ * 或 ①a 发版冒烟。**别把本文件的绿当成行为被验证过。**
+ *
+ * 逐条分类登记在 `utils/forumContractAudit.js`（desc / title / kind / verdict / 落点），
+ * 由本文件末组「断言分类登记」守护 1:1 覆盖 —— 新增 `it` 不登记就红。
+ * 人读版处置表：`node scripts/gen-2332-assertion-audit.mjs` 渲染到 `docs/2332-断言处置表.md`。
+ */
 /** harness：读取层归一 + 模块归属面（ADR-0023 票 C 起，本文件不再自建 ROOT / read / walker） */
 const h = require('./contractHarness');
 const ROOT = h.ROOT;
@@ -374,7 +388,7 @@ describe('招聘 tab 退场契约（#705 退场部分先行；简历入口重挂
   });
 });
 
-describe('行为保持契约（手术不改跳转、交互与乐观更新语义）', () => {
+describe('行为保持契约（源码接线侧：跳转/时序/乐观更新的真判据在行为腿与 ①a，不在本组）', () => {
   const page = read('pages/forum/forum.uvue');
   const detailPage = read('pages/forum/forum-detail.uvue');
   const detail = read('composables/useTopicDetail.uts');
@@ -382,12 +396,12 @@ describe('行为保持契约（手术不改跳转、交互与乐观更新语义�
   /** P3：图片流水线已收进共享 picker（限额闸门与文案都在那里） */
   const picker = read('composables/useForumImagePicker.uts');
 
-  it('头像入口统一跳个人动态（招聘退场后无简历直达分支）', () => {
+  it('壳层仍把头像点击接到个人动态（跳转语义的真判据归 ①a 发版冒烟）', () => {
     expect(page).toMatch(/function onPersonalActivity\(\) : void \{/);
     expect(page).toContain("uni.navigateTo({ url: '/pages/profile/personal-activity' })");
   });
 
-  it('上传资源格子跳 forum-create 资源 tab（#760 复用发布页，upload-resource 退役）', () => {
+  it('壳层仍把资源格子接到 forum-create 资源 tab（#760 复用发布页；跳转语义归 ①a）', () => {
     const panel = read('pages/forum/components/forum-resource-panel.uvue');
     expect(panel).toContain('/pages/forum/forum-create?scope=resource');
     expect(panel).not.toContain('/pages/resources/upload-resource');
@@ -397,7 +411,7 @@ describe('行为保持契约（手术不改跳转、交互与乐观更新语义�
     expect(page).toMatch(/:variant="currentTab === 'hot' \? 'qa' : 'square'"/);
   });
 
-  it('onShow 刷新语义保留：非资源 tab 重载列表，资源区不重复拉取', () => {
+  it('onShow 分支仍在：非资源 tab 调 reload、资源区不拉（生命周期时序归 ①a）', () => {
     expect(page).toMatch(/if \(currentTab\.value !== 'resource'\) \{\s*loadTopics\(true\)/);
   });
 
@@ -421,7 +435,7 @@ describe('行为保持契约（手术不改跳转、交互与乐观更新语义�
     expect(detailPage).toContain(':class="{ disabled: !canSubmitReply }"');
   });
 
-  it('帖子/回复乐观更新与回滚逐字保留', () => {
+  it('onToggleReplyLike / onToggleLike 的调用点仍在（行为判据见 utils/forumReplyLikeBehavior.test.js）', () => {
     expect(detail).toContain('// 乐观更新');
     expect(detail).toContain('t.favorited = wasFavorited');
     expect(detail).toContain('t.liked = wasLiked');
@@ -433,7 +447,7 @@ describe('行为保持契约（手术不改跳转、交互与乐观更新语义�
     expect(picker).toContain("'最多上传 ' + maxImages + ' 张图片'");
   });
 
-  it('onLoad 参数解析与 loadDetail 时序保留（⑪-4 键盘监听在 loadDetail 之后注册、onUnload 注销）', () => {
+  it('onLoad 解析与 loadDetail 调用点仍在（⑪-4 键盘监听注册/注销；时序真判据归 ①a）', () => {
     expect(detailPage).toMatch(/topicId\.value = parseInt\(`\$\{id\}`\)/);
     // loadDetail 仍在 onLoad 内被调用（其后追加键盘监听注册 ⇒ 不再要求它是收尾最后一句）
     expect(detailPage).toMatch(/\}\s*loadDetail\(\)/);
@@ -637,7 +651,7 @@ describe('回复分页契约（ADR-0042 / #850：详情回复改分页读取 + �
     expect(replyType).toMatch(/parent_avatar_url : string/);
   });
 
-  it('detail：分页态沉在 useTopicDetail（page/total/hasMore + loadingMore/remaining），判据是 hasMore 不是 reply_count', () => {
+  it('detail：分页态的声明仍在 useTopicDetail（接线锁；分页行为待行为套件，债务登记见 docs/2332-断言处置表.md）', () => {
     expect(detail).toContain('const replyPage = ref<number>(1)');
     expect(detail).toContain('const replyHasMore = ref<boolean>(false)');
     expect(detail).toContain('const replyTotal = ref<number>(0)');
@@ -646,7 +660,7 @@ describe('回复分页契约（ADR-0042 / #850：详情回复改分页读取 + �
     expect(detail).toContain('const remainingReplies = computed<number>');
   });
 
-  it('detail：首屏 / 切排序 / 重试都回第 1 页并**替换**列表（分页语义，不是追加）', () => {
+  it('detail：loadDetail 仍以第 1 页替换整列（接线锁；替换语义待行为套件，债务登记见 docs/2332-断言处置表.md）', () => {
     expect(detail).toMatch(/getForumTopicDetailApi\(topicId\.value, replySortField\.value, replySortOrder\.value, 1, REPLY_PAGE_SIZE\)/);
     expect(detail).toContain('replies.value = data.replies');
     expect(detail).toContain('replyPage.value = 1');
@@ -655,7 +669,7 @@ describe('回复分页契约（ADR-0042 / #850：详情回复改分页读取 + �
     expect(detail).toMatch(/function onReplySortFieldChange[\s\S]{0,200}?loadDetail\(\)/);
   });
 
-  it('detail：loadMoreReplies **追加**下一页（不替换已渲染内容）、按 id 去重、以 hasMore 判定到底', () => {
+  it('detail：loadMoreReplies 仍按 hasMore 追加并去重（接线锁；追加语义待行为套件，债务登记见 docs/2332-断言处置表.md）', () => {
     expect(detail).toContain('async function loadMoreReplies() : Promise<void>');
     expect(detail).toContain('if (loadingMore.value || !hasMoreReplies.value) return');
     expect(detail).toContain('const next = replyPage.value + 1');
@@ -738,5 +752,46 @@ describe('DTO 构造层拆分锁（#1218：请求形态与响应构造分家）'
     const lines = (rel) => read(rel).split('\n').length;
     expect(lines('api/forum.uts')).toBeLessThanOrEqual(600);
     expect(lines('api/forumDto.uts')).toBeLessThanOrEqual(600);
+  });
+});
+
+// ===== 断言分类登记（#2332：判据两问的处置面） =====
+
+/**
+ * 本组是**元守护**：审计对象就是本文件。三件事 ——
+ *   ① 每条 `it` 都在 `utils/forumContractAudit.js` 登记过（新增用例不登记就红）；
+ *   ② 登记表没有失效条目（用例改名 / 删除后必须同步）；
+ *   ③ 自称行为的条目必须写出判据落点，接线条目不得假装验证过行为。
+ * 本组自己的用例不参与登记（按 desc 过滤），否则会自我递归。
+ */
+describe('断言分类登记（#2332：接线 / 自称行为 两分法与 1:1 覆盖）', () => {
+  const { AUDIT, extractCases } = require('./forumContractAudit');
+  const META = '断言分类登记';
+  const src = read('utils/forumContract.test.js');
+  const cases = extractCases(src).filter((c) => c.desc.indexOf(META) < 0);
+  const keyOf = (c) => `${c.desc}::${c.title}`;
+  const registered = new Set(AUDIT.map(keyOf));
+
+  it('每条 it 都在登记表里（漏标即红）', () => {
+    expect(cases.map(keyOf).filter((k) => !registered.has(k))).toEqual([]);
+  });
+
+  it('登记表没有失效条目（改名 / 删除不同步即红）', () => {
+    const alive = new Set(cases.map(keyOf));
+    expect([...registered].filter((k) => !alive.has(k))).toEqual([]);
+  });
+
+  it('类别与处置取值受控，且每条都写了判据落点', () => {
+    for (const row of AUDIT) {
+      expect(['wiring', 'behavior-claim']).toContain(row.kind);
+      expect(['keep-wiring', 'retitle-wiring', 'rewrite-behavior']).toContain(row.verdict);
+      expect(typeof row.note === 'string' && row.note.length > 10).toBe(true);
+    }
+  });
+
+  it('读数锁：声明单元 80 条（76 条 it + 4 条 it.each，后者运行时展开成 12 个用例 ⇒ 88 个运行时用例）', () => {
+    expect(cases.length).toBe(80);
+    expect(cases.filter((c) => c.kind === 'each').length).toBe(4);
+    expect(AUDIT.filter((r) => r.kind === 'behavior-claim').length).toBe(12);
   });
 });
