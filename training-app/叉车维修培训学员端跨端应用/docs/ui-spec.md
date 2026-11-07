@@ -153,6 +153,7 @@
 | `$md-color-text` | `$text-color` | 正文（30/48，#333） |
 | `$md-color-heading` | `$text-strong` | 标题 h1–h3（#1a1a1a） |
 | `$md-color-muted` | `$text-color-secondary` | 引用文字、列表符号（#666） |
+| `$md-color-link` | `#2979ff` | 正文句中链接字色（**现状原样**；对比度收敛属 #2338，目标 `#1b6f9c`） |
 | `$md-color-divider` | `$border-color` | 分隔线（#e5e5e5，线宽见 `$md-divider-line`） |
 | `$md-weight-heading` | `700` | 标题字重（四档一律 700） |
 | `$md-size-h1` | `40rpx` | h1 字号 |

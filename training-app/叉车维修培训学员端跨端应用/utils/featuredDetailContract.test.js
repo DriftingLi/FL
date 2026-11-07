@@ -59,6 +59,10 @@ describe('内容精选详情页：缺 id 落态 + source 单用途 + 外链只�
     expect(code).toContain("from '../../utils/externalLinkDispatch'");
     expect(code).toContain('dispatchExternalLinkTap(url)');
     expect(code).not.toContain('uni.showModal');
+    // #2355：句中链接的分词搬进公共件后，本页仍**不直引分词器** —— 判据比换件前更强
+    // （原锁只钉「不直引闸门函数」，现在连分词器本身也不许出现在本页）
+    expect(code).not.toContain('splitInlineRuns');
+    expect(code).not.toContain('markdownInline');
     // 协议闸只许有分词器那一处：页面里既不出现协议字面量，也不直引闸门函数
     expect(code).not.toContain('inlineLinkSafe');
     expect(code).not.toContain('https://');

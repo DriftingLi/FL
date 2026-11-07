@@ -133,7 +133,11 @@ describe('§1.6 白名单文件自检', () => {
   });
 
   it('白名单值不得与 token 值重叠（重叠即该值应直接走 token；例外：#F5F5F5=$gradient-end 渐变尾色，语义不是中性底）', () => {
-    const SEMANTIC_MISMATCH = new Set(['#F5F5F5']);
+    // #2979FF：`$md-color-link` 的值 = **现状原样**（内容精选面 .md-run-l 换件前就写这个色）。
+    // 它此时是「阅读刻度的行内链接色」而不是主操作蓝；把正文链接色收敛到达标值的判断属 #2338，
+    // 落地时只改 uni.scss 那一行、四个阅读面同时生效 —— 所以这条重叠是**有意的过渡态**，
+    // 不是「该值应直接走 token」那种错配。
+    const SEMANTIC_MISMATCH = new Set(['#F5F5F5', '#2979FF']);
     for (const value of Object.keys(WHITELIST)) {
       if (SEMANTIC_MISMATCH.has(value)) continue;
       expect(tokenValues.has(value)).toBe(false);

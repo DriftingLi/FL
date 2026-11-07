@@ -582,6 +582,88 @@ describe('页面级契约：章节面渲染表格、内容精选面走交集', (
     expect(featured).not.toContain('md-table');
   });
 
+  /**
+   * #2355 决议 D1/D2/D3 的接线组：精选面把正文交给公共件，三条轴里取 `plain`。
+   *
+   * 为什么这三条要单独钉：换件之后，「精选面还走不走行内 runs」「链接点开还弹不弹确认」
+   * 这两件事在源码里都只剩**一行属性**，任何一条丢了都不会让别的断言红 ——
+   * 而丢了的表现是「正文记号漏到屏幕上」或「链接点了没反应」，都是静默失效。
+   */
+  it('featured-detail：正文交给公共件，行内轴 = plain，句中链接回页面编排', () => {
+    const src = read('pages/featured/featured-detail.uvue');
+    expect(src).toContain("import MarkdownBlocks from '../../components/markdown/markdown-blocks.uvue'");
+    expect(src).toContain(':blocks="contentBlocks"');
+    expect(src).toContain('inline-axis="plain"');
+    // 句中链接的**编排**仍只在页面一处（公共件只把 url 交回来）
+    expect(src).toContain('@link-click="onRunLink"');
+    expect(src).toContain('dispatchExternalLinkTap(url)');
+    // 页面不再直引分词器：分词器只经「轴」间接取（比换件前更强的一条锁）
+    expect(src).not.toContain('splitInlineRuns');
+    expect(src).not.toContain('markdownInline');
+    expect(src).not.toContain('runsOf(');
+    expect(src).not.toContain('runClasses(');
+  });
+
+  /**
+   * #2355 决议 D2 的源守卫：`FEATURED_CAPS` 的每一项 ∈ `SUBSET_MEMBERS_FEATURED` ∪ `{paragraph}`。
+   * 与 AI 气泡那条同形、同理由：声明表（解析器产什么块）与 caps（渲染器画什么块）是两份天然事实。
+   */
+  /**
+   * #2355 决议 D1/D3 的公共件侧接线组：轴有三档、缺省 `none`、链接只交回壳层。
+   *
+   * `none` 的缺省值本身就是一条**回归保险**：章节面与 AI 气泡都不传这个 prop，
+   * 它们的行为必须逐字不变（章节子集不声明 `inline`，整段直出才是对的）。
+   */
+  it('公共件：inlineAxis 三档 + 缺省 none + linkClick 只交回壳层', () => {
+    const src = read('components/markdown/markdown-blocks.uvue');
+    for (const a of ["const AXIS_NONE : string = 'none'", "const AXIS_PLAIN : string = 'plain'", "const AXIS_FORUM : string = 'forum'"]) {
+      expect(src).toContain(a);
+    }
+    // 缺省 = none：不传这条 prop 的壳件（章节 / AI）行为不变
+    expect(src).toContain('inlineAxis? : string');
+    // 缺省值必须是**字面量**：defineProps() 被提升到 setup() 之外，引用 setup 内变量是编译期错误
+    // （hx:compile-only 实测原话见组件注释），这一条把它钉成不可回退的形状
+    expect(src).toContain("inlineAxis: 'none'");
+    expect(src).not.toContain('inlineAxis: AXIS_NONE');
+    // plain / forum 两轴都调分词器；none 轴**不调**（构造一条纯文本 run）
+    expect(src).toContain('return splitInlineRuns(src)');
+    expect(src).toContain('if (axis == AXIS_PLAIN || axis == AXIS_FORUM)');
+    // 链接只 emit、不自己弹窗（编排留在壳层一处）
+    expect(src).toContain("defineEmits(['imageClick', 'linkClick'])");
+    expect(src).toContain("emit('linkClick', run.link)");
+    expect(src).not.toContain('dispatchExternalLinkTap');
+    expect(src).not.toContain('uni.showModal');
+  });
+
+  it('精选面的 caps 与解析器声明表同源（差集只许是段落地板 paragraph）', () => {
+    const CAPS = read('pages/featured/featured-detail.uvue')
+      .match(/const FEATURED_CAPS : string\[\] = \[([\s\S]*?)\]/);
+    expect(CAPS).not.toBe(null);
+    const declared = (CAPS[1].match(/'[a-z]+'/g) || []).map((x) => x.replace(/'/g, ''));
+    const mdSrc = read('utils/markdown.uts');
+    const table = mdSrc.match(/export const SUBSET_MEMBERS_FEATURED : string\[\] = \[([\s\S]*?)\]/);
+    expect(table).not.toBe(null);
+    const members = (table[1].match(/MEMBER_[A-Z_]+/g) || [])
+      .map((c) => c.replace('MEMBER_', '').toLowerCase());
+    expect(members.length).toBeGreaterThan(0);
+    for (const c of declared) {
+      expect([c, c === 'paragraph' || members.indexOf(c) >= 0]).toEqual([c, true]);
+    }
+    // 反向：声明表里的每一档都得被渲染（少一位 = 该档在精选面静默消失）。
+    // 例外只有一个 `inline`：它是**行内轴开关**、不是块类型（精选档声明它之后，块数组里
+    // 另有一份 `inline` 语义 —— 由公共件的 `inlineAxis` 承接，不对应任何 caps 位）。
+    const BLOCK_MEMBERS = members.filter((m) => m !== 'inline');
+    expect(BLOCK_MEMBERS.length).toBeGreaterThan(0);
+    for (const m of BLOCK_MEMBERS) {
+      expect([m, declared.indexOf(m) >= 0]).toEqual([m, true]);
+    }
+    // 段落地板恰好一位（`cap('paragraph')` 是整篇正文的唯一入口，重复即两份事实），
+    // 且 table 不在（精选档本来就不声明它：三端交集，表格退回逐行原始文本）
+    expect(declared.filter((c) => c === 'paragraph').length).toBe(1);
+    expect(declared).not.toContain('table');
+    expect(declared.length).toBe(BLOCK_MEMBERS.length + 1);
+  });
+
   // ADR-0025 P2（#1240）：论坛面是第三档。档位**决策**已从页面收进 `utils/forumBody.uts`
   // （行为面由 `utils/forumBodyBehavior.test.js` 真执行承重），这里只守**接线**：页面接的是那条
   // 决策口，而不是自己重判一遍档位、更不是自持第二份子集声明。
@@ -628,14 +710,41 @@ describe('页面级契约：章节面渲染表格、内容精选面走交集', (
     // runs 的入口必须在（否则上面那条「一处直出」是假的：分支根本没渲染文字）
     expect(forumMd).toContain('runsOf(');
     expect(forumMd).toContain('runClasses(');
-    // 精选详情页（#2124 起正文同样走 runs）：直出点同样恰好一处，且必须是代码块那一处
-    // （图片分支的 `:src="block.text"` 是属性、不是文字直出，故不进计数）
+    // 精选详情页（#2124 起正文同样走 runs；#2355 起改由**公共件**承载）
+    // —— ADR-0007 的改指：这条判据的**语义**是「精选面画出来的文字同样只经 runs」，
+    //    承载件从页面换成公共件后，判据跟到新承载件，并**加强**一组页面侧接线锁：
+    //    页面必须整份交给公共件、且自己一条块分支都不再持有（持有 = 「一套刻度」在精选面不成立）。
+    const blocksMd = read('components/markdown/markdown-blocks.uvue');
+    const blocksRaw = (blocksMd.match(/\{\{\s*block\.text\s*\}\}/g) || []);
+    expect(blocksRaw.length).toBe(1);
+    expect(blocksMd).toContain('md-code');
+    expect(blocksMd).toContain('runsOf(');
+    expect(blocksMd).toContain('runClasses(');
     const featuredMd = read('pages/featured/featured-detail.uvue');
-    const featuredRaw = (featuredMd.match(/\{\{\s*block\.text\s*\}\}/g) || []);
-    expect(featuredRaw.length).toBe(1);
-    expect(featuredMd).toContain('md-code');
-    expect(featuredMd).toContain('runsOf(');
-    expect(featuredMd).toContain('runClasses(');
+    expect(featuredMd).toContain('MarkdownBlocks');
+    expect(featuredMd).toContain(':caps="FEATURED_CAPS"');
+    expect(featuredMd).toContain('inline-axis="plain"');
+    // 精选页自持的块分支计数必须为 0（换件后最典型的假绿：模板留着旧分支但不渲染）
+    expect(featuredMd.match(/block\.type\s*==/g) || []).toEqual([]);
+  });
+
+  /**
+   * #2355 决议 D4：列表符号按 `level` 槽出 —— OL 出编号、UL 出圆点。
+   *
+   * 为什么只能是接线锁而不是行为断言：`.uvue` 模板进不了 `loadUts` 的**行为缝**
+   * （`docs/agents/guards.md` 明说接线守护不构成 ③ 门证据），渲染层的三目表达式没有可执行替身。
+   * 可执行的那一半在解析器侧：`markdownSubsetBehavior` 已钉住「声明了 `MEMBER_INLINE` 的档
+   * 才会产出 `LIST_LEVEL_OL`」，本条钉的是「产出了 OL 之后渲染层真的画编号」。
+   * 两条合起来才是「精选的 1. 2. 3. 不会退化成 •」——少任何一半那句话都不成立。
+   */
+  it('公共件列表符号按 level 出：OL 出编号、UL 出圆点（#2355 决议 D4）', () => {
+    const blocksMd = read('components/markdown/markdown-blocks.uvue');
+    // 三目形态与 `forum-markdown-blocks` 同形（同一条判据在两个承载件上一致，便于互相印证）
+    expect(blocksMd).toContain("block.level == 1 ? (li + 1) + '.' : '•'");
+    // 旧的一律 `•` 必须绝迹（留着它就是「精选的编号还会退化成圆点」）
+    expect(blocksMd).not.toContain('<text class="md-list-bullet">•</text>');
+    // 编号从 1 起（`li + 1`），不是从 0 起、也不是从 `level` 取值
+    expect(blocksMd).not.toContain("block.level + '.'");
   });
 
   it('论坛面：格式由详情壳层扁平下发（组件不自行读 topic / 回复 DTO）', () => {
