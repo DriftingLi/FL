@@ -31,7 +31,8 @@
             </view>
             <!-- 列表 -->
             <view v-else-if="cap('list') && block.type == 'list'" class="md-list">
-                <view v-for="(item, li) in block.items" :key="li" class="md-list-item">
+                <view v-for="(item, li) in block.items" :key="li"
+                    :class="{ 'md-list-item': true, 'md-list-item-gap': li > 0 }">
                     <text class="md-list-bullet">•</text>
                     <text :class="blockClasses(idx, 'md-list-text')">{{ item }}</text>
                 </view>
@@ -240,7 +241,13 @@
     .md-list-item {
         flex-direction: row;
         align-items: flex-start;
-        margin-bottom: $md-space-list-item;
+    }
+
+    /* 项间 12rpx **只给非首项**（margin-top）：若写成每项 margin-bottom，最后一项会把 12rpx 拖到
+     * 列表块之外，把「列表 → 下一个标题」从 40 顶成 52（2026-11-07 真机读数实测 51.4rpx 抓到的）。
+     * 不用 `:last-child` —— uvue 只认 .class 选择器，伪类会被静默忽略。 */
+    .md-list-item-gap {
+        margin-top: $md-space-list-item;
     }
 
     .md-list-bullet {
