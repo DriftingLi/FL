@@ -179,6 +179,7 @@
 | `$md-space-16` | `16rpx` | 间距档 `mt-16`：紧跟标题的块 / 分隔线自身与后继 |
 | `$md-space-24` | `24rpx` | 间距档 `mt-24`：标题紧跟标题 / 其余块 |
 | `$md-space-40` | `40rpx` | 间距档 `mt-40`：标题块自身 |
+| `$md-space-list-item` | `12rpx` | 列表项之间（spec「列表」条目：块间距 24、项间 12；不是四态的一档） |
 | `$md-quote-bar` | `8rpx` | 引用左竖线宽（不铺底色） |
 | `$md-quote-padding-left` | `24rpx` | 引用左内边距 |
 | `$md-code-bg` | `$bg-color` | 代码块底（#f8f8f8） |
@@ -187,6 +188,10 @@
 | `$md-code-inline-bg` | `$border-color-light` | 行内码底（#f0f0f0） |
 | `$md-code-inline-radius` | `$radius-sm` | 行内码圆角（8rpx） |
 | `$md-divider-line` | `1rpx` | 分隔线宽（规格按「不小于 1 物理像素」：2 倍屏上 1rpx 恰为 1 像素） |
+| `$md-table-size` | `26rpx` | 表格单元格字号（**不属阅读刻度**，值为迁移前原样；表格窄屏怎么读属地图 #2334 的 Out of scope） |
+| `$md-table-line` | `40rpx` | 表格单元格行高（同上） |
+| `$md-table-padding-y` | `16rpx` | 表格单元格上下内边距（同上） |
+| `$md-table-padding-x` | `20rpx` | 表格单元格左右内边距（同上） |
 
 ---
 

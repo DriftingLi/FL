@@ -369,10 +369,19 @@ describe('删除禁区「courses 不用删」：行为保持点逐项仍在', ()
     expect(src).toContain('getChapterDetailApi(courseId.value, chapterId.value)');
   });
 
+  // #2353：块怎么排搬进四面共用的 `components/markdown/markdown-blocks.uvue`，章节壳件只剩容器 + 一行转发。
+  // 按 ADR-0007「手术 PR 内可更新文件路径指向，禁删/弱化断言」：8 条分支断言一条不少地跟到新承载件，
+  // 另外**加强**两条壳件侧判据 —— 壳件必须指向共用件、且能力位传满 8 位（少一位那一档会在章节面静默消失）。
   it('章节正文渲染：8 个渲染分支与附件资料区块逐项仍在', () => {
-    const md = read('pages/courses/components/chapter-markdown.uvue');
+    const md = read('components/markdown/markdown-blocks.uvue');
     for (const t of ["'heading'", "'paragraph'", "'code'", "'list'", "'quote'", "'divider'", "'image'", "'table'"]) {
       expect(md).toContain('block.type == ' + t);
+    }
+    const shell = read('pages/courses/components/chapter-markdown.uvue');
+    expect(shell).toContain("from '../../../components/markdown/markdown-blocks.uvue'");
+    expect(shell).toContain(':caps="CHAPTER_CAPS"');
+    for (const t of ["'heading'", "'paragraph'", "'code'", "'list'", "'quote'", "'divider'", "'image'", "'table'"]) {
+      expect(shell).toContain(t);
     }
     const files = read('pages/courses/components/chapter-file-list.uvue');
     expect(files).toContain('附件资料');

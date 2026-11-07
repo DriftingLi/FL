@@ -1,0 +1,317 @@
+<template>
+    <!-- 四面共用的块级渲染组件（#2353；spec #2351「四套刻度收成一套」）。
+         三层之间只有一条接口：① 上游 `parseMarkdown` 出块 → ② `utils/markdownTypography` 的 `markdownTiers` 只出
+         **档位名** → ③ 本组件只认档位名。数值唯一处是 `uni.scss` 的 `$md-*` 段（#2352 决议 D1/D2），本文件只引用
+         变量、不写字面量 —— 这样「改一次四面同时生效」才是物理事实。
+
+         分支开关是 `caps`（#2337 裁定）：调用方传本面的能力位，未声明的档不渲染（论坛档不持 table / image）。
+         本票只接课程章节一面，章节传全集八位（见 `pages/courses/components/chapter-markdown.uvue` 的 `CHAPTER_CAPS`）。
+
+         块间距 = **margin-top-only**：间距只由后一块的 `mt-*` 提供，块自身 `margin-bottom` 恒 0（四态 16/24/40 不叠加，
+         分隔线上下 32 = 自身 16 + 后继块 16）。uvue 是 flex 布局、相邻 margin 不折叠，这个模型才成立。
+
+         行内 runs 本轮未启用（`inlineAxis` 见 #2353 决议 D5）：章节子集不声明 `inline`，解析器已剥掉记号，
+         故本章面整段直出 `block.text` 是正确的；精选 / 论坛的行内 runs 由 #2355 / #2356 各自补落。 -->
+    <view class="md-body">
+        <view v-for="(block, idx) in blocks" :key="idx" :class="spaceClasses(idx)">
+            <!-- 标题 -->
+            <text v-if="cap('heading') && block.type == 'heading'"
+                :class="headingClasses(idx)">{{ block.text }}</text>
+            <!-- 段落 -->
+            <text v-else-if="cap('paragraph') && block.type == 'paragraph'"
+                :class="blockClasses(idx, 'md-paragraph')">{{ block.text }}</text>
+            <!-- 代码块（spec「不折行、可横向滑动」：横滑靠 flex-direction: row + 子项 flex-shrink: 0 撑出溢出，
+                 不写 white-space —— 它只在 text/button 上生效且写进 <style> 必须登记 LEGAL_CARRIER_SITES） -->
+            <view v-else-if="cap('code') && block.type == 'code'" class="md-code-wrap">
+                <scroll-view class="md-code-scroll" scroll-x="true">
+                    <view class="md-code-row">
+                        <text :class="blockClasses(idx, 'md-code')">{{ block.text }}</text>
+                    </view>
+                </scroll-view>
+            </view>
+            <!-- 列表 -->
+            <view v-else-if="cap('list') && block.type == 'list'" class="md-list">
+                <view v-for="(item, li) in block.items" :key="li" class="md-list-item">
+                    <text class="md-list-bullet">•</text>
+                    <text :class="blockClasses(idx, 'md-list-text')">{{ item }}</text>
+                </view>
+            </view>
+            <!-- 引用（不铺底色，只靠左侧竖线标识） -->
+            <view v-else-if="cap('quote') && block.type == 'quote'" class="md-quote">
+                <text :class="blockClasses(idx, 'md-quote-text')">{{ block.text }}</text>
+            </view>
+            <!-- 分隔线 -->
+            <view v-else-if="cap('divider') && block.type == 'divider'" class="md-divider"></view>
+            <!-- 图片（点击向页面 emit，previewImage 仍留在页面壳层） -->
+            <image v-else-if="cap('image') && block.type == 'image'" class="md-image" :src="block.text" mode="widthFix"
+                @click="onImageTap(block.text)"></image>
+            <!-- 表格（ADR-0046：章节正文渲染成表格；解析器按行出块，表头行 level=1；行间归零由 mt-0 档承担） -->
+            <view v-else-if="cap('table') && block.type == 'table'" class="md-table-row">
+                <view v-for="(cell, ci) in block.items" :key="ci"
+                    :class="{ 'md-table-cell': true, 'md-table-cell-first': ci == 0, 'md-table-cell-head': block.level == 1 }">
+                    <text :class="{ 'md-table-cell-text': true, 'md-table-cell-text-head': block.level == 1 }">{{ cell }}</text>
+                </view>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { computed } from 'vue'
+    import type { MarkdownBlock } from '../../types/index'
+    import { markdownTiers } from '../../utils/markdownTypography'
+    import type { MarkdownTier } from '../../utils/markdownTypography'
+
+    const props = withDefaults(defineProps<{
+        blocks? : MarkdownBlock[]
+        /** 本面能力位：只有列出的档会渲染（#2337 的分支开关）。**必填**：不传等于整面空渲染，故意不给缺省值 */
+        caps : string[]
+    }>(), {
+        blocks: () => [] as MarkdownBlock[]
+    })
+
+    const emit = defineEmits(['imageClick'])
+
+    /** 每块的档位（与 `blocks` 1:1 对齐）。**不跨组件传**：tier 对象当可选 prop 再直读成员会命中
+     *  「可选对象 prop 成员直读」的 Kotlin 编译坑（规则 P / 移动端 ADR-0007），故在本组件内部算。 */
+    const tiers = computed((): MarkdownTier[] => markdownTiers(props.blocks))
+
+    /** 能力位判定：本地薄包装（模板直调外部 import 函数会编成 `.invoke()`，规则 S） */
+    const cap = (name : string) : boolean => {
+        for (let i = 0; i < props.caps.length; i++) {
+            if (props.caps[i] == name) return true
+        }
+        return false
+    }
+
+    /** 字号档令牌 → 类名。令牌只有 `markdownTiers` 产出的那九种，其余一律折到正文档（与纯函数同口径） */
+    const sizeClassOf = (tier : string) : string => {
+        if (tier == 'h1') return 'md-sz-h1'
+        if (tier == 'h2') return 'md-sz-h2'
+        if (tier == 'h3') return 'md-sz-h3'
+        if (tier == 'h4') return 'md-sz-h4'
+        if (tier == 'quote') return 'md-sz-quote'
+        if (tier == 'code') return 'md-sz-code'
+        if (tier == 'listText') return 'md-sz-listtext'
+        return 'md-sz-body'
+    }
+
+    /** 间距档：令牌名与块级 class 同名（`mt-0` / `mt-16` / `mt-24` / `mt-40`），渲染侧不建第二张映射表 */
+    const spaceClasses = (idx : number) : string[] => {
+        const cls : string[] = ['md-block']
+        if (idx < tiers.value.length) cls.push(tiers.value[idx].space)
+        return cls
+    }
+
+    /** 块内文字的类：基线类 + 该块的字号档 */
+    const blockClasses = (idx : number, base : string) : string[] => {
+        const cls : string[] = [base]
+        if (idx < tiers.value.length) cls.push(sizeClassOf(tiers.value[idx].size))
+        return cls
+    }
+
+    /** 标题另分两档颜色：h1–h3 更深（越大越深，层级单调），h4–h6 与正文同色（靠字号更小 + 700 区隔） */
+    const headingClasses = (idx : number) : string[] => {
+        const cls : string[] = ['md-heading']
+        const tier : string = idx < tiers.value.length ? tiers.value[idx].size : 'h4'
+        cls.push(sizeClassOf(tier))
+        cls.push(tier == 'h4' ? 'md-heading-lo' : 'md-heading-hi')
+        return cls
+    }
+
+    const onImageTap = (url : string) : void => {
+        emit('imageClick', url)
+    }
+</script>
+
+<style lang="scss">
+    /* 只认 .class 选择器、只在 <text> 上写文字类样式（`docs/agents/uvue-css.md`）。
+       值一律取 `uni.scss` 的 `$md-*` 段，本文件不写字号 / 间距字面量。 */
+
+    .md-body {
+        flex-direction: column;
+    }
+
+    .md-block {
+        flex-direction: column;
+    }
+
+    /* 四态间距：只提供 margin-top，块自身 margin-bottom 恒 0 */
+    .mt-0 {
+        margin-top: $md-space-0;
+    }
+
+    .mt-16 {
+        margin-top: $md-space-16;
+    }
+
+    .mt-24 {
+        margin-top: $md-space-24;
+    }
+
+    .mt-40 {
+        margin-top: $md-space-40;
+    }
+
+    /* 字号档：四档 + 正文 / 引用 / 代码 / 列表文字 */
+    .md-sz-h1 {
+        font-size: $md-size-h1;
+        line-height: $md-line-h1;
+    }
+
+    .md-sz-h2 {
+        font-size: $md-size-h2;
+        line-height: $md-line-h2;
+    }
+
+    .md-sz-h3 {
+        font-size: $md-size-h3;
+        line-height: $md-line-h3;
+    }
+
+    .md-sz-h4 {
+        font-size: $md-size-h4;
+        line-height: $md-line-h4;
+    }
+
+    .md-sz-body {
+        font-size: $md-size-body;
+        line-height: $md-line-body;
+    }
+
+    .md-sz-quote {
+        font-size: $md-size-quote;
+        line-height: $md-line-quote;
+    }
+
+    .md-sz-code {
+        font-size: $md-size-code;
+        line-height: $md-line-code;
+    }
+
+    .md-sz-listtext {
+        font-size: $md-size-list-text;
+        line-height: $md-line-list-text;
+    }
+
+    /* 标题与段落 */
+    .md-heading {
+        font-weight: $md-weight-heading;
+    }
+
+    .md-heading-hi {
+        color: $md-color-heading;
+    }
+
+    .md-heading-lo {
+        color: $md-color-text;
+    }
+
+    .md-paragraph {
+        color: $md-color-text;
+    }
+
+    /* 代码块：底 / 圆角 / 内边距取刻度；横滑靠 row + flex-shrink: 0 */
+    .md-code-wrap {
+        background-color: $md-code-bg;
+        border-radius: $md-code-radius;
+        padding: $md-code-padding;
+    }
+
+    .md-code-scroll {
+        flex-direction: row;
+    }
+
+    .md-code-row {
+        flex-direction: row;
+    }
+
+    .md-code {
+        flex-shrink: 0;
+        font-family: $md-font-code;
+        color: $md-color-text;
+    }
+
+    /* 列表 */
+    .md-list {
+        flex-direction: column;
+    }
+
+    .md-list-item {
+        flex-direction: row;
+        align-items: flex-start;
+        margin-bottom: $md-space-list-item;
+    }
+
+    .md-list-bullet {
+        font-size: $md-size-list-bullet;
+        line-height: $md-line-list-text;
+        color: $md-color-muted;
+        margin-right: $md-gap-list-bullet;
+    }
+
+    .md-list-text {
+        flex: 1;
+        color: $md-color-text;
+    }
+
+    /* 引用：只靠左侧竖线标识，不铺底色 */
+    .md-quote {
+        border-left: $md-quote-bar solid $md-color-divider;
+        padding-left: $md-quote-padding-left;
+    }
+
+    .md-quote-text {
+        color: $md-color-muted;
+    }
+
+    /* 分隔线 */
+    .md-divider {
+        height: $md-divider-line;
+        background-color: $md-color-divider;
+    }
+
+    /* 图片 */
+    .md-image {
+        width: 100%;
+        border-radius: 12rpx;
+    }
+
+    /* 表格（ADR-0046 的渲染口径原样搬运；这些值是表格自身样式、不属阅读刻度，但同样收在 $md-* 段，
+       避免渲染面出现裸字面量） */
+    .md-table-row {
+        flex-direction: row;
+        margin-bottom: 0;
+    }
+
+    .md-table-cell {
+        flex: 1;
+        padding: $md-table-padding-y $md-table-padding-x;
+        border-right-width: 1rpx;
+        border-right-color: #e0e0e0;
+        border-bottom-width: 1rpx;
+        border-bottom-color: #e0e0e0;
+    }
+
+    .md-table-cell-first {
+        border-left-width: 1rpx;
+        border-left-color: #e0e0e0;
+    }
+
+    .md-table-cell-head {
+        border-top-width: 1rpx;
+        border-top-color: #e0e0e0;
+        background-color: $md-code-bg;
+    }
+
+    .md-table-cell-text {
+        font-size: $md-table-size;
+        line-height: $md-table-line;
+        color: $md-color-text;
+    }
+
+    .md-table-cell-text-head {
+        font-weight: $md-weight-heading;
+        color: $md-color-heading;
+    }
+</style>

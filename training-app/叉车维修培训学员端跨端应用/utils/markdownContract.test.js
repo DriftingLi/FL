@@ -544,10 +544,12 @@ describe('镜像同步：utils/markdown.uts 与本文件镜像逐条一致', () 
 
 describe('页面级契约：章节面渲染表格、内容精选面走交集', () => {
   const chapter = read('pages/courses/chapter-view.uvue');
-  // T08 手术（#646）：章节正文的渲染分支搬进模块私有 section 组件，因此「表格怎么渲染」这几条
-  // 的**路径指向**随之改指该组件 —— 断言一条未删、未弱化（ADR-0007：「手术 PR 内可更新文件路径
-  // 指向，禁删/弱化断言」）；「走哪一档」仍钉在页面（档位是页面侧决策，组件只渲染下发的块）。
-  const chapterMd = read('pages/courses/components/chapter-markdown.uvue');
+  // 两次手术、同一条纪律（ADR-0007：「手术 PR 内可更新文件路径指向，禁删/弱化断言」）：
+  // ① T08（#646）把章节正文的渲染分支搬进模块私有 section 组件；
+  // ② #2353 又把块怎么排搬进**四面共用**的 `components/markdown/markdown-blocks.uvue`，
+  //    章节壳件只剩容器与一行转发 ⇒ 「表格怎么渲染」这几条再改指一次共用件，断言一条未删；
+  //    「走哪一档」仍钉在页面（档位是页面侧决策，组件只渲染下发的块）。
+  const chapterMd = read('components/markdown/markdown-blocks.uvue');
   const featured = read('pages/featured/featured-detail.uvue');
 
   it('chapter-view：table 块渲染成逐行 flex 的原生表格（单元格取自 items）', () => {
@@ -555,8 +557,15 @@ describe('页面级契约：章节面渲染表格、内容精选面走交集', (
     expect(chapterMd).toContain('v-for="(cell, ci) in block.items"');
     expect(chapterMd).toContain("'md-table-cell-head': block.level == 1");
     expect(chapterMd).toContain('.md-table-cell-head');
-    // 表格行必须归零 .md-block 的块间距，否则同一张表会被拆成一格一格的横条
-    expect(chapterMd).toMatch(/\.md-table-row\s*\{[^}]*margin-bottom:\s*0/);
+    // 表格行必须归零块间距，否则同一张表会被拆成一格一格的横条。
+    // #2353 起这条从「源码里有一行 margin-bottom: 0」升级成**三条钉值断言**：间距模型换成
+    // margin-top-only 后，「表内续行」由 `mt-0` 令牌表达（`markdownTiers` 的第 7 行优先序），
+    // 于是要证明的是「mt-0 这个类真的存在、它的值是 0、且块自身没有 margin-bottom 把它叠回来」。
+    // 旧断言只证明源码里写过 0；新的三条证明跑起来就是 0（行为侧另有 markdownTypographyBehavior 承重）。
+    expect(chapterMd).toMatch(/\.mt-0\s*\{\s*margin-top:\s*\$md-space-0;/);
+    expect(chapterMd).not.toMatch(/\.md-block\s*\{[^}]*margin-bottom/);
+    const uniScss = read('uni.scss');
+    expect(uniScss).toContain('$md-space-0: 0rpx;');
   });
 
   it('chapter-view：走缺省档（章节正文 = 可信面全集）', () => {

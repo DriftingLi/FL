@@ -81,6 +81,10 @@ const INFRA = {
     // 口径落跨切面基础设施（同款先例：`components/app-*` 整族）。登记为 INFRA 而非某模块私有，
     // 是为了让另一页 import 它时**不构成跨模块私有件消费**（那会触发连锁消费者锁）。
     'components/login-agreement',
+    // 'components/markdown' —— #2353：四面共用的块级渲染组件（章节 / 内容精选 / 论坛 / AI 气泡），
+    // 与 `components/app-*` 同属跨切面基础设施：四模块共用、无单一主消费方。登记为 INFRA 而非某
+    // 模块私有，是为了让别的面 import 它时**不构成跨模块私有件消费**（同 login-agreement 的口径）。
+    'components/markdown',
     'config',
     'constants',
     'stores',
