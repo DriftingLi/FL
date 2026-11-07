@@ -92,6 +92,9 @@ $text-color-placeholder: #999999;
 $text-color-inverse: #ffffff;
 /* 禁用 / 弱化文字（ui-spec 1.4 记作 $text-disabled；此前只在页面上以 #cccccc 字面值出现） */
 $text-disabled: #cccccc;
+/* 强调文字黑（#2338 裁定的 `$text-strong`：比 $text-color 更深；阅读刻度的 h1–h3 引它，
+ * 值来自现状四渲染器 `.md-heading` 的裸 hex #1a1a1a） */
+$text-strong: #1a1a1a;
 
 /* 背景色 */
 $bg-color: #f8f8f8;
@@ -144,3 +147,63 @@ $danger-color: #ff3b30;
 
 /* 输入框边框 */
 $input-border: #e5e5e5;
+
+/* ==================== 阅读刻度（Markdown 正文 · #2352） ====================
+ * **一套值只在这里出现一次**：四面（课程章节 / 内容精选 / 论坛 / AI 气泡）与块级渲染组件
+ * 只许引用，不许再写字面量（#2352 决议 D1；守卫见 #2358）。
+ *
+ * 为什么独立前缀、不并入 `$font-size-*` 阶梯：现有全局档位是 20/24/28/32/36rpx，**不含**
+ * 30/26/34/40rpx；硬塞进去会牵动阅读面以外的百余处界面字号。而且 30rpx 正文与 26rpx 代码
+ * 属同一条阅读节奏，与界面字号不是同一套语义。
+ *
+ * 命名约定两条（渲染侧因此不需要第二张映射表）：
+ * - 尺寸令牌名 = `utils/markdownTypography.uts` 的 `size` 档位名（h1…h4 / body / quote / code / listText）；
+ * - 间距令牌名 = 块级 class 选择器名（`mt-0` / `mt-16` / `mt-24` / `mt-40`，#2337 定名）。
+ */
+
+/* 字色：正文 / 标题 / 次级（前两个复用全站语义 token，不重复写字面量） */
+$md-color-text: $text-color;
+$md-color-heading: $text-strong; /* 比正文更深：越大越深，层级单调（#2340） */
+$md-color-muted: $text-color-secondary;
+$md-color-divider: $border-color;
+
+/* 字重：标题一律 700 */
+$md-weight-heading: 700;
+
+/* 字号 / 行高（rpx）：行高一律绝对值，禁无单位 number（#2340） */
+$md-size-h1: 40rpx;
+$md-line-h1: 56rpx;
+$md-size-h2: 34rpx;
+$md-line-h2: 48rpx;
+$md-size-h3: 30rpx; /* 与正文同号是刻意的：靠 700 与前距区分 */
+$md-line-h3: 48rpx;
+$md-size-h4: 26rpx; /* h4 / h5 / h6 三档同款 */
+$md-line-h4: 40rpx;
+$md-size-body: 30rpx;
+$md-line-body: 48rpx;
+$md-size-quote: 30rpx;
+$md-line-quote: 48rpx;
+$md-size-code: 26rpx;
+$md-line-code: 40rpx;
+$md-font-code: monospace;
+$md-size-code-inline: 26rpx; /* 块内子元素：不由 markdownTiers 产出 */
+$md-size-list-text: 30rpx;
+$md-line-list-text: 48rpx;
+$md-size-list-bullet: 30rpx; /* 块内子元素：同上 */
+$md-gap-list-bullet: 16rpx;
+
+/* 块间距四态（rpx）：令牌名 = 块级 class 选择器名（#2337） */
+$md-space-0: 0rpx; /* mt-0：首块（即使它是分隔线） */
+$md-space-16: 16rpx; /* mt-16：紧跟标题的块 / 分隔线自身与后继 */
+$md-space-24: 24rpx; /* mt-24：标题紧跟标题 / 其余块 */
+$md-space-40: 40rpx; /* mt-40：标题块自身 */
+
+/* 几何：引用 / 代码 / 分隔线（#2338 色彩口径 + #2340 刻度） */
+$md-quote-bar: 8rpx; /* 引用左竖线（不铺底色） */
+$md-quote-padding-left: 24rpx;
+$md-code-bg: $bg-color;
+$md-code-padding: 24rpx;
+$md-code-radius: 12rpx;
+$md-code-inline-bg: $border-color-light;
+$md-code-inline-radius: $radius-sm;
+$md-divider-line: 1rpx; /* 规格按「不小于 1 物理像素」理解：2 倍屏上 1rpx 恰为 1 像素 */

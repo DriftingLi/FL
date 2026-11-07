@@ -27,7 +27,6 @@ module.exports = {
     '#888888': 'pages/guide/choose-cert.uvue province-label/error-text 次要说明文字——\-color-secondary(#666666) 偏深、\-color-placeholder(#999999) 偏浅，中间灰无 token；收敛待灰阶 token 票裁',
     '#F0F2F5': 'pages/guide/choose-cert.uvue province-bar 胶囊底（\-color(#F8F8F8)/\-color-light(#F0F0F0) 均不等，冷灰胶囊底） + pages/resume/resume-edit.uvue 分割浅灰——待真机裁',
     '#F5F7FA': 'pages/guide/choose-cert.uvue page 页底——\-color(#F8F8F8) 近似但值不等，视觉回归风险待真机裁',
-    '#1A1A1A': 'pages/jobs/job-list.uvue tab-text.active 选中文字——比 \-color(#333333) 更重的文字黑，job-list 特有强调；收敛待文字灰阶 token 票裁',
     '#EEEEEE': 'pages/jobs/job-list.uvue tab-avatar 边框 + job-card 边框 + batch2 profile 两页分割线/边框——\-color(#e5e5e5)/\-color-light(#f0f0f0) 之间的更浅边框，待真机裁',
     '#E8F0FE': 'pages/jobs/job-list.uvue filter-tag-active 主色浅底 + pages/practice/practice-do.uvue 题型标签浅蓝底——\-tint(#ebf5ff) 近似但值不等，视觉回归风险待真机裁',
     '#F0F5FF': 'pages/jobs/job-list.uvue tab-avatar-placeholder 底——\-tint(#ebf5ff) 近似但值不等，视觉回归风险待真机裁',
@@ -122,4 +121,8 @@ module.exports = {
     '#86EFAC': 'pages/forgot-password/forgot-password.uvue 成功态浅绿字——green-300，token 表无对应',
     '#F0F1F5': 'pages/register/register.uvue、pages/forgot-password/forgot-password.uvue mode-tab 未选中底——分段控件中性浅灰，$bg-color 近似但值不等（与批5 #EEF1F5 轨道灰用途不同，各守各点不并条）',
     '#FF4D4F': 'pages/mall/mall.uvue product-price 价格红——与页面私有子组件 mall-category-sidebar 同值，本批只收页头不扩面改色；$danger-color(#ff3b30) 值不等（同批2 #F44336 判例），待红系 token 票裁',
+    // '#1A1A1A' 已于 #2352 收敛为 $text-strong（#2338 裁定：新增 token，值来自现状 .md-heading 裸 hex）：
+    // 值成了 token 值 ⇒ 白名单行必须删（§1.6 自检：白名单值不得与 token 值重叠）。裸字面仍散在 5 处
+    // （courses.uvue ×2 / job-list.uvue / resume.uvue / ai-chat-bubble.uvue），渲染面迁移随 #2353–#2356；
+    // 声明位判据不再拦它们（值 ∈ token 值）。
 }
