@@ -36,8 +36,8 @@
         <scroll-view v-else class="content-scroll" scroll-y="true">
             <!-- 章节标题区 -->
             <view class="chapter-header">
-                <text class="chapter-title">{{ detail!.title }}</text>
-                <view class="chapter-meta">
+                <text class="page-heading">{{ detail!.title }}</text>
+                <view class="page-meta">
                     <text v-if="detail!.study_status == 'completed'" class="status-tag completed">已完成</text>
                     <text v-else class="status-tag studying">学习中</text>
                     <text class="chapter-duration">预计 {{ formatDuration(detail!.duration) }}</text>
@@ -400,17 +400,25 @@ import { goBack } from '../../utils/navigation'
         flex-direction: column;
     }
 
-    .chapter-title {
-        font-size: 40rpx;
-        font-weight: bold;
-        color: #333333;
-        line-height: 56rpx;
+    /* 页面标题区（#2357 决议 D1/D2）：详情页专用类名，与列表卡片的 .chapter-title 不再同名，
+       居中规则因此不靠「隔离策略兜住同名类」这一层。四个值一律引阅读刻度 $md-* 的 h1 档 ——
+       页面标题区就是正文 h1 档，两者只差对齐（这里居中、正文标题恒左对齐）。
+       居中只能落 <text> 的 text-align：写 <view> 上会被渲染层忽略并逐次打 error（uvue-css.md）。 */
+    .page-heading {
+        font-size: $md-size-h1;
+        line-height: $md-line-h1;
+        font-weight: $md-weight-heading;
+        color: $md-color-text;
+        text-align: center;
         margin-bottom: 16rpx;
     }
 
-    .chapter-meta {
+    /* 元信息行与标题同轴：justify-content 让整行居中，flex-wrap 让超宽时换行而不是溢出 */
+    .page-meta {
         flex-direction: row;
         align-items: center;
+        justify-content: center;
+        flex-wrap: wrap;
     }
 
     .status-tag {
