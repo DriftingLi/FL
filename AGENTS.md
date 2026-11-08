@@ -49,6 +49,7 @@ AI 安全审计用 DeepSec（Shield）。See `docs/agents/security-scan.md`.
 | [`docs/agents/release.md`](docs/agents/release.md) | 发布流程：分支 + PR + ruleset 门禁 + squash 直发 production，含应急通道与「禁 timeout 包 git/gh」铁律；**证据 = PR 正文一行 `跑于 <sha7>`（A1 形态，2026-10-29 #2100 起）、先预检绿再开 PR**（见其「证据主键」段）；**合并后的分支与 worktree 收尾顺序**见其「收尾」段（第 7 步）：一条命令 `pwsh scripts/dev-close.ps1 -Task <票号>`（`verdict=ok` 才算收完，`noop`/`planned` 都不是），拆树仍只走 `remove-worktree.ps1`、别手搓两步；**认树看目录名 `wt-<票号>`、身份看登记分支**（别按 `feat/<票号>` 猜），裁定见 [`ADR-0092`](docs/adr/ADR-0092-树身份-目录为入口与登记分支为身份.md) | push / PR / merge / 清理工作树前 |
 | [`docs/agents/multi-agent-git.md`](docs/agents/multi-agent-git.md) | 多 Agent 并发与 git 隔离：worktree 一会话一分支、游离提交取证、`git add` 纪律 | 多会话/自动化并发操作仓库时 |
 | [`docs/agents/comments.md`](docs/agents/comments.md) | 注释标准：三类判据（保留 / 删除 / 不可动）、本仓先例、「只减不增」棘轮锁哪些类与为什么 | 增删改注释前（后端 `backend/**/*.go`；底数与逐包实测见 [`docs/design/1445-p4-comment-audit.md`](docs/design/1445-p4-comment-audit.md)） |
+| [`docs/agents/CODING_STANDARDS.md`](docs/agents/CODING_STANDARDS.md) | 编码规范（judgement 类）：什么算判断类、什么不接确定性检查 | 新增 CI 门 / 守卫脚本 / lint 规则 / 预检硬判据 / 测试断言前（先查「不立守护」裁定）；评审 Standards 轴 |
 
 > **建 worktree 一律走闸门**：`pwsh training-app/叉车维修培训学员端跨端应用/scripts/new-worktree.ps1 -Task <票号>`（**别裸用 `git worktree add`**——闸门在创建处校验参数并实测 `jest --listTests` 必须列出套件，目录名不合规会让 ③ 门**静默匹配 0 个套件**，血账 #1144）。**移动端交付不用 Qoder 托管树**；宿主「本地任务的 Worktree 配置」框只填 `wt-bootstrap.ps1` 一行调用——血账、框现值核对方法与移动端边界，见移动端 `AGENTS.md`「Qoder 托管 worktree 的使用边界」。
 
