@@ -16,6 +16,8 @@ This file provides guidance to Qoder (qoder.com) when working with code in this 
 
 - **架构决策记录（ADRs）**：根仓库 `docs/adr/`（编号 `ADR-0001-…`）；**移动端项目**（`training-app/叉车维修培训学员端跨端应用/docs/adr/`）**另有一套独立 ADR**（`0001-…` 起编号，记录 uni-app-x 侧决策：SSE 流式传输、轻量状态管理、手动 JSON 映射、生物识别、安全存储等）——两套编号体系互不相关，引用时注明「根仓库 / 移动端」
 
+- **当要给 X 加守护 / 机检、或要查某个 retro 候选到底立没立时**：先查 `docs/design/` 的判据与实测账本（例：[`20261107-兜底边口径机检判据边界裁定.md`](docs/design/20261107-兜底边口径机检判据边界裁定.md) = #2317「不立机检」）——落进仓内的裁定别只在票里翻；此处只给触发条件与落点，不复制裁定理由，也不建全量索引（那会变成第二个漂移面）。
+
 ## Agent skills
 
 ### Skill routing
@@ -49,8 +51,6 @@ AI 安全审计用 DeepSec（Shield）。See `docs/agents/security-scan.md`.
 | [`docs/agents/comments.md`](docs/agents/comments.md) | 注释标准：三类判据（保留 / 删除 / 不可动）、本仓先例、「只减不增」棘轮锁哪些类与为什么 | 增删改注释前（后端 `backend/**/*.go`；底数与逐包实测见 [`docs/design/1445-p4-comment-audit.md`](docs/design/1445-p4-comment-audit.md)） |
 
 > **建 worktree 一律走闸门**：`pwsh training-app/叉车维修培训学员端跨端应用/scripts/new-worktree.ps1 -Task <票号>`（**别裸用 `git worktree add`**——闸门在创建处校验参数并实测 `jest --listTests` 必须列出套件，目录名不合规会让 ③ 门**静默匹配 0 个套件**，血账 #1144）。**移动端交付不用 Qoder 托管树**；宿主「本地任务的 Worktree 配置」框只填 `wt-bootstrap.ps1` 一行调用——血账、框现值核对方法与移动端边界，见移动端 `AGENTS.md`「Qoder 托管 worktree 的使用边界」。
-
-**当要给 X 加守护 / 机检、或要查某个 retro 候选到底立没立时，先查 `docs/design/` 下的裁定记录**（例：[`20261107-兜底边口径机检判据边界裁定.md`](docs/design/20261107-兜底边口径机检判据边界裁定.md) = #2317「不立机检」）——这类裁定的单一真源在那里，别只在票里翻；此处只给触发条件与落点，不复制裁定理由，也不建全量索引（那会变成第二个漂移面）。
 
 ## 会话纪律（降本四条，#1705）
 
