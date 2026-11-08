@@ -22,6 +22,7 @@
 | 判「这次到底要不要跑全量门」 | 全量 ③ 门该不该跑（C2 四档） |
 | 门在跑 / 跑完 / 跑红，怎么读数 | agent 判读纪律 |
 | 测试里 spawn pwsh 出中文乱码 / 要写探针 | 测试探针 spawn pwsh 时的中文编码 |
+| 手工把命令输出重定向成日志文件 | 手工重定向：别用 shell `>` 抄控制台流 |
 | PR 面 ④c（② 已退役，本节的 ② 部分为历史账） | PR 面一次取锁串两门 |
 | 连真机做逐页取证 | 真机无线调试入口 |
 | 建树 / 用树遇到怪问题 | 工作树与会话坑位原文 |
@@ -261,6 +262,8 @@ L 系列钉 `-Mode` / `-Leg` 两维的机检可判读性（L1a–L1c 成对腿�
    可**汇总行仍可能被 CLIXML 噪音挤掉**——同日两腿那一跑，行为腿机检行老实写 `missing=suites|tests|time`
    （心跳行 `JEST_SUITE_DONE total=70 passed=67 failed=3` 反而是那跑唯一完整的计数来源）。
    ⇒ 先问「结论行在不在」，别问「输出好不好看」；**要读 jest 汇总就绕开门入口直跑那一腿的 `npm run test:*:local` 并重定向到文件**。
+   ⚠️ 这份临时重定向件**只给眼睛看、别当日志留**：字节走控制台码页（本机 cp936），落盘即 B1 不可逆
+   （见「手工重定向：别用 shell `>` 抄控制台流」）；要留证就引脚本自产的那份 UTF-8 件。
    ⚠️ 这条**曾经**被写成「换个捕获方式治不了」——那个结论只对「攒到最后再吐」成立；**判读的可见性**靠流式，
    **落盘件的完整性**靠绕开入口读，两件事分开记。
    ⚠️ **缺字段 ≠ 跑失败**：上面那跑串行门 `exit=0` 也照样 `missing=suites|tests|time`——落盘件按汇总行取数，
@@ -414,6 +417,21 @@ style-loop.ps1 -MaxLineBytes 201   （[ValidateRange(40,200)] 拒收）
 
 **判据是谁**：别自己数 U+FFFD —— `node .github/scripts/check-evidence-encoding.mjs --root <树>`（诊断形态），
 加 `--since <ISO>` 只判该时刻之后写过的（判据比的是 mtime）。存量豁免口径见 `docs/agents/ledger.md` #27。
+
+## 手工重定向：别用 shell `>` 抄控制台流（#2234，2026-11-08 立）
+
+**一句话**：在 bash / cmd 里 `pwsh … > log`（或 `| tee log`）抄到的是**按控制台码页（本机 cp936）编码的字节**，
+落盘即 B1 原始 GBK 字节，**不可逆**（#2139 台账 #27 的第三条生产者路径；实证见
+`docs/日志编码损坏生产者定位-2026-11-03.md` §4.2：`t2164-ab.sh` 的重定向件是 GBK 原文，不是块边界切断）。
+
+- **要门日志**：引脚本自产的那份 UTF-8 件 —— `npm run test:unit:gate` 落 `.ci-verify/test-unit.log` /
+  `.ci-verify/test-behavior.log`（采集层 `Read-Utf8Chunk` 已按块解码）。自己再抄一份只会得到第二份坏件。
+- **确实要自己落一份**：在 PowerShell 侧写（`… | Out-File -Encoding utf8 <path>`），别在 bash / cmd 里 `>`
+  或 `| tee`；写完用下面的判据核一次，坏件当场就能看出来。
+- **判据**：`node .github/scripts/check-evidence-encoding.mjs --root D:/FL --since <ISO>`（只判该时刻之后
+  写过的件，判据比 mtime；存量豁免口径见 `docs/agents/ledger.md` #27）。
+- **坏件不挪不删**：`preflight-pr` 只判本次新产出，把「新件干净」当结论即可；挪走或删掉坏件换来的绿，
+  下次没人知道那里曾经坏过。
 
 ## ② 贴证前两核（#1845 实证，2026-10-24 立；② 已于 #2320 退役）
 
