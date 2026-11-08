@@ -41,6 +41,7 @@
 | `checks.md` | 测试与检查流程（后端 Windows/WSL 双环境、前端、部署配置、安全检测） |
 | `release.md` | 发布流程（分支 + PR + ruleset 门禁 + squash 直发 production） |
 | `multi-agent-git.md` | 多 Agent 并发与 git 隔离（worktree / 游离提交 / add 纪律） |
+| `CODING_STANDARDS.md` | 编码规范（judgement 类）：新增守护 / 机检前先查「不立守护」裁定；只收判据、不接门禁（#2346） |
 | `handoff-验收门-2026-09-11.md` | 验收门改造的**交接记录**（2026-09-11）；被 `multi-agent-git.md` 与 `.github/scripts/pr-evidence-check.test.mjs` 引用，属在用的判据来源，不是可归档的草稿 |
 
 ### docs/adr/（入库）
