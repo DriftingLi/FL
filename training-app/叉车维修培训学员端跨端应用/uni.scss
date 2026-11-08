@@ -95,6 +95,9 @@ $text-disabled: #cccccc;
 /* 强调文字黑（#2338 裁定的 `$text-strong`：比 $text-color 更深；阅读刻度的 h1–h3 引它，
  * 值来自现状四渲染器 `.md-heading` 的裸 hex #1a1a1a） */
 $text-strong: #1a1a1a;
+/* 链接与可点文字（#2338 裁定：品牌色相的唯一消费点；白卡对比度 5.53、原 #2979ff 只有 3.16–3.98）。
+ * 落地在 #2356：论坛正文的句内链接是它的第一个消费者（此前全仓零命中，token 只停在裁定里）。 */
+$color-link: #1b6f9c;
 
 /* 背景色 */
 $bg-color: #f8f8f8;
@@ -212,6 +215,9 @@ $md-code-radius: 12rpx;
 $md-code-inline-bg: $border-color-light;
 $md-code-inline-radius: $radius-sm;
 $md-divider-line: 1rpx; /* 规格按「不小于 1 物理像素」理解：2 倍屏上 1rpx 恰为 1 像素 */
+/* 楼层正文的左缩进（与署名行对齐）。**不是阅读刻度的一档**，是版式偏移；收在这里只为
+ * 「渲染面不出现裸间距字面量」（#2356 决议 D6）。纯文本回复与 Markdown 回复共用同一个值。 */
+$md-reply-indent: 72rpx;
 /* 表格的字号与内边距（**不属阅读刻度**：表格窄屏怎么读属地图 #2334 的 Out of scope，渲染口径按 ADR-0046 原样保留，
  * 值 = 迁移前 `chapter-markdown.uvue` 的那一套）。收在这里只为「渲染面不出现字号 / 间距裸字面量」（#2353 AC）；
  * 表格的边框宽度、边框色、圆角不属字号/间距，仍留在组件里写字面量。 */

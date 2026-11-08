@@ -1,45 +1,35 @@
 <template>
-    <!-- 论坛正文 / 回复的 Markdown 块渲染（ADR-0025 P2）。
-         块由壳层**解析后下发**（本组件只渲染、不解析）—— 档位是页面侧决策，见 `utils/forumBody.uts`。
-         只持**论坛档声明的那几个成员**（heading / list / quote / code / divider）：table 与 image
-         都不在本档里（表格退回逐行原始文本、正文内嵌 `![alt](url)` 展开成 alt 文本，两者都落在
-         **段落地板**上由解析器处理）⇒ 本组件**不持**这两条分支，与 `featured-detail` 不持表格分支同例。 -->
-    <view class="md-body">
-        <view v-for="(block, idx) in blocks" :key="idx" class="md-block">
-            <!-- 标题（⑩-2：文字按 runs 出嵌套 text，逐 run 自带样式 —— C1） -->
-            <text v-if="block.type == 'heading'"
-                :class="['md-heading', 'md-h' + block.level]"><text v-for="(run, ri) in runsOf(block.text)" :key="ri" :class="runClasses(run, false)" @click="onRunTap(run)">{{ runText(run) }}</text></text>
-            <!-- 段落 -->
-            <text v-else-if="block.type == 'paragraph'" class="md-paragraph"><text v-for="(run, ri) in runsOf(block.text)" :key="ri" :class="runClasses(run, false)" @click="onRunTap(run)">{{ runText(run) }}</text></text>
-            <!-- 代码块（整体等宽，内部不解析） -->
-            <view v-else-if="block.type == 'code'" class="md-code-wrap">
-                <text class="md-code">{{ block.text }}</text>
-            </view>
-            <!-- 列表（⑩-3：`level` 槽带有序性 ⇒ 编号现算，起始值一律从 1 起，⑩-4） -->
-            <view v-else-if="block.type == 'list'" class="md-list">
-                <view v-for="(item, li) in block.items" :key="li" class="md-list-item">
-                    <text class="md-list-bullet">{{ block.level == 1 ? (li + 1) + '.' : '•' }}</text>
-                    <text class="md-list-text"><text v-for="(run, ri) in runsOf(item)" :key="ri" :class="runClasses(run, false)" @click="onRunTap(run)">{{ runText(run) }}</text></text>
-                </view>
-            </view>
-            <!-- 引用（⚠️ 这条分支曾直出 `block.text`：引用块因此漏记号，判据按 runs 看不见 —— 现同样走 runs） -->
-            <view v-else-if="block.type == 'quote'" class="md-quote">
-                <text class="md-quote-text"><text v-for="(run, ri) in runsOf(block.text)" :key="ri" :class="runClasses(run, true)" @click="onRunTap(run)">{{ runText(run) }}</text></text>
-            </view>
-            <!-- 分隔线 -->
-            <view v-else-if="block.type == 'divider'" class="md-divider"></view>
-        </view>
-    </view>
+    <!-- 论坛面的正文壳件（#2356）。块怎么排一律交给四面共用的
+         `components/markdown/markdown-blocks.uvue` —— 本文件只剩三件：
+
+         ① **能力位** `FORUM_CAPS`：论坛档声明 heading / list / quote / code / divider 五个块成员 + 段落地板。
+            论坛**不持** image / table 两条分支（图文分离：正文内嵌图片与 Web 同口径展开成 alt 文本、图片走
+            `images` 数组；表格退回逐行原始文本）—— 这两条由「能力位里没有那一位」表达，不再是
+            「本文件没有那条分支」（ADR-0025 P2 + #2356 决议 D3）。
+         ② **行内轴** `inline-axis="forum"`：论坛档声明了 `inline`，块内 `text` 存的是**行内源串**，
+            必须经格式轴切 runs 再出字（否则 `**粗**` 会原样上屏）。
+         ③ **对外接口** 仍是 `:blocks` —— 三个消费方（帖子正文 / 楼层回复 / 发帖预览）一行不改。
+
+         为什么保留这一层而不是让三处直连公共件：三个消费方共用同一个渲染器，壳件让「本面开哪几条分支、
+         走哪条行内轴」这**两条本面决策**有唯一的家（与 `pages/courses/components/chapter-markdown.uvue`
+         同形），消费方因此不需要各自持有能力位常量。 -->
+    <MarkdownBlocks :blocks="blocks" :caps="FORUM_CAPS" inline-axis="forum" @link-click="onRunLink" />
 </template>
 
 <script setup lang="uts">
     import type { MarkdownBlock } from '../../../types/index'
-    // 只经**格式轴**拿 runs（与「档位决策不收在模板里」同一条接线口径，ADR-0025 P2 新决策 1）：
-    // 本组件不许出现 `parseMarkdown` / `SUBSET_`，也不直引 utils/markdownInline —— 由
-    // markdownContract 的论坛面组钉住。
-    import { forumInlineRuns } from '../../../utils/forumBody'
+    import MarkdownBlocks from '../../../components/markdown/markdown-blocks.uvue'
     import { dispatchExternalLinkTap } from '../../../utils/externalLinkDispatch'
-    import type { MarkdownInlineRun } from '../../../utils/markdownInline'
+
+    /**
+     * 论坛面的能力位：论坛档声明的五个块成员 + **段落地板**。
+     *
+     * - 段落为什么在：它从来不在子集声明表里（它是不可关闭的地板），但公共件的 paragraph 分支靠
+     *   `cap('paragraph')` 开 —— 不传这一位，正文段落会整段消失。
+     * - `inline` 为什么不在：它是**块内文本语义**（决定解析器留不留记号），不是块分支，公共件没有它的
+     *   分支位；行内与否由 `inline-axis` 表达（#2356 决议 D3）。
+     */
+    const FORUM_CAPS : string[] = ['heading', 'paragraph', 'code', 'list', 'quote', 'divider']
 
     const props = withDefaults(defineProps<{
         blocks? : MarkdownBlock[]
@@ -47,211 +37,11 @@
         blocks: () => [] as MarkdownBlock[]
     })
 
-    const runsOf = (src : string) : MarkdownInlineRun[] => forumInlineRuns(src)
-
     /**
-     * C1：App 端**子 `<text>` 不继承父样式** ⇒ 每个 run 必须自带字号字色行高，
-     * 再叠样式位。基线字号/色与所在块一致（正文 30rpx、引用 28rpx 的差异由外层
-     * `.md-quote-text` 的类**带不进**子节点，故子节点各自写死一份 —— 这是 uvue 的规则，不是啰嗦）。
-     *
-     * C2：修饰线只写长形态 `text-decoration-line`（`text-decoration` 简写 App 端不支持）。
-     * C3：行内代码不用 `padding/margin/width/display`（子 text 上不生效），改「底色 + 字符空格」。
-     * C4：等宽只给单一 `monospace`，不写逗号回退列表（App 端不支持分隔符列表）。
+     * 句中链接（⑩-8）：公共件只把 url 交回壳层（#2355 决议 D3 的接线定式），确认弹窗与按端分叉
+     * 住 `utils/externalLinkDispatch.uts` —— 与 `featured-detail` 的 `onRunLink` 同形。
      */
-    // ⚠️ 第二参**不给默认值**：UTS 匿名函数（箭头）编译成 Kotlin 后不允许参数默认值
-    // （`anonymous functions cannot specify default values for their parameters`，④c 实测）
-    // ⇒ 所有调用点显式传第二参（引用块 `true`，其余 `false`）。
-    const runClasses = (run : MarkdownInlineRun, inQuote : boolean) : string[] => {
-        const cls : string[] = ['md-run']
-        if (inQuote) cls.push('md-run-q')           // 排在后面 ⇒ 覆盖基线字号字色（uvue 只认同权重后来者）
-        if (run.bold) cls.push('md-run-b')
-        if (run.italic) cls.push('md-run-i')
-        if (run.strike) cls.push('md-run-s')
-        if (run.code) cls.push('md-run-c')
-        if (run.link.length > 0) cls.push('md-run-l')
-        return cls
-    }
-
-    /**
-     * C3：行内代码胶囊靠 `background-color` + **前后字符空格** —— 子 `<text>` 上 `padding/margin`
-     * 不生效（官方文档明写，见 ADR-0025 C3），只能用字符空格撑出呼吸感。空格**只给 code run**，
-     * 其余 run 原样；纯文本投影（`inlineRunsPlainText` 走 `run.text`）不受这里影响。
-     */
-    const runText = (run : MarkdownInlineRun) : string => run.code ? ' ' + run.text + ' ' : run.text
-
-    /**
-     * ⑩-8：点可点 run（`link` 非空 ⇒ 已过协议闸，只可能 http(s)）。确认弹窗 + 按端分叉的**编排**
-     * 已抽到 `utils/externalLinkDispatch.uts`（#2035：留在本组件就进不了 `loadUts` 行为缝，
-     * 行为与接线双零）⇒ 本层只剩一行委托；弹窗字样 / 确认闸 / 分叉口径的变化一律过那边的套件。
-     *
-     * ⚠️ 嵌套**子 `<text>`** 的点击：App 端要 HBuilderX ≥ 4.51（本机 5.23 满足）；小程序端「子 text
-     * 能否被点」文档未承诺（ADR-0025 §6）⇒ 「点了确实响应」仍**只能真机 ①a 验**，jest/④c 测不出。
-     */
-    const onRunTap = (run : MarkdownInlineRun) : void => {
-        dispatchExternalLinkTap(run.link)
+    function onRunLink(url : string) : void {
+        dispatchExternalLinkTap(url)
     }
 </script>
-
-<style lang="scss">
-    .md-body {
-        flex-direction: column;
-    }
-
-    .md-block {
-        margin-bottom: 24rpx;
-    }
-
-    /* 标题 */
-    .md-heading {
-        font-weight: bold;
-        color: #1a1a1a;
-        margin-top: 16rpx;
-        margin-bottom: 16rpx;
-    }
-
-    .md-h1 {
-        font-size: 40rpx;
-        padding-bottom: 16rpx;
-        border-bottom: 1rpx solid #eeeeee;
-    }
-
-    .md-h2 {
-        font-size: 36rpx;
-        padding-bottom: 12rpx;
-        border-bottom: 1rpx solid #f0f0f0;
-    }
-
-    .md-h3 {
-        font-size: 32rpx;
-    }
-
-    .md-h4 {
-        font-size: 30rpx;
-        color: #333333;
-    }
-
-    .md-h5 {
-        font-size: 28rpx;
-        color: #333333;
-    }
-
-    .md-h6 {
-        font-size: 26rpx;
-        color: #666666;
-    }
-
-    /* 段落 */
-    .md-paragraph {
-        font-size: 30rpx;
-        color: #333333;
-        line-height: 52rpx;
-    }
-
-    /* 代码块 */
-    .md-code-wrap {
-        background-color: #f6f8fa;
-        border-left: 6rpx solid #2979ff;
-        border-radius: 8rpx;
-        padding: 24rpx;
-        margin: 16rpx 0;
-    }
-
-    .md-code {
-        font-size: 26rpx;
-        color: #d63384;
-        line-height: 44rpx;
-        font-family: monospace;
-    }
-
-    /* 列表 */
-    .md-list {
-        flex-direction: column;
-        margin: 12rpx 0;
-    }
-
-    .md-list-item {
-        flex-direction: row;
-        align-items: flex-start;
-        margin-bottom: 12rpx;
-    }
-
-    .md-list-bullet {
-        font-size: 30rpx;
-        color: #2979ff;
-        margin-right: 16rpx;
-        line-height: 52rpx;
-    }
-
-    .md-list-text {
-        flex: 1;
-        font-size: 30rpx;
-        color: #333333;
-        line-height: 52rpx;
-    }
-
-    /* 引用 */
-    .md-quote {
-        background-color: #f0f7ff;
-        border-left: 6rpx solid #2979ff;
-        border-radius: 8rpx;
-        padding: 24rpx;
-        margin: 16rpx 0;
-    }
-
-    .md-quote-text {
-        font-size: 28rpx;
-        color: #555555;
-        line-height: 48rpx;
-    }
-
-    /* 分隔线 */
-    .md-divider {
-        height: 1rpx;
-        background-color: #e0e0e0;
-        margin: 24rpx 0;
-    }
-
-    /* ── 行内 run（⑩-2；C1–C4 的落点）──────────────────────────────
-       每条 run 自带字号 / 字色 / 行高：App 端子 `<text>` **不继承**父组件样式（C1）。
-       基线取正文的 30rpx / #333333；引用块内的 run 由下面的覆盖条改尺寸。 */
-    .md-run {
-        font-size: 30rpx;
-        color: #333333;
-        line-height: 52rpx;
-    }
-
-    .md-run-b {
-        font-weight: bold;
-    }
-
-    .md-run-i {
-        font-style: italic;
-    }
-
-    /* C2：只写长形态 —— `text-decoration` 简写在 app 端不支持（官方 tips 原话），
-       且值域只有 underline / line-through / overline / none。 */
-    .md-run-s {
-        text-decoration-line: line-through;
-    }
-
-    .md-run-l {
-        color: #2979ff;
-        text-decoration-line: underline;
-    }
-
-    /* C3：行内代码**不写 padding / margin / width / display**（子 text 上不生效），
-       胶囊感靠 background-color + 模板里的前后空格；C4：单一 monospace，不写逗号回退。 */
-    .md-run-c {
-        font-family: monospace;
-        background-color: #f0f0f0;
-        color: #d63384;
-    }
-
-    /* 引用块内的 run：父级样式带不下来（也没有后代选择器可依赖），只能**显式传进去**
-       —— 由 runClasses 的第二参决定，不靠 CSS 级联。 */
-    .md-run-q {
-        font-size: 28rpx;
-        color: #555555;
-        line-height: 48rpx;
-    }
-</style>

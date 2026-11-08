@@ -194,7 +194,7 @@
     }
 </script>
 
-<style>
+<style lang="scss">
     /* 回复列表 */
     .replies-section {
         background-color: #ffffff;
@@ -320,12 +320,15 @@
         font-size: 28rpx;
         color: #333333;
         line-height: 1.6;
-        padding-left: 72rpx;
+        padding-left: $md-reply-indent;
     }
 
-    /* Markdown 档回复的块渲染容器：与 .reply-content 同缩进（署名行对齐），块样式由组件自持 */
+    /* Markdown 档回复的块渲染容器：与 .reply-content 同缩进（署名行对齐），块的字号 / 行高 / 间距 / 字色
+       一律由 `components/markdown/markdown-blocks.uvue` 的 `$md-*` 刻度提供（#2356）。
+       ⚠️ 纯文本档（上面那条 `.reply-content`）的字号与行高**本票不动**：纯文本面无块结构，
+       它的刻度归 #2336 划的边界 —— 具名登记见 #2356 正文 D6。 */
     .reply-md-body {
-        padding-left: 72rpx;
+        padding-left: $md-reply-indent;
     }
 
     /* 图片墙（帖子/回复展示） */

@@ -5,7 +5,8 @@
          变量、不写字面量 —— 这样「改一次四面同时生效」才是物理事实。
 
          分支开关是 `caps`（#2337 裁定）：调用方传本面的能力位，未声明的档不渲染（论坛档不持 table / image）。
-         本票只接课程章节一面，章节传全集八位（见 `pages/courses/components/chapter-markdown.uvue` 的 `CHAPTER_CAPS`）。
+         四个面各自的壳件持自己的能力位常量（`CHAPTER_CAPS` / `AI_ANSWER_CAPS` / `FORUM_CAPS`），
+         常量不散进模板字面量 —— `markdownContract` 的守卫钉着「caps ⊆ 本档声明表 ∪ {paragraph}」。
 
          块间距 = **margin-top-only**：间距只由后一块的 `mt-*` 提供，块自身 `margin-bottom` 恒 0（四态 16/24/40 不叠加，
          分隔线上下 32 = 自身 16 + 后继块 16）。uvue 是 flex 布局、相邻 margin 不折叠，这个模型才成立。
@@ -13,23 +14,22 @@
          图片点击的载荷是**单对象** `MarkdownImageClick`（#2354 决议 D4）：`{ url, index }`，`index` 是该图所在
          **块的序号**（不是图集下标）。需要按位置换算预览起点的面（AI 气泡）自己换算，其余面只取 `url`。
 
-         行内 runs 由 `inlineAxis` 决定（#2353 决议 D5 预留、#2355 决议 D1 落地）：三条轴都在本组件内取分词，
-         壳件只声明「本面要不要按行内记号切」——
-           · `none`（缺省）：本章子集不声明 `inline`，解析器已剥掉记号 ⇒ 整段当一个纯文本 run 出（逐字等于直出）；
-           · `plain`：精选那类声明了 `inline` 的档，按 `splitInlineRuns` 切；
-           · `forum`：留给 #2356（论坛面接进本件时用），本轮行为与 `plain` 同。
+         行内文字走哪条轴由 `inlineAxis` 决定（#2353 决议 D5 的接口：`plain` 由 #2355 落、`forum` 由 #2356 落）——
+           · `none`（缺省）⇒ 直出 `block.text`：章节 / AI 两面的子集不声明 `inline`，解析器已把记号剥净，再分词就是第二套规则；
+           · `plain` ⇒ 经 `splitInlineRuns` 切（内容精选面）；
+           · `forum` ⇒ 经 `utils/forumBody.forumInlineRuns`（**格式轴**，不直引分词器实现）切（论坛面）。
+         run 的**字号与字色从所在块的 tier 取**，本文件没有第二份 run 字号表（`.md-run-*` 只带样式位，
+         唯一的字号例外是行内码的 `$md-size-code-inline`）—— 这是「同一段文字换面同貌」在行内轴上的落点。
          **不让壳件把 run 数组当 prop 传**：自定义类型的数组字段会被 UTS 编译期改名（#905 血账）。
-         行内逐 run 的样式同样取 `$md-*`（官方原文「app-uvue 样式不继承」⇒ 每条 run 必须自带字号字色行高）。 -->
+         ⚠️ 子 `<text>` **不继承父样式**（ADR-0025 C1）⇒ runs 轴上每个 run 必须自带字号 / 字色 / 行高；全靠 tier 给，不靠类级联。 -->
     <view class="md-body">
         <view v-for="(block, idx) in blocks" :key="idx" :class="spaceClasses(idx)">
-            <!-- 标题（文字按 runs 出：`none` 轴下只有一条纯文本 run，逐字等于直出） -->
+            <!-- 标题（runs 轴开时逐 run 出字；轴关时走同一元素的直出兜底） -->
             <text v-if="cap('heading') && block.type == 'heading'"
-                :class="headingClasses(idx)"><text v-for="(run, ri) in runsOf(block.text)" :key="ri"
-                    :class="runClasses(run, 2, block.level)" @click="onRunTap(run)">{{ runText(run) }}</text></text>
+                :class="headingClasses(idx)"><text v-for="(run, ri) in runsOf(block.text)" :key="ri" :class="runClasses(idx, run)" @click="onRunTap(run)">{{ runText(run) }}</text><text v-if="!runsOn">{{ block.text }}</text></text>
             <!-- 段落 -->
             <text v-else-if="cap('paragraph') && block.type == 'paragraph'"
-                :class="blockClasses(idx, 'md-paragraph')"><text v-for="(run, ri) in runsOf(block.text)" :key="ri"
-                    :class="runClasses(run, 0, 0)" @click="onRunTap(run)">{{ runText(run) }}</text></text>
+                :class="blockClasses(idx, 'md-paragraph')"><text v-for="(run, ri) in runsOf(block.text)" :key="ri" :class="runClasses(idx, run)" @click="onRunTap(run)">{{ runText(run) }}</text><text v-if="!runsOn">{{ block.text }}</text></text>
             <!-- 代码块（spec「不折行、可横向滑动」：横滑靠 flex-direction: row + 子项 flex-shrink: 0 撑出溢出，
                  不写 white-space —— 它只在 text/button 上生效且写进 <style> 必须登记 LEGAL_CARRIER_SITES） -->
             <view v-else-if="cap('code') && block.type == 'code'" class="md-code-wrap">
@@ -45,14 +45,12 @@
                 <view v-for="(item, li) in block.items" :key="li"
                     :class="{ 'md-list-item': true, 'md-list-item-gap': li > 0 }">
                     <text class="md-list-bullet">{{ block.level == 1 ? (li + 1) + '.' : '•' }}</text>
-                    <text :class="blockClasses(idx, 'md-list-text')"><text v-for="(run, ri) in runsOf(item)" :key="ri"
-                        :class="runClasses(run, 0, 0)" @click="onRunTap(run)">{{ runText(run) }}</text></text>
+                    <text :class="blockClasses(idx, 'md-list-text')"><text v-for="(run, ri) in runsOf(item)" :key="ri" :class="runClasses(idx, run)" @click="onRunTap(run)">{{ runText(run) }}</text><text v-if="!runsOn">{{ item }}</text></text>
                 </view>
             </view>
             <!-- 引用（不铺底色，只靠左侧竖线标识） -->
             <view v-else-if="cap('quote') && block.type == 'quote'" class="md-quote">
-                <text :class="blockClasses(idx, 'md-quote-text')"><text v-for="(run, ri) in runsOf(block.text)" :key="ri"
-                    :class="runClasses(run, 1, 0)" @click="onRunTap(run)">{{ runText(run) }}</text></text>
+                <text :class="blockClasses(idx, 'md-quote-text')"><text v-for="(run, ri) in runsOf(block.text)" :key="ri" :class="runClasses(idx, run)" @click="onRunTap(run)">{{ runText(run) }}</text><text v-if="!runsOn">{{ block.text }}</text></text>
             </view>
             <!-- 分隔线 -->
             <view v-else-if="cap('divider') && block.type == 'divider'" class="md-divider"></view>
@@ -77,14 +75,15 @@
     import type { MarkdownTier } from '../../utils/markdownTypography'
     import { splitInlineRuns } from '../../utils/markdownInline'
     import type { MarkdownInlineRun } from '../../utils/markdownInline'
+    // 论坛面只经**格式轴**取 runs（与「档位决策收在格式轴」同一条接线口径，见 `utils/forumBody.uts` 文件头；
+    // `markdownContract` 的论坛面组钉这条）。`utils/markdownInline` 那行是**类型**导入（零运行期依赖）。
+    import { forumInlineRuns } from '../../utils/forumBody'
 
-    /** 行内轴：本面按不按行内记号切（#2353 决议 D5 定的 prop 名、#2355 决议 D1 落地）。
-     *  取字符串而不是 run 数组 —— 自定义类型的数组字段会被 UTS 编译期改名（#905 血账）。
+    /** 行内轴三条（#2353 决议 D5 定的 prop 名）。取字符串而不是 run 数组 —— 自定义类型的数组字段会被
+     *  UTS 编译期改名（#905 血账）。
      *
-     *  ⚠️ 这三个常量**不能**出现在下面的 `withDefaults` 里：`defineProps()` 会被提升到
-     *  `setup()` 之外，引用 setup 内声明的变量是编译期错误（`hx:compile-only` 实测原话
-     *  「`defineProps()` in <script setup> cannot reference locally declared variables」，
-     *  指向正是缺省值那一行）。故缺省值写**字面量** `'none'`，常量只服务组件体内的比较。 */
+     *  ⚠️ 这三个常量**不能**出现在下面的 `withDefaults` 里：`defineProps()` 会被提升到 `setup()` 之外，
+     *  引用 setup 内声明的变量是编译期错误（`hx:compile-only` 实测原话）。故缺省值写**字面量** `none`。 */
     const AXIS_NONE : string = 'none'
     const AXIS_PLAIN : string = 'plain'
     const AXIS_FORUM : string = 'forum'
@@ -93,8 +92,9 @@
         blocks? : MarkdownBlock[]
         /** 本面能力位：只有列出的档会渲染（#2337 的分支开关）。**必填**：不传等于整面空渲染，故意不给缺省值 */
         caps : string[]
-        /** 行内轴：`none`（缺省，不切）/ `plain`（按 `splitInlineRuns` 切）/ `forum`（留给 #2356）。
-         *  与 `caps` 不同，它**有**缺省值：不写这条的壳件（章节面）行为必须逐字不变。 */
+        /** 块内文字走哪条轴（#2353 决议 D5 的接口）：`none` = 直出 `block.text`；`plain` = `splitInlineRuns`；
+         *  `forum` = 经格式轴切。**缺省给 `none`，与 `caps` 必填故意不对称**：`caps` 不传是事故（整面空渲染），
+         *  而本参数不传恰是章节面 / AI 面的真实缺省（这两面子集不声明 `inline`，解析器已把记号剥净）。 */
         inlineAxis? : string
     }>(), {
         blocks: () => [] as MarkdownBlock[],
@@ -141,49 +141,46 @@
         return cls
     }
 
-    /** 标题另分两档颜色：h1–h3 更深（越大越深，层级单调），h4–h6 与正文同色（靠字号更小 + 700 区隔） */
-    const headingClasses = (idx : number) : string[] => {
-        const cls : string[] = ['md-heading']
-        const tier : string = idx < tiers.value.length ? tiers.value[idx].size : 'h4'
-        cls.push(sizeClassOf(tier))
-        cls.push(tier == 'h4' ? 'md-heading-lo' : 'md-heading-hi')
-        return cls
-    }
+    /** 行内轴是否开启。`none` ⇒ 模板走直出兜底；`plain` / `forum` ⇒ 逐 run 出字 */
+    const runsOn = computed((): boolean => props.inlineAxis != 'none')
 
     /**
-     * 行内 run（#2355 决议 D1/D2）：轴决定「切不切」。
+     * 一段块内源串 → run 序列。轴关时返回**空数组**（模板里 `v-if="!runsOn"` 的直出接住它）。
      *
-     * `none` 轴下**不调分词器**、直接造一条纯文本 run —— 章节子集不声明 `inline`，解析器已剥掉记号，
-     * 整段直出才是对的；这样做还让三条轴的渲染路径**同形**（模板只有一条写法），
-     * 「一套刻度」不会因为某个面「没 runs」而在模板里分叉。
-     *
-     * 轴判定走本地薄包装、模板里不直调 import（规则 S：模板直调外部 import 会编成 `.invoke()`）。
+     * 为什么轴关时不分词：`none` 轴的面（章节 / AI）子集不声明 `inline`，解析器已把记号剥成纯文本，
+     * 再跑一遍分词器就是用第二套规则重新解释已归一的内容 —— 那是能力面变化，不是本组件该做的事。
      */
     const runsOf = (src : string) : MarkdownInlineRun[] => {
-        const axis : string = props.inlineAxis
-        if (axis == AXIS_PLAIN || axis == AXIS_FORUM) return splitInlineRuns(src)
-        const plain : MarkdownInlineRun[] = []
-        plain.push({ text: src, bold: false, italic: false, strike: false, code: false, link: '' } as MarkdownInlineRun)
-        return plain
+        if (!runsOn.value) return [] as MarkdownInlineRun[]
+        if (props.inlineAxis == AXIS_FORUM) return forumInlineRuns(src)
+        return splitInlineRuns(src)
     }
 
     /**
-     * run 的类名（#2355 决议 D2）。**每条 run 自带字号 / 字色 / 行高**：官方原文（样式不继承，
-     * <https://doc.dcloud.net.cn/uni-app-x/css/index.html#stylenoextends>）——
-     * 「在 app-uvue 中，样式不继承……如需修改样式，需写在 text 组件中」，故不能靠父 `<text>` 级联。
+     * run 的字色位：标题两档沿用既有色类（它们本身只带颜色），引用走次级色，其余正文色。
      *
-     * 第二参 = 块上下文（0 正文 / 1 引用 / 2 标题），第三参 = 标题级数。
-     * ⚠️ 顺序即优先级：基线 → 块覆盖 → 样式位（uvue 只认同权重后来者）。
+     * 为什么必须显式给：App 端子 `<text>` **不继承父样式**（ADR-0025 C1）—— 外层 `.md-paragraph`
+     * 的 `color` 带不到 run 上，不给就是浏览器默认黑。
      */
-    const runClasses = (run : MarkdownInlineRun, kind : number, level : number) : string[] => {
-        const cls : string[] = ['md-run']
-        if (kind == 1) cls.push('md-run-q')
-        else if (kind == 2) {
-            if (level <= 1) cls.push('md-run-h1')
-            else if (level == 2) cls.push('md-run-h2')
-            else if (level == 3) cls.push('md-run-h3')
-            else cls.push('md-run-h4')
-        }
+    const runColorClassOf = (tier : string) : string => {
+        if (tier == 'h1' || tier == 'h2' || tier == 'h3') return 'md-heading-hi'
+        if (tier == 'h4') return 'md-heading-lo'
+        if (tier == 'quote') return 'md-run-muted'
+        return 'md-run-text'
+    }
+
+    /**
+     * run 的类：**字号档与字色位都从所在块的 tier 取**，再叠样式位。
+     *
+     * 这里取代了论坛面旧渲染器的那份第二字号表（`.md-run { font-size: 30rpx }` +
+     * `.md-run-q { font-size: 28rpx }`）—— 那份表让论坛的 h1–h6 **全部渲染成 30rpx**
+     * （子 text 不继承父样式，run 的 30rpx 压过 `.md-h2` 的 34rpx），标题层级因此形同虚设。
+     */
+    const runClasses = (idx : number, run : MarkdownInlineRun) : string[] => {
+        const cls : string[] = []
+        const tier : string = idx < tiers.value.length ? tiers.value[idx].size : 'body'
+        cls.push(sizeClassOf(tier))
+        cls.push(runColorClassOf(tier))
         if (run.bold) cls.push('md-run-b')
         if (run.italic) cls.push('md-run-i')
         if (run.strike) cls.push('md-run-s')
@@ -192,17 +189,25 @@
         return cls
     }
 
-    /** 行内代码的胶囊感靠**前后字符空格**（子 `<text>` 上 padding / margin 不生效，ADR-0025 C3）；
-     *  空格只给 code run，其余 run 原样。 */
+    /** C3：行内代码的胶囊感靠底色 + **前后字符空格**（子 `<text>` 上 padding / margin 不生效） */
     const runText = (run : MarkdownInlineRun) : string => run.code ? ' ' + run.text + ' ' : run.text
 
     /**
-     * 句中链接点击（#2355 决议 D3）：本组件**不持有**「离开 app」的编排（协议闸已在分词器、
-     * 确认弹窗与按端分叉在 `utils/externalLinkDispatch`），只把 url 交回壳层。
-     * camelCase emit ↔ kebab-case 监听在本仓已在跑（`imageClick` ↔ `@image-click`）。
+     * 点可点 run（`link` 非空 ⇒ 已过协议闸，只可能 http(s)）。本组件**不持有**「离开 app」的编排：
+     * rebase 到 #2355 之后，这条接线按 master 的定式回落到壳层（#2355 决议 D3），论坛壳件补
+     * `@link-click` 转发到 `utils/externalLinkDispatch`。
      */
     const onRunTap = (run : MarkdownInlineRun) : void => {
         if (run.link.length > 0) emit('linkClick', run.link)
+    }
+
+    /** 标题另分两档颜色：h1–h3 更深（越大越深，层级单调），h4–h6 与正文同色（靠字号更小 + 700 区隔） */
+    const headingClasses = (idx : number) : string[] => {
+        const cls : string[] = ['md-heading']
+        const tier : string = idx < tiers.value.length ? tiers.value[idx].size : 'h4'
+        cls.push(sizeClassOf(tier))
+        cls.push(tier == 'h4' ? 'md-heading-lo' : 'md-heading-hi')
+        return cls
     }
 
     /**
@@ -288,6 +293,46 @@
         line-height: $md-line-list-text;
     }
 
+    /* ── 行内 run（runs 轴；C1–C4 的落点，ADR-0025）─────────────────────────
+       这些类**只带样式位与字色**：字号 / 行高由所在块的 `md-sz-*` 档位给（与块同一份 tier），
+       所以这里没有第二份 run 字号表。唯一的字号例外是行内码 —— 它按刻度是 26rpx（`$md-size-code-inline`），
+       与正文 30rpx 不同档，那是**刻度本身的规定**，不是本文件另起的规矩。 */
+    .md-run-text {
+        color: $md-color-text;
+    }
+
+    .md-run-muted {
+        color: $md-color-muted;
+    }
+
+    .md-run-b {
+        font-weight: $md-weight-heading;
+    }
+
+    .md-run-i {
+        font-style: italic;
+    }
+
+    /* C2：只写长形态 —— `text-decoration` 简写在 app 端不支持，值域只有 underline / line-through / overline / none */
+    .md-run-s {
+        text-decoration-line: line-through;
+    }
+
+    /* C3：行内码**不写 padding / margin / width / display**（子 text 上不生效），胶囊感靠底色 + 模板里的前后空格。
+       C4：等宽只给单一 monospace，不写逗号回退列表。 */
+    .md-run-c {
+        font-size: $md-size-code-inline;
+        font-family: $md-font-code;
+        background-color: $md-code-inline-bg;
+        border-radius: $md-code-inline-radius;
+    }
+
+    /* 链接：色取刻度（#2338 裁定 `$color-link`，白卡对比度 5.53），下划线保留「可点」提示 */
+    .md-run-l {
+        color: $md-color-link;
+        text-decoration-line: underline;
+    }
+
     /* 标题与段落 */
     .md-heading {
         font-weight: $md-weight-heading;
@@ -353,78 +398,6 @@
     .md-list-text {
         flex: 1;
         color: $md-color-text;
-    }
-
-    /* ── 行内 run（#2355 决议 D2；ADR-0025 C1–C4 的落点）────────────────────────────────
-       每条 run **自带**字号 / 字色 / 行高：app-uvue 样式不继承（官方原文见脚本注释），
-       父 `<text>` 的类带不进子节点。值一律取 `$md-*`，本文件不写字面量。
-       基线取正文档（30 / 48 / $md-color-text），引用与标题由下面的覆盖条改档。 */
-    .md-run {
-        font-size: $md-size-body;
-        color: $md-color-text;
-        line-height: $md-line-body;
-    }
-
-    .md-run-b {
-        font-weight: $md-weight-heading;
-    }
-
-    .md-run-i {
-        font-style: italic;
-    }
-
-    /* C2：只写长形态 —— `text-decoration` 简写在 app 端不支持 */
-    .md-run-s {
-        text-decoration-line: line-through;
-    }
-
-    .md-run-l {
-        color: $md-color-link;
-        text-decoration-line: underline;
-    }
-
-    /* C3：行内码不写 padding / margin（子 `<text>` 上不生效）；C4：等宽只给单一 monospace */
-    .md-run-c {
-        font-family: $md-font-code;
-        font-size: $md-size-code-inline;
-        background-color: $md-code-inline-bg;
-        color: $md-color-text;
-    }
-
-    /* 引用块内的 run：父级样式带不下来，由 runClasses 的第二参显式传入（不靠 CSS 级联） */
-    .md-run-q {
-        font-size: $md-size-quote;
-        color: $md-color-muted;
-        line-height: $md-line-quote;
-    }
-
-    /* 标题内的 run：字号与 `.md-sz-h*` 同表（否则子 run 缩成正文尺寸）；颜色随标题两档 */
-    .md-run-h1 {
-        font-size: $md-size-h1;
-        line-height: $md-line-h1;
-        color: $md-color-heading;
-        font-weight: $md-weight-heading;
-    }
-
-    .md-run-h2 {
-        font-size: $md-size-h2;
-        line-height: $md-line-h2;
-        color: $md-color-heading;
-        font-weight: $md-weight-heading;
-    }
-
-    .md-run-h3 {
-        font-size: $md-size-h3;
-        line-height: $md-line-h3;
-        color: $md-color-heading;
-        font-weight: $md-weight-heading;
-    }
-
-    .md-run-h4 {
-        font-size: $md-size-h4;
-        line-height: $md-line-h4;
-        color: $md-color-text;
-        font-weight: $md-weight-heading;
     }
 
     /* 引用：只靠左侧竖线标识，不铺底色 */

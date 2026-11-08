@@ -86,6 +86,7 @@
 | `$text-color-placeholder` | `#999999` | 辅助文字（日期、placeholder） |
 | `$text-disabled` | `#cccccc` | 禁用 / 弱化文字 |
 | `$text-strong` | `#1a1a1a` | 强调文字黑（标题 / 选中态文字；阅读刻度的 h1–h3 引它，#2338 裁定） |
+| `$color-link` | `#1b6f9c` | 链接与可点文字（品牌色相的唯一消费点；白卡对比度 5.53，原 `#2979ff` 只有 3.16–3.98，#2338 裁定、#2356 落地） |
 | `$text-color-inverse` | `#ffffff` | 反色文字（深色背景上） |
 
 ### 1.5 表面与边框
@@ -189,6 +190,7 @@
 | `$md-code-inline-bg` | `$border-color-light` | 行内码底（#f0f0f0） |
 | `$md-code-inline-radius` | `$radius-sm` | 行内码圆角（8rpx） |
 | `$md-divider-line` | `1rpx` | 分隔线宽（规格按「不小于 1 物理像素」：2 倍屏上 1rpx 恰为 1 像素） |
+| `$md-reply-indent` | `72rpx` | 楼层正文左缩进（与署名行对齐；**不是**阅读刻度的一档，是版式偏移，#2356） |
 | `$md-table-size` | `26rpx` | 表格单元格字号（**不属阅读刻度**，值为迁移前原样；表格窄屏怎么读属地图 #2334 的 Out of scope） |
 | `$md-table-line` | `40rpx` | 表格单元格行高（同上） |
 | `$md-table-padding-y` | `16rpx` | 表格单元格上下内边距（同上） |

@@ -625,9 +625,9 @@ describe('页面级契约：章节面渲染表格、内容精选面走交集', (
     // （hx:compile-only 实测原话见组件注释），这一条把它钉成不可回退的形状
     expect(src).toContain("inlineAxis: 'none'");
     expect(src).not.toContain('inlineAxis: AXIS_NONE');
-    // plain / forum 两轴都调分词器；none 轴**不调**（构造一条纯文本 run）
+    // 轴分派：forum 走格式轴（`forumBody.forumInlineRuns`）、plain 走分词器、none 直出
+    expect(src).toContain('if (props.inlineAxis == AXIS_FORUM) return forumInlineRuns(src)');
     expect(src).toContain('return splitInlineRuns(src)');
-    expect(src).toContain('if (axis == AXIS_PLAIN || axis == AXIS_FORUM)');
     // 链接只 emit、不自己弹窗（编排留在壳层一处）
     expect(src).toContain("defineEmits(['imageClick', 'linkClick'])");
     expect(src).toContain("emit('linkClick', run.link)");
@@ -682,44 +682,64 @@ describe('页面级契约：章节面渲染表格、内容精选面走交集', (
     expect(replyList).toContain('v-if="!isMarkdownReply(item)"');
   });
 
-  it('论坛面：块渲染组件只持论坛档声明的成员，不含 table / image 两条分支', () => {
-    const forumMd = read('pages/forum/components/forum-markdown-blocks.uvue');
-    for (const t of ["'heading'", "'paragraph'", "'code'", "'list'", "'quote'", "'divider'"]) {
-      expect(forumMd).toContain('block.type == ' + t);
+  it('论坛面：只开论坛档声明的成员，table / image 两位不在能力位里（#2356 等价改写）', () => {
+    /*
+     * 迁移前的判据是「这个文件里没有那两条分支」；#2356 起论坛面不再自带分支（块怎么排交给四面共用的
+     * markdown-blocks），于是同一条语义换载体：**能力位里没有那一位 ⇒ 那条分支在本面永远不可达**。
+     * 这不是弱化 —— 分支代码仍在公共件里（章节面要它），而「论坛面不许用它」这条只有能力位能表达。
+     */
+    const forumShell = read('pages/forum/components/forum-markdown-blocks.uvue');
+    const caps = forumShell.match(/const FORUM_CAPS : string\[\] = \[([\s\S]*?)\]/);
+    expect(caps).not.toBe(null);
+    const declared = (caps[1].match(/'[a-z]+'/g) || []).map((x) => x.replace(/'/g, ''));
+    for (const t of ['heading', 'paragraph', 'code', 'list', 'quote', 'divider']) {
+      expect([t, declared.indexOf(t) >= 0]).toEqual([t, true]);
     }
     // 论坛档不声明 table（退回逐行原始文本）、不声明 image（图文分离，图片走 images 数组）
-    expect(forumMd).not.toContain("block.type == 'table'");
-    expect(forumMd).not.toContain("block.type == 'image'");
-    expect(forumMd).not.toContain('md-table');
+    expect(declared).not.toContain('table');
+    expect(declared).not.toContain('image');
+    // 壳件自己不持任何块分支（它只传能力位与行内轴）
+    expect(forumShell).not.toContain('block.type ==');
+    expect(forumShell).not.toContain('md-table');
+    // 行内轴必须真的接上：漏传 inline-axis ⇒ 论坛面声明了 inline 却按直出渲染，
+    // `**粗**` 会原样上屏（这正是 ADR-0025 ⑩-2 当初要消灭的形态），而且只有真机看得见。
+    expect(forumShell).toContain('inline-axis="forum"');
   });
 
-  it('⑥-1 的渲染面近似：文字一律经 runs 出，**只有代码块**允许直出 `block.text`', () => {
+  it('⑥-1 的渲染面近似：runs 轴上文字一律经 runs 出，直出只留受守卫的兜底与代码块', () => {
     /*
      * 为什么需要这一条：#1472 的判据对象是「真正画出来的产物」，而 `.uvue` 模板进不了
      * `loadUts` 的行为缝（接线守护不构成 ③ 门证据，`docs/agents/guards.md`）。原型实测正是
      * **引用块分支直出了 `block.text`** ⇒ 记号漏到渲染面，而「按 runs 判」的机检看不见它。
-     * 这里用**计数**近似那条渲染判据：直出点必须恰好一处（代码块，它本就不该解析）。
      * 真判据仍在 ①a：未压缩 `uiautomator dump` 读渲染后的文本节点，断言不含成对记号。
+     *
+     * #2356 起这条判据的承载件从论坛渲染器换成**四面共用的块渲染件**，且组件有了两条轴：
+     * 「全文件恰好一处直出」不再可能（`none` 轴的面本来就要直出）。判据因此从**计数**升级成
+     * **逐行判归属**：每个文字直出口要么带 `v-if="!runsOn"` 兜底（轴关才走），要么是代码块那一处
+     * （它本就不该解析）。比原来的「恰好一处」更贴身 —— 原来数不到「兜底口长在哪个分支里」。
      */
-    const forumMd = read('pages/forum/components/forum-markdown-blocks.uvue');
-    const rawOuts = (forumMd.match(/\{\{\s*block\.text\s*\}\}/g) || []);
-    expect(rawOuts.length).toBe(1);
-    // 且那唯一一处必须在 code 分支里（紧邻 `md-code` 类）
-    expect(forumMd.indexOf('md-code') < forumMd.indexOf('{{ block.text }}')
-      && forumMd.indexOf('{{ block.text }}') < forumMd.indexOf('md-list')).toBe(true);
-    // runs 的入口必须在（否则上面那条「一处直出」是假的：分支根本没渲染文字）
-    expect(forumMd).toContain('runsOf(');
-    expect(forumMd).toContain('runClasses(');
-    // 精选详情页（#2124 起正文同样走 runs；#2355 起改由**公共件**承载）
-    // —— ADR-0007 的改指：这条判据的**语义**是「精选面画出来的文字同样只经 runs」，
-    //    承载件从页面换成公共件后，判据跟到新承载件，并**加强**一组页面侧接线锁：
-    //    页面必须整份交给公共件、且自己一条块分支都不再持有（持有 = 「一套刻度」在精选面不成立）。
     const blocksMd = read('components/markdown/markdown-blocks.uvue');
-    const blocksRaw = (blocksMd.match(/\{\{\s*block\.text\s*\}\}/g) || []);
-    expect(blocksRaw.length).toBe(1);
-    expect(blocksMd).toContain('md-code');
+    // ⚠️ 只在 <template> 段上计数：脚本注释里提到 v-if="!runsOn" 不算「接了一个兜底口」
+    const tpl = blocksMd.slice(0, blocksMd.indexOf('</template>'));
+    expect(tpl.length).toBeGreaterThan(500);   // 防空集合假绿：切歪了会得到空串
+    // 轴开的四处（标题 / 段落 / 列表项 / 引用）各有一句直出兜底
+    expect((tpl.match(/v-if="!runsOn"/g) || []).length).toBe(4);
+    // 直出口的**总数**也钉住：少了说明某个分支根本没渲染文字，多了说明有人偷偷加了一个旁路
+    expect((tpl.match(/\{\{\s*block\.text\s*\}\}/g) || []).length).toBe(4);
+    expect((tpl.match(/\{\{\s*item\s*\}\}/g) || []).length).toBe(1);
+    for (const line of tpl.split('\n')) {
+      if (!/\{\{\s*(block\.text|item)\s*\}\}/.test(line)) continue;
+      const guarded = line.indexOf('v-if="!runsOn"') >= 0;
+      const isCode = line.indexOf("'md-code'") >= 0;
+      expect([line.trim().slice(0, 48), guarded || isCode]).toEqual([line.trim().slice(0, 48), true]);
+    }
+    // runs 的入口必须在（否则上面那几条「直出受守卫」是假的：轴根本没接上）
     expect(blocksMd).toContain('runsOf(');
     expect(blocksMd).toContain('runClasses(');
+    expect(blocksMd).toContain('runText(');
+    expect(blocksMd).toContain('onRunTap(');
+    // 精选详情页（#2124 起正文同样走 runs）：直出点同样恰好一处，且必须是代码块那一处
+    // （图片分支的 `:src="block.text"` 是属性、不是文字直出，故不进计数）
     const featuredMd = read('pages/featured/featured-detail.uvue');
     expect(featuredMd).toContain('MarkdownBlocks');
     expect(featuredMd).toContain(':caps="FEATURED_CAPS"');
@@ -849,9 +869,12 @@ describe('ADR-0046 / API.md 的移动端登记（本票的口径落点）', () =
     expect(bubble).toContain('MarkdownBlocks');
     expect(bubble).toContain('@image-click="onPreviewAssistantImageAt"');
     expect(bubble).toContain('payload.index');
-    // 本票只动 AI 回答面：论坛正文仍图文分离（块数组与渲染分支都不许长出 image）
-    const forumMd = read('pages/forum/components/forum-markdown-blocks.uvue');
-    expect(forumMd).not.toContain("block.type == 'image'");
+    // 论坛正文仍图文分离。#2356 起论坛面不自带分支（块怎么排交给公共件）⇒ 这条改指**能力位**：
+    // 「论坛面不许长出 image」现在由「FORUM_CAPS 里没有 image」表达（同 ⑥-1 上方那条口径）。
+    const forumShell = read('pages/forum/components/forum-markdown-blocks.uvue');
+    const forumCaps = forumShell.match(/const FORUM_CAPS : string\[\] = \[([\s\S]*?)\]/);
+    expect(forumCaps).not.toBe(null);
+    expect(forumCaps[1]).not.toContain("'image'");
   });
 
   it('AI 气泡接的是同一套刻度（#2354 决议 D1/D2/D5）：换件、caps 七位、不再自排块', () => {
@@ -908,6 +931,84 @@ describe('ADR-0046 / API.md 的移动端登记（本票的口径落点）', () =
     expect(declared).not.toContain('table');
     // 七位：六个声明档 + paragraph
     expect(declared.length).toBe(members.length + 1);
+  });
+
+  /**
+   * #2356 的守卫：论坛面的**能力位**与**行内轴**各自与真源对齐。
+   *
+   * 为什么必须有机检：这两处天然是**两份事实** —— 声明表在 `utils/markdown.uts`（决定解析器产什么块、
+   * 块内文字留不留记号），能力位在论坛壳件（决定渲染器画什么块），行内轴在公共件与壳件的交界（决定
+   * 文字怎么出）。少一位 = 那一档静默消失；多一位 = 渲染一条永远不可达的分支、并掩盖「档位被换错」；
+   * 轴漏传 = 记号原样上屏。三者之间没有别的机检。
+   */
+  it('论坛面 caps 与解析器声明表同源（差集只许是段落地板 paragraph）', () => {
+    const CAPS = read('pages/forum/components/forum-markdown-blocks.uvue')
+      .match(/const FORUM_CAPS : string\[\] = \[([\s\S]*?)\]/);
+    expect(CAPS).not.toBe(null);
+    const declared = (CAPS[1].match(/'[a-z]+'/g) || []).map((x) => x.replace(/'/g, ''));
+    // 声明表：以 .uts 源里的字面量为准（.uts 不能在 jest 里 import，本文件全程如此）。
+    // ⚠️ 用正则取数组体、不要拿 indexOf(']') 切：类型标注 string[] 自带一个 ]，按它切会得到空串，
+    // 而「空串 → 成员列表为空 → 循环体一条都不跑」正是最典型的假绿（#2354 实测踩过）。
+    const mdSrc = read('utils/markdown.uts');
+    const table = mdSrc.match(/export const SUBSET_MEMBERS_FORUM : string\[\] = \[([\s\S]*?)\]/);
+    expect(table).not.toBe(null);
+    const members = (table[1].match(/MEMBER_[A-Z_]+/g) || [])
+      .map((c) => c.replace('MEMBER_', '').toLowerCase())
+      .filter((m) => m !== 'inline');   // inline 不是块分支：它改块内文字语义，由 inline-axis 表达
+    expect(members.length).toBeGreaterThan(0);
+    for (const c of declared) {
+      expect([c, c === 'paragraph' || members.indexOf(c) >= 0]).toEqual([c, true]);
+    }
+    for (const m of members) {
+      expect([m, declared.indexOf(m) >= 0]).toEqual([m, true]);
+    }
+    expect(declared).toContain('paragraph');
+    expect(declared.length).toBe(members.length + 1);   // 五个块成员 + paragraph
+  });
+
+  it('行内 run 不建第二份字号表：字号只来自档位，唯一的覆写是行内码那条刻度', () => {
+    // 这条守的是本票的核心主张。反例就在迁移前的论坛渲染器里：`.md-run { font-size: 30rpx }`
+    // 让 h1–h6 全部渲染成 30rpx（子 text 不继承父样式）⇒ 论坛的标题层级形同虚设。
+    const blocksMd = read('components/markdown/markdown-blocks.uvue');
+    // ⚠️ 只在 <style> 段上判：脚本注释里引用旧表（`.md-run { font-size: 30rpx }`）不是违规，是来路说明。
+    // 取 lastIndexOf：脚本里有一句注释提到 `<style>`（讲 white-space 的登记纪律），indexOf 会从那里切开。
+    const stylePart = blocksMd.slice(blocksMd.lastIndexOf('<style'));
+    expect(stylePart.length).toBeGreaterThan(200);   // 防空集合假绿
+    // 基类若被建回来（`.md-run { ... }`），旧表就回来了
+    expect(/\.md-run\s*\{/.test(stylePart)).toBe(false);
+    const bodies = [...stylePart.matchAll(/\.md-run-[a-z]+\s*\{([^}]*)\}/g)].map((m) => m[1]);
+    expect(bodies.length).toBeGreaterThan(3);   // 防空集合假绿：样式位至少 b/i/s/c/l 五种
+    const sizes = [];
+    for (const body of bodies) {
+      expect([body.trim().slice(0, 32), /\bline-height\s*:/.test(body)]).toEqual([body.trim().slice(0, 32), false]);
+      const m = body.match(/\bfont-size\s*:\s*([^;]+);/);
+      if (m) sizes.push(m[1].trim());
+    }
+    // 唯一允许的字号声明：行内码（刻度规定它是 26rpx，与正文 30rpx 不同档）
+    expect(sizes).toEqual(['$md-size-code-inline']);
+  });
+
+  it('论坛轴只走格式轴：`forum` 分派到 forumInlineRuns，分词器的运行期引用只服务 `plain`', () => {
+    // #2353 决议 D5 的接线口径：#2356 落 `forum` 轴时**只能**经 `utils/forumBody.forumInlineRuns`。
+    // 直接拿 `utils/markdownInline` 的分词器处理论坛源串会让论坛面绕过格式轴，那是第二处档位决策。
+    // （`plain` 轴自 #2355 起就用 `splitInlineRuns` —— 那是精选面的轴，与论坛的格式轴是两条。）
+    const blocksMd = read('components/markdown/markdown-blocks.uvue');
+    expect(blocksMd).toContain("from '../../utils/forumBody'");
+    const runsOf = (blocksMd.match(/const runsOf = [\s\S]*?\n    \}/) || [''])[0];
+    expect(runsOf.length).toBeGreaterThan(50);   // 防空集合假绿
+    expect(runsOf).toContain('forumInlineRuns(src)');
+    expect(runsOf).toContain('splitInlineRuns(src)');
+    // 论坛那一支必须先于 plain 分派（顺序反了就等于论坛也走分词器）
+    expect(runsOf.indexOf('forumInlineRuns(src)') < runsOf.indexOf('splitInlineRuns(src)')).toBe(true);
+    // `utils/markdownInline` 的语句导入只允许两种：类型导入、或 plain 轴的 `splitInlineRuns`
+    const lines = blocksMd.split('\n')
+      .filter((l) => /^\s*import\b/.test(l))
+      .filter((l) => l.indexOf('utils/markdownInline') >= 0);
+    expect(lines.length).toBeGreaterThan(0);   // 导入必须在（否则这条判据是空跑）
+    for (const line of lines) {
+      const ok = /^\s*import\s+type\s/.test(line) || /import\s+\{\s*splitInlineRuns\s*\}/.test(line);
+      expect([line.trim().slice(0, 60), ok]).toEqual([line.trim().slice(0, 60), true]);
+    }
   });
 
   it('公共件根节点不带宽度 / 内边距（#2354 AC 第 2 条：气泡正文内宽不被换件改变）', () => {
