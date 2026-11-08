@@ -14,9 +14,9 @@
             </view>
             <view v-else-if="detail != null" class="article-wrap">
                 <!-- 标题 -->
-                <text class="article-title">{{ detail!.title }}</text>
+                <text class="page-heading">{{ detail!.title }}</text>
                 <!-- 元信息 -->
-                <view class="article-meta">
+                <view class="page-meta">
                     <text v-if="detail!.category_label.length > 0" class="meta-category">{{ detail!.category_label }}</text>
                     <text v-if="detail!.source.length > 0" class="meta-text">{{ detail!.source }}</text>
                     <text v-if="detail!.published_at.length > 0" class="meta-text">{{ displayTime(detail!.published_at) }}</text>
@@ -241,18 +241,28 @@
         padding: 32rpx;
     }
 
-    .article-title {
-        font-size: 38rpx;
-        font-weight: bold;
-        color: #333333;
+    /* 页面标题区（#2357 决议 D1/D2）：详情页专用类名，与列表卡片的 .article-title 不再同名 ——
+       列表卡片（featured-list.uvue）一个字不动，居中规则因此不靠「同名类靠隔离策略兜住」这一层。
+       四个值一律引阅读刻度 $md-* 的 h1 档：页面标题区就是正文 h1 档，两者只差对齐（这里居中、
+       正文标题恒左对齐）。lines: 3 / text-overflow 保留（D4）：详情页长标题截断有「别把正文
+       推下一屏」的作用，且不在这五项统一范围内。
+       居中只能落 <text> 的 text-align：写 <view> 上会被渲染层忽略并逐次打 error（uvue-css.md）。 */
+    .page-heading {
+        font-size: $md-size-h1;
+        line-height: $md-line-h1;
+        font-weight: $md-weight-heading;
+        color: $md-color-text;
+        text-align: center;
         lines: 3;
         text-overflow: ellipsis;
         margin-bottom: 16rpx;
     }
 
-    .article-meta {
+    /* 元信息行与标题同轴（justify-content 整行居中）；flex-wrap 本页已有，超宽时换行不溢出 */
+    .page-meta {
         flex-direction: row;
         align-items: center;
+        justify-content: center;
         flex-wrap: wrap;
         margin-bottom: 24rpx;
         padding-bottom: 20rpx;
