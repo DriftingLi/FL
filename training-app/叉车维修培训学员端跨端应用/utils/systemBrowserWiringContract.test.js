@@ -25,7 +25,14 @@ const read = (rel) => readText(path.join(ROOT, rel));
 
 const SB_REL = 'utils/systemBrowser.uts';
 const DP_REL = 'utils/externalLinkDispatch.uts';
-const MD_REL = 'pages/forum/components/forum-markdown-blocks.uvue';
+/**
+ * 外链分派的**消费面**。⚠️ 2026-11-08 合并后（#2355 emit + #2356 runs 轴）：句内 runs 住在四面共用的
+ * `components/markdown/markdown-blocks.uvue`，但它**只把 url 交回壳层**（`linkClick`）——
+ * 「离开 app」的编排仍留在壳层，且**分派点唯一**（论坛壳件 / featured-detail 各一处，互不重复）。
+ * 「不直引 systemBrowser」这条语义原样保留，只换承载件（ADR-0007：可改路径指向）。
+ */
+const MD_REL = 'components/markdown/markdown-blocks.uvue';
+const FORUM_MD_REL = 'pages/forum/components/forum-markdown-blocks.uvue';
 const IMPORT_STAR = 'import ' + String.fromCharCode(42) + ' from';
 
 // ===== ① error15 具名导入接线 =====
@@ -42,11 +49,19 @@ describe('① 原生/消费面全具名（error15：命名空间导入会 Kotlin
     expect(dp).toContain("import { openExternalBrowser } from './systemBrowser'");
     expect(dp).not.toContain(IMPORT_STAR);
   });
-  it('消费面收敛：论坛块组件不再直引 systemBrowser，外链只经分派模块', () => {
+  it('消费面收敛：公共件只 emit，不直引 systemBrowser、也不自己做分派', () => {
     const md = read(MD_REL);
     expect(md).not.toContain('systemBrowser');
-    expect(md).toContain("import { dispatchExternalLinkTap } from '../../../utils/externalLinkDispatch'");
-    expect(md.split('dispatchExternalLinkTap(').length - 1).toBe(1);   // 委托点唯一
+    expect(md).not.toContain('dispatchExternalLinkTap');
+    expect(md).toContain("emit('linkClick', run.link)");
+  });
+  it('论坛壳件把句内链接转给唯一分派点（与 featured-detail 的 onRunLink 同形）', () => {
+    // 壳件不渲染 run、也不持编排：只把公共件交回的 url 转给 `dispatchExternalLinkTap`。
+    // 留这条是为了防「搬家搬了一半」：两处都分派 = 双入口；一处都没有 = 点链接没反应，
+    // 而那时只有真机看得见。
+    const shell = read(FORUM_MD_REL);
+    expect(shell).not.toContain('systemBrowser');
+    expect(shell.split('dispatchExternalLinkTap(').length - 1).toBe(1);
   });
 });
 
