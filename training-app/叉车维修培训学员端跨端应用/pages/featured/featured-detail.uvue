@@ -26,19 +26,17 @@
                 <view v-if="detail!.cover_image.length > 0" class="cover-wrap">
                     <image class="cover-img" :src="detail!.cover_image" mode="widthFix"></image>
                 </view>
-                <!-- 正文 Markdown 渲染 -->
+                <!-- 正文 Markdown 渲染（#2355：块怎么排一律交给四面共用的
+                     `components/markdown/markdown-blocks.uvue`。本页此前自带一份 8 条分支的模板
+                     与一整套 .md-* / .md-run* 样式 —— 那是「一套刻度」在精选面的第二份事实，
+                     换件后同一段正文换个入口不再换一种疏密。
+                     行内 runs 由 `inline-axis="plain"` 声明：精选档声明了 `MEMBER_INLINE`，
+                     分词在公共件内做（本页不再直引分词器）。
+                     图片不接 `@image-click`（#2355 决议 D5：保持本页「正文图不可点」的现状，
+                     那是早于本票存在的差异，接上就是能力面变化）。 -->
                 <view class="article-body">
-                    <view v-for="(block, idx) in contentBlocks" :key="idx" class="md-block">
-                        <text v-if="block.type == 'heading'" class="md-heading" :style="{ fontSize: getHeadingSize(block.level) }"><text v-for="(run, ri) in runsOf(block.text)" :key="ri" :class="runClasses(run, 2, block.level)" @click="onRunTap(run)">{{ runText(run) }}</text></text>
-                        <text v-else-if="block.type == 'paragraph'" class="md-paragraph"><text v-for="(run, ri) in runsOf(block.text)" :key="ri" :class="runClasses(run, 0, 0)" @click="onRunTap(run)">{{ runText(run) }}</text></text>
-                        <text v-else-if="block.type == 'code'" class="md-code">{{ block.text }}</text>
-                        <view v-else-if="block.type == 'list'" class="md-list">
-                            <text v-for="(item, itemIdx) in block.items" :key="itemIdx" class="md-list-item"><text class="md-list-bullet">{{ listBullet(block.level, itemIdx) }}</text><text v-for="(run, ri) in runsOf(item)" :key="ri" :class="runClasses(run, 0, 0)" @click="onRunTap(run)">{{ runText(run) }}</text></text>
-                        </view>
-                        <text v-else-if="block.type == 'quote'" class="md-quote"><text v-for="(run, ri) in runsOf(block.text)" :key="ri" :class="runClasses(run, 1, 0)" @click="onRunTap(run)">{{ runText(run) }}</text></text>
-                        <view v-else-if="block.type == 'divider'" class="md-divider"></view>
-                        <image v-else-if="block.type == 'image'" class="md-image" :src="block.text" mode="widthFix"></image>
-                    </view>
+                    <MarkdownBlocks :blocks="contentBlocks" :caps="FEATURED_CAPS" inline-axis="plain"
+                        @link-click="onRunLink" />
                 </view>
                 <!-- 正文外链（#2097）：链接由正文 Markdown 承载，`source` 列只作来源名称、不参与判断 -->
                 <view v-if="sourceLinks.length > 0" class="link-section">
@@ -71,7 +69,7 @@
     import { ref, computed } from 'vue'
     import { onLoad, onShow } from '@dcloudio/uni-app'
     import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
-import { goBack } from '../../utils/navigation'
+    import { goBack } from '../../utils/navigation'
     import { getFeaturedContentDetailApi, viewFeaturedContentApi } from '../../api/featured'
     import { checkFavoriteApi, addFavoriteApi, removeFavoriteApi } from '../../api/favorite'
     import { parseMarkdown, SUBSET_FEATURED } from '../../utils/markdown'
@@ -80,8 +78,21 @@ import { goBack } from '../../utils/navigation'
     import { collectFeaturedLinks } from '../../utils/featuredLinks'
     import type { FeaturedLink } from '../../utils/featuredLinks'
     import { dispatchExternalLinkTap } from '../../utils/externalLinkDispatch'
-    import { splitInlineRuns } from '../../utils/markdownInline'
-    import type { MarkdownInlineRun } from '../../utils/markdownInline'
+    import MarkdownBlocks from '../../components/markdown/markdown-blocks.uvue'
+
+    /**
+     * 内容精选面的能力位（#2355 决议 D2 / #2354 D2 同形：常量写在页面脚本里，不散进模板字面量）。
+     *
+     * 与 `SUBSET_MEMBERS_FEATURED` 的差集只有一处：多一个 `paragraph` —— 它是**段落地板**，
+     * 从来没进过解析器那边的声明表，但公共件的 paragraph 分支靠 `cap('paragraph')` 开；
+     * 不传这一位，整篇正文只剩标题与列表。这条是两份天然事实，故
+     * `markdownContract` 里有一条源守卫钉「每一项 ∈ 声明表 ∪ {paragraph}」。
+     *
+     * **不传 `table`**：精选档本来就不声明它（三端交集），窄屏里表格按行退回原始文本是既定口径。
+     */
+    const FEATURED_CAPS : string[] = [
+        'heading', 'paragraph', 'code', 'list', 'quote', 'divider', 'image'
+    ]
 
     /** 模板不可直调 import 函数（uvue 模板 import 调用编译为 .invoke() = Kotlin error18，先例 #677）；
      *  本地薄包装消费 utils/format 唯一实现（T03 口径：展示纯函数零第二实现） */
@@ -115,52 +126,13 @@ import { goBack } from '../../utils/navigation'
         dispatchExternalLinkTap(url)
     }
 
-    /** 正文行内 runs（ADR-0025 ⑩-2 口径，#2124 起精选面也走）：分词器是唯一实现，此处只是模板可调的薄包装
-     *  （模板不可直调 import 函数 —— uvue 编译成 .invoke() 即 Kotlin error18，先例 #677）。 */
-    const runsOf = (src : string) : MarkdownInlineRun[] => splitInlineRuns(src)
-
-    /** 列表符号（⑩-3 / ⑩-4）：有序档由 `level` 槽判定，编号一律从 1 起；无序沿用本页原有 `·` */
-    function listBullet(level : number, idx : number) : string {
-        if (level == 1) return (idx + 1).toString() + '. '
-        return '· '
-    }
-
     /**
-     * C1：App 端**子 `<text>` 不继承父样式** ⇒ 每条 run 自带字号字色行高，再叠样式位。
-     * 第二参 = 块上下文（0 正文 / 1 引用 / 2 标题），第三参 = 标题级数（字号与 getHeadingSize 同表）。
-     * ⚠️ UTS 匿名函数不允许参数默认值（论坛面实测）⇒ 所有调用点显式传满三参。
-     * 顺序即优先级：基线 → 块覆盖 → 样式位（uvue 只认同权重后来者）。
+     * 正文句中链接的落点（#2355 决议 D3）：公共件只把 url 交回来，**编排仍只在本页一处** ——
+     * 确认弹窗 + 按端分叉全在 `dispatchExternalLinkTap`（移动端 ADR-0025 ⑩-8/⑩-9）。
+     * 公共件因此不持有「离开 app」这件事，四个阅读面共用它时也不会各写一份弹窗。
      */
-    const runClasses = (run : MarkdownInlineRun, kind : number, level : number) : string[] => {
-        const cls : string[] = ['md-run']
-        if (kind == 1) cls.push('md-run-q')
-        else if (kind == 2) {
-            if (level <= 1) cls.push('md-run-h1')
-            else if (level == 2) cls.push('md-run-h2')
-            else if (level == 3) cls.push('md-run-h3')
-            else cls.push('md-run-h4')
-        }
-        if (run.bold) cls.push('md-run-b')
-        if (run.italic) cls.push('md-run-i')
-        if (run.strike) cls.push('md-run-s')
-        if (run.code) cls.push('md-run-c')
-        if (run.link.length > 0) cls.push('md-run-l')
-        return cls
-    }
-
-    /** C3：行内代码不写 padding / margin（子 text 上不生效），胶囊感靠 background + 前后字符空格 */
-    const runText = (run : MarkdownInlineRun) : string => run.code ? ' ' + run.text + ' ' : run.text
-
-    /** ⑩-8：句中链接点击委托既有编排（确认弹窗 + 按端分叉）；link 为空 = 普通文字，不弹窗 */
-    const onRunTap = (run : MarkdownInlineRun) : void => {
-        if (run.link.length > 0) dispatchExternalLinkTap(run.link)
-    }
-
-    function getHeadingSize(level : number) : string {
-        if (level == 1) return '38rpx'
-        if (level == 2) return '34rpx'
-        if (level == 3) return '30rpx'
-        return '28rpx'
+    function onRunLink(url : string) : void {
+        dispatchExternalLinkTap(url)
     }
 
     async function loadDetail() : Promise<void> {
@@ -316,138 +288,6 @@ import { goBack } from '../../utils/navigation'
         margin-top: 16rpx;
     }
 
-    .md-block {
-        margin-bottom: 16rpx;
-    }
-
-    .md-heading {
-        font-weight: bold;
-        color: #333333;
-        margin-bottom: 12rpx;
-        margin-top: 8rpx;
-    }
-
-    .md-paragraph {
-        font-size: 28rpx;
-        color: #555555;
-        line-height: 44rpx;
-    }
-
-    .md-code {
-        font-size: 24rpx;
-        color: #333333;
-        background-color: #f5f5f5;
-        padding: 16rpx 20rpx;
-        border-radius: 8rpx;
-        font-family: monospace;
-    }
-
-    .md-list {
-        flex-direction: column;
-        padding-left: 12rpx;
-    }
-
-    .md-list-item {
-        font-size: 28rpx;
-        color: #555555;
-        line-height: 44rpx;
-    }
-
-    .md-quote {
-        font-size: 26rpx;
-        color: #888888;
-        border-left-width: 6rpx;
-        border-left-color: #2979ff;
-        padding-left: 20rpx;
-        margin: 8rpx 0;
-        line-height: 40rpx;
-    }
-
-    .md-divider {
-        height: 2rpx;
-        background-color: #eeeeee;
-        margin: 20rpx 0;
-    }
-
-    .md-image {
-        width: 100%;
-        border-radius: 8rpx;
-        margin: 8rpx 0;
-    }
-
-    /* ── 行内 run（ADR-0025 ⑩-2；C1–C4 的落点；#2124 起精选正文也走 runs）──────────────
-       每条 run 自带字号 / 字色 / 行高：App 端子 `<text>` **不继承**父组件样式（C1）。
-       基线取本页正文（28rpx / #555555 / 44rpx）；引用与标题由下面的覆盖条改尺寸。 */
-    .md-run {
-        font-size: 28rpx;
-        color: #555555;
-        line-height: 44rpx;
-    }
-
-    .md-run-b {
-        font-weight: bold;
-    }
-
-    .md-run-i {
-        font-style: italic;
-    }
-
-    /* C2：只写长形态 —— `text-decoration` 简写在 app 端不支持，值域只有 underline / line-through / overline / none */
-    .md-run-s {
-        text-decoration-line: line-through;
-    }
-
-    .md-run-l {
-        color: #2979ff;
-        text-decoration-line: underline;
-    }
-
-    /* C3：行内代码不写 padding / margin / width / display（子 text 上不生效），胶囊感靠 background + 模板前后空格；
-       C4：等宽只给单一 monospace，不写逗号回退列表。 */
-    .md-run-c {
-        font-family: monospace;
-        background-color: #f0f0f0;
-        color: #333333;
-    }
-
-    /* 引用块内的 run：父级样式带不下来，由 runClasses 的第二参显式传入（不靠 CSS 级联） */
-    .md-run-q {
-        font-size: 26rpx;
-        color: #888888;
-        line-height: 40rpx;
-    }
-
-    /* 标题内的 run：字号与 getHeadingSize 同表，否则子 run 缩成正文尺寸（C1） */
-    .md-run-h1 {
-        font-size: 38rpx;
-        color: #333333;
-        font-weight: bold;
-    }
-
-    .md-run-h2 {
-        font-size: 34rpx;
-        color: #333333;
-        font-weight: bold;
-    }
-
-    .md-run-h3 {
-        font-size: 30rpx;
-        color: #333333;
-        font-weight: bold;
-    }
-
-    .md-run-h4 {
-        font-size: 28rpx;
-        color: #333333;
-        font-weight: bold;
-    }
-
-    /* 列表符号同样是子 text（C1）：自带字号字色，符号·间距由字符本身撑开 */
-    .md-list-bullet {
-        font-size: 28rpx;
-        color: #2979ff;
-        line-height: 44rpx;
-    }
     /* 正文外链段（#2097）：无链接整段不渲染；样式落在 text 上（C1：App 端子节点不继承父样式） */
     .link-section {
         margin-top: 24rpx;
