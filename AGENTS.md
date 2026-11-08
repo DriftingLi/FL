@@ -16,6 +16,8 @@ This file provides guidance to Qoder (qoder.com) when working with code in this 
 
 - **架构决策记录（ADRs）**：根仓库 `docs/adr/`（编号 `ADR-0001-…`）；**移动端项目**（`training-app/叉车维修培训学员端跨端应用/docs/adr/`）**另有一套独立 ADR**（`0001-…` 起编号，记录 uni-app-x 侧决策：SSE 流式传输、轻量状态管理、手动 JSON 映射、生物识别、安全存储等）——两套编号体系互不相关，引用时注明「根仓库 / 移动端」
 
+- **当要给 X 加守护 / 机检、或要查某个 retro 候选到底立没立时**：先查 `docs/design/` 的判据与实测账本（例：[`20261107-兜底边口径机检判据边界裁定.md`](docs/design/20261107-兜底边口径机检判据边界裁定.md) = #2317「不立机检」）——落进仓内的裁定别只在票里翻；此处只给触发条件与落点，不复制裁定理由，也不建全量索引（那会变成第二个漂移面）。
+
 ## Agent skills
 
 ### Skill routing
