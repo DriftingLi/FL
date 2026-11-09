@@ -168,10 +168,11 @@ $input-border: #e5e5e5;
 $md-color-text: $text-color;
 $md-color-heading: $text-strong; /* 比正文更深：越大越深，层级单调（#2340） */
 $md-color-muted: $text-color-secondary;
-/* 正文句中链接的字色。**值是现状原样**（内容精选面 .md-run-l 原本就写 #2979ff）：
- * 本票只搬刻度、不动色彩；「#2979ff 作文字在四个阅读面全部不足 4.5:1」的收敛属 #2338，
- * 那里裁定目标为 #1b6f9c —— 落地时改这一行即可，四个阅读面的行内链接同时生效。 */
-$md-color-link: #2979ff;
+/* 正文句中链接的字色。#2383 兑现 #2338 裁定的那一次翻值：三面此前已接共用件，
+ * 「只改这一行、四个阅读面同时生效」的设计意图自此成立。引用 `$color-link`（#1b6f9c，
+ * 白卡对比度 5.53；旧值 `#2979ff` 作文字在四个阅读面实测不足 WCAG AA 4.5:1），
+ * 品牌色相在阅读面不留第二个字面量 —— `markdownTypographyContract` ⑥ 钉这条单源。 */
+$md-color-link: $color-link;
 $md-color-divider: $border-color;
 
 /* 字重：标题一律 700 */
