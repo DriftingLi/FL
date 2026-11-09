@@ -40,11 +40,10 @@ export const SUBSET_FORUM = 'forum'
 /**
  * 子集档位：AI 助手回答（移动端 ADR 0056 / #2362 第四档）。
  *
- * 与论坛档的**唯一差别是 image**：回答正文由模型回串，配图经后端归一成站内代理路径
- * （`/api/ai-assistant/diagnosis/ossimg/*`），手机端要**看见图**而不是「诊断配图」四个字。
- * ⚠️ **不声明 inline**：气泡模板直出块文本（`{{ block.text }}`，无 runs），声明 inline 会让句内
- * `![alt](url)` 原样留在段落里 —— URL 外露正是 #1279 当年挡的那件事。不声明则解析器按
- * `stripInlinePlain` 只留 alt。表格同理不声明（窄气泡里按行退回原始文本）。
+ * 与论坛档的差别是 image 与（自 #2366 起的）inline：回答正文由模型回串，配图经后端归一成站内代理路径
+ * （`/api/ai-assistant/diagnosis/ossimg/*`），手机端要**看见图**而不是「诊断配图」四个字；气泡已改走
+ * 共享块渲染件的行内 runs（`inline-axis="plain"`），故块文本交源串、记号由渲染层吞（移动端 ADR 0059）。
+ * 表格不声明：窄气泡里按行退回原始文本。
  */
 export const SUBSET_AI_ANSWER = 'ai-answer'
 
@@ -103,10 +102,13 @@ export const SUBSET_MEMBERS_FORUM : string[] = [
 	MEMBER_HEADING, MEMBER_LIST, MEMBER_QUOTE,
 	MEMBER_CODE, MEMBER_DIVIDER, MEMBER_INLINE,
 ]
-/** AI 回答档声明（移动端 ADR 0056）：论坛档的文本面 **+ image、- inline**（理由见档位常量的注释） */
+/** AI 回答档声明（移动端 ADR 0056）：论坛档的文本面 **+ image**；2026-11-09 #2366 起**声明 inline**
+ *  —— 气泡模板已改走共享块渲染件的行内 runs，块文本交出源串才是正确形态（此前直出块文本，
+ *  句内 `![alt](url)` 会连 URL 外露）。⚠️ 声明 inline 的连带事实：有序列表在此档拿到 `LIST_LEVEL_OL`
+ *  编号（`level` 槽 0→1），这是能力面变化，已记入移动端 ADR 0059。 */
 export const SUBSET_MEMBERS_AI_ANSWER : string[] = [
 	MEMBER_HEADING, MEMBER_LIST, MEMBER_QUOTE,
-	MEMBER_CODE, MEMBER_DIVIDER, MEMBER_IMAGE,
+	MEMBER_CODE, MEMBER_DIVIDER, MEMBER_IMAGE, MEMBER_INLINE,
 ]
 
 /**

@@ -74,14 +74,17 @@ describe('子集声明表：三档可枚举，未知档退到章节档', () => {
     expect(new Set([m.SUBSET_CHAPTER, m.SUBSET_FEATURED, m.SUBSET_FORUM, m.SUBSET_AI_ANSWER]).size).toBe(4);
   });
 
-  it('AI 回答档：声明 image，不声明 inline 与 table（移动端 ADR 0056）', () => {
-    // 声明 image 是「配图可见」的前提；不声明 inline 是因为气泡模板直出块文本，
-    // 句内图会连 URL 一起外露（#2362 实跑读数），不声明 table 沿用「按行退回原始文本」的段落地板。
+  it('AI 回答档：声明 image 与 inline，不声明 table（移动端 ADR 0056 / #2366）', () => {
+    // 声明 image 是「配图可见」的前提；声明 inline 是气泡改走行内 runs 的前提（块文本交源串，
+    // 记号由渲染层吞）。不声明 table 沿用「按行退回原始文本」的段落地板。
     const m = md();
     const members = declared(m, m.SUBSET_AI_ANSWER);
     expect(members).toContain(m.MEMBER_IMAGE);
-    expect(members).not.toContain(m.MEMBER_INLINE);
+    expect(members).toContain(m.MEMBER_INLINE);
     expect(members).not.toContain(m.MEMBER_TABLE);
+    // 声明 inline 的连带事实：有序列表在本档拿到 OL 编号（`level` 槽 0→1），能力面变化已记移动端 ADR 0059
+    const ol = m.parseMarkdown('3. 起步', m.SUBSET_AI_ANSWER);
+    expect(ol[0].level).toBe(m.LIST_LEVEL_OL);
   });
 
   it('章节档声明含表格；内容精选与论坛两档都不含（各自的理由见 ADR-0046 / ADR-0025）', () => {

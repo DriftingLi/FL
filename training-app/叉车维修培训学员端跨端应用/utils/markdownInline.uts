@@ -155,6 +155,41 @@ function isWordChar(c : string) : boolean {
     return c.match(/^[A-Za-z0-9]$/) != null
 }
 
+/** 单字符是否空白（与记号 flanking 用的 `\s` 同源；逐字判，不对整串调正则） */
+function isBlankChar(c : string) : boolean {
+    return c.length == 0 || c.match(/^\s$/) != null
+}
+
+/** 从 `from` 起连续 `ch` 的个数（三重星 / 多反引号代码都要数「连跑宽度」） */
+function charRun(text : string, from : number, ch : string) : number {
+    let n = 0
+    while (from + n < text.length && text.substring(from + n, from + n + 1) == ch) {
+        n++
+    }
+    return n
+}
+
+/**
+ * 从 `from` 起找下一个「连跑宽度 >= minRun」的 `ch`，返回首字符下标；找不到返回 -1。
+ *
+ * 为什么不用正则找闭合：`**注意 *务必* 戴手套**` 的内层带一对斜体记号，正则里的 `[^*]*`
+ * 把 `*` 当禁区 ⇒ 整条粗体匹配失败、两个 `**` 外露（#2366 实测的三种外露之一）；
+ * 行内码同理（``a`b``）。三重星 / 多反引号 / 粗体三处共用这一份「数连跑宽度」的扫描。
+ */
+function findRunClose(src : string, from : number, ch : string, minRun : number) : number {
+    let j = from
+    while (j < src.length) {
+        if (src.substring(j, j + 1) == ch) {
+            const run = charRun(src, j, ch)
+            if (run >= minRun) return j
+            j = j + run
+            continue
+        }
+        j++
+    }
+    return -1
+}
+
 /**
  * 递归切内层，并把结果**平铺**进外层同一张表（样式位由调用处传下来，不建树）。
  * 内层为空时什么都不加 —— 「空记号对」因此不会产出空 run 之外的副作用。
@@ -231,11 +266,31 @@ function splitInner(src : string, spans : number[],
             continue
         }
 
-        // ③ 粗体 **x** / __x__
-        const b1 = rest.match(/^\*\*([^\s*](?:[^*]*[^\s*])?)\*\*/)
-        if (b1 != null) {
-            flushPlain(); appendInner(runs, b1![1] ?? '', true, italic, strike, link)
-            i += (b1![0] ?? '').length; continue
+        // ③a 粗体+斜体 ***x***：连跑三个星号是**两枚记号**（粗 × 斜），
+        //    别让它掉进 `**` 分支——那样会剩下一个游离 `*`（#2366 实测的第二种外露）
+        const starRun = charRun(src, i, '*')
+        if (starRun >= 3) {
+            const close = findRunClose(src, i + 3, '*', 3)
+            if (close > i + 3) {
+                flushPlain()
+                appendInner(runs, src.substring(i + 3, close), true, true, strike, link)
+                i = close + 3
+                continue
+            }
+        }
+
+        // ③b 粗体 **x** / __x__
+        if (starRun == 2) {
+            const first = src.substring(i + 2, i + 3)
+            // 闭合只认 `**` 连跑：内层单个 `*`（斜体）不再把粗体提前截断
+            const close = findRunClose(src, i + 2, '*', 2)
+            const before = close > i + 2 ? src.substring(close - 1, close) : ''
+            if (!isBlankChar(first) && first != '*' && close > i + 2 && !isBlankChar(before) && before != '*') {
+                flushPlain()
+                appendInner(runs, src.substring(i + 2, close), true, italic, strike, link)
+                i = close + 2
+                continue
+            }
         }
         const b2 = rest.match(/^__([^\s_](?:[^_]*[^\s_])?)__/)
         if (b2 != null && !isWordChar(src.substring(i > 0 ? i - 1 : 0, i))) {
@@ -250,15 +305,21 @@ function splitInner(src : string, spans : number[],
             i += (st![0] ?? '').length; continue
         }
 
-        // ⑤ 行内代码 `x`：内容**原样**、不再解析（代码里的 `**` 是代码）
-        const cd = rest.match(/^`([^`]+)`/)
-        if (cd != null) {
-            flushPlain()
-            runs.push({
-                text: cd![1] ?? '', bold: bold, italic: italic, strike: strike, code: true, link: link,
-            } as MarkdownInlineRun)
-            i += (cd![0] ?? '').length
-            continue
+        // ⑤ 行内代码 `x` / ``x`y``：内容**原样**、不再解析（代码里的 `**` 是代码）。
+        //    反引号连跑的宽度是**分隔符宽度**：``a`b`` 里的单个 `` ` `` 是内容，
+        //    不是闭合 —— 旧正则 `^`([^`]+)` ` 会把这里截成 `a` 再剩尾巴（#2366 第三种外露）
+        if (src.substring(i, i + 1) == '`') {
+            const ticks = charRun(src, i, '`')
+            const close = findRunClose(src, i + ticks, '`', ticks)
+            if (close > i + ticks) {
+                flushPlain()
+                runs.push({
+                    text: src.substring(i + ticks, close), bold: bold, italic: italic, strike: strike, code: true, link: link,
+                } as MarkdownInlineRun)
+                // 闭合连跑整段吃掉：`` `a`` `` 这类「闭记号比开记号宽」的形态不留尾巴
+                i = close + charRun(src, close, '`')
+                continue
+            }
         }
 
         // ⑥ 斜体 *x*
