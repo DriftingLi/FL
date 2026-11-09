@@ -67,6 +67,7 @@ function loadApi(respond, apiFile) {
     AI_REQUEST_TIMEOUT: 330000,
     STORAGE_KEY_TOKEN: 'auth_token',
     getStorage: () => 'access-token',
+    createSseParser: loadUts(path.join(ROOT, 'utils', 'sseIncrementalParser.uts'), {}).createSseParser,
     uni: uni,
     console: console,
   });

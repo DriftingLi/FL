@@ -40,6 +40,8 @@ export type UseAiChatResult = {
 	messages : Ref<AiSessionMessage[]>
 	inputText : Ref<string>
 	thinking : Ref<boolean>
+	/** 等待态文案（#2389）：后端 `status` 帧的 text；空串 = 没有具体阶段，页面回落到「思考中...」 */
+	statusText : Ref<string>
 	scrollIntoViewId : Ref<string>
 	sidebarLeft : Ref<boolean>
 	sidebarRight : Ref<boolean>
@@ -61,6 +63,7 @@ export function useAiChat(featureScope : Ref<string>) {
 	const messages = ref<AiSessionMessage[]>([])
 	const inputText = ref<string>('')
 	const thinking = ref<boolean>(false)
+	const statusText = ref<string>('')
 	const scrollIntoViewId = ref<string>('')
 	const sidebarLeft = ref<boolean>(false)
 	const sidebarRight = ref<boolean>(false)
@@ -193,7 +196,13 @@ export function useAiChat(featureScope : Ref<string>) {
 
 		const params = buildBody(history, sessionID, featureKey)
 		streamChatApi(params, {
+			onStatus: (text : string) => {
+				// 等待态文案（#2389）：后端在检索 / 生成等阶段发 status 帧，此前被静默丢弃。
+				statusText.value = text
+			},
 			onMessage: (chunk : string) => {
+				// 正文一开始流，阶段文案就过期了（否则气泡上方会一直挂着「正在检索…」）
+				statusText.value = ''
 				assistantMsg.content += chunk
 				scrollToBottom()
 			},
@@ -205,9 +214,16 @@ export function useAiChat(featureScope : Ref<string>) {
 					scrollToBottom()
 				}
 			},
+			onRestart: () => {
+				// 401 续期后重发（#2389 R7）：新请求会从头再发一遍正文 ⇒ 丢掉已累积的增量，
+				// 否则重发后气泡里会出现两遍正文。
+				assistantMsg.content = ''
+				statusText.value = ''
+			},
 			onError: (msg : string) => {
 				// 请求结束（失败 / 超时 / 服务不可用）⇒ 等待态就地结束，不残留到下一轮（#2298）。
 				thinking.value = false
+				statusText.value = ''
 				assistantMsg.content += '\n[错误：' + msg + ']'
 				uni.showToast({ title: msg, icon: 'none' })
 				scrollToBottom()
@@ -234,6 +250,7 @@ export function useAiChat(featureScope : Ref<string>) {
 				}
 				// 请求结束（成功）⇒ 等待态就地结束，不残留、不串到下一轮（#2298）。
 				thinking.value = false
+				statusText.value = ''
 				scrollToBottom()
 			},
 		})
@@ -281,6 +298,7 @@ export function useAiChat(featureScope : Ref<string>) {
 		messages: messages,
 		inputText: inputText,
 		thinking: thinking,
+		statusText: statusText,
 		scrollIntoViewId: scrollIntoViewId,
 		sidebarLeft: sidebarLeft,
 		sidebarRight: sidebarRight,

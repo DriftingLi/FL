@@ -54,7 +54,7 @@
 					<AiChatBubble v-for="(msg, idx) in messages" :key="idx" :role="msg.role" :content="msg.content" :sources="msg.sources" :meta="msg.meta" :show-actions="msg.role == 'assistant'" :is-last="idx == messages.length - 1" @copy="onCopyText(msg.content)" @retry="onRetry" />
 					<view v-if="thinking" class="message-row assistant">
 						<view class="message-bubble thinking">
-							<text class="message-text">思考中...</text>
+							<text class="message-text">{{ thinkingLabel }}</text>
 						</view>
 					</view>
 				</view>
@@ -147,6 +147,7 @@
 		messages,
 		inputText,
 		thinking,
+		statusText,
 		scrollIntoViewId,
 		sidebarLeft,
 		sidebarRight,
@@ -158,6 +159,14 @@
 		toggleSidebarRight,
 		sendInput,
 	} = useAiChat(featureScope)
+
+	// 等待态文案（#2389）：后端 `status` 帧驱动；没有阶段文案时回落到「思考中...」。
+	const thinkingLabel = computed<string>(() : string => {
+		if (statusText.value.length > 0) {
+			return statusText.value
+		}
+		return '思考中...'
+	})
 
 	// 视图状态
 	const showModelPicker = ref<boolean>(false)
