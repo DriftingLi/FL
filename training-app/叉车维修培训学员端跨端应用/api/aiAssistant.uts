@@ -20,6 +20,8 @@ import type {
 	AiSession,
 	AiSessionMessage,
 	AiDiagnosisSource,
+	AiDiagnosisBadge,
+	AiDiagnosisMeta,
 	DiagnosisIntentBrand,
 	DiagnosisFaq,
 	DiagnosisIntents,
@@ -96,6 +98,41 @@ export function parseDiagnosisSources(arr : Array<UTSJSONObject>) : AiDiagnosisS
 	return out
 }
 
+/**
+ * 解析诊断能力徽章与耗时（**单点**）：当轮 `done.meta` 与回看消息 DTO 走同一份实现（#2361）。
+ *
+ * 为什么必须单点：两路数据同源（后端 `ai_chat_messages.meta` 列与 SSE `done.meta` 是同一份
+ * `DiagnosisMeta`），分成两份解析就会出现「当轮有徽章、回看没有」这类假差异。
+ *
+ * ⚠️ 两路的**键缺失**不对称：当轮 `done.meta` 带 `omitempty`，可能只有 `elapsed` 没有 `badges`
+ * （也可能反过来）；回看 `messages[].meta` 键常在且 `badges` 恒为数组。故这里一律按「缺键即空」
+ * 兜底，产出**恒定形状**的 `AiDiagnosisMeta`（badges 恒为数组、elapsed 恒为数值）——
+ * 归一后的三态判定在 `utils/aiDiagnosisMeta.uts` 的 `metaViewOf`，两处各司其职。
+ */
+export function parseDiagnosisMeta(raw : any | null) : AiDiagnosisMeta | null {
+	if (raw == null) return null
+	const obj = raw as UTSJSONObject
+	const badges : AiDiagnosisBadge[] = []
+	const rawBadges = obj['badges']
+	if (rawBadges != null) {
+		const arr = rawBadges as Array<UTSJSONObject>
+		for (let i = 0; i < arr.length; i++) {
+			const item = arr[i]
+			const badge : AiDiagnosisBadge = {
+				name: toStr(item['name']),
+				emoji: toStr(item['emoji']),
+				cls: toStr(item['cls']),
+			}
+			badges.push(badge)
+		}
+	}
+	const meta : AiDiagnosisMeta = {
+		badges: badges,
+		elapsed: toNumber(obj['elapsed']),
+	}
+	return meta
+}
+
 function buildSessionMessage(obj : UTSJSONObject) : AiSessionMessage {
 	const msg : AiSessionMessage = {
 		id: toNumber(obj['id'], toNumber(obj['message_id'])),
@@ -109,6 +146,10 @@ function buildSessionMessage(obj : UTSJSONObject) : AiSessionMessage {
 		const list = parseDiagnosisSources(rawSources as Array<UTSJSONObject>)
 		if (list.length > 0) msg.sources = list
 	}
+	// 回看徽章与耗时（#2361）：后端 meta 列对非诊断轮与存量消息为 null ⇒ 有值才写字段，
+	// 不写字段（而不是写 null）—— #2328 的事故链正是「optional 被显式填 null」。
+	const meta = parseDiagnosisMeta(obj['meta'])
+	if (meta != null) msg.meta = meta
 	return msg
 }
 

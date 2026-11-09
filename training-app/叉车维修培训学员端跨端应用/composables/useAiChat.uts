@@ -23,9 +23,10 @@ import {
 	createAiSessionApi,
 	deleteAiSessionApi,
 	getAiSessionMessagesApi,
+	parseDiagnosisMeta,
 	streamChatApi,
 } from '../api/aiAssistant'
-import type { AiSession, AiSessionMessage, AiChatMessage, AiDiagnosisSource } from '../types/index'
+import type { AiSession, AiSessionMessage, AiChatMessage, AiDiagnosisSource, AiDiagnosisMeta } from '../types/index'
 import { canSend } from '../utils/aiImageQuota'
 
 /** 构造差异化请求体：基础版固定 admin，专业版按 model_source 分支 */
@@ -222,6 +223,13 @@ export function useAiChat(featureScope : Ref<string>) {
 						if (full.length > 0) {
 							assistantMsg.content = full
 						}
+					}
+					// 当轮徽章与耗时（#2361）：`done.meta` 仅诊断功能下发；与回看路径
+					// （`buildSessionMessage` 读 meta 列）走**同一个**解析器、落**同一个**字段，
+					// 故两条路渲染逐项一致。无 meta（非诊断轮 done data 为 null）时不写字段。
+					const turnMeta : AiDiagnosisMeta | null = parseDiagnosisMeta(data['meta'])
+					if (turnMeta != null) {
+						assistantMsg.meta = turnMeta
 					}
 				}
 				// 请求结束（成功）⇒ 等待态就地结束，不残留、不串到下一轮（#2298）。
