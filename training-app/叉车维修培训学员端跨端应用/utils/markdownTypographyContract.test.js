@@ -20,6 +20,10 @@
  * 将来若要锁，另起一票按「外壳尺寸档」单独定义，不混进阅读刻度守卫。
  * ⇒ ① 的入口侧判据因此是「**块渲染区的类**」而不是整文件：判整文件会把那 46 处一起拖进来判红。
  *
+ * #2383 追加一组：**⑥ 链接色单源**（spec #2351 色彩条款的最后一格翻值）。`$md-color-link` 只许引
+ * `$color-link`、后者取值 `#1b6f9c`（#2338 裁定；此前 `#2979ff` 作文字在四个阅读面实测不足 WCAG AA 4.5:1）。
+ * 翻值前该变量停在过渡值，#2356 留下的理由「三面还没接共用件」在三面接入后失效 ⇒ 这组锁「旧蓝不许再被静默写回」。
+ *
  * ③ 门身份：这是**接线守护**（读源码文本断言，不真跑被测物），归 `scripts/classify-guards.mjs` 定腿；
  * 判别力由「① 注入变异必须判红」那组自检给出（成对：必红 / 必不红），不拿「跑过一次绿」当验收。
  *
@@ -282,6 +286,26 @@ function resolveSpec(rel, spec) {
 /** 合成 `.uvue`：自检样本用，不碰真文件 */
 const uvue = (tpl, css) => '<template>\n' + tpl + '\n</template>\n\n<style lang="scss">\n' + css + '\n</style>\n'
 
+/**
+ * 守卫 ⑥ 判定（#2383）：阅读面句内链接色的单源与裁定值。
+ * 两条判据都**不重算被测物**：别名形态照 #2338 裁定（同一语义不留两个字面量，先例 `$md-color-text: $text-color`），
+ * 取值 `#1b6f9c` 是 spec #2351 色彩条款的独立期望值——写回旧蓝或挪走 token 值都必须从这里判红。
+ */
+function linkColorViolationsOf(scss) {
+  const out = []
+  const mdLine = /\$md-color-link\s*:\s*([^;]+);/.exec(scss)
+  if (!mdLine) return ['`uni.scss` 没有 `$md-color-link` 行：四个阅读面句内链接色的唯一变量没了宿主']
+  if (mdLine[1].trim() !== '$color-link') {
+    out.push('`$md-color-link` 应引 `$color-link`（#2338 裁定：品牌色相在阅读面不留第二个字面量），当前 `' + mdLine[1].trim() + '`')
+  }
+  const baseLine = /\$color-link\s*:\s*([^;]+);/.exec(scss)
+  if (!baseLine) return out.concat(['`uni.scss` 没有 `$color-link` 行：#2338 裁定 token 丢了宿主'])
+  if (baseLine[1].trim().toLowerCase() !== '#1b6f9c') {
+    out.push('`$color-link` 应为 `#1b6f9c`（#2338 裁定值，白卡对比度 5.53），当前 `' + baseLine[1].trim() + '`')
+  }
+  return out
+}
+
 /* ------------------------------------------------------------------ 测试 */
 
 const rendererSource = readText(RENDERER)
@@ -425,6 +449,27 @@ describe('阅读刻度与版式契约（#2358）', () => {
     test('`components/markdown/` 目录里只有这一个块渲染件', () => {
       const dir = path.join(ROOT, 'components/markdown')
       expect(fs.readdirSync(dir).sort()).toEqual(['markdown-blocks.uvue'])
+    })
+  })
+
+  /* ---------------- ⑥ 链接色单源：#2338 裁定值，#2383 翻值落地 ---------------- */
+  describe('⑥ 阅读面句内链接色取单源（#2338 裁定 / #2383 落地）', () => {
+    test('合法样本不红：`$md-color-link: $color-link` + `$color-link: #1b6f9c`', () => {
+      expect(linkColorViolationsOf('$color-link: #1b6f9c;\n$md-color-link: $color-link;\n')).toEqual([])
+    })
+
+    test('变异：`$md-color-link` 写回旧蓝 `#2979ff` ⇒ 必红（不碰真文件）', () => {
+      expect(linkColorViolationsOf('$color-link: #1b6f9c;\n$md-color-link: #2979ff;\n').join('\n'))
+        .toMatch(/\$md-color-link[\s\S]*#2979ff/)
+    })
+
+    test('变异：`$color-link` 取值被挪走 ⇒ 必红', () => {
+      expect(linkColorViolationsOf('$color-link: #2979ff;\n$md-color-link: $color-link;\n').join('\n'))
+        .toMatch(/\$color-link[\s\S]*#1b6f9c/)
+    })
+
+    test('真实 `uni.scss` 零违规：四面句内链接此刻按裁定色渲染', () => {
+      expect({ violations: linkColorViolationsOf(readText('uni.scss')) }).toEqual({ violations: [] })
     })
   })
 })
