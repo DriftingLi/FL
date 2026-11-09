@@ -148,6 +148,7 @@
 		messages,
 		inputText,
 		thinking,
+		statusText,
 		scrollIntoViewId,
 		sidebarLeft,
 		loadSessions,
@@ -180,7 +181,12 @@
 	// 3) 计时器跟着等待态关 —— 请求结束（成功 / 失败 / 超时 / 截断）后不能继续跳秒，
 	//    更不能串到下一轮（验收第 5 条）。
 	const thinkingSeconds = ref<number>(0)
+	// 文案优先级（#2389）：后端阶段文案 > 已等秒数 > 兜底「思考中...」。
+	// 阶段文案来自 `status` 帧（此前被静默丢弃），让「在等」能说清在等什么。
 	const thinkingLabel = computed<string>(() : string => {
+		if (statusText.value.length > 0) {
+			return statusText.value
+		}
 		if (thinkingSeconds.value <= 0) {
 			return '思考中...'
 		}

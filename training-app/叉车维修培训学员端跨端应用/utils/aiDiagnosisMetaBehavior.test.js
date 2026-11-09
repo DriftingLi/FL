@@ -103,6 +103,7 @@ function loadPair(options) {
     AI_REQUEST_TIMEOUT: 60000,
     STORAGE_KEY_TOKEN: 'auth_token',
     getStorage: () => 'access-token',
+    createSseParser: loadUts(path.join(ROOT, 'utils', 'sseIncrementalParser.uts'), {}).createSseParser,
     uni: uni,
     console: console,
   });

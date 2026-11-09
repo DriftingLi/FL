@@ -182,6 +182,7 @@ function buildApp(opts) {
     AI_REQUEST_TIMEOUT: 60000,
     STORAGE_KEY_TOKEN: KEY_TOKEN,
     getStorage: storage.getStorage,
+    createSseParser: loadUts(path.join(ROOT, 'utils', 'sseIncrementalParser.uts'), {}).createSseParser,
     uni,
   });
 
