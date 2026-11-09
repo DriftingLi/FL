@@ -16,6 +16,10 @@
 			<MarkdownBlocks v-if="role != 'user'" :blocks="assistantBlocks" :caps="AI_ANSWER_CAPS"
 				@image-click="onPreviewAssistantImageAt" />
 		</view>
+		<!-- 诊断能力徽章与耗时（#2361）：位置按票面 AC「回答下方」，排在来源折叠件之前。
+		     要不要出现由 `utils/aiDiagnosisMeta.uts#metaViewOf` 的 visible 判定（meta 为 null /
+		     徽章空集 / 耗时为 0 三种「没有」态都不出空壳），本处只把归一后的 meta 传下去。 -->
+		<AiChatBadges v-if="role == 'assistant'" :meta="messageMeta" />
 		<!-- 诊断来源资料（#988）：位置对齐 web 的 `#assistant-extra`（回答下方、操作按钮上方）。
 		     仅助手消息且有来源才出现；调用方不传 `sources` 时行为与从前完全一致。 -->
 		<AiChatSources v-if="role == 'assistant' && messageSources.length > 0" :sources="messageSources" />
@@ -29,11 +33,12 @@
 <script setup lang="uts">
 	import { computed } from 'vue'
 	import AiChatSources from './ai-chat-sources.uvue'
+	import AiChatBadges from './ai-chat-badges.uvue'
 	import MarkdownBlocks from '../markdown/markdown-blocks.uvue'
 	import { expandImageMarkers } from '../../utils/aiSourcesDisplay'
 	import { previewImages } from '../../utils/forumDetailDisplay'
 	import { aiAnswerBlocks, aiAnswerImageUrls, aiAnswerImageIndexAt } from '../../utils/aiAnswerBody'
-	import type { AiDiagnosisSource, MarkdownBlock, MarkdownImageClick } from '../../types/index'
+	import type { AiDiagnosisSource, AiDiagnosisMeta, MarkdownBlock, MarkdownImageClick } from '../../types/index'
 
 	/**
 	 * AI 回答面的能力位（#2354 决议 D2）：**七位**，与 `chapter-markdown.uvue` 的 `CHAPTER_CAPS` 同形
@@ -59,6 +64,13 @@
 		sources?: AiDiagnosisSource[]
 		/** 用户消息附图（#2299）：站内 URL；历史回显与刚发出的同一形状 */
 		images?: string[]
+		/**
+		 * 诊断能力徽章与耗时（#2361）：仅诊断通道的助手消息会有；当轮与回看落同一字段。
+		 *
+		 * ⚠️ 这个可空对象 prop **不进 withDefaults**：默认值只对 undefined 生效，父级显式传
+		 * null（非诊断轮 / 存量消息）时会绕过它 —— #2328 事故链正是这一条。取值走 `messageMeta`。
+		 */
+		meta?: AiDiagnosisMeta
 	}>(), {
 		role: 'assistant',
 		content: '',
@@ -110,6 +122,18 @@
 		const v = props.sources
 		if (v == null) return [] as AiDiagnosisSource[]
 		return v
+	})
+
+	/**
+	 * 诊断徽章与耗时的**空值归一**（#2361，同 #2328 的收敛理由）：非诊断轮与存量消息的
+	 * meta 为 null，模板若直取成员会打断整帧渲染。这里只判空、不解析 —— 三态与文案
+	 * 全部由 `utils/aiDiagnosisMeta.uts#metaViewOf` 决定（纯函数、真执行断言）。
+	 */
+	const messageMeta = computed<AiDiagnosisMeta | null>(() : AiDiagnosisMeta | null => {
+		const v = props.meta
+		if (v == null) return null
+		// props 成员在 Kotlin 侧被当成 Any ⇒ 显式强转回目标类型（ai-chat-diagnosis-guide 同例，④c 实测）
+		return v as AiDiagnosisMeta
 	})
 
 	/** 用户附图预览：口径单点在 `utils/forumDetailDisplay.previewImages`，本处只包本地名（.invoke 雷同） */

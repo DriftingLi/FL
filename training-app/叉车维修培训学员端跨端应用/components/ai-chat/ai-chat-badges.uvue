@@ -1,0 +1,107 @@
+<template>
+	<!-- 诊断能力徽章与耗时（#2361）：与 web `DiagnosisBadges.vue` + `DiagnosisSources.vue` 的耗时脚注同源 -->
+	<view v-if="metaView.visible" class="ai-meta">
+		<view v-if="metaView.badges.length > 0" class="ai-meta-badges">
+			<view v-for="(chip, ci) in chips" :key="chip.key" class="ai-meta-chip" :class="{ 'ai-meta-chip-gap': ci > 0 }">
+				<text class="ai-meta-chip-text">{{ chip.label }}</text>
+			</view>
+		</view>
+		<text v-if="metaView.elapsedText.length > 0" class="ai-meta-elapsed">{{ metaView.elapsedText }}</text>
+	</view>
+</template>
+
+<script setup lang="uts">
+	/**
+	 * 诊断回答的「能力徽章行 + 耗时脚注」（#2361）。
+	 *
+	 * 数据只有**一个**入口：助手消息的 `meta`（当轮由 `done.meta` 落、回看由 messages DTO 的
+	 * `meta` 列落，两条路都在 `api/aiAssistant.uts#parseDiagnosisMeta` 归一）。故本组件不关心
+	 * 「这轮是不是当轮」——浏览器回放与当轮走的是同一份字段、同一个渲染件，票面验收② 由此结构性成立。
+	 *
+	 * 三态判定全部下沉到 `utils/aiDiagnosisMeta.uts#metaViewOf`（纯函数、真执行断言）：
+	 * null / badges 空集 / elapsed 为 0 三个「没有」态产出的视图模型完全一致 ⇒ 本组件不做任何
+	 * 业务判断，只按 `visible` 决定出不出现（票面验收①③：不出空行、不出空壳）。
+	 *
+	 * 徽章三字段（name / emoji / cls）**原样消费**：本组件不维护词表副本、不按 cls 改文案或图标，
+	 * `cls` 仅随 v-for 的 key 参与渲染稳定性（票面验收④，口径对齐 web DiagnosisBadges.vue）。
+	 */
+	import { computed } from 'vue'
+	import { metaViewOf, badgeLabelOf, type AiDiagnosisMetaView } from '../../utils/aiDiagnosisMeta'
+	// 类型的**唯一声明处**是 types/ai.uts，这里只 import（#1322：同一类型两处就地声明会在编译产物里
+	// 裂成互不相关的 open class ⇒ props 代理强转即 CCE）。
+	import type { AiDiagnosisMeta } from '../../types/index'
+
+	/** 单个徽章的展示模型：文案在壳层一次算好，模板不重复拼串 */
+	type BadgeChip = {
+		key : string
+		label : string
+	}
+
+	// ⚠️ 可空对象 prop **不给 withDefaults 默认值**（#2328）：默认值只对 undefined 生效，
+	//    父级显式传 null 时会绕过它。故取值走下面的 `metaOf()` 判空包装。
+	const props = defineProps<{
+		meta?: AiDiagnosisMeta
+	}>()
+
+	/**
+	 * props 判空包装。
+	 * @note props 成员在 Kotlin 侧被当成 Any ⇒ 必须显式强转回目标类型（④c 实测 error）。
+	 */
+	function metaOf() : AiDiagnosisMeta | null {
+		const m = props.meta
+		if (m == null) return null
+		return m as AiDiagnosisMeta
+	}
+
+	const metaView = computed<AiDiagnosisMetaView>(() : AiDiagnosisMetaView => {
+		return metaViewOf(metaOf())
+	})
+
+	const chips = computed<BadgeChip[]>(() : BadgeChip[] => {
+		const list : BadgeChip[] = []
+		const badges = metaView.value.badges
+		for (let i = 0; i < badges.length; i++) {
+			const b = badges[i]
+			// key 用 cls（后端能力标识，未知 cls 也照用）+ 序位兜底去重，不用裸下标当 key。
+			const chip : BadgeChip = { key: b.cls + '#' + i.toString(), label: badgeLabelOf(b) }
+			list.push(chip)
+		}
+		return list
+	})
+</script>
+
+<style lang="scss">
+	.ai-meta {
+		flex-direction: column;
+		max-width: 600rpx;
+		margin-top: $spacing-xs;
+	}
+
+	.ai-meta-badges {
+		flex-direction: row;
+		flex-wrap: wrap;
+		align-items: center;
+	}
+
+	.ai-meta-chip {
+		padding: 4rpx 12rpx;
+		border-radius: $radius-pill;
+		background-color: $primary-tint;
+	}
+
+	/* 徽章之间用 margin 而非 gap：原生端不支持 gap（uvue-css 四条红线） */
+	.ai-meta-chip-gap {
+		margin-left: $spacing-xs;
+	}
+
+	.ai-meta-chip-text {
+		font-size: $font-size-xs;
+		color: $primary-color;
+	}
+
+	.ai-meta-elapsed {
+		font-size: $font-size-xs;
+		color: $text-color-placeholder;
+		margin-top: 4rpx;
+	}
+</style>

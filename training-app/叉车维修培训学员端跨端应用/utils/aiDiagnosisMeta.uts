@@ -1,0 +1,104 @@
+/**
+ * 诊断回答元数据（徽章 + 耗时）→ 渲染视图模型（#2361）
+ *
+ * ## 为什么单独成件、为什么必须是纯函数
+ *
+ * 票面验收⑤要求「meta → 渲染视图模型」的归一**真执行**后断言产物。读源码文本只能证明
+ * 「有个 if 判了 null」，证明不了「badges 空集真的不出空行」「elapsed 为 0 真的不出耗时脚注」、
+ * 也证明不了「当轮与回看喂进来的两种形状归一后逐项相同」。故归一全部落在这里，
+ * 由 `utils/aiDiagnosisMetaBehavior.test.js` 装真件、喂三态、断言产出的视图模型。
+ *
+ * ## 为什么三态都要吸收
+ *
+ * 后端两路形状**不对称**（#2361 取证，backend/internal/aiassistant/）：
+ * - 当轮 `done.meta` 由 `DiagnosisMeta{ Badges []DiagnosisBadge `json:"badges,omitempty"`; Elapsed float64 `json:"elapsed,omitempty"` }`
+ *   序列化 ⇒ **可能缺 badges 键**、也可能缺 elapsed 键；
+ * - 回看 `messages[].meta` 走 `AIChatMessageMeta`（无 omitempty，且 nil 徽章在
+ *   GetSessionMessages 里被归一成空数组）⇒ 键常在、`badges` 恒为数组。
+ *
+ * 归一只有一个入口（`metaViewOf`），两路都喂它 —— 这是「回看逐项一致」的实现保证，
+ * 不是靠两处各写一份等价映射。
+ *
+ * ## 约束
+ *
+ * 展示层纯函数（移动端 ADR-0007）：**零运行期依赖**，只允许 `import type`；不用正则
+ * （Kotlin 目标下 RegExp 字面量不可靠），一律 indexOf / length 判定。
+ */
+import type { AiDiagnosisBadge, AiDiagnosisMeta } from '../types/index'
+
+/**
+ * 归一后的渲染视图模型。
+ *
+ * `visible` 是「这一块要不要出现」的唯一判据：徽章与耗时都没值时整个渲染件不出空壳
+ * （票面验收③：meta 为 null 不出空壳；①②：badges 空集不渲染空行、elapsed 0/缺席不渲染耗时）。
+ */
+export type AiDiagnosisMetaView = {
+    visible : boolean
+    badges : AiDiagnosisBadge[]
+    elapsedText : string   // 已组装好的「耗时 11.8 秒」；空串即不显示（文案只在下面一处生成）
+}
+
+/** 耗时的文案骨架（web `DiagnosisSources.vue` 同口径：`耗时 <n> 秒`，一位小数） */
+export const ELAPSED_LABEL_PREFIX : string = '耗时 '
+export const ELAPSED_LABEL_SUFFIX : string = ' 秒'
+
+/** 空视图：三态里的「没有」态（null / 非诊断轮 / 两字段都为空，产出完全一致） */
+export function emptyMetaView() : AiDiagnosisMetaView {
+    const view : AiDiagnosisMetaView = { visible: false, badges: [] as AiDiagnosisBadge[], elapsedText: '' }
+    return view
+}
+
+/**
+ * 耗时 → 脚注文案。`0` 与负数（后端缺省值的可能形态）都返回空串 = 不显示。
+ * 一位小数与 web 一致，避免同一条回答在两端读成 11.8 / 12。
+ */
+export function elapsedLabelOf(elapsed : number) : string {
+    if (elapsed <= 0) return ''
+    return ELAPSED_LABEL_PREFIX + elapsed.toFixed(1) + ELAPSED_LABEL_SUFFIX
+}
+
+/**
+ * 单个徽章的显示文案：`emoji name`，任一为空则只出另一个。
+ * 放这里而不是组件里，是为了让「空 emoji 不留前导空格」这条也有真执行的断言。
+ */
+export function badgeLabelOf(badge : AiDiagnosisBadge) : string {
+    const name = badge.name
+    const emoji = badge.emoji
+    if (emoji.length == 0) return name
+    if (name.length == 0) return emoji
+    return emoji + ' ' + name
+}
+
+/**
+ * 徽章数组归一：丢掉「名称与图标都空」的残条（后端回放确实能出现空串，见
+ * `diagnosis_adapter.go` 里对「把 emoji/cls 重建为空串」的反面教材注释）。
+ * 三字段**原样透传**、不补默认值、不改写内容 —— 票面验收④不许另造词表。
+ */
+function absorbBadges(raw : AiDiagnosisBadge[] | null) : AiDiagnosisBadge[] {
+    const out : AiDiagnosisBadge[] = []
+    if (raw == null) return out
+    for (let i = 0; i < raw.length; i++) {
+        const item = raw[i]
+        // 三字段在 DTO 里都无 omitempty（`DiagnosisBadge` 的 name/emoji/cls 一律出现），
+        // 类型上也非可选 ⇒ 这里不做 null 兜底，只丢「两列都空」的残条。
+        if (item.name.length == 0 && item.emoji.length == 0) continue
+        const badge : AiDiagnosisBadge = { name: item.name, emoji: item.emoji, cls: item.cls }
+        out.push(badge)
+    }
+    return out
+}
+
+/**
+ * 唯一的归一入口：meta（可能为 null / 可能缺键）→ 渲染视图模型。
+ *
+ * 当轮 `done.meta` 与回看 `messages[].meta` 都调它，故「历史回放同源」是结构性的，
+ * 不依赖两处映射写得一样。
+ */
+export function metaViewOf(meta : AiDiagnosisMeta | null) : AiDiagnosisMetaView {
+    if (meta == null) return emptyMetaView()
+    const badges = absorbBadges(meta.badges ?? null)
+    const elapsedText = elapsedLabelOf(meta.elapsed ?? 0)
+    const visible = badges.length > 0 || elapsedText.length > 0
+    const view : AiDiagnosisMetaView = { visible: visible, badges: badges, elapsedText: elapsedText }
+    return view
+}

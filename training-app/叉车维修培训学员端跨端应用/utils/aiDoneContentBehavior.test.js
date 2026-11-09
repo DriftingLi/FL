@@ -107,6 +107,8 @@ function loadPair(options) {
     deleteAiSessionApi: () => Promise.resolve(),
     getAiSessionMessagesApi: () => Promise.resolve([]),
     streamChatApi: api.streamChatApi,
+    // #2361：useAiChat 的 onDone 新增运行期依赖 parseDiagnosisMeta（与回看同一个解析器）
+    parseDiagnosisMeta: api.parseDiagnosisMeta,
     toStr: h.toStr,
     // #2299 起 useAiChat 的早退判据是 `canSend`（有字 ∨ 有图）—— 依赖注入按真件补
     canSend: quota.canSend,
