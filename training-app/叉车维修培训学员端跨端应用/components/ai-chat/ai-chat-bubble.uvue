@@ -13,8 +13,11 @@
 			     —— 直调 import 函数会编成 .invoke()（见脚本注释）。
 			     本票之前这里自带一份 8 条分支的模板与一整套 .md-* 样式，与课程章节面各排各的，
 			     于是「一套刻度」在气泡里永远是第二份事实；现在同一段正文换个入口不再换一种疏密。 -->
+			<!-- 行内轴 = `plain`（#2366）：块文本交给分词器切成 runs，记号由渲染层吞，
+			     与课程章节页 / 论坛 / 内容精选走同一套嵌套 `<text>`；不传这个 prop 就是
+			     `none`（直出块文本），`**粗**` 会原样外露。 -->
 			<MarkdownBlocks v-if="role != 'user'" :blocks="assistantBlocks" :caps="AI_ANSWER_CAPS"
-				@image-click="onPreviewAssistantImageAt" />
+				inline-axis="plain" @image-click="onPreviewAssistantImageAt" />
 		</view>
 		<!-- 诊断能力徽章与耗时（#2361）：位置按票面 AC「回答下方」，排在来源折叠件之前。
 		     要不要出现由 `utils/aiDiagnosisMeta.uts#metaViewOf` 的 visible 判定（meta 为 null /

@@ -15,8 +15,8 @@
          **块的序号**（不是图集下标）。需要按位置换算预览起点的面（AI 气泡）自己换算，其余面只取 `url`。
 
          行内文字走哪条轴由 `inlineAxis` 决定（#2353 决议 D5 的接口：`plain` 由 #2355 落、`forum` 由 #2356 落）——
-           · `none`（缺省）⇒ 直出 `block.text`：章节 / AI 两面的子集不声明 `inline`，解析器已把记号剥净，再分词就是第二套规则；
-           · `plain` ⇒ 经 `splitInlineRuns` 切（内容精选面）；
+           · `none`（缺省）⇒ 直出 `block.text`：章节面的子集不声明 `inline`，解析器已把记号剥净，再分词就是第二套规则；
+           · `plain` ⇒ 经 `splitInlineRuns` 切（内容精选面 / AI 气泡面，#2366）；
            · `forum` ⇒ 经 `utils/forumBody.forumInlineRuns`（**格式轴**，不直引分词器实现）切（论坛面）。
          run 的**字号与字色从所在块的 tier 取**，本文件没有第二份 run 字号表（`.md-run-*` 只带样式位，
          唯一的字号例外是行内码的 `$md-size-code-inline`）—— 这是「同一段文字换面同貌」在行内轴上的落点。
@@ -97,7 +97,7 @@
         caps : string[]
         /** 块内文字走哪条轴（#2353 决议 D5 的接口）：`none` = 直出 `block.text`；`plain` = `splitInlineRuns`；
          *  `forum` = 经格式轴切。**缺省给 `none`，与 `caps` 必填故意不对称**：`caps` 不传是事故（整面空渲染），
-         *  而本参数不传恰是章节面 / AI 面的真实缺省（这两面子集不声明 `inline`，解析器已把记号剥净）。 */
+         *  而本参数不传恰是章节面的真实缺省（该面子集不声明 `inline`，解析器已把记号剥净）。 */
         inlineAxis? : string
     }>(), {
         blocks: () => [] as MarkdownBlock[],
@@ -150,7 +150,7 @@
     /**
      * 一段块内源串 → run 序列。轴关时返回**空数组**（模板里 `v-if="!runsOn"` 的直出接住它）。
      *
-     * 为什么轴关时不分词：`none` 轴的面（章节 / AI）子集不声明 `inline`，解析器已把记号剥成纯文本，
+     * 为什么轴关时不分词：`none` 轴的面（章节）子集不声明 `inline`，解析器已把记号剥成纯文本，
      * 再跑一遍分词器就是用第二套规则重新解释已归一的内容 —— 那是能力面变化，不是本组件该做的事。
      */
     const runsOf = (src : string) : MarkdownInlineRun[] => {

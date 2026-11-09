@@ -11,8 +11,14 @@
  *   模型回串按 Markdown 呈现就是本票的裁定（用户翻案决定：回答大量含列表/代码/引用，纯文本难读）；
  *   空串由 `parseMarkdown` 自然产出空数组，渲染出空气泡 —— 与旧纯文本行为等价，不设特判。
  * - **档位 = `SUBSET_AI_ANSWER`**（移动端 ADR 0056 第四档）：heading / list / quote / code / divider
- *   **+ image**，不含 inline 与 table。声明 image 是「配图可见」的前提；不声明 inline 是因为气泡模板
- *   直出块文本（无 runs），句内 `![alt](url)` 会连 URL 一起外露（#2362 实跑读数）。
+ *   **+ image + inline**。声明 image 是「配图可见」的前提；声明 inline 是因为气泡模板自 #2354 起
+ *   走共享块渲染件（`components/markdown/markdown-blocks.uvue`）的**行内 runs**，块文本保持源串、
+ *   记号由渲染层吞掉（#2366）。不声明 table 沿用「按行退回原始文本」的段落地板。
+ * - **句内图升块**（#2366）：段落里混排的 `![alt](url)` 先按图切段（`splitInlineImageParagraphs`），
+ *   图各自成为独立的 image 块、按出现顺序不合并。切分**只对安全行**生效 —— 判据是
+ *   「把 alt 换回原文后，逐段分词投影拼起来必须与整行分词投影逐字相等」：记号跨图（`**注意 ![图] 安全**`）、
+ *   行内码跨图、链接跨图、公式跨图一律不切（边界①），整行退回**声明 inline 之前的可见形态**——
+ *   图折回 alt、其余记号交给渲染层（`foldImagesToAlt`；不折的话链接 / 行内码会把包着图的整段读成 URL）。
  * - **展开器只抹历史标记**：`expandLegacyImageMarkers` 只处理 `<<IMAGE:…>>`，`![alt](url)` 原样
  *   交给解析器 —— 用 `expandImageMarkers`（两种形状都抹成 alt）会让 URL 到不了解析器，图永远出不来。
  * - **站内闸**：`image` 块只放行后端归一后的本站代理前缀，其余退化成 alt 文字。后端回归时手机上
@@ -21,11 +27,12 @@
  *   不在模板里散写拼接（#2362 验收第 5 条）。
  *
  * 层次约束：本模块**不 import `.uvue`**、不依赖 DOM；`expandLegacyImageMarkers` 取真源
- * `utils/aiSourcesDisplay.uts`（loadUts 真执行时需同时注入 markdown / display / format 三层的真绑定）。
+ * `utils/aiSourcesDisplay.uts`（loadUts 真执行时需同时注入 markdown / inline / display / format 四层的真绑定）。
  *
  * @note 不依赖 DOM API，跨端通用（App / 小程序 / H5）
  */
 import { parseMarkdown, SUBSET_AI_ANSWER } from './markdown'
+import { splitInlineRuns, inlineRunsPlainText } from './markdownInline'
 import { expandLegacyImageMarkers, IMAGE_ALT_FALLBACK } from './aiSourcesDisplay'
 import { resolveFileUrl } from './format'
 import type { MarkdownBlock } from '../types/index'
@@ -69,12 +76,143 @@ export function aiAnswerImageIndexAt(blocks : MarkdownBlock[], blockIndex : numb
 }
 
 /**
- * 助手回答的渲染块：先抹历史标记，再按 **AI 回答档**解析，最后过站内闸与 URL 拼接。
+ * 把一行切成「段 / 图 / 段 …」：`segTexts` 是图之间的原文切片，`alts` / `urls` 是按出现顺序的图。
+ * 恒有 `segTexts.length == alts.length + 1`。
+ *
+ * 图片标记的扫描口径与分词器的 image 分支一致（`![alt](url)`，alt 不含 `]`、url 到首个 `)`）。
+ * 口径不一致的后果由 {@link canSplitImageLine} 的投影比对兜住 —— 那份判据吃的是**分词器自己的产出**，
+ * 不是这里再抄一份记号规则。
+ */
+function segmentImageLine(line : string, segTexts : string[], alts : string[], urls : string[]) {
+	let cursor = 0
+	let last = 0
+	while (cursor < line.length) {
+		const open = line.indexOf('![', cursor)
+		if (open < 0) break
+		const mid = line.indexOf('](', open + 2)
+		if (mid < 0) break
+		const alt = line.substring(open + 2, mid)
+		// alt 里撞上 `]` ⇒ 分词器不会把这个 `![` 认成图（它的 `[^\]]*` 先撞上那个 `]`），跳过重找
+		if (alt.indexOf(']') >= 0) {
+			cursor = open + 2
+			continue
+		}
+		const close = line.indexOf(')', mid + 2)
+		if (close < 0) break
+		segTexts.push(line.substring(last, open))
+		alts.push(alt)
+		urls.push(line.substring(mid + 2, close))
+		cursor = close + 1
+		last = cursor
+	}
+	segTexts.push(line.substring(last))
+}
+
+/**
+ * 这一行能不能「按图切段」——判据 (d)（#2366 票面，权威口径）：
+ *
+ * 1. 至少一张图，且每张图的 alt 非空（空 alt 走 `IMAGE_ALT_FALLBACK` 老路径，不切，边界②）；
+ * 2. 把 alt **原样**换回「段 / 图 / 段」序列后逐段分词投影、按序拼成 `projected`；
+ *    再对整行分词投影得 `whole`；`projected === whole` 才切。
+ *
+ * 第 2 条同时兜住记号跨图（`**注意 ![图] 安全**`、行内码 / 链接 / 公式跨图）：那些形态下
+ * 逐段切开会把未闭合的记号落到段里，拼出来的投影与整行不同 ⇒ 整行不切、退回今天的行为
+ * （边界①「安全才切」）。一张图不安全 ⇒ 整行不切（边界③ 逐行取交集）。
+ */
+function canSplitImageLine(line : string, segTexts : string[], alts : string[]) : boolean {
+	if (alts.length == 0) return false
+	for (let k = 0; k < alts.length; k++) {
+		if (alts[k].length == 0) return false
+	}
+	let projected = ''
+	for (let k = 0; k < segTexts.length; k++) {
+		projected += inlineRunsPlainText(splitInlineRuns(segTexts[k]))
+		if (k < alts.length) projected += alts[k]
+	}
+	return projected == inlineRunsPlainText(splitInlineRuns(line))
+}
+
+/**
+ * 把「段 / 图 / 段」序列里的图折回 alt（等价于声明 inline 之前 `stripInlinePlain` 对图的处理）。
+ * 供不切的行使用：块文本仍是源串、记号留给渲染层，但不让图标记活到分词器看得见的地方 ——
+ * 链接 / 行内码 / 公式跨图时，分词器会把包着图的那整段读成 URL，那是比 alt 更糟的外露。
+ */
+function foldImagesToAlt(segTexts : string[], alts : string[]) : string {
+	let text = ''
+	for (let k = 0; k < segTexts.length; k++) {
+		text += segTexts[k]
+		if (k < alts.length) text += alts[k]
+	}
+	return text
+}
+
+/**
+ * 段落地板上的「句内图升块」：只动 `paragraph`，其余块原样透传。
+ * 切出来的段落文本仍是**源串**（本档声明了 inline，渲染层自己吞记号），图块 `text` 是原始 URL
+ * —— 站内闸与 `resolveFileUrl` 留给下面的统一闸门，两条入路走同一条判据。
+ *
+ * 不切的行（记号跨图 / 非段落块）把图**折回 alt**：那是声明 inline 之前的可见形态（边界①
+ * 「退回今天的行为」），也挡住分词器在链接 / 行内码里把包着图的整段读成 URL。
+ */
+function splitInlineImageParagraphs(blocks : MarkdownBlock[]) : MarkdownBlock[] {
+	const out : MarkdownBlock[] = []
+	for (let i = 0; i < blocks.length; i++) {
+		const b = blocks[i]
+		// 只有「块内文字走行内 runs」的四类块会看图标记：代码块原样直出、图块自己就是图，
+		// 对它们折 alt 会把代码里的 `![…](…)` 改坏（代码内容原样是本档既有判据）。
+		const inlineText = b.type == 'paragraph' || b.type == 'heading' || b.type == 'list' || b.type == 'quote'
+		if (!inlineText) {
+			out.push(b)
+			continue
+		}
+		const segTexts : string[] = []
+		const alts : string[] = []
+		const urls : string[] = []
+		segmentImageLine(b.text, segTexts, alts, urls)
+		if (alts.length == 0) {
+			out.push(b)
+			continue
+		}
+		if (b.type == 'paragraph' && canSplitImageLine(b.text, segTexts, alts)) {
+			for (let k = 0; k < segTexts.length; k++) {
+				const seg = segTexts[k].replace(/^\s+|\s+$/g, '')
+				if (seg.length > 0) {
+					out.push({
+						type: 'paragraph',
+						level: 0,
+						text: seg,
+						items: [] as string[],
+					} as MarkdownBlock)
+				}
+				if (k < alts.length) {
+					out.push({
+						type: 'image',
+						level: 0,
+						text: urls[k],
+						items: [alts[k]],
+					} as MarkdownBlock)
+				}
+			}
+			continue
+		}
+		out.push({
+			type: b.type,
+			level: b.level,
+			text: foldImagesToAlt(segTexts, alts),
+			items: b.items,
+		} as MarkdownBlock)
+	}
+	return out
+}
+
+/**
+ * 助手回答的渲染块：先抹历史标记，再按 **AI 回答档**解析，然后把句内图切成独立块，
+ * 最后过站内闸与 URL 拼接。
  *
  * @param raw 模型回串原文（未做任何预处理；空串 ⇒ 空数组）
  */
 export function aiAnswerBlocks(raw : string) : MarkdownBlock[] {
-	const parsed = parseMarkdown(expandLegacyImageMarkers(raw), SUBSET_AI_ANSWER)
+	const parsed = splitInlineImageParagraphs(parseMarkdown(expandLegacyImageMarkers(raw), SUBSET_AI_ANSWER))
 	const out : MarkdownBlock[] = []
 	for (let i = 0; i < parsed.length; i++) {
 		const b = parsed[i]
