@@ -35,8 +35,10 @@
     const props = withDefaults(defineProps<{
         title ?: string
         leftIcon ?: string
-        rightIcon ?: string
-        /** 多图标右槽（#1602 追加）：与 rightIcon 互斥，rightIcons 优先。 */
+        /**
+         * 右槽字形（#1602 追加；#2412 收编）：右槽**唯一**的字形路径，单图标也走本数组（n = 1）。
+         * 同义的 `rightIcon` 已删除 —— 它在 #1649 被删了渲染分支，留着只会再骗一次调用方。
+         */
         rightIcons ?: string[]
         transparent ?: boolean
         /** 页头套（#1592 双层套的页头层）：'inverse'（N01 蓝底，标题/图标反色）| 'plain'（N02/N03 白底） */
@@ -69,7 +71,6 @@
     }>(), {
         title: '',
         leftIcon: '‹',
-        rightIcon: '',
         rightIcons: (): string[] => [],
         transparent: false,
         variant: 'plain',
