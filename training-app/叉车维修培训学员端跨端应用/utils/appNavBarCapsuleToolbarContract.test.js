@@ -11,11 +11,13 @@
  *    （`padding-right: <数字>rpx` 正是 #1848 死件 platform-nav-bar 的历史形态；
  *    槽容器的简写 `padding: 0 <数字>rpx` 是同一件事的另一种写法，一并禁）。
  * B. 右槽右缘 = 胶囊左边线 − RIGHT_SLOT_CLEARANCE：内容盒偏移由 margin-right 补偿。
+ *    rightIcons 分支（`.nav-bar-right`，没有 `.nav-bar-side` 基类）须自己写 row + 垂直居中 + 右对齐：
+ *    uvue 的 view 默认 column，漏写 row 就是多图标竖排（#2410）。
  * C. 工具栏（showToolbar + #toolbar）是标题栏**之下的第二行**：根层兄弟节点、
  *    默认关闭 ⇒ 现有调用方零 diff；它不做胶囊让宽，否则「第二行」只剩和右槽一样的宽度。
  *
  * 分类：接线守护（读源码形状断言），不构成 ③ 门证据；判别力由注入违规样本的必红面自证。
- * 行为面（第二行真渲染、动作真在标题栏之下、真不与胶囊相交）无自动化守护 —— 与
+ * 行为面（第二行真渲染、动作真在标题栏之下、真不与胶囊相交、右槽图标真贴安全线）无自动化守护 —— 与
  * appNavBarLeftEntryContract 同口径：由发版冒烟的真机页级检查兜底（ADR-0043）。
  */
 const h = require('./contractHarness');
@@ -66,6 +68,23 @@ function capsuleToolbarViolations(srcRaw) {
   }
   if (!/\(750\s*-\s*NAV_BODY_PADDING_X\)\s*-\s*\(capsuleLeft\s*-\s*RIGHT_SLOT_CLEARANCE\)/.test(src)) {
     v.push('右槽右缘几何不是 (750 − paddingX) − (capsuleLeft − clearance)');
+  }
+
+  // ── B2. rightIcons 分支（.nav-bar-right，没有 .nav-bar-side 基类）与 #right 插槽分支同方向 ──
+  // uvue 的 view 默认 flex-direction: column ⇒ 漏写 row 时 2 个以上图标竖排（#2410）。
+  const rightIconsSlot = ruleBlock(src, '.nav-bar-right');
+  if (rightIconsSlot === '') {
+    v.push('.nav-bar-right 规则缺失');
+  } else {
+    if (!/flex-direction\s*:\s*row/.test(rightIconsSlot)) {
+      v.push('.nav-bar-right 缺 flex-direction: row（uvue view 默认 column ⇒ rightIcons 多图标竖排）');
+    }
+    if (!/align-items\s*:\s*center/.test(rightIconsSlot)) {
+      v.push('.nav-bar-right 缺 align-items: center（图标垂直居中须显式写）');
+    }
+    if (!/justify-content\s*:\s*flex-end/.test(rightIconsSlot)) {
+      v.push('.nav-bar-right 缺 justify-content: flex-end（动作须贴胶囊安全右缘）');
+    }
   }
 
   // ── C. 工具栏：显式开关 + 默认关 + 根层兄弟 + 单行 + 不做胶囊让宽 ──
@@ -180,6 +199,18 @@ describe('检测器判别力（注入违规样本必红）', () => {
       /(\.nav-bar-toolbar\s*\{[^}]*?)padding:\s*0\s*\$spacing-md;/,
       '$1padding: 0 40rpx;',
     );
+  });
+
+  it('B2: rightIcons 分支缺 row（多图标竖排）', () => {
+    expectRed(/(\.nav-bar-right\s*\{[^}]*?)flex-direction:\s*row;/, '$1');
+  });
+
+  it('B2: rightIcons 分支缺 align-items: center（图标不居中）', () => {
+    expectRed(/(\.nav-bar-right\s*\{[^}]*?)align-items:\s*center;/, '$1');
+  });
+
+  it('B2: rightIcons 分支缺 flex-end（动作不贴安全右缘）', () => {
+    expectRed(/(\.nav-bar-right\s*\{[^}]*?)justify-content:\s*flex-end;/, '$1');
   });
 
   it('C: 工具栏未开合（默认开 ⇒ 全仓多一行）', () => {

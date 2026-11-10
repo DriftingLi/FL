@@ -219,6 +219,11 @@
 **胶囊让位算法**（#1592）：测量层 `utils/system.uts` 扩 `useSafeArea()` 返回 `{ statusBarHeight, capsuleLeft, rightSlotWidth }` Ref；
 小程序 `uni.getMenuButtonBoundingClientRect()` + px→rpx = `v_px × 750 / windowWidth`；App/H5 兜底 `useStatusBarHeight(44)`、H5 状态栏=0、右槽不设让位约束。
 右槽单行定宽、右缘=胶囊左边线；放不下 = 页面把次要动作移出页头（**不隐藏、不换行、不压缩、不写死 80rpx 魔数**）。
+右槽内容**右对齐**，且必须显式 `flex-direction: row`：uvue 的 `<view>` 默认 flex + 竖向，漏写 row 时 `rightIcons`
+多图标会竖排（#2410）。预期几何（`rightIcons` 分支、单图标）：字形右缘 = 胶囊左边线 − `36rpx`（槽右缘 24rpx +
+项内边距 12rpx），字形左缘 = 胶囊左边线 − `80rpx`；相邻图标中心距 = `68rpx`（44 字形 + 两侧各 12rpx）⇒ 双图标
+136rpx 放得下（典型槽宽 194rpx），三图标 204rpx 会向左压标题（#1846 同量级）。反向判据：改完图标仍停在槽**左**缘
+⇒ row / `flex-end` 没生效。
 页头 `paddingTop = statusBarHeight + 88rpx`（开启 `showToolbar` 时 + `88rpx`）。
 
 **多动作落点**（2026-11-10）：右槽放不下的动作走本件 `showToolbar` + `#toolbar` 的第二行 —— 该行在标题栏**之下**，
