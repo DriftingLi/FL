@@ -53,8 +53,9 @@
 			<text class="guide-entry-text">{{ guideEntryLabel }}</text>
 		</view>
 
-		<!-- 故障码体检（#2297）：输入框正上方一行。五态里只渲染 known / typo / format；
-		     未收录、还没输入、取数失败都**整行不渲染**（安静不打扰是判据）。
+		<!-- 故障码体检（#2297；口径 2026-11-10 反转，#2403）：输入框正上方一行，只渲染 known / typo；
+		     format / 未收录 / 还没输入 / 取数失败都**整行不渲染**（安静不打扰是判据）。
+		     format 静默的理由：体检只看长度、不懂句意，页面又支持自由提问 ⇒ 问「维修资料在哪」会被答「码格式不对」。
 		     点这一行 = 把追问句替换进输入框（不自动发送），随后收掉。 -->
 		<view v-if="isDiagnosis && codeHintView.visible" class="code-hint" @click="onCodeHintTap">
 			<text :class="codeHintView.kind == 'known' ? 'code-hint-text' : 'code-hint-text code-hint-text-warn'">{{ codeHintView.text }}</text>
@@ -247,7 +248,7 @@
 	/**
 	 * 故障码体检（#2297）：输入框正上方那一行。
 	 *
-	 * 分工：五态 → 文案在纯函数 `utils/diagnosisCodeHint.uts`（有真执行的行为用例）；
+	 * 分工：状态 → 文案在纯函数 `utils/diagnosisCodeHint.uts`（有真执行的行为用例；只有 known / typo 可见）；
 	 * 防抖 / 过期丢弃 / 失败静默在 `useDiagnosisCodeHint`；本页只做三件事 ——
 	 * 把输入框的变化喂进去、渲染那一行、点击回填追问句。
 	 *
@@ -627,7 +628,7 @@
 		color: $text-color-secondary;
 	}
 
-	/* typo / format：这两态是「你填得不对」，用警示色；known 才用次级文字色 */
+	/* typo 是「你填得不对」，用警示色；known 才用次级文字色 */
 	.code-hint-text-warn {
 		color: $warning-color;
 	}
