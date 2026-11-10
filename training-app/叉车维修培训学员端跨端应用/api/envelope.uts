@@ -41,6 +41,12 @@ export type PageQuery = UTSJSONObject
  * `Array<UTSJSONObject>` cast 是仓内先例形态（api/note.uts:39、api/student.uts:101）。
  */
 function extractArray(obj : UTSJSONObject, keys : string[]) : Array<UTSJSONObject> | null {
+    // 第二道兜底（#2404）：obj 本身是裸数组时直接返回。**必须放在取键之前** ——
+    // 数组上按字符串键取值在 Kotlin 侧会抛 ClassCastException。
+    if (Array.isArray(obj)) {
+        const anyObj : any = obj
+        return anyObj as Array<UTSJSONObject>
+    }
     for (let i = 0; i < keys.length; i++) {
         const raw = obj[keys[i]]
         if (raw != null) {
