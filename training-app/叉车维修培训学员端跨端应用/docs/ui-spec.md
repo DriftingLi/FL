@@ -208,7 +208,7 @@
 > ⇒ **补声明是骨架层首票第一步**（#1597 K2，批 0 承接）。
 > 本件负责**状态栏占位与胶囊让位**（`navigationStyle: "custom"` 下避让责任 100% 在项目代码，见 ADR-0035 现状锚点表）。
 
-- 高度：`88rpx`（**不含状态栏**）
+- 高度：`88rpx`（**不含状态栏**；开启 `showToolbar` 时再加一行 `88rpx`，见「多动作落点」）
 - 状态栏占位：由本件内部按 `useSafeArea()` 取值渲染，**页面不再自带 `<view class="status-bar">`**
 - 右侧按钮区：右边界**不得越过微信胶囊左边界**（`getMenuButtonBoundingClientRect().left` − 安全间距），也不得写死魔数
 - 标题：居中，`$font-size-xl`（36rpx），font-weight bold；**居中必须脱流**（胶囊让位把右槽撑宽，流内居中必然偏左，#2402 / ADR-0062）
@@ -219,7 +219,11 @@
 **胶囊让位算法**（#1592）：测量层 `utils/system.uts` 扩 `useSafeArea()` 返回 `{ statusBarHeight, capsuleLeft, rightSlotWidth }` Ref；
 小程序 `uni.getMenuButtonBoundingClientRect()` + px→rpx = `v_px × 750 / windowWidth`；App/H5 兜底 `useStatusBarHeight(44)`、H5 状态栏=0、右槽不设让位约束。
 右槽单行定宽、右缘=胶囊左边线；放不下 = 页面把次要动作移出页头（**不隐藏、不换行、不压缩、不写死 80rpx 魔数**）。
-页头 `paddingTop = statusBarHeight + 88rpx`。
+页头 `paddingTop = statusBarHeight + 88rpx`（开启 `showToolbar` 时 + `88rpx`）。
+
+**多动作落点**（2026-11-10）：右槽放不下的动作走本件 `showToolbar` + `#toolbar` 的第二行 —— 该行在标题栏**之下**，
+胶囊矩形不进入，可吃满内容盒宽度；默认关闭 ⇒ 不传的页面零 diff。第二行只放**次要动作**，主操作仍留右槽；
+仍禁止页面自建第二份页头（ADR-0035）。工具栏不重复做胶囊让宽，否则可用宽度又退回右槽那一档。
 
 ### 5.2 卡片（appCard）
 
