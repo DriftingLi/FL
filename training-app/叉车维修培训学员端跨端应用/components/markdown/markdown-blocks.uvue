@@ -120,8 +120,10 @@
         return false
     }
 
-    /** 字号档令牌 → 类名。令牌只有 `markdownTiers` 产出的那九种，其余一律折到正文档（与纯函数同口径） */
+    /** 字号档令牌 → 类名。令牌只有 `markdownTiers` 产出的那十种，其余一律折到正文档（与纯函数同口径） */
     const sizeClassOf = (tier : string) : string => {
+        // 强调段落（#2399）：字号仍取正文档，字重由 `md-emph` 另叠 —— 分开两件事是「不改字号」的前提
+        if (tier == 'bodyEmph') return 'md-sz-body'
         if (tier == 'h1') return 'md-sz-h1'
         if (tier == 'h2') return 'md-sz-h2'
         if (tier == 'h3') return 'md-sz-h3'
@@ -139,10 +141,14 @@
         return cls
     }
 
-    /** 块内文字的类：基线类 + 该块的字号档 */
+    /** 块内文字的类：基线类 + 该块的字号档（字号档是 `bodyEmph` 时再叠一档字重，#2399） */
     const blockClasses = (idx : number, base : string) : string[] => {
         const cls : string[] = [base]
-        if (idx < tiers.value.length) cls.push(sizeClassOf(tiers.value[idx].size))
+        if (idx < tiers.value.length) {
+            const tier : string = tiers.value[idx].size
+            cls.push(sizeClassOf(tier))
+            if (tier == 'bodyEmph') cls.push('md-emph')
+        }
         return cls
     }
 
@@ -185,6 +191,7 @@
         const cls : string[] = []
         const tier : string = idx < tiers.value.length ? tiers.value[idx].size : 'body'
         cls.push(sizeClassOf(tier))
+        if (tier == 'bodyEmph') cls.push('md-emph')
         cls.push(runColorClassOf(tier))
         if (run.bold) cls.push('md-run-b')
         if (run.italic) cls.push('md-run-i')
@@ -298,6 +305,12 @@
     .md-sz-body {
         font-size: $md-size-body;
         line-height: $md-line-body;
+    }
+
+    /* 强调段落（#2399）：只叠字重 —— 字号 / 行高 / 字色全沿用正文档（令牌来自 `markdownTypography` 的 bodyEmph）。
+       这是**显示层的强调**，不是语法层的标题：块类型仍是段落，`#` 的语义与块数组文本都没动。 */
+    .md-emph {
+        font-weight: $md-weight-heading;
     }
 
     .md-sz-quote {

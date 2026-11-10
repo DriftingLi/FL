@@ -1,0 +1,92 @@
+/**
+ * 段落「弱强调」判定（#2399）—— **显示层的强调，不是语法层的标题**
+ *
+ * 学员在 AI 回答里看到「一、故障码快速定位指引」「二、常见故障码含义对照」这类**独立起行的
+ * 序号段**，希望一眼就能看出回答分成几块。做法只有两层显示层强调：**字重加粗 + 段前距**；
+ * 字号不动（仍是正文档），块类型仍是 `paragraph`。
+ *
+ * **为什么不是 heading**：标题是作者用 `#` 声明的**结构**（进目录、带层级语义、自带字号档），
+ * 而这里判的是「读者看着像个小标题」的**呈现**。把序号段升成 `heading` 会连带改掉字号与层级
+ * 语义，也破坏 `parseMarkdown` 块数组的「逐字不变」（正文一个字符都不该动）。同理也不做
+ * 「表格横滑 / 折叠」那类动作 —— 本函数只回答一个布尔问题。
+ *
+ * **判据（三条同时满足；宁可漏不可滥）**：
+ *   1. 行首是序号：中文「一、」–「十、」，或阿拉伯「1、」「1. 」（`1.` 后面必须是空白，
+ *      与 `markdown.uts` 的有序列表判据同形 —— 否则 `1.5mm 间隙` 这类小数会被误伤）；
+ *   2. 整行不含句末标点 `。！？` —— 带句号的说明它是**句子**，不是小标题；
+ *   3. 长度不超过一行（约 20 字）—— 超长的说明它是正文段落，只是恰好以序号开头。
+ *
+ * **长度按纯文本投影计**：解答面按 run 保留了 `**` 等标记字符，「**八、两位数序号边界**」
+ * 源串 21 字、投影 17 字，应当落在强调内。投影只删标记字符与链接地址，不做第二次行内解析
+ * （那会与 `markdown.uts` 的 `stripInline` 变成两套口径，而它还是私有件、带公式跨度保护）。
+ *
+ * **已知的不可达分支**：「1. 检查电池电压」这类在**真实链路**上先被 `markdown.uts:514` 的
+ * 有序列表分支吃掉、成为 `list` 块，本判据只作用于 `paragraph`（票面 #2399 Q1 已裁）。
+ *
+ * @note 纯函数：不读 DOM、不碰组件实例、不读样式；UTS 侧由 `loadUts` 真跑（行为腿）
+ */
+
+/** 一行仍算「短序号线」的字数上限（约一行；超过就当正文段落，不强调） */
+const MAX_EMPHASIS_CHARS : number = 20
+
+/** 中文序号 + 顿号：一–十（`十一、` 不在字符集内 ⇒ 自然不命中） */
+const RE_CN_ORDINAL : RegExp = /^[一二三四五六七八九十]、/
+
+/** 阿拉伯序号 + 顿号：`1、` */
+const RE_AR_DUN_ORDINAL : RegExp = /^\d+、/
+
+/** 阿拉伯序号 + 点 + 空白：`1. `（与 `markdown.uts` 的有序列表判据同形，不误伤 `1.5mm`） */
+const RE_AR_DOT_ORDINAL : RegExp = /^\d+\.[ \t]/
+
+/** 句末标点：整行出现任一个，说明它是句子而不是小标题 */
+const SENTENCE_MARKS : string[] = ['。', '！', '？']
+
+/** 行内标记字符：只删记号本身，不改字序（显示宽度口径） */
+const RE_INLINE_MARKS : RegExp = /[*_`~\[\]]/g
+
+/** 链接 / 图片的地址段：`](url)` 整段收掉，标签文字留下 */
+const RE_LINK_TARGET : RegExp = /\]\([^)]*\)/g
+
+/**
+ * 纯文本投影：去掉行内标记字符与链接地址后剩下的「看得见的字」。
+ * 只做删除，不做配对 / 嵌套判断 —— 这里要的是显示宽度，不是解析结果。
+ */
+function plainProjection(text : string) : string {
+	const linkFree = text.replace(RE_LINK_TARGET, ']')
+	return linkFree.replace(RE_INLINE_MARKS, '').trim()
+}
+
+/**
+ * 行首序号的长度（含其后的顿号 / 点与空白）；不是序号行 ⇒ 0。
+ * `十一、`、`1.5mm` 这类都返回 0，交给上面两条判据兜底。
+ */
+function ordinalPrefixLength(line : string) : number {
+	// `match` 在 UTS 侧的元素是 `String?`（kotlinc 只给 ?. / !!. 调用）⇒ 按 `markdown.uts` 既定写法用 `?? ''` 兜底
+	const cn = line.match(RE_CN_ORDINAL)
+	if (cn != null && cn.length > 0) return (cn![0] ?? '').length
+	const dun = line.match(RE_AR_DUN_ORDINAL)
+	if (dun != null && dun.length > 0) return (dun![0] ?? '').length
+	const dot = line.match(RE_AR_DOT_ORDINAL)
+	if (dot != null && dot.length > 0) return (dot![0] ?? '').length
+	return 0
+}
+
+/**
+ * 一个 `paragraph` 块该不该被弱强调（加粗 + 段前距）。
+ *
+ * @param text 段落块的 `text`（页面上看得见的那一行；可以带行内标记字符）
+ * @returns 行首是序号、整行无句末标点、投影不超过 20 字 —— 三条同时满足才为 `true`
+ */
+export function isEmphasisParagraph(text : string) : boolean {
+	const plain = plainProjection(text)
+	if (plain.length == 0) return false
+	if (plain.length > MAX_EMPHASIS_CHARS) return false
+	for (let i = 0; i < SENTENCE_MARKS.length; i++) {
+		if (plain.indexOf(SENTENCE_MARKS[i]) >= 0) return false
+	}
+	const prefix = ordinalPrefixLength(plain)
+	if (prefix <= 0) return false
+	// 序号后必须还有字：光秃秃的「一、」不是小标题
+	if (plain.length <= prefix) return false
+	return true
+}

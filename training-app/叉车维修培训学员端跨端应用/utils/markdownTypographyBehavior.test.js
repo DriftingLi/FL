@@ -20,9 +20,12 @@ const { loadUts, readText } = require('./utsHarness');
 
 const TYPO_UTS = path.join(__dirname, 'markdownTypography.uts');
 const MD_UTS = path.join(__dirname, 'markdown.uts');
+const EMPH_UTS = path.join(__dirname, 'markdownEmphasis.uts');
 
+/** 弱强调判据（#2399）：`markdownTypography` 的真实依赖，按 import 名注入 */
+const emph = () => loadUts(EMPH_UTS, {});
 /** 每次取一个全新模块实例（模块内全是常量，互不串） */
-const typo = () => loadUts(TYPO_UTS, {});
+const typo = () => loadUts(TYPO_UTS, { isEmphasisParagraph: emph().isEmphasisParagraph });
 /** 真源解析器：本函数的入参就是它的产出（不是测试自造的另一种块形状） */
 const md = () => loadUts(MD_UTS, {});
 
@@ -49,7 +52,7 @@ describe('形状：返回值与输入 1:1 对齐，且只有两个字符串字�
       expect(typeof t.size).toBe('string');
       expect(typeof t.space).toBe('string');
       // 令牌表白名单：数值（40 / '40rpx'）或第三个字段一旦混进来，这条先红
-      expect(t.size).toMatch(/^(h[1-4]|body|quote|code|listText|divider)$/);
+      expect(t.size).toMatch(/^(h[1-4]|body|bodyEmph|quote|code|listText|divider)$/);
       expect(t.space).toMatch(/^mt-(0|16|24|40)$/);
     }
   });
@@ -137,6 +140,40 @@ describe('间距优先序（#2352 决议 D3「首块与标题优先」）', () =
   });
 });
 
+describe('强调段落（#2399）：只加粗 + 段前距，字号档仍是正文档的变体', () => {
+  const EMPH = '一、故障码快速定位指引';
+
+  it('短序号段 ⇒ 字号档 bodyEmph、间距 mt-40；普通段落不受影响', () => {
+    expect(sizes([blk('paragraph', 0, '先看总览。'), blk('paragraph', 0, EMPH)]))
+      .toEqual(['body', 'bodyEmph']);
+    expect(spaces([blk('paragraph', 0, '先看总览。'), blk('paragraph', 0, EMPH)]))
+      .toEqual(['mt-0', 'mt-40']);
+  });
+
+  it('首块是强调段仍是 mt-0（第 1 行优先于强调档）', () => {
+    expect(spaces([blk('paragraph', 0, EMPH), blk('paragraph', 0, '正文')]))
+      .toEqual(['mt-0', 'mt-24']);
+  });
+
+  it('紧跟标题的强调段仍是 mt-16（标题的「紧」压过强调的 40）', () => {
+    expect(spaces([blk('heading', 2), blk('paragraph', 0, '二、常见故障码含义对照')]))
+      .toEqual(['mt-0', 'mt-16']);
+  });
+
+  it('三条判据缺一不可：带句号 / 超一行 / 行首无序号 ⇒ 仍是正文档', () => {
+    const blocks = [
+      blk('paragraph', 0, '一、这是完整的一句话，说明电压要测。'),
+      blk('paragraph', 0, '三、这一行明显超过二十个字了所以它只能算正文段落不是小标题'),
+      blk('paragraph', 0, '故障码快速定位指引'),
+    ];
+    expect(sizes(blocks)).toEqual(['body', 'body', 'body']);
+  });
+
+  it('块类型不升标题：强调段的 type 仍是 paragraph（AC ③ 的第二半）', () => {
+    expect([blk('paragraph', 0, EMPH).type]).toEqual(['paragraph']);
+  });
+});
+
 describe('真链路：既有解析器的产出直接喂进来', () => {
   it('标题 / 段落 / 分隔线 / 标题 / 段落 ⇒ mt-0, 16, 16, 40, 16（八行表里第 1/6/4/3 行各命中一次）', () => {
     const blocks = md().parseMarkdown('# 一级标题\n\n正文一\n\n---\n\n## 二级标题\n\n正文二');
@@ -144,6 +181,13 @@ describe('真链路：既有解析器的产出直接喂进来', () => {
     expect(typo().markdownTiers(blocks).map((t) => t.space))
       .toEqual(['mt-0', 'mt-16', 'mt-16', 'mt-40', 'mt-16']);
     expect(sizes(blocks)).toEqual(['h1', 'body', 'divider', 'h2', 'body']);
+  });
+
+  it('解答面保留标记字符：「**八、两位数序号边界**」投影 17 字 ⇒ bodyEmph（源码 21 字也不该漏）', () => {
+    const blocks = md().parseMarkdown('**八、两位数序号边界**', 'ai-answer');
+    expect(blocks.map((b) => b.type)).toEqual(['paragraph']);
+    expect(blocks[0].text).toBe('**八、两位数序号边界**');
+    expect(sizes(blocks)).toEqual(['bodyEmph']);
   });
 
   it('章节档的表格按行出块：表头行取四态、续行归零（ADR-0046 的归零行为保住）', () => {
@@ -166,7 +210,8 @@ describe('成对取证（必红）：本套件的判据在坏实现上确实会�
     fs.writeFileSync(file, src);
     return file;
   }
-  const loadMutated = (replacements) => loadUts(mutatedCopy(replacements), {});
+  const loadMutated = (replacements) =>
+    loadUts(mutatedCopy(replacements), { isEmphasisParagraph: emph().isEmphasisParagraph });
 
   it('必不红 · 原样副本（不注入变异）与真源同结果 —— 红不是临时目录带来的', () => {
     const same = loadMutated([]);
@@ -181,6 +226,15 @@ describe('成对取证（必红）：本套件的判据在坏实现上确实会�
     ]);
     const got = broken.markdownTiers([blk('paragraph'), blk('divider')]).map((t) => t.space);
     expect(got).toEqual(['mt-0', 'mt-24']); // 真实现是 ['mt-0', 'mt-16']
+  });
+
+  it('必红 · 强调段的间距行判错（mt-40 → mt-24）⇒「强调段落 mt-40」判据必然判红', () => {
+    const broken = loadMutated([
+      ['return SPACE_SECTION\n\tif (block.type == TYPE_TABLE', 'return SPACE_BLOCK\n\tif (block.type == TYPE_TABLE'],
+    ]);
+    const got = broken.markdownTiers([blk('paragraph', 0, '正文'), blk('paragraph', 0, '一、故障码快速定位指引')])
+      .map((t) => t.space);
+    expect(got).toEqual(['mt-0', 'mt-24']); // 真实现是 ['mt-0', 'mt-40']
   });
 
   it('必红 · 标题映射降一档（h2 → h3）⇒「h2 档」判据必然判红', () => {
