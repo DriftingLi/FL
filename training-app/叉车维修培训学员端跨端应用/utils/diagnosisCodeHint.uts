@@ -1,19 +1,22 @@
 /**
- * 故障码体检：上游五态 → 屏幕上那一行（#2297）—— 纯函数，可被 `utils/utsHarness.js` **真执行**。
+ * 故障码体检：上游状态 → 屏幕上那一行（#2297；口径 2026-11-10 反转，#2403）—— 纯函数，可被 `utils/utsHarness.js` **真执行**。
  *
- * 为什么必须是纯函数：票面判据是「『状态 → 展示什么』的映射有**真执行**的行为测试」。
+ * 为什么必须是纯函数：判据是「『状态 → 展示什么』的映射有**真执行**的行为测试」。
  * 读源码文本只能证明「有个 `status == 'known'` 分支」，证明不了「unknown 真的不渲染」——
- * 后者只有把五种状态各喂一遍才看得见（判据见 `docs/agents/guards.md`）。
+ * 后者只有把每种状态各喂一遍才看得见（判据见 `docs/agents/guards.md`）。
  *
- * ## 口径（2026-11-05 维护者拍板：票面 AC 覆盖 #2295 用户故事 10 / 决策 10 的「只渲染 known」）
+ * ## 口径（2026-11-10 维护者拍板，反转 2026-11-05「format 也渲染」；票 #2403）
  *
  *   known  → 一行说明 + 可点追问（追问句带规范码；点一下**替换**输入框内容，不自动发送）
  *   typo   → 指出该改成什么（`fix`；`message` 里已含 fix 时不重复，免得「你要输 E01，应该是 E01」）
- *   format → 指出怎么填（`message` + `samples` 最多 3 条）
- *   其余（unknown / none / 上游将来新增的态 / 取数失败）→ 整行**不渲染**，安静不打扰
+ *   其余（format / unknown / none / 上游将来新增的态 / 取数失败）→ 整行**不渲染**，安静不打扰
  *
- * 为什么 format 只取前 3 条 samples：这一行在输入框正上方，撑到两行就把输入区推走；
- * 3 条足够给出「E01 / E41 / E101」这种写法示范。
+ * 为什么连 format 也不渲染：这一行只看得见「输入有多长」，看不见「输入的是什么」——学员真想输码
+ * 却写错，与被判成「格式不对」的整句提问，在它眼里是同一件事；而页面**支持自由提问**（`useFreeform()`），
+ * 于是用户问「林德 E-1254-01 的维修资料在哪」时，这一行会答「你的码格式不对」。Web 侧
+ * （`frontend/src/components/ai-assistant/DiagnosisGuide.vue:320-321`）早就只渲染 known / typo，
+ * 移动端 #2297 一度按「format 也渲染」实现、与 Web 分叉。代价是「真想输码却写错时不再有格式指引」，
+ * 由上游 typo 态与输入框占位文案兜住（#2403 已接受）。
  */
 import type { DiagnosisCodeHint } from '../types/index'
 
@@ -23,14 +26,11 @@ export const CODE_HINT_DEBOUNCE_MS : number = 250
 /** 太短的输入不当故障码：本层先挡住，省一次请求（与 Web 侧 `trim().length < 2` 同口径） */
 export const CODE_HINT_MIN_LEN : number = 2
 
-/** format 态最多展示几条写法示例 */
-export const CODE_HINT_MAX_SAMPLES : number = 3
-
 /** 「状态 → 展示什么」的唯一产物：页面只读它，不自己判 `status` */
 export type DiagnosisCodeHintView = {
-	/** 是否渲染这一行（五态里只有 3 态为 true） */
+	/** 是否渲染这一行（只有 known / typo 为 true） */
 	visible : boolean
-	/** known / typo / format；不可见时为空串 */
+	/** known / typo；不可见时为空串 */
 	kind : string
 	/** 那一行的正文 */
 	text : string
@@ -38,7 +38,7 @@ export type DiagnosisCodeHintView = {
 	followUp : string
 }
 
-/** 不可见：未收录 / 还没输入 / 取数失败 / 上游加的新态，全归它 */
+/** 不可见：format / 未收录 / 还没输入 / 取数失败 / 上游加的新态，全归它 */
 export function emptyHintView() : DiagnosisCodeHintView {
 	const v : DiagnosisCodeHintView = {
 		visible: false,
@@ -66,20 +66,6 @@ function visibleView(kind : string, text : string, followUp : string) : Diagnosi
 	return v
 }
 
-/** format 的写法示例：最多 3 条，用 ` / ` 串起来（空条目跳过） */
-function samplesText(samples : string[]) : string {
-	let out = ''
-	let n = 0
-	for (let i = 0; i < samples.length; i++) {
-		const s = samples[i].trim()
-		if (s.length == 0) continue
-		if (n >= CODE_HINT_MAX_SAMPLES) break
-		out = n == 0 ? s : out + ' / ' + s
-		n++
-	}
-	return out
-}
-
 /**
  * 上游结果 → 展示描述。
  *
@@ -105,14 +91,6 @@ export function hintViewOf(hint : DiagnosisCodeHint | null, typed : string) : Di
 		if (text.length == 0) return emptyHintView()
 		return visibleView('typo', text, '')
 	}
-	if (status == 'format') {
-		const samples = samplesText(hint.samples)
-		let text = message.length > 0 ? message : '格式不对'
-		if (samples.length > 0) {
-			text = text + '，可这样填：' + samples
-		}
-		return visibleView('format', text, '')
-	}
-	// unknown / none / 未来新增态：静默（票面 AC：未收录、还没输入 ⇒ 不渲染任何提示，也不报错）
+	// format / unknown / none / 未来新增态：静默（票面 AC：格式不合法、未收录、还没输入 ⇒ 不渲染任何提示，也不报错）
 	return emptyHintView()
 }
