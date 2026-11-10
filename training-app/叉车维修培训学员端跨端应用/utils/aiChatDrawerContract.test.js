@@ -67,6 +67,55 @@ function leftEntryVisible(nav, page) {
   return v;
 }
 
+/**
+ * 右入口**可见性**判据（2026-11-10，#2412）—— 与上面 leftEntryVisible 对称的右半边。
+ *
+ * 现场：#1649（8a95e05b）修融合冲突时把页头件的单图标分支删了，只留 rightIcons 与 #right 插槽，
+ * 而 ai-chat-nav 还在传 :right-icon ⇒ 右槽退回空插槽：MP-WEIXIN 端「看不见、点得动」
+ * （rightSlotWidth > 0 且挂着 @click），App / H5 端零宽 ⇒ 入口彻底消失。
+ * 收编后右槽只剩两条渲染路径：组件画字形（rightIcons，n ≥ 1 已覆盖 n = 1）或页面注入 #right。
+ * 本 helper 锁第一条（AI 助手页走的就是它），插槽那条由 ④ 继续锁。
+ *
+ * 三件串成一条：① 页头件真有 rightIcons 分支、且 ai-chat-nav 传了非空字形；
+ * ② 点击经 rightClick → onMenuClick 接到开右抽屉；③ 抽屉真的在页面里渲染并绑菜单项。
+ */
+function rightEntryVisible(nav, navBar, page) {
+  const v = [];
+  if (!/v-if="rightIcons\.length > 0"/.test(navBar)) {
+    v.push('页头件没有 rightIcons 渲染分支 ⇒ 右槽只剩空插槽，入口无可见字形');
+  }
+  // 字形必须非空：字面量数组直接判；绑定标识符则回查脚本里的字符串数组声明
+  const bound = (nav.match(/:right-icons="([^"]+)"/) || [])[1];
+  const expr = bound ? bound.trim() : '';
+  if (expr.length === 0) {
+    v.push('ai-chat-nav 未把 right-icons 传给页头件（传了别的 prop ⇒ 字形落不到屏幕上）');
+  } else {
+    const literal = expr.match(/^\[([\s\S]*)\]$/);
+    let body = '';
+    if (literal) {
+      body = literal[1];
+    } else {
+      const name = expr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const decl = nav.match(new RegExp(name + '\\s*:\\s*string\\[\\]\\s*=\\s*\\[([^\\]]*)\\]'));
+      body = decl ? decl[1] : '';
+    }
+    const glyphs = (body.match(/'[^']*'|"[^"]*"/g) || []).map((s) => s.slice(1, -1));
+    if (glyphs.length === 0 || glyphs.some((g) => g.length === 0)) {
+      v.push('右槽字形为空（right-icons 绑的空数组 / 空串）⇒ 传了也不渲染，入口看不见');
+    }
+  }
+  if (!/@right-click="onMenuClick"/.test(nav)) {
+    v.push('ai-chat-nav 未把 right-click 接到 onMenuClick（点得动也开不了右抽屉）');
+  }
+  if (!/@menu-click="toggleSidebarRight"/.test(page)) {
+    v.push('页面未把 menu-click 接到 toggleSidebarRight（点了也开不了右抽屉）');
+  }
+  if (!/<AiChatDrawerRight[^>]*:menu-items="rightMenuItems"/.test(page)) {
+    v.push('页面未渲染右侧菜单抽屉，或抽屉未绑菜单项（开了也是空的）');
+  }
+  return v;
+}
+
 describe('AI 助手抽屉契约（类型单一来源 / view 不承载文字样式）', () => {
   const right = read(RIGHT);
   const left = read(LEFT);
@@ -153,5 +202,37 @@ describe('左入口可见性（最近对话 / 会话列表，2026-10-27）', () 
     // 判别力：默认值翻成 false 或拆掉透传 ⇒ 两条断言各自失配
     expect(nav.replace(/centerTitle:\s*true/, 'centerTitle: false')).not.toMatch(/centerTitle:\s*true/);
     expect(nav.replace(':center-title="centerTitle"', '')).not.toMatch(/:center-title="centerTitle"/);
+  });
+});
+
+/**
+ * 右入口（右侧菜单抽屉）：2026-10-11（#1649）起不可见 —— 页头件右槽只剩 rightIcons / #right
+ * 两条路径，而 ai-chat-nav 传的是被抽掉的 rightIcon 死 prop。收编后补上右槽的对称兜底。
+ */
+describe('右入口可见性（右侧菜单抽屉，2026-11-10 #2412）', () => {
+  const nav = read(NAV);
+  const navBar = read(NAVBAR);
+  const page = read(PAGE_PATH);
+
+  it('① 三件齐备：组件画字形 + 点击接到开右抽屉 + 抽屉绑菜单项，零违规', () => {
+    expect(rightEntryVisible(nav, navBar, page)).toEqual([]);
+  });
+
+  it('② 判别力：字形置空 / 拆右接线 / 不渲染右抽屉 ⇒ 各自报红', () => {
+    // 字形置空（形态 A）：绑定标识符的字符串数组改成空数组
+    const emptyArray = nav.replace(/(rightIcons\s*:\s*string\[\]\s*=\s*)\[[^\]]*\]/, '$1[]');
+    expect(emptyArray).not.toBe(nav);
+    expect(rightEntryVisible(emptyArray, navBar, page).join()).toMatch(/右槽字形为空/);
+    // 字形置空（形态 B）：直接绑空字面量
+    expect(rightEntryVisible(nav.replace(/:right-icons="[^"]*"/, ':right-icons="[]"'), navBar, page).join()).toMatch(/右槽字形为空/);
+    // 拆右接线：nav 侧 / 页面侧各一处
+    expect(rightEntryVisible(nav.replace('@right-click="onMenuClick"', ''), navBar, page).join()).toMatch(/未把 right-click 接到 onMenuClick/);
+    expect(rightEntryVisible(nav, navBar, page.replace('@menu-click="toggleSidebarRight"', '')).join()).toMatch(/未把 menu-click 接到 toggleSidebarRight/);
+    // 不渲染右抽屉
+    const noDrawer = page.replace(/<AiChatDrawerRight[\s\S]*?\/>/, '');
+    expect(noDrawer).not.toBe(page);
+    expect(rightEntryVisible(nav, navBar, noDrawer).join()).toMatch(/未渲染右侧菜单抽屉/);
+    // 页头件丢了字形分支（回归原形：右槽只剩插槽）
+    expect(rightEntryVisible(nav, navBar.replace('v-if="rightIcons.length > 0"', 'v-if="false"'), page).join()).toMatch(/没有 rightIcons 渲染分支/);
   });
 });
