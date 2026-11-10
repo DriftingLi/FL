@@ -22,6 +22,9 @@
                 <slot name="right"></slot>
             </view>
         </view>
+        <view v-if="showToolbar" class="nav-bar-toolbar">
+            <slot name="toolbar"></slot>
+        </view>
     </view>
 </template>
 
@@ -50,6 +53,19 @@
          * 「左槽有字形（☰）也要居中」的三段式页头，那是左对齐形态（§5.1）唯一要覆盖的场景。
          */
         centerTitle ?: boolean
+        /**
+         * 标题栏下方工具栏（2026-11-10）：多个业务动作的第二行落点，配合 `#toolbar` 插槽使用。
+         *
+         * 为什么不继续挤右槽：右槽的定宽是胶囊让位的代价（典型可用约 194rpx，见 `rightSlotStyle`），
+         * 两个以上动作只能向左溢出压标题；而工具栏整体在标题栏**之下**，与胶囊矩形不相交，
+         * 可以吃满内容盒宽度 —— 这是 ui-spec「放不下由页面把次要动作移出页头」的组件化落点，
+         * 页面不必各自手搓第二行（先例：forum #1846 把发帖 pill 手工下沉到搜索栏）。
+         *
+         * 默认 false ⇒ 全仓现有调用方零 diff（不传就不渲染这一行，视觉逐像素不变）。
+         * 判空不用 `$slots.toolbar`：全仓 .uvue 零 `$slots` 先例，uvue 的插槽存在性探测
+         * 未在本仓验证过，故用显式开关 —— 页面传了 `#toolbar` 再开。
+         */
+        showToolbar ?: boolean
     }>(), {
         title: '',
         leftIcon: '‹',
@@ -59,7 +75,8 @@
         variant: 'plain',
         subtitle: '',
         divider: false,
-        centerTitle: false
+        centerTitle: false,
+        showToolbar: false
     })
 
     const emit = defineEmits(['leftClick', 'rightClick'])
@@ -226,6 +243,19 @@
 
     .nav-bar-right {
         justify-content: flex-end;
+    }
+
+    /* 标题栏下方工具栏：多个业务动作的第二行落点（见 props.showToolbar 的注释）。
+       - 显式 row：漏了会把动作竖排（uvue view 默认 column）；右对齐，与上方右槽同一视觉轴；
+       - 不做胶囊让宽：本行在标题栏之下，胶囊矩形不进入；若把胶囊这段宽度也留空，
+         「第二行」就只剩和右槽一样的可用宽度，等于把挤压原样搬下来；
+       - 高 88rpx 与 .nav-bar-body 一致，触摸目标 44×44。 */
+    .nav-bar-toolbar {
+        flex-direction: row;
+        align-items: center;
+        justify-content: flex-end;
+        height: 88rpx;
+        padding: 0 $spacing-md;
     }
 
     .nav-bar-right-item {
