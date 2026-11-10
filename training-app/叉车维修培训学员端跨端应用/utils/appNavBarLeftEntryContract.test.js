@@ -58,7 +58,7 @@ describe('页头左入口代发契约（真实源码，#1677）', () => {
   });
 
   it('左槽 @click 链仍在（左槽有 icon 时的原返回入口不被拆）', () => {
-    // 判据容忍标签内插入其它属性（2026-10-27 插了 centerTitle 的抬层 :class）。
+    // 判据容忍标签内插入其它属性（2026-10-27 插了抬层 :class，2026-11-10 起值是 titleFloating）。
     // 用 [^>]* 把范围钉在**同一个标签内** —— 放宽成 [\s\S]* 会跨标签，@click 落到别家也算命中（假绿）。
     expect(src).toMatch(/class="nav-bar-side nav-bar-left"[^>]*@click="onLeftClick"/);
   });
@@ -122,13 +122,17 @@ describe('检测器判别力（注入违规样本必红）', () => {
 });
 
 /* ══════════════════════════════════════════════════════════════════════════════
- * 标题恒居中形态（`centerTitle`，2026-10-27）
+ * 标题居中形态（`titleFloating`，2026-10-27 起；2026-11-10 #2402 收口）
  *
- * 起因：AI 助手页左槽补上 ☰ 之后，§5.1 的「左槽有字 ⇒ 标题左对齐」把它变成
- * 「☰ AI 助手 ⋯」挤在左上角；聊天页要的是三段式居中。
+ * 起因一（2026-10-27）：AI 助手页左槽补上 ☰ 之后，§5.1 的「左槽有字 ⇒ 标题左对齐」把它变成
+ * 「☰ AI 助手 ⋯」挤在左上角；聊天页要的是三段式居中 ⇒ 加了 `centerTitle` prop。
  *
- * 这个形态**必须脱流**才是真居中：右槽为让开小程序胶囊带了 width + 大段 margin-right，
- * 标题留在流内只能在「左槽 → 右槽」的剩余宽度里居中，视线上明显偏左。
+ * 起因二（#2402）：`--center`（流内居中）根本不是居中 —— 右槽为让开小程序胶囊带
+ * width + 大段 margin-right，流内标题只能在「左槽 → 右槽」的剩余宽度里居中，视线上必然偏左
+ * （真机复现页：我的）。于是判定收口成一处：**左槽空置且有标题就脱流居中**，
+ * `centerTitle` 降级为「左槽有字也要居中」的覆盖开关，`--center` 形态类整体删除。
+ *
+ * 这个形态**必须脱流**才是真居中，这是全仓唯一一种居中实现。
  *
  * 脱流带来一个**静默失效**风险，正是本组要锁的东西：全宽标题块会盖住左槽 ☰ 与右槽 ⋯，
  * 两层都点不动 —— 不报错、不崩、只是点了没反应。本仓无 `pointer-events` 先例（全仓 0 处），
@@ -137,7 +141,7 @@ describe('检测器判别力（注入违规样本必红）', () => {
  * 会跑到整个页面的原点去。
  * ══════════════════════════════════════════════════════════════════════════════ */
 
-/** centerTitle 形态违规清单：真实文件与注入样本共用同一检测路径。 */
+/** 标题居中形态违规清单：真实文件与注入样本共用同一检测路径。 */
 function centerTitleViolations(srcRaw) {
   const src = stripComments(srcRaw);
   const v = [];
@@ -148,15 +152,35 @@ function centerTitleViolations(srcRaw) {
     v.push('centerTitle 默认值不是 false（现有调用方会被动变形，违反零 diff）');
   }
   if (!/if\s*\(\s*props\.centerTitle\s*\)/.test(src)) {
-    v.push('titleBlockClass 缺 centerTitle 分支（prop 形同虚设）');
+    v.push('titleFloating 缺 centerTitle 直通分支（prop 形同虚设）');
   }
   if (!/nav-bar-title-block--floating-center/.test(src)) {
     v.push('缺 floating-center 形态类');
   }
-  // 两侧槽**都要**挂 --front：漏一个，那一个就点不动
-  const frontCount = (src.match(/nav-bar-side--front':\s*centerTitle/g) || []).length;
+  // 两侧槽**都要**挂 --front：漏一个，那一个就点不动。判据看 titleFloating 而不是 centerTitle ——
+  // #2402 起自动居中（左槽空置）同样脱流，两侧槽若不跟着抬层，☰/⋯ 会一起被盖住。
+  const frontCount = (src.match(/nav-bar-side--front':\s*titleFloating/g) || []).length;
   if (frontCount < 2) {
     v.push(`两侧槽只挂 ${frontCount} 处 --front（应为 2：左 ☰ 与右 ⋯ 都会被脱流标题块盖住）`);
+  }
+  // #2402 收口：居中判定只允许一处 —— 左槽空置且有标题 ⇒ 自动脱流，不再逐页加 prop
+  const trigger = (src.match(/const titleFloating\s*=\s*computed[\s\S]*?\}\)\n/) || [''])[0];
+  if (!trigger) {
+    v.push('缺 titleFloating 判定（页头居中的唯一开关，见 #2402）');
+  } else {
+    if (!/props\.centerTitle/.test(trigger)) {
+      v.push('titleFloating 丢 centerTitle 直通（AI 助手「☰ 标题 ⋯」三段式会翻车）');
+    }
+    if (!/!leftOverlap\.value/.test(trigger)) {
+      v.push('titleFloating 丢「左槽空置」分支（!leftOverlap）—— tabBar 页会退回逐页偏左');
+    }
+    if (!/props\.title\.length\s*>\s*0/.test(trigger)) {
+      v.push('titleFloating 丢非空标题守卫（空标题脱流 ⇒ 长出 574rpx×88rpx 的透明点击区）');
+    }
+  }
+  // 死件防复活：流内居中（--center）已随 #2402 删除，居中只剩脱流这一种实现
+  if (/nav-bar-title-block--center/.test(src)) {
+    v.push('nav-bar-title-block--center 复活（流内居中不成立，居中只允许脱流，见 #2402）');
   }
   const floating = (src.match(/\.nav-bar-title-block--floating-center\s*\{[^}]*\}/) || [''])[0];
   const floatingRules = [
@@ -186,7 +210,7 @@ function centerTitleViolations(srcRaw) {
   return v;
 }
 
-describe('标题恒居中形态（centerTitle，2026-10-27）', () => {
+describe('标题居中形态（titleFloating，2026-10-27 / #2402 收口）', () => {
   const src = h.read(SRC_REL);
 
   it('守约：prop 默认关 + 脱流居中 + 两侧槽抬层 + 包含块齐备，零违规', () => {
@@ -199,13 +223,18 @@ describe('标题恒居中形态（centerTitle，2026-10-27）', () => {
   });
 });
 
-describe('centerTitle 检测器判别力（注入违规样本必红）', () => {
+describe('居中形态检测器判别力（注入违规样本必红）', () => {
   const BASE = [
-    '<view class="nav-bar-side nav-bar-left" :class="{ \'nav-bar-side--front\': centerTitle }"></view>',
-    '<view v-else class="nav-bar-side nav-bar-right" :class="{ \'nav-bar-side--front\': centerTitle }"></view>',
+    '<view class="nav-bar-side nav-bar-left" :class="{ \'nav-bar-side--front\': titleFloating }"></view>',
+    '<view v-else class="nav-bar-side nav-bar-right" :class="{ \'nav-bar-side--front\': titleFloating }"></view>',
     'centerTitle ?: boolean',
     'centerTitle: false',
-    'if (props.centerTitle) { return \'nav-bar-title-block--floating-center\' }',
+    'const titleFloating = computed((): boolean => {',
+    '    if (props.centerTitle) {',
+    '        return true',
+    '    }',
+    '    return props.title.length > 0 && !leftOverlap.value',
+    '})',
     '<style lang="scss">',
     '.nav-bar-body { position: relative; }',
     '.nav-bar-side--front { position: relative; z-index: 2; }',
@@ -232,9 +261,30 @@ describe('centerTitle 检测器判别力（注入违规样本必红）', () => {
 
   it('漏挂一处 --front（右槽点不动）→ 报「只挂 1 处」', () => {
     const v = centerTitleViolations(
-      BASE.replace(' :class="{ \'nav-bar-side--front\': centerTitle }"></view>', '></view>')
+      BASE.replace(' :class="{ \'nav-bar-side--front\': titleFloating }"></view>', '></view>')
     );
     expect(v.some((x) => x.includes('只挂 1 处'))).toBe(true);
+  });
+
+  it('自动居中分支被摘掉（退回逐页加 prop）→ 报「左槽空置」', () => {
+    const v = centerTitleViolations(
+      BASE.replace('return props.title.length > 0 && !leftOverlap.value', 'return false')
+    );
+    expect(v.some((x) => x.includes('左槽空置'))).toBe(true);
+  });
+
+  it('去掉非空标题守卫（空标题也脱流）→ 报「透明点击区」', () => {
+    const v = centerTitleViolations(
+      BASE.replace('return props.title.length > 0 && !leftOverlap.value', 'return !leftOverlap.value')
+    );
+    expect(v.some((x) => x.includes('透明点击区'))).toBe(true);
+  });
+
+  it('复活流内居中 --center → 报「复活」（居中只允许脱流一种实现）', () => {
+    const v = centerTitleViolations(
+      BASE.replace('</style>', '.nav-bar-title-block--center { align-items: center; }</style>')
+    );
+    expect(v.some((x) => x.includes('复活'))).toBe(true);
   });
 
   it('两侧槽去掉 z-index → 报「缺 z-index」（这是「点了没反应」的唯一防线）', () => {
