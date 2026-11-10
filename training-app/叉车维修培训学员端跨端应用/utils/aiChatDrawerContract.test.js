@@ -84,6 +84,11 @@ function rightEntryVisible(nav, navBar, page) {
   if (!/v-if="rightIcons\.length > 0"/.test(navBar)) {
     v.push('页头件没有 rightIcons 渲染分支 ⇒ 右槽只剩空插槽，入口无可见字形');
   }
+  // 同义 prop 不得复活：它是本票的成因（#1649 删了分支却留下 prop），收编后右槽只有
+  // rightIcons / #right 两条路径（ADR 0063）；再长出第三条只会让下一个调用方再被骗一次
+  if (/rightIcon\s*\?:\s*string/.test(navBar)) {
+    v.push('页头件又声明了 rightIcon prop（#2412 已收编为 rightIcons 一条路径，同义 prop 不得复活，见 ADR 0063）');
+  }
   // 字形必须非空：字面量数组直接判；绑定标识符则回查脚本里的字符串数组声明
   const bound = (nav.match(/:right-icons="([^"]+)"/) || [])[1];
   const expr = bound ? bound.trim() : '';
@@ -205,10 +210,7 @@ describe('左入口可见性（最近对话 / 会话列表，2026-10-27）', () 
   });
 });
 
-/**
- * 右入口（右侧菜单抽屉）：2026-10-11（#1649）起不可见 —— 页头件右槽只剩 rightIcons / #right
- * 两条路径，而 ai-chat-nav 传的是被抽掉的 rightIcon 死 prop。收编后补上右槽的对称兜底。
- */
+/** 右入口（右侧菜单抽屉）：补上右槽与 leftEntryVisible 对称的兜底（#2412）。 */
 describe('右入口可见性（右侧菜单抽屉，2026-11-10 #2412）', () => {
   const nav = read(NAV);
   const navBar = read(NAVBAR);
@@ -234,5 +236,9 @@ describe('右入口可见性（右侧菜单抽屉，2026-11-10 #2412）', () => 
     expect(rightEntryVisible(nav, navBar, noDrawer).join()).toMatch(/未渲染右侧菜单抽屉/);
     // 页头件丢了字形分支（回归原形：右槽只剩插槽）
     expect(rightEntryVisible(nav, navBar.replace('v-if="rightIcons.length > 0"', 'v-if="false"'), page).join()).toMatch(/没有 rightIcons 渲染分支/);
+    // 同义 prop 复活（本票原形：prop 在、分支没了）
+    const resurrected = navBar.replace('rightIcons ?: string[]', 'rightIcon ?: string\n        rightIcons ?: string[]');
+    expect(resurrected).not.toBe(navBar);
+    expect(rightEntryVisible(nav, resurrected, page).join()).toMatch(/又声明了 rightIcon prop/);
   });
 });

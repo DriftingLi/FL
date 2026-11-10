@@ -108,7 +108,7 @@
 defineProps<{
   title?: string        // 导航栏标题
   leftIcon?: string     // 左侧图标文字（默认 ‹）
-  rightIcon?: string    // 右侧图标文字
+  rightIcons?: string[] // 右侧图标文字（可多个；单图标也走数组）
   transparent?: boolean // 是否透明背景（渐变页面用）
 }>()
 defineEmits(['leftClick', 'rightClick'])
