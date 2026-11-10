@@ -9,9 +9,10 @@
  *  2. **返回副本、绝不改动入参**（入参 `options.data` 还要原样发出去）；
  *  3. null 原样返回 null，不炸。
  *
- * ⚠️ 边界：JS 的 `x as UTSJSONObject` 是类型擦除的 no-op（不抛），而 Kotlin 真机对非对象会抛
- *   ClassCastException 走 catch 分支。故本缝只覆盖**对象**与 **null** 两支 —— 标量 / 数组请求体
- *   本仓不存在（auth 请求体都是扁平 UTSJSONObject），不在射程内。
+ * ⚠️ 边界：本缝只覆盖**对象**与 **null** 两支 —— 标量请求体本仓不存在（auth 请求体都是
+ *   扁平 UTSJSONObject），不在射程内。**数组**一支自 #2404 起由
+ *   `utils/bareArrayEnvelopeBehavior.test.js` 覆盖（形状判定已改为显式 `Array.isArray`，
+ *   不再依赖「`as` 抛异常」—— 那在 JS 运行时被擦除、在 Kotlin 抛异常，两支结果不一致）。
  */
 /** 把传输层真件当 JS 跑起来，取它导出的 sanitizeForLog */
 const path = require('path');

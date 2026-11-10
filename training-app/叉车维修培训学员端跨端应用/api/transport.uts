@@ -180,19 +180,15 @@ function isSensitiveLogKey(key : string) : boolean {
  * （`doSingleRequest`），就地打码会连同真实请求体一起毁掉。
  *
  * 只处理**扁平对象**请求体：本仓敏感请求体（登录 / 登出 / 刷新 / 验证码）的敏感值都在顶层键；
- * 非对象形态（null / 数组 / 标量）原样返回，不做递归（无需要脱敏的嵌套载荷，YAGNI）。
+ * 非对象形态（null / 数组）原样返回，不做递归（无需要脱敏的嵌套载荷，YAGNI）。
+ * 标量请求体本仓不存在（auth 请求体都是扁平 UTSJSONObject），不在射程内。
  */
 export function sanitizeForLog(data : any | null) : any | null {
     if (data == null) return null
-    let casted : UTSJSONObject | null = null
-    try {
-        casted = data as UTSJSONObject
-    } catch (e) {
-        // 非对象形态（数组 / 标量）：本仓无此类敏感请求体，原样返回
-        return data
-    }
-    if (casted == null) return data
-    const obj : UTSJSONObject = casted!
+    // 形状判定先判数组（#2404）：`as UTSJSONObject` 在 Kotlin 抛异常、在 JS 被擦除，
+    // 两种运行时的分支结果不一致 ⇒ 显式判形。数组请求体无具名键可打码，原样返回。
+    if (Array.isArray(data)) return data
+    const obj : UTSJSONObject = data as UTSJSONObject
     const out : UTSJSONObject = {}
     for (const k in obj) {
         if (isSensitiveLogKey(k)) {
@@ -207,9 +203,10 @@ export function sanitizeForLog(data : any | null) : any | null {
 /**
  * 统一信封解析：HTTP 状态码 + 业务 code 双重校验，成功时解包 data 字段
  * @returns true=已给出最终结果（resolve/reject）；false=HTTP 401，由调用方决定刷新/登出
- * @note 后端各接口 data 有「对象」与「裸数组」两种形态。Android 端数组无法
- *       as UTSJSONObject（会抛 ClassCastException），此处捕获后统一包装为
- *       { list: [...] }，由各 API 层按 list 字段取值。
+ * @note 后端各接口 data 有「对象」与「裸数组」两种形态。裸数组统一包装为
+ *       { list: [...] }，由各 API 层按 list 字段取值。形状判定走 `Array.isArray`
+ *       而**不是**「cast 抛异常」——后者在 JS 运行时（小程序 / H5）被完全擦除，
+ *       裸数组会原样透传、消费方按信封取键恒落空（#2404）。
  */
 export function handleStatus(statusCode : number, body : UTSJSONObject, silent : boolean, fallbackMsg : string, resolve : (v : UTSJSONObject) => void, reject : (e : Error) => void) : boolean {
     if (statusCode == 401) {
@@ -278,14 +275,19 @@ export function handleStatus(statusCode : number, body : UTSJSONObject, silent :
         resolve({})
         return true
     }
-    let dataObj : UTSJSONObject
-    try {
-        dataObj = data as UTSJSONObject
-    } catch (e) {
-        // data 为数组：包装为 { list: [...] }
-        dataObj = { list: data } as UTSJSONObject
+    // 形状判定**必须先判数组**，不能靠 `data as UTSJSONObject` 抛异常（#2404）：
+    // `as` 在 App(Kotlin) 是运行时强转、数组抛 ClassCastException 进 catch；但在 JS 运行时
+    // （小程序 / H5）被**完全擦除**、裸数组原样透传 ⇒ 消费方按信封取键恒落空
+    // （现象：App 端查得到历史对话、小程序端查不到）。
+    // `Array.isArray` 是官方 sanctioned 的数组判定（docs/uts/README.md「类型判断」），
+    // 两种运行时都有定义；`instanceof UTSJSONObject` 不可用 —— JS 侧 `uni.request` 的
+    // res.data 是纯 JS 对象，不是 UTSJSONObject 实例。
+    if (Array.isArray(data)) {
+        // 保留 App 语义：裸数组统一包装为 { list: [...] }，消费方零改动
+        resolve({ list: data } as UTSJSONObject)
+        return true
     }
-    resolve(dataObj)
+    resolve(data as UTSJSONObject)
     return true
 }
 
