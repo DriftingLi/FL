@@ -44,19 +44,20 @@
 	import type { AiDiagnosisSource, AiDiagnosisMeta, MarkdownBlock, MarkdownImageClick } from '../../types/index'
 
 	/**
-	 * AI 回答面的能力位（#2354 决议 D2）：**七位**，与 `chapter-markdown.uvue` 的 `CHAPTER_CAPS` 同形
+	 * AI 回答面的能力位（#2354 决议 D2）：**八位**，与 `chapter-markdown.uvue` 的 `CHAPTER_CAPS` 同形
 	 * （常量写在壳件脚本里，不散进模板字面量）。
 	 *
 	 * - 与 `SUBSET_MEMBERS_AI_ANSWER` 的差集只有一处：多一个 `paragraph`。它是**段落地板**，
 	 *   从来没进过解析器那边的声明表（`markdownContract.test.js` 有一条
 	 *   `not.toContain('MEMBER_PARAGRAPH')` 钉着），但公共件的 paragraph 分支靠 `cap('paragraph')`
 	 *   开 —— 不传这一位，整条回答只剩标题与列表，正文整体消失。
-	 * - **不传 `table`**：AI 档本来就不声明它，窄气泡里表格按行退回原始文本是既定口径。
+	 * - `table` 自 #2398 起**传**（移动端 ADR 0061）：解析器那边同批声明了它，两处缺一处表格块
+	 *   就静默消失且日志无异常 —— 这正是本票 AC① 要钉的失败模式。
 	 * - 这两处天然是**两份事实**（声明表 vs 这里的手写清单），所以 `markdownContract` 套件里
 	 *   有一条源守卫钉「每一项 ∈ 声明表 ∪ {paragraph}」，防「AI 档日后加成员而 caps 不跟」。
 	 */
 	const AI_ANSWER_CAPS : string[] = [
-		'heading', 'paragraph', 'code', 'list', 'quote', 'divider', 'image'
+		'heading', 'paragraph', 'code', 'list', 'quote', 'divider', 'image', 'table'
 	]
 
 	const props = withDefaults(defineProps<{

@@ -60,11 +60,13 @@
             <!-- 图片（点击向页面 emit，previewImage 仍留在页面壳层） -->
             <image v-else-if="cap('image') && block.type == 'image'" class="md-image" :src="block.text" mode="widthFix"
                 @click="onImageTap(idx, block.text)"></image>
-            <!-- 表格（ADR-0046：章节正文渲染成表格；解析器按行出块，表头行 level=1；行间归零由 mt-0 档承担） -->
+            <!-- 表格（ADR-0046：章节正文渲染成表格；解析器按行出块，表头行 level=1；行间归零由 mt-0 档承担）
+                 单元格自 #2398 起走 runs（移动端 ADR 0061）：声明 inline 的档里单元格存的是行内源串，
+                 直出会把 `**粗**` 原样吐出来。字号另立 `.md-sz-table`（26rpx），不跟正文档 30rpx。 -->
             <view v-else-if="cap('table') && block.type == 'table'" class="md-table-row">
                 <view v-for="(cell, ci) in block.items" :key="ci"
                     :class="{ 'md-table-cell': true, 'md-table-cell-first': ci == 0, 'md-table-cell-head': block.level == 1 }">
-                    <text :class="{ 'md-table-cell-text': true, 'md-table-cell-text-head': block.level == 1 }">{{ cell }}</text>
+                    <text :class="{ 'md-table-cell-text': true, 'md-table-cell-text-head': block.level == 1 }"><text v-for="(run, ri) in runsOf(cell)" :key="ri" :class="tableRunClasses(run, block.level == 1)" @click="onRunTap(run)">{{ runText(run) }}</text><text v-if="!runsOn">{{ cell }}</text></text>
                 </view>
             </view>
         </view>
@@ -184,6 +186,23 @@
         const tier : string = idx < tiers.value.length ? tiers.value[idx].size : 'body'
         cls.push(sizeClassOf(tier))
         cls.push(runColorClassOf(tier))
+        if (run.bold) cls.push('md-run-b')
+        if (run.italic) cls.push('md-run-i')
+        if (run.strike) cls.push('md-run-s')
+        if (run.code) cls.push('md-run-c')
+        if (run.link.length > 0) cls.push('md-run-l')
+        return cls
+    }
+
+    /**
+     * 表内 run 的类（#2398）：字号**恒取表格档** `.md-sz-table`（26rpx），不取所在块的 tier ——
+     * 表格块的 tier 是正文档（`markdownTypography` 把 table 归 body），照 tier 走会把表内文字
+     * 从 26rpx 顶到 30rpx，等于顺手改了表格刻度。表头另叠 `.md-run-table-head`（加粗 + 深色），
+     * 因为父 `.md-table-cell-text-head` 的样式带不到子 `<text>`（ADR-0025 C1）。
+     */
+    const tableRunClasses = (run : MarkdownInlineRun, isHead : boolean) : string[] => {
+        const cls : string[] = ['md-sz-table']
+        cls.push(isHead ? 'md-run-table-head' : 'md-run-text')
         if (run.bold) cls.push('md-run-b')
         if (run.italic) cls.push('md-run-i')
         if (run.strike) cls.push('md-run-s')
@@ -459,6 +478,19 @@
     }
 
     .md-table-cell-text-head {
+        font-weight: $md-weight-heading;
+        color: $md-color-heading;
+    }
+
+    /* 表内 run 的字号档（#2398）：表格是 26rpx 档，与正文档 30rpx 不同 —— 保留表格刻度，
+       不把表内文字顶到正文档档位。子 text 不继承父样式（ADR-0025 C1）⇒ 必须自带。 */
+    .md-sz-table {
+        font-size: $md-table-size;
+        line-height: $md-table-line;
+    }
+
+    /* 表头 run：与 .md-table-cell-text-head 同口径（runs 轴上父类带不到子 text） */
+    .md-run-table-head {
         font-weight: $md-weight-heading;
         color: $md-color-heading;
     }

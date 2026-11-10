@@ -74,14 +74,15 @@ describe('子集声明表：三档可枚举，未知档退到章节档', () => {
     expect(new Set([m.SUBSET_CHAPTER, m.SUBSET_FEATURED, m.SUBSET_FORUM, m.SUBSET_AI_ANSWER]).size).toBe(4);
   });
 
-  it('AI 回答档：声明 image 与 inline，不声明 table（移动端 ADR 0056 / #2366）', () => {
+  it('AI 回答档：声明 image、table 与 inline（移动端 ADR 0056 / #2366 / #2398）', () => {
     // 声明 image 是「配图可见」的前提；声明 inline 是气泡改走行内 runs 的前提（块文本交源串，
-    // 记号由渲染层吞）。不声明 table 沿用「按行退回原始文本」的段落地板。
+    // 记号由渲染层吞）；声明 table 自 #2398 起 —— 诊断回答的对照表要渲成原生表格，
+    // 不再是「按行退回原始文本」的竖线原文（移动端 ADR 0061）。
     const m = md();
     const members = declared(m, m.SUBSET_AI_ANSWER);
     expect(members).toContain(m.MEMBER_IMAGE);
     expect(members).toContain(m.MEMBER_INLINE);
-    expect(members).not.toContain(m.MEMBER_TABLE);
+    expect(members).toContain(m.MEMBER_TABLE);
     // 声明 inline 的连带事实：有序列表在本档拿到 OL 编号（`level` 槽 0→1），能力面变化已记移动端 ADR 0059
     const ol = m.parseMarkdown('3. 起步', m.SUBSET_AI_ANSWER);
     expect(ol[0].level).toBe(m.LIST_LEVEL_OL);
@@ -203,13 +204,15 @@ describe('行为对账 · 反向：未声明的成员不得出块，且内容退
 // ===== ④ 零回归：既有两档的行为没被这次改造动过 =====
 
 describe('零回归（ADR-0025 ⑤）：章节档的行为逐条不变（精选面自 #2124 退出该保证）', () => {
-  it('章节档仍是唯一出表格块的档，且表头/正文 level 口径不变', () => {
+  it('章节档与 AI 回答档都出表格块，且表头/正文 level 口径不变', () => {
     const m = md();
-    const blocks = m.parseMarkdown(TABLE, m.SUBSET_CHAPTER);
-    expect(types(blocks)).toEqual(['table', 'table']);
-    expect(blocks.map((b) => b.level)).toEqual([m.TABLE_LEVEL_HEAD, m.TABLE_LEVEL_BODY]);
-    expect(blocks[0].items).toEqual(['故障码', '含义']);
-    expect(blocks.map((b) => b.text)).toEqual(['故障码 含义', 'E01 电压过低']);
+    for (const subset of [m.SUBSET_CHAPTER, m.SUBSET_AI_ANSWER]) {
+      const blocks = m.parseMarkdown(TABLE, subset);
+      expect(types(blocks)).toEqual(['table', 'table']);
+      expect(blocks.map((b) => b.level)).toEqual([m.TABLE_LEVEL_HEAD, m.TABLE_LEVEL_BODY]);
+      expect(blocks[0].items).toEqual(['故障码', '含义']);
+      expect(blocks.map((b) => b.text)).toEqual(['故障码 含义', 'E01 电压过低']);
+    }
   });
 
   it('公式在两档都降级为源码且原样可见（含下标不被斜体规则撕碎）', () => {

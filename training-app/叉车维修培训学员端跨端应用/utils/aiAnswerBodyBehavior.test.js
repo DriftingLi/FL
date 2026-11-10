@@ -21,8 +21,8 @@
  * （`utils/markdownInline.uts` 的 `splitInlineRuns` / `inlineRunsPlainText`，真执行注入）。
  *
  * 成对取证（③ 判据③）：末组用注入变异的副本证明上面的判据**有牙**，两种真实坏实现——
- * ① 摘掉 #1279 的展开前置（百分号编码的内网路径进正文）；② 档位拿错（论坛档换成章节档，
- * 表格被渲染出来 —— 与「两面同档」的裁定直接冲突）。
+ * ① 摘掉 #1279 的展开前置（百分号编码的内网路径进正文）；② 档位拿错（AI 回答档换成论坛档，
+ * 表格退回逐行段落 —— 与 #2398「表格渲成原生表格」的裁定直接冲突）。
  */
 const fs = require('fs');
 const os = require('os');
@@ -134,12 +134,21 @@ describe('aiAnswerBody 壳层（真执行）', () => {
     expect(all).not.toContain('1721219449286');
   });
 
-  it('表格与公式保持论坛档降级（按行段落、源码原样 —— 「仍可读」不是白说的）', () => {
+  it('表格渲成 table 块（#2398），公式仍按论坛档降级（源码原样 —— 「仍可读」不是白说的）', () => {
     const blocks = shell().aiAnswerBlocks(TABLE);
-    expect(blocks.every((b) => b.type === 'paragraph')).toBe(true);
-    expect(JSON.stringify(blocks)).toContain('|');
+    expect(blocks.map((b) => b.type)).toEqual(['table', 'table']);
+    expect(blocks[0].items).toEqual(['故障码', '含义']);
+    expect(blocks[1].items).toEqual(['E01', '电压过低']);
+    // 表头行 level=1、正文行 level=0 —— 渲染层靠它区分表头样式（AC③ 的可见区分）
+    expect(blocks.map((b) => b.level)).toEqual([1, 0]);
     const formula = shell().aiAnswerBlocks('扭矩 $M = F \\times d$ 超限。');
     expect(JSON.stringify(formula)).toContain('$M = F');
+  });
+
+  it('表内行内记号保留源串（#2398 AC④）：单元格存 `**粗**` / 行内码，由渲染层吞', () => {
+    const blocks = shell().aiAnswerBlocks('| 项 | 说明 |\n| --- | --- |\n| **急停** | 按 `红色` 按钮 |');
+    expect(blocks.map((b) => b.type)).toEqual(['table', 'table']);
+    expect(blocks[1].items).toEqual(['**急停**', '按 `红色` 按钮']);
   });
 
   it('空回答 ⇒ 空数组（渲染出空气泡，与旧纯文本行为等价）', () => {
@@ -309,9 +318,11 @@ describe('成对取证（必红）：本套件的判据在坏实现上确实会�
     expect(all).toContain('fault_images/');
   });
 
-  it('必红 · 档位拿错（AI 回答档→章节档）⇒ 表格被渲成 table 块，「窄气泡不画表格」判据必然判红', () => {
-    const broken = loadMutated([['parseMarkdown(expandLegacyImageMarkers(raw), SUBSET_AI_ANSWER)', 'parseMarkdown(expandLegacyImageMarkers(raw), SUBSET_CHAPTER)']]);
-    expect(broken.aiAnswerBlocks(TABLE).some((b) => b.type === 'table')).toBe(true);
+  it('必红 · 档位拿错（AI 回答档→论坛档）⇒ 表格退回逐行段落，「表格渲成原生表格」判据必然判红', () => {
+    // #2398 起 AI 档与章节档**都**声明 table，故变异目标换成论坛档（仍不声明 table）——
+    // 拿错档位的真实后果就是「表格又变回竖线原文」，这正是本票要挡的那件事。
+    const broken = loadMutated([['parseMarkdown(expandLegacyImageMarkers(raw), SUBSET_AI_ANSWER)', "parseMarkdown(expandLegacyImageMarkers(raw), 'forum')"]]);
+    expect(broken.aiAnswerBlocks(TABLE).some((b) => b.type === 'table')).toBe(false);
   });
 
   it('必红 · 摘掉站内前缀闸 ⇒ 站外图变成 image 块，图片请求直连第三方主机', () => {
