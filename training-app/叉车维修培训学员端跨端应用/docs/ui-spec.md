@@ -211,7 +211,7 @@
 - 高度：`88rpx`（**不含状态栏**）
 - 状态栏占位：由本件内部按 `useSafeArea()` 取值渲染，**页面不再自带 `<view class="status-bar">`**
 - 右侧按钮区：右边界**不得越过微信胶囊左边界**（`getMenuButtonBoundingClientRect().left` − 安全间距），也不得写死魔数
-- 标题：居中，`$font-size-xl`（36rpx），font-weight bold
+- 标题：居中，`$font-size-xl`（36rpx），font-weight bold；**居中必须脱流**（胶囊让位把右槽撑宽，流内居中必然偏左，#2402 / ADR-0062）
 - 左侧返回按钮：`‹` 字符，`44rpx`
 - 右侧图标：`44rpx`
 - 背景：随页头套走（§7：N01 `$primary-color` / N02–N03 `$bg-header` / N05 `transparent` 页面自垫 / N06 白名单无页头）

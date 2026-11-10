@@ -159,12 +159,19 @@ function buildSessionMessage(obj : UTSJSONObject) : AiSessionMessage {
 
 /** 从 data 中提取数组（兼容直接数组 / {key:[]}） */
 function extractArray(data : UTSJSONObject, key : string) : Array<UTSJSONObject> {
+	// 第二道兜底（#2404）：data 本身是裸数组时直接返回。**必须放在取键之前** ——
+	// 数组上按字符串键取值在 Kotlin 侧会抛 ClassCastException。
+	// 传输层（api/transport.uts 的 handleStatus）已把裸数组归一成 {list:[...]}；
+	// 这里兜的是「归一失效」的最后一道：宁可多判一次形状，也不要静默返回空列表。
+	if (Array.isArray(data)) {
+		const anyData : any = data
+		return anyData as Array<UTSJSONObject>
+	}
 	const raw = data[key]
 	if (raw != null) {
 		return raw as Array<UTSJSONObject>
 	}
-	// data 本身可能就是数组（request 层把 data 解包后若是数组会转成 UTSJSONObject 有问题）
-	// 这里再尝试 items/list
+	// 再尝试 items/list
 	const items = data['items']
 	if (items != null) return items as Array<UTSJSONObject>
 	const list = data['list']
