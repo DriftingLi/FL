@@ -241,7 +241,12 @@
         justify-content: flex-start;
     }
 
+    /* rightIcons 分支（多图标）：uvue 的 <view> 默认 flex 且竖向（flex-direction: column），
+       漏写 row 会让 2 个以上图标竖排；右对齐让字形贴胶囊安全右缘，与 #right 插槽分支同一视觉轴。
+       单图标形态的水平位移是预期几何（字形右缘 = 胶囊左边线 − 36rpx），见 docs/ui-spec.md §5.1。 */
     .nav-bar-right {
+        flex-direction: row;
+        align-items: center;
         justify-content: flex-end;
     }
 
