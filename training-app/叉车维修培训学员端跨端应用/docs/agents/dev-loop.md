@@ -305,6 +305,12 @@ L 系列钉 `-Mode` / `-Leg` 两维的机检可判读性（L1a–L1c 成对腿�
   比 #1410 记的「并行 60–90 s / 串行 236 s」与 2026-10-14 的「178 套件 880 s」又大了一截——
   套件从 146 → 178 → 190，**行为套件变重**（`mpWeixinGateResultLineBehavior` 从 265 s 涨到 496 s）是主因
   ⇒ **旧账不能当现测引**，引之前先现跑一次，并把新数写回 `docs/adr/0042`。
+- **时间账现测换跑（2026-11-08，#2260 / post-#2326）**：上面「只认这一跑」的 2026-10-18 旧数（接线 42 s + 行为 1129 s = 全量门 1172 s）**保留为历史、不再当现测**；现测改为隔离干净树 `wt-2260` / `feat/2260`（head `f651508`，post-#2326）跑的一次全量两腿 `-UnitGate`：
+  `TEST_UNIT_RESULT exit=0 suites=138 suitesFailed=0 tests=2945 testsFailed=0 time=25.105s wall=27s … dirty=clean`、
+  `TEST_BEHAVIOR_RESULT exit=0 suites=105 suitesFailed=0 tests=1288 testsFailed=0 time=849.177s wall=851s … dirty=clean planned=105 completed=105 stalls=0`、
+  `  两腿合计 wall=879s（每腿自己的 wall= 在各自机检行里）` = **879 s = 14.65 min**（两腿 `exit=0` / `dirty=clean`）。
+  行为腿逐套件心跳 105 条全 PASS、reporter 逐套件 `elapsed` 合计 **676.9 s**、机检行 `time=849.177s`（拼出汇总行）、入口 `wall=851s` 三者不混读（ADR-0042 行 90 判据）；最慢单套 `kotlinAllProcessCaptureBehavior` **73.2 s**（旧 496 s / A-1 628.8 s 量级随 #2326 消失）；现存 4 条 mpWeixin 套合计约 56.7 s、无一套 >5 min；分类 `243 = 138 + 105`（`classify-guards.mjs --json`，与两行 `suites` 吻合）；整棵树 `git status --porcelain` 启动前后均 0 行。
+  ⇒ 机制：#2326 删掉占旧行为腿 57.9% 的两慢套，行为腿墙钟从 A-1 直跑 1814 s（30.2 min）降到本次门 851 s（14.2 min）；「全量两腿 ≤25 min」由 A-1 的「现状不可达」翻转为**达成**。完整读数与历史行不动的回填见移动端 `docs/adr/0042-测试门拆腿与逐套件心跳.md` 文末「实测回填（#2260 …）」段。
 
 ### 本地收口走行为腿子集（#2034 立，ADR-0046 步骤 3 的唯一入口）
 
