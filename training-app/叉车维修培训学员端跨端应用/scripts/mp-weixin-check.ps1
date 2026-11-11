@@ -54,6 +54,11 @@ try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
 $OutputEncoding = [System.Text.Encoding]::UTF8
 
 $DistRelative = 'unpackage\dist\build\mp-weixin'
+# 主包体积两条线（#2417）：2 MiB 是微信**硬限**（超了上传直接拒）⇒ 判失败；1.5 MiB 只是**建议**线
+# （上传面板口径）。为什么建议线不判红：minified 是**上传时**压缩（#2415 同树 A/B 实测：开关 ON/OFF
+# 产物字节只差 42 B、.js 分毫不差）⇒ 本地产物字节反映不了上传后的读数，1.5 M 的权威读数只在面板上。
+$MainHardLimitBytes = 2097152
+$MainAdvisoryBytes = 1572864
 # 开发者工具 cli.bat 的自动探测候选（逐字取自 HEAD 346–352 行）。
 # ⚠️ 必须留在顶层：Resolve-DevToolsCli 在不传 -DevToolsCli 时枚举它（= npm 入口的真实形态），
 # 而 Set-StrictMode 下「使用早于定义」当场抛「无法检索变量」——装配器按行区间抽取时把旧常量块整段跳过了（#2326 实测：
@@ -321,12 +326,20 @@ function New-GatePlan {
         exit2    = @()
         resultLine = [ordered]@{
             prefix = 'MP_WEIXIN_BUILDONLY_RESULT'
+            # 字段 = 这一轮真能读到的读数（列着读不到的字段就是逼执行路径填假值）。
+            # #2417 起补三枚产物开关读数 + 主包字节数与 2 MiB 硬限判定：票面要的是「结果行直接读出」——
+            # 开关只写在日志正文里时，人读结果行看不出产物到底带没带，等于没读。
             fields = @(
                 [ordered]@{ name = 'appid' },
                 [ordered]@{ name = 'pages' },
                 [ordered]@{ name = 'product' },
+                [ordered]@{ name = 'lazyCodeLoading' },
+                [ordered]@{ name = 'minified' },
+                [ordered]@{ name = 'es6' },
                 [ordered]@{ name = 'build' },
                 [ordered]@{ name = 'elapsed' },
+                [ordered]@{ name = 'mainBytes' },
+                [ordered]@{ name = 'main2m' },
                 [ordered]@{ name = 'log' }
             )
         }
@@ -651,8 +664,73 @@ try {
         }
     }
 
+    # 3.6) **发行开关 + 主包字节数（#2417）** —— 判据取**产物**，不取仓根配置。
+    #      为什么不取仓根：仓根 project.config.json / manifest.json 改对了、产物却没带（构建没重来 /
+    #      HBuilderX 没把仓根那份复制进产物）时，上传面板的「JS 压缩」「组件按需注入」照样红 ⇒
+    #      断言源码只会给出假绿。为什么排在这里：产物合法性过了才谈得上读开关（坏产物已在 3) 拦掉）。
+    #      失败行各自一个 stage（lazy-code-loading / minified / es6 / main-package）＋ actual= 实读值
+    #      ⇒ 一眼分辨是哪一条坏的，不用去翻日志找上下文。
+    $artifact = Get-MpWeixinArtifactReadings -Dist $dist
+    if (-not $artifact.ok) {
+        Write-Host "[error] 产物开关读数失败（stage=$($artifact.stage)）：$($artifact.detail)" -ForegroundColor Red
+        Write-Log "$(Get-GateResultPrefix) errors=1 stage=$($artifact.stage) detail=$($artifact.detail)"
+        exit 1
+    }
+    Write-Log "产物读数 = $($artifact.detail)"
+    Write-Host "产物读数 = $($artifact.detail)"
+
+    # ① 组件按需注入：值必须是 requiredComponents（缺字段与写错值都判失败 —— 缺了等于没开）
+    if ("$($artifact.lazyCodeLoading)" -ne 'requiredComponents') {
+        $lazyActual = Format-ProductSwitchValue $artifact.lazyCodeLoading
+        Write-Host "[error] 产物 app.json 的 lazyCodeLoading 为 $lazyActual（期望 requiredComponents）" -ForegroundColor Red
+        Write-Host '        组件按需注入是上传面板的【必须】项；开关写在 manifest.json 的 mp-weixin 节点内才会进产物。' -ForegroundColor Red
+        Write-Host '        处置：改 manifest.json 的 mp-weixin.lazyCodeLoading 后重跑一次发行构建（产物没重来就别指望变）。' -ForegroundColor Red
+        Write-Log "$(Get-GateResultPrefix) errors=1 stage=lazy-code-loading actual=$lazyActual detail=产物 app.json 缺 lazyCodeLoading 或值不是 requiredComponents（须在 manifest.json 的 mp-weixin 节点内声明）"
+        exit 1
+    }
+
+    # ② JS 压缩：minified 必须是 JSON 布尔 true（字符串 "true" 会被微信按布尔读成没开 ⇒ 判失败）
+    if (-not (Test-ProductSwitchBool $artifact.minified $true)) {
+        $minActual = Format-ProductSwitchValue $artifact.minified
+        Write-Host "[error] 产物 project.config.json 的 setting.minified 为 $minActual（期望 true）" -ForegroundColor Red
+        Write-Host '        JS 压缩是上传面板的【必须】项，且只在**上传时**生效（本地产物字节不因此变化，故必须看开关本身）。' -ForegroundColor Red
+        Write-Host '        处置：改仓根 project.config.json 的 setting.minified（HBuilderX 会原样复制进产物）后重跑构建。' -ForegroundColor Red
+        Write-Log "$(Get-GateResultPrefix) errors=1 stage=minified actual=$minActual detail=产物 project.config.json 的 setting.minified 不为 true（仓根 project.config.json 须为 true，HBuilderX 原样复制进产物）"
+        exit 1
+    }
+
+    # ③ es6 降级必须关：开成 true 会把代码降级成 ES5（体积反而涨），而面板只查「JS 是否被压缩」
+    if (-not (Test-ProductSwitchBool $artifact.es6 $false)) {
+        $es6Actual = Format-ProductSwitchValue $artifact.es6
+        Write-Host "[error] 产物 project.config.json 的 setting.es6 为 $es6Actual（期望 false）" -ForegroundColor Red
+        Write-Host '        es6 打开会把代码降级编译成 ES5：体积涨、面板的「JS 压缩」也不看它 —— 本仓裁定保持 false。' -ForegroundColor Red
+        Write-Log "$(Get-GateResultPrefix) errors=1 stage=es6 actual=$es6Actual detail=产物 project.config.json 的 setting.es6 不为 false（本仓保持 es6=false，降级成 ES5 只会让包更大）"
+        exit 1
+    }
+
+    # ④ 主包字节数：2 MiB 硬限判失败；1.5 MiB 只是**建议**线 ⇒ 只打印读数与「权威读数是上传面板」，不判红
+    $mainVerdict = if ($artifact.mainBytes -gt $MainHardLimitBytes) { 'over' } else { 'ok' }
+    $advisory = if ($artifact.mainBytes -gt $MainAdvisoryBytes) { 'over' } else { 'under' }
+    Write-Log "main-package mainBytes=$($artifact.mainBytes) totalBytes=$($artifact.totalBytes) files=$($artifact.files) subPackages=$($artifact.subPackages) advisory1.5m=$advisory hard2m=$mainVerdict limit=$MainHardLimitBytes"
+    Write-Host "主包字节数 = $($artifact.mainBytes) B（全量 $($artifact.totalBytes) B / $($artifact.files) 文件 / 分包 $($artifact.subPackages) 个；1.5 MiB 建议线 $MainAdvisoryBytes / 2 MiB 硬限 $MainHardLimitBytes）"
+    # 建议线口径**无条件**写进日志与输出（AC ④）：不超线时也要说明「这条线不判红、权威读数在面板」，
+    # 否则读者只看到 advisory1.5m=under 会以为本地读数就是面板读数。
+    $advisoryNote = '1.5 MiB 是建议线、不判红：1.5 M 的权威读数是上传面板（minified 上传时才压缩，本地产物字节不变），本地读数只作参照'
+    Write-Log "main-package advisory1.5m=$advisory note=$advisoryNote"
+    if ($advisory -eq 'over') {
+        Write-Host "        已超 1.5 MiB 建议线 —— $advisoryNote" -ForegroundColor Yellow
+    } else {
+        Write-Host "        $advisoryNote"
+    }
+    if ($mainVerdict -ne 'ok') {
+        Write-Host "[error] 主包 $($artifact.mainBytes) B 超过 2 MiB 硬限 $MainHardLimitBytes B —— 微信上传会直接拒" -ForegroundColor Red
+        Write-Host '        处置：分包（把非必需页移出主包）或裁剪主包静态资源；本检查不做分包动作。' -ForegroundColor Red
+        Write-Log "$(Get-GateResultPrefix) errors=1 stage=main-package mainBytes=$($artifact.mainBytes) limit=$MainHardLimitBytes detail=主包超过 2 MiB 硬限（微信上传会拒）须先分包或裁剪资源"
+        exit 1
+    }
+
     # 指纹落盘（#1860）：只有**本轮真构建过**（走到这里时 -SkipBuild 仍为 false = 没被指纹/人工跳过）
-    # 且产物合法性 / appid 两道 exit 1 断言都过了才写 —— 产物坏不写（下次必然重建）。
+    # 且 3)–3.6) 的 exit 1 断言（产物合法性 / appid / 三枚开关 / 主包硬限）都过了才写 —— 产物坏不写（下次必然重建）。
     # 写失败只警告，不影响门结论（fail 向重建：没写成 = 下次没有指纹 = 重建）。
     if (-not $SkipBuild) {
         try {
@@ -681,8 +759,16 @@ $buildValues = [ordered]@{
     appid   = "$productAppId"
     pages   = "$($product.pages)"
     product = 'ok'
+    # 三枚开关读数取**产物实读值**（不是仓根配置值）：只有产物带着才算数（见 3.6 段）
+    lazyCodeLoading = (Format-ProductSwitchValue $artifact.lazyCodeLoading)
+    minified = (Format-ProductSwitchValue $artifact.minified)
+    es6      = (Format-ProductSwitchValue $artifact.es6)
     build   = $buildMode
     elapsed = $(if (-not $SkipBuild) { "${publishSeconds}s" } else { 'n/a' })
+    mainBytes = "$($artifact.mainBytes)"
+    # 硬限判定取 3.6 段算出的同一枚 $mainVerdict（超限在那里就 exit 1）—— 不写死 'ok'，
+    # 否则 3.6 段一旦移位/条件化，结果行会替一个没做过的判定作证。
+    main2m  = $mainVerdict
     log     = $logRelative
 }
 $buildLine = "$($script:GatePlan.resultLine.prefix) " + (Format-GateMetricLine -Plan $script:GatePlan -Values $buildValues)
