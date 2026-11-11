@@ -88,7 +88,7 @@
 		<!-- 左侧会话抽屉：本页**只列本功能区**的会话（list/create 都带本页键，见 useAiChat 的 featureScope）。
 		     它就是 ADR-0013「带键必有列它的界面」里的那个**界面** —— 缺了它，本页建的会话
 		     在通用页「最近对话」里也看不到（#921 首版实测回归形态）。 -->
-		<AiChatDrawerLeft :visible="sidebarLeft" :sessions="sessions" :current-session-id="currentSession?.id ?? 0" :status-bar-height="statusBarHeight" @close="sidebarLeft = false" @new-chat="onNewChat" @select="onSelectSession" @delete="onDeleteSession" />
+		<AiChatDrawerLeft :visible="sidebarLeft" :sessions="sessions" :current-session-id="currentSessionId" :status-bar-height="statusBarHeight" @close="sidebarLeft = false" @new-chat="onNewChat" @select="onSelectSession" @delete="onDeleteSession" />
 	</view>
 </template>
 
@@ -159,6 +159,19 @@
 		toggleSidebarLeft,
 		sendInput,
 	} = useAiChat(currentFeatureKey)
+
+	// 抽屉的「当前会话 id」：模板里直接写 `currentSession?.id ?? 0` 会让 mp-weixin 产物残留
+	// `??`（ES2020），微信上传接口按 ES2019 解析产物，直接拒传（#2419 实测
+	// `invalid file: pages/ai-assistant/ai-feature.js, 1:6749 SyntaxError: Unexpected token ?`）；
+	// 模板里改写成三元又过不了 Kotlin 侧 —— `AiSession?` 在这条渲染通路上不智能转换，
+	// ④ 编译门实测报 `Only safe (?.) or non-null asserted (!!.) calls are allowed`。
+	// 落在 script 里的 computed 两头都满足：Kotlin 侧对局部 val 判空后可智能转换，
+	// mp-weixin 产物是三目表达式。
+	const currentSessionId = computed<number>(() : number => {
+		const s = currentSession.value
+		return s == null ? 0 : s.id
+	})
+
 
 	// 根容器高度（同 ai-settings.uvue / 通用页）：给根节点一个确定高度，onLoad 里赋值
 	const pageHeight = ref<number>(0)
