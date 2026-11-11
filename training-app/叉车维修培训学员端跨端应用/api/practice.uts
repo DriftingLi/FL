@@ -187,8 +187,11 @@ export function getFreePracticeApi(count : number = 20, type : string = '') : Pr
 	if (type.length > 0) {
 		params['type'] = type
 	}
-	// 装载走信封归一出口 `decodeList`（ADR-0037 PR-B）：数组键 `questions`
-	return getMapped<Question[]>('/practice-mode/free', params, (data : UTSJSONObject) : Question[] => decodeList<Question>(data, '/practice-mode/free', (obj : UTSJSONObject) : Question => buildQuestion(obj), ['questions']))
+	// 装载走信封归一出口 `decodeList`（ADR-0037 PR-B）：本域语义键在前、通用兜底键在后。
+	// 后端 `data` 是**裸数组**（swagger `array<QuestionDTO>`），传输层 #2404 起归一成 `{list:[...]}`、部分链路给
+	// `{items:[...]}`；只写 `questions` 会让这两种包裹形状落空（#2406：随机练习两端皆空，且不抛错）。
+	// 裸数组本身由 `extractArray` 的数组判形接住；此处只放宽取键，`全落空 ⇒ no-hit` 的语义不因此放宽。
+	return getMapped<Question[]>('/practice-mode/free', params, (data : UTSJSONObject) : Question[] => decodeList<Question>(data, '/practice-mode/free', (obj : UTSJSONObject) : Question => buildQuestion(obj), ['questions', 'items', 'list']))
 }
 /** 顺序练习（开始/续练） */
 export function getSequentialPracticeApi() : Promise<Question[]> {
