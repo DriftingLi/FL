@@ -1,11 +1,15 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <app-nav-bar title="职位详情" @left-click="onBack" divider>
+        <app-nav-bar title="职位详情" @left-click="onBack" divider :show-toolbar="!hasReported">
             <template #right>
                 <view class="nav-action" @click="toggleFavorite">
                     <text class="favorite-icon">{{ isFavorited ? '♥' : '♡' }}</text>
                 </view>
-                <text v-if="!hasReported" class="report-btn" @click="onOpenReport">举报</text>
+            </template>
+            <template #toolbar>
+                <view class="nav-action" @click="onOpenReport">
+                    <text v-if="!hasReported" class="report-btn">举报</text>
+                </view>
             </template>
         </app-nav-bar>
 
@@ -323,6 +327,7 @@
     }
 
     /* 顶部导航栏 */
+    /* 举报（#2421）：下沉 #toolbar 第二行，复用 .nav-action 方块撑足 44×44（<text> 只有文字高）。 */
     .report-btn {
         font-size: 28rpx;
         color: $danger-color;
@@ -333,15 +338,13 @@
         color: $text-disabled;
     }
 
-    /* 收藏按钮（#1946）：右槽是 .nav-bar-side（flex-direction: row）⇒ 与「举报」并排。
-       两态都渲染字形（♥ 已收藏 / ♡ 未收藏），靠实心/空心区分 —— 与 course-detail 同一套先例
-       （未收藏态渲染空串 = 点击区在、却看不见，观感等同没有该功能，#1140 教训）。 */
+    /* .nav-action = 88rpx 方块（44×44 触摸目标）：右槽收藏（#1946 / #2421）与 #toolbar 举报共用，旧 64rpx 仅 32px。
+       字形两态都渲染（♥/♡，实心空心区分，#1140：空串 = 有区无像）；右缘由 .nav-bar-right 的 flex-end 定。 */
     .nav-action {
-        width: 64rpx;
-        height: 64rpx;
+        width: 88rpx;
+        height: 88rpx;
         align-items: center;
         justify-content: center;
-        margin-right: 8rpx;
     }
 
     .favorite-icon {
