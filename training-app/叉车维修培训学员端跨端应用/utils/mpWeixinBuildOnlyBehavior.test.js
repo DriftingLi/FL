@@ -347,6 +347,103 @@ describe('-BuildOnly（#1861）：只跑构建面，会话段真不跑', () => {
     } finally { rmFixture(fixture.dir); }
   });
 
+  // ---------- #2418：工作树回写判据（manifest.json / pages.json） ----------
+  // 判据**刻意不对称**：仅工作区脏 ⇒ 只提示（正常构建必然脏，判红等于每次构建都红）；
+  // 进暂存区 ⇒ exit 1 并指名（那才是「会被并入本次提交」的真实风险）。
+  // 夹具默认**不是 git 仓库**（其余用例都跑在这个形态上）⇒ 读数 git=unavailable、不判红；
+  // 这里显式 git init 造出「干净 / 仅脏 / 已暂存」三种树形态。
+
+  /** 把夹具变成 git 仓库，并把两处本地配置提交进去（干净树起点）。 */
+  function initRepo(fixture) {
+    const git = (args) => execFileSync('git', args, { cwd: fixture.dir, encoding: 'utf8', stdio: 'pipe' });
+    fs.writeFileSync(path.join(fixture.dir, 'pages.json'), JSON.stringify({ pages: [] }), 'utf8');
+    git(['init', '-q']);
+    git(['config', 'user.email', 'fixture@example.com']);
+    git(['config', 'user.name', 'fixture']);
+    git(['add', 'manifest.json', 'pages.json']);
+    git(['-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'fixture']);
+    return git;
+  }
+
+  it('G9a 回写面：干净树 ⇒ 读数 clean/clean、exit 0、不打脏改提示（不误报）', async () => {
+    if (!H.IS_WIN) return;
+    const fixture = H.makeFixture();
+    try {
+      initRepo(fixture);
+      const fakeCli = H.makeFakeDevTools(fixture.dir);
+      const port = await H.freePort();
+      const r = runGate(fixture, fakeCli, port, ['-BuildOnly']);
+      const log = H.gateLog(fixture);
+
+      expect(r.status).toBe(0);
+      expect(log).toMatch(/^worktree-rewrite manifest\.json=clean pages\.json=clean git=ok$/m);
+      // 干净树不打提示（提示里的还原命令是 ASCII，可跨控制台代码页断言；'>>>' 不唯一 ——
+      // -SkipBuild 与 devtools-close 也用它）
+      expect(r.stdout).not.toContain('git checkout -- manifest.json');
+    } finally { rmFixture(fixture.dir); }
+  });
+
+  it('G9b 回写面：仅工作区脏（未暂存）⇒ 读数 dirty、只提示不判红', async () => {
+    if (!H.IS_WIN) return;
+    const fixture = H.makeFixture();
+    try {
+      initRepo(fixture);
+      // HBuilderX 回写形态：appid 被置 null
+      fs.writeFileSync(path.join(fixture.dir, 'manifest.json'), JSON.stringify({ name: 'fixture', 'mp-weixin': { appid: null } }), 'utf8');
+      const fakeCli = H.makeFakeDevTools(fixture.dir);
+      const port = await H.freePort();
+      const r = runGate(fixture, fakeCli, port, ['-BuildOnly']);
+      const log = H.gateLog(fixture);
+
+      expect(r.status).toBe(0);
+      expect(log).toMatch(/^worktree-rewrite manifest\.json=dirty pages\.json=clean git=ok$/m);
+      // 只提示：脏改提示照打（含还原命令），但结果行照出、退出码 0
+      expect(r.stdout).toContain('git checkout -- manifest.json');
+      expect(resultLine(fixture, 'MP_WEIXIN_BUILDONLY_RESULT')).toContain('build=skipped(explicit)');
+    } finally { rmFixture(fixture.dir); }
+  });
+
+  it('G9c 回写面：回写脏改进暂存区 ⇒ exit 1 并指名是哪一处', async () => {
+    if (!H.IS_WIN) return;
+    const CASES = [
+      { file: 'manifest.json', mutate: (dir) => fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify({ name: 'fixture', 'mp-weixin': { appid: null } }), 'utf8') },
+      { file: 'pages.json', mutate: (dir) => fs.writeFileSync(path.join(dir, 'pages.json'), JSON.stringify({ pages: [], condition: { current: 0, list: [{ name: 'dev', path: 'pages/index/index' }] } }), 'utf8') }
+    ];
+    for (const c of CASES) {
+      const fixture = H.makeFixture();
+      try {
+        const git = initRepo(fixture);
+        c.mutate(fixture.dir);
+        git(['add', c.file]);
+        const fakeCli = H.makeFakeDevTools(fixture.dir);
+        const port = await H.freePort();
+        const r = runGate(fixture, fakeCli, port, ['-BuildOnly']);
+        const log = H.gateLog(fixture);
+
+        expect({ file: c.file, status: r.status }).toEqual({ file: c.file, status: 1 });
+        // 指名：staged= 后面就是那一处（两处同时暂存时是逗号分隔的清单）
+        expect(log).toMatch(new RegExp('^MP_WEIXIN_BUILDONLY_RESULT errors=1 stage=worktree-rewrite staged=' + c.file.replace('.', '\\.') + '(\\s|$)', 'm'));
+        expect(log).toMatch(new RegExp('^worktree-rewrite manifest\\.json=(clean|staged) pages\\.json=(clean|staged) git=ok$', 'm'));
+        // 判失败 ⇒ 不写通过结果行（与其它 exit 1 出口同形）
+        expect(log).not.toMatch(/^MP_WEIXIN_BUILDONLY_RESULT appid=/m);
+      } finally { rmFixture(fixture.dir); }
+    }
+  });
+
+  it('G9d 回写面：非 git 仓库 ⇒ 读数 git=unavailable、不判红（判不出 ≠ 判失败）', async () => {
+    if (!H.IS_WIN) return;
+    const fixture = H.makeFixture();
+    try {
+      const fakeCli = H.makeFakeDevTools(fixture.dir);
+      const port = await H.freePort();
+      const r = runGate(fixture, fakeCli, port, ['-BuildOnly']);
+      const log = H.gateLog(fixture);
+
+      expect(r.status).toBe(0);
+      expect(log).toMatch(/^worktree-rewrite manifest\.json=unknown pages\.json=unknown git=unavailable$/m);
+    } finally { rmFixture(fixture.dir); }
+  });
+
   it('G5a 静态：构建面用到的顶层常量必须有顶格定义（装配漏抽常量块的直接后验）', () => {
     // 为什么存在（#2326 实测）：装配器按**行区间**从旧文件抽构建面段落，旧 340–353 的常量块整段落在
     // 所有切割区间之外 ⇒ `$WxDevToolsPatterns` 的定义被丢掉，而 `Resolve-DevToolsCli` 仍在 foreach 它。
@@ -360,7 +457,8 @@ describe('-BuildOnly（#1861）：只跑构建面，会话段真不跑', () => {
       'WxDevToolsPatterns',  // 开发者工具候选路径（旧 346 行）⇒ Resolve-DevToolsCli 的枚举源
       'Doctor',              // 已退役开关的常量兜底（指纹段判定式仍取反它）
       'MainHardLimitBytes',  // 主包 2 MiB 硬限（#2417，3.6 段判定式）
-      'MainAdvisoryBytes'    // 主包 1.5 MiB 建议线（#2417，只打读数不判红）
+      'MainAdvisoryBytes',   // 主包 1.5 MiB 建议线（#2417，只打读数不判红）
+      'WorktreeRewritePaths' // 回写判据的两处本地配置（#2418，3.7 段与 finally 共用）
     ];
     for (const name of REQUIRED) {
       expect({ name, defined: definedAtTopLevel(name) }).toEqual({ name, defined: true });

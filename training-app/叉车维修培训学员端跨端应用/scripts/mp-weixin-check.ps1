@@ -59,6 +59,9 @@ $DistRelative = 'unpackage\dist\build\mp-weixin'
 # 产物字节只差 42 B、.js 分毫不差）⇒ 本地产物字节反映不了上传后的读数，1.5 M 的权威读数只在面板上。
 $MainHardLimitBytes = 2097152
 $MainAdvisoryBytes = 1572864
+# HBuilderX 发行构建会回写的两处本地配置（#2418）：manifest.json 的 mp-weixin.appid 置 null、
+# pages.json 写入启动页 condition 段。两者都是本地开发配置、禁止提交（见 ADR-0008「appid 口径诊断」）。
+$WorktreeRewritePaths = @('manifest.json', 'pages.json')
 # 开发者工具 cli.bat 的自动探测候选（逐字取自 HEAD 346–352 行）。
 # ⚠️ 必须留在顶层：Resolve-DevToolsCli 在不传 -DevToolsCli 时枚举它（= npm 入口的真实形态），
 # 而 Set-StrictMode 下「使用早于定义」当场抛「无法检索变量」——装配器按行区间抽取时把旧常量块整段跳过了（#2326 实测：
@@ -80,6 +83,9 @@ $Doctor = $false
 # 变量，Set-StrictMode 下当场抛「无法检索变量」⇒ catch 写成 env-blocked、把通过的运行判成 exit 2
 #（#2326 G2 实测踩到，红在 build=skipped(explicit) 那条断言上）。
 $script:buildSkippedByFingerprint = $false
+# 工作树回写读数（#2418）：成功路径算一次并打印，失败路径在 finally 里补算（$null = 还没算过）。
+# ⚠️ 必须先初始化 —— Set-StrictMode 下 finally 读未设置变量会当场抛，把正常退出判成 env-blocked。
+$script:worktreeRewriteReport = $null
 . (Join-Path $PSScriptRoot 'lib\gate-stages.ps1')
 
 function Test-PeHeader {
@@ -370,10 +376,70 @@ function Write-Log {
         if ($ln -match '^MP_WEIXIN(_BUILDONLY)?_RESULT(\s|$)' -and $ln -notmatch ' comment=') { Write-Host $ln }
     }
 }
+# ---------- 工作树回写判据（#2418）----------
+# HBuilderX 发行构建必然回写两处本地配置：manifest.json 的 mp-weixin.appid 置 null、pages.json 写入启动页
+# condition 段（ADR-0008「appid 口径诊断」实测）。两者都是运行时面 / 打包面判据的来源，误提交会污染
+# pr-evidence（pages.json 还会凭空命中 ④b 云打包触发条件）。此前只靠人记「跑完先 git status」。
+# 判据**刻意不对称**：仅工作区脏 ⇒ 只提示（正常构建必然脏，判红等于每次构建都红）；进暂存区 ⇒ 判失败并
+# 指名（那才是「会被并入本次提交」的真实风险）。脚本仍**不自动改工作树**（自动 checkout 会抹掉真实改动）。
+function Get-WorktreeRewriteReport {
+    param([string]$Project, [string[]]$Paths)
+    $report = [ordered]@{ git = 'ok'; files = [ordered]@{} }
+    if (-not (Get-Command git -CommandType Application -ErrorAction SilentlyContinue)) {
+        $report.git = 'unavailable'
+        foreach ($p in $Paths) { $report.files[$p] = 'unknown' }
+        return $report
+    }
+    foreach ($p in $Paths) {
+        $state = 'clean'
+        # 逐路径单独问、且**不解析路径列**：status.relativePaths / core.quotepath 会改渲染形态，
+        # 只读 XY 两列 —— X 非空格且非 '?' 即「已进暂存区」（'??' 是未跟踪，不算）。
+        try {
+            $out = @(& git -C $Project status --porcelain -- $p 2>$null)
+            $gitExit = $LASTEXITCODE
+        } catch {
+            $report.git = 'unavailable'
+            $report.files[$p] = 'unknown'
+            continue
+        }
+        if ($gitExit -ne 0) {
+            $report.git = 'unavailable'
+            $report.files[$p] = 'unknown'
+            continue
+        }
+        foreach ($ln in $out) {
+            $s = [string]$ln
+            if ($s.Length -lt 2) { continue }
+            $x = $s.Substring(0, 1)
+            if ($x -ne ' ' -and $x -ne '?') { $state = 'staged'; break }
+            if ($state -eq 'clean') { $state = 'dirty' }
+        }
+        $report.files[$p] = $state
+    }
+    return $report
+}
+function Format-WorktreeRewriteLine {
+    param($Report)
+    $parts = @()
+    foreach ($k in $Report.files.Keys) { $parts += "$k=$($Report.files[$k])" }
+    return "worktree-rewrite $($parts -join ' ') git=$($Report.git)"
+}
+function Write-WorktreeRewriteReading {
+    param($Report)
+    $line = Format-WorktreeRewriteLine -Report $Report
+    Write-Log $line
+    Write-Host $line
+}
 # -BuildOnly 的脏改提示（#1861 2026-10-28 裁定「跑完打印脏改提示」）：publish 经 HBuilderX 会回写工作树 ——
 # manifest.json 的 mp-weixin.appid 可能被置 null、pages.json 可能被写入 condition（GUI 选的启动页，属本地开发
 # 配置、禁止提交）。脚本**不自动改工作树**（自动 checkout 会把用户真实的改动一起抹掉），只把核对与还原动作印出来。
+# #2418 起：读数由 Get-WorktreeRewriteReport 给出，**干净树（且 git 可用）时不打提示** —— 判据不误报、也不制造噪音。
 function Write-BuildOnlyWorktreeHint {
+    param($Report)
+    if ($null -ne $Report -and $Report.git -eq 'ok') {
+        $touched = @($Report.files.Keys | Where-Object { $Report.files[$_] -ne 'clean' })
+        if ($touched.Count -eq 0) { return }
+    }
     Write-Host ''
     Write-Host '>>> 脏改提示（build-only 不自动改工作树，请人工核对）：' -ForegroundColor Yellow
     Write-Host '    git status --porcelain -- manifest.json pages.json' -ForegroundColor Yellow
@@ -748,6 +814,22 @@ try {
         }
     }
 
+    # 3.7) 工作树回写判据（#2418）：HBuilderX 回写的两处本地配置是否被改动 / 是否已进暂存区。
+    # 放在指纹落盘**之后**：指纹回答的是「这份产物能不能复用」（产物合法性 + 开关 + 体积都过了），
+    # 与「工作树能不能提交」正交 —— 暂存区脏改不该让下一次重跑白重建（2–3 min）。
+    # 放在收口**之前**：进暂存区 ⇒ 判失败，且不写结果行（与其它 exit 1 出口同形）。
+    $script:worktreeRewriteReport = Get-WorktreeRewriteReport -Project $Project -Paths $WorktreeRewritePaths
+    Write-WorktreeRewriteReading -Report $script:worktreeRewriteReport
+    $stagedRewrite = @($script:worktreeRewriteReport.files.Keys | Where-Object { $script:worktreeRewriteReport.files[$_] -eq 'staged' })
+    if ($stagedRewrite.Count -gt 0) {
+        $stagedList = $stagedRewrite -join ','
+        Write-Host "[error] HBuilderX 回写的本地配置已进暂存区：$stagedList" -ForegroundColor Red
+        Write-Host '        这两处是本地开发配置（manifest.json 的 appid 被置 null / pages.json 的 condition 段），禁止提交。' -ForegroundColor Red
+        Write-Host "        处置：git restore --staged $stagedList 后按需 git checkout -- <文件> 还原，再重跑本检查。" -ForegroundColor Red
+        Write-Log "$(Get-GateResultPrefix) errors=1 stage=worktree-rewrite staged=$stagedList detail=HBuilderX 回写的本地配置已进暂存区（会被并入本次提交）：manifest.json 的 mp-weixin.appid 置 null / pages.json 的 condition 段均禁止提交，先 git restore --staged 再还原"
+        exit 1
+    }
+
 # ---------- 构建面收口 ----------
 # 走到这里说明构建面的判据都成立：publish 成功行已解析、产物合法性（#1210）已过、指纹已落盘。
 # 会话段已于 2026-11-05 整体退役（#2320），其后不再有任何「之后整段」⇒ 这里就是脚本唯一的收口点。
@@ -787,6 +869,12 @@ exit 0
     # publish 尾段会自启开发者工具：收掉那个自启实例靠这一次 close（幂等；失败只警告）。
     Invoke-DevToolsClose
     if (Get-Command Release-HxLock -ErrorAction SilentlyContinue) { Release-HxLock }
-    Write-BuildOnlyWorktreeHint
+    # 读数在成功路径已打过；失败路径（产物非法 / 开关 / 体积 / 异常）在这里补一次 —— 失败时更需要
+    # 知道工作树被回写成了什么样（#2418）。
+    if ($null -eq $script:worktreeRewriteReport) {
+        $script:worktreeRewriteReport = Get-WorktreeRewriteReport -Project $Project -Paths $WorktreeRewritePaths
+        Write-WorktreeRewriteReading -Report $script:worktreeRewriteReport
+    }
+    Write-BuildOnlyWorktreeHint -Report $script:worktreeRewriteReport
 }
 exit $exitCode
