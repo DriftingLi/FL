@@ -6,7 +6,8 @@
  *
  * 守的四条接线：
  *   ① 卡面那一行文案只能来自单点 `jobCredentialNotice`，且**无要求时不渲染**（v-if 判长度）；
- *   ② 证件筛选组的选项只能来自 `buildCredentialFilterOptions`（不许页面手写证件清单——那就是第二份字典）；
+ *   ② 证件筛选组的选项只能来自 `buildCredentialFilterOptions`，且条目只来自职位聚合
+ *      `collectRequiredCredentials`（不许页面手写证件清单、也不许拉全量字典当选项——那就是第二份字典）；
  *   ③ 选中证件必须经 `credentialFilterParam` 折成查询参数（0/非法值不发出去），并落进 `credential_id`；
  *   ④ DTO 字段与参数名两端同名：`required_credentials` / `required_credential_ids` / `credential_id`。
  */
@@ -44,6 +45,13 @@ describe('证件筛选组：选项与参数接线', () => {
     const src = read(PAGE);
     expect(src).toMatch(/\bbuildCredentialFilterOptions\b/);
     expect(src).not.toMatch(/『?全部证件』?\s*,\s*[^\n]*'叉车司机/);
+  });
+
+  it('选项只来自职位聚合：页面不再拉全量证件字典（#2422）', () => {
+    const src = read(PAGE);
+    expect(src).not.toMatch(/getAllCredentialsApi/);
+    expect(src).toMatch(/\bcollectRequiredCredentials\b/);
+    expect(src).toMatch(/buildCredentialFilterOptions\(\s*knownCredentials\.value\s*\)/);
   });
 
   it('选中证件经 credentialFilterParam 折算后写进 credential_id', () => {

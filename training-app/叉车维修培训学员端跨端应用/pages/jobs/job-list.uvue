@@ -26,7 +26,7 @@
             </view>
         </view>
 
-        <!-- 证件筛选组（#1945）：选项=证件字典；「全部证件」即清除，选具体证件走列表 credential_id -->
+        <!-- 证件筛选组（#2422）：选项=当前职位列表里实际要求的证件；「全部证件」即清除，选具体证件走列表 credential_id -->
         <view class="filter-row filter-row-tight" v-if="recruitTab === 'job' && credentialFilterTags.length > 1">
             <view v-for="(tag, idx) in credentialFilterTags" :key="tag.credential_id"
                 :class="{ 'filter-tag': true, 'ml-16': idx > 0, 'filter-tag-active': activeCredentialFilter == idx }"
@@ -90,10 +90,9 @@
     import { onLoad } from '@dcloudio/uni-app'
     import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { getJobListApi } from '../../api/job'
-    import { getAllCredentialsApi } from '../../api/credential'
     import { getCatalogTreeSpecialties } from '../../api/course'
     import { useAuthStore } from '../../stores/auth'
-    import { jobCredentialNotice, buildCredentialFilterOptions, credentialFilterParam } from '../../utils/jobCredentialDisplay'
+    import { jobCredentialNotice, collectRequiredCredentials, buildCredentialFilterOptions, credentialFilterParam, JOB_CREDENTIAL_ALL_ID } from '../../utils/jobCredentialDisplay'
     import type { JobPosting, JobRequiredCredential } from '../../types/index'
     import NoticePanel from './components/notice-panel.uvue'
 
@@ -122,10 +121,50 @@
     const filterTags = ref<FilterTag[]>([{ label: '全部', id: 0 }])
     const activeFilter = ref<number>(0)
 
-    // ---- 证件筛选组（#1945）：选项来自后端证件字典；首项「全部证件」（id=0）即清除筛选 ----
+    // ---- 证件筛选组（#2422）：选项=当前职位列表里实际要求的证件；首项「全部证件」（id=0）即清除筛选 ----
     // 选项构造与「选中→查询参数」折算都在 utils/jobCredentialDisplay 里（行为腿真跑那份单点）
-    const credentialFilterTags = ref<JobRequiredCredential[]>([])
+    // 已见证件在本次会话内累积：翻页 / 切换筛选时组不缩水，避免选中项消失后无法切回
+    const credentialFilterTags = ref<JobRequiredCredential[]>(buildCredentialFilterOptions([]))
     const activeCredentialFilter = ref<number>(0)
+    const knownCredentials = ref<JobRequiredCredential[]>([])
+
+    /** 当前选中的证件 id（重建后按 id 对齐；对不上回落「全部证件」） */
+    function activeCredentialId() : number {
+        const tag = credentialFilterTags.value[activeCredentialFilter.value]
+        return tag != null ? tag.credential_id : JOB_CREDENTIAL_ALL_ID
+    }
+
+    /** 用累积的证件重建筛选组，并把选中项按 id 对回去（不按旧索引硬指） */
+    function rebuildCredentialFilters() : void {
+        const selectedId = activeCredentialId()
+        const options = buildCredentialFilterOptions(knownCredentials.value)
+        credentialFilterTags.value = options
+        let idx = 0
+        for (let i = 0; i < options.length; i++) {
+            if (options[i].credential_id == selectedId) {
+                idx = i
+                break
+            }
+        }
+        activeCredentialFilter.value = idx
+    }
+
+    /** 把一批职位实际要求的证件并入累积集（同 id 只留首次出现的名称） */
+    function absorbRequiredCredentials(items : JobPosting[]) : void {
+        const fresh = collectRequiredCredentials(items)
+        for (let i = 0; i < fresh.length; i++) {
+            const c = fresh[i]
+            let exists = false
+            for (let j = 0; j < knownCredentials.value.length; j++) {
+                if (knownCredentials.value[j].credential_id == c.credential_id) {
+                    exists = true
+                    break
+                }
+            }
+            if (!exists) knownCredentials.value.push(c)
+        }
+        rebuildCredentialFilters()
+    }
 
     // ---- 职位数据 ----
     const jobs = ref<JobPosting[]>([])
@@ -148,23 +187,6 @@
         }
     }
 
-    // ---- 证件筛选组加载（字典分组拍平后交给单点，不在这里造第二份证件清单）----
-    async function loadCredentialFilters() : Promise<void> {
-        try {
-            const groups = await getAllCredentialsApi()
-            const dict : JobRequiredCredential[] = []
-            for (const group of groups) {
-                for (const item of group.items) {
-                    dict.push({ credential_id: item.id, name: item.name } as JobRequiredCredential)
-                }
-            }
-            credentialFilterTags.value = buildCredentialFilterOptions(dict)
-        } catch (e) {
-            // 降级：只剩「全部证件」（筛选组不消失、不清空已有结果）
-            credentialFilterTags.value = buildCredentialFilterOptions([])
-        }
-    }
-
     /** 卡面「需持 X 证」一行：无证件要求返回空串 ⇒ 模板据此不渲染该行 */
     function credentialNoticeOf(job : JobPosting) : string {
         return jobCredentialNotice(job.required_credentials)
@@ -183,8 +205,7 @@
         try {
             const activeTag = filterTags.value[activeFilter.value]
             const specialtyId = activeTag != null ? activeTag.id : 0
-            const activeCredTag = credentialFilterTags.value[activeCredentialFilter.value]
-            const credentialId = activeCredTag != null ? activeCredTag.credential_id : 0
+            const credentialId = activeCredentialId()
             const result = await getJobListApi({
                 page: page.value,
                 page_size: PAGE_SIZE,
@@ -196,6 +217,8 @@
             } else {
                 jobs.value = jobs.value.concat(result.items)
             }
+            // 筛选项跟着职位数据长：字典里没人要的证件不再占位（#2422）
+            absorbRequiredCredentials(result.items)
             if (result.items.length < PAGE_SIZE || jobs.value.length >= result.total) {
                 noMore.value = true
             }
@@ -219,7 +242,6 @@
     // onLoad 必须带 options 形参：Kotlin Function1<OnLoadOptions, Unit>，零参即 error17
     onLoad((options : OnLoadOptions) => {
         loadFilters()
-        loadCredentialFilters()
         loadJobs(true)
     })
 
