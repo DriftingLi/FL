@@ -138,8 +138,15 @@ describe('批2 特殊页头形态（app-nav-bar 槽位承载）', () => {
     expect(src).toContain(':status-bar-height="statusBarHeight"');
   });
 
-  it('job-detail 右槽保留举报入口；resume-edit 右槽保留保存；custom-models 右槽保留添加', () => {
-    expect(read('pages/jobs/job-detail.uvue')).toMatch(/<template #right>[\s\S]*?onOpenReport[\s\S]*?<\/template>/);
+  it('job-detail 右槽只留收藏、举报在 #toolbar（#2421）；resume-edit 右槽保留保存；custom-models 右槽保留添加', () => {
+    // #2421：右槽收敛为主操作（收藏），次要动作「举报」下沉第二行 ⇒ 两条断言反向对调，
+    // 用「取出插槽块再判包含」而不是跨插槽的惰性正则（后者会越过 </template> 命中 #toolbar）。
+    const jobDetail = read('pages/jobs/job-detail.uvue');
+    const rightSlot = (jobDetail.match(/<template #right>[\s\S]*?<\/template>/) || [''])[0];
+    const toolbarSlot = (jobDetail.match(/<template #toolbar>[\s\S]*?<\/template>/) || [''])[0];
+    expect(rightSlot).toContain('toggleFavorite');
+    expect(rightSlot).not.toContain('onOpenReport');
+    expect(toolbarSlot).toContain('onOpenReport');
     expect(read('pages/resume/resume-edit.uvue')).toMatch(/<template #right>[\s\S]*?onSave[\s\S]*?<\/template>/);
     expect(read('pages/ai-assistant/custom-models.uvue')).toMatch(/<template #right>[\s\S]*?startCreate[\s\S]*?<\/template>/);
   });
