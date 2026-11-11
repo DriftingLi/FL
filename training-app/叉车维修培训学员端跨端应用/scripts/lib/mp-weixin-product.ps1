@@ -133,3 +133,134 @@ function Get-MpWeixinProductReport {
         detail = "产物合法：appid='$appid'；pages=$($pages.Count) 页各自有 .js；必需文件齐（project.config.json / app.json / app.js / app.wxss）"
     }
 }
+
+<#
+  发行开关 + 包体积读数（#2417）。
+
+  与上面的「产物合法性」**分开**，因为它们回答的是两个不同的问题，复用面也不同：
+    · 合法性 = 「产物写完没有、能不能跑」—— lib/mp-weixin-publish-settle.ps1 的**收流判据**复用它，
+      只该看写盘完成度；
+    · 开关/体积 = 「这份产物是否带着发行必需的开关、主包多大」—— 只有构建面检查（⑤，可选不判红）读它。
+  若把开关断言塞进 Get-MpWeixinProductReport，一个「产物完整但开关没开」的构建会被收流判据判成
+  「没写完」，一路等到 publish 预算超时（900 s 白烧）—— 这是两个判据必须分开的实质理由，不是整洁洁癖。
+
+  口径（判据取**产物**，不取仓根配置 —— 铁律）：
+    仓根 project.config.json / manifest.json 改对了、产物却没带（构建没重来 / HBuilderX 没把仓根那份
+    复制进产物）时，微信上传面板的「JS 压缩」「组件按需注入」照样红 ⇒ 断言源码只会给出**假绿**。
+    故这里只读产物里的 app.json 与 project.config.json。
+
+  主包字节数 = 产物目录全部文件字节 **减去** app.json 声明分包（subPackages / subpackages，取各自
+  root 目录）下的文件。无分包时等于全量字节。指纹文件 .mp-weixin-build-fingerprint.json 不计
+  （与 mp-weixin-build-fingerprint.ps1 / mp-weixin-publish-settle.ps1 的排除口径同源）。
+
+  为什么本地字节能当「2 M 硬限」的判据：minified 是**上传时**压缩（#2415 同树 A/B 实证：开关 ON/OFF
+  产物字节只差 42 B、.js 分毫不差）⇒ 上传包 ≤ 本地产物字节，本地不过硬限上传必不过；反过来本地产物
+  过线也不等于上传面板的 1.5 M 建议线读数（那是面板口径，本函数只给本地读数，不冒充面板）。
+#>
+
+<#
+  安全取 JSON 属性：ConvertFrom-Json 的对象在 Set-StrictMode -Version Latest 下访问不存在的属性会抛
+  （不是回 $null），故按 PSObject 判存在；[ordered]@{} 字典的键不是属性，另走 IDictionary 分支
+  （#1817：字典键按属性读会静默回 $null）。
+#>
+function Get-ProductJsonProperty {
+    param($Object, [string]$Name)
+    if ($null -eq $Object) { return $null }
+    $p = $Object.PSObject.Properties[$Name]
+    if ($p) { return $p.Value }
+    if ($Object -is [System.Collections.IDictionary] -and $Object.Contains($Name)) { return $Object[$Name] }
+    return $null
+}
+
+<#
+  把一个开关值渲染成结果行可用的**字面量**：true / false / 字符串原样 / 缺失写 missing。
+  用字面量而不是空串：结果行要「直接读出真实状态」，空值会被读成「没这一项」。
+#>
+function Format-ProductSwitchValue {
+    param($Value)
+    if ($null -eq $Value) { return 'missing' }
+    if ($Value -is [bool]) { if ($Value) { return 'true' } else { return 'false' } }
+    return [string]$Value
+}
+
+<#
+  布尔开关严格判定：值必须**是 JSON 布尔**且等于期望值。
+  为什么不用 -eq 直接比：PowerShell 会把字符串 'true' 与 $true 按字符串比成相等 ⇒ 写成
+  "minified": "true" 的产物会被放过，而微信按布尔读，照样不压缩。
+#>
+function Test-ProductSwitchBool {
+    param($Value, [bool]$Expected)
+    if ($null -eq $Value) { return $false }
+    if ($Value -isnot [bool]) { return $false }
+    return ($Value -eq $Expected)
+}
+
+<#
+  读一份 mp-weixin 产物的发行开关与包体积。
+  @param Dist 产物目录（unpackage/dist/build/mp-weixin）
+  @returns 有序字典：ok / stage / detail / lazyCodeLoading / minified / es6 /
+           totalBytes / mainBytes / files / subPackages
+           stage ∈ product-ok / product-missing / product-json（与 #1210 同族，便于失败行统一认读）
+#>
+function Get-MpWeixinArtifactReadings {
+    param([Parameter(Mandatory = $true)][string]$Dist)
+
+    $fail = {
+        param([string]$Stage, [string]$Detail)
+        return [ordered]@{
+            ok = $false; stage = $Stage; detail = $Detail
+            lazyCodeLoading = $null; minified = $null; es6 = $null
+            totalBytes = [long]0; mainBytes = [long]0; files = 0; subPackages = 0
+        }
+    }
+
+    $appPath = Join-Path $Dist 'app.json'
+    $cfgPath = Join-Path $Dist 'project.config.json'
+    if (-not (Test-Path -LiteralPath $appPath)) { return & $fail 'product-missing' "产物缺 app.json：$appPath" }
+    if (-not (Test-Path -LiteralPath $cfgPath)) { return & $fail 'product-missing' "产物缺 project.config.json：$cfgPath" }
+
+    $app = Read-ProductJsonFile -Path $appPath
+    if (-not $app.ok) { return & $fail 'product-json' "app.json 非法 JSON：$($app.error)" }
+    $cfg = Read-ProductJsonFile -Path $cfgPath
+    if (-not $cfg.ok) { return & $fail 'product-json' "project.config.json 非法 JSON：$($cfg.error)" }
+
+    $setting = Get-ProductJsonProperty -Object $cfg.value -Name 'setting'
+    $lazy = Get-ProductJsonProperty -Object $app.value -Name 'lazyCodeLoading'
+    $minified = Get-ProductJsonProperty -Object $setting -Name 'minified'
+    $es6 = Get-ProductJsonProperty -Object $setting -Name 'es6'
+
+    # 分包根：主包 = 分包之外的一切。两条属性名都要认（微信产物写 subPackages，历史上也有小写形态）。
+    $subs = Get-ProductJsonProperty -Object $app.value -Name 'subPackages'
+    if ($null -eq $subs) { $subs = Get-ProductJsonProperty -Object $app.value -Name 'subpackages' }
+    $roots = @()
+    foreach ($s in @($subs)) {
+        $root = ([string](Get-ProductJsonProperty -Object $s -Name 'root')).Trim().TrimStart('/').TrimEnd('/')
+        if ($root.Length -gt 0) { $roots += ($root -replace '\\', '/') }
+    }
+
+    $files = 0
+    $total = [long]0
+    $main = [long]0
+    if (Test-Path -LiteralPath $Dist -PathType Container) {
+        foreach ($f in @(Get-ChildItem -LiteralPath $Dist -Recurse -File -Force -ErrorAction SilentlyContinue)) {
+            if ($f.Name -eq '.mp-weixin-build-fingerprint.json') { continue }
+            $files++
+            $total += $f.Length
+            $rel = ([System.IO.Path]::GetRelativePath($Dist, $f.FullName)) -replace '\\', '/'
+            $inSub = $false
+            foreach ($r in $roots) {
+                if ($rel.StartsWith($r + '/', [System.StringComparison]::OrdinalIgnoreCase)) { $inSub = $true; break }
+            }
+            if (-not $inSub) { $main += $f.Length }
+        }
+    }
+
+    return [ordered]@{
+        ok = $true; stage = 'product-ok'
+        detail = ("产物开关与体积读数：lazyCodeLoading=$(Format-ProductSwitchValue $lazy)；" +
+            "minified=$(Format-ProductSwitchValue $minified)；es6=$(Format-ProductSwitchValue $es6)；" +
+            "主包 $main B / 全量 $total B / $files 文件 / 分包 $(@($roots).Count) 个")
+        lazyCodeLoading = $lazy; minified = $minified; es6 = $es6
+        totalBytes = $total; mainBytes = $main; files = $files; subPackages = @($roots).Count
+    }
+}

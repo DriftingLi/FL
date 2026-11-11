@@ -30,13 +30,24 @@ function writeFile(p, text, mode) {
   if (mode) fs.chmodSync(p, mode);
 }
 
-/** 造一份**合法**的 mp-weixin 产物夹具（判据面：`scripts/lib/mp-weixin-product.ps1`）。 */
+/**
+ * 造一份**合法且发行形态**的 mp-weixin 产物夹具（判据面：`scripts/lib/mp-weixin-product.ps1`）。
+ *
+ * 为什么夹具必须带两个开关（#2417）：构建面自本票起**同时断言产物**的 `lazyCodeLoading` 与
+ * `setting.minified/es6` —— 夹具要是还停在「只有 appid + pages」的形态，每次构建面检查都会判红，
+ * 而那不是被测行为坏了、是夹具不再是「合法发行产物」。故这里按发行形态造：minified=true / es6=false /
+ * lazyCodeLoading=requiredComponents（与 2415 落库的仓根配置同形）。各用例要「缺字段 / 错值」自己 ad hoc 改。
+ */
 function makeFixture() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mp-weixin-gate-'));
   writeFile(path.join(dir, 'manifest.json'), JSON.stringify({ name: 'fixture', 'mp-weixin': { appid: APPID } }));
   const dist = path.join(dir, 'unpackage', 'dist', 'build', 'mp-weixin');
-  writeFile(path.join(dist, 'project.config.json'), JSON.stringify({ appid: APPID, projectname: 'fixture' }));
-  writeFile(path.join(dist, 'app.json'), JSON.stringify({ pages: ['pages/index/index'] }));
+  writeFile(path.join(dist, 'project.config.json'), JSON.stringify({
+    appid: APPID, projectname: 'fixture', setting: { minified: true, es6: false }
+  }));
+  writeFile(path.join(dist, 'app.json'), JSON.stringify({
+    pages: ['pages/index/index'], lazyCodeLoading: 'requiredComponents'
+  }));
   writeFile(path.join(dist, 'app.js'), '// fixture\n');
   writeFile(path.join(dist, 'app.wxss'), '/* fixture */\n');
   writeFile(path.join(dist, 'pages', 'index', 'index.js'), '// fixture\n');
