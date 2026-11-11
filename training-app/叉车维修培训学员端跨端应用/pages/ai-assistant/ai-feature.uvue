@@ -88,7 +88,7 @@
 		<!-- 左侧会话抽屉：本页**只列本功能区**的会话（list/create 都带本页键，见 useAiChat 的 featureScope）。
 		     它就是 ADR-0013「带键必有列它的界面」里的那个**界面** —— 缺了它，本页建的会话
 		     在通用页「最近对话」里也看不到（#921 首版实测回归形态）。 -->
-		<AiChatDrawerLeft :visible="sidebarLeft" :sessions="sessions" :current-session-id="currentSession?.id ?? 0" :status-bar-height="statusBarHeight" @close="sidebarLeft = false" @new-chat="onNewChat" @select="onSelectSession" @delete="onDeleteSession" />
+		<AiChatDrawerLeft :visible="sidebarLeft" :sessions="sessions" :current-session-id="currentSession ? currentSession.id : 0" :status-bar-height="statusBarHeight" @close="sidebarLeft = false" @new-chat="onNewChat" @select="onSelectSession" @delete="onDeleteSession" />
 	</view>
 </template>
 

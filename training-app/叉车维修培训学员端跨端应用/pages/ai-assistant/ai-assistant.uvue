@@ -66,7 +66,7 @@
 		<AiChatInput :show-model-bar="proUnlocked" :model-name="currentModelName" :model-readonly="!proUnlocked" :show-image-button="proUnlocked" @send="onInputSend" @model-click="onModelBarClick" @voice-click="onVoiceClick" @image-click="onImageClick" />
 
 		<!-- 左侧会话抽屉 -->
-		<AiChatDrawerLeft :visible="sidebarLeft" :sessions="sessions" :current-session-id="currentSession?.id ?? 0" :status-bar-height="statusBarHeight" @close="sidebarLeft = false" @new-chat="onNewChat" @select="onSelectSession" @delete="onDeleteSession" />
+		<AiChatDrawerLeft :visible="sidebarLeft" :sessions="sessions" :current-session-id="currentSession ? currentSession.id : 0" :status-bar-height="statusBarHeight" @close="sidebarLeft = false" @new-chat="onNewChat" @select="onSelectSession" @delete="onDeleteSession" />
 
 		<!-- 右侧菜单抽屉 -->
 		<AiChatDrawerRight :visible="sidebarRight" :menu-items="rightMenuItems" :status-bar-height="statusBarHeight" @close="sidebarRight = false" @action="onMenuAction" />
