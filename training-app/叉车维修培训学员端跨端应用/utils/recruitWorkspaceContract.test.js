@@ -723,10 +723,22 @@ describe('F. 状态词单点 + 两端同源（ADR-0018 口径）', () => {
 
 describe('G. pages.json：新增路由注册闭环（无死链 / 无未注册页）', () => {
   const pagesJson = read('pages.json');
+  const parsed = JSON.parse(pagesJson);
+  // 招聘端已切出主包（#2430）：注册面 = pages ∪ subPackages（subPackages 的 path 相对各自 root）
+  const allRoutes = [
+    ...(parsed.pages || []).map((p) => p.path),
+    ...(parsed.subPackages || []).flatMap((sp) => (sp.pages || []).map((p) => `${sp.root}/${p.path}`)),
+  ];
+  const recruiterRoutes = allRoutes.filter((p) => p.startsWith('pages/recruiter/'));
+
+  it('招聘端整目录在 subPackages 内（#2430 只切招聘端出主包）', () => {
+    expect((parsed.subPackages || []).map((sp) => sp.root)).toContain('pages/recruiter');
+    expect((parsed.pages || []).map((p) => p.path).filter((p) => p.startsWith('pages/recruiter/'))).toEqual([]);
+  });
 
   it('本票新增的 5 条注册齐备，且历史登录页仍在', () => {
     for (const route of ['home', 'jobs', 'resumes', 'contacts', 'applications', 'me', 'login']) {
-      expect([route, pagesJson.includes(`"pages/recruiter/${route}"`)]).toEqual([route, true]);
+      expect([route, recruiterRoutes.includes(`pages/recruiter/${route}`)]).toEqual([route, true]);
     }
   });
 
@@ -734,17 +746,16 @@ describe('G. pages.json：新增路由注册闭环（无死链 / 无未注册页
     const files = h.filesUnder('pages/recruiter', /\.uvue$/)
       .filter((rel) => !rel.includes('/components/'))
       .map((rel) => rel.replace(/\.uvue$/, ''));
-    const parsed = JSON.parse(pagesJson);
-    const registered = parsed.pages
-      .map((p) => p.path)
-      .filter((p) => p.startsWith('pages/recruiter/'))
-      .sort();
-    expect(files.sort()).toEqual(registered);
+    expect(files.sort()).toEqual(recruiterRoutes.sort());
   });
 
   it('新增注册一律 navigationStyle=custom（本仓 46/48 页的主流做法，ADR-0022 ⑤）', () => {
-    const parsed = JSON.parse(pagesJson);
-    const mine = parsed.pages.filter((p) => p.path.startsWith('pages/recruiter/'));
+    const mine = [
+      ...(parsed.pages || []),
+      ...(parsed.subPackages || []).flatMap((sp) =>
+        (sp.pages || []).map((p) => ({ ...p, path: `${sp.root}/${p.path}` })),
+      ),
+    ].filter((p) => p.path.startsWith('pages/recruiter/'));
     const notCustom = mine.filter((p) => p.style.navigationStyle !== 'custom').map((p) => p.path);
     expect(notCustom).toEqual([]);
   });

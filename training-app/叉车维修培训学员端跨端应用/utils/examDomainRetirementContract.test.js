@@ -84,8 +84,13 @@ describe('全域零命中（验收标准 §1）', () => {
 });
 
 describe('pages.json 无孤儿路由（域下线不残留路径）', () => {
-  const src = read('pages.json');
-  const routes = [...src.matchAll(/"path"\s*:\s*"([^"]+)"/g)].map((m) => m[1]);
+  // #2430：招聘端已切进 subPackages（root/path 相对），路由必须按 pages + subPackages 拍平后再比对，
+  // 否则分包页会被当成裸 path 去主包目录找文件，误报死路由。
+  const parsed = JSON.parse(read('pages.json'));
+  const routes = [
+    ...(parsed.pages || []).map((p) => p.path),
+    ...((parsed.subPackages || []).flatMap((sp) => (sp.pages || []).map((p) => `${sp.root}/${p.path}`))),
+  ];
 
   it('两条等级考试路由已摘除', () => {
     expect(routes).not.toContain('pages/exam/level-exam-do');
