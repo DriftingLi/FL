@@ -279,7 +279,7 @@ import { goBack } from '../../utils/navigation'
     .stats-num {
         font-size: 36rpx;
         font-weight: bold;
-        color: #2979ff;
+        color: $primary-color;
         margin-bottom: 6rpx;
     }
 
@@ -424,12 +424,12 @@ import { goBack } from '../../utils/navigation'
 
     .record-action-text {
         font-size: 24rpx;
-        color: #2979ff;
+        color: $primary-color;
     }
 
     .record-action-arrow {
         font-size: 32rpx;
-        color: #2979ff;
+        color: $primary-color;
         margin-left: 4rpx;
     }
 

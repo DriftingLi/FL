@@ -127,7 +127,7 @@ import { goBack } from '../../utils/navigation'
     }
 
     function getTypeColor(type : string) : string {
-        if (type == 'course') return '#2979ff'
+        if (type == 'course') return '#239EDD'
         if (type == 'chapter') return '#4caf50'
         if (type == 'topic') return '#f44336'
         if (type == 'featured') return '#9e9e9e'
@@ -368,7 +368,7 @@ import { goBack } from '../../utils/navigation'
     }
 
     .filter-chip.active {
-        background-color: #2979ff;
+        background-color: $primary-color;
     }
 
     .filter-chip-text {
@@ -423,7 +423,7 @@ import { goBack } from '../../utils/navigation'
     .fav-cover-text {
         font-size: 32rpx;
         font-weight: bold;
-        color: #2979ff;
+        color: $primary-color;
     }
 
     .fav-info {

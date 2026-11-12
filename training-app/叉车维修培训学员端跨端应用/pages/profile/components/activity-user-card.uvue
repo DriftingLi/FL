@@ -33,7 +33,7 @@
   })
 </script>
 
-<style>
+<style lang="scss">
   .user-card {
     background-color: #e8f4fd;
     margin: 20rpx 24rpx;
@@ -92,7 +92,7 @@
 
   .level-text {
     font-size: 22rpx;
-    color: #2979ff;
+    color: $primary-color;
     font-weight: bold;
   }
 

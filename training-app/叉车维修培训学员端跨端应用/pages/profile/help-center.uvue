@@ -281,7 +281,7 @@ import { goBack } from '../../utils/navigation'
 
     /* 搜索栏 */
     .search-bar {
-        background-color: #2979ff;
+        background-color: $primary-color;
         padding: 0 32rpx 24rpx 32rpx;
         flex-direction: row;
         align-items: center;
@@ -336,7 +336,7 @@ import { goBack } from '../../utils/navigation'
     }
 
     .category-chip-active {
-        background-color: #2979ff;
+        background-color: $primary-color;
     }
 
     .category-text {
@@ -372,7 +372,7 @@ import { goBack } from '../../utils/navigation'
     }
 
     .state-btn {
-        background-color: #2979ff;
+        background-color: $primary-color;
         padding: 16rpx 48rpx;
         border-radius: 32rpx;
         margin-top: 32rpx;

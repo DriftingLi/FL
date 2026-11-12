@@ -48,7 +48,7 @@
     }
 </script>
 
-<style>
+<style lang="scss">
     /* 上/下章导航 */
     .chapter-nav {
         flex-direction: row;
@@ -78,7 +78,7 @@
 
     .nav-arrow {
         font-size: 48rpx;
-        color: #2979ff;
+        color: $primary-color;
     }
 
     .nav-content {

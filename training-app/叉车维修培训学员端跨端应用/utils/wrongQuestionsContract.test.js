@@ -233,7 +233,8 @@ describe('四项补展示（#1083：图 / 答案与解析 / 上次答案 / 最�
   });
 
   it('uvue 样式约束：新样式只用 class 选择器 / 无 gap / 无 CSS 变量', () => {
-    const style = card.slice(card.indexOf('<style>'));
+    // 用 '<style' 前缀取块：样式块已带 lang="scss"（#2446 换 token 的前置），写死 '<style>' 会 slice(-1) 取到末字符
+    const style = card.slice(card.indexOf('<style'));
     for (const cls of ['.record-question-img', '.record-date-last', '.answer-section', '.answer-line', '.answer-explain', '.answer-empty']) {
       expect(style).toContain(cls);
     }

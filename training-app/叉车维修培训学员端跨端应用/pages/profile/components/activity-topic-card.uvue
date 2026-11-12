@@ -81,7 +81,7 @@
   }
 </script>
 
-<style>
+<style lang="scss">
   .topic-card {
     background-color: #ffffff;
     border-radius: 16rpx;
@@ -108,7 +108,7 @@
 
   .reply-ref-title {
     font-size: 26rpx;
-    color: #2979ff;
+    color: $primary-color;
     margin-bottom: 8rpx;
     font-weight: bold;
   }
@@ -135,7 +135,7 @@
 
   .topic-edit-text {
     font-size: 22rpx;
-    color: #2979ff;
+    color: $primary-color;
   }
 
   .topic-stats {

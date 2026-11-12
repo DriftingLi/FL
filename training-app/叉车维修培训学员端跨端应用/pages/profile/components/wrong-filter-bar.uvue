@@ -58,7 +58,7 @@
     }
 </script>
 
-<style>
+<style lang="scss">
     /* 筛选栏 */
     .filter-bar {
         background-color: #ffffff;
@@ -87,7 +87,7 @@
 
     .filter-chip.active {
         background-color: #e3f2fd;
-        border: 1rpx solid #2979ff;
+        border: 1rpx solid $primary-color;
     }
 
     .filter-chip-text {
@@ -96,7 +96,7 @@
     }
 
     .filter-chip.active .filter-chip-text {
-        color: #2979ff;
+        color: $primary-color;
     }
 
     .filter-reset {

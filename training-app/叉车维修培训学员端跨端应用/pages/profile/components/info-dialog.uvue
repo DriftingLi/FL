@@ -47,7 +47,7 @@
   }
 </script>
 
-<style>
+<style lang="scss">
   .dialog-mask {
     position: fixed;
     top: 0;
@@ -95,7 +95,7 @@
   }
 
   .dialog-btn-primary {
-    background-color: #2979ff;
+    background-color: $primary-color;
   }
 
   .dialog-btn-text {

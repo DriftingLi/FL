@@ -260,7 +260,7 @@
 
     function getBadgeColor(course : CourseItem) : string {
         const text = getBadgeText(course)
-        if (text == '入门' || text == '冲刺') return '#2979ff'
+        if (text == '入门' || text == '冲刺') return '#239EDD'
         if (text == '进阶' || text == '专项') return '#e6a23c'
         return '#909399'
     }
@@ -424,7 +424,7 @@
 
     .filter-tag--active {
         background-color: #EBF5FF;
-        border-color: #2979ff;
+        border-color: $primary-color;
     }
 
     .filter-tag-text {
@@ -433,7 +433,7 @@
     }
 
     .filter-tag-text--active {
-        color: #2979ff;
+        color: $primary-color;
     }
 
     /* 免费/付费组提示（#1951）：文字样式必须落 <text>（红线），落 view 会被静默忽略并逐处报错；
@@ -507,7 +507,7 @@
     .course-item-price-text {
         font-size: 24rpx;
         font-weight: 600;
-        color: #2979ff;
+        color: $primary-color;
     }
 
     /* ---- 更多课程按钮 ---- */
@@ -520,14 +520,14 @@
         padding: 18rpx 64rpx;
         border-radius: 32rpx;
         border-width: 2rpx;
-        border-color: #2979ff;
+        border-color: $primary-color;
         border-style: solid;
         background-color: #ffffff;
     }
 
     .more-btn-text {
         font-size: 28rpx;
-        color: #2979ff;
+        color: $primary-color;
         font-weight: 500;
     }
 
@@ -553,7 +553,7 @@
 
     /* #1331：失败态重试位（与 course-detail / chapter-view 的 retry-btn 同款形态） */
     .retry-btn {
-        background-color: #2979ff;
+        background-color: $primary-color;
         border-radius: 32rpx;
         padding: 16rpx 48rpx;
         margin-top: 24rpx;

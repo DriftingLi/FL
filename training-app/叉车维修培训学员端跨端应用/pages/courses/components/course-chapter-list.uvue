@@ -64,7 +64,7 @@
     }
 </script>
 
-<style>
+<style lang="scss">
     /* ===== 通用 section ===== */
     .section {
         background-color: #ffffff;
@@ -135,7 +135,7 @@
     .chapter-index-text {
         font-size: 28rpx;
         font-weight: bold;
-        color: #2979ff;
+        color: $primary-color;
     }
 
     .chapter-check {
