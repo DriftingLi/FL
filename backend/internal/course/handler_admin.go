@@ -111,7 +111,7 @@ var courseWriteFacts400 = []error{
 	ErrCourseCredentialRefNotFound, model.ErrSpecialtyNotFound,
 	model.ErrCourseLevelNotFound, model.ErrCertificateTemplateNotFound,
 	ErrCourseTheoryHoursNegative, ErrCoursePracticeHoursNegative,
-	ErrCourseSortOrderNegative,
+	ErrCourseSortOrderNegative, ErrCoursePointsPriceInvalid,
 	ErrCoursePrerequisiteSelf, ErrCoursePrerequisiteNotFound,
 	ErrCoursePrerequisiteCycle,
 }
@@ -124,7 +124,7 @@ var courseWriteFacts400 = []error{
 // @Security BearerAuth
 // @Param body body object false "课程输入 {name,description,cover_image,duration,status,...}"
 // @Success 201 {object} response.R{data=CourseDTO} "课程创建成功"
-// @Failure 400 {object} response.R "输入不合法（挂载必填 / 引用ID无效或不存在 / 数值为负 / 前置课程冲突）"
+// @Failure 400 {object} response.R "输入不合法（挂载必填 / 引用ID无效或不存在 / 数值为负 / 积分价非正 / 前置课程冲突）"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 500 {object} response.R "写库或查库失败"
 // @Router /admin/course [post]
