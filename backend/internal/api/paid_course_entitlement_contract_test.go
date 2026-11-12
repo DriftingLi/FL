@@ -168,3 +168,88 @@ func entitledOf(t *testing.T, rec *httptest.ResponseRecorder) *bool {
 	}
 	return env.Data.CourseInfo.Entitled
 }
+
+// TestCourseDetailChapterContentEntitlement 详情信封的章节正文按权益空化（#2448，ADR-0062 决策 3）：
+// 未兑换时 chapters[].content 为空串（字段保留、形状不变），标题/序号照发；
+// 兑换后同一请求正文回来。锁的是响应体——UI 渲染与否无关。
+func TestCourseDetailChapterContentEntitlement(t *testing.T) {
+	t.Parallel()
+	testutil.SetTestGinMode()
+	db := testutil.NewMemoryDB(t)
+	cfg := &config.Config{
+		JWTSecretKey:    "detail-content-secret",
+		JWTExpiresHours: 2,
+		AuthCookie:      config.AuthCookieConfig{Name: "hrwai_token"},
+	}
+	r := NewRouter(newContractDeps(t, db, cfg))
+	token := failureTestStudentToken(t, db, cfg, "detail_content_stu")
+	if err := db.Model(&model.HrwaiUser{}).Where("username = ?", "detail_content_stu").
+		UpdateColumn("points_balance", 500).Error; err != nil {
+		t.Fatalf("预置余额失败: %v", err)
+	}
+
+	price := 100
+	spec := model.Specialty{Code: "det-content", Name: "空化方向", SortOrder: 1, Status: 1}
+	if err := db.Create(&spec).Error; err != nil {
+		t.Fatalf("建专业方向失败: %v", err)
+	}
+	lv := model.CourseLevel{Code: "det-content-lv", Name: "入门", SortOrder: 1, Status: 1}
+	if err := db.Create(&lv).Error; err != nil {
+		t.Fatalf("建课程等级失败: %v", err)
+	}
+	course := model.Course{Name: "叉车液压系统", Status: 1, PointsPrice: &price,
+		SpecialtyID: &spec.SpecialtyID, LevelID: &lv.LevelID, CreatedAt: testutil.Now()}
+	if err := db.Create(&course).Error; err != nil {
+		t.Fatalf("建付费课程失败: %v", err)
+	}
+	ch := model.Chapter{CourseID: course.CourseID, Title: "液压泵拆装", Content: "本节讲液压泵拆装工艺",
+		OrderNum: 1, CreatedAt: testutil.Now()}
+	if err := db.Create(&ch).Error; err != nil {
+		t.Fatalf("建章节失败: %v", err)
+	}
+	detailURL := fmt.Sprintf("/api/course/%d", course.CourseID)
+
+	before := chaptersOf(t, doWithToken(t, r, token, http.MethodGet, detailURL, nil))
+	if len(before) != 1 {
+		t.Fatalf("章节应 1 条, got %d", len(before))
+	}
+	if before[0].Content != "" {
+		t.Fatalf("未兑换章节正文必须为空串, got %q", before[0].Content)
+	}
+	if before[0].Title != "液压泵拆装" || before[0].OrderNum != 1 {
+		t.Fatalf("章节元信息不得被空化波及: %+v", before[0])
+	}
+
+	if rec := doWithToken(t, r, token, http.MethodPost,
+		fmt.Sprintf("/api/points/shop/course/%d/redeem", course.CourseID), nil); rec.Code != http.StatusOK {
+		t.Fatalf("兑换应 200, got %d %s", rec.Code, rec.Body.String())
+	}
+
+	after := chaptersOf(t, doWithToken(t, r, token, http.MethodGet, detailURL, nil))
+	if after[0].Content != "本节讲液压泵拆装工艺" {
+		t.Fatalf("兑换后正文必须原样返回, got %q", after[0].Content)
+	}
+}
+
+// chaptersOf 从课程详情信封取 chapters 的正文/元信息最小面。
+type chapterFace struct {
+	Content  string `json:"content"`
+	OrderNum int    `json:"order_num"`
+	Title    string `json:"title"`
+}
+
+func chaptersOf(t *testing.T, rec *httptest.ResponseRecorder) []chapterFace {
+	t.Helper()
+	if rec.Code != http.StatusOK {
+		t.Fatalf("课程详情应 200, got %d %s", rec.Code, rec.Body.String())
+	}
+	var env struct {
+		Data struct {
+			Chapters []chapterFace `json:"chapters"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+		t.Fatalf("解析课程详情失败: %v body=%s", err, rec.Body.String())
+	}
+	return env.Data.Chapters
+}
