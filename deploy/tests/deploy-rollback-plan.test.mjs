@@ -94,7 +94,7 @@ test('回滚接线：只改 tag + write_env_file + assert_running_image，且不
   assert.ok(start > 0, '找不到 do_rollback')
   const end = src.indexOf('# ---------------------------------------------------------------- down', start)
   const body = src.slice(start, end > 0 ? end : src.length)
-  for (const needle of ['self.tag_backend =', 'self.tag_frontend =', 'write_env_file', 'assert_running_image']) {
+  for (const needle of ['setattr(self, f"tag_{service}"', 'write_env_file', 'assert_running_image']) {
     assert.ok(body.includes(needle), 'do_rollback 缺少：' + needle)
   }
   for (const banned of ['os.environ', 'export BACKEND_IMAGE', 'export FRONTEND_IMAGE']) {

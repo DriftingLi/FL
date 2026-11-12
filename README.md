@@ -87,7 +87,7 @@
 
 ### 后端
 
-- Go 1.26（CI 钉 1.26.10）、Gin v1.12、GORM + pgx/v5、PostgreSQL 18
+- Go 1.26（CI 钉 1.26.11）、Gin v1.12、GORM + pgx/v5、PostgreSQL 18
 - **PostgreSQL 为唯一存储面**：验证码、图形码、refresh 黑名单等临时 KV 落在 `ephemeral_kv` 单表（#2109 起 Redis 退役），过期清扫是 daemon 里的一条 5 分钟守护
 - golang-migrate、golang-jwt/v5、viper、zap + lumberjack、aws-sdk-go-v2（S3）、gofpdf
 - AI：CloudWeGo Eino + OpenAI 兼容接口（DeepSeek 默认）；PPT / 文档转换走 LibreOffice sidecar
