@@ -35,6 +35,8 @@ while :; do
       exit 0
     fi
     echo "::error::run ${RUN_ID} completed/${CONCLUSION}（不是 success）⇒ 不放行"
+    echo "verdict=red" >> "$GITHUB_OUTPUT"
+    echo "reason=run completed/${CONCLUSION}" >> "$GITHUB_OUTPUT"
     exit 1
   fi
 

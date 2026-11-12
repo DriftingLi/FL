@@ -34,6 +34,14 @@ while :; do
       ;;
   esac
 
+  # TIMEOUT=0 表示单次快查不轮询
+  if [ "$TIMEOUT" -eq 0 ]; then
+    echo "::error::commit ${SHA:0:8} 的 ${ENVIRONMENT} 冒烟未就绪（deployment=${DEP_ID:-无记录} 状态=${STATE:-未知}）"
+    echo "deployment_id=${DEP_ID:-}" >> "$GITHUB_OUTPUT"
+    echo "deployment_status=${STATE:-unknown}" >> "$GITHUB_OUTPUT"
+    exit 1
+  fi
+
   if [ "$(date +%s)" -ge "$DEADLINE" ]; then
     echo "::error::等不到 commit ${SHA:0:8} 的 ${ENVIRONMENT} 冒烟成功（deployment=${DEP_ID:-无记录} 状态=${STATE:-未知}）"
     echo "deployment_id=${DEP_ID:-}" >> "$GITHUB_OUTPUT"
