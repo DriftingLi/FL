@@ -53,8 +53,11 @@
                         <text class="retry-btn-text">重试</text>
                     </view>
                 </view>
+                <!-- #2443：空态按当前分组说人话 —— 「积分兑换」组恒空时不能只说「暂无课程数据」，
+                     否则用户会以为整站没课（真实原因见 #2435：后端 points_price 无写入通道） -->
                 <view v-else-if="courses.length == 0 && !loading" class="empty-tip">
-                    <text class="empty-text">暂无课程数据</text>
+                    <text class="empty-text">{{ emptyText }}</text>
+                    <text v-if="emptyHint.length > 0" class="empty-hint">{{ emptyHint }}</text>
                 </view>
                 <view class="course-list">
                     <view v-for="(course, idx) in courses" :key="idx" class="course-item"
@@ -64,7 +67,12 @@
                         </view>
                         <view class="course-item-info">
                             <text class="course-item-title">{{ course.title }}</text>
-                            <text class="course-item-meta">共{{ course.chapter_count > 0 ? course.chapter_count : 6 }}个课时</text>
+                            <!-- #2443：课时数只在后端真下发时显示（此前兜底成 6 是假数据，后端不下发 chapter_count） -->
+                            <text v-if="chapterMetaText(course).length > 0" class="course-item-meta">{{ chapterMetaText(course) }}</text>
+                        </view>
+                        <!-- #2443：付费课在列表层就标出积分价 —— 兑换入口此前只在详情页，列表看不出哪门要积分 -->
+                        <view v-if="hasPointsPrice(course)" class="course-item-price">
+                            <text class="course-item-price-text">{{ pointsPriceText(course) }}</text>
                         </view>
                     </view>
                 </view>
@@ -89,7 +97,7 @@
 </template>
 
 <script setup lang="uts">
-    import { ref } from 'vue'
+    import { ref, computed } from 'vue'
     import { onShow } from '@dcloudio/uni-app'
     import AppNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { getCourseListApi, getCatalogTreeSpecialties, getLevelsApi } from '../../api/course'
@@ -149,6 +157,20 @@
     const noMore = ref<boolean>(false)
     /** #1331：首屏失败标记 —— 失败与「暂无数据」必须分开（#816 口径），失败给可见错误 + 重试位，不伪装成空列表 */
     const loadError = ref<boolean>(false)
+
+    // ---- 空态文案（#2443）----
+    // 「积分兑换」组恒空是当前真实状态（后端 points_price 无写入通道，见 #2435 / #2447），
+    // 只说「暂无课程数据」会让用户误以为整站没课 ⇒ 按分组给不同文案 + 一句出路。
+    const emptyText = computed((): string => {
+        if (activePaid.value == 2) return '暂无可兑换课程'
+        if (activePaid.value == 1) return '暂无免费课程'
+        return '暂无课程数据'
+    })
+
+    const emptyHint = computed((): string => {
+        if (activePaid.value == 2) return '课程暂未开放积分兑换，可先看「全部」或「免费」'
+        return ''
+    })
 
     async function loadCourses(reset : boolean) : Promise<void> {
         if (loading.value) return
@@ -241,6 +263,25 @@
         if (text == '入门' || text == '冲刺') return '#2979ff'
         if (text == '进阶' || text == '专项') return '#e6a23c'
         return '#909399'
+    }
+
+    // ---- 列表行辅助（#2443）----
+    /** 课时数只在后端真下发时显示；后端当前不下发 chapter_count（#2449 待补），此前兜底成 6 是假数据 */
+    function chapterMetaText(course : CourseItem) : string {
+        if (course.chapter_count > 0) return '共' + course.chapter_count + '个课时'
+        return ''
+    }
+
+    /** 付费课判定：points_price 有值且 > 0（与详情页 CTA 同源，见 #1951 / ADR-0031） */
+    function hasPointsPrice(course : CourseItem) : boolean {
+        const p = course.points_price
+        return p != null && p! > 0
+    }
+
+    function pointsPriceText(course : CourseItem) : string {
+        const p = course.points_price
+        if (p == null) return ''
+        return p! + ' 积分'
     }
 
     function onLoadMore() : void {
@@ -454,6 +495,21 @@
         color: #999999;
     }
 
+    /* #2443：付费课积分价签 —— 右端固定，不参与标题挤压 */
+    .course-item-price {
+        flex-shrink: 0;
+        margin-left: 16rpx;
+        padding: 6rpx 16rpx;
+        border-radius: 8rpx;
+        background-color: #EBF5FF;
+    }
+
+    .course-item-price-text {
+        font-size: 24rpx;
+        font-weight: 600;
+        color: #2979ff;
+    }
+
     /* ---- 更多课程按钮 ---- */
     .more-btn-wrap {
         align-items: center;
@@ -484,6 +540,15 @@
     .empty-text {
         font-size: 28rpx;
         color: #999999;
+    }
+
+    /* #2443：空态出路提示（比主文案小一号；色沿用 $text-color-placeholder(#999999)，不自造灰） */
+    .empty-hint {
+        font-size: 24rpx;
+        color: #999999;
+        margin-top: 12rpx;
+        text-align: center;
+        padding: 0 48rpx;
     }
 
     /* #1331：失败态重试位（与 course-detail / chapter-view 的 retry-btn 同款形态） */
