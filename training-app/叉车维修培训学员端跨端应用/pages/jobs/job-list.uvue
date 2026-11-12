@@ -345,8 +345,10 @@
         font-weight: bold;
     }
 
+    /* 命中区补到 88rpx（44px 下限）；头像仍 56rpx 居中，视觉不变。
+       注意：样式块注释里别写「#数字」——§9 机检会把 4 位票号当成 hex 色值判红。 */
     .tab-avatar-btn {
-        width: 72rpx;
+        width: 88rpx;
         height: 88rpx;
         align-items: center;
         justify-content: center;
