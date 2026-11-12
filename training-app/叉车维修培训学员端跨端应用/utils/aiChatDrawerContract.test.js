@@ -68,49 +68,49 @@ function leftEntryVisible(nav, page) {
 }
 
 /**
- * 右入口**可见性**判据（2026-11-10，#2412）—— 与上面 leftEntryVisible 对称的右半边。
+ * 右入口**可见性**判据（2026-11-10，#2412；#2479 改锚点：页头右槽 → 工具栏行）。
  *
  * 现场：#1649（8a95e05b）修融合冲突时把页头件的单图标分支删了，只留 rightIcons 与 #right 插槽，
  * 而 ai-chat-nav 还在传 :right-icon ⇒ 右槽退回空插槽：MP-WEIXIN 端「看不见、点得动」
  * （rightSlotWidth > 0 且挂着 @click），App / H5 端零宽 ⇒ 入口彻底消失。
- * 收编后右槽只剩两条渲染路径：组件画字形（rightIcons，n ≥ 1 已覆盖 n = 1）或页面注入 #right。
- * 本 helper 锁第一条（AI 助手页走的就是它），插槽那条由 ④ 继续锁。
  *
- * 三件串成一条：① 页头件真有 rightIcons 分支、且 ai-chat-nav 传了非空字形；
- * ② 点击经 rightClick → onMenuClick 接到开右抽屉；③ 抽屉真的在页面里渲染并绑菜单项。
+ * #2479 改锚点：一级页标题要居中于**屏幕中心** ⇒ 页头第一行右槽必须为空（不空则长标题会钻到
+ * 浮动的右槽下面），⋯ 下沉到标题栏下方工具栏行（app-nav-bar 的 #toolbar）。入口的**链路**没变
+ * （页面 API 仍是 menuClick、右抽屉仍由页面渲染），变的只是字形落点。
+ *
+ * 三件串成一条：① ⋯ 在 #toolbar 里有字形、且 ai-chat-nav 打开了工具栏行；
+ * ② 点击经 onMenuClick → 页面 @menu-click 接到开右抽屉；③ 抽屉真的在页面里渲染并绑菜单项。
+ * 另守两条：页头件的 rightIcons 分支仍在（其他页面仍在用）、同义 rightIcon prop 不得复活。
  */
 function rightEntryVisible(nav, navBar, page) {
   const v = [];
   if (!/v-if="rightIcons\.length > 0"/.test(navBar)) {
     v.push('页头件没有 rightIcons 渲染分支 ⇒ 右槽只剩空插槽，入口无可见字形');
   }
-  // 同义 prop 不得复活：它是本票的成因（#1649 删了分支却留下 prop），收编后右槽只有
+  // 同义 prop 不得复活：它是 #2412 的成因（#1649 删了分支却留下 prop），收编后右槽只有
   // rightIcons / #right 两条路径（ADR 0063）；再长出第三条只会让下一个调用方再被骗一次
   if (/rightIcon\s*\?:\s*string/.test(navBar)) {
     v.push('页头件又声明了 rightIcon prop（#2412 已收编为 rightIcons 一条路径，同义 prop 不得复活，见 ADR 0063）');
   }
-  // 字形必须非空：字面量数组直接判；绑定标识符则回查脚本里的字符串数组声明
-  const bound = (nav.match(/:right-icons="([^"]+)"/) || [])[1];
-  const expr = bound ? bound.trim() : '';
-  if (expr.length === 0) {
-    v.push('ai-chat-nav 未把 right-icons 传给页头件（传了别的 prop ⇒ 字形落不到屏幕上）');
-  } else {
-    const literal = expr.match(/^\[([\s\S]*)\]$/);
-    let body = '';
-    if (literal) {
-      body = literal[1];
-    } else {
-      const name = expr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const decl = nav.match(new RegExp(name + '\\s*:\\s*string\\[\\]\\s*=\\s*\\[([^\\]]*)\\]'));
-      body = decl ? decl[1] : '';
-    }
-    const glyphs = (body.match(/'[^']*'|"[^"]*"/g) || []).map((s) => s.slice(1, -1));
-    if (glyphs.length === 0 || glyphs.some((g) => g.length === 0)) {
-      v.push('右槽字形为空（right-icons 绑的空数组 / 空串）⇒ 传了也不渲染，入口看不见');
-    }
+  if (!/<slot name="toolbar">/.test(navBar)) {
+    v.push('页头件没有 #toolbar 插槽 ⇒ ⋯ 无处渲染（#2479：入口下沉标题栏下方工具栏行）');
   }
-  if (!/@right-click="onMenuClick"/.test(nav)) {
-    v.push('ai-chat-nav 未把 right-click 接到 onMenuClick（点得动也开不了右抽屉）');
+  if (/:right-icons="/.test(nav)) {
+    v.push('ai-chat-nav 又把右槽字形传回页头（#2479：一级页页头第一行右槽必须为空，否则长标题钻到浮动右槽下面）');
+  }
+  if (!/:show-toolbar="true"/.test(nav)) {
+    v.push('ai-chat-nav 未打开页头工具栏行（:show-toolbar）⇒ ⋯ 不渲染，入口看不见');
+  }
+  const toolbar = (nav.match(/<template #toolbar>([\s\S]*?)<\/template>/) || [])[1] || '';
+  if (toolbar.length === 0) {
+    v.push('ai-chat-nav 未把 ⋯ 放进 #toolbar（#2479：右抽屉入口落在工具栏行）');
+  } else {
+    if (!/⋯/.test(toolbar)) {
+      v.push('工具栏行无 ⋯ 字形 ⇒ 右抽屉入口不可见');
+    }
+    if (!/@click="onMenuClick"/.test(toolbar)) {
+      v.push('工具栏行 ⋯ 未接到 onMenuClick（点得动也开不了右抽屉）');
+    }
   }
   if (!/@menu-click="toggleSidebarRight"/.test(page)) {
     v.push('页面未把 menu-click 接到 toggleSidebarRight（点了也开不了右抽屉）');
@@ -120,7 +120,6 @@ function rightEntryVisible(nav, navBar, page) {
   }
   return v;
 }
-
 describe('AI 助手抽屉契约（类型单一来源 / view 不承载文字样式）', () => {
   const right = read(RIGHT);
   const left = read(LEFT);
@@ -149,15 +148,18 @@ describe('AI 助手抽屉契约（类型单一来源 / view 不承载文字样�
     expect(left).toMatch(/\.empty-text\s*\{[^}]*font-size/);
   });
 
-  it('④ 右侧入口可点：命中区由页头件右槽承载（#1602 归一：AiChatNav→AppNavBar，#947 经验收编进 app-nav-bar 右槽）', () => {
-    // #1602：AiChatNav 独立形态消失，页头右槽归 app-nav-bar；此处守两件事：
+  it('④ 右侧入口可点：⋯ 的命中区由 #toolbar 行承载（#2479 改锚点：页头第一行右槽清空）', () => {
+    // #1602：AiChatNav 独立形态消失，页头结构归 app-nav-bar；此处守三件事：
     // a) nav 包装件仍发出 menuClick（页面 API 不变）
     expect(nav).toMatch(/onMenuClick/);
-    // b) 页头件右槽是显式可点元素（右槽右缘由 useSafeArea().capsuleLeft 驱动，胶囊让位）。
-    //    #1604：右槽 class 归一为 nav-bar-side nav-bar-right（左右槽共用 .nav-bar-side 基类），
-    //    并开放 <slot name="right">（批1 页面右槽内容经 slot 注入）——可点性与宽度约束不变。
-    //    #2442：右槽宽度改内容自适应，让位只由 margin-right 承担 ⇒ 判据看 capsuleLeft。
+    // b) #2479：一级页标题居中于屏幕中心 ⇒ 入口下沉标题栏下方工具栏行 —— 页头件必须有该插槽，
+    //    且工具栏节点真的渲染它（组件侧几何由 appNavBarCapsuleToolbarContract 另看一道）。
     const navBar = read(NAVBAR);
+    expect(navBar).toMatch(/<slot name="toolbar">/);
+    expect(navBar).toMatch(/v-if="showToolbar"[\s\S]*?slot name="toolbar"/);
+    // c) 页头第一行右槽不再承载该入口（清空正是标题能居中的前提）
+    expect(nav).not.toMatch(/:right-icons=/);
+    // 组件侧右槽仍可点（其他页面 —— resume 等 —— 仍在用 rightIcons / #right 两条路径）
     expect(navBar).toMatch(/class="nav-bar-side nav-bar-right"[\s\S]*?@click="onRightClick"/);
     expect(navBar).toMatch(/capsuleLeft/);
     // 右抽屉 left 锚定继续保留（#947 实测组合）
@@ -212,7 +214,7 @@ describe('左入口可见性（最近对话 / 会话列表，2026-10-27）', () 
 });
 
 /** 右入口（右侧菜单抽屉）：补上右槽与 leftEntryVisible 对称的兜底（#2412）。 */
-describe('右入口可见性（右侧菜单抽屉，2026-11-10 #2412）', () => {
+describe('右入口可见性（右侧菜单抽屉，2026-11-10 #2412；#2479 锚点移到工具栏行）', () => {
   const nav = read(NAV);
   const navBar = read(NAVBAR);
   const page = read(PAGE_PATH);
@@ -221,16 +223,22 @@ describe('右入口可见性（右侧菜单抽屉，2026-11-10 #2412）', () => 
     expect(rightEntryVisible(nav, navBar, page)).toEqual([]);
   });
 
-  it('② 判别力：字形置空 / 拆右接线 / 不渲染右抽屉 ⇒ 各自报红', () => {
-    // 字形置空（形态 A）：绑定标识符的字符串数组改成空数组
-    const emptyArray = nav.replace(/(rightIcons\s*:\s*string\[\]\s*=\s*)\[[^\]]*\]/, '$1[]');
-    expect(emptyArray).not.toBe(nav);
-    expect(rightEntryVisible(emptyArray, navBar, page).join()).toMatch(/右槽字形为空/);
-    // 字形置空（形态 B）：直接绑空字面量
-    expect(rightEntryVisible(nav.replace(/:right-icons="[^"]*"/, ':right-icons="[]"'), navBar, page).join()).toMatch(/右槽字形为空/);
-    // 拆右接线：nav 侧 / 页面侧各一处
-    expect(rightEntryVisible(nav.replace('@right-click="onMenuClick"', ''), navBar, page).join()).toMatch(/未把 right-click 接到 onMenuClick/);
+  it('② 判别力：字形置空 / 抽掉工具栏 / 拆接线 / 传回右槽 / 不渲染右抽屉 ⇒ 各自报红', () => {
+    // 字形置空：工具栏行里的 ⋯ 被掏空
+    const noGlyph = nav.replace(/(<text class="chat-menu-glyph">)[^<]*(<\/text>)/, '$1$2');
+    expect(noGlyph).not.toBe(nav);
+    expect(rightEntryVisible(noGlyph, navBar, page).join()).toMatch(/工具栏行无 ⋯ 字形/);
+    // 整块 #toolbar 抽掉（回到「页头第一行是唯一入口」的旧形态）
+    const noToolbar = nav.replace(/<template #toolbar>[\s\S]*?<\/template>\s*/, '');
+    expect(noToolbar).not.toBe(nav);
+    expect(rightEntryVisible(noToolbar, navBar, page).join()).toMatch(/未把 ⋯ 放进 #toolbar/);
+    // 拆接线：nav 侧 / 页面侧各一处
+    expect(rightEntryVisible(nav.replace('@click="onMenuClick"', ''), navBar, page).join()).toMatch(/未接到 onMenuClick/);
     expect(rightEntryVisible(nav, navBar, page.replace('@menu-click="toggleSidebarRight"', '')).join()).toMatch(/未把 menu-click 接到 toggleSidebarRight/);
+    // 关掉工具栏行（⋯ 无处渲染）
+    expect(rightEntryVisible(nav.replace(':show-toolbar="true"', ''), navBar, page).join()).toMatch(/未打开页头工具栏行/);
+    // 右槽字形又传回来（本票的成因形态）
+    expect(rightEntryVisible(nav.replace('<template #toolbar>', ':right-icons="[]"\n\t\t\t<template #toolbar>'), navBar, page).join()).toMatch(/又把右槽字形传回页头/);
     // 不渲染右抽屉
     const noDrawer = page.replace(/<AiChatDrawerRight[\s\S]*?\/>/, '');
     expect(noDrawer).not.toBe(page);
@@ -241,5 +249,7 @@ describe('右入口可见性（右侧菜单抽屉，2026-11-10 #2412）', () => 
     const resurrected = navBar.replace('rightIcons ?: string[]', 'rightIcon ?: string\n        rightIcons ?: string[]');
     expect(resurrected).not.toBe(navBar);
     expect(rightEntryVisible(nav, resurrected, page).join()).toMatch(/又声明了 rightIcon prop/);
+    // 页头件丢了 #toolbar 插槽（⋯ 无处渲染）
+    expect(rightEntryVisible(nav, navBar.replace('<slot name="toolbar">', ''), page).join()).toMatch(/没有 #toolbar 插槽/);
   });
 });

@@ -171,6 +171,15 @@ _Avoid_：把它当「加个占位 view」——`components/common/platform-nav-
 （硬编码 `padding-right: 80rpx`、用 `var(--plus-safe-area-inset-top)`，在 uvue 上不成立），0 引用；
 「页头/导航栏」（它只管顶端让位，页面层级与底部 tabBar 另属信息架构）；「沉浸式」（那是配色与铺满策略，不是安全区测量）
 
+**页头标题（nav bar title）**：
+导航栏件（`components/app-nav-bar/`）里那颗标题，按**有没有返回箭头**（`left-icon` 是否为空）分两种形态 ——
+判据不是页面层级，是箭头：**一级页**（无箭头）居中于**屏幕中心**（两侧槽 `position: absolute` 脱流、标题块两端 48rpx
+对称留白 ⇒ 中心恒 375rpx、屏宽 750），且**右槽必须为空**；**二级页**（有箭头）仍在「左槽右缘 → 右槽左缘」的
+**可用空间**里居中，右槽可放动作。点标题发 `titleClick`（工作台证件切换接它），不再代发 `leftClick`（移动端 ADR-0069）。
+
+_Avoid_：与「页面标题区」（详情页正文顶部那颗居中标题 + 元信息行，见上条）混用；把两种形态的「居中」当同一件事
+（一级页是屏幕中心、二级页是可用空间中心）；拿「标题」单称它（正文标题也叫标题）
+
 **Changed 模式（收口子集）**：
 `npm run test:unit:changed`（= `dev-finish.ps1 -Changed`）的执行形态——接线腿**全量**（67 s 量级的廉价保险，
 设计内、非待优化项）+ 行为腿**受影响子集**（`scripts/behavior-suite-deps.mjs` 按本次工作树改动现算，

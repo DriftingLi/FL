@@ -4,15 +4,10 @@
              状态栏占位由页头件内化；右槽多图标按胶囊左边线让位（透明变体，N05 页面自垫底色）。
              #1846 收敛：右槽 3→2 图标（🔍 移出，落点进下方功能宫格），最长内容形态落回典型可用槽宽内。
              🛒 随之移出页头（右槽 2→1）：商城入口已在下方功能宫格「课程商城」，页头重复占位。 -->
-        <!-- #2442：一级页面（无返回）的单个自定义操作放**左槽**，标题仍在可用空间居中；
-             右侧整段留给微信胶囊，不再为让位压缩标题。 -->
-        <AppNavBar variant="plain" transparent :left-icon="''" :title="navTitle" @left-click="onCertTap">
-            <template #left>
-                <view class="nav-bell" @click="onNotificationClick">
-                    <text class="nav-bell-icon">🔔</text>
-                </view>
-            </template>
-        </AppNavBar>
+        <!-- #2479：一级页标题居中于**屏幕中心**，页头左右槽都不承载页级动作；证件切换挂标题的
+             显式 @title-click（#1677「左槽空置时标题代发 leftClick」已删）。🔔 通知入口下沉：
+             它另有论坛 / 个人中心 / 简历三处，页头是重复占位。 -->
+        <AppNavBar variant="plain" transparent :left-icon="''" :title="navTitle" @title-click="onCertTap" />
 
         <!-- 公告栏 -->
         <view class="notice-bar" @click="onNoticeClick">
@@ -102,7 +97,7 @@
 
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
-    // #2442：通知铃铛改挂页头**左槽**（一级页面的单个自定义操作放左侧，标题仍居中）。
+    // #2479：🔔 通知移出页头（一级页左右槽都不承载页级动作，标题才能居中于屏幕中心）。
     // #1846 收敛：🔍（全局搜索）移出页头——入口下沉功能宫格（dashboard-menu-grid），触发行为不变
     // （仍 navigateTo 压栈，搜索页「取消」依赖返回栈）。🛒 同理移出页头：商城入口已在宫格「课程商城」。
 
@@ -112,7 +107,7 @@
         loadCredentials, onCertTap, onSelectCredential, onCloseCertDropdown,
     } = useDashboardCredential()
 
-    // #1602 修复：旧页头「证件名 ▾」入口迁入 AppNavBar 左槽标题（点击 emit leftClick → onCertTap）。
+    // #1602 修复 / #2479：旧页头「证件名 ▾」入口由标题承载（点击 emit titleClick → onCertTap）。
     const navTitle = computed((): string => currentCert.value + ' ▾')
 
     // ---- 数据流：未读轮询 / 继续学习 / 新闻资讯 / 首页课程区（composable 持有） ----
@@ -142,10 +137,6 @@
         showFilter.value = false
         // #1608 §8⑤：确认即按所选口径重拉课程区（此前只 console.log 空转不落数据）
         loadHotCourses(currentCredentialId.value, filterValues[selectedFilter.value])
-    }
-
-    function onNotificationClick() : void {
-        uni.navigateTo({ url: '/pages/notifications/notifications' })
     }
 
     // #1846：onSearchClick 随页头 🔍 一并退役——搜索跳转归宫格条目（path 常量 + push 语义，
@@ -210,18 +201,6 @@
         background: linear-gradient(to bottom, $gradient-start, $gradient-end);
         background-color: $gradient-end;
         flex-direction: column;
-    }
-
-    /* 页头左槽通知铃铛（#2442）：88rpx 方块 = 44×44 触摸目标下限，字形 40rpx 居中。 */
-    .nav-bell {
-        width: 88rpx;
-        height: 88rpx;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .nav-bell-icon {
-        font-size: 40rpx;
     }
 
     .content-scroll {

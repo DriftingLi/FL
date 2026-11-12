@@ -1,14 +1,19 @@
 /**
- * 页头左入口代发契约（refs #1677）
+ * 页头左入口接线契约（refs #1677 / #2479）
  *
  * 现象（#1677 B）：dashboard 传 `:left-icon="''"` ⇒ 左槽内 text 无渲染 ⇒ 左槽 view
  * 零宽零高，`onLeftClick` 命中区不存在；`.nav-bar-title-block` 原本无 @click ⇒
  * 页头左入口动作（证件切换）在全命中面点不动。
  *
- * 修复（#1677）：标题块挂 `@click="onTitleBlockClick"`，handler 内**仅左槽空置时**
- * （leftIcon.length == 0）上移发同一条 leftClick；左槽有 icon（返回箭头）时标题是纯
- * 展示文字，点击不得触发左动作 —— 否则全仓子页点标题即误返回。标题块高度 88rpx +
- * 内容垂直居中，把命中区从「文字高」抬到整条 bar 高（视觉不变，触摸目标 44×44）。
+ * 沿革（#1677）：标题块挂 `@click="onTitleBlockClick"`，handler 内**仅左槽空置时**
+ * （leftIcon.length == 0）上移发同一条 leftClick。标题块高度 88rpx + 内容垂直居中，
+ * 把命中区从「文字高」抬到整条 bar 高（视觉不变，触摸目标 44×44）—— 这两条本契约保留。
+ *
+ * 改判（#2479 D3，2026-11-12）：`#1677` 的「左槽空置时标题代发 leftClick」是隐式规则 ——
+ * 页面把左入口动作绑在**标题**上，读代码看不出接线。现改为显式 `titleClick`：标题块点击
+ * 一律 `emit('titleClick')`，页面用 `@title-click` 接（dashboard 证件切换）。左槽空置守卫
+ * 与代发 leftClick 路径一并删除，本契约钉「必须是 titleClick，且不得再代发 leftClick /
+ * 不得再带左槽空置守卫」。
  *
  * 分类：接线守护（读源码形状断言），不构成 ③ 门证据；判别力由注入违规样本的必红面自证，
  * 行为面（真点击开合浮层）由 ② 门 automator 取证覆盖。
@@ -27,18 +32,25 @@ function leftEntryViolations(srcRaw) {
   const src = stripComments(srcRaw);
   const v = [];
   if (!/@click="onTitleBlockClick"/.test(src)) {
-    v.push('标题块缺 @click="onTitleBlockClick"（左槽空置时左入口无命中区）');
+    v.push('标题块缺 @click="onTitleBlockClick"（标题命中区无接线）');
   }
   if (!/function onTitleBlockClick\(\)[\s\S]*?\{[\s\S]*?\}/.test(src)) {
     v.push('onTitleBlockClick handler 缺失');
     return v;
   }
   const fn = (src.match(/function onTitleBlockClick\(\)[\s\S]*?\{[\s\S]*?\}/) || [''])[0];
-  if (!/props\.leftIcon\.length == 0/.test(fn)) {
-    v.push('onTitleBlockClick 缺左槽空置守卫（props.leftIcon.length == 0）—— 无守卫时全仓子页点标题即触发返回');
+  if (!/emit\(\s*'titleClick'\s*\)/.test(fn)) {
+    v.push("onTitleBlockClick 未发 titleClick（#2479 D3：标题点击必须是显式 titleClick 事件）");
   }
-  if (!/emit\(\s*'leftClick'\s*\)/.test(fn)) {
-    v.push('onTitleBlockClick 未发 leftClick（未上移进同一条左入口链）');
+  if (/emit\(\s*'leftClick'\s*\)/.test(fn)) {
+    v.push('onTitleBlockClick 仍在代发 leftClick（#2479 D3 已删「左槽空置时标题代发 leftClick」隐式规则）');
+  }
+  if (/props\.leftIcon\.length\s*==\s*0/.test(fn)) {
+    v.push('onTitleBlockClick 仍带左槽空置守卫（守卫随代发规则一并删除，点击一律发 titleClick）');
+  }
+  const emitsDecl = (src.match(/defineEmits\(\s*\[[^\]]*\]\s*\)/) || [''])[0];
+  if (!/['"]titleClick['"]/.test(emitsDecl)) {
+    v.push("defineEmits 未声明 titleClick（父级 @title-click 收不到事件）");
   }
   if (!/height\s*:\s*88rpx\s*;/.test((src.match(/\.nav-bar-title-block\s*\{[^}]*\}/) || [''])[0])) {
     v.push('.nav-bar-title-block 缺 height:88rpx（命中区未抬到整条 bar 高，触摸目标不足 44×44）');
@@ -50,10 +62,10 @@ function leftEntryViolations(srcRaw) {
 }
 
 /* ══ 真实文件（必不红面） ══ */
-describe('页头左入口代发契约（真实源码，#1677）', () => {
+describe('页头左入口接线契约（真实源码，#1677 / #2479）', () => {
   const src = h.read(SRC_REL);
 
-  it('守约：标题块接 @click + 空槽守卫代发 leftClick + 命中区 88rpx 垂直居中，零违规', () => {
+  it('守约：标题块接 @click + 一律 emit titleClick + 命中区 88rpx 垂直居中，零违规', () => {
     expect(leftEntryViolations(src)).toEqual([]);
   });
 
@@ -67,11 +79,10 @@ describe('页头左入口代发契约（真实源码，#1677）', () => {
 /* ══ 判别力（必红面）：注入违规样本，检测器必须红 ══ */
 describe('检测器判别力（注入违规样本必红）', () => {
   const BASE = [
+    "defineEmits(['leftClick', 'rightClick', 'titleClick'])",
     '<view class="nav-bar-title-block" @click="onTitleBlockClick"></view>',
     'function onTitleBlockClick() : void {',
-    '    if (props.leftIcon.length == 0) {',
-    "        emit('leftClick')",
-    '    }',
+    "    emit('titleClick')",
     '}',
     '<style lang="scss">',
     '.nav-bar-title-block {',
@@ -85,14 +96,28 @@ describe('检测器判别力（注入违规样本必红）', () => {
     expect(v.some((x) => x.includes('缺 @click'))).toBe(true);
   });
 
-  it('handler 去掉左槽空置守卫（无条件代发）→ 报「缺守卫」', () => {
-    const v = leftEntryViolations(BASE.replace('    if (props.leftIcon.length == 0) {\n', '').replace('    }\n', ''));
-    expect(v.some((x) => x.includes('缺左槽空置守卫'))).toBe(true);
+  it('handler 改回代发 leftClick（#2479 已删的隐式规则）→ 报「仍在代发 leftClick」', () => {
+    const v = leftEntryViolations(BASE.replace("    emit('titleClick')", "    emit('leftClick')"));
+    expect(v.some((x) => x.includes('仍在代发 leftClick'))).toBe(true);
   });
 
-  it('handler 去掉 emit → 报「未发 leftClick」', () => {
-    const v = leftEntryViolations(BASE.replace("        emit('leftClick')", ''));
-    expect(v.some((x) => x.includes('未发 leftClick'))).toBe(true);
+  it('handler 加回左槽空置守卫 → 报「仍带左槽空置守卫」', () => {
+    const v = leftEntryViolations(
+      BASE.replace("    emit('titleClick')", "    if (props.leftIcon.length == 0) {\n        emit('titleClick')\n    }")
+    );
+    expect(v.some((x) => x.includes('仍带左槽空置守卫'))).toBe(true);
+  });
+
+  it('handler 去掉 emit → 报「未发 titleClick」', () => {
+    const v = leftEntryViolations(BASE.replace("    emit('titleClick')\n", ''));
+    expect(v.some((x) => x.includes('未发 titleClick'))).toBe(true);
+  });
+
+  it('defineEmits 漏声明 titleClick → 报「未声明 titleClick」', () => {
+    const v = leftEntryViolations(
+      BASE.replace("defineEmits(['leftClick', 'rightClick', 'titleClick'])", "defineEmits(['leftClick', 'rightClick'])")
+    );
+    expect(v.some((x) => x.includes('未声明 titleClick'))).toBe(true);
   });
 
   it('标题块高度去掉（命中区塌回文字高）→ 报「缺 height:88rpx」', () => {
@@ -207,6 +232,51 @@ function centerTitleViolations(srcRaw) {
   if (blockTag.length === 0) {
     v.push('标题块缺 v-if 非空守卫（空标题下 flex:1 会长出透明点击区）');
   }
+  // 居中形态的两条配套几何（#2479）：侧槽脱流 + 两端 48rpx 对称留白，缺一条中心就不是 375rpx
+  const body = (src.match(/\.nav-bar-body\s*\{[^}]*\}/) || [''])[0];
+  if (!/position\s*:\s*relative/.test(body)) {
+    v.push('.nav-bar-body 缺 position:relative（居中形态侧槽绝对定位的包含块）');
+  }
+  const floatSides = [
+    ['nav-bar-side--floating-left', 'left'],
+    ['nav-bar-side--floating-right', 'right'],
+  ];
+  for (const pair of floatSides) {
+    const blk = (src.match(new RegExp('\\.' + pair[0] + '\\s*\\{[^}]*\\}')) || [''])[0];
+    if (blk.length === 0) {
+      v.push('缺 .' + pair[0] + '（居中形态侧槽未脱流 ⇒ 空右槽的胶囊让位仍把标题中心挤左）');
+      continue;
+    }
+    if (!/position\s*:\s*absolute/.test(blk)) {
+      v.push('.' + pair[0] + ' 未 position:absolute（未出流则仍参与 space-between）');
+    }
+    if (!new RegExp(pair[1] + '\\s*:\\s*24rpx').test(blk)) {
+      v.push('.' + pair[0] + ' 缺 ' + pair[1] + ':24rpx（与流内位置不再一致）');
+    }
+  }
+  const floatClasses = [
+    ['leftSlotFloatClass', 'nav-bar-side--floating-left'],
+    ['rightSlotFloatClass', 'nav-bar-side--floating-right'],
+  ];
+  for (const pair of floatClasses) {
+    const c = (src.match(new RegExp('const ' + pair[0] + '\\s*=\\s*computed[\\s\\S]*?\\}\\)')) || [''])[0];
+    if (c.length === 0) {
+      v.push('缺 ' + pair[0] + ' 计算属性（侧槽脱流没有触发面）');
+      continue;
+    }
+    if (!/titleCentered\.value/.test(c)) {
+      v.push(pair[0] + ' 未以 titleCentered 为门（非居中形态的二级页也会被脱流）');
+    }
+    if (!new RegExp(pair[1]).test(c)) {
+      v.push(pair[0] + ' 未返回 ' + pair[1]);
+    }
+  }
+  if (!/margin-left\s*:\s*48rpx/.test(centered)) {
+    v.push('居中形态缺左 48rpx 对称留白（标题文字带左界不再是 72rpx）');
+  }
+  if (!/margin-right\s*:\s*48rpx/.test(centered)) {
+    v.push('居中形态缺右 48rpx 对称留白（两端不对称 ⇒ 文字中心偏离 375rpx）');
+  }
   return v;
 }
 
@@ -237,9 +307,18 @@ describe('居中形态检测器判别力（注入违规样本必红）', () => {
     'const titleBlockClass = computed((): string => {',
     "    return titleCentered.value ? 'nav-bar-title-block--centered' : ''",
     '})',
+    'const leftSlotFloatClass = computed((): string => {',
+    "    return titleCentered.value ? 'nav-bar-side--floating-left' : ''",
+    '})',
+    'const rightSlotFloatClass = computed((): string => {',
+    "    return titleCentered.value ? 'nav-bar-side--floating-right' : ''",
+    '})',
     '<style lang="scss">',
+    '.nav-bar-body { position: relative; }',
+    '.nav-bar-side--floating-left { position: absolute; left: 24rpx; }',
+    '.nav-bar-side--floating-right { position: absolute; right: 24rpx; }',
     '.nav-bar-title-block { flex: 1; min-width: 0; }',
-    '.nav-bar-title-block--centered { align-items: center; margin-left: 0; }',
+    '.nav-bar-title-block--centered { align-items: center; margin-left: 48rpx; margin-right: 48rpx; }',
     '.nav-bar-title--centered { width: 100%; text-align: center; margin-left: 0; }',
     '</style>',
   ].join('\n');
@@ -306,12 +385,37 @@ describe('居中形态检测器判别力（注入违规样本必红）', () => {
     );
     expect(v.some((x) => x.includes('缺 v-if 非空守卫'))).toBe(true);
   });
+
+  it('居中形态侧槽不脱流（摘掉 --floating-left）→ 报「缺 .nav-bar-side--floating-left」', () => {
+    const v = centerTitleViolations(BASE.replace('.nav-bar-side--floating-left { position: absolute; left: 24rpx; }', ''));
+    expect(v.some((x) => x.includes('缺 .nav-bar-side--floating-left'))).toBe(true);
+  });
+
+  it('侧槽脱流类丢 titleCentered 门（二级页也被脱流）→ 报「未以 titleCentered 为门」', () => {
+    const v = centerTitleViolations(
+      BASE.replace("    return titleCentered.value ? 'nav-bar-side--floating-right' : ''", "    return 'nav-bar-side--floating-right'")
+    );
+    expect(v.some((x) => x.includes('未以 titleCentered 为门'))).toBe(true);
+  });
+
+  it('对称留白只留一边（中心偏离 375rpx）→ 报「缺右 48rpx」', () => {
+    const v = centerTitleViolations(
+      BASE.replace('align-items: center; margin-left: 48rpx; margin-right: 48rpx;', 'align-items: center; margin-left: 48rpx;')
+    );
+    expect(v.some((x) => x.includes('缺右 48rpx'))).toBe(true);
+  });
+
+  it('.nav-bar-body 丢 position:relative（侧槽失去包含块）→ 报「缺 position:relative」', () => {
+    const v = centerTitleViolations(BASE.replace('.nav-bar-body { position: relative; }', '.nav-bar-body { }'));
+    expect(v.some((x) => x.includes('缺 position:relative'))).toBe(true);
+  });
 });
 
 /**
- * 一级/二级页面页头形态（#2442 裁定，见 docs/adr/0067）
+ * 一级/二级页面页头形态（#2442 裁定，见 docs/adr/0067；#2479 收窄为「一级页真居中」）
  *
- * 一级页面（无返回按钮）：标题居中，单个自定义操作优先放左槽，右侧整段留给胶囊。
+ * 一级页面（无返回按钮）：标题居中于**屏幕中心**（#2479，几何见上），页级动作只能放左槽，
+ * 右槽必须空 —— 右槽留内容时标题长文本会钻到它下面（侧槽已脱流）。
  * 二级页面（有返回按钮）：返回 + 标题左对齐，必要操作放右侧；返回必须真能返回。
  */
 describe('一级/二级页面页头形态（#2442）', () => {
@@ -326,9 +430,34 @@ describe('一级/二级页面页头形态（#2442）', () => {
     const forum = h.read('pages/forum/forum.uvue');
     expect(forum).toMatch(/<template #left>[\s\S]*?msg-icon-wrap/);
     expect(forum).not.toMatch(/<template #right>/);
+    // #2479 D5：dashboard 的 🔔 下沉（通知入口另有 forum / profile / resume 三处），
+    // 证件切换改挂显式 @title-click —— 左右槽都清空，标题才居中在屏幕中心。
     const dash = h.read('pages/dashboard/dashboard.uvue');
-    expect(dash).toMatch(/<template #left>[\s\S]*?nav-bell/);
+    expect(dash).not.toMatch(/<template #left>/);
+    expect(dash).not.toMatch(/nav-bell/);
+    expect(dash).toMatch(/@title-click="onCertTap"/);
     expect(dash).not.toMatch(/:right-icons=/);
+  });
+
+  it('一级页面（left-icon=""）右槽必须空（#2479 D5/D6：侧槽脱流后标题块吃满整行）', () => {
+    const bad = [];
+    for (const rel of h.sourceFilesIn('pages')) {
+      const src = h.read(rel);
+      for (const m of src.matchAll(/<(?:app-nav-bar|AppNavBar)\b[^>]*>/g)) {
+        const tag = m[0];
+        if (!/left-icon="''"|left-icon=""/.test(tag)) continue;
+        const icons = tag.match(/:right-icons="([^"]*)"/);
+        if (icons && !/^\s*\[\s*\]\s*$/.test(icons[1])) {
+          bad.push(rel + ' :: :right-icons=' + icons[1]);
+        }
+        const rest = src.slice((m.index || 0) + tag.length);
+        const end = rest.indexOf('</app-nav-bar>');
+        if (end >= 0 && /<template #right>/.test(rest.slice(0, end))) {
+          bad.push(rel + ' :: <template #right>');
+        }
+      }
+    }
+    expect(bad).toEqual([]);
   });
 
   it('二级页面（默认返回箭头）必须接 @left-click，不留死按钮', () => {
