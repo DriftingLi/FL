@@ -379,7 +379,7 @@ import { goBack } from '../../utils/navigation'
     }
 
     .segment-item-active {
-        background-color: #2979ff;
+        background-color: $primary-color;
     }
 
     .segment-text {
@@ -417,14 +417,14 @@ import { goBack } from '../../utils/navigation'
         margin-top: 32rpx;
         padding: 16rpx 40rpx;
         border-radius: 32rpx;
-        border: 1rpx solid #2979ff;
+        border: 1rpx solid $primary-color;
         align-items: center;
         justify-content: center;
     }
 
     .state-btn-text {
         font-size: 26rpx;
-        color: #2979ff;
+        color: $primary-color;
     }
 
     .note-list {
@@ -472,7 +472,7 @@ import { goBack } from '../../utils/navigation'
     }
 
     .note-tag-standalone .note-tag-text {
-        color: #2979ff;
+        color: $primary-color;
     }
 
     .note-tag-question .note-tag-text {
