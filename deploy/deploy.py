@@ -32,7 +32,6 @@ import gzip
 import json
 import os
 import re
-import shlex
 import shutil
 import subprocess
 import sys
@@ -49,7 +48,7 @@ _deploy_dir = str(Path(__file__).resolve().parent)
 if _deploy_dir not in sys.path:
     sys.path.insert(0, _deploy_dir)
 from release_transaction import ReleaseTransaction, build_release_plan
-
+from effective_config import EffectiveConfig, parse_env_text
 RED = "\033[0;31m"
 GREEN = "\033[0;32m"
 YELLOW = "\033[1;33m"
@@ -239,22 +238,10 @@ def plan_decisions(
 # 镜像引用始终由 .env 单独控制（不会被 env.defaults 里的 BACKEND_IMAGE 盖掉）。
 DEFAULTS: Dict[str, str] = {}
 
-_ENV_LINE = re.compile(r"^export ([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
-
 
 def parse_env_defaults(text: str) -> Dict[str, str]:
     """解析 deploy/env.defaults 的文本（shell 可 source 格式），返回 {名字: 值}。"""
-    out: Dict[str, str] = {}
-    for line in text.splitlines():
-        m = _ENV_LINE.match(line.strip())
-        if not m:
-            continue
-        try:
-            parts = shlex.split(m.group(2))
-        except ValueError:
-            continue
-        out[m.group(1)] = parts[0] if parts else ""
-    return out
+    return parse_env_text(text)
 
 
 def load_env_defaults(deploy_path: Path) -> Dict[str, str]:
@@ -383,6 +370,9 @@ class Deployer:
                             else Path(getenv("DEPLOY_PATH", str(REPO_ROOT))).resolve())
         # 必须在读其余配置前加载默认值；只进内存，不进 os.environ。
         set_defaults(load_env_defaults(self.deploy_path))
+        # EffectiveConfig：统一配置解析（声明表 + 环境 secrets + 显式覆盖 → resolved map）。
+        self.config = EffectiveConfig.load_from_env_defaults(self.deploy_path)
+        self.config.derived = {"SMTP_USERNAME": "SMTP_FROM"}
 
         raw_compose = os.environ.get("COMPOSE_FILE", "")
         if raw_compose:
@@ -630,6 +620,15 @@ class Deployer:
 
     # ---------------------------------------------------------------- .env
     def render_env_file(self) -> str:
+        config = getattr(self, "config", None) or EffectiveConfig(
+            declarations=dict(DEFAULTS), derived={"SMTP_USERNAME": "SMTP_FROM"})
+        resolved = config.resolve(environment=dict(os.environ), overrides={})
+
+        def gv(name: str, default: str = "") -> str:
+            """从 resolved map 取值（统一优先级：覆盖 > 环境 > 声明表默认值）。"""
+            v = resolved.get(name, "")
+            return v if v else default
+
         lines: List[str] = [
             "# 由 deploy/deploy.py 自动生成 — 请勿手动编辑",
             "APP_ENV=production",
@@ -639,70 +638,70 @@ class Deployer:
         def add(name: str, value: str) -> None:
             lines.append(f"{name}={value}")
 
-        add("DATABASE_URL", env_val(getenv("DATABASE_URL")))
-        add("DB_USER", env_val(getenv("DB_USER", "forklift")))
+        add("DATABASE_URL", env_val(gv("DATABASE_URL")))
+        add("DB_USER", env_val(gv("DB_USER", "forklift")))
         add("DB_PASSWORD", env_val(self.db_password))
 
-        add("SMTP_HOST", env_val(getenv("SMTP_HOST")))
-        add("SMTP_PORT", getenv("SMTP_PORT", "465"))
-        add("SMTP_USERNAME", env_val(getenv("SMTP_USERNAME") or getenv("SMTP_FROM")))
-        add("SMTP_PASSWORD", env_val(getenv("SMTP_PASSWORD")))
-        add("SMTP_FROM", env_val(getenv("SMTP_FROM")))
-        add("SMTP_FROM_NAME", env_val(getenv("SMTP_FROM_NAME", "和润天下")))
-        add("TENCENT_SMS_SECRET_ID", env_val(getenv("TENCENT_SMS_SECRET_ID")))
-        add("TENCENT_SMS_SECRET_KEY", env_val(getenv("TENCENT_SMS_SECRET_KEY")))
-        add("TENCENT_SMS_SDK_APP_ID", env_val(getenv("TENCENT_SMS_SDK_APP_ID")))
-        add("TENCENT_SMS_SIGN_NAME", env_val(getenv("TENCENT_SMS_SIGN_NAME")))
+        add("SMTP_HOST", env_val(gv("SMTP_HOST")))
+        add("SMTP_PORT", gv("SMTP_PORT", "465"))
+        add("SMTP_USERNAME", env_val(gv("SMTP_USERNAME")))  # derived: ← SMTP_FROM
+        add("SMTP_PASSWORD", env_val(gv("SMTP_PASSWORD")))
+        add("SMTP_FROM", env_val(gv("SMTP_FROM")))
+        add("SMTP_FROM_NAME", env_val(gv("SMTP_FROM_NAME", "和润天下")))
+        add("TENCENT_SMS_SECRET_ID", env_val(gv("TENCENT_SMS_SECRET_ID")))
+        add("TENCENT_SMS_SECRET_KEY", env_val(gv("TENCENT_SMS_SECRET_KEY")))
+        add("TENCENT_SMS_SDK_APP_ID", env_val(gv("TENCENT_SMS_SDK_APP_ID")))
+        add("TENCENT_SMS_SIGN_NAME", env_val(gv("TENCENT_SMS_SIGN_NAME")))
         for name in (
             "TENCENT_SMS_TEMPLATE_REGISTER",
             "TENCENT_SMS_TEMPLATE_LOGIN",
             "TENCENT_SMS_TEMPLATE_PASSWORD",
             "TENCENT_SMS_TEMPLATE_BIND_PHONE",
         ):
-            add(name, getenv(name))
-        add("TENCENT_SMS_REGION", getenv("TENCENT_SMS_REGION", "ap-guangzhou"))
-        add("WECHAT_MINI_PROGRAM_APP_ID", env_val(getenv("WECHAT_MINI_PROGRAM_APP_ID")))
-        add("WECHAT_MINI_PROGRAM_APP_SECRET", env_val(getenv("WECHAT_MINI_PROGRAM_APP_SECRET")))
-        add("WECHAT_OPEN_PLATFORM_APP_ID", env_val(getenv("WECHAT_OPEN_PLATFORM_APP_ID")))
-        add("WECHAT_OPEN_PLATFORM_APP_SECRET", env_val(getenv("WECHAT_OPEN_PLATFORM_APP_SECRET")))
+            add(name, gv(name))
+        add("TENCENT_SMS_REGION", gv("TENCENT_SMS_REGION", "ap-guangzhou"))
+        add("WECHAT_MINI_PROGRAM_APP_ID", env_val(gv("WECHAT_MINI_PROGRAM_APP_ID")))
+        add("WECHAT_MINI_PROGRAM_APP_SECRET", env_val(gv("WECHAT_MINI_PROGRAM_APP_SECRET")))
+        add("WECHAT_OPEN_PLATFORM_APP_ID", env_val(gv("WECHAT_OPEN_PLATFORM_APP_ID")))
+        add("WECHAT_OPEN_PLATFORM_APP_SECRET", env_val(gv("WECHAT_OPEN_PLATFORM_APP_SECRET")))
 
-        add("SECRET_KEY", env_val(getenv("SECRET_KEY")))
-        add("JWT_SECRET_KEY", env_val(getenv("JWT_SECRET_KEY")))
-        add("JWT_EXPIRES_HOURS", getenv("JWT_EXPIRES_HOURS", "2"))
-        add("JWT_REFRESH_EXPIRES_DAYS", getenv("JWT_REFRESH_EXPIRES_DAYS", "7"))
-        add("AUTH_COOKIE_NAME", env_val(getenv("AUTH_COOKIE_NAME", "hrwai_token")))
-        add("AUTH_COOKIE_DOMAIN", env_val(getenv("AUTH_COOKIE_DOMAIN")))
-        add("AUTH_COOKIE_SECURE", getenv("AUTH_COOKIE_SECURE", "true"))
+        add("SECRET_KEY", env_val(gv("SECRET_KEY")))
+        add("JWT_SECRET_KEY", env_val(gv("JWT_SECRET_KEY")))
+        add("JWT_EXPIRES_HOURS", gv("JWT_EXPIRES_HOURS", "2"))
+        add("JWT_REFRESH_EXPIRES_DAYS", gv("JWT_REFRESH_EXPIRES_DAYS", "7"))
+        add("AUTH_COOKIE_NAME", env_val(gv("AUTH_COOKIE_NAME", "hrwai_token")))
+        add("AUTH_COOKIE_DOMAIN", env_val(gv("AUTH_COOKIE_DOMAIN")))
+        add("AUTH_COOKIE_SECURE", gv("AUTH_COOKIE_SECURE", "true"))
 
-        add("ADMIN_DEFAULT_PASSWORD", env_val(getenv("ADMIN_DEFAULT_PASSWORD")))
-        add("TUTOR_DEFAULT_PASSWORD", env_val(getenv("TUTOR_DEFAULT_PASSWORD")))
-        add("STUDENT_DEFAULT_PASSWORD", env_val(getenv("STUDENT_DEFAULT_PASSWORD")))
-        add("CORS_ORIGINS", env_val(getenv("CORS_ORIGINS")))
+        add("ADMIN_DEFAULT_PASSWORD", env_val(gv("ADMIN_DEFAULT_PASSWORD")))
+        add("TUTOR_DEFAULT_PASSWORD", env_val(gv("TUTOR_DEFAULT_PASSWORD")))
+        add("STUDENT_DEFAULT_PASSWORD", env_val(gv("STUDENT_DEFAULT_PASSWORD")))
+        add("CORS_ORIGINS", env_val(gv("CORS_ORIGINS")))
 
-        add("BACKEND_IMAGE", self.backend_ref or getenv("BACKEND_IMAGE", "forklift-backend:latest"))
-        add("FRONTEND_IMAGE", self.frontend_ref or getenv("FRONTEND_IMAGE", "forklift-frontend:latest"))
-        add("LIBREOFFICE_IMAGE", self.libreoffice_ref or getenv("LIBREOFFICE_IMAGE", "forklift-libreoffice:latest"))
-        add("DOMAIN", env_val(getenv("DOMAIN", "localhost")))
-        add("TLS_MODE", getenv("TLS_MODE", "auto"))
-        add("CADDY_ACME_EMAIL", getenv("CADDY_ACME_EMAIL"))
+        add("BACKEND_IMAGE", self.backend_ref or gv("BACKEND_IMAGE", "forklift-backend:latest"))
+        add("FRONTEND_IMAGE", self.frontend_ref or gv("FRONTEND_IMAGE", "forklift-frontend:latest"))
+        add("LIBREOFFICE_IMAGE", self.libreoffice_ref or gv("LIBREOFFICE_IMAGE", "forklift-libreoffice:latest"))
+        add("DOMAIN", env_val(gv("DOMAIN", "localhost")))
+        add("TLS_MODE", gv("TLS_MODE", "auto"))  # 必须写出：compose 回落 auto，testing 会去申请公共证书（2026-10-22 实测）
+        add("CADDY_ACME_EMAIL", gv("CADDY_ACME_EMAIL"))
         add("UPLOAD_FOLDER", "/data/uploads")
         add("VOLUME_MOUNT_PATH", "/data")
         add("MAX_CONTENT_LENGTH_MB", "250")
         add("VALUATION_PDF_OUTPUT_DIR", "/data/reports")
-        add("STORAGE_DRIVER", getenv("STORAGE_DRIVER", "local"))
-        add("R2_ENDPOINT", env_val(getenv("R2_ENDPOINT")))
-        add("R2_ACCOUNT_ID", env_val(getenv("R2_ACCOUNT_ID")))
-        add("R2_ACCESS_KEY_ID", env_val(getenv("R2_ACCESS_KEY_ID")))
-        add("R2_SECRET_ACCESS_KEY", env_val(getenv("R2_SECRET_ACCESS_KEY")))
-        add("R2_BUCKET", getenv("R2_BUCKET"))
-        add("R2_PUBLIC_DOMAIN", env_val(getenv("R2_PUBLIC_DOMAIN")))
-        add("EDGE_ORIGIN_TOKEN", env_val(getenv("EDGE_ORIGIN_TOKEN")))
-        add("BACKEND_HOST_PORT", getenv("BACKEND_HOST_PORT", "8080"))
-        add("PG_VOLUME", getenv("PG_VOLUME", "pgdata-prod"))
-        add("UPLOADS_VOLUME", getenv("UPLOADS_VOLUME", "uploads-data"))
-        add("REPORTS_VOLUME", getenv("REPORTS_VOLUME", "reports-data"))
-        add("LOGS_VOLUME", getenv("LOGS_VOLUME", "logs-data"))
-        project = getenv("COMPOSE_PROJECT_NAME")
+        add("STORAGE_DRIVER", gv("STORAGE_DRIVER", "local"))
+        add("R2_ENDPOINT", env_val(gv("R2_ENDPOINT")))
+        add("R2_ACCOUNT_ID", env_val(gv("R2_ACCOUNT_ID")))
+        add("R2_ACCESS_KEY_ID", env_val(gv("R2_ACCESS_KEY_ID")))
+        add("R2_SECRET_ACCESS_KEY", env_val(gv("R2_SECRET_ACCESS_KEY")))
+        add("R2_BUCKET", gv("R2_BUCKET"))
+        add("R2_PUBLIC_DOMAIN", env_val(gv("R2_PUBLIC_DOMAIN")))
+        add("EDGE_ORIGIN_TOKEN", env_val(gv("EDGE_ORIGIN_TOKEN")))
+        add("BACKEND_HOST_PORT", gv("BACKEND_HOST_PORT", "8080"))
+        add("PG_VOLUME", gv("PG_VOLUME", "pgdata-prod"))
+        add("UPLOADS_VOLUME", gv("UPLOADS_VOLUME", "uploads-data"))
+        add("REPORTS_VOLUME", gv("REPORTS_VOLUME", "reports-data"))
+        add("LOGS_VOLUME", gv("LOGS_VOLUME", "logs-data"))
+        project = gv("COMPOSE_PROJECT_NAME")
         if project:
             add("COMPOSE_PROJECT_NAME", project)
         return "\n".join(lines) + "\n"
