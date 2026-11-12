@@ -7,6 +7,8 @@ export type AiChatMessage = {
     role : string       // user | assistant | system
     content : string
     images ?: string[]  // 用户消息附带的图片 URL（仅最后一条用户消息生效，后端 StreamChatReq.Messages[].Images）
+    // 诊断能力徽章与耗时（#2361）：仅诊断通道的**助手**消息会有
+    meta ?: AiDiagnosisMeta
 }
 
 /** 平台可用模型 */
@@ -54,6 +56,30 @@ export type AiDiagnosisSource = {
     source_url ?: string        // 来源 PDF 的内网路径（本票不渲染，留作后续外链）
 }
 
+/**
+ * 诊断能力徽章（对齐后端 `DiagnosisBadge`，三字段原样消费，#2361）。
+ *
+ * `cls` 只作视觉提示、**不参与语义判定**：未知 cls 不该让徽章消失或变形（web `DiagnosisBadges.vue` 同口径）。
+ * 移动端不复刻 web 的 Tailwind class，故 `cls` 只透传到 `data-cap` 之外不作样式名 —— 渲染见 `ai-chat-badges.uvue`。
+ */
+export type AiDiagnosisBadge = {
+    name : string       // 能力中文名，如「知识检索」
+    emoji : string      // 能力图标（可能是多码位 emoji）
+    cls : string        // 后端给的能力标识，仅作视觉提示位透传
+}
+
+/**
+ * 诊断回答元数据（对齐后端 `DiagnosisMeta` / `AIChatMessageMeta`，#2361）。
+ *
+ * 两字段都按「缺席即可」处理：当轮 SSE 的 `done.meta` 因后端 `omitempty` **可能缺键**，
+ * 回看 `messages[].meta` 恒给 `badges` 数组、`elapsed` 数值。客户端归一由
+ * `utils/aiDiagnosisMeta.uts` 的 `metaViewOf` 单点吸收这一不对称，渲染层只看归一结果。
+ */
+export type AiDiagnosisMeta = {
+    badges ?: AiDiagnosisBadge[]
+    elapsed ?: number   // 本轮流式耗时（秒）；0 或缺席即不显示耗时脚注
+}
+
 /** AI 会话消息（含 id） */
 export type AiSessionMessage = {
     id : number
@@ -63,6 +89,8 @@ export type AiSessionMessage = {
     images ?: string[]  // 用户消息附带图片 URL（仅最后一条用户消息生效）
     // 诊断来源资料（#988）：仅诊断通道的**助手**消息会有；SSE `sources` 事件与回看 DTO 两条路都落到此字段。
     sources ?: AiDiagnosisSource[]
+    // 诊断能力徽章与耗时（#2361）：同上，仅诊断通道的助手消息会有；当轮 done.meta 与回看 DTO 两条路都落到此字段。
+    meta ?: AiDiagnosisMeta
 }
 
 /** 对话设置（本地缓存） */

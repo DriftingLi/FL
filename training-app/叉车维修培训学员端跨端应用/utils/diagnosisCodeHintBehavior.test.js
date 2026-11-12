@@ -3,8 +3,8 @@
  *
  * 票面两条判据要求「真执行」：
  *   ① 「状态 → 展示什么」的映射有真执行的行为测试 —— 读源码只能证明「有个 status == 'known'
- *      分支」，证明不了 unknown / none 真的**整行不渲染**；那种「多渲染一行」的回归只有把五种
- *      状态各喂一遍才看得见（#1273 先例：断言源码字面量 ⇒ 实现改了照样绿）。
+ *      分支」，证明不了 unknown / none / format 真的**整行不渲染**；那种「多渲染一行」的回归只有把
+ *      五种状态各喂一遍才看得见（#1273 先例：断言源码字面量 ⇒ 实现改了照样绿）。
  *   ② 防抖有行为层用例 —— 判据是「连续敲键不逐字发请求」，只有真起计时器、真数请求次数才能观测。
  *
  * 缝：`utils/utsHarness.js` 的 `loadUts`（把 `.uts` 去掉类型当 JS 真跑）。注入两样替身：
@@ -109,25 +109,28 @@ describe('五态 → 展示什么（纯函数真执行）', () => {
     expect(v.text).toBe('是不是要输入 E01？');
   });
 
-  test('format：message + 最多 3 条写法示例', () => {
-    const v = hint.hintViewOf(
-      { status: 'format', message: '格式不对', fix: '', samples: ['E01', 'E41', 'E101', 'E999'] },
-      'e01x',
-    );
-    expect(v.visible).toBe(true);
-    expect(v.kind).toBe('format');
-    expect(v.text).toBe('格式不对，可这样填：E01 / E41 / E101');
-  });
-
-  test('format：没有 samples 时只给 message；没有 message 时有默认句子', () => {
-    expect(hint.hintViewOf({ status: 'format', message: '请按 E01 的写法填', fix: '', samples: [] }, 'x').text)
-      .toBe('请按 E01 的写法填');
-    expect(hint.hintViewOf({ status: 'format', message: '', fix: '', samples: [] }, 'x').text)
-      .toBe('格式不对');
-  });
-
-  test('unknown / none / 未来新增态 / 取数失败：整行不渲染', () => {
+  // #2403：体检只看长度、不懂句意 ⇒ 输入框里是**整句提问**（「林德 E-1254-01 的维修资料在哪」）
+  // 也会落进 format，那一行就在用户问资料时答「你的码格式不对」。Web 侧早已静默
+  // （`frontend/src/components/ai-assistant/DiagnosisGuide.vue:320-321`：「unknown / format /
+  // none 都是『没有信息』，静默即可」），这里收回同一口径。
+  test('format：整行不渲染（含「整句提问被判成格式错」的真实问句）', () => {
+    const typed = '林德（Linde）E-1254-01关于故障与信息菜单及故障码的维修资料有哪';
     [
+      { message: '格式不对', fix: '', samples: ['E01', 'E41', 'E101', 'E999'] },
+      { message: '请按 E01 的写法填', fix: '', samples: [] },
+      { message: '', fix: '', samples: [] },
+    ].forEach((h) => {
+      const v = hint.hintViewOf({ status: 'format', ...h }, typed);
+      expect(v.visible).toBe(false);
+      expect(v.kind).toBe('');
+      expect(v.text).toBe('');
+      expect(v.followUp).toBe('');
+    });
+  });
+
+  test('unknown / none / format / 未来新增态 / 取数失败：整行不渲染', () => {
+    [
+      { status: 'format', message: '格式不对', fix: '', samples: ['E01'] },
       { status: 'unknown', message: '', fix: '', samples: [] },
       { status: 'none', message: '', fix: '', samples: [] },
       { status: 'something-new', message: '新态', fix: '', samples: [] },

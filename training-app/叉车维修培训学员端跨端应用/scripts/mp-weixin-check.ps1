@@ -54,6 +54,14 @@ try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
 $OutputEncoding = [System.Text.Encoding]::UTF8
 
 $DistRelative = 'unpackage\dist\build\mp-weixin'
+# 主包体积两条线（#2417）：2 MiB 是微信**硬限**（超了上传直接拒）⇒ 判失败；1.5 MiB 只是**建议**线
+# （上传面板口径）。为什么建议线不判红：minified 是**上传时**压缩（#2415 同树 A/B 实测：开关 ON/OFF
+# 产物字节只差 42 B、.js 分毫不差）⇒ 本地产物字节反映不了上传后的读数，1.5 M 的权威读数只在面板上。
+$MainHardLimitBytes = 2097152
+$MainAdvisoryBytes = 1572864
+# HBuilderX 发行构建会回写的两处本地配置（#2418）：manifest.json 的 mp-weixin.appid 置 null、
+# pages.json 写入启动页 condition 段。两者都是本地开发配置、禁止提交（见 ADR-0008「appid 口径诊断」）。
+$WorktreeRewritePaths = @('manifest.json', 'pages.json')
 # 开发者工具 cli.bat 的自动探测候选（逐字取自 HEAD 346–352 行）。
 # ⚠️ 必须留在顶层：Resolve-DevToolsCli 在不传 -DevToolsCli 时枚举它（= npm 入口的真实形态），
 # 而 Set-StrictMode 下「使用早于定义」当场抛「无法检索变量」——装配器按行区间抽取时把旧常量块整段跳过了（#2326 实测：
@@ -75,6 +83,9 @@ $Doctor = $false
 # 变量，Set-StrictMode 下当场抛「无法检索变量」⇒ catch 写成 env-blocked、把通过的运行判成 exit 2
 #（#2326 G2 实测踩到，红在 build=skipped(explicit) 那条断言上）。
 $script:buildSkippedByFingerprint = $false
+# 工作树回写读数（#2418）：成功路径算一次并打印，失败路径在 finally 里补算（$null = 还没算过）。
+# ⚠️ 必须先初始化 —— Set-StrictMode 下 finally 读未设置变量会当场抛，把正常退出判成 env-blocked。
+$script:worktreeRewriteReport = $null
 . (Join-Path $PSScriptRoot 'lib\gate-stages.ps1')
 
 function Test-PeHeader {
@@ -321,12 +332,20 @@ function New-GatePlan {
         exit2    = @()
         resultLine = [ordered]@{
             prefix = 'MP_WEIXIN_BUILDONLY_RESULT'
+            # 字段 = 这一轮真能读到的读数（列着读不到的字段就是逼执行路径填假值）。
+            # #2417 起补三枚产物开关读数 + 主包字节数与 2 MiB 硬限判定：票面要的是「结果行直接读出」——
+            # 开关只写在日志正文里时，人读结果行看不出产物到底带没带，等于没读。
             fields = @(
                 [ordered]@{ name = 'appid' },
                 [ordered]@{ name = 'pages' },
                 [ordered]@{ name = 'product' },
+                [ordered]@{ name = 'lazyCodeLoading' },
+                [ordered]@{ name = 'minified' },
+                [ordered]@{ name = 'es6' },
                 [ordered]@{ name = 'build' },
                 [ordered]@{ name = 'elapsed' },
+                [ordered]@{ name = 'mainBytes' },
+                [ordered]@{ name = 'main2m' },
                 [ordered]@{ name = 'log' }
             )
         }
@@ -357,10 +376,70 @@ function Write-Log {
         if ($ln -match '^MP_WEIXIN(_BUILDONLY)?_RESULT(\s|$)' -and $ln -notmatch ' comment=') { Write-Host $ln }
     }
 }
+# ---------- 工作树回写判据（#2418）----------
+# HBuilderX 发行构建必然回写两处本地配置：manifest.json 的 mp-weixin.appid 置 null、pages.json 写入启动页
+# condition 段（ADR-0008「appid 口径诊断」实测）。两者都是运行时面 / 打包面判据的来源，误提交会污染
+# pr-evidence（pages.json 还会凭空命中 ④b 云打包触发条件）。此前只靠人记「跑完先 git status」。
+# 判据**刻意不对称**：仅工作区脏 ⇒ 只提示（正常构建必然脏，判红等于每次构建都红）；进暂存区 ⇒ 判失败并
+# 指名（那才是「会被并入本次提交」的真实风险）。脚本仍**不自动改工作树**（自动 checkout 会抹掉真实改动）。
+function Get-WorktreeRewriteReport {
+    param([string]$Project, [string[]]$Paths)
+    $report = [ordered]@{ git = 'ok'; files = [ordered]@{} }
+    if (-not (Get-Command git -CommandType Application -ErrorAction SilentlyContinue)) {
+        $report.git = 'unavailable'
+        foreach ($p in $Paths) { $report.files[$p] = 'unknown' }
+        return $report
+    }
+    foreach ($p in $Paths) {
+        $state = 'clean'
+        # 逐路径单独问、且**不解析路径列**：status.relativePaths / core.quotepath 会改渲染形态，
+        # 只读 XY 两列 —— X 非空格且非 '?' 即「已进暂存区」（'??' 是未跟踪，不算）。
+        try {
+            $out = @(& git -C $Project status --porcelain -- $p 2>$null)
+            $gitExit = $LASTEXITCODE
+        } catch {
+            $report.git = 'unavailable'
+            $report.files[$p] = 'unknown'
+            continue
+        }
+        if ($gitExit -ne 0) {
+            $report.git = 'unavailable'
+            $report.files[$p] = 'unknown'
+            continue
+        }
+        foreach ($ln in $out) {
+            $s = [string]$ln
+            if ($s.Length -lt 2) { continue }
+            $x = $s.Substring(0, 1)
+            if ($x -ne ' ' -and $x -ne '?') { $state = 'staged'; break }
+            if ($state -eq 'clean') { $state = 'dirty' }
+        }
+        $report.files[$p] = $state
+    }
+    return $report
+}
+function Format-WorktreeRewriteLine {
+    param($Report)
+    $parts = @()
+    foreach ($k in $Report.files.Keys) { $parts += "$k=$($Report.files[$k])" }
+    return "worktree-rewrite $($parts -join ' ') git=$($Report.git)"
+}
+function Write-WorktreeRewriteReading {
+    param($Report)
+    $line = Format-WorktreeRewriteLine -Report $Report
+    Write-Log $line
+    Write-Host $line
+}
 # -BuildOnly 的脏改提示（#1861 2026-10-28 裁定「跑完打印脏改提示」）：publish 经 HBuilderX 会回写工作树 ——
 # manifest.json 的 mp-weixin.appid 可能被置 null、pages.json 可能被写入 condition（GUI 选的启动页，属本地开发
 # 配置、禁止提交）。脚本**不自动改工作树**（自动 checkout 会把用户真实的改动一起抹掉），只把核对与还原动作印出来。
+# #2418 起：读数由 Get-WorktreeRewriteReport 给出，**干净树（且 git 可用）时不打提示** —— 判据不误报、也不制造噪音。
 function Write-BuildOnlyWorktreeHint {
+    param($Report)
+    if ($null -ne $Report -and $Report.git -eq 'ok') {
+        $touched = @($Report.files.Keys | Where-Object { $Report.files[$_] -ne 'clean' })
+        if ($touched.Count -eq 0) { return }
+    }
     Write-Host ''
     Write-Host '>>> 脏改提示（build-only 不自动改工作树，请人工核对）：' -ForegroundColor Yellow
     Write-Host '    git status --porcelain -- manifest.json pages.json' -ForegroundColor Yellow
@@ -651,8 +730,73 @@ try {
         }
     }
 
+    # 3.6) **发行开关 + 主包字节数（#2417）** —— 判据取**产物**，不取仓根配置。
+    #      为什么不取仓根：仓根 project.config.json / manifest.json 改对了、产物却没带（构建没重来 /
+    #      HBuilderX 没把仓根那份复制进产物）时，上传面板的「JS 压缩」「组件按需注入」照样红 ⇒
+    #      断言源码只会给出假绿。为什么排在这里：产物合法性过了才谈得上读开关（坏产物已在 3) 拦掉）。
+    #      失败行各自一个 stage（lazy-code-loading / minified / es6 / main-package）＋ actual= 实读值
+    #      ⇒ 一眼分辨是哪一条坏的，不用去翻日志找上下文。
+    $artifact = Get-MpWeixinArtifactReadings -Dist $dist
+    if (-not $artifact.ok) {
+        Write-Host "[error] 产物开关读数失败（stage=$($artifact.stage)）：$($artifact.detail)" -ForegroundColor Red
+        Write-Log "$(Get-GateResultPrefix) errors=1 stage=$($artifact.stage) detail=$($artifact.detail)"
+        exit 1
+    }
+    Write-Log "产物读数 = $($artifact.detail)"
+    Write-Host "产物读数 = $($artifact.detail)"
+
+    # ① 组件按需注入：值必须是 requiredComponents（缺字段与写错值都判失败 —— 缺了等于没开）
+    if ("$($artifact.lazyCodeLoading)" -ne 'requiredComponents') {
+        $lazyActual = Format-ProductSwitchValue $artifact.lazyCodeLoading
+        Write-Host "[error] 产物 app.json 的 lazyCodeLoading 为 $lazyActual（期望 requiredComponents）" -ForegroundColor Red
+        Write-Host '        组件按需注入是上传面板的【必须】项；开关写在 manifest.json 的 mp-weixin 节点内才会进产物。' -ForegroundColor Red
+        Write-Host '        处置：改 manifest.json 的 mp-weixin.lazyCodeLoading 后重跑一次发行构建（产物没重来就别指望变）。' -ForegroundColor Red
+        Write-Log "$(Get-GateResultPrefix) errors=1 stage=lazy-code-loading actual=$lazyActual detail=产物 app.json 缺 lazyCodeLoading 或值不是 requiredComponents（须在 manifest.json 的 mp-weixin 节点内声明）"
+        exit 1
+    }
+
+    # ② JS 压缩：minified 必须是 JSON 布尔 true（字符串 "true" 会被微信按布尔读成没开 ⇒ 判失败）
+    if (-not (Test-ProductSwitchBool $artifact.minified $true)) {
+        $minActual = Format-ProductSwitchValue $artifact.minified
+        Write-Host "[error] 产物 project.config.json 的 setting.minified 为 $minActual（期望 true）" -ForegroundColor Red
+        Write-Host '        JS 压缩是上传面板的【必须】项，且只在**上传时**生效（本地产物字节不因此变化，故必须看开关本身）。' -ForegroundColor Red
+        Write-Host '        处置：改仓根 project.config.json 的 setting.minified（HBuilderX 会原样复制进产物）后重跑构建。' -ForegroundColor Red
+        Write-Log "$(Get-GateResultPrefix) errors=1 stage=minified actual=$minActual detail=产物 project.config.json 的 setting.minified 不为 true（仓根 project.config.json 须为 true，HBuilderX 原样复制进产物）"
+        exit 1
+    }
+
+    # ③ es6 降级必须关：开成 true 会把代码降级成 ES5（体积反而涨），而面板只查「JS 是否被压缩」
+    if (-not (Test-ProductSwitchBool $artifact.es6 $false)) {
+        $es6Actual = Format-ProductSwitchValue $artifact.es6
+        Write-Host "[error] 产物 project.config.json 的 setting.es6 为 $es6Actual（期望 false）" -ForegroundColor Red
+        Write-Host '        es6 打开会把代码降级编译成 ES5：体积涨、面板的「JS 压缩」也不看它 —— 本仓裁定保持 false。' -ForegroundColor Red
+        Write-Log "$(Get-GateResultPrefix) errors=1 stage=es6 actual=$es6Actual detail=产物 project.config.json 的 setting.es6 不为 false（本仓保持 es6=false，降级成 ES5 只会让包更大）"
+        exit 1
+    }
+
+    # ④ 主包字节数：2 MiB 硬限判失败；1.5 MiB 只是**建议**线 ⇒ 只打印读数与「权威读数是上传面板」，不判红
+    $mainVerdict = if ($artifact.mainBytes -gt $MainHardLimitBytes) { 'over' } else { 'ok' }
+    $advisory = if ($artifact.mainBytes -gt $MainAdvisoryBytes) { 'over' } else { 'under' }
+    Write-Log "main-package mainBytes=$($artifact.mainBytes) totalBytes=$($artifact.totalBytes) files=$($artifact.files) subPackages=$($artifact.subPackages) advisory1.5m=$advisory hard2m=$mainVerdict limit=$MainHardLimitBytes"
+    Write-Host "主包字节数 = $($artifact.mainBytes) B（全量 $($artifact.totalBytes) B / $($artifact.files) 文件 / 分包 $($artifact.subPackages) 个；1.5 MiB 建议线 $MainAdvisoryBytes / 2 MiB 硬限 $MainHardLimitBytes）"
+    # 建议线口径**无条件**写进日志与输出（AC ④）：不超线时也要说明「这条线不判红、权威读数在面板」，
+    # 否则读者只看到 advisory1.5m=under 会以为本地读数就是面板读数。
+    $advisoryNote = '1.5 MiB 是建议线、不判红：1.5 M 的权威读数是上传面板（minified 上传时才压缩，本地产物字节不变），本地读数只作参照'
+    Write-Log "main-package advisory1.5m=$advisory note=$advisoryNote"
+    if ($advisory -eq 'over') {
+        Write-Host "        已超 1.5 MiB 建议线 —— $advisoryNote" -ForegroundColor Yellow
+    } else {
+        Write-Host "        $advisoryNote"
+    }
+    if ($mainVerdict -ne 'ok') {
+        Write-Host "[error] 主包 $($artifact.mainBytes) B 超过 2 MiB 硬限 $MainHardLimitBytes B —— 微信上传会直接拒" -ForegroundColor Red
+        Write-Host '        处置：分包（把非必需页移出主包）或裁剪主包静态资源；本检查不做分包动作。' -ForegroundColor Red
+        Write-Log "$(Get-GateResultPrefix) errors=1 stage=main-package mainBytes=$($artifact.mainBytes) limit=$MainHardLimitBytes detail=主包超过 2 MiB 硬限（微信上传会拒）须先分包或裁剪资源"
+        exit 1
+    }
+
     # 指纹落盘（#1860）：只有**本轮真构建过**（走到这里时 -SkipBuild 仍为 false = 没被指纹/人工跳过）
-    # 且产物合法性 / appid 两道 exit 1 断言都过了才写 —— 产物坏不写（下次必然重建）。
+    # 且 3)–3.6) 的 exit 1 断言（产物合法性 / appid / 三枚开关 / 主包硬限）都过了才写 —— 产物坏不写（下次必然重建）。
     # 写失败只警告，不影响门结论（fail 向重建：没写成 = 下次没有指纹 = 重建）。
     if (-not $SkipBuild) {
         try {
@@ -670,6 +814,22 @@ try {
         }
     }
 
+    # 3.7) 工作树回写判据（#2418）：HBuilderX 回写的两处本地配置是否被改动 / 是否已进暂存区。
+    # 放在指纹落盘**之后**：指纹回答的是「这份产物能不能复用」（产物合法性 + 开关 + 体积都过了），
+    # 与「工作树能不能提交」正交 —— 暂存区脏改不该让下一次重跑白重建（2–3 min）。
+    # 放在收口**之前**：进暂存区 ⇒ 判失败，且不写结果行（与其它 exit 1 出口同形）。
+    $script:worktreeRewriteReport = Get-WorktreeRewriteReport -Project $Project -Paths $WorktreeRewritePaths
+    Write-WorktreeRewriteReading -Report $script:worktreeRewriteReport
+    $stagedRewrite = @($script:worktreeRewriteReport.files.Keys | Where-Object { $script:worktreeRewriteReport.files[$_] -eq 'staged' })
+    if ($stagedRewrite.Count -gt 0) {
+        $stagedList = $stagedRewrite -join ','
+        Write-Host "[error] HBuilderX 回写的本地配置已进暂存区：$stagedList" -ForegroundColor Red
+        Write-Host '        这两处是本地开发配置（manifest.json 的 appid 被置 null / pages.json 的 condition 段），禁止提交。' -ForegroundColor Red
+        Write-Host "        处置：git restore --staged $stagedList 后按需 git checkout -- <文件> 还原，再重跑本检查。" -ForegroundColor Red
+        Write-Log "$(Get-GateResultPrefix) errors=1 stage=worktree-rewrite staged=$stagedList detail=HBuilderX 回写的本地配置已进暂存区（会被并入本次提交）：manifest.json 的 mp-weixin.appid 置 null / pages.json 的 condition 段均禁止提交，先 git restore --staged 再还原"
+        exit 1
+    }
+
 # ---------- 构建面收口 ----------
 # 走到这里说明构建面的判据都成立：publish 成功行已解析、产物合法性（#1210）已过、指纹已落盘。
 # 会话段已于 2026-11-05 整体退役（#2320），其后不再有任何「之后整段」⇒ 这里就是脚本唯一的收口点。
@@ -681,8 +841,16 @@ $buildValues = [ordered]@{
     appid   = "$productAppId"
     pages   = "$($product.pages)"
     product = 'ok'
+    # 三枚开关读数取**产物实读值**（不是仓根配置值）：只有产物带着才算数（见 3.6 段）
+    lazyCodeLoading = (Format-ProductSwitchValue $artifact.lazyCodeLoading)
+    minified = (Format-ProductSwitchValue $artifact.minified)
+    es6      = (Format-ProductSwitchValue $artifact.es6)
     build   = $buildMode
     elapsed = $(if (-not $SkipBuild) { "${publishSeconds}s" } else { 'n/a' })
+    mainBytes = "$($artifact.mainBytes)"
+    # 硬限判定取 3.6 段算出的同一枚 $mainVerdict（超限在那里就 exit 1）—— 不写死 'ok'，
+    # 否则 3.6 段一旦移位/条件化，结果行会替一个没做过的判定作证。
+    main2m  = $mainVerdict
     log     = $logRelative
 }
 $buildLine = "$($script:GatePlan.resultLine.prefix) " + (Format-GateMetricLine -Plan $script:GatePlan -Values $buildValues)
@@ -701,6 +869,12 @@ exit 0
     # publish 尾段会自启开发者工具：收掉那个自启实例靠这一次 close（幂等；失败只警告）。
     Invoke-DevToolsClose
     if (Get-Command Release-HxLock -ErrorAction SilentlyContinue) { Release-HxLock }
-    Write-BuildOnlyWorktreeHint
+    # 读数在成功路径已打过；失败路径（产物非法 / 开关 / 体积 / 异常）在这里补一次 —— 失败时更需要
+    # 知道工作树被回写成了什么样（#2418）。
+    if ($null -eq $script:worktreeRewriteReport) {
+        $script:worktreeRewriteReport = Get-WorktreeRewriteReport -Project $Project -Paths $WorktreeRewritePaths
+        Write-WorktreeRewriteReading -Report $script:worktreeRewriteReport
+    }
+    Write-BuildOnlyWorktreeHint -Report $script:worktreeRewriteReport
 }
 exit $exitCode

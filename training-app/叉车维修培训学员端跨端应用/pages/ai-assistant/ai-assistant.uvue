@@ -51,10 +51,10 @@
 
 				<!-- 聊天消息 -->
 				<view v-if="messages.length > 0" class="chat-area">
-					<AiChatBubble v-for="(msg, idx) in messages" :key="idx" :role="msg.role" :content="msg.content" :sources="msg.sources" :show-actions="msg.role == 'assistant'" :is-last="idx == messages.length - 1" @copy="onCopyText(msg.content)" @retry="onRetry" />
+					<AiChatBubble v-for="(msg, idx) in messages" :key="idx" :role="msg.role" :content="msg.content" :sources="msg.sources" :meta="msg.meta" :show-actions="msg.role == 'assistant'" :is-last="idx == messages.length - 1" @copy="onCopyText(msg.content)" @retry="onRetry" />
 					<view v-if="thinking" class="message-row assistant">
 						<view class="message-bubble thinking">
-							<text class="message-text">思考中...</text>
+							<text class="message-text">{{ thinkingLabel }}</text>
 						</view>
 					</view>
 				</view>
@@ -66,7 +66,7 @@
 		<AiChatInput :show-model-bar="proUnlocked" :model-name="currentModelName" :model-readonly="!proUnlocked" :show-image-button="proUnlocked" @send="onInputSend" @model-click="onModelBarClick" @voice-click="onVoiceClick" @image-click="onImageClick" />
 
 		<!-- 左侧会话抽屉 -->
-		<AiChatDrawerLeft :visible="sidebarLeft" :sessions="sessions" :current-session-id="currentSession?.id ?? 0" :status-bar-height="statusBarHeight" @close="sidebarLeft = false" @new-chat="onNewChat" @select="onSelectSession" @delete="onDeleteSession" />
+		<AiChatDrawerLeft :visible="sidebarLeft" :sessions="sessions" :current-session-id="currentSessionId" :status-bar-height="statusBarHeight" @close="sidebarLeft = false" @new-chat="onNewChat" @select="onSelectSession" @delete="onDeleteSession" />
 
 		<!-- 右侧菜单抽屉 -->
 		<AiChatDrawerRight :visible="sidebarRight" :menu-items="rightMenuItems" :status-bar-height="statusBarHeight" @close="sidebarRight = false" @action="onMenuAction" />
@@ -147,6 +147,7 @@
 		messages,
 		inputText,
 		thinking,
+		statusText,
 		scrollIntoViewId,
 		sidebarLeft,
 		sidebarRight,
@@ -158,6 +159,27 @@
 		toggleSidebarRight,
 		sendInput,
 	} = useAiChat(featureScope)
+
+	// 抽屉的「当前会话 id」：模板里直接写 `currentSession?.id ?? 0` 会让 mp-weixin 产物残留
+	// `??`（ES2020），微信上传接口按 ES2019 解析产物，直接拒传（#2419 实测
+	// `invalid file: pages/ai-assistant/ai-assistant.js, 1:9427 SyntaxError: Unexpected token ?`）；
+	// 模板里改写成三元又过不了 Kotlin 侧 —— `AiSession?` 在这条渲染通路上不智能转换，
+	// ④ 编译门实测报 `Only safe (?.) or non-null asserted (!!.) calls are allowed`。
+	// 落在 script 里的 computed 两头都满足：Kotlin 侧对局部 val 判空后可智能转换，
+	// mp-weixin 产物是三目表达式。
+	const currentSessionId = computed<number>(() : number => {
+		const s = currentSession.value
+		return s == null ? 0 : s.id
+	})
+
+
+	// 等待态文案（#2389）：后端 `status` 帧驱动；没有阶段文案时回落到「思考中...」。
+	const thinkingLabel = computed<string>(() : string => {
+		if (statusText.value.length > 0) {
+			return statusText.value
+		}
+		return '思考中...'
+	})
 
 	// 视图状态
 	const showModelPicker = ref<boolean>(false)

@@ -151,7 +151,8 @@ describe('批6 N06 专项（#1592：页面自绘、自垫状态栏走唯一真�
       expect(s).not.toContain('useStatusBarHeight');
       expect(s).not.toMatch(/statusBarHeight\.value\s*=/);
       if (s.includes('class="status-bar"')) {
-        expect(s).toContain('import { useSafeArea }');
+        // #2442：允许与 CAPSULE_CLEARANCE_RPX 同批具名导入，判据是「取自唯一测量层」而非「只导一个符号」
+        expect(s).toMatch(/import \{[^}]*\buseSafeArea\b[^}]*\}/);
         expect(s).toMatch(/height:\s*safeArea\.statusBarHeight\s*\+\s*'px'/);
       }
     }
@@ -176,10 +177,10 @@ describe('批6 N06 专项（#1592：页面自绘、自垫状态栏走唯一真�
     expect(s).toMatch(/<view class="search-header"\s+:style="searchHeaderStyle"/);
     // 值取自唯一测量层 useSafeArea 的 capsuleLeft；右缘 = 胶囊左边线 − 24rpx
     expect(s).toMatch(/safeArea\.value\.capsuleLeft/);
-    expect(s).toMatch(/750\s*-\s*capsuleLeft\s*\+\s*CAPSULE_CLEARANCE/);
-    // 间隙常量与页头件 RIGHT_SLOT_CLEARANCE 同值（24），两处漂移在此显形
-    expect(s).toMatch(/CAPSULE_CLEARANCE\s*=\s*24/);
-    expect(read('components/app-nav-bar/app-nav-bar.uvue')).toMatch(/RIGHT_SLOT_CLEARANCE\s*=\s*24/);
+    expect(s).toMatch(/750\s*-\s*capsuleLeft\s*\+\s*CAPSULE_CLEARANCE_RPX/);
+    // 间隙常量全站唯一（#2442 抽到 utils/system.uts），两处漂移在此显形
+    expect(read('utils/system.uts')).toMatch(/CAPSULE_CLEARANCE_RPX\s*=\s*24/);
+    expect(read('components/app-nav-bar/app-nav-bar.uvue')).toMatch(/CAPSULE_CLEARANCE_RPX/);
   });
 
   it('防回潮：N06 现形态里唯一「顶部行右端可点元素」的 search 必须保留让位结构（#1845）', () => {

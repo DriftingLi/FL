@@ -226,7 +226,7 @@ describe('UI 像素结构锁定（样式归属互斥，无双写）', () => {
       expect(page).toContain(cls);
     }
     expect(page).not.toContain('.page-header');
-    expect(page).toContain('<app-nav-bar title="个人动态">');
+    expect(page).toContain('<app-nav-bar title="个人动态" @left-click="onBack">');
     for (const [moved, target] of [
       ['.tab-item.active', TABS], ['.sub-tab-text.active', TABS],
       ['.user-avatar-placeholder', USER], ['.level-badge', USER],

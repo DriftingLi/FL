@@ -42,6 +42,17 @@ describe('气泡对可空 prop 的归一契约（#2328）', () => {
     it('不读裸 sources.length', () => {
       expect(template).not.toMatch(/\bsources\.length\b/);
     });
+
+    /**
+     * #2361：徽章/耗时的三态判定**不在气泡模板里**做（template 只把归一后的对象传下去，
+     * 分支在徽章件内部按 visible 走），故这里不得出现对 meta 的成员直取 —— 一取就是又一处
+     * 可能落在 null 上的读。
+     */
+    it('不读裸 meta 成员（badges / elapsed / length）', () => {
+      expect(template).not.toMatch(/\bmeta\.badges\b/);
+      expect(template).not.toMatch(/\bmeta\.elapsed\b/);
+      expect(template).not.toMatch(/\bmeta\.length\b/);
+    });
   });
 
   describe('归一 computed 存在，且形状与 userImages 一致（null → 空值）', () => {
@@ -56,6 +67,17 @@ describe('气泡对可空 prop 的归一契约（#2328）', () => {
       expect(body).toContain('props.sources');
       expect(body).toContain('if (v == null) return [] as AiDiagnosisSource[]');
     });
+
+    /**
+     * #2361：`meta` 是**可空对象** prop（非诊断轮 / 存量消息真的是 null），与
+     * content/sources 同一条缝。归一形态按对象取值应有的样子 —— null 原样返回，
+     * 三态判定全交给 `utils/aiDiagnosisMeta.uts#metaViewOf`（那里有真执行断言）。
+     */
+    it('messageMeta：null 原样返回（不造空壳对象，也不硬塞默认值）', () => {
+      const body = computedBody('messageMeta');
+      expect(body).toContain('props.meta');
+      expect(body).toContain('if (v == null) return null');
+    });
   });
 
   describe('模板只消费归一后的值', () => {
@@ -67,6 +89,11 @@ describe('气泡对可空 prop 的归一契约（#2328）', () => {
     it('来源组件读 messageSources，不再直传 props.sources', () => {
       expect(template).toContain(':sources="messageSources"');
       expect(template).not.toContain(':sources="sources"');
+    });
+
+    it('徽章组件读 messageMeta，不再直传 props.meta（#2361）', () => {
+      expect(template).toContain(':meta="messageMeta"');
+      expect(template).not.toContain(':meta="meta"');
     });
 
     it('助手 markdown 块吃归一后的正文', () => {

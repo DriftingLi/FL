@@ -54,9 +54,11 @@ describe('#1602 骨架层基建契约', () => {
         }
     });
 
-    it('D: 页头件右槽按胶囊让位（rightSlotWidth 驱动）且 <style lang="scss">', () => {
+    it('D: 页头件右槽按胶囊让位（capsuleLeft 驱动）且 <style lang="scss">', () => {
         const nav = readText(join(ROOT, 'components', 'app-nav-bar', 'app-nav-bar.uvue'));
-        expect(nav).toContain('rightSlotWidth');
+        expect(nav).toContain('capsuleLeft');
+        // #2442 方案 B：右槽宽度由内容决定，不再写死 width（space-between 下天然贴右缘）
+        expect(nav).not.toMatch(/return 'width:/);
         expect(nav).toContain('<style lang="scss">');
         expect(nav).not.toContain('80rpx');
     });
@@ -67,7 +69,7 @@ describe('#1602 骨架层基建契约', () => {
         // 且 paddingX 必须与 scss .nav-bar-body 的实际 padding 一致。
         const nav = readText(join(ROOT, 'components', 'app-nav-bar', 'app-nav-bar.uvue'));
         expect(nav).toContain('margin-right');
-        expect(nav).toMatch(/capsuleLeft\s*-\s*RIGHT_SLOT_CLEARANCE|RIGHT_SLOT_CLEARANCE/);
+        expect(nav).toMatch(/capsuleLeft\s*-\s*CAPSULE_CLEARANCE_RPX|CAPSULE_CLEARANCE_RPX/);
         // padding 常量与样式串用（$spacing-md = 24rpx，见 uni.scss）
         const scss = readText(join(ROOT, 'uni.scss'));
         const m = scss.match(/\$spacing-md:\s*(\d+)rpx/);

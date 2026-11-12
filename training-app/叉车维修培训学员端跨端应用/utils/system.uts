@@ -10,6 +10,12 @@ import type { Ref } from 'vue'
  */
 export const DEFAULT_STATUS_BAR_HEIGHT = 44
 
+/**
+ * 胶囊让位视觉间隙（rpx）—— 全站唯一（#2442：页头件与自绘页头此前各写一份 24）。
+ * 右槽 / 自绘头行右端内容右缘一律钉在「胶囊左边线 − 本值」，别处不得再写字面量。
+ */
+export const CAPSULE_CLEARANCE_RPX = 24
+
 /** 安全区测量结果（#1592 页头共同格）：页头件唯一数据源。
  *  用 type 而非 interface：UTS 里 interface 不能用对象字面量构造（#1602 ④c Kotlin 报错）。 */
 export type SafeAreaInfo = {

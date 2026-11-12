@@ -5,14 +5,18 @@
  * - GET/POST/DELETE/PATCH sessions
  * - GET/POST/DELETE user-models
  *
- * @note chat 为 SSE 流：event: delta/done/error + data: {...}
- *       uni.request 不支持增量流式回调，这里整包接收后解析 delta 文本。
+ * @note chat 为 SSE 流：event: status/message/sources/error/done + data: {...}
+ *       分块通道（#2389）：`enableChunked` + `onChunkReceived` 逐块喂
+ *       `utils/sseIncrementalParser.uts`；平台不支持分块时退回整包解析
+ *       （`parseStreamSSE`，只服务这条降级路径）。
  */
 import { del, getMapped, postMapped, patchMapped, uploadFile, renewOrExpire, AUTH_EXPIRED_MESSAGE } from './request'
 import { toBool, toNumber, toStr } from './helpers'
 import { API_BASE_URL, AI_REQUEST_TIMEOUT } from '../config/env'
 import { STORAGE_KEY_TOKEN } from '../constants/app'
 import { getStorage } from '../utils/storage'
+import { createSseParser, decodeUtf8 } from '../utils/sseIncrementalParser'
+import type { SseFrame } from '../utils/sseIncrementalParser'
 import type {
 	AiChatMessage,
 	AiModel,
@@ -20,6 +24,8 @@ import type {
 	AiSession,
 	AiSessionMessage,
 	AiDiagnosisSource,
+	AiDiagnosisBadge,
+	AiDiagnosisMeta,
 	DiagnosisIntentBrand,
 	DiagnosisFaq,
 	DiagnosisIntents,
@@ -96,6 +102,41 @@ export function parseDiagnosisSources(arr : Array<UTSJSONObject>) : AiDiagnosisS
 	return out
 }
 
+/**
+ * 解析诊断能力徽章与耗时（**单点**）：当轮 `done.meta` 与回看消息 DTO 走同一份实现（#2361）。
+ *
+ * 为什么必须单点：两路数据同源（后端 `ai_chat_messages.meta` 列与 SSE `done.meta` 是同一份
+ * `DiagnosisMeta`），分成两份解析就会出现「当轮有徽章、回看没有」这类假差异。
+ *
+ * ⚠️ 两路的**键缺失**不对称：当轮 `done.meta` 带 `omitempty`，可能只有 `elapsed` 没有 `badges`
+ * （也可能反过来）；回看 `messages[].meta` 键常在且 `badges` 恒为数组。故这里一律按「缺键即空」
+ * 兜底，产出**恒定形状**的 `AiDiagnosisMeta`（badges 恒为数组、elapsed 恒为数值）——
+ * 归一后的三态判定在 `utils/aiDiagnosisMeta.uts` 的 `metaViewOf`，两处各司其职。
+ */
+export function parseDiagnosisMeta(raw : any | null) : AiDiagnosisMeta | null {
+	if (raw == null) return null
+	const obj = raw as UTSJSONObject
+	const badges : AiDiagnosisBadge[] = []
+	const rawBadges = obj['badges']
+	if (rawBadges != null) {
+		const arr = rawBadges as Array<UTSJSONObject>
+		for (let i = 0; i < arr.length; i++) {
+			const item = arr[i]
+			const badge : AiDiagnosisBadge = {
+				name: toStr(item['name']),
+				emoji: toStr(item['emoji']),
+				cls: toStr(item['cls']),
+			}
+			badges.push(badge)
+		}
+	}
+	const meta : AiDiagnosisMeta = {
+		badges: badges,
+		elapsed: toNumber(obj['elapsed']),
+	}
+	return meta
+}
+
 function buildSessionMessage(obj : UTSJSONObject) : AiSessionMessage {
 	const msg : AiSessionMessage = {
 		id: toNumber(obj['id'], toNumber(obj['message_id'])),
@@ -109,17 +150,28 @@ function buildSessionMessage(obj : UTSJSONObject) : AiSessionMessage {
 		const list = parseDiagnosisSources(rawSources as Array<UTSJSONObject>)
 		if (list.length > 0) msg.sources = list
 	}
+	// 回看徽章与耗时（#2361）：后端 meta 列对非诊断轮与存量消息为 null ⇒ 有值才写字段，
+	// 不写字段（而不是写 null）—— #2328 的事故链正是「optional 被显式填 null」。
+	const meta = parseDiagnosisMeta(obj['meta'])
+	if (meta != null) msg.meta = meta
 	return msg
 }
 
 /** 从 data 中提取数组（兼容直接数组 / {key:[]}） */
 function extractArray(data : UTSJSONObject, key : string) : Array<UTSJSONObject> {
+	// 第二道兜底（#2404）：data 本身是裸数组时直接返回。**必须放在取键之前** ——
+	// 数组上按字符串键取值在 Kotlin 侧会抛 ClassCastException。
+	// 传输层（api/transport.uts 的 handleStatus）已把裸数组归一成 {list:[...]}；
+	// 这里兜的是「归一失效」的最后一道：宁可多判一次形状，也不要静默返回空列表。
+	if (Array.isArray(data)) {
+		const anyData : any = data
+		return anyData as Array<UTSJSONObject>
+	}
 	const raw = data[key]
 	if (raw != null) {
 		return raw as Array<UTSJSONObject>
 	}
-	// data 本身可能就是数组（request 层把 data 解包后若是数组会转成 UTSJSONObject 有问题）
-	// 这里再尝试 items/list
+	// 再尝试 items/list
 	const items = data['items']
 	if (items != null) return items as Array<UTSJSONObject>
 	const list = data['list']
@@ -502,6 +554,11 @@ export type StreamChatCallbacks = {
 	// 诊断来源（#988）：后端仅在 RAG 命中 answer_sources 时发该事件 ⇒ 不是每轮都有，
 	// 且**不是**「诊断通道生效」的必要条件（见 #999 收尾评论的更正）。
 	onSources ?: (sources : AiDiagnosisSource[]) => void
+	/**
+	 * 等待态文案（#2389）：后端 `status` 帧的 `{"text":"正在检索维修知识库…"}`。
+	 * 此前该帧被静默丢弃 ⇒ 学员只看到「思考中...」，不知道在等什么。
+	 */
+	onStatus ?: (text : string) => void
 	onError ?: (msg : string) => void
 	/**
 	 * 终帧载荷（#2310）：`done` 的 data 可能是 `null`（非诊断功能），故参数可空。
@@ -509,6 +566,11 @@ export type StreamChatCallbacks = {
 	 * （判据 `fullContent != streamed.String()`，见 backend/internal/aiassistant/handler.go）。
 	 */
 	onDone ?: (data : UTSJSONObject | null) => void
+	/**
+	 * 401 续期成功后、重发之前触发（#2389 R7）：新请求会从头再发一遍正文，
+	 * 调用方必须丢弃已累积的增量并清空占位气泡，否则正文会重复。
+	 */
+	onRestart ?: () => void
 }
 
 /**
@@ -591,6 +653,18 @@ function handleStreamSSEEvent(event : string, data : string, callbacks : StreamC
 		} catch (e) {
 			console.error('[streamChat] parse sources error:', e)
 		}
+	} else if (event == 'status') {
+		// 等待态文案（#2389）：后端 handler.go 的 sendEvent("status", {"text": …})。
+		// 空文案不派发 —— 否则等待态会被清成空串。
+		try {
+			const obj = JSON.parse(data) as UTSJSONObject
+			const text = toStr(obj['text'])
+			if (text.length > 0 && callbacks.onStatus != null) {
+				callbacks.onStatus(text)
+			}
+		} catch (e) {
+			console.error('[streamChat] parse status error:', e)
+		}
 	} else if (event == 'error') {
 		let msg = '对话出错'
 		try {
@@ -635,6 +709,35 @@ export function streamChatApi(params : UTSJSONObject, callbacks : StreamChatCall
 }
 
 /**
+ * 响应体归一成文本（整包降级路径）
+ *
+ * 分块通道要求 `responseType: 'arraybuffer'`，但该选项在部分平台被忽略 ⇒ 同一处可能拿到
+ * `ArrayBuffer` 或字符串，两种都要能读（#2389 回退矩阵第 1 行）。
+ */
+function bodyToText(data : any | null) : string {
+	if (data == null) {
+		return ''
+	}
+	const value = data as any
+	if (value instanceof ArrayBuffer) {
+		try {
+			return decodeUtf8(new Uint8Array(value as ArrayBuffer))
+		} catch (e) {
+			console.error('[streamChat] decode body error:', e)
+			return ''
+		}
+	}
+	try {
+		const asObj = value as UTSJSONObject
+		if (asObj != null && (asObj['content'] != null || asObj['message'] != null ||
+				asObj['choices'] != null || asObj['data'] != null)) {
+			return JSON.stringify(value)
+		}
+	} catch (e) {}
+	return `${value}`
+}
+
+/**
  * 发出一次流式请求（401 续期成功后递归重发**一次**）
  *
  * 本模块**不复制** 401 规则：续期与终态全在 `api/request.uts` 的 `renewOrExpire()`
@@ -658,18 +761,50 @@ function sendStream(params : UTSJSONObject, callbacks : StreamChatCallbacks, isR
 		header['Authorization'] = `Bearer ${token}`
 	}
 
+	// 一次请求一个解析器（#2363 Q4）：401 重发走新的 sendStream ⇒ 新实例，
+	// 旧实例残留的半帧不会串进新流。
+	const parser = createSseParser()
+	// 收口闸：onChunkReceived 与 success / fail 会竞争，只允许第一个到达的终态生效。
+	let settled = false
+	// 是否真的收到过分块：收到过就说明分块通道接管了，success 只做收尾、不再重放整包
+	// （否则同一段正文会被解析两遍 ⇒ 气泡里出现重复正文）。
+	let received = false
+
+	const settleError = (msg : string) : void => {
+		if (settled) return
+		settled = true
+		emitStreamError(callbacks, msg)
+	}
+
+	const dispatch = (frames : SseFrame[]) : void => {
+		for (let i = 0; i < frames.length; i++) {
+			if (settled) return
+			if (handleStreamSSEEvent(frames[i].event, frames[i].data, callbacks)) {
+				settled = true
+			}
+		}
+	}
+
 	const task = uni.request({
 		url: url,
 		method: 'POST',
 		data: params,
 		header: header,
 		timeout: AI_REQUEST_TIMEOUT,
+		enableChunked: true,
+		responseType: 'arraybuffer',
 		success: (res) => {
 			const statusCode = res.statusCode
 			if (statusCode == 401) {
+				// 旧尝试立即作废：迟到的 chunk 不得再进回调（否则重发后正文重复，R7）
+				settled = true
 				// silent=true：文案由 onError 交回对话流，不再叠一层 toast（真失效时页面随即被 reLaunch）
 				renewOrExpire(token, !isRetry, true).then((retried : boolean) => {
 					if (retried) {
+						// 新请求会从头再发一遍正文 ⇒ 先让调用方丢掉已累积的增量（R7）
+						if (callbacks.onRestart != null) {
+							callbacks.onRestart()
+						}
 						sendStream(params, callbacks, true)
 					} else {
 						emitStreamError(callbacks, AUTH_EXPIRED_MESSAGE)
@@ -677,6 +812,7 @@ function sendStream(params : UTSJSONObject, callbacks : StreamChatCallbacks, isR
 				})
 				return
 			}
+			if (settled) return
 			if (statusCode < 200 || statusCode >= 300) {
 				// 服务不可用（5xx）有专门的行动文案；4xx 保留状态码，便于客服定位是哪个入口打错
 				let msg = statusCode >= 500 ? STREAM_MSG_SERVICE_DOWN : `请求失败 (${statusCode})`
@@ -685,40 +821,47 @@ function sendStream(params : UTSJSONObject, callbacks : StreamChatCallbacks, isR
 					const bm = bodyObj['message']
 					if (bm != null && `${bm}`.length > 0) msg = `${bm}`
 				} catch (e) {}
-				emitStreamError(callbacks, msg)
+				settleError(msg)
 				return
 			}
-			let raw = ''
-			try {
-				const asObj = res.data as UTSJSONObject
-				if (asObj != null && (asObj['content'] != null || asObj['message'] != null ||
-						asObj['choices'] != null || asObj['data'] != null)) {
-					raw = JSON.stringify(res.data)
-				} else {
-					raw = `${res.data}`
+			if (received) {
+				// 分块通道已接管：只收尾，不重放整包。末帧无空行时解析器不派发（#2388 口径），
+				// 因此这里以「见过 done / error」判收口，而不是以「有没有帧」判。
+				const fin = parser.finish()
+				dispatch(fin.events)
+				if (!settled && !fin.terminated) {
+					settleError(STREAM_MSG_INCOMPLETE)
 				}
-			} catch (e) {
-				raw = `${res.data}`
+				return
 			}
-			if (raw.length == 0) {
-				raw = `${res.data}`
-			}
+			// 整包降级：分块不可用 / 服务端没走 chunked / 平台忽略 enableChunked
+			const raw = bodyToText(res.data)
 			// 200 不等于「答完了」：整包解析后必须见到 done / error 才算收口。
 			// 截断（无终止帧）时显式收尾，否则等待态一直转 —— 这正是 #2298 验收第 5 条要挡的残留态。
 			const terminated = parseStreamSSE(raw, callbacks)
 			if (!terminated) {
-				emitStreamError(callbacks, STREAM_MSG_INCOMPLETE)
+				settleError(STREAM_MSG_INCOMPLETE)
 			}
 		},
 		fail: (err) => {
 			// 平台原始 errMsg（`request:fail ...`）只进日志，不上屏：它不是可行动文案（#2298 验收第 3 条）
 			console.error('[streamChat] fail:', err.errMsg)
+			if (settled) return
 			const errMsg = err.errMsg ?? ''
-			const msg = errMsg.indexOf('timeout') >= 0 ? STREAM_MSG_TIMEOUT : STREAM_MSG_NETWORK
-			emitStreamError(callbacks, msg)
+			settleError(errMsg.indexOf('timeout') >= 0 ? STREAM_MSG_TIMEOUT : STREAM_MSG_NETWORK)
 		},
 	})
 	if (task != null) {
+		try {
+			task.onChunkReceived((res) => {
+				received = true
+				if (settled) return
+				dispatch(parser.feed(res.data as ArrayBuffer))
+			})
+		} catch (e) {
+			// 能力探测：平台没有 onChunkReceived ⇒ 整包路径照旧（回退矩阵第 1 行）
+			console.error('[streamChat] chunked unsupported:', e)
+		}
 		return task
 	}
 	return null

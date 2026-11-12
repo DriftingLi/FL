@@ -14,69 +14,6 @@
             }
         },
         {
-            "path": "pages/recruiter/login",
-            "style": {
-                "navigationStyle": "custom",
-                "navigationBarTitleText": "招聘者登录"
-            }
-        },
-        {
-            "path": "pages/recruiter/home",
-            "style": {
-                "navigationStyle": "custom",
-                "navigationBarTitleText": "工作台"
-            }
-        },
-        {
-            "path": "pages/recruiter/jobs",
-            "style": {
-                "navigationStyle": "custom",
-                "navigationBarTitleText": "工作台"
-            }
-        },
-        {
-            "path": "pages/recruiter/job-edit",
-            "style": {
-                "navigationStyle": "custom",
-                "navigationBarTitleText": "编辑职位"
-            }
-        },
-        {
-            "path": "pages/recruiter/resumes",
-            "style": {
-                "navigationStyle": "custom",
-                "navigationBarTitleText": "工作台"
-            }
-        },
-        {
-            "path": "pages/recruiter/contacts",
-            "style": {
-                "navigationStyle": "custom",
-                "navigationBarTitleText": "工作台"
-            }
-        },
-        {
-            "path": "pages/recruiter/applications",
-            "style": {
-                "navigationStyle": "custom",
-                "navigationBarTitleText": "投递"
-            }
-        },
-        {
-            "path": "pages/recruiter/me",
-            "style": {
-                "navigationStyle": "custom",
-                "navigationBarTitleText": "我的"
-            }
-        },
-        {
-            "path": "pages/recruiter/resume-detail",
-            "style": {
-                "navigationStyle": "custom",
-                "navigationBarTitleText": "简历详情"
-            }
-        },
-        {
             "path": "pages/register/register",
             "style": {
                 "navigationBarTitleText": "注册"
@@ -427,6 +364,73 @@
             }
         }
     ],
+    "subPackages": [{
+        "root": "pages/recruiter",
+        "pages": [{
+                "path": "login",
+                "style": {
+                    "navigationStyle": "custom",
+                    "navigationBarTitleText": "招聘者登录"
+                }
+            },
+            {
+                "path": "home",
+                "style": {
+                    "navigationStyle": "custom",
+                    "navigationBarTitleText": "工作台"
+                }
+            },
+            {
+                "path": "jobs",
+                "style": {
+                    "navigationStyle": "custom",
+                    "navigationBarTitleText": "工作台"
+                }
+            },
+            {
+                "path": "job-edit",
+                "style": {
+                    "navigationStyle": "custom",
+                    "navigationBarTitleText": "编辑职位"
+                }
+            },
+            {
+                "path": "resumes",
+                "style": {
+                    "navigationStyle": "custom",
+                    "navigationBarTitleText": "工作台"
+                }
+            },
+            {
+                "path": "contacts",
+                "style": {
+                    "navigationStyle": "custom",
+                    "navigationBarTitleText": "工作台"
+                }
+            },
+            {
+                "path": "applications",
+                "style": {
+                    "navigationStyle": "custom",
+                    "navigationBarTitleText": "投递"
+                }
+            },
+            {
+                "path": "me",
+                "style": {
+                    "navigationStyle": "custom",
+                    "navigationBarTitleText": "我的"
+                }
+            },
+            {
+                "path": "resume-detail",
+                "style": {
+                    "navigationStyle": "custom",
+                    "navigationBarTitleText": "简历详情"
+                }
+            }
+        ]
+    }],
     "globalStyle": {
         "navigationBarTextStyle": "black",
         "navigationBarTitleText": "叉车维修培训",

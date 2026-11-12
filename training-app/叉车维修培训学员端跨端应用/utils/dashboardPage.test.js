@@ -84,19 +84,14 @@ function menuEntries() {
 }
 
 describe('首页格式契约（对照设计稿截图）', () => {
-  it('顶部导航单图标（通知）必须可见（历史 bug：icon 文本为空导致图标消失；#1602 迁移后经 AppNavBar right-icons 数组流入；#1846 收敛：🔍 移出页头进宫格，3→2；🛒 移出页头——商城入口已在宫格「课程商城」，2→1）', () => {
-    // 旧形态：页内三枚 class="nav-icon-text"；迁移后：模板绑定 :right-icons + 脚本数组真源。
-    expect(template).toContain(':right-icons="navRightIcons"');
-    const arr = src.match(/navRightIcons\s*:\s*string\[\]\s*=\s*\[([^\]]*)\]/);
-    expect(arr).not.toBeNull();
-    const icons = [...arr[1].matchAll(/'([^']*)'/g)].map((m) => m[1]);
-    // #1846：右槽最长内容形态须落在典型可用槽宽内（约 164rpx）——1×(44+24)=68rpx 在界内
-    //（2 图标 136rpx 亦在界内；3 图标 ≈204rpx 超宽，溢出向右顶进胶囊间隙带，spec 20261023 §4.2，几何复验归真机门）
-    expect(icons.length).toBe(1);
-    expect(icons).toEqual(['🔔']);
-    for (const icon of icons) {
-      expect(icon.trim().length).toBeGreaterThan(0);
-    }
+  it('顶部导航单图标（通知）必须可见（历史 bug：icon 文本为空导致图标消失；#1602 迁移后经 AppNavBar 承载；#1846 收敛：🔍 移出页头进宫格；🛒 移出页头；#2442：改挂左槽插槽）', () => {
+    // #2442：一级页面（无返回）的单个自定义操作放左槽，标题仍居中 —— 铃铛从 right-icons 数组改挂 #left。
+    expect(template).toMatch(/<template #left>[\s\S]*?nav-bell[\s\S]*?@click="onNotificationClick"/);
+    expect(template).not.toContain(':right-icons="navRightIcons"');
+    // 字形非空（历史 bug：icon 文本为空导致图标消失）
+    const bell = /<text class="nav-bell-icon">([^<]*)<\/text>/.exec(template);
+    expect(bell).not.toBeNull();
+    expect(bell[1].trim().length).toBeGreaterThan(0);
   });
 
   it('导航下方有公告栏（icon + 文案 + 箭头）', () => {

@@ -1,0 +1,401 @@
+/**
+ * 增量 SSE 解析器：字节块序列 → 事件帧序列（#2388，决策 #2363 的第 ① 张执行票）
+ *
+ * ## 为什么单独成模块
+ *
+ * 逐字输出要换增量通道（`enableChunked` + `onChunkReceived`，见决策 #2363），而 chunk 边界
+ * **没有任何对齐承诺**（RFC 9112 §7.1：chunk 是纯字节序列）⇒ 一个 chunk 可能含多帧、半帧，
+ * 也可能切在 UTF-8 三/四字节字符中间。半包/粘包若写进 `api/aiAssistant.uts` 的请求回调里，
+ * 就只能靠读源码文本的接线守护去守；抽到这里后它与 `uni.*` / 时间 / 网络全无关系，
+ * 可被 `utils/utsHarness.js` 的 `loadUts` **真执行**（同 `utils/aiAnswerBody.uts` 的判据）。
+ *
+ * ## 口径（一次性定死，② 直接消费，不二次约定）
+ *
+ * - **入口**：`createSseParser()` 每次请求新建一个实例；解析器**不持跨请求状态**。
+ * - **出口**：`feed(chunk: ArrayBuffer): SseFrame[]` 逐块喂入、逐帧产出；
+ *   `finish(): SseFinishResult` 收尾。帧形状 `{ event, data }` 与
+ *   `api/aiAssistant.uts` 的 `handleStreamSSEEvent(event, data, callbacks)` **同构**——
+ *   本模块只产事件、**不做分发**（分发器已存在，② 一行接上即可）。
+ * - **末帧没有空行 ⇒ 不派发**（WHATWG SSE `:407/:498/:525`）。现行整包路径
+ *   `parseStreamSSE` 的「末尾兜底派发」是相反口径，那条路径本期不动；这里不派发是为了
+ *   不让半帧 `done` 触发 #2310 的 `done.content` 整体替换。截断信号走 `incomplete`。
+ * - **遇终止帧停下**：`done` / `error` 那一帧照常产出，之后不再产出（`terminated = true`）。
+ *
+ * ## 解码为什么自己实现（不用 `TextDecoder`）
+ *
+ * 微信小程序运行时（`mp-weixin`）**没有 `TextDecoder` 全局**：`new TextDecoder()` 直接抛
+ * `ReferenceError: TextDecoder is not defined`（#2432 体验版实测，`createSseParser()` 在构造
+ * 解析器时就炸，整条流式回答链路在发请求前失败）。本模块被三端共用，不能只在 App / H5 上成立。
+ *
+ * 因此字节 → 文本走本模块自带的 `decodeUtf8()`（纯 JS，`String.fromCharCode` + `join`），
+ * 三端同一份实现、同一套替换口径。尾部挂起仍按 Encoding §8.1.1 的 `bytes needed` 判据：
+ * 只把**完整前缀**交给 `decodeUtf8()`，半截字符留到下一块；`finish()` 时残留的半个字符
+ * **不解码、不产出 U+FFFD**，只置 `incomplete = true`。
+ * 判据只用区间比较（续字节 128..191、前导字节区间），不用位运算：字节面越朴素越好。
+ *
+ * ## 边界
+ *
+ * 单行超过 `MAX_LINE_CHARS` 视为坏帧丢弃（防坏流把内存吃穿），不影响后续帧。
+ * 不认识的字段（`id` / `retry` / 任意名字）与 `:` 注释行一律忽略；缺 `data:` 的帧产事件
+ * `data` 为空串，不抛。
+ *
+ * @note 零 `uni.*`、零时间、零网络、零 import（loadUts 无需注入绑定）；跨端通用。
+ */
+
+export type SseFrame = {
+	/** SSE 事件名（`event:` 行）；后端六类见 `backend/internal/aiassistant/handler.go` */
+	event : string
+	/** 该帧的 `data:` 载荷原文（多行 `data:` 以 \n 连接）；**未做 JSON 解析** */
+	data : string
+}
+
+export type SseFinishResult = {
+	/** 恒为空数组：本解析器不在 `finish()` 里补派发（见模块头「末帧不派发」），留字段只为让 ② 统一遍历 */
+	events : SseFrame[]
+	/** 是否见过终止帧（`done` / `error`） */
+	terminated : boolean
+	/** 收尾时是否还有未收口的半帧（含半截 UTF-8 序列）：断流要发「回答未完整返回」 */
+	incomplete : boolean
+}
+
+/** 单行字符上限（不是字节）：超长坏帧整行丢弃，不吃内存 */
+const MAX_LINE_CHARS : number = 1024 * 1024
+
+/**
+ * 尾部不完整 UTF-8 序列要从本块末尾**扣下**几个字节。
+ *
+ * 判据是 Encoding §8.1.1 的 `bytes needed`：自尾部回退续字节找到前导字节，
+ * 由前导字节算出整个序列长度 `need`，再看「前导字节到块尾」够不够 `need` 个。
+ * 不够就**把前导字节起的这一段（`have` 个字节）整体留到下一块**——
+ * 不是留 `need - have` 个：那样会把前导字节之前的字节也扣进来，切成半截字符的
+ * 上一块尾部就被一起挂起，解码器拿到的前缀少了一整个字符（#2388 行为腿抓获）。
+ *
+ * @returns 0 = 整块可解（含最后一个是 ASCII 或完整序列）；1..3 = 要留到下一块的字节数
+ */
+function incompleteUtf8Tail(bytes : Uint8Array) : number {
+	const len = bytes.length
+	let i = len - 1
+	let cont = 0
+	while (i >= 0 && cont < 3) {
+		const b = bytes[i]
+		if (b >= 128 && b <= 191) {
+			i = i - 1
+			cont = cont + 1
+		} else {
+			break
+		}
+	}
+	if (i < 0) {
+		return 0
+	}
+	const lead = bytes[i]
+	let need = 0
+	if (lead >= 194 && lead <= 223) {
+		need = 2
+	} else if (lead >= 224 && lead <= 239) {
+		need = 3
+	} else if (lead >= 240 && lead <= 244) {
+		need = 4
+	} else {
+		return 0
+	}
+	const have = len - i
+	if (have >= need) {
+		return 0
+	}
+	return have
+}
+
+/**
+ * UTF-8 字节 → 字符串（纯 JS 实现，**不依赖 `TextDecoder`**）
+ *
+ * 为什么不用 `TextDecoder`：微信小程序运行时（`mp-weixin`）没有这个全局，
+ * `new TextDecoder()` 直接抛 `ReferenceError: TextDecoder is not defined`（#2432 体验版实测）。
+ * 本模块被三端共用，不能只在 App / H5 上成立。
+ *
+ * 口径：
+ * - 只接受**完整**的 UTF-8 序列（调用方已按 `incompleteUtf8Tail` 扣下尾部残字节）。
+ * - 非法序列（孤立续字节 / 越界前导 / 超长编码 / 代理区码点）产出 **U+FFFD**，
+ *   每次只前进 1 字节后继续 —— 与 `TextDecoder` 的替换粒度不保证逐字节一致，
+ *   但保证「不抛、不吞后续合法字节」。后端正常流不会走到这里。
+ * - 四字节码点按 UTF-16 代理对输出（`String.fromCharCode` 两次）。
+ *
+ * @param bytes 完整 UTF-8 字节
+ * @returns 解码后的字符串
+ */
+export function decodeUtf8(bytes : Uint8Array) : string {
+	const parts : string[] = []
+	const len = bytes.length
+	let i = 0
+	while (i < len) {
+		const b0 = bytes[i]
+		if (b0 < 128) {
+			parts.push(String.fromCharCode(b0))
+			i = i + 1
+			continue
+		}
+		let need = 0
+		let cp = 0
+		let min = 0
+		if (b0 >= 194 && b0 <= 223) {
+			need = 1
+			cp = b0 - 192
+			min = 128
+		} else if (b0 >= 224 && b0 <= 239) {
+			need = 2
+			cp = b0 - 224
+			min = 2048
+		} else if (b0 >= 240 && b0 <= 244) {
+			need = 3
+			cp = b0 - 240
+			min = 65536
+		} else {
+			parts.push('\uFFFD')
+			i = i + 1
+			continue
+		}
+		if (i + need >= len) {
+			parts.push('\uFFFD')
+			i = i + 1
+			continue
+		}
+		let ok = true
+		let k = 1
+		while (k <= need) {
+			const b = bytes[i + k]
+			if (b < 128 || b > 191) {
+				ok = false
+				break
+			}
+			cp = cp * 64 + (b - 128)
+			k = k + 1
+		}
+		if (!ok || cp < min || cp > 1114111 || (cp >= 55296 && cp <= 57343)) {
+			parts.push('\uFFFD')
+			i = i + 1
+			continue
+		}
+		if (cp <= 65535) {
+			parts.push(String.fromCharCode(cp))
+		} else {
+			const v = cp - 65536
+			parts.push(String.fromCharCode(55296 + Math.floor(v / 1024)))
+			parts.push(String.fromCharCode(56320 + (v % 1024)))
+		}
+		i = i + need + 1
+	}
+	return parts.join('')
+}
+
+class SseIncrementalParser {
+	carry : Uint8Array = new Uint8Array(0)
+	lineBuf : string = ''
+	eventName : string = ''
+	dataBuf : string = ''
+	hasDataLine : boolean = false
+	skipLF : boolean = false
+	skippingLine : boolean = false
+	terminated : boolean = false
+	finished : boolean = false
+	incompleteAtFinish : boolean = false
+	sawFirstText : boolean = false
+
+	/** 喂入一块字节，返回这一块里收口的帧（按帧序；可能 0 帧） */
+	feed(chunk : ArrayBuffer) : SseFrame[] {
+		const frames : SseFrame[] = []
+		if (this.terminated || this.finished) {
+			return frames
+		}
+		const text = this.decodeChunk(chunk)
+		if (text.length > 0) {
+			this.pushText(text, frames)
+		}
+		return frames
+	}
+
+	/** 收尾：不补派发半帧，只报 `terminated` / `incomplete`；幂等 */
+	finish() : SseFinishResult {
+		if (!this.finished) {
+			this.finished = true
+			this.incompleteAtFinish = !this.terminated
+				&& (this.carry.length > 0 || this.lineBuf.length > 0 || this.eventName.length > 0 || this.hasDataLine || this.skippingLine)
+			this.carry = new Uint8Array(0)
+			this.lineBuf = ''
+			this.resetBlock()
+		}
+		const events : SseFrame[] = []
+		const result : SseFinishResult = { events: events, terminated: this.terminated, incomplete: this.incompleteAtFinish }
+		return result
+	}
+
+	isTerminated() : boolean {
+		return this.terminated
+	}
+
+	/** 字节 → 文本：先拼上上一块留下的残字节，再切出完整前缀交给 decodeUtf8 */
+	decodeChunk(chunk : ArrayBuffer) : string {
+		const incoming = new Uint8Array(chunk)
+		const carryLen = this.carry.length
+		const total = carryLen + incoming.length
+		if (total == 0) {
+			return ''
+		}
+		const merged = new Uint8Array(total)
+		let i = 0
+		while (i < carryLen) {
+			merged[i] = this.carry[i]
+			i = i + 1
+		}
+		let j = 0
+		while (j < incoming.length) {
+			merged[carryLen + j] = incoming[j]
+			j = j + 1
+		}
+		const hold = incompleteUtf8Tail(merged)
+		const cut = total - hold
+		if (cut <= 0) {
+			this.carry = merged
+			return ''
+		}
+		const prefix = new Uint8Array(cut)
+		let k = 0
+		while (k < cut) {
+			prefix[k] = merged[k]
+			k = k + 1
+		}
+		if (hold > 0) {
+			const rest = new Uint8Array(hold)
+			let m = 0
+			while (m < hold) {
+				rest[m] = merged[cut + m]
+				m = m + 1
+			}
+			this.carry = rest
+		} else {
+			this.carry = new Uint8Array(0)
+		}
+		let text = decodeUtf8(prefix)
+		if (!this.sawFirstText) {
+			this.sawFirstText = true
+			if (text.length > 0 && text.charCodeAt(0) == 0xFEFF) {
+				text = text.substring(1)
+			}
+		}
+		return text
+	}
+
+	/** 文本 → 逐行：`\n` / `\r` / `\r\n` 都断行；块尾单个 `\r` 要挂起（下一块首字节若是 `\n` 就吞掉） */
+	pushText(text : string, frames : SseFrame[]) : void {
+		const n = text.length
+		let i = 0
+		let start = 0
+		if (this.skipLF) {
+			this.skipLF = false
+			if (n > 0 && text.charCodeAt(0) == 10) {
+				i = 1
+				start = 1
+			}
+		}
+		while (i < n) {
+			const c = text.charCodeAt(i)
+			if (c == 10 || c == 13) {
+				this.appendText(text.substring(start, i))
+				this.endLine(frames)
+				i = i + 1
+				if (c == 13) {
+					if (i < n) {
+						if (text.charCodeAt(i) == 10) {
+							i = i + 1
+						}
+					} else {
+						this.skipLF = true
+					}
+				}
+				start = i
+			} else {
+				i = i + 1
+			}
+		}
+		if (start < n) {
+			this.appendText(text.substring(start, n))
+		}
+	}
+
+	/** 行内累积（跨块）：超上限就整行丢弃，直到下一个换行 */
+	appendText(piece : string) : void {
+		if (piece.length == 0 || this.skippingLine) {
+			return
+		}
+		if (this.lineBuf.length + piece.length > MAX_LINE_CHARS) {
+			this.lineBuf = ''
+			this.skippingLine = true
+			return
+		}
+		this.lineBuf = this.lineBuf + piece
+	}
+
+	/** 完整行 → 字段累积；空行派发 */
+	endLine(frames : SseFrame[]) : void {
+		const line = this.lineBuf
+		this.lineBuf = ''
+		if (this.skippingLine) {
+			this.skippingLine = false
+			return
+		}
+		if (line.length == 0) {
+			this.dispatch(frames)
+			return
+		}
+		if (line.charCodeAt(0) == 58) {
+			return
+		}
+		const sep = line.indexOf(':')
+		let field = ''
+		let value = ''
+		if (sep < 0) {
+			field = line
+		} else {
+			field = line.substring(0, sep)
+			value = line.substring(sep + 1)
+		}
+		if (value.length > 0 && value.charCodeAt(0) == 32) {
+			value = value.substring(1)
+		}
+		if (field == 'event') {
+			this.eventName = value
+		} else if (field == 'data') {
+			if (this.hasDataLine) {
+				this.dataBuf = this.dataBuf + '\n'
+			}
+			this.dataBuf = this.dataBuf + value
+			this.hasDataLine = true
+		}
+	}
+
+	/** 空行 = 帧边界；无 `event:` 的块不派发（与 `parseStreamSSE` 的现行判据一致） */
+	dispatch(frames : SseFrame[]) : void {
+		if (this.terminated) {
+			this.resetBlock()
+			return
+		}
+		if (this.eventName.length > 0) {
+			const frame : SseFrame = { event: this.eventName, data: this.hasDataLine ? this.dataBuf : '' }
+			frames.push(frame)
+			if (this.eventName == 'done' || this.eventName == 'error') {
+				this.terminated = true
+			}
+		}
+		this.resetBlock()
+	}
+
+	resetBlock() : void {
+		this.eventName = ''
+		this.dataBuf = ''
+		this.hasDataLine = false
+	}
+}
+
+/** 每次请求新建一个；解析器不持跨请求状态（401 重发必须换新实例，见决策 #2363 Q4） */
+export function createSseParser() : SseIncrementalParser {
+	return new SseIncrementalParser()
+}

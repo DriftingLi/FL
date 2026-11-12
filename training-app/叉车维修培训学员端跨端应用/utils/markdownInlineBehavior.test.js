@@ -66,6 +66,40 @@ describe('① 成对记号不出现在可见文字里（逐 run 判，不拼整�
   });
 });
 
+// ===== ①b 记号外露三形（#2366：嵌套粗斜 / 三重星 / 多反引号代码）=====
+
+describe('①b 记号不以外露字符收尾（#2366 修的三处真实残留）', () => {
+  it('粗体套斜体（内层单星）⇒ 两个 `**` 都被吃掉，内层拿 italic+bold', () => {
+    const runs = runsOf('**注意 *务必* 戴手套**再动手。');
+    expect(plain('**注意 *务必* 戴手套**再动手。')).toBe('注意 务必 戴手套再动手。');
+    const inner = find(runs, '务必');
+    expect([inner.bold, inner.italic]).toEqual([true, true]);
+    // 任何可见 run 都不许以 `**` 开头/结尾（旧实现把开头那两个星原样留在文本里）
+    expect(leaves(runs).filter((t) => t.indexOf('**') >= 0)).toEqual([]);
+  });
+
+  it('三重星 `***x***` ⇒ 粗+斜同一枚 run，不留游离 `*`', () => {
+    const runs = runsOf('***务必***戴手套。');
+    expect(plain('***务必***戴手套。')).toBe('务必戴手套。');
+    const x = find(runs, '务必');
+    expect([x.bold, x.italic]).toEqual([true, true]);
+    expect(leaves(runs).filter((t) => t.indexOf('*') >= 0)).toEqual([]);
+  });
+
+  it('多反引号代码 ``a`b`` ⇒ 单反引号是内容，不是闭合；不留尾巴反引号', () => {
+    const runs = runsOf('执行 ``a`b`` 即可。');
+    expect(plain('执行 ``a`b`` 即可。')).toBe('执行 a`b 即可。');
+    const code = runs.filter((r) => r.code)[0];
+    expect(code.text).toBe('a`b');
+    expect(leaves(runs).filter((t) => t.indexOf('`') >= 0)).toEqual([]);
+  });
+
+  it('未闭合的记号仍是正文（fail-soft：不吞字符、也不假装成对）', () => {
+    expect(plain('**未闭合的粗体')).toBe('**未闭合的粗体');
+    expect(plain('收尾多一个反引号 `x')).toBe('收尾多一个反引号 `x');
+  });
+});
+
 // ===== ② 嵌套继承（⑩-2 的形状决定：扁平 runs + 样式位）=====
 
 describe('② 粗体里的链接/代码成为独立 run 并继承外层样式（单趟匹配必漏的那格）', () => {

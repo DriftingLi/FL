@@ -152,6 +152,7 @@ const MODULES = {
     extraDirs: ['components/ai-chat'],
     files: [
       'api/aiAssistant.uts',
+      'components/ai-chat/ai-chat-badges.uvue',
       'components/ai-chat/ai-chat-bubble.uvue',
       'components/ai-chat/ai-chat-diagnosis-guide.uvue',
       'components/ai-chat/ai-chat-custom-form.uvue',

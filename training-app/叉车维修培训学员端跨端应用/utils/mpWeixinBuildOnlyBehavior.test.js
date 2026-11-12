@@ -5,7 +5,7 @@
  *   判据要是写成源码文本断言（「文件里有 Start-GateStage -Name 'automation' 之前 exit」），
  *   把 `exit 0` 挪到 automation 之后、或把切点抬到产物判据之前，守护照样绿（C20 先例：判据看着在、实际静默失效）。
  * 四组用例各钉一面：
- *   G1 计划面：`-DryRun -BuildOnly` ⇒ 结果行换 token、字段换成本轮真能读的六项、会话段步骤整段不在计划里。
+ *   G1 计划面：`-DryRun -BuildOnly` ⇒ 结果行换 token、字段换成本轮真能读的十一项、会话段步骤整段不在计划里。
  *      列着「这轮不跑」的步骤就是两份真相，故这条断言的是**计划的步骤集合**，不是注释。**跨平台**（-DryRun
  *      在端口/环境检查之前退出）。
  *   G2 收口面：`-BuildOnly -SkipBuild` 真跑到切点（产物合法性之后）⇒ exit 0、
@@ -82,8 +82,12 @@ describe('-BuildOnly（#1861）：只跑构建面，会话段真不跑', () => {
 
       // ① token：build-only 与 ② 必须**可判读分流**（同 TEST_UNIT_LOCAL_RESULT 先例）
       expect(plan.resultLine.prefix).toBe('MP_WEIXIN_BUILDONLY_RESULT');
-      // ② 字段：只声明这一轮真能读到的六项（会话段那些读数本轮根本不存在，列着就是逼执行路径填假值）
-      expect(plan.resultLine.fields.map((f) => f.name)).toEqual(['appid', 'pages', 'product', 'build', 'elapsed', 'log']);
+      // ② 字段：只声明这一轮真能读到的读数（会话段那些本轮根本不存在，列着就是逼执行路径填假值）。
+      //    #2417 起补三枚**产物开关**读数 + 主包字节数与 2 MiB 硬限判定：票面要「结果行直接读出」。
+      expect(plan.resultLine.fields.map((f) => f.name)).toEqual([
+        'appid', 'pages', 'product', 'lazyCodeLoading', 'minified', 'es6',
+        'build', 'elapsed', 'mainBytes', 'main2m', 'log'
+      ]);
       // ③ 步骤：只剩构建面仍要用的收尾 close；会话段（quit / open / auto / 就绪闸门 / 探针）整段已随
       //    #2326 删除，env-preprobe（IDE 楔死预探）也随之删除
       expect(plan.steps.map((s) => s.id)).toEqual(['devtools-close']);
@@ -107,7 +111,7 @@ describe('-BuildOnly（#1861）：只跑构建面，会话段真不跑', () => {
 
       expect(r.status).toBe(0);
       // build= 只报事实：显式 -SkipBuild ⇒ skipped(explicit)（**不得**写成 publish —— 那等于假称构建过）
-      expect(line).toMatch(/^MP_WEIXIN_BUILDONLY_RESULT appid=wx38c3e31b16a7ced0 pages=1 product=ok build=skipped\(explicit\) elapsed=n\/a log=\.ci-verify\/mp-weixin\.log$/m);
+      expect(line).toMatch(/^MP_WEIXIN_BUILDONLY_RESULT appid=wx38c3e31b16a7ced0 pages=1 product=ok lazyCodeLoading=requiredComponents minified=true es6=false build=skipped\(explicit\) elapsed=n\/a mainBytes=\d+ main2m=ok log=\.ci-verify\/mp-weixin\.log$/m);
       // ② 的 token 一行都不许出现在 build-only 的日志里（分流靠 token，不靠行内容）
       expect(log).not.toMatch(/^MP_WEIXIN_RESULT /m);
       // 会话段真没跑：假开发者工具只收到 finally 那一次 close（quit / open / auto 一个都没有）
@@ -165,10 +169,278 @@ describe('-BuildOnly（#1861）：只跑构建面，会话段真不跑', () => {
       const log = H.gateLog(fixture);
       expect(status).toBe(0);
       // build=publish（真构建过）+ elapsed 是本轮 publish 墙钟，不是 n/a
-      expect(line).toMatch(/^MP_WEIXIN_BUILDONLY_RESULT appid=wx38c3e31b16a7ced0 pages=1 product=ok build=publish elapsed=\d+s log=\.ci-verify\/mp-weixin\.log$/m);
+      expect(line).toMatch(/^MP_WEIXIN_BUILDONLY_RESULT appid=wx38c3e31b16a7ced0 pages=1 product=ok lazyCodeLoading=requiredComponents minified=true es6=false build=publish elapsed=\d+s mainBytes=\d+ main2m=ok log=\.ci-verify\/mp-weixin\.log$/m);
       // 会话段仍未跑：只有 finally 的 close（quit / open / auto 一次都没有）
       expect(H.verbsOf(fakeCli)).toEqual(['close']);
       expect(log).not.toMatch(/^MP_WEIXIN_RESULT /m);
+    } finally { rmFixture(fixture.dir); }
+  });
+
+  // ---------- #2417：产物两开关 + 主包字节数 ----------
+  // 判据一律取**产物**，不取仓根配置：仓根改对而产物没带（构建没重来 / HBuilderX 没把仓根那份复制进
+  // 产物）时，上传面板的「JS 压缩」「组件按需注入」照样红 ⇒ 断言源码只会给出假绿。
+  // 三条失败各自一个 stage + actual= 实读值 ⇒ 看失败行就知道坏在哪一项，不用翻日志找上下文。
+
+  /** 改产物里的某份 JSON（按相对路径）。 */
+  function mutateProductJson(fixture, relPath, mutate) {
+    const p = path.join(fixture.dist, ...relPath.split('/'));
+    const obj = JSON.parse(fs.readFileSync(p, 'utf8'));
+    mutate(obj);
+    fs.writeFileSync(p, JSON.stringify(obj), 'utf8');
+  }
+
+  /** 目录文件字节总和（期望值的**独立算法** —— 不复用被测脚本的读数实现）。 */
+  function sumBytes(dir, excludeRoots = []) {
+    let total = 0;
+    const walk = (d, rel) => {
+      for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+        const p = path.join(d, e.name);
+        const r = rel ? rel + '/' + e.name : e.name;
+        if (e.isDirectory()) { if (!excludeRoots.includes(r)) walk(p, r); } else { total += fs.statSync(p).size; }
+      }
+    };
+    walk(dir, '');
+    return total;
+  }
+
+  /** 往产物里塞一份指定字节数的文件（造体积形态用，内容无意义）。 */
+  function writeBlob(dir, relPath, bytes) {
+    const p = path.join(dir, ...relPath.split('/'));
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, Buffer.alloc(bytes, 0x20));
+  }
+
+  it('G6a 开关面：产物 lazyCodeLoading 缺失 / 值不对 ⇒ 都判失败，失败行指名是哪一项', async () => {
+    if (!H.IS_WIN) return; // 同 G2–G4：构建面在 POSIX 上走不到结果行
+    const CASES = [
+      { label: '缺字段', mutate: (o) => { delete o.lazyCodeLoading; }, actual: 'missing' },
+      // 值在、但不对 = 等于没开：只断言「字段存在性」的守护会在这一形上假绿
+      { label: '值不对', mutate: (o) => { o.lazyCodeLoading = 'required'; }, actual: 'required' }
+    ];
+    for (const c of CASES) {
+      const fixture = H.makeFixture();
+      try {
+        mutateProductJson(fixture, 'app.json', c.mutate);
+        const fakeCli = H.makeFakeDevTools(fixture.dir);
+        const port = await H.freePort();
+        const r = runGate(fixture, fakeCli, port, ['-BuildOnly']);
+        const log = H.gateLog(fixture);
+
+        expect({ label: c.label, status: r.status }).toEqual({ label: c.label, status: 1 });
+        expect(log).toMatch(new RegExp('^MP_WEIXIN_BUILDONLY_RESULT errors=1 stage=lazy-code-loading actual=' + c.actual + '(\\s|$)', 'm'));
+        expect(log).not.toMatch(/^MP_WEIXIN_RESULT /m);
+        expect(H.verbsOf(fakeCli)).toEqual(['close']);
+      } finally { rmFixture(fixture.dir); }
+    }
+  });
+
+  it('G6b 开关面：产物 setting.minified 不为 JSON 布尔 true ⇒ 判失败（含「字符串 true」这一形）', async () => {
+    if (!H.IS_WIN) return;
+    const CASES = [
+      { label: 'false', mutate: (o) => { o.setting.minified = false; } },
+      { label: '缺字段', mutate: (o) => { delete o.setting.minified; } },
+      // ⚠️ 这一形是**故意**钉的：产物写 "minified": "true" 时字符串长得像真值，微信按布尔读 = 没开。
+      //    故判据必须是 stage（严格布尔判定），不是「actual 看起来对不对」。
+      { label: '字符串 true', mutate: (o) => { o.setting.minified = 'true'; } }
+    ];
+    for (const c of CASES) {
+      const fixture = H.makeFixture();
+      try {
+        mutateProductJson(fixture, 'project.config.json', c.mutate);
+        const fakeCli = H.makeFakeDevTools(fixture.dir);
+        const port = await H.freePort();
+        const r = runGate(fixture, fakeCli, port, ['-BuildOnly']);
+        const log = H.gateLog(fixture);
+
+        expect({ label: c.label, status: r.status }).toEqual({ label: c.label, status: 1 });
+        expect(log).toMatch(/^MP_WEIXIN_BUILDONLY_RESULT errors=1 stage=minified(\s|$)/m);
+        expect(H.verbsOf(fakeCli)).toEqual(['close']);
+      } finally { rmFixture(fixture.dir); }
+    }
+  });
+
+  it('G6c 开关面：产物 setting.es6 不为 JSON 布尔 false ⇒ 判失败（降级成 ES5 只会让包更大）', async () => {
+    if (!H.IS_WIN) return;
+    const CASES = [
+      { label: 'true', mutate: (o) => { o.setting.es6 = true; } },
+      { label: "字符串 'false'", mutate: (o) => { o.setting.es6 = 'false'; } },
+      { label: '缺字段', mutate: (o) => { delete o.setting.es6; } }
+    ];
+    for (const c of CASES) {
+      const fixture = H.makeFixture();
+      try {
+        mutateProductJson(fixture, 'project.config.json', c.mutate);
+        const fakeCli = H.makeFakeDevTools(fixture.dir);
+        const port = await H.freePort();
+        const r = runGate(fixture, fakeCli, port, ['-BuildOnly']);
+        const log = H.gateLog(fixture);
+
+        expect({ label: c.label, status: r.status }).toEqual({ label: c.label, status: 1 });
+        expect(log).toMatch(/^MP_WEIXIN_BUILDONLY_RESULT errors=1 stage=es6(\s|$)/m);
+        expect(H.verbsOf(fakeCli)).toEqual(['close']);
+      } finally { rmFixture(fixture.dir); }
+    }
+  });
+
+  it('G7a 体积面：主包字节数进结果行；超 1.5 MiB 建议线只提示不判红', async () => {
+    if (!H.IS_WIN) return;
+    const fixture = H.makeFixture();
+    try {
+      // 无分包 ⇒ 主包 = 全量。1.6 MB 落在 1.5 MiB 建议线与 2 MiB 硬限之间：这是本票最要紧的一格 ——
+      // 真实产物（1,595,414 B）就在这里，判红等于每次构建都失败。
+      writeBlob(fixture.dist, 'static/blob.bin', 1600000);
+      const expectedMain = sumBytes(fixture.dist);
+      expect(expectedMain).toBeGreaterThan(1572864);
+      expect(expectedMain).toBeLessThan(2097152);
+
+      const fakeCli = H.makeFakeDevTools(fixture.dir);
+      const port = await H.freePort();
+      const r = runGate(fixture, fakeCli, port, ['-BuildOnly']);
+      const log = H.gateLog(fixture);
+      const line = resultLine(fixture, 'MP_WEIXIN_BUILDONLY_RESULT');
+
+      expect(r.status).toBe(0);
+      expect(line).toContain('mainBytes=' + expectedMain);
+      expect(line).toContain('main2m=ok');
+      // 建议线只写读数与「权威读数是上传面板」的注明，不判红（判红 = 每次构建必失败）
+      expect(log).toMatch(/^main-package mainBytes=\d+ .* advisory1\.5m=over hard2m=ok(\s|$)/m);
+    } finally { rmFixture(fixture.dir); }
+  });
+
+  it('G7b 体积面：分包目录不计入主包（全量超 2 MiB 而主包没过线 ⇒ 仍通过）', async () => {
+    if (!H.IS_WIN) return;
+    const fixture = H.makeFixture();
+    try {
+      mutateProductJson(fixture, 'app.json', (o) => { o.subPackages = [{ root: 'pkg-a', pages: ['pages/index/index'] }]; });
+      writeBlob(fixture.dist, 'pkg-a/blob.bin', 3000000);
+      const expectedMain = sumBytes(fixture.dist, ['pkg-a']);
+      expect(sumBytes(fixture.dist)).toBeGreaterThan(2097152);
+      expect(expectedMain).toBeLessThan(1572864);
+
+      const fakeCli = H.makeFakeDevTools(fixture.dir);
+      const port = await H.freePort();
+      const r = runGate(fixture, fakeCli, port, ['-BuildOnly']);
+      const log = H.gateLog(fixture);
+      const line = resultLine(fixture, 'MP_WEIXIN_BUILDONLY_RESULT');
+
+      expect(r.status).toBe(0);
+      expect(line).toContain('mainBytes=' + expectedMain);
+      expect(log).toMatch(/^main-package .*subPackages=1 .*advisory1\.5m=under hard2m=ok(\s|$)/m);
+    } finally { rmFixture(fixture.dir); }
+  });
+
+  it('G8 体积面：主包超 2 MiB 硬限 ⇒ exit 1，失败行带读数与限值', async () => {
+    if (!H.IS_WIN) return;
+    const fixture = H.makeFixture();
+    try {
+      writeBlob(fixture.dist, 'static/blob.bin', 2100000);
+      const expectedMain = sumBytes(fixture.dist);
+
+      const fakeCli = H.makeFakeDevTools(fixture.dir);
+      const port = await H.freePort();
+      const r = runGate(fixture, fakeCli, port, ['-BuildOnly']);
+      const log = H.gateLog(fixture);
+
+      expect(r.status).toBe(1);
+      expect(log).toMatch(new RegExp('^MP_WEIXIN_BUILDONLY_RESULT errors=1 stage=main-package mainBytes=' + expectedMain + ' limit=2097152(\\s|$)', 'm'));
+      expect(H.verbsOf(fakeCli)).toEqual(['close']);
+    } finally { rmFixture(fixture.dir); }
+  });
+
+  // ---------- #2418：工作树回写判据（manifest.json / pages.json） ----------
+  // 判据**刻意不对称**：仅工作区脏 ⇒ 只提示（正常构建必然脏，判红等于每次构建都红）；
+  // 进暂存区 ⇒ exit 1 并指名（那才是「会被并入本次提交」的真实风险）。
+  // 夹具默认**不是 git 仓库**（其余用例都跑在这个形态上）⇒ 读数 git=unavailable、不判红；
+  // 这里显式 git init 造出「干净 / 仅脏 / 已暂存」三种树形态。
+
+  /** 把夹具变成 git 仓库，并把两处本地配置提交进去（干净树起点）。 */
+  function initRepo(fixture) {
+    const git = (args) => execFileSync('git', args, { cwd: fixture.dir, encoding: 'utf8', stdio: 'pipe' });
+    fs.writeFileSync(path.join(fixture.dir, 'pages.json'), JSON.stringify({ pages: [] }), 'utf8');
+    git(['init', '-q']);
+    git(['config', 'user.email', 'fixture@example.com']);
+    git(['config', 'user.name', 'fixture']);
+    git(['add', 'manifest.json', 'pages.json']);
+    git(['-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'fixture']);
+    return git;
+  }
+
+  it('G9a 回写面：干净树 ⇒ 读数 clean/clean、exit 0、不打脏改提示（不误报）', async () => {
+    if (!H.IS_WIN) return;
+    const fixture = H.makeFixture();
+    try {
+      initRepo(fixture);
+      const fakeCli = H.makeFakeDevTools(fixture.dir);
+      const port = await H.freePort();
+      const r = runGate(fixture, fakeCli, port, ['-BuildOnly']);
+      const log = H.gateLog(fixture);
+
+      expect(r.status).toBe(0);
+      expect(log).toMatch(/^worktree-rewrite manifest\.json=clean pages\.json=clean git=ok$/m);
+      // 干净树不打提示（提示里的还原命令是 ASCII，可跨控制台代码页断言；'>>>' 不唯一 ——
+      // -SkipBuild 与 devtools-close 也用它）
+      expect(r.stdout).not.toContain('git checkout -- manifest.json');
+    } finally { rmFixture(fixture.dir); }
+  });
+
+  it('G9b 回写面：仅工作区脏（未暂存）⇒ 读数 dirty、只提示不判红', async () => {
+    if (!H.IS_WIN) return;
+    const fixture = H.makeFixture();
+    try {
+      initRepo(fixture);
+      // HBuilderX 回写形态：appid 被置 null
+      fs.writeFileSync(path.join(fixture.dir, 'manifest.json'), JSON.stringify({ name: 'fixture', 'mp-weixin': { appid: null } }), 'utf8');
+      const fakeCli = H.makeFakeDevTools(fixture.dir);
+      const port = await H.freePort();
+      const r = runGate(fixture, fakeCli, port, ['-BuildOnly']);
+      const log = H.gateLog(fixture);
+
+      expect(r.status).toBe(0);
+      expect(log).toMatch(/^worktree-rewrite manifest\.json=dirty pages\.json=clean git=ok$/m);
+      // 只提示：脏改提示照打（含还原命令），但结果行照出、退出码 0
+      expect(r.stdout).toContain('git checkout -- manifest.json');
+      expect(resultLine(fixture, 'MP_WEIXIN_BUILDONLY_RESULT')).toContain('build=skipped(explicit)');
+    } finally { rmFixture(fixture.dir); }
+  });
+
+  it('G9c 回写面：回写脏改进暂存区 ⇒ exit 1 并指名是哪一处', async () => {
+    if (!H.IS_WIN) return;
+    const CASES = [
+      { file: 'manifest.json', mutate: (dir) => fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify({ name: 'fixture', 'mp-weixin': { appid: null } }), 'utf8') },
+      { file: 'pages.json', mutate: (dir) => fs.writeFileSync(path.join(dir, 'pages.json'), JSON.stringify({ pages: [], condition: { current: 0, list: [{ name: 'dev', path: 'pages/index/index' }] } }), 'utf8') }
+    ];
+    for (const c of CASES) {
+      const fixture = H.makeFixture();
+      try {
+        const git = initRepo(fixture);
+        c.mutate(fixture.dir);
+        git(['add', c.file]);
+        const fakeCli = H.makeFakeDevTools(fixture.dir);
+        const port = await H.freePort();
+        const r = runGate(fixture, fakeCli, port, ['-BuildOnly']);
+        const log = H.gateLog(fixture);
+
+        expect({ file: c.file, status: r.status }).toEqual({ file: c.file, status: 1 });
+        // 指名：staged= 后面就是那一处（两处同时暂存时是逗号分隔的清单）
+        expect(log).toMatch(new RegExp('^MP_WEIXIN_BUILDONLY_RESULT errors=1 stage=worktree-rewrite staged=' + c.file.replace('.', '\\.') + '(\\s|$)', 'm'));
+        expect(log).toMatch(new RegExp('^worktree-rewrite manifest\\.json=(clean|staged) pages\\.json=(clean|staged) git=ok$', 'm'));
+        // 判失败 ⇒ 不写通过结果行（与其它 exit 1 出口同形）
+        expect(log).not.toMatch(/^MP_WEIXIN_BUILDONLY_RESULT appid=/m);
+      } finally { rmFixture(fixture.dir); }
+    }
+  });
+
+  it('G9d 回写面：非 git 仓库 ⇒ 读数 git=unavailable、不判红（判不出 ≠ 判失败）', async () => {
+    if (!H.IS_WIN) return;
+    const fixture = H.makeFixture();
+    try {
+      const fakeCli = H.makeFakeDevTools(fixture.dir);
+      const port = await H.freePort();
+      const r = runGate(fixture, fakeCli, port, ['-BuildOnly']);
+      const log = H.gateLog(fixture);
+
+      expect(r.status).toBe(0);
+      expect(log).toMatch(/^worktree-rewrite manifest\.json=unknown pages\.json=unknown git=unavailable$/m);
     } finally { rmFixture(fixture.dir); }
   });
 
@@ -183,7 +455,10 @@ describe('-BuildOnly（#1861）：只跑构建面，会话段真不跑', () => {
     const REQUIRED = [
       'DistRelative',        // 产物目录（旧 342 行）
       'WxDevToolsPatterns',  // 开发者工具候选路径（旧 346 行）⇒ Resolve-DevToolsCli 的枚举源
-      'Doctor'               // 已退役开关的常量兜底（指纹段判定式仍取反它）
+      'Doctor',              // 已退役开关的常量兜底（指纹段判定式仍取反它）
+      'MainHardLimitBytes',  // 主包 2 MiB 硬限（#2417，3.6 段判定式）
+      'MainAdvisoryBytes',   // 主包 1.5 MiB 建议线（#2417，只打读数不判红）
+      'WorktreeRewritePaths' // 回写判据的两处本地配置（#2418，3.7 段与 finally 共用）
     ];
     for (const name of REQUIRED) {
       expect({ name, defined: definedAtTopLevel(name) }).toEqual({ name, defined: true });

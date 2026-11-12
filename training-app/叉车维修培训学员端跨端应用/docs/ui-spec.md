@@ -208,18 +208,34 @@
 > ⇒ **补声明是骨架层首票第一步**（#1597 K2，批 0 承接）。
 > 本件负责**状态栏占位与胶囊让位**（`navigationStyle: "custom"` 下避让责任 100% 在项目代码，见 ADR-0035 现状锚点表）。
 
-- 高度：`88rpx`（**不含状态栏**）
+- 高度：`88rpx`（**不含状态栏**；开启 `showToolbar` 时再加一行 `88rpx`，见「多动作落点」）
 - 状态栏占位：由本件内部按 `useSafeArea()` 取值渲染，**页面不再自带 `<view class="status-bar">`**
 - 右侧按钮区：右边界**不得越过微信胶囊左边界**（`getMenuButtonBoundingClientRect().left` − 安全间距），也不得写死魔数
-- 标题：居中，`$font-size-xl`（36rpx），font-weight bold
+- 标题：居中，`$font-size-xl`（36rpx），font-weight bold；**居中必须脱流**（胶囊让位把右槽撑宽，流内居中必然偏左，#2402 / ADR-0062）
 - 左侧返回按钮：`‹` 字符，`44rpx`
 - 右侧图标：`44rpx`
 - 背景：随页头套走（§7：N01 `$primary-color` / N02–N03 `$bg-header` / N05 `transparent` 页面自垫 / N06 白名单无页头）
 
-**胶囊让位算法**（#1592）：测量层 `utils/system.uts` 扩 `useSafeArea()` 返回 `{ statusBarHeight, capsuleLeft, rightSlotWidth }` Ref；
+**胶囊让位算法**（#1592 / #2442）：测量层 `utils/system.uts` 扩 `useSafeArea()` 返回 `{ statusBarHeight, capsuleLeft, rightSlotWidth }` Ref；
 小程序 `uni.getMenuButtonBoundingClientRect()` + px→rpx = `v_px × 750 / windowWidth`；App/H5 兜底 `useStatusBarHeight(44)`、H5 状态栏=0、右槽不设让位约束。
-右槽单行定宽、右缘=胶囊左边线；放不下 = 页面把次要动作移出页头（**不隐藏、不换行、不压缩、不写死 80rpx 魔数**）。
-页头 `paddingTop = statusBarHeight + 88rpx`。
+右槽**宽度内容自适应**（#2442：不再定宽，`space-between` 下本就贴右缘），右缘=胶囊左边线 − `CAPSULE_CLEARANCE_RPX`（24rpx，全站唯一常量，与 `pages/search` 共用）；
+放不下**或**次要动作需与主操作分级 = 页面把该动作移出页头（**不隐藏、不换行、不压缩、不写死 80rpx 魔数**）。分级判据见「多动作落点」。
+右槽内容**右对齐**，且必须显式 `flex-direction: row`：uvue 的 `<view>` 默认 flex + 竖向，漏写 row 时 `rightIcons`
+多图标会竖排（#2410）。预期几何（`rightIcons` 分支、单图标）：字形右缘 = 胶囊左边线 − `36rpx`（槽右缘 24rpx +
+项内边距 12rpx），字形左缘 = 胶囊左边线 − `80rpx`；相邻图标中心距 = `68rpx`（44 字形 + 两侧各 12rpx）⇒ 双图标
+136rpx 放得下（典型槽宽 194rpx），三图标 204rpx 会向左压标题（#1846 同量级）。反向判据：改完图标仍停在槽**左**缘
+⇒ row / `flex-end` 没生效。
+页头 `paddingTop = statusBarHeight + 88rpx`（开启 `showToolbar` 时 + `88rpx`）。
+
+**多动作落点**（2026-11-10；触发条件 2026-11-11 由 #2421 扩一档）：右槽放不下、**或**次要动作需与主操作分级的，
+走本件 `showToolbar` + `#toolbar` 的第二行 —— 该行在标题栏**之下**，
+胶囊矩形不进入，可吃满内容盒宽度；默认关闭 ⇒ 不传的页面零 diff。第二行只放**次要动作**，主操作仍留右槽；
+**「分级」也成立**：两个动作在窄槽里挤得下（如 job-detail 的 ♥ + 举报 = 128rpx < 典型槽宽 194rpx），
+但一个是主操作、一个是低频破坏性动作时，仍按本机制下沉 —— 判据是语义层级，不是宽度。
+触发器绑业务状态（job-detail 用 `:show-toolbar="!hasReported"`），别写死 `true`：动作消失后会留下一条空行。
+行高 88rpx 但 `<text>` 自身只有文字高，可点容器需自己撑到 ≥88rpx（先例 job-detail：右槽与第二行共用 `.nav-action` 方块）；
+右槽剩单图标时，盒宽按触摸目标取 88rpx（=44px），别再沿用 64rpx。
+仍禁止页面自建第二份页头（ADR-0035）。工具栏不重复做胶囊让宽，否则可用宽度又退回右槽那一档。
 
 ### 5.2 卡片（appCard）
 

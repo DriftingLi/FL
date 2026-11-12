@@ -33,7 +33,7 @@
 				</view>
 			</view>
 			<view v-if="messages.length > 0" class="chat-area">
-				<AiChatBubble v-for="(msg, idx) in messages" :key="idx" :role="msg.role" :content="msg.content" :sources="msg.sources" :images="msg.images" :show-actions="msg.role == 'assistant'" :is-last="idx == messages.length - 1" @copy="onCopyText(msg.content)" @retry="onRetry" />
+				<AiChatBubble v-for="(msg, idx) in messages" :key="idx" :role="msg.role" :content="msg.content" :sources="msg.sources" :images="msg.images" :meta="msg.meta" :show-actions="msg.role == 'assistant'" :is-last="idx == messages.length - 1" @copy="onCopyText(msg.content)" @retry="onRetry" />
 				<view v-if="thinking" class="message-row assistant">
 					<view class="message-bubble thinking">
 						<text class="message-text">{{ thinkingLabel }}</text>
@@ -53,8 +53,9 @@
 			<text class="guide-entry-text">{{ guideEntryLabel }}</text>
 		</view>
 
-		<!-- 故障码体检（#2297）：输入框正上方一行。五态里只渲染 known / typo / format；
-		     未收录、还没输入、取数失败都**整行不渲染**（安静不打扰是判据）。
+		<!-- 故障码体检（#2297；口径 2026-11-10 反转，#2403）：输入框正上方一行，只渲染 known / typo；
+		     format / 未收录 / 还没输入 / 取数失败都**整行不渲染**（安静不打扰是判据）。
+		     format 静默的理由：体检只看长度、不懂句意，页面又支持自由提问 ⇒ 问「维修资料在哪」会被答「码格式不对」。
 		     点这一行 = 把追问句替换进输入框（不自动发送），随后收掉。 -->
 		<view v-if="isDiagnosis && codeHintView.visible" class="code-hint" @click="onCodeHintTap">
 			<text :class="codeHintView.kind == 'known' ? 'code-hint-text' : 'code-hint-text code-hint-text-warn'">{{ codeHintView.text }}</text>
@@ -87,7 +88,7 @@
 		<!-- 左侧会话抽屉：本页**只列本功能区**的会话（list/create 都带本页键，见 useAiChat 的 featureScope）。
 		     它就是 ADR-0013「带键必有列它的界面」里的那个**界面** —— 缺了它，本页建的会话
 		     在通用页「最近对话」里也看不到（#921 首版实测回归形态）。 -->
-		<AiChatDrawerLeft :visible="sidebarLeft" :sessions="sessions" :current-session-id="currentSession?.id ?? 0" :status-bar-height="statusBarHeight" @close="sidebarLeft = false" @new-chat="onNewChat" @select="onSelectSession" @delete="onDeleteSession" />
+		<AiChatDrawerLeft :visible="sidebarLeft" :sessions="sessions" :current-session-id="currentSessionId" :status-bar-height="statusBarHeight" @close="sidebarLeft = false" @new-chat="onNewChat" @select="onSelectSession" @delete="onDeleteSession" />
 	</view>
 </template>
 
@@ -148,6 +149,7 @@
 		messages,
 		inputText,
 		thinking,
+		statusText,
 		scrollIntoViewId,
 		sidebarLeft,
 		loadSessions,
@@ -157,6 +159,19 @@
 		toggleSidebarLeft,
 		sendInput,
 	} = useAiChat(currentFeatureKey)
+
+	// 抽屉的「当前会话 id」：模板里直接写 `currentSession?.id ?? 0` 会让 mp-weixin 产物残留
+	// `??`（ES2020），微信上传接口按 ES2019 解析产物，直接拒传（#2419 实测
+	// `invalid file: pages/ai-assistant/ai-feature.js, 1:6749 SyntaxError: Unexpected token ?`）；
+	// 模板里改写成三元又过不了 Kotlin 侧 —— `AiSession?` 在这条渲染通路上不智能转换，
+	// ④ 编译门实测报 `Only safe (?.) or non-null asserted (!!.) calls are allowed`。
+	// 落在 script 里的 computed 两头都满足：Kotlin 侧对局部 val 判空后可智能转换，
+	// mp-weixin 产物是三目表达式。
+	const currentSessionId = computed<number>(() : number => {
+		const s = currentSession.value
+		return s == null ? 0 : s.id
+	})
+
 
 	// 根容器高度（同 ai-settings.uvue / 通用页）：给根节点一个确定高度，onLoad 里赋值
 	const pageHeight = ref<number>(0)
@@ -180,7 +195,12 @@
 	// 3) 计时器跟着等待态关 —— 请求结束（成功 / 失败 / 超时 / 截断）后不能继续跳秒，
 	//    更不能串到下一轮（验收第 5 条）。
 	const thinkingSeconds = ref<number>(0)
+	// 文案优先级（#2389）：后端阶段文案 > 已等秒数 > 兜底「思考中...」。
+	// 阶段文案来自 `status` 帧（此前被静默丢弃），让「在等」能说清在等什么。
 	const thinkingLabel = computed<string>(() : string => {
+		if (statusText.value.length > 0) {
+			return statusText.value
+		}
 		if (thinkingSeconds.value <= 0) {
 			return '思考中...'
 		}
@@ -241,7 +261,7 @@
 	/**
 	 * 故障码体检（#2297）：输入框正上方那一行。
 	 *
-	 * 分工：五态 → 文案在纯函数 `utils/diagnosisCodeHint.uts`（有真执行的行为用例）；
+	 * 分工：状态 → 文案在纯函数 `utils/diagnosisCodeHint.uts`（有真执行的行为用例；只有 known / typo 可见）；
 	 * 防抖 / 过期丢弃 / 失败静默在 `useDiagnosisCodeHint`；本页只做三件事 ——
 	 * 把输入框的变化喂进去、渲染那一行、点击回填追问句。
 	 *
@@ -621,7 +641,7 @@
 		color: $text-color-secondary;
 	}
 
-	/* typo / format：这两态是「你填得不对」，用警示色；known 才用次级文字色 */
+	/* typo 是「你填得不对」，用警示色；known 才用次级文字色 */
 	.code-hint-text-warn {
 		color: $warning-color;
 	}
