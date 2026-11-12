@@ -28,6 +28,8 @@ This file provides guidance to Qoder (qoder.com) when working with code in this 
 
 Issues 存放在 GitHub Issues（使用 `gh` CLI）。See `docs/agents/issue-tracker.md`.
 
+**调用方式**：`deck_*` 工具（`deck_context` / `deck_issue_get` / `deck_map_snapshot` 等）一律直接调用，不要包在 `run_code` 里再调。原因：`run_code` 有 120 秒执行硬限制，而 deck 工具内部预算是 300 秒；后端慢时（冷启动、gh 排队、大仓快照重建）会被 `run_code` 先掐断，表现为 `CODE_RUN_FAILED (timeout)`，并连带抛出 `Cannot read properties of undefined (reading 'length')` 的 `UNKNOWN`——那是 dsh 错误格式化的二次异常，不是票务数据问题，重试也无法绕过。直接调用则走 300 秒预算，慢也会正常返回。
+
 ### Triage labels
 
 五个 canonical triage roles，label 与 role 同名（`needs-triage` 等）；唯一变体：`ready-for-agent` 在移动端票用 **`ready-for-mobile-agent`**。See `docs/agents/triage-labels.md`.
