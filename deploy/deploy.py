@@ -44,6 +44,12 @@ from pathlib import Path
 from typing import Dict, List, Optional
 from urllib.parse import quote
 
+# deploy/ 目录加入 sys.path 以支持 importlib 加载场景（测试用 spec_from_file_location）
+_deploy_dir = str(Path(__file__).resolve().parent)
+if _deploy_dir not in sys.path:
+    sys.path.insert(0, _deploy_dir)
+from release_transaction import ReleaseTransaction, build_release_plan
+
 RED = "\033[0;31m"
 GREEN = "\033[0;32m"
 YELLOW = "\033[1;33m"
@@ -306,6 +312,58 @@ def env_val(value: str) -> str:
         escaped = value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
         return f'"{escaped}"'
     return value
+
+
+# ======================================================================
+# DeployerEnvironment：Deployer → Environment Protocol 桥接
+# ======================================================================
+class DeployerEnvironment:
+    """将 Deployer 方法适配到 release_transaction.Environment 协议。
+
+    ReleaseTransaction 通过这个 adapter 操作 Deployer，
+    消除 deploy.py 中平行的 mutable 状态编排。
+    """
+
+    def __init__(self, d: "Deployer"):
+        self._d = d
+
+    def get_running_image(self, service: str) -> str:
+        cid = self._d.compose_ps_id(service, include_stopped=False)
+        if not cid:
+            return "unknown"
+        cp = self._d.run(["docker", "inspect", "-f", "{{.Config.Image}}", cid], check=False, capture=True)
+        return (cp.stdout or "").strip() or "unknown"
+
+    def recreate_service(self, service: str, force: bool = False) -> None:
+        args = ["up", "-d"]
+        if force or self._d.opts.force:
+            args += ["--force-recreate"]
+        if self._d.opts.remove_orphans:
+            args += ["--remove-orphans"]
+        args.append(service)
+        cp = self._d.run(self._d._compose() + args, check=False)
+        if cp.returncode != 0:
+            self._d._tail_logs(service)
+            raise DeployError(f"{service} 启动失败")
+
+    def set_service_image(self, service: str, image: str) -> None:
+        setattr(self._d, f"{service}_ref", image)
+        self._d.write_env_file()
+
+    def verify_running_image(self, service: str, expected: str) -> bool:
+        return self._d.assert_running_image(service, expected)
+
+    def preflight_migration_check(self, image: str) -> bool:
+        return self._d.preflight_migration_check(image)
+
+    def fix_dirty_state(self) -> None:
+        self._d.fix_dirty_state()
+
+    def run_migration(self) -> None:
+        self._d.run_migration()
+
+    def health_check(self) -> None:
+        self._d.health_check()
 
 
 # ======================================================================
@@ -1381,6 +1439,7 @@ class Deployer:
             backup_thread = threading.Thread(target=self._backup_once, name="deploy-backup", daemon=True)
             backup_thread.start()
 
+        txn: Optional[ReleaseTransaction] = None
         try:
             self.pull_images()
 
@@ -1401,13 +1460,7 @@ class Deployer:
                 else:
                     log_ok("备份已完成")
 
-            # dirty 状态与「是否有待跑迁移」是两件事：即使版本已最新也要清 dirty。
-            self.fix_dirty_state()
-            if self.migration_needed(self.backend_ref):
-                self.run_migration()
-            else:
-                log_ok("数据库已是最新迁移版本，跳过 migrate")
-
+            # 构建不可变变更计划，交给 ReleaseTransaction 驱动
             app_decisions = self.plan_app()
             blocked = [d for d in app_decisions if d.action == "blocked"]
             if blocked:
@@ -1415,15 +1468,24 @@ class Deployer:
             for d in app_decisions:
                 label = {"skip": "跳过", "start": "启动", "create": "创建", "recreate": "重建", "blocked": "阻止"}[d.action]
                 log_info(f"计划 {d.service}: {label}（{d.reason}）")
-            self.apply_app(app_decisions)
 
-            self.health_check()
-        except DeployError:
+            env = DeployerEnvironment(self)
+            plan = build_release_plan(
+                env=env,
+                desired_images=self.desired_app_images(),
+                decisions=app_decisions,
+                migration_needed=self.migration_needed(self.backend_ref),
+            )
+            txn = ReleaseTransaction(plan, env)
+            txn.backup_error = self.backup_error
+            txn.execute()
+            txn.verify()
+        except (DeployError, RuntimeError):
             # 只有真的动过应用容器才回滚；镜像拉取/迁移阶段失败时线上版本没变，不需要回滚。
-            if self.applied and (self.backup_dir / "last-version.txt").is_file():
+            if txn and txn.applied_services and (self.backup_dir / "last-version.txt").is_file():
                 log_warn("部署失败，尝试回滚已变更的服务...")
                 try:
-                    self.do_rollback()
+                    txn.rollback()
                 except Exception as exc:  # noqa: BLE001 — 回滚失败也要保留原始失败
                     log_error(f"自动回滚失败: {exc}")
             raise

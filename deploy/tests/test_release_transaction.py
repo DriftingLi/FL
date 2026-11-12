@@ -35,7 +35,7 @@ class FakeEnvironment:
         self.calls.append(("get_running_image", service))
         return self.running_images.get(service, "unknown")
 
-    def recreate_service(self, service: str) -> None:
+    def recreate_service(self, service: str, force: bool = False) -> None:
         self.calls.append(("recreate_service", service))
 
     def set_service_image(self, service: str, image: str) -> None:

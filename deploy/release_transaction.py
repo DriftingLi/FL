@@ -53,8 +53,8 @@ class Environment(Protocol):
         """返回服务当前运行镜像坐标；未运行返回 "unknown"。"""
         ...
 
-    def recreate_service(self, service: str) -> None:
-        """重建指定服务容器（docker compose up -d --force-recreate）。"""
+    def recreate_service(self, service: str, force: bool = False) -> None:
+        """重建指定服务容器。force=True 时带 --force-recreate（回滚必用）。"""
         ...
 
     def set_service_image(self, service: str, image: str) -> None:
@@ -162,10 +162,11 @@ class ReleaseTransaction:
         self._backup_error = value
 
     def execute(self) -> None:
-        """按计划推进部署：迁移 → 服务变更 → 健康检查。"""
+        """按计划推进部署：清 dirty → 迁移（如需）→ 服务变更 → 健康检查。"""
+        # dirty 状态与「是否有待跑迁移」是两件事：即使版本已最新也要清 dirty。
+        self._env.fix_dirty_state()
         # 迁移先于服务重启（ADR-0088 决策 5）
         if self._plan.migration_needed:
-            self._env.fix_dirty_state()
             self._env.run_migration()
 
         # 服务变更
@@ -188,8 +189,15 @@ class ReleaseTransaction:
         # 反转序：后部署的先回滚；先设镜像再重建（否则 recreate 会拉当前镜像）
         for change in reversed(self._plan.services):
             if change.service in self._applied and change.previous_image != "unknown":
+                # 后端迁移预检：拒绝回滚到迁移落后于数据库的镜像（防崩溃循环）
+                if change.service == "backend":
+                    if not self._env.preflight_migration_check(change.previous_image):
+                        raise RuntimeError(
+                            f"拒绝回滚后端到 {change.previous_image}"
+                            f"（迁移版本落后数据库，会崩溃循环）"
+                        )
                 self._env.set_service_image(change.service, change.previous_image)
-                self._env.recreate_service(change.service)
+                self._env.recreate_service(change.service, force=True)
 
         self._env.health_check()
 
