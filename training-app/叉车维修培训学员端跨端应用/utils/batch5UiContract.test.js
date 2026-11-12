@@ -131,22 +131,25 @@ describe('批5 N05 页面自垫底色（页头透明后背景由页面承担，�
 });
 
 describe('批5 特殊页头形态（app-nav-bar 槽位承载）', () => {
-  it('forum 右槽仅保留消息徽标入口（#1846 收敛：发帖 pill 下沉页内搜索栏右端；✉️ 单图标 64rpx 落在典型可用槽宽约 164rpx 内）', () => {
+  it('forum 页头仅保留消息徽标入口（#1846 收敛：发帖 pill 下沉页内搜索栏右端；#2442：一级页面的单个自定义操作改挂左槽）', () => {
     const s = read('pages/forum/forum.uvue');
-    // 右槽只剩 ✉️（含未读徽标）；发帖 pill 不得回流页头（右槽超宽会顶进胶囊矩形，spec 20261023 §4.2）
-    const right = /<template #right>([\s\S]*?)<\/template>/.exec(s);
-    expect(right).not.toBeNull();
-    expect(right[1]).toMatch(/msg-icon-wrap[\s\S]*?msg-badge/);
-    expect(right[1]).not.toMatch(/create-pill|header-right|发帖/);
+    // 页头只剩 ✉️（含未读徽标）；发帖 pill 不得回流页头（页头超宽会顶进胶囊矩形，spec 20261023 §4.2）
+    const left = /<template #left>([\s\S]*?)<\/template>/.exec(s);
+    expect(left).not.toBeNull();
+    expect(left[1]).toMatch(/msg-icon-wrap[\s\S]*?msg-badge/);
+    expect(left[1]).not.toMatch(/create-pill|header-right|发帖/);
+    // #2442：一级页面（无返回）的单个自定义操作放左槽，右槽不再承载它
+    expect(s).not.toMatch(/<template #right>/);
     // 移出页头的入口页内可达（#1846）：搜索栏右端 pill 与搜索栏本体同走 onCreate（触发行为不变）
     expect(s).toMatch(/v-if="currentTab !== 'experience'" class="res-search-bar"/);
     expect(s).toMatch(/class="create-pill"[\s\S]{0,120}?@click="onCreate"/);
   });
 
-  it('dashboard 页头保留证件下拉标题与单图标右槽（#1846 收敛：🔍 移出页头进功能宫格，3→2；🛒 移出页头——商城入口已在宫格「课程商城」，右槽 2→1；#1602 形态其余不动）', () => {
+  it('dashboard 页头保留证件下拉标题与单图标左槽（#1846 收敛：🔍 移出页头进功能宫格；🛒 移出页头；#2442：一级页面单操作改挂左槽）', () => {
     const s = read('pages/dashboard/dashboard.uvue');
-    expect(s).toMatch(/:right-icons="navRightIcons"/);
-    expect(s).toMatch(/navRightIcons\s*:\s*string\[\]\s*=\s*\['🔔'\]/);
+    // #2442：铃铛从 right-icons 数组改挂 #left 插槽（一级页面单操作放左侧，标题仍居中）
+    expect(s).not.toMatch(/:right-icons="navRightIcons"/);
+    expect(s).toMatch(/<template #left>[\s\S]*?nav-bell[\s\S]*?@click="onNotificationClick"/);
     expect(s).not.toContain("'🛒'");
     expect(s).toMatch(/<AppNavBar[^>]*@left-click="onCertTap"/);
     // 移出页头的入口页内可达（#1846）：宫格补全局搜索格（静态面与跳转语义另由 dashboardContract / searchContract M2 钉住）

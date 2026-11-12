@@ -216,9 +216,10 @@
 - 右侧图标：`44rpx`
 - 背景：随页头套走（§7：N01 `$primary-color` / N02–N03 `$bg-header` / N05 `transparent` 页面自垫 / N06 白名单无页头）
 
-**胶囊让位算法**（#1592）：测量层 `utils/system.uts` 扩 `useSafeArea()` 返回 `{ statusBarHeight, capsuleLeft, rightSlotWidth }` Ref；
+**胶囊让位算法**（#1592 / #2442）：测量层 `utils/system.uts` 扩 `useSafeArea()` 返回 `{ statusBarHeight, capsuleLeft, rightSlotWidth }` Ref；
 小程序 `uni.getMenuButtonBoundingClientRect()` + px→rpx = `v_px × 750 / windowWidth`；App/H5 兜底 `useStatusBarHeight(44)`、H5 状态栏=0、右槽不设让位约束。
-右槽单行定宽、右缘=胶囊左边线；放不下**或**次要动作需与主操作分级 = 页面把该动作移出页头（**不隐藏、不换行、不压缩、不写死 80rpx 魔数**）。分级判据见「多动作落点」。
+右槽**宽度内容自适应**（#2442：不再定宽，`space-between` 下本就贴右缘），右缘=胶囊左边线 − `CAPSULE_CLEARANCE_RPX`（24rpx，全站唯一常量，与 `pages/search` 共用）；
+放不下**或**次要动作需与主操作分级 = 页面把该动作移出页头（**不隐藏、不换行、不压缩、不写死 80rpx 魔数**）。分级判据见「多动作落点」。
 右槽内容**右对齐**，且必须显式 `flex-direction: row`：uvue 的 `<view>` 默认 flex + 竖向，漏写 row 时 `rightIcons`
 多图标会竖排（#2410）。预期几何（`rightIcons` 分支、单图标）：字形右缘 = 胶囊左边线 − `36rpx`（槽右缘 24rpx +
 项内边距 12rpx），字形左缘 = 胶囊左边线 − `80rpx`；相邻图标中心距 = `68rpx`（44 字形 + 两侧各 12rpx）⇒ 双图标

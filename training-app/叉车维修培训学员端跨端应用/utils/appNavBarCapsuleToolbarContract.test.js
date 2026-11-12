@@ -58,15 +58,19 @@ function capsuleToolbarViolations(srcRaw) {
       v.push(`${sel} 出现 rpx 数值内边距（右向预留须由胶囊测量驱动，不写死）`);
     }
   }
-  if (!/rightSlotWidth/.test(src)) {
-    v.push('右槽未用 rightSlotWidth（让宽须由 getMenuButtonBoundingClientRect 的结果驱动）');
+  if (!/rightSlotStyle/.test(src) || !/capsuleLeft/.test(src)) {
+    v.push('右槽未用 capsuleLeft（让位须由 getMenuButtonBoundingClientRect 的结果驱动）');
+  }
+  // #2442 方案 B：右槽宽度由内容决定，不得再写死 width（定宽会白吃标题可用区）
+  if (/return 'width:/.test(src)) {
+    v.push('右槽写死了 width（#2442 裁定：宽度内容自适应，只留 margin-right 钉右缘）');
   }
 
   // ── B. 右槽右缘几何 ──
   if (!/margin-right/.test(src)) {
     v.push('右槽缺 margin-right 补偿（内容盒偏移未抵消 ⇒ 图标落进胶囊矩形）');
   }
-  if (!/\(750\s*-\s*NAV_BODY_PADDING_X\)\s*-\s*\(capsuleLeft\s*-\s*RIGHT_SLOT_CLEARANCE\)/.test(src)) {
+  if (!/\(750\s*-\s*NAV_BODY_PADDING_X\)\s*-\s*\(capsuleLeft\s*-\s*CAPSULE_CLEARANCE_RPX\)/.test(src)) {
     v.push('右槽右缘几何不是 (750 − paddingX) − (capsuleLeft − clearance)');
   }
 
@@ -189,7 +193,7 @@ describe('检测器判别力（注入违规样本必红）', () => {
 
   it('B: 右槽几何丢掉内容盒补偿', () => {
     expectRed(
-      /const marginRight = Math\.max\(0, \(750 - NAV_BODY_PADDING_X\) - \(capsuleLeft - RIGHT_SLOT_CLEARANCE\)\)/,
+      /const marginRight = Math\.max\(0, \(750 - NAV_BODY_PADDING_X\) - \(capsuleLeft - CAPSULE_CLEARANCE_RPX\)\)/,
       'const marginRight = 0',
     );
   });

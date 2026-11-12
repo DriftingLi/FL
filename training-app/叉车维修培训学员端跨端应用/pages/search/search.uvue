@@ -118,7 +118,7 @@
 <script setup lang="uts">
 	import { ref, computed } from 'vue'
 	import { onShow } from '@dcloudio/uni-app'
-	import { useSafeArea } from '../../utils/system'
+	import { useSafeArea, CAPSULE_CLEARANCE_RPX } from '../../utils/system'
 	import { getCurrentCredentialApi } from '../../api/credential'
 	import { searchAllApi, searchByTypeApi } from '../../api/search'
 	import { splitHighlight, searchItemPath, hitLabel, displaySnippet, sectionLabel, itemPrimaryText, shouldShowSnippet } from '../../utils/searchDisplay'
@@ -128,19 +128,18 @@
 
 	const safeArea = useSafeArea()
 
-	// 胶囊让位（#1845）：N06 自绘页不受页头件避让保护，搜索头行右端「取消」按钮
-	// 的右缘自行钉在胶囊左边线 − 24rpx（与 app-nav-bar 的 RIGHT_SLOT_CLEARANCE 同间隙值）。
+	// 胶囊让位（#1845 / #2442）：N06 自绘页不受页头件避让保护，搜索头行右端「取消」按钮
+	// 的右缘自行钉在胶囊左边线 − CAPSULE_CLEARANCE_RPX（与页头件共用 utils/system 的同一常量）。
 	// uvue 不支持 var()/calc()，动态值走内联 style 分项覆盖（先例：app-nav-bar 的
 	// rightSlotStyle 内联 margin-right 覆盖 class 值）；非小程序端 capsuleLeft = 0
 	// ⇒ 返回空串不设约束，维持样式表里 .search-header 的 24rpx 右 padding 基线。
-	const CAPSULE_CLEARANCE = 24 // 取消按钮与胶囊的视觉间隙（rpx），与页头件同值
 	const searchHeaderStyle = computed((): string => {
 		const capsuleLeft = safeArea.value.capsuleLeft
 		if (capsuleLeft <= 0) {
 			return ''
 		}
-		// 右 padding = 750 − capsuleLeft + 24 ⇒ 行内内容右缘 = 胶囊左边线 − 24
-		const paddingRight = Math.max(24, 750 - capsuleLeft + CAPSULE_CLEARANCE)
+		// 右 padding = 750 − capsuleLeft + 间隙 ⇒ 行内内容右缘 = 胶囊左边线 − 间隙
+		const paddingRight = Math.max(24, 750 - capsuleLeft + CAPSULE_CLEARANCE_RPX)
 		return 'padding-right: ' + paddingRight + 'rpx;'
 	})
 

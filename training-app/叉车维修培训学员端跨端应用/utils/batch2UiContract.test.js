@@ -90,12 +90,13 @@ describe('批2 四页 · 页头归位（ui-spec §5.1 / §7.1 · N02 白底套�
     }
   });
 
-  it('personal-activity 右槽承载 ⚙ 设置钮（无返回键的标题页，slot=right 形态）', () => {
+  it('personal-activity 右槽承载 ⚙ 设置钮（二级页面：返回 + 标题左对齐，必要操作放右侧）', () => {
     const src = read('pages/profile/personal-activity.uvue');
     expect(src).toMatch(/<template #right>/);
     expect(src).toContain('onSettings');
-    // 右槽页不再有返回钮绑定
-    expect(src).not.toMatch(/<app-nav-bar[^>]*@left-click/);
+    // #2442：本页由 forum 头像 navigateTo 压栈，是二级页面 —— 返回箭头必须真能返回（此前是死按钮）
+    expect(src).toMatch(/<app-nav-bar[^>]*@left-click="onBack"/);
+    expect(src).toMatch(/function onBack\(\)[\s\S]{0,120}?uni\.navigateBack\(\)/);
   });
 
   it('三个有返回键的页绑定 @left-click', () => {
