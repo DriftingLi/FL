@@ -1,0 +1,83 @@
+name: "Release Evidence"
+description: "发布证据收集：waitForRun / checkDeployment / gateVerdict 三步可组合（#2455）"
+
+inputs:
+  step:
+    description: "运行哪一步：waitForRun / checkDeployment / gateVerdict"
+    required: true
+  sha:
+    description: "被测 commit SHA"
+    required: true
+  environment:
+    description: "环境名（testing / production）"
+    required: false
+    default: "testing"
+  run-id:
+    description: "要等待的 run ID（waitForRun / gateVerdict 用）"
+    required: false
+    default: ""
+  timeout:
+    description: "超时秒数"
+    required: false
+    default: "480"
+  poll-interval:
+    description: "轮询间隔秒数"
+    required: false
+    default: "30"
+
+outputs:
+  verdict:
+    description: "green / red（gateVerdict 输出）"
+    value: ${{ steps.gateVerdict.outputs.verdict }}
+  reason:
+    description: "verdict 原因"
+    value: ${{ steps.gateVerdict.outputs.reason }}
+  conclusion:
+    description: "run 结论（waitForRun 输出）"
+    value: ${{ steps.waitForRun.outputs.conclusion }}
+  head-sha:
+    description: "run head SHA（waitForRun 输出）"
+    value: ${{ steps.waitForRun.outputs.head_sha }}
+  deployment-id:
+    description: "deployment ID（checkDeployment 输出）"
+    value: ${{ steps.checkDeployment.outputs.deployment_id }}
+  deployment-status:
+    description: "deployment 状态（checkDeployment 输出）"
+    value: ${{ steps.checkDeployment.outputs.deployment_status }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: waitForRun
+      id: waitForRun
+      if: inputs.step == 'waitForRun'
+      shell: bash
+      run: ${{ github.action_path }}/wait-for-run.sh
+      env:
+        INPUT_RUN_ID: ${{ inputs.run-id }}
+        INPUT_SHA: ${{ inputs.sha }}
+        INPUT_TIMEOUT: ${{ inputs.timeout }}
+        INPUT_POLL_INTERVAL: ${{ inputs.poll-interval }}
+
+    - name: checkDeployment
+      id: checkDeployment
+      if: inputs.step == 'checkDeployment'
+      shell: bash
+      run: ${{ github.action_path }}/check-deployment.sh
+      env:
+        INPUT_SHA: ${{ inputs.sha }}
+        INPUT_ENVIRONMENT: ${{ inputs.environment }}
+        INPUT_TIMEOUT: ${{ inputs.timeout }}
+        INPUT_POLL_INTERVAL: ${{ inputs.poll-interval }}
+
+    - name: gateVerdict
+      id: gateVerdict
+      if: inputs.step == 'gateVerdict'
+      shell: bash
+      run: ${{ github.action_path }}/gate-verdict.sh
+      env:
+        INPUT_SHA: ${{ inputs.sha }}
+        INPUT_ENVIRONMENT: ${{ inputs.environment }}
+        INPUT_RUN_ID: ${{ inputs.run-id }}
+        INPUT_TIMEOUT: ${{ inputs.timeout }}
+        INPUT_POLL_INTERVAL: ${{ inputs.poll-interval }}
