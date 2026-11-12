@@ -643,14 +643,14 @@ jobs:
             echo '# compose 就会去 Docker Hub 拉不存在的 forklift-backend:latest（2026-09-13 testing 冒烟实测踩到）。'
             echo 'unset BACKEND_IMAGE FRONTEND_IMAGE LIBREOFFICE_IMAGE'
             echo ''
-            echo '# ---- 覆盖段：secrets / 环境里确实提供了值的变量才写出（空值保留上面的默认）----'
-            echo '# 变量清单直接读生成物，workflow 里不再手抄一份默认值：'
+            echo '# ---- 纯传值：cd.yml 只传 secrets / 环境值，默认值由 deploy.py EffectiveConfig 统一解析 ----'
+            echo '# 优先级：显式覆盖 > 环境变量 > 声明表默认值（env.defaults）。不再手抄默认值。'
             for _name in $(grep -E '^export [A-Z_0-9]+=' deploy/env.defaults | sed -E 's/^export ([A-Z_0-9]+)=.*/\1/'); do
               if [ -n "${!_name:-}" ]; then printf 'export %s=%q\n' "$_name" "${!_name}"; fi
             done
             echo ''
-            echo '# ---- 其余变量（密钥类：空默认交给 compose / 后端）----'
-            printf 'export IMAGE_TAG=%q\n' "${IMAGE_TAG:-latest}"
+            echo '# ---- 密钥类变量（默认为空，由 compose / 后端兜底）----'
+            printf 'export IMAGE_TAG=%q\n' "${IMAGE_TAG:-}"
             printf 'export IMAGE_TAG_BACKEND=%q\n' "${IMAGE_TAG_BACKEND:-}"
             printf 'export IMAGE_TAG_FRONTEND=%q\n' "${IMAGE_TAG_FRONTEND:-}"
             printf 'export IMAGE_TAG_LIBREOFFICE=%q\n' "${IMAGE_TAG_LIBREOFFICE:-}"
@@ -658,24 +658,22 @@ jobs:
             printf 'export IMAGE_FRONTEND=%q\n' "${IMAGE_FRONTEND:-}"
             printf 'export IMAGE_LIBREOFFICE=%q\n' "${IMAGE_LIBREOFFICE:-}"
             printf 'export GITHUB_TOKEN=%q\n' "${GITHUB_TOKEN:-}"
-            printf 'export REGISTRY=%q\n' "${REGISTRY:-ghcr.io}"
+            printf 'export REGISTRY=%q\n' "${REGISTRY:-}"
             printf 'export REGISTRY_PROXY=%q\n' "${REGISTRY_PROXY:-}"
-            printf 'export REGISTRY_PROXY_BIND=%q\n' "${REGISTRY_PROXY_BIND:-127.0.0.1}"
-            printf 'export KEEP_IMAGES=%q\n' "${KEEP_IMAGES:-3}"
+            printf 'export REGISTRY_PROXY_BIND=%q\n' "${REGISTRY_PROXY_BIND:-}"
+            printf 'export KEEP_IMAGES=%q\n' "${KEEP_IMAGES:-}"
             printf 'export DATABASE_URL=%q\n' "${DATABASE_URL:-}"
             printf 'export DB_PASSWORD=%q\n' "${DB_PASSWORD:-}"
             printf 'export SECRET_KEY=%q\n' "${SECRET_KEY:-}"
             printf 'export JWT_SECRET_KEY=%q\n' "${JWT_SECRET_KEY:-}"
             printf 'export AUTH_COOKIE_DOMAIN=%q\n' "${AUTH_COOKIE_DOMAIN:-}"
-            # 证书策略与 ACME 邮箱：**必须在这里写出**，否则远端 .env 里没有它们，
-            # compose 回落到 auto，testing 会去申请公共证书（2026-10-22 两次冒烟实测）。
-            printf 'export TLS_MODE=%q\n' "${TLS_MODE:-auto}"
+            printf 'export TLS_MODE=%q\n' "${TLS_MODE:-}"
             printf 'export CADDY_ACME_EMAIL=%q\n' "${CADDY_ACME_EMAIL:-}"
             printf 'export ADMIN_DEFAULT_PASSWORD=%q\n' "${ADMIN_DEFAULT_PASSWORD:-}"
             printf 'export TUTOR_DEFAULT_PASSWORD=%q\n' "${TUTOR_DEFAULT_PASSWORD:-}"
             printf 'export STUDENT_DEFAULT_PASSWORD=%q\n' "${STUDENT_DEFAULT_PASSWORD:-}"
             printf 'export SMTP_HOST=%q\n' "${SMTP_HOST:-}"
-            printf 'export SMTP_USERNAME=%q\n' "${SMTP_USERNAME:-${SMTP_FROM:-}}"
+            printf 'export SMTP_USERNAME=%q\n' "${SMTP_USERNAME:-}"
             printf 'export SMTP_PASSWORD=%q\n' "${SMTP_PASSWORD:-}"
             printf 'export SMTP_FROM=%q\n' "${SMTP_FROM:-}"
             printf 'export TENCENT_SMS_SECRET_ID=%q\n' "${TENCENT_SMS_SECRET_ID:-}"
@@ -691,10 +689,8 @@ jobs:
             printf 'export WECHAT_OPEN_PLATFORM_APP_ID=%q\n' "${WECHAT_OPEN_PLATFORM_APP_ID:-}"
             printf 'export WECHAT_OPEN_PLATFORM_APP_SECRET=%q\n' "${WECHAT_OPEN_PLATFORM_APP_SECRET:-}"
             printf 'export CORS_ORIGINS=%q\n' "${CORS_ORIGINS:-}"
-            printf 'export COMPOSE_FILE=%q\n' "${COMPOSE_FILE:-deploy/docker-compose.prod.yml}"
-            printf 'export SKIP_MIGRATION=%q\n' "${SKIP_MIGRATION:-false}"
-            # TRUSTED_PROXIES / STORAGE_DRIVER
-            # 的默认值由 deploy/env.defaults 提供（上面 source），此处不再自写。
+            printf 'export COMPOSE_FILE=%q\n' "${COMPOSE_FILE:-}"
+            printf 'export SKIP_MIGRATION=%q\n' "${SKIP_MIGRATION:-}"
             printf 'export R2_ENDPOINT=%q\n' "${R2_ENDPOINT:-}"
             printf 'export R2_ACCOUNT_ID=%q\n' "${R2_ACCOUNT_ID:-}"
             printf 'export R2_ACCESS_KEY_ID=%q\n' "${R2_ACCESS_KEY_ID:-}"
@@ -702,8 +698,6 @@ jobs:
             printf 'export R2_BUCKET=%q\n' "${R2_BUCKET:-}"
             printf 'export R2_PUBLIC_DOMAIN=%q\n' "${R2_PUBLIC_DOMAIN:-}"
             printf 'export EDGE_ORIGIN_TOKEN=%q\n' "${EDGE_ORIGIN_TOKEN:-}"
-            # 外部诊断助手 v2（票 2237）：DIAGNOSIS_V2_OSS_BASE 由 deploy/env.defaults 提供默认值
-            # （上面 source 过），这里只补两个「默认必须为空」的——基址与 Key。
             printf 'export DIAGNOSIS_ASSISTANT_URL=%q\n' "${DIAGNOSIS_ASSISTANT_URL:-}"
             printf 'export DIAGNOSIS_V2_API_KEY=%q\n' "${DIAGNOSIS_V2_API_KEY:-}"
             printf 'export SWAGGER_USER=%q\n' "${SWAGGER_USER:-}"
@@ -711,10 +705,8 @@ jobs:
             printf 'export BACKUP_REMOTE_HOST=%q\n' "${BACKUP_REMOTE_HOST:-}"
             printf 'export BACKUP_REMOTE_DIR=%q\n' "${BACKUP_REMOTE_DIR:-}"
             printf 'export BACKUP_REMOTE_KEY=%q\n' "${BACKUP_REMOTE_KEY:-}"
-            # BACKEND_HOST_PORT / PG_VOLUME / UPLOADS_VOLUME / REPORTS_VOLUME
-            # 同样来自 deploy/env.defaults。
-            printf 'export SKIP_BACKUP=%q\n' "${SKIP_BACKUP:-false}"
-            printf 'export FORCE_DATA_SERVICES=%q\n' "${FORCE_DATA_SERVICES:-false}"
+            printf 'export SKIP_BACKUP=%q\n' "${SKIP_BACKUP:-}"
+            printf 'export FORCE_DATA_SERVICES=%q\n' "${FORCE_DATA_SERVICES:-}"
             printf 'export COMPOSE_PROFILES=%q\n' "${COMPOSE_PROFILES:-}"
             printf 'export HEALTH_CHECK_RETRIES=%q\n' "${HEALTH_CHECK_RETRIES:-20}"
             # 整体超时必须写进远程 env 文件：job env 不会自动传进 ssh 远端 shell
