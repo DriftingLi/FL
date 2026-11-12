@@ -1,6 +1,6 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <app-nav-bar title="个人动态">
+        <app-nav-bar title="个人动态" @left-click="onBack">
             <template #right>
                 <view class="settings-btn" @click="onSettings">
                     <text class="settings-icon">⚙</text>
@@ -290,6 +290,12 @@
     }
 
     // ---- 事件处理 ----
+    /** 返回（#2442）：本页由 forum 头像 navigateTo 压栈，是二级页面 —— 页头默认渲染返回箭头，
+     *  此前没接 @left-click ⇒ 箭头点了没反应（死按钮）。二级页面必须给出可用返回。 */
+    function onBack() : void {
+        uni.navigateBack()
+    }
+
     function onSettings() : void {
         uni.navigateTo({ url: '/pages/profile/settings' })
     }

@@ -73,6 +73,8 @@ function loadAi(raw, opt = {}) {
     AI_REQUEST_TIMEOUT: 60000,
     STORAGE_KEY_TOKEN: 'auth_token',
     getStorage: () => 'access-token',
+    createSseParser: loadUts(path.join(__dirname, '..', 'utils', 'sseIncrementalParser.uts'), {}).createSseParser,
+    decodeUtf8: loadUts(path.join(__dirname, '..', 'utils', 'sseIncrementalParser.uts'), {}).decodeUtf8,
   });
   return { mod };
 }

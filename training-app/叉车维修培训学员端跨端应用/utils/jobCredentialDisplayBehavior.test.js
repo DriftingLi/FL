@@ -102,6 +102,51 @@ describe('buildCredentialFilterOptions：筛选栏「证件」组选项', () => 
   });
 });
 
+describe('collectRequiredCredentials：筛选组只收当前职位实际要求的证件（#2422）', () => {
+  const { collectRequiredCredentials } = display();
+
+  /** 造一条职位：筛选组只关心它的 required_credentials */
+  const job = (creds) => ({ required_credentials: creds });
+
+  it('没有任何职位要求证件 ⇒ 空数组（筛选组只剩「全部证件」，整行不渲染）', () => {
+    expect(collectRequiredCredentials([])).toEqual([]);
+    expect(collectRequiredCredentials([job([]), job([])])).toEqual([]);
+  });
+
+  it('按职位顺序 + 职位内顺序拍平（筛选组顺序可预期，不是字典顺序）', () => {
+    const out = collectRequiredCredentials([
+      job([cred(9, '乙证')]),
+      job([cred(3, '甲证'), cred(5, '丙证')]),
+    ]);
+    expect(out.map(o => o.credential_id)).toEqual([9, 3, 5]);
+  });
+
+  it('跨职位按 id 去重，名称以首次出现为准', () => {
+    const out = collectRequiredCredentials([
+      job([cred(3, '甲证')]),
+      job([cred(3, '甲证的别名'), cred(7, '丁证')]),
+    ]);
+    expect(out).toEqual([{ credential_id: 3, name: '甲证' }, { credential_id: 7, name: '丁证' }]);
+  });
+
+  it('非法 id（<= 0）被剔除（0 是「全部证件」的保留位）', () => {
+    const out = collectRequiredCredentials([
+      job([cred(0, '全部证件'), cred(-2, '坏数据'), cred(4, '丁证')]),
+    ]);
+    expect(out.map(o => o.credential_id)).toEqual([4]);
+  });
+
+  it('名称为空的条目不进筛选组（否则组里出现一个点不动的空标签）', () => {
+    const out = collectRequiredCredentials([job([cred(3, ''), cred(4, '   '), cred(5, '丙证')])]);
+    expect(out.map(o => o.credential_id)).toEqual([5]);
+  });
+
+  it('同一职位内重复 id 只出一次', () => {
+    const out = collectRequiredCredentials([job([cred(3, '甲证'), cred(3, '甲证')])]);
+    expect(out.map(o => o.credential_id)).toEqual([3]);
+  });
+});
+
 describe('成对取证（必红）：上面那些判据在真实坏实现上确实会红', () => {
   /** 读真源 → 注入变异 → 落临时目录（锚点必须命中：变异没进去就等于没测） */
   const mutatedCopy = (replacements) => {
@@ -143,6 +188,17 @@ describe('成对取证（必红）：上面那些判据在真实坏实现上确�
     ]]);
     expect(broken.credentialFilterParam(0)).toBe(0);
     expect(broken.credentialFilterParam(0)).not.toBe(display().credentialFilterParam(0));
+  });
+
+  it('坏实现④：聚合不去重 ⇒ 同一证件在筛选组里出现两次，判据必红', () => {
+    const broken = mutatedCopy([[
+      'if (seen.indexOf(c.credential_id) >= 0) continue',
+      'if (false) continue',
+    ]]);
+    const dup = [{ required_credentials: [cred(3, '甲证'), cred(3, '甲证')] }];
+    expect(broken.collectRequiredCredentials(dup).length).toBe(2);
+    expect(broken.collectRequiredCredentials(dup).length)
+      .not.toBe(display().collectRequiredCredentials(dup).length);
   });
 });
 

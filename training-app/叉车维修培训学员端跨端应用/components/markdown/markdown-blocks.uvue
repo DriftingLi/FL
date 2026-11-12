@@ -15,8 +15,8 @@
          **块的序号**（不是图集下标）。需要按位置换算预览起点的面（AI 气泡）自己换算，其余面只取 `url`。
 
          行内文字走哪条轴由 `inlineAxis` 决定（#2353 决议 D5 的接口：`plain` 由 #2355 落、`forum` 由 #2356 落）——
-           · `none`（缺省）⇒ 直出 `block.text`：章节 / AI 两面的子集不声明 `inline`，解析器已把记号剥净，再分词就是第二套规则；
-           · `plain` ⇒ 经 `splitInlineRuns` 切（内容精选面）；
+           · `none`（缺省）⇒ 直出 `block.text`：章节面的子集不声明 `inline`，解析器已把记号剥净，再分词就是第二套规则；
+           · `plain` ⇒ 经 `splitInlineRuns` 切（内容精选面 / AI 气泡面，#2366）；
            · `forum` ⇒ 经 `utils/forumBody.forumInlineRuns`（**格式轴**，不直引分词器实现）切（论坛面）。
          run 的**字号与字色从所在块的 tier 取**，本文件没有第二份 run 字号表（`.md-run-*` 只带样式位，
          唯一的字号例外是行内码的 `$md-size-code-inline`）—— 这是「同一段文字换面同貌」在行内轴上的落点。
@@ -60,11 +60,13 @@
             <!-- 图片（点击向页面 emit，previewImage 仍留在页面壳层） -->
             <image v-else-if="cap('image') && block.type == 'image'" class="md-image" :src="block.text" mode="widthFix"
                 @click="onImageTap(idx, block.text)"></image>
-            <!-- 表格（ADR-0046：章节正文渲染成表格；解析器按行出块，表头行 level=1；行间归零由 mt-0 档承担） -->
+            <!-- 表格（ADR-0046：章节正文渲染成表格；解析器按行出块，表头行 level=1；行间归零由 mt-0 档承担）
+                 单元格自 #2398 起走 runs（移动端 ADR 0061）：声明 inline 的档里单元格存的是行内源串，
+                 直出会把 `**粗**` 原样吐出来。字号另立 `.md-sz-table`（26rpx），不跟正文档 30rpx。 -->
             <view v-else-if="cap('table') && block.type == 'table'" class="md-table-row">
                 <view v-for="(cell, ci) in block.items" :key="ci"
                     :class="{ 'md-table-cell': true, 'md-table-cell-first': ci == 0, 'md-table-cell-head': block.level == 1 }">
-                    <text :class="{ 'md-table-cell-text': true, 'md-table-cell-text-head': block.level == 1 }">{{ cell }}</text>
+                    <text :class="{ 'md-table-cell-text': true, 'md-table-cell-text-head': block.level == 1 }"><text v-for="(run, ri) in runsOf(cell)" :key="ri" :class="tableRunClasses(run, block.level == 1)" @click="onRunTap(run)">{{ runText(run) }}</text><text v-if="!runsOn">{{ cell }}</text></text>
                 </view>
             </view>
         </view>
@@ -97,7 +99,7 @@
         caps : string[]
         /** 块内文字走哪条轴（#2353 决议 D5 的接口）：`none` = 直出 `block.text`；`plain` = `splitInlineRuns`；
          *  `forum` = 经格式轴切。**缺省给 `none`，与 `caps` 必填故意不对称**：`caps` 不传是事故（整面空渲染），
-         *  而本参数不传恰是章节面 / AI 面的真实缺省（这两面子集不声明 `inline`，解析器已把记号剥净）。 */
+         *  而本参数不传恰是章节面的真实缺省（该面子集不声明 `inline`，解析器已把记号剥净）。 */
         inlineAxis? : string
     }>(), {
         blocks: () => [] as MarkdownBlock[],
@@ -118,8 +120,10 @@
         return false
     }
 
-    /** 字号档令牌 → 类名。令牌只有 `markdownTiers` 产出的那九种，其余一律折到正文档（与纯函数同口径） */
+    /** 字号档令牌 → 类名。令牌只有 `markdownTiers` 产出的那十种，其余一律折到正文档（与纯函数同口径） */
     const sizeClassOf = (tier : string) : string => {
+        // 强调段落（#2399）：字号仍取正文档，字重由 `md-emph` 另叠 —— 分开两件事是「不改字号」的前提
+        if (tier == 'bodyEmph') return 'md-sz-body'
         if (tier == 'h1') return 'md-sz-h1'
         if (tier == 'h2') return 'md-sz-h2'
         if (tier == 'h3') return 'md-sz-h3'
@@ -137,10 +141,14 @@
         return cls
     }
 
-    /** 块内文字的类：基线类 + 该块的字号档 */
+    /** 块内文字的类：基线类 + 该块的字号档（字号档是 `bodyEmph` 时再叠一档字重，#2399） */
     const blockClasses = (idx : number, base : string) : string[] => {
         const cls : string[] = [base]
-        if (idx < tiers.value.length) cls.push(sizeClassOf(tiers.value[idx].size))
+        if (idx < tiers.value.length) {
+            const tier : string = tiers.value[idx].size
+            cls.push(sizeClassOf(tier))
+            if (tier == 'bodyEmph') cls.push('md-emph')
+        }
         return cls
     }
 
@@ -150,7 +158,7 @@
     /**
      * 一段块内源串 → run 序列。轴关时返回**空数组**（模板里 `v-if="!runsOn"` 的直出接住它）。
      *
-     * 为什么轴关时不分词：`none` 轴的面（章节 / AI）子集不声明 `inline`，解析器已把记号剥成纯文本，
+     * 为什么轴关时不分词：`none` 轴的面（章节）子集不声明 `inline`，解析器已把记号剥成纯文本，
      * 再跑一遍分词器就是用第二套规则重新解释已归一的内容 —— 那是能力面变化，不是本组件该做的事。
      */
     const runsOf = (src : string) : MarkdownInlineRun[] => {
@@ -183,7 +191,25 @@
         const cls : string[] = []
         const tier : string = idx < tiers.value.length ? tiers.value[idx].size : 'body'
         cls.push(sizeClassOf(tier))
+        if (tier == 'bodyEmph') cls.push('md-emph')
         cls.push(runColorClassOf(tier))
+        if (run.bold) cls.push('md-run-b')
+        if (run.italic) cls.push('md-run-i')
+        if (run.strike) cls.push('md-run-s')
+        if (run.code) cls.push('md-run-c')
+        if (run.link.length > 0) cls.push('md-run-l')
+        return cls
+    }
+
+    /**
+     * 表内 run 的类（#2398）：字号**恒取表格档** `.md-sz-table`（26rpx），不取所在块的 tier ——
+     * 表格块的 tier 是正文档（`markdownTypography` 把 table 归 body），照 tier 走会把表内文字
+     * 从 26rpx 顶到 30rpx，等于顺手改了表格刻度。表头另叠 `.md-run-table-head`（加粗 + 深色），
+     * 因为父 `.md-table-cell-text-head` 的样式带不到子 `<text>`（ADR-0025 C1）。
+     */
+    const tableRunClasses = (run : MarkdownInlineRun, isHead : boolean) : string[] => {
+        const cls : string[] = ['md-sz-table']
+        cls.push(isHead ? 'md-run-table-head' : 'md-run-text')
         if (run.bold) cls.push('md-run-b')
         if (run.italic) cls.push('md-run-i')
         if (run.strike) cls.push('md-run-s')
@@ -279,6 +305,12 @@
     .md-sz-body {
         font-size: $md-size-body;
         line-height: $md-line-body;
+    }
+
+    /* 强调段落（#2399）：只叠字重 —— 字号 / 行高 / 字色全沿用正文档（令牌来自 `markdownTypography` 的 bodyEmph）。
+       这是**显示层的强调**，不是语法层的标题：块类型仍是段落，`#` 的语义与块数组文本都没动。 */
+    .md-emph {
+        font-weight: $md-weight-heading;
     }
 
     .md-sz-quote {
@@ -459,6 +491,19 @@
     }
 
     .md-table-cell-text-head {
+        font-weight: $md-weight-heading;
+        color: $md-color-heading;
+    }
+
+    /* 表内 run 的字号档（#2398）：表格是 26rpx 档，与正文档 30rpx 不同 —— 保留表格刻度，
+       不把表内文字顶到正文档档位。子 text 不继承父样式（ADR-0025 C1）⇒ 必须自带。 */
+    .md-sz-table {
+        font-size: $md-table-size;
+        line-height: $md-table-line;
+    }
+
+    /* 表头 run：与 .md-table-cell-text-head 同口径（runs 轴上父类带不到子 text） */
+    .md-run-table-head {
         font-weight: $md-weight-heading;
         color: $md-color-heading;
     }

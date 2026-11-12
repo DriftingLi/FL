@@ -5,6 +5,12 @@
 
 本项目使用 uni-app-x (uvue 模式) 编译到 Android/iOS 原生端。uvue 的 CSS 引擎是**原生渲染器**，仅支持 CSS 属性的子集，与 Web CSS 有显著差异。编写 `.uvue` 文件的 `<style>` 时必须遵守：
 
+## 布局默认值（与 Web 不同）
+
+`<view>` 默认 `display: flex; flex-direction: column`。官方口径：「uni-app x 编译到 web 和小程序时，默认的布局也重置为了 flex，且默认为竖向，即 flex-direction: column;」（[uni-app x 的 CSS](https://doc.dcloud.net.cn/uni-app-x/css/)）。
+
+⇒ **横排必须显式写 `flex-direction: row`**；默认 `column` 下 `justify-content` 管的是**垂直**方向，想让内容贴右缘得先有 row。现成反例：`app-nav-bar` 的 `.nav-bar-right`（`rightIcons` 分支）在 #2410 之前没有 row，2 个以上图标竖排。
+
 ## 必须使用 `<style lang="scss">`
 
 `.uvue` 文件的 `<style>` 块**必须**声明 `lang="scss"`，否则 SCSS 变量不会被预处理，直接传递给 uvue CSS 引擎会报错。

@@ -60,4 +60,7 @@
     .region-text { font-size: 26rpx; color: $text-color; }
     .region-arrow { font-size: 20rpx; color: $text-color-placeholder; margin-left: 8rpx; }
     .safe-bottom { height: 34rpx; }
+    /* 页头右槽搜索入口（#2442）：此前全仓无样式定义 ⇒ 命中区只有字形高。
+       44rpx 字形 + 上下各 22rpx = 88rpx，触摸目标 44×44。 */
+    .nav-icon { font-size: 44rpx; padding: 22rpx 12rpx; }
 </style>

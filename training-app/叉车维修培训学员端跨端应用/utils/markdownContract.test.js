@@ -53,8 +53,8 @@ const MEMBER_INLINE = 'inline';
 const SUBSET_MEMBERS_CHAPTER = [MEMBER_HEADING, MEMBER_LIST, MEMBER_QUOTE, MEMBER_CODE, MEMBER_DIVIDER, MEMBER_IMAGE, MEMBER_TABLE];
 const SUBSET_MEMBERS_FEATURED = [MEMBER_HEADING, MEMBER_LIST, MEMBER_QUOTE, MEMBER_CODE, MEMBER_DIVIDER, MEMBER_IMAGE, MEMBER_INLINE];
 const SUBSET_MEMBERS_FORUM = [MEMBER_HEADING, MEMBER_LIST, MEMBER_QUOTE, MEMBER_CODE, MEMBER_DIVIDER, MEMBER_INLINE];
-/** 移动端 ADR 0056 第四档：论坛档的文本面 + image、- inline */
-const SUBSET_MEMBERS_AI_ANSWER = [MEMBER_HEADING, MEMBER_LIST, MEMBER_QUOTE, MEMBER_CODE, MEMBER_DIVIDER, MEMBER_IMAGE];
+/** 移动端 ADR 0056 第四档：论坛档的文本面 + image；2026-11-09 #2366 起也声明 inline（与真源同步） */
+const SUBSET_MEMBERS_AI_ANSWER = [MEMBER_HEADING, MEMBER_LIST, MEMBER_QUOTE, MEMBER_CODE, MEMBER_DIVIDER, MEMBER_IMAGE, MEMBER_TABLE, MEMBER_INLINE];
 /** 镜像 `subsetMembers`：未知档位退到章节档（与 parseMarkdown 的缺省档同向） */
 function subsetMembers(subset) {
   if (subset === SUBSET_FEATURED) return SUBSET_MEMBERS_FEATURED;
@@ -561,6 +561,11 @@ describe('页面级契约：章节面渲染表格、内容精选面走交集', (
     expect(chapterMd).toContain('v-for="(cell, ci) in block.items"');
     expect(chapterMd).toContain("'md-table-cell-head': block.level == 1");
     expect(chapterMd).toContain('.md-table-cell-head');
+    // #2398：单元格改走 runs（表内 `**粗**` / 行内码生效，AC④），字号另立 `.md-sz-table` ——
+    // 不跟正文档 30rpx，否则「保留表格刻度」这条裁定会被顺手推翻。
+    expect(chapterMd).toContain('runsOf(cell)');
+    expect(chapterMd).toContain('.md-sz-table');
+    expect(chapterMd).toContain('.md-run-table-head');
     // 表格行必须归零块间距，否则同一张表会被拆成一格一格的横条。
     // #2353 起这条从「源码里有一行 margin-bottom: 0」升级成**三条钉值断言**：间距模型换成
     // margin-top-only 后，「表内续行」由 `mt-0` 令牌表达（`markdownTiers` 的第 7 行优先序），
@@ -611,15 +616,16 @@ describe('页面级契约：章节面渲染表格、内容精选面走交集', (
   /**
    * #2355 决议 D1/D3 的公共件侧接线组：轴有三档、缺省 `none`、链接只交回壳层。
    *
-   * `none` 的缺省值本身就是一条**回归保险**：章节面与 AI 气泡都不传这个 prop，
-   * 它们的行为必须逐字不变（章节子集不声明 `inline`，整段直出才是对的）。
+   * `none` 的缺省值本身就是一条**回归保险**：章节面不传这个 prop，
+   * 它的行为必须逐字不变（章节子集不声明 `inline`，整段直出才是对的）。
+   * AI 气泡自 #2366 起传 `plain`（同一组里断言），不再吃这个缺省。
    */
   it('公共件：inlineAxis 三档 + 缺省 none + linkClick 只交回壳层', () => {
     const src = read('components/markdown/markdown-blocks.uvue');
     for (const a of ["const AXIS_NONE : string = 'none'", "const AXIS_PLAIN : string = 'plain'", "const AXIS_FORUM : string = 'forum'"]) {
       expect(src).toContain(a);
     }
-    // 缺省 = none：不传这条 prop 的壳件（章节 / AI）行为不变
+    // 缺省 = none：不传这条 prop 的壳件（章节面）行为不变
     expect(src).toContain('inlineAxis? : string');
     // 缺省值必须是**字面量**：defineProps() 被提升到 setup() 之外，引用 setup 内变量是编译期错误
     // （hx:compile-only 实测原话见组件注释），这一条把它钉成不可回退的形状
@@ -722,13 +728,15 @@ describe('页面级契约：章节面渲染表格、内容精选面走交集', (
     // ⚠️ 只在 <template> 段上计数：脚本注释里提到 v-if="!runsOn" 不算「接了一个兜底口」
     const tpl = blocksMd.slice(0, blocksMd.indexOf('</template>'));
     expect(tpl.length).toBeGreaterThan(500);   // 防空集合假绿：切歪了会得到空串
-    // 轴开的四处（标题 / 段落 / 列表项 / 引用）各有一句直出兜底
-    expect((tpl.match(/v-if="!runsOn"/g) || []).length).toBe(4);
+    // 轴开的五处（标题 / 段落 / 列表项 / 引用 / 表格单元格）各有一句直出兜底
+    // （表格单元格自 #2398 起也走 runs，兜底口随之 +1）
+    expect((tpl.match(/v-if="!runsOn"/g) || []).length).toBe(5);
     // 直出口的**总数**也钉住：少了说明某个分支根本没渲染文字，多了说明有人偷偷加了一个旁路
     expect((tpl.match(/\{\{\s*block\.text\s*\}\}/g) || []).length).toBe(4);
     expect((tpl.match(/\{\{\s*item\s*\}\}/g) || []).length).toBe(1);
+    expect((tpl.match(/\{\{\s*cell\s*\}\}/g) || []).length).toBe(1);
     for (const line of tpl.split('\n')) {
-      if (!/\{\{\s*(block\.text|item)\s*\}\}/.test(line)) continue;
+      if (!/\{\{\s*(block\.text|item|cell)\s*\}\}/.test(line)) continue;
       const guarded = line.indexOf('v-if="!runsOn"') >= 0;
       const isCode = line.indexOf("'md-code'") >= 0;
       expect([line.trim().slice(0, 48), guarded || isCode]).toEqual([line.trim().slice(0, 48), true]);
@@ -915,8 +923,10 @@ describe('ADR-0046 / API.md 的移动端登记（本票的口径落点）', () =
     const mdSrc = read('utils/markdown.uts');
     const table = mdSrc.match(/export const SUBSET_MEMBERS_AI_ANSWER : string\[\] = \[([\s\S]*?)\]/);
     expect(table).not.toBe(null);
+    // `inline` 不是块分支（它改块内文字语义，由 `inline-axis="plain"` 表达），不进块 caps 的对账
     const members = (table[1].match(/MEMBER_[A-Z_]+/g) || [])
-      .map((c) => c.replace('MEMBER_', '').toLowerCase());
+      .map((c) => c.replace('MEMBER_', '').toLowerCase())
+      .filter((m) => m !== 'inline');
     expect(members.length).toBeGreaterThan(0);
     // 每一项都要是「声明表成员」或段落地板；一条不满足就是静默消失 / 不可达分支
     for (const c of declared) {
@@ -926,11 +936,13 @@ describe('ADR-0046 / API.md 的移动端登记（本票的口径落点）', () =
     for (const m of members) {
       expect([m, declared.indexOf(m) >= 0]).toEqual([m, true]);
     }
-    // 段落地板恰好一位，且 table 不在（AI 档本来就不声明它）
+    // 段落地板恰好一位；table 自 #2398 起**在**（解析器同批声明，两处缺一处表格块静默消失）
     expect(declared).toContain('paragraph');
-    expect(declared).not.toContain('table');
-    // 七位：六个声明档 + paragraph
+    expect(declared).toContain('table');
+    // 八位：七个块声明档 + paragraph（inline 走轴、不占 caps 位）
     expect(declared.length).toBe(members.length + 1);
+    // 行内轴必须真的接上：漏传 ⇒ 声明了 inline 却按直出渲染，`**粗**` 原样上屏
+    expect(read('components/ai-chat/ai-chat-bubble.uvue')).toContain('inline-axis="plain"');
   });
 
   /**

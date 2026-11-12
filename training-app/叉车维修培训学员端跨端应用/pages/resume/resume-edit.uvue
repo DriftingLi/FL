@@ -229,6 +229,14 @@
     }
 
     /* ===== 顶栏 ===== */
+
+    /* 页头右槽「保存」（#2442）：此前全仓无样式定义 ⇒ 命中区只有文字高。
+       28rpx 字号 + 上下各 30rpx = 88rpx，触摸目标 44×44。 */
+    .nav-save {
+        font-size: 28rpx;
+        color: $primary-color;
+        padding: 30rpx 12rpx;
+    }
     .body {
         flex: 1;
         height: 0;

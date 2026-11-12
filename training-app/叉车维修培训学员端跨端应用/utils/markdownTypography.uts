@@ -16,6 +16,11 @@
  * 每项只有两个字符串字段。给自定义类型加「数组字段」会被 UTS 在编译期改名
  * （`utils/markdown.uts:11-17` 的 kotlinc 60 条 unresolved reference / 根 ADR-0046 决定 6）。
  *
+ * **强调段落（#2399）**：`bodyEmph` 是**字重档**的令牌，不是第二套字号 —— 字号仍归 `body`，
+ * 渲染侧把它折到 `md-sz-body` 再叠一档字重（值同样只在 `$md-*` 段、仍守 D1）。判定本身是
+ * 纯函数，落在 `utils/markdownEmphasis.uts`（行首序号 + 无句末标点 + 不超过一行，三条同时满足；
+ * 宁可漏不可滥）。它改的是**呈现**，不是语法层标题：不产生 `heading` 块、不动块数组的逐字文本。
+ *
  * **间距优先序**（#2352 决议 D3「首块与标题优先」，自上而下先命中先返回）：
  *
  *   1. 本块是首块（即使它就是分隔线）       → `mt-0`
@@ -24,15 +29,18 @@
  *   4. 本块是分隔线                         → `mt-16`
  *   5. 前一块是分隔线（含上一条命中的情形） → `mt-16`
  *   6. 前一块是标题                         → `mt-16`
- *   7. 本块是 `table` 行，且前一块也是 `table` 行 → `mt-0`
- *   8. 其余                                 → `mt-24`
+ *   7. 本块是**强调段落**（行首短的序号行，#2399）→ `mt-40`
+ *   8. 本块是 `table` 行，且前一块也是 `table` 行 → `mt-0`
+ *   9. 其余                                 → `mt-24`
  *
  * 三条容易写错的：
  * - **第 3 行压过第 5 行**：标题紧跟分隔线取 `mt-40`。标题的 40 是「这一节的呼吸」，
  *   让给分隔线的 16 会把节头压扁（D3 选 A 而非 B 的那一格）。
- * - **第 7 行排在四态之后**：一张表的**第一行**仍取四态值（紧跟标题就是 16、否则 24），
+ * - **第 8 行排在四态之后**：一张表的**第一行**仍取四态值（紧跟标题就是 16、否则 24），
  *   只有「表内续行」归零 —— 否则同一张表会被切开（根 ADR-0046 的归零口径）。
  * - **分隔线合计 32 不靠叠加**：自身 16 + 后继块 16（margin-top-only 模型、`margin-bottom` 恒 0）。
+ * - **第 7 行排在标题 / 分隔线之后**（#2399）：强调段落借的是标题的段前呼吸，但它不是结构 ——
+ *   紧跟标题仍取 `mt-16`、首块仍取 `mt-0`，只有「前后都是普通块」时才拉开 `mt-40`。
  *
  * **已知边界（本轮不做，别在这里补）**：`table` / `image` 的**排版特性**（表格窄屏怎么读、
  * 图片与图注）属地图 #2334 划出的 Out of scope ⇒ 这里只把它们折到 `body` + 常规间距，
@@ -42,6 +50,7 @@
  * @note 不依赖 DOM API，跨端通用（App / 小程序 / H5）
  */
 import type { MarkdownBlock } from '../types/index'
+import { isEmphasisParagraph } from './markdownEmphasis'
 
 /** 一块的阅读档位：字号档 + 间距档（两个**令牌**，不含数值） */
 export type MarkdownTier = {
@@ -64,6 +73,8 @@ const SIZE_H2 : string = 'h2'
 const SIZE_H3 : string = 'h3'
 const SIZE_H4 : string = 'h4'
 const SIZE_BODY : string = 'body'
+/** 强调段落的字号档（#2399）：**字号仍走正文档**，这一档只让渲染侧叠字重（见文件头 D2 的例外说明） */
+const SIZE_BODY_EMPH : string = 'bodyEmph'
 const SIZE_QUOTE : string = 'quote'
 const SIZE_CODE : string = 'code'
 const SIZE_LIST_TEXT : string = 'listText'
@@ -76,6 +87,8 @@ const TYPE_CODE : string = 'code'
 const TYPE_LIST : string = 'list'
 const TYPE_DIVIDER : string = 'divider'
 const TYPE_TABLE : string = 'table'
+/** 段落（正文块）：唯一一个会读 `text` 的块类型（#2399 弱强调判定） */
+const TYPE_PARAGRAPH : string = 'paragraph'
 
 /**
  * 字号档：只由 `type` + `level` 派生。
@@ -95,12 +108,14 @@ function sizeTierOf(block : MarkdownBlock) : string {
 	if (block.type == TYPE_CODE) return SIZE_CODE
 	if (block.type == TYPE_LIST) return SIZE_LIST_TEXT
 	if (block.type == TYPE_DIVIDER) return SIZE_DIVIDER
+	// 段落「弱强调」（#2399）：只换字重档，字号仍由渲染侧折到 md-sz-body（不改字号是票面 AC ③）
+	if (block.type == TYPE_PARAGRAPH && isEmphasisParagraph(block.text)) return SIZE_BODY_EMPH
 	// paragraph / table / image / 未知类型：一律正文档（表格与图片的排版不在本轮）
 	return SIZE_BODY
 }
 
 /**
- * 间距档：按上面的八行优先序判。`index` 决定「是不是首块」，`prevType` 给前一块的类型
+ * 间距档：按上面的九行优先序判。`index` 决定「是不是首块」，`prevType` 给前一块的类型
  * （首块传空串，不用可空类型 —— UTS 侧少一层判空）。
  */
 function spaceTierOf(block : MarkdownBlock, prevType : string, index : number) : string {
@@ -112,6 +127,8 @@ function spaceTierOf(block : MarkdownBlock, prevType : string, index : number) :
 	if (block.type == TYPE_DIVIDER) return SPACE_TIGHT
 	if (prevType == TYPE_DIVIDER) return SPACE_TIGHT
 	if (prevIsHeading) return SPACE_TIGHT
+	// 强调段落（#2399）：段前距借标题档，但排在标题 / 分隔线之后判 —— 首块仍 mt-0、紧跟标题仍 mt-16
+	if (block.type == TYPE_PARAGRAPH && isEmphasisParagraph(block.text)) return SPACE_SECTION
 	if (block.type == TYPE_TABLE && prevType == TYPE_TABLE) return SPACE_NONE
 	return SPACE_BLOCK
 }
@@ -120,8 +137,9 @@ function spaceTierOf(block : MarkdownBlock, prevType : string, index : number) :
  * 排版解析器：块数组 → 每块的档位与间距档（与输入 **1:1 对齐**，顺序不变）。
  *
  * @param blocks 既有解析器（`parseMarkdown`）产出的块数组；空数组 ⇒ 空数组
- * @returns 每块一个 {@link MarkdownTier}；只读 `type` / `level` 与前一块的 `type`，
- *          不读 `text` / `items`，不碰组件实例、不读样式
+ * @returns 每块一个 {@link MarkdownTier}；读 `type` / `level` / 前一块的 `type`，以及**段落块的
+ *          `text`**（仅交给 {@link isEmphasisParagraph} 判弱强调，#2399）；不读 `items`，
+ *          不碰组件实例、不读样式
  */
 export function markdownTiers(blocks : MarkdownBlock[]) : MarkdownTier[] {
 	const tiers : MarkdownTier[] = []

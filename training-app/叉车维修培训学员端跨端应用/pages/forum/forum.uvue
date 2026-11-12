@@ -1,10 +1,12 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
         <!-- #1608 批5 N05：手写 .status-bar + .header 收口进 app-nav-bar（transparent，页面自垫渐变底）。
-             #1846 收敛：右槽仅留 ✉️（单图标 64rpx 落在典型可用槽宽内），发帖 pill 下沉页内搜索栏右端
-             （胶囊下方、无冲突；落点见下方 res-search-bar）。 -->
+             #1846 收敛：页头只留 ✉️（单图标 64rpx），发帖 pill 下沉页内搜索栏右端
+             （胶囊下方、无冲突；落点见下方 res-search-bar）。
+             #2442：一级页面（无返回）的单个自定义操作按规范放**左槽**，标题仍在可用空间居中 ——
+             右侧整段留给微信胶囊，不必再为让位牺牲标题宽度。 -->
         <app-nav-bar transparent :left-icon="''" title="学员论坛">
-            <template #right>
+            <template #left>
                 <view class="msg-icon-wrap" @click="onMsgClick">
                     <text class="msg-icon">✉️</text>
                     <view v-if="unreadCount > 0" class="msg-badge">

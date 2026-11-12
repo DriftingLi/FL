@@ -49,7 +49,6 @@ if _deploy_dir not in sys.path:
     sys.path.insert(0, _deploy_dir)
 from release_transaction import ReleaseTransaction, build_release_plan
 from effective_config import EffectiveConfig, parse_env_text
-
 RED = "\033[0;31m"
 GREEN = "\033[0;32m"
 YELLOW = "\033[1;33m"
