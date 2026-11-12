@@ -211,7 +211,7 @@
 - 高度：`88rpx`（**不含状态栏**；开启 `showToolbar` 时再加一行 `88rpx`，见「多动作落点」）
 - 状态栏占位：由本件内部按 `useSafeArea()` 取值渲染，**页面不再自带 `<view class="status-bar">`**
 - 右侧按钮区：右边界**不得越过微信胶囊左边界**（`getMenuButtonBoundingClientRect().left` − 安全间距），也不得写死魔数
-- 标题：居中，`$font-size-xl`（36rpx），font-weight bold；**居中必须脱流**（胶囊让位把右槽撑宽，流内居中必然偏左，#2402 / ADR-0062）
+- 标题：`$font-size-xl`（36rpx），font-weight bold；**一级页（无返回箭头）居中于屏幕中心**，**二级页**（有返回箭头）仍在「左槽右缘 → 右槽左缘」的可用空间内居中（#2479 / ADR-0069）
 - 左侧返回按钮：`‹` 字符，`44rpx`
 - 右侧图标：`44rpx`
 - 背景：随页头套走（§7：N01 `$primary-color` / N02–N03 `$bg-header` / N05 `transparent` 页面自垫 / N06 白名单无页头）
@@ -227,12 +227,20 @@
 ⇒ row / `flex-end` 没生效。
 页头 `paddingTop = statusBarHeight + 88rpx`（开启 `showToolbar` 时 + `88rpx`）。
 
+**居中形态几何**（#2479 / ADR-0069）：一级页两侧槽 `position: absolute` 脱流（左 `left: 24rpx` / 右 `right: 24rpx`，
+包含块 `.nav-bar-body` 需 `position: relative`）⇒ 空右槽不再吃那段让位宽度；标题块流内 `flex: 1`，
+两端各 48rpx **对称留白**（用 `margin` 实现，**不是** `padding` —— `appNavBarCapsuleToolbarContract` 禁数值右向 padding），
+内容盒 [24,726] 内缩到文字带 [72,678] ⇒ 文字中心恒 375rpx（屏宽 750），与侧槽有无内容无关。
+一级页**右槽必须为空**（ADR-0069 决定 4）：右槽有内容会被长标题钻到下面，且 `appNavBarLeftEntryContract` 判红 —— 要加动作先移出页头。
+标题点击一律发 **`titleClick`**（工作台证件切换照此接线）；`#1677` 的「左槽空置时标题代发 `leftClick`」已删除。
+
 **多动作落点**（2026-11-10；触发条件 2026-11-11 由 #2421 扩一档）：右槽放不下、**或**次要动作需与主操作分级的，
 走本件 `showToolbar` + `#toolbar` 的第二行 —— 该行在标题栏**之下**，
 胶囊矩形不进入，可吃满内容盒宽度；默认关闭 ⇒ 不传的页面零 diff。第二行只放**次要动作**，主操作仍留右槽；
 **「分级」也成立**：两个动作在窄槽里挤得下（如 job-detail 的 ♥ + 举报 = 128rpx < 典型槽宽 194rpx），
 但一个是主操作、一个是低频破坏性动作时，仍按本机制下沉 —— 判据是语义层级，不是宽度。
-触发器绑业务状态（job-detail 用 `:show-toolbar="!hasReported"`），别写死 `true`：动作消失后会留下一条空行。
+触发器绑业务状态（job-detail 用 `:show-toolbar="!hasReported"`），别写死 `true`：动作消失后会留下一条空行；
+**常驻**入口不受此限——AI 助手页的 ⋯（右抽屉唯一可见入口）不随状态出现/消失，写死 `true`（#2479 起它自右槽下沉到本行）。
 行高 88rpx 但 `<text>` 自身只有文字高，可点容器需自己撑到 ≥88rpx（先例 job-detail：右槽与第二行共用 `.nav-action` 方块）；
 右槽剩单图标时，盒宽按触摸目标取 88rpx（=44px），别再沿用 64rpx。
 仍禁止页面自建第二份页头（ADR-0035）。工具栏不重复做胶囊让宽，否则可用宽度又退回右槽那一档。

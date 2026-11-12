@@ -138,7 +138,7 @@ describe('批5 特殊页头形态（app-nav-bar 槽位承载）', () => {
     expect(left).not.toBeNull();
     expect(left[1]).toMatch(/msg-icon-wrap[\s\S]*?msg-badge/);
     expect(left[1]).not.toMatch(/create-pill|header-right|发帖/);
-    // #2442：一级页面（无返回）的单个自定义操作放左槽，右槽不再承载它
+    // #2479：一级页标题居中于屏幕中心 ⇒ 右槽一律为空（左槽动作如论坛 ✉️ 原地保留）
     expect(s).not.toMatch(/<template #right>/);
     // 移出页头的入口页内可达（#1846）：搜索栏右端 pill 与搜索栏本体同走 onCreate（触发行为不变）
     // #2445：@click 改挂 88rpx 命中盒 .create-pill-hit（视觉胶囊仍 56rpx）
@@ -146,13 +146,14 @@ describe('批5 特殊页头形态（app-nav-bar 槽位承载）', () => {
     expect(s).toMatch(/class="create-pill-hit"[\s\S]{0,120}?@click="onCreate"/);
   });
 
-  it('dashboard 页头保留证件下拉标题与单图标左槽（#1846 收敛：🔍 移出页头进功能宫格；🛒 移出页头；#2442：一级页面单操作改挂左槽）', () => {
+  it('dashboard 页头只留证件下拉标题（#1846 收敛：🔍 移出页头进功能宫格；🛒 移出页头；#2479：🔔 移出页头、证件切换改挂标题 title-click）', () => {
     const s = read('pages/dashboard/dashboard.uvue');
-    // #2442：铃铛从 right-icons 数组改挂 #left 插槽（一级页面单操作放左侧，标题仍居中）
-    expect(s).not.toMatch(/:right-icons="navRightIcons"/);
-    expect(s).toMatch(/<template #left>[\s\S]*?nav-bell[\s\S]*?@click="onNotificationClick"/);
+    // #2479：一级页标题居中于屏幕中心 ⇒ 页头左右槽都不承载页级动作（🔔 另有论坛 / 个人中心 / 简历三处入口）
+    expect(s).not.toMatch(/:right-icons="/);
+    expect(s).not.toMatch(/nav-bell/);
+    expect(s).not.toMatch(/<template #left>/);
     expect(s).not.toContain("'🛒'");
-    expect(s).toMatch(/<AppNavBar[^>]*@left-click="onCertTap"/);
+    expect(s).toMatch(/<AppNavBar[^>]*@title-click="onCertTap"/);
     // 移出页头的入口页内可达（#1846）：宫格补全局搜索格（静态面与跳转语义另由 dashboardContract / searchContract M2 钉住）
     expect(read('pages/dashboard/components/dashboard-menu-grid.uvue')).toContain("path: '/pages/search/search'");
   });
