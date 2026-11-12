@@ -25,12 +25,12 @@ func (p *ssePort) Complete(string, []*schema.Message, CompleteOptions) (string, 
 	return p.final, nil
 }
 
-func (p *ssePort) Stream(_ context.Context, _ ModelSelector, _ []*schema.Message, onChunk func(string)) (string, *Usage, error) {
+func (p *ssePort) Stream(_ context.Context, _ ModelSelector, _ []*schema.Message, sink StreamSink) (string, *Usage, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	for _, c := range p.chunks {
-		if onChunk != nil {
-			onChunk(c)
+		if sink != nil {
+			sink.OnChunk(c)
 		}
 	}
 	return p.final, nil, nil

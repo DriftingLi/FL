@@ -33,7 +33,7 @@
     }
 </script>
 
-<style>
+<style lang="scss">
     .app-btn {
         flex-direction: row;
         align-items: center;
@@ -92,7 +92,7 @@
 
     /* Text: primary */
     .app-btn-text--primary {
-        color: $text-inverse;
+        color: $text-color-inverse;
         font-weight: bold;
     }
 
@@ -108,7 +108,7 @@
 
     /* Text: ghost */
     .app-btn-text--ghost {
-        color: $text-secondary;
+        color: $text-color-secondary;
     }
 
     /* Text size: large */

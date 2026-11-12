@@ -131,7 +131,7 @@ func (m *meteredAIModel) Complete(featureKey string, msgs []*schema.Message, opt
 // ctx 显式免费声明（内部二次消费）> 注册表对话计费声明（aiFeatureChatBilled 单点）；
 // 计费事实 = 调用方声明的 DTO 层消息列表优先，未声明回退端口消息推导（同一口径函数）；
 // 请求标识与降级键见 aiFallbackRequestID。usage 事件数据面原样回传，形状不变。
-func (m *meteredAIModel) Stream(ctx context.Context, sel ModelSelector, msgs []*schema.Message, onChunk func(string)) (string, *Usage, error) {
+func (m *meteredAIModel) Stream(ctx context.Context, sel ModelSelector, msgs []*schema.Message, sink StreamSink) (string, *Usage, error) {
 	billed := !aiMeterFreeDeclared(ctx) && aiFeatureChatBilled(sel.FeatureKey)
 
 	// 余额预检（迁移前 handler 原位语义）：billed 且已登录才预检，不足即阻断且不发起传输
@@ -141,7 +141,7 @@ func (m *meteredAIModel) Stream(ctx context.Context, sel ModelSelector, msgs []*
 		}
 	}
 
-	content, _, err := m.next.Stream(ctx, sel, msgs, onChunk)
+	content, _, err := m.next.Stream(ctx, sel, msgs, sink)
 	if err != nil {
 		return content, nil, err
 	}

@@ -23,62 +23,10 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
-	"sync"
 
 	"github.com/cloudwego/eino/schema"
 	"go.uber.org/zap"
 )
-
-// ---- ctx 透传通道：来源、过程状态与元数据 ----
-
-// diagnosisSourcesCtxKey ctx 键：诊断响应来源数据容器（可变指针——adapter 与调用方共享）。
-// ModelPort.Stream 返回签名固定 (string, *Usage, error)，sources 属助手专用产物，
-// 不污染通用端口语义——用 box 完成 adapter（写）→ handler（读）的跨层透传，并发安全。
-//
-// v2 的 done 事件不再带来源资料（只有 answer/badges/trace/elapsed），本容器现阶段恒空；
-// 保留它是因为历史行仍按 ADR-0033 回放来源。
-type diagnosisSourcesCtxKey struct{}
-
-type diagnosisSourcesBox struct {
-	mu      sync.Mutex
-	sources []DiagnosisSource
-}
-
-// WithDiagnosisSources 初始化来源容器（handler 在调 port 前注入；service 透传同一 ctx）。
-func WithDiagnosisSources(ctx context.Context) context.Context {
-	return context.WithValue(ctx, diagnosisSourcesCtxKey{}, &diagnosisSourcesBox{})
-}
-
-// DiagnosisSourcesFrom 读取诊断来源（无容器/未写入时返回空切片）。
-func DiagnosisSourcesFrom(ctx context.Context) []DiagnosisSource {
-	b, _ := ctx.Value(diagnosisSourcesCtxKey{}).(*diagnosisSourcesBox)
-	if b == nil {
-		return nil
-	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return append([]DiagnosisSource(nil), b.sources...)
-}
-
-// diagnosisStatusCtxKey ctx 键：上游 status 事件的下沉通道（「正在检索维修知识库…」这类过程文案）。
-// v2 在首个 delta 之前会先发 status，正好填住我方 8~15 秒只有加载点的空档。
-//
-// 用回调而不是「最后一条文案」的容器：status 必须**即刻**转给前端，等 Stream 返回再读，
-// 那时 delta 早已开始、文案没有意义了（票 2245 决策 5）。
-type diagnosisStatusCtxKey struct{}
-
-// WithDiagnosisStatusSink 注册状态下沉回调（handler 注入；sink 为 nil 即丢弃状态）。
-func WithDiagnosisStatusSink(ctx context.Context, sink func(text string)) context.Context {
-	if sink == nil {
-		return ctx
-	}
-	return context.WithValue(ctx, diagnosisStatusCtxKey{}, sink)
-}
-
-func diagnosisStatusSinkFrom(ctx context.Context) func(string) {
-	sink, _ := ctx.Value(diagnosisStatusCtxKey{}).(func(string))
-	return sink
-}
 
 // DiagnosisBadge 能力徽章（v2 九种固定词表；原样存对方给的三字段，不压成逗号串——
 // 对方自己的回放把 emoji/cls 重建成了空串，是反面教材）。
@@ -93,38 +41,6 @@ type DiagnosisBadge struct {
 type DiagnosisMeta struct {
 	Badges  []DiagnosisBadge `json:"badges,omitempty"`
 	Elapsed float64          `json:"elapsed,omitempty"`
-}
-
-// diagnosisMetaCtxKey ctx 键：元数据透传容器（adapter 写 → handler 发 done 载荷）。
-type diagnosisMetaCtxKey struct{}
-
-type diagnosisMetaBox struct {
-	mu   sync.Mutex
-	meta DiagnosisMeta
-	ok   bool
-}
-
-// WithDiagnosisMeta 初始化元数据容器（handler 注入）。
-func WithDiagnosisMeta(ctx context.Context) context.Context {
-	return context.WithValue(ctx, diagnosisMetaCtxKey{}, &diagnosisMetaBox{})
-}
-
-// DiagnosisMetaFrom 读取元数据（第二返回值为 false 表示本轮没有元数据）。
-func DiagnosisMetaFrom(ctx context.Context) (DiagnosisMeta, bool) {
-	b, _ := ctx.Value(diagnosisMetaCtxKey{}).(*diagnosisMetaBox)
-	if b == nil {
-		return DiagnosisMeta{}, false
-	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.meta, b.ok
-}
-
-func (b *diagnosisMetaBox) set(meta DiagnosisMeta) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.meta = meta
-	b.ok = true
 }
 
 // ---- 助手 API 契约（历史回放仍在用） ----
@@ -218,9 +134,9 @@ func (a *diagnosisAssistantAdapter) Complete(_ string, _ []*schema.Message, _ Co
 	return "", errors.New("智能维修诊断不支持阻塞补全")
 }
 
-// Stream 调 v2 SSE：delta 原样经 onChunk 透传（只为观感），done 的 answer 为权威全文并跑
-// 归一链，badges/elapsed 写入 ctx 元数据容器，status 写入状态容器。
-func (a *diagnosisAssistantAdapter) Stream(ctx context.Context, _ ModelSelector, msgs []*schema.Message, onChunk func(string)) (string, *Usage, error) {
+// Stream 调 v2 SSE：delta 经 sink.OnChunk 透传（只为观感），done 的 answer 为权威全文并跑
+// 归一链，badges/elapsed 经 sink.OnMeta 产出，status 经 sink.OnStatus 产出。
+func (a *diagnosisAssistantAdapter) Stream(ctx context.Context, _ ModelSelector, msgs []*schema.Message, sink StreamSink) (string, *Usage, error) {
 	if a.baseURL == "" || a.apiKey == "" {
 		return "", nil, errors.New("智能维修诊断服务未配置，请联系管理员")
 	}
@@ -230,7 +146,7 @@ func (a *diagnosisAssistantAdapter) Stream(ctx context.Context, _ ModelSelector,
 		return "", nil, err
 	}
 
-	answer, err := a.callSSE(ctx, content, images, onChunk)
+	answer, err := a.callSSE(ctx, content, images, sink)
 	if err != nil {
 		return "", nil, err
 	}
@@ -243,7 +159,7 @@ func (a *diagnosisAssistantAdapter) Stream(ctx context.Context, _ ModelSelector,
 }
 
 // callSSE 发起 v2 流式请求并按帧消费；返回 done 的 answer（权威全文）。
-func (a *diagnosisAssistantAdapter) callSSE(ctx context.Context, content string, images []string, onChunk func(string)) (string, error) {
+func (a *diagnosisAssistantAdapter) callSSE(ctx context.Context, content string, images []string, sink StreamSink) (string, error) {
 	payload, err := json.Marshal(diagnosisChatRequest{Content: content, Images: images})
 	if err != nil {
 		return "", fmt.Errorf("构造诊断请求失败: %w", err)
@@ -272,11 +188,11 @@ func (a *diagnosisAssistantAdapter) callSSE(ctx context.Context, content string,
 		return "", a.statusError(resp)
 	}
 
-	return a.consumeSSE(ctx, resp.Body, onChunk)
+	return a.consumeSSE(ctx, resp.Body, sink)
 }
 
 // consumeSSE 按契约 §1.5 铁律以空行切帧、逐帧读 data: 里的 JSON，按 type 分派。
-func (a *diagnosisAssistantAdapter) consumeSSE(ctx context.Context, body io.Reader, onChunk func(string)) (string, error) {
+func (a *diagnosisAssistantAdapter) consumeSSE(ctx context.Context, body io.Reader, sink StreamSink) (string, error) {
 	scanner := bufio.NewScanner(body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
 
@@ -292,22 +208,20 @@ func (a *diagnosisAssistantAdapter) consumeSSE(ctx context.Context, body io.Read
 		}
 		switch ev.Type {
 		case "status":
-			if sink := diagnosisStatusSinkFrom(ctx); sink != nil && ev.Text != "" {
-				sink(ev.Text)
+			if sink != nil && ev.Text != "" {
+				sink.OnStatus(ev.Text)
 			}
 		case "delta":
 			// 只为观感：全文以 done 的 answer 为准，delta 不做归一。
-			if onChunk != nil && ev.Text != "" {
-				onChunk(ev.Text)
+			if sink != nil && ev.Text != "" {
+				sink.OnChunk(ev.Text)
 			}
 		case "ping", "user_saved":
 			// 忽略：心跳与「用户图片已落盘」对学员端无展示价值
 		case "done":
 			answer = ev.Answer
-			if b, _ := ctx.Value(diagnosisMetaCtxKey{}).(*diagnosisMetaBox); b != nil {
-				if len(ev.Badges) > 0 || ev.Elapsed > 0 {
-					b.set(DiagnosisMeta{Badges: ev.Badges, Elapsed: ev.Elapsed})
-				}
+			if sink != nil && (len(ev.Badges) > 0 || ev.Elapsed > 0) {
+				sink.OnMeta(DiagnosisMeta{Badges: ev.Badges, Elapsed: ev.Elapsed})
 			}
 			return true, nil
 		case "error":
@@ -703,9 +617,9 @@ func (r *routingAIModel) Complete(featureKey string, msgs []*schema.Message, opt
 }
 
 // Stream 按注册表 adapter 分发：diagnosis 走外部诊断 RAG，其余走 eino（含未注册键回退路径）。
-func (r *routingAIModel) Stream(ctx context.Context, sel ModelSelector, msgs []*schema.Message, onChunk func(string)) (string, *Usage, error) {
+func (r *routingAIModel) Stream(ctx context.Context, sel ModelSelector, msgs []*schema.Message, sink StreamSink) (string, *Usage, error) {
 	if aiFeatureAdapterOf(sel.FeatureKey) == aiAdapterDiagnosis {
-		return r.diagnosis.Stream(ctx, sel, msgs, onChunk)
+		return r.diagnosis.Stream(ctx, sel, msgs, sink)
 	}
-	return r.normal.Stream(ctx, sel, msgs, onChunk)
+	return r.normal.Stream(ctx, sel, msgs, sink)
 }

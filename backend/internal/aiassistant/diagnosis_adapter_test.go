@@ -95,12 +95,9 @@ func TestDiagnosisAdapterStream_SSEAndMeta(t *testing.T) {
 	server := httptest.NewServer(fake.handler())
 	defer server.Close()
 
-	var statuses, chunks []string
-	ctx := WithDiagnosisMeta(context.Background())
-	ctx = WithDiagnosisStatusSink(ctx, func(text string) { statuses = append(statuses, text) })
-
-	content, usage, err := newDiagnosisForTest(server).Stream(ctx, ModelSelector{FeatureKey: FeatureFaultDiagnosis},
-		msgsSample("叉车无法行驶怎么排查？", 2), func(c string) { chunks = append(chunks, c) })
+	sink := &recordingSink{}
+	content, usage, err := newDiagnosisForTest(server).Stream(context.Background(), ModelSelector{FeatureKey: FeatureFaultDiagnosis},
+		msgsSample("叉车无法行驶怎么排查？", 2), sink)
 	if err != nil {
 		t.Fatalf("Stream 异常: %v", err)
 	}
@@ -110,18 +107,18 @@ func TestDiagnosisAdapterStream_SSEAndMeta(t *testing.T) {
 	if usage != nil {
 		t.Fatalf("诊断适配器不应自行造 usage（闸门在装饰器）: %+v", usage)
 	}
-	if len(statuses) != 1 || !strings.Contains(statuses[0], "正在检索") {
-		t.Fatalf("status 应即刻下沉: %v", statuses)
+	if len(sink.statuses) != 1 || !strings.Contains(sink.statuses[0], "正在检索") {
+		t.Fatalf("status 应即刻下沉: %v", sink.statuses)
 	}
-	if len(chunks) != 2 {
-		t.Fatalf("delta 应逐帧透传（ping 忽略），got %d 块: %v", len(chunks), chunks)
+	if len(sink.chunks) != 2 {
+		t.Fatalf("delta 应逐帧透传（ping 忽略），got %d 块: %v", len(sink.chunks), sink.chunks)
 	}
 
 	// 元数据：徽章三字段原样、elapsed 保留、trace 不收
-	meta, ok := DiagnosisMetaFrom(ctx)
-	if !ok {
-		t.Fatal("done 应写入元数据")
+	if len(sink.metas) == 0 {
+		t.Fatal("done 应产出元数据")
 	}
+	meta := sink.metas[0]
 	if len(meta.Badges) != 1 || meta.Badges[0].Name != "知识检索" || meta.Badges[0].Emoji != "📚" || meta.Badges[0].Cls != "cap-rag" {
 		t.Fatalf("徽章应原样三字段: %+v", meta.Badges)
 	}

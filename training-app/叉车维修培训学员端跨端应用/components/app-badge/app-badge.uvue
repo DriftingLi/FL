@@ -14,7 +14,7 @@
     })
 </script>
 
-<style>
+<style lang="scss">
     .app-badge {
         background-color: $danger-color;
         border-radius: $radius-pill;
@@ -38,7 +38,7 @@
 
     .app-badge-text {
         font-size: $font-size-xs;
-        color: $text-inverse;
+        color: $text-color-inverse;
         font-weight: 600;
     }
 </style>

@@ -48,7 +48,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  GO_VERSION: "1.26.10" # 与 ci.yml 同源（#1623 / #1744）：生产镜像用同一个补丁版
+  GO_VERSION: "1.26.11" # 与 ci.yml 同源（#1623 / #1744）：生产镜像用同一个补丁版
   NODE_VERSION: "24"
   REGISTRY: ghcr.io
   IMAGE_BACKEND: ${{ vars.REGISTRY || 'ghcr.io' }}/${{ github.repository }}-backend
@@ -598,6 +598,7 @@ jobs:
           # /usr/local/bin 里的旧副本仍在盯它，连续 3 次判红并发出了告警邮件。
           tar czf /tmp/deploy-files.tar.gz \
             deploy/deploy.py \
+            deploy/release_transaction.py \
             deploy/docker-compose.prod.yml \
             deploy/env.defaults \
             deploy/forklift-watchdog.sh \
