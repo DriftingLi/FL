@@ -571,6 +571,7 @@ jobs:
           tar czf /tmp/deploy-files.tar.gz \
             deploy/deploy.py \
             deploy/release_transaction.py \
+            deploy/effective_config.py \
             deploy/docker-compose.prod.yml \
             deploy/env.defaults \
             deploy/forklift-watchdog.sh \
