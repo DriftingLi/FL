@@ -316,8 +316,7 @@ class Deployer:
         self.mode = mode
         self.opts = opts
         self.applied: List[str] = []
-        self.previous_backend_image = "unknown"
-        self.previous_frontend_image = "unknown"
+        self.previous_images: Dict[str, str] = {}
         self.backup_error: Optional[str] = None
 
         # 部署根默认 = 本脚本所在仓库/部署目录的父级（远程布局里就是 $DEPLOY_PATH）。
@@ -977,20 +976,19 @@ class Deployer:
 
     # ---------------------------------------------------------------- 备份
     def capture_previous_images(self) -> None:
-        for service, attr in (("backend", "previous_backend_image"), ("frontend", "previous_frontend_image")):
+        """快照所有应用服务的当前镜像（含 libreoffice），回滚才能覆盖全部。"""
+        self.previous_images: Dict[str, str] = {}
+        for service in self.desired_app_images():
             cid = self.compose_ps_id(service, include_stopped=False)
             value = "unknown"
             if cid:
                 cp = self.run(["docker", "inspect", "-f", "{{.Config.Image}}", cid], check=False, capture=True)
                 value = (cp.stdout or "").strip() or "unknown"
-            setattr(self, attr, value)
+            self.previous_images[service] = value
         if self.mode != "local":
             self.backup_dir.mkdir(parents=True, exist_ok=True)
-            (self.backup_dir / "last-version.txt").write_text(
-                f"PREVIOUS_BACKEND_IMAGE={self.previous_backend_image}\n"
-                f"PREVIOUS_FRONTEND_IMAGE={self.previous_frontend_image}\n",
-                encoding="utf-8",
-            )
+            lines = "".join(f"PREVIOUS_{k.upper()}_IMAGE={v}\n" for k, v in self.previous_images.items())
+            (self.backup_dir / "last-version.txt").write_text(lines, encoding="utf-8")
 
     def _backup_once(self) -> None:
         try:
@@ -1465,63 +1463,55 @@ class Deployer:
     def do_rollback(self) -> None:
         log_warn(">>> 执行回滚操作...")
         previous = self._read_last_version()
-        prev_backend = previous.get("PREVIOUS_BACKEND_IMAGE", "unknown")
-        prev_frontend = previous.get("PREVIOUS_FRONTEND_IMAGE", "unknown")
-        prev_backend_tag = rollback_tag(prev_backend)
-        prev_frontend_tag = rollback_tag(prev_frontend)
 
         self.apply_data(self.plan_data())
         self.wait_postgres()
 
-        # 「是否真的回滚这个服务」只看 tag 是否变化：相同 tag 不重建，避免回滚把无关容器也重启。
-        cur_backend_tag = rollback_tag(self.backend_ref)
-        cur_frontend_tag = rollback_tag(self.frontend_ref)
-        backend_base = _strip_tag(self.backend_ref) or _strip_tag(self.backend_ref_orig)
-        frontend_base = _strip_tag(self.frontend_ref) or _strip_tag(self.frontend_ref_orig)
-        backend_changed = bool(prev_backend_tag and backend_base and prev_backend_tag != cur_backend_tag)
-        frontend_changed = bool(prev_frontend_tag and frontend_base and prev_frontend_tag != cur_frontend_tag)
+        # 回滚所有有变更的应用服务（含 libreoffice），只动 tag 变化的服务（ADR-0088 决策 6）
+        changed_services = []
+        for service in self.desired_app_images():
+            prev_key = f"PREVIOUS_{service.upper()}_IMAGE"
+            prev_image = previous.get(prev_key, "unknown")
+            prev_tag = rollback_tag(prev_image)
+            cur_ref = self.desired_app_images().get(service, "")
+            cur_tag = rollback_tag(cur_ref)
 
-        # 后端：迁移预检不过则保持当前版本（避免回滚到会崩溃循环的镜像）。
-        if backend_changed:
-            candidate = f"{backend_base}:{prev_backend_tag}"
-            if self.preflight_migration_check(candidate):
-                self.tag_backend = prev_backend_tag
-                self.backend_ref = candidate
-                log_info(f"回滚后端到: {candidate}")
-            else:
-                backend_changed = False
-                log_error(f"拒绝回滚后端到 {candidate}（迁移版本落后数据库，会崩溃循环）")
-                log_error(f"保持当前后端镜像: {self.backend_ref}")
-        elif prev_backend_tag:
-            log_ok(f"后端已是历史版本 tag={prev_backend_tag}，无需重建")
-        else:
-            log_warn("无后端历史版本，跳过后端回滚")
+            if not prev_tag:
+                log_warn(f"无{service}历史版本，跳过{service}回滚")
+                continue
 
-        if frontend_changed:
-            self.tag_frontend = prev_frontend_tag
-            self.frontend_ref = f"{frontend_base}:{prev_frontend_tag}"
-            log_info(f"回滚前端到: {self.frontend_ref}")
-        elif prev_frontend_tag:
-            log_ok(f"前端已是历史版本 tag={prev_frontend_tag}，无需重建")
-        else:
-            log_warn("无前端历史版本，跳过前端回滚")
+            base = _strip_tag(cur_ref) or _strip_tag(getattr(self, f"{service}_ref_orig", ""))
+            if not base or prev_tag == cur_tag:
+                log_ok(f"{service}已是历史版本 tag={prev_tag}，无需重建")
+                continue
+
+            # 后端特殊：迁移预检不过则保持当前版本（避免回滚到会崩溃循环的镜像）
+            if service == "backend":
+                candidate = f"{base}:{prev_tag}"
+                if not self.preflight_migration_check(candidate):
+                    log_error(f"拒绝回滚后端到 {candidate}（迁移版本落后数据库，会崩溃循环）")
+                    log_error(f"保持当前后端镜像: {cur_ref}")
+                    continue
+
+            setattr(self, f"tag_{service}", prev_tag)
+            setattr(self, f"{service}_ref", f"{base}:{prev_tag}")
+            log_info(f"回滚{service}到: {base}:{prev_tag}")
+            changed_services.append(service)
 
         self.write_env_file()
 
-        for service in (s for s in ("backend", "frontend")
-                        if (s == "backend" and backend_changed) or (s == "frontend" and frontend_changed)):
-            args = ["up", "-d", "--force-recreate"]
-            args.append(service)
+        for service in changed_services:
+            args = ["up", "-d", "--force-recreate", service]
             log_info(f">>> 回滚重建 {service}")
             cp = self.run(self._compose() + args, check=False)
             if cp.returncode != 0:
                 self._tail_logs(service)
                 raise DeployError(f"{service} 回滚失败")
 
-        if backend_changed and not self.assert_running_image("backend", self.backend_ref):
-            raise DeployError("后端回滚自证失败：.env 已写 tag，但运行容器不是该镜像")
-        if frontend_changed and not self.assert_running_image("frontend", self.frontend_ref):
-            raise DeployError("前端回滚自证失败：.env 已写 tag，但运行容器不是该镜像")
+        for service in changed_services:
+            expected = getattr(self, f"{service}_ref", "")
+            if not self.assert_running_image(service, expected):
+                raise DeployError(f"{service}回滚自证失败：.env 已写 tag，但运行容器不是该镜像")
 
         self.health_check()
         log_ok("回滚成功")
