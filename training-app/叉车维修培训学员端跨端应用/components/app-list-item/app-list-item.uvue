@@ -33,7 +33,7 @@
     }
 </script>
 
-<style>
+<style lang="scss">
     .app-list-item {
         flex-direction: row;
         justify-content: space-between;
@@ -68,7 +68,7 @@
 
     .app-list-item-value {
         font-size: $font-size-sm;
-        color: $text-placeholder;
+        color: $text-color-placeholder;
     }
 
     .app-list-item-avatar {
@@ -79,7 +79,7 @@
 
     .app-list-item-arrow {
         font-size: 32rpx;
-        color: $text-placeholder;
+        color: $text-color-placeholder;
     }
 
     .ml-8 { margin-left: 8rpx; }

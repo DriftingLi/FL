@@ -18,7 +18,7 @@
     })
 </script>
 
-<style>
+<style lang="scss">
     .app-card {
         flex-direction: column;
     }
