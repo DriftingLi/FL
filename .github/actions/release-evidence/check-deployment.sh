@@ -34,11 +34,17 @@ while :; do
       ;;
   esac
 
-  # TIMEOUT=0 表示单次快查不轮询
+  # TIMEOUT=0 表示单次快查：只检查记录存在（#2120 语义：record exists = green）
   if [ "$TIMEOUT" -eq 0 ]; then
-    echo "::error::commit ${SHA:0:8} 的 ${ENVIRONMENT} 冒烟未就绪（deployment=${DEP_ID:-无记录} 状态=${STATE:-未知}）"
-    echo "deployment_id=${DEP_ID:-}" >> "$GITHUB_OUTPUT"
-    echo "deployment_status=${STATE:-unknown}" >> "$GITHUB_OUTPUT"
+    if [ -n "$DEP_ID" ]; then
+      echo "deployment_id=${DEP_ID}" >> "$GITHUB_OUTPUT"
+      echo "deployment_status=${STATE:-none}" >> "$GITHUB_OUTPUT"
+      echo "✅ deployment ${DEP_ID} 记录存在 (sha=${SHA:0:8}, env=${ENVIRONMENT})"
+      exit 0
+    fi
+    echo "::error::commit ${SHA:0:8} 的 ${ENVIRONMENT} 无部署记录"
+    echo "deployment_id=" >> "$GITHUB_OUTPUT"
+    echo "deployment_status=none" >> "$GITHUB_OUTPUT"
     exit 1
   fi
 

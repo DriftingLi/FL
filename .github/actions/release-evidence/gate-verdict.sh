@@ -13,10 +13,11 @@ POLL_INTERVAL="${INPUT_POLL_INTERVAL:-30}"
 if [ -n "$RUN_ID" ]; then
   HEAD_SHA=$(gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" \
              --json headSha --jq '.headSha' || echo 'unknown')
-  if [ "$HEAD_SHA" != "$SHA" ] && [ "$HEAD_SHA" != "unknown" ]; then
+  # SHA 校验：run 的 headSha 必须与期望一致，否则拒绝（fail-closed：gh 失败也拒绝）
+  if [ "$HEAD_SHA" != "$SHA" ]; then
     echo "verdict=red" >> "$GITHUB_OUTPUT"
     echo "reason=SHA mismatch: run ${RUN_ID} head ${HEAD_SHA} != expected ${SHA}" >> "$GITHUB_OUTPUT"
-    echo "::error::SHA 错位：run ${RUN_ID} head_sha=${HEAD_SHA} 与期望 ${SHA} 不一致，拒绝假证据"
+    echo "::error::SHA 错位或查询失败：run ${RUN_ID} head_sha=${HEAD_SHA} 与期望 ${SHA} 不一致，拒绝假证据"
     exit 1
   fi
 fi
