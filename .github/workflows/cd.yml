@@ -146,45 +146,17 @@ jobs:
             exit 1
           fi
 
-          # 2) testing 冒烟:部署记录在 CD 的 deploy job 启动时才创建,而合并可能早于冒烟结束,
-          #    故轮询等待(上限 8 分钟);冒烟明确失败则立即阻断,不再白等。
-          #    8 分钟 = testing 冒烟正常耗时(2~3 分钟)的近 3 倍余量。曾放宽到 15 分钟,
-          #    结果 pve-01 deploy 卡死时 gate 白白陪等 15 分钟才阻断(2026-09-04 两次事故)。
-          #    聚合一律下推到 --jq（避免 `| head -1` 在 pipefail 下因 SIGPIPE 误杀步骤）;
-          #    瞬时 API 失败按「未就绪」处理继续轮询,不直接判死。
-          DEADLINE=$(( $(date +%s) + 480 ))
-          while :; do
-            DEP_ID=$(gh api "repos/$GITHUB_REPOSITORY/deployments?per_page=100" \
-                       --jq "[.[] | select(.sha==\"$SHA\" and .environment==\"testing\")] | (.[0].id // empty)" || true)
-            STATE=""
-            if [ -n "$DEP_ID" ]; then
-              STATE=$(gh api "repos/$GITHUB_REPOSITORY/deployments/$DEP_ID/statuses" \
-                        --jq 'if length == 0 then "none" else (sort_by(.created_at) | last | .state) end' || true)
-            fi
-            case "$STATE" in
-              success)
-                echo "✅ testing 冒烟通过(deployment $DEP_ID)"
-                break ;;
-              failure|error)
-                echo "::error::commit $SHA 的 testing 冒烟为 $STATE,阻断生产部署"
-                echo "    出口 A:到 Actions 重跑该分支的 testing CD run,通过后重新合并"
-                echo "    出口 B:确认无需冒烟时$MANUAL"
-                exit 1 ;;
-            esac
-            if [ "$(date +%s)" -ge "$DEADLINE" ]; then
-              echo "::error::等不到 commit $SHA 的 testing 冒烟成功(deployment=${DEP_ID:-无记录} 状态=${STATE:-未知}),阻断生产部署"
-              if [ -z "$DEP_ID" ]; then
-                echo "    无部署记录多半是「分支 CI 变绿时还没有开 PR」造成的(ci-summary 只在有 open PR 时派发冒烟)。"
-                echo "    出口 A:到 Actions 重跑该分支的 CI run → ci-summary 会补发 testing 冒烟"
-              else
-                echo "    出口 A:到 Actions 重跑该分支的 testing CD run"
-              fi
-              echo "    出口 B:冒烟通过后(或确认无需冒烟时)$MANUAL"
-              exit 1
-            fi
-            echo "testing 冒烟未就绪(deployment=${DEP_ID:-无记录} 状态=${STATE:-未知}),30s 后重试..."
-            sleep 30
-          done
+          # 2) testing 冒烟:轮询委托给 release-evidence module（#2455）
+          #    gate-verdict 拥有轮询语义（8 分钟上限 / 瞬时 API 失败按未就绪处理 / 明确失败立即阻断）
+          export INPUT_SHA="$SHA"
+          export INPUT_ENVIRONMENT="testing"
+          export INPUT_TIMEOUT="480"
+          export INPUT_POLL_INTERVAL="30"
+          if ! bash "$GITHUB_WORKSPACE/.github/actions/release-evidence/gate-verdict.sh"; then
+            echo "    出口 A:到 Actions 重跑该分支的 testing CD run,通过后重新合并"
+            echo "    出口 B:确认无需冒烟时$MANUAL"
+            exit 1
+          fi
 
           echo "✅ 门禁通过:PR #$PR / ci-summary=success / testing 冒烟=success"
           echo "| 门禁 | PR #$PR · ci-summary ✅ · testing 冒烟 ✅ |" >> "$GITHUB_STEP_SUMMARY"

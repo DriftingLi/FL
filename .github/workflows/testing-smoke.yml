@@ -129,29 +129,17 @@ jobs:
           done
           echo "| 冒烟 run | [${RUN_ID}](https://github.com/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}) |" >> "$GITHUB_STEP_SUMMARY"
 
-          WAIT_DEADLINE=$(( $(date +%s) + 2400 ))
-          while :; do
-            SMOKE=$(gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --json status,conclusion \
-                     --jq '"\(.status)/\(.conclusion // "-")"' || echo 'unknown/-')
-            case "$SMOKE" in
-              completed/success) break ;;
-              completed/*)
-                echo "::error::testing 冒烟 run ${RUN_ID} 结束为 ${SMOKE#completed/}（不是 success）⇒ 不放行：生产 gate 会找不到成功记录。处置：看该 run 日志；若是排队被取消或机器问题，重跑本检查，或手动 gh workflow run cd.yml --repo ${GITHUB_REPOSITORY} --ref master -f environment=testing -f ref=${SHA}"
-                exit 1 ;;
-            esac
-            if [ "$(date +%s)" -ge "$WAIT_DEADLINE" ]; then
-              echo "::error::等 testing 冒烟 run ${RUN_ID} 超过 40 分钟仍未完成（当前 ${SMOKE}）⇒ fail-closed 不绿灯。多半是 cd-testing 组被别的部署占着（cd.yml 按环境串行）"
-              exit 1
-            fi
-            echo "testing 冒烟 ${SMOKE}，30 秒后重试…"
-            sleep 30
-          done
+          # 轮询委托给 release-evidence module（#2455）：waitForRun 拥有轮询语义
+          export INPUT_RUN_ID="$RUN_ID"
+          export INPUT_SHA="$SHA"
+          export INPUT_TIMEOUT="2400"
+          export INPUT_POLL_INTERVAL="30"
+          bash "$GITHUB_WORKSPACE/.github/actions/release-evidence/wait-for-run.sh"
 
-          # ===== 5. 复核 deployment 记录（把「检查绿但没记录」变回红）=====
-          DEP=$(gh api "repos/$GITHUB_REPOSITORY/deployments?per_page=100" \
-                 --jq "[.[] | select(.sha==\"$SHA\" and .environment==\"testing\")] | length")
-          if [ "$DEP" = "0" ]; then
-            echo "::error::run ${RUN_ID} 虽 success，但按 sha=${SHA:0:8} + environment=testing 仍查不到 deployment 记录 ⇒ 生产 gate 依然会阻断"
-            exit 1
-          fi
-          echo "✅ testing 冒烟记录已就位（sha=${SHA:0:8}，deployment 共 ${DEP} 条）" | tee -a "$GITHUB_STEP_SUMMARY"
+          # ===== 5. 复核 deployment 记录（#2455 module：checkDeployment）=====
+          export INPUT_SHA="$SHA"
+          export INPUT_ENVIRONMENT="testing"
+          export INPUT_TIMEOUT="0"
+          export INPUT_POLL_INTERVAL="1"
+          bash "$GITHUB_WORKSPACE/.github/actions/release-evidence/check-deployment.sh"
+          echo "✅ testing 冒烟记录已就位（sha=${SHA:0:8}）" | tee -a "$GITHUB_STEP_SUMMARY"
