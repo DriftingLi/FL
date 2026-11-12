@@ -102,6 +102,7 @@ function loadAi(rawData, transportModule, aiFile) {
     STORAGE_KEY_TOKEN: 'auth_token',
     getStorage: () => 'access-token',
     createSseParser: uts.loadUts(SSE_UTS, {}).createSseParser,
+    decodeUtf8: uts.loadUts(SSE_UTS, {}).decodeUtf8,
   });
 }
 

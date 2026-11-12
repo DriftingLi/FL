@@ -15,7 +15,7 @@ import { toBool, toNumber, toStr } from './helpers'
 import { API_BASE_URL, AI_REQUEST_TIMEOUT } from '../config/env'
 import { STORAGE_KEY_TOKEN } from '../constants/app'
 import { getStorage } from '../utils/storage'
-import { createSseParser } from '../utils/sseIncrementalParser'
+import { createSseParser, decodeUtf8 } from '../utils/sseIncrementalParser'
 import type { SseFrame } from '../utils/sseIncrementalParser'
 import type {
 	AiChatMessage,
@@ -721,7 +721,7 @@ function bodyToText(data : any | null) : string {
 	const value = data as any
 	if (value instanceof ArrayBuffer) {
 		try {
-			return new TextDecoder().decode(value as ArrayBuffer)
+			return decodeUtf8(new Uint8Array(value as ArrayBuffer))
 		} catch (e) {
 			console.error('[streamChat] decode body error:', e)
 			return ''

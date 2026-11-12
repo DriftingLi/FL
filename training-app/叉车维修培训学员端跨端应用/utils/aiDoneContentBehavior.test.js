@@ -89,6 +89,7 @@ function loadPair(options) {
     STORAGE_KEY_TOKEN: 'auth_token',
     getStorage: () => 'access-token',
     createSseParser: loadUts(path.join(ROOT, 'utils', 'sseIncrementalParser.uts'), {}).createSseParser,
+    decodeUtf8: loadUts(path.join(ROOT, 'utils', 'sseIncrementalParser.uts'), {}).decodeUtf8,
     uni: uni,
     console: console,
   });
