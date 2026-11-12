@@ -40,6 +40,7 @@ const drawerForm = reactive<Record<string, any>>({
   theory_hours: 0,
   practice_hours: 0,
   duration: 0,
+  points_price: null,
   certificate_template_id: null,
   prerequisite_course_ids: [],
   description: '',
@@ -51,7 +52,16 @@ const courseRules = {
   name: [{ required: true, message: '请输入课程名称', trigger: 'blur' }],
   credential_id: [{ required: true, message: '请选择所属证件', trigger: 'change' }],
   specialty_id: [{ required: true, message: '请选择专业方向', trigger: 'change' }],
-  level_id: [{ required: true, message: '请选择课程等级', trigger: 'change' }]
+  level_id: [{ required: true, message: '请选择课程等级', trigger: 'change' }],
+  // 积分校验口径与后端一致（#2447）：≥1 的整数为定价，留空 = 免费（落 NULL）。
+  points_price: [{
+    validator: (_rule: unknown, value: unknown, callback: (e?: Error) => void) => {
+      if (value === null || value === undefined || value === '') return callback()
+      if (Number.isInteger(value) && (value as number) >= 1) return callback()
+      return callback(new Error('积分价须为 ≥1 的整数，留空=免费'))
+    },
+    trigger: 'change'
+  }]
 }
 
 function open(course: AdminCourseItem | null) {
@@ -68,6 +78,7 @@ function open(course: AdminCourseItem | null) {
       theory_hours: 0,
       practice_hours: 0,
       duration: 0,
+      points_price: null,
       certificate_template_id: null,
       prerequisite_course_ids: [],
       description: '',
@@ -86,6 +97,7 @@ function open(course: AdminCourseItem | null) {
     theory_hours: course.theory_hours || 0,
     practice_hours: course.practice_hours || 0,
     duration: course.duration || 0,
+    points_price: course.points_price ?? null,
     certificate_template_id: course.certificate_template_id,
     prerequisite_course_ids: course.prerequisite_course_ids || [],
     description: course.description || '',
@@ -108,6 +120,7 @@ async function loadDrawerDetail() {
         theory_hours: detail.theory_hours ?? 0,
         practice_hours: detail.practice_hours ?? 0,
         duration: detail.duration ?? 0,
+        points_price: detail.points_price ?? null,
         certificate_template_id: detail.certificate_template_id ?? null,
         prerequisite_course_ids: detail.prerequisite_course_ids || [],
         description: detail.description ?? '',
@@ -134,6 +147,8 @@ async function submitCourse() {
       theory_hours: drawerForm.theory_hours,
       practice_hours: drawerForm.practice_hours,
       duration: drawerForm.duration,
+      // 空输入 = null = 显式清空（免费）；键恒携带，后端靠它与「未携带=保留」分家（#2447）
+      points_price: drawerForm.points_price ?? null,
       certificate_template_id: drawerForm.certificate_template_id ?? 0,
       prerequisite_course_ids: drawerForm.prerequisite_course_ids,
       description: drawerForm.description,
@@ -254,6 +269,10 @@ defineExpose({ open })
       <el-form-item label="课程时长">
         <el-input-number v-model="drawerForm.duration" :min="0" :step="10" controls-position="right" />
         <span class="cc-hours-unit">分钟</span>
+      </el-form-item>
+      <el-form-item label="积分兑换价" prop="points_price">
+        <el-input-number v-model="drawerForm.points_price" :min="0" :step="1" controls-position="right" />
+        <span class="cc-hours-unit">留空 = 免费</span>
       </el-form-item>
       <el-form-item label="证书模板">
         <UiSelect v-model="drawerForm.certificate_template_id" clearable placeholder="不关联" style="width: 100%" :options="(certificateTemplates).map((t) => ({ label: t.name, value: t.id }))" />

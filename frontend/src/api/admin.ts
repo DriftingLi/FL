@@ -183,6 +183,8 @@ export interface CoursePayload {
   sort_order?: number
   is_hot?: boolean
   is_featured?: boolean
+  // 积分兑换价（#2447）：≥1 的整数为定价；null = 清空（免费）；未携带 = 保留现状。
+  points_price?: number | null
 }
 
 export interface ChapterPayload {

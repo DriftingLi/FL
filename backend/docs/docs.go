@@ -1599,7 +1599,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "输入不合法（挂载必填 / 引用ID无效或不存在 / 数值为负 / 前置课程冲突）",
+                        "description": "输入不合法（挂载必填 / 引用ID无效或不存在 / 数值为负 / 积分价非正 / 前置课程冲突）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
