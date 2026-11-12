@@ -141,8 +141,9 @@ describe('批5 特殊页头形态（app-nav-bar 槽位承载）', () => {
     // #2442：一级页面（无返回）的单个自定义操作放左槽，右槽不再承载它
     expect(s).not.toMatch(/<template #right>/);
     // 移出页头的入口页内可达（#1846）：搜索栏右端 pill 与搜索栏本体同走 onCreate（触发行为不变）
+    // #2445：@click 改挂 88rpx 命中盒 .create-pill-hit（视觉胶囊仍 56rpx）
     expect(s).toMatch(/v-if="currentTab !== 'experience'" class="res-search-bar"/);
-    expect(s).toMatch(/class="create-pill"[\s\S]{0,120}?@click="onCreate"/);
+    expect(s).toMatch(/class="create-pill-hit"[\s\S]{0,120}?@click="onCreate"/);
   });
 
   it('dashboard 页头保留证件下拉标题与单图标左槽（#1846 收敛：🔍 移出页头进功能宫格；🛒 移出页头；#2442：一级页面单操作改挂左槽）', () => {

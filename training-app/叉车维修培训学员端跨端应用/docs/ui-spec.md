@@ -306,6 +306,16 @@
 `.uvue` 原生端**不支持 CSS 伪类**（§9 机检口径）。唯一存量 `pages/courses/course-detail.uvue:469` `.action-btn:active`
 改 `@touchstart`/`@touchend` 切 `pressed` class（#1593 裁定，执行票承接）。
 
+### 5.11 触摸目标与长文本截断（#2445）
+
+**触摸目标**：可点元素命中区 ≥ **88rpx × 88rpx**（44px）。视觉件可以更小，用外层 hit 盒撑开——先例
+`pages/forum/forum.uvue` 的 `.create-pill-hit`（88rpx 盒 / 56rpx 胶囊）、`pages/jobs/job-list.uvue` 的
+`.tab-avatar-btn`（88rpx 盒 / 56rpx 头像）。**别把视觉件本身拉大来凑**，那会改掉既有形态。
+
+**长文本截断**：固定高度容器里的文本必须显式截断，不许靠「内容一般不会太长」兜底。
+单行用 `lines: 1` + `text-overflow: ellipsis`；多行用 `lines: N`（N 按容器高度算，别写 `lines: 0`）。
+新改页面执行本条；存量页逐票转绿，不单独开治理票。
+
 ---
 
 ## 6. 页面结构模板
