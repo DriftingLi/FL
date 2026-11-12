@@ -598,6 +598,7 @@ jobs:
           # /usr/local/bin 里的旧副本仍在盯它，连续 3 次判红并发出了告警邮件。
           tar czf /tmp/deploy-files.tar.gz \
             deploy/deploy.py \
+            deploy/release_transaction.py \
             deploy/docker-compose.prod.yml \
             deploy/env.defaults \
             deploy/forklift-watchdog.sh \
