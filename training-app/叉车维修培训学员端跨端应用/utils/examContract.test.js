@@ -235,6 +235,33 @@ describe('幻影路由锁（#662 口径）：api 层路由必须落在后端已�
     const phantom = used.filter((u) => !registered.includes(u));
     expect(phantom).toEqual([]);
   });
+
+  it('api/realExam.uts 的每条路由都在 backend realexam/handler.go 已注册（#2461）', () => {
+    const backend = stripComments(read('../../backend/internal/realexam/handler.go'));
+    expect(backend).toContain('rg.Group("/real-exam"');
+    const registered = [];
+    const re = /g\.(GET|POST|PUT|DELETE|PATCH)\("([^"]+)"/g;
+    let m;
+    while ((m = re.exec(backend)) !== null) registered.push('/real-exam' + m[2]);
+    expect(registered.length).toBe(4);
+
+    const api = stripComments(read('api/realExam.uts'));
+    // 拼接连形态：'/real-exam/papers/' + <id 变量> + '/practice'
+    const concatRe = /'\/real-exam\/papers\/'\s*\+\s*[A-Za-z_$][\w$.]*\s*\+\s*'(\/[^']*)'/g;
+    const used = [];
+    let c;
+    while ((c = concatRe.exec(api)) !== null) used.push('/real-exam/papers/:paper_id' + c[1]);
+    const rest = api.replace(concatRe, '');
+    const litRe = /'(\/real-exam\/papers[^']*)'/g;
+    let l;
+    while ((l = litRe.exec(rest)) !== null) used.push(l[1]);
+    // 列卷出口把同一条路径又喂给 decodeList（信封兜底），字面量因此出现两次 —— 比**去重后**的路由集
+    const routes = [...new Set(used)];
+    expect(routes.length).toBe(4);
+
+    const phantom = routes.filter((u) => !registered.includes(u));
+    expect(phantom).toEqual([]);
+  });
 });
 
 describe('删除禁区「exam 不用删」：行为保持点逐项仍在', () => {

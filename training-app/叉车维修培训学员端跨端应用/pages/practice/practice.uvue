@@ -41,7 +41,7 @@
     function onReportClick() : void { uni.navigateTo({ url: '/pages/practice/practice-report' }) }
     function onModuleClick(m : ModuleRow) : void { uni.navigateTo({ url: '/pages/practice/practice-do?mode=tag&tag_id=' + m.tag_id.toString() + '&tag_name=' + encodeURIComponent(m.name) }) }
     function onFeatureClick(feature : string) : void {
-        if (feature == 'past_paper') { uni.showToast({ title: '历年真题开发中', icon: 'none' }) }
+        if (feature == 'past_paper') { uni.navigateTo({ url: '/pages/practice/real-exam-papers' }) }
         else if (feature == 'mock_exam') { uni.navigateTo({ url: '/pages/exam/mock-exam' }) }
         // #810：等级考试域已退役；本格视觉与 feature key 保持不变，改指既有模拟考试链路
         else if (feature == 'level_exam') { uni.navigateTo({ url: '/pages/exam/mock-exam' }) }

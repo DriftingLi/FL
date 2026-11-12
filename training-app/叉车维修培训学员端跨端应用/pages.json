@@ -188,6 +188,13 @@
             }
         },
         {
+            "path": "pages/practice/real-exam-papers",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "历年真题"
+            }
+        },
+        {
             "path": "pages/forum/forum",
             "style": {
                 "navigationStyle": "custom",
