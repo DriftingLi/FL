@@ -582,7 +582,7 @@ const (
 // 即可）。此处只把请求的模型选择字段投影为 ModelSelector（纯数据、零解析知识）并组装消息；
 // 凭证解析（专项单绑定 → 双模式 → 旧来源）与传输（client 签名缓存/超时/Recv 收集）
 // 全部在单一模型端口 Stream 内经注入 resolver 单点完成（ADR-0029 T2）。
-func (s *Service) StreamChat(ctx context.Context, userID int, req StreamChatReq, onChunk func(content string)) (string, *Usage, error) {
+func (s *Service) StreamChat(ctx context.Context, userID int, req StreamChatReq, sink StreamSinkWithResult) (string, *Usage, error) {
 	sel := ModelSelector{
 		FeatureKey:    req.FeatureKey,
 		Mode:          req.Mode,
@@ -632,7 +632,7 @@ func (s *Service) StreamChat(ctx context.Context, userID int, req StreamChatReq,
 	// 结构化过滤已退役，组句责任在 Web 前端（票 2241 的 diagnosisCompose）。
 	// 保留 DTO 字段是为了不动已发布的前端契约，但不再经 ctx 传给 adapter。
 
-	fullContent, usage, err := s.port.Stream(withAIPromptMessages(ctx, aiPromptMessagesFromDTO(req.Messages)), sel, msgs, onChunk)
+	fullContent, usage, err := s.port.Stream(withAIPromptMessages(ctx, aiPromptMessagesFromDTO(req.Messages)), sel, msgs, sink)
 	if err != nil {
 		return fullContent, usage, err
 	}
@@ -663,10 +663,14 @@ func (s *Service) StreamChat(ctx context.Context, userID int, req StreamChatReq,
 				s.logger.Error("保存用户消息失败", zap.Int("session_id", req.SessionID), zap.Int("user_id", userID), zap.Error(err))
 				return fullContent, usage, &persistError{msg: persistUserMsgFailed, cause: err}
 			}
-			// T5：诊断来源随助手消息持久化（ctx 容器→ JSON 列；非诊断/空来源存空串）
+			// T5：诊断来源随助手消息持久化（sink.Result() → JSON 列；非诊断/空来源存空串）
 			sourcesJSON := ""
-			if sources := DiagnosisSourcesFrom(ctx); len(sources) > 0 {
-				if b, err := json.Marshal(sources); err == nil {
+			var result StreamResult
+			if sink != nil {
+				result = sink.Result()
+			}
+			if len(result.Sources) > 0 {
+				if b, err := json.Marshal(result.Sources); err == nil {
 					sourcesJSON = string(b)
 				} else {
 					s.logger.Warn("诊断来源序列化失败，按无来源落库", zap.Int("session_id", req.SessionID), zap.Error(err))
@@ -676,7 +680,8 @@ func (s *Service) StreamChat(ctx context.Context, userID int, req StreamChatReq,
 			// 只在该功能真产出元数据时写：通用对话的 done 载荷本来是 null，
 			// 落一个 `{"badges":[],"elapsed":0}` 会让「有元数据」这个判据失去区分力。
 			metaJSON := ""
-			if meta, ok := DiagnosisMetaFrom(ctx); ok {
+			if result.HasMeta {
+				meta := result.Meta
 				if meta.Badges == nil {
 					meta.Badges = []DiagnosisBadge{}
 				}

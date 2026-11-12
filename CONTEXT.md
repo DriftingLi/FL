@@ -207,6 +207,17 @@
   _Avoid_: 靠注释互指（「与明文位置同键同措辞的那一格」不是锁，改一半不会红）；给只有单侧载体的事实挂 tag（单侧谈不上对齐）；用「把投影降级成错误面那句」来统一——那会把「曾授权但企业被处置」与「从没授权」压回同一个值；以为这把锁证明那句话**发得出去**（它读的是生成物的静态描述，那一半归 HTTP 级断言）。
 - **阅读量（view count）**：文章被真实浏览器访问的次数。门户侧详情接口带 `no_view=1` 时不计入（SSR/爬虫路径），由 hydration 后客户端计数端点累加——与「详情请求次数」语义区分；论坛侧为详情请求即计数（`GET /api/forum/topics/:id` 每次 +1），**已补防刷**：排除作者自访问、区分「详情请求次数」与「真实浏览」，口径照门户 `no_view` 先例——因为 `hot` 排序的第三键正是 `view_count`，不设防即可被自刷推热。
 
+## 架构深化候选术语（2026-11-12 评审产出）
+
+- **StreamSink（流式事件接收器）**：AI 域流式对话的事件出口 interface——OnChunk / OnStatus / OnSources / OnMeta 四方法，替代原先 3 个诊断 context 旁路 key（DiagnosisSources / DiagnosisMeta / DiagnosisStatusSink）。sink 自身累积事件供持久化消费（sink.Result()），同时作为 SSE writer 直接写出帧。ModelPort.Stream 接收 sink 而非裸 callback。
+  _Avoid_: 把 metering 的 3 个 ctx key（RequestID / MeterFree / PromptMessages）也塞进 sink——它们是计量管线内部，生命周期局限在一次调用内。
+- **ReleaseTransaction（发布事务）**：部署面的变更生命周期 module——plan → execute → rollback → verify。构造时生成 immutable 变更计划（全部服务含 libreoffice，含 migration/backup/health 目标），rollback 基于同一计划的反转序列执行。可变状态（applied / previous / backup_error）归入 Transaction 内部。
+  _Avoid_: 把环境准备（pull images / registry proxy / docker login）塞进 Transaction——那是 Deployer 的职责。
+- **EffectiveConfig（有效部署配置）**：部署环境变量的统一优先级 resolve module——输入声明表 + 环境 secrets + 显式覆盖，输出 resolved map。消灭「4 层各自投影有效值」和「手工例外清单」。compose 的 ${VAR:-default} 退居纯兜底。
+  _Avoid_: 把密钥类变量排除在外——它们也在 resolved map 中，只是值来自环境而非声明表默认值。
+- **ReleaseEvidence（发布证据）**：CI/CD 证据判定的 composite GitHub Action——waitForRun / checkDeployment / gateVerdict 三步骤拥有轮询语义与 SHA 校验，三个 workflow 只做调用。统一 #2120「run 真 success 且 deployment 存在才绿」的判定。
+  _Avoid_: 让各 workflow 自行轮询或判断 SHA 错位——证据判定语义必须单点。
+
 ## 工程协作（仓库级）
 
 - **树身份（worktree identity）**：一票（票号）之「那棵树」的两段判据——**入口** = `git worktree list` 注册表中路径为 `wt-<票号>` 的条目（目录名由 `new-worktree.ps1` 闸门在创建处保证）；**身份** = 该条目实际登记的分支（`feat/…`、`fix/…`、`docs/…` 皆为合法形态——闸门自设有 `-Branch` 覆盖）。PR 状态核对、未合并提交对账、拆树、分支残留核对一律消费「身份分支」，**不按 `feat/<票号>` 猜**。磁盘上有 `wt-*` 目录但未注册 = **野树**，不参与票号判定，归 `remove-worktree.ps1 -PruneOrphans`。裁定与血账见 [`docs/adr/ADR-0092-树身份-目录为入口与登记分支为身份.md`](docs/adr/ADR-0092-树身份-目录为入口与登记分支为身份.md)；来路 #2233（spec B）；旧判据（三处写死 `feat/<票号>`）的缺陷活例是 `wt-2189`（挂 `fix/2189-lint-brace-expansion`）。

@@ -36,7 +36,7 @@ func (p *ownershipPort) Complete(string, []*schema.Message, CompleteOptions) (st
 	return "答案", nil
 }
 
-func (p *ownershipPort) Stream(_ context.Context, _ ModelSelector, _ []*schema.Message, _ func(string)) (string, *Usage, error) {
+func (p *ownershipPort) Stream(_ context.Context, _ ModelSelector, _ []*schema.Message, _ StreamSink) (string, *Usage, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.called++

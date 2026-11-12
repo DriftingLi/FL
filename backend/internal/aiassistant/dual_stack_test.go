@@ -218,15 +218,15 @@ func TestAIModelPortSharedConfigFromBinding(t *testing.T) {
 	}
 
 	// 流式：同一配置解析 → Stream → 分片回调 + 累积结果
-	var gotChunks []string
+	sink := &recordingSink{}
 	gotStream, _, err := adapter.Stream(ctx, ModelSelector{FeatureKey: FeatureMaintenanceKnowledge},
 		[]*schema.Message{schema.UserMessage("叉车液压异常")},
-		func(c string) { gotChunks = append(gotChunks, c) })
+		sink)
 	if err != nil || gotStream != full {
 		t.Fatalf("Stream 异常: %q err=%v", gotStream, err)
 	}
-	if len(gotChunks) != 2 || gotChunks[0] != "你好" || gotChunks[1] != "，叉车" {
-		t.Fatalf("流式分片回调不符: %v", gotChunks)
+	if len(sink.chunks) != 2 || sink.chunks[0] != "你好" || sink.chunks[1] != "，叉车" {
+		t.Fatalf("流式分片回调不符: %v", sink.chunks)
 	}
 
 	// 同一绑定两方法解析同配置（与 ResolveConfig 单点一致）

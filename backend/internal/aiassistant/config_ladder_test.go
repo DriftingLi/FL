@@ -190,14 +190,14 @@ func (f *fakeAIModelPort) Complete(featureKey string, msgs []*schema.Message, op
 	return f.content, f.err
 }
 
-func (f *fakeAIModelPort) Stream(_ context.Context, sel ModelSelector, msgs []*schema.Message, onChunk func(string)) (string, *Usage, error) {
+func (f *fakeAIModelPort) Stream(_ context.Context, sel ModelSelector, msgs []*schema.Message, sink StreamSink) (string, *Usage, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.streamN++
 	f.gotSel = sel
 	f.gotMsgs = msgs
-	if onChunk != nil {
-		onChunk(f.content)
+	if sink != nil {
+		sink.OnChunk(f.content)
 		f.chunks = append(f.chunks, f.content)
 	}
 	return f.content, nil, f.err
@@ -223,18 +223,18 @@ func TestStreamingPortInjectedEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateSession 失败: %v", err)
 	}
-	var chunks []string
+	sink := &recordingSink{}
 	full, _, err := assistant.StreamChat(ctx, 7, StreamChatReq{
 		SessionID:    session.ID,
 		ModelSource:  "custom",
 		CustomAPIKey: "sk-custom", CustomBaseURL: "https://custom.example.com/v1", CustomModel: "gpt-4o",
 		Messages: []StreamMessage{{Role: "user", Content: "叉车启动困难怎么办"}},
-	}, func(c string) { chunks = append(chunks, c) })
+	}, sink)
 	if err != nil {
 		t.Fatalf("StreamChat 失败: %v", err)
 	}
-	if full != "模拟回复" || len(chunks) != 1 {
-		t.Fatalf("流式回调/完整回复不符: full=%q chunks=%v", full, chunks)
+	if full != "模拟回复" || len(sink.chunks) != 1 {
+		t.Fatalf("流式回调/完整回复不符: full=%q chunks=%v", full, sink.chunks)
 	}
 
 	// prompt 组装：首位为通用专家系统提示词（FeatureKey 为空），末位为用户消息
