@@ -23,8 +23,10 @@
                 <text class="res-search-placeholder">写下你此刻的想法</text>
                 <text class="res-search-icon">🔍</text>
             </view>
-            <view class="create-pill" @click="onCreate">
-                <text class="create-pill-text">发帖</text>
+            <view class="create-pill-hit" @click="onCreate">
+                <view class="create-pill">
+                    <text class="create-pill-text">发帖</text>
+                </view>
             </view>
         </view>
         <!-- 精选筛选（#742 批次三）：三 Tab 通用轴，资源 Tab 不显示 -->
@@ -276,6 +278,15 @@
         font-size: 28rpx;
         color: #999999;
         flex: 1;
+    }
+
+    /* 发帖 pill 的触摸盒：视觉胶囊仍 56rpx，命中区撑到 88rpx（44px 下限）。
+       别把胶囊本身拉高来凑——那会改掉 #1846 定下的形态。
+       注意：样式块注释里别写「#数字」——§9 机检会把 4 位票号当成 hex 色值判红。 */
+    .create-pill-hit {
+        height: 88rpx;
+        align-items: center;
+        justify-content: center;
     }
 
     /* 发帖 pill（#1846 自页头右槽下沉，宽高与色值沿用原形态） */
