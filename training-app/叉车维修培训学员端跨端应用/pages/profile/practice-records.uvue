@@ -254,7 +254,7 @@ import { goBack } from '../../utils/navigation'
     }
 
     .filter-chip.active {
-        background-color: #2979ff;
+        background-color: $primary-color;
     }
 
     .filter-chip-text {
@@ -279,7 +279,7 @@ import { goBack } from '../../utils/navigation'
 
     .summary-correct {
         font-size: 24rpx;
-        color: #2979ff;
+        color: $primary-color;
         margin-left: 16rpx;
     }
 
@@ -306,7 +306,7 @@ import { goBack } from '../../utils/navigation'
     .stats-num {
         font-size: 36rpx;
         font-weight: bold;
-        color: #2979ff;
+        color: $primary-color;
         margin-bottom: 6rpx;
     }
 
@@ -400,7 +400,7 @@ import { goBack } from '../../utils/navigation'
 
     .record-tag-type {
         color: #ffffff;
-        background-color: #2979ff;
+        background-color: $primary-color;
     }
 
     .record-tag-mode {

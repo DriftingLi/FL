@@ -34,7 +34,7 @@
   }
 </script>
 
-<style>
+<style lang="scss">
   .tab-bar {
     flex-direction: row;
     background-color: #ffffff;
@@ -50,7 +50,7 @@
   }
 
   .tab-item.active {
-    border-bottom-color: #2979ff;
+    border-bottom-color: $primary-color;
   }
 
   .tab-text {
@@ -59,7 +59,7 @@
   }
 
   .tab-text.active {
-    color: #2979ff;
+    color: $primary-color;
     font-weight: bold;
   }
 
@@ -79,7 +79,7 @@
   }
 
   .sub-tab-item.active {
-    border-bottom-color: #2979ff;
+    border-bottom-color: $primary-color;
   }
 
   .sub-tab-text {
@@ -88,7 +88,7 @@
   }
 
   .sub-tab-text.active {
-    color: #2979ff;
+    color: $primary-color;
     font-weight: bold;
   }
 </style>

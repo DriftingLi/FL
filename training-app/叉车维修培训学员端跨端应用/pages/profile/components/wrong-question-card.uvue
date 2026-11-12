@@ -295,7 +295,7 @@
     defineExpose({ resetSelection })
 </script>
 
-<style>
+<style lang="scss">
     .record-card {
         background-color: #ffffff;
         border-radius: 16rpx;
@@ -331,7 +331,7 @@
 
     .record-fav-tag {
         font-size: 20rpx;
-        color: #2979ff;
+        color: $primary-color;
         background-color: #e3f2fd;
         padding: 4rpx 12rpx;
         border-radius: 6rpx;
@@ -389,7 +389,7 @@
 
     .option-selected {
         background-color: #e3f2fd;
-        border-color: #2979ff;
+        border-color: $primary-color;
     }
 
     .option-correct {
@@ -413,7 +413,7 @@
     }
 
     .option-key-selected {
-        background-color: #2979ff;
+        background-color: $primary-color;
     }
 
     .option-key-correct {
@@ -502,7 +502,7 @@
     }
 
     .redo-btn-primary {
-        background-color: #2979ff;
+        background-color: $primary-color;
     }
 
     .redo-btn-success {
@@ -535,12 +535,12 @@
         padding: 8rpx 24rpx;
         border-radius: 24rpx;
         background-color: #ffffff;
-        border: 1rpx solid #2979ff;
+        border: 1rpx solid $primary-color;
         margin-left: 16rpx;
     }
 
     .card-action-primary {
-        background-color: #2979ff;
+        background-color: $primary-color;
     }
 
     .card-action-danger {
@@ -550,7 +550,7 @@
 
     .card-action-text {
         font-size: 24rpx;
-        color: #2979ff;
+        color: $primary-color;
     }
 
     .card-action-primary .card-action-text {
