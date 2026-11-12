@@ -484,24 +484,14 @@ func (h *handler) StreamChat(c *gin.Context) {
 	if requestID := c.GetString(string(middleware.CtxRequestID)); requestID != "" {
 		ctx = WithRequestID(ctx, requestID)
 	}
-	// 诊断来源容器初始化（fault_diagnosis 响应 answer_sources 经此透传；其他功能恒空）
-	ctx = WithDiagnosisSources(ctx)
-	// 诊断元数据容器（徽章 + 耗时，v2 的 done 载荷；其他功能恒空）
-	ctx = WithDiagnosisMeta(ctx)
-	// 上游 status 立刻下沉成 SSE 事件：v2 在首个 delta 之前发的「正在检索…」要马上到前端，
-	// 不能等 Stream 返回（那时内容已经开始流了）。
-	ctx = WithDiagnosisStatusSink(ctx, func(text string) {
-		sendEvent("status", map[string]string{"text": text})
-	})
+
+	// StreamSink 统一承载流式事件：写 SSE 帧 + 累积 result 供持久化与 done 载荷
+	sink := NewSSEStreamSink(sendEvent)
 
 	// 累积下行增量：用来判断「终端权威全文」是否与已推给浏览器的增量一致。
 	// 诊断功能会在 done 前把正文里的图片归一（白名单外降级成文字，ADR-0091 决策 5），
 	// 那一步在 adapter 返回时做，增量里仍是第三方原始 URL —— 只有比对才能知道要不要补发全文。
-	var streamed strings.Builder
-	fullContent, usage, err := h.svc.StreamChat(ctx, userID, req, func(content string) {
-		streamed.WriteString(content)
-		sendEvent("message", map[string]string{"content": content})
-	})
+	fullContent, usage, err := h.svc.StreamChat(ctx, userID, req, sink)
 
 	if err != nil {
 		if errors.Is(err, points.ErrInsufficientPoints) {
@@ -512,10 +502,7 @@ func (h *handler) StreamChat(c *gin.Context) {
 		sendEvent("error", map[string]string{"message": err.Error()})
 		return
 	}
-	// 智能维修诊断来源资料（answer_sources）透传：message 事件只搬 content，来源独立事件
-	if sources := DiagnosisSourcesFrom(ctx); len(sources) > 0 {
-		sendEvent("sources", map[string]any{"sources": sources})
-	}
+	// 智能维修诊断来源资料（answer_sources）已在 sink.OnSources 时写出 SSE 帧
 	// usage 事件与扣费结果形状不变（移动端契约无感）：扣费失败时沿用迁移前行为——
 	// 余额不足发 error（仍发 done），其余错误静默跳过 usage 事件
 	if usage != nil {
@@ -531,15 +518,15 @@ func (h *handler) StreamChat(c *gin.Context) {
 	// content 只在「终端权威全文 ≠ 已推增量」时出现，目前唯一来源是诊断配图归一
 	// （adapter 在 done 前把白名单外的第三方图降级成文字）。普通对话两者恒等，不多发一个字节。
 	var donePayload any
-	meta, hasMeta := DiagnosisMetaFrom(ctx)
+	result := sink.Result()
 	finalContent := ""
-	if fullContent != "" && fullContent != streamed.String() {
+	if fullContent != "" && fullContent != result.Content {
 		finalContent = fullContent
 	}
-	if hasMeta || finalContent != "" {
+	if result.HasMeta || finalContent != "" {
 		payload := map[string]any{}
-		if hasMeta {
-			payload["meta"] = meta
+		if result.HasMeta {
+			payload["meta"] = result.Meta
 		}
 		if finalContent != "" {
 			payload["content"] = finalContent

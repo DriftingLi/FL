@@ -27,8 +27,8 @@ func TestDiagnosisWireV2_DoneFrame(t *testing.T) {
 	server := httptest.NewServer((&fakeDiagnosisServer{t: t, raw: wireV2Done}).handler())
 	defer server.Close()
 
-	ctx := WithDiagnosisMeta(context.Background())
-	content, _, err := newDiagnosisForTest(server).Stream(ctx, ModelSelector{FeatureKey: FeatureFaultDiagnosis}, msgsSample("制动异响怎么查？", 0), nil)
+	sink := &recordingSink{}
+	content, _, err := newDiagnosisForTest(server).Stream(context.Background(), ModelSelector{FeatureKey: FeatureFaultDiagnosis}, msgsSample("制动异响怎么查？", 0), sink)
 	if err != nil {
 		t.Fatalf("Stream 异常: %v", err)
 	}
@@ -49,10 +49,10 @@ func TestDiagnosisWireV2_DoneFrame(t *testing.T) {
 		t.Fatalf("正文结构被破坏: %q", content)
 	}
 
-	meta, ok := DiagnosisMetaFrom(ctx)
-	if !ok || len(meta.Badges) != 2 {
-		t.Fatalf("徽章应两条: %+v ok=%v", meta, ok)
+	if len(sink.metas) == 0 || len(sink.metas[0].Badges) != 2 {
+		t.Fatalf("徽章应两条: %+v", sink.metas)
 	}
+	meta := sink.metas[0]
 	if meta.Badges[1].Emoji != "⚠️" || meta.Badges[1].Cls != "cap-risk" {
 		t.Fatalf("徽章三字段应原样: %+v", meta.Badges[1])
 	}

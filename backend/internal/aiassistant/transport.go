@@ -71,11 +71,11 @@ type ModelPort interface {
 	// featureKey 经注入 resolver 解析绑定配置；生命周期自持（不携带调用方 context，
 	// 与原阻塞栈语义一致——章节生成在后台 goroutine 运行、评分不随请求中断）。
 	Complete(featureKey string, msgs []*schema.Message, opts CompleteOptions) (string, error)
-	// Stream 流式调用：增量经 onChunk 回调透传，返回累积完整回复与计量产出
+	// Stream 流式调用：增量与富事件经 sink 产出，返回累积完整回复与计量产出
 	// （*Usage，ADR-0031；免费/未登录/未扣费为 nil，内容错误时不扣费）。
 	// 选择子经注入 resolver 解析凭证（调用方只传选择子）；沿用调用方 context（SSE
 	// 随请求断连取消是既有语义），超时纪律在 adapter 内单点封顶。
-	Stream(ctx context.Context, sel ModelSelector, msgs []*schema.Message, onChunk func(string)) (string, *Usage, error)
+	Stream(ctx context.Context, sel ModelSelector, msgs []*schema.Message, sink StreamSink) (string, *Usage, error)
 }
 
 // 超时纪律单点（ADR-0029 决策 3）：阻塞/流式按调用形态在此分化，不再各自为政。
@@ -163,7 +163,7 @@ func (a *einoAIAdapter) Complete(featureKey string, msgs []*schema.Message, opts
 // Stream 流式调用（ModelPort 实现）：300s 超时纪律 → resolver 解析 → 签名缓存取 client
 // → eino Stream → Recv 收集循环单点（错误文案与原流式栈逐字一致）。裸传输不产生计量产出
 // （闸门在 meteredAIModel 装饰器内）。
-func (a *einoAIAdapter) Stream(ctx context.Context, sel ModelSelector, msgs []*schema.Message, onChunk func(string)) (string, *Usage, error) {
+func (a *einoAIAdapter) Stream(ctx context.Context, sel ModelSelector, msgs []*schema.Message, sink StreamSink) (string, *Usage, error) {
 	ctx, cancel := context.WithTimeout(ctx, aiStreamTimeout)
 	defer cancel()
 	mc, err := a.resolver.ResolveChatSettings(ctx, sel)
@@ -178,7 +178,7 @@ func (a *einoAIAdapter) Stream(ctx context.Context, sel ModelSelector, msgs []*s
 	if err != nil {
 		return "", nil, fmt.Errorf("调用模型失败: %w", err)
 	}
-	content, err := collectStreamReader(reader, onChunk)
+	content, err := collectStreamReader(reader, sink)
 	if err != nil {
 		return content, nil, fmt.Errorf("流式接收失败: %w", err)
 	}
@@ -226,9 +226,9 @@ func newEinoChatModel(ctx context.Context, mc ChatSettings) (*einoopenai.ChatMod
 	})
 }
 
-// collectStreamReader 流式接收循环单点：EOF 正常结束，增量回调，返回累积内容
+// collectStreamReader 流式接收循环单点：EOF 正常结束，增量经 sink.OnChunk 产出，返回累积内容
 // （错误时返回已累积的部分内容，与既有语义一致）。reader 由此统一关闭。
-func collectStreamReader(reader *schema.StreamReader[*schema.Message], onChunk func(string)) (string, error) {
+func collectStreamReader(reader *schema.StreamReader[*schema.Message], sink StreamSink) (string, error) {
 	defer reader.Close()
 	var sb strings.Builder
 	for {
@@ -241,8 +241,8 @@ func collectStreamReader(reader *schema.StreamReader[*schema.Message], onChunk f
 		}
 		if msg != nil && msg.Content != "" {
 			sb.WriteString(msg.Content)
-			if onChunk != nil {
-				onChunk(msg.Content)
+			if sink != nil {
+				sink.OnChunk(msg.Content)
 			}
 		}
 	}

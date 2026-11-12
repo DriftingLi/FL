@@ -70,8 +70,8 @@ Shield 扫的是**我们自己写的代码**，看不到「依赖里的已知漏
 - 本机 `go version` 只影响本地开发，不影响线上。
 
 所以「某个标准库漏洞有没有修」的判据是：**这四处里产生产物用的那个版本是否 ≥ 公告的修复版本**。
-例：`GO-2026-6809`（CVE-2026-111943，`crypto/x509` 错误信任已撤销的中间证书）修在 `1.26.10` / `1.27.3`；
-本仓镜像与 CI 都在 `1.26.10`（不受影响），而本机 `1.27.1` 低于 `1.27.3`（本地构建属受影响区间）。
+例：`GO-2026-6859`（`net/http` MaxBytesReader header race）修在 `1.26.11` / `1.27.4`；
+本仓镜像与 CI 都在 `1.26.11`（不受影响）。
 
 ### 3. 想知道「哪些依赖漏洞真的能被走到」
 
@@ -84,7 +84,7 @@ cd backend && go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 **CI 里已经跑着**：`security-scan` job 装固定版本的 `govulncheck`（v1.7.0）跑全后端，前端跑
 `npm audit --audit-level=high`，Dockerfile 走 Trivy —— 这道门 PR 上本来就有，本地跑只是为了推之前先看见。
 
-本仓实测（2026-10-22）：用**生产同款** `go1.26.10` 跑 → `0 vulnerabilities`（标准库 0 条可达）；
+本仓实测（2026-11-12）：用**生产同款** `go1.26.11` 跑 → `0 vulnerabilities`（标准库 0 条可达）；
 用当时的本机 `go1.27.1` 跑 → `13 vulnerabilities from the Go standard library` 全部可达。
 同一份代码、同一天，差别只在工具链 —— 所以「本机扫出来一片红」先别慌，先看用的是哪个 Go。
 
