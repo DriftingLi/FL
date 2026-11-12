@@ -94,9 +94,37 @@ const LINE_BUDGET = 600;
  * 接通面消费页仍为 1（欢迎页唯一界面，#1879 裁决原样）；两端直出、**不新增 `#ifdef`**
  * （landingLoginContract 的计数锁 0 不破）；欢迎页零改动。
  * ⇒ 两把 sha 同步前进；其余每一行逐字节不变。判别力自检照旧。
+ *
+ * ⚠️ **蓝白商务改版第六次显式变更（2026-11-11，B 方案落地，同样不是绕过）**：
+ * 视觉重设计经原型确认（`pages/login/__prototype__/login-prototype.html` 三方案 → 选 B「左对齐紧凑」）。
+ * 模板块：header 收敛为左对齐品牌区（删右上「招聘者登录」，移到底部 footer——batch6 N06 负面机检
+ * 禁止自绘头部段出现可点元素，自绘头无页头件的胶囊让位保护）、新增下划线 tab（替代原底部
+ * mode-switch 常显行）、三模式输入框统一 `.field`（验证码/图形码内嵌输入框右侧）、「其他登录方式」
+ * 改为并排次级按钮（微信 + 账号密码/验证码登录，替代原 back-password 文字链 + 独立 wechat-entry）。
+ * 样式块：类名整批替换（input-wrap / code-btn / mode-switch / back-password / wechat-entry /
+ * recruiter-entry → field / inline-btn / tabs / alt-row / footer-link 等）；声明位 hex 一律走
+ * token 或既有白名单（主操作蓝沿用已登记的 `#2979FF`，不新增白名单行；`#2878F9` 与它视觉不可辨、
+ * 且新增第二个「历史蓝」豁免行无收益）。
+ * **行为面零变更**：脚本块逐字未动（mode 默认 phone、三模式校验、60s 倒计时、协议门控、
+ * 生物识别回填、微信纯导航、招聘者导航全保）；验证码按钮文案保持 `countdown + 's'` 原式
+ *（本文件「行为保持点」断言原样通过）。
+ * ⇒ 两把 sha 同步前进；脚本块与其余每一条行为断言逐字节不变。
+ *
+ * ⚠️ **蓝白商务改版第七次显式变更（2026-11-11，B 方案视觉二轮打磨，同样不是绕过）**：
+ * 用户对首轮落地反馈「样式一般、微信专属 logo 没上去」，只动视觉面：
+ * 模板 —— ① 品牌区 logo 加浅灰托底方块（`.logo-box`，把彩色标志收成应用图标）；
+ * ② 下划线 tab 改分段控件（`.tab-on` 白色活动块，替代 `.tab-line` 指示条）；
+ * ③ 其他登录方式改左对齐小标题 `.alt-caption`（删居中分隔线 `.divider-row/.divider-line/.divider-text`）；
+ * ④ 次级按钮由 `<button>` 改 `<view>`（`.alt-btn`）+ 微信品牌图标 `static/wechat-logo.png`（`.alt-icon`），
+ *    否则 `<image>` 无法作为 button 子节点；点击绑定仍走原 `goWechatLanding` / `switchMode(...)`；
+ * ⑤ footer 改「分隔线 + 一行两端对齐」（`.footer-line/.footer-row`，uvue 未验证 `border-top-*` 故用独立 view）。
+ * 样式 —— 新增 `$primary-tint` / `$success-tint` 两个既有 token（无新增裸 hex、无新增白名单行）；
+ * 主按钮加投影（`rgba(41,121,255,.28)`，与 points-detail 同款）；≤3 条声明的规则压成单行以守住 600 行预算。
+ * **行为面零变更**：脚本块逐字未动；入口与事件绑定一一对应（微信 / 账号密码 / 验证码登录 / 招聘者）。
+ * ⇒ 两把 sha 同步前进；其余每一条行为断言逐字节不变。
  */
-const TEMPLATE_SHA256 = '3e2d1d81407dabf5d39902ea21104a9be9d6e33b7eed580993a8e52585a8ee54';
-const STYLE_SHA256 = '955473dd40c097378a61d0b3e36b1eb54bab555060482358b5c31a4278ef1f89';
+const TEMPLATE_SHA256 = 'f5079f56e600a9e7afddaa97e8337b39184f980a63ed46e9c10293986257871d';
+const STYLE_SHA256 = 'cdcd6ea5e771f978ca896ab8faa7008ad6995e32d3d06ee1791ca15ed9d41fe2';
 
 /** 页面块（template / script / style）。模板**有嵌套** `<template v-if>` ⇒ 闭合取最后一个 */
 function block(src, tag) {
