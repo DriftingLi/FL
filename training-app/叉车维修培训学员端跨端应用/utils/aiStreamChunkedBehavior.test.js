@@ -77,6 +77,7 @@ function makeApi(opt = {}) {
     STORAGE_KEY_TOKEN: 'auth_token',
     getStorage: () => 'access-token',
     createSseParser: parserMod.createSseParser,
+    decodeUtf8: parserMod.decodeUtf8,
     uni: uni,
     console: console,
   });
