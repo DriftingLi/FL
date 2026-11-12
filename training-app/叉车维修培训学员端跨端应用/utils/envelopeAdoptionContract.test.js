@@ -73,6 +73,11 @@ const DOMAIN_TOTAL_READS = [
     why: 'by_tag 每项的 total = 该考点累计作答次数（后端 PracticeTagStat.Total，正确率的分母），不是分页总条数（#1948）',
   },
   {
+    file: 'api/realExam.uts',
+    fn: 'buildPaperPractice',
+    why: '按卷练习会话 total = 该卷题总数（后端 practicemode.PracticeStartResultDTO.Total），不是分页总条数（#2461）',
+  },
+  {
     file: 'api/wrongQuestion.uts',
     fn: 'buildWrongQuestionStats',
     why: '错题统计 /wrong-questions/stats 的 total = 错题总数（后端 WrongQuestionStatsDTO.Total）',

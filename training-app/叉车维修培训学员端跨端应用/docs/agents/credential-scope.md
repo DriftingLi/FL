@@ -35,8 +35,9 @@
 | `/mock-exam/*` | `api/mockExam.uts` |
 | `/favorites*` | `api/favorite.uts` |
 | `/contributions`（列表 / mine / upload-file） | `api/contribution.uts` |
+| `/real-exam/*` | `api/realExam.uts`（列卷 / 按卷练习 / 整卷考试 / 兑换，#2461 起） |
 
-> `/real-exam/*` 同样是 JWT + `CredentialScoped`，但**移动端没有消费面**（无 `api/realExam.uts`）。
+> 上表 `real-exam` 一行的证件分区同样由服务端兜底（`roleOf(c) == student`）：真题卷列表只显示当前证件的卷，端上不拼分区、不传 `credential_id`。
 
 ## 三、不分区（不传，传了也没用）
 

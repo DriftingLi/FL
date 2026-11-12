@@ -1,0 +1,151 @@
+/**
+ * 历年真题（真题卷）API 出口（#2461 / spec #2459）
+ *
+ * 后端 `/real-exam` 组四条路由（`backend/internal/realexam/handler.go:35-44`）与这里一一对应：
+ *   - GET  /real-exam/papers                  → listPapersApi（当前证件的卷列表）
+ *   - GET  /real-exam/papers/:id/practice     → startPaperPracticeApi（按卷练习开始/续练）
+ *   - POST /real-exam/papers/:id/exam         → startPaperExamApi（开整卷考试）
+ *   - POST /real-exam/papers/:id/redeem       → redeemPaperApi（积分兑换该卷）
+ *
+ * 本票四次出口一次建齐（票面 AC⑦）：页面只消费第一条，另三条由 #2463 / #2464 / #2462 接。
+ *
+ * ## 证件传参：沿用既有口径，**不显式传**
+ *
+ * 组级挂了 `CredentialScoped`：显式 query `credential_id > 0` 优先，否则按登录学员的
+ * `current_credential_id` 兜底（`backend/internal/middleware/credential_scope.go:24-51`）。
+ * 列卷的证件分区因此**由服务端兜底**，端上不拼分区、也不传 credential_id
+ * （`docs/agents/credential-scope.md`；`utils/credentialScopeContract.test.js` 的 FALLBACK_FNS 钉住这一点）。
+ *
+ * ## 两条不许越界的读侧纪律
+ *
+ *   ① 兑换回执**不作**「已兑换」判据：解锁状态唯一事实源是列表响应的 `entitled`
+ *      （ADR-0024 禁字符串比对），故这里只映射字段，成败判断留给消费方重拉列表。
+ *   ② 列表响应的 `data` 是**裸数组**（后端 `httpx.Endpoint[…, []RealExamPaperDTO]`），
+ *      裸数组/归一后的 `{ list: [...] }` 都靠 `decodeList` 兜底，别自己索引取键。
+ */
+import { getMapped, postMapped } from './request'
+import { decodeList } from './envelope'
+import { toNumber, toStr, toBool } from './helpers'
+import type {
+    RealExamPaper,
+    RealExamPaperPractice,
+    RealExamRedeemResult,
+    MockExamInfo,
+    ExamQuestion,
+    QuestionOption,
+    Question,
+} from '../types/index'
+
+/** 后端 options 是 Map，端上是数组（与 api/practice.uts、api/mockExam.uts 同形） */
+function buildOptions(raw : any | null) : QuestionOption[] {
+    const list : QuestionOption[] = []
+    if (raw == null) {
+        return list
+    }
+    const optsMap = raw as UTSJSONObject
+    for (const k in optsMap) {
+        list.push({ key: k, text: toStr(optsMap[k]) } as QuestionOption)
+    }
+    return list
+}
+
+/** 后端 questionbank.QuestionDTO → Question（与 /practice-mode 各出口同一模型） */
+function buildQuestion(obj : UTSJSONObject) : Question {
+    return {
+        question_id: toNumber(obj['id']),
+        type: toStr(obj['type']),
+        title: toStr(obj['content']),
+        options: buildOptions(obj['options']),
+        correct_answer: toStr(obj['answer']),
+        explanation: toStr(obj['explanation']),
+        knowledge_point: toStr(obj['knowledge_point_id']),
+    } as Question
+}
+
+/** 后端 RealExamPaperDTO → RealExamPaper
+ *  `year` / `source` 是 omitempty：缺省收成 0 与空串，显示口径交给展示层。 */
+function buildRealExamPaper(obj : UTSJSONObject) : RealExamPaper {
+    return {
+        paper_id: toNumber(obj['paper_id']),
+        title: toStr(obj['title']),
+        year: toNumber(obj['year']),
+        source: toStr(obj['source']),
+        question_count: toNumber(obj['question_count']),
+        duration_minutes: toNumber(obj['duration_minutes']),
+        entitled: toBool(obj['entitled']),
+        price: toNumber(obj['price']),
+    } as RealExamPaper
+}
+
+/** 后端 practicemode.PracticeStartResultDTO → RealExamPaperPractice */
+function buildPaperPractice(obj : UTSJSONObject) : RealExamPaperPractice {
+    const questions : Question[] = []
+    const raw = obj['questions']
+    if (raw != null) {
+        const arr = raw as Array<UTSJSONObject>
+        for (let i = 0; i < arr.length; i++) {
+            questions.push(buildQuestion(arr[i]))
+        }
+    }
+    return {
+        questions: questions,
+        current_index: toNumber(obj['current_index']),
+        total: toNumber(obj['total']),
+        completed: toNumber(obj['completed']),
+    } as RealExamPaperPractice
+}
+
+/** 后端 mockexam.MockExamStartDTO → MockExamInfo（整卷考试的题集与时长由后端按卷给定） */
+function buildPaperExamInfo(obj : UTSJSONObject) : MockExamInfo {
+    const questions : ExamQuestion[] = []
+    const raw = obj['questions']
+    if (raw != null) {
+        const arr = raw as Array<UTSJSONObject>
+        for (let i = 0; i < arr.length; i++) {
+            const q = arr[i]
+            questions.push({
+                question_id: toNumber(q['id']),
+                type: toStr(q['type']),
+                title: toStr(q['content']),
+                options: buildOptions(q['options']),
+                score: toNumber(q['score']),
+            } as ExamQuestion)
+        }
+    }
+    return {
+        mock_exam_id: toNumber(obj['mock_exam_id']),
+        questions: questions,
+        duration: toNumber(obj['duration']),
+        remaining_time: toNumber(obj['remaining_time']),
+    } as MockExamInfo
+}
+
+/** 后端 points.RedeemResult → RealExamRedeemResult */
+function buildRedeemResult(obj : UTSJSONObject) : RealExamRedeemResult {
+    return {
+        balance: toNumber(obj['balance']),
+        total_earned: toNumber(obj['total_earned']),
+        sku: toStr(obj['sku']),
+        ref_id: toStr(obj['ref_id']),
+    } as RealExamRedeemResult
+}
+
+/** 当前证件的真题卷列表（分区由服务端兜底，端上不传 credential_id） */
+export function listPapersApi() : Promise<RealExamPaper[]> {
+    return getMapped<RealExamPaper[]>('/real-exam/papers', null, (data : UTSJSONObject) : RealExamPaper[] => decodeList<RealExamPaper>(data, '/real-exam/papers', (obj : UTSJSONObject) : RealExamPaper => buildRealExamPaper(obj)))
+}
+
+/** 取按卷练习会话（卷序由后端固定；续练靠 mode=paper:<id> 的进度键，非本票范围） */
+export function startPaperPracticeApi(paperId : number) : Promise<RealExamPaperPractice> {
+    return getMapped<RealExamPaperPractice>('/real-exam/papers/' + paperId + '/practice', null, (data : UTSJSONObject) : RealExamPaperPractice => buildPaperPractice(data))
+}
+
+/** 开整卷考试（返回与模拟考试同形的 MockExamInfo，交卷/结果走既有链路） */
+export function startPaperExamApi(paperId : number) : Promise<MockExamInfo> {
+    return postMapped<MockExamInfo>('/real-exam/papers/' + paperId + '/exam', null, (data : UTSJSONObject) : MockExamInfo => buildPaperExamInfo(data))
+}
+
+/** 积分兑换该卷；回执只作展示，解锁状态以重拉列表的 entitled 为准（ADR-0024） */
+export function redeemPaperApi(paperId : number) : Promise<RealExamRedeemResult> {
+    return postMapped<RealExamRedeemResult>('/real-exam/papers/' + paperId + '/redeem', null, (data : UTSJSONObject) : RealExamRedeemResult => buildRedeemResult(data))
+}

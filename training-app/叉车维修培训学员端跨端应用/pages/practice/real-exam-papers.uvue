@@ -1,0 +1,113 @@
+<template>
+    <view class="page" :style="{ height: windowHeight + 'px' }">
+        <app-nav-bar title="历年真题" @left-click="onBack" divider></app-nav-bar>
+        <view class="summary-bar">
+            <text class="summary-text">{{ summaryText }}</text>
+        </view>
+        <scroll-view class="scroll-content" scroll-y="true" :refresher-enabled="true" :refresher-triggered="isRefreshing" @refresherrefresh="onRefresh">
+            <!-- 失败态与空态分开（AC⑥）：拉不到不能说成「真题建设中，敬请期待」 -->
+            <app-empty-state v-if="errorText.length > 0" icon="⚠️" :text="errorText" action-text="重试" @action="onRetry"></app-empty-state>
+            <view v-else-if="loading" class="loading">
+                <text class="loading-text">加载中...</text>
+            </view>
+            <app-empty-state v-else-if="papers.length == 0" icon="📄" :text="emptyText"></app-empty-state>
+            <view v-else>
+                <view v-for="group in groups" :key="group.title" class="group">
+                    <text class="group-title">{{ group.title }}</text>
+                    <view v-for="p in group.papers" :key="p.paper_id" class="paper-card">
+                        <text class="paper-title" lines="2">{{ p.title }}</text>
+                        <text class="paper-meta">{{ metaText(p) }}</text>
+                        <text v-if="p.entitled" class="paper-entitled">已解锁</text>
+                        <text v-else class="paper-price">{{ priceText(p) }}</text>
+                    </view>
+                </view>
+            </view>
+            <view class="safe-bottom"></view>
+        </scroll-view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref, computed } from 'vue'
+    import { onLoad } from '@dcloudio/uni-app'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
+    import appEmptyState from '../../components/app-empty-state/app-empty-state.uvue'
+    import { goBack } from '../../utils/navigation'
+    import { errMsg } from '../../api/helpers'
+    import { getCurrentCredentialApi } from '../../api/credential'
+    import { listPapersApi } from '../../api/realExam'
+    import { groupRealExamPapers, paperMetaText, paperPriceText, papersEmptyText, papersSummaryText } from '../../utils/realExamPapersDisplay'
+    import type { RealExamPaperGroup } from '../../utils/realExamPapersDisplay'
+    import type { RealExamPaper } from '../../types/index'
+
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+    const credentialName = ref<string>('')
+    const papers = ref<RealExamPaper[]>([])
+    const loading = ref<boolean>(false)
+    const errorText = ref<string>('')
+    const isRefreshing = ref<boolean>(false)
+
+    // 分组、逐卷 meta、价格行、空态与页头文案都在 utils/realExamPapersDisplay.uts 一处判定
+    const groups = computed<RealExamPaperGroup[]>(() : RealExamPaperGroup[] => groupRealExamPapers(papers.value))
+    const summaryText = computed<string>(() : string => papersSummaryText(credentialName.value, papers.value.length))
+    const emptyText = computed<string>(() : string => papersEmptyText(credentialName.value))
+
+    function metaText(p : RealExamPaper) : string { return paperMetaText(p) }
+    function priceText(p : RealExamPaper) : string { return paperPriceText(p.price) }
+
+    /** 证件名只用于页头与空态文案；读不到不阻断列表（证件分区由服务端兜底） */
+    async function loadCredential() : Promise<void> {
+        try {
+            const cred = await getCurrentCredentialApi()
+            credentialName.value = cred != null ? cred!.name : ''
+        } catch (e) {
+            console.warn('[real-exam-papers] credential failed:', e)
+        }
+    }
+
+    async function loadPapers() : Promise<void> {
+        loading.value = true
+        errorText.value = ''
+        try {
+            papers.value = await listPapersApi()
+        } catch (e) {
+            console.error('[real-exam-papers] papers failed:', e)
+            errorText.value = errMsg(e, '真题卷加载失败，请重试')
+        } finally {
+            loading.value = false
+        }
+    }
+
+    async function onRefresh() : Promise<void> {
+        isRefreshing.value = true
+        await loadCredential()
+        await loadPapers()
+        isRefreshing.value = false
+    }
+
+    async function onRetry() : Promise<void> {
+        await loadCredential()
+        await loadPapers()
+    }
+
+    function onBack() : void { goBack() }
+
+    onLoad((_options : OnLoadOptions) => { loadCredential(); loadPapers() })
+</script>
+
+<style lang="scss">
+    .page { display: flex; flex-direction: column; background-color: $bg-color; }
+    .summary-bar { background-color: $card-bg; padding: 16rpx 24rpx; }
+    .summary-text { font-size: 26rpx; color: $text-color-placeholder; }
+    .scroll-content { flex: 1; height: 0; }
+    .loading { padding: 60rpx 0; align-items: center; }
+    .loading-text { font-size: 26rpx; color: $text-color-placeholder; }
+    .group { padding: 0 24rpx; }
+    .group-title { font-size: 28rpx; font-weight: bold; color: $text-color; padding: 24rpx 0 12rpx; }
+    .paper-card { background-color: $card-bg; border-radius: 16rpx; padding: 24rpx; margin-bottom: 16rpx; }
+    .paper-title { font-size: 30rpx; color: $text-color; }
+    .paper-meta { font-size: 24rpx; color: $text-color-placeholder; margin-top: 8rpx; }
+    .paper-entitled { font-size: 24rpx; color: $text-color; margin-top: 8rpx; }
+    .paper-price { font-size: 24rpx; color: $text-color; margin-top: 8rpx; }
+    .safe-bottom { height: 34rpx; }
+</style>
