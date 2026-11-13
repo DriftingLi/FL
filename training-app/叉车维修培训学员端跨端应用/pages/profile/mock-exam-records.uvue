@@ -326,7 +326,7 @@ import { goBack } from '../../utils/navigation'
     }
 
     .status-passed {
-        background-color: #e8f5e9;
+        background-color: $success-tint;
     }
 
     .status-failed {

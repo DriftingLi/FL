@@ -388,8 +388,8 @@ import { goBack } from '../../utils/navigation'
 <style lang="scss">
     .container {
         display: flex;
-        background: linear-gradient(to bottom, #CFE9FB, #D0EBFD);
-        background-color: #D0EBFD;
+        background: linear-gradient(to bottom, $gradient-start, $gradient-mid);
+        background-color: $gradient-mid;
         flex-direction: column;
     }
 

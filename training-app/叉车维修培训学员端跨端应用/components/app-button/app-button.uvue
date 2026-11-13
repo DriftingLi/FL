@@ -40,16 +40,19 @@
         justify-content: center;
     }
 
-    /* Primary */
+    /* Primary（#2509 R2 冲突 8：主 CTA 换血为 #6ECCFD→#0CA2EF 渐变，原型 65 处/16 屏）。
+     * uvue 原生端只接受「to 关键字 + 恰好 2 个色值」，实色兜底必须写在 background 之后
+     * （gradientSyntaxContract 口径，同 §6.1 模板）。 */
     .app-btn--primary {
-        background-color: $primary-color;
+        background: linear-gradient(to bottom, $primary-grad-start, $primary-grad-end);
+        background-color: $primary-grad-end;
         border-radius: $radius-pill;
     }
 
-    /* Secondary */
+    /* Secondary（#2509 R2 冲突 9：透明底 → $primary-tint 浅蓝底 + 1px 主色边框） */
     .app-btn--secondary {
-        background-color: transparent;
-        border-width: 2rpx;
+        background-color: $primary-tint;
+        border-width: 1rpx;
         border-style: solid;
         border-color: $primary-color;
         border-radius: $radius-lg;

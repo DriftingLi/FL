@@ -115,9 +115,14 @@ describe('批5 N05 页面自垫底色（页头透明后背景由页面承担，�
     }
   });
 
-  it('profile 页自垫蓝渐变对（白名单在册，#1592 保留视觉不并 token）', () => {
+  it('profile 页自垫蓝渐变对改走 $primary-grad-* token（#2516 / #2509 R2 冲突 8）', () => {
+    // #1592 当时以「白名单在册、保留视觉不并 token」收口；#2509 R2 把这对色升格为主 CTA 渐变端点
+    // （$primary-grad-start/$primary-grad-end），#2516 B0 落地，白名单两行随之删除 —— 故此处由
+    // 「断言字面值」翻成「断言 token 引用」，视觉值不变（#6ECCFD/#0CA2EF）。
     const style = styleBlock(read('pages/profile/profile.uvue'));
-    expect(style).toMatch(/linear-gradient\(to bottom,\s*#6ECCFD,\s*#0CA2EF\)/i);
+    expect(style).toMatch(/linear-gradient\(to bottom,\s*\$primary-grad-start,\s*\$primary-grad-end\)/);
+    expect(style).toMatch(/background-color:\s*\$primary-grad-end/);
+    expect(style).not.toMatch(/#6ECCFD|#0CA2EF/i);
   });
 
   it('resume 页自垫灰底 $bg-header 语义值 #F5F6FA（白名单在册）；login 自垫 $bg-header token', () => {

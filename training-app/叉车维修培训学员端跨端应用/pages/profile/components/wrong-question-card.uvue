@@ -393,7 +393,7 @@
     }
 
     .option-correct {
-        background-color: #e8f5e9;
+        background-color: $success-tint;
         border-color: #4caf50;
     }
 
@@ -456,7 +456,7 @@
     }
 
     .redo-result.correct {
-        background-color: #e8f5e9;
+        background-color: $success-tint;
     }
 
     .redo-result.wrong {

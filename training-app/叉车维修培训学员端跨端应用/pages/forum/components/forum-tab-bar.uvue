@@ -42,7 +42,7 @@
     }
 </script>
 
-<style>
+<style lang="scss">
     /* 顶部Tab栏 */
     .tab-bar {
         flex-direction: row;
@@ -69,7 +69,7 @@
     }
 
     .tab-item.active .tab-text {
-        color: #1a1a1a;
+        color: $text-strong;
         font-weight: bold;
     }
 

@@ -42,15 +42,17 @@
         color: $text-color-secondary;
     }
 
+    /* #2509 R2 冲突 11：选中文字改深色（原型 322:9139 = #333333 16px w500），色彩让给指示条；
+     * 指示条 = 20×4rpx、R=10（$radius-sm 之外的独立几何，故直接写 rpx）。 */
     .app-tab-text--active {
-        color: $primary-color;
-        font-weight: 600;
+        color: $text-color;
+        font-weight: 500;
     }
 
     .app-tab-underline {
-        width: 40rpx;
+        width: 20rpx;
         height: 4rpx;
-        background-color: $primary-color;
+        background-color: $segment-indicator;
         border-radius: 2rpx;
         margin-top: 8rpx;
     }

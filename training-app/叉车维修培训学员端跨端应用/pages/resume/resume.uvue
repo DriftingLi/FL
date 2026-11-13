@@ -320,7 +320,7 @@
     .resume-guide-text {
         font-size: 30rpx;
         font-weight: bold;
-        color: #1a1a1a;
+        color: $text-strong;
         margin-top: 12rpx;
     }
 

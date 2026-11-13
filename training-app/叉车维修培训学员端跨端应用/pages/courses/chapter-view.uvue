@@ -430,7 +430,7 @@ import { goBack } from '../../utils/navigation'
 
     .status-tag.completed {
         color: #4caf50;
-        background-color: #e8f5e9;
+        background-color: $success-tint;
     }
 
     .status-tag.studying {

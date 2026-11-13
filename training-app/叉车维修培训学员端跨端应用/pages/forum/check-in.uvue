@@ -330,7 +330,7 @@ import { goBack } from '../../utils/navigation'
     .reminder-label { font-size: 30rpx; font-weight: bold; color: #333333; }
     .reminder-right { flex-direction: row; align-items: center; }
     .reminder-text { font-size: 24rpx; color: #999999; margin-right: 12rpx; }
-    .switch { width: 84rpx; height: 48rpx; border-radius: 24rpx; background-color: #d9d9d9; justify-content: center; padding: 0 4rpx; }
+    .switch { width: 84rpx; height: 48rpx; border-radius: 24rpx; background-color: $checkin-cell-miss; justify-content: center; padding: 0 4rpx; }
     .switch-on { background-color: #2979ff; justify-content: flex-end; }
     .switch-knob { width: 40rpx; height: 40rpx; border-radius: 20rpx; background-color: #ffffff; }
     .month-bar { flex-direction: row; align-items: center; justify-content: center; padding: 20rpx 0; }

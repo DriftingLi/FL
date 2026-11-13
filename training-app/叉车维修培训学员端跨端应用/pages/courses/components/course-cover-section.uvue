@@ -40,7 +40,7 @@
     })
 </script>
 
-<style>
+<style lang="scss">
     /* ===== 封面区 ===== */
     .cover-section {
         background-color: #ffffff;
@@ -65,7 +65,7 @@
     .cover-title {
         font-size: 40rpx;
         font-weight: bold;
-        color: #1a1a1a;
+        color: $text-strong;
         line-height: 56rpx;
         margin-bottom: 16rpx;
     }

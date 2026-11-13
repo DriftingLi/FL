@@ -36,7 +36,7 @@
     })
 </script>
 
-<style>
+<style lang="scss">
     /* 题目详情列表 */
     .detail-list {
         padding: 0 24rpx;
@@ -74,7 +74,7 @@
 
     .status-correct {
         color: #4caf50;
-        background-color: #e8f5e9;
+        background-color: $success-tint;
     }
 
     .status-wrong {

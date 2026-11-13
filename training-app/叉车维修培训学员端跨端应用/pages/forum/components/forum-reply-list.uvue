@@ -450,7 +450,7 @@
     .reply-accepted-badge {
         font-size: 20rpx;
         color: #4caf50;
-        background-color: #e8f5e9;
+        background-color: $success-tint;
         padding: 2rpx 12rpx;
         border-radius: 12rpx;
         margin-left: 12rpx;
@@ -464,7 +464,7 @@
     }
 
     .reply-accept-btn {
-        background-color: #e8f5e9;
+        background-color: $success-tint;
         padding: 8rpx 24rpx;
         border-radius: 24rpx;
         border: 1rpx solid #4caf50;

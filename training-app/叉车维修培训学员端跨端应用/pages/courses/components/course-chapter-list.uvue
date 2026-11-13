@@ -82,7 +82,7 @@
     .section-title {
         font-size: 32rpx;
         font-weight: bold;
-        color: #1a1a1a;
+        color: $text-strong;
     }
 
     .chapter-count {
@@ -129,7 +129,7 @@
     }
 
     .chapter-item.chapter-completed .chapter-index {
-        background-color: #e8f5e9;
+        background-color: $success-tint;
     }
 
     .chapter-index-text {
