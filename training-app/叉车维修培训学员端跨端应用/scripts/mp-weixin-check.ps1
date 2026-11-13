@@ -553,7 +553,7 @@ function Invoke-DevToolsClose {
         # 把这层预期写进日志，免得下一个人把 Invoke-Process 的 [warn] 读成故障。
         if ($r.DrainAbandoned) { Write-Log ">>> $($closeStep.tag)：主进程已退出，输出流被常驻 IDE 继承（DrainAbandoned=true，预期行为，不影响结论）" }
         Write-Log "`n>>> $($closeStep.tag)`n$($r.Output)"
-        Write-Host $r.Output
+        # #2526：全量输出已由上行 Write-Log 落 .ci-verify/mp-weixin.log，stdout 默认只留状态/结果/✅ 汇总行
     } catch {
         Write-Host "[warn] cli.bat close 失败（不影响门结论）：$_" -ForegroundColor Yellow
     }
@@ -615,7 +615,7 @@ try {
                 @{ Tag = 'project-open'; Args = @('project', 'open', '--path', $Project) })) {
             $r = Invoke-Process -FilePath $cliExe -Arguments $step.Args -TimeoutSeconds $PublishTimeoutSeconds -Tag $step.Tag
             Write-Log "`n>>> $($step.Tag)`n$($r.Output)"
-            Write-Host $r.Output
+            # #2526：全量输出已由上行 Write-Log 落日志，stdout 不再回显
             if ($r.Output -match '与主程序的连接已中断|启动超时') {
                 Write-Host '[error] HBuilderX CLI 连不上主程序：受限/沙箱会话会阻断 CLI↔主程序的本地 IPC。' -ForegroundColor Red
                 Write-Log "$(Get-GateResultPrefix) errors=env-blocked reason=cli-ipc-blocked"
@@ -645,7 +645,7 @@ try {
         $pubSw.Stop()
         $publishSeconds = [int]$pubSw.Elapsed.TotalSeconds
         Write-Log "`n>>> publish-mp-weixin`n$($pub.Output)"
-        Write-Host $pub.Output
+        # #2526：全量输出已由上行 Write-Log 落日志，stdout 不再回显
         if ($pub.Output -match '与主程序的连接已中断') {
             Write-Host '[error] HBuilderX CLI 连不上主程序（见日志）。' -ForegroundColor Red
             Write-Log "$(Get-GateResultPrefix) errors=env-blocked reason=cli-ipc-blocked"
