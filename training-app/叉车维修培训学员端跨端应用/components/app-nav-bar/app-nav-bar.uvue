@@ -310,7 +310,9 @@
 
     .nav-bar-title {
         font-size: $font-size-xl;
-        font-weight: bold;
+        /* #2509 R2 冲突 12：页头标题 700 → 600（原型 51 条大标题全无 700，w500/w600 并存后收敛为 600）。
+         * 只动 UI 标题；阅读刻度 $md-weight-heading 仍 700（原型未覆盖阅读面）。 */
+        font-weight: 600;
         color: $text-color;
         /* #2480：铺满标题块内容盒，lines:1 + ellipsis 才在二级页生效（不铺满则按
            max-content 撑出块、压到右槽动作）。缩进改由标题块 margin-left 承担。 */

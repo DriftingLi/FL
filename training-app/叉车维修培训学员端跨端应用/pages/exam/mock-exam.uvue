@@ -197,7 +197,7 @@ import { goBack } from '../../utils/navigation'
     }
 
     .palette-chip.palette-answered {
-        background-color: #e8f5e9;
+        background-color: $success-tint;
         border-color: #4caf50;
     }
 

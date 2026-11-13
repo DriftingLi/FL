@@ -21,7 +21,9 @@
 </script>
 
 <style lang="scss">
-    /* 筛选标签（#979）：未选中 = 浅灰底次要字；选中 = 主色实底反白 —— 把色彩留给「当前档位」 */
+    /* 筛选标签（#979 建立；#2509 R2 冲突 10 翻案）：未选中 = 浅灰底次要字；选中 = **底色不变**
+     * + 深色加粗字。原型两态底色同为 #F5F5F5（807:2035 / 807:2190），主色实底反白在筛选栏里
+     * 被判为过重，只保留给 Tab 页签类场景（见 app-tabs）。 */
     .app-chip {
         padding: 16rpx 32rpx;
         border-radius: $radius-pill;
@@ -29,16 +31,17 @@
     }
 
     .app-chip--active {
-        background-color: $primary-color;
+        background-color: $bg-color;
     }
 
     .app-chip-text {
         font-size: $font-size-sm;
         color: $text-color-secondary;
+        font-weight: 400;
     }
 
     .app-chip-text--active {
-        color: $text-color-inverse;
+        color: $text-color;
         font-weight: 600;
     }
 </style>

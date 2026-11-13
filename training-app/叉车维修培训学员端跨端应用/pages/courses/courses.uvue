@@ -403,7 +403,7 @@
     .section-card-title {
         font-size: 32rpx;
         font-weight: 700;
-        color: #1a1a1a;
+        color: $text-strong;
         margin-bottom: 16rpx;
     }
 
@@ -423,7 +423,7 @@
     }
 
     .filter-tag--active {
-        background-color: #EBF5FF;
+        background-color: $primary-tint;
         border-color: $primary-color;
     }
 
@@ -486,7 +486,7 @@
     .course-item-title {
         font-size: 30rpx;
         font-weight: 600;
-        color: #1a1a1a;
+        color: $text-strong;
         margin-bottom: 6rpx;
     }
 
@@ -501,7 +501,7 @@
         margin-left: 16rpx;
         padding: 6rpx 16rpx;
         border-radius: 8rpx;
-        background-color: #EBF5FF;
+        background-color: $primary-tint;
     }
 
     .course-item-price-text {

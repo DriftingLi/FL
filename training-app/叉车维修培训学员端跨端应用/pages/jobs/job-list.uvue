@@ -341,7 +341,7 @@
     }
 
     .tab-text.active {
-        color: #1a1a1a;
+        color: $text-strong;
         font-weight: bold;
     }
 

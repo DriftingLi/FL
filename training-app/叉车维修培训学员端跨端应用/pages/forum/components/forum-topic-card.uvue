@@ -227,7 +227,7 @@
     }
 
     .status-badge.status-resolved {
-        background-color: #e8f5e9;
+        background-color: $success-tint;
     }
 
     .status-badge-text {

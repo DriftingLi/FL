@@ -112,7 +112,7 @@
     }
 
     .file-icon-image {
-        background-color: #e8f5e9;
+        background-color: $success-tint;
     }
 
     .file-icon-default {

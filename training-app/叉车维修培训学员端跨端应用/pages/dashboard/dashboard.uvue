@@ -324,7 +324,7 @@
     }
 
     .filter-chip--active {
-        background-color: #EBF5FF;
+        background-color: $primary-tint;
         border-color: #2979FF;
     }
 

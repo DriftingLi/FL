@@ -338,8 +338,8 @@
     .container {
         flex: 1;
         /* 批5 N05（票1608）：本页保留原型蓝渐变（非 §6.1 通用渐变对，色值入 uiHexWhitelist 留痕） */
-        background: linear-gradient(to bottom, #6ECCFD, #0CA2EF);
-        background-color: #0CA2EF;
+        background: linear-gradient(to bottom, $primary-grad-start, $primary-grad-end);
+        background-color: $primary-grad-end;
         flex-direction: column;
     }
 
@@ -383,7 +383,7 @@
     }
 
     .stats-num-green {
-        color: #14AE50;
+        color: $success-color;
     }
 
     .stats-num-blue {

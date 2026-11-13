@@ -81,7 +81,7 @@ $uni-font-size-paragraph:15px;
 $primary-color: #239EDD; // #1597 裁定 #2979ff → #239EDD（#1603 落地）
 $primary-color-light: #5b9aff;
 $primary-color-dark: #1c9eff;
-$success-color: #4cd964;
+$success-color: #14AE50; // 原型裁定（#2509 R2 冲突 2）：#4cd964 在 69 屏原型 0 次；绿收敛为单值 #14AE50
 $warning-color: #ff9900;
 /* $error-color（原 #dd524d）已删：与 $danger-color（:137 一带）同语义位，#1597 Z12 裁定删定义留占位（#1603） */
 
@@ -92,29 +92,35 @@ $text-color-placeholder: #999999;
 $text-color-inverse: #ffffff;
 /* 禁用 / 弱化文字（ui-spec 1.4 记作 $text-disabled；此前只在页面上以 #cccccc 字面值出现） */
 $text-disabled: #cccccc;
-/* 强调文字黑（#2338 裁定的 `$text-strong`：比 $text-color 更深；阅读刻度的 h1–h3 引它，
- * 值来自现状四渲染器 `.md-heading` 的裸 hex #1a1a1a） */
-$text-strong: #1a1a1a;
+/* 强调文字黑（#2338 裁定的 `$text-strong`：比 $text-color 更深；阅读刻度的 h1–h3 引它）。
+ * 值 #1a1a1a → #000000 是 #2509 R2 冲突 7 的裁定（原型强调文字 111 处均为纯黑）；
+ * 本次只翻 token 值，渲染面已按 #2352/#2353–#2356 引 token，无需逐页改字面量。 */
+$text-strong: #000000;
 /* 链接与可点文字（#2338 裁定：品牌色相的唯一消费点；白卡对比度 5.53、原 #2979ff 只有 3.16–3.98）。
- * 落地在 #2356：论坛正文的句内链接是它的第一个消费者（此前全仓零命中，token 只停在裁定里）。 */
+ * 落地在 #2356：论坛正文的句内链接是它的第一个消费者。
+ *
+ * **#2509 R2 冲突 6 的不落地例外（#2516 明写）**：原型侧链接实测为 #2B77FE、裁定建议并入主色
+ * #239EDD，但 #239EDD on #FFFFFF 实测对比度仅 **3.00**，不足正文 WCAG AA 4.5:1；本值 5.53 达标，
+ * 且被 `utils/markdownTypographyContract.test.js` ⑥ 硬钉（注释 :24/:292 声明「挪走 token 值必须判红」）。
+ * 因此 B0 保留 #1b6f9c，改值留待单独的对比度/链接色裁定票。 */
 $color-link: #1b6f9c;
 
 /* 背景色 */
-$bg-color: #f8f8f8;
+$bg-color: #F5F5F5; // #2509 R2 冲突 4：原型填充 246 处为 #F5F5F5；与 $gradient-end 同值不同语义
 $card-bg: #ffffff;
 /* 页面画布淡蓝调（#979 搜索页：白卡浮在淡蓝画布上，避免整页纯白/纯灰） */
 $bg-tint: #f1f6ff;
-/* 主色浅底（分区标题带、选中标签、历史 chip 底；收敛此前散落的 #EBF5FF 字面值） */
-$primary-tint: #ebf5ff;
+/* 主色浅底（分区标题带、选中标签、历史 chip 底）。#2509 R2 冲突 1：值 #ebf5ff → #EBF9FF */
+$primary-tint: #EBF9FF;
 /* 白底页头套底色（N02/N03 套，#1592/#1603 新增，ui-spec §1.2 登记） */
 $bg-header: #ffffff;
 /* 状态浅底三 tint（#1597/#1603 新增，ui-spec §1.3 登记；收敛页面散落的同义字面值） */
-$success-tint: #e8f5e9;
+$success-tint: #ECFFF2; // #2509 R2 冲突 3：原型成功浅底 = #ECFFF2
 $warning-tint: #fff3e0;
 $danger-tint: #ffebee;
 
-/* 边框色 */
-$border-color: #e5e5e5;
+/* 边框色（#2509 R2 冲突 5：内容区分隔线 #e5e5e5 → #D9D9D9，原型描边 111 处） */
+$border-color: #D9D9D9;
 $border-color-light: #f0f0f0;
 
 /* 圆角（rpx） */
@@ -123,6 +129,7 @@ $radius-md: 16rpx;
 $radius-lg: 24rpx;
 $radius-xl: 32rpx;
 $radius-pill: 999rpx;
+$radius-card: 20rpx; // #2509 R2 新增：原型卡面圆角 20rpx（卡类容器专用，区别于 $radius-lg 的 24rpx）
 
 /* 间距（rpx） */
 $spacing-xs: 8rpx;
@@ -137,7 +144,11 @@ $font-size-sm: 24rpx;
 $font-size-md: 28rpx;
 $font-size-lg: 32rpx;
 $font-size-xl: 36rpx;
-/* $font-size-xxl（原 44rpx）已删：全站零消费 + 两份文档均写明「统一为 5 级」，#1597 Z7/C4 裁定删定义留占位（#1603） */
+/* $font-size-xxl（原 44rpx）已删：全站零消费 + 两份文档均写明「统一为 5 级」，#1597 Z7/C4 裁定删定义留占位（#1603）。
+ * #2516 补 2xl/3xl 两档是 #2509 R2 的新增裁定（原型标题 40/48rpx 有实际消费面），
+ * 与原「5 级」不冲突：那五级是界面字号，这两档是**标题层级**的补充档。 */
+$font-size-2xl: 40rpx;
+$font-size-3xl: 48rpx;
 
 /* ==================== 扩展 Token（UI 规范新增） ==================== */
 
@@ -150,6 +161,52 @@ $danger-color: #ff3b30;
 
 /* 输入框边框 */
 $input-border: #e5e5e5;
+
+/* ==================== 原型换血 Token（#2509 R2 裁定 · #2516 B0 落地） ====================
+ * 逐值出处见 `.scratch/figma-proto-export/TOKEN_DECISIONS.md`（69 屏 PNG + deep.json 频次）。
+ * 分组与裁定一致：品牌黄三件套 / 主 CTA 渐变四端点 / 品牌-页头渐变对 / 打卡格四态 /
+ * TabBar 三色 / 功能强调四色 / 中性面二值 / 几何与字号三档。
+ * 约束：#2509 新增 27 条里 `$checkin-cell-streak` 复用 `$accent-yellow`（默认位 null），按裁定计 4 项。
+ */
+
+/* 品牌黄三件套（433:751 品牌色圆声明：黄升格第三品牌色；打卡格 / 积分底 / 评分星） */
+$accent-yellow: #FDE03B;
+$accent-yellow-tint: #FDF9E6;
+$text-on-yellow: #271309;
+
+/* 主 CTA 渐变四端点（原型主 CTA 65 处/16 屏一律 `#6ECCFD`→`#0CA2EF`，含 pressed 对） */
+$primary-grad-start: #6ECCFD;
+$primary-grad-end: #0CA2EF;
+$primary-grad-pressed-start: #239EDD;
+$primary-grad-pressed-end: #139DE4;
+
+/* 品牌 / 页头渐变对（我的页整页渐变、页头蓝转白） */
+$brand-grad-start: #239EDD;
+$brand-grad-end: #14AE50;
+$header-grad-start: #239EDD;
+$header-grad-end: #FFFFFF;
+/* 渐变中停靠色：uvue 原生端两停靠限制下只 web 预览可用（gradientSyntaxContract 口径） */
+$gradient-mid: #D0EBFD;
+
+/* 打卡格四态（G8 日历套） */
+$checkin-cell-miss: #D9D9D9;
+$checkin-cell-past-miss: #ECECEC;
+$checkin-cell-inactive: rgba(255, 255, 255, 0.80);
+$checkin-cell-streak: $accent-yellow;
+
+/* TabBar 三色（pages.json 原生 tabBar 已同值；此处是 token 侧登记） */
+$tabbar-bg: #FFFFFF;
+$tabbar-active: #239EDD;
+$tabbar-inactive: #999999;
+
+/* 功能强调四色 */
+$color-price: #FF2424;
+$answer-correct: #7BD398;
+$answer-wrong: #FF5A5A;
+$segment-indicator: #239EDD;
+
+/* 中性面二值 */
+$tag-bg-neutral: #ECECEC;
 
 /* ==================== 阅读刻度（Markdown 正文 · #2352） ====================
  * **一套值只在这里出现一次**：四面（课程章节 / 内容精选 / 论坛 / AI 气泡）与块级渲染组件

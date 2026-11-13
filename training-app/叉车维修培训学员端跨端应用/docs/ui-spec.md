@@ -39,10 +39,10 @@
 
 | Token | 色值 | 用途 |
 |---|---|---|
-| `$primary-color` | **`#239EDD`** | 按钮、选中态、Tab 高亮、链接、**主色 header / 状态栏**（N01 蓝底套） |
-| `$primary-color-light` | `#5b9aff` | 渐变底部、hover 态（随主色轮换一并复评） |
-| `$primary-color-dark` | `#1c9eff` | 按钮 pressed 态（同上） |
-| `$primary-tint` | `#ebf5ff` | 主色浅底（分区标题带、选中标签底、历史 chip 底） |
+| `$primary-color` | **`#239EDD`** | 选中态、Tab 高亮、**主色 header / 状态栏**（N01 蓝底套）——**#2509 R2 起不再直接做按钮底色**（主 CTA 改 §5.3 渐变对） |
+| `$primary-color-light` | `#5b9aff` | **#2509 R2 起待退役**：原「渐变底部」用途被 `$primary-grad-*`（§1.7）取代，全仓 `.uvue` 零消费 |
+| `$primary-color-dark` | `#1c9eff` | **#2509 R2 起待退役**：pressed 态改 `$primary-grad-pressed-*`（§1.7），全仓 `.uvue` 零消费 |
+| `$primary-tint` | `#EBF9FF` | 主色浅底（分区标题带、选中标签底、历史 chip 底）；**#2509 R2 冲突 1 改值**（原 `#ebf5ff`） |
 
 > **换色执行口径**：`uni.scss` 只改两处——`:18` `$uni-color-primary` 与 `:81` `$primary-color`，单点生效，**禁止逐页改字面色值**；
 > 页面上残留的 `#2979ff` 字面值（#1595 实测 213 处/44 页）由逐页替换执行票收敛。主色字面值**不进**机检白名单（§9）。
@@ -59,8 +59,8 @@
 | Token | 色值 | 用途 |
 |---|---|---|
 | `$gradient-start` | `#CFE9FB` | 渐变顶部（tabBar 页面专用） |
-| `$gradient-end` | `#F5F5F5` | 渐变底部（**2026-10-10 裁定 #1597 C3**：tabBar 渐变方向改 `to bottom`，终点采 `$gradient-end`；`#D0EBFD` 退役） |
-| `$bg-color` | `#F8F8F8` | 通用页面背景 |
+| `$gradient-end` | `#F5F5F5` | 渐变底部（**2026-10-10 裁定 #1597 C3**：tabBar 渐变方向改 `to bottom`，终点采 `$gradient-end`）。#2509 R2 后 `#D0EBFD` 以 `$gradient-mid`（§1.7）回到登记面，但仅 web 预览可用 |
+| `$bg-color` | `#F5F5F5` | 通用页面背景；**#2509 R2 冲突 4 改值**（原 `#F8F8F8`，原型填充 246 处） |
 | `$bg-tint` | `#F1F6FF` | 淡蓝画布（列表/结果页：白卡浮于其上，避免整页纯白） |
 | `$bg-header` | `#ffffff` | **白底页头套底色（2026-10-10 新增，N02/N03 套）**——登记进 `uni.scss` 与本节 |
 
@@ -68,10 +68,10 @@
 
 | Token | 色值 | 用途 |
 |---|---|---|
-| `$success-color` | `#4cd964` | 成功状态 |
+| `$success-color` | `#14AE50` | 成功状态；**#2509 R2 冲突 2 改值**（原 `#4cd964` 原型 0 次） |
 | `$warning-color` | `#ff9900` | 警告状态 |
 | `$danger-color` | `#ff3b30` | 危险操作（退出登录、删除） |
-| `$success-tint` | `#e8f5e9` | **新增**：成功浅底（存量 17 处） |
+| `$success-tint` | `#ECFFF2` | 成功浅底；**#2509 R2 冲突 3 改值**（原 `#e8f5e9`，存量 17 处） |
 | `$warning-tint` | `#fff3e0` | **新增**：警告浅底（存量 8 处） |
 | `$danger-tint` | `#ffebee` | **新增**：危险浅底（存量 7 处，`#fff0f0` 并入） |
 
@@ -85,8 +85,8 @@
 | `$text-color-secondary` | `#666666` | 次要文字（描述、副标题、结果片段） |
 | `$text-color-placeholder` | `#999999` | 辅助文字（日期、placeholder） |
 | `$text-disabled` | `#cccccc` | 禁用 / 弱化文字 |
-| `$text-strong` | `#1a1a1a` | 强调文字黑（标题 / 选中态文字；阅读刻度的 h1–h3 引它，#2338 裁定） |
-| `$color-link` | `#1b6f9c` | 链接与可点文字（品牌色相的唯一消费点；白卡对比度 5.53，原 `#2979ff` 只有 3.16–3.98，#2338 裁定、#2356 落地） |
+| `$text-strong` | `#000000` | 强调文字黑（标题 / 选中态文字；阅读刻度的 h1–h3 引它，#2338 裁定）；**#2509 R2 冲突 7 改值**（原 `#1a1a1a`，原型强调文字 111 处纯黑） |
+| `$color-link` | `#1b6f9c` | 链接与可点文字（品牌色相的唯一消费点；白卡对比度 5.53，原 `#2979ff` 只有 3.16–3.98，#2338 裁定、#2356 落地）。**#2509 R2 冲突 6 明确不落地**（#2516 裁定）：主色 `#239EDD` 白卡仅 3.00，不足 AA 4.5:1，保留本值 |
 | `$text-color-inverse` | `#ffffff` | 反色文字（深色背景上） |
 
 ### 1.5 表面与边框
@@ -94,7 +94,7 @@
 | Token | 色值 | 用途 |
 |---|---|---|
 | `$card-bg` | `#ffffff` | 卡片背景 |
-| `$border-color` | `#e5e5e5` | 分隔线、卡片边框（**内容区分隔线的唯一值**，§7 共同格） |
+| `$border-color` | `#D9D9D9` | 分隔线、卡片边框（**内容区分隔线的唯一值**，§7 共同格）；**#2509 R2 冲突 5 改值**（原 `#e5e5e5`，原型描边 111 处） |
 | `$border-color-light` | `#f0f0f0` | 更浅的分隔线（列表行内分隔；**#1596 残留裁定：`#EEEEEE` 不采，非 token**） |
 | `$input-border` | `#e5e5e5` | 输入框边框 |
 
@@ -102,6 +102,41 @@
 
 存量基线 2142 处声明位/171 种色值（#1593 口径）：裁定 1–6 收敛约 1440 处，余约 700 处属**低频内容色**（130 种、每种 ≤4 次）——
 **逐值一行理由入册**（写在机检白名单文件里，注明「哪个文件为什么留」），**不按次数自动豁免**。Material 近似族（如 `#f44336`→`$danger-color`，约 135 处）收敛进既有 token，不进白名单。
+
+### 1.7 原型换血新增 Token（2026-11-13 裁定 #2509 R2 · #2516 **B0** 落地）
+
+> 出处：`.scratch/figma-proto-export/TOKEN_DECISIONS.md`（69 屏 PNG + deep.json 频次）。本节 27 条是
+> `uni.scss` 业务段「原型换血 Token」段的登记面，两侧由 `utils/uiDocDocMapContract.test.js` 双向对账。
+
+| Token | 色值 | 用途 |
+|---|---|---|
+| `$accent-yellow` | `#FDE03B` | 品牌黄（433:751 品牌色圆声明；打卡格、积分底、评分星） |
+| `$accent-yellow-tint` | `#FDF9E6` | 品牌黄浅底 |
+| `$text-on-yellow` | `#271309` | 黄底上的文字色 |
+| `$primary-grad-start` | `#6ECCFD` | 主 CTA 渐变起（原型 65 处/16 屏） |
+| `$primary-grad-end` | `#0CA2EF` | 主 CTA 渐变止 / 实色兜底 |
+| `$primary-grad-pressed-start` | `#239EDD` | 主 CTA 按下态渐变起 |
+| `$primary-grad-pressed-end` | `#139DE4` | 主 CTA 按下态渐变止 |
+| `$brand-grad-start` | `#239EDD` | 品牌渐变起（着陆页） |
+| `$brand-grad-end` | `#14AE50` | 品牌渐变止 |
+| `$header-grad-start` | `#239EDD` | 页头渐变起 |
+| `$header-grad-end` | `#FFFFFF` | 页头渐变止（蓝转白） |
+| `$gradient-mid` | `#D0EBFD` | 浅蓝中停靠（forum 页头渐变尾色；原生端仍是两停靠，仅 web 预览用中停靠） |
+| `$checkin-cell-miss` | `#D9D9D9` | 打卡格：未打卡 |
+| `$checkin-cell-past-miss` | `#ECECEC` | 打卡格：过去未打卡 |
+| `$checkin-cell-inactive` | `rgba(255, 255, 255, 0.80)` | 打卡格：不可用 |
+| `$checkin-cell-streak` | `$accent-yellow` | 打卡格：连续打卡（复用品牌黄，不重复立值） |
+| `$tabbar-bg` | `#FFFFFF` | TabBar 底色 |
+| `$tabbar-active` | `#239EDD` | TabBar 选中（与 pages.json 原生 tabBar 同值） |
+| `$tabbar-inactive` | `#999999` | TabBar 未选中（同上） |
+| `$color-price` | `#FF2424` | 价格强调红 |
+| `$answer-correct` | `#7BD398` | 答题正确 |
+| `$answer-wrong` | `#FF5A5A` | 答题错误（收敛 #DF6454） |
+| `$segment-indicator` | `#239EDD` | 分段控件指示条（20×4rpx，R=10） |
+| `$tag-bg-neutral` | `#ECECEC` | 中性标签底 |
+| `$radius-card` | `20rpx` | 卡面容圆角（区别于 `$radius-lg` 24rpx） |
+| `$font-size-2xl` | `40rpx` | 标题层级 2xl（原型 h1 40rpx） |
+| `$font-size-3xl` | `48rpx` | 标题层级 3xl（原型大标题 48rpx） |
 
 ---
 
@@ -211,7 +246,7 @@
 - 高度：`88rpx`（**不含状态栏**；开启 `showToolbar` 时再加一行 `88rpx`，见「多动作落点」）
 - 状态栏占位：由本件内部按 `useSafeArea()` 取值渲染，**页面不再自带 `<view class="status-bar">`**
 - 右侧按钮区：右边界**不得越过微信胶囊左边界**（`getMenuButtonBoundingClientRect().left` − 安全间距），也不得写死魔数
-- 标题：`$font-size-xl`（36rpx），font-weight bold；**一级页（无返回箭头）居中于屏幕中心**（#2479 / ADR-0069），**二级页**（有返回箭头）在返回箭头后**左对齐**（ADR-0067 决定 5）；标题铺满标题块内容盒，过长省略，不覆盖右槽动作（#2480）
+- 标题：`$font-size-xl`（36rpx），font-weight **600**（#2509 R2 冲突 12：原型 51 条大标题 **0 处 700**，w500/w600 收敛为 600；阅读刻度 `$md-weight-heading` 仍 700，不随动）；**一级页（无返回箭头）居中于屏幕中心**（#2479 / ADR-0069），**二级页**（有返回箭头）在返回箭头后**左对齐**（ADR-0067 决定 5）；标题铺满标题块内容盒，过长省略，不覆盖右槽动作（#2480）
 - 左侧返回按钮：`‹` 字符，`44rpx`
 - 右侧图标：`44rpx`
 - 背景：随页头套走（§7：N01 `$primary-color` / N02–N03 `$bg-header` / N05 `transparent` 页面自垫 / N06 白名单无页头）
@@ -259,7 +294,8 @@
 
 ### 5.3 主按钮（appButton type=primary）
 
-- 背景：`linear-gradient(to bottom, $primary-color, $primary-color-light)` 或纯色 `$primary-color`（**方向只能写 `to` 关键字，禁 `deg`** —— ADR-0010）
+- 背景：`linear-gradient(to bottom, $primary-grad-start, $primary-grad-end)`（`#6ECCFD`→`#0CA2EF`），实色兜底 `background-color: $primary-grad-end` 写在渐变**之后**；按下态用 `$primary-grad-pressed-*`（`#239EDD`→`#139DE4`）。**方向只能写 `to` 关键字，禁 `deg`** —— ADR-0010；原生端只吃两停靠（§1.2 表头）
+  - **2026-11-13（#2509 R2 冲突 8）**：原「`$primary-color`→`$primary-color-light`」纯色渐变被原型推翻（主 CTA 65 处/16 屏一律新渐变对），`$primary-color` 自此不再直接做按钮底色
 - 文字：`$text-color-inverse`，`$font-size-lg`，font-weight bold
 - 圆角：`$radius-pill`（999rpx 胶囊形）
 - 高度：`80rpx`
@@ -267,25 +303,27 @@
 
 ### 5.4 次按钮（appButton type=secondary）
 
-- 背景：透明
-- 边框：2rpx solid `$primary-color`
+- 背景：`$primary-tint`（浅蓝底；**2026-11-13 #2509 R2 冲突 9** 推翻原「透明底」，出处贴片 433:347）
+- 边框：**1rpx** solid `$primary-color`
 - 文字：`$primary-color`，`$font-size-md`
 - 圆角：`$radius-lg`（**24rpx**，§3 C2 裁定）
 
 ### 5.5 筛选标签（appChip）
 
 - 圆角：`$radius-pill`（胶囊）
-- 未选中：`$bg-color` 浅灰底 + `$text-color-secondary` 文字
-- 选中：`$primary-color` **实底** + `$text-color-inverse` 反白文字 + font-weight 600
+- 未选中：`$bg-color` 浅灰底 + `$text-color-secondary` 文字 + font-weight 400
+- 选中：**底色不变**（仍 `$bg-color`）+ `$text-color` 深色文字 + font-weight 600 —— **2026-11-13 #2509 R2 冲突 10**：原型两态底色同为 `#F5F5F5`（807:2035 / 807:2190），主色实底反白只保留给 Tab 页签类场景
 - 内边距：`16rpx 32rpx`
 - 字号：`$font-size-sm`（24rpx）
 
 > 2026-09-15（#979）改版：原「白底描边 + 浅蓝底描边」两态在真机上就是一片白，选中态几乎看不出；
 > 改为「浅灰底 / 主色实底」后，色彩只落在**当前档位**上。
+> **2026-11-13（#2509 R2 冲突 10）再翻案**：主色实底在筛选栏里过重，改「底色不变 + 深色加粗字」，
+> 色彩改由 Tab 页签/指示条承担。
 
 ### 5.6 Tab 栏（appTabs）
 
-- underline 风格：文字下方 4rpx 蓝色指示条
+- underline 风格：文字下方 **20×4rpx** 指示条（`$segment-indicator`，R=10）；选中文字 `$text-color` + w500、未选 `$text-color-secondary` —— **2026-11-13 #2509 R2 冲突 11**（原型 322:9139：选中文字 #333333 16px w500 + 蓝指示条 20×4px R=10）
 - pill 风格：胶囊标签（同 appChip 选中态）
 - 字号：`$font-size-md`（28rpx）
 - 未选中：`$text-color-secondary`

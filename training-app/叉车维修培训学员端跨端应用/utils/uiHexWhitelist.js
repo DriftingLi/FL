@@ -67,7 +67,6 @@ module.exports = {
     '#A8C4FF': 'pages/resources/materials.uvue material-action--busy 底——主操作蓝 busy 态，token 表无对应',
     '#EEF4FF': 'pages/resources/materials.uvue material-icon-box 底——资料图标浅蓝底，$primary-tint(#ebf5ff) 近似但值不等，待真机裁',
     '#D0E4FF': 'pages/notifications/notifications.uvue 状态条边框——浅蓝边框，$primary-tint 近似但值不等，待真机裁',
-    '#D0EBFD': 'pages/forum/forum-detail.uvue 与 forum-create.uvue topic-header 渐变尾色/实底兜底——与 $gradient-end 同位但值不等（#CFE9FB 渐变组合），待真机裁',
     '#F8F9FA': 'pages/forum/forum-create.uvue 输入底——$bg-color(#F8F8F8) 近似但值不等，输入件视觉回归风险待真机裁',
     '#DDDDDD': 'pages/profile/notebook.uvue 编辑区边框——$border-color(#e5e5e5) 近似但值不等，待真机裁',
     '#EEF3FF': 'pages/profile/notebook.uvue note-tag-standalone 标签浅蓝底——$primary-tint 近似但值不等，待真机裁',
@@ -84,14 +83,10 @@ module.exports = {
     '#8A8A8A': 'pages/forum/check-in.uvue num-missed 过去未打卡日数字——中灰文字，$text-color-secondary 偏深，待灰阶 token 票裁',
     '#F6B93E': 'pages/forum/check-in.uvue badge-coin 金币徽章底——金币金，token 表无对应',
     '#C9C9C9': 'pages/forum/check-in.uvue badge-coin-missed 灰金币徽章底——$text-disabled(#cccccc) 近似但值不等，待真机裁',
-    '#D9D9D9': 'pages/forum/check-in.uvue switch 关态底——开关关态灰，$border-color(#e5e5e5) 近似但值不等，待真机裁',
 
     // ── 批5（#1608 N05 透明页头 7 页）新增 ──
     '#60A5FA': 'pages/courses/courses.uvue category-card 渐变首色——分类卡页头装饰蓝对（Tailwind blue-400），token 表无渐变对对应',
     '#3B82F6': 'pages/courses/courses.uvue category-card 渐变尾色/实底兜底——与 #60A5FA 成对，同上',
-    '#6ECCFD': 'pages/profile/profile.uvue 整页蓝渐变首色——原型「我的」蓝天底，与 $gradient-start(#CFE9FB) 语义不同（饱和蓝非浅蓝），待 token 票裁',
-    '#0CA2EF': 'pages/profile/profile.uvue 整页蓝渐变尾色/实底兜底——与 #6ECCFD 成对，同上',
-    '#14AE50': 'pages/profile/profile.uvue stats-num-green 学习统计绿——$success-color(#4CD964) 偏荧光语义不符（同批2 #4CAF50 判例），待成功系 token 票裁',
     '#8C8C8C': 'pages/profile/profile.uvue stats-label 标签灰——$text-color-placeholder(#999999) 近似但值不等，待灰阶 token 票裁',
     '#E3F0FF': 'pages/resume/resume.uvue user-card 渐变首色——用户卡浅蓝渐变对，$primary-tint(#ebf5ff) 近似但值不等，待真机裁',
     '#CFE4FF': 'pages/resume/resume.uvue user-card 渐变尾色/实底兜底——与 #E3F0FF 成对，同上',

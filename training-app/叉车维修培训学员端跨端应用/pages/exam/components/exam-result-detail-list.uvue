@@ -74,7 +74,7 @@
 
     .status-correct {
         color: #4caf50;
-        background-color: #e8f5e9;
+        background-color: $success-tint;
     }
 
     .status-wrong {

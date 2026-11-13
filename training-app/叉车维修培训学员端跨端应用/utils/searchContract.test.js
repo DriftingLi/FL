@@ -117,11 +117,14 @@ describe('M3 封装层与 token 化', () => {
     expect(styleBlock(SEARCH_PAGE)).toMatch(/\.result-item--last\s*\{[^}]*border-bottom-width:\s*0/);
   });
 
-  it('选中档位改主色实底反白（app-chip），未选中用浅灰底', () => {
+  it('选中档位「底色不变 + 深色加粗字」（app-chip），未选中用浅灰底', () => {
+    // #979 原判据是「主色实底 + 反白」；#2509 R2 冲突 10 依原型 807:2035/807:2190 翻案为
+    // 「两态同为 #F5F5F5 底、选中改深色加粗字」，故断言随裁定翻面（#2516 B0 落地）。
     const chip = read('components/app-chip/app-chip.uvue');
-    expect(chip).toMatch(/\.app-chip--active\s*\{[^}]*background-color:\s*\$primary-color/);
-    expect(chip).toMatch(/\.app-chip-text--active\s*\{[^}]*color:\s*\$text-color-inverse/);
+    expect(chip).toMatch(/\.app-chip--active\s*\{[^}]*background-color:\s*\$bg-color/);
+    expect(chip).toMatch(/\.app-chip-text--active\s*\{[^}]*color:\s*\$text-color[;,]/);
     expect(chip).toMatch(/\.app-chip\s*\{[^}]*background-color:\s*\$bg-color/);
+    expect(chip).not.toMatch(/\.app-chip--active\s*\{[^}]*color-\s*\$primary-color/);
   });
 
   const TOKEN_FILES = {
