@@ -3,7 +3,8 @@ package model
 import "time"
 
 // 导师个人文件库（#2494）：与 chapter_file 的关系——文件库行是独立实体（归属单一导师），
-// 章节挂接/换挂（单挂）由后续票引入；本表只管「传得进、存得住、看得见、删得掉」。
+// 单挂挂接/换挂（#2497，spec B2/B5/B6）由 chapter_id 承载：NULL=在库未挂，非空=挂在该章
+// （含在审快照与已发布槽引用的视同挂接中——B5，引用面扩展由 #2498 接入）。
 // 上传走四段契约（init/chunk/complete/abort），会话与分片凭据落 upload_session / upload_part。
 
 // TutorFile 导师文件库行。命名沿 `<name>_<毫秒时间戳>.<ext>` 契约（filestore.Save 同源）。
@@ -14,6 +15,7 @@ type TutorFile struct {
 	FileName    string    `gorm:"column:file_name" json:"file_name"`
 	ContentType string    `gorm:"column:content_type;default:document" json:"content_type"`
 	FileSize    int64     `gorm:"column:file_size;default:0" json:"file_size"`
+	ChapterID   *int      `gorm:"column:chapter_id" json:"chapter_id,omitempty"`
 	CreatedAt   time.Time `gorm:"column:created_at" json:"created_at"`
 }
 

@@ -125,7 +125,9 @@ type ChapterDTO struct {
 	Files       *[]ChapterFileDTO `json:"files,omitempty" extensions:"x-optional" nullability:"nonnil"`
 }
 
-// ChapterFileDTO 章节文件（chapter_file 表条目与旧版 chapter.file_url 兼容条目同构）。
+// ChapterFileDTO 章节文件（chapter_file 表条目、文件库挂接条目与旧版 chapter.file_url 兼容条目同构）。
+// Source 判别条目来源（#2497）：chapter_file / tutor_file / legacy——file_id 在各来源内独立编号，
+// 动作面（删除 vs 解挂/换挂）按来源分流，勿混用。
 type ChapterFileDTO struct {
 	ChapterID   *int   `json:"chapter_id" extensions:"x-nullable"`
 	ContentType string `json:"content_type"`
@@ -134,7 +136,15 @@ type ChapterFileDTO struct {
 	FileName    string `json:"file_name"`
 	FileSize    int64  `json:"file_size"`
 	FileURL     string `json:"file_url"`
+	Source      string `json:"source,omitempty" extensions:"x-optional"`
 }
+
+// 章节文件来源判别值（ChapterFileDTO.Source）。
+const (
+	FileSourceChapter = "chapter_file" // chapter_file 表条目（单发上传）
+	FileSourceTutor   = "tutor_file"   // 文件库挂接条目（#2497 单挂挂接）
+	FileSourceLegacy  = "legacy"       // chapter.file_url 折叠兼容条目
+)
 
 // ChapterDetailDTO 章节详情（含上下章 ID 与文件列表；study_status 仅学员端路径填充）。
 type ChapterDetailDTO struct {
@@ -794,6 +804,7 @@ func ChapterFileToDTO(f *model.ChapterFile) ChapterFileDTO {
 		ContentType: f.ContentType,
 		FileSize:    f.FileSize,
 		CreatedAt:   timefmt.FormatISO(f.CreatedAt),
+		Source:      FileSourceChapter,
 	}
 }
 
@@ -815,6 +826,7 @@ func LegacyFileEntry(ch *model.Chapter) ChapterFileDTO {
 		ContentType: contentType,
 		FileSize:    0,
 		CreatedAt:   timefmt.FormatISO(ch.CreatedAt),
+		Source:      FileSourceLegacy,
 	}
 }
 
@@ -838,7 +850,8 @@ func chapterPrevNext(chapters []model.Chapter, chapterID int) (prevID, nextID in
 }
 
 // loadChapterFiles 装载单个章节的文件列表（chapter_file 表条目；无条目且 chapter.file_url 非空时
-// 折叠 legacy 兼容条目）。两者两端详情共用。
+// 折叠 legacy 兼容条目）+ 文件库挂接条目（#2497，spec B2：tutor_file.chapter_id 指向本章的行）。
+// 两端详情共用；挂接条目排在 chapter_file 条目之后（created_at 序）。
 func loadChapterFiles(db *gorm.DB, chapter *model.Chapter) []ChapterFileDTO {
 	var files []model.ChapterFile
 	db.Where("chapter_id = ?", chapter.ChapterID).Order("created_at").Find(&files)
@@ -850,11 +863,13 @@ func loadChapterFiles(db *gorm.DB, chapter *model.Chapter) []ChapterFileDTO {
 			fileList = append(fileList, ChapterFileToDTO(&files[i]))
 		}
 	}
-	return fileList
+	attached := loadAttachedTutorFiles(db, []int{chapter.ChapterID})
+	return append(fileList, attached[chapter.ChapterID]...)
 }
 
 // LoadChapterFilesBulk 批量装载多个章节的文件列表（一次 IN 查询），消除逐章节 N+1。
 // 返回 map[chapterID][]ChapterFileDTO；无文件的章节不在 map 中（legacy 兼容在调用侧合并）。
+// 文件库挂接条目（#2497）同样合入。
 func LoadChapterFilesBulk(db *gorm.DB, chapters []model.Chapter) map[int][]ChapterFileDTO {
 	if len(chapters) == 0 {
 		return map[int][]ChapterFileDTO{}
@@ -872,6 +887,38 @@ func LoadChapterFilesBulk(db *gorm.DB, chapters []model.Chapter) map[int][]Chapt
 		}
 		cid := *files[i].ChapterID
 		result[cid] = append(result[cid], ChapterFileToDTO(&files[i]))
+	}
+	for cid, attached := range loadAttachedTutorFiles(db, ids) {
+		result[cid] = append(result[cid], attached...)
+	}
+	return result
+}
+
+// loadAttachedTutorFiles 批量装载挂接到章节的文件库行（#2497，spec B2/C13）：
+// tutor_file.chapter_id 指向这些章节的行随章节出现在文件清单（学员端与导师端同一读面）。
+// 挂接/解挂/换挂的写面单点在 internal/tutorfile；本处只做读面合并。
+func loadAttachedTutorFiles(db *gorm.DB, chapterIDs []int) map[int][]ChapterFileDTO {
+	if len(chapterIDs) == 0 {
+		return map[int][]ChapterFileDTO{}
+	}
+	var rows []model.TutorFile
+	db.Where("chapter_id IN ?", chapterIDs).Order("created_at").Find(&rows)
+	result := make(map[int][]ChapterFileDTO, len(chapterIDs))
+	for i := range rows {
+		if rows[i].ChapterID == nil {
+			continue
+		}
+		cid := *rows[i].ChapterID
+		result[cid] = append(result[cid], ChapterFileDTO{
+			ChapterID:   rows[i].ChapterID,
+			ContentType: rows[i].ContentType,
+			CreatedAt:   timefmt.FormatISO(rows[i].CreatedAt),
+			FileID:      rows[i].FileID,
+			FileName:    rows[i].FileName,
+			FileSize:    rows[i].FileSize,
+			FileURL:     rows[i].FileURL,
+			Source:      FileSourceTutor,
+		})
 	}
 	return result
 }

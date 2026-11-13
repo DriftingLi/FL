@@ -27,13 +27,16 @@ type UploadChunkResponse struct {
 }
 
 // FileDTO 文件库行（列表与 complete 共用形状）。
+// ChapterID/ChapterTitle 只在挂接中时出现（spec B2/B7：挂接状态是管理面的一等信息）。
 type FileDTO struct {
-	FileID      int       `json:"file_id"`
-	FileURL     string    `json:"file_url"`
-	FileName    string    `json:"file_name"`
-	ContentType string    `json:"content_type"`
-	FileSize    int64     `json:"file_size"`
-	CreatedAt   time.Time `json:"created_at"`
+	FileID       int       `json:"file_id"`
+	FileURL      string    `json:"file_url"`
+	FileName     string    `json:"file_name"`
+	ContentType  string    `json:"content_type"`
+	FileSize     int64     `json:"file_size"`
+	ChapterID    *int      `json:"chapter_id,omitempty"`
+	ChapterTitle string    `json:"chapter_title,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 // FileListDTO 文件库列表。
@@ -53,16 +56,37 @@ type SessionStatusDTO struct {
 	ReceivedParts []int  `json:"received_parts"`
 }
 
-// toFileDTO 模型 → 传输形状。
-func toFileDTO(f model.TutorFile) FileDTO {
-	return FileDTO{
+// AttachRequest 单挂挂接请求（spec B2）。
+type AttachRequest struct {
+	ChapterID int `json:"chapter_id" binding:"required"`
+}
+
+// RenameRequest 改名请求（spec B7）。
+type RenameRequest struct {
+	FileName string `json:"file_name" binding:"required"`
+}
+
+// SwapRequest 章节侧换挂请求（spec B6：挂新 + 旧回库）。
+type SwapRequest struct {
+	OldFileID int `json:"old_file_id" binding:"required"`
+	NewFileID int `json:"new_file_id" binding:"required"`
+}
+
+// toFileDTO 模型 → 传输形状。titles 为章节标题缓存（ChapterTitles 一次查询），可为 nil。
+func toFileDTO(f model.TutorFile, titles map[int]string) FileDTO {
+	d := FileDTO{
 		FileID:      f.FileID,
 		FileURL:     f.FileURL,
 		FileName:    f.FileName,
 		ContentType: f.ContentType,
 		FileSize:    f.FileSize,
+		ChapterID:   f.ChapterID,
 		CreatedAt:   f.CreatedAt,
 	}
+	if f.ChapterID != nil && titles != nil {
+		d.ChapterTitle = titles[*f.ChapterID]
+	}
+	return d
 }
 
 // toSessionStatusDTO 会话行 + 已收分片 → 断点续传清单传输形状。

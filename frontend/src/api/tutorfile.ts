@@ -62,15 +62,51 @@ export const tutorFileApi = {
     return unwrappedRequest.get<SessionStatusDTO>(`/tutor/files/upload/${sessionId}`)
   },
 
-  /** 文件库列表 */
-  listFiles() {
-    return unwrappedRequest.get<FileListDTO>('/tutor/files')
+  /** 文件库列表（可选筛选：类型 / 挂接状态 / 创建时间区间，spec B7） */
+  listFiles(filter?: FileListFilter) {
+    const params: Record<string, string> = {}
+    if (filter?.content_type) params.content_type = filter.content_type
+    if (filter?.attached !== undefined) params.attached = String(filter.attached)
+    if (filter?.created_from) params.created_from = filter.created_from
+    if (filter?.created_to) params.created_to = filter.created_to
+    return unwrappedRequest.get<FileListDTO>('/tutor/files', { params })
   },
 
-  /** 删除文件（文件行 + 存储对象） */
+  /** 单挂挂接到章节（spec B2）：一个文件同一时间只挂一章 */
+  attachFile(fileId: number, chapterId: number) {
+    return unwrappedRequest.post<null>(`/tutor/files/${fileId}/attach`, { chapter_id: chapterId })
+  },
+
+  /** 取消挂接回库（spec B2）：回到在库未挂状态，重复调用幂等 */
+  detachFile(fileId: number) {
+    return unwrappedRequest.post<null>(`/tutor/files/${fileId}/detach`)
+  },
+
+  /** 改名（spec B7）：只改显示名 */
+  renameFile(fileId: number, fileName: string) {
+    return unwrappedRequest.post<null>(`/tutor/files/${fileId}/rename`, { file_name: fileName })
+  },
+
+  /** 章节侧换挂（spec B6）：挂新 + 旧回库一步原子 */
+  swapChapterFile(chapterId: number, oldFileId: number, newFileId: number) {
+    return unwrappedRequest.post<null>(`/tutor/chapter/${chapterId}/files/swap`, {
+      old_file_id: oldFileId,
+      new_file_id: newFileId
+    })
+  },
+
+  /** 删除文件（文件行 + 存储对象；被章节引用时 409，先解挂，spec B5） */
   deleteFile(fileId: number) {
     return unwrappedRequest.delete<null>(`/tutor/files/${fileId}`)
   }
+}
+
+/** 文件库列表筛选（spec B7）。attached：true=已挂 / false=未挂；时间可传 RFC3339 或 YYYY-MM-DD */
+export interface FileListFilter {
+  content_type?: string
+  attached?: boolean
+  created_from?: string
+  created_to?: string
 }
 
 /** 断点续传的客户端持久化（spec A8）：会话 id + 已完成分片清单，localStorage 单点。 */

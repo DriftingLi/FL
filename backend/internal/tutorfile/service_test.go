@@ -80,7 +80,7 @@ func TestUploadCompleteCreatesFileRowAndListVisible(t *testing.T) {
 		t.Fatalf("存储命名不符 <name>_<毫秒时间戳>.<ext> 契约: %q", base)
 	}
 
-	files, err := svc.ListFiles(ctx, 1)
+	files, err := svc.ListFiles(ctx, 1, FileFilter{})
 	if err != nil {
 		t.Fatalf("ListFiles 失败: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestUploadCompleteCreatesFileRowAndListVisible(t *testing.T) {
 	}
 
 	// 别的导师看不见
-	other, err := svc.ListFiles(ctx, 2)
+	other, err := svc.ListFiles(ctx, 2, FileFilter{})
 	if err != nil || len(other) != 0 {
 		t.Fatalf("他人列表应为空: %v %v", other, err)
 	}
@@ -238,7 +238,7 @@ func TestDeleteFileRemovesRowAndStorage(t *testing.T) {
 	if err := svc.DeleteFile(ctx, 1, file.FileID); err != nil {
 		t.Fatalf("DeleteFile 失败: %v", err)
 	}
-	files, _ := svc.ListFiles(ctx, 1)
+	files, _ := svc.ListFiles(ctx, 1, FileFilter{})
 	if len(files) != 0 {
 		t.Fatalf("删除后列表应为空: %+v", files)
 	}

@@ -74,6 +74,7 @@ export interface ChapterFileDTO {
   file_name: string
   file_size: number
   file_url: string
+  source?: string
 }
 
 export interface ChapterSlidesDTO {
