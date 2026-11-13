@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"forklift-training/internal/filestore"
@@ -32,6 +33,16 @@ const (
 	MaxChunkSize = 8 << 20
 	// MaxChunks 分片总数上限（spec A2，与 R2/S3 同值）。
 	MaxChunks = 10000
+
+	// MaxFilesPerTutor / MaxBytesPerTutor 配额双臂（spec B3）：≤300 个 / ≤100GB 每导师，
+	// 各自独立拦截（数字是软值，调前须重估——#2486 grilling 决策）。
+	MaxFilesPerTutor = 300
+	MaxBytesPerTutor = 100 << 30
+
+	// SessionTTL 未完成会话的存活期（spec A3）：超过 7 天自动 abort（R2 lifecycle 同口径）。
+	SessionTTL = 7 * 24 * time.Hour
+	// OrphanTTL 真孤儿（对象在、文件行没有）的回收门槛（spec B4）：沿 orphan_sweep 24h 既有口径。
+	OrphanTTL = 24 * time.Hour
 
 	statusActive    = "active"
 	statusCompleted = "completed"
@@ -50,21 +61,26 @@ var (
 	ErrInvalidState = errors.New("上传会话状态不允许该操作")
 	// ErrInvalidParam 参数越界（大小/类型/分片档/序号/长度）。
 	ErrInvalidParam = errors.New("上传参数不合法")
+	// ErrQuotaFileCount 配额数量臂（spec B3，400 沿投稿配额先例）。
+	ErrQuotaFileCount = errors.New("文件数量已达上限")
+	// ErrQuotaTotalSize 配额容量臂（spec B3，400 沿投稿配额先例）。
+	ErrQuotaTotalSize = errors.New("文件总容量已达上限")
 )
 
 // Service 导师文件库服务。
 // 依赖 storage.Storage（与全域同型）；分片四段走 multipart 能力（UploadStore），
 // 驱动不支持时 Init/Chunk/Complete/Abort 调用面报错，List/Delete 仍按普通存储走。
 type Service struct {
-	db *gorm.DB
-	st storage.Storage
-	mp storage.UploadStore
+	db     *gorm.DB
+	st     storage.Storage
+	mp     storage.UploadStore
+	logger *zap.Logger
 }
 
 // NewService 创建文件库服务。st 为 nil 时仅当调用面走到存储操作才报错
-// （契约测试装配允许 nil 存储，与 FileSvc 同构）。
-func NewService(db *gorm.DB, st storage.Storage) *Service {
-	s := &Service{db: db, st: st}
+// （契约测试装配允许 nil 存储，与 FileSvc 同构）；logger 可为 nil（尽力而为日志）。
+func NewService(db *gorm.DB, st storage.Storage, logger *zap.Logger) *Service {
+	s := &Service{db: db, st: st, logger: logger}
 	s.mp, _ = st.(storage.UploadStore)
 	return s
 }
@@ -98,6 +114,9 @@ func (s *Service) InitUpload(ctx context.Context, tutorID int, filename string, 
 	}
 	total, err := chunkPlan(fileSize, chunkSize)
 	if err != nil {
+		return "", err
+	}
+	if err := s.checkQuota(ctx, tutorID, fileSize); err != nil {
 		return "", err
 	}
 	ext := filestore.FileExtension(filename)
@@ -256,17 +275,145 @@ func (s *Service) AbortUpload(ctx context.Context, tutorID int, sessionID string
 	if row.Status == statusCompleted {
 		return fmt.Errorf("%w: 会话已完成，不能放弃", ErrInvalidState)
 	}
+	return s.abortSessionRow(ctx, row)
+}
+
+// abortSessionRow 放弃一个 active 会话的共用落点（显式 abort 与 7 天过期清扫同用）：
+// 清存储半成品 + 行落 aborted + 删分片凭据。
+func (s *Service) abortSessionRow(ctx context.Context, row *model.TutorUploadSession) error {
 	if err := s.mp.AbortMultipart(ctx, row.StorageKey, row.UploadID); err != nil {
 		return err
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&model.TutorUploadSession{}).
-			Where("session_id = ?", sessionID).
+			Where("session_id = ?", row.SessionID).
 			Updates(map[string]any{"status": statusAborted, "updated_at": time.Now()}).Error; err != nil {
 			return err
 		}
-		return tx.Where("session_id = ?", sessionID).Delete(&model.TutorUploadPart{}).Error
+		return tx.Where("session_id = ?", row.SessionID).Delete(&model.TutorUploadPart{}).Error
 	})
+}
+
+// GetUploadSession 断点续传查询口（spec A8，= S3 ListParts 语义）：
+// 返回会话行与已收分片序号清单，客户端据此只补缺片；服务端以会话状态为准。
+func (s *Service) GetUploadSession(ctx context.Context, tutorID int, sessionID string) (*model.TutorUploadSession, []int, error) {
+	row, err := s.loadSession(ctx, tutorID, sessionID)
+	if err != nil {
+		return nil, nil, err
+	}
+	var parts []model.TutorUploadPart
+	if err := s.db.WithContext(ctx).
+		Where("session_id = ?", sessionID).
+		Order("part_number ASC").
+		Find(&parts).Error; err != nil {
+		return nil, nil, fmt.Errorf("读取分片凭据失败: %w", err)
+	}
+	nums := make([]int, 0, len(parts))
+	for _, p := range parts {
+		nums = append(nums, p.PartNumber)
+	}
+	return row, nums, nil
+}
+
+// SweepStaleSessions 会话 7 天自动 abort（spec A3）：updated_at 早于 now-SessionTTL 的
+// active 会话全部放弃（存储半成品 + 行态 + 分片凭据）。返回清理数；now 由调用方注入（可测）。
+func (s *Service) SweepStaleSessions(ctx context.Context, now time.Time) (int, error) {
+	if err := s.needMultipart(); err != nil {
+		return 0, err
+	}
+	var sessions []model.TutorUploadSession
+	if err := s.db.WithContext(ctx).
+		Where("status = ? AND updated_at < ?", statusActive, now.Add(-SessionTTL)).
+		Find(&sessions).Error; err != nil {
+		return 0, fmt.Errorf("查询过期会话失败: %w", err)
+	}
+	cleaned := 0
+	for i := range sessions {
+		if err := s.abortSessionRow(ctx, &sessions[i]); err != nil {
+			if s.logger != nil {
+				s.logger.Warn("[tutorfile] 过期会话清理失败", zap.String("session_id", sessions[i].SessionID), zap.Error(err))
+			}
+			continue
+		}
+		cleaned++
+	}
+	return cleaned, nil
+}
+
+// CleanupOrphanFiles 真孤儿回收（spec B4，薄配置壳，算法单点见 internal/filestore/orphan_sweep.go /
+// ADR-0027 C2）：ListWithInfo(tutor-files/) 与全量引用集（tutor_file.file_url）差集，
+// 仅删存储侧 LastModified 超过 OrphanTTL 且未被任何文件行引用的对象。
+// 「库内有行文件永不静默删」由差集天然保证：引用集里有它的 key 就不动。
+// 引用集查不动或为空时整轮不清理（ADR-0062 票5）；ctx 取消语义贯穿。
+func (s *Service) CleanupOrphanFiles(ctx context.Context) int {
+	if s.st == nil {
+		return 0
+	}
+	return filestore.RunOrphanSweep(ctx, filestore.OrphanSweepConfig{
+		Domain: "tutor_file",
+		TTL:    OrphanTTL,
+		List: func(c context.Context) ([]storage.FileInfo, error) {
+			return s.st.ListWithInfo(c, Subfolder)
+		},
+		Referenced: s.collectReferencedKeys,
+		KeyOf:      storageKeyOf,
+		DeleteFile: s.st.Delete,
+		Logger:     s.logger,
+	})
+}
+
+// collectReferencedKeys 全量引用集：tutor_file 行的 file_url → 存储 key（与 KeyOf 同归一化口径）。
+// 任一非空 URL 提取不出 key 就整体报错——「不知道谁在引用」不得当成「没人引用」
+// （orphan_sweep 引用集 fail-safe 同构，B4「有行永不静默删」的最后一道闸）。
+func (s *Service) collectReferencedKeys() (map[string]bool, error) {
+	var urls []string
+	if err := s.db.Model(&model.TutorFile{}).Pluck("file_url", &urls).Error; err != nil {
+		return nil, fmt.Errorf("读取文件行引用集失败: %w", err)
+	}
+	refs := make(map[string]bool, len(urls))
+	for _, u := range urls {
+		key := storageKeyOf(u)
+		if key == "" && u != "" {
+			return nil, fmt.Errorf("文件行 URL 提取不出存储 key（格式漂移?）: %q", u)
+		}
+		if key != "" {
+			refs[key] = true
+		}
+	}
+	return refs, nil
+}
+
+// storageKeyOf URL → 存储对象 key：先剥 query/fragment（签名串不属 key），
+// 再走 filestore.AttachmentKey 的前缀收窄（local/R2 两形态同口径，提取失败返回空串）。
+func storageKeyOf(url string) string {
+	if i := strings.IndexAny(url, "?#"); i >= 0 {
+		url = url[:i]
+	}
+	return filestore.AttachmentKey(url, Subfolder)
+}
+
+// checkQuota 配额双臂（spec B3）：数量与容量各自独立判定、拒绝信息含当前用量。
+// 只在 init 闸（最早拒、最好体验）；并发会话竞态在软值口径内可接受（#2486 grilling）。
+func (s *Service) checkQuota(ctx context.Context, tutorID int, fileSize int64) error {
+	var count int64
+	if err := s.db.WithContext(ctx).Model(&model.TutorFile{}).
+		Where("tutor_id = ?", tutorID).Count(&count).Error; err != nil {
+		return fmt.Errorf("查询文件数量失败: %w", err)
+	}
+	if count+1 > int64(MaxFilesPerTutor) {
+		return fmt.Errorf("%w: 文件数量已达上限（%d/%d 个），请先清理后再上传", ErrQuotaFileCount, count, MaxFilesPerTutor)
+	}
+	var used int64
+	if err := s.db.WithContext(ctx).Model(&model.TutorFile{}).
+		Where("tutor_id = ?", tutorID).
+		Select("COALESCE(SUM(file_size), 0)").Scan(&used).Error; err != nil {
+		return fmt.Errorf("查询文件总容量失败: %w", err)
+	}
+	if used+fileSize > MaxBytesPerTutor {
+		return fmt.Errorf("%w: 文件总容量已达上限（%.1f/%d GB），请先清理后再上传",
+			ErrQuotaTotalSize, float64(used)/float64(1<<30), MaxBytesPerTutor>>30)
+	}
+	return nil
 }
 
 // ListFiles 列出导师自己的文件库行（新→旧）。
