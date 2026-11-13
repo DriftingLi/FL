@@ -4,6 +4,7 @@ import { ref, reactive } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance } from 'element-plus'
 import { adminApi, type AdminCourseItem, type ChapterPayload } from '@/api/admin'
+import { useConfirm } from '@/composables/useConfirm'
 import type { CatalogDirectionNode, CatalogLevel, CertificateTemplate } from '@/api/training'
 
 import type { CredentialDict } from '@/api/credential'
@@ -193,6 +194,13 @@ function openChapterDialog(ch?: { chapter_id: number; title: string; duration?: 
 async function submitChapter() {
   if (!chapterFormRef.value) return
   await chapterFormRef.value.validate()
+  // #2498 C7：管理员写面直接生效（不走审核队列），改前确认。
+  if (chapterForm.chapter_id) {
+    await useConfirm().confirm(
+      '管理员保存将直接生效并同步已发布版本（不走审核队列），确认保存？',
+      '直接生效确认'
+    )
+  }
   try {
     const payload = {
       title: chapterForm.title,

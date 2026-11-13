@@ -49,6 +49,8 @@ var ModelBlocks = []ModelBlock{
 			&CoursePrerequisite{},
 			&Chapter{},
 			&ChapterFile{},
+			&ChapterContentSlot{}, // 章节审核版本槽（#2498）：在审快照/已发布槽
+			&ChapterFileSlot{},
 			&StudyRecord{},
 			&CourseView{}, // 浏览课程事实源（#2065）：依赖 hrwai_users 与 course（两块都先建）
 		},

@@ -58,4 +58,8 @@ func TestRouteRegistryCoverage(t *testing.T) {
 // PUT /api/tutor/files/upload/{session_id}/chunk/{part_number}、POST …/complete、
 // POST …/abort、GET /api/tutor/files、DELETE /api/tutor/files/{file_id}）→ 353。
 // 2026-11-13 #2495 断点续传清单端点（GET /api/tutor/files/upload/{session_id}）→ 354。
-const expectedRouteCount = 358
+// 2026-11-13 #2497 挂接/换挂/改名 4 条（POST /api/tutor/files/{file_id}/attach|detach|rename、
+// POST /api/tutor/chapter/{chapter_id}/files/swap）→ 358。
+// 2026-11-13 #2498 审核流 3 条（POST /api/tutor/chapter/{chapter_id}/submit-review、
+// POST /api/admin/chapter/{chapter_id}/approve-review|reject-review）→ 361。
+const expectedRouteCount = 361

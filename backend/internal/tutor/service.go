@@ -2,6 +2,7 @@
 package tutor
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -97,7 +98,7 @@ func (s *Service) GetChapterDetail(chapterID int) (*course.ChapterDetailDTO, err
 		}
 		return nil, err // 查不动不得被读成「不存在」（ADR-0064 决策 1）
 	}
-	return course.ChapterDetailShared(s.db, &chapter, false, 0)
+	return course.ChapterDetailShared(s.db, &chapter, false, 0, false)
 }
 
 // UploadChapterFile 上传章节文件。
@@ -139,6 +140,10 @@ func (s *Service) UploadChapterFile(chapterID int, filename string, fileContent 
 	if err := s.db.Create(&chapterFile).Error; err != nil {
 		return nil, err
 	}
+	// 文件挂接清单属审核单元（C3）：标回草稿（语义见 course.MarkChapterDraft）。
+	if err := course.MarkChapterDraft(s.db, chapterID); err != nil {
+		return nil, err
+	}
 
 	if chapter.ContentType == "" || chapter.ContentType == "text" {
 		chapter.ContentType = contentType
@@ -156,6 +161,20 @@ func (s *Service) UploadChapterFile(chapterID int, filename string, fileContent 
 	}
 
 	d := course.ChapterFileToDTO(&chapterFile)
+	return &d, nil
+}
+
+// SubmitChapterReview 提交审核（#2498 C2 显式动作）：冻结整章快照（正文+文件挂接清单）
+// 进在审槽；同章单 pending（C8）。审核期间讲师改的是草稿，不影响在审内容（C4）。
+func (s *Service) SubmitChapterReview(ctx context.Context, chapterID, tutorID int) (*course.ChapterDTO, error) {
+	if err := course.SubmitChapterForReview(ctx, s.db, chapterID, tutorID); err != nil {
+		return nil, err
+	}
+	var chapter model.Chapter
+	if err := s.db.First(&chapter, chapterID).Error; err != nil {
+		return nil, err
+	}
+	d := course.ChapterToDTO(&chapter)
 	return &d, nil
 }
 
@@ -189,6 +208,13 @@ func (s *Service) UpdateChapterInfo(chapterID int, in *course.ChapterInput) (*co
 	if err := s.db.Save(&chapter).Error; err != nil {
 		return nil, err
 	}
+	// C2/C5：讲师保存只落草稿（学生仍见已发布旧版）——正文变化把工作副本标回草稿，
+	// 重新显式提交审核才进队列。标题/时长等元数据不入审核单元（C3），不触发。
+	if in.Content != nil {
+		if err := course.MarkChapterDraft(s.db, chapterID); err != nil {
+			return nil, err
+		}
+	}
 	d := course.ChapterToDTO(&chapter)
 	return &d, nil
 }
@@ -207,6 +233,14 @@ func (s *Service) DeleteChapterFileByID(fileID int) (*DeleteFileResult, error) {
 	}
 	chapterID := chapterFile.ChapterID
 	s.db.Delete(&chapterFile)
+	if chapterID != nil {
+		// 文件行已删成事实，此处失败只能记录不能回滚（返回值只有删除结果）；
+		// 漏标草稿会让讲师看到旧的「已发布」状态，故必须留痕而不是静默吞。
+		if err := course.MarkChapterDraft(s.db, *chapterID); err != nil {
+			s.logger.Warn("[tutor] 删除章节文件后标回草稿失败",
+				zap.Int("chapter_id", *chapterID), zap.Error(err))
+		}
+	}
 
 	var remaining []model.ChapterFile
 	s.db.Where("chapter_id = ?", chapterID).Find(&remaining)
@@ -241,6 +275,13 @@ func (s *Service) BatchDeleteChapterFiles(fileIDs []int) *BatchDeleteFilesResult
 		}
 		chapterID := chapterFile.ChapterID
 		s.db.Delete(&chapterFile)
+		if chapterID != nil {
+			// 同 DeleteChapterFileByID：漏标草稿要留痕，不静默吞（C2 不变量）。
+			if err := course.MarkChapterDraft(s.db, *chapterID); err != nil {
+				s.logger.Warn("[tutor] 批量删除章节文件后标回草稿失败",
+					zap.Int("chapter_id", *chapterID), zap.Error(err))
+			}
+		}
 		var remaining []model.ChapterFile
 		s.db.Where("chapter_id = ?", chapterID).Find(&remaining)
 		if len(remaining) == 0 && chapterID != nil {

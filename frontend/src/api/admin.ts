@@ -410,6 +410,14 @@ export const adminApi = {
   updateChapter(chapterId: number, data: ChapterPayload) {
     return unwrappedRequest.put<ChapterDTO>(`/admin/chapter/${chapterId}`, data)
   },
+  // #2498 C4：过审＝在审快照原子切换到已发布槽；无在审版本 409。
+  approveChapterReview(chapterId: number) {
+    return unwrappedRequest.post<ChapterDTO>(`/admin/chapter/${chapterId}/approve-review`)
+  },
+  // #2498 C1/C4：驳回＝弃快照回草稿并记理由（理由必填）。
+  rejectChapterReview(chapterId: number, reason: string) {
+    return unwrappedRequest.post<ChapterDTO>(`/admin/chapter/${chapterId}/reject-review`, { reason })
+  },
 
   deleteChapter(chapterId: number) {
     return unwrappedRequest.delete<DeleteChapterResult>(`/admin/chapter/${chapterId}`)

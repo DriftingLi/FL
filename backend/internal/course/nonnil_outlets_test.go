@@ -95,7 +95,7 @@ func outletChapterDetailNoFiles(t *testing.T) any {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
 	_, chapters := seedChapterWithMeta(t, db)
-	res, err := ChapterDetailShared(db, &chapters[1], false, 0)
+	res, err := ChapterDetailShared(db, &chapters[1], false, 0, false)
 	if err != nil {
 		t.Fatalf("章节详情失败: %v", err)
 	}

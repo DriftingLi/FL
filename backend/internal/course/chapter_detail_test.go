@@ -8,6 +8,7 @@
 package course
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
@@ -59,6 +60,15 @@ func seedChapterWithMeta(t *testing.T, db *gorm.DB) (*model.Course, []model.Chap
 		"file_url": "/static/uploads/chapters/c.pdf", "content_type": "ppt",
 	}).Error; err != nil {
 		t.Fatalf("更新 legacy file_url 失败: %v", err)
+	}
+	// C11 学员读面限已发布槽（#2498）：夹具章节走真实过审路径出槽，否则按「不存在」。
+	for i := range chapters {
+		if err := SubmitChapterForReview(context.Background(), db, chapters[i].ChapterID, 7); err != nil {
+			t.Fatalf("夹具提交审核失败: %v", err)
+		}
+		if err := ApproveChapterReview(context.Background(), db, chapters[i].ChapterID); err != nil {
+			t.Fatalf("夹具过审失败: %v", err)
+		}
 	}
 	return &course, chapters
 }

@@ -1142,6 +1142,15 @@ definitions:
         x-optional: true
       order_num:
         type: integer
+      reject_reason:
+        type: string
+        x-optional: true
+      review_status:
+        description: |-
+          ReviewStatus/RejectReason 章节审核状态机（#2498 C1）：draft/pending/published + 驳回理由。
+          只在管理读面/导师编辑面有意义，学生读面省略（x-optional）。
+        type: string
+        x-optional: true
       title:
         type: string
     type: object
@@ -1175,6 +1184,9 @@ definitions:
       previous_chapter_id:
         type: integer
         x-nullable: true
+      reject_reason:
+        type: string
+        x-optional: true
       resume_position:
         description: |-
           ResumePosition 该学员在本章节的最后播放位置（秒，契约只增不改 —— ADR-0048）。
@@ -1182,6 +1194,12 @@ definitions:
           另一条并发请求填的 map，谁先回来全凭运气 ⇒ 多半读到 0，每次从片头重播
           （词表「学习位置」的承诺在最常用的入口上不成立）。
         type: integer
+      review_status:
+        description: |-
+          ReviewStatus/RejectReason 章节审核状态机（#2498 C1）：draft/pending/published + 驳回理由。
+          只在管理读面/导师编辑面有意义，学生读面省略（x-optional）。
+        type: string
+        x-optional: true
       study_status:
         type: string
         x-optional: true
@@ -1432,6 +1450,11 @@ definitions:
         type: array
       course:
         $ref: '#/definitions/course.CourseDTO'
+    type: object
+  course.rejectReviewBody:
+    properties:
+      reason:
+        type: string
     type: object
   faq.AdminFaqCategoriesResult:
     properties:
@@ -5383,6 +5406,94 @@ paths:
       security:
       - BearerAuth: []
       summary: 更新章节
+      tags:
+      - 管理端-章节
+  /admin/chapter/{chapter_id}/approve-review:
+    post:
+      description: 在审快照原子切换到已发布槽（#2498 C4）；无在审版本 409
+      parameters:
+      - description: 章节 ID
+        in: path
+        name: chapter_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 过审成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/course.ChapterDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 章节不存在
+          schema:
+            $ref: '#/definitions/response.R'
+        "409":
+          description: 没有在审版本
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 章节过审
+      tags:
+      - 管理端-章节
+  /admin/chapter/{chapter_id}/reject-review:
+    post:
+      consumes:
+      - application/json
+      description: 弃在审快照、回草稿并记驳回理由（#2498 C1/C4）；理由必填 400，无在审版本 409
+      parameters:
+      - description: 章节 ID
+        in: path
+        name: chapter_id
+        required: true
+        type: integer
+      - description: 驳回理由
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/course.rejectReviewBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 驳回成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/course.ChapterDTO'
+              type: object
+        "400":
+          description: 驳回理由不能为空
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 章节不存在
+          schema:
+            $ref: '#/definitions/response.R'
+        "409":
+          description: 没有在审版本
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 章节驳回
       tags:
       - 管理端-章节
   /admin/contributions/{id}/approve:
@@ -16396,6 +16507,46 @@ paths:
       summary: 章节侧换文件
       tags:
       - 讲师端-文件库
+  /tutor/chapter/{chapter_id}/submit-review:
+    post:
+      consumes:
+      - application/json
+      description: 冻结整章快照（正文 + 文件挂接清单）进在审队列（#2498 C2/C4）；同章单 pending，重复提交 400（C8）
+      parameters:
+      - description: 章节ID
+        in: path
+        name: chapter_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/course.ChapterDTO'
+              type: object
+        "400":
+          description: 已有在审版本
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 章节不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 提交章节审核
+      tags:
+      - 讲师端-课程
   /tutor/chapter/{chapter_id}/upload:
     post:
       consumes:

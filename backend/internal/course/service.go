@@ -123,6 +123,10 @@ type ChapterDTO struct {
 	OrderNum    int               `json:"order_num"`
 	Title       string            `json:"title"`
 	Files       *[]ChapterFileDTO `json:"files,omitempty" extensions:"x-optional" nullability:"nonnil"`
+	// ReviewStatus/RejectReason 章节审核状态机（#2498 C1）：draft/pending/published + 驳回理由。
+	// 只在管理读面/导师编辑面有意义，学生读面省略（x-optional）。
+	ReviewStatus string `json:"review_status,omitempty" extensions:"x-optional"`
+	RejectReason string `json:"reject_reason,omitempty" extensions:"x-optional"`
 }
 
 // ChapterFileDTO 章节文件（chapter_file 表条目、文件库挂接条目与旧版 chapter.file_url 兼容条目同构）。
@@ -378,6 +382,11 @@ func (s *Service) GetCourseDetail(courseID, studentID int) (*CourseDetailDTO, er
 	if err != nil {
 		return nil, err
 	}
+	// C6/C11：学员章节列表只留有已发布槽的章节，正文/格式/legacy 文件位换槽值
+	chapterList, err = applyPublishedOverlay(s.db, chapterList)
+	if err != nil {
+		return nil, err
+	}
 	progress := 0.0
 	lp := LearningPosition{}
 	if studentID > 0 {
@@ -464,7 +473,8 @@ func (s *Service) GetChapterDetail(courseID, chapterID, studentID int) (*Chapter
 	if err := s.studentCanReadCourse(chapter.CourseID, studentID); err != nil {
 		return nil, err
 	}
-	return ChapterDetailShared(s.db, &chapter, true, studentID)
+	// 学员读面：publishedOnly——无已发布槽按「不存在」（C6 404 不泄漏存在性）
+	return ChapterDetailShared(s.db, &chapter, true, studentID, true)
 }
 
 // GetChapterSlides 章节幻灯片。
@@ -479,6 +489,13 @@ func (s *Service) GetChapterSlides(chapterID, studentID int) (*ChapterSlidesDTO,
 	}
 	if err := s.studentCanReadCourse(chapter.CourseID, studentID); err != nil {
 		return nil, err
+	}
+	// C6/C11：幻灯片与详情同一可见谓词——无已发布槽按「不存在」，否则 slides 会成为
+	// 未过审章节内容的旁路。
+	if ok, err := chapterHasPublished(s.db, chapterID); err != nil {
+		return nil, err
+	} else if !ok {
+		return nil, ErrChapterNotFound
 	}
 
 	// 1. 优先读 DB 持久化的 slide_urls
@@ -511,6 +528,12 @@ func (s *Service) RegenerateChapterSlides(chapterID, studentID int) (*ChapterSli
 	}
 	if err := s.studentCanReadCourse(chapter.CourseID, studentID); err != nil {
 		return nil, err
+	}
+	// C6/C11：与 GetChapterSlides 同一谓词（无已发布槽按「不存在」）
+	if ok, err := chapterHasPublished(s.db, chapterID); err != nil {
+		return nil, err
+	} else if !ok {
+		return nil, ErrChapterNotFound
 	}
 	pptURL := resolveChapterPPTURL(s.db, &chapter, chapterID)
 	if pptURL == "" {
@@ -760,11 +783,19 @@ func CourseToDTO(c *model.Course) CourseDTO {
 	}
 }
 
-// fillChapterCount 填充课程章节数。
+// fillChapterCount 填充课程章节数（学员面口径：只数有已发布槽的章节，C6 未过审不计数）。
 func fillChapterCount(db *gorm.DB, courseID int, dto *CourseDTO) {
 	var count int64
-	db.Model(&model.Chapter{}).Where("course_id = ?", courseID).Count(&count)
+	db.Model(&model.ChapterContentSlot{}).
+		Where("slot = ? AND chapter_id IN (?)", model.ChapterReviewPublished, publishedChapterSubquery(db, courseID)).
+		Count(&count)
 	dto.ChapterCount = &count
+}
+
+// publishedChapterSubquery 课程内章节 id 子查询（「有已发布槽」判定两处共用：
+// fillChapterCount 计数与 publishedChapterIDs 取集，同一谓词不得写两份）。
+func publishedChapterSubquery(db *gorm.DB, courseID int) *gorm.DB {
+	return db.Model(&model.Chapter{}).Select("chapter_id").Where("course_id = ?", courseID)
 }
 
 // FillPrereqIDs 填充前置课程 ID 列表（供编辑表单回填，避免前端提交空数组清空关联）。
@@ -782,16 +813,18 @@ func FillPrereqIDs(db *gorm.DB, courseID int, dto *CourseDTO) {
 
 func ChapterToDTO(c *model.Chapter) ChapterDTO {
 	return ChapterDTO{
-		ChapterID:   c.ChapterID,
-		CourseID:    c.CourseID,
-		Title:       c.Title,
-		Content:     c.Content,
-		ContentType: c.ContentType,
-		FileURL:     c.FileURL,
-		Description: c.Description,
-		Duration:    c.Duration,
-		OrderNum:    c.OrderNum,
-		CreatedAt:   timefmt.FormatISO(c.CreatedAt),
+		ChapterID:    c.ChapterID,
+		CourseID:     c.CourseID,
+		Title:        c.Title,
+		Content:      c.Content,
+		ContentType:  c.ContentType,
+		FileURL:      c.FileURL,
+		Description:  c.Description,
+		Duration:     c.Duration,
+		OrderNum:     c.OrderNum,
+		CreatedAt:    timefmt.FormatISO(c.CreatedAt),
+		ReviewStatus: c.ReviewStatus,
+		RejectReason: c.RejectReason,
 	}
 }
 
@@ -944,9 +977,27 @@ func chapterStudyStatus(db *gorm.DB, studentID, courseID, chapterID int) string 
 // ChapterDetailShared 章节详情共享实现：prev/next 计算、文件列表装载 + legacy 兼容、
 // 可选 study_status 回填（fillStudyStatus=true 且 studentID>0 时）。
 // 学员端与导师端详情响应 shape 零漂移；两端唯一差异是学员端回填 study_status。
-func ChapterDetailShared(db *gorm.DB, chapter *model.Chapter, fillStudyStatus bool, studentID int) (*ChapterDetailDTO, error) {
+func ChapterDetailShared(db *gorm.DB, chapter *model.Chapter, fillStudyStatus bool, studentID int, publishedOnly bool) (*ChapterDetailDTO, error) {
 	var chapters []model.Chapter
 	db.Where("course_id = ?", chapter.CourseID).Order("order_num").Find(&chapters)
+	if publishedOnly {
+		// C6/C11：学员读面限已发布槽章节——无槽按「不存在」（404 不泄漏存在性），
+		// prev/next 也只在已发布章节间跳，否则上下章指针会泄漏未过审章节入口。
+		pub, err := publishedChapterIDs(db, chapter.CourseID)
+		if err != nil {
+			return nil, err
+		}
+		if !pub[chapter.ChapterID] {
+			return nil, ErrChapterNotFound
+		}
+		visible := chapters[:0:0]
+		for i := range chapters {
+			if pub[chapters[i].ChapterID] {
+				visible = append(visible, chapters[i])
+			}
+		}
+		chapters = visible
+	}
 	prevID, nextID := chapterPrevNext(chapters, chapter.ChapterID)
 
 	var prevIDPtr, nextIDPtr *int
@@ -962,6 +1013,26 @@ func ChapterDetailShared(db *gorm.DB, chapter *model.Chapter, fillStudyStatus bo
 		Files:             loadChapterFiles(db, chapter),
 		PreviousChapterID: prevIDPtr,
 		NextChapterID:     nextIDPtr,
+	}
+	if publishedOnly {
+		// 正文/文件挂接清单用已发布槽（C5：重审期间学员见旧版）
+		slot, err := loadPublishedContent(db, chapter.ChapterID)
+		if err != nil {
+			return nil, err
+		}
+		if slot == nil {
+			return nil, ErrChapterNotFound
+		}
+		d.Content = slot.Content
+		d.ContentType = slot.ContentType
+		d.FileURL = slot.FileURL
+		d.ReviewStatus = "" // 审核态是管理面/导师面信息，不进学员读面
+		d.RejectReason = ""
+		files, err := loadPublishedFiles(db, chapter.ChapterID)
+		if err != nil {
+			return nil, err
+		}
+		d.Files = files
 	}
 	if fillStudyStatus {
 		d.StudyStatus = chapterStudyStatus(db, studentID, chapter.CourseID, chapter.ChapterID)

@@ -181,6 +181,40 @@ func TestDeleteFileRefusedWhileReferencedThenDeletable(t *testing.T) {
 	}
 }
 
+// TestDeleteFileRefusedWhileSlotReferenced C13（#2498 B5 扩展）：在审快照 / 已发布槽
+// 引用的文件视同挂接中——已解挂仍不可删（否则版本槽引用悬空），版本槽引用消失后可删。
+func TestDeleteFileRefusedWhileSlotReferenced(t *testing.T) {
+	svc, _ := newSvc(t)
+	ctx := context.Background()
+	ch := seedChapter(t, svc, "第一章")
+	f := makeFile(t, svc, 1, "录课.mp4")
+	if err := svc.AttachFile(ctx, 1, f.FileID, ch); err != nil {
+		t.Fatalf("挂接失败: %v", err)
+	}
+	// 提交审核冻结清单（真实路径出在审快照）
+	if err := course.SubmitChapterForReview(ctx, svc.db, ch, 1); err != nil {
+		t.Fatalf("提交审核失败: %v", err)
+	}
+	// 解挂回库：live 挂接没了，但快照仍引用
+	if err := svc.DetachFile(ctx, 1, f.FileID); err != nil {
+		t.Fatalf("解挂失败: %v", err)
+	}
+	err := svc.DeleteFile(ctx, 1, f.FileID)
+	if !errors.Is(err, ErrFileInUse) {
+		t.Fatalf("被在审快照引用的文件删除应拒 ErrFileInUse, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "在审/已发布版本") {
+		t.Fatalf("拒绝信息应明示版本槽引用, got %q", err.Error())
+	}
+	// 版本槽引用消失（驳回弃快照）后可删
+	if err := course.RejectChapterReview(ctx, svc.db, ch, "不行"); err != nil {
+		t.Fatalf("驳回失败: %v", err)
+	}
+	if err := svc.DeleteFile(ctx, 1, f.FileID); err != nil {
+		t.Fatalf("快照弃置后删除失败: %v", err)
+	}
+}
+
 func TestRenameFileUpdatesDisplayName(t *testing.T) {
 	svc, _ := newSvc(t)
 	ctx := context.Background()

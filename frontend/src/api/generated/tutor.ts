@@ -11,6 +11,7 @@
 //   POST /tutor/chapter/{chapter_id}/upload
 //   POST /tutor/upload-image
 //   PUT  /tutor/chapter/{chapter_id}
+//   POST /tutor/chapter/{chapter_id}/submit-review
 //   DELETE /tutor/file/{file_id}
 //   POST /tutor/files/batch-delete
 //
@@ -46,6 +47,8 @@ export interface ChapterDTO {
   file_url: string
   files?: ChapterFileDTO[]
   order_num: number
+  reject_reason?: string
+  review_status?: string
   title: string
 }
 
@@ -62,7 +65,9 @@ export interface ChapterDetailDTO {
   next_chapter_id: number | null
   order_num: number
   previous_chapter_id: number | null
+  reject_reason?: string
   resume_position: number
+  review_status?: string
   study_status?: string
   title: string
 }

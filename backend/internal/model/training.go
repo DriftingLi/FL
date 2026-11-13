@@ -139,11 +139,16 @@ type Chapter struct {
 	FileURL     string `gorm:"column:file_url" json:"file_url"`
 	// SlideUrls PPT 转图后的幻灯片 URL 列表（JSON 数组字符串）。
 	// 为空表示未生成；由 SlideRenderer.Render 生成后写入。
-	SlideUrls   string    `gorm:"column:slide_urls" json:"slide_urls"`
-	Description string    `gorm:"column:description" json:"description"`
-	Duration    int       `gorm:"column:duration;default:0" json:"duration"`
-	OrderNum    int       `gorm:"column:order_num;default:0" json:"order_num"`
-	CreatedAt   time.Time `gorm:"column:created_at" json:"created_at"`
+	SlideUrls   string `gorm:"column:slide_urls" json:"slide_urls"`
+	Description string `gorm:"column:description" json:"description"`
+	Duration    int    `gorm:"column:duration;default:0" json:"duration"`
+	OrderNum    int    `gorm:"column:order_num;default:0" json:"order_num"`
+	// ReviewStatus 章节审核状态机（#2498，spec C1）：draft/pending/published + RejectReason，
+	// 独立命名不与题库/投稿/资料混称。working 草稿在本行，在审快照与已发布槽在
+	// chapter_content_slot / chapter_file_slot（C4）。
+	ReviewStatus string    `gorm:"column:review_status;default:draft" json:"review_status"`
+	RejectReason string    `gorm:"column:reject_reason" json:"reject_reason"`
+	CreatedAt    time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
 func (Chapter) TableName() string { return "chapter" }

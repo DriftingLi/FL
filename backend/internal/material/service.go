@@ -51,12 +51,17 @@ type MaterialPageResult struct {
 }
 
 // materialScope 资料可见范围：章节挂载附件 + 归属课程已发布（legacy 无章节附件不含）。
+//
+// #2498 C11：学员可见谓词 = 课程可见 ∧ 章节有已发布槽。资料聚合是第三个读面
+// （课程详情 / 章节详情 / 章节附件投递），必须用同一谓词收窄——否则未过审新章的附件
+// 会从「学习资料」面泄漏（C6 列表不泄漏存在性）。半开 JOIN 保证无槽章节整条消失。
 func materialScope(q *gorm.DB, courseID int) *gorm.DB {
 	q = q.Table("chapter_file AS cf").
 		Select("cf.file_id, cf.chapter_id, cf.file_name, cf.file_url, cf.content_type, cf.file_size, cf.created_at, " +
 			"ch.course_id AS course_id_v, c.name AS course_name, COALESCE(ch.title, '') AS chapter_title").
 		Joins("JOIN chapter AS ch ON ch.chapter_id = cf.chapter_id").
 		Joins("JOIN course AS c ON c.course_id = ch.course_id AND c.status = 1").
+		Joins("JOIN chapter_content_slot AS cs ON cs.chapter_id = ch.chapter_id AND cs.slot = 'published'").
 		Where("cf.chapter_id IS NOT NULL")
 	if courseID > 0 {
 		q = q.Where("ch.course_id = ?", courseID)
