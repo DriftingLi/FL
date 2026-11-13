@@ -4,6 +4,7 @@
 package course
 
 import (
+	"context"
 	"strconv"
 	"testing"
 
@@ -39,6 +40,13 @@ func TestGetCourseDetailBlanksLockedChapterContent(t *testing.T) {
 		OrderNum: 1, CreatedAt: testutil.Now()}
 	if err := db.Create(&ch).Error; err != nil {
 		t.Fatalf("播种章节失败: %v", err)
+	}
+	// C11：学员读面限已发布槽——夹具走真实过审路径出槽
+	if err := SubmitChapterForReview(context.Background(), db, ch.ChapterID, 7); err != nil {
+		t.Fatalf("夹具提交审核失败: %v", err)
+	}
+	if err := ApproveChapterReview(context.Background(), db, ch.ChapterID); err != nil {
+		t.Fatalf("夹具过审失败: %v", err)
 	}
 
 	// 未兑换学员：正文空串，标题/序号照发（「未解锁」态展示所需的元信息不受影响）。
@@ -110,6 +118,13 @@ func TestGetCourseDetailFreeCourseContentUnchanged(t *testing.T) {
 		OrderNum: 1, CreatedAt: testutil.Now()}
 	if err := db.Create(&ch).Error; err != nil {
 		t.Fatalf("播种章节失败: %v", err)
+	}
+	// C11：学员读面限已发布槽——夹具走真实过审路径出槽
+	if err := SubmitChapterForReview(context.Background(), db, ch.ChapterID, 7); err != nil {
+		t.Fatalf("夹具提交审核失败: %v", err)
+	}
+	if err := ApproveChapterReview(context.Background(), db, ch.ChapterID); err != nil {
+		t.Fatalf("夹具过审失败: %v", err)
 	}
 
 	detail, err := svc.GetCourseDetail(free.CourseID, 0)

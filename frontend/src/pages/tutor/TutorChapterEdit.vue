@@ -29,11 +29,29 @@
         @back="goBackToChapters"
       >
         <template #actions>
+          <UiTag v-if="reviewDescriptor" :tone="reviewDescriptor.tone">
+            {{ reviewDescriptor.label }}
+          </UiTag>
+          <UiButton
+            size="small"
+            :loading="submittingReview"
+            :disabled="chapterDetail.review_status === 'pending'"
+            @click="submitReview"
+          >
+            <UiIcon name="upload" /> 提交审核
+          </UiButton>
           <UiButton size="small" @click="openMetaDialog">
             <UiIcon name="pencil" /> 编辑信息
           </UiButton>
         </template>
       </UiPageHeader>
+
+      <div
+        v-if="chapterDetail.review_status === 'draft' && chapterDetail.reject_reason"
+        class="mb-4 rounded-lg border border-bad-soft bg-bad-soft px-4 py-3 text-sm text-bad-strong"
+      >
+        上次驳回理由：{{ chapterDetail.reject_reason }}
+      </div>
 
       <UiCard class="mb-6">
         <!-- ⚠️ 下划线必须用 \ 转义成 \_ ：Tailwind 任意变体里裸 _ 会被解析成空格，
@@ -445,6 +463,42 @@ async function saveContent() {
     /* 错误已由拦截器提示 */
   } finally {
     savingContent.value = false
+  }
+}
+
+// #2498 C1/C2：审核状态与显式「提交审核」动作（保存只落草稿，提交冻结整章快照入队）。
+const submittingReview = ref(false)
+const reviewDescriptor = computed<{ label: string; tone: 'warning' | 'info' | 'success' } | null>(() => {
+  switch (chapterDetail.value?.review_status) {
+    case 'draft':
+      return { label: '草稿', tone: 'warning' }
+    case 'pending':
+      return { label: '审核中', tone: 'info' }
+    case 'published':
+      return { label: '已发布', tone: 'success' }
+    default:
+      return null
+  }
+})
+
+async function submitReview() {
+  if (!chapterDetail.value) return
+  await useConfirm().confirm(
+    '提交后将冻结当前正文与文件清单进入审核（后续改动不影响在审版本），确认提交？',
+    '提交审核'
+  )
+  submittingReview.value = true
+  try {
+    const updated = await tutorApi.submitChapterReview(chapterDetail.value.chapter_id)
+    if (chapterDetail.value) {
+      chapterDetail.value.review_status = updated.review_status ?? 'pending'
+      chapterDetail.value.reject_reason = updated.reject_reason ?? ''
+    }
+    ElMessage.success('已提交审核')
+  } catch {
+    /* 错误已由拦截器提示（重复提交 400 / 章节不存在 404） */
+  } finally {
+    submittingReview.value = false
   }
 }
 

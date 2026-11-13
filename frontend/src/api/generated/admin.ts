@@ -42,6 +42,8 @@
 //   DELETE /admin/course/{course_id}
 //   POST /admin/course/{course_id}/chapter
 //   PUT  /admin/chapter/{chapter_id}
+//   POST /admin/chapter/{chapter_id}/approve-review
+//   POST /admin/chapter/{chapter_id}/reject-review
 //   DELETE /admin/chapter/{chapter_id}
 //   GET  /admin/ai-configs
 //   POST /admin/ai-configs
@@ -343,6 +345,8 @@ export interface ChapterDTO {
   file_url: string
   files?: ChapterFileDTO[]
   order_num: number
+  reject_reason?: string
+  review_status?: string
   title: string
 }
 

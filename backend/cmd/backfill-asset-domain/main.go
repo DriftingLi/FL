@@ -98,6 +98,12 @@ var defaultTargets = []target{
 	{Table: "tutor_file", Columns: []column{
 		{Name: "file_url", Kind: kindText},
 	}},
+	{Table: "chapter_content_slot", Columns: []column{
+		{Name: "file_url", Kind: kindText},
+	}},
+	{Table: "chapter_file_slot", Columns: []column{
+		{Name: "file_url", Kind: kindText},
+	}},
 	{Table: "certificate_template", Columns: []column{
 		{Name: "template_url", Kind: kindText},
 	}},

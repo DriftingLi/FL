@@ -91,6 +91,10 @@ export const tutorApi = {
   updateChapter(chapterId: number, data: UpdateChapterPayload) {
     return unwrappedRequest.put<ChapterDTO>(`/tutor/chapter/${chapterId}`, data)
   },
+  // #2498 C2：显式提交审核（冻结整章快照入队），同章单 pending，重复提交 400。
+  submitChapterReview(chapterId: number) {
+    return unwrappedRequest.post<ChapterDTO>(`/tutor/chapter/${chapterId}/submit-review`)
+  },
 
   /** 删除章节文件：后端返回 {file_id,deleted}（此前被当成无载荷） */
   deleteFile(fileId: number) {

@@ -474,17 +474,28 @@ func (s *Service) AttachFile(ctx context.Context, tutorID, fileID, chapterID int
 		}
 		return fmt.Errorf("读取章节失败: %w", err) // 查不动不得被读成「不存在」（ADR-0064 决策 1）
 	}
-	return s.db.WithContext(ctx).Model(&model.TutorFile{}).
-		Where("file_id = ?", fileID).Update("chapter_id", chapterID).Error
+	if err := s.db.WithContext(ctx).Model(&model.TutorFile{}).
+		Where("file_id = ?", fileID).Update("chapter_id", chapterID).Error; err != nil {
+		return err
+	}
+	// 挂接清单是审核单元（#2498 C3）：变更把章节工作副本标回草稿（C2）
+	return course.MarkChapterDraft(s.db, chapterID)
 }
 
 // DetachFile 取消挂接回库（spec B2）：chapter_id 清空回到未挂状态。重复解挂幂等。
 func (s *Service) DetachFile(ctx context.Context, tutorID, fileID int) error {
-	if _, err := s.loadFile(ctx, tutorID, fileID); err != nil {
+	file, err := s.loadFile(ctx, tutorID, fileID)
+	if err != nil {
 		return err
 	}
-	return s.db.WithContext(ctx).Model(&model.TutorFile{}).
-		Where("file_id = ?", fileID).Update("chapter_id", nil).Error
+	if err := s.db.WithContext(ctx).Model(&model.TutorFile{}).
+		Where("file_id = ?", fileID).Update("chapter_id", nil).Error; err != nil {
+		return err
+	}
+	if file.ChapterID != nil {
+		return course.MarkChapterDraft(s.db, *file.ChapterID)
+	}
+	return nil
 }
 
 // SwapChapterFile 章节侧换挂（spec B6）：挂新 + 旧回库一步原子——「换文件」是章节侧动作，
@@ -512,8 +523,11 @@ func (s *Service) SwapChapterFile(ctx context.Context, tutorID, chapterID, oldFi
 			Where("file_id = ?", newFileID).Update("chapter_id", chapterID).Error; err != nil {
 			return err
 		}
-		return tx.Model(&model.TutorFile{}).
-			Where("file_id = ?", oldFileID).Update("chapter_id", nil).Error
+		if err := tx.Model(&model.TutorFile{}).
+			Where("file_id = ?", oldFileID).Update("chapter_id", nil).Error; err != nil {
+			return err
+		}
+		return course.MarkChapterDraft(tx, chapterID)
 	})
 }
 
@@ -546,6 +560,17 @@ func (s *Service) DeleteFile(ctx context.Context, tutorID, fileID int) error {
 	}
 	if file.ChapterID != nil {
 		return fmt.Errorf("%w: 文件已挂接到章节（#%d），解挂后可删除", ErrFileInUse, *file.ChapterID)
+	}
+	// C13（#2498 B5 扩展）：在审快照与已发布槽引用的文件视同挂接中——即使已解挂，
+	// 被冻结清单引用期间库侧不可删，否则版本槽引用会悬空。
+	var slotRefs int64
+	if err := s.db.WithContext(ctx).Model(&model.ChapterFileSlot{}).
+		Where("source = ? AND file_id = ?", course.FileSourceTutor, fileID).
+		Count(&slotRefs).Error; err != nil {
+		return fmt.Errorf("查询版本槽引用失败: %w", err)
+	}
+	if slotRefs > 0 {
+		return fmt.Errorf("%w: 文件仍被章节的在审/已发布版本引用，版本更新或解绑后可删除", ErrFileInUse)
 	}
 	if err := s.st.Delete(ctx, file.FileURL); err != nil {
 		return fmt.Errorf("删除存储对象失败: %w", err)

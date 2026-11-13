@@ -142,6 +142,7 @@ func newRegenerateFixture(t *testing.T, db *gorm.DB, paid bool) regenerateFixtur
 	if err := db.Create(&ch).Error; err != nil {
 		t.Fatalf("建章节失败: %v", err)
 	}
+	publishChapterForRead(t, db, ch.ChapterID) // #2498：学员读面只认已发布槽
 	return regenerateFixture{
 		chapterID: ch.ChapterID, courseID: course.CourseID,
 		regenURL: "/api/chapter/" + strconv.Itoa(ch.ChapterID) + "/slides/regenerate",

@@ -9,6 +9,7 @@
 package course
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -95,6 +96,13 @@ func outletChapterSlidesWithoutRenderer(t *testing.T) any {
 	}
 	if err := db.Create(&ch).Error; err != nil {
 		t.Fatalf("播种章节失败: %v", err)
+	}
+	// C11：幻灯片读面同谓词——夹具章节走真实过审路径出已发布槽
+	if err := SubmitChapterForReview(context.Background(), db, ch.ChapterID, 7); err != nil {
+		t.Fatalf("夹具提交审核失败: %v", err)
+	}
+	if err := ApproveChapterReview(context.Background(), db, ch.ChapterID); err != nil {
+		t.Fatalf("夹具过审失败: %v", err)
 	}
 	// slideRenderer 传 nil 就是生产上「未配置转图能力」那一档，不是为测试造的分支。
 	out, err := NewService(db, nil, zap.NewNop()).GetChapterSlides(ch.ChapterID, 1)

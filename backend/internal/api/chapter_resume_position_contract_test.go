@@ -46,6 +46,7 @@ func TestChapterDetailProjectsResumePosition(t *testing.T) {
 		Update("course_id", course.CourseID).Error; err != nil {
 		t.Fatalf("挂章节到课程失败: %v", err)
 	}
+	publishChapterForRead(t, db, ch.ChapterID) // #2498：学员读面只认已发布槽
 	if err := db.Model(&model.StudyRecord{}).Where("record_id = ?", rec.RecordID).
 		Updates(map[string]any{"course_id": course.CourseID, "chapter_id": ch.ChapterID}).Error; err != nil {
 		t.Fatalf("关联学习记录失败: %v", err)

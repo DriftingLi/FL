@@ -45,6 +45,8 @@ export interface ChapterDTO {
   file_url: string
   files?: ChapterFileDTO[]
   order_num: number
+  reject_reason?: string
+  review_status?: string
   title: string
 }
 
@@ -61,7 +63,9 @@ export interface ChapterDetailDTO {
   next_chapter_id: number | null
   order_num: number
   previous_chapter_id: number | null
+  reject_reason?: string
   resume_position: number
+  review_status?: string
   study_status?: string
   title: string
 }

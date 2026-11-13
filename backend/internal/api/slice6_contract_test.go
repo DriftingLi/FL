@@ -339,13 +339,13 @@ func TestSlice6TutorEnvelopeKeys(t *testing.T) {
 	// 「无主体」与「在 0 秒」被压成两种表达 —— 票12 的同一课）。
 	chapterKeys := []string{
 		"chapter_id", "content", "content_type", "course_id", "created_at", "description", "duration",
-		"file_url", "files", "next_chapter_id", "order_num", "previous_chapter_id", "resume_position", "title",
+		"file_url", "files", "next_chapter_id", "order_num", "previous_chapter_id", "resume_position", "review_status", "title",
 	}
 	rec = catalogRequest(t, r, token, "GET", fmt.Sprintf("/api/tutor/chapter/%d", chapter.ChapterID), "")
 	slice6AssertKeys(t, rec, 200, chapterKeys...)
 
 	rec = catalogRequest(t, r, token, "PUT", fmt.Sprintf("/api/tutor/chapter/%d", chapter.ChapterID), `{"title":"章节一"}`)
-	slice6AssertKeys(t, rec, 200, "chapter_id", "content", "content_type", "course_id", "created_at", "description", "duration", "file_url", "order_num", "title")
+	slice6AssertKeys(t, rec, 200, "chapter_id", "content", "content_type", "course_id", "created_at", "description", "duration", "file_url", "order_num", "review_status", "title")
 
 	rec = catalogRequest(t, r, token, "DELETE", fmt.Sprintf("/api/tutor/file/%d", chapterFile.FileID), "")
 	slice6AssertKeys(t, rec, 200, "deleted", "file_id")

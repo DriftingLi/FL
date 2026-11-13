@@ -9,6 +9,7 @@
 package course
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -67,6 +68,14 @@ func TestCourseReadVisibilityContract(t *testing.T) {
 		if err := db.Create(ch).Error; err != nil {
 			t.Fatalf("创建章节失败: %v", err)
 		}
+	}
+	// C11：学员可见 = 课程可见 ∧ 有已发布槽——可见课的章节走真实过审路径出槽；
+	// 其余章节不补槽（C6 双保险：即便课程可见侧判据失守，无槽仍按「不存在」）。
+	if err := SubmitChapterForReview(context.Background(), db, visibleCh.ChapterID, 7); err != nil {
+		t.Fatalf("夹具提交审核失败: %v", err)
+	}
+	if err := ApproveChapterReview(context.Background(), db, visibleCh.ChapterID); err != nil {
+		t.Fatalf("夹具过审失败: %v", err)
 	}
 
 	user := model.HrwaiUser{Account: "acct_read_vis", Phone: "13800000066", Username: "读面", Status: 1, CreatedAt: testutil.Now()}

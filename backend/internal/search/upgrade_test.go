@@ -1,11 +1,15 @@
 package search
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"strings"
 	"testing"
 
+	"gorm.io/gorm"
+
+	"forklift-training/internal/course"
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
 )
@@ -13,6 +17,17 @@ import (
 // ===== #982 搜索能力升级：章节分区 / 回复命中 / 匹配面 / 命中片段 / 排序 / 检索事实 =====
 
 // 章节分区：可见性跟随所属课程（已发布 + 挂载不变式），并按当前证件分区。
+// publishChapterForSearch 夹具章节走真实过审路径出已发布槽（#2498 C6：搜索面限已发布槽章节）。
+func publishChapterForSearch(t *testing.T, db *gorm.DB, chapterID int) {
+	t.Helper()
+	if err := course.SubmitChapterForReview(context.Background(), db, chapterID, 7); err != nil {
+		t.Fatalf("夹具提交审核失败: %v", err)
+	}
+	if err := course.ApproveChapterReview(context.Background(), db, chapterID); err != nil {
+		t.Fatalf("夹具过审失败: %v", err)
+	}
+}
+
 func TestSearchChapterPartitionFollowsCourseVisibility(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 	svc := NewService(db, nil)
@@ -46,6 +61,7 @@ func TestSearchChapterPartitionFollowsCourseVisibility(t *testing.T) {
 		if err := db.Create(&ch).Error; err != nil {
 			t.Fatalf("建章节失败: %v", err)
 		}
+		publishChapterForSearch(t, db, ch.ChapterID)
 		return ch
 	}
 
@@ -183,6 +199,7 @@ func TestSearchAllIncludesChapterSection(t *testing.T) {
 	if err := db.Create(&ch).Error; err != nil {
 		t.Fatalf("建章节失败: %v", err)
 	}
+	publishChapterForSearch(t, db, ch.ChapterID)
 	all, err := svc.Search("液压", "", 1, 20, nil)
 	if err != nil {
 		t.Fatalf("聚合搜索失败: %v", err)
@@ -245,9 +262,11 @@ func TestSearchFactsAreAnonymousAndZeroResultQueryable(t *testing.T) {
 	if err := db.Create(&c).Error; err != nil {
 		t.Fatalf("建课失败: %v", err)
 	}
-	if err := db.Create(&model.Chapter{CourseID: c.CourseID, Title: "液压章节", Content: "x", CreatedAt: testutil.Now()}).Error; err != nil {
+	ch := model.Chapter{CourseID: c.CourseID, Title: "液压章节", Content: "x", CreatedAt: testutil.Now()}
+	if err := db.Create(&ch).Error; err != nil {
 		t.Fatalf("建章节失败: %v", err)
 	}
+	publishChapterForSearch(t, db, ch.ChapterID)
 	if _, err := svc.Search("液压", "", 1, 20, nil); err != nil {
 		t.Fatalf("搜索失败: %v", err)
 	}

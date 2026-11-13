@@ -48,6 +48,8 @@ func RegisterAdminRoutes(rg *gin.RouterGroup, session *security.Session, svc *Ad
 	write.DELETE("/course/:course_id", h.DeleteCourse)
 	write.POST("/course/:course_id/chapter", h.CreateChapter)
 	write.PUT("/chapter/:chapter_id", h.UpdateChapter)
+	write.POST("/chapter/:chapter_id/approve-review", h.ApproveChapterReview)
+	write.POST("/chapter/:chapter_id/reject-review", h.RejectChapterReview)
 	write.DELETE("/chapter/:chapter_id", h.DeleteChapter)
 }
 
@@ -380,6 +382,72 @@ func (h *adminHandler) DeleteChapter(c *gin.Context) {
 		WithSentinel(ErrChapterNotFound, http.StatusNotFound).Handle(c)
 }
 
+// @Summary 章节过审
+// @Description 在审快照原子切换到已发布槽（#2498 C4）；无在审版本 409
+// @Tags 管理端-章节
+// @Produce json
+// @Security BearerAuth
+// @Param chapter_id path int true "章节 ID"
+// @Success 200 {object} response.R{data=ChapterDTO} "过审成功"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "章节不存在"
+// @Failure 409 {object} response.R "没有在审版本"
+// @Router /admin/chapter/{chapter_id}/approve-review [post]
+// ApproveChapterReview 章节过审 POST /api/admin/chapter/:chapter_id/approve-review
+func (h *adminHandler) ApproveChapterReview(c *gin.Context) {
+	httpx.Endpoint[idParam, ChapterDTO]{
+		Parse: func(c *gin.Context) (*idParam, error) {
+			id, err := httpx.PathInt(c, "chapter_id", "章节ID无效")
+			if err != nil {
+				return nil, err
+			}
+			return &idParam{ID: id}, nil
+		},
+		Invoke: func(ctx context.Context, req *idParam) (*ChapterDTO, error) {
+			return h.courseSvc.ApproveChapterReview(req.ID)
+		},
+	}.WithSuccess(httpx.OkMsg("已过审"), http.StatusInternalServerError).
+		WithSentinel(ErrChapterNotFound, http.StatusNotFound).
+		WithSentinel(ErrChapterReviewNoPending, http.StatusConflict).Handle(c)
+}
+
+// @Summary 章节驳回
+// @Description 弃在审快照、回草稿并记驳回理由（#2498 C1/C4）；理由必填 400，无在审版本 409
+// @Tags 管理端-章节
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param chapter_id path int true "章节 ID"
+// @Param body body rejectReviewBody true "驳回理由"
+// @Success 200 {object} response.R{data=ChapterDTO} "驳回成功"
+// @Failure 400 {object} response.R "驳回理由不能为空"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "章节不存在"
+// @Failure 409 {object} response.R "没有在审版本"
+// @Router /admin/chapter/{chapter_id}/reject-review [post]
+// RejectChapterReview 章节驳回 POST /api/admin/chapter/:chapter_id/reject-review
+func (h *adminHandler) RejectChapterReview(c *gin.Context) {
+	httpx.Endpoint[rejectReviewInput, ChapterDTO]{
+		Parse: func(c *gin.Context) (*rejectReviewInput, error) {
+			id, err := httpx.PathInt(c, "chapter_id", "章节ID无效")
+			if err != nil {
+				return nil, err
+			}
+			body, err := httpx.BindJSONMsg[rejectReviewBody](c, "请求数据无效")
+			if err != nil {
+				return nil, err
+			}
+			return &rejectReviewInput{ID: id, Reason: body.Reason}, nil
+		},
+		Invoke: func(ctx context.Context, req *rejectReviewInput) (*ChapterDTO, error) {
+			return h.courseSvc.RejectChapterReview(req.ID, req.Reason)
+		},
+	}.WithSuccess(httpx.OkMsg("已驳回"), http.StatusInternalServerError).
+		WithSentinel(ErrChapterNotFound, http.StatusNotFound).
+		WithSentinel(ErrChapterReviewNoPending, http.StatusConflict).
+		WithSentinel(ErrInvalidReviewInput, http.StatusBadRequest).Handle(c)
+}
+
 // ===== Endpoint 请求类型（原 internal/api/admin.go:875-967 的共享私有类型副本）=====
 
 // idParam 路径整型 ID 请求（course_id / chapter_id）。原 internal/api/admin.go:878 的共享私有类型；
@@ -404,6 +472,17 @@ type chapterIDInput struct {
 type swapCourseSortReq struct {
 	ID       int
 	SwapWith int
+}
+
+// rejectReviewBody 章节驳回请求体（#2498 C1：理由随驳回落 reject_reason）。
+type rejectReviewBody struct {
+	Reason string `json:"reason"`
+}
+
+// rejectReviewInput 路径章节 ID + 驳回理由。
+type rejectReviewInput struct {
+	ID     int
+	Reason string
 }
 
 // adminCourseListReq 管理端课程列表查询参数。原 internal/api/admin.go:945。

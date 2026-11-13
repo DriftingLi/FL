@@ -201,6 +201,7 @@ func TestChapterSlidesRequireAuthContract(t *testing.T) {
 	if err := db.Create(&ch).Error; err != nil {
 		t.Fatalf("创建章节失败: %v", err)
 	}
+	publishChapterForRead(t, db, ch.ChapterID) // #2498：slides 读面同学员谓词（无已发布槽按不存在）
 	user := model.HrwaiUser{Account: "acct_slides", Phone: "13800000088", Username: "幻灯片", Status: 1, CreatedAt: testutil.Now()}
 	if err := db.Create(&user).Error; err != nil {
 		t.Fatalf("创建用户失败: %v", err)

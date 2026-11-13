@@ -1213,6 +1213,152 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/chapter/{chapter_id}/approve-review": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "在审快照原子切换到已发布槽（#2498 C4）；无在审版本 409",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-章节"
+                ],
+                "summary": "章节过审",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "章节 ID",
+                        "name": "chapter_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "过审成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/course.ChapterDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "章节不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "409": {
+                        "description": "没有在审版本",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/chapter/{chapter_id}/reject-review": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "弃在审快照、回草稿并记驳回理由（#2498 C1/C4）；理由必填 400，无在审版本 409",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-章节"
+                ],
+                "summary": "章节驳回",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "章节 ID",
+                        "name": "chapter_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "驳回理由",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/course.rejectReviewBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "驳回成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/course.ChapterDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "驳回理由不能为空",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "章节不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "409": {
+                        "description": "没有在审版本",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/contributions/pending": {
             "get": {
                 "security": [
@@ -19480,6 +19626,73 @@ const docTemplate = `{
                 }
             }
         },
+        "/tutor/chapter/{chapter_id}/submit-review": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "冻结整章快照（正文 + 文件挂接清单）进在审队列（#2498 C2/C4）；同章单 pending，重复提交 400（C8）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "讲师端-课程"
+                ],
+                "summary": "提交章节审核",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "章节ID",
+                        "name": "chapter_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/course.ChapterDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "已有在审版本",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "章节不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/tutor/chapter/{chapter_id}/upload": {
             "post": {
                 "security": [
@@ -26929,6 +27142,15 @@ const docTemplate = `{
                 "order_num": {
                     "type": "integer"
                 },
+                "reject_reason": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "review_status": {
+                    "description": "ReviewStatus/RejectReason 章节审核状态机（#2498 C1）：draft/pending/published + 驳回理由。\n只在管理读面/导师编辑面有意义，学生读面省略（x-optional）。",
+                    "type": "string",
+                    "x-optional": true
+                },
                 "title": {
                     "type": "string"
                 }
@@ -26978,9 +27200,18 @@ const docTemplate = `{
                     "type": "integer",
                     "x-nullable": true
                 },
+                "reject_reason": {
+                    "type": "string",
+                    "x-optional": true
+                },
                 "resume_position": {
                     "description": "ResumePosition 该学员在本章节的最后播放位置（秒，契约只增不改 —— ADR-0048）。\nADR-0062 决策 11：断点续播的位置由后端下发。旧形状是前端在章节详情装载里同步读\n另一条并发请求填的 map，谁先回来全凭运气 ⇒ 多半读到 0，每次从片头重播\n（词表「学习位置」的承诺在最常用的入口上不成立）。",
                     "type": "integer"
+                },
+                "review_status": {
+                    "description": "ReviewStatus/RejectReason 章节审核状态机（#2498 C1）：draft/pending/published + 驳回理由。\n只在管理读面/导师编辑面有意义，学生读面省略（x-optional）。",
+                    "type": "string",
+                    "x-optional": true
                 },
                 "study_status": {
                     "type": "string",
@@ -27354,6 +27585,14 @@ const docTemplate = `{
                 },
                 "course": {
                     "$ref": "#/definitions/course.CourseDTO"
+                }
+            }
+        },
+        "course.rejectReviewBody": {
+            "type": "object",
+            "properties": {
+                "reason": {
+                    "type": "string"
                 }
             }
         },

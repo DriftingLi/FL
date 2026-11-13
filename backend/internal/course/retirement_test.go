@@ -8,6 +8,7 @@ package course
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -79,6 +80,13 @@ func seedCatalogCourse(t *testing.T, db *gorm.DB) (*model.Course, *model.Course)
 		ch := model.Chapter{CourseID: course.CourseID, Title: "章节", OrderNum: i, CreatedAt: testutil.Now()}
 		if err := db.Create(&ch).Error; err != nil {
 			t.Fatalf("创建章节失败: %v", err)
+		}
+		// C11/C6 计数口径：只数有已发布槽的章节——夹具走真实过审路径出槽
+		if err := SubmitChapterForReview(context.Background(), db, ch.ChapterID, 7); err != nil {
+			t.Fatalf("夹具提交审核失败: %v", err)
+		}
+		if err := ApproveChapterReview(context.Background(), db, ch.ChapterID); err != nil {
+			t.Fatalf("夹具过审失败: %v", err)
 		}
 	}
 	if err := db.Create(&model.CoursePrerequisite{

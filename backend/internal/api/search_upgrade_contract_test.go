@@ -24,6 +24,7 @@ func TestSearchUpgradeContract(t *testing.T) {
 	if err := db.Create(&ch).Error; err != nil {
 		t.Fatalf("建章节失败: %v", err)
 	}
+	publishChapterForRead(t, db, ch.ChapterID) // #2498：搜索面只索引已发布槽
 
 	// 聚合路径：新增 chapters 分区，且条目形状带命中片段 / 命中位置 / 落点参数
 	rec := catalogRequest(t, r, "", http.MethodGet, "/api/search?keyword=%E6%B6%B2%E5%8E%8B", "")

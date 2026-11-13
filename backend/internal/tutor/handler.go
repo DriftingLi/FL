@@ -48,6 +48,7 @@ func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, svc *Service
 	g.GET("/chapter/:chapter_id", h.GetChapterDetail)
 	// POST /api/tutor/chapter/:chapter_id/upload  上传章节文件
 	g.POST("/chapter/:chapter_id/upload", h.UploadChapterFile)
+	g.POST("/chapter/:chapter_id/submit-review", h.SubmitChapterReview)
 	// POST /api/tutor/upload-image  上传图文 Markdown 中的图片（Vditor 格式）
 	g.POST("/upload-image", h.UploadImage)
 	// PUT /api/tutor/chapter/:chapter_id  更新章节信息
@@ -252,6 +253,37 @@ func (h *handler) UpdateChapterInfo(c *gin.Context) {
 		},
 	}.WithSuccess(httpx.OkMsg("章节更新成功"), http.StatusInternalServerError).
 		WithSentinel(course.ErrChapterNotFound, http.StatusNotFound).Handle(c)
+}
+
+// SubmitChapterReview 提交章节审核
+// @Summary 提交章节审核
+// @Description 冻结整章快照（正文 + 文件挂接清单）进在审队列（#2498 C2/C4）；同章单 pending，重复提交 400（C8）
+// @Tags 讲师端-课程
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param chapter_id path int true "章节ID"
+// @Success 200 {object} response.R{data=course.ChapterDTO} "success"
+// @Failure 400 {object} response.R "已有在审版本"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "章节不存在"
+// @Router /tutor/chapter/{chapter_id}/submit-review [post]
+func (h *handler) SubmitChapterReview(c *gin.Context) {
+	uid := middleware.CurrentUserID(c)
+	httpx.Endpoint[idParam, course.ChapterDTO]{
+		Parse: func(c *gin.Context) (*idParam, error) {
+			id, err := httpx.PathInt(c, "chapter_id", "章节ID无效")
+			if err != nil {
+				return nil, err
+			}
+			return &idParam{ID: id}, nil
+		},
+		Invoke: func(ctx context.Context, req *idParam) (*course.ChapterDTO, error) {
+			return h.svc.SubmitChapterReview(req.ID, uid)
+		},
+	}.WithSuccess(httpx.OkMsg("已提交审核"), http.StatusInternalServerError).
+		WithSentinel(course.ErrChapterNotFound, http.StatusNotFound).
+		WithSentinel(course.ErrChapterReviewPending, http.StatusBadRequest).Handle(c)
 }
 
 // DeleteChapterFile 删除章节文件

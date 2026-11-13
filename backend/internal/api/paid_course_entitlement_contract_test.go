@@ -49,6 +49,7 @@ func TestPaidCourseEntitlementGate(t *testing.T) {
 	if err := db.Create(&ch).Error; err != nil {
 		t.Fatalf("建章节失败: %v", err)
 	}
+	publishChapterForRead(t, db, ch.ChapterID) // #2498：学员读面只认已发布槽
 
 	pwd, _ := core.HashPassword("student123")
 	student := seedStudent(t, db, "paid_gate_stu", pwd)
@@ -207,6 +208,7 @@ func TestCourseDetailChapterContentEntitlement(t *testing.T) {
 	if err := db.Create(&ch).Error; err != nil {
 		t.Fatalf("建章节失败: %v", err)
 	}
+	publishChapterForRead(t, db, ch.ChapterID) // #2498：学员读面只认已发布槽
 	detailURL := fmt.Sprintf("/api/course/%d", course.CourseID)
 
 	before := chaptersOf(t, doWithToken(t, r, token, http.MethodGet, detailURL, nil))

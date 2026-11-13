@@ -39,7 +39,6 @@ func TestSearchPartitionRegistryConsistency(t *testing.T) {
 		t.Fatalf("建课失败: %v", err)
 	}
 	for _, row := range []any{
-		&model.Chapter{CourseID: course.CourseID, Title: "液压章节", Content: "液压正文", CreatedAt: testutil.Now()},
 		&model.Question{Type: "single_choice", Content: "液压题干", Answer: "A", Status: "published", CredentialID: &credID},
 		&model.FeaturedContent{Title: "液压精选", Summary: "液压", Content: "液压正文", Status: 1, CreatedAt: testutil.Now()},
 		&model.ForumTopic{Title: "液压主题", Content: "液压正文", Category: "discussion", ContentFormat: "text", CreatedAt: testutil.Now()},
@@ -48,6 +47,11 @@ func TestSearchPartitionRegistryConsistency(t *testing.T) {
 			t.Fatalf("建行失败: %v", err)
 		}
 	}
+	ch := model.Chapter{CourseID: course.CourseID, Title: "液压章节", Content: "液压正文", CreatedAt: testutil.Now()}
+	if err := db.Create(&ch).Error; err != nil {
+		t.Fatalf("建行失败: %v", err)
+	}
+	publishChapterForSearch(t, db, ch.ChapterID)
 
 	all, err := svc.Search("液压", "", 1, 20, nil)
 	if err != nil {

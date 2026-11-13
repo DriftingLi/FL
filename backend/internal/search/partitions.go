@@ -76,11 +76,13 @@ var coursePartition = partitionSpec[model.Course]{
 	},
 }
 
-// ===== 章节分区：匹配章节标题 + 正文 + 描述；可见性跟随所属课程（已发布 + 挂载不变式）=====
+// ===== 章节分区：匹配章节标题 + 正文 + 描述；可见性跟随所属课程（已发布 + 挂载不变式）
+// 且限有已发布槽的章节（#2498 C6：未过审章节搜索不出现；正文命中面用已发布槽内容，
+// 不拿 working 草稿当命中——草稿正文不进学员读面）=====
 
 const (
 	searchChapterTitleHit   = "LOWER(chapter.title) LIKE ? ESCAPE '\\'"
-	searchChapterContentHit = "LOWER(chapter.content) LIKE ? ESCAPE '\\'"
+	searchChapterContentHit = "LOWER(s.content) LIKE ? ESCAPE '\\'"
 	searchChapterDescHit    = "LOWER(chapter.description) LIKE ? ESCAPE '\\'"
 )
 
@@ -88,6 +90,7 @@ var chapterPartition = partitionSpec[model.Chapter]{
 	key: SearchTypeChapter,
 	match: func(s *Service, p searchParams) *gorm.DB {
 		return s.db.Model(&model.Chapter{}).
+			Joins("JOIN chapter_content_slot s ON s.slot = 'published' AND s.chapter_id = chapter.chapter_id").
 			Where("("+searchChapterTitleHit+" OR "+searchChapterContentHit+" OR "+searchChapterDescHit+")", p.like, p.like, p.like)
 	},
 	scope: func(s *Service, q *gorm.DB, p searchParams) *gorm.DB {
@@ -96,9 +99,9 @@ var chapterPartition = partitionSpec[model.Chapter]{
 		mounted = scope.EntityOwnedBy(mounted, "credential_id", p.cred)
 		return q.Where("course_id IN (?)", mounted)
 	},
-	selects:   "chapter_id, course_id, title, content, description",
+	selects:   "chapter.chapter_id, chapter.course_id, chapter.title, s.content AS content, chapter.description",
 	titleHit:  searchChapterTitleHit,
-	secondary: "order_num ASC, chapter_id ASC",
+	secondary: "chapter.order_num ASC, chapter.chapter_id ASC",
 	hit: func(s *Service, r *model.Chapter, p searchParams) (string, string) {
 		body := r.Content
 		if body == "" {
