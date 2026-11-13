@@ -387,8 +387,9 @@ describe('整卷考试入口（#2464）：考试页接卷参数即开考，列�
 
   it('开考走 /real-exam/papers/:id/exam 出口：题集与卷时长由后端按卷给定', () => {
     expect(session).toMatch(/import\s*\{[^}]*startPaperExamApi[^}]*\}\s*from\s*'\.\.\/\.\.\/\.\.\/api\/realExam'/);
-    expect(session).toContain('startPaperExamApi(paperId.value)');
-    // 卷考不拿客户端时长去开考：startMockExamApi 只在无卷参数分支出现
+    // 右括号必须紧贴：多传一个参数（例如客户端时长）就红，这才是「卷考不带客户端时长」的判据
+    expect(session).toMatch(/startPaperExamApi\(paperId\.value\)/);
+    // 反向留证：无卷参数分支仍是原样的 startMockExamApi(0, initDuration)
     expect(session).toContain('startMockExamApi(0, initDuration.value)');
   });
 
@@ -407,6 +408,7 @@ describe('整卷考试入口（#2464）：考试页接卷参数即开考，列�
 
   it('列表页不抢先开考（AC④：先开考再跳，返回时就留下悬空考试记录）', () => {
     expect(papersPage).not.toContain('startPaperExamApi');
+    // 本文件的「零直发请求」清单只含 exam 两页，practice 域这一页在此单列
     expect(papersPage).not.toMatch(/uni\.request\s*\(/);
   });
 

@@ -109,6 +109,8 @@ describe('整卷考试入口（#2464）', () => {
     const { session, calls } = loadSession({});
     session.applyOptions({ paper: '77' });
     await session.boot();
+    // boot 的卷考分支沿用既有 `loadExam()` 不 await 的写法（与尾部同形），等一拍让装载落定
+    await flush();
     expect(calls.paper).toEqual([77]);
     expect(calls.history).toBe(0);
     expect(calls.start).toEqual([]);
@@ -123,6 +125,7 @@ describe('整卷考试入口（#2464）', () => {
     const { session, calls } = loadSession({ paperFails: true });
     session.applyOptions({ paper: '77' });
     await session.boot();
+    await flush();
     expect(session.loadError.value).toContain('请先兑换该真题卷');
     expect(session.mockExamId.value).toBe(0);
     expect(calls.intervals).toBe(0);
