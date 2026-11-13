@@ -207,7 +207,7 @@ func TestListFilesFilters(t *testing.T) {
 	ctx := context.Background()
 	ch := seedChapter(t, svc, "第一章")
 	video := makeFile(t, svc, 1, "录课.mp4") // video，将挂接
-	doc := makeFile(t, svc, 1, "讲义.pdf")    // document，未挂
+	doc := makeFile(t, svc, 1, "讲义.pdf")   // document，未挂
 	doc.ContentType = "document"
 	svc.db.Save(doc)
 	if err := svc.AttachFile(ctx, 1, video.FileID, ch); err != nil {
