@@ -241,3 +241,66 @@ describe('考点正确率接线（#1948：摘 mockAccuracy，改接 stats 的 by
     expect(page).toContain('loadTagAccuracy()');
   });
 });
+
+describe('积分解锁兑换接线（#2462：二次确认 → 兑换 → 以 entitled 为准重拉）', () => {
+  const papersPage = read('pages/practice/real-exam-papers.uvue');
+
+  /** 取函数体：从声明处到下一个 8 空格缩进的 `}`（页面里没有嵌套到同级的块） */
+  function bodyOf(signature) {
+    const start = papersPage.indexOf(signature);
+    expect(start).toBeGreaterThan(-1);
+    return papersPage.slice(start, papersPage.indexOf('\n    }', start));
+  }
+
+  const redeem = bodyOf('async function doRedeemPaper');
+  const click = bodyOf('function onRedeem');
+
+  it('只有未解锁卷渲染解锁按钮，已解锁卷不留按钮', () => {
+    expect(papersPage).toMatch(/<app-button v-if="!p\.entitled"[^>]*@click="onRedeem\(p\)"><\/app-button>/);
+  });
+
+  it('按钮文案与在途文案来自 utils/realExamPapersDisplay（页面不留第二份字面量）', () => {
+    expect(papersPage).toContain('paperRedeemButtonText(redeemingPaperId.value == p.paper_id)');
+    expect(papersPage).not.toMatch(/'积分解锁'/);
+  });
+
+  it('在途期间所有解锁按钮禁用、且点击守卫再拦一次（AC④ 不可重复点击）', () => {
+    expect(papersPage).toMatch(/<app-button v-if="!p\.entitled"[^>]*:disabled="redeemingPaperId != 0"/);
+    expect(click).toMatch(/redeemingPaperId\.value != 0\)\s*\{\s*\n\s*return/);
+  });
+
+  it('点击先出二次确认，确认文案含该卷价格；仅确认才发请求（取消不发，AC①）', () => {
+    expect(click).toContain('uni.showModal(');
+    expect(click).toMatch(/content:\s*paperRedeemConfirmText\(p\.price\)/);
+    expect(click).toMatch(/if \(res\.confirm\) \{\s*\n\s*doRedeemPaper\(p\)/);
+    expect(click).not.toContain('redeemPaperApi');
+  });
+
+  it('兑换走 api/realExam 的 redeemPaperApi（页面不直连请求，AC⑥ 无后端改动）', () => {
+    expect(papersPage).toMatch(/import\s*\{[^}]*redeemPaperApi[^}]*\}\s*from\s*'\.\.\/\.\.\/api\/realExam'/);
+    expect(redeem).toContain('await redeemPaperApi(p.paper_id)');
+    expect(papersPage).not.toMatch(/uni\.request\s*\(/);
+  });
+
+  it('成败都重拉列表：catch 只记原因、不 return 不提前收尾，await loadPapers(true) 在 catch 之后（AC②③）', () => {
+    expect(redeem).toMatch(/catch[\s\S]*?errMsg\(e, '兑换失败，请稍后重试'\)/);
+    expect(redeem).not.toMatch(/catch[\s\S]*?\breturn\b/);
+    expect(redeem.indexOf('await loadPapers(true)')).toBeGreaterThan(redeem.indexOf('catch'));
+  });
+
+  it('解锁状态只认服务端：entitled / price 一概不本地赋值（AC⑤）', () => {
+    expect(papersPage).not.toMatch(/\.entitled\s*=(?!=)/);
+    expect(papersPage).not.toMatch(/\.price\s*=(?!=)/);
+  });
+
+  it('全链路没有按响应文案判「已兑换」的字符串比对（AC⑤ / ADR-0024）', () => {
+    expect(papersPage).not.toMatch(/(indexOf|includes|match|test)\(\s*['"]已兑换/);
+    expect(papersPage).not.toMatch(/['"]已兑换['"]/);
+  });
+
+  it('失败提示 = 后端原因 + 重拉后的真实状态，并给出下一步落点（AC③）', () => {
+    const fail = bodyOf('function notifyRedeemFailed');
+    expect(fail).toMatch(/content:\s*paperRedeemFailText\(reason, stillLocked\)/);
+    expect(fail).toContain("uni.navigateTo({ url: '/pages/points/task-center' })");
+  });
+});

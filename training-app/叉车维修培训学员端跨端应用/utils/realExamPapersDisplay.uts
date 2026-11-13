@@ -84,6 +84,43 @@ export function paperPriceText(price : number) : string {
     return price.toString() + ' 积分/套'
 }
 
+/** 未解锁卷的解锁按钮文案（#2462 AC①） */
+export const PAPER_REDEEM_BUTTON_TEXT : string = '积分解锁'
+
+/** 兑换在途时的按钮文案（AC④：按钮组件没有 loading 态，用文案 + disabled 表达） */
+export const PAPER_REDEEM_BUSY_TEXT : string = '兑换中...'
+
+/**
+ * 解锁按钮当前该显示哪句（AC①④）：在途换文案，同卷之外的其他按钮由页面统一禁用。
+ * @param busy 这一卷是否正在兑换
+ */
+export function paperRedeemButtonText(busy : boolean) : string {
+    return busy ? PAPER_REDEEM_BUSY_TEXT : PAPER_REDEEM_BUTTON_TEXT
+}
+
+/**
+ * 二次确认文案（AC①「确认文案含该卷价格」）：价格只来自后端 SKU，端上不换算、不兜底。
+ * @param price 该卷价格（列表响应里的 `price`）
+ */
+export function paperRedeemConfirmText(price : number) : string {
+    return '该真题卷需 ' + price.toString() + ' 积分，解锁后可开始练习与模拟考试，确认兑换？'
+}
+
+/**
+ * 兑换失败提示（AC③）：后端哨兵原因**原样**透传 + 重拉后列表给出的真实解锁状态。
+ *
+ * 后半句只读重拉回来的 `entitled`（服务端事实），**不**按失败文案判断「是否已兑换」——
+ * 字符串比对正是 ADR-0024 明令禁止的那类写法（「已兑换」与「积分不足」在后端同为 400，
+ * 端上本来就无从按码区分）。
+ *
+ * @param reason 后端错误原文（页面用 `errMsg` 取）
+ * @param stillLocked 重拉后这一卷是否仍未解锁
+ */
+export function paperRedeemFailText(reason : string, stillLocked : boolean) : string {
+    const tail = stillLocked ? '，该卷仍未解锁，可稍后重试。' : '，该卷已解锁，请查看最新状态。'
+    return reason + tail
+}
+
 /** 空态文案：`{当前证件} 真题建设中，敬请期待`（AC⑤） */
 export function papersEmptyText(credentialName : string) : string {
     return credentialName.length > 0 ? credentialName + ' 真题建设中，敬请期待' : '真题建设中，敬请期待'
