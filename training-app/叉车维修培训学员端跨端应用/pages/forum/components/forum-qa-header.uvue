@@ -60,7 +60,7 @@
     }
 </script>
 
-<style>
+<style lang="scss">
     .qa-header-wrap {
         flex-direction: column;
     }

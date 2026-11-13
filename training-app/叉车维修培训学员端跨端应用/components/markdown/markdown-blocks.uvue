@@ -34,7 +34,7 @@
             <text v-else-if="cap('paragraph') && block.type == 'paragraph'"
                 :class="blockClasses(idx, 'md-paragraph')"><text v-for="(run, ri) in runsOf(block.text)" :key="ri" :class="runClasses(idx, run)" @click="onRunTap(run)">{{ runText(run) }}</text><text v-if="!runsOn">{{ block.text }}</text></text>
             <!-- 代码块（spec「不折行、可横向滑动」：横滑靠 flex-direction: row + 子项 flex-shrink: 0 撑出溢出，
-                 不写 white-space —— 它只在 text/button 上生效且写进 <style> 必须登记 LEGAL_CARRIER_SITES） -->
+                 不写 white-space —— 它只在 text/button 上生效且写进 <style lang="scss"> 必须登记 LEGAL_CARRIER_SITES） -->
             <view v-else-if="cap('code') && block.type == 'code'" class="md-code-wrap">
                 <scroll-view class="md-code-scroll" scroll-x="true">
                     <view class="md-code-row">

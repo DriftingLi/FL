@@ -145,7 +145,7 @@
     // #2442 裁定：不再设 width —— .nav-bar-body 是 space-between，右槽本就贴右缘，
     // 定宽 194rpx 只是把标题可用区白吃掉约 130rpx（14 个带返回箭头页标题因此左移约 172rpx）。
     // 非小程序端无胶囊 ⇒ 不设约束。
-    const NAV_BODY_PADDING_X = 24 // 与 <style> 里 .nav-bar-body padding 的 $spacing-md 对齐
+    const NAV_BODY_PADDING_X = 24 // 与 <style lang="scss"> 里 .nav-bar-body padding 的 $spacing-md 对齐
     const rightSlotStyle = computed((): string => {
         const capsuleLeft = safeArea.value.capsuleLeft
         if (capsuleLeft <= 0) {

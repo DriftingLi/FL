@@ -36,7 +36,7 @@
     })
 </script>
 
-<style>
+<style lang="scss">
     /* 题目详情列表 */
     .detail-list {
         padding: 0 24rpx;

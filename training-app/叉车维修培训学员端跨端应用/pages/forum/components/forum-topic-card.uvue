@@ -163,7 +163,7 @@
     }
 </script>
 
-<style>
+<style lang="scss">
     .topic-card {
         background-color: #ffffff;
         border-radius: 16rpx;

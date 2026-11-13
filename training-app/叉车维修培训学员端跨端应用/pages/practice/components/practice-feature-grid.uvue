@@ -36,7 +36,7 @@
     }
 </script>
 
-<style>
+<style lang="scss">
     .feature-grid {
         margin: 0 24rpx 24rpx 24rpx;
         background-color: #ffffff;

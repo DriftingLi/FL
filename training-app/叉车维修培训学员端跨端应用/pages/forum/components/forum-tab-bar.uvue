@@ -42,7 +42,7 @@
     }
 </script>
 
-<style>
+<style lang="scss">
     /* 顶部Tab栏 */
     .tab-bar {
         flex-direction: row;

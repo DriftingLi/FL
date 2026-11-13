@@ -60,7 +60,7 @@
     }
 </script>
 
-<style>
+<style lang="scss">
     .section {
         background-color: #ffffff;
         margin-top: 16rpx;
