@@ -193,6 +193,22 @@ func NewDeps(cfg *config.Config, db *gorm.DB, st storage.Storage, logger *zap.Lo
 				logger.Info("投稿悬空文件清理完成", zap.Int("cleaned", cleaned))
 			}
 		}},
+		// 导师文件库真孤儿清理（#2495 / spec B4）：complete 后落行失败的残件沿 orphan_sweep 24h 口径回收；
+		// 库内有文件行的对象永不在差集里，不静默删。
+		{Name: "tutor-file-cleanup", Interval: 6 * time.Hour, Run: func(ctx context.Context) {
+			if cleaned := d.TutorFileSvc.CleanupOrphanFiles(ctx); cleaned > 0 {
+				logger.Info("导师文件库孤儿清理完成", zap.Int("cleaned", cleaned))
+			}
+		}},
+		// 分片上传会话 7 天自动 abort（#2495 / spec A3，R2 lifecycle 同口径）：
+		// 1 小时轮询对 7 天窗口纯属精度余量，清理失败下一轮重试。
+		{Name: "tutor-upload-session-expire", Interval: time.Hour, Run: func(ctx context.Context) {
+			if cleaned, err := d.TutorFileSvc.SweepStaleSessions(ctx, clock.Now()); err != nil {
+				logger.Warn("导师上传会话过期清理失败", zap.Error(err))
+			} else if cleaned > 0 {
+				logger.Info("导师上传会话过期清理完成", zap.Int("cleaned", cleaned))
+			}
+		}},
 		// 联系方式交换的裁决窗口收敛（#1197）：把窗口已闭却仍挂 pending 的行落为 expired。
 		// 1 小时对 14 天窗口纯属精度余量；正在重试的企业由 Create 的定向落态当场兜住，
 		// 本守护只负责没人再触碰的那些行。

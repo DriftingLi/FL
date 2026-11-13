@@ -24,7 +24,7 @@ func provideTraining(c *coreSingletons, d *Deps) {
 	d.StudentSvc = student.NewService(c.db, c.logger)
 	d.TutorSvc = tutor.NewService(c.db, c.cfg.UploadFolder, c.fileSvc, c.slideRenderer, c.logger)
 	// 分片上传走存储 seam 的 multipart 能力（#2494）：能力断言与 nil 容忍在 tutorfile.NewService 内收口。
-	d.TutorFileSvc = tutorfile.NewService(c.db, c.st)
+	d.TutorFileSvc = tutorfile.NewService(c.db, c.st, c.logger)
 	d.MaterialSvc = material.NewService(c.db, c.logger)
 	d.SearchSvc = search.NewService(c.db, c.logger)
 	d.FavoriteSvc = favorite.NewService(c.db, c.logger)

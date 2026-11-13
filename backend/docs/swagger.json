@@ -19842,6 +19842,70 @@
                 }
             }
         },
+        "/tutor/files/upload/{session_id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "返回会话状态与已收分片序号（spec A8，= S3 ListParts 语义）；客户端凭清单只补缺片，服务端以会话状态为准",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "讲师端-文件库"
+                ],
+                "summary": "断点续传清单",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "会话 ID",
+                        "name": "session_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/tutorfile.SessionStatusDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "非本人会话",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "会话不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/tutor/files/upload/{session_id}/abort": {
             "post": {
                 "security": [
@@ -30640,6 +30704,35 @@
                     "type": "integer"
                 },
                 "session_id": {
+                    "type": "string"
+                },
+                "total_chunks": {
+                    "type": "integer"
+                }
+            }
+        },
+        "tutorfile.SessionStatusDTO": {
+            "type": "object",
+            "properties": {
+                "chunk_size": {
+                    "type": "integer"
+                },
+                "file_name": {
+                    "type": "string"
+                },
+                "file_size": {
+                    "type": "integer"
+                },
+                "received_parts": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "session_id": {
+                    "type": "string"
+                },
+                "status": {
                     "type": "string"
                 },
                 "total_chunks": {

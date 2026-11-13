@@ -6,13 +6,14 @@
 //
 // 覆盖端点：
 //   POST /tutor/files/upload
+//   GET  /tutor/files/upload/{session_id}
 //   PUT  /tutor/files/upload/{session_id}/chunk/{part_number}
 //   POST /tutor/files/upload/{session_id}/complete
 //   POST /tutor/files/upload/{session_id}/abort
 //   GET  /tutor/files
 //   DELETE /tutor/files/{file_id}
 //
-// 覆盖的 Go 类型：FileDTO / FileListDTO / InitUploadResponse / UploadChunkResponse
+// 覆盖的 Go 类型：FileDTO / FileListDTO / InitUploadResponse / SessionStatusDTO / UploadChunkResponse
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -40,6 +41,16 @@ export interface FileListDTO {
 export interface InitUploadResponse {
   chunk_size: number
   session_id: string
+  total_chunks: number
+}
+
+export interface SessionStatusDTO {
+  chunk_size: number
+  file_name: string
+  file_size: number
+  received_parts: number[]
+  session_id: string
+  status: string
   total_chunks: number
 }
 

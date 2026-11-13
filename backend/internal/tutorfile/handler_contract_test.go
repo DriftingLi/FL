@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -33,7 +34,7 @@ func newTutorFileRouter(t *testing.T) (*gin.Engine, *Service, *config.Config) {
 	}
 	st := storage.NewLocalStorage(t.TempDir())
 	sess := security.SessionFromConfigWithBlacklist(cfg, testutil.NewValueBlacklist())
-	svc := NewService(db, st)
+	svc := NewService(db, st, nil)
 
 	r := gin.New()
 	api := r.Group("/api")
@@ -200,5 +201,70 @@ func TestHTTPErrorStatusMapping(t *testing.T) {
 	w = doJSON(t, r, tok, http.MethodDelete, "/api/tutor/files/999999", nil)
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("删除不存在文件应 404, got %d", w.Code)
+	}
+}
+
+// ===== #2495：断点续传清单端点 / 配额拒绝映射 =====
+
+func TestHTTPResumeManifestEndpoint(t *testing.T) {
+	r, _, cfg := newTutorFileRouter(t)
+	tok := issueTutorToken(t, cfg, 1, "tutor_a")
+
+	w := doJSON(t, r, tok, http.MethodPost, "/api/tutor/files/upload",
+		InitUploadRequest{FileName: "a.mp4", FileSize: 2*testChunkSz + 4, ChunkSize: testChunkSz})
+	var initResp struct {
+		Data InitUploadResponse `json:"data"`
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &initResp)
+	sid := initResp.Data.SessionID
+
+	// 传 1、3 片
+	if w := doRaw(t, r, tok, http.MethodPut, fmt.Sprintf("/api/tutor/files/upload/%s/chunk/1", sid), bytesOf('A', int(testChunkSz))); w.Code != http.StatusOK {
+		t.Fatalf("chunk 1 状态 = %d", w.Code)
+	}
+	if w := doRaw(t, r, tok, http.MethodPut, fmt.Sprintf("/api/tutor/files/upload/%s/chunk/3", sid), []byte("DDDD")); w.Code != http.StatusOK {
+		t.Fatalf("chunk 3 状态 = %d", w.Code)
+	}
+
+	// 断点续传清单
+	w = doJSON(t, r, tok, http.MethodGet, "/api/tutor/files/upload/"+sid, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("manifest 状态 = %d, body = %s", w.Code, w.Body.String())
+	}
+	var mf struct {
+		Data SessionStatusDTO `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &mf); err != nil {
+		t.Fatalf("解析 manifest 失败: %v", err)
+	}
+	if mf.Data.Status != statusActive || mf.Data.TotalChunks != 3 {
+		t.Fatalf("manifest 状态 = %s/%d, want active/3", mf.Data.Status, mf.Data.TotalChunks)
+	}
+	if len(mf.Data.ReceivedParts) != 2 || mf.Data.ReceivedParts[0] != 1 || mf.Data.ReceivedParts[1] != 3 {
+		t.Fatalf("received_parts = %v, want [1 3]", mf.Data.ReceivedParts)
+	}
+
+	// 他人查 → 403；不存在 → 404
+	tok2 := issueTutorToken(t, cfg, 2, "tutor_b")
+	if w := doJSON(t, r, tok2, http.MethodGet, "/api/tutor/files/upload/"+sid, nil); w.Code != http.StatusForbidden {
+		t.Fatalf("他人 manifest 状态 = %d, want 403", w.Code)
+	}
+	if w := doJSON(t, r, tok, http.MethodGet, "/api/tutor/files/upload/nope", nil); w.Code != http.StatusNotFound {
+		t.Fatalf("不存在 manifest 状态 = %d, want 404", w.Code)
+	}
+}
+
+func TestHTTPQuotaRejectedWithUsage(t *testing.T) {
+	r, svc, cfg := newTutorFileRouter(t)
+	tok := issueTutorToken(t, cfg, 1, "tutor_a")
+	seedFileRows(t, svc, 1, MaxFilesPerTutor, 1)
+
+	w := doJSON(t, r, tok, http.MethodPost, "/api/tutor/files/upload",
+		InitUploadRequest{FileName: "n.mp4", FileSize: 8, ChunkSize: testChunkSz})
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("配额拒绝状态 = %d, want 400（沿投稿配额先例）", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "300/300") {
+		t.Fatalf("拒绝信息应含当前用量, body = %s", w.Body.String())
 	}
 }
