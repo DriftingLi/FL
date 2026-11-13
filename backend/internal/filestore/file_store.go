@@ -62,6 +62,12 @@ func NewFileStore(libreofficeSidecarURL string, st storage.Storage, logger *zap.
 	}
 }
 
+// UniqueFileName 按命名契约 `<name>_<毫秒时间戳>.<ext>` 生成唯一文件名。
+// Save 与分片上传 complete（tutorfile）两个写入点共用，契约不因写入路径分叉。
+func UniqueFileName(name, ext string) string {
+	return fmt.Sprintf("%s_%s%s", name, strconv.FormatInt(time.Now().UnixMilli(), 10), ext)
+}
+
 // Save 保存文件到存储后端，返回可访问 URL。
 // key 设计为 <subfolder>/<name>_<毫秒时间戳>.<ext>，保证唯一性。
 // 时间戳命名契约由本 module 的 Save 写入；解析方自行遵守该契约。
@@ -69,7 +75,6 @@ func NewFileStore(libreofficeSidecarURL string, st storage.Storage, logger *zap.
 func (s *FileStore) Save(content []byte, filename, subfolder string) (string, error) {
 	ext := filepath.Ext(filename)
 	name := strings.TrimSuffix(filename, ext)
-	timestamp := strconv.FormatInt(time.Now().UnixMilli(), 10)
 
 	contentType := mimeTypeFromExt(FileExtension(filename))
 	finalExt := ext
@@ -81,7 +86,7 @@ func (s *FileStore) Save(content []byte, filename, subfolder string) (string, er
 		}
 	}
 
-	uniqueFilename := fmt.Sprintf("%s_%s%s", name, timestamp, finalExt)
+	uniqueFilename := UniqueFileName(name, finalExt)
 	key := fmt.Sprintf("%s/%s", subfolder, uniqueFilename)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
