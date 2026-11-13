@@ -3,9 +3,12 @@
  */
 import { ref, computed } from 'vue'
 import type { Ref, ComputedRef } from 'vue'
-import { getFreePracticeApi, getSequentialPracticeApi, getTagPracticeApi, getQuestionByIdApi, submitAnswerApi, savePracticeProgressApi } from '../../../api/practice'
+import { getFreePracticeApi, getSequentialPracticeApi, getTagPracticeApi, getQuestionByIdApi, submitAnswerApi, savePracticeProgressApi, getPracticeProgressApi } from '../../../api/practice'
 import { checkFavoriteApi, addFavoriteApi, removeFavoriteApi } from '../../../api/favorite'
 import { getCurrentCredentialApi } from '../../../api/credential'
+import { startPaperPracticeApi } from '../../../api/realExam'
+import { errMsg } from '../../../api/helpers'
+import { paperProgressMode, paperProgressIndex, paperAnswerStateValue, parsePaperAnswerStates, resolvePaperResumeIndex, paperLoadErrorText, PAPER_LOAD_FAIL_TEXT } from '../../../utils/realExamPaperPractice'
 import type { Question, SubmitAnswerResult, AnswerState, QuestionOption, SubmitAnswerParams, FavoriteCheckResult } from '../../../types/index'
 
 /** 本 composable 的显式返回类型。
@@ -16,6 +19,10 @@ export type UsePracticeSessionResult = {
     questions : Ref<Question[]>
     currentIndex : Ref<number>
     loading : Ref<boolean>
+    /** 按卷练习的可见失败文案（#2463）：空串=无错；页面直接展示它，不白屏不静默 */
+    errorText : Ref<string>
+    /** 按卷练习的当前卷 id（#2463）：0=非 paper 承载；页面据此判承载与「再练一次」 */
+    paperId : Ref<number>
     showResult : Ref<boolean>
     showSummary : Ref<boolean>
     showAnswerCard : Ref<boolean>
@@ -47,6 +54,9 @@ export type UsePracticeSessionResult = {
     onOptionClick : (key : string) => void
     onToggleFavorite : () => void
     loadQuestions : (mode : string, practiceCount : number, tagId : number, questionId : number) => Promise<void>
+    loadPaperQuestions : (paperId : number, resume : boolean) => Promise<void>
+    /** 存进度（paper 承载在页面隐藏/销毁时也要存，否则未提交就退出会丢游标） */
+    saveProgress : (mode : string, tagId : number) => void
     onSubmit : (mode : string) => Promise<void>
     onNext : () => void
     onJumpToQuestion : (idx : number) => void
@@ -65,6 +75,7 @@ export function usePracticeSession() : UsePracticeSessionResult {
     const questions = ref<Question[]>([])
     const currentIndex = ref<number>(0)
     const loading = ref<boolean>(false)
+    const errorText = ref<string>('')
     const showResult = ref<boolean>(false)
     const showSummary = ref<boolean>(false)
     const showAnswerCard = ref<boolean>(false)
@@ -84,6 +95,9 @@ export function usePracticeSession() : UsePracticeSessionResult {
      *  （中间件对 body 无能为力，见 api/practice.uts savePracticeProgressApi /
      *  docs/agents/credential-scope.md）。会话开始时解析一次——一次练习期间不会切证件。 */
     let browseCredentialId = 0
+    /** 按卷练习的当前卷 id（#2463）：只在 paper 承载里有值，进度键与续练都靠它。
+     *  以 ref 暴露给页面（UsePracticeSessionResult.paperId）——卷 id 只此一份，页面不再自己存。 */
+    const paperId = ref<number>(0)
 
     const currentQuestion = computed<Question>(() : Question => {
         if (questions.value.length == 0) { return { question_id: 0, type: '', title: '', options: [] as QuestionOption[], correct_answer: '', explanation: '' } as Question }
@@ -118,11 +132,17 @@ export function usePracticeSession() : UsePracticeSessionResult {
     function recordQuestionTime() { const now = Date.now(); if (questionStartTime.value > 0) { questionElapsed.value = Math.floor((now - questionStartTime.value) / 1000) }; questionStartTime.value = now }
     async function checkFavorite() : Promise<void> { const qid = currentQuestion.value.question_id; if (qid <= 0) return; try { const r = await checkFavoriteApi('question', qid); isFavorited.value = r.favorited; favoriteId.value = r.favorite_id } catch (e) { console.warn('[practice-do] checkFavorite failed:', e) } }
     function onToggleFavorite() : void { const qid = currentQuestion.value.question_id; if (qid <= 0) return; if (isFavorited.value) { const fid = favoriteId.value; if (fid > 0) { removeFavoriteApi(fid).then(() => { isFavorited.value = false; favoriteId.value = 0; uni.showToast({ title: '已取消收藏', icon: 'none' }) }).catch((e) => { console.warn('[practice-do] removeFavorite failed:', e); uni.showToast({ title: '操作失败', icon: 'none' }) }) } } else { addFavoriteApi('question', qid).then((item) => { isFavorited.value = true; favoriteId.value = item.favorite_id; uni.showToast({ title: '已收藏', icon: 'none' }) }).catch((e) => { console.warn('[practice-do] addFavorite failed:', e); uni.showToast({ title: '操作失败', icon: 'none' }) }) } }
-    async function loadQuestions(mode : string, practiceCount : number, tagId : number, questionId : number = 0) : Promise<void> {
+    /** 两种装载（既有四承载 / paper）共用的开场：置 loading、清可见错误、解析本次会话的证件 */
+    async function beginLoad() : Promise<void> {
         loading.value = true
+        errorText.value = ''
+        // 证件只在会话开始时解析一次：保存进度要用它（见 browseCredentialId 声明处）
+        try { const cred = await getCurrentCredentialApi(); if (cred != null) { browseCredentialId = cred!.id } } catch (e) { console.warn('[practice-do] load credential failed:', e) }
+    }
+
+    async function loadQuestions(mode : string, practiceCount : number, tagId : number, questionId : number = 0) : Promise<void> {
+        await beginLoad()
         try {
-            // 证件只在会话开始时解析一次：保存进度要用它（见 browseCredentialId 声明处）
-            try { const cred = await getCurrentCredentialApi(); if (cred != null) { browseCredentialId = cred!.id } } catch (e) { console.warn('[practice-do] load credential failed:', e) }
             if (mode == 'single') {
                 // 单题承载（ADR-0049 决策 4）：按 id 取题，可见性由后端题库池口径兜底（#981）
                 const one = await getQuestionByIdApi(questionId)
@@ -143,19 +163,85 @@ export function usePracticeSession() : UsePracticeSessionResult {
             loading.value = false
         }
     }
-    function saveProgress(mode : string, tagId : number) { if (mode != 'sequential' && mode != 'tag') return; const saveMode = mode == 'tag' ? 'tag:' + tagId.toString() : mode; const a : UTSJSONObject = {} as UTSJSONObject; for (let i = 0; i < answerStates.value.length; i++) { const s = answerStates.value[i]; a[s.question_id.toString()] = s.user_answer }; savePracticeProgressApi(currentIndex.value + 1, saveMode, questions.value.length, a, browseCredentialId).catch((e) => { console.warn('[practice-do] save progress failed:', e) }) }
-    async function onSubmit(mode : string) : Promise<void> { if (selectedKeys.value.length == 0) { uni.showToast({ title: '请选择答案', icon: 'none' }); return }; let ua = ''; if (isMultiChoice()) { ua = selectedKeys.value.slice().sort().join(',') } else { ua = selectedKeys.value[0] }; lastUserAnswer.value = ua; const qid = currentQuestion.value.question_id; try { const p : SubmitAnswerParams = { question_id: qid, user_answer: ua, practice_type: mode == 'single' ? 'free' : mode } as SubmitAnswerParams; const r = await submitAnswerApi(p); lastResult.value = r; showResult.value = true; recordQuestionTime(); const s : AnswerState = { question_id: qid, user_answer: ua, is_correct: r.correct, correct_answer: r.correct_answer, submitted: true } as AnswerState; answerStates.value.push(s); if (mode != 'free' && mode != 'single') { saveProgress(mode, 0) } } catch (e) { console.error('[practice-do] submit failed:', e); uni.showToast({ title: '提交失败', icon: 'none' }) } }
+
+    /**
+     * 把 answerStates 里这条题的作答还原到当前题（答题卡跳转与按卷续练共用同一套还原）：
+     * 选中项从 user_answer 解析回来（选项高亮），判题结果只在拿到了 correct_answer 时才展示。
+     * 进度行里的作答若是裸字符串（异端写入方，本端与 Web 都写对象）就没有 correct_answer ⇒ 只回填选中项、不伪造对错。
+     */
+    function restoreAnswerStateOf(qid : number) : void {
+        for (let i = 0; i < answerStates.value.length; i++) {
+            const st = answerStates.value[i]
+            if (st.question_id != qid) continue
+            lastUserAnswer.value = st.user_answer
+            lastResult.value = { correct: st.is_correct, correct_answer: st.correct_answer, explanation: '' } as SubmitAnswerResult
+            selectedKeys.value = parseAnswerKeys(st.user_answer)
+            showResult.value = st.correct_answer.length > 0
+            return
+        }
+    }
+
+    /**
+     * 按卷练习承载（#2463 / spec #2459 决策 4）：题目按卷内固定顺序（后端只回已发布题），
+     * 进度键 paper:<卷 id>，与既有四种承载（单题/随机/顺序/标签）各写各的进度行、互不干扰。
+     *
+     * 续练为什么要两次请求：StartPaperPractice 只回游标、不回逐题作答（backend/internal/realexam/service.go），
+     * 作答状态只有进度行里有 ⇒ 先按卷取题拿到顺序，再读 paper:<id> 的进度行还原游标与作答（与 Web 同型）。
+     * @param resume true=续练（读回游标与作答状态）；false=再练一次（从头开始，且不读回旧作答）
+     */
+    async function loadPaperQuestions(pid : number, resume : boolean = true) : Promise<void> {
+        await beginLoad()
+        paperId.value = pid
+        answerStates.value = [] as AnswerState[]
+        try {
+            const paper = await startPaperPracticeApi(pid)
+            questions.value = paper.questions
+            let startIdx = 0
+            if (resume) {
+                startIdx = paper.current_index
+                try {
+                    const prog = await getPracticeProgressApi(paperProgressMode(pid))
+                    startIdx = resolvePaperResumeIndex(paper.current_index, prog.index, questions.value.length)
+                    answerStates.value = parsePaperAnswerStates(prog.answers_state)
+                } catch (e) {
+                    // 进度行读不到不算致命：后端协商出来的游标仍然可用，只是作答标记恢复不了
+                    console.warn('[practice-do] load paper progress failed:', e)
+                    startIdx = resolvePaperResumeIndex(paper.current_index, 0, questions.value.length)
+                }
+            }
+            currentIndex.value = startIdx
+            selectedKeys.value = [] as string[]
+            showResult.value = false
+            showSummary.value = false
+            // 续练落点若已答过：把该题的选中项与判题结果一并回填（AC③「作答状态读回」）
+            restoreAnswerStateOf(currentQuestion.value.question_id)
+            if (questions.value.length > 0) { startTimer(); recordQuestionTime(); checkFavorite() }
+        } catch (e) {
+            console.error('[practice-do] load paper failed:', e)
+            questions.value = [] as Question[]
+            // 失败要可见（AC：未解锁/无已发布题给明确提示、不白屏不静默）：
+            // 后端 400 的中文原因原样透出，404 剥掉 transport 的状态前缀
+            errorText.value = paperLoadErrorText(errMsg(e, PAPER_LOAD_FAIL_TEXT))
+        } finally {
+            loading.value = false
+        }
+    }
+    /** 存进度：paper 的游标写 0 基（与 Web / 后端 ResumeSet 同口径），既有两承载维持原 1 基写法不动 */
+    function saveProgress(mode : string, tagId : number) { if (mode != 'sequential' && mode != 'tag' && mode != 'paper') return; if (mode == 'paper' && paperId.value <= 0) return; if (questions.value.length == 0) return; const saveMode = mode == 'tag' ? 'tag:' + tagId.toString() : (mode == 'paper' ? paperProgressMode(paperId.value) : mode); const saveIndex = mode == 'paper' ? paperProgressIndex(currentIndex.value) : currentIndex.value + 1; const a : UTSJSONObject = {} as UTSJSONObject; for (let i = 0; i < answerStates.value.length; i++) { const s = answerStates.value[i]; a[s.question_id.toString()] = mode == 'paper' ? paperAnswerStateValue(s) : s.user_answer }; savePracticeProgressApi(saveIndex, saveMode, questions.value.length, a, browseCredentialId).catch((e) => { console.warn('[practice-do] save progress failed:', e) }) }
+    async function onSubmit(mode : string) : Promise<void> { if (selectedKeys.value.length == 0) { uni.showToast({ title: '请选择答案', icon: 'none' }); return }; let ua = ''; if (isMultiChoice()) { ua = selectedKeys.value.slice().sort().join(',') } else { ua = selectedKeys.value[0] }; lastUserAnswer.value = ua; const qid = currentQuestion.value.question_id; try { const p : SubmitAnswerParams = { question_id: qid, user_answer: ua, practice_type: mode == 'single' ? 'free' : mode } as SubmitAnswerParams; const r = await submitAnswerApi(p); lastResult.value = r; showResult.value = true; recordQuestionTime(); const s : AnswerState = { question_id: qid, user_answer: ua, is_correct: r.correct, correct_answer: r.correct_answer, submitted: true } as AnswerState; if (mode == 'paper') { let replaced = false; for (let i = 0; i < answerStates.value.length; i++) { if (answerStates.value[i].question_id == qid) { answerStates.value[i] = s; replaced = true; break } }; if (!replaced) { answerStates.value.push(s) } } else { answerStates.value.push(s) }; if (mode != 'free' && mode != 'single') { saveProgress(mode, 0) } } catch (e) { console.error('[practice-do] submit failed:', e); uni.showToast({ title: '提交失败', icon: 'none' }) } }
     function resetQuestionState() : void { showResult.value = false; lastUserAnswer.value = ''; lastResult.value = { correct: false, correct_answer: '', explanation: '' } as SubmitAnswerResult }
     function onNext() : void { if (currentIndex.value >= questions.value.length - 1) { showSummary.value = true; stopTimer(); return }; currentIndex.value = currentIndex.value + 1; selectedKeys.value = []; resetQuestionState(); recordQuestionTime(); checkFavorite() }
-    function onJumpToQuestion(idx : number) : void { if (idx == currentIndex.value) { showAnswerCard.value = false; return }; currentIndex.value = idx; selectedKeys.value = []; resetQuestionState(); const q = questions.value[idx]; for (let i = 0; i < answerStates.value.length; i++) { if (answerStates.value[i].question_id == q.question_id) { const st = answerStates.value[i]; lastUserAnswer.value = st.user_answer; lastResult.value = { correct: st.is_correct, correct_answer: st.correct_answer, explanation: '' } as SubmitAnswerResult; showResult.value = true; break } }; showAnswerCard.value = false; recordQuestionTime(); checkFavorite() }
+    function onJumpToQuestion(idx : number) : void { if (idx == currentIndex.value) { showAnswerCard.value = false; return }; currentIndex.value = idx; selectedKeys.value = []; resetQuestionState(); const q = questions.value[idx]; if (paperId.value > 0) { restoreAnswerStateOf(q.question_id) } else { for (let i = 0; i < answerStates.value.length; i++) { if (answerStates.value[i].question_id == q.question_id) { const st = answerStates.value[i]; lastUserAnswer.value = st.user_answer; lastResult.value = { correct: st.is_correct, correct_answer: st.correct_answer, explanation: '' } as SubmitAnswerResult; showResult.value = true; break } } }; showAnswerCard.value = false; recordQuestionTime(); checkFavorite() }
     function onToggleAnswerCard() : void { showAnswerCard.value = !showAnswerCard.value }
     function onCloseAnswerCard() : void { showAnswerCard.value = false }
     function onSubmitPaper() : void { uni.showModal({ title: '提示', content: '确定要交卷吗？', success: (res) => { if (res.confirm) { showAnswerCard.value = false; showSummary.value = true; stopTimer() } } }) }
-    function onRestart() : void { currentIndex.value = 0; selectedKeys.value = []; showResult.value = false; showSummary.value = false; answerStates.value = []; lastResult.value = { correct: false, correct_answer: '', explanation: '' } as SubmitAnswerResult; totalSeconds.value = 0; questionStartTime.value = 0; questionElapsed.value = 0 }
+    function onRestart() : void { currentIndex.value = 0; selectedKeys.value = []; showResult.value = false; showSummary.value = false; errorText.value = ''; answerStates.value = []; lastResult.value = { correct: false, correct_answer: '', explanation: '' } as SubmitAnswerResult; totalSeconds.value = 0; questionStartTime.value = 0; questionElapsed.value = 0 }
     return {
         questions,
         currentIndex,
         loading,
+        errorText,
+        paperId,
         showResult,
         showSummary,
         showAnswerCard,
@@ -187,6 +273,8 @@ export function usePracticeSession() : UsePracticeSessionResult {
         onOptionClick: (key : string) => onOptionClick(key),
         onToggleFavorite: () => onToggleFavorite(),
         loadQuestions: (mode : string, practiceCount : number, tagId : number, questionId : number) => loadQuestions(mode, practiceCount, tagId, questionId),
+        loadPaperQuestions: (pid : number, resume : boolean) => loadPaperQuestions(pid, resume),
+        saveProgress: (mode : string, tagId : number) => saveProgress(mode, tagId),
         onSubmit: (mode : string) => onSubmit(mode),
         onNext: () => onNext(),
         onJumpToQuestion: (idx : number) => onJumpToQuestion(idx),

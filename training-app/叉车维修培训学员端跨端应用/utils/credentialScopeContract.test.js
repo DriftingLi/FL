@@ -273,7 +273,8 @@ describe('#1107 消费面接线：页面/组合式函数把证件交给 api', ()
   it('练习会话：顺序练习保存进度时把当前证件写进 body', () => {
     const src = read('pages/practice/composables/usePracticeSession.uts');
     expect(src).toContain('let browseCredentialId = 0');
-    expect(src).toContain('savePracticeProgressApi(currentIndex.value + 1, saveMode, questions.value.length, a, browseCredentialId)');
+    // #2463 把游标抽成 saveIndex（paper 写 0 基、既有两承载写 1 基）；本锁守的是「证件固定第 5 位下发」
+    expect(src).toContain('savePracticeProgressApi(saveIndex, saveMode, questions.value.length, a, browseCredentialId)');
   });
 });
 

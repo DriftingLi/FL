@@ -304,3 +304,80 @@ describe('积分解锁兑换接线（#2462：二次确认 → 兑换 → 以 ent
     expect(fail).toContain("uni.navigateTo({ url: '/pages/points/task-center' })");
   });
 });
+describe('按卷练习承载（#2463：答题页新增 paper 承载 + 续练，既有四种承载不动）', () => {
+  const papersPage = read('pages/practice/real-exam-papers.uvue');
+  const doPage = read('pages/practice/practice-do.uvue');
+  const comp = read('pages/practice/composables/usePracticeSession.uts');
+  const paperUtil = read('utils/realExamPaperPractice.uts');
+
+  it('列表页已解锁卷给「开始练习」入口，跳答题页并带 mode=paper + paper_id（AC①）', () => {
+    expect(papersPage).toContain('onStartPractice');
+    expect(papersPage).toContain("'/pages/practice/practice-do?mode=paper&paper_id='");
+    expect(papersPage).toContain('PAPER_START_PRACTICE_TEXT');
+    expect(read('utils/realExamPapersDisplay.uts')).toContain("export const PAPER_START_PRACTICE_TEXT");
+  });
+
+  it('答题页 onLoad 实读 paper_id（空转参数会让幻影路由锁判红）并走 paper 装载', () => {
+    expect(doPage).toContain("options['paper_id']");
+    expect(doPage).toContain('session.loadPaperQuestions(session.paperId.value, true)');
+    expect(doPage).toContain("mode.value = 'paper'");
+  });
+
+  it('paper 装载 = 按卷取题 + 读 paper:<id> 进度行还原游标与作答（AC②③）', () => {
+    expect(comp).toContain("from '../../../api/realExam'");
+    expect(comp).toContain('startPaperPracticeApi(pid)');
+    expect(comp).toContain('getPracticeProgressApi(paperProgressMode(pid))');
+    expect(comp).toContain('parsePaperAnswerStates(prog.answers_state)');
+    expect(comp).toContain('resolvePaperResumeIndex(paper.current_index, prog.index');
+  });
+
+  it('保存 paper 进度的键是 paper:<卷 id>，值是对象（与 Web 同型才读得回对错）', () => {
+    expect(comp).toContain('paperProgressMode(paperId.value)');
+    expect(comp).toContain('paperAnswerStateValue(s)');
+    // 既有两承载的键不得被改写
+    expect(comp).toContain("'tag:' + tagId.toString()");
+  });
+
+  it('提交练习类型仍是 mode 直传（paper 走封闭枚举，不硬编码单题/随机分支）', () => {
+    expect(comp).toContain("practice_type: mode == 'single' ? 'free' : mode");
+  });
+
+  it('装载失败落到页面可见文案，不当白屏（AC④）：paper 兜底 + 优先透出 errorText', () => {
+    expect(comp).toContain("errorText.value = paperLoadErrorText(errMsg(e, PAPER_LOAD_FAIL_TEXT))");
+    expect(doPage).toContain("'该卷暂无已发布题目'");
+    expect(doPage).toContain('session.errorText.value');
+  });
+
+  it('续练落点已答过的题要回填选中项与判题结果（AC③「作答状态读回」）', () => {
+    expect(comp).toContain('function restoreAnswerStateOf(qid : number)');
+    expect(comp).toContain('restoreAnswerStateOf(currentQuestion.value.question_id)');
+    // 进度行里若是裸字符串（异端写入方）就没有 correct_answer ⇒ 只回填选中项，不伪造对错
+    expect(comp).toContain('showResult.value = st.correct_answer.length > 0');
+  });
+
+  it('「再练一次」对 paper 不读回旧进度（resume=false）；其余承载分支原样保留', () => {
+    expect(doPage).toContain('session.loadPaperQuestions(session.paperId.value, false)');
+    expect(doPage).toContain('session.loadQuestions(mode.value, practiceCount.value, tagId.value, 0)');
+  });
+
+  it('退出（隐藏/销毁）也存一次 paper 进度，未提交就退出不丢游标（AC③）', () => {
+    expect(doPage).toContain("if (isPaper.value) session.saveProgress('paper', 0)");
+    expect(comp).toContain('saveProgress: (mode : string, tagId : number) => saveProgress(mode, tagId)');
+  });
+
+  it('paper 游标写 0 基（与读侧 resolvePaperResumeIndex / Web 同口径），既有两承载维持 1 基', () => {
+    expect(comp).toContain('paperProgressIndex(currentIndex.value)');
+    expect(comp).toContain('currentIndex.value + 1');
+  });
+
+  it('404 前缀与 transport 同源（否则剥前缀会静默失效）', () => {
+    const pick = (src, name) => {
+      const m = src.match(new RegExp('export const ' + name + "\\s*(?::\\s*string)?\\s*=\\s*'([^']*)'"));
+      return m ? m[1] : null;
+    };
+    const transportPrefix = pick(read('api/transport.uts'), 'NOT_FOUND_MESSAGE_PREFIX');
+    expect(transportPrefix).toBe('404:');
+    expect(pick(paperUtil, 'PAPER_NOT_FOUND_PREFIX')).toBe(transportPrefix);
+  });
+});
+

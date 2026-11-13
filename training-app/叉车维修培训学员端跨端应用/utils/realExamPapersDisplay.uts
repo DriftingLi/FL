@@ -33,6 +33,9 @@ export const REAL_EXAM_UNKNOWN_YEAR_TITLE : string = '年份未知'
 /** 后端 `source` 是 `omitempty`：缺省时这一行不能空着（AC③「来源为空时显示真题」） */
 export const REAL_EXAM_DEFAULT_SOURCE : string = '真题'
 
+/** 已解锁卷的练习入口文案（#2463）：点击进入答题页的 paper 承载，题目按卷内固定顺序 */
+export const PAPER_START_PRACTICE_TEXT : string = '开始练习'
+
 /**
  * 卷列表按年份分组：年份倒序、未知组垫底、同一年内保持入参顺序。
  * @param papers 列表响应里的卷（顺序即后端给的 `paper_id DESC`）
