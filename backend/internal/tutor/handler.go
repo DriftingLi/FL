@@ -279,7 +279,7 @@ func (h *handler) SubmitChapterReview(c *gin.Context) {
 			return &idParam{ID: id}, nil
 		},
 		Invoke: func(ctx context.Context, req *idParam) (*course.ChapterDTO, error) {
-			return h.svc.SubmitChapterReview(req.ID, uid)
+			return h.svc.SubmitChapterReview(ctx, req.ID, uid)
 		},
 	}.WithSuccess(httpx.OkMsg("已提交审核"), http.StatusInternalServerError).
 		WithSentinel(course.ErrChapterNotFound, http.StatusNotFound).

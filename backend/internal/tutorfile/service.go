@@ -478,7 +478,7 @@ func (s *Service) AttachFile(ctx context.Context, tutorID, fileID, chapterID int
 		Where("file_id = ?", fileID).Update("chapter_id", chapterID).Error; err != nil {
 		return err
 	}
-	// 挂接清单是审核单元（#2498 C3）：变更把章节工作副本标回草稿（C2）
+	// 挂接清单属审核单元（C3）：标回草稿（C2 语义见 course.MarkChapterDraft）。
 	return course.MarkChapterDraft(s.db, chapterID)
 }
 

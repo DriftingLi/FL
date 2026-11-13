@@ -60,6 +60,7 @@ func seedP1Env(t *testing.T) (*gin.Engine, *config.Config, int) {
 	if err := db.Create(&file).Error; err != nil {
 		t.Fatalf("创建附件失败: %v", err)
 	}
+	publishChapterForRead(t, db, ch.ChapterID) // #2498 C11：资料面同谓词，章节须已过审
 	legacy := model.ChapterFile{FileName: "legacy.pdf", FileURL: "/static/legacy.pdf", CreatedAt: testutil.Now()}
 	if err := db.Create(&legacy).Error; err != nil {
 		t.Fatalf("创建 legacy 附件失败: %v", err)

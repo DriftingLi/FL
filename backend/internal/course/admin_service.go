@@ -300,8 +300,8 @@ func (s *AdminService) UpdateChapter(chapterID int, in *ChapterInput) (*ChapterD
 }
 
 // ApproveChapterReview 过审（#2498 C7/C8 仅管理员）：在审快照原子切换到已发布槽。
-func (s *AdminService) ApproveChapterReview(chapterID int) (*ChapterDTO, error) {
-	if err := ApproveChapterReview(context.Background(), s.db, chapterID); err != nil {
+func (s *AdminService) ApproveChapterReview(ctx context.Context, chapterID int) (*ChapterDTO, error) {
+	if err := ApproveChapterReview(ctx, s.db, chapterID); err != nil {
 		return nil, err
 	}
 
@@ -314,8 +314,8 @@ func (s *AdminService) ApproveChapterReview(chapterID int) (*ChapterDTO, error) 
 }
 
 // RejectChapterReview 驳回（#2498 C7/C8 仅管理员）：弃在审快照，回草稿并记理由。
-func (s *AdminService) RejectChapterReview(chapterID int, reason string) (*ChapterDTO, error) {
-	if err := RejectChapterReview(context.Background(), s.db, chapterID, reason); err != nil {
+func (s *AdminService) RejectChapterReview(ctx context.Context, chapterID int, reason string) (*ChapterDTO, error) {
+	if err := RejectChapterReview(ctx, s.db, chapterID, reason); err != nil {
 		return nil, err
 	}
 	var chapter model.Chapter

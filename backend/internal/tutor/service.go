@@ -140,7 +140,7 @@ func (s *Service) UploadChapterFile(chapterID int, filename string, fileContent 
 	if err := s.db.Create(&chapterFile).Error; err != nil {
 		return nil, err
 	}
-	// 文件挂接清单是审核单元（C3）：增删文件把工作副本标回草稿（C2）
+	// 文件挂接清单属审核单元（C3）：标回草稿（语义见 course.MarkChapterDraft）。
 	if err := course.MarkChapterDraft(s.db, chapterID); err != nil {
 		return nil, err
 	}
@@ -166,8 +166,8 @@ func (s *Service) UploadChapterFile(chapterID int, filename string, fileContent 
 
 // SubmitChapterReview 提交审核（#2498 C2 显式动作）：冻结整章快照（正文+文件挂接清单）
 // 进在审槽；同章单 pending（C8）。审核期间讲师改的是草稿，不影响在审内容（C4）。
-func (s *Service) SubmitChapterReview(chapterID, tutorID int) (*course.ChapterDTO, error) {
-	if err := course.SubmitChapterForReview(context.Background(), s.db, chapterID, tutorID); err != nil {
+func (s *Service) SubmitChapterReview(ctx context.Context, chapterID, tutorID int) (*course.ChapterDTO, error) {
+	if err := course.SubmitChapterForReview(ctx, s.db, chapterID, tutorID); err != nil {
 		return nil, err
 	}
 	var chapter model.Chapter
@@ -234,8 +234,12 @@ func (s *Service) DeleteChapterFileByID(fileID int) (*DeleteFileResult, error) {
 	chapterID := chapterFile.ChapterID
 	s.db.Delete(&chapterFile)
 	if chapterID != nil {
-		// 文件挂接清单是审核单元（C3）：删文件把工作副本标回草稿（C2）
-		_ = course.MarkChapterDraft(s.db, *chapterID)
+		// 文件行已删成事实，此处失败只能记录不能回滚（返回值只有删除结果）；
+		// 漏标草稿会让讲师看到旧的「已发布」状态，故必须留痕而不是静默吞。
+		if err := course.MarkChapterDraft(s.db, *chapterID); err != nil {
+			s.logger.Warn("[tutor] 删除章节文件后标回草稿失败",
+				zap.Int("chapter_id", *chapterID), zap.Error(err))
+		}
 	}
 
 	var remaining []model.ChapterFile
@@ -272,7 +276,11 @@ func (s *Service) BatchDeleteChapterFiles(fileIDs []int) *BatchDeleteFilesResult
 		chapterID := chapterFile.ChapterID
 		s.db.Delete(&chapterFile)
 		if chapterID != nil {
-			_ = course.MarkChapterDraft(s.db, *chapterID)
+			// 同 DeleteChapterFileByID：漏标草稿要留痕，不静默吞（C2 不变量）。
+			if err := course.MarkChapterDraft(s.db, *chapterID); err != nil {
+				s.logger.Warn("[tutor] 批量删除章节文件后标回草稿失败",
+					zap.Int("chapter_id", *chapterID), zap.Error(err))
+			}
 		}
 		var remaining []model.ChapterFile
 		s.db.Where("chapter_id = ?", chapterID).Find(&remaining)

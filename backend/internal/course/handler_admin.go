@@ -404,7 +404,7 @@ func (h *adminHandler) ApproveChapterReview(c *gin.Context) {
 			return &idParam{ID: id}, nil
 		},
 		Invoke: func(ctx context.Context, req *idParam) (*ChapterDTO, error) {
-			return h.courseSvc.ApproveChapterReview(req.ID)
+			return h.courseSvc.ApproveChapterReview(ctx, req.ID)
 		},
 	}.WithSuccess(httpx.OkMsg("已过审"), http.StatusInternalServerError).
 		WithSentinel(ErrChapterNotFound, http.StatusNotFound).
@@ -440,7 +440,7 @@ func (h *adminHandler) RejectChapterReview(c *gin.Context) {
 			return &rejectReviewInput{ID: id, Reason: body.Reason}, nil
 		},
 		Invoke: func(ctx context.Context, req *rejectReviewInput) (*ChapterDTO, error) {
-			return h.courseSvc.RejectChapterReview(req.ID, req.Reason)
+			return h.courseSvc.RejectChapterReview(ctx, req.ID, req.Reason)
 		},
 	}.WithSuccess(httpx.OkMsg("已驳回"), http.StatusInternalServerError).
 		WithSentinel(ErrChapterNotFound, http.StatusNotFound).

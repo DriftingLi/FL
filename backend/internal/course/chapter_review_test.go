@@ -156,6 +156,52 @@ func TestChapterReviewRejectDropsSnapshotAndAllowsResubmit(t *testing.T) {
 	}
 }
 
+// TestMarkChapterDraftKeepsPendingStatus 审中改草稿不改审核状态（展示与 C8 一致性）：
+// 有在审版本时状态必须留在 pending——否则讲师页显示「草稿」却又被单 pending 约束
+// 挡住再次提交，两种事实自相矛盾。快照被弃置后才回到 draft 语义。
+func TestMarkChapterDraftKeepsPendingStatus(t *testing.T) {
+	db := testutil.NewMemoryDB(t)
+	ch := seedReviewChapter(t, db)
+	ctx := context.Background()
+
+	// 无在审版本：改草稿即标回 draft（正常工作流）
+	if err := MarkChapterDraft(db, ch.ChapterID); err != nil {
+		t.Fatalf("标草稿失败: %v", err)
+	}
+	var got model.Chapter
+	db.First(&got, ch.ChapterID)
+	if got.ReviewStatus != model.ChapterReviewDraft {
+		t.Fatalf("无在审时改草稿后状态 = %q, want draft", got.ReviewStatus)
+	}
+
+	// 有在审版本：状态保持 pending（不被打成 draft）
+	if err := SubmitChapterForReview(ctx, db, ch.ChapterID, 7); err != nil {
+		t.Fatalf("提交失败: %v", err)
+	}
+	if err := MarkChapterDraft(db, ch.ChapterID); err != nil {
+		t.Fatalf("审中标草稿失败: %v", err)
+	}
+	db.First(&got, ch.ChapterID)
+	if got.ReviewStatus != model.ChapterReviewPending {
+		t.Fatalf("审中改草稿后状态 = %q, want pending（不得打成 draft）", got.ReviewStatus)
+	}
+	// 在审快照仍在（未被误弃）
+	var n int64
+	db.Model(&model.ChapterContentSlot{}).
+		Where("slot = ? AND chapter_id = ?", model.ChapterReviewPending, ch.ChapterID).Count(&n)
+	if n != 1 {
+		t.Fatalf("审中改草稿不应弃快照, pending 槽 = %d", n)
+	}
+	// 驳回弃快照后，状态随驳回回到 draft（理由照记）
+	if err := RejectChapterReview(ctx, db, ch.ChapterID, "再改改"); err != nil {
+		t.Fatalf("驳回失败: %v", err)
+	}
+	db.First(&got, ch.ChapterID)
+	if got.ReviewStatus != model.ChapterReviewDraft || got.RejectReason != "再改改" {
+		t.Fatalf("驳回后 = %q/%q, want draft+理由", got.ReviewStatus, got.RejectReason)
+	}
+}
+
 func TestChapterReviewVisibilityPredicateAndOverlay(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 	ch := seedReviewChapter(t, db)
@@ -166,7 +212,10 @@ func TestChapterReviewVisibilityPredicateAndOverlay(t *testing.T) {
 	if err != nil || has {
 		t.Fatalf("新章不应有已发布槽: %v %v", has, err)
 	}
-	got := applyPublishedOverlay(db, []ChapterDTO{ChapterToDTO(ch)})
+	got, err := applyPublishedOverlay(db, []ChapterDTO{ChapterToDTO(ch)})
+	if err != nil {
+		t.Fatalf("覆盖失败: %v", err)
+	}
 	if len(got) != 0 {
 		t.Fatalf("无已发布槽章节应从学员列表消失: %+v", got)
 	}
@@ -175,7 +224,10 @@ func TestChapterReviewVisibilityPredicateAndOverlay(t *testing.T) {
 	if err := SubmitChapterForReview(ctx, db, ch.ChapterID, 7); err != nil {
 		t.Fatalf("提交失败: %v", err)
 	}
-	if got := applyPublishedOverlay(db, []ChapterDTO{ChapterToDTO(ch)}); len(got) != 0 {
+	if got, err = applyPublishedOverlay(db, []ChapterDTO{ChapterToDTO(ch)}); err != nil {
+		t.Fatalf("覆盖失败: %v", err)
+	}
+	if len(got) != 0 {
 		t.Fatalf("pending 章节应不可见: %+v", got)
 	}
 
@@ -187,7 +239,10 @@ func TestChapterReviewVisibilityPredicateAndOverlay(t *testing.T) {
 		Update("content", "v2 草稿").Error; err != nil {
 		t.Fatalf("改草稿失败: %v", err)
 	}
-	got = applyPublishedOverlay(db, []ChapterDTO{ChapterToDTO(ch)})
+	got, err = applyPublishedOverlay(db, []ChapterDTO{ChapterToDTO(ch)})
+	if err != nil {
+		t.Fatalf("覆盖失败: %v", err)
+	}
 	if len(got) != 1 || got[0].Content != "v1 正文" {
 		t.Fatalf("学员读面应是已发布内容: %+v", got)
 	}

@@ -383,7 +383,10 @@ func (s *Service) GetCourseDetail(courseID, studentID int) (*CourseDetailDTO, er
 		return nil, err
 	}
 	// C6/C11：学员章节列表只留有已发布槽的章节，正文/格式/legacy 文件位换槽值
-	chapterList = applyPublishedOverlay(s.db, chapterList)
+	chapterList, err = applyPublishedOverlay(s.db, chapterList)
+	if err != nil {
+		return nil, err
+	}
 	progress := 0.0
 	lp := LearningPosition{}
 	if studentID > 0 {
@@ -784,10 +787,15 @@ func CourseToDTO(c *model.Course) CourseDTO {
 func fillChapterCount(db *gorm.DB, courseID int, dto *CourseDTO) {
 	var count int64
 	db.Model(&model.ChapterContentSlot{}).
-		Where("slot = ? AND chapter_id IN (SELECT chapter_id FROM chapter WHERE course_id = ?)",
-			model.ChapterReviewPublished, courseID).
+		Where("slot = ? AND chapter_id IN (?)", model.ChapterReviewPublished, publishedChapterSubquery(db, courseID)).
 		Count(&count)
 	dto.ChapterCount = &count
+}
+
+// publishedChapterSubquery 课程内章节 id 子查询（「有已发布槽」判定两处共用：
+// fillChapterCount 计数与 publishedChapterIDs 取集，同一谓词不得写两份）。
+func publishedChapterSubquery(db *gorm.DB, courseID int) *gorm.DB {
+	return db.Model(&model.Chapter{}).Select("chapter_id").Where("course_id = ?", courseID)
 }
 
 // FillPrereqIDs 填充前置课程 ID 列表（供编辑表单回填，避免前端提交空数组清空关联）。

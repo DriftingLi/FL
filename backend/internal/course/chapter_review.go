@@ -23,6 +23,8 @@ var (
 	ErrChapterReviewPending = errors.New("该章节已有在审版本")
 	// ErrChapterReviewNoPending 没有在审版本可审（过审/驳回的状态前置哨兵）。
 	ErrChapterReviewNoPending = errors.New("该章节没有在审版本")
+	// ErrInvalidReviewInput 审核动作入参不合法（驳回理由为空等）。
+	ErrInvalidReviewInput = errors.New("审核入参不合法")
 )
 
 // SubmitChapterForReview 提交审核（C2 显式动作，讲师面）：冻结整章快照（正文 + 文件挂接
@@ -42,7 +44,7 @@ func SubmitChapterForReview(ctx context.Context, db *gorm.DB, chapterID, actorID
 			return err
 		}
 		if n > 0 {
-			return fmt.Errorf("%w: 内容待审核", ErrChapterReviewPending)
+			return ErrChapterReviewPending
 		}
 		// 冻结内容快照（working 行当前值）
 		snapshot := model.ChapterContentSlot{
@@ -142,9 +144,6 @@ func RejectChapterReview(ctx context.Context, db *gorm.DB, chapterID int, reason
 	})
 }
 
-// ErrInvalidReviewInput 审核动作入参不合法（驳回理由为空等）。
-var ErrInvalidReviewInput = errors.New("审核入参不合法")
-
 // publishWorkingCopy 管理员写面直接生效（C7）：把 working 草稿同步进已发布槽
 // （正文+文件挂接清单）、状态 published、清理由、弃在审快照。事务内调用或自带事务。
 func publishWorkingCopy(db *gorm.DB, chapter *model.Chapter) error {
@@ -180,7 +179,20 @@ func publishWorkingCopy(db *gorm.DB, chapter *model.Chapter) error {
 
 // MarkChapterDraft 讲师改动审核单元（正文/文件挂接清单）后把工作副本标回草稿（C2）：
 // 学生仍见已发布旧版（C5），过审/管理员写面才切换。
+//
+// 有在审版本时**不改状态**：pending 快照仍在队列里，状态若被打成 draft，讲师页会显示
+// 「草稿」却又被 C8 挡住再次提交（自相矛盾）。此时草稿改动只等本次审核结果——
+// 过审后 working 即「下一版草稿」，驳回则随驳回回到 draft。
 func MarkChapterDraft(db *gorm.DB, chapterID int) error {
+	var pending int64
+	if err := db.Model(&model.ChapterContentSlot{}).
+		Where("slot = ? AND chapter_id = ?", model.ChapterReviewPending, chapterID).
+		Count(&pending).Error; err != nil {
+		return err
+	}
+	if pending > 0 {
+		return nil
+	}
 	return db.Model(&model.Chapter{}).Where("chapter_id = ?", chapterID).
 		Updates(map[string]any{"review_status": model.ChapterReviewDraft}).Error
 }
@@ -223,9 +235,12 @@ func freezeFileManifestInto(tx *gorm.DB, chapter *model.Chapter, slot string) er
 
 // applyPublishedOverlay 学员章节列表的已发布覆盖（C6/C11）：只保留有已发布槽的章节，
 // 正文/格式/legacy 文件位换成槽值（C5 重审期间学员见旧版，working 再改不影响）。
-func applyPublishedOverlay(db *gorm.DB, chapters []ChapterDTO) []ChapterDTO {
+//
+// 查询故障**上抛**而不是收成空列表：把「读不动槽表」演成「整课没有章节」，会让 DB 抖动
+// 被学员读成内容消失（ADR-0064 决策 1：查不动不得被读成不存在）。
+func applyPublishedOverlay(db *gorm.DB, chapters []ChapterDTO) ([]ChapterDTO, error) {
 	if len(chapters) == 0 {
-		return chapters
+		return chapters, nil
 	}
 	ids := make([]int, 0, len(chapters))
 	for i := range chapters {
@@ -234,7 +249,7 @@ func applyPublishedOverlay(db *gorm.DB, chapters []ChapterDTO) []ChapterDTO {
 	var slots []model.ChapterContentSlot
 	if err := db.Where("slot = ? AND chapter_id IN ?", model.ChapterReviewPublished, ids).
 		Find(&slots).Error; err != nil {
-		return nil
+		return nil, err
 	}
 	byID := make(map[int]model.ChapterContentSlot, len(slots))
 	for _, s := range slots {
@@ -254,7 +269,7 @@ func applyPublishedOverlay(db *gorm.DB, chapters []ChapterDTO) []ChapterDTO {
 		c.RejectReason = ""
 		result = append(result, c)
 	}
-	return result
+	return result, nil
 }
 
 // publishedChapterIDs 课程内有已发布槽的章节 id 集（学员 prev/next 跳转限已发布，
@@ -262,8 +277,7 @@ func applyPublishedOverlay(db *gorm.DB, chapters []ChapterDTO) []ChapterDTO {
 func publishedChapterIDs(db *gorm.DB, courseID int) (map[int]bool, error) {
 	var ids []int
 	if err := db.Model(&model.ChapterContentSlot{}).
-		Where("slot = ? AND chapter_id IN (SELECT chapter_id FROM chapter WHERE course_id = ?)",
-			model.ChapterReviewPublished, courseID).
+		Where("slot = ? AND chapter_id IN (?)", model.ChapterReviewPublished, publishedChapterSubquery(db, courseID)).
 		Pluck("chapter_id", &ids).Error; err != nil {
 		return nil, err
 	}
