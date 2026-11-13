@@ -375,3 +375,44 @@ describe('展示纯函数唯一实现（T03/T06 口径）：exam 模块零题型
     }
   });
 });
+
+describe('整卷考试入口（#2464）：考试页接卷参数即开考，列表页只带参不预开', () => {
+  const session = read('pages/exam/composables/useMockExamSession.uts');
+  const papersPage = read('pages/practice/real-exam-papers.uvue');
+
+  it('页面参数 paper 经 applyOptions 落到 paperId（导航键要靠它被真的读走）', () => {
+    expect(session).toContain("options['paper']");
+    expect(session).toMatch(/paperId\.value = pid/);
+  });
+
+  it('开考走 /real-exam/papers/:id/exam 出口：题集与卷时长由后端按卷给定', () => {
+    expect(session).toMatch(/import\s*\{[^}]*startPaperExamApi[^}]*\}\s*from\s*'\.\.\/\.\.\/\.\.\/api\/realExam'/);
+    expect(session).toContain('startPaperExamApi(paperId.value)');
+    // 卷考不拿客户端时长去开考：startMockExamApi 只在无卷参数分支出现
+    expect(session).toContain('startMockExamApi(0, initDuration.value)');
+  });
+
+  it('有卷参数时跳过未完成询问（卷考题集固定，没有「重新组卷」这个分支）', () => {
+    const start = session.indexOf('async function boot()');
+    expect(start).toBeGreaterThan(-1);
+    const body = session.slice(start, session.indexOf('\n    }', start));
+    const gate = body.indexOf('paperId.value > 0');
+    expect(gate).toBeGreaterThan(-1);
+    expect(gate).toBeLessThan(body.indexOf('getMockExamHistoryApi(1, 5)'));
+  });
+
+  it('列表页「模拟考试」只带卷参数跳既有模拟考试页', () => {
+    expect(papersPage).toContain("'/pages/exam/mock-exam?paper=' + p.paper_id");
+  });
+
+  it('列表页不抢先开考（AC④：先开考再跳，返回时就留下悬空考试记录）', () => {
+    expect(papersPage).not.toContain('startPaperExamApi');
+    expect(papersPage).not.toMatch(/uni\.request\s*\(/);
+  });
+
+  it('卷参数只从 query 落到会话：考试页仍是 onLoad → applyOptions + boot 的两步接线', () => {
+    const page = read('pages/exam/mock-exam.uvue');
+    expect(page).toContain('session.applyOptions(options)');
+    expect(page).toContain('session.boot()');
+  });
+});

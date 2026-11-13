@@ -19,6 +19,8 @@
                         <text class="paper-meta">{{ metaText(p) }}</text>
                         <text v-if="p.entitled" class="paper-entitled">已解锁</text>
                         <text v-else class="paper-price">{{ priceText(p) }}</text>
+                        <!-- 整卷考试入口：只带卷参数跳考试页，开考由考试页发起（AC④） -->
+                        <button v-if="p.entitled" class="paper-action" @click="onStartExam(p)">模拟考试</button>
                     </view>
                 </view>
             </view>
@@ -54,6 +56,15 @@
 
     function metaText(p : RealExamPaper) : string { return paperMetaText(p) }
     function priceText(p : RealExamPaper) : string { return paperPriceText(p.price) }
+
+    /**
+     * 整卷考试（#2464）：这里**只带卷参数**就跳走，「开整卷考试」由考试页自己发起。
+     * 先开考再跳会让「返回列表」留下一条没人交卷的悬空考试记录（AC④），且列表页无从知道
+     * 卷的题集与卷时长 —— 那两件事只有后端按卷给定。
+     */
+    function onStartExam(p : RealExamPaper) : void {
+        uni.navigateTo({ url: '/pages/exam/mock-exam?paper=' + p.paper_id })
+    }
 
     /** 证件名只用于页头与空态文案；读不到不阻断列表（证件分区由服务端兜底） */
     async function loadCredential() : Promise<void> {
@@ -109,5 +120,6 @@
     .paper-meta { font-size: 24rpx; color: $text-color-placeholder; margin-top: 8rpx; }
     .paper-entitled { font-size: 24rpx; color: $text-color; margin-top: 8rpx; }
     .paper-price { font-size: 24rpx; color: $text-color; margin-top: 8rpx; }
+    .paper-action { height: 88rpx; margin-top: 16rpx; font-size: 28rpx; color: $primary-color; border: 1rpx solid $primary-color; border-radius: 12rpx; }
     .safe-bottom { height: 34rpx; }
 </style>
