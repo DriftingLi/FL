@@ -14,6 +14,7 @@
 import { ref, computed } from 'vue'
 import type { Ref, ComputedRef } from 'vue'
 import { startMockExamApi, resumeMockExamApi, saveMockExamApi, submitMockExamApi, getMockExamHistoryApi } from '../../../api/mockExam'
+import { startPaperExamApi } from '../../../api/realExam'
 import { getTypeName, isMultiChoice as isMultiChoiceType } from '../../../utils/wrongQuestionDisplay'
 import type { MockExamInfo, ExamQuestion, QuestionOption } from '../../../types/index'
 
@@ -29,6 +30,7 @@ export type UseMockExamSessionResult = {
     mode : Ref<string>
     mockExamId : Ref<number>
     initDuration : Ref<number>
+    paperId : Ref<number>
     questions : Ref<ExamQuestion[]>
     currentIndex : Ref<number>
     loading : Ref<boolean>
@@ -64,6 +66,8 @@ export function useMockExamSession() : UseMockExamSessionResult {
     const mode = ref<string>('new')           // new / resume
     const mockExamId = ref<number>(0)
     const initDuration = ref<number>(90)      // 新考试默认时长（分钟）
+    // 整卷考试（#2464）：>0 即本场是「按卷开考」，题集与卷时长全部由后端按卷给定
+    const paperId = ref<number>(0)
 
     // 题目与状态
     const questions = ref<ExamQuestion[]>([])
@@ -317,7 +321,10 @@ export function useMockExamSession() : UseMockExamSessionResult {
         loadError.value = ''
         try {
             let info : MockExamInfo
-            if (mode.value == 'resume' && mockExamId.value > 0) {
+            if (paperId.value > 0) {
+                // 卷考（#2464）：不传时长、不传卷号以外的任何东西 —— 卷题集与卷时长是后端的事实
+                info = await startPaperExamApi(paperId.value)
+            } else if (mode.value == 'resume' && mockExamId.value > 0) {
                 info = await resumeMockExamApi(mockExamId.value)
             } else {
                 info = await startMockExamApi(0, initDuration.value)
@@ -359,6 +366,12 @@ export function useMockExamSession() : UseMockExamSessionResult {
      * 避免重复组卷产生多条 in_progress 记录、浪费考试次数。
      */
     async function boot() : Promise<void> {
+        // 卷考（#2464）：进页即开考，不探历史 ——「继续上一场 / 重新组卷」是随机组卷的口径，
+        // 卷考的题集由卷固定，没有「重新组卷」这个分支可用。
+        if (paperId.value > 0) {
+            loadExam()
+            return
+        }
         if (mode.value == 'new') {
             try {
                 const h = await getMockExamHistoryApi(1, 5)
@@ -465,7 +478,7 @@ export function useMockExamSession() : UseMockExamSessionResult {
         })
     }
 
-    /** 应用页面 onLoad 参数（mode / mock_exam_id / duration） */
+    /** 应用页面 onLoad 参数（mode / mock_exam_id / duration / paper） */
     function applyOptions(options : UTSJSONObject) : void {
         const m = options['mode']
         if (m != null) mode.value = `${m}`
@@ -473,12 +486,19 @@ export function useMockExamSession() : UseMockExamSessionResult {
         if (id != null) mockExamId.value = parseInt(`${id}`)
         const dur = options['duration']
         if (dur != null) initDuration.value = parseInt(`${dur}`)
+        // 整卷考试（#2464）：列表页只带卷参数（paper），开考由本页发起（AC④ 不留悬空考试）
+        const rawPaper = options['paper']
+        if (rawPaper != null) {
+            const pid = parseInt(`${rawPaper}`)
+            if (pid > 0) paperId.value = pid
+        }
     }
 
     return {
         mode,
         mockExamId,
         initDuration,
+        paperId,
         questions,
         currentIndex,
         loading,
