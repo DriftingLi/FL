@@ -41,6 +41,18 @@ type FileListDTO struct {
 	Files []FileDTO `json:"files"`
 }
 
+// SessionStatusDTO 断点续传清单（spec A8，= S3 ListParts 语义）：
+// 客户端凭 session_id 查询会话状态与已收分片序号，只补缺片。
+type SessionStatusDTO struct {
+	SessionID     string `json:"session_id"`
+	FileName      string `json:"file_name"`
+	FileSize      int64  `json:"file_size"`
+	ChunkSize     int64  `json:"chunk_size"`
+	TotalChunks   int    `json:"total_chunks"`
+	Status        string `json:"status"`
+	ReceivedParts []int  `json:"received_parts"`
+}
+
 // toFileDTO 模型 → 传输形状。
 func toFileDTO(f model.TutorFile) FileDTO {
 	return FileDTO{
@@ -50,5 +62,18 @@ func toFileDTO(f model.TutorFile) FileDTO {
 		ContentType: f.ContentType,
 		FileSize:    f.FileSize,
 		CreatedAt:   f.CreatedAt,
+	}
+}
+
+// toSessionStatusDTO 会话行 + 已收分片 → 断点续传清单传输形状。
+func toSessionStatusDTO(row *model.TutorUploadSession, received []int) SessionStatusDTO {
+	return SessionStatusDTO{
+		SessionID:     row.SessionID,
+		FileName:      row.FileName,
+		FileSize:      row.FileSize,
+		ChunkSize:     row.ChunkSize,
+		TotalChunks:   row.TotalChunks,
+		Status:        row.Status,
+		ReceivedParts: received,
 	}
 }

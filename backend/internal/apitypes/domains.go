@@ -451,11 +451,13 @@ var Domains = []Domain{
 		Roots: []string{
 			"tutorfile.InitUploadResponse",
 			"tutorfile.UploadChunkResponse",
+			"tutorfile.SessionStatusDTO",
 			"tutorfile.FileDTO",
 			"tutorfile.FileListDTO",
 		},
 		Endpoints: []Endpoint{
 			{Method: "POST", Path: "/tutor/files/upload"},
+			{Method: "GET", Path: "/tutor/files/upload/{session_id}"},
 			{Method: "PUT", Path: "/tutor/files/upload/{session_id}/chunk/{part_number}"},
 			{Method: "POST", Path: "/tutor/files/upload/{session_id}/complete"},
 			{Method: "POST", Path: "/tutor/files/upload/{session_id}/abort", NoData: true},

@@ -4,10 +4,15 @@ package tutorfile
 
 import (
 	"context"
+	"errors"
+	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
+	"forklift-training/internal/model"
 	"forklift-training/internal/storage"
 	"forklift-training/internal/testutil"
 )
@@ -21,7 +26,7 @@ func newSvc(t *testing.T) (*Service, *storage.LocalStorage) {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
 	st := storage.NewLocalStorage(t.TempDir())
-	return NewService(db, st), st
+	return NewService(db, st, nil), st
 }
 
 func initSession(t *testing.T, svc *Service, tutorID int, filename string, fileSize, chunkSize int64) string {
@@ -246,5 +251,185 @@ func TestDeleteFileRemovesRowAndStorage(t *testing.T) {
 	file2, _ := svc.CompleteUpload(ctx, 1, sid2)
 	if err := svc.DeleteFile(ctx, 2, file2.FileID); err == nil {
 		t.Fatal("他人删除应拒绝")
+	}
+}
+
+// ===== #2495：断点续传清单 / 配额双臂 / 会话与孤儿生命周期 =====
+
+func TestGetUploadSessionListsReceivedPartsForResume(t *testing.T) {
+	svc, _ := newSvc(t)
+	ctx := context.Background()
+	sid := initSession(t, svc, 1, "a.mp4", 2*testChunkSz+4, testChunkSz)
+	if err := svc.UploadChunk(ctx, 1, sid, 1, bytesOf('A', int(testChunkSz))); err != nil {
+		t.Fatalf("UploadChunk 1 失败: %v", err)
+	}
+	if err := svc.UploadChunk(ctx, 1, sid, 3, []byte("DDDD")); err != nil {
+		t.Fatalf("UploadChunk 3 失败: %v", err)
+	}
+
+	row, parts, err := svc.GetUploadSession(ctx, 1, sid)
+	if err != nil {
+		t.Fatalf("GetUploadSession 失败: %v", err)
+	}
+	if row.Status != statusActive || row.TotalChunks != 3 {
+		t.Fatalf("会话状态 = %s, total = %d, want active/3", row.Status, row.TotalChunks)
+	}
+	if len(parts) != 2 || parts[0] != 1 || parts[1] != 3 {
+		t.Fatalf("已收分片清单 = %v, want [1 3]（续传据清单只补缺片）", parts)
+	}
+
+	if _, _, err := svc.GetUploadSession(ctx, 2, sid); err != ErrForbidden {
+		t.Fatalf("他人查询会话应拒绝, got %v", err)
+	}
+	if _, _, err := svc.GetUploadSession(ctx, 1, "nope"); err != ErrNotFound {
+		t.Fatalf("不存在的会话应 404 语义, got %v", err)
+	}
+
+	// 续传闭环：补缺片 2 后 complete 成功
+	if err := svc.UploadChunk(ctx, 1, sid, 2, bytesOf('B', int(testChunkSz))); err != nil {
+		t.Fatalf("续传补片失败: %v", err)
+	}
+	file, err := svc.CompleteUpload(ctx, 1, sid)
+	if err != nil {
+		t.Fatalf("续传后 complete 失败: %v", err)
+	}
+	if file.FileSize != 2*testChunkSz+4 {
+		t.Fatalf("文件大小 = %d, want %d", file.FileSize, 2*testChunkSz+4)
+	}
+}
+
+func TestQuotaFileCountArmIndependent(t *testing.T) {
+	svc, _ := newSvc(t)
+	ctx := context.Background()
+	seedFileRows(t, svc, 1, MaxFilesPerTutor, 1) // 300 个小文件：数量臂顶格，容量远未到
+
+	_, err := svc.InitUpload(ctx, 1, "n.mp4", 8, testChunkSz)
+	if !errors.Is(err, ErrQuotaFileCount) {
+		t.Fatalf("数量臂应拦截, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "300/300") {
+		t.Fatalf("拒绝信息应含当前用量 300/300, got %q", err.Error())
+	}
+	// 他人不共享配额
+	if _, err := svc.InitUpload(ctx, 2, "n.mp4", 8, testChunkSz); err != nil {
+		t.Fatalf("他人配额独立，不应拦截: %v", err)
+	}
+}
+
+func TestQuotaTotalSizeArmIndependent(t *testing.T) {
+	svc, _ := newSvc(t)
+	ctx := context.Background()
+	// 2 × 50GiB：容量臂顶格、数量（2/300）远未到——两臂各自独立
+	seedFileRows(t, svc, 1, 2, 50<<30)
+
+	_, err := svc.InitUpload(ctx, 1, "big.mp4", 8, testChunkSz)
+	if !errors.Is(err, ErrQuotaTotalSize) {
+		t.Fatalf("容量臂应拦截, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "100.0/100") {
+		t.Fatalf("拒绝信息应含当前用量 100.0/100 GB, got %q", err.Error())
+	}
+	if _, err := svc.InitUpload(ctx, 2, "big.mp4", 8, testChunkSz); err != nil {
+		t.Fatalf("他人配额独立，不应拦截: %v", err)
+	}
+}
+
+func TestSweepAbortsStaleSessionsOnly(t *testing.T) {
+	svc, _ := newSvc(t)
+	ctx := context.Background()
+	stale := initSession(t, svc, 1, "old.mp4", 8, testChunkSz)
+	_ = svc.UploadChunk(ctx, 1, stale, 1, []byte("AAAAAAAA"))
+	fresh := initSession(t, svc, 1, "new.mp4", 8, testChunkSz)
+	_ = svc.UploadChunk(ctx, 1, fresh, 1, []byte("BBBBBBBB"))
+
+	// 构造 8 天前的旧会话（7 天门槛外）——测试 setup 直改行
+	old := time.Now().Add(-8 * 24 * time.Hour)
+	if err := svc.db.Model(&model.TutorUploadSession{}).
+		Where("session_id = ?", stale).
+		Updates(map[string]any{"updated_at": old, "created_at": old}).Error; err != nil {
+		t.Fatalf("backdate 失败: %v", err)
+	}
+
+	n, err := svc.SweepStaleSessions(ctx, time.Now())
+	if err != nil || n != 1 {
+		t.Fatalf("SweepStaleSessions = (%d, %v), want (1, nil)", n, err)
+	}
+
+	if _, err := svc.CompleteUpload(ctx, 1, stale); !errors.Is(err, ErrInvalidState) {
+		t.Fatalf("过期会话 complete 应拒绝, got %v", err)
+	}
+	if err := svc.UploadChunk(ctx, 1, stale, 1, []byte("CCCCCCCC")); !errors.Is(err, ErrInvalidState) {
+		t.Fatalf("过期会话补片应拒绝, got %v", err)
+	}
+	file, err := svc.CompleteUpload(ctx, 1, fresh)
+	if err != nil || file.FileSize != 8 {
+		t.Fatalf("新会话不应被清扫: (%v, %v)", file, err)
+	}
+}
+
+func TestCleanupOrphanFilesKeepsRowsAndFreshOrphans(t *testing.T) {
+	ctx := context.Background()
+	base := t.TempDir()
+	db := testutil.NewMemoryDB(t)
+	st := storage.NewLocalStorage(base)
+	svc := NewService(db, st, nil)
+
+	// B：有文件行（走真实 complete 落行）——有行永不静默删
+	sid := initSession(t, svc, 1, "b.mp4", 8, testChunkSz)
+	_ = svc.UploadChunk(ctx, 1, sid, 1, []byte("BBBBBBBB"))
+	file, err := svc.CompleteUpload(ctx, 1, sid)
+	if err != nil {
+		t.Fatalf("complete 失败: %v", err)
+	}
+
+	// A：孤儿（complete 后落行失败同形——对象在、行没有），mtime 拨到 25h 前
+	orphanURL, err := st.Save(ctx, "tutor-files/1/orphan_deadbeef.mp4", []byte("ORPHAN"), "video/mp4")
+	if err != nil {
+		t.Fatalf("造孤儿失败: %v", err)
+	}
+	// C：新孤儿（TTL 内保留）
+	freshURL, err := st.Save(ctx, "tutor-files/1/orphan_fresh00.mp4", []byte("FRESH"), "video/mp4")
+	if err != nil {
+		t.Fatalf("造新孤儿失败: %v", err)
+	}
+	old := time.Now().Add(-25 * time.Hour)
+	for _, key := range []string{"tutor-files/1/orphan_deadbeef.mp4"} {
+		p := filepath.Join(base, filepath.FromSlash(key))
+		if err := os.Chtimes(p, old, old); err != nil {
+			t.Fatalf("chtimes 失败: %v", err)
+		}
+	}
+
+	cleaned := svc.CleanupOrphanFiles(ctx)
+	if cleaned != 1 {
+		t.Fatalf("cleaned = %d, want 1（只清过期孤儿）", cleaned)
+	}
+	if ok, _ := st.Exists(ctx, orphanURL); ok {
+		t.Fatal("过期孤儿应被清理")
+	}
+	if ok, _ := st.Exists(ctx, freshURL); !ok {
+		t.Fatal("TTL 内的新孤儿不应被清理")
+	}
+	if ok, _ := st.Exists(ctx, file.FileURL); !ok {
+		t.Fatal("有文件行的对象永不静默删（B4 对照）")
+	}
+}
+
+// seedFileRows 直落文件行做配额前置（setup 不走公开上传面，300 次真实上传太重）。
+func seedFileRows(t *testing.T, svc *Service, tutorID, n int, sizeEach int64) {
+	t.Helper()
+	rows := make([]model.TutorFile, 0, n)
+	for i := 0; i < n; i++ {
+		rows = append(rows, model.TutorFile{
+			TutorID:     tutorID,
+			FileURL:     "/static/uploads/tutor-files/seed/seed_" + strconv.Itoa(i) + ".mp4",
+			FileName:    "seed_" + strconv.Itoa(i) + ".mp4",
+			ContentType: "video",
+			FileSize:    sizeEach,
+			CreatedAt:   time.Now(),
+		})
+	}
+	if err := svc.db.Create(&rows).Error; err != nil {
+		t.Fatalf("seed 失败: %v", err)
 	}
 }

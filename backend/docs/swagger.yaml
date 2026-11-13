@@ -3903,6 +3903,25 @@ definitions:
       total_chunks:
         type: integer
     type: object
+  tutorfile.SessionStatusDTO:
+    properties:
+      chunk_size:
+        type: integer
+      file_name:
+        type: string
+      file_size:
+        type: integer
+      received_parts:
+        items:
+          type: integer
+        type: array
+      session_id:
+        type: string
+      status:
+        type: string
+      total_chunks:
+        type: integer
+    type: object
   tutorfile.UploadChunkResponse:
     properties:
       part_number:
@@ -16585,6 +16604,44 @@ paths:
       security:
       - BearerAuth: []
       summary: 创建分片上传会话
+      tags:
+      - 讲师端-文件库
+  /tutor/files/upload/{session_id}:
+    get:
+      description: 返回会话状态与已收分片序号（spec A8，= S3 ListParts 语义）；客户端凭清单只补缺片，服务端以会话状态为准
+      parameters:
+      - description: 会话 ID
+        in: path
+        name: session_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/tutorfile.SessionStatusDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: 非本人会话
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 会话不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 断点续传清单
       tags:
       - 讲师端-文件库
   /tutor/files/upload/{session_id}/abort:

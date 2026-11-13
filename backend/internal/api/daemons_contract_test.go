@@ -25,7 +25,9 @@ var expectedDaemonNames = []string{
 	"contribution-file-cleanup",
 	"featured-scheduled-publish",
 	"forum-image-cleanup",
-	"kv-expired-sweep", // #2109：ephemeral_kv 过期清扫
+	"kv-expired-sweep",            // #2109：ephemeral_kv 过期清扫
+	"tutor-file-cleanup",          // #2495：导师文件库真孤儿清理（orphan_sweep 24h）
+	"tutor-upload-session-expire", // #2495：分片会话 7 天自动 abort（spec A3）
 }
 
 func TestDaemonRegistryLock(t *testing.T) {
