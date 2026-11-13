@@ -131,6 +131,53 @@ describe('papersSummaryText：页头汇总（AC②）', () => {
   });
 });
 
+describe('paperRedeemButtonText：解锁按钮文案与在途态（#2462 AC①④）', () => {
+  it('未解锁卷显示「积分解锁」', () => {
+    const { paperRedeemButtonText } = display();
+    expect(paperRedeemButtonText(false)).toBe('积分解锁');
+  });
+
+  it('在途时换成「兑换中...」（按钮组件没有 loading 态，靠文案 + disabled 表达）', () => {
+    const { paperRedeemButtonText } = display();
+    expect(paperRedeemButtonText(true)).toBe('兑换中...');
+    expect(paperRedeemButtonText(true)).not.toBe(paperRedeemButtonText(false));
+  });
+});
+
+describe('paperRedeemConfirmText：二次确认必须含该卷价格（#2462 AC①）', () => {
+  it('价格原样来自后端响应，端上不换算、不硬编码', () => {
+    const { paperRedeemConfirmText } = display();
+    expect(paperRedeemConfirmText(300)).toContain('300');
+    expect(paperRedeemConfirmText(500)).toContain('500');
+    expect(paperRedeemConfirmText(500)).not.toContain('300');
+  });
+
+  it('说清解锁后的后果（可开始练习与模拟考试）', () => {
+    const { paperRedeemConfirmText } = display();
+    expect(paperRedeemConfirmText(300)).toBe('该真题卷需 300 积分，解锁后可开始练习与模拟考试，确认兑换？');
+  });
+});
+
+describe('paperRedeemFailText：后端原因 + 重拉后的真实状态（#2462 AC③⑤）', () => {
+  it('后端哨兵原因原样透传（不另造话术，也不作文案比对）', () => {
+    const { paperRedeemFailText } = display();
+    expect(paperRedeemFailText('积分不足', true).indexOf('积分不足')).toBe(0);
+    expect(paperRedeemFailText('网络异常，请稍后重试', true).indexOf('网络异常，请稍后重试')).toBe(0);
+  });
+
+  it('仍未解锁 / 已解锁两句话由重拉结果决定', () => {
+    const { paperRedeemFailText } = display();
+    expect(paperRedeemFailText('积分不足', true)).toContain('该卷仍未解锁');
+    expect(paperRedeemFailText('已兑换', false)).toContain('该卷已解锁');
+    expect(paperRedeemFailText('已兑换', false)).not.toContain('仍未解锁');
+  });
+
+  it('同一原因换个状态就换半句：判据是 entitled 而不是失败文案', () => {
+    const { paperRedeemFailText } = display();
+    expect(paperRedeemFailText('已兑换', true)).not.toBe(paperRedeemFailText('已兑换', false));
+  });
+});
+
 describe('变异取证：倒序断言必须有牙', () => {
   it('年份比较器反向 ⇒ 读数是升序（与上面判据相反）', () => {
     const mutated = mutateDisplay([['return b.year - a.year', 'return a.year - b.year']]);
@@ -140,5 +187,25 @@ describe('变异取证：倒序断言必须有牙', () => {
       paper({ paper_id: 2, year: 2025 }),
     ]).map((g) => g.title);
     expect(titles).toEqual(['2023', '2025']);
+  });
+});
+
+describe('变异取证：#2462 解锁文案的断言必须有牙', () => {
+  it('确认文案丢掉价格 ⇒ 价格断言翻面', () => {
+    const mutated = mutateDisplay([["price.toString() + ' 积分，解锁后", "'' + ' 积分，解锁后"]]);
+    const { paperRedeemConfirmText } = uts.loadUts(mutated, {});
+    expect(paperRedeemConfirmText(300)).not.toContain('300');
+  });
+
+  it('在途文案塌回「积分解锁」⇒ 在途/空闲两态不可分（AC④ 失守）', () => {
+    const mutated = mutateDisplay([["= '兑换中...'", "= '积分解锁'"]]);
+    const { paperRedeemButtonText } = uts.loadUts(mutated, {});
+    expect(paperRedeemButtonText(true)).toBe(paperRedeemButtonText(false));
+  });
+
+  it('失败提示丢掉「仍未解锁」⇒ 学员看不出下一步（AC③ 失守）', () => {
+    const mutated = mutateDisplay([["'，该卷仍未解锁，可稍后重试。'", "''"]]);
+    const { paperRedeemFailText } = uts.loadUts(mutated, {});
+    expect(paperRedeemFailText('积分不足', true)).toBe('积分不足');
   });
 });

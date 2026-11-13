@@ -7,7 +7,7 @@
             <text class="loading-text">正在加载题目...</text>
         </view>
         <view v-else-if="session.questions.value.length == 0" class="empty-wrap">
-            <text class="empty-text">{{ isSingle ? '题目不存在或不在当前证件的题库内' : '暂无题目' }}</text>
+            <text class="empty-text">{{ emptyText }}</text>
         </view>
         <scroll-view v-else class="content-scroll" scroll-y="true">
             <view class="question-section">
@@ -158,6 +158,14 @@
     const notes = usePracticeNotes()
     const knowledgeTags = ref<KnowledgeTag[]>([])
 
+    /** 按卷练习承载（#2463）：卷 id 由会话持有（session.paperId，单一真源），>0 即按卷模式 */
+    const isPaper = computed<boolean>(() : boolean => session.paperId.value > 0)
+    /** 空态文案：paper 承载优先用会话记下的失败原因（未解锁 / 无已发布题 / 其他），其余承载维持原文案 */
+    const emptyText = computed<string>(() : string => {
+        if (isPaper.value) return session.errorText.value.length > 0 ? session.errorText.value : '该卷暂无已发布题目'
+        return isSingle.value ? '题目不存在或不在当前证件的题库内' : '暂无题目'
+    })
+
     async function loadKnowledge() : Promise<void> {
         const qid = session.currentQuestion.value.question_id
         if (qid <= 0) return
@@ -180,7 +188,10 @@
     /** 单题模式重载（「再练一次」语义收敛为重新拉这道题） */
     function onReloadSingle() : void { session.onRestart(); comments.resetComments(); notes.resetNotes(); knowledgeTags.value = []; session.loadQuestions('single', practiceCount.value, tagId.value, questionId.value); loadKnowledge() }
 
-    function onRestart() : void { if (isSingle.value) { onReloadSingle(); return }; session.onRestart(); comments.resetComments(); notes.resetNotes(); knowledgeTags.value = []; session.loadQuestions(mode.value, practiceCount.value, tagId.value, 0); loadKnowledge() }
+    /** 按卷的「再练一次」= 重新按卷取题但**不读回**旧进度（resume=false），旧进度行仍留着等下次续练覆盖 */
+    function onReloadPaper() : void { session.onRestart(); comments.resetComments(); notes.resetNotes(); knowledgeTags.value = []; session.loadPaperQuestions(session.paperId.value, false); loadKnowledge() }
+
+    function onRestart() : void { if (isSingle.value) { onReloadSingle(); return }; if (isPaper.value) { onReloadPaper(); return }; session.onRestart(); comments.resetComments(); notes.resetNotes(); knowledgeTags.value = []; session.loadQuestions(mode.value, practiceCount.value, tagId.value, 0); loadKnowledge() }
 
     onLoad((options : UTSJSONObject) => {
         const m = options['mode']; if (m != null) mode.value = m.toString()
@@ -192,16 +203,26 @@
             const parsed = parseInt(qidParam.toString())
             if (!isNaN(parsed) && parsed > 0) { questionId.value = parsed; mode.value = 'single' }
         }
-        session.loadQuestions(mode.value, practiceCount.value, tagId.value, questionId.value); loadKnowledge()
+        // 按卷练习承载（#2463）：paper_id 存在即按卷；提交练习类型固定 paper（后端封闭枚举）
+        const pidParam = options['paper_id']
+        if (pidParam != null) {
+            const parsedPid = parseInt(pidParam.toString())
+            if (!isNaN(parsedPid) && parsedPid > 0) { session.paperId.value = parsedPid; mode.value = 'paper' }
+        }
+        if (isPaper.value) { session.loadPaperQuestions(session.paperId.value, true) } else { session.loadQuestions(mode.value, practiceCount.value, tagId.value, questionId.value) }
+        loadKnowledge()
     })
 
     // 系统返回键/手势返回不走 onExit（#1727）：页面隐藏/销毁时必须停表，避免计时随页面引用在后台继续递增。
+    // 按卷练习还要顺手存一次进度（AC③）：只提交才存的话，跳到第 N 题没作答就退出会丢掉游标。
     onHide(() : void => {
         session.stopTimer()
+        if (isPaper.value) session.saveProgress('paper', 0)
     })
 
     onUnload(() : void => {
         session.stopTimer()
+        if (isPaper.value) session.saveProgress('paper', 0)
     })
 </script>
 

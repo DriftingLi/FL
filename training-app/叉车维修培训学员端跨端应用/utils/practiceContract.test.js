@@ -241,3 +241,143 @@ describe('考点正确率接线（#1948：摘 mockAccuracy，改接 stats 的 by
     expect(page).toContain('loadTagAccuracy()');
   });
 });
+
+describe('积分解锁兑换接线（#2462：二次确认 → 兑换 → 以 entitled 为准重拉）', () => {
+  const papersPage = read('pages/practice/real-exam-papers.uvue');
+
+  /** 取函数体：从声明处到下一个 8 空格缩进的 `}`（页面里没有嵌套到同级的块） */
+  function bodyOf(signature) {
+    const start = papersPage.indexOf(signature);
+    expect(start).toBeGreaterThan(-1);
+    return papersPage.slice(start, papersPage.indexOf('\n    }', start));
+  }
+
+  const redeem = bodyOf('async function doRedeemPaper');
+  const click = bodyOf('function onRedeem');
+
+  it('只有未解锁卷渲染解锁按钮，已解锁卷不留按钮', () => {
+    expect(papersPage).toMatch(/<app-button v-if="!p\.entitled"[^>]*@click="onRedeem\(p\)"><\/app-button>/);
+  });
+
+  it('按钮文案与在途文案来自 utils/realExamPapersDisplay（页面不留第二份字面量）', () => {
+    expect(papersPage).toContain('paperRedeemButtonText(redeemingPaperId.value == p.paper_id)');
+    expect(papersPage).not.toMatch(/'积分解锁'/);
+  });
+
+  it('在途期间所有解锁按钮禁用、且点击守卫再拦一次（AC④ 不可重复点击）', () => {
+    expect(papersPage).toMatch(/<app-button v-if="!p\.entitled"[^>]*:disabled="redeemingPaperId != 0"/);
+    expect(click).toMatch(/redeemingPaperId\.value != 0\)\s*\{\s*\n\s*return/);
+  });
+
+  it('点击先出二次确认，确认文案含该卷价格；仅确认才发请求（取消不发，AC①）', () => {
+    expect(click).toContain('uni.showModal(');
+    expect(click).toMatch(/content:\s*paperRedeemConfirmText\(p\.price\)/);
+    expect(click).toMatch(/if \(res\.confirm\) \{\s*\n\s*doRedeemPaper\(p\)/);
+    expect(click).not.toContain('redeemPaperApi');
+  });
+
+  it('兑换走 api/realExam 的 redeemPaperApi（页面不直连请求，AC⑥ 无后端改动）', () => {
+    expect(papersPage).toMatch(/import\s*\{[^}]*redeemPaperApi[^}]*\}\s*from\s*'\.\.\/\.\.\/api\/realExam'/);
+    expect(redeem).toContain('await redeemPaperApi(p.paper_id)');
+    expect(papersPage).not.toMatch(/uni\.request\s*\(/);
+  });
+
+  it('成败都重拉列表：catch 只记原因、不 return 不提前收尾，await loadPapers(true) 在 catch 之后（AC②③）', () => {
+    expect(redeem).toMatch(/catch[\s\S]*?errMsg\(e, '兑换失败，请稍后重试'\)/);
+    expect(redeem).not.toMatch(/catch[\s\S]*?\breturn\b/);
+    expect(redeem.indexOf('await loadPapers(true)')).toBeGreaterThan(redeem.indexOf('catch'));
+  });
+
+  it('解锁状态只认服务端：entitled / price 一概不本地赋值（AC⑤）', () => {
+    expect(papersPage).not.toMatch(/\.entitled\s*=(?!=)/);
+    expect(papersPage).not.toMatch(/\.price\s*=(?!=)/);
+  });
+
+  it('全链路没有按响应文案判「已兑换」的字符串比对（AC⑤ / ADR-0024）', () => {
+    expect(papersPage).not.toMatch(/(indexOf|includes|match|test)\(\s*['"]已兑换/);
+    expect(papersPage).not.toMatch(/['"]已兑换['"]/);
+  });
+
+  it('失败提示 = 后端原因 + 重拉后的真实状态，并给出下一步落点（AC③）', () => {
+    const fail = bodyOf('function notifyRedeemFailed');
+    expect(fail).toMatch(/content:\s*paperRedeemFailText\(reason, stillLocked\)/);
+    expect(fail).toContain("uni.navigateTo({ url: '/pages/points/task-center' })");
+  });
+});
+describe('按卷练习承载（#2463：答题页新增 paper 承载 + 续练，既有四种承载不动）', () => {
+  const papersPage = read('pages/practice/real-exam-papers.uvue');
+  const doPage = read('pages/practice/practice-do.uvue');
+  const comp = read('pages/practice/composables/usePracticeSession.uts');
+  const paperUtil = read('utils/realExamPaperPractice.uts');
+
+  it('列表页已解锁卷给「开始练习」入口，跳答题页并带 mode=paper + paper_id（AC①）', () => {
+    expect(papersPage).toContain('onStartPractice');
+    expect(papersPage).toContain("'/pages/practice/practice-do?mode=paper&paper_id='");
+    expect(papersPage).toContain('PAPER_START_PRACTICE_TEXT');
+    expect(read('utils/realExamPapersDisplay.uts')).toContain("export const PAPER_START_PRACTICE_TEXT");
+  });
+
+  it('答题页 onLoad 实读 paper_id（空转参数会让幻影路由锁判红）并走 paper 装载', () => {
+    expect(doPage).toContain("options['paper_id']");
+    expect(doPage).toContain('session.loadPaperQuestions(session.paperId.value, true)');
+    expect(doPage).toContain("mode.value = 'paper'");
+  });
+
+  it('paper 装载 = 按卷取题 + 读 paper:<id> 进度行还原游标与作答（AC②③）', () => {
+    expect(comp).toContain("from '../../../api/realExam'");
+    expect(comp).toContain('startPaperPracticeApi(pid)');
+    expect(comp).toContain('getPracticeProgressApi(paperProgressMode(pid))');
+    expect(comp).toContain('parsePaperAnswerStates(prog.answers_state)');
+    expect(comp).toContain('resolvePaperResumeIndex(paper.current_index, prog.index');
+  });
+
+  it('保存 paper 进度的键是 paper:<卷 id>，值是对象（与 Web 同型才读得回对错）', () => {
+    expect(comp).toContain('paperProgressMode(paperId.value)');
+    expect(comp).toContain('paperAnswerStateValue(s)');
+    // 既有两承载的键不得被改写
+    expect(comp).toContain("'tag:' + tagId.toString()");
+  });
+
+  it('提交练习类型仍是 mode 直传（paper 走封闭枚举，不硬编码单题/随机分支）', () => {
+    expect(comp).toContain("practice_type: mode == 'single' ? 'free' : mode");
+  });
+
+  it('装载失败落到页面可见文案，不当白屏（AC④）：paper 兜底 + 优先透出 errorText', () => {
+    expect(comp).toContain("errorText.value = paperLoadErrorText(errMsg(e, PAPER_LOAD_FAIL_TEXT))");
+    expect(doPage).toContain("'该卷暂无已发布题目'");
+    expect(doPage).toContain('session.errorText.value');
+  });
+
+  it('续练落点已答过的题要回填选中项与判题结果（AC③「作答状态读回」）', () => {
+    expect(comp).toContain('function restoreAnswerStateOf(qid : number)');
+    expect(comp).toContain('restoreAnswerStateOf(currentQuestion.value.question_id)');
+    // 进度行里若是裸字符串（异端写入方）就没有 correct_answer ⇒ 只回填选中项，不伪造对错
+    expect(comp).toContain('showResult.value = st.correct_answer.length > 0');
+  });
+
+  it('「再练一次」对 paper 不读回旧进度（resume=false）；其余承载分支原样保留', () => {
+    expect(doPage).toContain('session.loadPaperQuestions(session.paperId.value, false)');
+    expect(doPage).toContain('session.loadQuestions(mode.value, practiceCount.value, tagId.value, 0)');
+  });
+
+  it('退出（隐藏/销毁）也存一次 paper 进度，未提交就退出不丢游标（AC③）', () => {
+    expect(doPage).toContain("if (isPaper.value) session.saveProgress('paper', 0)");
+    expect(comp).toContain('saveProgress: (mode : string, tagId : number) => saveProgress(mode, tagId)');
+  });
+
+  it('paper 游标写 0 基（与读侧 resolvePaperResumeIndex / Web 同口径），既有两承载维持 1 基', () => {
+    expect(comp).toContain('paperProgressIndex(currentIndex.value)');
+    expect(comp).toContain('currentIndex.value + 1');
+  });
+
+  it('404 前缀与 transport 同源（否则剥前缀会静默失效）', () => {
+    const pick = (src, name) => {
+      const m = src.match(new RegExp('export const ' + name + "\\s*(?::\\s*string)?\\s*=\\s*'([^']*)'"));
+      return m ? m[1] : null;
+    };
+    const transportPrefix = pick(read('api/transport.uts'), 'NOT_FOUND_MESSAGE_PREFIX');
+    expect(transportPrefix).toBe('404:');
+    expect(pick(paperUtil, 'PAPER_NOT_FOUND_PREFIX')).toBe(transportPrefix);
+  });
+});
+
