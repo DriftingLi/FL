@@ -470,7 +470,9 @@ const MODULES = {
       'pages/practice/real-exam-papers.uvue',
     ],
     extractDirs: ['pages/practice/components', 'pages/practice/composables'],
-    crossModuleConsumers: ['profile'],
+    // #2464：整卷考试（真题卷 → 考试页带上卷参数即开考）由 exam 模块的 useMockExamSession.uts
+    // 调 practice 域的 startPaperExamApi；域 api 归 practice、消费者登记在被消费模块（ADR-0023 ③）
+    crossModuleConsumers: ['profile', 'exam'],
     budget: BUDGET,
     budgetOverrides: {},
     maxDepth: MAX_DEPTH,
