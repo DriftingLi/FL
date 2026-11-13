@@ -280,6 +280,36 @@ function centerTitleViolations(srcRaw) {
   return v;
 }
 
+/**
+ * 二级页标题形态违规清单（#2480）：返回箭头后左对齐 + 定宽省略，不压右槽动作。
+ *
+ * 二级页（有返回箭头）标题**不居中**（ADR-0067 决定 5）：标题块 align-items:flex-start，
+ * 标题文字无 text-align:center。标题必须铺满标题块内容盒（width:100%），否则 lines:1 +
+ * text-overflow:ellipsis 不生效，长标题按 max-content 撑出块、压到右槽动作。
+ */
+function secondaryTitleViolations(srcRaw) {
+  const src = stripComments(srcRaw);
+  const v = [];
+  const block = (src.match(/\.nav-bar-title-block\s*\{[^}]*\}/) || [''])[0];
+  if (block === '') {
+    v.push('.nav-bar-title-block 规则缺失');
+  } else if (!/align-items\s*:\s*flex-start/.test(block)) {
+    v.push('非居中标题块缺 align-items:flex-start（二级页标题须在返回箭头后左对齐）');
+  }
+  const title = (src.match(/\.nav-bar-title\s*\{[^}]*\}/) || [''])[0];
+  if (title === '') {
+    v.push('.nav-bar-title 规则缺失');
+  } else {
+    if (/text-align\s*:\s*center/.test(title)) {
+      v.push('.nav-bar-title 出现 text-align:center（二级页标题不得居中）');
+    }
+    if (!/width\s*:\s*100%/.test(title)) {
+      v.push('.nav-bar-title 缺 width:100%（不铺满则 lines:1 + ellipsis 不生效，长标题压右槽动作）');
+    }
+  }
+  return v;
+}
+
 describe('标题居中形态（titleCentered，2026-10-27 / #2402 / #2442）', () => {
   const src = h.read(SRC_REL);
 
@@ -471,5 +501,43 @@ describe('一级/二级页面页头形态（#2442）', () => {
       }
     }
     expect(dead).toEqual([]);
+  });
+});
+
+/**
+ * 二级页标题形态（#2480，ADR-0067 决定 5）
+ *
+ * 二级页标题在返回箭头后左对齐，不居中；标题铺满标题块内容盒，长标题省略而不是撑出块
+ * 压到右槽动作。右槽与胶囊让位只影响标题可用宽度，不改变标题起始位置。
+ */
+describe('二级页标题形态（#2480）', () => {
+  const navBar = h.read(SRC_REL);
+
+  it('守约：非居中标题块左对齐 + 标题定宽省略，零违规', () => {
+    expect(secondaryTitleViolations(navBar)).toEqual([]);
+  });
+
+  const BASE = [
+    '.nav-bar-title-block { flex: 1; min-width: 0; flex-direction: column; align-items: flex-start; margin-left: 32rpx; height: 88rpx; justify-content: center; }',
+    '.nav-bar-title { width: 100%; margin-left: 0; lines: 1; text-overflow: ellipsis; }',
+  ].join('\n');
+
+  it('基准样本零违规（检测器自身不空跑）', () => {
+    expect(secondaryTitleViolations(BASE)).toEqual([]);
+  });
+
+  it('标题块改回居中（align-items:center）→ 报「缺 align-items:flex-start」', () => {
+    const v = secondaryTitleViolations(BASE.replace('align-items: flex-start', 'align-items: center'));
+    expect(v.some((x) => x.includes('缺 align-items:flex-start'))).toBe(true);
+  });
+
+  it('标题文字加 text-align:center → 报「不得居中」', () => {
+    const v = secondaryTitleViolations(BASE.replace('width: 100%;', 'width: 100%; text-align: center;'));
+    expect(v.some((x) => x.includes('不得居中'))).toBe(true);
+  });
+
+  it('标题去掉 width:100%（ellipsis 失效）→ 报「缺 width:100%」', () => {
+    const v = secondaryTitleViolations(BASE.replace('width: 100%; margin-left: 0;', 'margin-left: 0;'));
+    expect(v.some((x) => x.includes('缺 width:100%'))).toBe(true);
   });
 });
