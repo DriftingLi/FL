@@ -94,6 +94,32 @@ const touchDist = (key, rel, text) =>
   `$out.${key} = $null; Set-Content -LiteralPath (Join-Path $io.dist ${JSON.stringify(rel)}) -Value ${JSON.stringify(text)} -Encoding utf8NoBOM`;
 
 describe('② 产物内容指纹行为（#1860：三组件全等才命中，fail 向重建）', () => {
+  it('必不红（#2526）：输入集含 0 字节文件仍 Saved=true / 且该文件真进哈希（内容变 ⇒ inputs-changed）', () => {
+    const f = makeProject();
+    try {
+      // 复刻本会话实测病根：未跟踪草稿 .research-tmp/deps.err 为 0 字节 ⇒ ReadAllBytes 返回 [byte[]]@()，
+      // PowerShell 拒绝把空数组绑给 Mandatory 数组参数 ⇒ 整树哈希 $null ⇒ input-hash-unavailable、指纹永不落盘。
+      const empty = path.join(f.dir, '.research-tmp', 'deps.err');
+      fs.mkdirSync(path.dirname(empty), { recursive: true });
+      fs.writeFileSync(empty, '', 'utf8');
+      const out = parseOut(runLib([
+        save('saved'),
+        hit('hit1'),
+        touch('fill', '.research-tmp/deps.err', 'x'),
+        hit('hit2')
+      ], { project: f.dir, dist: f.dist, version: VERSION, command: BUILD_COMMAND }));
+      expect(out.saved.Saved).toBe(true);
+      expect(out.saved.Reason).toBe('saved');
+      expect(out.hit1.Hit).toBe(true);
+      expect(out.hit1.Reason).toBe('fingerprint-hit');
+      // 对抗式：0 字节文件不得被「跳过」——写进 1 字节后必须 inputs-changed（证明它真在输入集里）
+      expect(out.hit2.Hit).toBe(false);
+      expect(out.hit2.Reason).toBe('inputs-changed');
+    } finally {
+      fs.rmSync(f.dir, { recursive: true, force: true });
+    }
+  });
+
   it('必不红：save 后什么都不变 ⇒ 命中；排除面文件新增 ⇒ 仍命中', () => {
     const f = makeProject();
     try {

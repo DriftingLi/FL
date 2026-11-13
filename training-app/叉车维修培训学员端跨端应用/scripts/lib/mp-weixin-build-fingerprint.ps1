@@ -42,7 +42,9 @@
  SHA256 → 小写 hex。
 #>
 function Get-MpWeixinSha256Hex {
-    param([Parameter(Mandatory = $true)][byte[]]$Bytes)
+    # AllowEmptyCollection（#2526）：0 字节文件 ReadAllBytes 返回空 [byte[]]@() —— PowerShell 拒绝把空数组
+    # 绑给 Mandatory 数组参数 ⇒ 抛异常 ⇒ 整树哈希 $null ⇒ input-hash-unavailable ⇒ 指纹永不落盘（每次白重建 ~186s）。
+    param([Parameter(Mandatory = $true)][AllowEmptyCollection()][byte[]]$Bytes)
     $sha = [System.Security.Cryptography.SHA256]::Create()
     try {
         return ([System.BitConverter]::ToString($sha.ComputeHash($Bytes)) -replace '-', '').ToLowerInvariant()
