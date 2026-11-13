@@ -94,6 +94,10 @@ var defaultTargets = []target{
 	{Table: "chapter_file", Columns: []column{
 		{Name: "file_url", Kind: kindText},
 	}},
+	// 导师文件库（#2494）：文件行的存储 URL 与章节文件同形，换存储域名同样要回填。
+	{Table: "tutor_file", Columns: []column{
+		{Name: "file_url", Kind: kindText},
+	}},
 	{Table: "certificate_template", Columns: []column{
 		{Name: "template_url", Kind: kindText},
 	}},

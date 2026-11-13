@@ -190,6 +190,7 @@ const pagesData = [
   { name: 'TutorQuestionManage', path: '/training/tutor/question-manage', component: () => import('@/pages/tutor/QuestionManage.vue'), layout: 'tutor', workspace: 'tutor', requiresAuth: true, capability: 'question.author', nav: { group: 'tutor', label: '题库管理', icon: 'square-pen', activeRouteNames: ['TutorQuestionCreate', 'TutorQuestionTags'], order: 3 } },
   { name: 'TutorQuestionCreate', path: '/training/tutor/question-create', component: () => import('@/pages/tutor/QuestionCreate.vue'), layout: 'tutor', workspace: 'tutor', requiresAuth: true, capability: 'question.author' },
   { name: 'TutorQuestionTags', path: '/training/tutor/question-tags', component: () => import('@/pages/tutor/QuestionTags.vue'), layout: 'tutor', workspace: 'tutor', requiresAuth: true, capability: 'question.author', nav: { group: 'tutor', label: '标签管理', icon: 'bookmark', order: 4 } },
+  { name: 'TutorFileLibrary', path: '/training/tutor/files', component: () => import('@/pages/tutor/TutorFileLibrary.vue'), layout: 'tutor', workspace: 'tutor', requiresAuth: true, capability: 'tutor.access', nav: { group: 'tutor', label: '文件库', icon: 'folder-open', order: 5 } },
 
   // 残值评估的公开界面已迁门户仓（valuation.hrwai.cn/valuation，2026-10）；
   // 本仓只保留管理端的「残值配置」（ValuationConfigManage），它挂在 manage 工作区下。

@@ -3859,6 +3859,57 @@ definitions:
       file_id:
         type: integer
     type: object
+  tutorfile.FileDTO:
+    properties:
+      content_type:
+        type: string
+      created_at:
+        type: string
+      file_id:
+        type: integer
+      file_name:
+        type: string
+      file_size:
+        type: integer
+      file_url:
+        type: string
+    type: object
+  tutorfile.FileListDTO:
+    properties:
+      files:
+        items:
+          $ref: '#/definitions/tutorfile.FileDTO'
+        type: array
+    type: object
+  tutorfile.InitUploadRequest:
+    properties:
+      chunk_size:
+        type: integer
+      file_name:
+        type: string
+      file_size:
+        type: integer
+    required:
+    - chunk_size
+    - file_name
+    - file_size
+    type: object
+  tutorfile.InitUploadResponse:
+    properties:
+      chunk_size:
+        type: integer
+      session_id:
+        type: string
+      total_chunks:
+        type: integer
+    type: object
+  tutorfile.UploadChunkResponse:
+    properties:
+      part_number:
+        type: integer
+      size:
+        type: integer
+    type: object
   valuation.AlgorithmParameters:
     properties:
       brands:
@@ -16412,6 +16463,55 @@ paths:
       summary: 删除章节文件
       tags:
       - 讲师端-课程
+  /tutor/files:
+    get:
+      description: 当前导师的文件库行（新→旧）
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/tutorfile.FileListDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 导师文件库列表
+      tags:
+      - 讲师端-文件库
+  /tutor/files/{file_id}:
+    delete:
+      description: 删除文件行与存储对象（仅归属导师）
+      parameters:
+      - description: 文件 ID
+        in: path
+        name: file_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 文件不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 删除文件库文件
+      tags:
+      - 讲师端-文件库
   /tutor/files/batch-delete:
     post:
       consumes:
@@ -16449,6 +16549,157 @@ paths:
       summary: 批量删除章节文件
       tags:
       - 讲师端-课程
+  /tutor/files/upload:
+    post:
+      consumes:
+      - application/json
+      description: 导师个人文件库分片上传四段契约之 init：登记归属导师与预期大小/类型（spec A1）。校验单文件 ≤2GB、类型白名单四档、分片
+        5–8MiB、片数 ≤10,000
+      parameters:
+      - description: 会话参数
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/tutorfile.InitUploadRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/tutorfile.InitUploadResponse'
+              type: object
+        "400":
+          description: 参数越界
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 创建分片上传会话
+      tags:
+      - 讲师端-文件库
+  /tutor/files/upload/{session_id}/abort:
+    post:
+      description: 四段契约之 abort：清理半成品（spec A1）。重复调用幂等；已完成会话拒绝
+      parameters:
+      - description: 会话 ID
+        in: path
+        name: session_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 会话不存在
+          schema:
+            $ref: '#/definitions/response.R'
+        "409":
+          description: 会话状态不允许
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 放弃上传会话
+      tags:
+      - 讲师端-文件库
+  /tutor/files/upload/{session_id}/chunk/{part_number}:
+    put:
+      consumes:
+      - application/octet-stream
+      description: 四段契约之 chunk：body 为原始分片字节（spec A1/A8）。同序号重传幂等覆盖；除末片外各片须恰为 init 声明的
+        chunk_size
+      parameters:
+      - description: 会话 ID
+        in: path
+        name: session_id
+        required: true
+        type: string
+      - description: 分片序号（1 起）
+        in: path
+        name: part_number
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/tutorfile.UploadChunkResponse'
+              type: object
+        "400":
+          description: 参数越界
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 会话不存在
+          schema:
+            $ref: '#/definitions/response.R'
+        "409":
+          description: 会话状态不允许
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 上传分片
+      tags:
+      - 讲师端-文件库
+  /tutor/files/upload/{session_id}/complete:
+    post:
+      description: 四段契约之 complete：按分片序号拼装落存储、产出文件库行（spec A1/A5）。缺片、abort/已完成会话拒绝
+      parameters:
+      - description: 会话 ID
+        in: path
+        name: session_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/tutorfile.FileDTO'
+              type: object
+        "400":
+          description: 缺片或参数不合法
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 会话不存在
+          schema:
+            $ref: '#/definitions/response.R'
+        "409":
+          description: 会话状态不允许
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 完成上传
+      tags:
+      - 讲师端-文件库
   /tutor/upload-image:
     post:
       consumes:

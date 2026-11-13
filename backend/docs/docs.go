@@ -19680,6 +19680,49 @@ const docTemplate = `{
                 }
             }
         },
+        "/tutor/files": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "当前导师的文件库行（新→旧）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "讲师端-文件库"
+                ],
+                "summary": "导师文件库列表",
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/tutorfile.FileListDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/tutor/files/batch-delete": {
             "post": {
                 "security": [
@@ -19736,6 +19779,293 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/tutor/files/upload": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "导师个人文件库分片上传四段契约之 init：登记归属导师与预期大小/类型（spec A1）。校验单文件 ≤2GB、类型白名单四档、分片 5–8MiB、片数 ≤10,000",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "讲师端-文件库"
+                ],
+                "summary": "创建分片上传会话",
+                "parameters": [
+                    {
+                        "description": "会话参数",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/tutorfile.InitUploadRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/tutorfile.InitUploadResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数越界",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/tutor/files/upload/{session_id}/abort": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "四段契约之 abort：清理半成品（spec A1）。重复调用幂等；已完成会话拒绝",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "讲师端-文件库"
+                ],
+                "summary": "放弃上传会话",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "会话 ID",
+                        "name": "session_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "会话不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "409": {
+                        "description": "会话状态不允许",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/tutor/files/upload/{session_id}/chunk/{part_number}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "四段契约之 chunk：body 为原始分片字节（spec A1/A8）。同序号重传幂等覆盖；除末片外各片须恰为 init 声明的 chunk_size",
+                "consumes": [
+                    "application/octet-stream"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "讲师端-文件库"
+                ],
+                "summary": "上传分片",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "会话 ID",
+                        "name": "session_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "分片序号（1 起）",
+                        "name": "part_number",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/tutorfile.UploadChunkResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数越界",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "会话不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "409": {
+                        "description": "会话状态不允许",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/tutor/files/upload/{session_id}/complete": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "四段契约之 complete：按分片序号拼装落存储、产出文件库行（spec A1/A5）。缺片、abort/已完成会话拒绝",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "讲师端-文件库"
+                ],
+                "summary": "完成上传",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "会话 ID",
+                        "name": "session_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/tutorfile.FileDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "缺片或参数不合法",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "会话不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "409": {
+                        "description": "会话状态不允许",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/tutor/files/{file_id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "删除文件行与存储对象（仅归属导师）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "讲师端-文件库"
+                ],
+                "summary": "删除文件库文件",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "文件 ID",
+                        "name": "file_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "文件不存在",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -30253,6 +30583,84 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "file_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "tutorfile.FileDTO": {
+            "type": "object",
+            "properties": {
+                "content_type": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "file_id": {
+                    "type": "integer"
+                },
+                "file_name": {
+                    "type": "string"
+                },
+                "file_size": {
+                    "type": "integer"
+                },
+                "file_url": {
+                    "type": "string"
+                }
+            }
+        },
+        "tutorfile.FileListDTO": {
+            "type": "object",
+            "properties": {
+                "files": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/tutorfile.FileDTO"
+                    }
+                }
+            }
+        },
+        "tutorfile.InitUploadRequest": {
+            "type": "object",
+            "required": [
+                "chunk_size",
+                "file_name",
+                "file_size"
+            ],
+            "properties": {
+                "chunk_size": {
+                    "type": "integer"
+                },
+                "file_name": {
+                    "type": "string"
+                },
+                "file_size": {
+                    "type": "integer"
+                }
+            }
+        },
+        "tutorfile.InitUploadResponse": {
+            "type": "object",
+            "properties": {
+                "chunk_size": {
+                    "type": "integer"
+                },
+                "session_id": {
+                    "type": "string"
+                },
+                "total_chunks": {
+                    "type": "integer"
+                }
+            }
+        },
+        "tutorfile.UploadChunkResponse": {
+            "type": "object",
+            "properties": {
+                "part_number": {
+                    "type": "integer"
+                },
+                "size": {
                     "type": "integer"
                 }
             }

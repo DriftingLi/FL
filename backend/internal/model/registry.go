@@ -54,6 +54,14 @@ var ModelBlocks = []ModelBlock{
 		},
 	},
 	{
+		Name: "导师文件库与分片上传",
+		Models: []any{
+			&TutorFile{},
+			&TutorUploadSession{}, // 先建会话：tutor_upload_part 外键指向它
+			&TutorUploadPart{},
+		},
+	},
+	{
 		Name: "题库与练习",
 		Models: []any{
 			&Question{},

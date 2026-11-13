@@ -56,8 +56,9 @@ func TestFactProjectionsAreInResponseClosure(t *testing.T) {
 	// 改数并想清楚理由（波 1 是「静态面少一枚、派生面多一枚」，总数不变；波 7 把 valuation/repository
 	// 并回域包 ⇒ 静态面再少一枚、派生面不变，总数 35→34，这里签字）。
 	// #2070 新增 internal/feedback 域包 ⇒ 34→35。
-	if n := len(dirs); n != 35 {
-		t.Fatalf("fact 射程应是 35 个包目录，实际 %d 个：%v —— 少了就是漏扫（前缀绊线抓不到同前缀的目录），"+
+	// #2494 新增 internal/tutorfile 域包 ⇒ 35→36。
+	if n := len(dirs); n != 36 {
+		t.Fatalf("fact 射程应是 36 个包目录，实际 %d 个：%v —— 少了就是漏扫（前缀绊线抓不到同前缀的目录），"+
 			"多了就回来把这条数和上面的注释一起改。", n, dirs)
 	}
 	closure := responseDefinitions(t)

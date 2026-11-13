@@ -46,6 +46,7 @@ import (
 	"forklift-training/internal/student"
 	"forklift-training/internal/training"
 	"forklift-training/internal/tutor"
+	"forklift-training/internal/tutorfile"
 	"forklift-training/internal/valuation"
 	"forklift-training/internal/wrongquestion"
 )
@@ -109,6 +110,7 @@ type Deps struct {
 	MockExamSvc          *mockexam.Service
 	RealExamSvc          *realexam.Service
 	TutorSvc             *tutor.Service
+	TutorFileSvc         *tutorfile.Service
 	WrongQuestionSvc     *wrongquestion.Service
 	TrainingCatalogSvc   *training.Service
 	AIAssistantSvc       *aiassistant.Service
