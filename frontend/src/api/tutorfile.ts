@@ -12,6 +12,15 @@ import type {
 
 export type { FileDTO, FileListDTO, InitUploadResponse, UploadChunkResponse }
 
+/**
+ * 上传文件类型的 accept 串（文件选择器过滤用）。
+ * **镜像**后端类型表 backend/internal/filestore/file_type_table.go 的 upload 列四档
+ * （video/document/ppt/image）——类型表是唯一事实源，改表时同步此处；
+ * 不符的类型服务端 init 也会拒绝（400），这里只是选择器体验层。
+ */
+export const TUTOR_FILE_ACCEPT =
+  '.pdf,.ppt,.pptx,.mp4,.webm,.png,.jpg,.jpeg,.gif,.webp,.bmp'
+
 /** 创建上传会话入参（不生成，ADR-0048 决策 3） */
 export interface InitUploadPayload {
   file_name: string
@@ -59,23 +68,26 @@ export const tutorFileApi = {
 }
 
 /**
- * uploadFileInChunks 分片上传编排（spec A2）：5–8MiB 分片、除末片等大、逐片 PUT。
+ * uploadFileInChunks 分片上传编排（spec A2）：分片大小以 init 返回的 chunk_size 为准
+ * （服务端校验 5–8MiB 档后回传，唯一事实源在后端契约），除末片等大、逐片 PUT。
  * 断点续传（会话+已传清单持久化）归后续票（#2495）；此处为最小可用顺序上传。
  */
 export async function uploadFileInChunks(
   file: File,
   onProgress?: (percent: number) => void
 ): Promise<FileDTO> {
+  // 请求档位：契约下限 5MiB、上限 8MiB（服务端校验，spec A2）。
   const chunkSize = 8 * 1024 * 1024
   const init = await tutorFileApi.initUpload({
     file_name: file.name,
     file_size: file.size,
     chunk_size: chunkSize
   })
+  const size = init.chunk_size
   try {
     for (let i = 0; i < init.total_chunks; i++) {
-      const start = i * chunkSize
-      const chunk = file.slice(start, Math.min(start + chunkSize, file.size))
+      const start = i * size
+      const chunk = file.slice(start, Math.min(start + size, file.size))
       await tutorFileApi.uploadChunk(init.session_id, i + 1, chunk)
       onProgress?.(Math.round(((i + 1) / init.total_chunks) * 100))
     }

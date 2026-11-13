@@ -96,20 +96,14 @@ func (s *Service) InitUpload(ctx context.Context, tutorID int, filename string, 
 	if tutorID <= 0 {
 		return "", fmt.Errorf("%w: 归属导师无效", ErrInvalidParam)
 	}
-	if fileSize <= 0 || fileSize > MaxFileSize {
-		return "", fmt.Errorf("%w: 文件大小须在 1B–2GB 之间", ErrInvalidParam)
+	total, err := chunkPlan(fileSize, chunkSize)
+	if err != nil {
+		return "", err
 	}
 	ext := filestore.FileExtension(filename)
 	category := filestore.UploadCategoryOf(ext)
 	if category == "" {
 		return "", fmt.Errorf("%w: 不支持的文件类型 %q", ErrInvalidParam, ext)
-	}
-	if chunkSize < MinChunkSize || chunkSize > MaxChunkSize {
-		return "", fmt.Errorf("%w: 分片大小须在 5–8MiB 之间", ErrInvalidParam)
-	}
-	total := totalChunksFor(fileSize, chunkSize)
-	if total > MaxChunks {
-		return "", fmt.Errorf("%w: 分片总数超过 %d", ErrInvalidParam, MaxChunks)
 	}
 
 	sessionID, err := newSessionID()
@@ -117,6 +111,9 @@ func (s *Service) InitUpload(ctx context.Context, tutorID int, filename string, 
 		return "", err
 	}
 	name := strings.TrimSuffix(filename, filepath.Ext(filename))
+	// 命名契约 `<name>_<毫秒时间戳>.<ext>`（filestore.UniqueFileName）：multipart 的 key 在
+	// init 即绑定（S3 CreateMultipartUpload 语义），故时间戳取会话创建时刻而非 complete 时刻；
+	// 契约的语义是「唯一命名」，格式不变。
 	storageKey := fmt.Sprintf("%s/%d/%s", Subfolder, tutorID, filestore.UniqueFileName(name, filepath.Ext(filename)))
 	contentType := filestore.MimeTypeOf(ext)
 	uploadID, err := s.mp.InitMultipart(ctx, storageKey, contentType)
@@ -311,6 +308,23 @@ func (s *Service) DeleteFile(ctx context.Context, tutorID, fileID int) error {
 // totalChunksFor 按「除末片等大、末片补余」口径计算分片总数（服务与 handler 共用单点）。
 func totalChunksFor(fileSize, chunkSize int64) int {
 	return int((fileSize + chunkSize - 1) / chunkSize)
+}
+
+// chunkPlan 校验分片方案并返回总片数（spec A2：单片 5–8MiB、除末片等大、≤10,000 片）。
+// 检查顺序刻意让片数上限先于 2GB 档判定：2GB/5MiB 上限组合下片数上限在公开 API 上不可达，
+// 先判片数这条契约位（A2）才测得到（TestChunkPlanBandAndMaxChunks）。
+func chunkPlan(fileSize, chunkSize int64) (int, error) {
+	if chunkSize < MinChunkSize || chunkSize > MaxChunkSize {
+		return 0, fmt.Errorf("%w: 分片大小须在 5–8MiB 之间", ErrInvalidParam)
+	}
+	total := totalChunksFor(fileSize, chunkSize)
+	if total > MaxChunks {
+		return 0, fmt.Errorf("%w: 分片总数超过 %d", ErrInvalidParam, MaxChunks)
+	}
+	if fileSize <= 0 || fileSize > MaxFileSize {
+		return 0, fmt.Errorf("%w: 文件大小须在 1B–2GB 之间", ErrInvalidParam)
+	}
+	return total, nil
 }
 
 // loadSession 载入会话并做归属校验。

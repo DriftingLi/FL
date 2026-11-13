@@ -183,6 +183,30 @@ func TestUploadChunkRejectsWrongSizeAndOutOfRange(t *testing.T) {
 	}
 }
 
+func TestChunkPlanBandAndMaxChunks(t *testing.T) {
+	// 分片档位与片数上限的纯函数面（公开 API 上 2GB/5MiB 到不了 10,000 片，此处直测档位）。
+	if _, err := chunkPlan(mib, 1*mib); err == nil {
+		t.Fatal("chunkSize 低于 5MiB 下限应拒绝")
+	}
+	if _, err := chunkPlan(mib, 16*mib); err == nil {
+		t.Fatal("chunkSize 超 8MiB 上限应拒绝")
+	}
+	if _, err := chunkPlan(0, testChunkSz); err == nil {
+		t.Fatal("空文件应拒绝")
+	}
+	if _, err := chunkPlan(MaxFileSize+1, testChunkSz); err == nil {
+		t.Fatal("超 2GB 应拒绝")
+	}
+	// 5MiB 档、虚构体量越过片数上限——上限本身是契约位（A2 ≤10,000），保持可达判定。
+	total := totalChunksFor(50_001*mib, testChunkSz)
+	if total <= MaxChunks {
+		t.Fatalf("该组合应可触发片数上限，total=%d", total)
+	}
+	if _, err := chunkPlan(50_001*mib, testChunkSz); err == nil {
+		t.Fatal("片数超 10,000 应拒绝")
+	}
+}
+
 func TestCompleteRejectsMissingChunks(t *testing.T) {
 	svc, _ := newSvc(t)
 	ctx := context.Background()

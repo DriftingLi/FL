@@ -5,18 +5,14 @@
         <p class="text-sm text-ink-3">支持单文件最大 2GB；大文件自动分片上传，中断后重新选择即可</p>
       </template>
       <template #actions>
-        <div class="flex items-center gap-3">
-          <input
-            ref="fileInput"
-            type="file"
-            class="hidden"
-            accept=".pdf,.ppt,.pptx,.mp4,.webm,.png,.jpg,.jpeg,.gif,.webp,.bmp"
-            @change="onFileSelected"
-          />
-          <UiButton variant="primary" :loading="uploading" @click="fileInput?.click()">
-            上传文件
-          </UiButton>
-        </div>
+        <UiUpload
+          class="[&_.el-upload]:flex [&_.el-upload]:cursor-pointer"
+          :show-file-list="false"
+          :accept="TUTOR_FILE_ACCEPT"
+          :http-request="handleUpload"
+        >
+          <UiButton variant="primary" :loading="uploading">上传文件</UiButton>
+        </UiUpload>
       </template>
     </UiPageHeader>
 
@@ -25,9 +21,7 @@
         <p class="min-w-0 flex-1 truncate text-sm text-ink">{{ uploadingName }}</p>
         <span class="text-sm tabular-nums text-ink-3">{{ uploadPercent }}%</span>
       </div>
-      <div class="mt-2 h-1.5 overflow-hidden rounded-pill bg-ui-soft">
-        <div class="h-full rounded-pill bg-primary-500 transition-all duration-200" :style="{ width: uploadPercent + '%' }" />
-      </div>
+      <UiProgress class="mt-2" :value="uploadPercent" size="sm" />
     </UiCard>
 
     <UiAsyncSection
@@ -49,12 +43,13 @@
           <div class="min-w-0 flex-1">
             <p class="truncate text-base font-medium text-ink">{{ file.file_name }}</p>
             <div class="mt-1 flex flex-wrap items-center gap-3 text-xs text-ink-3">
-              <UiTag :tone="categoryTone(file.content_type)">{{ categoryLabel(file.content_type) }}</UiTag>
+              <UiTag :tone="describeCategory(file.content_type).tone">
+                {{ describeCategory(file.content_type).label }}
+              </UiTag>
               <span class="tabular-nums">{{ formatSize(file.file_size) }}</span>
-              <a :href="file.file_url" target="_blank" rel="noopener" class="text-primary-500 hover:underline">预览</a>
             </div>
           </div>
-          <UiButton variant="ghost" @click="onDelete(file)">删除</UiButton>
+          <UiButton variant="danger" @click="onDelete(file)">删除</UiButton>
         </UiCard>
       </div>
 
@@ -75,14 +70,15 @@ import UiCard from '@/components/ui/UiCard.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiIcon from '@/components/ui/UiIcon.vue'
 import UiPageHeader from '@/components/ui/UiPageHeader.vue'
+import UiProgress from '@/components/ui/UiProgress.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiTag from '@/components/ui/UiTag.vue'
+import UiUpload from '@/components/ui/UiUpload.vue'
 import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import { useAsyncPage } from '@/composables/useAsyncPage'
-import { ElMessageBox } from 'element-plus'
-import { tutorFileApi, uploadFileInChunks, type FileDTO } from '@/api/tutorfile'
+import { useConfirm } from '@/composables/useConfirm'
+import { tutorFileApi, uploadFileInChunks, TUTOR_FILE_ACCEPT, type FileDTO } from '@/api/tutorfile'
 
-const fileInput = ref<HTMLInputElement | null>(null)
 const uploading = ref(false)
 const uploadingName = ref('')
 const uploadPercent = ref(0)
@@ -110,12 +106,15 @@ onMounted(() => {
   loadFiles()
 })
 
-function categoryLabel(t: string) {
-  return ({ video: '视频', document: '文档', ppt: '幻灯片', image: '图片' } as Record<string, string>)[t] || t
-}
-
-function categoryTone(t: string): 'brand' | 'success' | 'info' | 'neutral' {
-  return ({ video: 'brand', document: 'info', ppt: 'success', image: 'neutral' } as const)[t] || 'neutral'
+/** 内容分类 → 语义色调（状态词表口径：单一 descriptor 派生 label 与 tone）。 */
+function describeCategory(t: string): { label: string; tone: 'brand' | 'success' | 'info' | 'neutral' } {
+  const map: Record<string, { label: string; tone: 'brand' | 'success' | 'info' | 'neutral' }> = {
+    video: { label: '视频', tone: 'brand' },
+    document: { label: '文档', tone: 'info' },
+    ppt: { label: '幻灯片', tone: 'success' },
+    image: { label: '图片', tone: 'neutral' }
+  }
+  return map[t] ?? { label: t, tone: 'neutral' }
 }
 
 function formatSize(size: number) {
@@ -124,11 +123,8 @@ function formatSize(size: number) {
   return Math.max(1, Math.round(size / 1024)) + ' KB'
 }
 
-async function onFileSelected(e: Event) {
-  const input = e.target as HTMLInputElement
-  const file = input.files?.[0]
-  input.value = ''
-  if (!file) return
+/** UiUpload 的 http-request 槽：接管传输（分片上传），不再走 el-upload 自带单发。 */
+async function handleUpload({ file }: { file: File }) {
   uploading.value = true
   uploadingName.value = file.name
   uploadPercent.value = 0
@@ -144,11 +140,7 @@ async function onFileSelected(e: Event) {
 
 async function onDelete(file: FileDTO) {
   try {
-    await ElMessageBox.confirm(`确认删除「${file.file_name}」？删除后无法恢复。`, '删除文件', {
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
-      type: 'warning'
-    })
+    await useConfirm().confirmDanger(`确认删除「${file.file_name}」？删除后无法恢复。`, '删除文件')
   } catch {
     return
   }
