@@ -20,6 +20,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/course"
 	"forklift-training/internal/filestore"
 	"forklift-training/internal/model"
 	"forklift-training/internal/storage"
@@ -65,7 +66,18 @@ var (
 	ErrQuotaFileCount = errors.New("文件数量已达上限")
 	// ErrQuotaTotalSize 配额容量臂（spec B3，400 沿投稿配额先例）。
 	ErrQuotaTotalSize = errors.New("文件总容量已达上限")
+	// ErrFileInUse 文件被章节引用，库侧不可删（spec B5 删除随引用走）。
+	ErrFileInUse = errors.New("文件已被章节引用")
 )
+
+// FileFilter 管理面筛选（spec B7）：类型 / 挂接状态 / 创建时间区间。
+// 零值 = 不过滤；区间闭区间（含端点）。
+type FileFilter struct {
+	ContentType string
+	Attached    *bool
+	CreatedFrom time.Time
+	CreatedTo   time.Time
+}
 
 // Service 导师文件库服务。
 // 依赖 storage.Storage（与全域同型）；分片四段走 multipart 能力（UploadStore），
@@ -416,32 +428,124 @@ func (s *Service) checkQuota(ctx context.Context, tutorID int, fileSize int64) e
 	return nil
 }
 
-// ListFiles 列出导师自己的文件库行（新→旧）。
-func (s *Service) ListFiles(ctx context.Context, tutorID int) ([]model.TutorFile, error) {
+// ListFiles 列出导师自己的文件库行（新→旧）。filter 零值 = 不过滤（spec B7 管理面筛选）。
+func (s *Service) ListFiles(ctx context.Context, tutorID int, filter FileFilter) ([]model.TutorFile, error) {
+	q := s.db.WithContext(ctx).Where("tutor_id = ?", tutorID)
+	if filter.ContentType != "" {
+		q = q.Where("content_type = ?", filter.ContentType)
+	}
+	if filter.Attached != nil {
+		if *filter.Attached {
+			q = q.Where("chapter_id IS NOT NULL")
+		} else {
+			q = q.Where("chapter_id IS NULL")
+		}
+	}
+	if !filter.CreatedFrom.IsZero() {
+		q = q.Where("created_at >= ?", filter.CreatedFrom)
+	}
+	if !filter.CreatedTo.IsZero() {
+		q = q.Where("created_at <= ?", filter.CreatedTo)
+	}
 	var files []model.TutorFile
-	if err := s.db.WithContext(ctx).
-		Where("tutor_id = ?", tutorID).
-		Order("file_id DESC").
-		Find(&files).Error; err != nil {
+	if err := q.Order("file_id DESC").Find(&files).Error; err != nil {
 		return nil, fmt.Errorf("读取文件库失败: %w", err)
 	}
 	return files, nil
 }
 
-// DeleteFile 删除文件行与存储对象（仅归属导师）。
+// AttachFile 单挂挂接（spec B2）：文件行带章节归属，空=在库未挂。单挂互斥——已挂其他章
+// 拒绝并明示（先解挂再挂）；挂到同章幂等。挂接后随该章节送审（块 C 的文件挂接清单引用它）。
+func (s *Service) AttachFile(ctx context.Context, tutorID, fileID, chapterID int) error {
+	file, err := s.loadFile(ctx, tutorID, fileID)
+	if err != nil {
+		return err
+	}
+	if file.ChapterID != nil {
+		if *file.ChapterID == chapterID {
+			return nil
+		}
+		return fmt.Errorf("%w: 文件已挂接到其他章节（#%d），先解挂再挂接", ErrInvalidState, *file.ChapterID)
+	}
+	var ch model.Chapter
+	if err := s.db.WithContext(ctx).First(&ch, "chapter_id = ?", chapterID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return course.ErrChapterNotFound
+		}
+		return fmt.Errorf("读取章节失败: %w", err) // 查不动不得被读成「不存在」（ADR-0064 决策 1）
+	}
+	return s.db.WithContext(ctx).Model(&model.TutorFile{}).
+		Where("file_id = ?", fileID).Update("chapter_id", chapterID).Error
+}
+
+// DetachFile 取消挂接回库（spec B2）：chapter_id 清空回到未挂状态。重复解挂幂等。
+func (s *Service) DetachFile(ctx context.Context, tutorID, fileID int) error {
+	if _, err := s.loadFile(ctx, tutorID, fileID); err != nil {
+		return err
+	}
+	return s.db.WithContext(ctx).Model(&model.TutorFile{}).
+		Where("file_id = ?", fileID).Update("chapter_id", nil).Error
+}
+
+// SwapChapterFile 章节侧换挂（spec B6）：挂新 + 旧回库一步原子——「换文件」是章节侧动作，
+// 库侧不提供替换。旧文件必须挂在本章、新文件必须在库未挂（单挂互斥同样成立）。
+func (s *Service) SwapChapterFile(ctx context.Context, tutorID, chapterID, oldFileID, newFileID int) error {
+	if oldFileID == newFileID {
+		return fmt.Errorf("%w: 新旧文件不能相同", ErrInvalidParam)
+	}
+	old, err := s.loadFile(ctx, tutorID, oldFileID)
+	if err != nil {
+		return err
+	}
+	fresh, err := s.loadFile(ctx, tutorID, newFileID)
+	if err != nil {
+		return err
+	}
+	if old.ChapterID == nil || *old.ChapterID != chapterID {
+		return fmt.Errorf("%w: 旧文件未挂在该章节，无法换挂", ErrInvalidState)
+	}
+	if fresh.ChapterID != nil {
+		return fmt.Errorf("%w: 新文件已挂接到其他章节（#%d），先解挂再换挂", ErrInvalidState, *fresh.ChapterID)
+	}
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&model.TutorFile{}).
+			Where("file_id = ?", newFileID).Update("chapter_id", chapterID).Error; err != nil {
+			return err
+		}
+		return tx.Model(&model.TutorFile{}).
+			Where("file_id = ?", oldFileID).Update("chapter_id", nil).Error
+	})
+}
+
+// RenameFile 改名（spec B7）：只改显示名 FileName，存储 key 不动（命名契约 A5 在落库时已定）。
+func (s *Service) RenameFile(ctx context.Context, tutorID, fileID int, newName string) error {
+	file, err := s.loadFile(ctx, tutorID, fileID)
+	if err != nil {
+		return err
+	}
+	newName = strings.TrimSpace(newName)
+	if newName == "" {
+		return fmt.Errorf("%w: 文件名不能为空", ErrInvalidParam)
+	}
+	if newName == file.FileName {
+		return nil
+	}
+	return s.db.WithContext(ctx).Model(&model.TutorFile{}).
+		Where("file_id = ?", fileID).Update("file_name", newName).Error
+}
+
+// DeleteFile 删除文件行与存储对象（仅归属导师）。被章节引用（含在审快照、已发布槽引用的
+// 视同挂接中——B5，引用面扩展由 #2498 接入）时拒绝并明示原因，绝不产生章节侧悬空引用。
 func (s *Service) DeleteFile(ctx context.Context, tutorID, fileID int) error {
 	if err := s.needStore(); err != nil {
 		return err
 	}
-	var file model.TutorFile
-	if err := s.db.WithContext(ctx).First(&file, "file_id = ?", fileID).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ErrNotFound
-		}
-		return fmt.Errorf("读取文件行失败: %w", err)
+	file, err := s.loadFile(ctx, tutorID, fileID)
+	if err != nil {
+		return err
 	}
-	if file.TutorID != tutorID {
-		return ErrForbidden
+	if file.ChapterID != nil {
+		return fmt.Errorf("%w: 文件已挂接到章节（#%d），解挂后可删除", ErrFileInUse, *file.ChapterID)
 	}
 	if err := s.st.Delete(ctx, file.FileURL); err != nil {
 		return fmt.Errorf("删除存储对象失败: %w", err)
@@ -450,6 +554,49 @@ func (s *Service) DeleteFile(ctx context.Context, tutorID, fileID int) error {
 		return fmt.Errorf("删除文件行失败: %w", err)
 	}
 	return nil
+}
+
+// ChapterTitles 为挂接中的文件行批量解析章节标题（管理面展示用，一次 IN 查询）。
+func (s *Service) ChapterTitles(ctx context.Context, files []model.TutorFile) map[int]string {
+	ids := make([]int, 0, len(files))
+	seen := make(map[int]bool, len(files))
+	for _, f := range files {
+		if f.ChapterID != nil && !seen[*f.ChapterID] {
+			seen[*f.ChapterID] = true
+			ids = append(ids, *f.ChapterID)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	titles := make(map[int]string, len(ids))
+	var rows []model.Chapter
+	if err := s.db.WithContext(ctx).Where("chapter_id IN ?", ids).Find(&rows).Error; err != nil {
+		// 查不动只降级展示（UI 回落「章节 #id」），不整页失败；不静默。
+		if s.logger != nil {
+			s.logger.Warn("[tutorfile] 解析挂接章标题失败，降级显示章节编号", zap.Error(err))
+		}
+		return titles
+	}
+	for _, ch := range rows {
+		titles[ch.ChapterID] = ch.Title
+	}
+	return titles
+}
+
+// loadFile 载入文件行并做归属校验（管理面动作的共用前置）。
+func (s *Service) loadFile(ctx context.Context, tutorID, fileID int) (*model.TutorFile, error) {
+	var file model.TutorFile
+	if err := s.db.WithContext(ctx).First(&file, "file_id = ?", fileID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("读取文件行失败: %w", err)
+	}
+	if file.TutorID != tutorID {
+		return nil, ErrForbidden
+	}
+	return &file, nil
 }
 
 // totalChunksFor 按「除末片等大、末片补余」口径计算分片总数（服务与 handler 共用单点）。

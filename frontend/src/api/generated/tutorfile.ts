@@ -1,5 +1,5 @@
 // 生成文件，勿手改（ADR-0019 契约 codegen 专项 / ADR-0048 按域解冻；spec #940 片五③、#952 片一）。
-// 域：导师文件库（/api/tutor/files*：分片上传四段契约 + 列表/删除，#2494）
+// 域：导师文件库（/api/tutor/files*：分片上传四段契约 + 管理面挂接/换挂/改名，#2494/#2497）
 // 唯一事实源：后端注解 → backend/docs/swagger.json（CI 有新鲜度锁：backend-lint 的 swagger 步骤）。
 // 再生成：cd backend && go run ./cmd/gen-apitypes
 // 同步契约：backend/internal/apitypes/codegen_test.go 把本文件与注解渲染结果全等比对。
@@ -11,6 +11,10 @@
 //   POST /tutor/files/upload/{session_id}/complete
 //   POST /tutor/files/upload/{session_id}/abort
 //   GET  /tutor/files
+//   POST /tutor/files/{file_id}/attach
+//   POST /tutor/files/{file_id}/detach
+//   POST /tutor/files/{file_id}/rename
+//   POST /tutor/chapter/{chapter_id}/files/swap
 //   DELETE /tutor/files/{file_id}
 //
 // 覆盖的 Go 类型：FileDTO / FileListDTO / InitUploadResponse / SessionStatusDTO / UploadChunkResponse
@@ -26,6 +30,8 @@
 // 需要更精确的形状时先在注解层补齐（先例见 spec #940 片五②的差集清单）。
 
 export interface FileDTO {
+  chapter_id: number
+  chapter_title: string
   content_type: string
   created_at: string
   file_id: number

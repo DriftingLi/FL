@@ -1205,6 +1205,9 @@ definitions:
         type: integer
       file_url:
         type: string
+      source:
+        type: string
+        x-optional: true
     type: object
   course.ChapterInput:
     properties:
@@ -3859,8 +3862,19 @@ definitions:
       file_id:
         type: integer
     type: object
+  tutorfile.AttachRequest:
+    properties:
+      chapter_id:
+        type: integer
+    required:
+    - chapter_id
+    type: object
   tutorfile.FileDTO:
     properties:
+      chapter_id:
+        type: integer
+      chapter_title:
+        type: string
       content_type:
         type: string
       created_at:
@@ -3903,6 +3917,13 @@ definitions:
       total_chunks:
         type: integer
     type: object
+  tutorfile.RenameRequest:
+    properties:
+      file_name:
+        type: string
+    required:
+    - file_name
+    type: object
   tutorfile.SessionStatusDTO:
     properties:
       chunk_size:
@@ -3921,6 +3942,16 @@ definitions:
         type: string
       total_chunks:
         type: integer
+    type: object
+  tutorfile.SwapRequest:
+    properties:
+      new_file_id:
+        type: integer
+      old_file_id:
+        type: integer
+    required:
+    - new_file_id
+    - old_file_id
     type: object
   tutorfile.UploadChunkResponse:
     properties:
@@ -16320,6 +16351,51 @@ paths:
       summary: 更新章节信息
       tags:
       - 讲师端-课程
+  /tutor/chapter/{chapter_id}/files/swap:
+    post:
+      consumes:
+      - application/json
+      description: 换挂发生在章节侧（spec B6）：挂新文件、旧文件回库，一步原子；库侧无「替换」动作
+      parameters:
+      - description: 章节 ID
+        in: path
+        name: chapter_id
+        required: true
+        type: integer
+      - description: 新旧文件
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/tutorfile.SwapRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数无效
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: 非本人文件
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 文件不存在
+          schema:
+            $ref: '#/definitions/response.R'
+        "409":
+          description: 旧文件未挂该章或新文件已挂别章
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 章节侧换文件
+      tags:
+      - 讲师端-文件库
   /tutor/chapter/{chapter_id}/upload:
     post:
       consumes:
@@ -16484,7 +16560,24 @@ paths:
       - 讲师端-课程
   /tutor/files:
     get:
-      description: 当前导师的文件库行（新→旧）
+      description: 当前导师的文件库行（新→旧）；支持类型/挂接状态/创建时间区间筛选（spec B7）
+      parameters:
+      - description: 类型筛选（video/document/ppt/image）
+        in: query
+        name: content_type
+        type: string
+      - description: 挂接状态筛选（true=已挂 / false=未挂）
+        in: query
+        name: attached
+        type: boolean
+      - description: 创建时间下界（RFC3339 或 YYYY-MM-DD，闭区间）
+        in: query
+        name: created_from
+        type: string
+      - description: 创建时间上界（RFC3339 或 YYYY-MM-DD，闭区间；日期按当天末）
+        in: query
+        name: created_to
+        type: string
       produces:
       - application/json
       responses:
@@ -16497,6 +16590,10 @@ paths:
                 data:
                   $ref: '#/definitions/tutorfile.FileListDTO'
               type: object
+        "400":
+          description: 筛选参数无效
+          schema:
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:
@@ -16529,6 +16626,121 @@ paths:
       security:
       - BearerAuth: []
       summary: 删除文件库文件
+      tags:
+      - 讲师端-文件库
+  /tutor/files/{file_id}/attach:
+    post:
+      consumes:
+      - application/json
+      description: 单挂挂接（spec B2）：一个文件同一时间只挂一章；已挂其他章拒绝并明示（先解挂再挂）
+      parameters:
+      - description: 文件 ID
+        in: path
+        name: file_id
+        required: true
+        type: integer
+      - description: 章节参数
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/tutorfile.AttachRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 参数无效
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: 非本人文件
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 文件或章节不存在
+          schema:
+            $ref: '#/definitions/response.R'
+        "409":
+          description: 已挂接到其他章节
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 挂接文件到章节
+      tags:
+      - 讲师端-文件库
+  /tutor/files/{file_id}/detach:
+    post:
+      description: 取消挂接回库（spec B2）：回到在库未挂状态；重复调用幂等
+      parameters:
+      - description: 文件 ID
+        in: path
+        name: file_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: 非本人文件
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 文件不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 取消挂接
+      tags:
+      - 讲师端-文件库
+  /tutor/files/{file_id}/rename:
+    post:
+      consumes:
+      - application/json
+      description: 改显示名（spec B7）；存储 key 与命名契约不动
+      parameters:
+      - description: 文件 ID
+        in: path
+        name: file_id
+        required: true
+        type: integer
+      - description: 新名称
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/tutorfile.RenameRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            $ref: '#/definitions/response.R'
+        "400":
+          description: 名称为空
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: 非本人文件
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 文件不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 文件改名
       tags:
       - 讲师端-文件库
   /tutor/files/batch-delete:

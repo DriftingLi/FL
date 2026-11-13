@@ -58,4 +58,4 @@ func TestRouteRegistryCoverage(t *testing.T) {
 // PUT /api/tutor/files/upload/{session_id}/chunk/{part_number}、POST …/complete、
 // POST …/abort、GET /api/tutor/files、DELETE /api/tutor/files/{file_id}）→ 353。
 // 2026-11-13 #2495 断点续传清单端点（GET /api/tutor/files/upload/{session_id}）→ 354。
-const expectedRouteCount = 354
+const expectedRouteCount = 358

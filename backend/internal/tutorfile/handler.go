@@ -10,10 +10,13 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/authz"
+	"forklift-training/internal/course"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/security"
 	"forklift-training/pkg/httpx"
@@ -43,6 +46,14 @@ func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, svc *Service
 	g.POST("/files/upload/:session_id/abort", h.AbortUpload)
 	// GET /api/tutor/files  文件库列表
 	g.GET("/files", h.ListFiles)
+	// POST /api/tutor/files/:file_id/attach  单挂挂接到章节
+	g.POST("/files/:file_id/attach", h.AttachFile)
+	// POST /api/tutor/files/:file_id/detach  取消挂接回库
+	g.POST("/files/:file_id/detach", h.DetachFile)
+	// POST /api/tutor/files/:file_id/rename  改名（仅显示名）
+	g.POST("/files/:file_id/rename", h.RenameFile)
+	// POST /api/tutor/chapter/:chapter_id/files/swap  章节侧换挂（挂新 + 旧回库，spec B6）
+	g.POST("/chapter/:chapter_id/files/swap", h.SwapChapterFile)
 	// DELETE /api/tutor/files/:file_id  删除文件
 	g.DELETE("/files/:file_id", h.DeleteFile)
 }
@@ -157,7 +168,7 @@ func (h *handler) CompleteUpload(c *gin.Context) {
 		writeServiceError(c, err)
 		return
 	}
-	response.Success(c, toFileDTO(*file))
+	response.Success(c, toFileDTO(*file, nil))
 }
 
 // AbortUpload 放弃上传会话 POST /api/tutor/files/upload/:session_id/abort
@@ -183,25 +194,162 @@ func (h *handler) AbortUpload(c *gin.Context) {
 
 // ListFiles 文件库列表 GET /api/tutor/files
 // @Summary 导师文件库列表
-// @Description 当前导师的文件库行（新→旧）
+// @Description 当前导师的文件库行（新→旧）；支持类型/挂接状态/创建时间区间筛选（spec B7）
 // @Tags 讲师端-文件库
 // @Produce json
 // @Security BearerAuth
+// @Param content_type query string false "类型筛选（video/document/ppt/image）"
+// @Param attached query bool false "挂接状态筛选（true=已挂 / false=未挂）"
+// @Param created_from query string false "创建时间下界（RFC3339 或 YYYY-MM-DD，闭区间）"
+// @Param created_to query string false "创建时间上界（RFC3339 或 YYYY-MM-DD，闭区间；日期按当天末）"
 // @Success 200 {object} response.R{data=tutorfile.FileListDTO} "success"
+// @Failure 400 {object} response.R "筛选参数无效"
 // @Failure 401 {object} response.R "未认证"
 // @Router /tutor/files [get]
 func (h *handler) ListFiles(c *gin.Context) {
+	filter, err := parseFileFilter(c)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
 	uid := middleware.CurrentUserID(c)
-	files, err := h.svc.ListFiles(c.Request.Context(), uid)
+	files, err := h.svc.ListFiles(c.Request.Context(), uid, filter)
 	if err != nil {
 		writeServiceError(c, err)
 		return
 	}
+	titles := h.svc.ChapterTitles(c.Request.Context(), files)
 	dtos := make([]FileDTO, 0, len(files))
 	for _, f := range files {
-		dtos = append(dtos, toFileDTO(f))
+		dtos = append(dtos, toFileDTO(f, titles))
 	}
 	response.Success(c, FileListDTO{Files: dtos})
+}
+
+// AttachFile 单挂挂接 POST /api/tutor/files/:file_id/attach
+// @Summary 挂接文件到章节
+// @Description 单挂挂接（spec B2）：一个文件同一时间只挂一章；已挂其他章拒绝并明示（先解挂再挂）
+// @Tags 讲师端-文件库
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param file_id path int true "文件 ID"
+// @Param body body tutorfile.AttachRequest true "章节参数"
+// @Success 200 {object} response.R "success"
+// @Failure 400 {object} response.R "参数无效"
+// @Failure 403 {object} response.R "非本人文件"
+// @Failure 404 {object} response.R "文件或章节不存在"
+// @Failure 409 {object} response.R "已挂接到其他章节"
+// @Router /tutor/files/{file_id}/attach [post]
+func (h *handler) AttachFile(c *gin.Context) {
+	fileID, err := httpx.PathInt(c, "file_id", "文件ID无效")
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	var req AttachRequest
+	if err := c.ShouldBindJSON(&req); err != nil || req.ChapterID <= 0 {
+		response.BadRequest(c, "请求数据无效")
+		return
+	}
+	uid := middleware.CurrentUserID(c)
+	if err := h.svc.AttachFile(c.Request.Context(), uid, fileID, req.ChapterID); err != nil {
+		writeServiceError(c, err)
+		return
+	}
+	response.SuccessWithMsg(c, "已挂接到章节", nil)
+}
+
+// DetachFile 取消挂接回库 POST /api/tutor/files/:file_id/detach
+// @Summary 取消挂接
+// @Description 取消挂接回库（spec B2）：回到在库未挂状态；重复调用幂等
+// @Tags 讲师端-文件库
+// @Produce json
+// @Security BearerAuth
+// @Param file_id path int true "文件 ID"
+// @Success 200 {object} response.R "success"
+// @Failure 403 {object} response.R "非本人文件"
+// @Failure 404 {object} response.R "文件不存在"
+// @Router /tutor/files/{file_id}/detach [post]
+func (h *handler) DetachFile(c *gin.Context) {
+	fileID, err := httpx.PathInt(c, "file_id", "文件ID无效")
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	uid := middleware.CurrentUserID(c)
+	if err := h.svc.DetachFile(c.Request.Context(), uid, fileID); err != nil {
+		writeServiceError(c, err)
+		return
+	}
+	response.SuccessWithMsg(c, "已取消挂接，文件回到文件库", nil)
+}
+
+// RenameFile 改名 POST /api/tutor/files/:file_id/rename
+// @Summary 文件改名
+// @Description 改显示名（spec B7）；存储 key 与命名契约不动
+// @Tags 讲师端-文件库
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param file_id path int true "文件 ID"
+// @Param body body tutorfile.RenameRequest true "新名称"
+// @Success 200 {object} response.R "success"
+// @Failure 400 {object} response.R "名称为空"
+// @Failure 403 {object} response.R "非本人文件"
+// @Failure 404 {object} response.R "文件不存在"
+// @Router /tutor/files/{file_id}/rename [post]
+func (h *handler) RenameFile(c *gin.Context) {
+	fileID, err := httpx.PathInt(c, "file_id", "文件ID无效")
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	var req RenameRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "请求数据无效")
+		return
+	}
+	uid := middleware.CurrentUserID(c)
+	if err := h.svc.RenameFile(c.Request.Context(), uid, fileID, req.FileName); err != nil {
+		writeServiceError(c, err)
+		return
+	}
+	response.SuccessWithMsg(c, "已改名", nil)
+}
+
+// SwapChapterFile 章节侧换挂 POST /api/tutor/chapter/:chapter_id/files/swap
+// @Summary 章节侧换文件
+// @Description 换挂发生在章节侧（spec B6）：挂新文件、旧文件回库，一步原子；库侧无「替换」动作
+// @Tags 讲师端-文件库
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param chapter_id path int true "章节 ID"
+// @Param body body tutorfile.SwapRequest true "新旧文件"
+// @Success 200 {object} response.R "success"
+// @Failure 400 {object} response.R "参数无效"
+// @Failure 403 {object} response.R "非本人文件"
+// @Failure 404 {object} response.R "文件不存在"
+// @Failure 409 {object} response.R "旧文件未挂该章或新文件已挂别章"
+// @Router /tutor/chapter/{chapter_id}/files/swap [post]
+func (h *handler) SwapChapterFile(c *gin.Context) {
+	chapterID, err := httpx.PathInt(c, "chapter_id", "章节ID无效")
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	var req SwapRequest
+	if err := c.ShouldBindJSON(&req); err != nil || req.OldFileID <= 0 || req.NewFileID <= 0 {
+		response.BadRequest(c, "请求数据无效")
+		return
+	}
+	uid := middleware.CurrentUserID(c)
+	if err := h.svc.SwapChapterFile(c.Request.Context(), uid, chapterID, req.OldFileID, req.NewFileID); err != nil {
+		writeServiceError(c, err)
+		return
+	}
+	response.SuccessWithMsg(c, "已换文件，旧文件回到文件库", nil)
 }
 
 // DeleteFile 删除文件 DELETE /api/tutor/files/:file_id
@@ -228,6 +376,48 @@ func (h *handler) DeleteFile(c *gin.Context) {
 	response.SuccessWithMsg(c, "文件已删除", nil)
 }
 
+// parseFileFilter 解析管理面筛选查询参数（spec B7）：
+// content_type 精确档位；attached=true/false；created_from/to 支持 RFC3339 或 YYYY-MM-DD
+// （日期形的上界按当天末，闭区间）。无效参数报错由调用方转 400。
+func parseFileFilter(c *gin.Context) (FileFilter, error) {
+	var f FileFilter
+	f.ContentType = c.Query("content_type")
+	if v := c.Query("attached"); v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return f, errors.New("attached 参数无效")
+		}
+		f.Attached = &b
+	}
+	from, err := parseFilterTime(c.Query("created_from"), false)
+	if err != nil {
+		return f, err
+	}
+	to, err := parseFilterTime(c.Query("created_to"), true)
+	if err != nil {
+		return f, err
+	}
+	f.CreatedFrom, f.CreatedTo = from, to
+	return f, nil
+}
+
+// parseFilterTime 时间筛选值解析：RFC3339 或 YYYY-MM-DD（endOfDay 时日期按当天 23:59:59）。
+func parseFilterTime(v string, endOfDay bool) (time.Time, error) {
+	if v == "" {
+		return time.Time{}, nil
+	}
+	if t, err := time.Parse(time.RFC3339, v); err == nil {
+		return t, nil
+	}
+	if t, err := time.ParseInLocation("2006-01-02", v, time.Local); err == nil {
+		if endOfDay {
+			return t.Add(24*time.Hour - time.Second), nil
+		}
+		return t, nil
+	}
+	return time.Time{}, errors.New("时间筛选参数无效（RFC3339 或 YYYY-MM-DD）")
+}
+
 // writeServiceError 服务哨兵错误 → 状态码映射（本域错误面单点）。
 func writeServiceError(c *gin.Context, err error) {
 	switch {
@@ -242,6 +432,11 @@ func writeServiceError(c *gin.Context, err error) {
 	case errors.Is(err, ErrQuotaFileCount), errors.Is(err, ErrQuotaTotalSize):
 		// 配额双臂（spec B3）：400 沿投稿配额先例，文案自带当前用量。
 		response.BadRequest(c, err.Error())
+	case errors.Is(err, ErrFileInUse):
+		// 删除随引用走（spec B5）：409 状态冲突，文案自带解挂指引。
+		response.Conflict(c, err.Error())
+	case errors.Is(err, course.ErrChapterNotFound):
+		response.NotFound(c, err.Error())
 	default:
 		response.ServerErrorCause(c, "文件库操作失败", err)
 	}

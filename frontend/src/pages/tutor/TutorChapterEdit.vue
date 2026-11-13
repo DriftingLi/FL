@@ -85,9 +85,14 @@
               <section class="rounded-ctl border border-line bg-canvas p-4">
                 <div class="mb-3 flex items-center justify-between">
                   <h3 class="text-sm font-semibold text-ink">已上传文件（{{ group.files.length }}）</h3>
-                  <UiButton size="small" @click="openUploadDialog(group.type)">
-                    <UiIcon name="upload" /> 上传{{ group.label }}
-                  </UiButton>
+                  <div class="flex items-center gap-2">
+                    <UiButton size="small" @click="openLibraryPicker(group.type)">
+                      <UiIcon name="folder-open" /> 从文件库挂接
+                    </UiButton>
+                    <UiButton size="small" @click="openUploadDialog(group.type)">
+                      <UiIcon name="upload" /> 上传{{ group.label }}
+                    </UiButton>
+                  </div>
                 </div>
 
                 <div v-if="group.files.length > 0" class="flex flex-col gap-2">
@@ -95,15 +100,37 @@
                     v-for="file in group.files"
                     :key="file.file_id"
                     class="flex cursor-pointer items-center gap-2.5 rounded-ctl border border-line bg-panel px-3 py-2.5 transition-colors hover:border-ui-500"
-                    :class="{ 'border-ui-500 bg-[color-mix(in_srgb,var(--color-ui-500)_12%,var(--color-panel))]': selectedFileId === file.file_id }"
-                    @click="selectFile(file.file_id)"
+                    :class="{ 'border-ui-500 bg-[color-mix(in_srgb,var(--color-ui-500)_12%,var(--color-panel))]': selectedFileKey === fileKey(file) }"
+                    @click="selectFile(file)"
                   >
                     <UiIcon :name="group.icon" class="shrink-0 text-ui-soft-ink" :size="18" :class="group.iconClass" />
                     <div class="flex min-w-0 flex-1 flex-col gap-0.5">
                       <span class="truncate text-sm text-ink" :title="file.file_name">{{ file.file_name }}</span>
                       <span v-if="file.file_size" class="text-xs text-ink-3">{{ formatSize(file.file_size) }}</span>
                     </div>
+                    <!-- 挂接文件库条目（source=tutor_file）：解挂/换文件（B6 换挂是章节侧动作）；
+                         chapter_file 条目才是删除。两类 file_id 独立编号，动作面按 source 分流。 -->
+                    <template v-if="file.source === 'tutor_file'">
+                      <UiButton
+                        variant="text"
+                        size="small"
+                        aria-label="换文件"
+                        @click.stop="openLibraryPicker(group.type, file)"
+                      >
+                        换文件
+                      </UiButton>
+                      <UiButton
+                        variant="text"
+                        size="small"
+                        class="text-bad"
+                        aria-label="取消挂接"
+                        @click.stop="handleDetachFile(file)"
+                      >
+                        解挂
+                      </UiButton>
+                    </template>
                     <UiButton
+                      v-else
                       variant="text"
                       size="small"
                       class="text-bad"
@@ -223,6 +250,32 @@
         @upload-all="handleUploadAll"
       />
     </UiDialog>
+
+    <!-- 从文件库挂接 / 换文件（#2497）：只列同类型、未挂接的库文件 -->
+    <UiDialog
+      v-model="libraryDialogVisible"
+      :title="libraryMode === 'swap' ? '从文件库换文件' : '从文件库挂接'"
+      width="640px"
+    >
+      <div v-if="libraryLoading" class="py-6 text-center text-sm text-ink-3">加载文件库…</div>
+      <UiEmptyState v-else-if="libraryFiles.length === 0" size="sm" description="文件库中没有同类型的未挂接文件" />
+      <div v-else class="flex flex-col gap-2">
+        <div
+          v-for="f in libraryFiles"
+          :key="f.file_id"
+          class="flex items-center gap-2.5 rounded-ctl border border-line bg-panel px-3 py-2.5"
+        >
+          <UiIcon name="file-text" class="shrink-0 text-ui-soft-ink" :size="18" />
+          <div class="flex min-w-0 flex-1 flex-col">
+            <span class="truncate text-sm text-ink" :title="f.file_name">{{ f.file_name }}</span>
+            <span class="text-xs text-ink-3">{{ formatSize(f.file_size) }}</span>
+          </div>
+          <UiButton size="small" variant="primary" @click="handleAttachLibrary(f)">
+            {{ libraryMode === 'swap' ? '换入' : '挂接' }}
+          </UiButton>
+        </div>
+      </div>
+    </UiDialog>
   </div>
 </template>
 
@@ -234,6 +287,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { href } from '@/config/pages'
 import { tutorApi, type TutorChapter, type TutorChapterDetail } from '@/api/tutor'
+import { tutorFileApi, type FileDTO } from '@/api/tutorfile'
 import type { ChapterFile } from '@/api/course'
 import MarkdownEditor from '@/components/tutor/MarkdownEditor.vue'
 import PublishPreviewDialog from '@/components/render/PublishPreviewDialog.vue'
@@ -319,16 +373,21 @@ const fileGroups = computed(() => {
   }))
 })
 
-// 选中文件预览
-const selectedFileId = ref<number | null>(null)
+// 选中文件预览。选中标识用 source+file_id 复合键：chapter_file 与 tutor_file 的
+// file_id 是两套独立编号，只比 file_id 会跨来源误选（#2497 挂接条目合入后成真）。
+const selectedFileKey = ref<string | null>(null)
+function fileKey(file: ChapterFile): string {
+  return `${file.source || 'chapter_file'}:${file.file_id}`
+}
 const selectedFile = computed(() => {
-  if (selectedFileId.value == null) return null
-  return chapterFiles.value.find((f) => f.file_id === selectedFileId.value) || null
+  if (selectedFileKey.value == null) return null
+  return chapterFiles.value.find((f) => fileKey(f) === selectedFileKey.value) || null
 })
 
-function selectFile(fileId?: number) {
-  if (fileId == null) return
-  selectedFileId.value = selectedFileId.value === fileId ? null : fileId
+function selectFile(file?: ChapterFile) {
+  if (!file) return
+  const key = fileKey(file)
+  selectedFileKey.value = selectedFileKey.value === key ? null : key
 }
 
 // 元信息编辑
@@ -437,12 +496,69 @@ async function handleDeleteFile(file: ChapterFile) {
       await tutorApi.deleteFile(file.file_id)
     }
     ElMessage.success('文件删除成功')
-    if (selectedFileId.value === file.file_id) {
-      selectedFileId.value = null
+    if (selectedFileKey.value === fileKey(file)) {
+      selectedFileKey.value = null
     }
     await loadChapterDetail()
   } catch {
     /* 取消确认或删除失败；错误已由拦截器提示 */
+  }
+}
+
+// 从文件库挂接 / 换文件（#2497 spec B2/B6）：picker 只列同类型、未挂接的库文件；
+// 挂接=attachFile，换文件=swapChapterFile（挂新 + 旧回库一步原子，B6：换挂是章节侧动作）。
+const libraryDialogVisible = ref(false)
+const libraryMode = ref<'attach' | 'swap'>('attach')
+const libraryFileType = ref('video')
+const librarySwapOldId = ref<number | null>(null)
+const libraryFiles = ref<FileDTO[]>([])
+const libraryLoading = ref(false)
+
+async function openLibraryPicker(type: string, swapOld?: ChapterFile) {
+  libraryFileType.value = type
+  libraryMode.value = swapOld ? 'swap' : 'attach'
+  librarySwapOldId.value = swapOld?.file_id ?? null
+  libraryFiles.value = []
+  libraryDialogVisible.value = true
+  libraryLoading.value = true
+  try {
+    libraryFiles.value = (await tutorFileApi.listFiles({ content_type: type, attached: false })).files
+  } catch {
+    /* 错误已由拦截器提示 */
+  } finally {
+    libraryLoading.value = false
+  }
+}
+
+async function handleAttachLibrary(file: FileDTO) {
+  const chapterId = chapterDetail.value?.chapter_id
+  if (!chapterId) return
+  try {
+    if (libraryMode.value === 'swap' && librarySwapOldId.value != null) {
+      await tutorFileApi.swapChapterFile(chapterId, librarySwapOldId.value, file.file_id)
+      ElMessage.success('已换文件，旧文件回到文件库')
+    } else {
+      await tutorFileApi.attachFile(file.file_id, chapterId)
+      ElMessage.success('已挂接到本章节')
+    }
+    libraryDialogVisible.value = false
+    await loadChapterDetail()
+  } catch {
+    /* 错误已由拦截器提示 */
+  }
+}
+
+async function handleDetachFile(file: ChapterFile) {
+  try {
+    await useConfirm().confirm(`取消挂接「${file.file_name}」？文件将回到文件库未挂状态。`, '取消挂接')
+    await tutorFileApi.detachFile(file.file_id)
+    ElMessage.success('已取消挂接，文件回到文件库')
+    if (selectedFileKey.value === fileKey(file)) {
+      selectedFileKey.value = null
+    }
+    await loadChapterDetail()
+  } catch {
+    /* 取消确认或解挂失败；错误已由拦截器提示 */
   }
 }
 
@@ -464,7 +580,7 @@ const { loading, loadError, retrying, isEmpty, retry: handleRetry, run: loadChap
       editContent.value = res.content || ''
       originalContent.value = res.content || ''
       activeTab.value = 'content'
-      selectedFileId.value = null
+      selectedFileKey.value = null
     }, itemsRef: chapterDetail }
 )
 
@@ -528,7 +644,7 @@ watch(
 
 // 切换 Tab 时重置选中文件，避免跨 Tab 预览错误
 watch(activeTab, () => {
-  selectedFileId.value = null
+  selectedFileKey.value = null
 })
 
 onMounted(() => {

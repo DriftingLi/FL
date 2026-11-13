@@ -19410,6 +19410,76 @@ const docTemplate = `{
                 }
             }
         },
+        "/tutor/chapter/{chapter_id}/files/swap": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "换挂发生在章节侧（spec B6）：挂新文件、旧文件回库，一步原子；库侧无「替换」动作",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "讲师端-文件库"
+                ],
+                "summary": "章节侧换文件",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "章节 ID",
+                        "name": "chapter_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "新旧文件",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/tutorfile.SwapRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "参数无效",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "非本人文件",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "文件不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "409": {
+                        "description": "旧文件未挂该章或新文件已挂别章",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/tutor/chapter/{chapter_id}/upload": {
             "post": {
                 "security": [
@@ -19687,7 +19757,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "当前导师的文件库行（新→旧）",
+                "description": "当前导师的文件库行（新→旧）；支持类型/挂接状态/创建时间区间筛选（spec B7）",
                 "produces": [
                     "application/json"
                 ],
@@ -19695,6 +19765,32 @@ const docTemplate = `{
                     "讲师端-文件库"
                 ],
                 "summary": "导师文件库列表",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "类型筛选（video/document/ppt/image）",
+                        "name": "content_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "挂接状态筛选（true=已挂 / false=未挂）",
+                        "name": "attached",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "创建时间下界（RFC3339 或 YYYY-MM-DD，闭区间）",
+                        "name": "created_from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "创建时间上界（RFC3339 或 YYYY-MM-DD，闭区间；日期按当天末）",
+                        "name": "created_to",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "success",
@@ -19712,6 +19808,12 @@ const docTemplate = `{
                                     }
                                 }
                             ]
+                        }
+                    },
+                    "400": {
+                        "description": "筛选参数无效",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
@@ -20124,6 +20226,186 @@ const docTemplate = `{
                 "responses": {
                     "200": {
                         "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "文件不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/tutor/files/{file_id}/attach": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "单挂挂接（spec B2）：一个文件同一时间只挂一章；已挂其他章拒绝并明示（先解挂再挂）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "讲师端-文件库"
+                ],
+                "summary": "挂接文件到章节",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "文件 ID",
+                        "name": "file_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "章节参数",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/tutorfile.AttachRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "参数无效",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "非本人文件",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "文件或章节不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "409": {
+                        "description": "已挂接到其他章节",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/tutor/files/{file_id}/detach": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "取消挂接回库（spec B2）：回到在库未挂状态；重复调用幂等",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "讲师端-文件库"
+                ],
+                "summary": "取消挂接",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "文件 ID",
+                        "name": "file_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "非本人文件",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "文件不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/tutor/files/{file_id}/rename": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "改显示名（spec B7）；存储 key 与命名契约不动",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "讲师端-文件库"
+                ],
+                "summary": "文件改名",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "文件 ID",
+                        "name": "file_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "新名称",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/tutorfile.RenameRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "400": {
+                        "description": "名称为空",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "非本人文件",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -26733,6 +27015,10 @@ const docTemplate = `{
                 },
                 "file_url": {
                     "type": "string"
+                },
+                "source": {
+                    "type": "string",
+                    "x-optional": true
                 }
             }
         },
@@ -30651,9 +30937,26 @@ const docTemplate = `{
                 }
             }
         },
+        "tutorfile.AttachRequest": {
+            "type": "object",
+            "required": [
+                "chapter_id"
+            ],
+            "properties": {
+                "chapter_id": {
+                    "type": "integer"
+                }
+            }
+        },
         "tutorfile.FileDTO": {
             "type": "object",
             "properties": {
+                "chapter_id": {
+                    "type": "integer"
+                },
+                "chapter_title": {
+                    "type": "string"
+                },
                 "content_type": {
                     "type": "string"
                 },
@@ -30718,6 +31021,17 @@ const docTemplate = `{
                 }
             }
         },
+        "tutorfile.RenameRequest": {
+            "type": "object",
+            "required": [
+                "file_name"
+            ],
+            "properties": {
+                "file_name": {
+                    "type": "string"
+                }
+            }
+        },
         "tutorfile.SessionStatusDTO": {
             "type": "object",
             "properties": {
@@ -30743,6 +31057,21 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "total_chunks": {
+                    "type": "integer"
+                }
+            }
+        },
+        "tutorfile.SwapRequest": {
+            "type": "object",
+            "required": [
+                "new_file_id",
+                "old_file_id"
+            ],
+            "properties": {
+                "new_file_id": {
+                    "type": "integer"
+                },
+                "old_file_id": {
                     "type": "integer"
                 }
             }

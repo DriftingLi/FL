@@ -118,3 +118,38 @@ describe('tutorFileApi 端点形状（#2495）', () => {
     expect(mockGet).toHaveBeenCalledWith('/tutor/files/upload/s1')
   })
 })
+
+describe('tutorFileApi 挂接与管理面（#2497）', () => {
+  it('listFiles：筛选参数映射 query', async () => {
+    mockGet.mockResolvedValue({ files: [] })
+    await tutorFileApi.listFiles({
+      content_type: 'video',
+      attached: true,
+      created_from: '2026-11-01',
+      created_to: '2026-11-13'
+    })
+    expect(mockGet).toHaveBeenCalledWith('/tutor/files', {
+      params: {
+        content_type: 'video',
+        attached: 'true',
+        created_from: '2026-11-01',
+        created_to: '2026-11-13'
+      }
+    })
+  })
+
+  it('attach/detach/rename/swap 端点形状', async () => {
+    mockPost.mockResolvedValue(null)
+    await tutorFileApi.attachFile(7, 3)
+    expect(mockPost).toHaveBeenLastCalledWith('/tutor/files/7/attach', { chapter_id: 3 })
+    await tutorFileApi.detachFile(7)
+    expect(mockPost).toHaveBeenLastCalledWith('/tutor/files/7/detach')
+    await tutorFileApi.renameFile(7, '新名字.mp4')
+    expect(mockPost).toHaveBeenLastCalledWith('/tutor/files/7/rename', { file_name: '新名字.mp4' })
+    await tutorFileApi.swapChapterFile(3, 7, 8)
+    expect(mockPost).toHaveBeenLastCalledWith('/tutor/chapter/3/files/swap', {
+      old_file_id: 7,
+      new_file_id: 8
+    })
+  })
+})

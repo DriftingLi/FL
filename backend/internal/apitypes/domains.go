@@ -447,7 +447,7 @@ var Domains = []Domain{
 
 	{
 		Name:  "tutorfile",
-		Title: "导师文件库（/api/tutor/files*：分片上传四段契约 + 列表/删除，#2494）",
+		Title: "导师文件库（/api/tutor/files*：分片上传四段契约 + 管理面挂接/换挂/改名，#2494/#2497）",
 		Roots: []string{
 			"tutorfile.InitUploadResponse",
 			"tutorfile.UploadChunkResponse",
@@ -462,6 +462,10 @@ var Domains = []Domain{
 			{Method: "POST", Path: "/tutor/files/upload/{session_id}/complete"},
 			{Method: "POST", Path: "/tutor/files/upload/{session_id}/abort", NoData: true},
 			{Method: "GET", Path: "/tutor/files"},
+			{Method: "POST", Path: "/tutor/files/{file_id}/attach", NoData: true},
+			{Method: "POST", Path: "/tutor/files/{file_id}/detach", NoData: true},
+			{Method: "POST", Path: "/tutor/files/{file_id}/rename", NoData: true},
+			{Method: "POST", Path: "/tutor/chapter/{chapter_id}/files/swap", NoData: true},
 			{Method: "DELETE", Path: "/tutor/files/{file_id}", NoData: true},
 		},
 	},
