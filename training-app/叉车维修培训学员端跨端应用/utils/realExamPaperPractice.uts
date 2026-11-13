@@ -1,0 +1,124 @@
+/**
+ * 按卷练习（真题卷 paper 承载）的判定单点（票 2463 / 规格 2459）
+ *
+ * 为什么抽出来：paper 承载只有三件事是「契约」而不是界面细节——进度键名、answers_state 的值形态、
+ * 续练游标怎么取舍。它们各自被后端收紧（api/practice.uts savePracticeProgressApi 的 mode 是封闭枚举、
+ * realexam service.go 只回游标不回逐题作答），散落在 composable 里就只能靠通读源码才知道边界；
+ * 集中在此，行为测试（utils/realExamPaperPracticeBehavior.test.js）直接跑真源码。
+ *
+ * 纯函数、零运行期依赖（只 import type）：能被 utils/utsHarness.js 当 JS 跑起来。
+ */
+import type { AnswerState } from '../types/index'
+
+/** 进度键前缀：后端 practicemode 的封闭枚举 `paper:<卷 id>`（其他值后端 400） */
+export const PAPER_PRACTICE_MODE_PREFIX : string = 'paper:'
+
+/** 载入失败兜底文案：后端给了 message 就原样透出，没有才用它（不白屏、不静默） */
+export const PAPER_LOAD_FAIL_TEXT : string = '该卷加载失败，请重试'
+
+/** 404 的消息前缀：与 api/transport.uts NOT_FOUND_MESSAGE_PREFIX **同值**（本模块零运行期依赖、不能 import，
+ *  故由 practiceContract.test.js 钉住两者相等——改一侧不改另一侧会静默剥不掉前缀） */
+export const PAPER_NOT_FOUND_PREFIX : string = '404:'
+
+/** paper 承载的进度键：'paper:' + 卷 id */
+export function paperProgressMode(paperId : number) : string {
+    return PAPER_PRACTICE_MODE_PREFIX + paperId.toString()
+}
+
+/** 单题作答写进 answers_state 的值：与 Web 同型（对象），续练时才能连对错一起读回 */
+export function paperAnswerStateValue(st : AnswerState) : UTSJSONObject {
+    const v : UTSJSONObject = {} as UTSJSONObject
+    v['user_answer'] = st.user_answer
+    v['is_correct'] = st.is_correct
+    v['correct_answer'] = st.correct_answer
+    return v
+}
+
+/** 值 → 字符串（字符串取原文，其余取 JSON 文本）；null / 空串归 '' */
+function valueText(v : any | null) : string {
+    if (v == null) return ''
+    const t = JSON.stringify(v)
+    if (t.length == 0 || t == 'null') return ''
+    if (t.charAt(0) == '"') return JSON.parse(t) as string
+    return t
+}
+
+/** 形状判定：JSON 文本首字符是不是对象（见 parsePaperAnswerStates 的注释） */
+function isObjectText(t : string) : boolean {
+    return t.length > 0 && t.charAt(0) == '{'
+}
+
+/**
+ * answers_state → AnswerState[]（续练读回）
+ *
+ * 值形态两种：本端与 Web 都写对象 { user_answer, is_correct, correct_answer }；
+ * 若历史/异端写的是裸字符串，只能还原作答、对错未知（correct_answer 留空 ⇒ 页面不显示判题，见 practice-do）。
+ *
+ * 形状判定走 JSON 文本首字符，**不用 typeof / instanceof**：`instanceof UTSJSONObject` 在小程序/H5 不可用
+ * （uni.request 的 res.data 是纯 JS 对象，见 api/transport.uts:283 的同类教训 #2404），
+ * 而 `as UTSJSONObject` 在 Kotlin 是强转、在 JS 被擦除 ⇒ 两种运行时分支会不一致。
+ */
+export function parsePaperAnswerStates(raw : UTSJSONObject | null) : AnswerState[] {
+    const out : AnswerState[] = []
+    if (raw == null) return out
+    for (const key in raw) {
+        const qid = parseInt(key)
+        // 只认正整数键：answers_state 的键是 question_id，其他键（脏数据）忽略而不是抛
+        if (!(qid > 0)) continue
+        const text = JSON.stringify(raw[key])
+        if (text.length == 0 || text == 'null') continue
+        if (!isObjectText(text)) {
+            const plain = valueText(raw[key])
+            if (plain.length == 0) continue
+            out.push({ question_id: qid, user_answer: plain, is_correct: false, correct_answer: '', submitted: true } as AnswerState)
+            continue
+        }
+        const obj = JSON.parse(text) as UTSJSONObject
+        out.push({
+            question_id: qid,
+            user_answer: valueText(obj['user_answer']),
+            is_correct: JSON.stringify(obj['is_correct']) == 'true',
+            correct_answer: valueText(obj['correct_answer']),
+            submitted: true
+        } as AnswerState)
+    }
+    return out
+}
+
+/**
+ * 进度行里的游标是 **0 基**（与 Web 同型；后端 ResumeSet 直接把它当索引用）：
+ * 写侧必须与读侧 resolvePaperResumeIndex 同一口径——写 1 基会让「答完第 1 题退出重进」跳到第 2 题。
+ */
+export function paperProgressIndex(currentIndex : number) : number {
+    return currentIndex < 0 ? 0 : currentIndex
+}
+
+/**
+ * 续练游标：已存进度优先（0 < saved < total），其次用后端协商出来的值，两者都不合法则从头
+ *
+ * 后端 practicemode.ResumeSet 已按「已存顺序与现集合同集」协商出游标，但它**不回逐题作答状态**；
+ * 续练要连作答一起恢复就必须再读进度行 —— 两处游标可能不同（进度行写的是上次保存时刻），
+ * 取「已存」这一处，并把越界值挡回 0（题量变了 / 脏数据都不能让页面停在不存在的题上）。
+ */
+export function resolvePaperResumeIndex(backendIndex : number, savedIndex : number, total : number) : number {
+    if (total <= 0) return 0
+    if (savedIndex > 0 && savedIndex < total) return savedIndex
+    if (backendIndex > 0 && backendIndex < total) return backendIndex
+    return 0
+}
+
+/**
+ * 载入失败 → 页面可见文案
+ *
+ * 后端两条业务拒绝（未兑换 400 / 该卷无已发布题 400）的 message 要原样透出；
+ * 卷不可用走 404，transport 会在 message 前拼状态前缀，展示前剥掉（用户不该看到 '404:'）。
+ */
+export function paperLoadErrorText(raw : string | null) : string {
+    const m = raw == null ? '' : raw.trim()
+    if (m.length == 0) return PAPER_LOAD_FAIL_TEXT
+    if (m.indexOf(PAPER_NOT_FOUND_PREFIX) == 0) {
+        const rest = m.substring(PAPER_NOT_FOUND_PREFIX.length).trim()
+        return rest.length == 0 ? PAPER_LOAD_FAIL_TEXT : rest
+    }
+    return m
+}

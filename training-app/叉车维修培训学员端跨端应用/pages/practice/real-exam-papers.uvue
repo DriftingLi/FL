@@ -17,10 +17,17 @@
                     <view v-for="p in group.papers" :key="p.paper_id" class="paper-card">
                         <text class="paper-title" lines="2">{{ p.title }}</text>
                         <text class="paper-meta">{{ metaText(p) }}</text>
-                        <text v-if="p.entitled" class="paper-entitled">已解锁</text>
-                        <text v-else class="paper-price">{{ priceText(p) }}</text>
-                        <!-- 整卷考试入口：只带卷参数跳考试页，开考由考试页发起（AC④） -->
-                        <button v-if="p.entitled" class="paper-action" @click="onStartExam(p)">模拟考试</button>
+                        <view class="paper-footer">
+                            <text v-if="p.entitled" class="paper-entitled">已解锁</text>
+                            <text v-else class="paper-price">{{ priceText(p) }}</text>
+                            <view class="paper-actions">
+                                <!-- 已解锁：开始练习（#2463）+ 模拟考试（#2464） -->
+                                <view v-if="p.entitled" class="paper-start-hit" @click="onStartPractice(p)"><view class="paper-start-btn"><text class="paper-start-text">{{ startText }}</text></view></view>
+                                <button v-if="p.entitled" class="paper-action" @click="onStartExam(p)">模拟考试</button>
+                                <!-- 未解锁才出「积分解锁」（#2462 AC①）；在途时文案与禁用由 redeemText / redeemingPaperId 决定（AC④） -->
+                                <app-button v-if="!p.entitled" size="small" :text="redeemText(p)" :disabled="redeemingPaperId != 0" @click="onRedeem(p)"></app-button>
+                            </view>
+                        </view>
                     </view>
                 </view>
             </view>
@@ -34,11 +41,12 @@
     import { onLoad } from '@dcloudio/uni-app'
     import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import appEmptyState from '../../components/app-empty-state/app-empty-state.uvue'
+    import appButton from '../../components/app-button/app-button.uvue'
     import { goBack } from '../../utils/navigation'
     import { errMsg } from '../../api/helpers'
     import { getCurrentCredentialApi } from '../../api/credential'
-    import { listPapersApi } from '../../api/realExam'
-    import { groupRealExamPapers, paperMetaText, paperPriceText, papersEmptyText, papersSummaryText } from '../../utils/realExamPapersDisplay'
+    import { listPapersApi, redeemPaperApi } from '../../api/realExam'
+    import { groupRealExamPapers, paperMetaText, paperPriceText, paperRedeemButtonText, paperRedeemConfirmText, paperRedeemFailText, papersEmptyText, papersSummaryText, PAPER_START_PRACTICE_TEXT } from '../../utils/realExamPapersDisplay'
     import type { RealExamPaperGroup } from '../../utils/realExamPapersDisplay'
     import type { RealExamPaper } from '../../types/index'
 
@@ -48,14 +56,19 @@
     const loading = ref<boolean>(false)
     const errorText = ref<string>('')
     const isRefreshing = ref<boolean>(false)
+    /** 正在兑换的卷 id（0 = 没有在途请求）：既是单飞守卫，也是按钮加载态的判据（#2462 AC④） */
+    const redeemingPaperId = ref<number>(0)
 
     // 分组、逐卷 meta、价格行、空态与页头文案都在 utils/realExamPapersDisplay.uts 一处判定
     const groups = computed<RealExamPaperGroup[]>(() : RealExamPaperGroup[] => groupRealExamPapers(papers.value))
     const summaryText = computed<string>(() : string => papersSummaryText(credentialName.value, papers.value.length))
     const emptyText = computed<string>(() : string => papersEmptyText(credentialName.value))
 
+    /** 入口文案单点在 utils/realExamPapersDisplay.uts（与 meta/价格同一处判定） */
+    const startText : string = PAPER_START_PRACTICE_TEXT
     function metaText(p : RealExamPaper) : string { return paperMetaText(p) }
     function priceText(p : RealExamPaper) : string { return paperPriceText(p.price) }
+    function redeemText(p : RealExamPaper) : string { return paperRedeemButtonText(redeemingPaperId.value == p.paper_id) }
 
     /**
      * 整卷考试（#2464）：这里**只带卷参数**就跳走，「开整卷考试」由考试页自己发起。
@@ -65,6 +78,9 @@
     function onStartExam(p : RealExamPaper) : void {
         uni.navigateTo({ url: '/pages/exam/mock-exam?paper=' + p.paper_id })
     }
+
+    /** 按卷练习入口（#2463 AC①）：题目顺序与进度键都由答题页的 paper 承载决定，列表页只负责跳转 */
+    function onStartPractice(p : RealExamPaper) : void { uni.navigateTo({ url: '/pages/practice/practice-do?mode=paper&paper_id=' + p.paper_id.toString() }) }
 
     /** 证件名只用于页头与空态文案；读不到不阻断列表（证件分区由服务端兜底） */
     async function loadCredential() : Promise<void> {
@@ -76,8 +92,11 @@
         }
     }
 
-    async function loadPapers() : Promise<void> {
-        loading.value = true
+    /** @param silent 静默重拉（兑换后的刷新）：不切加载态，列表原样留到新数据到手 */
+    async function loadPapers(silent : boolean = false) : Promise<void> {
+        if (!silent) {
+            loading.value = true
+        }
         errorText.value = ''
         try {
             papers.value = await listPapersApi()
@@ -87,6 +106,84 @@
         } finally {
             loading.value = false
         }
+    }
+
+    /** 重拉后的这一卷是否仍未解锁：只读服务端给的 entitled（AC③「不靠前端猜状态」） */
+    function isStillLocked(paperId : number) : boolean {
+        for (let i = 0; i < papers.value.length; i++) {
+            const item = papers.value[i]
+            if (item.paper_id == paperId) {
+                return !item.entitled
+            }
+        }
+        return true
+    }
+
+    /**
+     * 兑换失败提示（AC③「给出失败原因提示」+ 下一步）：原因用后端哨兵原文（`errMsg`），
+     * 后半句是重拉后的真实状态；末尾给唯一确定的下一步落点（任务中心赚积分）。
+     * 不按文案判断「已兑换」——那类字符串比对是 ADR-0024 明令禁止的写法（AC⑤）。
+     */
+    function notifyRedeemFailed(reason : string, stillLocked : boolean) : void {
+        uni.showModal({
+            title: '兑换未完成',
+            content: paperRedeemFailText(reason, stillLocked),
+            confirmText: '去赚积分',
+            cancelText: '知道了',
+            // uni.showModal 的 success 回调不可为 async（Kotlin error17），跳转是同步动作
+            success: (res) => {
+                if (res.confirm) {
+                    uni.navigateTo({ url: '/pages/points/task-center' })
+                }
+            }
+        })
+    }
+
+    /**
+     * 兑换（POST /real-exam/papers/{id}/redeem）。**成败都重拉列表**，解锁状态只认重拉回来的
+     * `entitled`（服务端事实，ADR-0024）；兑换回执里的余额/流水号一概不参与判解锁。
+     * ⚠️ 必须先于 onRedeem 声明：UTS 无函数提升（Kotlin error18）。
+     */
+    async function doRedeemPaper(p : RealExamPaper) : Promise<void> {
+        if (redeemingPaperId.value != 0) {
+            return
+        }
+        redeemingPaperId.value = p.paper_id
+        let reason : string = ''
+        try {
+            await redeemPaperApi(p.paper_id)
+        } catch (e) {
+            reason = errMsg(e, '兑换失败，请稍后重试')
+        }
+        redeemingPaperId.value = 0
+        // 成败都重拉：不本地写 entitled，也不拿回执文案当结论
+        await loadPapers(true)
+        if (reason.length == 0) {
+            uni.showToast({ title: '兑换成功', icon: 'success' })
+        } else {
+            notifyRedeemFailed(reason, isStillLocked(p.paper_id))
+        }
+    }
+
+    /**
+     * 解锁按钮点击（AC①）：先二次确认（文案含该卷价格），确认后才发请求 —— 取消不发任何请求。
+     * ⚠️ 声明在 doRedeemPaper / notifyRedeemFailed 之后：UTS 无函数提升（Kotlin error18）。
+     */
+    function onRedeem(p : RealExamPaper) : void {
+        if (p.entitled || redeemingPaperId.value != 0) {
+            return
+        }
+        uni.showModal({
+            title: '积分兑换',
+            content: paperRedeemConfirmText(p.price),
+            confirmText: '确认兑换',
+            cancelText: '取消',
+            success: (res) => {
+                if (res.confirm) {
+                    doRedeemPaper(p)
+                }
+            }
+        })
     }
 
     async function onRefresh() : Promise<void> {
@@ -118,8 +215,14 @@
     .paper-card { background-color: $card-bg; border-radius: 16rpx; padding: 24rpx; margin-bottom: 16rpx; }
     .paper-title { font-size: 30rpx; color: $text-color; }
     .paper-meta { font-size: 24rpx; color: $text-color-placeholder; margin-top: 8rpx; }
-    .paper-entitled { font-size: 24rpx; color: $text-color; margin-top: 8rpx; }
-    .paper-price { font-size: 24rpx; color: $text-color; margin-top: 8rpx; }
-    .paper-action { height: 88rpx; margin-top: 16rpx; font-size: 28rpx; color: $primary-color; border: 1rpx solid $primary-color; border-radius: 12rpx; }
+    .paper-footer { flex-direction: row; align-items: center; justify-content: space-between; margin-top: 8rpx; }
+    .paper-actions { flex-direction: row; align-items: center; }
+    .paper-entitled { font-size: 24rpx; color: $text-color; }
+    .paper-price { font-size: 24rpx; color: $text-color; }
+    /* 命中区撑到 88rpx（docs/ui-spec.md §5.11），视觉胶囊保持原尺寸——别把胶囊拉大来凑 */
+    .paper-start-hit { height: 88rpx; min-width: 88rpx; align-items: center; justify-content: center; }
+    .paper-start-btn { padding: 10rpx 28rpx; border-radius: 999rpx; background-color: $primary-color; }
+    .paper-start-text { font-size: 24rpx; color: $text-color-inverse; }
+    .paper-action { height: 88rpx; margin-left: 16rpx; font-size: 28rpx; color: $primary-color; border: 1rpx solid $primary-color; border-radius: 12rpx; }
     .safe-bottom { height: 34rpx; }
 </style>
