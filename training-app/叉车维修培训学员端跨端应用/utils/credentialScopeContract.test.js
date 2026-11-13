@@ -92,6 +92,8 @@ const SCOPED_REQUEST_SITES = [
   'GET /question-bank/questions',
   'GET /question-bank/questions/',
   'GET /question-bank/stats',
+  'GET /real-exam/papers',
+  'GET /real-exam/papers/',
   'GET /search',
   'GET /tags',
   'GET /wrong-questions',
@@ -100,7 +102,8 @@ const SCOPED_REQUEST_SITES = [
   'POST /favorites',
   'POST /mock-exam/start',
   'POST /practice-mode/progress',
-  'POST /practice-mode/submit'
+  'POST /practice-mode/submit',
+  'POST /real-exam/papers/'
 ].sort();
 
 /** 冻结：逐文件 scoped 请求点计数（防「同一路径多写一处调用」绕过去重集合） */
@@ -109,6 +112,7 @@ const SCOPED_REQUEST_COUNTS = {
   'api/course.uts': 2,
   'api/favorite.uts': 4,
   'api/mockExam.uts': 2,
+  'api/realExam.uts': 4,
   'api/practice.uts': 14,
   'api/search.uts': 2,
   'api/wrongQuestion.uts': 2
@@ -151,6 +155,7 @@ const FALLBACK_FNS = {
   ],
   'api/wrongQuestion.uts': ['getWrongQuestionsApi', 'getWrongQuestionStatsApi'],
   'api/mockExam.uts': ['startMockExamApi', 'getMockExamHistoryApi'],
+  'api/realExam.uts': ['listPapersApi', 'startPaperPracticeApi', 'startPaperExamApi', 'redeemPaperApi'],
   'api/favorite.uts': ['getFavoritesApi', 'addFavoriteApi', 'removeFavoriteApi', 'checkFavoriteApi'],
   'api/contribution.uts': ['getMyContributionsApi']
 };

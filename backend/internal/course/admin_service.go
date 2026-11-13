@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/clock"
+	"forklift-training/internal/coerce"
 	"forklift-training/internal/filestore"
 	"forklift-training/internal/model"
 	"forklift-training/internal/sortorder"
@@ -49,6 +50,26 @@ func (s *AdminService) GetCourseDetail(courseID int) (*AdminCourseDetailDTO, err
 	}, nil
 }
 
+// ErrCoursePointsPriceInvalid 积分价非法（#2447）：可写值只有 ≥1 的整数；「免费」不写 0——
+// 000002 迁移的列约束是 points_price IS NULL OR points_price > 0，免费的落点是 NULL。
+var ErrCoursePointsPriceInvalid = errors.New("积分价必须为大于0 的整数，免费请留空")
+
+// applyCoursePointsPrice 应用积分价（#2447）。三种输入形态（见 CourseInput 注释）：
+// 携带值（≥1 校验后落库）；显式 null（清空为免费）；未携带（编辑保留现状 / 新建免费）。
+func applyCoursePointsPrice(course *model.Course, in *CourseInput) error {
+	if in.PointsPrice != nil {
+		if *in.PointsPrice < 1 {
+			return ErrCoursePointsPriceInvalid
+		}
+		course.PointsPrice = coerce.IntPtr(*in.PointsPrice)
+		return nil
+	}
+	if in.pointsPriceCleared {
+		course.PointsPrice = nil
+	}
+	return nil
+}
+
 // CreateCourse 创建课程。专业方向与课程等级必填（挂载不变式，旧 category 已退役）。
 // 目标证件为可选（V1 兼容存量，未来收紧为必填），若携带则校验存在性。
 func (s *AdminService) CreateCourse(in *CourseInput) (*CourseDTO, error) {
@@ -81,6 +102,9 @@ func (s *AdminService) CreateCourse(in *CourseInput) (*CourseDTO, error) {
 		course.Duration = *in.Duration
 	}
 	if err := applyCourseTrainingFields(s.db, &course, in); err != nil {
+		return nil, err
+	}
+	if err := applyCoursePointsPrice(&course, in); err != nil {
 		return nil, err
 	}
 	// 未显式传 sort_order 时，自动排到所属方向+等级组的末尾（max+1）
@@ -132,6 +156,9 @@ func (s *AdminService) UpdateCourse(courseID int, in *CourseInput) (*CourseDTO, 
 		return nil, err
 	}
 	if err := applyCourseTrainingFields(s.db, &course, in); err != nil {
+		return nil, err
+	}
+	if err := applyCoursePointsPrice(&course, in); err != nil {
 		return nil, err
 	}
 	if err := s.db.Save(&course).Error; err != nil {

@@ -240,3 +240,15 @@ node_modules.broken/
 .baseline-fails.txt
 .scratch-*
 $null
+
+# 本地会话 scratch 与 git worktree 目录。2026-11-12 归置主树时实测：仓内 .local/ 积了 167 个
+# 未跟踪件（CI 日志解压、探针脚本、临时 body 稿、gh device-id），另有 wt-2439/、wt-final/、
+# wtx-base/ 三棵 worktree 被当成未跟踪 —— 一次 git add -A 会把整棵工作树带进版本库。
+# worktree 一律由 new-worktree.ps1 建、由 dev-close.ps1 收，永不入仓；要长期保留的结论请写进
+# docs/ 或 docs/design/（pr-evidence 认 docs/verification/）。
+.local/
+.out-of-scope/
+.dsh-mattskillsdeck-cache/
+.research-tmp/
+wt-*/
+wtx-base/

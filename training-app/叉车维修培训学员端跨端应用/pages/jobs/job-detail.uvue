@@ -443,7 +443,7 @@
 
     .apply-btn {
         height: 88rpx;
-        background-color: #2979ff;
+        background-color: $primary-color;
         border-radius: 44rpx;
         align-items: center;
         justify-content: center;
@@ -520,14 +520,14 @@
     }
 
     .report-radio-active {
-        border-color: #2979ff;
+        border-color: $primary-color;
     }
 
     .report-radio-dot {
         width: 20rpx;
         height: 20rpx;
         border-radius: 10rpx;
-        background-color: #2979ff;
+        background-color: $primary-color;
     }
 
     .report-option-text {
@@ -582,7 +582,7 @@
         flex: 1;
         height: 80rpx;
         border-radius: 40rpx;
-        background-color: #2979ff;
+        background-color: $primary-color;
         align-items: center;
         justify-content: center;
     }

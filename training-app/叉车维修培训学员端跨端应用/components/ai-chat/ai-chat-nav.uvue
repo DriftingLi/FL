@@ -1,17 +1,24 @@
 <template>
 	<view>
 		<!-- #1602 归一：页头形态收口到 app-nav-bar（唯一页头件，ADR-0035 禁 fork）。
-		     旧的独立形态消失；对页的 API（leftClick / menuClick）原样保留。 -->
+		     旧的独立形态消失；对页的 API（leftClick / menuClick）原样保留。
+		     #2479：一级页标题居中于**屏幕中心** ⇒ 页头第一行右槽必须为空，⋯（右抽屉的唯一
+		     可见入口，移动端 ADR-0063 决定 4）下沉到标题栏下方工具栏行（:show-toolbar）。 -->
 		<AppNavBar
 			title="AI 助手"
 			:subtitle="subtitle"
 			:transparent="transparent"
 			:left-icon="leftIcon"
-			:right-icons="rightIcons"
 			:center-title="centerTitle"
+			:show-toolbar="true"
 			@left-click="onLeftClick"
-			@right-click="onMenuClick"
-		/>
+		>
+			<template #toolbar>
+				<view class="chat-menu-action" @click="onMenuClick">
+					<text class="chat-menu-glyph">⋯</text>
+				</view>
+			</template>
+		</AppNavBar>
 	</view>
 </template>
 
@@ -42,13 +49,6 @@
 		centerTitle: true
 	})
 
-	/**
-	 * 右槽字形（#2412）：右槽只剩「组件画字形（rightIcons）/ 页面注入 #right」两条路径，
-	 * 同义的 rightIcon prop 已删除 —— 它在 #1649 被删了渲染分支，传了也不落屏幕。
-	 * 单图标也走数组（n = 1）；字形用 BMP 符号 ⋯（U+22EF），同 leftIcon ☰ 的避代理对口径。
-	 */
-	const rightIcons : string[] = ['⋯']
-
 	const emit = defineEmits(['leftClick', 'menuClick'])
 
 	function onLeftClick() : void {
@@ -59,3 +59,20 @@
 		emit('menuClick')
 	}
 </script>
+
+<style lang="scss">
+	/* #2479：⋯ 落在标题栏下方工具栏行（.nav-bar-toolbar 自身 row + justify-content: flex-end，
+	   见 app-nav-bar.uvue）。字形用 BMP 符号 ⋯（U+22EF），同 leftIcon ☰ 的避代理对口径；
+	   88rpx 方块 = 44×44 触摸目标下限（<text> 只有文字高，命中区由外层 view 撑足）。 */
+	.chat-menu-action {
+		width: 88rpx;
+		height: 88rpx;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.chat-menu-glyph {
+		font-size: 40rpx;
+		color: $text-color;
+	}
+</style>

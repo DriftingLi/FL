@@ -382,12 +382,20 @@ func (s *Service) GetCourseDetail(courseID, studentID int) (*CourseDetailDTO, er
 	// 权益投影只在有主体的读路径填（见 CourseDTO.Entitled 的注释）：
 	// 此前「已解锁」只存在于前端内存（兑换成功后把 points_price 抹成 null），
 	// 刷新即被打回「请先兑换」⇒ 付过分的学员反而进不去。
+	// 正文按权益空化（ADR-0062 决策 3）：详情是发现面，章节元信息全量给，
+	// 但 content 只发给有权益的读者——未解锁时置空串（字段保留、形状不变）；
+	// 泄漏在响应体，与 UI 是否渲染无关。权益问不出时如实上抛，不把正文交出去。
+	entitled, err := courseEntitled(s.db, course.CourseID, studentID, course.PointsPrice)
+	if err != nil {
+		return nil, err
+	}
 	if studentID > 0 {
-		entitled, err := courseEntitled(s.db, course.CourseID, studentID, course.PointsPrice)
-		if err != nil {
-			return nil, err
-		}
 		detail.Entitled = &entitled
+	}
+	if !entitled {
+		for i := range chapterList {
+			chapterList[i].Content = ""
+		}
 	}
 	fillChapterCount(s.db, course.CourseID, &detail)
 	fillCourseMeta(s.db, course, &detail)

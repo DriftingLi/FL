@@ -67,7 +67,7 @@
                         </view>
                         <view class="course-item-info">
                             <text class="course-item-title">{{ course.title }}</text>
-                            <!-- #2443：课时数只在后端真下发时显示（此前兜底成 6 是假数据，后端不下发 chapter_count） -->
+                            <!-- #2443/#2472：课时数按后端下发的 chapter_count 显示（#2083 起列表已下发；此前兜底成 6 是假数据） -->
                             <text v-if="chapterMetaText(course).length > 0" class="course-item-meta">{{ chapterMetaText(course) }}</text>
                         </view>
                         <!-- #2443：付费课在列表层就标出积分价 —— 兑换入口此前只在详情页，列表看不出哪门要积分 -->
@@ -260,13 +260,13 @@
 
     function getBadgeColor(course : CourseItem) : string {
         const text = getBadgeText(course)
-        if (text == '入门' || text == '冲刺') return '#2979ff'
+        if (text == '入门' || text == '冲刺') return '#239EDD'
         if (text == '进阶' || text == '专项') return '#e6a23c'
         return '#909399'
     }
 
     // ---- 列表行辅助（#2443）----
-    /** 课时数只在后端真下发时显示；后端当前不下发 chapter_count（#2449 待补），此前兜底成 6 是假数据 */
+    /** 课时数按后端下发的 chapter_count 显示（#2083 起列表已下发，0 不显示）；此前兜底成 6 是假数据 */
     function chapterMetaText(course : CourseItem) : string {
         if (course.chapter_count > 0) return '共' + course.chapter_count + '个课时'
         return ''
@@ -424,7 +424,7 @@
 
     .filter-tag--active {
         background-color: #EBF5FF;
-        border-color: #2979ff;
+        border-color: $primary-color;
     }
 
     .filter-tag-text {
@@ -433,7 +433,7 @@
     }
 
     .filter-tag-text--active {
-        color: #2979ff;
+        color: $primary-color;
     }
 
     /* 免费/付费组提示（#1951）：文字样式必须落 <text>（红线），落 view 会被静默忽略并逐处报错；
@@ -507,7 +507,7 @@
     .course-item-price-text {
         font-size: 24rpx;
         font-weight: 600;
-        color: #2979ff;
+        color: $primary-color;
     }
 
     /* ---- 更多课程按钮 ---- */
@@ -520,14 +520,14 @@
         padding: 18rpx 64rpx;
         border-radius: 32rpx;
         border-width: 2rpx;
-        border-color: #2979ff;
+        border-color: $primary-color;
         border-style: solid;
         background-color: #ffffff;
     }
 
     .more-btn-text {
         font-size: 28rpx;
-        color: #2979ff;
+        color: $primary-color;
         font-weight: 500;
     }
 
@@ -553,7 +553,7 @@
 
     /* #1331：失败态重试位（与 course-detail / chapter-view 的 retry-btn 同款形态） */
     .retry-btn {
-        background-color: #2979ff;
+        background-color: $primary-color;
         border-radius: 32rpx;
         padding: 16rpx 48rpx;
         margin-top: 24rpx;

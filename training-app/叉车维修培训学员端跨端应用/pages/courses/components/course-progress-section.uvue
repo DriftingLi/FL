@@ -26,7 +26,7 @@
     })
 </script>
 
-<style>
+<style lang="scss">
     /* ===== 学习进度 ===== */
     .progress-section {
         background-color: #ffffff;
@@ -49,7 +49,7 @@
     .progress-percent {
         font-size: 28rpx;
         font-weight: bold;
-        color: #2979ff;
+        color: $primary-color;
     }
 
     .progress-bar-wrap {
@@ -61,7 +61,7 @@
 
     .progress-bar {
         height: 12rpx;
-        background-color: #2979ff;
+        background-color: $primary-color;
         border-radius: 6rpx;
     }
 

@@ -455,6 +455,7 @@ const MODULES = {
     files: [
       'api/practice.uts',
       'api/questionInteraction.uts',
+      'api/realExam.uts',
       'pages/practice/components/practice-banner-card.uvue',
       'pages/practice/components/practice-feature-grid.uvue',
       'pages/practice/components/practice-module-list.uvue',
@@ -466,6 +467,7 @@ const MODULES = {
       'pages/practice/practice-do.uvue',
       'pages/practice/practice-report.uvue',
       'pages/practice/practice.uvue',
+      'pages/practice/real-exam-papers.uvue',
     ],
     extractDirs: ['pages/practice/components', 'pages/practice/composables'],
     crossModuleConsumers: ['profile'],

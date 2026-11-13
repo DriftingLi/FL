@@ -1,0 +1,96 @@
+/**
+ * 历年真题（真题卷）列表页的展示判定单点（#2461 / spec #2459）
+ *
+ * 本票的列表页只做只读投影，四件「跑起来才看得见」的判定全收在这里：
+ *   ① 年份分组与顺序 —— 无年份归「年份未知」一组、年份倒序、未知垫底；
+ *   ② 每卷一行 meta —— `来源 · N题 · M分钟`，来源为空回落「真题」；来源
+ *   ③ 未解锁卷的价格行 —— `{price} 积分/套`（价格只来自后端响应，端上零硬编码）；
+ *   ④ 页头汇总与空态文案 —— 都带当前证件名，没读到证件名时不留半句空档。
+ *
+ * ## 为什么端上自己再排一次年份
+ *
+ * 后端 `ListPapers` 已经按 `year DESC NULLS LAST, paper_id DESC` 出
+ * （`backend/internal/realexam/service.go:95-131`），但「年份倒序」是票面 AC③ 的
+ * **端上口径**：这里自己排一次，后端换排序口径也不会把页面顺序带偏；同一年内保持
+ * 后端给的卷序（`paper_id DESC`），不重排 —— 分组只换层级，不动组内次序。
+ *
+ * @note 本模块**零运行期依赖**（只有 `import type`）：既能被页面直接消费，也能被
+ *       `utils/utsHarness.js` 的 `loadUts` 整段执行（先例 `utils/jobCredentialDisplay.uts`）。
+ *       页面里没有第二份判定 —— 想改文案就改这里，`utils/realExamPapersDisplayBehavior.test.js` 会红。
+ */
+import type { RealExamPaper } from '../types/index'
+
+/** 分组行：一年一组（`year == 0` 是「年份未知」那一组） */
+export type RealExamPaperGroup = {
+    year : number
+    title : string
+    papers : RealExamPaper[]
+}
+
+/** 后端 `year` 是 `*int omitempty`：缺省/null 到端上收成 0，显示成这一组 */
+export const REAL_EXAM_UNKNOWN_YEAR_TITLE : string = '年份未知'
+
+/** 后端 `source` 是 `omitempty`：缺省时这一行不能空着（AC③「来源为空时显示真题」） */
+export const REAL_EXAM_DEFAULT_SOURCE : string = '真题'
+
+/**
+ * 卷列表按年份分组：年份倒序、未知组垫底、同一年内保持入参顺序。
+ * @param papers 列表响应里的卷（顺序即后端给的 `paper_id DESC`）
+ */
+export function groupRealExamPapers(papers : RealExamPaper[]) : RealExamPaperGroup[] {
+    const groups : RealExamPaperGroup[] = []
+    for (let i = 0; i < papers.length; i++) {
+        const p = papers[i]
+        let hit : RealExamPaperGroup | null = null
+        for (let j = 0; j < groups.length; j++) {
+            if (groups[j].year == p.year) {
+                hit = groups[j]
+                break
+            }
+        }
+        if (hit == null) {
+            hit = {
+                year: p.year,
+                title: p.year > 0 ? p.year.toString() : REAL_EXAM_UNKNOWN_YEAR_TITLE,
+                papers: [] as RealExamPaper[],
+            } as RealExamPaperGroup
+            groups.push(hit)
+        }
+        hit!.papers.push(p)
+    }
+    groups.sort((a : RealExamPaperGroup, b : RealExamPaperGroup) : number => {
+        if (a.year == b.year) {
+            return 0
+        }
+        if (a.year == 0) {
+            return 1
+        }
+        if (b.year == 0) {
+            return -1
+        }
+        return b.year - a.year
+    })
+    return groups
+}
+
+/** 每卷一行 meta：`来源 · N题 · M分钟`（AC③） */
+export function paperMetaText(p : RealExamPaper) : string {
+    const source = p.source.length > 0 ? p.source : REAL_EXAM_DEFAULT_SOURCE
+    return source + ' · ' + p.question_count.toString() + '题 · ' + p.duration_minutes.toString() + '分钟'
+}
+
+/** 未解锁卷的价格行：`{price} 积分/套`（AC④；price 由后端给，端上不换算、不兜底成默认价） */
+export function paperPriceText(price : number) : string {
+    return price.toString() + ' 积分/套'
+}
+
+/** 空态文案：`{当前证件} 真题建设中，敬请期待`（AC⑤） */
+export function papersEmptyText(credentialName : string) : string {
+    return credentialName.length > 0 ? credentialName + ' 真题建设中，敬请期待' : '真题建设中，敬请期待'
+}
+
+/** 页头汇总：`当前证件：{证件名} · 共 {N} 套`（AC②；证件名没读到用破折号占位） */
+export function papersSummaryText(credentialName : string, total : number) : string {
+    const name = credentialName.length > 0 ? credentialName : '—'
+    return '当前证件：' + name + ' · 共 ' + total.toString() + ' 套'
+}

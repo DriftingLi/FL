@@ -497,7 +497,7 @@
   }
 
   .code-btn {
-    background-color: #2979ff;
+    background-color: $primary-color;
     border-radius: 12rpx;
     padding: 16rpx 24rpx;
     margin-bottom: 20rpx;

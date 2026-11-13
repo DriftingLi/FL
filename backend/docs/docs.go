@@ -1599,7 +1599,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "输入不合法（挂载必填 / 引用ID无效或不存在 / 数值为负 / 前置课程冲突）",
+                        "description": "输入不合法（挂载必填 / 引用ID无效或不存在 / 数值为负 / 积分价非正 / 前置课程冲突）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -10666,7 +10666,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "需登录，返回课程信息 + 章节 + 学员维度进度/是否已选/完成章节/最后位置（ADR-0017）；未登录时 last_* 为空。可见性（ADR-0058）：未发布 / 未挂载课程按「不存在」返回",
+                "description": "需登录，返回课程信息 + 章节 + 学员维度进度/是否已选/完成章节/最后位置（ADR-0017）；未登录时 last_* 为空。可见性（ADR-0058）：未发布 / 未挂载课程按「不存在」返回。章节正文按权益空化（ADR-0062 决策 3）：未解锁章节的 content 为空串，标题/序号等元信息照发",
                 "consumes": [
                     "application/json"
                 ],

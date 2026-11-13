@@ -17,7 +17,7 @@ const h = require('./contractHarness');
 const ROOT = h.ROOT;
 const read = h.read;
 
-const PRACTICE_PAGES = ['pages/practice/practice.uvue', 'pages/practice/practice-do.uvue'];
+const PRACTICE_PAGES = ['pages/practice/practice.uvue', 'pages/practice/practice-do.uvue', 'pages/practice/real-exam-papers.uvue'];
 
 describe('composable 接线契约（T06 拆分：显式 import composable）', () => {
   const doPage = read('pages/practice/practice-do.uvue');

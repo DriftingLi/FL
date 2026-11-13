@@ -427,7 +427,7 @@ import { goBack } from '../../utils/navigation'
     }
 
     .action-btn {
-        background-color: #2979ff;
+        background-color: $primary-color;
         border-radius: 48rpx;
         padding: 24rpx 0;
         align-items: center;
@@ -481,7 +481,7 @@ import { goBack } from '../../utils/navigation'
     }
 
     .retry-btn {
-        background-color: #2979ff;
+        background-color: $primary-color;
         border-radius: 32rpx;
         padding: 16rpx 48rpx;
     }

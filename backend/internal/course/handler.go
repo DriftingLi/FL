@@ -161,7 +161,7 @@ func (h *handler) GetChapterSlides(c *gin.Context) {
 
 // GetCourseDetail 课程详情
 // @Summary 课程详情（含学习进度）
-// @Description 需登录，返回课程信息 + 章节 + 学员维度进度/是否已选/完成章节/最后位置（ADR-0017）；未登录时 last_* 为空。可见性（ADR-0058）：未发布 / 未挂载课程按「不存在」返回
+// @Description 需登录，返回课程信息 + 章节 + 学员维度进度/是否已选/完成章节/最后位置（ADR-0017）；未登录时 last_* 为空。可见性（ADR-0058）：未发布 / 未挂载课程按「不存在」返回。章节正文按权益空化（ADR-0062 决策 3）：未解锁章节的 content 为空串，标题/序号等元信息照发
 // @Tags 学员端-课程
 // @Accept json
 // @Produce json
@@ -186,7 +186,8 @@ func (h *handler) GetCourseDetail(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *courseDetailReq) (*CourseDetailDTO, error) {
 			return h.svc.GetCourseDetail(req.CourseID, req.StudentID)
 		},
-		// 详情是发现面：只判可见性、不判权益（未发布 / 未挂载按「不存在」返回，ADR-0058），
+		// 详情是发现面：只判可见性（未发布 / 未挂载按「不存在」返回，ADR-0058），
+		// 权益不改状态码、只在 service 层空化章节正文（ADR-0062 决策 3），
 		// 故这里可达的只有「课程不存在」那一件；四件一起登记是因为它们共享同一张呈现表，
 		// 未兑换若在别处冒出来，也不会被默认面答成 500。
 	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).

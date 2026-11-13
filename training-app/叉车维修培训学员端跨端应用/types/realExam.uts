@@ -1,0 +1,51 @@
+/**
+ * 历年真题（真题卷）域类型（#2461 / spec #2459）
+ *
+ * 与其余 api 域同口径：后端响应在 api 层**手写映射**成这里的类型（移动端 ADR-0002
+ * 不引运行期解析依赖），本文件只放形状。
+ *
+ * ## 为什么 `year` 是非可空 number
+ *
+ * 后端 `RealExamPaperDTO.Year` 是 `*int` + `omitempty`（`backend/internal/realexam/service.go:37-46`），
+ * 端上把它收成 **0 = 年份未知**：模板里不必出现可空分支，判定收在
+ * `utils/realExamPapersDisplay.uts` 一处（`year > 0 ? String(year) : '年份未知'`）。
+ *
+ * ## 为什么练习会话复用 `Question`
+ *
+ * 后端 `StartPaperPractice` 返回的就是 `practicemode.PracticeStartResultDTO`，
+ * 题与 /practice-mode 各出口是**同一个 QuestionDTO**；再抄一个同形类型只会多一处漂移面，
+ * 故这里直接引 `./practice` 的 `Question`。整卷考试同样复用 `types/exam.uts` 的 `MockExamInfo`。
+ */
+import type { Question } from './practice'
+
+/** 卷列表项（后端 `RealExamPaperDTO`） */
+export type RealExamPaper = {
+    paper_id : number
+    title : string
+    /** 0 = 后端没给年份（显示成「年份未知」） */
+    year : number
+    /** 空串 = 后端没给来源（显示成「真题」） */
+    source : string
+    question_count : number
+    duration_minutes : number
+    /** 已解锁真相：后端 entitlement 判定，端上不推算（ADR-0024 禁拿兑换文案猜） */
+    entitled : boolean
+    /** 未解锁时的兑换价（积分，来自积分商城 SKU，端上不硬编码） */
+    price : number
+}
+
+/** 按卷练习会话（后端 `practicemode.PracticeStartResultDTO`） */
+export type RealExamPaperPractice = {
+    questions : Question[]
+    current_index : number
+    total : number
+    completed : number
+}
+
+/** 兑换结果（后端 `points.RedeemResult`）——只作回执展示，解锁状态一律以列表的 entitled 为准 */
+export type RealExamRedeemResult = {
+    balance : number
+    total_earned : number
+    sku : string
+    ref_id : string
+}

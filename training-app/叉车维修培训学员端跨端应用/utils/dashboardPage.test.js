@@ -84,14 +84,14 @@ function menuEntries() {
 }
 
 describe('首页格式契约（对照设计稿截图）', () => {
-  it('顶部导航单图标（通知）必须可见（历史 bug：icon 文本为空导致图标消失；#1602 迁移后经 AppNavBar 承载；#1846 收敛：🔍 移出页头进宫格；🛒 移出页头；#2442：改挂左槽插槽）', () => {
-    // #2442：一级页面（无返回）的单个自定义操作放左槽，标题仍居中 —— 铃铛从 right-icons 数组改挂 #left。
-    expect(template).toMatch(/<template #left>[\s\S]*?nav-bell[\s\S]*?@click="onNotificationClick"/);
-    expect(template).not.toContain(':right-icons="navRightIcons"');
-    // 字形非空（历史 bug：icon 文本为空导致图标消失）
-    const bell = /<text class="nav-bell-icon">([^<]*)<\/text>/.exec(template);
-    expect(bell).not.toBeNull();
-    expect(bell[1].trim().length).toBeGreaterThan(0);
+  it('顶部导航只留证件标题（#2479：🔔 移出页头 —— 一级页左右槽都不承载页级动作，标题才能居中于屏幕中心）', () => {
+    // 历史 bug（#1602 前）是「挂着的图标字形为空 ⇒ 图标消失」；#2479 后页头不再挂第二个入口，
+    // 判据随之从「字形非空」改成「页头不含页级动作」——入口另有论坛 / 个人中心 / 简历三处。
+    expect(template).not.toMatch(/<template #left>/);
+    expect(template).not.toMatch(/nav-bell/);
+    expect(template).not.toMatch(/onNotificationClick/);
+    expect(template).not.toMatch(/:right-icons="/);
+    expect(template).toMatch(/<AppNavBar[^>]*@title-click="onCertTap"/);
   });
 
   it('导航下方有公告栏（icon + 文案 + 箭头）', () => {
