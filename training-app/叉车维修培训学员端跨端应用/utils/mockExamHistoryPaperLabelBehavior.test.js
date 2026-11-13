@@ -9,7 +9,6 @@
  *
  * 用真源码跑（utsHarness），只替掉传输层，断言的是出口行为不是内部实现。
  */
-const fs = require('fs');
 const path = require('path');
 
 const uts = require('./utsHarness');
@@ -66,7 +65,7 @@ describe('模考历史 paper_id（规格 #2459 US22，真题卷来源标识）',
   });
 
   it('历史页以 paper_id 为准渲染「真题卷」标（0 不渲染）', () => {
-    const src = fs.readFileSync(PAGE_UTS, 'utf8');
+    const src = uts.readText(PAGE_UTS);
     expect(src).toContain('v-if="item.paper_id > 0"');
     expect(src).toContain('真题卷');
     // 既有通过 / 未通过标不变（同一行共存，不是替换）
