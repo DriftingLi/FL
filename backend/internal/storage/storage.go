@@ -153,6 +153,10 @@ func (s *LocalStorage) ListWithInfo(ctx context.Context, prefix string) ([]FileI
 			return err
 		}
 		if d.IsDir() {
+			// 分片暂存目录（multipart.go）对列表面不可见：残片不是成品文件。
+			if d.Name() == stagingDirName {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		rel, err := filepath.Rel(s.baseDir, path)

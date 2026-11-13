@@ -446,6 +446,25 @@ var Domains = []Domain{
 	},
 
 	{
+		Name:  "tutorfile",
+		Title: "导师文件库（/api/tutor/files*：分片上传四段契约 + 列表/删除，#2494）",
+		Roots: []string{
+			"tutorfile.InitUploadResponse",
+			"tutorfile.UploadChunkResponse",
+			"tutorfile.FileDTO",
+			"tutorfile.FileListDTO",
+		},
+		Endpoints: []Endpoint{
+			{Method: "POST", Path: "/tutor/files/upload"},
+			{Method: "PUT", Path: "/tutor/files/upload/{session_id}/chunk/{part_number}"},
+			{Method: "POST", Path: "/tutor/files/upload/{session_id}/complete"},
+			{Method: "POST", Path: "/tutor/files/upload/{session_id}/abort", NoData: true},
+			{Method: "GET", Path: "/tutor/files"},
+			{Method: "DELETE", Path: "/tutor/files/{file_id}", NoData: true},
+		},
+	},
+
+	{
 		Name:  "training",
 		Title: "培训目录与字典（/api/catalog|levels|tags|positions、/api/admin 下的专业方向 / 等级 / 证书模板 / 题库标签 / 岗位字典）",
 		Roots: []string{

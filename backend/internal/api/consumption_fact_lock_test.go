@@ -59,8 +59,9 @@ func TestFactScanDirsCoverTheContractUniverse(t *testing.T) {
 	// （与批⑤「pathInt* 名字族必须恰好两枚」同形；波 1 是静态面少一枚、派生面多一枚，总数不变；
 	// 波 7 把 valuation/repository 也并回域包 ⇒ 静态面再少一枚、派生面不变，总数 35→34，这里签字）。
 	// #2070 新增 internal/feedback 域包 ⇒ 34→35。
-	if n := len(dirs); n != 35 {
-		t.Fatalf("fact 扫描面应是 35 个包目录，实际 %d 个：%v —— 少一枚就是漏扫（同前缀的目录之间绊线分不开），"+
+	// #2494 新增 internal/tutorfile 域包 ⇒ 35→36。
+	if n := len(dirs); n != 36 {
+		t.Fatalf("fact 扫描面应是 36 个包目录，实际 %d 个：%v —— 少一枚就是漏扫（同前缀的目录之间绊线分不开），"+
 			"多一枚就回来把这条数与注释一起改。", n, dirs)
 	}
 	defs := factDescriptions(t)

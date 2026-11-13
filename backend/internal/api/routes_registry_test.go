@@ -54,4 +54,7 @@ func TestRouteRegistryCoverage(t *testing.T) {
 // 2026-09-19 第十二波票 6 新增 POST /api/question-bank/questions/{id}/submit → 329；
 // 2026-09-14 全局搜索升级 #982 新增 GET /api/admin/search-facts/zero-results → 315；
 // 2026-09-17 学员笔记域 #1078 新增 4 条 → 319。
-const expectedRouteCount = 347
+// 2026-11-13 #2494 新增 6 条导师文件库端点（POST /api/tutor/files/upload、
+// PUT /api/tutor/files/upload/{session_id}/chunk/{part_number}、POST …/complete、
+// POST …/abort、GET /api/tutor/files、DELETE /api/tutor/files/{file_id}）→ 353。
+const expectedRouteCount = 353
