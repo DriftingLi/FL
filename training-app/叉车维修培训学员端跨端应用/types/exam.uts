@@ -69,6 +69,8 @@ export type MockExamHistoryItem = {
     status : string             // completed / in_progress
     created_at : string
     completed_at : string
+    /** 真题卷来源（后端 mock_exam.paper_id，omitempty）：按卷开考才有值，随机模考收成 0 */
+    paper_id : number
 }
 
 /** 错题项 */

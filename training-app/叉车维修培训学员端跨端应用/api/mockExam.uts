@@ -121,7 +121,8 @@ function buildMockExamResult(obj : UTSJSONObject) : MockExamResult {
  * 后端 /mock-exam/history 契约：
  *   envelope: { total, page, page_size, exams: [...] }
  *   item:     { id, student_id, question_ids, answers, start_time, submit_time,
- *               remaining_time, duration, status, result, created_at, score }
+ *               remaining_time, duration, status, result, created_at, score, paper_id }
+ *   paper_id（omitempty）：仅按卷开考的条目才有，随机模考没有该键 ⇒ 收成 0。
  *   result:   { total_score, max_score, correct_count, total_questions, accuracy, details }
  * 展示字段（total_score / passed / correct_count / used_time 等）由上述原始字段推导。
  */
@@ -156,6 +157,7 @@ function buildMockExamHistoryItem(obj : UTSJSONObject) : MockExamHistoryItem {
 		status: status,
 		created_at: toStr(obj['created_at'], toStr(obj['start_time'])),
 		completed_at: toStr(obj['completed_at'], toStr(obj['end_time'], toStr(obj['submit_time']))),
+		paper_id: toNumber(obj['paper_id']),
 	} as MockExamHistoryItem
 	return item
 }

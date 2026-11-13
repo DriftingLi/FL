@@ -53,6 +53,7 @@
                             <text class="record-tag" :class="item.passed ? 'tag-passed' : 'tag-failed'">
                                 {{ item.passed ? '通过' : '未通过' }}
                             </text>
+                            <text v-if="item.paper_id > 0" class="record-tag tag-paper">真题卷</text>
                             <text class="record-stat">{{ item.correct_count }}/{{ item.total_questions }} 题</text>
                             <text class="record-time">{{ formatUsedTime(item.used_time) }}</text>
                         </view>
@@ -398,6 +399,11 @@ import { goBack } from '../../utils/navigation'
     .tag-failed {
         color: #ffffff;
         background-color: #f44336;
+    }
+
+    .tag-paper {
+        color: #ffffff;
+        background-color: $primary-color;
     }
 
     .record-stat {
