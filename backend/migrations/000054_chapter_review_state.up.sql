@@ -40,29 +40,37 @@ BEGIN
   UPDATE chapter SET review_status = 'published' WHERE review_status <> 'published';
 
   INSERT INTO chapter_content_slot (slot, chapter_id, content, content_type, file_url, frozen_at)
-  SELECT 'published', c.chapter_id, c.content, c.content_type, c.file_url, now()
+  SELECT 'published', c.chapter_id, COALESCE(c.content, ''), COALESCE(c.content_type, ''),
+         COALESCE(c.file_url, ''), now()
   FROM chapter c
   WHERE NOT EXISTS (SELECT 1 FROM chapter_content_slot s WHERE s.slot = 'published' AND s.chapter_id = c.chapter_id);
 
   -- 存量文件清单按 live 读面三源冻结（source 判别沿 #2497）：
   -- chapter_file 行 / tutor_file 挂接行 / legacy 折叠（无 chapter_file 行且 chapter.file_url 非空）。
+  -- 历史行的 URL/名称/类型列可能为 NULL（迁移 000001 的 chapter.file_url 可空），槽表这三列
+  -- 是 NOT NULL ⇒ 一律 COALESCE，否则空库重建 baseline 会因存量 NULL 直接失败。
   INSERT INTO chapter_file_slot (slot, chapter_id, source, file_id, file_url, file_name, content_type, file_size, created_at)
-  SELECT 'published', cf.chapter_id, 'chapter_file', cf.file_id, cf.file_url, cf.file_name, cf.content_type, cf.file_size, cf.created_at
+  SELECT 'published', cf.chapter_id, 'chapter_file', cf.file_id, COALESCE(cf.file_url, ''),
+         COALESCE(cf.file_name, ''), COALESCE(cf.content_type, 'document'), COALESCE(cf.file_size, 0),
+         COALESCE(cf.created_at, now())
   FROM chapter_file cf
   WHERE cf.chapter_id IS NOT NULL
     AND NOT EXISTS (SELECT 1 FROM chapter_file_slot s WHERE s.slot = 'published' AND s.chapter_id = cf.chapter_id AND s.source = 'chapter_file' AND s.file_id = cf.file_id);
 
   INSERT INTO chapter_file_slot (slot, chapter_id, source, file_id, file_url, file_name, content_type, file_size, created_at)
-  SELECT 'published', tf.chapter_id, 'tutor_file', tf.file_id, tf.file_url, tf.file_name, tf.content_type, tf.file_size, tf.created_at
+  SELECT 'published', tf.chapter_id, 'tutor_file', tf.file_id, COALESCE(tf.file_url, ''),
+         COALESCE(tf.file_name, ''), COALESCE(tf.content_type, 'document'), COALESCE(tf.file_size, 0),
+         COALESCE(tf.created_at, now())
   FROM tutor_file tf
   WHERE tf.chapter_id IS NOT NULL
     AND NOT EXISTS (SELECT 1 FROM chapter_file_slot s WHERE s.slot = 'published' AND s.chapter_id = tf.chapter_id AND s.source = 'tutor_file' AND s.file_id = tf.file_id);
 
   INSERT INTO chapter_file_slot (slot, chapter_id, source, file_id, file_url, file_name, content_type, file_size, created_at)
   SELECT 'published', c.chapter_id, 'legacy', 0, c.file_url,
-         regexp_replace(c.file_url, '^.*/', ''), COALESCE(NULLIF(c.content_type, ''), 'document'), 0, c.created_at
+         regexp_replace(c.file_url, '^.*/', ''), COALESCE(NULLIF(c.content_type, ''), 'document'), 0,
+         COALESCE(c.created_at, now())
   FROM chapter c
-  WHERE c.file_url <> ''
+  WHERE c.file_url IS NOT NULL AND c.file_url <> ''
     AND NOT EXISTS (SELECT 1 FROM chapter_file cf WHERE cf.chapter_id = c.chapter_id)
     AND NOT EXISTS (SELECT 1 FROM chapter_file_slot s WHERE s.slot = 'published' AND s.chapter_id = c.chapter_id AND s.source = 'legacy');
 END;
