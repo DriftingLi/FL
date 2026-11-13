@@ -33,6 +33,8 @@ func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, svc *Service
 
 	// POST /api/tutor/files/upload  创建上传会话（init）
 	g.POST("/files/upload", h.InitUpload)
+	// GET /api/tutor/files/upload/:session_id  断点续传清单（已收分片序号）
+	g.GET("/files/upload/:session_id", h.GetUploadSession)
 	// PUT /api/tutor/files/upload/:session_id/chunk/:part_number  上传分片
 	g.PUT("/files/upload/:session_id/chunk/:part_number", h.UploadChunk)
 	// POST /api/tutor/files/upload/:session_id/complete  拼装产出文件行
@@ -74,6 +76,29 @@ func (h *handler) InitUpload(c *gin.Context) {
 		ChunkSize:   req.ChunkSize,
 		TotalChunks: totalChunksFor(req.FileSize, req.ChunkSize),
 	})
+}
+
+// GetUploadSession 断点续传清单 GET /api/tutor/files/upload/:session_id
+// @Summary 断点续传清单
+// @Description 返回会话状态与已收分片序号（spec A8，= S3 ListParts 语义）；客户端凭清单只补缺片，服务端以会话状态为准
+// @Tags 讲师端-文件库
+// @Produce json
+// @Security BearerAuth
+// @Param session_id path string true "会话 ID"
+// @Success 200 {object} response.R{data=tutorfile.SessionStatusDTO} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 403 {object} response.R "非本人会话"
+// @Failure 404 {object} response.R "会话不存在"
+// @Router /tutor/files/upload/{session_id} [get]
+func (h *handler) GetUploadSession(c *gin.Context) {
+	sid := c.Param("session_id")
+	uid := middleware.CurrentUserID(c)
+	row, parts, err := h.svc.GetUploadSession(c.Request.Context(), uid, sid)
+	if err != nil {
+		writeServiceError(c, err)
+		return
+	}
+	response.Success(c, toSessionStatusDTO(row, parts))
 }
 
 // UploadChunk 上传分片 PUT /api/tutor/files/upload/:session_id/chunk/:part_number
@@ -213,6 +238,9 @@ func writeServiceError(c *gin.Context, err error) {
 	case errors.Is(err, ErrInvalidState):
 		response.Conflict(c, err.Error())
 	case errors.Is(err, ErrInvalidParam):
+		response.BadRequest(c, err.Error())
+	case errors.Is(err, ErrQuotaFileCount), errors.Is(err, ErrQuotaTotalSize):
+		// 配额双臂（spec B3）：400 沿投稿配额先例，文案自带当前用量。
 		response.BadRequest(c, err.Error())
 	default:
 		response.ServerErrorCause(c, "文件库操作失败", err)
