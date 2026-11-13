@@ -134,7 +134,9 @@ func TestChapterReviewBackfillOnPostgres(t *testing.T) {
 		t.Fatalf("legacy 折叠文件名应取 URL 尾段「旧课件.pdf」, got %q", legacyName)
 	}
 	// legacy 折叠只在无 chapter_file 行时成立：chCf/chTf 不得混入 legacy 源。
-	if n := slotCount(`SELECT count(*) FROM chapter_file_slot WHERE source='legacy'`); n != 1 {
+	// 只在本测试造的四章范围内数——迁移库自带存量章节可能有自己的 legacy 槽。
+	mineIDs := []int{chCf.ChapterID, chTf.ChapterID, chLegacy.ChapterID, chPlain.ChapterID}
+	if n := slotCount(`SELECT count(*) FROM chapter_file_slot WHERE chapter_id IN (?) AND source='legacy'`, mineIDs); n != 1 {
 		t.Fatalf("legacy 源应只有折叠章节 1 行, got %d", n)
 	}
 	// 无文件章节不落文件槽。
@@ -143,12 +145,13 @@ func TestChapterReviewBackfillOnPostgres(t *testing.T) {
 	}
 
 	// 幂等：重放不重复落行（函数保留不删的意义即在此）。
+	// 只数本次造的四章——PG 迁移库里还有 baseline/seed 迁移带进来的存量章节，
+	// 重放会给它们也建槽，全局计数不是本测试的判据。
 	replay()
-	total := slotCount(`SELECT count(*) FROM chapter_file_slot`)
-	if total != 3 {
-		t.Fatalf("重放后文件槽应仍 3 行（幂等）, got %d", total)
+	if n := slotCount(`SELECT count(*) FROM chapter_file_slot WHERE chapter_id IN (?)`, mineIDs); n != 3 {
+		t.Fatalf("重放后文件槽应仍 3 行（幂等）, got %d", n)
 	}
-	if n := slotCount(`SELECT count(*) FROM chapter_content_slot`); n != 4 {
+	if n := slotCount(`SELECT count(*) FROM chapter_content_slot WHERE chapter_id IN (?)`, mineIDs); n != 4 {
 		t.Fatalf("重放后内容槽应仍 4 行（幂等）, got %d", n)
 	}
 }
