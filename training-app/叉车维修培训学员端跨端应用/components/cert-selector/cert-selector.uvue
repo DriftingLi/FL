@@ -3,17 +3,25 @@
          dashboard 证件下拉与引导页 choose-cert 共挂同一件，消灭「同一 UI 抄两份」。
          纯选择器：只 emit 选中项，不发请求、不落库（动作时机是页面的事，#1379 裁定⑥）。
          embedded=true 时为页面内嵌形态（无遮罩/标题/关闭，宿主页面自给导航）；默认仍是下拉浮层。 -->
-    <view :class="embedded ? 'cert-selector-embed' : 'cert-dropdown-mask'" @click="onMaskTap">
+    <view :class="embedded ? 'cert-selector-embed' : 'cert-dropdown-mask'" :style="{ top: maskTop + 'px' }"
+        @click="onMaskTap">
         <view :class="embedded ? 'cert-selector-panel' : 'cert-dropdown'" @click.stop>
             <!-- 状态栏占位（仅浮层形态）：面板现在铺满全屏，标题栏必须让开系统时钟；
-                 内嵌形态由宿主页面自己给占位，这里不重复。 -->
-            <view v-if="!embedded" class="cert-dropdown-statusbar" :style="{ height: statusBarHeight + 'px' }"></view>
+                 内嵌形态由宿主页面自己给占位，这里不重复。宿主给了 topInset（面板从页头下方起）时不需要。 -->
+            <view v-if="!embedded && !belowNavBar" class="cert-dropdown-statusbar" :style="{ height: statusBarHeight + 'px' }"></view>
             <!-- 标题栏（仅浮层形态；内嵌形态由宿主页面的导航栏承担标题） -->
             <view v-if="!embedded" class="cert-dropdown-header">
                 <text class="cert-dropdown-title">选择学习阶段</text>
                 <view class="cert-dropdown-close" @click="onClose">
                     <text class="cert-dropdown-close-icon">✕</text>
                 </view>
+            </view>
+            <!-- 报考省份胶囊（仅浮层形态 + 宿主开启）：与 choose-cert 主态同源，
+                 浮层即「整页选证态」——省份 + 分组 + 热门考证 + 完成（#2535 设计稿 324_9793） -->
+            <view v-if="!embedded && showProvince" class="cert-dropdown-province" @click="onProvinceTap">
+                <text class="cert-dropdown-province-pin">📍</text>
+                <text class="cert-dropdown-province-label">报考省份：</text>
+                <text class="cert-dropdown-province-value">{{ province }}</text>
             </view>
             <!-- 两种形态共用同一个 scroll-view，只换容器 class：浮层限高自滚（max-height），
                  内嵌面 `flex: 1` 吃满宿主给的内容区 ⇒ 不出现「scroll-view 套 scroll-view」的双滚动面。 -->
@@ -27,21 +35,22 @@
                         </view>
                         <text class="cert-dropdown-section-title">{{ group.group_name }}</text>
                     </view>
-                    <!-- 胶囊标签 -->
+                    <!-- 胶囊标签（等宽网格：同组胶囊平分一行，与设计稿 324_9793 一致） -->
                     <view class="cert-dropdown-chips">
-                        <view v-for="(item, idx) in group.items" :key="idx" class="cert-dropdown-chip mr-16 mb-16"
-                            :class="{ 'cert-dropdown-chip--active': currentId === item.id }" @click="onSelect(item)">
+                        <view v-for="(item, idx) in group.items" :key="idx" class="cert-dropdown-chip mb-16"
+                            :class="{ 'cert-dropdown-chip--active': currentId === item.id, 'cert-dropdown-chip--last': idx === group.items.length - 1 }"
+                            @click="onSelect(item)">
                             <!-- 单行（特种作业证） -->
                             <view v-if="item.level == null" class="cert-dropdown-chip-single">
                                 <text class="cert-dropdown-chip-text"
                                     :class="{ 'cert-dropdown-chip-text--active': currentId === item.id }">{{ item.name }}</text>
                             </view>
-                            <!-- 双行（技能等级证） -->
+                            <!-- 双行（技能等级证）：上行等级、下行俗称（设计稿两行都在） -->
                             <view v-else class="cert-dropdown-chip-double">
                                 <text class="cert-dropdown-chip-level"
                                     :class="{ 'cert-dropdown-chip-text--active': currentId === item.id }">{{ levelNames[item.level!.toString()] }}</text>
-                                <!-- <text class="cert-dropdown-chip-desc"
-                                    :class="{ 'cert-dropdown-chip-desc--active': currentId === item.id }">{{ item.name }}</text> -->
+                                <text class="cert-dropdown-chip-desc"
+                                    :class="{ 'cert-dropdown-chip-desc--active': currentId === item.id }">{{ levelAlias[item.level!.toString()] }}</text>
                             </view>
                         </view>
                     </view>
@@ -65,8 +74,8 @@
                     </view>
                 </view>
 
-                <!-- 热门考证详情说明 -->
-                <view class="cert-dropdown-section">
+                <!-- 热门考证详情说明（设计稿里这块是灰底卡片，其余区块直接铺白） -->
+                <view class="cert-dropdown-section cert-dropdown-detail-card">
                     <view v-for="(item, idx) in hotCertDetails" :key="idx" class="cert-dropdown-detail-item">
                         <view class="cert-dropdown-detail-title-row">
                             <text class="cert-dropdown-detail-bullet">✦</text>
@@ -79,12 +88,19 @@
                 <!-- 底部留白 -->
                 <view style="height: 48rpx;"></view>
             </scroll-view>
+            <!-- 底部完成条（仅浮层形态 + 宿主开启）：点「完成」才落库，关闭面板不改证件 -->
+            <view v-if="!embedded && confirmable" class="cert-dropdown-footer">
+                <view class="cert-dropdown-confirm" @click="onConfirm">
+                    <text class="cert-dropdown-confirm-text">完成</text>
+                </view>
+            </view>
         </view>
     </view>
 </template>
 
 <script setup lang="uts">
     import type { CredentialGroup, CredentialItem } from '../../types/index'
+    import { computed } from 'vue'
     import { useStatusBarHeight } from '../../utils/system'
 
     // 浮层形态铺满全屏后，标题栏要让开系统状态栏（内嵌形态由宿主页面的导航栏承担，不消费它）
@@ -95,13 +111,31 @@
         currentId? : number
         /** 内嵌形态（引导页）：不渲染遮罩/标题栏/关闭，由宿主页面承担导航 */
         embedded? : boolean
+        /** 报考省份回显值（仅浮层形态 + showProvince 时渲染） */
+        province? : string
+        /** 浮层形态是否渲染报考省份胶囊（dashboard 证件面板 = 整页选证态，#2535） */
+        showProvince? : boolean
+        /** 浮层形态是否渲染底部「完成」条（点完成才落库，关闭不改证件） */
+        confirmable? : boolean
+        /** 浮层是否从页头下方起（宿主页头保持可见，设计稿 324_9793）。
+         *  页头高度 = 状态栏 + 88rpx 导航条；rpx→px 手算（`uni.upx2px` 在 uvue 原生端不可用）。 */
+        belowNavBar? : boolean
     }>(), {
         groups: () => [] as CredentialGroup[],
         currentId: 0,
-        embedded: false
+        embedded: false,
+        province: '',
+        showProvince: false,
+        confirmable: false,
+        belowNavBar: false
     })
 
-    const emit = defineEmits(['close', 'select'])
+    const maskTop = computed((): number => {
+        if (!props.belowNavBar) return 0
+        return statusBarHeight.value + Math.round(88 * uni.getSystemInfoSync().windowWidth / 750)
+    })
+
+    const emit = defineEmits(['close', 'select', 'confirm', 'provinceTap'])
 
     // 等级数字转中文（全仓唯一抄本，随组件从 dashboard 搬来，#1395）
     const levelNames : UTSJSONObject = {
@@ -110,6 +144,15 @@
         '3': '三级',
         '2': '二级',
         '1': '一级',
+    }
+
+    // 等级俗称（设计稿胶囊第二行：五级/初级、四级/中级…；与 levelNames 同源同抄本）
+    const levelAlias : UTSJSONObject = {
+        '5': '初级',
+        '4': '中级',
+        '3': '高级',
+        '2': '技师',
+        '1': '高级技师',
     }
 
     // ---- 热门考证（静态数据，全仓唯一抄本） ----
@@ -153,6 +196,16 @@
     function onSelect(item : CredentialItem) : void {
         emit('select', item)
     }
+
+    /** 省份胶囊点击：选择逻辑归宿主（本件只回抛事件，不持省份状态） */
+    function onProvinceTap() : void {
+        emit('provinceTap')
+    }
+
+    /** 底部「完成」：只回抛事件，落库时机与失败回滚归宿主（#1379 裁定⑥） */
+    function onConfirm() : void {
+        emit('confirm')
+    }
 </script>
 
 <style lang="scss">
@@ -167,6 +220,7 @@
     .cert-selector-panel {
         flex: 1;
         flex-direction: column;
+        background-color: #FFFFFF;
     }
 
     /* 内嵌滚动面：高度由宿主的内容区决定（页面级滚动在组件内这一层发生） */
@@ -196,7 +250,9 @@
     .cert-dropdown {
         flex: 1;
         flex-direction: column;
-        background-color: #F5F7FA;
+        background-color: #FFFFFF;
+        border-top-left-radius: 28rpx;
+        border-top-right-radius: 28rpx;
     }
 
     .cert-dropdown-header {
@@ -205,8 +261,33 @@
         justify-content: space-between;
         padding: 28rpx 32rpx;
         background-color: #FFFFFF;
-        border-bottom-left-radius: 28rpx;
-        border-bottom-right-radius: 28rpx;
+    }
+
+    /* ---- 报考省份胶囊（浮层形态 + 宿主开启；与 choose-cert 主态同源） ---- */
+    .cert-dropdown-province {
+        flex-direction: row;
+        align-items: center;
+        margin: 0 32rpx 8rpx;
+        padding: 14rpx 24rpx;
+        background-color: #F0F2F5;
+        border-radius: 40rpx;
+        align-self: flex-start;
+    }
+
+    .cert-dropdown-province-pin {
+        font-size: 26rpx;
+        margin-right: 8rpx;
+    }
+
+    .cert-dropdown-province-label {
+        font-size: 26rpx;
+        color: #888888;
+    }
+
+    .cert-dropdown-province-value {
+        font-size: 26rpx;
+        color: #222222;
+        font-weight: 500;
     }
 
     .cert-dropdown-title {
@@ -231,11 +312,16 @@
         flex: 1;
     }
 
-    /* ---- 分组区块 ---- */
+    /* ---- 分组区块（设计稿里区块直接铺白，只有说明块是灰底卡） ---- */
     .cert-dropdown-section {
-        margin: 16rpx 24rpx 0;
+        margin: 16rpx 32rpx 0;
+        background-color: transparent;
+    }
+
+    .cert-dropdown-detail-card {
+        margin: 24rpx 32rpx 0;
         padding: 24rpx;
-        background-color: #FFFFFF;
+        background-color: $bg-color;
         border-radius: 16rpx;
     }
 
@@ -265,23 +351,28 @@
         flex: 1;
     }
 
-    /* ---- 胶囊标签 ---- */
+    /* ---- 胶囊标签（等宽网格：同组胶囊平分一行） ---- */
     .cert-dropdown-chips {
         flex-direction: row;
         flex-wrap: wrap;
     }
 
     .cert-dropdown-chip {
-        padding: 18rpx 28rpx;
-        background-color: #F5F7FA;
+        flex: 1;
+        margin-right: 16rpx;
+        padding: 18rpx 12rpx;
+        background-color: $bg-color;
         border-radius: 40rpx;
-        border-width: 2rpx;
-        border-color: transparent;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .cert-dropdown-chip--last {
+        margin-right: 0;
     }
 
     .cert-dropdown-chip--active {
         background-color: $primary-tint;
-        border-color: #2979FF;
     }
 
     /* 单行（特种作业证） */
@@ -296,7 +387,7 @@
     }
 
     .cert-dropdown-chip-text--active {
-        color: #2979FF;
+        color: $primary-color;
         font-weight: 600;
     }
 
@@ -321,7 +412,7 @@
     }
 
     .cert-dropdown-chip-desc--active {
-        color: #79AEFF;
+        color: $primary-color;
     }
 
     /* ---- 热门考证标题 ---- */
@@ -341,7 +432,7 @@
         width: 56rpx;
         height: 6rpx;
         border-radius: 3rpx;
-        background-color: #2979FF;
+        background-color: $primary-color;
         margin-top: 8rpx;
     }
 
@@ -353,7 +444,7 @@
     .cert-dropdown-hot-card {
         flex: 1;
         padding: 20rpx 16rpx;
-        background: linear-gradient(to bottom right, #2979FF, #1565C0);
+        background: linear-gradient(to bottom right, $primary-color, #1565C0);
         background-color: #1565C0;
         border-radius: 12rpx;
     }
@@ -398,7 +489,7 @@
 
     .cert-dropdown-detail-bullet {
         font-size: 24rpx;
-        color: #2979FF;
+        color: $primary-color;
         margin-right: 8rpx;
     }
 
@@ -413,6 +504,27 @@
         color: #666666;
         line-height: 36rpx;
         padding-left: 32rpx;
+    }
+
+    /* ---- 底部完成条（浮层形态 + 宿主开启）：白底压住滚动内容，按钮 96rpx 胶囊 ---- */
+    .cert-dropdown-footer {
+        padding: 20rpx 32rpx 40rpx;
+        background-color: #FFFFFF;
+    }
+
+    .cert-dropdown-confirm {
+        height: 96rpx;
+        border-radius: 48rpx;
+        background: linear-gradient(to bottom right, $primary-color, #1565C0);
+        background-color: #1565C0;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .cert-dropdown-confirm-text {
+        font-size: 32rpx;
+        font-weight: 600;
+        color: #FFFFFF;
     }
 
     /* ---- 间距工具类（替代 gap） ---- */

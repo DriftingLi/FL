@@ -1,0 +1,57 @@
+/**
+ * 选证引导态（#2535 Q2，设计稿 `307_6164.png`）—— 选证页首屏先给一屏引导，再进选证主态。
+ *
+ * ## 为什么是「页内双态」而不是一条新路由
+ * 地图 #2510 的映射裁定：选证三屏落成 `choose-cert` 的「引导态 + 主态」两态，不建路由。
+ * 引导态与主态共用同一份证件字典（`GET /credentials/grouped`），拆成两页就要拉两次、
+ * 且「跳过选证」与「完成选证」会变成两条互不相干的出口。
+ *
+ * ## 交互（票面 Q2 拍板）
+ * - 点击引导层任意处 → 进主态；
+ * - 上滑（位移 ≥ `GUIDE_SWIPE_UP_PX`）→ 进主态；
+ * - 右上角 X → 跳过选证直接进首页（导航归页面，本件只交状态）。
+ *
+ * 为什么状态落 composable：移动端 `AGENTS.md`「页面壳层零自持状态」——页面只解构消费。
+ */
+import { ref } from 'vue'
+import type { Ref } from 'vue'
+
+/** 上滑判定阈值（px）：小于这个位移按点击处理，避免手指微抖把引导态划走 */
+export const GUIDE_SWIPE_UP_PX : number = 60
+
+/** useChooseCertGuide 的返回值（显式类型：UTS 对返回对象的函数字段推断不可靠） */
+export type UseChooseCertGuideResult = {
+	guideVisible : Ref<boolean>
+	onGuideTouchStart : (y : number) => void
+	onGuideTouchEnd : (y : number) => void
+	enterMain : () => void
+}
+
+export function useChooseCertGuide() : UseChooseCertGuideResult {
+	// 初值 true：进页第一帧就是引导态（新用户注册成功、老用户从我的页进来都走这条）
+	const guideVisible = ref<boolean>(true)
+	let startY : number = 0
+
+	/** 进主态：引导层摘掉，露出下面的省份条 + 选证列表 + 完成按钮 */
+	function enterMain() : void {
+		guideVisible.value = false
+	}
+
+	function onGuideTouchStart(y : number) : void {
+		startY = y
+	}
+
+	function onGuideTouchEnd(y : number) : void {
+		if (startY - y >= GUIDE_SWIPE_UP_PX) {
+			enterMain()
+		}
+		startY = 0
+	}
+
+	return {
+		guideVisible: guideVisible,
+		onGuideTouchStart: (y : number) => onGuideTouchStart(y),
+		onGuideTouchEnd: (y : number) => onGuideTouchEnd(y),
+		enterMain: () => enterMain(),
+	} as UseChooseCertGuideResult
+}

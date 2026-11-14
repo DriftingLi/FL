@@ -33,6 +33,31 @@
                 <text class="btn-confirm-text">完成</text>
             </view>
         </view>
+
+        <!-- 选证引导态（#2535 Q2，设计稿 307_6164）：首屏先给一屏引导，点击或上滑进主态；
+             右上角 X = 跳过选证直接进首页。层叠在本页内、不建路由（地图 #2510 映射裁定）。
+             放在 .page 末子元素：绝对定位盖住页头与列表，且不参与上面那条 flex 列的高度分配。 -->
+        <view v-if="guideVisible" class="guide" @click="enterMain" @touchstart="handleGuideTouchStart"
+            @touchend="handleGuideTouchEnd">
+            <view class="guide-tint"></view>
+            <view class="guide-copy">
+                <view class="guide-row">
+                    <text class="guide-hi">Hi，您好</text>
+                </view>
+                <view class="guide-row guide-row--ask">
+                    <text class="guide-ask">请选择您需要考的证</text>
+                </view>
+                <view class="guide-row guide-row--tip">
+                    <text class="guide-tip">我们来为您推荐适合的课程</text>
+                </view>
+            </view>
+            <view class="guide-mascot-box">
+                <image class="guide-mascot" src="/static/guide-mascot.png" mode="aspectFit"></image>
+            </view>
+            <view class="guide-close" @click.stop="onSkipGuide">
+                <text class="guide-close-icon">✕</text>
+            </view>
+        </view>
     </view>
 </template>
 
@@ -44,6 +69,8 @@
     import { getAllCredentialsApi, switchCredentialApi, writeCurrentCredentialCache } from '../../api/credential'
     import type { CredentialGroup, CredentialItem } from '../../types/index'
     import CertSelector from '../../components/cert-selector/cert-selector.uvue'
+    import { useChooseCertGuide } from './composables/useChooseCertGuide'
+    import { DEFAULT_PROVINCE, pickProvince } from '../../utils/provincePicker'
 
     // 未登录防护
     const auth = useAuthStore()
@@ -52,8 +79,11 @@
         uni.reLaunch({ url: '/pages/login/login' })
     }
 
-    // ---- 省份 ----
-    const province = ref('全国')
+    // ---- 引导态（#2535 Q2）：首屏引导 → 点击/上滑进主态；X 跳过选证直达首页 ----
+    const { guideVisible, onGuideTouchStart, onGuideTouchEnd, enterMain } = useChooseCertGuide()
+
+    // ---- 省份（展示性字段，选择逻辑收口在 utils/provincePicker） ----
+    const province = ref(DEFAULT_PROVINCE)
 
     // ---- 选证列表（唯一真源 = 后端 GET /credentials/grouped，零硬编码） ----
     const groups = ref<CredentialGroup[]>([])
@@ -115,13 +145,27 @@
         goBack()
     }
 
+    /** 引导层触摸起点：只取触点纵坐标（px），上滑判定与阈值归 composable */
+    function handleGuideTouchStart(e : UniTouchEvent) : void {
+        if (e.touches.length > 0) {
+            onGuideTouchStart(e.touches[0].clientY)
+        }
+    }
+
+    function handleGuideTouchEnd(e : UniTouchEvent) : void {
+        if (e.changedTouches.length > 0) {
+            onGuideTouchEnd(e.changedTouches[0].clientY)
+        }
+    }
+
+    /** X = 跳过选证：不改证件、不 PATCH，直接落首页（票面 Q2 拍板） */
+    function onSkipGuide() : void {
+        uni.reLaunch({ url: '/pages/dashboard/dashboard' })
+    }
+
     function onProvinceTap() : void {
-        uni.showActionSheet({
-            itemList: ['全国', '北京', '上海', '广东', '浙江', '江苏', '山东', '四川', '湖北', '湖南', '河南'],
-            success: (res) => {
-                const list = ['全国', '北京', '上海', '广东', '浙江', '江苏', '山东', '四川', '湖北', '湖南', '河南']
-                province.value = list[res.tapIndex]
-            }
+        pickProvince((p : string) : void => {
+            province.value = p
         })
     }
 </script>
@@ -217,5 +261,91 @@
         font-size: $font-size-lg;
         font-weight: 600;
         color: $text-color-inverse;
+    }
+
+    /* ---- 选证引导态（票 2535 Q2，设计稿 307_6164 量测） ----
+       底色与闪屏同款：实底主色 + 底部一条渐变带。两层而不是三停 linear-gradient，
+       因为原生端对百分比色标支持不稳（同 pages/index/index.uvue 的 .splash-tint）。 */
+    .guide {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        background-color: $primary-color;
+        z-index: 10;
+    }
+
+    .guide-tint {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 584rpx;
+        background: linear-gradient(to bottom, $primary-color, $success-color);
+    }
+
+    .guide-copy {
+        position: absolute;
+        left: 146rpx;
+        right: 32rpx;
+        top: 450rpx;
+    }
+
+    .guide-row {
+        flex-direction: column;
+    }
+
+    .guide-row--ask {
+        margin-top: 14rpx;
+    }
+
+    .guide-row--tip {
+        margin-top: 20rpx;
+    }
+
+    .guide-hi {
+        font-size: 64rpx;
+        font-weight: bold;
+        color: #FFFFFF;
+    }
+
+    .guide-ask {
+        font-size: 46rpx;
+        color: #FFFFFF;
+    }
+
+    .guide-tip {
+        font-size: 38rpx;
+        color: #FFFFFF;
+    }
+
+    .guide-mascot-box {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 352rpx;
+        align-items: center;
+    }
+
+    .guide-mascot {
+        width: 349rpx;
+        height: 460rpx;
+    }
+
+    /* 关闭 X：视觉 24rpx 字形，触摸目标 88rpx（≥44×44 口径） */
+    .guide-close {
+        position: absolute;
+        right: 12rpx;
+        top: 174rpx;
+        width: 88rpx;
+        height: 88rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .guide-close-icon {
+        font-size: 32rpx;
+        color: #FFFFFF;
     }
 </style>

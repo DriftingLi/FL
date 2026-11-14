@@ -41,14 +41,32 @@
                 <text class="cta-secondary-text">其他登录方式</text>
             </view>
         </view>
+
+        <!-- 启动闪屏态（#2535，设计稿 307_6152.png）：首帧品牌图，1.5s 后淡出到上面这块着陆页内容。
+             叠在最后、绝对定位铺满，故不参与 .landing-page 的纵向排布；已登录冷启动在 onLoad 里
+             直接 reLaunch dashboard，本层不会上屏。 -->
+        <view class="splash" v-if="splashVisible" :style="{ opacity: splashOpacity }">
+            <view class="splash-tint"></view>
+            <view class="splash-brand">
+                <view class="splash-logo-box">
+                    <image class="splash-logo" src="/static/logo.png" mode="aspectFit"></image>
+                </view>
+                <text class="splash-title">叉车维修培训系统</text>
+                <text class="splash-subtitle">专业维修技能成长平台</text>
+            </view>
+            <view class="splash-mascot-box">
+                <image class="splash-mascot" src="/static/splash-mascot.png" mode="aspectFit"></image>
+            </view>
+        </view>
     </view>
 </template>
 
 <script setup lang="uts">
-    import { onLoad } from '@dcloudio/uni-app'
+    import { onLoad, onUnload } from '@dcloudio/uni-app'
     import { useAuthStore } from '../../stores/auth'
     import { useLoginProviders } from '../../composables/useLoginProviders'
     import { useLandingLogin } from './composables/useLandingLogin'
+    import { useLandingSplash } from './composables/useLandingSplash'
     import { useSafeArea } from '../../utils/system'
     import LoginAgreement from '../../components/login-agreement/login-agreement.uvue'
 
@@ -71,6 +89,10 @@
         onWechatLogin,
     } = useLandingLogin(wechatLoginReady.value)
 
+    // 启动闪屏态（#2535）：初值即上屏，未登录才起计时；已登录那条 reLaunch 在 onLoad 里先走，
+    // 页面不会绘制，故不必为「已登录不闪」再写分支。
+    const { splashVisible, splashOpacity, start: startSplash, dispose: disposeSplash } = useLandingSplash()
+
     onLoad((_options : OnLoadOptions) => {
         const restored = auth.restoreFromStorage()
         console.log('[welcome] restored=', restored, 'isLoggedIn=', auth.isLoggedIn.value)
@@ -82,9 +104,16 @@
                     console.error('[welcome] reLaunch to dashboard failed:', err)
                 }
             })
+        } else {
+            // 未登录：先放 1.5s 品牌图，再淡出到本着陆页
+            startSplash()
         }
 
         // 未登录：停留在本着陆页，由上方探测分支决定给出哪个入口
+    })
+
+    onUnload(() : void => {
+        disposeSplash()
     })
 </script>
 
@@ -225,5 +254,82 @@
         font-size: 30rpx;
         color: #1E9FFF;
         text-align: center;
+    }
+
+    /* ── 启动闪屏态（#2535，设计稿 307_6152.png） ─────────────────────────────
+       原型实测（780×1688 渲染，换算 750rpx 屏）：主色实心到 64% 屏高后转成功色；
+       白方块 180×180px ⇒ 173rpx、顶距 292rpx；标题 8 字跨 473px ⇒ 56rpx、顶距 524rpx；
+       副标题 10 字跨 316px ⇒ 30rpx、顶距 610rpx；吉祥物内容 340×480px ⇒ 327×462rpx、底距 133rpx。
+       渐变用「实底 + 底部渐变带」两层而不是三停 linear-gradient：uvue 原生端对百分比色标
+       支持不稳（不生效也不报错），两层是两端都确定成立的做法。 */
+    .splash {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: $primary-color;
+    }
+
+    /* 底部渐变带：原型里渐变从 64% 屏高起（1623rpx × 36% ≈ 584rpx），首色与实底同色故无缝 */
+    .splash-tint {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 584rpx;
+        background: linear-gradient(to bottom, $primary-color, $success-color);
+    }
+
+    .splash-brand {
+        position: absolute;
+        top: 292rpx;
+        left: 0;
+        right: 0;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    /* 白方块：原型 180×180px、圆角约 40px ⇒ 173rpx / 40rpx；内嵌叉车图标 133×103px ⇒ 128×99rpx */
+    .splash-logo-box {
+        width: 173rpx;
+        height: 173rpx;
+        border-radius: 40rpx;
+        background-color: #FFFFFF;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .splash-logo {
+        width: 128rpx;
+        height: 99rpx;
+    }
+
+    .splash-title {
+        margin-top: 48rpx;
+        font-size: 56rpx;
+        font-weight: bold;
+        color: #FFFFFF;
+        text-align: center;
+    }
+
+    .splash-subtitle {
+        margin-top: 16rpx;
+        font-size: 30rpx;
+        color: #FFFFFF;
+        text-align: center;
+    }
+
+    .splash-mascot-box {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 133rpx;
+        align-items: center;
+    }
+
+    .splash-mascot {
+        width: 327rpx;
+        height: 462rpx;
     }
 </style>
