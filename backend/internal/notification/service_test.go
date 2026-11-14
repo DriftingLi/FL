@@ -1,6 +1,7 @@
 package notification
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -26,7 +27,7 @@ func TestNotificationService_CreateAndList(t *testing.T) {
 		t.Fatalf("创建通知失败: %v", err)
 	}
 
-	result, err := svc.List(uid, 1, 10)
+	result, err := svc.List(context.Background(), studentRecipient(uid), 1, 10)
 	if err != nil {
 		t.Fatalf("查询通知失败: %v", err)
 	}
@@ -50,14 +51,14 @@ func TestNotificationService_CreateAndList(t *testing.T) {
 		t.Errorf("2 条通知每页 10 条应 1 页，得到 %d", result.Pages)
 	}
 
-	count, err := svc.UnreadCount(uid)
+	count, err := svc.UnreadCount(context.Background(), studentRecipient(uid))
 	if err != nil || count != 2 {
 		t.Fatalf("期望未读数 2，得到 %d, err=%v", count, err)
 	}
 
 	// 其他用户查询不到任何通知
 	other := testutil.SeedStudent(t, db, "notify_other", "x")
-	count, err = svc.UnreadCount(other.ID)
+	count, err = svc.UnreadCount(context.Background(), studentRecipient(other.ID))
 	if err != nil || count != 0 {
 		t.Fatalf("其他用户未读数应为 0，得到 %d, err=%v", count, err)
 	}
@@ -128,7 +129,7 @@ func TestNotificationService_MarkRead(t *testing.T) {
 		t.Fatalf("创建通知失败: %v", err)
 	}
 	var ids []int64
-	result, err := svc.List(uid, 1, 10)
+	result, err := svc.List(context.Background(), studentRecipient(uid), 1, 10)
 	if err != nil {
 		t.Fatalf("查询通知失败: %v", err)
 	}
@@ -139,27 +140,27 @@ func TestNotificationService_MarkRead(t *testing.T) {
 		t.Fatalf("期望 2 条通知")
 	}
 
-	if err := svc.MarkRead(uid, ids[0]); err != nil {
+	if err := svc.MarkRead(context.Background(), studentRecipient(uid), ids[0]); err != nil {
 		t.Fatalf("标记已读失败: %v", err)
 	}
 	// 重复标记已读应幂等成功
-	if err := svc.MarkRead(uid, ids[0]); err != nil {
+	if err := svc.MarkRead(context.Background(), studentRecipient(uid), ids[0]); err != nil {
 		t.Fatalf("重复标记已读应成功: %v", err)
 	}
 	// 不存在的通知应报错
-	if err := svc.MarkRead(uid, 99999); err == nil {
+	if err := svc.MarkRead(context.Background(), studentRecipient(uid), 99999); err == nil {
 		t.Error("不存在的通知应报错")
 	}
 
-	count, _ := svc.UnreadCount(uid)
+	count, _ := svc.UnreadCount(context.Background(), studentRecipient(uid))
 	if count != 1 {
 		t.Fatalf("期望剩余未读数 1，得到 %d", count)
 	}
 
-	if err := svc.MarkAllRead(uid); err != nil {
+	if err := svc.MarkAllRead(context.Background(), studentRecipient(uid)); err != nil {
 		t.Fatalf("全部已读失败: %v", err)
 	}
-	count, _ = svc.UnreadCount(uid)
+	count, _ = svc.UnreadCount(context.Background(), studentRecipient(uid))
 	if count != 0 {
 		t.Fatalf("全部已读后未读数应为 0，得到 %d", count)
 	}
@@ -178,7 +179,7 @@ func TestNotificationService_CreateWithTx_CommitAndRollback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("事务内创建通知失败: %v", err)
 	}
-	count, _ := svc.UnreadCount(uid)
+	count, _ := svc.UnreadCount(context.Background(), studentRecipient(uid))
 	if count != 1 {
 		t.Fatalf("提交后应落库 1 条，得到 %d", count)
 	}
@@ -193,7 +194,7 @@ func TestNotificationService_CreateWithTx_CommitAndRollback(t *testing.T) {
 	if err == nil {
 		t.Fatal("模拟失败应返回错误")
 	}
-	count, _ = svc.UnreadCount(uid)
+	count, _ = svc.UnreadCount(context.Background(), studentRecipient(uid))
 	if count != 1 {
 		t.Fatalf("回滚后不应新增通知，得到 %d", count)
 	}

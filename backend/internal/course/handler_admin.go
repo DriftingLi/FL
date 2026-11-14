@@ -359,7 +359,7 @@ func (h *adminHandler) UpdateChapter(c *gin.Context) {
 			return &chapterIDInput{ID: id, Input: data}, nil
 		},
 		Invoke: func(ctx context.Context, req *chapterIDInput) (*ChapterDTO, error) {
-			return h.courseSvc.UpdateChapter(req.ID, req.Input)
+			return h.courseSvc.UpdateChapter(ctx, req.ID, req.Input)
 		},
 	}.WithSuccess(httpx.OkMsg("章节更新成功"), http.StatusInternalServerError).
 		WithSentinel(ErrChapterNotFound, http.StatusNotFound).Handle(c)

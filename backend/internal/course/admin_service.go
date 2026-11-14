@@ -14,6 +14,7 @@ import (
 	"forklift-training/internal/coerce"
 	"forklift-training/internal/filestore"
 	"forklift-training/internal/model"
+	"forklift-training/internal/notification"
 	"forklift-training/internal/sortorder"
 )
 
@@ -21,13 +22,17 @@ import (
 type AdminService struct {
 	db      *gorm.DB
 	fileSvc *filestore.FileStore
+	// notifSvc 站内信服务（#2537 / ADR-0095）：章节审核结果通知讲师，与状态流转同事务。
+	// 可 nil——nil 时跳过投递（测试装配与「通知域未接线」的历史路径）。
+	notifSvc *notification.Service
 
 	logger *zap.Logger
 }
 
-// NewAdminService 创建管理端课程服务实例。fileSvc 用于删除章节时清理幻灯片/图文图片（可 nil，nil 时跳过）。
-func NewAdminService(db *gorm.DB, fileSvc *filestore.FileStore, logger *zap.Logger) *AdminService {
-	return &AdminService{db: db, fileSvc: fileSvc, logger: logger}
+// NewAdminService 创建管理端课程服务实例。fileSvc 用于删除章节时清理幻灯片/图文图片
+// （可 nil，nil 时跳过）；notifSvc 用于章节审核结果站内信（可 nil，nil 时跳过投递）。
+func NewAdminService(db *gorm.DB, fileSvc *filestore.FileStore, notifSvc *notification.Service, logger *zap.Logger) *AdminService {
+	return &AdminService{db: db, fileSvc: fileSvc, notifSvc: notifSvc, logger: logger}
 }
 
 // GetCourses 管理端课程列表。filter 支持 hot|featured|all（空串 = all；#1096：显式参数，不再是变参）。
@@ -264,9 +269,9 @@ func (s *AdminService) CreateChapter(courseID int, in *ChapterInput) (*ChapterDT
 }
 
 // UpdateChapter 更新章节。
-func (s *AdminService) UpdateChapter(chapterID int, in *ChapterInput) (*ChapterDTO, error) {
+func (s *AdminService) UpdateChapter(ctx context.Context, chapterID int, in *ChapterInput) (*ChapterDTO, error) {
 	var chapter model.Chapter
-	if err := s.db.First(&chapter, chapterID).Error; err != nil {
+	if err := s.db.WithContext(ctx).First(&chapter, chapterID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrChapterNotFound
 		}
@@ -287,16 +292,38 @@ func (s *AdminService) UpdateChapter(chapterID int, in *ChapterInput) (*ChapterD
 	if in.OrderNum != nil {
 		chapter.OrderNum = *in.OrderNum
 	}
-	if err := s.db.Save(&chapter).Error; err != nil {
+	// C7 管理员写面直接生效：编辑即发布——同步已发布槽（正文+文件挂接清单）、状态 published、
+	// 清驳回理由、弃可能存在的在审快照（管理员写即终审，自审空转）。
+	// #2537：发布与通知作者**同一事务**（ADR-0095 决策五强一致族）——通知写失败则发布回滚，
+	// 不留「已生效但作者不知道」的静默洞。
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(&chapter).Error; err != nil {
+			return err
+		}
+		tutorID, err := publishWorkingCopyInTx(tx, &chapter)
+		if err != nil {
+			return err
+		}
+		return s.notifyChapterAdminEdit(tx, &chapter, tutorID)
+	})
+	if err != nil {
 		return nil, err
 	}
-	// C7 管理员写面直接生效：编辑即发布——同步已发布槽（正文+文件挂接清单）、
-	// 状态 published、清驳回理由、弃可能存在的在审快照（管理员写即终审，自审空转）。
-	if err := publishWorkingCopy(s.db, &chapter); err != nil {
-		return nil, err
-	}
+	chapter.ReviewStatus = model.ChapterReviewPublished
+	chapter.RejectReason = ""
 	d := ChapterToDTO(&chapter)
 	return &d, nil
+}
+
+// notifyChapterAdminEdit C7 管理员直接生效的通知（#2537 / ADR-0095 决策七），在调用方事务内投递。
+// 复用 chapter_review 类型，靠 AdminEdit 区分来源文案——两者都是「章节状态变了，
+// 去编辑页看」，不需要第二种类型。收件人为空（存量章节作者未知）时跳过。
+func (s *AdminService) notifyChapterAdminEdit(tx *gorm.DB, chapter *model.Chapter, tutorID int) error {
+	if s.notifSvc == nil || tutorID <= 0 {
+		return nil
+	}
+	ev := notification.NewChapterAdminEditEvent(tutorID, chapter.Title, chapter.ChapterID, chapter.CourseID)
+	return s.notifSvc.CreateChapterReviewEvent(tx, ev, clock.Now())
 }
 
 // ApproveChapterReview 过审（#2498 C7/C8 仅管理员）：在审快照原子切换到已发布槽；

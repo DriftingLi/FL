@@ -14821,7 +14821,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "分页查询通知（含未读数）",
+                "description": "分页查询通知（含未读数）。收件人按登录角色分派：学员查学员信箱、讲师查讲师信箱；admin/recruiter 无信箱返回 403。",
                 "consumes": [
                     "application/json"
                 ],
@@ -14829,7 +14829,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "学员端-通知"
+                    "通知"
                 ],
                 "summary": "通知列表",
                 "parameters": [
@@ -14872,6 +14872,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "403": {
+                        "description": "该角色没有站内信箱",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             }
@@ -14883,7 +14889,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "全部通知标记为已读",
+                "description": "全部通知标记为已读。admin/recruiter 无信箱返回 403。",
                 "consumes": [
                     "application/json"
                 ],
@@ -14891,7 +14897,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "学员端-通知"
+                    "通知"
                 ],
                 "summary": "全部标记已读",
                 "responses": {
@@ -14906,6 +14912,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "403": {
+                        "description": "该角色没有站内信箱",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             }
@@ -14917,7 +14929,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "查询未读通知数量",
+                "description": "查询未读通知数量。收件人按登录角色分派；admin/recruiter 无信箱返回 403。",
                 "consumes": [
                     "application/json"
                 ],
@@ -14925,7 +14937,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "学员端-通知"
+                    "通知"
                 ],
                 "summary": "未读通知数",
                 "responses": {
@@ -14952,6 +14964,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
+                    },
+                    "403": {
+                        "description": "该角色没有站内信箱",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
                     }
                 }
             }
@@ -14963,7 +14981,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "标记指定通知为已读",
+                "description": "标记指定通知为已读。admin/recruiter 无信箱返回 403。",
                 "consumes": [
                     "application/json"
                 ],
@@ -14971,7 +14989,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "学员端-通知"
+                    "通知"
                 ],
                 "summary": "标记单条已读",
                 "parameters": [
@@ -14998,6 +15016,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "该角色没有站内信箱",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }

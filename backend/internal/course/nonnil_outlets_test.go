@@ -12,6 +12,7 @@ package course
 
 import (
 	"context"
+	"forklift-training/internal/notification"
 	"testing"
 
 	"go.uber.org/zap"
@@ -60,7 +61,7 @@ func outletCoursePageNoCourses(t *testing.T) any {
 func outletAdminCourseDetailNoChapters(t *testing.T) any {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	res, err := NewAdminService(db, nil, zap.NewNop()).GetCourseDetail(seedVisibleCourse(t, db))
+	res, err := NewAdminService(db, nil, notification.NewService(db, zap.NewNop()), zap.NewNop()).GetCourseDetail(seedVisibleCourse(t, db))
 	if err != nil {
 		t.Fatalf("管理端课程详情失败: %v", err)
 	}
@@ -73,7 +74,7 @@ func outletAdminCourseDetailNoChapters(t *testing.T) any {
 func outletAdminCourseDetailMeta(t *testing.T) any {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	res, err := NewAdminService(db, nil, zap.NewNop()).GetCourseDetail(seedVisibleCourse(t, db))
+	res, err := NewAdminService(db, nil, notification.NewService(db, zap.NewNop()), zap.NewNop()).GetCourseDetail(seedVisibleCourse(t, db))
 	if err != nil {
 		t.Fatalf("管理端课程详情失败: %v", err)
 	}
@@ -112,7 +113,7 @@ func outletChapterDetailNoFiles(t *testing.T) any {
 // outletEmptyReviewQueue 空库拉审核队列：无待审章节时 items 发 `[]`（#2499 C9）。
 func outletEmptyReviewQueue(t *testing.T) any {
 	t.Helper()
-	res, err := NewAdminService(testutil.NewMemoryDB(t), nil, zap.NewNop()).ListPendingChapterReviews(context.Background(), 1, 20)
+	res, err := NewAdminService(testutil.NewMemoryDB(t), nil, notification.NewService(testutil.NewMemoryDB(t), zap.NewNop()), zap.NewNop()).ListPendingChapterReviews(context.Background(), 1, 20)
 	if err != nil {
 		t.Fatalf("空库拉审核队列失败: %v", err)
 	}
@@ -135,7 +136,7 @@ func outletSnapshotNoFiles(t *testing.T) any {
 	if err := SubmitChapterForReview(context.Background(), db, ch.ChapterID, 1); err != nil {
 		t.Fatalf("提交审核失败: %v", err)
 	}
-	res, err := NewAdminService(db, nil, zap.NewNop()).GetChapterReviewSnapshot(context.Background(), ch.ChapterID)
+	res, err := NewAdminService(db, nil, notification.NewService(db, zap.NewNop()), zap.NewNop()).GetChapterReviewSnapshot(context.Background(), ch.ChapterID)
 	if err != nil {
 		t.Fatalf("查快照失败: %v", err)
 	}
@@ -145,7 +146,7 @@ func outletSnapshotNoFiles(t *testing.T) any {
 // outletBatchApproveNoFailures 空批量过审：failures 发 `[]`（#2499 C9）。
 func outletBatchApproveNoFailures(t *testing.T) any {
 	t.Helper()
-	res, err := NewAdminService(testutil.NewMemoryDB(t), nil, zap.NewNop()).
+	res, err := NewAdminService(testutil.NewMemoryDB(t), nil, notification.NewService(testutil.NewMemoryDB(t), zap.NewNop()), zap.NewNop()).
 		BatchApproveChapterReviews(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("空批量过审失败: %v", err)
@@ -156,7 +157,7 @@ func outletBatchApproveNoFailures(t *testing.T) any {
 // outletBatchRejectNoFailures 空批量驳回：failures 发 `[]`（#2499 C9）。
 func outletBatchRejectNoFailures(t *testing.T) any {
 	t.Helper()
-	res, err := NewAdminService(testutil.NewMemoryDB(t), nil, zap.NewNop()).
+	res, err := NewAdminService(testutil.NewMemoryDB(t), nil, notification.NewService(testutil.NewMemoryDB(t), zap.NewNop()), zap.NewNop()).
 		BatchRejectChapterReviews(context.Background(), nil, "统一理由")
 	if err != nil {
 		t.Fatalf("空批量驳回失败: %v", err)

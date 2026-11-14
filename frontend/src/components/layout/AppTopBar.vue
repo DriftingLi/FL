@@ -49,10 +49,13 @@ const avatarUrl = computed(() =>
 const roleLabel = computed(() => describeRole(authStore.userInfo?.role))
 // 徽标配色按角色分档（沿用侧栏身份区原有的四档语义色，只是搬进浮层）
 const roleClass = computed(() => authStore.userInfo?.role || 'hrwai_user')
-// 通知入口只对学员端显示（沿用侧栏底部的既有判据）
-const showNotifications = computed(
-  () => authStore.isLoggedIn && authStore.userInfo?.role === 'hrwai_user'
-)
+// 通知入口：学员与讲师都有信箱（#2537 / ADR-0095）——讲师收章节审核结果，
+// 学员收资料审核等 11 种既有通知。admin/recruiter 没有信箱（后端对这些角色返回 403），
+// 故仍不显示入口；按 role 收窄不必要，通知类型天然隔离（讲师只会收到 chapter_review）。
+const showNotifications = computed(() => {
+  const role = authStore.userInfo?.role
+  return authStore.isLoggedIn && (role === 'hrwai_user' || role === 'tutor')
+})
 
 async function onCommand(command: string) {
   if (command === 'logout') {

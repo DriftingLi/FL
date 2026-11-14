@@ -13742,7 +13742,7 @@ paths:
     get:
       consumes:
       - application/json
-      description: 分页查询通知（含未读数）
+      description: 分页查询通知（含未读数）。收件人按登录角色分派：学员查学员信箱、讲师查讲师信箱；admin/recruiter 无信箱返回 403。
       parameters:
       - default: 1
         description: 页码
@@ -13770,16 +13770,20 @@ paths:
           description: 未认证
           schema:
             $ref: '#/definitions/response.R'
+        "403":
+          description: 该角色没有站内信箱
+          schema:
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 通知列表
       tags:
-      - 学员端-通知
+      - 通知
   /notifications/{id}/read:
     post:
       consumes:
       - application/json
-      description: 标记指定通知为已读
+      description: 标记指定通知为已读。admin/recruiter 无信箱返回 403。
       parameters:
       - description: 通知ID
         in: path
@@ -13801,16 +13805,20 @@ paths:
           description: 未认证
           schema:
             $ref: '#/definitions/response.R'
+        "403":
+          description: 该角色没有站内信箱
+          schema:
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 标记单条已读
       tags:
-      - 学员端-通知
+      - 通知
   /notifications/read-all:
     post:
       consumes:
       - application/json
-      description: 全部通知标记为已读
+      description: 全部通知标记为已读。admin/recruiter 无信箱返回 403。
       produces:
       - application/json
       responses:
@@ -13822,16 +13830,20 @@ paths:
           description: 未认证
           schema:
             $ref: '#/definitions/response.R'
+        "403":
+          description: 该角色没有站内信箱
+          schema:
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 全部标记已读
       tags:
-      - 学员端-通知
+      - 通知
   /notifications/unread-count:
     get:
       consumes:
       - application/json
-      description: 查询未读通知数量
+      description: 查询未读通知数量。收件人按登录角色分派；admin/recruiter 无信箱返回 403。
       produces:
       - application/json
       responses:
@@ -13848,11 +13860,15 @@ paths:
           description: 未认证
           schema:
             $ref: '#/definitions/response.R'
+        "403":
+          description: 该角色没有站内信箱
+          schema:
+            $ref: '#/definitions/response.R'
       security:
       - BearerAuth: []
       summary: 未读通知数
       tags:
-      - 学员端-通知
+      - 通知
   /points/balance:
     get:
       description: 学员查看自己的积分余额

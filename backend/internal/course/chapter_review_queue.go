@@ -13,7 +13,9 @@ import (
 
 	"gorm.io/gorm"
 
+	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/internal/notification"
 	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
 )
@@ -232,28 +234,92 @@ func (s *AdminService) BatchRejectChapterReviews(ctx context.Context, chapterIDs
 
 // approveOneWithNotice 单章过审（同一事务）。
 //
-// #2499 C10 站内信**未接投递**：notifications.user_id 外键指向 hrwai_users（学员表），
-// 而章节提交人是讲师（tutor 表独立身份），照现状写库会外键违约回滚整笔审核、或把章节
-// 信息投给 id 恰好相同的无关学员。typed event 构造器已备在 notification 包
-// （ChapterReviewEvent/CreateChapterReviewEvent，形状与 CreateProfileReviewEvent 同构），
-// 待「讲师通知中心」票接通讲师侧收件人后再在此处接线。
+// #2537 已接通 C10 站内信（ADR-0095）：收件人是**章节作者讲师**（chapter.tutor_id），
+// 通知落 notifications.tutor_id——讲师在 hrwai_users 无行，落 user_id 会外键违约或投给
+// 撞号的无关学员。强一致族（ADR-0027）：通知写失败整笔审核回滚，不给「已过审但讲师
+// 永远不知道」的静默洞。收件人为空（存量章节作者未知）时跳过投递——那是如实的「不知道
+// 发给谁」，不是投给错的人。
 func (s *AdminService) approveOneWithNotice(ctx context.Context, chapterID int) error {
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if _, err := loadChapterForReview(tx, chapterID); err != nil {
+		chapter, err := loadChapterForReview(tx, chapterID)
+		if err != nil {
 			return err
 		}
-		return approveChapterReviewInTx(tx, chapterID)
+		// 收件人必须在状态流转**前**读出：过审会把 pending 槽改名为 published，
+		// 之后 submitted_by 就查不到了。chapter.tutor_id 是稳定归属，优先用它；
+		// 归属为空时回落到本次在审快照的提交人（同一讲师，且比归属更精确到本次）。
+		tutorID, err := reviewRecipient(tx, chapter)
+		if err != nil {
+			return err
+		}
+		if err := approveChapterReviewInTx(tx, chapterID); err != nil {
+			return err
+		}
+		// 结果状态是**流转后**的事实，不能读流转前快照的 chapter.ReviewStatus（那时还是 pending）。
+		return s.notifyChapterReview(tx, chapter, tutorID, model.ChapterReviewPublished, "")
 	})
 }
 
-// rejectOneWithNotice 单章驳回（同一事务）。C10 投递缺口同 approveOneWithNotice。
+// rejectOneWithNotice 单章驳回（同一事务）。C10 投递口径同 approveOneWithNotice。
 func (s *AdminService) rejectOneWithNotice(ctx context.Context, chapterID int, reason string) error {
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if _, err := loadChapterForReview(tx, chapterID); err != nil {
+		chapter, err := loadChapterForReview(tx, chapterID)
+		if err != nil {
 			return err
 		}
-		return rejectChapterReviewInTx(tx, chapterID, reason)
+		tutorID, err := reviewRecipient(tx, chapter)
+		if err != nil {
+			return err
+		}
+		if err := rejectChapterReviewInTx(tx, chapterID, reason); err != nil {
+			return err
+		}
+		return s.notifyChapterReview(tx, chapter, tutorID, model.ChapterReviewDraft, reason)
 	})
+}
+
+// notifyChapterReview 在事务内投递章节审核结果站内信（#2537 / ADR-0095）。
+// reviewStatus / reason 是**本次流转的结果**，由调用方显式给出——不读 chapter 行，
+// 因为那一行是流转前的快照（approve 前它的 ReviewStatus 还是 pending）。
+// notifSvc 为 nil 或收件人为空（存量章节作者未知）时跳过——前者是测试装配，后者是
+// 如实的「不知道发给谁」，两者都不该静默投给错的人。
+func (s *AdminService) notifyChapterReview(
+	tx *gorm.DB, chapter *model.Chapter, tutorID int, reviewStatus, reason string,
+) error {
+	if s.notifSvc == nil || tutorID <= 0 {
+		return nil
+	}
+	ev := notification.NewChapterReviewEvent(tutorID, chapter.Title,
+		chapter.ChapterID, chapter.CourseID, reviewStatus, reason)
+	return s.notifSvc.CreateChapterReviewEvent(tx, ev, clock.Now())
+}
+
+// reviewRecipient 取本次审核结果的收件人讲师（0 = 不知道发给谁，跳过投递）。
+//
+// 优先 chapter.tutor_id（稳定归属，ADR-0095）；为空时回落到 pending 快照的
+// submitted_by（本次提交人）。两者都为空说明既无归属也无在审快照——跳过。
+// 必须在状态流转前调用：过审会把 pending 槽改名 published，之后 submitted_by 查不到。
+//
+// 「查不到」与「查不动」分开（ADR-0064 决策 1）：快照查询的 DB 故障上抛，不静默读成
+// 「没人可发」——那会让投递在故障期悄悄失效，而审核看起来成功。
+func reviewRecipient(tx *gorm.DB, chapter *model.Chapter) (int, error) {
+	if chapter.TutorID != nil && *chapter.TutorID > 0 {
+		return *chapter.TutorID, nil
+	}
+	var slot model.ChapterContentSlot
+	err := tx.Select("submitted_by").
+		Where("slot = ? AND chapter_id = ?", model.ChapterReviewPending, chapter.ChapterID).
+		First(&slot).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	if slot.SubmittedBy <= 0 {
+		return 0, nil
+	}
+	return slot.SubmittedBy, nil
 }
 
 // loadChapterForReview 取章节并把「不存在」映射成 ErrChapterNotFound 哨兵（handler 的 404 靠它）。

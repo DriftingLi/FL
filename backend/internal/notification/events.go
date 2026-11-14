@@ -406,13 +406,14 @@ const NotifTypeChapterReview = "chapter_review"
 // ChapterReviewEvent 章节审核结果事件（#2499 C10，typed event constructor 先例同构）。
 // payload 为结构化判定标记（{"review_status":"published"|"draft"}），供前端确定性消费；
 // 驳回时 Content 追加驳回理由（人读文案），过审时说明已对学员生效。
+//
+// **收件人是讲师**：字段名用 TutorID 而非 UserID（ADR-0095）——通知域的 UserID 一律指
+// 学员（hrwai_users.id），两个 id 空间不可互读；签名里区分才不会被误传。
 type ChapterReviewEvent struct {
-	// UserID 收件人（提交审核的讲师）。
-	UserID int
+	// TutorID 收件人（章节作者讲师，tutor.tutor_id）。
+	TutorID int
 	// ChapterTitle 章节标题（文案用）。
 	ChapterTitle string
-	// CourseName 课程名（文案用，可为空）。
-	CourseName string
 	// ChapterID 章节 ID（payload 与链接用）。
 	ChapterID int
 	// CourseID 课程 ID（链接用）。
@@ -421,14 +422,15 @@ type ChapterReviewEvent struct {
 	ReviewStatus string
 	// Reason 驳回理由（过审时为空）。
 	Reason string
+	// AdminEdit 是否由管理员直接写面生效（C7）而非走审核队列：文案据此区分来源。
+	AdminEdit bool
 }
 
 // NewChapterReviewEvent 构造章节审核结果通知事件。
-func NewChapterReviewEvent(userID int, chapterTitle, courseName string, chapterID, courseID int, reviewStatus, reason string) ChapterReviewEvent {
+func NewChapterReviewEvent(tutorID int, chapterTitle string, chapterID, courseID int, reviewStatus, reason string) ChapterReviewEvent {
 	return ChapterReviewEvent{
-		UserID:       userID,
+		TutorID:      tutorID,
 		ChapterTitle: chapterTitle,
-		CourseName:   courseName,
 		ChapterID:    chapterID,
 		CourseID:     courseID,
 		ReviewStatus: reviewStatus,
@@ -436,13 +438,40 @@ func NewChapterReviewEvent(userID int, chapterTitle, courseName string, chapterI
 	}
 }
 
+// NewChapterAdminEditEvent 构造「章节被管理员直接更新并发布」通知事件（#2537 / spec C7）。
+// 复用同一通知类型与 payload，只靠 AdminEdit 区分来源文案——两者都是「章节状态变了，
+// 去编辑页看」，不需要第二种类型。
+func NewChapterAdminEditEvent(tutorID int, chapterTitle string, chapterID, courseID int) ChapterReviewEvent {
+	return ChapterReviewEvent{
+		TutorID:      tutorID,
+		ChapterTitle: chapterTitle,
+		ChapterID:    chapterID,
+		CourseID:     courseID,
+		ReviewStatus: model.ChapterReviewPublished,
+		AdminEdit:    true,
+	}
+}
+
 // CreateChapterReviewEvent 在指定事务/连接内创建章节审核结果站内信（与状态流转同事务）。
 // link 指向讲师章节编辑面（`/training/tutor/course/<courseID>/chapter/<chapterID>`），
 // 讲师点进去就能改被驳回的草稿。
+//
+// payload 携带 review_status 与**来源标记**（source=review|admin_edit）：ADR-0095 决策七
+// 要求「复用类型 + payload 区分来源」——只靠 title 文案区分会让消费方读文案判事实，
+// 本仓一贯禁止。文案仍按来源分流（人读），payload 是机器可判的那一份。
+//
+// 收件人落 tutor_id（CreateForTutorWithTx）——讲师在 hrwai_users 无行，落 user_id 会
+// 外键违约或投给撞号的无关学员（ADR-0095）。
 func (s *Service) CreateChapterReviewEvent(tx GormCreator, ev ChapterReviewEvent, createdAt time.Time) error {
 	title := "章节审核通过"
 	content := "你的章节「" + ev.ChapterTitle + "」已通过审核，学员端已更新。"
-	if ev.ReviewStatus == model.ChapterReviewDraft {
+	source := "review"
+	switch {
+	case ev.AdminEdit:
+		title = "章节已被管理员更新"
+		content = "你的章节「" + ev.ChapterTitle + "」已被管理员直接更新并发布，学员端已生效。"
+		source = "admin_edit"
+	case ev.ReviewStatus == model.ChapterReviewDraft:
 		title = "章节审核被驳回"
 		content = "你的章节「" + ev.ChapterTitle + "」未通过审核"
 		if ev.Reason != "" {
@@ -454,8 +483,8 @@ func (s *Service) CreateChapterReviewEvent(tx GormCreator, ev ChapterReviewEvent
 	if ev.CourseID > 0 && ev.ChapterID > 0 {
 		link = fmt.Sprintf("/training/tutor/course/%d/chapter/%d", ev.CourseID, ev.ChapterID)
 	}
-	return s.CreateWithTx(tx, ev.UserID, NotifTypeChapterReview, title, content, link,
-		reviewStatusPayload(ev.ReviewStatus), createdAt)
+	return s.CreateForTutorWithTx(tx, ev.TutorID, NotifTypeChapterReview, title, content, link,
+		chapterReviewPayload(ev.ReviewStatus, source), createdAt)
 }
 
 // ===== 尽力而为写入基座 =====

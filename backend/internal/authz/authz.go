@@ -40,17 +40,20 @@ type Capability string
 
 const (
 	// ===== 学员侧（training 工作区）=====
-	CapStudentAccess      Capability = "student.access"      // 学员工作区入口
-	CapCourseLearn        Capability = "course.learn"        // 课程与章节学习
-	CapQuestionPractice   Capability = "question.practice"   // 刷题与错题本
-	CapMockExamTake       Capability = "mock_exam.take"      // 模拟考试
-	CapRealExamTake       Capability = "real_exam.take"      // 真题卷
-	CapFavoriteManage     Capability = "favorite.manage"     // 收藏
-	CapSearchUse          Capability = "search.use"          // 全局搜索
-	CapMaterialRead       Capability = "material.read"       // 学习资料
-	CapCheckInUse         Capability = "check_in.use"        // 每日打卡
-	CapPointsUse          Capability = "points.use"          // 积分（余额/流水/任务/商城）
-	CapNotificationUse    Capability = "notification.use"    // 站内信
+	CapStudentAccess    Capability = "student.access"    // 学员工作区入口
+	CapCourseLearn      Capability = "course.learn"      // 课程与章节学习
+	CapQuestionPractice Capability = "question.practice" // 刷题与错题本
+	CapMockExamTake     Capability = "mock_exam.take"    // 模拟考试
+	CapRealExamTake     Capability = "real_exam.take"    // 真题卷
+	CapFavoriteManage   Capability = "favorite.manage"   // 收藏
+	CapSearchUse        Capability = "search.use"        // 全局搜索
+	CapMaterialRead     Capability = "material.read"     // 学习资料
+	CapCheckInUse       Capability = "check_in.use"      // 每日打卡
+	CapPointsUse        Capability = "points.use"        // 积分（余额/流水/任务/商城）
+	// CapNotificationUse 站内信（ADR-0095）：学员与讲师各有一格信箱（按 JWT role 分派到
+	// user_id / tutor_id 列）。当前通知端点**未挂**本能力键——它按收件人鉴权（见
+	// internal/api/authz_coverage_lock_test.go 的豁免理由），能力键只作能力清单/前端词表使用。
+	CapNotificationUse    Capability = "notification.use"
 	CapAIAssistantUse     Capability = "ai_assistant.use"    // AI 助手与维修诊断
 	CapContributionSubmit Capability = "contribution.submit" // 资料投稿（学员侧）
 	CapValuationUse       Capability = "valuation.use"       // 残值评估
@@ -128,7 +131,7 @@ var roleCapabilities = map[Capability][]Role{
 	CapMaterialRead:       {RoleStudent},
 	CapCheckInUse:         {RoleStudent},
 	CapPointsUse:          {RoleStudent},
-	CapNotificationUse:    {RoleStudent},
+	CapNotificationUse:    {RoleStudent, RoleTutor},
 	CapAIAssistantUse:     {RoleStudent},
 	CapContributionSubmit: {RoleStudent},
 	CapValuationUse:       {RoleStudent},

@@ -16,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/core"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
@@ -72,7 +73,7 @@ func TestNotificationContract_ApprovedPayload(t *testing.T) {
 	r, cfg, deps := newNotificationContractEnv(t)
 
 	student := seedStudent(t, deps.DB, "学员甲", "x")
-	studentToken := contractToken(t, cfg, student.ID, student.Account, "student")
+	studentToken := contractToken(t, cfg, student.ID, student.Account, core.HrwaiRole)
 	adminToken := contractToken(t, cfg, 1, "admin1", "admin")
 
 	// 1. 学员提交昵称修改（触发资料审核请求）

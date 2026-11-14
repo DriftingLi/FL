@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -198,15 +199,30 @@ func TestChapterReviewQueueContract(t *testing.T) {
 		t.Fatalf("过审后队列应为空, got %d", queue.Data.Total)
 	}
 
-	// C10 站内信：**本票不投递**（notifications.user_id 外键指向 hrwai_users，讲师在 hrwai_users
-	// 无行，照现状写库会外键违约回滚整笔审核、或投给 id 恰好相同的无关学员）。
-	// 这里断言「没有误投」——审核成功且没有往学员通知表里塞讲师 ID 的行。
+	// C10 站内信（#2537 已接通，ADR-0095）：收件人是**章节作者讲师**，落 notifications.tutor_id
+	// ——不是 user_id（讲师在 hrwai_users 无行）。这里断言两件事：
+	//   ①确实投递了（过审不再静默）；
+	//   ②收件人落在 tutor_id 且等于该章节的提交人，user_id 为空（没有误投给撞号的学员）。
 	var notices []model.Notification
 	if err := db.Where("type = ?", notification.NotifTypeChapterReview).Find(&notices).Error; err != nil {
 		t.Fatalf("查站内信失败: %v", err)
 	}
-	if len(notices) != 0 {
-		t.Fatalf("C10 投递面未接通前不应写站内信, got %d 条", len(notices))
+	if len(notices) != 2 {
+		t.Fatalf("批量过审 2 章应投递 2 条站内信, got %d", len(notices))
+	}
+	for _, n := range notices {
+		if n.UserID != nil {
+			t.Fatalf("讲师通知不得落 user_id（会投给撞号的无关学员），got user_id=%d", *n.UserID)
+		}
+		if n.TutorID == nil || *n.TutorID != 11 {
+			t.Fatalf("通知收件人应为章节作者讲师 %d, got %v", 11, n.TutorID)
+		}
+		if !strings.Contains(n.Title, "通过") {
+			t.Fatalf("过审通知标题应含「通过」, got %q", n.Title)
+		}
+		if !strings.Contains(string(n.Payload), `"published"`) {
+			t.Fatalf("过审通知 payload 应携带 review_status=published, got %s", n.Payload)
+		}
 	}
 
 	// 批量驳回：先让草稿章再进队列，再批量驳回（统一理由）
@@ -239,13 +255,26 @@ func TestChapterReviewQueueContract(t *testing.T) {
 	if rejected.ReviewStatus != model.ChapterReviewDraft || rejected.RejectReason != "正文缺少安全须知" {
 		t.Fatalf("驳回后 = %q/%q, want draft+统一理由", rejected.ReviewStatus, rejected.RejectReason)
 	}
-	// C10 投递面未接通（同过审段说明）：驳回也不写站内信
+	// C10 驳回投递（#2537）：驳回也要发信且带理由——讲师靠理由才知道该改什么。
 	var rejectNotices []model.Notification
-	if err := db.Where("type = ?", notification.NotifTypeChapterReview).Find(&rejectNotices).Error; err != nil {
+	if err := db.Where("type = ?", notification.NotifTypeChapterReview).Order("id DESC").Find(&rejectNotices).Error; err != nil {
 		t.Fatalf("查驳回站内信失败: %v", err)
 	}
-	if len(rejectNotices) != 0 {
-		t.Fatalf("C10 投递面未接通前驳回也不应写站内信, got %d 条", len(rejectNotices))
+	if len(rejectNotices) != 3 {
+		t.Fatalf("过审 2 条 + 驳回 1 条应共 3 条站内信, got %d", len(rejectNotices))
+	}
+	latest := rejectNotices[0]
+	if latest.TutorID == nil || *latest.TutorID != 11 {
+		t.Fatalf("驳回通知收件人应为讲师 %d, got %v", 11, latest.TutorID)
+	}
+	if !strings.Contains(latest.Title, "驳回") {
+		t.Fatalf("驳回通知标题应含「驳回」, got %q", latest.Title)
+	}
+	if !strings.Contains(latest.Content, "正文缺少安全须知") {
+		t.Fatalf("驳回通知正文应带理由, got %q", latest.Content)
+	}
+	if !strings.Contains(string(latest.Payload), `"draft"`) {
+		t.Fatalf("驳回通知 payload 应携带 review_status=draft, got %s", latest.Payload)
 	}
 
 	// 批量驳回空理由 400（不给无理由驳回后门）

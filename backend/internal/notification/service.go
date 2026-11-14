@@ -6,6 +6,7 @@
 package notification
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -54,16 +55,33 @@ func NewService(db *gorm.DB, logger *zap.Logger) *Service {
 	return &Service{db: db, logger: logger}
 }
 
-// Create 创建一条站内信通知（payload 为可选结构化标记，nil 表示无）。
+// Create 创建一条学员收件站内信通知（payload 为可选结构化标记，nil 表示无）。
 func (s *Service) Create(userID int, typ, title, content, link string, payload model.JSONB) error {
 	return s.CreateWithTx(s.db, userID, typ, title, content, link, payload, time.Now())
 }
 
-// CreateWithTx 在指定事务/连接内创建站内信。
+// CreateWithTx 在指定事务/连接内创建**学员收件**站内信（收件人落 user_id）。
 // 业务事件（如资料审核）与业务写同事务提交，避免通知丢失；createdAt 由调用方控制时区语义。
+// 讲师收件走 CreateForTutorWithTx——两个 id 空间不可互读（ADR-0095），故不共用一个入口。
 func (s *Service) CreateWithTx(tx GormCreator, userID int, typ, title, content, link string, payload model.JSONB, createdAt time.Time) error {
 	n := model.Notification{
-		UserID:    userID,
+		UserID:    &userID,
+		Type:      typ,
+		Title:     title,
+		Content:   content,
+		Link:      link,
+		Payload:   payload,
+		CreatedAt: createdAt,
+	}
+	return tx.Create(&n).Error
+}
+
+// CreateForTutorWithTx 在指定事务/连接内创建**讲师收件**站内信（收件人落 tutor_id）。
+// 与 CreateWithTx 分族而非共用一个「收件人 id」参数：两个 id 空间不可互读（ADR-0095），
+// 签名里区分才不会被误传。
+func (s *Service) CreateForTutorWithTx(tx GormCreator, tutorID int, typ, title, content, link string, payload model.JSONB, createdAt time.Time) error {
+	n := model.Notification{
+		TutorID:   &tutorID,
 		Type:      typ,
 		Title:     title,
 		Content:   content,
@@ -270,6 +288,20 @@ func reviewStatusPayload(reviewStatus string) model.JSONB {
 	return model.JSONB(b)
 }
 
+// chapterReviewPayload 章节审核结果的 payload：review_status + 来源标记（#2537 / ADR-0095 决策七）。
+// source ∈ {review, admin_edit}——「管理员直接改的」与「审核通过的」在 payload 上可判，
+// 消费方不必读 title 文案判事实。
+func chapterReviewPayload(reviewStatus, source string) model.JSONB {
+	b, err := json.Marshal(struct {
+		ReviewStatus string `json:"review_status"`
+		Source       string `json:"source"`
+	}{ReviewStatus: reviewStatus, Source: source})
+	if err != nil {
+		return nil
+	}
+	return model.JSONB(b)
+}
+
 // NotificationListPageResult 站内信分页结果（含未读数）。
 type NotificationListPageResult struct {
 	Items       []NotificationDTO `json:"items" nullability:"nonnil"`
@@ -284,18 +316,91 @@ type NotificationUnreadCountDTO struct {
 	Count int64 `json:"count"`
 }
 
-// List 分页查询当前用户通知，并附带未读数（一次请求同时支撑列表与角标）。
-func (s *Service) List(userID int, page, pageSize int) (*NotificationListPageResult, error) {
+// ErrNoMailbox 「该角色没有站内信箱」这一事实的唯一载体（ADR-0095）。
+// 与「信箱是空的」严格区分：admin / recruiter 当前没有通知投递面，调通知端点得 403
+// 而不是空列表——否则前端会看到一个功能没接通的「0 条未读」，那是 #2499 前端假报成功
+// 的同一类缺陷。handler 据此映射 403。
+var ErrNoMailbox = errors.New("该角色没有站内信箱")
+
+// RecipientRole 收件人身份（ADR-0095 的两个 id 空间）。
+type RecipientRole string
+
+const (
+	// RecipientStudent 学员收件人（落 notifications.user_id，指向 hrwai_users.id）。
+	RecipientStudent RecipientRole = "student"
+	// RecipientTutor 讲师收件人（落 notifications.tutor_id，指向 tutor.tutor_id）。
+	RecipientTutor RecipientRole = "tutor"
+)
+
+// Recipient 站内信收件人：身份 + 该身份表内的 id。
+// **两个 id 空间不可互读**——user_id=5 与 tutor_id=5 是两个不同的人（四张身份表各自
+// 自增，撞号几乎必然）。读面只查本角色对应的那一列，不跨列兜底。
+type Recipient struct {
+	Role RecipientRole
+	ID   int
+}
+
+// RecipientForRole 由登录角色（JWT role）构造收件人——**role→列的映射唯一入口**。
+// 收敛在单点而非散在四个读面各写一遍，否则就是第二事实源（ADR-0095）。
+// 非学员/讲师角色返回 ErrNoMailbox。
+//
+// 角色名用字面量而非 core.HrwaiRole：core 已经间接依赖本包（core → aiassistant →
+// points → notification），反向 import 会成环。取值与 core 的两条常量一致，由
+// TestRecipientForRoleMatchesCoreVocab 钉住，不靠人记。
+func RecipientForRole(role string, id int) (Recipient, error) {
+	switch role {
+	case "hrwai_user":
+		return Recipient{Role: RecipientStudent, ID: id}, nil
+	case "tutor":
+		return Recipient{Role: RecipientTutor, ID: id}, nil
+	}
+	return Recipient{}, ErrNoMailbox
+}
+
+// column 收件人所在的列名（本类型内部使用；不导出以免调用方绕过 RecipientForRole 拼列名）。
+//
+// 未知角色返回空串而**不是**兜底到 user_id：ADR-0095 明写「不跨列兜底」，兜到学员列正是
+// 那类「看起来能跑、实则投错人」的缺陷。Recipient 字段全导出，字面量构造是可能的，
+// 所以这里必须 fail-closed，由调用面（List/UnreadCount/...）把空列当成错误。
+func (r Recipient) column() string {
+	switch r.Role {
+	case RecipientTutor:
+		return "tutor_id"
+	case RecipientStudent:
+		return "user_id"
+	}
+	return ""
+}
+
+// errInvalidRecipient 未知收件人角色（含零值 Recipient{}）——fail-closed 的唯一载体。
+var errInvalidRecipient = errors.New("收件人身份不合法")
+
+// resolveColumn 取列名并拒绝未知角色（四个读面的统一前置）。
+func (r Recipient) resolveColumn() (string, error) {
+	col := r.column()
+	if col == "" {
+		return "", errInvalidRecipient
+	}
+	return col, nil
+}
+
+// List 分页查询当前收件人通知，并附带未读数（一次请求同时支撑列表与角标）。
+func (s *Service) List(ctx context.Context, r Recipient, page, pageSize int) (*NotificationListPageResult, error) {
+	col, err := r.resolveColumn()
+	if err != nil {
+		return nil, err
+	}
+	db := s.db.WithContext(ctx)
 	var unread int64
-	if err := s.db.Model(&model.Notification{}).
-		Where("user_id = ? AND is_read = ?", userID, false).Count(&unread).Error; err != nil {
+	if err := db.Model(&model.Notification{}).
+		Where(col+" = ? AND is_read = ?", r.ID, false).Count(&unread).Error; err != nil {
 		return nil, err
 	}
 
-	rows, total, page, pageSize, err := paging.QueryWithScan[model.Notification](s.db, page, pageSize, 10, 50,
+	rows, total, page, pageSize, err := paging.QueryWithScan[model.Notification](db, page, pageSize, 10, 50,
 		"id DESC",
 		func(q *gorm.DB) *gorm.DB {
-			return q.Model(&model.Notification{}).Where("user_id = ?", userID)
+			return q.Model(&model.Notification{}).Where(col+" = ?", r.ID)
 		})
 	if err != nil {
 		return nil, err
@@ -314,19 +419,28 @@ func (s *Service) List(userID int, page, pageSize int) (*NotificationListPageRes
 	}, nil
 }
 
-// UnreadCount 查询当前用户未读通知数。
-func (s *Service) UnreadCount(userID int) (int64, error) {
+// UnreadCount 查询当前收件人未读通知数。
+func (s *Service) UnreadCount(ctx context.Context, r Recipient) (int64, error) {
+	col, err := r.resolveColumn()
+	if err != nil {
+		return 0, err
+	}
 	var count int64
-	err := s.db.Model(&model.Notification{}).
-		Where("user_id = ? AND is_read = ?", userID, false).
+	err = s.db.WithContext(ctx).Model(&model.Notification{}).
+		Where(col+" = ? AND is_read = ?", r.ID, false).
 		Count(&count).Error
 	return count, err
 }
 
 // MarkRead 将单条通知标记为已读（仅限本人；已读或不存在均幂等成功，非本人报错）。
-func (s *Service) MarkRead(userID int, id int64) error {
-	res := s.db.Model(&model.Notification{}).
-		Where("id = ? AND user_id = ? AND is_read = ?", id, userID, false).
+func (s *Service) MarkRead(ctx context.Context, r Recipient, id int64) error {
+	col, err := r.resolveColumn()
+	if err != nil {
+		return err
+	}
+	db := s.db.WithContext(ctx)
+	res := db.Model(&model.Notification{}).
+		Where("id = ? AND "+col+" = ? AND is_read = ?", id, r.ID, false).
 		Updates(map[string]any{"is_read": true, "read_at": time.Now()})
 	if res.Error != nil {
 		return res.Error
@@ -336,8 +450,8 @@ func (s *Service) MarkRead(userID int, id int64) error {
 	}
 	// 未更新：校验是否属于本人（不存在或已读都返回成功，保持幂等）
 	var count int64
-	if err := s.db.Model(&model.Notification{}).
-		Where("id = ? AND user_id = ?", id, userID).Count(&count).Error; err != nil {
+	if err := db.Model(&model.Notification{}).
+		Where("id = ? AND "+col+" = ?", id, r.ID).Count(&count).Error; err != nil {
 		return err
 	}
 	if count == 0 {
@@ -346,10 +460,14 @@ func (s *Service) MarkRead(userID int, id int64) error {
 	return nil
 }
 
-// MarkAllRead 将当前用户全部未读通知标记为已读。
-func (s *Service) MarkAllRead(userID int) error {
-	return s.db.Model(&model.Notification{}).
-		Where("user_id = ? AND is_read = ?", userID, false).
+// MarkAllRead 将当前收件人全部未读通知标记为已读。
+func (s *Service) MarkAllRead(ctx context.Context, r Recipient) error {
+	col, err := r.resolveColumn()
+	if err != nil {
+		return err
+	}
+	return s.db.WithContext(ctx).Model(&model.Notification{}).
+		Where(col+" = ? AND is_read = ?", r.ID, false).
 		Updates(map[string]any{"is_read": true, "read_at": time.Now()}).Error
 }
 

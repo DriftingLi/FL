@@ -30,6 +30,9 @@ var (
 // SubmitChapterForReview 提交审核（C2 显式动作，讲师面）：冻结整章快照（正文 + 文件挂接
 // 清单，C3/C4）进 pending 槽；审中讲师改的是 working 草稿、不影响在审内容。
 // 状态转移：→ pending；清 reject_reason（题库 SubmitQuestion 先例）。
+//
+// 章节归属（ADR-0095 决策二）：actorID 是讲师，若 chapter.tutor_id 为空则顺手落定
+// （首次落定后不改——讲师 B 提交讲师 A 的章节不会抢走归属）。
 func SubmitChapterForReview(ctx context.Context, db *gorm.DB, chapterID, actorID int) error {
 	var chapter model.Chapter
 	if err := fetchRow(db.WithContext(ctx).Where("chapter_id = ?", chapterID), &chapter, ErrChapterNotFound); err != nil {
@@ -64,12 +67,26 @@ func SubmitChapterForReview(ctx context.Context, db *gorm.DB, chapterID, actorID
 		if err := freezeFileManifest(tx, &chapter); err != nil {
 			return err
 		}
-		return tx.Model(&model.Chapter{}).Where("chapter_id = ?", chapterID).
-			Updates(map[string]any{
-				"review_status": model.ChapterReviewPending,
-				"reject_reason": "",
-			}).Error
+		updates := map[string]any{
+			"review_status": model.ChapterReviewPending,
+			"reject_reason": "",
+		}
+		if err := tx.Model(&model.Chapter{}).Where("chapter_id = ?", chapterID).Updates(updates).Error; err != nil {
+			return err
+		}
+		// 章节归属（ADR-0095 决策二）：只落空位，首次落定后不改。条件写在 UPDATE 里而非
+		// 复用事务外读到的 chapter.TutorID——两个讲师并发提交时，后者不该覆盖前者的归属。
+		return ClaimChapterOwnership(tx, chapterID, actorID)
 	})
+}
+
+// ClaimChapterOwnership 讲师写章节时落定归属（ADR-0095 决策二）：仅当 tutor_id 为空时落当前
+// 讲师 id，非空不动——归属是「作者」而非「最后编辑者」，不能被后到的讲师悄悄改写。
+// 管理员写面**不调用**本函数（管理员是内容管理者，不是作者）。
+func ClaimChapterOwnership(db *gorm.DB, chapterID, tutorID int) error {
+	return db.Model(&model.Chapter{}).
+		Where("chapter_id = ? AND tutor_id IS NULL", chapterID).
+		Update("tutor_id", tutorID).Error
 }
 
 // ApproveChapterReview 过审（C7/C8 仅管理员）：pending 快照**原子切换**到已发布槽
@@ -158,37 +175,48 @@ func rejectChapterReviewInTx(tx *gorm.DB, chapterID int, reason string) error {
 		}).Error
 }
 
-// publishWorkingCopy 管理员写面直接生效（C7）：把 working 草稿同步进已发布槽
-// （正文+文件挂接清单）、状态 published、清理由、弃在审快照。事务内调用或自带事务。
-func publishWorkingCopy(db *gorm.DB, chapter *model.Chapter) error {
-	return db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("chapter_id = ?", chapter.ChapterID).
-			Delete(&model.ChapterContentSlot{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("chapter_id = ?", chapter.ChapterID).
-			Delete(&model.ChapterFileSlot{}).Error; err != nil {
-			return err
-		}
-		slot := model.ChapterContentSlot{
-			Slot:        model.ChapterReviewPublished,
-			ChapterID:   chapter.ChapterID,
-			Content:     chapter.Content,
-			ContentType: chapter.ContentType,
-			FileURL:     chapter.FileURL,
-		}
-		if err := tx.Create(&slot).Error; err != nil {
-			return err
-		}
-		if err := freezeFileManifestInto(tx, chapter, model.ChapterReviewPublished); err != nil {
-			return err
-		}
-		return tx.Model(&model.Chapter{}).Where("chapter_id = ?", chapter.ChapterID).
-			Updates(map[string]any{
-				"review_status": model.ChapterReviewPublished,
-				"reject_reason": "",
-			}).Error
-	})
+// publishWorkingCopyInTx 管理员写面直接生效（C7）的事务原语：把 working 草稿同步进已发布槽
+// （正文+文件挂接清单）、状态 published、清理由、弃在审快照。
+//
+// 只有 InTx 形态、没有自带事务的薄壳：C7 的调用方必须把「发布 + 通知」放进**同一事务**
+// （#2537 / ADR-0095 决策五强一致族），各自开事务会让通知失败时章节已发布、回滚不了。
+//
+// 返回发布前的收件人讲师 id（0 = 不知道发给谁），供调用方在同一事务内投递通知：
+// 收件人必须在槽被删**之前**读出——删槽后 pending 快照的 submitted_by 就消失了。
+func publishWorkingCopyInTx(tx *gorm.DB, chapter *model.Chapter) (tutorID int, err error) {
+	tutorID, err = reviewRecipient(tx, chapter)
+	if err != nil {
+		return 0, err
+	}
+	if err := tx.Where("chapter_id = ?", chapter.ChapterID).
+		Delete(&model.ChapterContentSlot{}).Error; err != nil {
+		return 0, err
+	}
+	if err := tx.Where("chapter_id = ?", chapter.ChapterID).
+		Delete(&model.ChapterFileSlot{}).Error; err != nil {
+		return 0, err
+	}
+	slot := model.ChapterContentSlot{
+		Slot:        model.ChapterReviewPublished,
+		ChapterID:   chapter.ChapterID,
+		Content:     chapter.Content,
+		ContentType: chapter.ContentType,
+		FileURL:     chapter.FileURL,
+	}
+	if err := tx.Create(&slot).Error; err != nil {
+		return 0, err
+	}
+	if err := freezeFileManifestInto(tx, chapter, model.ChapterReviewPublished); err != nil {
+		return 0, err
+	}
+	if err := tx.Model(&model.Chapter{}).Where("chapter_id = ?", chapter.ChapterID).
+		Updates(map[string]any{
+			"review_status": model.ChapterReviewPublished,
+			"reject_reason": "",
+		}).Error; err != nil {
+		return 0, err
+	}
+	return tutorID, nil
 }
 
 // MarkChapterDraft 讲师改动审核单元（正文/文件挂接清单）后把工作副本标回草稿（C2）：

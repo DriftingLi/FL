@@ -6,6 +6,7 @@
 package notification
 
 import (
+	"context"
 	"testing"
 
 	"go.uber.org/zap"
@@ -28,7 +29,8 @@ func TestNonNilDeclaredOutletsNeverEmitNull(t *testing.T) {
 // outletNotificationListEmpty 站内信列表：零消息时 items 是空集。
 func outletNotificationListEmpty(t *testing.T) any {
 	t.Helper()
-	res, err := NewService(testutil.NewMemoryDB(t), zap.NewNop()).List(1, 1, 20)
+	res, err := NewService(testutil.NewMemoryDB(t), zap.NewNop()).
+		List(context.Background(), Recipient{Role: RecipientStudent, ID: 1}, 1, 20)
 	if err != nil {
 		t.Fatalf("站内信列表失败: %v", err)
 	}

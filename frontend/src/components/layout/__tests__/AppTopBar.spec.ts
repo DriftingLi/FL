@@ -97,12 +97,18 @@ describe('顶栏身份格', () => {
 })
 
 describe('顶栏工具位', () => {
-  it('通知入口只对学员端出现', () => {
+  it('通知入口对学员与讲师出现（#2537：讲师也收章节审核结果）', () => {
     wrapper = mountBar()
     expect(wrapper.find('notification-panel-stub').exists()).toBe(true)
 
     wrapper.unmount()
     h.userInfo = { username: '导师甲', role: 'tutor' }
+    wrapper = mountBar()
+    expect(wrapper.find('notification-panel-stub').exists()).toBe(true)
+  })
+
+  it('通知入口不对管理员出现（admin 没有站内信箱，后端返回 403）', () => {
+    h.userInfo = { username: '管理员', role: 'admin' }
     wrapper = mountBar()
     expect(wrapper.find('notification-panel-stub').exists()).toBe(false)
   })
@@ -120,7 +126,7 @@ describe('顶栏工具位', () => {
     h.userInfo = { username: '导师甲', role: 'tutor' }
     wrapper = mountBar()
     expect(wrapper.find('theme-toggle-stub').exists()).toBe(true)
-    expect(wrapper.find('notification-panel-stub').exists()).toBe(false)
+    expect(wrapper.find('notification-panel-stub').exists()).toBe(true)
   })
 
   it('退出登录：确认后 revoke + 跳登录页', async () => {

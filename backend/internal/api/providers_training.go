@@ -20,7 +20,8 @@ import (
 func provideTraining(c *coreSingletons, d *Deps) {
 	d.CourseSvc = course.NewService(c.db, c.slideRenderer, c.logger)
 	d.AdminSvc = admin.NewService(c.db, c.sess, c.logger)
-	d.AdminCourseSvc = course.NewAdminService(c.db, c.fileSvc, c.logger)
+	// 章节审核结果站内信（#2537 / ADR-0095）：收件人是讲师，落 notifications.tutor_id。
+	d.AdminCourseSvc = course.NewAdminService(c.db, c.fileSvc, d.NotificationSvc, c.logger)
 	d.StudentSvc = student.NewService(c.db, c.logger)
 	d.TutorSvc = tutor.NewService(c.db, c.cfg.UploadFolder, c.fileSvc, c.slideRenderer, c.logger)
 	// 分片上传走存储 seam 的 multipart 能力（#2494）：能力断言与 nil 容忍在 tutorfile.NewService 内收口。

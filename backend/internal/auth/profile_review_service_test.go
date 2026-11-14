@@ -92,7 +92,7 @@ func TestProfileReview_Approve_EmitsNotification(t *testing.T) {
 		t.Errorf("通过审核通知 payload 应含 review_status=approved: %s", n.Payload)
 	}
 	// 通知应通过站内信模块落库：读面（域包的 List）能看到这条消息，而不只是表里有一行。
-	page, err := notifySvc.List(user.ID, 1, 20)
+	page, err := notifySvc.List(context.Background(), notification.Recipient{Role: notification.RecipientStudent, ID: user.ID}, 1, 20)
 	if err != nil {
 		t.Fatalf("站内信列表失败: %v", err)
 	}

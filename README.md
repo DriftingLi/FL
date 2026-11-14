@@ -2,7 +2,7 @@
 
 面向叉车维修培训、学员就业对接与叉车残值评估的全栈系统：在线培训与考试练习、论坛问答、资料投稿、积分激励、AI 助手、企业招聘对接，以及整机残值与电池剩余寿命（RUL）评估。系统按角色划分工作区（学员 / 讲师 / 管理员 / 企业招聘者），前端以子域名承载。
 
-领域术语以 [`CONTEXT.md`](./CONTEXT.md) 为准，架构决策记录在 [`docs/adr/`](./docs/adr/)（当前 95 篇）。
+领域术语以 [`CONTEXT.md`](./CONTEXT.md) 为准，架构决策记录在 [`docs/adr/`](./docs/adr/)（当前 96 篇）。
 
 ## 功能特性
 
@@ -324,7 +324,7 @@ python3 deploy/deploy.py down                  # 停栈（testing 冒烟收尾�
 | [`CONTEXT.md`](./CONTEXT.md) | 领域词汇表（canonical 术语与 Avoid 清单） |
 | [`API.md`](./API.md) | API 清单 |
 | [`AGENTS.md`](./AGENTS.md) | AI / agent 工作约定、验收门与发布流程 |
-| [`docs/adr/`](./docs/adr/) | 架构决策记录 ADR-0001 ~ ADR-0094（95 篇） |
+| [`docs/adr/`](./docs/adr/) | 架构决策记录 ADR-0001 ~ ADR-0095（96 篇） |
 | [`docs/agents/`](./docs/agents/) | agent 工作约定（**checks.md** 为测试与检查权威版本，**release.md** 为发布流程） |
 | [`docs/README.md`](./docs/README.md) | `docs/` 索引与入库 / 本地分层规则 |
 | [`deploy/README.md`](deploy/README.md) | 部署面：CLI、编排、数据库升级 runbook、域名 / 回源 / 诊断 |
