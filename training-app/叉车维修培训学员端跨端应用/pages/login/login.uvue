@@ -2,34 +2,51 @@
     <scroll-view scroll-y class="login-page">
         <view class="status-bar" :style="{ height: safeArea.statusBarHeight + 'px' }"></view>
 
-        <!-- 顶部品牌区：左对齐 Logo + 标题（B 方案：收紧纵向留白）
-             头部段不放可点元素——自绘头部无页头件的胶囊让位保护（batch6 N06 负面机检），
-             招聘者入口因此落到底部，见 .footer -->
+        <!-- 居中品牌区（#2517 截图 1:1）：logo + 标题，无副标题。
+             头部段零可点元素——自绘头部无页头件的胶囊让位保护（batch6 N06 负面机检） -->
         <view class="header">
-            <view class="brand">
-                <view class="logo-box">
-                    <image class="logo" src="/static/logo.png" mode="aspectFit"></image>
-                </view>
-                <view class="brand-text">
-                    <text class="app-title">叉车维修培训系统</text>
-                    <text class="app-sub">维修技能 · 残值评估</text>
-                </view>
+            <view class="logo-box">
+                <image class="logo" src="/static/logo.png" mode="aspectFit"></image>
             </view>
+            <text class="app-title">叉车维修培训系统</text>
         </view>
 
         <view class="form">
-            <!-- 验证码通道切换：分段控件，仅手机号/邮箱验证码模式展示 -->
-            <view class="tabs" v-if="mode != 'password'">
-                <view class="tab" :class="{ 'tab-on': mode == 'phone' }" @click="switchMode('phone')">
-                    <text class="tab-text" :class="{ 'tab-text-active': mode == 'phone' }">手机验证码</text>
+            <!-- ===== 学员 · 验证码通道（手机 / 邮箱） ===== -->
+            <template v-if="role == 'learner' && mode != 'password'">
+                <view class="field" v-if="mode == 'phone'">
+                    <text class="prefix">+86</text>
+                    <input class="field-input" type="number" placeholder="请输入手机号" :maxlength="11" :value="phone"
+                        @input="onPhoneInput" @confirm="onConfirm" />
                 </view>
-                <view class="tab" :class="{ 'tab-on': mode == 'email' }" @click="switchMode('email')">
-                    <text class="tab-text" :class="{ 'tab-text-active': mode == 'email' }">邮箱验证码</text>
+                <view class="field" v-else>
+                    <input class="field-input" type="text" placeholder="请输入邮箱" :maxlength="50" :value="email"
+                        @input="onEmailInput" @confirm="onConfirm" />
                 </view>
-            </view>
+                <view class="field">
+                    <input class="field-input" type="number" placeholder="请输入验证码" :maxlength="6"
+                        :value="mode == 'phone' ? phoneCode : emailCode" @input="onCodeInput" @confirm="onConfirm" />
+                    <button class="inline-btn" :class="{ 'inline-btn-disabled': sendingCode || countdown > 0 }"
+                        :disabled="sendingCode || countdown > 0" @click="onSendCode(mode)">
+                        {{ countdown > 0 ? countdown + 's' : '获取验证码' }}
+                    </button>
+                </view>
+                <!-- 人机验证：默认收起，点「获取验证码」就地展开（生产强制，config.go:338） -->
+                <view class="cap-row" v-if="captchaOpen">
+                    <input class="cap-input" type="text" placeholder="输入图形码" :maxlength="4" :value="captchaValue"
+                        @input="onCaptchaInput" @confirm="onConfirm" />
+                    <view class="cap-img-box cap-fail-box" v-if="captchaFailed" @click="refreshCaptcha">
+                        <text class="cap-fail-text">点击重试</text>
+                    </view>
+                    <image class="cap-img-box" v-else :src="captchaImage" mode="aspectFit" @click="refreshCaptcha" />
+                </view>
+                <view class="hint" v-if="codeHint.length > 0">
+                    <text class="hint-text">{{ codeHint }}</text>
+                </view>
+            </template>
 
-            <!-- ===== 账号密码登录 ===== -->
-            <template v-if="mode == 'password'">
+            <!-- ===== 学员 · 账号密码 ===== -->
+            <template v-else-if="role == 'learner'">
                 <view class="field">
                     <input class="field-input" type="text" placeholder="用户名或手机号" :maxlength="50" :value="username"
                         @input="onUsernameInput" @confirm="onConfirm" />
@@ -55,106 +72,76 @@
                 </view>
                 <view class="register-line">
                     <text class="meta-text">若手机号未注册，</text>
-                    <text class="meta-link" @click="goRegister">即刻注册</text>
+                    <text class="meta-link" @click="goRegister">立即注册</text>
                 </view>
             </template>
 
-            <!-- ===== 手机号验证码登录 ===== -->
-            <template v-else-if="mode == 'phone'">
-                <view class="field">
-                    <text class="prefix">+86</text>
-                    <input class="field-input" type="number" placeholder="请输入手机号" :maxlength="11" :value="phone"
-                        @input="onPhoneInput" @confirm="onConfirm" />
-                </view>
-                <view class="field">
-                    <input class="field-input" type="number" placeholder="请输入短信验证码" :maxlength="6"
-                        :value="phoneCode" @input="onPhoneCodeInput" @confirm="onConfirm" />
-                    <button class="inline-btn" :class="{ 'inline-btn-disabled': sendingCode || countdown > 0 }"
-                        :disabled="sendingCode || countdown > 0" @click="onSendCode('phone')">
-                        {{ countdown > 0 ? countdown + 's' : '获取验证码' }}
-                    </button>
-                </view>
-                <view class="field">
-                    <input class="field-input" type="text" placeholder="图形验证码" :maxlength="4"
-                        :value="captchaValue" @input="onCaptchaInput" />
-                    <view class="captcha-box captcha-fail-box" v-if="captchaFailed" @click="refreshCaptcha">
-                        <text class="captcha-fail-text">点击重试</text>
-                    </view>
-                    <image class="captcha-box" v-else :src="captchaImage" mode="aspectFit" @click="refreshCaptcha" />
-                </view>
-                <view class="hint" v-if="codeHint.length > 0">
-                    <text class="hint-text">{{ codeHint }}</text>
-                </view>
-            </template>
-
-            <!-- ===== 邮箱验证码登录 ===== -->
+            <!-- ===== 招聘者 · 账号密码（邀约制，走真实 B 端登录接口） ===== -->
             <template v-else>
                 <view class="field">
-                    <input class="field-input" type="text" placeholder="请输入邮箱" :maxlength="50" :value="email"
-                        @input="onEmailInput" @confirm="onConfirm" />
+                    <input class="field-input" type="text" placeholder="请输入招聘者账号" :maxlength="50"
+                        :value="recruiterAccount" @input="onRecruiterAccountInput" @confirm="onConfirm" />
                 </view>
                 <view class="field">
-                    <input class="field-input" type="number" placeholder="请输入邮箱验证码" :maxlength="6"
-                        :value="emailCode" @input="onEmailCodeInput" @confirm="onConfirm" />
-                    <button class="inline-btn" :class="{ 'inline-btn-disabled': sendingCode || countdown > 0 }"
-                        :disabled="sendingCode || countdown > 0" @click="onSendCode('email')">
-                        {{ countdown > 0 ? countdown + 's' : '获取验证码' }}
-                    </button>
+                    <input class="field-input" :password="!recruiterPasswordVisible" placeholder="请输入密码" :maxlength="32"
+                        :value="recruiterPassword" @input="onRecruiterPasswordInput" @confirm="onConfirm" />
+                    <text class="pwd-toggle" @click="toggleRecruiterPasswordVisible">{{ recruiterPasswordVisible ? '隐藏' : '显示' }}</text>
                 </view>
-                <view class="field">
-                    <input class="field-input" type="text" placeholder="图形验证码" :maxlength="4"
-                        :value="captchaValue" @input="onCaptchaInput" />
-                    <view class="captcha-box captcha-fail-box" v-if="captchaFailed" @click="refreshCaptcha">
-                        <text class="captcha-fail-text">点击重试</text>
-                    </view>
-                    <image class="captcha-box" v-else :src="captchaImage" mode="aspectFit" @click="refreshCaptcha" />
-                </view>
-                <view class="hint" v-if="codeHint.length > 0">
-                    <text class="hint-text">{{ codeHint }}</text>
+                <view class="hint">
+                    <text class="hint-text">邀约制账号 · 忘记密码请联系平台管理员</text>
                 </view>
             </template>
 
-            <!-- 协议勾选 + 注册引导（手机号/邮箱方式展示）
-                 #1478 抽成共享件 components/login-agreement（与着陆页同源同文案）；
-                 「非 password 模式才显示」的门槛条件留在本页，口径由 loginContract 继续执法 -->
-            <LoginAgreement v-if="mode != 'password'" :channel="mode" :agreed="agreed" @toggle="toggleAgree" @agreement="showAgreement" @register="goRegister" />
+            <!-- 协议勾选 + 注册引导：仅学员验证码通道（账号密码 / 招聘者不强制）
+                 #1478 抽成共享件 components/login-agreement（与着陆页同源同文案） -->
+            <LoginAgreement v-if="role == 'learner' && mode != 'password'" :channel="mode" :agreed="agreed"
+                :accent="agreementAccent" @toggle="toggleAgree" @agreement="showAgreement" @register="goRegister" />
+
+            <!-- 角色切换（#2517 截图位：登录按钮上方） -->
+            <view class="role-row">
+                <view class="role-pill" :class="{ 'role-pill-on': role == 'learner' }" @click="switchRole('learner')">
+                    <text class="role-text" :class="{ 'role-text-on': role == 'learner' }">学员</text>
+                </view>
+                <view class="role-pill" :class="{ 'role-pill-on': role == 'recruiter' }" @click="switchRole('recruiter')">
+                    <text class="role-text" :class="{ 'role-text-on': role == 'recruiter' }">招聘者</text>
+                </view>
+            </view>
+
             <!-- 登录按钮 -->
             <button class="btn-login" :class="{ 'btn-login-disabled': loading }"
                 :disabled="loading" @click="onSubmit">
                 {{ btnText }}
             </button>
 
-            <!-- 其他登录方式：微信一键登录（#1908，纯导航回欢迎页，本页不内嵌微信链路）
-                 + 账号密码 / 验证码通道切换（替代原底部 mode-switch 与 back-password 两段入口） -->
-            <!-- 其他登录方式左对齐小标题（比居中分隔线更贴合左对齐版式） -->
-            <text class="alt-caption">其他登录方式</text>
-            <view class="alt-row">
-                <view class="alt-cell alt-cell-left">
-                    <view class="alt-btn alt-btn-wechat" @click="goWechatLanding">
-                        <image class="alt-icon" src="/static/wechat-logo.png" mode="aspectFit"></image>
-                        <text class="alt-btn-text alt-btn-text-wechat">微信登录</text>
+            <!-- 底部三图标：手机 / 微信 / 邮箱（学员侧通道入口，替代原顶部通道 tab） -->
+            <view class="icon-row" v-if="role == 'learner'">
+                <view class="icon-cell" @click="switchMode('phone')">
+                    <view class="icon-circle" :class="{ 'icon-circle-on': mode == 'phone' }">
+                        <text class="icon-glyph">📱</text>
                     </view>
                 </view>
-                <view class="alt-cell">
-                    <view class="alt-btn alt-btn-plain" v-if="mode != 'password'" @click="switchMode('password')">
-                        <text class="alt-btn-text">账号密码登录</text>
-                    </view>
-                    <view class="alt-btn alt-btn-plain" v-else @click="switchMode('phone')">
-                        <text class="alt-btn-text">验证码登录</text>
+                <view class="icon-cell" @click="goWechatLanding">
+                    <view class="icon-circle icon-circle-wechat">
+                        <image class="icon-img" src="/static/wechat-logo.png" mode="aspectFit"></image>
                     </view>
                 </view>
+                <view class="icon-cell" @click="switchMode('email')">
+                    <view class="icon-circle" :class="{ 'icon-circle-on': mode == 'email' }">
+                        <text class="icon-glyph">✉</text>
+                    </view>
+                </view>
+            </view>
+
+            <!-- 密码登录 / 验证码登录 小字（生物识别入口的宿主，截图外新增） -->
+            <view class="small-row" v-if="role == 'learner'">
+                <text class="small-link" @click="togglePasswordMode">{{ mode == 'password' ? '验证码登录' : '密码登录' }}</text>
             </view>
         </view>
 
-        <!-- 底部说明 + 招聘者入口（纯文字链接，保持低调；不进头部段） -->
+        <!-- 底部说明（招聘者入口已上移为角色切换器，不再留文字链） -->
         <view class="footer">
             <view class="footer-line"></view>
-            <view class="footer-row">
-                <text class="footer-text">叉车维修培训系统 · 学员端</text>
-                <view class="footer-link-box" @click="goRecruiterLogin">
-                    <text class="footer-link">招聘者登录</text>
-                </view>
-            </view>
+            <text class="footer-text">叉车维修培训系统 · 学员端</text>
         </view>
     </scroll-view>
 </template>
@@ -174,9 +161,9 @@
     // 生物识别实例只有一个：门控 checkSupport 写入的 isSupported 与模板读取的必须是同一份
     const biometric = useBiometric()
 
-    // 表单态（登录方式 / 验证码 / 提交），模板绑定的符号一律解构成本地绑定 ——
-    // 模板因此可以**逐字节不变**（UI 像素级冻结的最强证据面），无需 reg.xxx.value 改写
+    // 表单态（角色 / 登录方式 / 验证码 / 提交），模板绑定的符号一律解构成本地绑定
     const {
+        role,
         mode,
         phone,
         phoneCode,
@@ -187,19 +174,26 @@
         email,
         emailCode,
         agreed,
+        captchaOpen,
         captchaImage,
         captchaValue,
         captchaFailed,
+        recruiterAccount,
+        recruiterPassword,
+        recruiterPasswordVisible,
+        agreementAccent,
         loading,
         sendingCode,
         countdown,
         codeHint,
         btnText,
-        loadCaptcha,
         clearCountdownTimer,
         switchMode,
+        switchRole,
+        togglePasswordMode,
         toggleAgree,
         togglePasswordVisible,
+        toggleRecruiterPasswordVisible,
         showAgreement,
         refreshCaptcha,
         onSendCode,
@@ -207,7 +201,6 @@
         onConfirm,
         goRegister,
         goForgotPassword,
-        goRecruiterLogin,
     } = useLoginForm(biometric)
 
     // 生物识别门控面（回填 / 快捷登录 / 取消勾选清除），凭据 ref 由表单态注入
@@ -219,7 +212,7 @@
             uni.reLaunch({ url: '/pages/dashboard/dashboard' })
             return
         }
-        loadCaptcha()
+        // 图形验证码改为延迟加载：点「获取验证码」展开人机验证行时才拉图（#2517）
         initBiometricGate()
     })
 
@@ -236,8 +229,12 @@
         phone.value = e.detail.value
     }
 
-    function onPhoneCodeInput(e : InputEvent) : void {
-        phoneCode.value = e.detail.value
+    function onCodeInput(e : InputEvent) : void {
+        if (mode.value == 'phone') {
+            phoneCode.value = e.detail.value
+        } else {
+            emailCode.value = e.detail.value
+        }
     }
 
     function onUsernameInput(e : InputEvent) : void {
@@ -252,8 +249,12 @@
         email.value = e.detail.value
     }
 
-    function onEmailCodeInput(e : InputEvent) : void {
-        emailCode.value = e.detail.value
+    function onRecruiterAccountInput(e : InputEvent) : void {
+        recruiterAccount.value = e.detail.value
+    }
+
+    function onRecruiterPasswordInput(e : InputEvent) : void {
+        recruiterPassword.value = e.detail.value
     }
 
     function onCaptchaInput(e : InputEvent) : void {
@@ -271,56 +272,25 @@
 
     .status-bar { background-color: $bg-header; }
 
-    /* ===== 顶部品牌区（左对齐，B 方案） ===== */
-    .header { flex-direction: row; align-items: center; padding: 44rpx 48rpx 0 48rpx; }
-
-    .brand { flex-direction: row; align-items: center; }
+    /* ===== 居中品牌区（#2517 截图 1:1） ===== */
+    .header { align-items: center; padding: 56rpx 48rpx 0 48rpx; }
 
     /* Logo 托底：浅灰圆角块把彩色标志收成「应用图标」 */
     .logo-box {
-        width: 112rpx;
-        height: 112rpx;
-        border-radius: 28rpx;
+        width: 132rpx;
+        height: 132rpx;
+        border-radius: 32rpx;
         background-color: #F5F7FA;
         align-items: center;
         justify-content: center;
-        margin-right: 24rpx;
     }
 
-    .logo { width: 84rpx; height: 66rpx; }
+    .logo { width: 96rpx; height: 76rpx; }
 
-    .brand-text { flex-direction: column; flex: 1; }
-
-    .app-title { font-size: 36rpx; font-weight: bold; color: $text-strong; }
-
-    .app-sub { margin-top: 10rpx; font-size: 22rpx; color: $text-color-placeholder; }
+    .app-title { margin-top: 24rpx; font-size: 40rpx; font-weight: bold; color: $text-strong; }
 
     /* ===== 表单区 ===== */
-    .form { padding: 48rpx 48rpx 0 48rpx; }
-
-    /* 验证码通道切换：分段控件（灰底槽 + 白色活动块） */
-    .tabs {
-        flex-direction: row;
-        background-color: #F5F7FA;
-        border-radius: 22rpx;
-        padding: 8rpx;
-        margin-bottom: 32rpx;
-    }
-
-    .tab {
-        flex: 1;
-        flex-direction: row;
-        align-items: center;
-        justify-content: center;
-        height: 76rpx;
-        border-radius: 16rpx;
-    }
-
-    .tab-on { background-color: #ffffff; box-shadow: 0 2rpx 10rpx rgba(26, 26, 26, 0.08); }
-
-    .tab-text { font-size: 28rpx; color: $text-color-secondary; }
-
-    .tab-text-active { color: $text-strong; font-weight: bold; }
+    .form { padding: 56rpx 48rpx 0 48rpx; }
 
     /* 统一输入框：灰底、104rpx 高、24rpx 圆角 */
     .field {
@@ -352,7 +322,7 @@
         border-right: 2rpx solid $border-color;
     }
 
-    .pwd-toggle { font-size: 26rpx; color: #2979FF; padding-left: 16rpx; }
+    .pwd-toggle { font-size: 26rpx; color: $primary-color; padding-left: 16rpx; }
 
     /* 验证码内嵌按钮：主色浅底胶囊（比白底描边更轻，不抢主按钮） */
     .inline-btn {
@@ -362,7 +332,7 @@
         padding: 0;
         margin-left: 20rpx;
         font-size: 26rpx;
-        color: #2979FF;
+        color: $primary-color;
         background-color: $primary-tint;
         border: none;
         border-radius: 32rpx;
@@ -372,8 +342,28 @@
     /* 发送中 / 倒计时：退回中性灰，不再靠整块透明度 */
     .inline-btn-disabled { color: $text-color-placeholder; background-color: #F5F7FA; }
 
-    /* 图形验证码：输入框内右侧图块 */
-    .captcha-box {
+    /* 人机验证就地展开行：输入框在左、码图在右（#2517 裁定 A） */
+    .cap-row {
+        flex-direction: row;
+        align-items: center;
+        height: 104rpx;
+        background-color: #F5F7FA;
+        border-radius: 24rpx;
+        padding: 0 28rpx;
+        margin-bottom: 24rpx;
+    }
+
+    .cap-input {
+        flex: 1;
+        height: 104rpx;
+        border: none;
+        background-color: transparent;
+        padding: 0;
+        font-size: 30rpx;
+        color: $text-strong;
+    }
+
+    .cap-img-box {
         width: 176rpx;
         height: 72rpx;
         border-radius: 16rpx;
@@ -381,9 +371,9 @@
         background-color: #ffffff;
     }
 
-    .captcha-fail-box { align-items: center; justify-content: center; }
+    .cap-fail-box { align-items: center; justify-content: center; }
 
-    .captcha-fail-text { font-size: 20rpx; color: #999999; text-align: center; }
+    .cap-fail-text { font-size: 20rpx; color: $text-color-placeholder; text-align: center; }
 
     /* 验证码规则提示 */
     .hint { margin-top: -8rpx; margin-bottom: 8rpx; }
@@ -395,8 +385,8 @@
 
     .biometric-link {
         font-size: 26rpx;
-        color: #2979FF;
-        border-bottom: 1rpx dashed #2979FF;
+        color: $primary-color;
+        border-bottom: 1rpx dashed $primary-color;
         padding-bottom: 2rpx;
     }
 
@@ -420,15 +410,34 @@
         margin-right: 12rpx;
     }
 
-    .checkbox-checked { background-color: #2979FF; border-color: #2979FF; }
+    .checkbox-checked { background-color: $primary-color; border-color: $primary-color; }
 
     .check-mark { font-size: 24rpx; color: #ffffff; }
 
-    .meta-text { font-size: 25rpx; color: #666666; }
+    .meta-text { font-size: 25rpx; color: $text-color-secondary; }
 
-    .meta-link { font-size: 25rpx; color: #2979FF; }
+    .meta-link { font-size: 25rpx; color: $primary-color; }
 
     .register-line { flex-direction: row; align-items: center; margin-bottom: 8rpx; }
+
+    /* ===== 角色切换（学员 / 招聘者，截图位在登录按钮上方） ===== */
+    .role-row { flex-direction: row; justify-content: center; margin-top: 8rpx; margin-bottom: 24rpx; }
+
+    .role-pill {
+        height: 88rpx;
+        padding: 0 40rpx;
+        border-radius: 44rpx;
+        align-items: center;
+        justify-content: center;
+        background-color: #F5F7FA;
+        margin: 0 12rpx;
+    }
+
+    .role-pill-on { background-color: $primary-tint; }
+
+    .role-text { font-size: 26rpx; color: $text-color-secondary; }
+
+    .role-text-on { color: $primary-color; font-weight: bold; }
 
     /* ===== 主登录按钮 ===== */
     .btn-login {
@@ -437,8 +446,8 @@
         height: 108rpx;
         line-height: 108rpx;
         border-radius: 54rpx;
-        background-color: #2979FF;
-        box-shadow: 0 12rpx 28rpx rgba(41, 121, 255, 0.28);
+        background-color: $primary-color;
+        box-shadow: 0 12rpx 28rpx rgba(35, 158, 221, 0.28);
         color: #ffffff;
         font-size: 32rpx;
         font-weight: bold;
@@ -448,51 +457,38 @@
 
     .btn-login-disabled { opacity: 0.6; }
 
-    /* ===== 其他登录方式：左对齐小标题 + 并排浅底次级按钮 ===== */
-    .alt-caption {
-        margin-top: 48rpx;
-        margin-bottom: 20rpx;
-        font-size: 24rpx;
-        color: $text-color-placeholder;
-    }
+    /* ===== 底部三图标：手机 / 微信 / 邮箱 ===== */
+    .icon-row { flex-direction: row; justify-content: center; margin-top: 40rpx; }
 
-    .alt-row { flex-direction: row; margin-bottom: 8rpx; }
+    .icon-cell { padding: 8rpx 24rpx; }
 
-    .alt-cell { flex: 1; }
-
-    .alt-cell-left { margin-right: 20rpx; }
-
-    .alt-btn {
-        flex-direction: row;
+    .icon-circle {
+        width: 88rpx;
+        height: 88rpx;
+        border-radius: 44rpx;
+        background-color: #F5F7FA;
         align-items: center;
         justify-content: center;
-        height: 96rpx;
-        border-radius: 48rpx;
     }
 
-    /* 微信品牌绿：浅绿底 + 绿字绿标（#07C160 走 uiHexWhitelist） */
-    .alt-btn-wechat { background-color: $success-tint; }
+    .icon-circle-on { background-color: $primary-tint; }
 
-    .alt-icon { width: 38rpx; height: 38rpx; margin-right: 12rpx; }
+    .icon-circle-wechat { background-color: $success-tint; }
 
-    .alt-btn-text { font-size: 28rpx; color: $text-color-secondary; }
+    .icon-glyph { font-size: 36rpx; color: $text-color-secondary; }
 
-    .alt-btn-text-wechat { color: #07C160; font-weight: bold; }
+    .icon-img { width: 44rpx; height: 44rpx; }
 
-    .alt-btn-plain { background-color: #F5F7FA; }
+    /* ===== 密码登录 / 验证码登录 小字 ===== */
+    .small-row { align-items: center; margin-top: 24rpx; }
 
-    /* ===== 底部说明 + 招聘者入口 ===== */
-    .footer { margin-top: 56rpx; padding: 0 48rpx; }
+    .small-link { font-size: 24rpx; color: $primary-color; padding: 16rpx 0; }
+
+    /* ===== 底部说明 ===== */
+    .footer { margin-top: 48rpx; padding: 0 48rpx 48rpx 48rpx; }
 
     /* 分隔线用独立 view（uvue 未验证 border-top-* 支持） */
     .footer-line { height: 2rpx; background-color: $border-color-light; }
 
-    .footer-row { flex-direction: row; align-items: center; justify-content: space-between; }
-
-    .footer-text { font-size: 24rpx; color: $text-color-placeholder; }
-
-    /* 88rpx 高保证 ≥44px 触摸目标 */
-    .footer-link-box { height: 88rpx; justify-content: center; padding-left: 32rpx; }
-
-    .footer-link { font-size: 25rpx; color: #2979FF; }
+    .footer-text { margin-top: 24rpx; font-size: 24rpx; color: $text-color-placeholder; text-align: center; }
 </style>
