@@ -11,17 +11,12 @@
         <!-- 状态栏占位（N06 自垫：高度取自 utils/system.uts 唯一真源，#1602/#1609） -->
         <view class="status-bar" :style="{ height: safeArea.statusBarHeight + 'px' }"></view>
 
-        <!-- 顶部标签 -->
-        <view class="page-tag">
-            <text class="page-tag-text">欢迎页</text>
-        </view>
-
         <!-- 品牌区：吉祥物改 logo 占位（原整组纯 view 手绘已删，#1478 判据 6） -->
         <view class="hero">
             <text class="hi">Hi，您好！</text>
             <text class="welcome">欢迎使用叉车维修培训系统</text>
             <view class="mascot-box">
-                <image class="mascot-logo" src="/static/logo.png" mode="aspectFit"></image>
+                <image class="mascot-logo" src="/static/ailogin.png" mode="aspectFit"></image>
             </view>
         </view>
 
@@ -37,7 +32,8 @@
             <button class="cta-wechat" v-if="wechatAvailable" :disabled="loading" @click="onWechatLogin">微信一键登录</button>
 
             <!-- 协议行与登录页同源同文案（共享件，判据 7）；它只门禁微信登录，故随主 CTA 同进同退 -->
-            <LoginAgreement v-if="wechatAvailable" :channel="'wechat'" :agreed="agreed" @toggle="toggleAgree" @agreement="showAgreement" @register="goRegister" />
+            <LoginAgreement v-if="wechatAvailable" :channel="'wechat'" :agreed="agreed" @toggle="toggleAgree"
+                @agreement="showAgreement" @register="goRegister" />
 
             <!-- 次级入口：通往独立登录页的路（登录页保留、降级为次级落点，不退役 #1483）
                  两端都在位，不受探测门禁 -->
@@ -128,72 +124,63 @@
         background-color: transparent;
     }
 
-    /* 顶部标签 */
-    .page-tag {
-        align-self: flex-start;
-        margin: 20rpx 0 0 40rpx;
-        padding: 10rpx 28rpx;
-        border-radius: 999rpx;
-        background-color: rgba(255, 255, 255, 0.20);
-        align-items: center;
-        justify-content: center;
-    }
-
-    .page-tag-text {
-        font-size: 24rpx;
-        color: rgba(255, 255, 255, 0.95);
-        text-align: center;
-    }
-
-    /* 品牌区（布局与配色取自 throwaway 原型 23409956，行为面未取） */
+    /* 品牌区：文案左对齐、吉祥物居中。字号与左边距按设计稿 781_75.png 实测反推
+       （780px 渲染：文字左边距 152px ⇒ 146rpx；Hi 字高 34px cap ⇒ 44rpx；副标题 12 字跨
+       475px ⇒ 38rpx；两行盒间距 19px ⇒ margin-top 13rpx）。故 hero 交叉轴 stretch
+       让文案左起，吉祥物靠 mascot-box 的 align-self 单独居中。
+       左边距取 144rpx 而非 146rpx：副标题 12 字 × 38rpx = 456rpx，146rpx 下内容宽只剩
+       458rpx（余 2rpx），换端换字体就可能折行；144rpx 留 6rpx 余量，视觉差 2rpx 不可见。 */
     .hero {
         flex: 1;
         flex-direction: column;
-        align-items: center;
+        align-items: stretch;
         justify-content: center;
-        padding: 0 56rpx;
+        padding: 0 144rpx;
     }
 
     .hi {
-        font-size: 60rpx;
+        font-size: 44rpx;
         font-weight: bold;
         color: #FFFFFF;
-        text-align: center;
+        text-align: left;
     }
 
     .welcome {
-        margin-top: 20rpx;
-        font-size: 32rpx;
+        margin-top: 13rpx;
+        font-size: 38rpx;
         color: rgba(255, 255, 255, 0.95);
-        text-align: center;
+        text-align: left;
     }
 
-    /* 吉祥物槽位：白底圆角盒 + logo 占位 */
+    /* 吉祥物槽位：设计稿位图直接坐在渐变上（原型 781_75.png），无白底盒、无投影。
+       尺寸按原型实测反推：原型 780px 渲染里吉祥物内容框 344x439px（占屏宽 44.1%）
+       ⇒ 750rpx 下内容约 331x422rpx；图自身带透明留白（画布 392x502、内容 363x452、填充 92.6%x90.0%），
+       故槽位取 360x460rpx，aspectFit 后内容约 333x415rpx，与原型齐平。 */
     .mascot-box {
+        align-self: center;
         margin-top: 60rpx;
         width: 360rpx;
-        height: 360rpx;
-        border-radius: 40rpx;
-        background-color: #ffffff;
+        height: 460rpx;
         align-items: center;
         justify-content: center;
-        box-shadow: 0 16rpx 40rpx rgba(8, 90, 120, 0.35);
     }
 
     .mascot-logo {
-        width: 320rpx;
-        height: 320rpx;
+        width: 360rpx;
+        height: 460rpx;
     }
 
-    /* 入口区白底卡片：让共享协议件的配色与登录页完全一致（同件同视觉，不给件加「深浅色」变体 prop） */
+    /* 入口区白底通栏（原型 781_75.png）：白底从渐变下沿直通屏底，无圆角、无投影、无左右留白。
+       高度按原型实测反推：白区 454px / 屏高 1688px = 26.9% ⇒ 844pt 屏上 227pt = 436rpx；
+       内容顶对齐（原型按钮距白区上沿 41px ⇒ 40rpx），故用 min-height 而非 height——登录失败
+       多出 error-box 时白区可自行长高，不会被裁。底边距 40rpx 只在内容超高时兜底。
+       共享协议件的配色仍与登录页完全一致（同件同视觉，不给件加「深浅色」变体 prop）。 */
     .actions {
         flex-direction: column;
         align-items: center;
-        margin: 0 24rpx 24rpx 24rpx;
-        padding: 32rpx 40rpx 40rpx 40rpx;
-        border-radius: 40rpx;
+        min-height: 436rpx;
+        padding: 40rpx 40rpx 40rpx 40rpx;
         background-color: #ffffff;
-        box-shadow: 0 12rpx 30rpx rgba(8, 90, 120, 0.28);
     }
 
     .error-box {
@@ -209,9 +196,9 @@
         text-align: center;
     }
 
-    /* 主 CTA：小程序端微信一键登录 */
+    /* 主 CTA：小程序端微信一键登录。宽度撑满通栏内宽（原型按钮左右各留 39px ⇒ 40rpx） */
     .cta-wechat {
-        width: 560rpx;
+        width: 100%;
         height: 96rpx;
         line-height: 96rpx;
         border-radius: 999rpx;
@@ -226,7 +213,7 @@
     /* 次级入口：通往独立登录页的路，两端都在位 */
     .cta-secondary {
         margin-top: 28rpx;
-        width: 560rpx;
+        width: 100%;
         height: 88rpx;
         border-radius: 999rpx;
         background-color: #F2F4F7;

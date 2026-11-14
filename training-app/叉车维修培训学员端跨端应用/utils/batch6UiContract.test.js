@@ -195,7 +195,8 @@ describe('批6 N06 专项（#1592：页面自绘、自垫状态栏走唯一真�
   it('N06 负面机检：其余自绘三页头部区不得长出可点元素形态（#1845 复审）', () => {
     // 头部段口径（按 2026-10-24 三页现状锚定）：自 class="status-bar" 占位起、至各自
     // 内容区起点类止（index=.hero、login=.form、profile-setup=.section）——三页该段现状
-    // 为居中 logo/标题（index=.page-tag、login/profile-setup=.header），零可点元素。
+    // 为居中 logo/标题（login/profile-setup=.header；index 的「欢迎页」胶囊已于 2026-11-14
+    // 按设计稿 781_75.png 删除，该段现只剩状态栏占位），零可点元素。
     // 段内出现 @click/@tap 即红：三页是自绘头部、无页头件的胶囊让位保护，头部右端长出
     // 可点元素就会顶进胶囊矩形；将来真要长，正路是 search 先例的 capsuleLeft 内联让位
     //（见上两条 #1845 断言），届时须先改本断言补让位判据、不得静默长出。

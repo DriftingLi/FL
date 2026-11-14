@@ -71,12 +71,13 @@ HBuilderX 是**单实例串行资源**——这是架构约束，不是可调优
 
 ## 代码规范
 
-文件 kebab-case、组件 PascalCase；导入顺序 `@vue/*` → uni-app API → 第三方 → 本地。`v-for` 必须带 `key`、**避免用 `index` 当 key**（`docs/adr/0025` 引它）。props / emit 优先，跨层才上 provide / inject 或 Pinia；平台差异走 `#ifdef`；样式用 rpx、触摸目标 ≥44×44。api 层**禁裸打印整段 response**，调试走 `api/request.uts` 的 `sanitizeForLog` 管道。
+文件 kebab-case、组件 PascalCase；导入顺序 `@vue/*` → uni-app API → 第三方 → 本地。`v-for` 必须带 `key`、**避免用 `index` 当 key**（`docs/adr/0025` 引它）。props / emit 优先，跨层才上 provide / inject 或 Pinia；**页面壳层零自持状态**——`ref` / `reactive` / `computed` 落进 `composables/` 并进它的显式结果类型，页面只解构消费（契约测试按页机检）；平台差异走 `#ifdef`；样式用 rpx、触摸目标 ≥44×44。api 层**禁裸打印整段 response**，调试走 `api/request.uts` 的 `sanitizeForLog` 管道。
 
 ## 注意事项
 
 - 一次改动一个 commit；改动后补测试、跑过再回话。**改导出符号（常量 / 函数改名）= 同批改钉名断言**——契约测试把名字与字面量都钉死，只改实现必然红；hint 常量还得同步 `docs/agents/ui-hints.md` 的登记行。
 - **动图片前先读 `docs/adr/0066`**：① 包内**禁 webp**（小程序 image 不解析包内 webp，真机/体验版空白，开发者工具是 Chromium 所以看不出来）② 喂**网络图**的 `<image>` 必须写 `:webp="true"`（该属性默认不解析网络 webp；后端把 jpg/png/bmp 转 webp 存，所以封面/头像/验证码一律是网络 webp）③ 新图用**逐张取优的调色板 PNG**，不放大。
+- **动 `static/` 里的图之前先算主包余量**：`G7a` 只打读数**不判红** ⇒ 破线是静默的；读数自己跑 `npm run build:mp-weixin-buildonly` 拿 `mainBytes=`，别拿 dev 产物或旧记录估（2026-11-14 登录页换 7 图后实测 1,419,854 B，距 1.5 MiB 建议线 153,010 B、距 2 MiB 硬限 677,298 B）。
 - 定时器挂 uni-app 生命周期上管理，别裸用 `setTimeout` / `setInterval`。
 - 跑完 HBuilderX 步骤先 `git status`：`manifest.json` 的 appid 会被回写置空、`pages.json` 会被写入启动页 `condition`——都是本地开发配置、禁止提交。删树前先 `cli project close --path <项目>`。
 - 一件票一个会话，冷启动只读票 + 对应 ADR；新决策回写 ADR 再关票（issue 评论不是必读面）。写 ADR 守中文文件名 + 固定六段 + ≤25 行，见 `docs/refactor-decisions.md`。

@@ -63,6 +63,7 @@ export type UseLoginFormResult = {
     countdown : Ref<number>
     codeHint : ComputedRef<string>
     btnText : ComputedRef<string>
+    wechatHighlighted : ComputedRef<boolean>
     refreshCaptcha : () => void
     clearCountdownTimer : () => void
     switchMode : (m : string) => void
@@ -464,6 +465,15 @@ export function useLoginForm(biometric : UseBiometricResult) : UseLoginFormResul
         return '登 录'
     })
 
+    // 底部三图标的灰/绿两态（设计稿导出位图，落盘 static/icons/login/）：
+    // 手机 / 邮箱跟随当前通道切换；微信是导航入口、不是通道，按设计稿常亮品牌绿。
+    // 两态路径直接写在模板里（字面量 /static/…）：包内图不吃 webp 属性，
+    // utils/imageWebpAttrContract 按「:src 表达式里出现 /static/」判豁免，藏进 computed 会被判漏配。
+    // 落盘用 64 色调色板 PNG 而非 webp：小程序 image 的 webp 属性默认 false，且只支持
+    // 网络资源、不解析包内 webp（体验版/真机空白，开发者工具是 Chromium 所以看不出来）。
+    // 6 个图标合计 webp 3,018 B -> PNG 3,874 B，包体只多 856 B。
+    const wechatHighlighted = computed<boolean>(() : boolean => true)
+
     function goRegister() : void {
         uni.navigateTo({ url: '/pages/register/register' })
     }
@@ -501,6 +511,7 @@ export function useLoginForm(biometric : UseBiometricResult) : UseLoginFormResul
         countdown,
         codeHint,
         btnText,
+        wechatHighlighted,
         refreshCaptcha: () => refreshCaptcha(),
         clearCountdownTimer: () => clearCountdownTimer(),
         switchMode: (m : string) => switchMode(m),

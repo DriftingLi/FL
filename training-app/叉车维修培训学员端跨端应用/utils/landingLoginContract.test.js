@@ -15,7 +15,7 @@
  * | 3 未勾选协议拦在请求之前 | 拦截文案与登录页**同一字面量** + 源码顺序（拦截 return 早于 `loginByWechat()`） | 「真的零请求」由 behavior 套件按桩计数断言 |
  * | 4 两入口一条成功出口 | 着陆页 composable **零** `reLaunch`、`afterLoginSuccess` 定义全仓**唯一**、新用户 toast 全仓**唯一** | 出口两条分支的行为 = behavior 套件真跑 |
  * | 5 失败可见 | `errorHint` 有写入点 **且** 页面有可见渲染位（两条都要，缺一即红） | 渲染出来长什么样 = 真机门 |
- * | 6 删手绘吉祥物 | 原手绘 class 名族零命中 + `logo.png` 图像槽位在位 | 图片视觉 = 真机门 |
+ * | 6 删手绘吉祥物 | 原手绘 class 名族零命中 + 吉祥物图像槽位在位（2026-11-14 由占位 `logo.png` 换成设计稿导出的 `ailogin.png`） | 图片视觉 = 真机门 |
  * | 7 协议行抽共享件 | 两页 import **同一件**、两页模板不再自持《用户协议》文案、共享件最小面（props/emits 清单 + 表单态不得入内）、**注册入口按 BASE 各通道都在**（F4：判据 7 只授权换文案，未授权增删入口） | 同视觉（`loginContract` 的模板 sha 锁已批准变更） |
  * | 探测件两页共享 | 两页 import **同一符号** + 两条判据的取数入口（端别 `uniPlatform` / 能力 `getProviderSync`）全仓**只出现在探测件里**（两份实现即红）；返回面是**两个**能力判断（展示面 / 接通面），能力半**已停用**（#1482 接回） | 探测结论在真机上对不对 = 真机门（且 `getProviderSync` 在本仓的**编译面**未验，见报告 ④c） |
  * | 协议详情提示一句文案 | 「详情页建设中」在内联面上**只住 `utils/agreementNotice.uts`**，三页只是转投（F2：曾有三个副本） | 端到端文案由 `landingLoginBehavior` C3-C6 真跑单点 |
@@ -460,28 +460,32 @@ describe('AC 5 loginByWechat 失败原因在启动页可见（toast + 常驻渲�
 /** BASE 版启动页手绘吉祥物的 class 族（逐个点名，不用「任何 m- 前缀」这种会误伤的宽口径） */
 const HAND_DRAWN = ['antenna-stick', 'antenna-ball', 'm-head', 'm-face', 'm-ear', 'm-eye', 'm-eye-glow', 'm-mouth', 'm-body', 'm-chest', 'm-arm', 'm-leg'];
 
+/** 吉祥物图像槽位：2026-11-14 起取设计稿导出的 `ailogin.png`（原为 `logo.png` 占位）。
+ *  只锁「恰一处 + 在 mascot 盒内」，不锁尺寸与视觉——那归真机门。 */
+const MASCOT_SRC = '/static/ailogin.png';
+
 function mascotFacts(src) {
   const all = stripAll(src);
   return {
     handDrawn: HAND_DRAWN.filter((c) => all.includes(c)),
-    logoImages: (all.match(/<image[^>]*\/static\/logo\.png/g) || []).length,
-    imageTagInMascotBox: /<view class="mascot-box"[\s\S]*?<image[^>]*src="\/static\/logo\.png"/.test(all),
+    logoImages: (all.match(new RegExp(`<image[^>]*${MASCOT_SRC.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'g')) || []).length,
+    imageTagInMascotBox: new RegExp(`<view class="mascot-box"[\\s\\S]*?<image[^>]*src="${MASCOT_SRC.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`).test(all),
   };
 }
 
-describe('AC 6 启动页不再有纯 view 手绘吉祥物，图像槽位取现有 logo.png', () => {
+describe('AC 6 启动页不再有纯 view 手绘吉祥物，图像槽位取设计稿吉祥物', () => {
   const facts = mascotFacts(read(PAGE));
 
-  it('十二个手绘 class 零命中，logo 图像槽位恰一处且在 mascot 盒内', () => {
+  it('十二个手绘 class 零命中，吉祥物图像槽位恰一处且在 mascot 盒内', () => {
     expect(facts.handDrawn).toEqual([]);
     expect(facts.logoImages).toBe(1);
     expect(facts.imageTagInMascotBox).toBe(true);
   });
 
-  it('判别力：把原手绘的一个节点塞回来必红；把 logo 换成第二张图同样必红', () => {
+  it('判别力：把原手绘的一个节点塞回来必红；把吉祥物换成第二张图同样必红', () => {
     const back = read(PAGE).replace('<view class="hero">', '<view class="hero">\n            <view class="m-head"></view>');
     expect(mascotFacts(back).handDrawn).toContain('m-head');
-    const doubled = read(PAGE).replace('<image class="mascot-logo"', '<image class="mascot-logo2" src="/static/logo.png" /><image class="mascot-logo"');
+    const doubled = read(PAGE).replace('<image class="mascot-logo"', `<image class="mascot-logo2" src="${MASCOT_SRC}" /><image class="mascot-logo"`);
     expect(mascotFacts(doubled).logoImages).toBe(2);
     expect(mascotFacts(read(PAGE))).toEqual(facts);
   });
