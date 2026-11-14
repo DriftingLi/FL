@@ -357,8 +357,11 @@ const MODULES = {
 
   guide: {
     extraDirs: [],
-    files: ['pages/guide/choose-cert.uvue'],
-    extractDirs: [],
+    files: [
+      'pages/guide/composables/useChooseCertGuide.uts',
+      'pages/guide/choose-cert.uvue',
+    ],
+    extractDirs: ['pages/guide/composables'],
     crossModuleConsumers: [],
     budget: BUDGET,
     budgetOverrides: {},
