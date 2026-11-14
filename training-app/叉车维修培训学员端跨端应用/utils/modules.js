@@ -369,6 +369,7 @@ const MODULES = {
     extraDirs: [],
     files: [
       'pages/index/composables/useLandingLogin.uts',
+      'pages/index/composables/useLandingSplash.uts',
       'pages/index/index.uvue',
     ],
     extractDirs: ['pages/index/composables'],

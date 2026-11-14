@@ -1,0 +1,93 @@
+/**
+ * 启动闪屏态（#2535，设计稿 `307_6152.png`）—— 着陆页首帧的品牌图，1.5s 后淡出到着陆页内容。
+ *
+ * ## 为什么是「页内启动态」而不是一条新路由
+ * 地图 #2510 的映射裁定：闪屏 = `pages/index/index` 的启动态，不建路由。理由有两条：
+ *   1. 已登录冷启动的唯一落地路由是 `index.onLoad` 里那条 `reLaunch(dashboard)`（#1478 不变量），
+ *      多一条路由就要在它前面再插一次跳转，等于把「唯一」变成「两条」；
+ *   2. 闪屏与着陆页共用同一块渐变底，页内叠一层即可淡出，跨路由反而要处理两页之间的白闪。
+ *
+ * ## 时序
+ * `start()` 之后：保持 `SPLASH_HOLD_MS`（1500ms）→ 按 `SPLASH_FADE_STEP_MS` 分步把不透明度
+ * 从 1 降到 0（共 `SPLASH_FADE_MS`）→ 置 `splashVisible=false` 摘掉整层。
+ *
+ * 为什么手写分步而不是 CSS `transition`：uvue 原生端不支持 `transition` / `animation`
+ * （移动端 `docs/agents/uvue-css.md` 四条红线），写了不生效且不报错。分步改 `opacity` 是
+ * 两端都成立的做法。
+ *
+ * ## 计时器挂在生命周期上
+ * `dispose()` 取消两个计时器，由页面 `onUnload` 调用（本仓反模式：裸 `setTimeout` 不管生命周期）。
+ * 页面在闪屏期间被 reLaunch 走（例如已登录）时，`dispose()` 保证不会留下孤儿计时器。
+ */
+import { ref } from 'vue'
+import type { Ref } from 'vue'
+
+/** 品牌图保持时长（ms）：票面 Q1 拍板 1.5s */
+export const SPLASH_HOLD_MS : number = 1500
+/** 淡出总时长（ms） */
+export const SPLASH_FADE_MS : number = 300
+/** 淡出步长（ms）：10 步 × 30ms，肉眼连续、又不至于每帧都触发重排 */
+export const SPLASH_FADE_STEP_MS : number = 30
+
+/** useLandingSplash 的返回值（显式类型：UTS 对返回对象的函数字段推断不可靠） */
+export type UseLandingSplashResult = {
+	splashVisible : Ref<boolean>
+	splashOpacity : Ref<number>
+	start : () => void
+	dispose : () => void
+}
+
+export function useLandingSplash() : UseLandingSplashResult {
+	// 初值 true：未登录冷启动的第一帧就该是品牌图，不能先闪一下着陆页再盖上
+	const splashVisible = ref<boolean>(true)
+	const splashOpacity = ref<number>(1)
+	let holdTimer : number = 0
+	let fadeTimer : number = 0
+
+	function cancelTimers() : void {
+		if (holdTimer != 0) {
+			clearTimeout(holdTimer)
+			holdTimer = 0
+		}
+		if (fadeTimer != 0) {
+			clearInterval(fadeTimer)
+			fadeTimer = 0
+		}
+	}
+
+	/** 起一次闪屏：保持 → 分步淡出 → 摘层。重复调用会先复位（幂等） */
+	function start() : void {
+		cancelTimers()
+		splashVisible.value = true
+		splashOpacity.value = 1
+		holdTimer = setTimeout(() : void => {
+			holdTimer = 0
+			const steps : number = Math.ceil(SPLASH_FADE_MS / SPLASH_FADE_STEP_MS)
+			let step : number = 0
+			fadeTimer = setInterval(() : void => {
+				step++
+				if (step >= steps) {
+					if (fadeTimer != 0) {
+						clearInterval(fadeTimer)
+						fadeTimer = 0
+					}
+					splashOpacity.value = 0
+					splashVisible.value = false
+					return
+				}
+				splashOpacity.value = 1 - step / steps
+			}, SPLASH_FADE_STEP_MS)
+		}, SPLASH_HOLD_MS)
+	}
+
+	function dispose() : void {
+		cancelTimers()
+	}
+
+	return {
+		splashVisible: splashVisible,
+		splashOpacity: splashOpacity,
+		start: () => start(),
+		dispose: () => dispose(),
+	} as UseLandingSplashResult
+}
