@@ -1,5 +1,5 @@
 /**
- * 登录页表单态 composable（T13 login 手术，parent #651 / ADR-0007）
+ * 登录页表单态 composable（T13 login 手术，parent #651 / ADR-0007；#2517 角色切换 + 人机验证延迟展开）
  *
  * 逐字搬自 `pages/login/login.uvue` 的 `<script setup>`：登录方式切换 → 图形验证码 →
  * 验证码发送与倒计时 → 表单校验 → 提交（含「记住密码」的凭据落地）。函数体**零改写**，
@@ -12,6 +12,13 @@
  * 生物识别门控面（门控回填 / 快捷登录 / 凭据降级 / 孤儿凭据自愈）**不在本文件**，
  * 见同目录 `useBiometricGate.uts`；本文件只把 `username` / `password` / `rememberMe`
  * 三个 ref 交给它写。凭据的读写一律经 `utils/secureStorage` 抽象层，无 storage 直调。
+ *
+ * #2517 新增（登录页 1:1 还原）：
+ * - `role`（learner / recruiter）：同页角色切换，招聘者态走真实 B 端登录
+ *   `/api/auth/recruiter-login`（`auth.loginAsRecruiter`）→ reLaunch 现有 `/pages/recruiter/home`；
+ *   旧独立招聘者页保留，只服务 401 角色化出口。
+ * - `captchaOpen`：人机验证**延迟展开**——默认不占版面，点「获取验证码」就地展开验证行，
+ *   通过后发码并收起（生产强制，`backend/internal/config/config.go:338`）。
  */
 import { ref, computed } from 'vue'
 import type { Ref, ComputedRef } from 'vue'
@@ -32,6 +39,7 @@ import type { UseBiometricResult } from '../../../composables/useBiometric'
  * 不再是本文件的内部函数 —— 两页都从那里取，全仓不存在第二套登录成功跳转。）
  */
 export type UseLoginFormResult = {
+    role : Ref<string>
     mode : Ref<string>
     phone : Ref<string>
     phoneCode : Ref<string>
@@ -42,27 +50,33 @@ export type UseLoginFormResult = {
     email : Ref<string>
     emailCode : Ref<string>
     agreed : Ref<boolean>
+    captchaOpen : Ref<boolean>
     captchaImage : Ref<string>
     captchaValue : Ref<string>
     captchaFailed : Ref<boolean>
+    recruiterAccount : Ref<string>
+    recruiterPassword : Ref<string>
+    recruiterPasswordVisible : Ref<boolean>
+    agreementAccent : string
     loading : Ref<boolean>
     sendingCode : Ref<boolean>
     countdown : Ref<number>
     codeHint : ComputedRef<string>
     btnText : ComputedRef<string>
-    loadCaptcha : () => Promise<void>
     refreshCaptcha : () => void
     clearCountdownTimer : () => void
     switchMode : (m : string) => void
+    switchRole : (r : string) => void
+    togglePasswordMode : () => void
     toggleAgree : () => void
     togglePasswordVisible : () => void
+    toggleRecruiterPasswordVisible : () => void
     showAgreement : (name : string) => void
     onSendCode : (channel : string) => Promise<void>
     onSubmit : () => Promise<void>
     onConfirm : () => void
     goRegister : () => void
     goForgotPassword : () => void
-    goRecruiterLogin : () => void
 }
 
 /**
@@ -71,7 +85,10 @@ export type UseLoginFormResult = {
 export function useLoginForm(biometric : UseBiometricResult) : UseLoginFormResult {
     const auth = useAuthStore()
 
-    // 登录方式：password（账号密码，默认） | phone（手机验证码） | email（邮箱验证码）
+    // 角色：learner（学员，默认） | recruiter（招聘者，邀约制账号密码）
+    const role = ref<string>('learner')
+
+    // 登录方式：password（账号密码） | phone（手机验证码，默认） | email（邮箱验证码）
     // （wechat 档已随 #1879 退役：微信一键登录只保留欢迎页主 CTA 一条界面）
     const mode = ref<string>('phone')
 
@@ -90,8 +107,16 @@ export function useLoginForm(biometric : UseBiometricResult) : UseLoginFormResul
     const email = ref<string>('')
     const emailCode = ref<string>('')
 
+    // 招聘者账号 + 密码（#2517：同页切换，走 /api/auth/recruiter-login）
+    const recruiterAccount = ref<string>('')
+    const recruiterPassword = ref<string>('')
+    const recruiterPasswordVisible = ref<boolean>(false)
+
     // 协议勾选
     const agreed = ref<boolean>(false)
+
+    // 协议行强调色：共享件默认值保持着陆页现状（#2979FF），本页按主色 token 传入（#2517 裁定 8）
+    const agreementAccent : string = '#239EDD'
 
     // 图形验证码（人机验证，生产环境发送短信/邮箱验证码前必填）
     const captchaId = ref<string>('')
@@ -99,8 +124,10 @@ export function useLoginForm(biometric : UseBiometricResult) : UseLoginFormResul
     const captchaValue = ref<string>('')
     const captchaLoading = ref<boolean>(false)
     const captchaFailed = ref<boolean>(false)
+    // 人机验证行是否展开（#2517 延迟展开：默认收起，点「获取验证码」就地展开）
+    const captchaOpen = ref<boolean>(false)
 
-    /** 加载图形验证码（进入页面/切换方式/点击图片刷新）；失败展示"点击重试"占位 */
+    /** 加载图形验证码（展开人机验证行/点击图片刷新）；失败展示"点击重试"占位 */
     async function loadCaptcha() : Promise<void> {
         if (captchaLoading.value) return
         captchaLoading.value = true
@@ -139,13 +166,38 @@ export function useLoginForm(biometric : UseBiometricResult) : UseLoginFormResul
     // 连续输错次数（对齐后端：错误上限 5 次，发新码时清零）
     const wrongAttempts = ref<number>(0)
 
+    /** 收起人机验证行并清空已填图形码（切通道 / 切角色 / 发码成功后） */
+    function closeCaptcha() : void {
+        captchaOpen.value = false
+        captchaValue.value = ''
+    }
+
     function switchMode(m : string) : void {
         if (m == mode.value) return
         mode.value = m
         clearCountdownTimer()
         countdown.value = 0
         wrongAttempts.value = 0
-        loadCaptcha()
+        closeCaptcha()
+    }
+
+    /** 角色切换（学员 / 招聘者）：清倒计时与验证码态，表单值保留（切回不丢已填内容） */
+    function switchRole(r : string) : void {
+        if (r == role.value) return
+        role.value = r
+        clearCountdownTimer()
+        countdown.value = 0
+        wrongAttempts.value = 0
+        closeCaptcha()
+    }
+
+    /** 密码登录 / 验证码登录 互切（小字入口，生物识别入口的宿主） */
+    function togglePasswordMode() : void {
+        if (mode.value == 'password') {
+            switchMode('phone')
+        } else {
+            switchMode('password')
+        }
     }
 
     function toggleAgree() : void {
@@ -154,6 +206,10 @@ export function useLoginForm(biometric : UseBiometricResult) : UseLoginFormResul
 
     function togglePasswordVisible() : void {
         passwordVisible.value = !passwordVisible.value
+    }
+
+    function toggleRecruiterPasswordVisible() : void {
+        recruiterPasswordVisible.value = !recruiterPasswordVisible.value
     }
 
     function showAgreement(name : string) : void {
@@ -180,6 +236,14 @@ export function useLoginForm(biometric : UseBiometricResult) : UseLoginFormResul
 
     async function onSendCode(channel : string) : Promise<void> {
         if (sendingCode.value || countdown.value > 0) return
+        // 人机验证延迟展开（#2517）：首次点击只展开验证行并拉图，不直接发码
+        if (!captchaOpen.value) {
+            captchaOpen.value = true
+            captchaValue.value = ''
+            loadCaptcha()
+            uni.showToast({ title: '请先完成人机验证', icon: 'none' })
+            return
+        }
         if (captchaId.value.length == 0 || captchaValue.value.length == 0) {
             uni.showToast({ title: '请先输入图形验证码', icon: 'none' })
             return
@@ -208,10 +272,11 @@ export function useLoginForm(biometric : UseBiometricResult) : UseLoginFormResul
         uni.showLoading({ title: '发送中...', mask: true })
         try {
             await sendCodeApi(target, channel, 'login', captchaId.value, captchaValue.value)
-            // 发送成功后刷新图形验证码（答案用后即焚，防止重放）
+            // 发送成功后刷新图形验证码（答案用后即焚，防止重放）并收起验证行
             wrongAttempts.value = 0
             uni.hideLoading()
             uni.showToast({ title: '验证码已发送，请查收', icon: 'none' })
+            closeCaptcha()
             startCountdown()
         } catch (e) {
             uni.hideLoading()
@@ -258,12 +323,57 @@ export function useLoginForm(biometric : UseBiometricResult) : UseLoginFormResul
     }
 
     /**
+     * 招聘者登录（#2517）：真实 B 端账号密码 → `/api/auth/recruiter-login`，
+     * 成功后 reLaunch 现有招聘者工作台（与旧独立页同一落地页，ADR-0022 ④）。
+     */
+    async function submitRecruiter() : Promise<void> {
+        const acct = recruiterAccount.value.trim()
+        if (acct.length == 0) {
+            uni.showToast({ title: '请输入招聘者账号', icon: 'none' })
+            return
+        }
+        if (recruiterPassword.value.length == 0) {
+            uni.showToast({ title: '请输入密码', icon: 'none' })
+            return
+        }
+        loading.value = true
+        uni.showLoading({ title: '登录中...', mask: true })
+        try {
+            await auth.loginAsRecruiter({
+                username: acct,
+                password: recruiterPassword.value,
+            })
+            uni.hideLoading()
+            uni.reLaunch({ url: '/pages/recruiter/home' })
+        } catch (e) {
+            uni.hideLoading()
+            console.error('[login] recruiter failed:', e)
+            let msg = '登录失败，请重试'
+            if (e instanceof Error) {
+                const errObj = e as Error
+                const m = errObj.message
+                if (m != null && m.length > 0) {
+                    msg = m
+                }
+            }
+            uni.showToast({ title: msg, icon: 'none' })
+        } finally {
+            loading.value = false
+        }
+    }
+
+    /**
      * 登录成功后的落地分叉现居 `utils/loginOutlet.uts` 的 `afterLoginSuccess(isNew)` ——
      * 新用户走 choose-cert、老用户进 dashboard 两条分支**逐字未改**（连同两条 toast 文案与
      * 800/500ms 延时），搬走的动机是着陆页要复用同一条出口，而不是在 `pages/index` 再抄一份。
      * #1879 起本文件的微信提交分支退役，phone / email / password 三路共用这一个出口调用点。
      */
     async function onSubmit() : Promise<void> {
+        // 招聘者态：独立提交路径（无协议勾选、无验证码、无生物识别凭据）
+        if (role.value == 'recruiter') {
+            await submitRecruiter()
+            return
+        }
         // 账号密码登录不强制勾选协议（账号已是注册过的用户）
         if (mode.value != 'password') {
             const errAgree = agreed.value == false ? '请先同意用户协议和隐私政策' : ''
@@ -362,16 +472,12 @@ export function useLoginForm(biometric : UseBiometricResult) : UseLoginFormResul
         uni.navigateTo({ url: '/pages/forgot-password/forgot-password' })
     }
 
-    /** 招聘者入口：推入独立招聘者登录页（可返回，ADR-0022 ②） */
-    function goRecruiterLogin() : void {
-        uni.navigateTo({ url: '/pages/recruiter/login' })
-    }
-
     function onConfirm() : void {
         onSubmit()
     }
 
     return {
+        role,
         mode,
         phone,
         phoneCode,
@@ -382,26 +488,32 @@ export function useLoginForm(biometric : UseBiometricResult) : UseLoginFormResul
         email,
         emailCode,
         agreed,
+        captchaOpen,
         captchaImage,
         captchaValue,
         captchaFailed,
+        recruiterAccount,
+        recruiterPassword,
+        recruiterPasswordVisible,
+        agreementAccent,
         loading,
         sendingCode,
         countdown,
         codeHint,
         btnText,
-        loadCaptcha: () => loadCaptcha(),
         refreshCaptcha: () => refreshCaptcha(),
         clearCountdownTimer: () => clearCountdownTimer(),
         switchMode: (m : string) => switchMode(m),
+        switchRole: (r : string) => switchRole(r),
+        togglePasswordMode: () => togglePasswordMode(),
         toggleAgree: () => toggleAgree(),
         togglePasswordVisible: () => togglePasswordVisible(),
+        toggleRecruiterPasswordVisible: () => toggleRecruiterPasswordVisible(),
         showAgreement: (name : string) => showAgreement(name),
         onSendCode: (channel : string) => onSendCode(channel),
         onSubmit: () => onSubmit(),
         onConfirm: () => onConfirm(),
         goRegister: () => goRegister(),
         goForgotPassword: () => goForgotPassword(),
-        goRecruiterLogin: () => goRecruiterLogin(),
     } as UseLoginFormResult
 }

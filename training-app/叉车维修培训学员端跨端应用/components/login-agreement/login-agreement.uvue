@@ -1,15 +1,15 @@
 <template>
     <!-- 协议勾选 + 注册引导（#1478 抽自 pages/login/login.uvue，启动页与登录页同源同文案） -->
     <view class="la-row" @click="onToggle">
-        <view class="la-checkbox" :class="{ 'la-checkbox--checked': agreed }">
+        <view class="la-checkbox" :class="{ 'la-checkbox--checked': agreed }" :style="accentBoxStyle">
             <text v-if="agreed" class="la-check-mark">✓</text>
         </view>
         <text class="la-text">同意</text>
-        <text class="la-link" @click.stop="onAgreementTap('用户协议')">《用户协议》</text>
+        <text class="la-link" :style="accentTextStyle" @click.stop="onAgreementTap('用户协议')">《用户协议》</text>
         <text class="la-text">和</text>
-        <text class="la-link" @click.stop="onAgreementTap('用户隐私')">《用户隐私》</text>
+        <text class="la-link" :style="accentTextStyle" @click.stop="onAgreementTap('用户隐私')">《用户隐私》</text>
         <text class="la-text">{{ registerHint }}</text>
-        <text class="la-link" @click.stop="onRegister">立即注册</text>
+        <text class="la-link" :style="accentTextStyle" @click.stop="onRegister">立即注册</text>
     </view>
 </template>
 
@@ -27,12 +27,28 @@
     const props = withDefaults(defineProps<{
         agreed? : boolean
         channel? : string
+        accent? : string
     }>(), {
         agreed: false,
         channel: 'phone',
+        // 默认值 = 着陆页现状（历史蓝），登录页按主色 token 传入（#2517 裁定 8：共享件走 prop + 默认值）
+        accent: '#2979FF',
     })
 
     const emit = defineEmits(['toggle', 'agreement', 'register'])
+
+    /** 勾选框选中态配色（未选中保持样式块里的默认灰边白底）；形态对齐 app-nav-bar 的 rightSlotStyle（computed 返回 CSS 串） */
+    const accentBoxStyle = computed((): string => {
+        if (props.agreed) {
+            return 'background-color:' + props.accent + ';border-color:' + props.accent
+        }
+        return 'background-color:#ffffff;border-color:#C8CDD8'
+    })
+
+    /** 协议名 / 立即注册 的文字色 */
+    const accentTextStyle = computed((): string => {
+        return 'color:' + props.accent
+    })
 
     /**
      * 三条通道注册语义不同（brief 的硬依据）：只有微信是「登录即注册」，手机/邮箱未注册则
