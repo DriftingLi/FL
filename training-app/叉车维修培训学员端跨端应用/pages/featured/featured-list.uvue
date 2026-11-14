@@ -21,7 +21,7 @@
             <view class="article-list">
                 <view v-for="(item, idx) in items" :key="idx" class="article-card" @click="onItemClick(item)">
                     <view v-if="item.cover_image.length > 0" class="article-cover">
-                        <image class="article-cover-img" :src="item.cover_image" mode="aspectFill"></image>
+                        <image class="article-cover-img" :src="item.cover_image" mode="aspectFill" :webp="true"></image>
                     </view>
                     <view class="article-body">
                         <text class="article-title">{{ item.title }}</text>

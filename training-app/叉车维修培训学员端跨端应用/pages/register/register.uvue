@@ -54,7 +54,7 @@
 					<view class="captcha-img captcha-fail-box" v-if="reg.captchaFailed.value" @click="reg.refreshCaptcha()">
 						<text class="captcha-fail-text">加载失败 点击重试</text>
 					</view>
-					<image class="captcha-img" v-else :src="reg.captchaImage.value" mode="aspectFit" @click="reg.refreshCaptcha()" />
+					<image class="captcha-img" v-else :src="reg.captchaImage.value" mode="aspectFit" @click="reg.refreshCaptcha()" :webp="true" />
 				</view>
 				<view class="form-item hint" v-if="reg.codeHint.value.length > 0">
 					<text class="hint-text">{{ reg.codeHint.value }}</text>
@@ -94,7 +94,7 @@
 					<view class="captcha-img captcha-fail-box" v-if="reg.captchaFailed.value" @click="reg.refreshCaptcha()">
 						<text class="captcha-fail-text">加载失败 点击重试</text>
 					</view>
-					<image class="captcha-img" v-else :src="reg.captchaImage.value" mode="aspectFit" @click="reg.refreshCaptcha()" />
+					<image class="captcha-img" v-else :src="reg.captchaImage.value" mode="aspectFit" @click="reg.refreshCaptcha()" :webp="true" />
 				</view>
 				<view class="form-item hint" v-if="reg.codeHint.value.length > 0">
 					<text class="hint-text">{{ reg.codeHint.value }}</text>

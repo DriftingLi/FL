@@ -28,7 +28,7 @@
                             @click="onProductClick(item)">
                             <view class="must-buy-img-wrap">
                                 <image v-if="item.cover_url" :src="item.cover_url" class="must-buy-img"
-                                    mode="aspectFill" />
+                                    mode="aspectFill" :webp="true" />
                                 <view v-else class="must-buy-img-placeholder"></view>
                             </view>
                             <text class="must-buy-title">{{ item.title }}</text>
@@ -49,7 +49,7 @@
                 </view>
                 <view v-for="(item, idx) in products" :key="idx" class="product-item" @click="onProductClick(item)">
                     <view class="product-img-wrap">
-                        <image v-if="item.cover_url" :src="item.cover_url" class="product-img" mode="aspectFill" />
+                        <image v-if="item.cover_url" :src="item.cover_url" class="product-img" mode="aspectFill" :webp="true" />
                         <view v-else class="product-img-placeholder"></view>
                     </view>
                     <view class="product-info">

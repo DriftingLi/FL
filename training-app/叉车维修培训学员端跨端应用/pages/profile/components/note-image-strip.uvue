@@ -2,7 +2,7 @@
     <view class="strip">
         <view class="strip-row">
             <view v-for="(url, idx) in shownUrls" :key="url" class="cell">
-                <image class="thumb" :src="srcOf(url)" mode="aspectFill" @click="onPreview(idx)" />
+                <image class="thumb" :src="srcOf(url)" mode="aspectFill" @click="onPreview(idx)" :webp="true" />
                 <view v-if="editable" class="remove" @click.stop="onRemove(idx)">
                     <text class="remove-x">×</text>
                 </view>

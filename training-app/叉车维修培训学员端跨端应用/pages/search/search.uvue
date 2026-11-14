@@ -40,7 +40,7 @@
 					<view v-if="section.items.length > 0">
 						<view v-for="(item, idx) in section.items" :key="idx" class="result-item"
 							:class="{ 'result-item--last': idx == section.items.length - 1 }" @click="onItemClick(item)">
-							<image v-if="item.cover.length > 0" class="item-cover" :src="item.cover" mode="aspectFill" />
+							<image v-if="item.cover.length > 0" class="item-cover" :src="item.cover" mode="aspectFill" :webp="true" />
 							<view class="item-content">
 								<text class="item-title">
 									<text v-for="(seg, tIdx) in itemTitleSegments(item)" :key="tIdx"
@@ -68,7 +68,7 @@
 				<view class="typed-card">
 					<view v-for="(item, idx) in typedResult.items" :key="idx" class="result-item"
 						:class="{ 'result-item--last': idx == typedResult.items.length - 1 }" @click="onItemClick(item)">
-						<image v-if="item.cover.length > 0" class="item-cover" :src="item.cover" mode="aspectFill" />
+						<image v-if="item.cover.length > 0" class="item-cover" :src="item.cover" mode="aspectFill" :webp="true" />
 						<view class="item-content">
 							<text class="item-title">
 								<text v-for="(seg, tIdx) in itemTitleSegments(item)" :key="tIdx"

@@ -5,7 +5,7 @@
 			     附图（#2299）：缩略图一行、点开走 `uni.previewImage`；URL 是站内地址，原样当 src 用。 -->
 			<text v-if="role == 'user' && messageContent.length > 0" class="message-text">{{ displayContent(messageContent) }}</text>
 			<view v-if="role == 'user' && userImages.length > 0" class="user-images">
-				<image v-for="(u, idx) in userImages" :key="u" class="user-image" :src="u" mode="aspectFill" @click="onPreviewImage(idx)" />
+				<image v-for="(u, idx) in userImages" :key="u" class="user-image" :src="u" mode="aspectFill" @click="onPreviewImage(idx)" :webp="true" />
 			</view>
 			<!-- 助手消息：块怎么排一律交给四面共用的 `components/markdown/markdown-blocks.uvue`
 			     （#2354 决议 D1：气泡不再自排块）。解析仍在壳层 `utils/aiAnswerBody.uts`

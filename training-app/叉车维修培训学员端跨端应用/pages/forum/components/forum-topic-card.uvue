@@ -15,10 +15,10 @@
         <text class="topic-content-preview">{{ contentPreview }}</text>
         <view v-if="images.length > 0" class="topic-images">
             <view v-for="(img, i) in firstImages" :key="i" class="topic-image-cell">
-                <image class="topic-image" :src="imgUrl(img)" mode="aspectFill" />
+                <image class="topic-image" :src="imgUrl(img)" mode="aspectFill" :webp="true" />
             </view>
             <view v-if="images.length > 3" class="topic-image-cell">
-                <image class="topic-image" :src="moreImageUrl" mode="aspectFill" />
+                <image class="topic-image" :src="moreImageUrl" mode="aspectFill" :webp="true" />
                 <view class="topic-image-more">
                     <text class="topic-image-more-text">+{{ moreCount }}</text>
                 </view>
@@ -28,7 +28,7 @@
         <view v-if="variant === 'qa'" class="qa-footer">
             <view class="qa-author">
                 <view class="author-avatar" :style="{ backgroundColor: avatarColor }">
-                    <image v-if="authorAvatar.length > 0" class="author-avatar-img" :src="authorAvatarUrl" mode="aspectFill" />
+                    <image v-if="authorAvatar.length > 0" class="author-avatar-img" :src="authorAvatarUrl" mode="aspectFill" :webp="true" />
                     <text v-else class="author-avatar-text">{{ authorInitial }}</text>
                 </view>
                 <view class="qa-author-text">
@@ -55,7 +55,7 @@
         <!-- 作者行：头像 + 昵称 + 时间 -->
         <view class="topic-author-row">
             <view class="author-avatar" :style="{ backgroundColor: avatarColor }">
-                <image v-if="authorAvatar.length > 0" class="author-avatar-img" :src="authorAvatarUrl" mode="aspectFill" />
+                <image v-if="authorAvatar.length > 0" class="author-avatar-img" :src="authorAvatarUrl" mode="aspectFill" :webp="true" />
                 <text v-else class="author-avatar-text">{{ authorInitial }}</text>
             </view>
             <text class="author-name">{{ displayName }}</text>

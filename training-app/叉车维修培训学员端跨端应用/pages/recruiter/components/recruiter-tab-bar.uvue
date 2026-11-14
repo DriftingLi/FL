@@ -4,7 +4,7 @@
             :class="{ 'recruiter-tab-item-active': tab.key == active }" @click="onTap(tab.key)">
             <view class="recruiter-tab-icon-wrap">
                 <image v-if="tab.iconKind == 'png'" class="recruiter-tab-icon"
-                    :src="tab.key == active ? tab.iconActive : tab.icon" mode="aspectFit"></image>
+                    :src="tab.key == active ? tab.iconActive : tab.icon" mode="aspectFit" :webp="true"></image>
                 <text v-if="tab.iconKind == 'glyph'" class="recruiter-tab-glyph"
                     :class="{ 'recruiter-tab-glyph-active': tab.key == active }">{{ tab.glyph }}</text>
                 <!-- 交换 tab 徽标：只计**未过期**的 pending（数量由 utils/recruitDisplay.uts 算好传进来） -->

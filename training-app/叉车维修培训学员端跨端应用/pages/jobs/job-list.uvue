@@ -11,7 +11,7 @@
                 <text class="tab-text" :class="{ active: recruitTab === 'job' }">职位</text>
             </view>
             <view class="tab-avatar-btn" @click="onMine">
-                <image v-if="avatarUrl.length > 0" class="tab-avatar" :src="avatarUrl" mode="aspectFill" />
+                <image v-if="avatarUrl.length > 0" class="tab-avatar" :src="avatarUrl" mode="aspectFill" :webp="true" />
                 <view v-else class="tab-avatar-placeholder">
                     <text class="tab-avatar-icon">👷</text>
                 </view>
