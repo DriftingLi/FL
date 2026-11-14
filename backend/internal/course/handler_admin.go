@@ -48,9 +48,19 @@ func RegisterAdminRoutes(rg *gin.RouterGroup, session *security.Session, svc *Ad
 	write.DELETE("/course/:course_id", h.DeleteCourse)
 	write.POST("/course/:course_id/chapter", h.CreateChapter)
 	write.PUT("/chapter/:chapter_id", h.UpdateChapter)
-	write.POST("/chapter/:chapter_id/approve-review", h.ApproveChapterReview)
-	write.POST("/chapter/:chapter_id/reject-review", h.RejectChapterReview)
 	write.DELETE("/chapter/:chapter_id", h.DeleteChapter)
+
+	// ===== 章节审核（#2498 C7/C8 单章 + #2499 C9 队列与批量）=====
+	// 能力位 chapter.review 独立一键（#1639 一页一键；#2499 前审核动作挂在 course.manage 下，
+	// 迁移 000055 把持有者的可达面平移到新键，不缩权）。单章与批量同属一个审核动作，
+	// 不拆成两个键——否则「能批量审、不能单章审」这种组合没有语义。
+	review := g.Group("", middleware.CapabilityRequired(authz.CapChapterReview))
+	review.POST("/chapter/:chapter_id/approve-review", h.ApproveChapterReview)
+	review.POST("/chapter/:chapter_id/reject-review", h.RejectChapterReview)
+	review.GET("/chapter-reviews/pending", h.ListPendingChapterReviews)
+	review.GET("/chapter-reviews/:chapter_id/snapshot", h.GetChapterReviewSnapshot)
+	review.POST("/chapter-reviews/batch-approve", h.BatchApproveChapterReviews)
+	review.POST("/chapter-reviews/batch-reject", h.BatchRejectChapterReviews)
 }
 
 // @Summary 管理端课程列表
@@ -448,6 +458,110 @@ func (h *adminHandler) RejectChapterReview(c *gin.Context) {
 		WithSentinel(ErrInvalidReviewInput, http.StatusBadRequest).Handle(c)
 }
 
+// ===== 章节审核队列（#2499 C9）=====
+
+// @Summary 章节审核队列
+// @Description 待审章节按提交时间升序（#2499 C9）；有在审快照的章节才入队
+// @Tags 管理端-章节
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页条数" default(20)
+// @Success 200 {object} response.R{data=ChapterReviewQueueResult} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/chapter-reviews/pending [get]
+func (h *adminHandler) ListPendingChapterReviews(c *gin.Context) {
+	httpx.Endpoint[adminChapterReviewQueueReq, ChapterReviewQueueResult]{
+		Parse: func(c *gin.Context) (*adminChapterReviewQueueReq, error) {
+			return &adminChapterReviewQueueReq{
+				Page:     httpx.QueryIntDefault(c, "page", 1),
+				PageSize: httpx.QueryIntDefault(c, "page_size", 20),
+			}, nil
+		},
+		Invoke: func(ctx context.Context, req *adminChapterReviewQueueReq) (*ChapterReviewQueueResult, error) {
+			return h.courseSvc.ListPendingChapterReviews(ctx, req.Page, req.PageSize)
+		},
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
+}
+
+// @Summary 章节在审快照详情
+// @Description 预览在审快照的完整内容（正文 + 冻结文件清单，#2499 C9）；无在审版本 409
+// @Tags 管理端-章节
+// @Produce json
+// @Security BearerAuth
+// @Param chapter_id path int true "章节 ID"
+// @Success 200 {object} response.R{data=ChapterReviewSnapshotDTO} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 409 {object} response.R "没有在审版本"
+// @Router /admin/chapter-reviews/{chapter_id}/snapshot [get]
+func (h *adminHandler) GetChapterReviewSnapshot(c *gin.Context) {
+	httpx.Endpoint[idParam, ChapterReviewSnapshotDTO]{
+		Parse: func(c *gin.Context) (*idParam, error) {
+			id, err := httpx.PathInt(c, "chapter_id", "章节ID无效")
+			if err != nil {
+				return nil, err
+			}
+			return &idParam{ID: id}, nil
+		},
+		Invoke: func(ctx context.Context, req *idParam) (*ChapterReviewSnapshotDTO, error) {
+			return h.courseSvc.GetChapterReviewSnapshot(ctx, req.ID)
+		},
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).
+		WithSentinel(ErrChapterReviewNoPending, http.StatusConflict).Handle(c)
+}
+
+// @Summary 批量过审章节
+// @Description 逐章独立事务过审，一章失败不连坐其余；失败明细逐条返回（#2499 C9）
+// @Tags 管理端-章节
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body batchReviewBody true "章节 ID 列表"
+// @Success 200 {object} response.R{data=BatchApproveResult} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/chapter-reviews/batch-approve [post]
+func (h *adminHandler) BatchApproveChapterReviews(c *gin.Context) {
+	httpx.Endpoint[batchReviewInput, BatchApproveResult]{
+		Parse: func(c *gin.Context) (*batchReviewInput, error) {
+			body, err := httpx.BindJSONMsg[batchReviewBody](c, "请求数据无效")
+			if err != nil {
+				return nil, err
+			}
+			return &batchReviewInput{IDs: body.ChapterIDs}, nil
+		},
+		Invoke: func(ctx context.Context, req *batchReviewInput) (*BatchApproveResult, error) {
+			return h.courseSvc.BatchApproveChapterReviews(ctx, req.IDs)
+		},
+	}.WithSuccess(httpx.OkMsg("批量过审完成"), http.StatusInternalServerError).Handle(c)
+}
+
+// @Summary 批量驳回章节
+// @Description 统一驳回理由，逐章独立事务驳回 + 逐章站内信；失败明细逐条返回（#2499 C9）
+// @Tags 管理端-章节
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body batchRejectBody true "章节 ID 列表 + 统一驳回理由"
+// @Success 200 {object} response.R{data=BatchRejectResult} "success"
+// @Failure 400 {object} response.R "驳回理由不能为空"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/chapter-reviews/batch-reject [post]
+func (h *adminHandler) BatchRejectChapterReviews(c *gin.Context) {
+	httpx.Endpoint[batchRejectInput, BatchRejectResult]{
+		Parse: func(c *gin.Context) (*batchRejectInput, error) {
+			body, err := httpx.BindJSONMsg[batchRejectBody](c, "请求数据无效")
+			if err != nil {
+				return nil, err
+			}
+			return &batchRejectInput{IDs: body.ChapterIDs, Reason: body.Reason}, nil
+		},
+		Invoke: func(ctx context.Context, req *batchRejectInput) (*BatchRejectResult, error) {
+			return h.courseSvc.BatchRejectChapterReviews(ctx, req.IDs, req.Reason)
+		},
+	}.WithSuccess(httpx.OkMsg("批量驳回完成"), http.StatusInternalServerError).
+		WithSentinel(ErrInvalidReviewInput, http.StatusBadRequest).Handle(c)
+}
+
 // ===== Endpoint 请求类型（原 internal/api/admin.go:875-967 的共享私有类型副本）=====
 
 // idParam 路径整型 ID 请求（course_id / chapter_id）。原 internal/api/admin.go:878 的共享私有类型；
@@ -482,6 +596,34 @@ type rejectReviewBody struct {
 // rejectReviewInput 路径章节 ID + 驳回理由。
 type rejectReviewInput struct {
 	ID     int
+	Reason string
+}
+
+// adminChapterReviewQueueReq 审核队列查询参数（#2499 C9）。
+type adminChapterReviewQueueReq struct {
+	Page     int
+	PageSize int
+}
+
+// batchReviewBody 批量审核请求体（#2499 C9：批量过审用，批量驳回另带 reason）。
+type batchReviewBody struct {
+	ChapterIDs []int `json:"chapter_ids"`
+}
+
+// batchRejectBody 批量驳回请求体（#2499 C9：统一驳回理由）。
+type batchRejectBody struct {
+	ChapterIDs []int  `json:"chapter_ids"`
+	Reason     string `json:"reason"`
+}
+
+// batchReviewInput 批量过审入参。
+type batchReviewInput struct {
+	IDs []int
+}
+
+// batchRejectInput 批量驳回入参。
+type batchRejectInput struct {
+	IDs    []int
 	Reason string
 }
 

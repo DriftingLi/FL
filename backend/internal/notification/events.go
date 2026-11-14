@@ -398,6 +398,66 @@ func (s *Service) CreateProfileReviewEvent(tx GormCreator, ev ProfileReviewEvent
 	return s.CreateWithTx(tx, ev.UserID, NotifTypeProfileReview, title, content, "", payload, createdAt)
 }
 
+// ===== 章节审核结果（#2499 C10）=====
+
+// NotifTypeChapterReview 章节审核结果通知类型（过审/驳回共用，payload.review_status 判别）。
+const NotifTypeChapterReview = "chapter_review"
+
+// ChapterReviewEvent 章节审核结果事件（#2499 C10，typed event constructor 先例同构）。
+// payload 为结构化判定标记（{"review_status":"published"|"draft"}），供前端确定性消费；
+// 驳回时 Content 追加驳回理由（人读文案），过审时说明已对学员生效。
+type ChapterReviewEvent struct {
+	// UserID 收件人（提交审核的讲师）。
+	UserID int
+	// ChapterTitle 章节标题（文案用）。
+	ChapterTitle string
+	// CourseName 课程名（文案用，可为空）。
+	CourseName string
+	// ChapterID 章节 ID（payload 与链接用）。
+	ChapterID int
+	// CourseID 课程 ID（链接用）。
+	CourseID int
+	// ReviewStatus 审核结果：model.ChapterReviewPublished / model.ChapterReviewDraft。
+	ReviewStatus string
+	// Reason 驳回理由（过审时为空）。
+	Reason string
+}
+
+// NewChapterReviewEvent 构造章节审核结果通知事件。
+func NewChapterReviewEvent(userID int, chapterTitle, courseName string, chapterID, courseID int, reviewStatus, reason string) ChapterReviewEvent {
+	return ChapterReviewEvent{
+		UserID:       userID,
+		ChapterTitle: chapterTitle,
+		CourseName:   courseName,
+		ChapterID:    chapterID,
+		CourseID:     courseID,
+		ReviewStatus: reviewStatus,
+		Reason:       reason,
+	}
+}
+
+// CreateChapterReviewEvent 在指定事务/连接内创建章节审核结果站内信（与状态流转同事务）。
+// link 指向讲师章节编辑面（`/training/tutor/course/<courseID>/chapter/<chapterID>`），
+// 讲师点进去就能改被驳回的草稿。
+func (s *Service) CreateChapterReviewEvent(tx GormCreator, ev ChapterReviewEvent, createdAt time.Time) error {
+	title := "章节审核通过"
+	content := "你的章节「" + ev.ChapterTitle + "」已通过审核，学员端已更新。"
+	if ev.ReviewStatus == model.ChapterReviewDraft {
+		title = "章节审核被驳回"
+		content = "你的章节「" + ev.ChapterTitle + "」未通过审核"
+		if ev.Reason != "" {
+			content += "，原因：" + ev.Reason
+		}
+		content += "。请修改后重新提交审核。"
+	}
+	link := ""
+	if ev.CourseID > 0 && ev.ChapterID > 0 {
+		link = fmt.Sprintf("/training/tutor/course/%d/chapter/%d", ev.CourseID, ev.ChapterID)
+	}
+	return s.CreateWithTx(tx, ev.UserID, NotifTypeChapterReview, title, content, link,
+		reviewStatusPayload(ev.ReviewStatus), createdAt)
+}
+
 // ===== 尽力而为写入基座 =====
 
 // tryCreateEvent 尽力而为写入站内信：任何失败（含 receiver 为 nil）仅记日志，不向调用方传播。

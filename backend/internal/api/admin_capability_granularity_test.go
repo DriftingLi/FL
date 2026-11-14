@@ -159,6 +159,19 @@ func TestAdminCapabilityGranularity(t *testing.T) {
 			allow: []string{"/api/admin/job-reports"},
 			deny:  []string{"/api/admin/points/ledger", "/api/admin/hrwai-users"},
 		},
+		{
+			// #2499 一页一键：章节审核独立键——只给章节审核的角色读得到队列，
+			// 读不到课程管理列表；反过来课程管理员读不到审核队列（下面 deny 那一半）。
+			role: "章节审核员", caps: []string{"chapter.review"},
+			allow: []string{"/api/admin/chapter-reviews/pending"},
+			deny:  []string{"/api/admin/courses"},
+		},
+		{
+			// 课程管理不再覆盖章节审核（#2499 把审核动作平移到了 chapter.review）
+			role: "课程管理员不审章", caps: []string{"course.manage"},
+			allow: []string{"/api/admin/courses"},
+			deny:  []string{"/api/admin/chapter-reviews/pending"},
+		},
 	}
 
 	for i, tc := range cases {

@@ -28,6 +28,10 @@ import type {
   AuditLog,
   AuditLogPageResult,
   ChapterDTO,
+  BatchApproveResult,
+  BatchRejectResult,
+  ChapterReviewQueueResult,
+  ChapterReviewSnapshotDTO,
   CourseDTO,
   CoursePageResult,
   CourseStatDTO,
@@ -417,6 +421,34 @@ export const adminApi = {
   // #2498 C1/C4：驳回＝弃快照回草稿并记理由（理由必填）。
   rejectChapterReview(chapterId: number, reason: string) {
     return unwrappedRequest.post<ChapterDTO>(`/admin/chapter/${chapterId}/reject-review`, { reason })
+  },
+
+  // ===== 章节审核队列（#2499 C9）=====
+
+  /** 待审章节队列：按提交时间升序（先进先审）；出口即 Page（ADR-0060 决策 6） */
+  async listPendingChapterReviews(params: { page?: number; page_size?: number } = {}) {
+    const res = await unwrappedRequest.get<ChapterReviewQueueResult>('/admin/chapter-reviews/pending', { params })
+    return toPage(res.items, res.total)
+  },
+
+  /** 在审快照详情（正文 + 冻结文件清单，不是 working 草稿） */
+  getChapterReviewSnapshot(chapterId: number) {
+    return unwrappedRequest.get<ChapterReviewSnapshotDTO>(`/admin/chapter-reviews/${chapterId}/snapshot`)
+  },
+
+  /** 批量过审：逐章独立事务，失败明细逐条返回 */
+  batchApproveChapterReviews(chapterIds: number[]) {
+    return unwrappedRequest.post<BatchApproveResult>('/admin/chapter-reviews/batch-approve', {
+      chapter_ids: chapterIds
+    })
+  },
+
+  /** 批量驳回：统一理由，逐章独立事务 + 逐章站内信 */
+  batchRejectChapterReviews(chapterIds: number[], reason: string) {
+    return unwrappedRequest.post<BatchRejectResult>('/admin/chapter-reviews/batch-reject', {
+      chapter_ids: chapterIds,
+      reason
+    })
   },
 
   deleteChapter(chapterId: number) {

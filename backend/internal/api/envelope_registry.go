@@ -100,6 +100,11 @@ var envelopeRegistry = []EnvelopeSpec{
 	{Result: "course.CoursePageResult", Endpoints: []string{"GET /courses", "GET /admin/courses", "GET /tutor/courses"},
 		Keys: []string{"courses", "page", "pages", "total"}, Dialect: paging.DialectPages,
 		Sample: course.CoursePageResult{}},
+	// #2499 C9 章节审核队列：显式 page/page_size/total（沿 paging.QueryWithMax 的 DialectPageSize 口径，
+	// 与 CoursePageResult 的 pages 口径不同——队列页不需要总页数）。
+	{Result: "course.ChapterReviewQueueResult", Endpoints: []string{"GET /admin/chapter-reviews/pending"},
+		Keys: []string{"items", "page", "page_size", "total"}, Dialect: paging.DialectPageSize,
+		Sample: course.ChapterReviewQueueResult{}},
 	{Result: "favorite.FavoritePageResult", Endpoints: []string{"GET /favorites"},
 		Keys: []string{"page", "pages", "total", "favorites"}, Dialect: paging.DialectPages,
 		Sample: favorite.FavoritePageResult{}},
