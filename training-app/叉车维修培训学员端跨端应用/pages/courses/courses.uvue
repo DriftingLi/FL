@@ -53,8 +53,8 @@
                         <text class="retry-btn-text">重试</text>
                     </view>
                 </view>
-                <!-- #2443：空态按当前分组说人话 —— 「积分兑换」组恒空时不能只说「暂无课程数据」，
-                     否则用户会以为整站没课（真实原因见 #2435：后端 points_price 无写入通道） -->
+                <!-- #2443：空态按当前分组说人话 —— 「积分兑换」组为空时不能只说「暂无课程数据」，
+                     否则用户会以为整站没课（#2530：说明只收在证件范围，不含功能可用性的时间判断） -->
                 <view v-else-if="courses.length == 0 && !loading" class="empty-tip">
                     <text class="empty-text">{{ emptyText }}</text>
                     <text v-if="emptyHint.length > 0" class="empty-hint">{{ emptyHint }}</text>
@@ -158,9 +158,9 @@
     /** #1331：首屏失败标记 —— 失败与「暂无数据」必须分开（#816 口径），失败给可见错误 + 重试位，不伪装成空列表 */
     const loadError = ref<boolean>(false)
 
-    // ---- 空态文案（#2443）----
-    // 「积分兑换」组恒空是当前真实状态（后端 points_price 无写入通道，见 #2435 / #2447），
-    // 只说「暂无课程数据」会让用户误以为整站没课 ⇒ 按分组给不同文案 + 一句出路。
+    // ---- 空态文案（#2443 / #2530）----
+    // 「积分兑换」组按当前证件下发，某证件下一门可兑是正常事实（能否兑换取决于后端赋价，见 #2493）；
+    // 只说「暂无课程数据」会让人误以为整站没课 ⇒ 按分组给不同文案 + 一句出路，且只收到证件范围。
     const emptyText = computed((): string => {
         if (activePaid.value == 2) return '暂无可兑换课程'
         if (activePaid.value == 1) return '暂无免费课程'
@@ -168,7 +168,7 @@
     })
 
     const emptyHint = computed((): string => {
-        if (activePaid.value == 2) return '课程暂未开放积分兑换，可先看「全部」或「免费」'
+        if (activePaid.value == 2) return '本证件下暂无积分兑换课程，可先看「全部」或「免费」'
         return ''
     })
 
