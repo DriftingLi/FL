@@ -102,6 +102,7 @@
     import AppNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { getCourseListApi, getCatalogTreeSpecialties, getLevelsApi } from '../../api/course'
     import { getCurrentCredentialApi } from '../../api/credential'
+    import { consumeCourseRedeemIntent } from '../../utils/navigation'
     import type { CourseItem, SpecialtyItem, LevelItem } from '../../types/index'
 
     const windowHeight = uni.getSystemInfoSync().windowHeight
@@ -299,6 +300,15 @@
         credentialRefresh = loadBrowseCredential()
         await Promise.all([loadSpecialties(), loadLevels()])
         await ensureBrowseCredential()
+        // 跨页一次性意图优先于下面两个判据（#2531）：从积分商城「课程兑换」卡过来时，
+        // 不管证件是否变、列表是否非空，都必须切到「积分兑换」组并按该组重取一次。
+        // 这里直接置 activePaid 而不是调 onPaidTap(2)：同组重复点击是空操作，已经停在 2 组时不会重取。
+        // 组号取 paidValues 里的序号（2），不按文案匹配 —— 文案会改，序号是本页自己的契约。
+        if (consumeCourseRedeemIntent()) {
+            activePaid.value = 2
+            loadCourses(true)
+            return
+        }
         // 证件切换 ⇒ 受过滤视图立即按新证件重取（CONTEXT.md「当前证件」：切换立即生效、回到第一页）；
         // 证件未变时保持既有行为（列表非空不重取，避免从课程详情返回时丢掉滚动位置）
         if (browseCredentialId.value != prevCredentialId) {

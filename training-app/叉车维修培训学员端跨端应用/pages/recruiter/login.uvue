@@ -69,7 +69,7 @@
      *      这时才必须自带出口：`reLaunch` 回学员登录页。
      *
      * 判据用的是 UTS 全局 `getCurrentPages()`，与仓内既有同形写法一致
-     * （`utils/navigation.uts:14` / `pages/search/search.uvue:376` 的 `pages != null && pages.length > 1`）。
+     * （`utils/navigation.uts:41` / `pages/search/search.uvue:376` 的 `pages != null && pages.length > 1`）。
      *
      * **清槽的判据是「当前身份是招聘者」，不是「栈空」**：`auth_active_role` 只在 `loginAsRecruiter()`
      * 里被写成 recruiter，学员侧任何登录路径都不写它 ⇒ 带着 recruiter 标记回学员端，下一次 401 仍按
