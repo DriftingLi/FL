@@ -102,8 +102,8 @@ module.exports = {
     '#8AA9C0': 'pages/ai-assistant/ai-assistant.uvue func-head-arrow 收起箭头灰蓝——功能入口头部装饰灰，token 表无对应，待灰阶 token 票裁',
 
     // ── 批6（#1609 N06 无页头白名单 6 页 + mall N03 补漏）新增 ──
-    '#0066FF': 'pages/index/index.uvue landing-page 渐变首色——着陆品牌渐变对（蓝→绿），非主色 #239EDD 族，token 表无对应，待品牌渐变票裁',
-    '#00CC99': 'pages/index/index.uvue landing-page 渐变尾色/实底兜底——与 #0066FF 成对，同上',
+    // '#0066FF'/'#00CC99' 已随 #2558 收敛为 $brand-grad-start/$brand-grad-end（#2516 B0 落 token）：
+    // 值成了 token 值 ⇒ 白名单行必须删（§1.6 自检：白名单值不得与 token 值重叠），index.uvue 裸字面同步清零。
     '#FFF1F0': 'pages/index/index.uvue error-box 底——错误提示浅红底，$danger-tint(#ffebee) 近似但值不等，待真机裁',
     '#D93025': 'pages/index/index.uvue error-text 字色——错误红，$danger-color(#ff3b30) 值不等（同批2 #F44336 判例），待红系 token 票裁',
     '#22C55E': 'pages/index/index.uvue cta-wechat 主按钮底 / pages/forgot-password/forgot-password.uvue 成功按钮底——微信绿按钮，$success-color(#4cd964) 偏荧光语义不符（同批2 #4CAF50、批5 #14AE50 判例），待成功系 token 票裁',
