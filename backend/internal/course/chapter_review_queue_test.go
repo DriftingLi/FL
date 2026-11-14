@@ -44,7 +44,7 @@ func TestListPendingChapterReviewsOrderedBySubmitTime(t *testing.T) {
 	// 未提交的章节不进队列（C2：显式提交才进队列）
 	seedQueueChapter(t, db, "未提交章节", "draft", false)
 
-	svc := NewAdminService(db, nil, zap.NewNop())
+	svc := NewAdminService(db, nil, notification.NewService(db, zap.NewNop()), zap.NewNop())
 	res, err := svc.ListPendingChapterReviews(context.Background(), 1, 20)
 	if err != nil {
 		t.Fatalf("查队列失败: %v", err)
@@ -86,7 +86,7 @@ func TestReviewQueueExcludesReviewedChapters(t *testing.T) {
 		t.Fatalf("驳回失败: %v", err)
 	}
 
-	svc := NewAdminService(db, nil, zap.NewNop())
+	svc := NewAdminService(db, nil, notification.NewService(db, zap.NewNop()), zap.NewNop())
 	res, err := svc.ListPendingChapterReviews(context.Background(), 1, 20)
 	if err != nil {
 		t.Fatalf("查队列失败: %v", err)
@@ -111,7 +111,7 @@ func TestReviewSnapshotPreviewShowsFrozenNotWorking(t *testing.T) {
 		t.Fatalf("造文件失败: %v", err)
 	}
 
-	svc := NewAdminService(db, nil, zap.NewNop())
+	svc := NewAdminService(db, nil, notification.NewService(db, zap.NewNop()), zap.NewNop())
 	snap, err := svc.GetChapterReviewSnapshot(context.Background(), ch.ChapterID)
 	if err != nil {
 		t.Fatalf("查快照失败: %v", err)
@@ -130,7 +130,7 @@ func TestReviewSnapshotPreviewShowsFrozenNotWorking(t *testing.T) {
 func TestGetReviewSnapshotWithoutPending(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 	ch := seedQueueChapter(t, db, "没提交过", "v1", false)
-	svc := NewAdminService(db, nil, zap.NewNop())
+	svc := NewAdminService(db, nil, notification.NewService(db, zap.NewNop()), zap.NewNop())
 	if _, err := svc.GetChapterReviewSnapshot(context.Background(), ch.ChapterID); !errors.Is(err, ErrChapterReviewNoPending) {
 		t.Fatalf("无在审版本应返回 ErrChapterReviewNoPending, got %v", err)
 	}
@@ -142,7 +142,7 @@ func TestBatchApproveChapterReviewsReportsPartialFailure(t *testing.T) {
 	ok2 := seedQueueChapter(t, db, "可过审二", "v2", true)
 	noPending := seedQueueChapter(t, db, "没有在审", "v3", false)
 
-	svc := NewAdminService(db, nil, zap.NewNop())
+	svc := NewAdminService(db, nil, notification.NewService(db, zap.NewNop()), zap.NewNop())
 	res, err := svc.BatchApproveChapterReviews(context.Background(),
 		[]int{ok1.ChapterID, noPending.ChapterID, ok2.ChapterID})
 	if err != nil {
@@ -177,7 +177,7 @@ func TestBatchRejectChapterReviewsUnifiedReason(t *testing.T) {
 	a := seedQueueChapter(t, db, "驳回一", "v1", true)
 	b := seedQueueChapter(t, db, "驳回二", "v2", true)
 
-	svc := NewAdminService(db, nil, zap.NewNop())
+	svc := NewAdminService(db, nil, notification.NewService(db, zap.NewNop()), zap.NewNop())
 	res, err := svc.BatchRejectChapterReviews(context.Background(), []int{a.ChapterID, b.ChapterID}, "配图与正文不符")
 	if err != nil {
 		t.Fatalf("批量驳回失败: %v", err)
@@ -199,7 +199,7 @@ func TestBatchRejectChapterReviewsUnifiedReason(t *testing.T) {
 func TestBatchRejectChapterReviewsRequiresReason(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 	a := seedQueueChapter(t, db, "驳回", "v1", true)
-	svc := NewAdminService(db, nil, zap.NewNop())
+	svc := NewAdminService(db, nil, notification.NewService(db, zap.NewNop()), zap.NewNop())
 	if _, err := svc.BatchRejectChapterReviews(context.Background(), []int{a.ChapterID}, "   "); !errors.Is(err, ErrInvalidReviewInput) {
 		t.Fatalf("空理由应返回 ErrInvalidReviewInput, got %v", err)
 	}
@@ -207,7 +207,7 @@ func TestBatchRejectChapterReviewsRequiresReason(t *testing.T) {
 
 func TestBatchApproveEmptyIDsIsNoop(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewAdminService(db, nil, zap.NewNop())
+	svc := NewAdminService(db, nil, notification.NewService(db, zap.NewNop()), zap.NewNop())
 	res, err := svc.BatchApproveChapterReviews(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("空批量不应报错: %v", err)
@@ -217,20 +217,31 @@ func TestBatchApproveEmptyIDsIsNoop(t *testing.T) {
 	}
 }
 
-// ===== C10 typed event 契约：构造器形状与 payload（投递面待「讲师通知中心」票接通） =====
+// ===== C10 typed event 契约：构造器形状与 payload =====
 //
-// 为什么这里只测构造器不测投递：notifications.user_id 外键指向 hrwai_users（学员表），
-// 而章节提交人是讲师（tutor 表独立身份）。照现状写库会外键违约回滚整笔审核、或把章节
-// 信息投给 id 恰好相同的无关学员。sqlite 内存库没有该外键，投递测试是假绿。
+// 投递面已由 #2537 接通（ADR-0095）：讲师收件人落 notifications.tutor_id，
+// 不再是 user_id——两个 id 空间不可互读，故事件字段名是 TutorID 而非 UserID。
+// 端到端投递（含 C7 管理员直接生效）的契约测试在 internal/api。
 
 func TestChapterReviewEventShape(t *testing.T) {
-	ev := notification.NewChapterReviewEvent(7, "电瓶维护", "叉车保养课", 12, 3, "published", "")
-	if ev.UserID != 7 || ev.ChapterID != 12 || ev.CourseID != 3 || ev.ReviewStatus != "published" {
+	ev := notification.NewChapterReviewEvent(7, "电瓶维护", 12, 3, "published", "")
+	if ev.TutorID != 7 || ev.ChapterID != 12 || ev.CourseID != 3 || ev.ReviewStatus != "published" {
 		t.Fatalf("事件字段未按入参落位: %+v", ev)
 	}
-	evRej := notification.NewChapterReviewEvent(7, "电瓶维护", "叉车保养课", 12, 3, "draft", "正文缺少安全须知")
+	evRej := notification.NewChapterReviewEvent(7, "电瓶维护", 12, 3, "draft", "正文缺少安全须知")
 	if evRej.Reason != "正文缺少安全须知" {
 		t.Fatalf("驳回事件应带理由, got %q", evRej.Reason)
+	}
+}
+
+// TestChapterAdminEditEventShape C7 管理员直接生效事件：复用同一类型，AdminEdit 区分来源。
+func TestChapterAdminEditEventShape(t *testing.T) {
+	ev := notification.NewChapterAdminEditEvent(7, "电瓶维护", 12, 3)
+	if ev.TutorID != 7 || !ev.AdminEdit || ev.ReviewStatus != "published" {
+		t.Fatalf("管理员改写事件形状不符: %+v", ev)
+	}
+	if ev.Reason != "" {
+		t.Fatalf("管理员改写不是驳回，不应带理由: %q", ev.Reason)
 	}
 }
 

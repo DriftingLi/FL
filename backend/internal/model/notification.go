@@ -7,9 +7,16 @@ import "time"
 
 // Notification 站内信通知（P0 通知基础设施，当前仅站内信渠道）。
 // Payload 为结构化业务标记（JSONB，如资料审核 {"review_status":"approved"}），加性扩展，不参与人读文案。
+//
+// 收件人身份空间（ADR-0095）：一条站内信只发给一个人，这个人可能是学员（UserID）
+// 或讲师（TutorID），**恰好一列非空**（DB CHECK num_nonnulls 兜底）。两个 id 空间
+// 不可互读——user_id=5 与 tutor_id=5 是两个不同的人（四张身份表各自自增）。
 type Notification struct {
-	ID        int64      `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	UserID    int        `gorm:"column:user_id" json:"user_id"`
+	ID int64 `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	// UserID 学员收件人（hrwai_users.id）；与 TutorID 恰好一列非空。
+	UserID *int `gorm:"column:user_id" json:"user_id,omitempty"`
+	// TutorID 讲师收件人（tutor.tutor_id）；与 UserID 恰好一列非空。
+	TutorID   *int       `gorm:"column:tutor_id" json:"tutor_id,omitempty"`
 	Type      string     `gorm:"column:type;default:system" json:"type"`
 	Title     string     `gorm:"column:title" json:"title"`
 	Content   string     `gorm:"column:content" json:"content"`

@@ -15,7 +15,7 @@ import (
 // TestCourseSortOrder 课程 sort_order：创建/更新可设置，列表按 sort_order 升序。
 func TestCourseSortOrder(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewAdminService(db, nil, zap.NewNop())
+	svc := NewAdminService(db, nil, nil, zap.NewNop())
 
 	spec := model.Specialty{Code: "operation", Name: "操作", Status: 1, CreatedAt: testutil.Now()}
 	db.Create(&spec)
@@ -70,7 +70,7 @@ func TestCourseSortOrder(t *testing.T) {
 
 func TestAdminCourse_TrainingFields(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewAdminService(db, nil, zap.NewNop())
+	svc := NewAdminService(db, nil, nil, zap.NewNop())
 
 	spec := model.Specialty{Code: "maintenance", Name: "维修", Status: 1, CreatedAt: testutil.Now()}
 	db.Create(&spec)

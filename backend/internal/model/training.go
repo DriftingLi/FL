@@ -146,9 +146,13 @@ type Chapter struct {
 	// ReviewStatus 章节审核状态机（#2498，spec C1）：draft/pending/published + RejectReason，
 	// 独立命名不与题库/投稿/资料混称。working 草稿在本行，在审快照与已发布槽在
 	// chapter_content_slot / chapter_file_slot（C4）。
-	ReviewStatus string    `gorm:"column:review_status;default:draft" json:"review_status"`
-	RejectReason string    `gorm:"column:reject_reason" json:"reject_reason"`
-	CreatedAt    time.Time `gorm:"column:created_at" json:"created_at"`
+	ReviewStatus string `gorm:"column:review_status;default:draft" json:"review_status"`
+	RejectReason string `gorm:"column:reject_reason" json:"reject_reason"`
+	// TutorID 章节归属（作者讲师，ADR-0095）：可空——存量章节作者未知。
+	// 讲师侧写、首次落定后不改；管理员写面不动。与「谁在编辑」是两件事
+	// （讲师之间无内容隔离，任何讲师都能编辑任何章节）。
+	TutorID   *int      `gorm:"column:tutor_id" json:"tutor_id,omitempty"`
+	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
 func (Chapter) TableName() string { return "chapter" }

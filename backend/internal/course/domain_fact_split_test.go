@@ -14,7 +14,9 @@
 package course
 
 import (
+	"context"
 	"errors"
+	"forklift-training/internal/notification"
 	"testing"
 
 	"go.uber.org/zap"
@@ -65,20 +67,20 @@ func TestCourseDomainFactSplit(t *testing.T) {
 			}},
 		{"课程", model.ErrCourseNotFound, "course",
 			func(t *testing.T, db *gorm.DB) error {
-				_, e := NewAdminService(db, nil, zap.NewNop()).UpdateCourse(999999, &CourseInput{})
+				_, e := NewAdminService(db, nil, notification.NewService(db, zap.NewNop()), zap.NewNop()).UpdateCourse(999999, &CourseInput{})
 				return e
 			},
 			func(t *testing.T, db *gorm.DB) error {
-				_, e := NewAdminService(db, nil, zap.NewNop()).UpdateCourse(1, &CourseInput{})
+				_, e := NewAdminService(db, nil, notification.NewService(db, zap.NewNop()), zap.NewNop()).UpdateCourse(1, &CourseInput{})
 				return e
 			}},
 		{"章节", ErrChapterNotFound, "chapter",
 			func(t *testing.T, db *gorm.DB) error {
-				_, e := NewAdminService(db, nil, zap.NewNop()).UpdateChapter(999999, &ChapterInput{})
+				_, e := NewAdminService(db, nil, notification.NewService(db, zap.NewNop()), zap.NewNop()).UpdateChapter(context.Background(), 999999, &ChapterInput{})
 				return e
 			},
 			func(t *testing.T, db *gorm.DB) error {
-				_, e := NewAdminService(db, nil, zap.NewNop()).UpdateChapter(1, &ChapterInput{})
+				_, e := NewAdminService(db, nil, notification.NewService(db, zap.NewNop()), zap.NewNop()).UpdateChapter(context.Background(), 1, &ChapterInput{})
 				return e
 			}},
 	}

@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"forklift-training/internal/notification"
 	"strings"
 	"testing"
 
@@ -24,7 +25,7 @@ import (
 // TestCreateCourseRequiresSpecialtyAndLevel 创建课程必须填专业方向与课程等级。
 func TestCreateCourseRequiresSpecialtyAndLevel(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewAdminService(db, nil, zap.NewNop())
+	svc := NewAdminService(db, nil, notification.NewService(db, zap.NewNop()), zap.NewNop())
 
 	spec := model.Specialty{Code: "maintenance", Name: "维修", SortOrder: 1, Status: 1}
 	if err := db.Create(&spec).Error; err != nil {
@@ -193,7 +194,7 @@ func TestStudentCourseDetailHasChapterCountAndPrereqIDs(t *testing.T) {
 // TestAdminCourseListHasChapterCountAndPrereqIDs 管理端列表返回章节数与前置课程ID。
 func TestAdminCourseListHasChapterCountAndPrereqIDs(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewAdminService(db, nil, zap.NewNop())
+	svc := NewAdminService(db, nil, notification.NewService(db, zap.NewNop()), zap.NewNop())
 	course, prereq := seedCatalogCourse(t, db)
 
 	list, err := svc.GetCourses(1, 10, "", nil, nil, nil, "")
@@ -256,7 +257,7 @@ func TestTutorCourseListHasChapterCount(t *testing.T) {
 // TestUpdateCourseWithoutPrereqKeyKeepsPrereqs 编辑课程不携带前置课程字段时，前置课程保持原样。
 func TestUpdateCourseWithoutPrereqKeyKeepsPrereqs(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewAdminService(db, nil, zap.NewNop())
+	svc := NewAdminService(db, nil, notification.NewService(db, zap.NewNop()), zap.NewNop())
 	course, prereq := seedCatalogCourse(t, db)
 
 	updated, err := svc.UpdateCourse(course.CourseID, &CourseInput{Name: coerce.StrPtr("改名")})

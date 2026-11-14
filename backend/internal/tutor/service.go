@@ -179,7 +179,9 @@ func (s *Service) SubmitChapterReview(ctx context.Context, chapterID, tutorID in
 }
 
 // UpdateChapterInfo 更新章节信息。
-func (s *Service) UpdateChapterInfo(chapterID int, in *course.ChapterInput) (*course.ChapterDTO, error) {
+// UpdateChapterInfo 更新章节信息（讲师面）。tutorID 是当前登录讲师：章节归属为空时
+// 顺手落定（ADR-0095 决策二），非空不动——归属是「作者」而非「最后编辑者」。
+func (s *Service) UpdateChapterInfo(chapterID, tutorID int, in *course.ChapterInput) (*course.ChapterDTO, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -206,6 +208,10 @@ func (s *Service) UpdateChapterInfo(chapterID int, in *course.ChapterInput) (*co
 		chapter.Description = *in.Description
 	}
 	if err := s.db.Save(&chapter).Error; err != nil {
+		return nil, err
+	}
+	// 章节归属（ADR-0095 决策二）：首次落定后不改——讲师 B 编辑讲师 A 的章节不会抢走归属。
+	if err := course.ClaimChapterOwnership(s.db, chapterID, tutorID); err != nil {
 		return nil, err
 	}
 	// C2/C5：讲师保存只落草稿（学生仍见已发布旧版）——正文变化把工作副本标回草稿，

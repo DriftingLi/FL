@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"forklift-training/internal/notification"
 	"testing"
 
 	"go.uber.org/zap"
@@ -60,7 +61,7 @@ func TestCourseInputPointsPriceDecode(t *testing.T) {
 
 func TestAdminCourse_PointsPriceWrite(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := NewAdminService(db, nil, zap.NewNop())
+	svc := NewAdminService(db, nil, notification.NewService(db, zap.NewNop()), zap.NewNop())
 	spec := model.Specialty{Code: "maintenance", Name: "维修", Status: 1, CreatedAt: testutil.Now()}
 	db.Create(&spec)
 	lv := model.CourseLevel{Code: "beginner", Name: "入门", Status: 1, CreatedAt: testutil.Now()}

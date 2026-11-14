@@ -63,7 +63,7 @@ func TestCreateCatalogItemsAppendToEnd(t *testing.T) {
 // TestCreateCourseAppendsToEndOfGroup 新建课程自动排所属方向+等级组的末尾。
 func TestCreateCourseAppendsToEndOfGroup(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := course.NewAdminService(db, nil, zap.NewNop())
+	svc := course.NewAdminService(db, nil, nil, zap.NewNop())
 
 	spec := model.Specialty{Code: "mt", Name: "维修", Status: 1, CreatedAt: testutil.Now()}
 	if err := db.Create(&spec).Error; err != nil {
@@ -162,7 +162,7 @@ func TestSwapCatalogSortWithEqualValues(t *testing.T) {
 // TestSwapCourseSortGroupBoundary 课程交换限制在同一个方向+等级组内。
 func TestSwapCourseSortGroupBoundary(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	svc := course.NewAdminService(db, nil, zap.NewNop())
+	svc := course.NewAdminService(db, nil, nil, zap.NewNop())
 
 	spec := model.Specialty{Code: "mt", Name: "维修", Status: 1, CreatedAt: testutil.Now()}
 	if err := db.Create(&spec).Error; err != nil {
