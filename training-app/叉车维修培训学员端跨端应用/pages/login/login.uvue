@@ -38,7 +38,7 @@
                     <view class="cap-img-box cap-fail-box" v-if="captchaFailed" @click="refreshCaptcha">
                         <text class="cap-fail-text">点击重试</text>
                     </view>
-                    <image class="cap-img-box" v-else :src="captchaImage" mode="aspectFit" @click="refreshCaptcha" />
+                    <image class="cap-img-box" v-else :src="captchaImage" mode="aspectFit" @click="refreshCaptcha" :webp="true" />
                 </view>
                 <view class="hint" v-if="codeHint.length > 0">
                     <text class="hint-text">{{ codeHint }}</text>

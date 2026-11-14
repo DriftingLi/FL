@@ -26,7 +26,7 @@
             <view class="reply-header">
                 <view class="reply-avatar" :style="{ backgroundColor: item.avatarColor }">
                     <image v-if="item.authorAvatar.length > 0" class="reply-avatar-img"
-                        :src="item.authorAvatar" mode="aspectFill" />
+                        :src="item.authorAvatar" mode="aspectFill" :webp="true" />
                     <text v-else class="reply-avatar-text">{{ item.authorInitial }}</text>
                 </view>
                 <view class="reply-info">
@@ -52,7 +52,7 @@
             <view v-if="item.imageUrls.length > 0" class="img-grid">
                 <view v-for="(img, i) in item.imageUrls" :key="i" class="img-cell small"
                     @click="onPreview(item, i)">
-                    <image class="img-thumb" :src="img" mode="aspectFill" />
+                    <image class="img-thumb" :src="img" mode="aspectFill" :webp="true" />
                 </view>
             </view>
             <!-- 采纳按钮（问答帖 + 楼主 + 非自己回复 + 未采纳）；判定已由壳层下发，模板零求值 -->

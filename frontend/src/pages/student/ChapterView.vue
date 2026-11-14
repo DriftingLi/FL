@@ -476,6 +476,13 @@ onBeforeUnmount(() => {
 /*
  * 仅保留 :deep 的 EP 内部覆盖（R1 允许，无法用原子类表达）：
  * - 上一章/下一章按钮：导航按钮需要更大的可点击区（padding 12/16，高度自适应）
+ * - 「下一章」贴容器右边缘：UiButton 包 el-button、是 inline-flex，而容器默认 block，
+ *   此时 margin-left: auto **不生效**（auto 只对 flex 子项生效）——必须把容器变成
+ *   flex 再 justify-content: flex-end。本仓讲师端 TutorChapterEdit.vue 踩过同一个坑
+ *   （#2540），此处同样不能只靠容器宽度收缩来「看起来贴右」（#2546）。
+ *
+ * 窄屏（max-md）模板仍是左右并排（外层没有 flex-col），只把贴右收回、文字改左对齐，
+ * 避免窄屏下「下一章」被推到最右边。
  */
 .nav-prev :deep(.el-button),
 .nav-next :deep(.el-button) {
@@ -487,8 +494,26 @@ onBeforeUnmount(() => {
   text-align: left;
 }
 
+.nav-next {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .nav-next :deep(.el-button) {
   text-align: right;
-  margin-left: auto;
+}
+
+@media (max-width: 767px) {
+  .nav-next {
+    justify-content: flex-start;
+  }
+
+  .nav-next :deep(.el-button) {
+    text-align: left;
+  }
+
+  .nav-next :deep(.el-button .flex-col) {
+    align-items: flex-start;
+  }
 }
 </style>

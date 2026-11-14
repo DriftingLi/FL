@@ -33,7 +33,7 @@
             <view class="fav-list">
                 <view v-for="(item, idx) in items" :key="idx" class="fav-card" @click="onItemClick(item)">
                     <view v-if="item.cover.length > 0" class="fav-cover">
-                        <image class="fav-cover-img" :src="item.cover" mode="aspectFill"></image>
+                        <image class="fav-cover-img" :src="item.cover" mode="aspectFill" :webp="true"></image>
                     </view>
                     <view v-else class="fav-cover fav-cover-fallback">
                         <text class="fav-cover-text">{{ getTypeLabel(item.target_type).charAt(0) }}</text>

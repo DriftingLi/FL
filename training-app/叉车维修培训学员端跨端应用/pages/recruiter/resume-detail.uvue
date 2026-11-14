@@ -105,7 +105,7 @@
                             <view class="photo-row mt-12">
                                 <image v-for="(url, idx) in photos" :key="url" class="photo"
                                     :class="{ 'ml-16': idx > 0 }" :src="url" mode="aspectFill"
-                                    @click="onPreviewPhoto(idx)" />
+                                    @click="onPreviewPhoto(idx)" :webp="true" />
                             </view>
                         </view>
 
@@ -117,7 +117,7 @@
                                 <text class="cert-line mt-8">编号：{{ emptyAsDash(toText(cert['cert_no'])) }}</text>
                                 <text class="cert-line mt-8">有效期至：{{ emptyAsDash(toText(cert['expire_date'])) }}</text>
                                 <image v-for="(url, i2) in imagesOf(cert)" :key="url" class="cert-image mt-12"
-                                    :src="url" mode="aspectFit" @click="onPreviewCertImage(cert, i2)" />
+                                    :src="url" mode="aspectFit" @click="onPreviewCertImage(cert, i2)" :webp="true" />
                             </view>
                         </view>
                     </view>

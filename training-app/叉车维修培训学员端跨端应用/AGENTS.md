@@ -76,6 +76,7 @@ HBuilderX 是**单实例串行资源**——这是架构约束，不是可调优
 ## 注意事项
 
 - 一次改动一个 commit；改动后补测试、跑过再回话。**改导出符号（常量 / 函数改名）= 同批改钉名断言**——契约测试把名字与字面量都钉死，只改实现必然红；hint 常量还得同步 `docs/agents/ui-hints.md` 的登记行。
+- **动图片前先读 `docs/adr/0066`**：① 包内**禁 webp**（小程序 image 不解析包内 webp，真机/体验版空白，开发者工具是 Chromium 所以看不出来）② 喂**网络图**的 `<image>` 必须写 `:webp="true"`（该属性默认不解析网络 webp；后端把 jpg/png/bmp 转 webp 存，所以封面/头像/验证码一律是网络 webp）③ 新图用**逐张取优的调色板 PNG**，不放大。
 - 定时器挂 uni-app 生命周期上管理，别裸用 `setTimeout` / `setInterval`。
 - 跑完 HBuilderX 步骤先 `git status`：`manifest.json` 的 appid 会被回写置空、`pages.json` 会被写入启动页 `condition`——都是本地开发配置、禁止提交。删树前先 `cli project close --path <项目>`。
 - 一件票一个会话，冷启动只读票 + 对应 ADR；新决策回写 ADR 再关票（issue 评论不是必读面）。写 ADR 守中文文件名 + 固定六段 + ≤25 行，见 `docs/refactor-decisions.md`。

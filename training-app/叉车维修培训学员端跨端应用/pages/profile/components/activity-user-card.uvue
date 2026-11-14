@@ -1,7 +1,7 @@
 <template>
   <view class="user-card">
     <view class="user-avatar-wrap">
-      <image v-if="avatarUrl.length > 0" class="user-avatar" :src="avatarUrl" mode="aspectFill" />
+      <image v-if="avatarUrl.length > 0" class="user-avatar" :src="avatarUrl" mode="aspectFill" :webp="true" />
       <view v-else class="user-avatar-placeholder">
         <text class="avatar-emoji">👤</text>
       </view>

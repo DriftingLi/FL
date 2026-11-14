@@ -188,7 +188,7 @@
 
       <!-- 上一章 / 下一章 -->
       <nav class="flex items-center justify-between gap-4 border-t border-line py-4 max-md:flex-col">
-        <div class="flex-1 max-w-[48%] max-md:max-w-full max-md:text-left">
+        <div class="nav-prev flex-1 max-w-[48%] max-md:max-w-full">
           <UiButton
             variant="text"
             :disabled="!chapterDetail.previous_chapter_id"
@@ -203,7 +203,7 @@
           </UiButton>
         </div>
 
-        <div class="flex-1 max-w-[48%] max-md:max-w-full max-md:text-left">
+        <div class="nav-next flex-1 max-w-[48%] max-md:max-w-full">
           <UiButton
             variant="text"
             :disabled="!chapterDetail.next_chapter_id"
@@ -705,3 +705,50 @@ onMounted(() => {
   loadChapterDetail()
 })
 </script>
+
+<style scoped>
+/*
+ * 上一章/下一章导航（#2540）。
+ *
+ * 仅保留 :deep 的 EP 内部覆盖（R1 允许，无法用原子类表达）：
+ * - 导航按钮需要更大的可点击区（padding 12/16，高度自适应）
+ * - 「下一章」贴容器右边缘：`.el-button` 是 inline-flex、容器默认 block，
+ *   此时 `margin-left: auto` **不生效**（auto 只对 flex 子项生效）——必须把容器
+ *   变成 flex 再 justify-content: flex-end。
+ *
+ * 窄屏（max-md）由模板上的 max-md:flex-col 变成纵向堆叠，两条导航不再分左右，
+ * 下面的 media query 把贴右收回，避免窄屏偏右。
+ */
+.nav-prev :deep(.el-button),
+.nav-next :deep(.el-button) {
+  padding: 12px 16px;
+  height: auto;
+}
+
+.nav-prev :deep(.el-button) {
+  text-align: left;
+}
+
+.nav-next {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.nav-next :deep(.el-button) {
+  text-align: right;
+}
+
+@media (max-width: 767px) {
+  .nav-next {
+    justify-content: flex-start;
+  }
+
+  .nav-next :deep(.el-button) {
+    text-align: left;
+  }
+
+  .nav-next :deep(.el-button .flex-col) {
+    align-items: flex-start;
+  }
+}
+</style>

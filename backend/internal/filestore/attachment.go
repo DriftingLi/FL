@@ -22,8 +22,28 @@ const (
 	QuestionImageDirPrefix      = "images/questions"    // 题库题目图片
 	ChapterImageDirPrefix       = "images/chapters"     // 章节图文图片（可按章节分目录 images/chapters/<id>）
 	ChapterFileDirPrefix        = "chapters"            // 章节课件附件
+	TutorFileDirPrefix          = "tutor-files"         // 讲师文件库（分片上传，#2494）
 	localStaticUploadsURLPrefix = "/static/uploads/"    // local 存储 URL 前缀（storage.LocalStorage.Save 的返回形态）
 )
+
+// AttachmentDirPrefixes 全部附件目录前缀（顺序即登记顺序）。
+//
+// 用途：cdn 直出白名单（frontend/Caddyfile 的 @object_store）必须逐项覆盖本清单，
+// 由 backend/internal/deploy/caddy_topology_test.go 断言。新增上传子目录时
+// **必须**在此登记——漏登记即漏白名单，表现为「对象在 RGW 里、cdn 却 404」。
+var AttachmentDirPrefixes = []string{
+	ForumImageDirPrefix,
+	AIAssistantImageDirPrefix,
+	FeaturedImageDirPrefix,
+	ContributionFileDirPrefix,
+	AvatarImageDirPrefix,
+	ResumeFileDirPrefix,
+	ResumeImageDirPrefix,
+	QuestionImageDirPrefix,
+	ChapterImageDirPrefix,
+	ChapterFileDirPrefix,
+	TutorFileDirPrefix,
+}
 
 // IsSiteAttachmentURL 判断 u 是否为本站在指定前缀下产生的附件 URL。两种形态：
 //   - local：/static/uploads/<prefix>/...

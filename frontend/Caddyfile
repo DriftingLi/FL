@@ -165,13 +165,20 @@ cdn.{$DOMAIN} {
 	# 2026-10-22 线上实测，那条 `@not_object_store` 对所有路径都成立 ⇒ 全部请求被本站
 	# `respond 404` 拦掉（正文是 9 字节的 "Not Found"，不是 RGW 的 NoSuchKey），
 	# 表现为「RGW 里明明有对象、cdn 却 404」（学员头像就是这样废掉的）。
-	@object_store path /featured/* /avatars/* /contributions/* /resumes/* /images/forum/* /images/questions/* /images/chapters/* /images/ai-assistant/* /chapters/* /slides/* /uploads/*
+	#
+	# 前缀清单必须覆盖 backend/internal/filestore/attachment.go 的 AttachmentDirPrefixes
+	# （漏一个 ⇒ 该分区的文件一律 404，见 #2541）；判据 caddy_topology_test.go 逐项断言。
+	@object_store path /featured/* /avatars/* /contributions/* /resumes/* /images/forum/* /images/questions/* /images/chapters/* /images/ai-assistant/* /chapters/* /slides/* /uploads/* /tutor-files/*
 	handle @object_store {
 		rewrite * /forklift-files{http.request.uri}
 		header Content-Disposition "attachment"
 		header @delivery_inline Content-Disposition "inline"
 		header X-Content-Type-Options "nosniff"
 		header Cache-Control "public, max-age=86400"
+		# 跨域读（#2542）：前端三查看器用 fetch HEAD 探测文件存在性（cdn 域 → 页面域必然跨域）。
+		# 静态 `*` 不新增任何读取能力——bucket 本就是公开读（storage/r2.go 前提），
+		# 且避免与 CORS_ORIGINS 维护第二份白名单。HEAD 属 simple method，无需预检。
+		header Access-Control-Allow-Origin "*"
 		reverse_proxy 172.17.1.42:8088
 	}
 	handle {

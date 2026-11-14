@@ -9,7 +9,7 @@
             <text class="section-label">头像</text>
             <!-- 微信登录：用 chooseAvatar 选微信头像 -->
             <button v-if="isWechat" class="avatar-btn-wechat" open-type="chooseAvatar" @chooseavatar="onChooseAvatar">
-                <image v-if="avatarUrl.length > 0" class="avatar-img" :src="avatarUrl" mode="aspectFill" />
+                <image v-if="avatarUrl.length > 0" class="avatar-img" :src="avatarUrl" mode="aspectFill" :webp="true" />
                 <view v-else class="avatar-placeholder">
                     <text class="avatar-icon">💚</text>
                     <text class="avatar-hint">选择微信头像</text>
@@ -17,7 +17,7 @@
             </button>
             <!-- 其他登录：用相册/拍照 -->
             <view v-else class="avatar-wrap" @click="onChooseImage">
-                <image v-if="avatarUrl.length > 0" class="avatar-img" :src="avatarUrl" mode="aspectFill" />
+                <image v-if="avatarUrl.length > 0" class="avatar-img" :src="avatarUrl" mode="aspectFill" :webp="true" />
                 <view v-else class="avatar-placeholder">
                     <text class="avatar-icon">📷</text>
                     <text class="avatar-hint">点击选择头像</text>

@@ -13,7 +13,7 @@
 
                     <!-- 题干配图（#1083）：故障识图题的图此前在错题本完全不可见；无图时元素不渲染（零占位、不塌陷） -->
                     <image v-if="displayImageUrl.length > 0" class="record-question-img"
-                        :src="displayImageUrl" mode="aspectFit"></image>
+                        :src="displayImageUrl" mode="aspectFit" :webp="true"></image>
 
                     <!-- 展开态：重做交互 -->
                     <view v-if="expanded" class="redo-section">

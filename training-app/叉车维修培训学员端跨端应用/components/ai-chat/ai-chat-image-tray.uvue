@@ -2,7 +2,7 @@
 	<view v-if="images.length > 0 || placeholders.length > 0" class="tray-wrap">
 		<view class="tray-row">
 			<view v-for="(u, idx) in images" :key="u" class="tray-item" @click="onPreview(idx)">
-				<image class="tray-thumb" :src="resolveUrl(u)" mode="aspectFill" />
+				<image class="tray-thumb" :src="resolveUrl(u)" mode="aspectFill" :webp="true" />
 				<view class="tray-del" @click.stop="onRemove(idx)">
 					<text class="tray-del-text">×</text>
 				</view>

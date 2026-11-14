@@ -49,8 +49,8 @@ const (
 	statusCompleted = "completed"
 	statusAborted   = "aborted"
 
-	// Subfolder 存储 key 分区前缀。
-	Subfolder = "tutor-files"
+	// Subfolder 存储 key 分区前缀（归位到 filestore 前缀登记表，cdn 直出白名单与它同源）。
+	Subfolder = filestore.TutorFileDirPrefix
 )
 
 var (
