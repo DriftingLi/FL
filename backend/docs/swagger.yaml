@@ -5453,10 +5453,6 @@ paths:
           description: 未认证
           schema:
             $ref: '#/definitions/response.R'
-        "404":
-          description: 章节不存在
-          schema:
-            $ref: '#/definitions/response.R'
         "409":
           description: 没有在审版本
           schema:
@@ -5490,10 +5486,6 @@ paths:
                 data:
                   $ref: '#/definitions/course.BatchApproveResult'
               type: object
-        "400":
-          description: 章节 ID 列表为空
-          schema:
-            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
           schema:

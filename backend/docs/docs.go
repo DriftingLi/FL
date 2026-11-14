@@ -1130,12 +1130,6 @@ const docTemplate = `{
                             ]
                         }
                     },
-                    "400": {
-                        "description": "章节 ID 列表为空",
-                        "schema": {
-                            "$ref": "#/definitions/response.R"
-                        }
-                    },
                     "401": {
                         "description": "未认证",
                         "schema": {
@@ -1312,12 +1306,6 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "未认证",
-                        "schema": {
-                            "$ref": "#/definitions/response.R"
-                        }
-                    },
-                    "404": {
-                        "description": "章节不存在",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
