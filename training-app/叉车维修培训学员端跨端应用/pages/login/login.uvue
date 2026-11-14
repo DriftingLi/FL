@@ -113,21 +113,23 @@
                 {{ btnText }}
             </button>
 
-            <!-- 底部三图标：手机 / 微信 / 邮箱（学员侧通道入口，替代原顶部通道 tab） -->
+            <!-- 底部三图标：手机 / 微信 / 邮箱（学员侧通道入口，替代原顶部通道 tab）
+                 图标用设计稿导出的六个状态位图（灰=未选中 / 绿=选中），落盘 static/icons/login/；
+                 微信是导航入口（切回一键登录页），按设计稿在未选中态保持品牌绿高亮 -->
             <view class="icon-row" v-if="role == 'learner'">
                 <view class="icon-cell" @click="switchMode('phone')">
                     <view class="icon-circle" :class="{ 'icon-circle-on': mode == 'phone' }">
-                        <text class="icon-glyph">📱</text>
+                        <image class="icon-img" :src="mode == 'phone' ? '/static/icons/login/phone-active.png' : '/static/icons/login/phone.png'" mode="aspectFit"></image>
                     </view>
                 </view>
                 <view class="icon-cell" @click="goWechatLanding">
-                    <view class="icon-circle icon-circle-wechat">
-                        <image class="icon-img" src="/static/wechat-logo.png" mode="aspectFit"></image>
+                    <view class="icon-circle" :class="{ 'icon-circle-on': wechatHighlighted }">
+                        <image class="icon-img" :src="wechatHighlighted ? '/static/icons/login/wechat-active.png' : '/static/icons/login/wechat.png'" mode="aspectFit"></image>
                     </view>
                 </view>
                 <view class="icon-cell" @click="switchMode('email')">
                     <view class="icon-circle" :class="{ 'icon-circle-on': mode == 'email' }">
-                        <text class="icon-glyph">✉</text>
+                        <image class="icon-img" :src="mode == 'email' ? '/static/icons/login/email-active.png' : '/static/icons/login/email.png'" mode="aspectFit"></image>
                     </view>
                 </view>
             </view>
@@ -187,6 +189,7 @@
         countdown,
         codeHint,
         btnText,
+        wechatHighlighted,
         clearCountdownTimer,
         switchMode,
         switchRole,
@@ -471,11 +474,8 @@
         justify-content: center;
     }
 
-    .icon-circle-on { background-color: $primary-tint; }
-
-    .icon-circle-wechat { background-color: $success-tint; }
-
-    .icon-glyph { font-size: 36rpx; color: $text-color-secondary; }
+    /* 选中态浅绿底：与设计稿的绿色图标同色系（原 $primary-tint 蓝底与绿图标冲突） */
+    .icon-circle-on { background-color: $success-tint; }
 
     .icon-img { width: 44rpx; height: 44rpx; }
 

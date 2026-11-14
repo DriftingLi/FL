@@ -115,7 +115,7 @@ const LINE_BUDGET = 600;
  * 模板 —— ① 品牌区 logo 加浅灰托底方块（`.logo-box`，把彩色标志收成应用图标）；
  * ② 下划线 tab 改分段控件（`.tab-on` 白色活动块，替代 `.tab-line` 指示条）；
  * ③ 其他登录方式改左对齐小标题 `.alt-caption`（删居中分隔线 `.divider-row/.divider-line/.divider-text`）；
- * ④ 次级按钮由 `<button>` 改 `<view>`（`.alt-btn`）+ 微信品牌图标 `static/wechat-logo.png`（`.alt-icon`），
+ * ④ 次级按钮由 `<button>` 改 `<view>`（`.alt-btn`）+ 微信品牌图标 `static/wechat-logo.png`（`.alt-icon`；该图已于第九次变更后删除），
  *    否则 `<image>` 无法作为 button 子节点；点击绑定仍走原 `goWechatLanding` / `switchMode(...)`；
  * ⑤ footer 改「分隔线 + 一行两端对齐」（`.footer-line/.footer-row`，uvue 未验证 `border-top-*` 故用独立 view）。
  * 样式 —— 新增 `$primary-tint` / `$success-tint` 两个既有 token（无新增裸 hex、无新增白名单行）；
@@ -140,9 +140,22 @@ const LINE_BUDGET = 600;
  * 样式 —— **逐字节未动**（STYLE_SHA256 不变）。
  * 行为 —— 零变更；脚本块与其余每一条断言逐字节不变。
  * ⇒ 只有 TEMPLATE_SHA256 前进。
+ *
+ * ⚠️ **底部三图标换设计稿位图（2026-11-14，第十次显式变更，同样不是绕过）**：
+ * 用户提供设计稿导出的六个状态位图（灰 = 未选中 / 绿 = 选中），要求底部三图标按切换前后两态显示。
+ * 模板 —— 三个 `.icon-circle` 的子节点由 `<text class="icon-glyph">` 的 emoji 字形与
+ * `<image src="/static/wechat-logo.png">`（该图随本次变更删除）统一换成 `<image class="icon-img" :src="…" mode="aspectFit">`；
+ * 微信圆的选中态由常亮 `.icon-circle-wechat` 改为 `:class="{ 'icon-circle-on': wechatHighlighted }"`
+ * （微信是导航入口不是通道，按设计稿在未选中态保持品牌绿）。
+ * 样式 —— `.icon-circle-on` 底色 `$primary-tint` → `$success-tint`（与绿色图标同色系，原蓝底与绿图标冲突）；
+ * 删 `.icon-circle-wechat` 与 `.icon-glyph` 两条死规则；无新增裸 hex。
+ * 脚本 —— 页面壳层仍零自持状态：`wechatHighlighted`（恒 true）落在 `useLoginForm.uts` 并进
+ * `UseLoginFormResult`，页面只解构消费；两态路径以字面量 `/static/…` 写在模板三元里
+ * （包内图不吃 webp 属性，`utils/imageWebpAttrContract` 按「:src 里出现 /static/」判豁免）。
+ * ⇒ 两把 sha 同步前进；其余每一条行为断言逐字节不变。
  */
-const TEMPLATE_SHA256 = '039b9129ffd12d65c169c183ad9a2b5504435f88cf493dac7e7225597ea0bc5b';
-const STYLE_SHA256 = 'c8ba237c0681f1d9837d3ba11fdb5dfbf675d697aff10a8a56989a263439a6fc';
+const TEMPLATE_SHA256 = '1ea92b34bd182e895ce8b7f1698faa4d1789e36ba076abb162602c517df41216';
+const STYLE_SHA256 = '8e5082666242eb21090df12234bb781ac8c2af0de6c4e1f7761c7355ef9ab8d5';
 
 /** 页面块（template / script / style）。模板**有嵌套** `<template v-if>` ⇒ 闭合取最后一个 */
 function block(src, tag) {
