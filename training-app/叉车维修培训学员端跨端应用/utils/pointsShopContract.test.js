@@ -7,6 +7,8 @@
  *   ② 可点性只由服务端事实决定：已拥有 / 售罄 ⇒ 按钮不可点；
  *   ③ 兑换必须过确认，且余额不足要明说（但仍由服务端裁定，不客户端预扣）；
  *   ④ 入口与落点：任务中心死按钮 + 积分明细 banner → 商城页；成功后落到权益页（AI 助手）。
+ *   ⑤ 课程兑换导流（#2531）：余额卡之后、商品列表之前的一张**静态**卡；CTA = 写一次性跨页意图
+ *      + switchTab 到课程列表（不是 navigateTo）；打开商城不多发任何证件 / 课程请求。
  *
  * 已知边界（如实声明）：本文件只钉客户端这一半；可兑性由后端对账表（shopSKUDecls）决定，
  * 那边由 backend/internal/points/sku_registry_test.go 与 shop_ai_pro_contract_test.go 钉住。
@@ -77,6 +79,45 @@ describe('积分商城页（#1942）契约', () => {
     it('页面已在 pages.json 登记（未登记 ⇒ 路由打不开）', () => {
       expect(PAGES_JSON).toContain('"path": "pages/points/points-shop"');
       expect(PAGES_JSON).toContain('"navigationBarTitleText": "积分商城"');
+    });
+  });
+
+  describe('⑤ 课程兑换导流卡（#2531：只加一张静态卡，不动兑换链路）', () => {
+    /** 只在模板里找位置，避免样式块里的同名选择器把顺序判据弄虚 */
+    const tpl = PAGE.slice(PAGE.indexOf('<template>'), PAGE.lastIndexOf('</template>'));
+
+    it('卡片位置固定：余额卡之后、商品列表之前（三件文案齐）', () => {
+      const iBalance = tpl.indexOf('balance-card');
+      const iEntry = tpl.indexOf('course-entry');
+      const iShop = tpl.indexOf('shop-card');
+      expect(iBalance).toBeGreaterThan(-1);
+      expect(iEntry).toBeGreaterThan(iBalance);
+      expect(iShop).toBeGreaterThan(iEntry);
+      expect(tpl).toContain('课程兑换');
+      expect(tpl).toContain('去兑换');
+      // 与课程详情确认弹窗「用积分解锁付费课」同一口径：不写价格、不写营销话
+      expect(tpl).toContain('用积分解锁付费课');
+    });
+
+    it('CTA = 写一次性意图 + switchTab 到课程列表（navigateTo 会开出与 tabBar 各活一份的第二页）', () => {
+      const fn = PAGE.slice(PAGE.indexOf('function onGoCourseRedeem'));
+      const body = fn.slice(0, 400);
+      expect(body).toMatch(/requestCourseRedeemIntent()/);
+      expect(body).toContain("uni.switchTab({ url: '/pages/courses/courses' })");
+      expect(body).not.toContain('uni.navigateTo');
+      // 意图写的是导航模块里那一个（不是页面里自造的第三个状态）
+      expect(PAGE).toContain("import { goBack, requestCourseRedeemIntent } from '../../utils/navigation'");
+    });
+
+    it('不探测服务端：打开商城仍然只发余额 + 列表两次请求，没有课程 / 证件请求', () => {
+      const show = PAGE.slice(PAGE.indexOf('onShow('));
+      expect(show.slice(0, 120)).toMatch(/loadBalance\(\)\s*loadItems\(\)/);
+      expect(PAGE).not.toMatch(/getCourseListApi|getCurrentCredentialApi/);
+    });
+
+    it('导流只走课程列表：卡片里不出现实物商城 / mall 的入口', () => {
+      const card = tpl.slice(tpl.indexOf('course-entry'), tpl.indexOf('shop-card'));
+      expect(card).not.toMatch(/mall|实物商城|商品商城/);
     });
   });
 

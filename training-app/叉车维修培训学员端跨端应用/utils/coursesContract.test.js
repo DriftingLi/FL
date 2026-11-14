@@ -25,6 +25,9 @@
  *     .filter-tag 为 #1951 免费/付费组共用的选择器，反向锁定不许被「顺手清理」误删
  * 14) #2530：课程列表「积分兑换」空态说明止于证件范围（不再断言功能未开放）、全页含注释
  *     绝迹「未开放 / 暂未开放 / 无写入通道」；不动面（空态标题 / 口径说明 / 价签 / 失败态）上锁
+ * 15) #2531 积分商城导流的落点：onShow 消费一次性意图后必须先切「积分兑换」组（按 paidValues 序号，
+ *     不按文案匹配）再 reset 重取，且该分支优先于「证件变更 / 列表为空才重取」两个既有判据。
+ *     一次性语义本身由行为腿 utils/courseRedeemIntentBehavior.test.js 真跑验证，此处只锁接线。
  */
 /** harness：读取层归一 + 模块归属面（ADR-0023 票 C 起，本文件不再自建 ROOT / read / walker） */
 const h = require('./contractHarness');
@@ -1015,5 +1018,58 @@ describe('#2530 积分兑换组空态文案（证件限定措辞）与过期表�
     const hint = paidBranch(reverted, 'emptyHint', 2);
     expect(hint).not.toBeNull();
     expect(hint).not.toMatch(/^本证件下暂无/);
+  });
+});
+/**
+ * #2531 积分商城「课程兑换」导流在课程页的落点（接线面）
+ *
+ * 分工：一次性语义（写入→消费得过→再消费得无、不落盘）由行为腿
+ * `utils/courseRedeemIntentBehavior.test.js` 真跑 `utils/navigation.uts` 验证；本组只锁
+ * **页面把那段语义接对了**——读源码能看见顺序与组号，但看不见「真的会切组」。
+ * 两者都不缺才不是假绿：拆掉接线时本组红，语义破掉时行为腿红。
+ */
+describe('#2531 商城导流落点：onShow 消费意图 → 切积分兑换组 → reset 重取', () => {
+  const stripAll = (s) =>
+    s
+      .replace(/<!--[\s\S]*?-->/g, '')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+  /** onShow 的完整回调体（从 `onShow(async () => {` 到紧随其后的 `})`） */
+  const onShowBody = () => {
+    const page = stripAll(read('pages/courses/courses.uvue'));
+    const start = page.indexOf('onShow(async () => {');
+    expect(start).toBeGreaterThan(-1);
+    return page.slice(start, page.indexOf('\n    })', start));
+  };
+
+  it('从导航模块消费意图（不是页面自造状态 / 不是本地存储）', () => {
+    const page = stripAll(read('pages/courses/courses.uvue'));
+    expect(page).toContain("import { consumeCourseRedeemIntent } from '../../utils/navigation'");
+    expect(onShowBody()).toMatch(/if \(consumeCourseRedeemIntent\(\)\)/);
+    // 不许另立一份「读了不清」的镜像：意图的写读都只能在 utils/navigation.uts 里
+    expect(page).not.toMatch(/courseRedeemIntent\s*=/);
+    expect(page).not.toMatch(/getStorageSync|setStorageSync/);
+  });
+
+  it('三件齐全：切组（按 paidValues 序号 2，不按文案）+ reset 重取 + 提前 return', () => {
+    const body = onShowBody();
+    const branch = body.slice(body.indexOf('if (consumeCourseRedeemIntent())'));
+    expect(branch).toContain('activePaid.value = 2');
+    expect(branch).toMatch(/loadCourses\(true\)/);
+    expect(branch).toMatch(/return/);
+    // 不许按文案匹配组：paidTags 会改，序号才是本页契约
+    expect(branch).not.toContain("'积分兑换'");
+    // 也不许复用 onPaidTap(2)：同组重复点击是空操作，停在 2 组时不会重取
+    expect(branch).not.toContain('onPaidTap');
+  });
+
+  it('意图分支优先于「证件变更 / 列表为空才重取」两个既有判据', () => {
+    const body = onShowBody();
+    const iIntent = body.indexOf('if (consumeCourseRedeemIntent())');
+    const iCred = body.indexOf('if (browseCredentialId.value != prevCredentialId)');
+    const iEmpty = body.indexOf('else if (courses.value.length == 0)');
+    expect(iIntent).toBeGreaterThan(-1);
+    expect(iCred).toBeGreaterThan(iIntent);
+    expect(iEmpty).toBeGreaterThan(iIntent);
   });
 });

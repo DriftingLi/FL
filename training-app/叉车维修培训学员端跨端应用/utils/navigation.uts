@@ -7,6 +7,32 @@
  */
 
 /**
+ * 课程列表「积分兑换」组的**跨页一次性意图**（#2531）。
+ *
+ * 为什么需要它：课程列表是 tabBar 页，`uni.switchTab` 既带不了 query、该页也没有 onLoad
+ * ⇒ 商城里的「去兑换」只能靠模块级状态把「进去后请切到积分兑换组」这件事带过去。
+ * 为什么不用本地存储：存储会在杀进程后残留，冷启动进课程页会被莫名其妙地切组。
+ *
+ * 不变量：
+ *   I1 写入只影响**下一次**消费，消费即清空（重复消费返回 false）；
+ *   I2 状态住在模块顶层（跨页单例，先例是 `api/refreshGate.uts`），不落盘、不广播；
+ *   I3 本模块仍只做导航相关的事：不引 request / storage，不做任何服务端探测。
+ */
+let courseRedeemIntent : boolean = false
+
+/** 商城侧调用：登记「下次进课程列表请切到积分兑换组」的一次性意图 */
+export function requestCourseRedeemIntent(): void {
+	courseRedeemIntent = true
+}
+
+/** 课程列表侧调用：取走意图（消费即清空；无意图返回 false） */
+export function consumeCourseRedeemIntent(): boolean {
+	if (!courseRedeemIntent) return false
+	courseRedeemIntent = false
+	return true
+}
+
+/**
  * 安全返回上一页；若当前为栈中第一页则 reLaunch 到 fallback 页面。
  * @param fallback 无上级页面时的回退页，默认首页 dashboard
  */

@@ -14,6 +14,18 @@
                 </view>
             </view>
 
+            <!-- 课程兑换导流（#2531）：静态卡，不探测服务端；文案与课程详情确认弹窗同一口径 -->
+            <view class="course-entry">
+                <view class="course-entry-info">
+                    <text class="course-entry-title">课程兑换</text>
+                    <text class="course-entry-desc">用积分解锁付费课</text>
+                </view>
+                <view class="course-entry-btn" @click="onGoCourseRedeem">
+                    <text class="course-entry-text">去兑换</text>
+                    <text class="course-entry-arrow">›</text>
+                </view>
+            </view>
+
             <!-- 三态分离（#408/#409 口径）：失败给重试，空态如实说「暂无可兑换商品」 -->
             <view v-if="loadFailed && items.length == 0" class="error-tip">
                 <text class="error-text">商品加载失败</text>
@@ -54,7 +66,7 @@
     import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { ref } from 'vue'
     import { onShow } from '@dcloudio/uni-app'
-    import { goBack } from '../../utils/navigation'
+    import { goBack, requestCourseRedeemIntent } from '../../utils/navigation'
     import { getPointsBalanceApi, getShopItemsApi, redeemShopItemApi } from '../../api/points'
     import { errMsg } from '../../api/helpers'
     import { AI_PRO_SKU } from '../../composables/useAiPro'
@@ -140,6 +152,16 @@
 
     function onEarnPoints() : void {
         uni.navigateTo({ url: '/pages/points/task-center' })
+    }
+
+    /**
+     * 课程兑换导流（#2531）：课程列表是 tabBar 页，switchTab 带不了 query ⇒ 先把一次性意图
+     * 写进导航模块，进去后由课程页 onShow 消费（切到「积分兑换」组并按该组重取）。
+     * 显式用 switchTab 而不是 navigateTo：后者打开的是页面栈里的新页，会和 tabBar 上的课程页各活一份。
+     */
+    function onGoCourseRedeem() : void {
+        requestCourseRedeemIntent()
+        uni.switchTab({ url: '/pages/courses/courses' })
     }
 
     /** 兑换成功后的落点（#1942 验收：权益即时生效、落点可达）：当前唯一可兑权益是 AI 专业版 */
@@ -249,6 +271,53 @@
     .earn-text {
         font-size: 26rpx;
         color: $text-color-secondary;
+    }
+
+    /* 课程兑换导流卡（#2531）：与余额卡同一套卡片语言，位置固定在余额卡之后、商品列表之前 */
+    .course-entry {
+        margin: 0 24rpx 24rpx 24rpx;
+        padding: 28rpx 32rpx;
+        border-radius: 16rpx;
+        background-color: $card-bg;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .course-entry-info {
+        flex: 1;
+        flex-direction: column;
+    }
+
+    .course-entry-title {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: $text-color;
+    }
+
+    .course-entry-desc {
+        margin-top: 8rpx;
+        font-size: 24rpx;
+        color: $text-color-placeholder;
+    }
+
+    .course-entry-btn {
+        height: 88rpx;
+        padding: 0 32rpx;
+        border-radius: 32rpx;
+        background-color: $bg-color;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .course-entry-text {
+        font-size: 26rpx;
+        color: $primary-color;
+    }
+
+    .course-entry-arrow {
+        margin-left: 6rpx;
+        font-size: 28rpx;
+        color: $primary-color;
     }
 
     /* 错误态 / 加载态 / 空态 */
