@@ -16,9 +16,14 @@
             <text class="notice-arrow">›</text>
         </view>
 
-        <!-- 证件下拉选择器（共享领域件 cert-selector，#1395 提升搬家） -->
+        <!-- 证件选择面板（共享领域件 cert-selector，#1395 提升搬家）
+             #2535 Q3：浮层升级为与 choose-cert 主态同源的完整面板——省份 + 分组 + 热门考证 + 完成；
+             点选只改待确认项，点「完成」才 PATCH 落库，关闭面板不改证件。
+             below-nav-bar 让页头保持可见（设计稿 324_9793：面板从页头下方起、上圆角）。 -->
         <CertSelector v-if="showCertDropdown" :groups="credentialGroups"
-            :current-id="currentCredentialId" @close="onCloseCertDropdown" @select="onSelectCredential" />
+            :current-id="pendingCredentialId" :province="province" :show-province="true" :confirmable="true"
+            :below-nav-bar="true" @close="onCloseCertDropdown" @select="onPickCredential"
+            @confirm="onConfirmCredential" @province-tap="onProvinceTap" />
 
         <scroll-view class="content-scroll" scroll-y="true">
             <!-- Banner 海报（图内含标题与"实际教学·案例分析·考核发证"文案） -->
@@ -56,12 +61,14 @@
                     </view>
                 </view>
 
-                <!-- 口径（#1608 §8⑤ 裁定：双轴改单轴，值域映射后端既有 filter；直播/录播、免费/付费两轴删除） -->
+                <!-- 口径（#1608 §8⑤ 裁定：双轴改单轴，值域映射后端既有 filter；直播/录播、免费/付费两轴删除）
+                     #2535：胶囊改等宽网格（设计稿 956_2984 三个胶囊平分一行） -->
                 <view class="filter-section">
                     <text class="filter-label">口径</text>
                     <view class="filter-options">
-                        <view v-for="(opt, idx) in filterOptions" :key="idx" class="filter-chip mr-20 mb-20"
-                            :class="{ 'filter-chip--active': selectedFilter === idx }" @click="selectedFilter = idx">
+                        <view v-for="(opt, idx) in filterOptions" :key="idx" class="filter-chip mb-20"
+                            :class="{ 'filter-chip--active': selectedFilter === idx, 'filter-chip--last': idx === filterOptions.length - 1 }"
+                            @click="selectedFilter = idx">
                             <text class="filter-chip-text"
                                 :class="{ 'filter-chip-text--active': selectedFilter === idx }">{{ opt }}</text>
                         </view>
@@ -104,7 +111,9 @@
     // ---- 证件切换流（composable 持有） ----
     const {
         currentCert, showCertDropdown, credentialGroups, currentCredentialId,
-        loadCredentials, onCertTap, onSelectCredential, onCloseCertDropdown,
+        pendingCredentialId, province,
+        loadCredentials, onCertTap, onPickCredential, onConfirmCredential,
+        onProvinceTap, onCloseCertDropdown,
     } = useDashboardCredential()
 
     // #1602 修复 / #2479：旧页头「证件名 ▾」入口由标题承载（点击 emit titleClick → onCertTap）。
@@ -276,9 +285,7 @@
         flex-direction: row;
         align-items: center;
         justify-content: space-between;
-        padding: 32rpx;
-        border-bottom-width: 1rpx;
-        border-bottom-color: #F0F0F0;
+        padding: 40rpx 32rpx 24rpx;
     }
 
     .filter-title {
@@ -315,17 +322,23 @@
         flex-wrap: wrap;
     }
 
+    /* #2535：胶囊等宽网格（设计稿 956_2984 三个胶囊平分一行），选中态浅蓝底 + 主色字、无描边 */
     .filter-chip {
-        padding: 18rpx 40rpx;
-        background-color: #F5F7FA;
+        flex: 1;
+        height: 88rpx;
+        margin-right: 42rpx;
+        background-color: $bg-color;
         border-radius: 40rpx;
-        border-width: 2rpx;
-        border-color: transparent;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .filter-chip--last {
+        margin-right: 0;
     }
 
     .filter-chip--active {
         background-color: $primary-tint;
-        border-color: #2979FF;
     }
 
     .filter-chip-text {
@@ -334,7 +347,7 @@
     }
 
     .filter-chip-text--active {
-        color: #2979FF;
+        color: $primary-color;
         font-weight: 500;
     }
 
@@ -347,21 +360,21 @@
         flex: 1;
         height: 88rpx;
         border-radius: 44rpx;
-        background-color: #F5F7FA;
+        background-color: $bg-color;
         align-items: center;
         justify-content: center;
     }
 
     .filter-btn-reset-text {
         font-size: 30rpx;
-        color: #666666;
+        color: $text-color-secondary;
     }
 
     .filter-btn-confirm {
-        flex: 2;
+        flex: 1;
         height: 88rpx;
         border-radius: 44rpx;
-        background-color: #2979FF;
+        background-color: $primary-color;
         align-items: center;
         justify-content: center;
     }
@@ -374,6 +387,5 @@
 
     /* ---- 间距工具类（替代 gap） ---- */
     .ml-24 { margin-left: 24rpx; }
-    .mr-20 { margin-right: 20rpx; }
     .mb-20 { margin-bottom: 20rpx; }
 </style>

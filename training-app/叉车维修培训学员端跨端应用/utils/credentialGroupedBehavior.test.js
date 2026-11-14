@@ -183,6 +183,9 @@ describe('use-dashboard-credential：当前证件与列表各自失败各自呈�
       switchCredentialApi: switchApi == null ? () => Promise.resolve({ success: true, credential: null }) : switchApi,
       readCurrentCredentialCache: readCache == null ? () => null : readCache,
       writeCurrentCredentialCache: (c) => { writes.push(c); if (writeCache) writeCache(c); },
+      // #2535：证件面板的报考省份走 utils/provincePicker（展示性字段，不参与落库）
+      DEFAULT_PROVINCE: '全国',
+      pickProvince: () => {},
       uni,
     });
     return { face: mod.useDashboardCredential(), toasts, writes };

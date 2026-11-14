@@ -70,6 +70,7 @@
     import type { CredentialGroup, CredentialItem } from '../../types/index'
     import CertSelector from '../../components/cert-selector/cert-selector.uvue'
     import { useChooseCertGuide } from './composables/useChooseCertGuide'
+    import { DEFAULT_PROVINCE, pickProvince } from '../../utils/provincePicker'
 
     // 未登录防护
     const auth = useAuthStore()
@@ -81,8 +82,8 @@
     // ---- 引导态（#2535 Q2）：首屏引导 → 点击/上滑进主态；X 跳过选证直达首页 ----
     const { guideVisible, onGuideTouchStart, onGuideTouchEnd, enterMain } = useChooseCertGuide()
 
-    // ---- 省份 ----
-    const province = ref('全国')
+    // ---- 省份（展示性字段，选择逻辑收口在 utils/provincePicker） ----
+    const province = ref(DEFAULT_PROVINCE)
 
     // ---- 选证列表（唯一真源 = 后端 GET /credentials/grouped，零硬编码） ----
     const groups = ref<CredentialGroup[]>([])
@@ -163,12 +164,8 @@
     }
 
     function onProvinceTap() : void {
-        uni.showActionSheet({
-            itemList: ['全国', '北京', '上海', '广东', '浙江', '江苏', '山东', '四川', '湖北', '湖南', '河南'],
-            success: (res) => {
-                const list = ['全国', '北京', '上海', '广东', '浙江', '江苏', '山东', '四川', '湖北', '湖南', '河南']
-                province.value = list[res.tapIndex]
-            }
+        pickProvince((p : string) : void => {
+            province.value = p
         })
     }
 </script>

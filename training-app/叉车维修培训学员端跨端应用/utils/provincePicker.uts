@@ -1,0 +1,23 @@
+/**
+ * 报考省份选择（choose-cert 引导页与 dashboard 证件面板共用，全仓唯一抄本）
+ *
+ * 省份是**展示性**字段：证件接口没有省份维度（#1608 §8⑤ 同源裁定：后端无该维度），
+ * 故这里只做本地选择与回显，不发请求、不落库。原先 choose-cert 页面内两份字面量数组
+ * 随本文件收口（#2535）。
+ */
+export const PROVINCES : string[] = ['全国', '北京', '上海', '广东', '浙江', '江苏', '山东', '四川', '湖北', '湖南', '河南']
+
+export const DEFAULT_PROVINCE : string = '全国'
+
+/** 弹系统 action sheet 选省份；只在合法下标时回调（取消/越界一律静默） */
+export function pickProvince(onPick : (province : string) => void) : void {
+    uni.showActionSheet({
+        itemList: PROVINCES,
+        success: (res) => {
+            const idx = res.tapIndex
+            if (idx >= 0 && idx < PROVINCES.length) {
+                onPick(PROVINCES[idx])
+            }
+        }
+    })
+}
