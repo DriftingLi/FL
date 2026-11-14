@@ -175,19 +175,12 @@ func rejectChapterReviewInTx(tx *gorm.DB, chapterID int, reason string) error {
 		}).Error
 }
 
-// publishWorkingCopy 管理员写面直接生效（C7）：把 working 草稿同步进已发布槽
-// （正文+文件挂接清单）、状态 published、清理由、弃在审快照。事务内调用或自带事务。
+// publishWorkingCopyInTx 管理员写面直接生效（C7）的事务原语：把 working 草稿同步进已发布槽
+// （正文+文件挂接清单）、状态 published、清理由、弃在审快照。
 //
-// 拆成 InTx 原语 + 薄壳：调用方若要把「发布 + 通知」放进**同一事务**（C7 就是），必须能
-// 复用事务句柄，不能各自开事务——否则通知失败时章节已发布、回滚不了（强一致族落空）。
-func publishWorkingCopy(db *gorm.DB, chapter *model.Chapter) error {
-	return db.Transaction(func(tx *gorm.DB) error {
-		_, err := publishWorkingCopyInTx(tx, chapter)
-		return err
-	})
-}
-
-// publishWorkingCopyInTx 在给定事务内把 working 草稿同步进已发布槽（C7 事务原语）。
+// 只有 InTx 形态、没有自带事务的薄壳：C7 的调用方必须把「发布 + 通知」放进**同一事务**
+// （#2537 / ADR-0095 决策五强一致族），各自开事务会让通知失败时章节已发布、回滚不了。
+//
 // 返回发布前的收件人讲师 id（0 = 不知道发给谁），供调用方在同一事务内投递通知：
 // 收件人必须在槽被删**之前**读出——删槽后 pending 快照的 submitted_by 就消失了。
 func publishWorkingCopyInTx(tx *gorm.DB, chapter *model.Chapter) (tutorID int, err error) {
