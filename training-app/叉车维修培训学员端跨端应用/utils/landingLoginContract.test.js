@@ -511,8 +511,9 @@ function agreementFacts(src) {
     // 「立即注册」入口（第 1 轮评审 F4）：BASE 里它是**无条件**存在的（登录页那行没有按通道的
     // v-if），brief 判据 7 授权的只有「同源同文案 + 按通道切换的注册引导**文案**」⇒ 入口不许按通道收掉。
     registerLinkCount: count(tpl, '立即注册'),
-    registerLinkWired: /<text class="la-link" @click\.stop="onRegister">立即注册<\/text>/.test(tpl),
-    registerLinkGated: /\bv-(?:if|show)="[^"]*"\s+@click\.stop="onRegister"/.test(tpl) || src.includes('showRegisterLink'),
+    // #2517：共享件新增 `accent` 配色 prop ⇒ 入口标签上多了 `:style`，判据放宽为「class 之后可有属性」
+    registerLinkWired: /<text class="la-link"(?:\s+:style="[^"]*")? @click\.stop="onRegister">立即注册<\/text>/.test(tpl),
+    registerLinkGated: /\bv-(?:if|show)="[^"]*"[^>]*@click\.stop="onRegister"/.test(tpl) || src.includes('showRegisterLink'),
   };
 }
 
@@ -537,8 +538,10 @@ describe('AC 7 协议行抽成共享件：启动页与登录页引用同一件�
     expect(facts.links.privacy).toBe(1);
   });
 
-  it('最小面守票面划线：props 只有 agreed / channel，emits 只有 toggle / agreement / register，表单态零命中', () => {
-    expect(facts.propNames).toEqual(['agreed', 'channel']);
+  it('最小面守票面划线：props 只有 agreed / channel / accent，emits 只有 toggle / agreement / register，表单态零命中', () => {
+    // #2517 显式变更（不是绕过）：新增 `accent` 只为配色（登录页传主色、着陆页走默认值），
+    // 仍属「原始值进、事件出」的最小面，表单态依旧零命中。
+    expect(facts.propNames).toEqual(['accent', 'agreed', 'channel']);
     expect(facts.emitNames).toEqual(['agreement', 'register', 'toggle']);
     expect(facts.formState).toEqual([]);
   });
@@ -560,11 +563,11 @@ describe('AC 7 协议行抽成共享件：启动页与登录页引用同一件�
 
   it('判别力（F4）：把入口再按通道收回去（评审越界的那一版）/ 删掉入口，两种都必红', () => {
     const src = read(AGREEMENT);
-    const gatedByChannel = src.replace('<text class="la-link" @click.stop="onRegister">立即注册</text>',
-      '<text class="la-link" v-if="channel != \'wechat\'" @click.stop="onRegister">立即注册</text>');
+    const gatedByChannel = src.replace('<text class="la-link" :style="accentTextStyle" @click.stop="onRegister">立即注册</text>',
+      '<text class="la-link" v-if="channel != \'wechat\'" :style="accentTextStyle" @click.stop="onRegister">立即注册</text>');
     expect(gatedByChannel).not.toBe(src);
     expect(agreementFacts(gatedByChannel).registerLinkGated).toBe(true);
-    const removed = src.replace('        <text class="la-link" @click.stop="onRegister">立即注册</text>\n', '');
+    const removed = src.replace('        <text class="la-link" :style="accentTextStyle" @click.stop="onRegister">立即注册</text>\n', '');
     expect(removed).not.toBe(src);
     expect(agreementFacts(removed).registerLinkCount).toBe(0);
     expect(agreementFacts(removed).registerLinkWired).toBe(false);

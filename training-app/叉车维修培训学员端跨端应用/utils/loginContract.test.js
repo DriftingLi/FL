@@ -122,9 +122,19 @@ const LINE_BUDGET = 600;
  * 主按钮加投影（`rgba(41,121,255,.28)`，与 points-detail 同款）；≤3 条声明的规则压成单行以守住 600 行预算。
  * **行为面零变更**：脚本块逐字未动；入口与事件绑定一一对应（微信 / 账号密码 / 验证码登录 / 招聘者）。
  * ⇒ 两把 sha 同步前进；其余每一条行为断言逐字节不变。
+ *
+ * ⚠️ **#2517 登录页 1:1 还原（2026-11-14，第八次显式变更，同样不是绕过）**：
+ * 模板 —— ① 品牌区改居中（logo 托底 + 标题，删副标题）；② 顶部通道 tab 下沉为底部三图标
+ * （手机 / 微信 / 邮箱）；③ 图形码由常显 field 改「点获取验证码就地展开」的 `.cap-row`；
+ * ④ 新增角色切换 pill（学员 / 招聘者，截图位在登录按钮上方）；⑤ 招聘者态为账号密码两格；
+ * ⑥ 协议行只在学员验证码通道出现，并新增 `:accent` 传入主色。
+ * 样式 —— 历史蓝 `#2979FF` 全数换 `$primary-color`（本页不再消费该白名单行），
+ * 新增 `.cap-row/.role-pill/.icon-row` 等；无新增裸 hex（`#F5F7FA`/`#C8CDD8`/`#ffffff` 均在册）。
+ * 行为 —— 图形码延迟展开、角色切换、招聘者走真实 B 端登录；其余行为断言逐字不变。
+ * ⇒ 两把 sha 同步前进。
  */
-const TEMPLATE_SHA256 = 'f5079f56e600a9e7afddaa97e8337b39184f980a63ed46e9c10293986257871d';
-const STYLE_SHA256 = 'cdcd6ea5e771f978ca896ab8faa7008ad6995e32d3d06ee1791ca15ed9d41fe2';
+const TEMPLATE_SHA256 = '96c6b0e3f41aaa2c323d185aaed123a2ae20b3809a4721408e815331640cc416';
+const STYLE_SHA256 = 'c8ba237c0681f1d9837d3ba11fdb5dfbf675d697aff10a8a56989a263439a6fc';
 
 /** 页面块（template / script / style）。模板**有嵌套** `<template v-if>` ⇒ 闭合取最后一个 */
 function block(src, tag) {
@@ -228,7 +238,7 @@ describe('手术目标页落袋锁（模块全量预算 / 目录 ≤2 层 / 必�
   it('sha 锁具备判别力（模板 / 样式各改一个字符都必须换 sha）', () => {
     const tpl = pageTemplate();
     const style = block(read(PAGE), 'style');
-    expect(sha(tpl.replace('账号密码登录', '账号密码登录X'))).not.toBe(TEMPLATE_SHA256);
+    expect(sha(tpl.replace('叉车维修培训系统', '叉车维修培训系统X'))).not.toBe(TEMPLATE_SHA256);
     expect(sha(style.replace('.login-page {', '.login-pageY {'))).not.toBe(STYLE_SHA256);
     // 反面对照：原样重算必等（防空块恒真的假绿）
     expect(sha(tpl)).toBe(TEMPLATE_SHA256);
@@ -361,13 +371,21 @@ describe('页面壳层零自持状态 + 模板符号存在性（T09–T12 口径
     expect(roots.filter((r) => !pageScope().has(r))).toEqual(['quickLoginLabelX']);
   });
 
-  it('壳层输入 handler 仍是 7 个 InputEvent 薄包装（`InputEvent` 只出现在 .uvue 侧，T11 形态决定 ②）', () => {
+  it('壳层输入 handler 仍是 InputEvent 薄包装（`InputEvent` 只出现在 .uvue 侧，T11 形态决定 ②）', () => {
     const script = pageScript();
-    const handlers = ['onPhoneInput', 'onPhoneCodeInput', 'onUsernameInput', 'onPasswordInput', 'onEmailInput', 'onEmailCodeInput', 'onCaptchaInput'];
-    const targets = ['phone', 'phoneCode', 'username', 'password', 'email', 'emailCode', 'captchaValue'];
-    handlers.forEach((fn, i) => {
-      expect(script).toMatch(new RegExp('function ' + fn + '\\(e : InputEvent\\) : void \\{\\s*' + targets[i] + '\\.value = e\\.detail\\.value'));
+    // #2517：验证码一格按通道分流（手机/邮箱共用同一输入框），招聘者两格新增
+    const handlers = ['onPhoneInput', 'onCodeInput', 'onUsernameInput', 'onPasswordInput', 'onEmailInput', 'onRecruiterAccountInput', 'onRecruiterPasswordInput', 'onCaptchaInput'];
+    handlers.forEach((fn) => {
+      expect(script).toMatch(new RegExp('function ' + fn + '\\(e : InputEvent\\) : void \\{'));
     });
+    const direct = [['onPhoneInput', 'phone'], ['onUsernameInput', 'username'], ['onPasswordInput', 'password'], ['onEmailInput', 'email'], ['onRecruiterAccountInput', 'recruiterAccount'], ['onRecruiterPasswordInput', 'recruiterPassword'], ['onCaptchaInput', 'captchaValue']];
+    direct.forEach(([fn, target]) => {
+      expect(script).toMatch(new RegExp('function ' + fn + '\\(e : InputEvent\\) : void \\{\\s*' + target + '\\.value = e\\.detail\\.value'));
+    });
+    const code = fnBodyOf(script, 'onCodeInput');
+    expect(code).toContain("if (mode.value == 'phone') {");
+    expect(code).toContain('phoneCode.value = e.detail.value');
+    expect(code).toContain('emailCode.value = e.detail.value');
     for (const f of [FORM, GATE]) {
       const src = read(f);
       // 「无 InputEvent 先例」= .uts 侧不得出现该**类型使用**（注释里提及它属文档说明，允许）
@@ -462,25 +480,30 @@ describe('行为保持点（票面 ②：UI 像素级不变 / 表单行为逐字
 
   it('三种登录方式分支齐备，默认仍是手机号验证码（#1879 起微信档退役，不得回流）', () => {
     expect(form).toContain("const mode = ref<string>('phone')");
-    for (const probe of ['<template v-if="mode == \'password\'">', "<template v-else-if=\"mode == 'phone'\">", '<template v-else>']) {
+    // #2517：分支外层多了角色维度（学员验证码态 / 学员密码态 / 招聘者态）
+    for (const probe of ['<template v-if="role == \'learner\' && mode != \'password\'">', '<template v-else-if="role == \'learner\'">', '<template v-else>']) {
       expect(tpl).toContain(probe);
     }
     expect(tpl).not.toContain("mode == 'wechat'");
     expect(tpl).toContain("{{ countdown > 0 ? countdown + 's' : '获取验证码' }}");
   });
 
-  it('模式切换：同值短路 + 清倒计时 + 错次归零 + 刷图形验证码', () => {
+  it('模式切换：同值短路 + 清倒计时 + 错次归零 + 收起人机验证行', () => {
     const sw = fnBodyOf(form, 'switchMode');
     expect(sw).toContain('if (m == mode.value) return');
     expect(sw).toContain('clearCountdownTimer()');
     expect(sw).toContain('countdown.value = 0');
     expect(sw).toContain('wrongAttempts.value = 0');
-    expect(sw).toContain('loadCaptcha()');
+    // #2517：图形码改为延迟展开 ⇒ 切通道不再预拉图，而是收起已展开的验证行
+    expect(sw).toContain('closeCaptcha()');
   });
 
-  it('发送验证码：重入/倒计时拦截 → 图形验证码前置 → 通道校验 → 60s 倒计时 → 失败刷新图形验证码', () => {
+  it('发送验证码：重入/倒计时拦截 → 人机验证延迟展开 → 图形验证码前置 → 通道校验 → 60s 倒计时 → 失败刷新图形验证码', () => {
     const body = fnBodyOf(form, 'onSendCode');
     expect(body).toContain('if (sendingCode.value || countdown.value > 0) return');
+    // #2517：首次点击只展开验证行（不直接发码），再点才校验图形码
+    expect(body).toContain('if (!captchaOpen.value) {');
+    expect(body).toContain("uni.showToast({ title: '请先完成人机验证', icon: 'none' })");
     expect(body).toContain("uni.showToast({ title: '请先输入图形验证码', icon: 'none' })");
     expect(body).toContain('const err = validatePhoneNum(phone.value)');
     expect(body).toContain("uni.showToast({ title: '邮箱格式不正确', icon: 'none' })");
@@ -519,7 +542,8 @@ describe('行为保持点（票面 ②：UI 像素级不变 / 表单行为逐字
     const body = fnBodyOf(form, 'onSubmit');
     expect(body).toContain("if (mode.value != 'password') {");
     expect(body).toContain("const errAgree = agreed.value == false ? '请先同意用户协议和隐私政策' : ''");
-    expect(tpl).toContain("v-if=\"mode != 'password'\"");
+    // #2517：协议行只在学员侧出现（招聘者态无协议勾选）
+    expect(tpl).toContain("v-if=\"role == 'learner' && mode != 'password'\"");
   });
 
   it('提交：三路分派 + 凭据落地三态 + 失败累计验证码错次（#1879 起微信分支退役）', () => {
@@ -569,21 +593,27 @@ describe('行为保持点（票面 ②：UI 像素级不变 / 表单行为逐字
     expect(hint).toContain("return '6 位数字验证码，5 分钟内有效'");
   });
 
-  it('三个跳转入口 + 键盘「完成」= 提交', () => {
+  it('两个跳转入口 + 招聘者同页真实登录 + 键盘「完成」= 提交', () => {
     expect(fnBodyOf(form, 'goRegister')).toContain("uni.navigateTo({ url: '/pages/register/register' })");
     expect(fnBodyOf(form, 'goForgotPassword')).toContain("uni.navigateTo({ url: '/pages/forgot-password/forgot-password' })");
-    expect(fnBodyOf(form, 'goRecruiterLogin')).toContain("uni.navigateTo({ url: '/pages/recruiter/login' })");
+    // #2517：招聘者入口由「跳独立页」改为同页真实 B 端登录（旧独立页保留，只服务 401 角色化出口）
+    const rec = fnBodyOf(form, 'submitRecruiter');
+    expect(rec).toContain('await auth.loginAsRecruiter({');
+    expect(rec).toContain("uni.reLaunch({ url: '/pages/recruiter/home' })");
+    expect(form).not.toContain("'/pages/recruiter/login'");
     expect(fnBodyOf(form, 'onConfirm')).toContain('onSubmit()');
   });
 
-  it('生命周期：onLoad 已登录门控 → 拉图形验证码 → 门控初始化；onUnload 清倒计时', () => {
+  it('生命周期：onLoad 已登录门控 → 门控初始化；onUnload 清倒计时（#2517 起图形码延迟加载）', () => {
     const script = pageScript();
     expect(script).toContain('auth.restoreFromStorage()');
     expect(script).toContain('if (auth.isLoggedIn.value)');
     expect(script).toContain("uni.reLaunch({ url: '/pages/dashboard/dashboard' })");
     expect(script).toContain('const safeArea = useSafeArea()');
     expect(script).not.toContain('getSystemInfoSync');
-    expect(script).toMatch(/loadCaptcha\(\)\s*\n\s*initBiometricGate\(\)/);
+    expect(script).toContain('initBiometricGate()');
+    // 图形码改为点「获取验证码」时才拉图 ⇒ 页面壳层不再预拉
+    expect(script).not.toContain('loadCaptcha');
     expect(script).toMatch(/onUnload\(\(\) => \{\s*clearCountdownTimer\(\)/);
   });
 

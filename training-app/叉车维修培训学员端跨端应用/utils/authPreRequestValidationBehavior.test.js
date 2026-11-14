@@ -193,7 +193,11 @@ async function submitPassword(app, password) {
 
 /** 「获取验证码」按钮（#1286 的第一落点：图形验证码前置之后、发送之前） */
 async function sendPhoneCode(app, phone) {
-  await app.face.loadCaptcha();
+  // #2517：图形码改为延迟展开 ⇒ 先展开验证行并拉图（桩返回 fake-captcha-id），再点「获取验证码」
+  app.face.captchaOpen.value = true;
+  app.face.refreshCaptcha();
+  await Promise.resolve();
+  await Promise.resolve();
   app.face.captchaValue.value = '9x7q';
   app.face.phone.value = phone;
   await app.face.onSendCode('phone');
