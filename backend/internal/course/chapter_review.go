@@ -46,7 +46,8 @@ func SubmitChapterForReview(ctx context.Context, db *gorm.DB, chapterID, actorID
 		if n > 0 {
 			return ErrChapterReviewPending
 		}
-		// 冻结内容快照（working 行当前值）
+		// 冻结内容快照（working 行当前值）；frozen_at 显式落当前时刻——
+		// 审核队列按它排序（C9「按提交时间排序」），不能靠库默认值（内存库 AutoMigrate 无默认）。
 		snapshot := model.ChapterContentSlot{
 			Slot:        model.ChapterReviewPending,
 			ChapterID:   chapterID,
@@ -54,6 +55,7 @@ func SubmitChapterForReview(ctx context.Context, db *gorm.DB, chapterID, actorID
 			ContentType: chapter.ContentType,
 			FileURL:     chapter.FileURL,
 			SubmittedBy: actorID,
+			FrozenAt:    clock.Now(),
 		}
 		if err := tx.Create(&snapshot).Error; err != nil {
 			return err
@@ -73,75 +75,87 @@ func SubmitChapterForReview(ctx context.Context, db *gorm.DB, chapterID, actorID
 // ApproveChapterReview 过审（C7/C8 仅管理员）：pending 快照**原子切换**到已发布槽
 // （C4：改槽前旧版照常可见，C5），工作副本与已发布一致 ⇒ 状态 published、清驳回理由。
 func ApproveChapterReview(ctx context.Context, db *gorm.DB, chapterID int) error {
+	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return approveChapterReviewInTx(tx, chapterID)
+	})
+}
+
+// approveChapterReviewInTx 过审的事务内实现（#2499：审核队列要在**同一事务**里补发
+// 站内信，ADR-0027 强一致族——通知与状态流转同提交/同回滚，故拆出本函数供两处复用）。
+func approveChapterReviewInTx(tx *gorm.DB, chapterID int) error {
 	var chapter model.Chapter
-	if err := fetchRow(db.WithContext(ctx).Where("chapter_id = ?", chapterID), &chapter, ErrChapterNotFound); err != nil {
+	if err := fetchRow(tx.Where("chapter_id = ?", chapterID), &chapter, ErrChapterNotFound); err != nil {
 		return err
 	}
-	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var pending model.ChapterContentSlot
-		err := tx.Where("slot = ? AND chapter_id = ?", model.ChapterReviewPending, chapterID).
-			First(&pending).Error
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ErrChapterReviewNoPending
-		}
-		if err != nil {
-			return err
-		}
-		// 原子切换：删旧 published 槽（内容+清单）→ pending 改槽 published
-		if err := tx.Where("slot = ? AND chapter_id = ?", model.ChapterReviewPublished, chapterID).
-			Delete(&model.ChapterContentSlot{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Where("slot = ? AND chapter_id = ?", model.ChapterReviewPublished, chapterID).
-			Delete(&model.ChapterFileSlot{}).Error; err != nil {
-			return err
-		}
-		if err := tx.Model(&model.ChapterContentSlot{}).
-			Where("slot = ? AND chapter_id = ?", model.ChapterReviewPending, chapterID).
-			Update("slot", model.ChapterReviewPublished).Error; err != nil {
-			return err
-		}
-		if err := tx.Model(&model.ChapterFileSlot{}).
-			Where("slot = ? AND chapter_id = ?", model.ChapterReviewPending, chapterID).
-			Update("slot", model.ChapterReviewPublished).Error; err != nil {
-			return err
-		}
-		return tx.Model(&model.Chapter{}).Where("chapter_id = ?", chapterID).
-			Updates(map[string]any{
-				"review_status": model.ChapterReviewPublished,
-				"reject_reason": "",
-			}).Error
-	})
+	var pending model.ChapterContentSlot
+	err := tx.Where("slot = ? AND chapter_id = ?", model.ChapterReviewPending, chapterID).
+		First(&pending).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return ErrChapterReviewNoPending
+	}
+	if err != nil {
+		return err
+	}
+	// 原子切换：删旧 published 槽（内容+清单）→ pending 改槽 published
+	if err := tx.Where("slot = ? AND chapter_id = ?", model.ChapterReviewPublished, chapterID).
+		Delete(&model.ChapterContentSlot{}).Error; err != nil {
+		return err
+	}
+	if err := tx.Where("slot = ? AND chapter_id = ?", model.ChapterReviewPublished, chapterID).
+		Delete(&model.ChapterFileSlot{}).Error; err != nil {
+		return err
+	}
+	if err := tx.Model(&model.ChapterContentSlot{}).
+		Where("slot = ? AND chapter_id = ?", model.ChapterReviewPending, chapterID).
+		Update("slot", model.ChapterReviewPublished).Error; err != nil {
+		return err
+	}
+	if err := tx.Model(&model.ChapterFileSlot{}).
+		Where("slot = ? AND chapter_id = ?", model.ChapterReviewPending, chapterID).
+		Update("slot", model.ChapterReviewPublished).Error; err != nil {
+		return err
+	}
+	return tx.Model(&model.Chapter{}).Where("chapter_id = ?", chapterID).
+		Updates(map[string]any{
+			"review_status": model.ChapterReviewPublished,
+			"reject_reason": "",
+		}).Error
 }
 
 // RejectChapterReview 驳回（C7/C8 仅管理员）：弃在审快照（C4），状态回 draft 并记理由（C1）。
 func RejectChapterReview(ctx context.Context, db *gorm.DB, chapterID int, reason string) error {
+	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return rejectChapterReviewInTx(tx, chapterID, reason)
+	})
+}
+
+// rejectChapterReviewInTx 驳回的事务内实现（#2499 同 approveChapterReviewInTx：站内信同事务）。
+// 章节存在性先于理由校验——查不动的章节不能被读成「理由不合法」。
+func rejectChapterReviewInTx(tx *gorm.DB, chapterID int, reason string) error {
 	var chapter model.Chapter
-	if err := fetchRow(db.WithContext(ctx).Where("chapter_id = ?", chapterID), &chapter, ErrChapterNotFound); err != nil {
+	if err := fetchRow(tx.Where("chapter_id = ?", chapterID), &chapter, ErrChapterNotFound); err != nil {
 		return err
 	}
 	if reason == "" {
 		return fmt.Errorf("%w: 驳回理由不能为空", ErrInvalidReviewInput)
 	}
-	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		res := tx.Where("slot = ? AND chapter_id = ?", model.ChapterReviewPending, chapterID).
-			Delete(&model.ChapterContentSlot{})
-		if res.Error != nil {
-			return res.Error
-		}
-		if res.RowsAffected == 0 {
-			return ErrChapterReviewNoPending
-		}
-		if err := tx.Where("slot = ? AND chapter_id = ?", model.ChapterReviewPending, chapterID).
-			Delete(&model.ChapterFileSlot{}).Error; err != nil {
-			return err
-		}
-		return tx.Model(&model.Chapter{}).Where("chapter_id = ?", chapterID).
-			Updates(map[string]any{
-				"review_status": model.ChapterReviewDraft,
-				"reject_reason": reason,
-			}).Error
-	})
+	res := tx.Where("slot = ? AND chapter_id = ?", model.ChapterReviewPending, chapterID).
+		Delete(&model.ChapterContentSlot{})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrChapterReviewNoPending
+	}
+	if err := tx.Where("slot = ? AND chapter_id = ?", model.ChapterReviewPending, chapterID).
+		Delete(&model.ChapterFileSlot{}).Error; err != nil {
+		return err
+	}
+	return tx.Model(&model.Chapter{}).Where("chapter_id = ?", chapterID).
+		Updates(map[string]any{
+			"review_status": model.ChapterReviewDraft,
+			"reject_reason": reason,
+		}).Error
 }
 
 // publishWorkingCopy 管理员写面直接生效（C7）：把 working 草稿同步进已发布槽

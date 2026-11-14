@@ -37,6 +37,8 @@ export const CAPABILITY_LABELS: Readonly<Record<AuthzCapability, string>> = {
   'application.review': '投递处理与简历库',
   'audit.read': '审计日志',
   'catalog.author': '目录作者面（题库标签等）',
+  // #2499 C9：章节审核独立一键（队列/快照预览/批量过审驳回）
+  'chapter.review': '章节审核（队列/批量过审驳回）',
   'check_in.use': '每日打卡',
   'contact.request': '联系方式交换（发起与查看）',
   'contact.respond': '联系方式交换（同意/拒绝/撤回）',
@@ -103,6 +105,7 @@ export const CAPABILITY_DOMAIN_LABELS: Readonly<Record<CapabilityDomain, string>
   audit: '审计',
   catalog: '培训目录',
   check_in: '打卡',
+  chapter: '章节',
   contact: '联系方式交换',
   content: '内容',
   contribution: '投稿',

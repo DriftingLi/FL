@@ -11,6 +11,7 @@
 package course
 
 import (
+	"context"
 	"testing"
 
 	"go.uber.org/zap"
@@ -31,6 +32,12 @@ var nonnilOutletsCourse = map[string]func(t *testing.T) any{
 	"course.CourseDTO.prerequisite_course_ids": outletAdminCourseDetailMeta,
 	"course.CourseDetailDTO.chapters":          outletCourseDetailNoChapters,
 	"course.ChapterDetailDTO.files":            outletChapterDetailNoFiles,
+	// #2499 C9 审核队列三型：空队列/无文件快照/无失败明细都必须发 `[]` 而不是 null
+	// （前端 v-for 与 failures 遍历直接消费，null 会炸）。
+	"course.ChapterReviewQueueResult.items": outletEmptyReviewQueue,
+	"course.ChapterReviewSnapshotDTO.files": outletSnapshotNoFiles,
+	"course.BatchApproveResult.failures":    outletBatchApproveNoFailures,
+	"course.BatchRejectResult.failures":     outletBatchRejectNoFailures,
 }
 
 // TestNonNilDeclaredOutletsNeverEmitNull 本域的举证入口（判据本体在 testutil）。
@@ -98,6 +105,61 @@ func outletChapterDetailNoFiles(t *testing.T) any {
 	res, err := ChapterDetailShared(db, &chapters[1], false, 0, false)
 	if err != nil {
 		t.Fatalf("章节详情失败: %v", err)
+	}
+	return res
+}
+
+// outletEmptyReviewQueue 空库拉审核队列：无待审章节时 items 发 `[]`（#2499 C9）。
+func outletEmptyReviewQueue(t *testing.T) any {
+	t.Helper()
+	res, err := NewAdminService(testutil.NewMemoryDB(t), nil, zap.NewNop()).ListPendingChapterReviews(context.Background(), 1, 20)
+	if err != nil {
+		t.Fatalf("空库拉审核队列失败: %v", err)
+	}
+	return res
+}
+
+// outletSnapshotNoFiles 在审快照但章节无文件：files 发 `[]`（#2499 C9）。
+func outletSnapshotNoFiles(t *testing.T) any {
+	t.Helper()
+	db := testutil.NewMemoryDB(t)
+	course := model.Course{Name: "快照课程", Status: 1, CreatedAt: testutil.Now()}
+	if err := db.Create(&course).Error; err != nil {
+		t.Fatalf("播种课程失败: %v", err)
+	}
+	ch := model.Chapter{CourseID: course.CourseID, Title: "无文件章", Content: "正文",
+		ContentType: "text", CreatedAt: testutil.Now()}
+	if err := db.Create(&ch).Error; err != nil {
+		t.Fatalf("播种章节失败: %v", err)
+	}
+	if err := SubmitChapterForReview(context.Background(), db, ch.ChapterID, 1); err != nil {
+		t.Fatalf("提交审核失败: %v", err)
+	}
+	res, err := NewAdminService(db, nil, zap.NewNop()).GetChapterReviewSnapshot(context.Background(), ch.ChapterID)
+	if err != nil {
+		t.Fatalf("查快照失败: %v", err)
+	}
+	return res
+}
+
+// outletBatchApproveNoFailures 空批量过审：failures 发 `[]`（#2499 C9）。
+func outletBatchApproveNoFailures(t *testing.T) any {
+	t.Helper()
+	res, err := NewAdminService(testutil.NewMemoryDB(t), nil, zap.NewNop()).
+		BatchApproveChapterReviews(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("空批量过审失败: %v", err)
+	}
+	return res
+}
+
+// outletBatchRejectNoFailures 空批量驳回：failures 发 `[]`（#2499 C9）。
+func outletBatchRejectNoFailures(t *testing.T) any {
+	t.Helper()
+	res, err := NewAdminService(testutil.NewMemoryDB(t), nil, zap.NewNop()).
+		BatchRejectChapterReviews(context.Background(), nil, "统一理由")
+	if err != nil {
+		t.Fatalf("空批量驳回失败: %v", err)
 	}
 	return res
 }

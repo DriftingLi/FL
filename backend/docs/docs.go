@@ -1082,6 +1082,255 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/chapter-reviews/batch-approve": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "逐章独立事务过审，一章失败不连坐其余；失败明细逐条返回（#2499 C9）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-章节"
+                ],
+                "summary": "批量过审章节",
+                "parameters": [
+                    {
+                        "description": "章节 ID 列表",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/course.batchReviewBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/course.BatchApproveResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "章节 ID 列表为空",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/chapter-reviews/batch-reject": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "统一驳回理由，逐章独立事务驳回 + 逐章站内信；失败明细逐条返回（#2499 C9）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-章节"
+                ],
+                "summary": "批量驳回章节",
+                "parameters": [
+                    {
+                        "description": "章节 ID 列表 + 统一驳回理由",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/course.batchRejectBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/course.BatchRejectResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "驳回理由不能为空",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/chapter-reviews/pending": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "待审章节按提交时间升序（#2499 C9）；有在审快照的章节才入队",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-章节"
+                ],
+                "summary": "章节审核队列",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "每页条数",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/course.ChapterReviewQueueResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/chapter-reviews/{chapter_id}/snapshot": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "预览在审快照的完整内容（正文 + 冻结文件清单，#2499 C9）；无在审版本 409",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-章节"
+                ],
+                "summary": "章节在审快照详情",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "章节 ID",
+                        "name": "chapter_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/course.ChapterReviewSnapshotDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "章节不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "409": {
+                        "description": "没有在审版本",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/chapter/{chapter_id}": {
             "put": {
                 "security": [
@@ -27082,6 +27331,45 @@ const docTemplate = `{
                 }
             }
         },
+        "course.BatchApproveResult": {
+            "type": "object",
+            "properties": {
+                "approved_count": {
+                    "type": "integer"
+                },
+                "failures": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/course.BatchReviewFailureDTO"
+                    }
+                }
+            }
+        },
+        "course.BatchRejectResult": {
+            "type": "object",
+            "properties": {
+                "failures": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/course.BatchReviewFailureDTO"
+                    }
+                },
+                "rejected_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "course.BatchReviewFailureDTO": {
+            "type": "object",
+            "properties": {
+                "chapter_id": {
+                    "type": "integer"
+                },
+                "reason": {
+                    "type": "string"
+                }
+            }
+        },
         "course.CertificateTemplateDTO": {
             "type": "object",
             "properties": {
@@ -27270,6 +27558,93 @@ const docTemplate = `{
                 },
                 "title": {
                     "type": "string"
+                }
+            }
+        },
+        "course.ChapterReviewQueueItemDTO": {
+            "type": "object",
+            "properties": {
+                "chapter_id": {
+                    "type": "integer"
+                },
+                "chapter_title": {
+                    "type": "string"
+                },
+                "content_type": {
+                    "type": "string"
+                },
+                "course_id": {
+                    "type": "integer"
+                },
+                "course_name": {
+                    "type": "string"
+                },
+                "file_count": {
+                    "type": "integer"
+                },
+                "frozen_at": {
+                    "type": "string"
+                },
+                "submitted_by": {
+                    "type": "integer"
+                }
+            }
+        },
+        "course.ChapterReviewQueueResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/course.ChapterReviewQueueItemDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "course.ChapterReviewSnapshotDTO": {
+            "type": "object",
+            "properties": {
+                "chapter_id": {
+                    "type": "integer"
+                },
+                "chapter_title": {
+                    "type": "string"
+                },
+                "content": {
+                    "type": "string"
+                },
+                "content_type": {
+                    "type": "string"
+                },
+                "course_id": {
+                    "type": "integer"
+                },
+                "course_name": {
+                    "type": "string"
+                },
+                "file_url": {
+                    "type": "string"
+                },
+                "files": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/course.ChapterFileDTO"
+                    }
+                },
+                "frozen_at": {
+                    "type": "string"
+                },
+                "submitted_by": {
+                    "type": "integer"
                 }
             }
         },
@@ -27585,6 +27960,31 @@ const docTemplate = `{
                 },
                 "course": {
                     "$ref": "#/definitions/course.CourseDTO"
+                }
+            }
+        },
+        "course.batchRejectBody": {
+            "type": "object",
+            "properties": {
+                "chapter_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "reason": {
+                    "type": "string"
+                }
+            }
+        },
+        "course.batchReviewBody": {
+            "type": "object",
+            "properties": {
+                "chapter_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
                 }
             }
         },

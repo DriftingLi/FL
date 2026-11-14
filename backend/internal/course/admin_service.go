@@ -299,9 +299,10 @@ func (s *AdminService) UpdateChapter(chapterID int, in *ChapterInput) (*ChapterD
 	return &d, nil
 }
 
-// ApproveChapterReview 过审（#2498 C7/C8 仅管理员）：在审快照原子切换到已发布槽。
+// ApproveChapterReview 过审（#2498 C7/C8 仅管理员）：在审快照原子切换到已发布槽；
+// #2499 C10：给提交人发审核结果站内信（与状态流转同事务）。
 func (s *AdminService) ApproveChapterReview(ctx context.Context, chapterID int) (*ChapterDTO, error) {
-	if err := ApproveChapterReview(ctx, s.db, chapterID); err != nil {
+	if err := s.approveOneWithNotice(ctx, chapterID); err != nil {
 		return nil, err
 	}
 
@@ -313,9 +314,10 @@ func (s *AdminService) ApproveChapterReview(ctx context.Context, chapterID int) 
 	return &d, nil
 }
 
-// RejectChapterReview 驳回（#2498 C7/C8 仅管理员）：弃在审快照，回草稿并记理由。
+// RejectChapterReview 驳回（#2498 C7/C8 仅管理员）：弃在审快照，回草稿并记理由；
+// #2499 C10：给提交人发驳回站内信（含理由，与状态流转同事务）。
 func (s *AdminService) RejectChapterReview(ctx context.Context, chapterID int, reason string) (*ChapterDTO, error) {
-	if err := RejectChapterReview(ctx, s.db, chapterID, reason); err != nil {
+	if err := s.rejectOneWithNotice(ctx, chapterID, reason); err != nil {
 		return nil, err
 	}
 	var chapter model.Chapter

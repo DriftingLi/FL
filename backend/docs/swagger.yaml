@@ -1102,6 +1102,31 @@ definitions:
       theory_hours:
         type: integer
     type: object
+  course.BatchApproveResult:
+    properties:
+      approved_count:
+        type: integer
+      failures:
+        items:
+          $ref: '#/definitions/course.BatchReviewFailureDTO'
+        type: array
+    type: object
+  course.BatchRejectResult:
+    properties:
+      failures:
+        items:
+          $ref: '#/definitions/course.BatchReviewFailureDTO'
+        type: array
+      rejected_count:
+        type: integer
+    type: object
+  course.BatchReviewFailureDTO:
+    properties:
+      chapter_id:
+        type: integer
+      reason:
+        type: string
+    type: object
   course.CertificateTemplateDTO:
     properties:
       code:
@@ -1239,6 +1264,63 @@ definitions:
         type: integer
       title:
         type: string
+    type: object
+  course.ChapterReviewQueueItemDTO:
+    properties:
+      chapter_id:
+        type: integer
+      chapter_title:
+        type: string
+      content_type:
+        type: string
+      course_id:
+        type: integer
+      course_name:
+        type: string
+      file_count:
+        type: integer
+      frozen_at:
+        type: string
+      submitted_by:
+        type: integer
+    type: object
+  course.ChapterReviewQueueResult:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/course.ChapterReviewQueueItemDTO'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+    type: object
+  course.ChapterReviewSnapshotDTO:
+    properties:
+      chapter_id:
+        type: integer
+      chapter_title:
+        type: string
+      content:
+        type: string
+      content_type:
+        type: string
+      course_id:
+        type: integer
+      course_name:
+        type: string
+      file_url:
+        type: string
+      files:
+        items:
+          $ref: '#/definitions/course.ChapterFileDTO'
+        type: array
+      frozen_at:
+        type: string
+      submitted_by:
+        type: integer
     type: object
   course.ChapterSlidesDTO:
     properties:
@@ -1450,6 +1532,22 @@ definitions:
         type: array
       course:
         $ref: '#/definitions/course.CourseDTO'
+    type: object
+  course.batchRejectBody:
+    properties:
+      chapter_ids:
+        items:
+          type: integer
+        type: array
+      reason:
+        type: string
+    type: object
+  course.batchReviewBody:
+    properties:
+      chapter_ids:
+        items:
+          type: integer
+        type: array
     type: object
   course.rejectReviewBody:
     properties:
@@ -5330,6 +5428,153 @@ paths:
       summary: 证书模板列表
       tags:
       - 管理端-培训目录
+  /admin/chapter-reviews/{chapter_id}/snapshot:
+    get:
+      description: 预览在审快照的完整内容（正文 + 冻结文件清单，#2499 C9）；无在审版本 409
+      parameters:
+      - description: 章节 ID
+        in: path
+        name: chapter_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/course.ChapterReviewSnapshotDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 章节不存在
+          schema:
+            $ref: '#/definitions/response.R'
+        "409":
+          description: 没有在审版本
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 章节在审快照详情
+      tags:
+      - 管理端-章节
+  /admin/chapter-reviews/batch-approve:
+    post:
+      consumes:
+      - application/json
+      description: 逐章独立事务过审，一章失败不连坐其余；失败明细逐条返回（#2499 C9）
+      parameters:
+      - description: 章节 ID 列表
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/course.batchReviewBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/course.BatchApproveResult'
+              type: object
+        "400":
+          description: 章节 ID 列表为空
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 批量过审章节
+      tags:
+      - 管理端-章节
+  /admin/chapter-reviews/batch-reject:
+    post:
+      consumes:
+      - application/json
+      description: 统一驳回理由，逐章独立事务驳回 + 逐章站内信；失败明细逐条返回（#2499 C9）
+      parameters:
+      - description: 章节 ID 列表 + 统一驳回理由
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/course.batchRejectBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/course.BatchRejectResult'
+              type: object
+        "400":
+          description: 驳回理由不能为空
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 批量驳回章节
+      tags:
+      - 管理端-章节
+  /admin/chapter-reviews/pending:
+    get:
+      description: 待审章节按提交时间升序（#2499 C9）；有在审快照的章节才入队
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/course.ChapterReviewQueueResult'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 章节审核队列
+      tags:
+      - 管理端-章节
   /admin/chapter/{chapter_id}:
     delete:
       description: 管理员删除章节，返回被删除的 chapter_id

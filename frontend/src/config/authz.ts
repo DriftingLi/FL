@@ -27,6 +27,7 @@ export type AuthzCapability =
   | 'application.review'
   | 'audit.read'
   | 'catalog.author'
+  | 'chapter.review'
   | 'check_in.use'
   | 'contact.request'
   | 'contact.respond'

@@ -74,17 +74,20 @@ const (
 	// 统计分析/用户管理/讲师管理/AI 配置五页，catalog.manage 盖住课程/岗位/证件三页，
 	// content.manage 盖住内容生成/内容精选两页——超管做不到「只给用户管理、不给讲师管理」。
 	// 旧粗键由迁移 000042 展开成细键后删除（不缩权：持有粗键的角色拿到的是同一片可达面）。
-	CapAdminAccess        Capability = "admin.access"        // 管理端入口与仪表盘
-	CapStatisticsRead     Capability = "statistics.read"     // 统计看板
-	CapHrwaiUserManage    Capability = "hrwai_user.manage"   // HRWAI 用户管理
-	CapTutorManage        Capability = "tutor.manage"        // 讲师账号管理
-	CapAIConfigManage     Capability = "ai_config.manage"    // AI 配置与功能绑定
-	CapCourseManage       Capability = "course.manage"       // 课程与章节管理
-	CapPositionManage     Capability = "position.manage"     // 岗位字典管理
-	CapCredentialManage   Capability = "credential.manage"   // 目标证件管理
-	CapContentGenerate    Capability = "content.generate"    // 课程内容 AI 生成
-	CapFeaturedManage     Capability = "featured.manage"     // 内容精选管理
-	CapQuestionReview     Capability = "question.review"     // 题库审核（发布/驳回）
+	CapAdminAccess      Capability = "admin.access"      // 管理端入口与仪表盘
+	CapStatisticsRead   Capability = "statistics.read"   // 统计看板
+	CapHrwaiUserManage  Capability = "hrwai_user.manage" // HRWAI 用户管理
+	CapTutorManage      Capability = "tutor.manage"      // 讲师账号管理
+	CapAIConfigManage   Capability = "ai_config.manage"  // AI 配置与功能绑定
+	CapCourseManage     Capability = "course.manage"     // 课程与章节管理
+	CapPositionManage   Capability = "position.manage"   // 岗位字典管理
+	CapCredentialManage Capability = "credential.manage" // 目标证件管理
+	CapContentGenerate  Capability = "content.generate"  // 课程内容 AI 生成
+	CapFeaturedManage   Capability = "featured.manage"   // 内容精选管理
+	CapQuestionReview   Capability = "question.review"   // 题库审核（发布/驳回）
+	// 章节审核（#2499 C9/C10）：队列/快照预览/批量过审驳回与题库审核分开一键——
+	// 管理端「一页一键」（#1639），否则「只给题库审核、不给章节审核」表达不出来。
+	CapChapterReview      Capability = "chapter.review"
 	CapContributionReview Capability = "contribution.review" // 投稿审核（讲师与管理员同为审核者）
 	CapCatalogAuthor      Capability = "catalog.author"      // 目录作者面（题库标签等讲师可维护项）
 	CapProfileReview      Capability = "profile.review"      // 资料审核
@@ -161,6 +164,7 @@ var roleCapabilities = map[Capability][]Role{
 	CapContentGenerate:    {},
 	CapFeaturedManage:     {},
 	CapQuestionReview:     {},
+	CapChapterReview:      {},
 	CapContributionReview: {RoleTutor},
 	CapCatalogAuthor:      {RoleTutor},
 	CapProfileReview:      {},
@@ -204,6 +208,7 @@ var protectedAdminCapabilities = []Capability{
 	CapFeaturedManage,     // 内容精选管理
 	CapQuestionAuthor,     // 题库作者（与讲师共有）
 	CapQuestionReview,     // 题库审核
+	CapChapterReview,      // 章节审核（#2499 C9/C10）
 	CapContributionReview, // 投稿审核（与讲师共有）
 	CapCatalogAuthor,      // 目录作者面（与讲师共有）
 	CapProfileReview,      // 资料审核

@@ -657,6 +657,11 @@ var Domains = []Domain{
 			"course.ChapterDTO",
 			"course.DeleteCourseResult",
 			"course.DeleteChapterResult",
+			// #2499 C9 审核队列三型（队列分页 / 在审快照 / 批量结果）
+			"course.ChapterReviewQueueResult",
+			"course.ChapterReviewSnapshotDTO",
+			"course.BatchApproveResult",
+			"course.BatchRejectResult",
 			"aiassistant.AIConfigDTO",
 			"aiassistant.FeatureBindingDTO",
 			"auth.ProfileChangeRequestPageResult",
@@ -703,6 +708,11 @@ var Domains = []Domain{
 			{Method: "POST", Path: "/admin/chapter/{chapter_id}/approve-review"},
 			{Method: "POST", Path: "/admin/chapter/{chapter_id}/reject-review"},
 			{Method: "DELETE", Path: "/admin/chapter/{chapter_id}"},
+			// #2499 C9 审核队列：队列读面 + 在审快照预览 + 批量过审/驳回
+			{Method: "GET", Path: "/admin/chapter-reviews/pending"},
+			{Method: "GET", Path: "/admin/chapter-reviews/{chapter_id}/snapshot"},
+			{Method: "POST", Path: "/admin/chapter-reviews/batch-approve"},
+			{Method: "POST", Path: "/admin/chapter-reviews/batch-reject"},
 			{Method: "GET", Path: "/admin/ai-configs"},
 			{Method: "POST", Path: "/admin/ai-configs", NoData: true},
 			{Method: "PUT", Path: "/admin/ai-configs/{id}", NoData: true},
