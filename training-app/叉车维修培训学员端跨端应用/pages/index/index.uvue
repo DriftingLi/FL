@@ -123,8 +123,9 @@
         flex-direction: column;
         position: relative;
         overflow: hidden;
-        background: linear-gradient(to bottom, #0066FF, #00CC99);
-        background-color: #00CC99;
+        // #2558：着陆品牌渐变对已随 #2516（B0）落 uni.scss，白名单两条登记随之删除
+        background: linear-gradient(to bottom, $brand-grad-start, $brand-grad-end);
+        background-color: $brand-grad-end;
     }
 
     /* 背景光晕装饰 */
