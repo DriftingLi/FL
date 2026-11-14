@@ -6,7 +6,7 @@
             <!-- 用户信息卡 -->
             <view class="user-card">
                 <view class="user-row">
-                    <image v-if="avatarUrl.length > 0" class="avatar" :src="avatarUrl" mode="aspectFill" />
+                    <image v-if="avatarUrl.length > 0" class="avatar" :src="avatarUrl" mode="aspectFill" :webp="true" />
                     <view v-else class="avatar avatar-placeholder">
                         <text class="avatar-icon">👷</text>
                     </view>

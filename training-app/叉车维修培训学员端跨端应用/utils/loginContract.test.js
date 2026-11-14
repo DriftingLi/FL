@@ -132,8 +132,16 @@ const LINE_BUDGET = 600;
  * 新增 `.cap-row/.role-pill/.icon-row` 等；无新增裸 hex（`#F5F7FA`/`#C8CDD8`/`#ffffff` 均在册）。
  * 行为 —— 图形码延迟展开、角色切换、招聘者走真实 B 端登录；其余行为断言逐字不变。
  * ⇒ 两把 sha 同步前进。
+ *
+ * ⚠️ **#2543 图形码改开 webp 属性（2026-11-14，第九次显式变更，同样不是绕过）**：
+ * 模板 —— 只给图形码 `<image>` 补一个 `:webp="true"`：服务器图一律落成 webp
+ * （后端 `filestore` 把 jpg/png/bmp 转 `image/webp` 存），而 image 组件的 webp 属性默认
+ * **不解析网络 webp** —— 不写这一句，验证码在真机/体验版是空白。
+ * 样式 —— **逐字节未动**（STYLE_SHA256 不变）。
+ * 行为 —— 零变更；脚本块与其余每一条断言逐字节不变。
+ * ⇒ 只有 TEMPLATE_SHA256 前进。
  */
-const TEMPLATE_SHA256 = '96c6b0e3f41aaa2c323d185aaed123a2ae20b3809a4721408e815331640cc416';
+const TEMPLATE_SHA256 = '039b9129ffd12d65c169c183ad9a2b5504435f88cf493dac7e7225597ea0bc5b';
 const STYLE_SHA256 = 'c8ba237c0681f1d9837d3ba11fdb5dfbf675d697aff10a8a56989a263439a6fc';
 
 /** 页面块（template / script / style）。模板**有嵌套** `<template v-if>` ⇒ 闭合取最后一个 */

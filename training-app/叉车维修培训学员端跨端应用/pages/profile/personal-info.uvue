@@ -9,7 +9,7 @@
           <view class="cell" @click="onEditAvatar">
             <text class="cell-label">修改头像</text>
             <view class="cell-avatar-wrap">
-              <image v-if="avatarUrl.length > 0" class="cell-avatar" :src="avatarUrl" mode="aspectFill">
+              <image v-if="avatarUrl.length > 0" class="cell-avatar" :src="avatarUrl" mode="aspectFill" :webp="true">
               </image>
               <view v-else class="cell-avatar-placeholder">
                 <text class="cell-avatar-icon">👤</text>

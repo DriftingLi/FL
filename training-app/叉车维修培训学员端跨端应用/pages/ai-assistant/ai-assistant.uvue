@@ -14,7 +14,7 @@
 			<view v-if="!functionHeaderCollapsed" class="function-grid">
 				<view v-for="(item, idx) in functionItems" :key="idx" class="function-item" @click="onFunctionClick(item)">
 					<view class="function-icon-box">
-						<image v-if="item.iconPath && item.iconPath.length > 0" class="function-icon-img" :src="item.iconPath" mode="aspectFit" />
+						<image v-if="item.iconPath && item.iconPath.length > 0" class="function-icon-img" :src="item.iconPath" mode="aspectFit" :webp="true" />
 						<text v-else class="function-icon-emoji">{{ item.icon }}</text>
 					</view>
 					<text class="function-title">{{ item.title }}</text>

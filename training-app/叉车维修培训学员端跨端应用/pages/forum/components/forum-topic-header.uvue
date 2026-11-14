@@ -2,7 +2,7 @@
     <view class="topic-info">
         <view class="author-avatar" :style="{ backgroundColor: avatarColor }">
             <image v-if="authorAvatar.length > 0" class="author-avatar-img"
-                :src="authorAvatar" mode="aspectFill" />
+                :src="authorAvatar" mode="aspectFill" :webp="true" />
             <text v-else class="author-avatar-text">{{ authorInitial }}</text>
         </view>
         <view class="author-info">

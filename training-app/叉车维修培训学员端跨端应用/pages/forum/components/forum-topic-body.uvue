@@ -7,7 +7,7 @@
         <view v-if="imageUrls.length > 0" class="img-grid">
             <view v-for="(img, idx) in imageUrls" :key="idx" class="img-cell"
                 @click="onPreview(idx)">
-                <image class="img-thumb" :src="img" mode="aspectFill" />
+                <image class="img-thumb" :src="img" mode="aspectFill" :webp="true" />
             </view>
         </view>
     </view>

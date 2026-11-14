@@ -59,7 +59,7 @@
             <view v-else-if="cap('divider') && block.type == 'divider'" class="md-divider"></view>
             <!-- 图片（点击向页面 emit，previewImage 仍留在页面壳层） -->
             <image v-else-if="cap('image') && block.type == 'image'" class="md-image" :src="block.text" mode="widthFix"
-                @click="onImageTap(idx, block.text)"></image>
+                @click="onImageTap(idx, block.text)" :webp="true"></image>
             <!-- 表格（ADR-0046：章节正文渲染成表格；解析器按行出块，表头行 level=1；行间归零由 mt-0 档承担）
                  单元格自 #2398 起走 runs（移动端 ADR 0061）：声明 inline 的档里单元格存的是行内源串，
                  直出会把 `**粗**` 原样吐出来。字号另立 `.md-sz-table`（26rpx），不跟正文档 30rpx。 -->

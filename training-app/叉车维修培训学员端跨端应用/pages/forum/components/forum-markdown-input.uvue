@@ -73,7 +73,7 @@
              同形状先例 `pages/resume/resume-detail.uvue` 的 photos 列表）。 -->
         <view v-if="showImages" class="image-row">
             <view v-for="(img, idx) in previewImages" :key="img" class="image-cell">
-                <image class="image-thumb" :src="img" mode="aspectFill" @click="onPreviewImage(idx)" />
+                <image class="image-thumb" :src="img" mode="aspectFill" @click="onPreviewImage(idx)" :webp="true" />
                 <view class="image-remove" @click.stop="onRemoveImage(idx)">
                     <text class="image-remove-text">×</text>
                 </view>

@@ -24,7 +24,7 @@
                 </view>
                 <!-- 封面图 -->
                 <view v-if="detail!.cover_image.length > 0" class="cover-wrap">
-                    <image class="cover-img" :src="detail!.cover_image" mode="widthFix"></image>
+                    <image class="cover-img" :src="detail!.cover_image" mode="widthFix" :webp="true"></image>
                 </view>
                 <!-- 正文 Markdown 渲染（#2355：块怎么排一律交给四面共用的
                      `components/markdown/markdown-blocks.uvue`。本页此前自带一份 8 条分支的模板

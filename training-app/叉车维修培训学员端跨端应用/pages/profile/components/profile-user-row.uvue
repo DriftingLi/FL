@@ -2,7 +2,7 @@
     <!-- 用户行：头像 + 昵称/等级 + 段位星级 + 签到胶囊 -->
     <view class="user-row">
         <view class="user-avatar" @click.stop="onAvatarTap">
-            <image v-if="avatarUrl.length > 0" class="avatar-img" :src="avatarUrl" mode="aspectFill">
+            <image v-if="avatarUrl.length > 0" class="avatar-img" :src="avatarUrl" mode="aspectFill" :webp="true">
             </image>
             <text v-else class="avatar-icon">👤</text>
         </view>
