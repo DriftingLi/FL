@@ -23,6 +23,8 @@
  * 13) #2196 / #2230 防回归锁：课程页死标签三件套（filterTags/activeFilter/onFilterTap）与子标签三件套
  *     （subTabs/activeSubTab/onSubTabTap）代码面零出现；
  *     .filter-tag 为 #1951 免费/付费组共用的选择器，反向锁定不许被「顺手清理」误删
+ * 14) #2530：课程列表「积分兑换」空态说明止于证件范围（不再断言功能未开放）、全页含注释
+ *     绝迹「未开放 / 暂未开放 / 无写入通道」；不动面（空态标题 / 口径说明 / 价签 / 失败态）上锁
  */
 /** harness：读取层归一 + 模块归属面（ADR-0023 票 C 起，本文件不再自建 ROOT / read / walker） */
 const h = require('./contractHarness');
@@ -922,5 +924,96 @@ describe('#1422 首页课程区接真实数据：is_hot 迁出 · filter=hot 口
     // 页面点击落点即该课真 id（修 mock id 直跳真实详情的错位 bug；query 键沿用现行口径 id=）
     const page = stripAll(read(DASH_PAGE));
     expect(page).toMatch(/uni\.navigateTo\(\{ url: '\/pages\/courses\/course-detail\?id=' \+ course\.course_id\.toString\(\) \}\)/);
+  });
+});
+
+/**
+ * #2530：课程列表「积分兑换」空态文案与后端事实对齐 —— 契约形状锁。
+ *
+ * 票面成因是**事实性错误**，不是措辞偏好：后端已有 points_price 写入通道并已给课程赋价
+ * （规格 #2493 的数据前提：迁移为「货叉操作技能训练」补 100 积分），而本页还在说
+ * 「课程暂未开放积分兑换」、注释还在说「后端 points_price 无写入通道」。
+ * 学员读到的是「这功能没上线」，真实情况是「这门课现在就能兑换」。
+ *
+ * 本组守两件事（前者是学员可观察的对外事实，后者是维护者的判断依据）：
+ * ① 空态说明止于证件范围（`本证件下暂无…`），不再做「功能未开放」这类**时间性判断** ——
+ *    后端随时可以给新课赋价，端上任何「还没开放」的说法都会再次变成谎言；
+ * ② 全页（**含注释**）不再出现那两组过期字样。注释也算：它是下一个改动者的判断依据，
+ *    「无写入通道」留着就会有人据此设计出恒空分支。
+ *
+ * 不动面同样上锁（AC3）：空态标题、顶部口径说明、价签条件、失败态与重试位。
+ * 只加断言、不新建套件（AC4）。
+ */
+describe('#2530 积分兑换组空态文案（证件限定措辞）与过期表述绝迹', () => {
+  const PAGE = 'pages/courses/courses.uvue';
+  const src = read(PAGE);
+
+  /**
+   * 过期字样清单。`暂未开放` 是 `未开放` 的超集 —— 两条都列是为了让红的读数能直接指名到票面原句，
+   * 而不是只报一个宽泛的「未开放」。
+   */
+  const STALE_COPY = ['未开放', '暂未开放', '无写入通道'];
+  /** 全页扫描（**故意不剥注释**：本票要求连注释一起清） */
+  const staleCopyHits = (s) => STALE_COPY.filter((t) => s.includes(t));
+
+  /** 取 `const <name> = computed(…)` 的整段体（到大括号收尾行 `    })` 为止） */
+  function computedBody(text, name) {
+    const start = text.indexOf('const ' + name + ' = computed');
+    if (start < 0) return '';
+    const end = text.indexOf('\n    })', start);
+    return end < 0 ? '' : text.slice(start, end);
+  }
+
+  /** 某个 computed 里 `activePaid.value == <idx>` 分支返回的字面量；解析不出返回 null */
+  function paidBranch(text, name, idx) {
+    const re = new RegExp('activePaid\\.value\\s*==\\s*' + idx + "\\s*\\)\\s*return\\s*'([^']*)'");
+    const m = re.exec(computedBody(text, name));
+    return m === null ? null : m[1];
+  }
+
+  it('AC1 积分兑换组空态说明止于证件范围（"本证件下暂无…"），且保留一句出路', () => {
+    const hint = paidBranch(src, 'emptyHint', 2);
+    expect(hint).not.toBeNull();
+    // 断言前缀而非整句：票面要求的是「止于」，即把范围收在证件内，不禁后续微调字句
+    expect(hint).toMatch(/^本证件下暂无/);
+    // 说清缺的是什么 + 出路仍在：否则空态变死胡同（#2443 的原意不能丢）
+    expect(hint).toContain('积分兑换课程');
+    expect(hint).toContain('可先看「全部」或「免费」');
+    // 反向：不得断言功能未开放
+    expect(hint).not.toContain('未开放');
+  });
+
+  it('AC2 全页（含注释）不再出现「未开放」「暂未开放」「无写入通道」', () => {
+    expect(staleCopyHits(src)).toEqual([]);
+  });
+
+  it('AC3 不动面：空态标题 / 顶部口径说明 / 价签条件 / 失败态与重试位逐项仍在', () => {
+    // 空态标题三档（#2443）不变
+    expect(paidBranch(src, 'emptyText', 2)).toBe('暂无可兑换课程');
+    expect(paidBranch(src, 'emptyText', 1)).toBe('暂无免费课程');
+    expect(computedBody(src, 'emptyText')).toContain("return '暂无课程数据'");
+    // 顶部口径说明：与课程详情页同一扣积分口径（#1951），一个字不改
+    expect(src).toContain('「积分兑换」= 需用积分解锁的付费课，与课程详情页扣积分为同一口径');
+    // 价签条件：points_price 非空且 > 0 才显示「N 积分」
+    expect(src).toMatch(/function hasPointsPrice\([\s\S]{0,200}?return p != null && p! > 0/);
+    expect(src).toContain("return p! + ' 积分'");
+    // 失败态与重试位（#1331/#816：5xx 与断网不伪装成空列表）
+    expect(src).toContain('课程加载失败，请检查网络后重试');
+    expect(src).toContain('class="retry-btn"');
+    expect(src).toContain('@click="loadCourses(true)"');
+  });
+
+  it('AC5 判据具备红能力：把文案改回旧句、把过期注释注回 ⇒ 两条断言都必须抓到', () => {
+    // 现状干净之后，注入旧形态必须立刻红 —— 否则上面三条只是「文案抄写机」
+    const reverted = src
+      .replace('本证件下暂无积分兑换课程', '课程暂未开放积分兑换')
+      .replace('// ---- 空态文案', '// ---- 空态文案：后端 points_price 无写入通道');
+    // 注入确实生效（防止 replace 静默不命中，让本用例变成自证空的绿）
+    expect(reverted).not.toBe(src);
+    expect(staleCopyHits(reverted)).toEqual(['未开放', '暂未开放', '无写入通道']);
+    // 文案判据同样有红能力：注入后前缀不再是证件限定措辞
+    const hint = paidBranch(reverted, 'emptyHint', 2);
+    expect(hint).not.toBeNull();
+    expect(hint).not.toMatch(/^本证件下暂无/);
   });
 });
