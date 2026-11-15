@@ -1,11 +1,15 @@
 <template>
-	<!-- 左侧分类栏 -->
+	<!-- 左侧分类栏（824:6971 实测：栏宽 230rpx，行高 116rpx，文字左对齐缩进 40rpx，
+	     激活 = 灰底($bg-color) + 主色粗体，无左缘色条；原型只画了「图书系列」激活态）。
+	     三态 = 热门 / 图书系列（本页态）+ 积分兑换（不是本页态：点击经 categoryChange(2)
+	     由页面跳积分商城，824:7014 → 821:6396 边，Q8 两路由不合并）。
+    	     VIP 套餐位退役：原型本屏左栏为 热门/图书系列/积分兑换，无 VIP 位（红字特殊态随之清退）。 -->
 	<scroll-view class="category-sidebar" scroll-y="true">
 		<view v-for="(cat, idx) in categories" :key="idx" class="category-item"
-			:class="{ 'category-active': activeCategory === idx, 'category-vip': cat.isVip }"
+			:class="{ 'category-active': activeCategory === idx }"
 			@click="onCat(idx)">
 			<text class="category-text"
-				:class="{ 'category-text-active': activeCategory === idx, 'category-text-vip': cat.isVip }">{{ cat.name }}</text>
+				:class="{ 'category-text-active': activeCategory === idx }">{{ cat.name }}</text>
 		</view>
 	</scroll-view>
 </template>
@@ -14,13 +18,12 @@
 	type CategoryItem = {
 		name : string
 		id : number
-		isVip : boolean
 	}
 
 	const categories : CategoryItem[] = [
-		{ name: '热门', id: 0, isVip: false },
-		{ name: '图书系列', id: 1, isVip: false },
-		{ name: 'VIP套餐', id: 2, isVip: true },
+		{ name: '热门', id: 0 },
+		{ name: '图书系列', id: 1 },
+		{ name: '积分兑换', id: 2 },
 	]
 
 	const props = withDefaults(defineProps<{
@@ -36,50 +39,31 @@
 	}
 </script>
 
-<style>
+<style lang="scss">
 	/* ===== 左侧分类栏 ===== */
 	.category-sidebar {
-		width: 180rpx;
-		background-color: #f8f8f8;
+		width: 230rpx;
+		background-color: $card-bg;
 	}
 
 	.category-item {
-		padding: 28rpx 24rpx;
-		align-items: center;
+		height: 116rpx;
 		justify-content: center;
-		border-left: 6rpx solid transparent;
-		background-color: #f8f8f8;
+		padding-left: 40rpx;
+		background-color: $card-bg;
 	}
 
 	.category-active {
-		background-color: #ffffff;
-		border-left-color: #2979ff;
+		background-color: $bg-color;
 	}
 
 	.category-text {
 		font-size: 26rpx;
-		color: #333333;
+		color: $text-color;
 	}
 
 	.category-text-active {
-		color: #2979ff;
+		color: $primary-color;
 		font-weight: bold;
-	}
-
-	/* VIP套餐特殊样式 */
-	.category-vip {
-		background-color: #f8f8f8;
-	}
-
-	.category-vip.category-active {
-		background-color: #ffffff;
-	}
-
-	.category-text-vip {
-		color: #ff4d4f;
-	}
-
-	.category-text-vip.category-text-active {
-		color: #2979ff;
 	}
 </style>

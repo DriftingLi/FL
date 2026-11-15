@@ -10,17 +10,17 @@
             </template>
         </AppNavBar>
 
-        <!-- 排序栏 -->
+        <!-- 排序栏（824:6971 实测：88rpx 高、商品左锚定带主色胶囊下划线、右端搜索位） -->
         <MallSortBar :active-sort="activeSort" @sort-change="onSortChange" @search="onSearch" />
 
         <!-- 双栏主体 -->
         <view class="main-body">
-            <!-- 左侧分类栏 -->
+            <!-- 左侧分类栏（热门/图书系列 = 本页态；积分兑换 → 积分商城，见 onCategoryChange） -->
             <MallCategorySidebar :active-category="activeCategory" @category-change="onCategoryChange" />
 
-            <!-- 右侧商品列表 -->
+            <!-- 右侧商品列表（原型 824:6971：灰底列表 + 白卡通栏、卡距 20rpx） -->
             <scroll-view class="product-list" scroll-y="true" @scrolltolower="onLoadMore">
-                <!-- 必买清单区域（热门分类时显示） -->
+                <!-- 必买清单区域（热门分类时显示）——原型只画了「图书系列」激活态，本区保持现网形态 -->
                 <view v-if="activeCategory === 0 && mustBuyList.length > 0" class="must-buy-section">
                     <text class="section-title">必买清单</text>
                     <view class="must-buy-grid">
@@ -50,7 +50,10 @@
                 <view v-for="(item, idx) in products" :key="idx" class="product-item" @click="onProductClick(item)">
                     <view class="product-img-wrap">
                         <image v-if="item.cover_url" :src="item.cover_url" class="product-img" mode="aspectFill" :webp="true" />
-                        <view v-else class="product-img-placeholder"></view>
+                        <!-- cover_url 为空时的默认书封（第 4 刀）：路径字面量进表达式（过 imageWebpAttrContract 豁免），
+                             文件名按商品名称关键词对号（DTO 无商品类型字段），原型 824:6971 五种书封 -->
+                        <image v-else class="product-img" mode="aspectFill"
+                            :src="'/static/icons/mall/cover-' + defaultCoverName(item) + '.png'" />
                     </view>
                     <view class="product-info">
                         <text class="product-name">{{ item.title }}</text>
@@ -58,8 +61,9 @@
                             <!-- #1421（移动端 ADR-0031）：价格行吃单点渲染 —— 「N 积分 / 免费」，
                                  不再有 ¥ 金额与恒假「免费」；原「已有 N 人参与学习」行随接线清退
                                  （学员端列表后端根本不发 student_count，恒 0 是假信号）。
+                                 色随文案走（原型两态：免费红 / 付费深灰），判定与文案同一单点 priceIsFree。
                                  经本地包装函数转发（模板直调 import 函数会被 Kotlin 判炸，规则 S）。 -->
-                            <text class="product-price">{{ coursePriceText(item) }}</text>
+                            <text :class="priceIsFree(item) ? 'product-price-free' : 'product-price-paid'">{{ coursePriceText(item) }}</text>
                         </view>
                     </view>
                 </view>
@@ -97,6 +101,7 @@
     const activeSort = ref<number>(0)
 
     // ---- 左侧分类 ----
+    // 0 热门 / 1 图书系列 = 本页态；2 积分兑换不是本页态，选中即跳积分商城（Q8 两路由互跳）
     const activeCategory = ref<number>(0)
 
     // ---- 商品列表 ----
@@ -166,7 +171,16 @@
         loadProducts(true)
     }
 
+    /** 左栏「积分兑换」→ 积分商城（824:7014 → 821:6396 边；Q8 两路由不合并，互跳即两路由互跳） */
+    function onGoPointsShop() : void {
+        uni.navigateTo({ url: '/pages/points/points-shop' })
+    }
+
     function onCategoryChange(idx : number) : void {
+        if (idx == 2) {
+            onGoPointsShop()
+            return
+        }
         activeCategory.value = idx
         loadProducts(true)
     }
@@ -195,6 +209,25 @@
         return renderCoursePrice(item.points_price)
     }
 
+    /** 免费判定与价格文案同一单点（文案 == '免费'），色随文案走：免费红 / 付费深灰（原型两态） */
+    function priceIsFree(item : CourseItem) : boolean {
+        return coursePriceText(item) == '免费'
+    }
+
+    /**
+     * 默认书封名（第 4 刀）：cover_url 为空时的兜底封面，按商品名称关键词对号入座；
+     * 列表 DTO 无商品类型字段 ⇒ 名称匹配 + 「教材」兜底（原型 824:6971 五种书封，
+     * 素材 = 判定 CSV「课程商城」目录 5 张 PLACEHOLDER，出图 = 容器 CSS×2 = 142×200）。
+     */
+    function defaultCoverName(item : CourseItem) : string {
+        const t = item.title
+        if (t.indexOf('电子图书') >= 0) return 'ebook'
+        if (t.indexOf('专业技术') >= 0) return 'material-pro'
+        if (t.indexOf('技能') >= 0) return 'material-skill'
+        if (t.indexOf('辅助') >= 0) return 'material-aux'
+        return 'textbook'
+    }
+
     // onLoad 必须带 options 形参：Kotlin Function1<OnLoadOptions, Unit>，零参即 error17
     // 回到调必须是 Unit（非 Promise）⇒ 用 .then 串证件解析，不写 async 回调
     onLoad((options : OnLoadOptions) => {
@@ -207,7 +240,7 @@
 <style lang="scss">
     .container {
         flex: 1;
-        background-color: #f5f5f5;
+        background-color: $bg-color;
         flex-direction: column;
     }
 
@@ -230,22 +263,23 @@
         flex-direction: row;
     }
 
-    /* ===== 右侧商品列表 ===== */
+    /* ===== 右侧商品列表（原型：灰底通栏 + 白卡、卡距 20rpx）===== */
     .product-list {
         flex: 1;
-        background-color: #ffffff;
+        background-color: $bg-color;
     }
 
-    /* ===== 必买清单区域 ===== */
+    /* ===== 必买清单区域（原型未画本态，保持现网形态：白卡语言随列表底色补底）===== */
     .must-buy-section {
         padding: 20rpx;
-        border-bottom: 1rpx solid #f5f5f5;
+        background-color: $card-bg;
+        border-bottom: 1rpx solid $bg-color;
     }
 
     .section-title {
         font-size: 30rpx;
         font-weight: bold;
-        color: #333333;
+        color: $text-color;
         margin-bottom: 20rpx;
     }
 
@@ -264,7 +298,7 @@
         width: 100%;
         height: 160rpx;
         border-radius: 12rpx;
-        background-color: #f5f5f5;
+        background-color: $bg-color;
         overflow: hidden;
     }
 
@@ -281,38 +315,33 @@
 
     .must-buy-title {
         font-size: 24rpx;
-        color: #333333;
+        color: $text-color;
         margin-top: 12rpx;
         lines: 2;
         text-overflow: ellipsis;
     }
 
-    /* ===== 商品卡片 ===== */
+    /* ===== 商品卡片（原型实测：白卡通栏、内边距 20rpx、无圆角、卡距 20rpx）===== */
     .product-item {
-        padding: 24rpx;
+        padding: 20rpx;
         flex-direction: row;
-        border-bottom: 1rpx solid #f5f5f5;
+        background-color: $card-bg;
+        margin-bottom: 20rpx;
     }
 
+    /* 书封容器（原型 71×100 CSS ≈ 135×192rpx，方角；封面素材自带书脊与角标） */
     .product-img-wrap {
-        width: 140rpx;
-        height: 140rpx;
-        border-radius: 12rpx;
-        background-color: #f5f5f5;
+        width: 135rpx;
+        height: 192rpx;
+        background-color: $bg-color;
         overflow: hidden;
-        margin-right: 20rpx;
+        margin-right: 24rpx;
         flex-shrink: 0;
     }
 
     .product-img {
         width: 100%;
         height: 100%;
-    }
-
-    .product-img-placeholder {
-        width: 100%;
-        height: 100%;
-        background-color: #e8e8e8;
     }
 
     .product-info {
@@ -323,8 +352,7 @@
 
     .product-name {
         font-size: 28rpx;
-        color: #333333;
-        font-weight: 500;
+        color: $text-color;
         lines: 2;
         text-overflow: ellipsis;
     }
@@ -336,10 +364,17 @@
         margin-top: 12rpx;
     }
 
-    .product-price {
+    /* 价格两态（原型 824:6971：免费红 / 付费深灰；免费红实测核心值 #FF2424 = 既有 $color-price token，走 token） */
+    .product-price-free {
         font-size: 32rpx;
         font-weight: bold;
-        color: #ff4d4f;
+        color: $color-price;
+    }
+
+    .product-price-paid {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: $text-color;
     }
 
     /* ===== 空状态 ===== */
@@ -350,7 +385,7 @@
 
     .empty-text {
         font-size: 28rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     /* #1331：失败态重试位（与 course-detail / chapter-view 的 retry-btn 同款形态） */
@@ -374,6 +409,6 @@
 
     .loading-text {
         font-size: 24rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 </style>

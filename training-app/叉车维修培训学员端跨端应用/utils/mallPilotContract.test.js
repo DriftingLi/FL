@@ -71,3 +71,34 @@ describe('模块私有组件接线契约（Q17 安置：pages/<module>/component
     expect(page).toMatch(/<MallFloatActions[\s/>]/);
   });
 });
+
+describe('#2518 第 4 刀（商城逐像素收口 824:6971）：默认书封 · 搜索切图 · 积分兑换反向边', () => {
+  const page = read('pages/mall/mall.uvue');
+
+  it('默认书封：cover_url 兜底走包内路径拼接（表达式含 /static/ 才过 imageWebpAttrContract 豁免），五种书封文件在位', () => {
+    expect(page).toMatch(/:src="'\/static\/icons\/mall\/cover-' \+ defaultCoverName\(item\) \+ '\.png'"/);
+    for (const f of ['cover-ebook', 'cover-material-pro', 'cover-material-aux', 'cover-material-skill', 'cover-textbook']) {
+      expect(h.exists(`static/icons/mall/${f}.png`)).toBe(true);
+    }
+    // 商品卡纯 CSS 灰块兜底退役（必买清单区不在本刀射程，其占位保留）
+    expect(page).not.toContain('product-img-placeholder');
+  });
+
+  it('搜索位吃切图（排序栏 + 悬浮菜单共用一个 32×32 资产），🔍 emoji 兜底退场', () => {
+    expect(h.exists('static/icons/mall/search.png')).toBe(true);
+    expect(read('pages/mall/components/mall-sort-bar.uvue')).toContain('/static/icons/mall/search.png');
+    expect(read('pages/mall/components/mall-float-actions.uvue')).toContain('/static/icons/mall/search.png');
+    expect(read('pages/mall/components/mall-sort-bar.uvue')).not.toContain('🔍');
+    expect(read('pages/mall/components/mall-float-actions.uvue')).not.toContain('🔍');
+  });
+
+  it('左栏「积分兑换」→ 积分商城（824:7014 → 821:6396 边；Q8 两路由不合并，互跳即两路由互跳）；VIP 套餐位退役', () => {
+    const side = read('pages/mall/components/mall-category-sidebar.uvue');
+    expect(side).toContain('积分兑换');
+    expect(side).not.toContain('VIP套餐');
+    expect(side).not.toContain('isVip');
+    expect(page).toContain("uni.navigateTo({ url: '/pages/points/points-shop' })");
+    // 选中「积分兑换」不是本页态：不落 activeCategory（分支内 return）
+    expect(page).toMatch(/if \(idx == 2\) \{\s*\n\s*onGoPointsShop\(\)\s*\n\s*return/);
+  });
+});

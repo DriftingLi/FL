@@ -1,33 +1,26 @@
 <template>
-	<!-- 悬浮按钮组 -->
-	<view class="float-group">
-		<!-- 回到顶部 -->
-		<view class="float-btn" @click="scrollToTop">
-			<text class="float-icon">↑</text>
-		</view>
-		<!-- 展开/收起 -->
-		<view class="float-btn" @click="toggleFloatMenu">
-			<text class="float-icon">{{ showFloatMenu ? '∧' : '∨' }}</text>
-		</view>
-		<!-- 搜索（收起态） -->
-		<view v-if="!showFloatMenu" class="float-btn float-btn-search" @click="onSearchClick">
-			<text class="float-icon">🔍</text>
-			<text class="float-btn-label">搜索</text>
+	<!-- 悬浮按钮组（824:6971 实测：右侧白色竖胶囊，宽 106rpx、全圆角，右缘 40rpx；
+	     展开态 = ∧ 折叠钮置顶 + 首页/分享/搜索（图标+小字），与原型画出的展开态一致）。
+	     #1421（移动端 ADR-0031）：原型无「回到顶部」位，原 no-op scrollToTop 按钮随本刀退役；
+	     首页/分享线形图标无切图素材，维持字形/emoji 承载，搜索位吃切图。 -->
+	<view class="float-pill">
+		<!-- 折叠/展开 -->
+		<view class="float-item" @click="toggleFloatMenu">
+			<text class="float-toggle">{{ showFloatMenu ? '∧' : '∨' }}</text>
 		</view>
 		<!-- 展开菜单 -->
-		<view v-if="showFloatMenu" class="float-menu">
-			<view class="float-menu-item" @click="goHome">
-				<text class="float-menu-icon">🏠</text>
-				<text class="float-menu-text">首页</text>
-			</view>
-			<view class="float-menu-item" @click="onShare">
-				<text class="float-menu-icon">🔗</text>
-				<text class="float-menu-text">分享</text>
-			</view>
-			<view class="float-menu-item" @click="onSearchClick">
-				<text class="float-menu-icon">🔍</text>
-				<text class="float-menu-text">搜索</text>
-			</view>
+		<view v-if="showFloatMenu" class="float-item" @click="goHome">
+			<text class="float-icon">🏠</text>
+			<text class="float-label">首页</text>
+		</view>
+		<view v-if="showFloatMenu" class="float-item" @click="onShare">
+			<text class="float-icon">🔗</text>
+			<text class="float-label">分享</text>
+		</view>
+		<!-- 搜索（收起态常驻；展开态为菜单末项） -->
+		<view class="float-item" @click="onSearchClick">
+			<image class="float-search-img" src="/static/icons/mall/search.png" mode="aspectFit" />
+			<text class="float-label">搜索</text>
 		</view>
 	</view>
 </template>
@@ -52,77 +45,52 @@
 		emit('search')
 	}
 
-	function scrollToTop() : void {
-		// 滚动到顶部
-	}
-
 	function toggleFloatMenu() : void {
 		showFloatMenu.value = !showFloatMenu.value
 	}
 </script>
 
-<style>
-	/* ===== 悬浮按钮组 ===== */
-	.float-group {
+<style lang="scss">
+	/* ===== 悬浮胶囊（原型：白色竖胶囊、全圆角、右侧 40rpx；底部位置沿用现网 200rpx——
+	     原型画幅裁不到胶囊底缘，无实测依据不动它）===== */
+	.float-pill {
 		position: fixed;
-		right: 24rpx;
+		right: 40rpx;
 		bottom: 200rpx;
+		width: 106rpx;
 		flex-direction: column;
 		align-items: center;
-		z-index: 100;
-	}
-
-	.float-btn {
-		width: 80rpx;
-		height: 80rpx;
-		border-radius: 40rpx;
-		background-color: #ffffff;
-		align-items: center;
-		justify-content: center;
+		background-color: $card-bg;
+		border-radius: 53rpx;
 		box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.15);
-		margin-bottom: 16rpx;
+		padding-top: 16rpx;
+		padding-bottom: 16rpx;
 	}
 
-	.float-btn-search {
-		width: 80rpx;
-		height: 100rpx;
-		border-radius: 40rpx;
+	.float-item {
 		flex-direction: column;
-		padding-top: 8rpx;
+		align-items: center;
+		padding-top: 14rpx;
+		padding-bottom: 14rpx;
+	}
+
+	.float-toggle {
+		font-size: 28rpx;
+		color: $text-color-secondary;
 	}
 
 	.float-icon {
 		font-size: 32rpx;
-		color: #666666;
 	}
 
-	.float-btn-label {
-		font-size: 20rpx;
-		color: #666666;
-		margin-top: 4rpx;
+	.float-search-img {
+		width: 32rpx;
+		height: 32rpx;
 	}
 
-	.float-menu {
-		background-color: #ffffff;
-		border-radius: 16rpx;
-		box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.15);
-		padding: 16rpx 0;
-		margin-bottom: 16rpx;
-	}
-
-	.float-menu-item {
-		flex-direction: row;
-		align-items: center;
-		padding: 16rpx 32rpx;
-	}
-
-	.float-menu-icon {
-		font-size: 32rpx;
-		margin-right: 16rpx;
-	}
-
-	.float-menu-text {
-		font-size: 26rpx;
-		color: #333333;
+	.float-label {
+		font-size: 22rpx;
+		color: $text-color;
+		margin-top: 6rpx;
 	}
 </style>

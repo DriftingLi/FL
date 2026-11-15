@@ -1,23 +1,38 @@
 <template>
-	<!-- 排序栏 -->
+	<!-- 排序栏（824:6971 实测）：高 88rpx，商品左锚定 28rpx 粗体 + 主色胶囊下划线（38×8rpx）；
+	     价格/积分/销量 22rpx 深灰 + 堆叠双向三角（上浅下深）；右端搜索位吃切图。
+	     激活态 = 大字粗体 + 下划线，四个档位同一机制（原型只画了「商品」激活态）。
+	     #1421（移动端 ADR-0031 决策 6）：cart 事件随购物车族清退，原型排序栏右端的购物车图标位
+	     不复活；搜索位随之收靠右缘（原型成对图标右锚 36rpx）。 -->
 	<view class="sort-bar">
-		<view class="sort-item" :class="{ 'sort-active': activeSort === 0 }" @click="onSort(0)">
-			<text class="sort-text" :class="{ 'sort-text-active': activeSort === 0 }">商品</text>
+		<view class="sort-main" :class="{ 'sort-main-active': activeSort === 0 }" @click="onSort(0)">
+			<text class="sort-text-main" :class="{ 'sort-text-main-active': activeSort === 0 }">商品</text>
+			<view class="sort-underline" :class="{ 'sort-underline-on': activeSort === 0 }"></view>
 		</view>
-		<view class="sort-item" :class="{ 'sort-active': activeSort === 1 }" @click="onSort(1)">
+		<view class="sort-item sort-item-first" @click="onSort(1)">
 			<text class="sort-text" :class="{ 'sort-text-active': activeSort === 1 }">价格</text>
-			<text class="sort-arrow">∨</text>
+			<view class="sort-arrows">
+				<text class="arrow-up">▲</text>
+				<text class="arrow-down">▼</text>
+			</view>
 		</view>
-		<view class="sort-item" :class="{ 'sort-active': activeSort === 2 }" @click="onSort(2)">
+		<view class="sort-item" @click="onSort(2)">
 			<text class="sort-text" :class="{ 'sort-text-active': activeSort === 2 }">积分</text>
-			<text class="sort-arrow">∨</text>
+			<view class="sort-arrows">
+				<text class="arrow-up">▲</text>
+				<text class="arrow-down">▼</text>
+			</view>
 		</view>
-		<view class="sort-item" :class="{ 'sort-active': activeSort === 3 }" @click="onSort(3)">
+		<view class="sort-item" @click="onSort(3)">
 			<text class="sort-text" :class="{ 'sort-text-active': activeSort === 3 }">销量</text>
-			<text class="sort-arrow">∨</text>
+			<view class="sort-arrows">
+				<text class="arrow-up">▲</text>
+				<text class="arrow-down">▼</text>
+			</view>
 		</view>
+		<view class="sort-spacer"></view>
 		<view class="sort-icon-btn" @click="onSearchClick">
-			<text class="sort-icon">🔍</text>
+			<image class="sort-icon-img" src="/static/icons/mall/search.png" mode="aspectFit" />
 		</view>
 	</view>
 </template>
@@ -41,48 +56,104 @@
 	}
 </script>
 
-<style>
-	/* ===== 排序栏 ===== */
+<style lang="scss">
+	/* ===== 排序栏（原型 824:6971：白底 88rpx，底部 1rpx 分隔线）===== */
 	.sort-bar {
-		background-color: #ffffff;
-		padding: 16rpx 24rpx;
+		background-color: $card-bg;
+		height: 88rpx;
+		padding-left: 40rpx;
+		padding-right: 36rpx;
 		flex-direction: row;
 		align-items: center;
-		border-bottom: 1rpx solid #f0f0f0;
+		border-bottom: 1rpx solid $bg-color;
 	}
 
+	/* 「商品」档：列排、下划线槽常驻底部（激活与否内容位置不跳）；定宽 56rpx（激活字宽），
+	     激活态字号变化不推挤右邻 */
+	.sort-main {
+		width: 56rpx;
+		height: 88rpx;
+		justify-content: flex-end;
+		align-items: flex-start;
+	}
+
+	.sort-text-main {
+		font-size: 22rpx;
+		color: $text-color;
+		margin-bottom: 22rpx;
+	}
+
+	.sort-text-main-active {
+		font-size: 28rpx;
+		font-weight: bold;
+		color: $text-color;
+	}
+
+	/* 主色胶囊下划线（原型实测 38×8rpx、圆角全、贴分隔线上缘、居中于「商品」两字 ⇒ 左缩进 9rpx） */
+	.sort-underline {
+		width: 38rpx;
+		height: 8rpx;
+		margin-left: 9rpx;
+		border-radius: 4rpx;
+		background-color: transparent;
+	}
+
+	.sort-underline-on {
+		background-color: $primary-color;
+	}
+
+	/* 价格/积分/销量：原型实测起点节距 132imgpx ≈ 127rpx（内容宽 ~64rpx ⇒ 间距 ~62rpx）；
+	     价格距「商品」块 140rpx（原型实测起点 245imgpx ≈ 236rpx） */
 	.sort-item {
-		flex: 1;
 		flex-direction: row;
 		align-items: center;
-		justify-content: center;
-		padding: 8rpx 0;
+		margin-left: 62rpx;
+	}
+
+	.sort-item-first {
+		margin-left: 140rpx;
+	}
+
+	/* 搜索位左占位（flex 撑开；margin auto 原生端无先例不赌） */
+	.sort-spacer {
+		flex: 1;
 	}
 
 	.sort-text {
-		font-size: 26rpx;
-		color: #666666;
+		font-size: 22rpx;
+		color: $text-color;
 	}
 
 	.sort-text-active {
-		color: #2979ff;
-		font-weight: 600;
+		font-size: 22rpx;
+		font-weight: bold;
+		color: $text-color;
 	}
 
-	.sort-arrow {
-		font-size: 20rpx;
-		color: #cccccc;
-		margin-left: 4rpx;
-	}
-
-	.sort-icon-btn {
-		width: 60rpx;
-		height: 60rpx;
+	/* 堆叠双向三角（原型：上浅 #CCC / 下深 #999，列高 ~19rpx） */
+	.sort-arrows {
+		margin-left: 8rpx;
+		flex-direction: column;
 		align-items: center;
-		justify-content: center;
 	}
 
-	.sort-icon {
-		font-size: 32rpx;
+	.arrow-up {
+		font-size: 14rpx;
+		color: $text-disabled;
+	}
+
+	.arrow-down {
+		font-size: 14rpx;
+		color: $text-color-placeholder;
+	}
+
+	/* 搜索位（切图 16×16 CSS，素材 32×32）；购物车位已随 #1421 清退，搜索右锚 36rpx */
+	.sort-icon-btn {
+		padding: 16rpx;
+	}
+
+	.sort-icon-img {
+		width: 32rpx;
+		height: 32rpx;
 	}
 </style>

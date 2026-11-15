@@ -110,7 +110,9 @@ module.exports = {
     '#14532D': 'pages/forgot-password/forgot-password.uvue 成功态深绿字——green-900，token 表无对应',
     '#86EFAC': 'pages/forgot-password/forgot-password.uvue 成功态浅绿字——green-300，token 表无对应',
     '#F0F1F5': 'pages/register/register.uvue、pages/forgot-password/forgot-password.uvue mode-tab 未选中底——分段控件中性浅灰，$bg-color 近似但值不等（与批5 #EEF1F5 轨道灰用途不同，各守各点不并条）',
-    '#FF4D4F': 'pages/mall/mall.uvue product-price 价格红——与页面私有子组件 mall-category-sidebar 同值，本批只收页头不扩面改色；$danger-color(#ff3b30) 值不等（同批2 #F44336 判例），待红系 token 票裁',
+    // '#FF4D4F' 已随 #2518 第 4 刀退役（mall 价格红改两态制 + VIP 套餐位清退，两处承载均不存在）。
+    // 免费价红的新承载（product-price-free）实测核心值 #FF2424 = 既有 $color-price token 值，
+    // 值 ∈ token 值 ⇒ 走 token、不进白名单（§1.6 自检：白名单值不得与 token 值重叠）。
     // '#1A1A1A' 已于 #2352 收敛为 $text-strong（#2338 裁定：新增 token，值来自现状 .md-heading 裸 hex）：
     // 值成了 token 值 ⇒ 白名单行必须删（§1.6 自检：白名单值不得与 token 值重叠）。裸字面仍散在 4 处
     // （courses.uvue ×2 / job-list.uvue / resume.uvue），渲染面迁移随 #2353–#2356；
