@@ -120,12 +120,19 @@ function Invoke-GateTee {
             $drainSw = $null
         }
     }
+    # 出口 1（两条流都 EOF）可能在子进程尚未被回收时跳出：此时 $p.ExitCode 的 getter 抛
+    # InvalidOperationException，PowerShell 把属性 getter 异常降级成非终止错误 ⇒ 值落成 $null
+    # （#2565：CI 上 T4 的 mixedExit=null）。出口 1 补一次有界等待；出口 2（有界放弃）保持
+    # 「可能拿不到」的已知形态，不额外拖时间。
+    if (-not $abandoned -and -not $p.HasExited) { [void]$p.WaitForExit(10000) }
+    $exitCode = if ($p.HasExited) { $p.ExitCode } else { $null }
     if ($abandoned) {
-        Write-Host ("[warn] 子进程已退出（exit={0}）但输出流仍被其子进程（常驻 IDE 等）占用 ⇒ 放弃剩余输出，不影响退出码与门结论" -f $p.ExitCode) -ForegroundColor Yellow
+        $why = if ($null -eq $exitCode) { '子进程仍在运行' } else { "子进程已退出（exit=$exitCode）" }
+        Write-Host ("[warn] {0} 但输出流仍被其子进程（常驻 IDE 等）占用 ⇒ 放弃剩余输出，不影响退出码与门结论" -f $why) -ForegroundColor Yellow
     }
     return [pscustomobject]@{
         Lines = [string[]]$collected.ToArray()
-        ExitCode = $p.ExitCode
+        ExitCode = $exitCode
         DrainAbandoned = $abandoned
     }
 }
