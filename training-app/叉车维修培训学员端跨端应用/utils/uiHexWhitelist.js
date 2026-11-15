@@ -58,7 +58,6 @@ module.exports = {
     '#E8F3FF': 'pages/resume/resume-attach.uvue 文件图标浅蓝底——$primary-tint(#ebf5ff) 近似但值不等，待真机裁',
     '#FADCD9': 'pages/resume/resume-attach.uvue 删除按钮浅红底——$danger-tint(#ffebee) 近似但值不等，待真机裁',
     '#F0F7FF': 'pages/practice/practice-do.uvue 选中项/考点标签浅蓝底——$primary-tint 近似但值不等，待真机裁',
-    '#FAFAFA': 'pages/practice/practice-do.uvue 笔记输入底——$bg-color 近似但值不等，输入件视觉回归风险待真机裁',
 
     // ── 批4（#1607 N01 蓝底套 19 页）新增 ──
     '#A0C4FF': 'pages/courses/chapter-view.uvue mark-done-btn--busy 底——主操作蓝 busy 态，token 表无对应',
@@ -66,8 +65,6 @@ module.exports = {
     '#EEF4FF': 'pages/resources/materials.uvue material-icon-box 底——资料图标浅蓝底，$primary-tint(#ebf5ff) 近似但值不等，待真机裁',
     '#D0E4FF': 'pages/notifications/notifications.uvue 状态条边框——浅蓝边框，$primary-tint 近似但值不等，待真机裁',
     '#F8F9FA': 'pages/forum/forum-create.uvue 输入底——$bg-color(#F8F8F8) 近似但值不等，输入件视觉回归风险待真机裁',
-    '#DDDDDD': 'pages/profile/notebook.uvue 编辑区边框——$border-color(#e5e5e5) 近似但值不等，待真机裁',
-    '#EEF3FF': 'pages/profile/notebook.uvue note-tag-standalone 标签浅蓝底——$primary-tint 近似但值不等，待真机裁',
     '#E2622C': 'pages/courses/course-detail.uvue 报名状态强调字色——强调橙红，token 表无对应（$warning-color 偏黄）',
     '#E5484D': 'pages/resources/my-uploads.uvue 审核驳回原因字色——危险红变体，$danger-color(#ff3b30) 语义相同但值不等，待红系 token 收敛裁',
     '#FFF0F0': 'pages/resources/my-uploads.uvue 审核驳回原因浅红底——$danger-tint(#ffebee) 近似但值不等，待真机裁',

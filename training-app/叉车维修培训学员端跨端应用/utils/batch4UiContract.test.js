@@ -30,8 +30,6 @@ const PAGES = [
   'pages/profile/records.uvue',
   'pages/profile/practice-records.uvue',
   'pages/profile/mock-exam-records.uvue',
-  'pages/profile/favorites.uvue',
-  'pages/profile/notebook.uvue',
   'pages/profile/help-center.uvue',
   'pages/forum/forum-detail.uvue',
   'pages/forum/forum-create.uvue',
@@ -104,6 +102,19 @@ for (const p of PAGES) {
     });
   });
 }
+
+describe('B3 页头随原型迁移（#2519：favorites/notebook 自 N01 蓝底套改白底套）', () => {
+  // 原型 700:7287 / 769:1567 页头均为白底深字（N02/N03 形态），不再吃蓝底反白
+  for (const p of ['pages/profile/favorites.uvue', 'pages/profile/notebook.uvue']) {
+    it(`${p} 白底页头（无 variant=inverse）且仍走 app-nav-bar`, () => {
+      const s = read(p);
+      expect(s).toContain("from '../../components/app-nav-bar/app-nav-bar.uvue'");
+      expect(s).toMatch(/<app-nav-bar[^>]*@left-click/);
+      expect(s).not.toMatch(/variant="inverse"/);
+      expect(s).not.toMatch(/class="status-bar"/);
+    });
+  }
+});
 
 describe('批4 特殊页右槽形态（app-nav-bar 槽位承载）', () => {
   it('course-detail/chapter-view 右槽保留 toggleFavorite 收藏入口', () => {
