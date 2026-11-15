@@ -1,22 +1,25 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <app-nav-bar title="我的笔记" variant="inverse" @left-click="onBack">
+        <app-nav-bar :title="editorVisible ? '' : '笔记本'" @left-click="onBack">
             <template #right>
-                <view class="nav-action" @click="onCreate">
+                <view v-if="!editorVisible" class="nav-action" @click="onCreate">
                     <text class="header-action">新建</text>
                 </view>
             </template>
         </app-nav-bar>
 
-        <!-- 分段控件：三态取值与后端 scope 参数同名（ADR-0055），不另造端上词表 -->
-        <view class="segment-bar">
-            <view v-for="(opt, idx) in scopeOptions" :key="opt.value" class="segment-item"
-                :class="opt.value == scope ? 'segment-item-active' : ''" @click="onScopeClick(opt.value)">
-                <text class="segment-text" :class="opt.value == scope ? 'segment-text-active' : ''">{{ opt.label }}</text>
+        <!-- 双视图 chips（B3 #2519 按原型 769:1567/769:1625）：最新 = 时间倒序列表；分类 = 按题分组。
+             数据面仍是 scope=all 一份列表（NOTE_SCOPE_* 三态保留在 api 层，ADR-0055），切视图不重取 -->
+        <view v-if="!editorVisible" class="chip-bar">
+            <view class="chip" :class="viewMode == 'latest' ? 'chip-active' : ''" @click="onViewMode('latest')">
+                <text class="chip-text" :class="viewMode == 'latest' ? 'chip-text-active' : ''">最新</text>
+            </view>
+            <view class="chip" :class="viewMode == 'grouped' ? 'chip-active' : ''" @click="onViewMode('grouped')">
+                <text class="chip-text" :class="viewMode == 'grouped' ? 'chip-text-active' : ''">分类</text>
             </view>
         </view>
 
-        <scroll-view class="content-scroll" scroll-y="true" @scrolltolower="onLoadMore">
+        <scroll-view v-if="!editorVisible" class="content-scroll" scroll-y="true" @scrolltolower="onLoadMore">
             <!-- 失败态：给重试位而不是空态（#816 口径：失败与「没有数据」必须分开） -->
             <view v-if="loadError.length > 0" class="state-box">
                 <text class="state-text">{{ loadError }}</text>
@@ -37,17 +40,21 @@
             </view>
 
             <template v-else>
-                <view class="note-list">
+                <!-- 最新：时间倒序卡片流 -->
+                <view v-if="viewMode == 'latest'" class="note-list">
                     <view v-for="(item, idx) in items" :key="item.id" class="note-card">
                         <view class="note-top">
+                            <view class="note-time-row">
+                                <text class="note-clock">⏰</text>
+                                <text class="note-time">{{ displayTime(item.updated_at) }}</text>
+                            </view>
                             <view v-if="isStandalone(item)" class="note-tag note-tag-standalone">
-                                <text class="note-tag-text">独立笔记</text>
+                                <text class="note-tag-text-standalone">独立笔记</text>
                             </view>
                             <view v-else class="note-tag note-tag-question" @click="onJumpQuestion(item)">
-                                <text class="note-tag-text">{{ badgeText(item.question_content) }}</text>
+                                <text class="note-tag-text">查看原题</text>
                                 <text class="note-tag-arrow">›</text>
                             </view>
-                            <text class="note-time">{{ displayTime(item.updated_at) }}</text>
                         </view>
                         <text class="note-title">{{ titleText(item.content) }}</text>
                         <text v-if="excerptText(item.content).length > 0" class="note-excerpt">{{ excerptText(item.content) }}</text>
@@ -65,6 +72,19 @@
                         </view>
                     </view>
                 </view>
+
+                <!-- 分类：按题分组（原型 769:1625）；独立笔记聚一组、组标签复用题目徽标文案 -->
+                <view v-else class="group-list">
+                    <view v-for="g in groups" :key="g.key" class="group-card" @click="onGroupClick(g)">
+                        <view v-if="g.question_id > 0" class="group-icon">
+                            <text class="group-icon-text">›</text>
+                        </view>
+                        <text class="group-name">{{ g.label }}</text>
+                        <text class="group-count">{{ g.count }}题</text>
+                        <text class="group-chevron">›</text>
+                    </view>
+                </view>
+
                 <view v-if="loadingMore" class="foot-tip">
                     <text class="foot-text">加载中...</text>
                 </view>
@@ -77,28 +97,38 @@
             </template>
         </scroll-view>
 
-        <!-- 新建（独立笔记）/ 编辑共用一个弹窗壳：纯文本 + 2000 上限，与 practice-do 的笔记同构。
-             壳复用模块内 InfoDialog（表单真值源与提交流程留在本页，先例 personal-info 的设置弹窗） -->
-        <InfoDialog :show="editorVisible" :title="editorTitle" cancel-text="取消"
-            :confirm-text="editorConfirmText" @close="onEditorCancel" @confirm="onSave">
-            <textarea class="editor-textarea" v-model="draft" placeholder="记点什么…" maxlength="2000" />
-            <!-- 图片区整域（选图 / 逐张上传 / 删除 / 预览 / 上限提示）收在 `components/note-image-strip.uvue` -->
-            <note-image-strip :urls="editorImages" :max="noteImageLimit" :editable="true"
-                @change="onEditorImagesChange" @busy="onEditorImagesBusy" />
-        </InfoDialog>
+        <!-- 新增/编辑态（原型 769:1854，G1 Q12 页内新增态）：记笔记卡整页承载，不再走弹窗壳。
+             题目挂靠模式（practice-do「添加笔记」进入）走老契约 upsert（纯文字），图片只在独立笔记开放 -->
+        <scroll-view v-else class="content-scroll" scroll-y="true">
+            <view class="editor-card">
+                <view class="editor-head">
+                    <text class="editor-icon">📘</text>
+                    <text class="editor-title">记笔记</text>
+                    <view class="editor-save" @click="onSave">
+                        <text class="editor-save-text">{{ saving ? '保存中...' : '保存' }}</text>
+                    </view>
+                </view>
+                <textarea class="editor-textarea" v-model="draft" placeholder="请写下您的笔记内容" maxlength="2000" />
+                <view v-if="editorQuestionId <= 0" class="editor-images">
+                    <note-image-strip :urls="editorImages" :max="noteImageLimit" :editable="true"
+                        @change="onEditorImagesChange" @busy="onEditorImagesBusy" />
+                </view>
+                <text v-else class="editor-hint">该笔记挂靠题目，仅支持文字内容</text>
+            </view>
+        </scroll-view>
     </view>
 </template>
 
 <script setup lang="uts">
     import { computed, ref } from 'vue'
-    import { onShow } from '@dcloudio/uni-app'
+    import { onLoad, onShow } from '@dcloudio/uni-app'
     import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
-import { goBack } from '../../utils/navigation'
-    import { listNotesApi, createNoteApi, updateNoteApi, removeNoteApi, NOTE_SCOPE_ALL, NOTE_SCOPE_QUESTION, NOTE_SCOPE_STANDALONE, NOTE_IMAGES_MAX } from '../../api/note'
+    import { goBack } from '../../utils/navigation'
+    import { listNotesApi, createNoteApi, updateNoteApi, removeNoteApi, NOTE_SCOPE_ALL, NOTE_IMAGES_MAX } from '../../api/note'
+    import { getNoteApi, saveNoteApi } from '../../api/questionInteraction'
     import type { NoteItem } from '../../types/index'
-    import { noteTitle, noteExcerpt, noteBadgeText, isStandaloneNote, noteEmptyText } from '../../utils/notebookDisplay'
+    import { noteTitle, noteExcerpt, noteBadgeText, isStandaloneNote, noteEmptyText, notebookGroups, type NotebookGroup } from '../../utils/notebookDisplay'
     import { formatDateTimeStr } from '../../utils/format'
-    import InfoDialog from './components/info-dialog.uvue'
     import NoteImageStrip from './components/note-image-strip.uvue'
 
     /** 模板不可直调 import 函数（uvue 模板 import 调用编译为 .invoke() = Kotlin error18，先例 #677）；
@@ -124,21 +154,9 @@ import { goBack } from '../../utils/navigation'
         return formatDateTimeStr(dateStr)
     }
 
-    /** 分段控件选项 */
-    type ScopeOption = {
-        label : string
-        value : string
-    }
-
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
-    const scopeOptions : ScopeOption[] = [
-        { label: '全部', value: NOTE_SCOPE_ALL },
-        { label: '题目笔记', value: NOTE_SCOPE_QUESTION },
-        { label: '独立笔记', value: NOTE_SCOPE_STANDALONE },
-    ]
-
-    // ===== 列表三态 + 分页 =====
+    // ===== 数据面（scope 取值与后端 query 参数同名 ADR-0055；本页双视图共用 scope=all 一份列表） =====
     const scope = ref<string>(NOTE_SCOPE_ALL)
     const items = ref<NoteItem[]>([])
     const page = ref<number>(1)
@@ -152,9 +170,32 @@ import { goBack } from '../../utils/navigation'
     /** 翻页失败（列表已有着落，只在页脚补一个可点重试位，不清屏） */
     const moreError = ref<boolean>(false)
 
-    // ===== 编辑器（新建独立笔记 / 编辑既有笔记共用） =====
+    // ===== 视图面（原型 769:1567 最新 / 769:1625 分类）：同源数据两种排法，切视图不重取 =====
+    const viewMode = ref<string>('latest')
+    /** 分类视图分组（question_id 聚簇 + 独立笔记组；声明在消费它的 computed 之后需先于模板） */
+    const groups = computed<NotebookGroup[]>(() : NotebookGroup[] => {
+        return notebookGroups(items.value)
+    })
+
+    function onViewMode(mode : string) : void {
+        if (viewMode.value == mode) return
+        viewMode.value = mode
+    }
+
+    /** 分组行点击：题目组 → 该题解析态（与「查看原题」同一落点）；独立笔记组不可跳（无目标） */
+    function onGroupClick(g : NotebookGroup) : void {
+        if (g.question_id <= 0) return
+        uni.navigateTo({ url: '/pages/practice/practice-do?mode=single&question_id=' + g.question_id.toString() })
+    }
+
+    // ===== 编辑器（原型 769:1854 页内新增态；新建独立笔记 / 编辑既有笔记 / 题目挂靠三入口共用） =====
     const editorVisible = ref<boolean>(false)
+    /** 题目挂靠模式：>0 = 记在题目上（老契约 upsert，纯文字）；0 = 独立笔记（可带图） */
+    const editorQuestionId = ref<number>(0)
+    /** 从列表进入的编辑（编辑既有的独立笔记时记 id 走 PUT）；题目挂靠一律 upsert，不用 id */
     const editingId = ref<number>(0)
+    /** 编辑器是不是从别的页带参进来的（保存/返回都要 navigateBack 回源页，NAV_FLOW 452:2433→769:1854） */
+    const editorFromRoute = ref<boolean>(false)
     const draft = ref<string>('')
     const saving = ref<boolean>(false)
 
@@ -174,20 +215,11 @@ import { goBack } from '../../utils/navigation'
         editorUploading.value = busy
     }
 
-    const editorTitle = computed<string>(() : string => {
-        return editingId.value > 0 ? '编辑笔记' : '新建笔记'
-    })
-
-    /** 保存中不给重复提交的入口文案（真值源仍是 saving，弹窗壳只管展示） */
-    const editorConfirmText = computed<string>(() : string => {
-        return saving.value ? '保存中...' : '保存'
-    })
-
     const emptyText = computed<string>(() : string => {
         return noteEmptyText(scope.value)
     })
 
-    /** 首屏 / 切段 / 重试：整屏三态由 loadError / loading / items 决定 */
+    /** 首屏 / 重试：整屏三态由 loadError / loading / items 决定 */
     async function loadNotes() : Promise<void> {
         if (loading.value) return
         loading.value = true
@@ -242,15 +274,6 @@ import { goBack } from '../../utils/navigation'
         onLoadMore()
     }
 
-    /** 切段：清空列表后重取（避免旧筛选的行残留在新筛选下） */
-    function onScopeClick(val : string) : void {
-        if (scope.value == val) return
-        scope.value = val
-        items.value = []
-        total.value = 0
-        loadNotes()
-    }
-
     /** 题目徽标：跳到该笔记挂靠的题目（practice-do 读 mode + question_id） */
     function onJumpQuestion(item : NoteItem) : void {
         const qid = item.question_id
@@ -258,31 +281,53 @@ import { goBack } from '../../utils/navigation'
         uni.navigateTo({ url: '/pages/practice/practice-do?mode=single&question_id=' + qid!.toString() })
     }
 
-    function openEditor(id : number, content : string, images : string[]) : void {
+    /** 打开编辑器（页面态）：questionId>0 = 题目挂靠（纯文字）；id>0 = 编辑既有独立笔记（PUT） */
+    function openEditor(questionId : number, id : number, content : string, images : string[]) : void {
+        editorQuestionId.value = questionId
         editingId.value = id
         draft.value = content
-        // 编辑时把**当前全量**图片灌进选择器（提交是全量替换语义，删一张就是新数组里没有它）
         editorImages.value = images.slice()
         editorVisible.value = true
     }
 
     function onCreate() : void {
-        openEditor(0, '', [] as string[])
+        editorFromRoute.value = false
+        openEditor(0, 0, '', [] as string[])
     }
 
     function onEdit(item : NoteItem) : void {
-        openEditor(item.id, item.content, item.images)
+        editorFromRoute.value = false
+        if (isStandalone(item)) {
+            // 编辑时把**当前全量**图片灌进选择器（提交是全量替换语义，删一张就是新数组里没有它）
+            openEditor(0, item.id, item.content, item.images)
+        } else {
+            // 题目笔记：老契约按题 upsert（纯文字），id 不参与
+            openEditor(item.question_id != null ? item.question_id! : 0, 0, item.content, [] as string[])
+        }
     }
 
-    function onEditorCancel() : void {
+    /** 编辑器返回：从列表进入 = 收回编辑器回列表；从别的页带参进入 = 整页返回（回到解析态） */
+    function onEditorBack() : void {
         if (saving.value) return
         editorVisible.value = false
+        editorQuestionId.value = 0
         editingId.value = 0
         draft.value = ''
         editorImages.value = [] as string[]
+        editorUploading.value = false
     }
 
-    /** 保存：新建走 POST /notes（独立笔记），编辑走 PUT /notes/:id；图片全量随正文一起提交 */
+    function onBack() : void {
+        if (editorVisible.value) {
+            if (editorFromRoute.value) { goBack(); return }
+            onEditorBack()
+            return
+        }
+        goBack()
+    }
+
+    /** 保存：题目挂靠走老契约 upsert 并**整页返回**（NAV_FLOW 769:1871「保存」→ 452:2391 解析态）；
+     *  独立笔记新建走 POST /notes、编辑走 PUT /notes/:id；图片全量随正文一起提交 */
     async function onSave() : Promise<void> {
         if (saving.value) return
         const content = draft.value
@@ -290,27 +335,33 @@ import { goBack } from '../../utils/navigation'
             uni.showToast({ title: '笔记内容不能为空', icon: 'none' })
             return
         }
-        if (editorUploading.value) {
-            uni.showToast({ title: '图片还在上传，稍等一下', icon: 'none' })
-            return
-        }
         const images = editorImages.value.slice()
         saving.value = true
         try {
+            if (editorQuestionId.value > 0) {
+                await saveNoteApi(editorQuestionId.value, content)
+                editorVisible.value = false
+                draft.value = ''
+                uni.showToast({ title: '已保存', icon: 'none' })
+                if (editorFromRoute.value) { goBack(); return }
+                loadNotes()
+                return
+            }
+            if (editorUploading.value) {
+                uni.showToast({ title: '图片还在上传，稍等一下', icon: 'none' })
+                return
+            }
             if (editingId.value > 0) {
                 await updateNoteApi(editingId.value, content, images)
             } else {
                 await createNoteApi(content, images)
             }
-            editorVisible.value = false
-            editingId.value = 0
-            draft.value = ''
-            editorImages.value = [] as string[]
+            onEditorBack()
             uni.showToast({ title: '已保存', icon: 'none' })
             await loadNotes()
         } catch (e) {
             console.error('[notebook] save failed:', e)
-            // 失败保持浮层打开（输入不丢）；错误 toast 由 request 层统一给
+            // 失败保持编辑器打开（输入不丢）；错误 toast 由 request 层统一给
         } finally {
             saving.value = false
         }
@@ -333,9 +384,22 @@ import { goBack } from '../../utils/navigation'
         })
     }
 
-    function onBack() : void {
-        goBack()
-    }
+    onLoad((options : UTSJSONObject) => {
+        // practice-do「添加笔记」带参进入（NAV_FLOW 452:2433 → 769:1854）：直接落新增态并预填已有笔记
+        const editParam = options['edit']
+        const qidParam = options['question_id']
+        if (editParam == null || qidParam == null) return
+        const parsed = parseInt(qidParam.toString())
+        if (isNaN(parsed) || parsed <= 0) return
+        editorFromRoute.value = true
+        editorQuestionId.value = parsed
+        editorVisible.value = true
+        getNoteApi(parsed).then((note) : void => {
+            if (note.content.length > 0) { draft.value = note.content }
+        }).catch((e) => {
+            console.warn('[notebook] prefill note failed:', e)
+        })
+    })
 
     onShow(() => {
         loadNotes()
@@ -343,229 +407,57 @@ import { goBack } from '../../utils/navigation'
 </script>
 
 <style lang="scss">
-    .container {
-        flex: 1;
-        background-color: #f5f5f5;
-        flex-direction: column;
-    }
-
-    .nav-action {
-        width: 64rpx;
-        height: 64rpx;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .header-action {
-        font-size: 28rpx;
-        color: #ffffff;
-    }
-
-    .segment-bar {
-        flex-direction: row;
-        background-color: #ffffff;
-        margin: 16rpx 24rpx;
-        padding: 6rpx;
-        border-radius: 12rpx;
-        border: 1px solid #eeeeee;
-    }
-
-    .segment-item {
-        flex: 1;
-        height: 64rpx;
-        border-radius: 10rpx;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .segment-item-active {
-        background-color: $primary-color;
-    }
-
-    .segment-text {
-        font-size: 26rpx;
-        color: #666666;
-    }
-
-    .segment-text-active {
-        color: #ffffff;
-    }
-
-    .content-scroll {
-        flex: 1;
-        height: 0;
-    }
-
-    .state-box {
-        flex-direction: column;
-        align-items: center;
-        padding: 160rpx 48rpx;
-    }
-
-    .state-icon {
-        font-size: 80rpx;
-        margin-bottom: 24rpx;
-    }
-
-    .state-text {
-        font-size: 28rpx;
-        color: #999999;
-        text-align: center;
-    }
-
-    .state-btn {
-        margin-top: 32rpx;
-        padding: 16rpx 40rpx;
-        border-radius: 32rpx;
-        border: 1rpx solid $primary-color;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .state-btn-text {
-        font-size: 26rpx;
-        color: $primary-color;
-    }
-
-    .note-list {
-        flex-direction: column;
-        padding: 0 24rpx;
-    }
-
-    .note-card {
-        flex-direction: column;
-        background-color: #ffffff;
-        border-radius: 16rpx;
-        padding: 24rpx;
-        margin-bottom: 16rpx;
-        border: 1px solid #eeeeee;
-    }
-
-    .note-top {
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 12rpx;
-    }
-
-    .note-tag {
-        flex-direction: row;
-        align-items: center;
-        padding: 4rpx 12rpx;
-        border-radius: 8rpx;
-        flex-shrink: 1;
-    }
-
-    .note-tag-standalone {
-        background-color: #eef3ff;
-    }
-
-    .note-tag-question {
-        background-color: #fff3e0;
-    }
-
-    .note-tag-text {
-        font-size: 20rpx;
-        color: #666666;
-        overflow: hidden;
-        lines: 1;
-    }
-
-    .note-tag-standalone .note-tag-text {
-        color: $primary-color;
-    }
-
-    .note-tag-question .note-tag-text {
-        color: #ff9800;
-    }
-
-    .note-tag-arrow {
-        font-size: 22rpx;
-        color: #ff9800;
-        margin-left: 4rpx;
-    }
-
-    .note-time {
-        font-size: 22rpx;
-        color: #999999;
-        flex-shrink: 0;
-        margin-left: 16rpx;
-    }
-
-    .note-title {
-        font-size: 30rpx;
-        font-weight: 500;
-        color: #333333;
-        margin-bottom: 8rpx;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        lines: 2;
-    }
-
-    .note-excerpt {
-        font-size: 26rpx;
-        color: #888888;
-        line-height: 40rpx;
-        margin-bottom: 16rpx;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        lines: 2;
-    }
-
-    /* 列表里的图片附件（只读回显；点开看大图） */
-    .note-images {
-        flex-direction: row;
-        flex-wrap: wrap;
-        margin-bottom: 16rpx;
-    }
-
-    .note-actions {
-        flex-direction: row;
-        margin-top: 8rpx;
-    }
-
-    .note-action {
-        padding: 8rpx 28rpx;
-        border-radius: 24rpx;
-        border: 1rpx solid #dddddd;
-        align-items: center;
-        justify-content: center;
-        margin-right: 16rpx;
-    }
-
-    .note-action-danger {
-        border: 1rpx solid #f44336;
-    }
-
-    .note-action-text {
-        font-size: 24rpx;
-        color: #666666;
-    }
-
-    .note-action-text-danger {
-        font-size: 24rpx;
-        color: #f44336;
-    }
-
-    .foot-tip {
-        align-items: center;
-        padding: 24rpx 0;
-    }
-
-    .foot-text {
-        font-size: 24rpx;
-        color: #999999;
-    }
-
-    .editor-textarea {
-        width: 100%;
-        min-height: 240rpx;
-        background-color: #fafafa;
-        border: 1rpx solid #f0f0f0;
-        border-radius: 12rpx;
-        padding: 20rpx;
-        font-size: 28rpx;
-        color: #333333;
-        line-height: 44rpx;
-    }
+    .container { flex: 1; background-color: $bg-color; flex-direction: column; }
+    .nav-action { width: 64rpx; height: 64rpx; align-items: center; justify-content: center; }
+    .header-action { font-size: 28rpx; color: $text-color; }
+    .chip-bar { flex-direction: row; padding: 16rpx 24rpx 8rpx; }
+    .chip { padding: 12rpx 32rpx; border-radius: $radius-pill; background-color: $tag-bg-neutral; margin-right: 16rpx; }
+    .chip-active { background-color: $primary-tint; }
+    .chip-text { font-size: 26rpx; color: $text-color; }
+    .chip-text-active { color: $primary-color; }
+    .content-scroll { flex: 1; height: 0; }
+    .state-box { flex-direction: column; align-items: center; padding: 160rpx 48rpx; }
+    .state-icon { font-size: 80rpx; margin-bottom: 24rpx; }
+    .state-text { font-size: 28rpx; color: $text-color-placeholder; text-align: center; }
+    .state-btn { margin-top: 32rpx; padding: 16rpx 40rpx; border-radius: 32rpx; border: 1rpx solid $primary-color; align-items: center; justify-content: center; }
+    .state-btn-text { font-size: 26rpx; color: $primary-color; }
+    .note-list { flex-direction: column; padding: 8rpx 24rpx 0; }
+    .note-card { flex-direction: column; background-color: $card-bg; border-radius: $radius-card; padding: 24rpx; margin-bottom: 16rpx; }
+    .note-top { flex-direction: row; align-items: center; justify-content: space-between; margin-bottom: 16rpx; padding-bottom: 16rpx; border-bottom: 1rpx solid $border-color-light; }
+    .note-time-row { flex-direction: row; align-items: center; }
+    .note-clock { font-size: 26rpx; margin-right: 8rpx; }
+    .note-tag { flex-direction: row; align-items: center; padding: 4rpx 8rpx; flex-shrink: 1; }
+    .note-tag-standalone { background-color: $primary-tint; border-radius: $radius-sm; padding: 4rpx 12rpx; }
+    /* 题目徽标（B3 #2519）：纯文字链接「查看原题 ›」，无底色；触摸区由 .note-tag 的 padding 保证 */
+    .note-tag-question { flex-direction: row; align-items: center; padding: 4rpx 8rpx; }
+    .note-tag-text-standalone { font-size: 22rpx; color: $primary-color; }
+    .note-tag-text { font-size: 26rpx; color: $primary-color; }
+    .note-tag-arrow { font-size: 26rpx; color: $primary-color; margin-left: 4rpx; }
+    .note-time { font-size: 26rpx; color: $text-color; }
+    .note-title { font-size: 30rpx; font-weight: 500; color: $text-color; margin-bottom: 8rpx; overflow: hidden; text-overflow: ellipsis; lines: 2; }
+    .note-excerpt { font-size: 26rpx; color: #888888; line-height: 40rpx; margin-bottom: 16rpx; overflow: hidden; text-overflow: ellipsis; lines: 2; }
+    .note-images { flex-direction: row; flex-wrap: wrap; margin-bottom: 16rpx; }
+    .note-actions { flex-direction: row; justify-content: flex-end; margin-top: 8rpx; }
+    .note-action { padding: 8rpx 28rpx; border-radius: $radius-pill; border: 1rpx solid $border-color; align-items: center; justify-content: center; margin-left: 16rpx; }
+    .note-action-danger { border: 1rpx solid $answer-wrong; }
+    .note-action-text { font-size: 24rpx; color: $text-color-secondary; }
+    .note-action-text-danger { font-size: 24rpx; color: $answer-wrong; }
+    .group-list { flex-direction: column; padding: 8rpx 24rpx 0; }
+    .group-card { background-color: $card-bg; border-radius: $radius-card; padding: 32rpx 24rpx; margin-bottom: 20rpx; flex-direction: row; align-items: center; }
+    .group-icon { width: 48rpx; height: 48rpx; border-radius: 24rpx; border: 3rpx solid $primary-color; align-items: center; justify-content: center; margin-right: 20rpx; flex-shrink: 0; }
+    .group-icon-text { font-size: 30rpx; color: $primary-color; font-weight: bold; }
+    .group-name { flex: 1; font-size: 30rpx; color: $text-color; font-weight: 500; overflow: hidden; text-overflow: ellipsis; lines: 1; }
+    .group-count { font-size: 26rpx; color: $text-color-secondary; margin-right: 12rpx; }
+    .group-chevron { font-size: 32rpx; color: $text-disabled; }
+    .foot-tip { align-items: center; padding: 24rpx 0; }
+    .foot-text { font-size: 24rpx; color: $text-color-placeholder; }
+    .editor-card { margin: 24rpx; background-color: $card-bg; border-radius: $radius-card; padding: 24rpx; flex-direction: column; }
+    .editor-head { flex-direction: row; align-items: center; padding-bottom: 20rpx; border-bottom: 1rpx solid $border-color-light; margin-bottom: 20rpx; }
+    .editor-icon { font-size: 44rpx; margin-right: 16rpx; }
+    .editor-title { flex: 1; font-size: 32rpx; font-weight: 600; color: $text-color; }
+    .editor-save { background-color: $primary-color; border-radius: $radius-pill; padding: 16rpx 44rpx; align-items: center; justify-content: center; }
+    .editor-save-text { font-size: 28rpx; color: $text-color-inverse; font-weight: 600; }
+    .editor-textarea { width: 100%; min-height: 240rpx; background-color: $card-bg; padding: 8rpx 0; font-size: 28rpx; color: $text-color; line-height: 44rpx; }
+    .editor-images { margin-top: 16rpx; align-items: center; }
+    .editor-hint { margin-top: 16rpx; font-size: 24rpx; color: $text-color-placeholder; }
 </style>

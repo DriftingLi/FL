@@ -64,3 +64,59 @@ export function noteEmptyText(scope : string) : string {
 	if (scope == 'standalone') return '还没有独立笔记'
 	return '还没有笔记'
 }
+
+/**
+ * 「分类」视图的分组行（B3 #2519，原型 769:1625 笔记本分类态）。
+ *
+ * 原型分组标签是章节名（叉车基础知识），但后端知识点域已退役（错题本同因）、笔记又没有
+ * 章节/标签维度 —— 可用的真实维度只剩「挂在哪道题」。故分组 = 题目笔记按 question_id 聚簇，
+ * 标签文案复用 noteBadgeText（题干摘要）；独立笔记（question_id 为空）聚成一组放最后。
+ *
+ * 顺序 = 首次出现序（不做客户端重排：列表排序真源是后端 updated_at DESC，组序随数据走）。
+ * 分页下的诚实代价：组与计数只在**已加载页**内统计，触底翻页后组会继续长大 —— 不假装全量。
+ */
+
+/** 分组输入的最小面（NoteItem 的两字段；.uts 不 import types，调用方传轻量切片） */
+export type NoteGroupItem = {
+	question_id : number | null
+	question_content : string
+}
+
+export type NotebookGroup = {
+	key : string          // v-for key：题目笔记 'q<id>'，独立笔记固定 'standalone'
+	question_id : number  // 0 = 独立笔记组（不可跳题）
+	label : string
+	count : number
+}
+
+export function notebookGroups(items : NoteGroupItem[]) : NotebookGroup[] {
+	const groups : NotebookGroup[] = []
+	for (let i = 0; i < items.length; i++) {
+		const item = items[i]
+		if (isStandaloneNote(item.question_id)) {
+			// 独立笔记聚成一组（首条建组，其余只累加计数）
+			let standalone : NotebookGroup | null = null
+			for (let j = 0; j < groups.length; j++) {
+				if (groups[j].question_id == 0) { standalone = groups[j]; break }
+			}
+			if (standalone == null) {
+				groups.push({ key: 'standalone', question_id: 0, label: '独立笔记', count: 1 } as NotebookGroup)
+			} else {
+				standalone.count = standalone.count + 1
+			}
+			continue
+		}
+		const qid = item.question_id != null ? item.question_id! : 0
+		const label = noteBadgeText(item.question_content)
+		let found : NotebookGroup | null = null
+		for (let j = 0; j < groups.length; j++) {
+			if (groups[j].question_id == qid) { found = groups[j]; break }
+		}
+		if (found == null) {
+			groups.push({ key: 'q' + qid.toString(), question_id: qid, label: label, count: 1 } as NotebookGroup)
+		} else {
+			found.count = found.count + 1
+		}
+	}
+	return groups
+}
