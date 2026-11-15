@@ -13,6 +13,8 @@
  * 逐字对齐（40 / 80 / 18）——两端同一列表观感，改一处必须同改。
  */
 
+import type { NoteItem } from '../types/index'
+
 /**
  * 正文首行即标题（截断 40）。
  * @param content 笔记正文（纯文本，允许空串）
@@ -76,12 +78,6 @@ export function noteEmptyText(scope : string) : string {
  * 分页下的诚实代价：组与计数只在**已加载页**内统计，触底翻页后组会继续长大 —— 不假装全量。
  */
 
-/** 分组输入的最小面（NoteItem 的两字段；.uts 不 import types，调用方传轻量切片） */
-export type NoteGroupItem = {
-	question_id : number | null
-	question_content : string
-}
-
 export type NotebookGroup = {
 	key : string          // v-for key：题目笔记 'q<id>'，独立笔记固定 'standalone'
 	question_id : number  // 0 = 独立笔记组（不可跳题）
@@ -89,7 +85,7 @@ export type NotebookGroup = {
 	count : number
 }
 
-export function notebookGroups(items : NoteGroupItem[]) : NotebookGroup[] {
+export function notebookGroups(items : NoteItem[]) : NotebookGroup[] {
 	const groups : NotebookGroup[] = []
 	for (let i = 0; i < items.length; i++) {
 		const item = items[i]
