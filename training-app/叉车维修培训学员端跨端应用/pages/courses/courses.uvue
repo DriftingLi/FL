@@ -3,17 +3,18 @@
         <!-- #1608 批5 N05：手写 .status-bar + .header 收口进 app-nav-bar（transparent，页面自垫渐变底） -->
         <app-nav-bar transparent :left-icon="''" title="课程" />
 
-        <!-- 顶部分类大按钮：资料课 / 课程 -->
+        <!-- 顶部分类大按钮：资料课 / 课程（#2518 刀3 逐像素收口：文案在左、0课程 切图在右，
+             包内路径写字面量 —— imageWebpAttrContract 的豁免判据只看 :src 表达式文本） -->
         <view class="category-row">
             <view class="category-card" :class="{ 'category-card--active': activeCategory == 'material' }"
                 @click="onCategoryTap('material')">
-                <text class="category-card-icon">📚</text>
                 <text class="category-card-text">资料课</text>
+                <image class="category-card-icon icon-material" src="/static/icons/courses/folder-material.png" mode="aspectFit" />
             </view>
             <view class="category-card ml-20" :class="{ 'category-card--active': activeCategory == 'course' }"
                 @click="onCategoryTap('course')">
-                <text class="category-card-icon">📥</text>
                 <text class="category-card-text">课程</text>
+                <image class="category-card-icon icon-course" src="/static/icons/courses/folder-course.png" mode="aspectFit" />
             </view>
         </view>
 
@@ -36,7 +37,7 @@
             <!-- 免费/付费组（#1951）：走后端布尔参数 paid，付费口径 = 需积分兑换（与详情页 CTA 同源） -->
             <view class="filter-row">
                 <view v-for="(tag, idx) in paidTags" :key="idx"
-                    :class="{ 'filter-tag': true, 'ml-16': idx > 0, 'filter-tag--active': activePaid == idx }" @click="onPaidTap(idx)">
+                    :class="{ 'filter-tag': true, 'ml-20': idx > 0, 'filter-tag--active': activePaid == idx }" @click="onPaidTap(idx)">
                     <text class="filter-tag-text" :class="{ 'filter-tag-text--active': activePaid == idx }">{{ tag }}</text>
                 </view>
             </view>
@@ -60,20 +61,22 @@
                     <text v-if="emptyHint.length > 0" class="empty-hint">{{ emptyHint }}</text>
                 </view>
                 <view class="course-list">
+                    <!-- #2518 刀3 逐像素收口：原型列表项 = 首行 徽章+标题(+价签)、次行课时数通栏；
+                         徽章底色原型全灰（分级配色无原型依据，随 CSS 单点） -->
                     <view v-for="(course, idx) in courses" :key="idx" class="course-item"
                         @click="onCourseClick(course.course_id)">
-                        <view class="course-item-badge" :style="{ backgroundColor: getBadgeColor(course) }">
-                            <text class="course-item-badge-text">{{ getBadgeText(course) }}</text>
-                        </view>
-                        <view class="course-item-info">
+                        <view class="course-item-main">
+                            <view class="course-item-badge">
+                                <text class="course-item-badge-text">{{ getBadgeText(course) }}</text>
+                            </view>
                             <text class="course-item-title">{{ course.title }}</text>
-                            <!-- #2443/#2472：课时数按后端下发的 chapter_count 显示（#2083 起列表已下发；此前兜底成 6 是假数据） -->
-                            <text v-if="chapterMetaText(course).length > 0" class="course-item-meta">{{ chapterMetaText(course) }}</text>
+                            <!-- #2443：付费课在列表层就标出积分价 —— 兑换入口此前只在详情页，列表看不出哪门要积分 -->
+                            <view v-if="hasPointsPrice(course)" class="course-item-price">
+                                <text class="course-item-price-text">{{ pointsPriceText(course) }}</text>
+                            </view>
                         </view>
-                        <!-- #2443：付费课在列表层就标出积分价 —— 兑换入口此前只在详情页，列表看不出哪门要积分 -->
-                        <view v-if="hasPointsPrice(course)" class="course-item-price">
-                            <text class="course-item-price-text">{{ pointsPriceText(course) }}</text>
-                        </view>
+                        <!-- #2443/#2472：课时数按后端下发的 chapter_count 显示（#2083 起列表已下发；此前兜底成 6 是假数据） -->
+                        <text v-if="chapterMetaText(course).length > 0" class="course-item-meta">{{ chapterMetaText(course) }}</text>
                     </view>
                 </view>
 
@@ -259,12 +262,8 @@
         return '基础'
     }
 
-    function getBadgeColor(course : CourseItem) : string {
-        const text = getBadgeText(course)
-        if (text == '入门' || text == '冲刺') return '#239EDD'
-        if (text == '进阶' || text == '专项') return '#e6a23c'
-        return '#909399'
-    }
+    // #2518 刀3：原 getBadgeColor 的分级配色（入门/冲刺蓝、进阶/专项橙）无原型依据 —— 原型 442:1636
+    // 的徽章全为灰底白字，底色随 .course-item-badge 单点（$text-color-placeholder 同值灰），函数随之退役。
 
     // ---- 列表行辅助（#2443）----
     /** 课时数按后端下发的 chapter_count 显示（#2083 起列表已下发，0 不显示）；此前兜底成 6 是假数据 */
@@ -330,21 +329,23 @@
 
     /* 批5 N05（票1608）：原页头三件套样式随页头件收口删除 */
 
-    /* ---- 顶部分类大按钮 ---- */
+    /* ---- 顶部分类大按钮 ----
+       #2518 刀3（原型 442:1636 实测）：垂直渐变 #6ECCFC→#0FA5F1（白名单随值换对）、高 116rpx、
+       圆角 16rpx、页边距 38rpx；文案在左、切图在右（56rpx 高，宽按切图容器 34/28 CSS×2） */
     .category-row {
         flex-direction: row;
-        padding: 12rpx 32rpx 16rpx;
+        padding: 12rpx 38rpx 16rpx;
     }
 
     .category-card {
         flex: 1;
-        height: 100rpx;
-        border-radius: 20rpx;
+        height: 116rpx;
+        border-radius: 16rpx;
         flex-direction: row;
         align-items: center;
         justify-content: center;
-        background: linear-gradient(to bottom right, #60A5FA, #3B82F6);
-        background-color: #3B82F6;
+        background: linear-gradient(to bottom, #6ECCFC, #0FA5F1);
+        background-color: #0FA5F1;
         opacity: 0.7;
     }
 
@@ -353,14 +354,18 @@
     }
 
     .category-card-icon {
-        font-size: 36rpx;
-        margin-right: 10rpx;
+        height: 56rpx;
+        margin-left: 20rpx;
     }
 
+    .icon-material { width: 65rpx; }
+
+    .icon-course { width: 54rpx; }
+
     .category-card-text {
-        font-size: 32rpx;
+        font-size: 26rpx;
         font-weight: 600;
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 
     /* ---- 资料课建设中 ---- */
@@ -403,55 +408,56 @@
         flex-direction: column;
     }
 
+    /* ---- 分组标题 ----
+       #2518 刀3：原型标题是渐变底上的 28rpx 半粗 #333333($text-color) 字、不带白卡；类名按 #2230
+       反向锁原地保留、只改视觉；与分类卡间距 = category-row pb16 + margin-top 30 = 46rpx（实测 46） */
     .section-card {
-        background-color: #ffffff;
-        margin: 0 32rpx 16rpx;
-        border-radius: 16rpx;
-        padding: 24rpx 28rpx;
+        margin: 30rpx 38rpx 0;
     }
 
     .section-card-title {
-        font-size: 32rpx;
-        font-weight: 700;
-        color: $text-strong;
-        margin-bottom: 16rpx;
+        font-size: 28rpx;
+        font-weight: 600;
+        color: $text-color;
     }
 
-    /* ---- 筛选标签 ---- */
+    /* ---- 筛选标签 ----
+       #2518 刀3：原型 chip 为胶囊（高 66rpx、radius 33rpx）无描边；选中/未选中的底与字全部走 token
+       （$primary-tint / $primary-color / $tag-bg-neutral / $text-color-secondary），间距 20rpx */
     .filter-row {
         flex-direction: row;
-        padding: 0 32rpx 16rpx;
+        padding: 27rpx 38rpx 0;
     }
 
     .filter-tag {
-        padding: 8rpx 24rpx;
-        border-radius: 20rpx;
-        background-color: #ffffff;
-        border-width: 1rpx;
-        border-color: #e0e0e0;
-        border-style: solid;
+        height: 66rpx;
+        padding: 0 24rpx;
+        border-radius: 33rpx;
+        flex-direction: row;
+        align-items: center;
+        justify-content: center;
+        background-color: $tag-bg-neutral;
     }
 
     .filter-tag--active {
         background-color: $primary-tint;
-        border-color: $primary-color;
     }
 
     .filter-tag-text {
         font-size: 24rpx;
-        color: #666666;
+        color: $text-color-secondary;
     }
 
     .filter-tag-text--active {
         color: $primary-color;
     }
 
-    /* 免费/付费组提示（#1951）：文字样式必须落 <text>（红线），落 view 会被静默忽略并逐处报错；
-       色取 $text-color-placeholder(#999999) —— 辅助说明灰，不用白名单外的自造灰（§9 机检会判红） */
+    /* 免费/付费组提示（#1951）：文字样式必须落 <text>（红线，落 view 被静默忽略并逐处报错）；
+       色取 $text-color-placeholder(#999999) 不自造灰。原型无此行（#2493「不变」保留），自给 16rpx 顶距 */
     .paid-hint {
         font-size: 22rpx;
-        color: #999999;
-        padding: 0 32rpx 16rpx;
+        color: $text-color-placeholder;
+        padding: 16rpx 38rpx 0;
     }
 
     /* ---- 课程列表 ---- */
@@ -463,46 +469,49 @@
     }
 
     .course-list {
-        padding: 0 32rpx;
+        padding: 24rpx 38rpx 0;
     }
 
+    /* #2518 刀3（原型 442:1636 实测）：内边距上下 20 / 左右 28、卡距 20rpx（卡高 ≈135rpx 由内容撑出）；
+       结构 = 首行徽章+标题(+价签)、次行课时数通栏（不再缩进徽章右侧） */
     .course-item {
+        flex-direction: column;
+        background-color: $card-bg;
+        border-radius: 16rpx;
+        padding: 20rpx 28rpx;
+        margin-bottom: 20rpx;
+    }
+
+    .course-item-main {
         flex-direction: row;
         align-items: center;
-        background-color: #ffffff;
-        border-radius: 16rpx;
-        padding: 28rpx 24rpx;
-        margin-bottom: 16rpx;
     }
 
     .course-item-badge {
-        padding: 8rpx 20rpx;
-        border-radius: 8rpx;
+        padding: 10rpx 12rpx;
+        border-radius: 10rpx;
         margin-right: 20rpx;
         flex-shrink: 0;
+        background-color: $text-color-placeholder;
     }
 
     .course-item-badge-text {
-        font-size: 24rpx;
+        font-size: 22rpx;
         font-weight: 600;
-        color: #ffffff;
-    }
-
-    .course-item-info {
-        flex: 1;
-        flex-direction: column;
+        color: $text-color-inverse;
     }
 
     .course-item-title {
-        font-size: 30rpx;
+        flex: 1;
+        font-size: 32rpx;
         font-weight: 600;
-        color: $text-strong;
-        margin-bottom: 6rpx;
+        color: $text-color;
     }
 
     .course-item-meta {
-        font-size: 24rpx;
-        color: #999999;
+        font-size: 20rpx;
+        color: $text-color-secondary;
+        margin-top: 16rpx;
     }
 
     /* #2443：付费课积分价签 —— 右端固定，不参与标题挤压 */
@@ -520,24 +529,26 @@
         color: $primary-color;
     }
 
-    /* ---- 更多课程按钮 ---- */
+    /* ---- 更多课程按钮 ----
+       #2518 刀3：原型为实心主色胶囊（高 66rpx、radius 33rpx、白字 24rpx），非描边款 */
     .more-btn-wrap {
         align-items: center;
-        padding: 24rpx 32rpx 48rpx;
+        padding: 24rpx 38rpx 48rpx;
     }
 
     .more-btn {
-        padding: 18rpx 64rpx;
-        border-radius: 32rpx;
-        border-width: 2rpx;
-        border-color: $primary-color;
-        border-style: solid;
-        background-color: #ffffff;
+        height: 66rpx;
+        padding: 0 32rpx;
+        border-radius: 33rpx;
+        flex-direction: row;
+        align-items: center;
+        justify-content: center;
+        background-color: $primary-color;
     }
 
     .more-btn-text {
-        font-size: 28rpx;
-        color: $primary-color;
+        font-size: 24rpx;
+        color: $text-color-inverse;
         font-weight: 500;
     }
 
@@ -584,6 +595,5 @@
         color: #999999;
     }
 
-    .ml-16 { margin-left: 16rpx; }
     .ml-20 { margin-left: 20rpx; }
 </style>
