@@ -194,12 +194,13 @@ describe('课程兑换动词（#1421 / 移动端 ADR-0031：接后端 points.go 
 });
 
 describe('points-detail.uvue 接线（切实路由 + 失败可见）', () => {
-  it('只 import 真接口出口，三 tab 走 direction 查询', () => {
+  it('只 import 真接口出口，收支两 tab 走 direction 查询', () => {
     expect(detailSrc).toContain('getPointsLedgerApi');
     expect(detailSrc).not.toContain('getPointsRecordListApi');
     expect(detailSrc).toMatch(/'in'/);
     expect(detailSrc).toMatch(/'out'/);
-    expect(detailSrc).toMatch(/'all'/);
+    // 原型 355:1725 的第三 tab「即将过期」随 G1 删除清单退役后只剩收支两态（#2523）
+    expect(detailSrc).not.toMatch(/'all'/);
   });
 
   it('「即将过期」筛选整体退役（根 ADR-0082：积分暂不过期，#1943）', () => {

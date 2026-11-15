@@ -73,6 +73,7 @@ const INFRA = {
     'components/app-card',
     'components/app-chip',
     'components/app-empty-state',
+    'components/app-level-badge',
     'components/app-list-item',
     'components/app-nav-bar',
     'components/app-tabs',

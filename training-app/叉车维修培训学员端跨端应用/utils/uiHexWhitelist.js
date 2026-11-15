@@ -35,10 +35,10 @@ module.exports = {
     '#2979FF': 'batch2 多页主操作蓝（option-key-selected/submit-btn/comment-send-active/section-action 等）——历史蓝，值 ≠ $primary-color(#239EDD)，字面替换会全站视觉回归，待主色 token 票裁',
     '#4A9AFF': 'pages/profile/personal-info.uvue 头像编辑入口浅蓝——品牌浅蓝变体，token 表无对应',
     '#FFF6E5': 'pages/profile/personal-info.uvue 提示条浅橙底——token 表无警告浅底对应（$warning-tint 是 #FFF3E0），语义相近但值不等，待真机裁',
-    '#E3F2FD': 'pages/points/points-detail.uvue 积分规则提示浅蓝底——$primary-tint(#ebf5ff) 近似但值不等，待真机裁',
+    '#E3F2FD': 'pages/profile/favorites.uvue 收藏封面兜底浅蓝底——token 表无对应浅蓝（$primary-tint 是 #EBF9FF），#2523 起 points-detail 的同值承载退役，此值仍由 favorites 承载',
     '#EE0A24': 'batch2 points 两页危险文字/删除按钮——$danger-color(#ff3b30) 语义相同但值不等（vant 系红），替换会视觉回归，待红系 token 收敛裁',
-    '#FBE9E7': 'pages/points/points-detail.uvue 兑换即将过期浅红底——$danger-tint(#ffebee) 近似但值不等，待真机裁',
-    '#FF8F00': 'pages/points/task-center.uvue 限时任务标签橙——$warning-color(#ff9900) 近似但值不等，待真机裁',
+    // '#FBE9E7' —— #2523 起 points-detail 流水图标位按原型退役（行内不再有图标底色），该浅红底无承载，条目退役
+    '#FF8F00': 'pages/forum/components/forum-topic-header.uvue 限时/状态标签橙——$warning-color(#ff9900) 近似但值不等，待真机裁',
     '#FFA000': 'pages/points/task-center.uvue 金币卡渐变尾色 + 深橙文字——渐变组合色，token 表无对应',
     '#FFD700': 'pages/points/task-center.uvue 金币卡渐变起色——金币金，token 表无对应',
     '#222222': 'batch2 ai-assistant 两页/practice-report 重文字——$text-color(#333333) 近似但值不等，历史深灰，待文字 token 收敛裁',

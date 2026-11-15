@@ -3,22 +3,24 @@
         <app-nav-bar title="任务中心" @left-click="onBack" divider />
 
         <scroll-view class="content-scroll" scroll-y="true">
-            <!-- 积分卡片（余额 / 累计来自 GET /points/balance，今日可得按未领任务算） -->
-            <view class="balance-card">
-                <view class="balance-top">
-                    <view class="balance-coin">
-                        <text class="coin-icon">🪙</text>
+            <!-- 蓝底 + 白卡（原型 569:4532）：余额 / 去兑换 / 今日可得一行，卡面跨在蓝带下沿 -->
+            <view class="hero">
+                <view class="balance-card">
+                    <view class="balance-top">
+                        <view class="balance-coin">
+                            <text class="coin-icon">🪙</text>
+                        </view>
+                        <view class="balance-info">
+                            <text class="balance-label">可用积分</text>
+                            <text class="balance-value">{{ pointsBalance }}</text>
+                        </view>
+                        <view class="balance-exchange" @click="goExchange">
+                            <text class="exchange-text">去兑换</text>
+                        </view>
                     </view>
-                    <view class="balance-info">
-                        <text class="balance-label">可用积分</text>
-                        <text class="balance-value">{{ pointsBalance }}</text>
+                    <view class="balance-bottom">
+                        <text class="balance-stats">今日可得 +{{ todayEarnable }}，累计获得 {{ totalEarned }}</text>
                     </view>
-                    <view class="balance-exchange" @click="goExchange">
-                        <text class="exchange-text">去兑换</text>
-                    </view>
-                </view>
-                <view class="balance-bottom">
-                    <text class="balance-stats">今日可得  +{{ todayEarnable }}，累计获得 {{ totalEarned }}</text>
                 </view>
             </view>
 
@@ -40,22 +42,23 @@
                 <view class="section-header">
                     <text class="section-title">{{ g.label }}</text>
                     <view class="section-underline"></view>
-                    <text class="section-desc">{{ g.desc }}</text>
                 </view>
                 <view class="task-card">
                     <view v-for="(task, ti) in g.tasks" :key="task.code"
                         :class="['task-item', { 'task-item-last': ti == g.tasks.length - 1 }]">
-                        <view :class="['task-icon-wrap', groupIconClass(task.group)]">
+                        <view class="task-icon-wrap">
                             <text class="task-icon">{{ taskIconText(task.code, task.group) }}</text>
                         </view>
                         <view class="task-content">
                             <view class="task-title-row">
                                 <text class="task-title">{{ task.title }}</text>
-                                <text v-if="task.total > 1" class="task-progress">（{{ task.progress }}/{{ task.total }}）</text>
+                                <text class="task-progress">（{{ task.progress }}/{{ task.total }}）</text>
                             </view>
-                            <text class="task-desc">{{ task.desc }}</text>
+                            <view class="task-desc-row">
+                                <text class="task-desc">{{ task.desc }}</text>
+                                <text class="task-points">+{{ task.points }}</text>
+                            </view>
                         </view>
-                        <text class="task-points">+{{ task.points }}</text>
                         <view :class="['task-btn', taskBtnClass(task.status)]" @click="onTaskBtn(task)">
                             <text :class="['task-btn-text', taskBtnTextClass(task.status)]">{{ taskBtnText(task.status, task.code) }}</text>
                         </view>
@@ -85,7 +88,6 @@
     type TaskGroupView = {
         key : string
         label : string
-        desc : string
         tasks : PointsTaskItem[]
     }
 
@@ -116,24 +118,17 @@
         return '其他任务'
     }
 
-    /** 分组口径文案与后端配置同源（#410；ADR-0054 后分组只剩 daily / newbie 两组） */
-    function groupDescOf(group : string) : string {
-        if (group == 'daily') return '每日 0 点重置，当日达成当日领'
-        if (group == 'newbie') return '一次性任务，完成后不再出现'
-        return ''
-    }
-
-    function groupIconClass(group : string) : string {
-        if (group == 'daily') return 'icon-daily'
-        if (group == 'newbie') return 'icon-newbie'
-        return 'icon-other'
-    }
-
+    /**
+     * 任务图标字形：原型 569:4532 是 3D 插画，切图目录「积分规则」13 张当前判 UNUSED
+     * （主包余量见 PR 体积账）⇒ 先用 emoji 兜底，插槽按 code 预留、换图不改结构。
+     */
     function taskIconText(code : string, group : string) : string {
         if (code == 'daily_login') return '👆'
         if (code == 'daily_quiz') return '📝'
         if (code == 'daily_browse') return '📖'
         if (code == 'browse_course') return '🎓'
+        if (code == 'browse_mall') return '🛒'
+        if (code == 'exchange_gift') return '🎁'
         if (code == 'growth_post') return '📋'
         if (code == 'growth_reply') return '💬'
         if (code == 'growth_mock') return '📊'
@@ -156,6 +151,8 @@
         if (code == 'newbie_first_course') return { url: '/pages/courses/courses', tab: true } as TaskRoute
         // #1944「浏览 3 门课程」落课程列表；daily_browse 是论坛帖子浏览，两者不得同落点
         if (code == 'browse_course') return { url: '/pages/courses/courses', tab: true } as TaskRoute
+        // N3 #2550 待上线：两项奖励都发生在积分商城（游览商品 / 完成兑礼），落商城页；后端落地前 code 不会下发
+        if (code == 'browse_mall' || code == 'exchange_gift') return { url: '/pages/points/points-shop', tab: false } as TaskRoute
         return { url: '', tab: false } as TaskRoute
     }
 
@@ -169,7 +166,7 @@
                 if (list[j].group == order[i]) bucket.push(list[j])
             }
             if (bucket.length > 0) {
-                out.push({ key: order[i], label: groupLabelOf(order[i]), desc: groupDescOf(order[i]), tasks: bucket } as TaskGroupView)
+                out.push({ key: order[i], label: groupLabelOf(order[i]), tasks: bucket } as TaskGroupView)
             }
         }
         // 后端新增分组时兜底成段，避免任务在端上凭空消失
@@ -178,7 +175,7 @@
             if (order.indexOf(list[j].group) < 0) rest.push(list[j])
         }
         if (rest.length > 0) {
-            out.push({ key: 'other', label: '其他任务', desc: '', tasks: rest } as TaskGroupView)
+            out.push({ key: 'other', label: '其他任务', tasks: rest } as TaskGroupView)
         }
         return out
     }
@@ -186,19 +183,19 @@
     function taskBtnText(status : string, code : string) : string {
         if (claimingCode.value == code) return '领取中'
         if (status == 'claimable') return '领取'
-        if (status == 'claimed') return '已领取'
+        if (status == 'claimed') return '已完成'
         return '去完成'
     }
 
     function taskBtnClass(status : string) : string {
-        // 领取态是唯一可点成事的动作，其余（去完成 / 已领取）同属「非动作」灰态，共用一套外观
-        if (status == 'claimable') return 'task-btn-claim'
-        return 'task-btn-off'
+        // 领取 / 去完成都是动作态（原型蓝胶囊），已完成是灰态
+        if (status == 'claimed') return 'task-btn-off'
+        return 'task-btn-action'
     }
 
     function taskBtnTextClass(status : string) : string {
-        if (status == 'claimable') return 'text-on-claim'
-        return 'text-on-off'
+        if (status == 'claimed') return 'text-on-off'
+        return 'text-on-action'
     }
 
     // ===== 派生视图 =====
@@ -318,11 +315,17 @@
         flex: 1;
     }
 
+    /* 蓝底带（原型 #6ECCFD→#0CA2EF，卡面压在下沿） */
+    .hero {
+        padding: 24rpx 24rpx 40rpx;
+        background: linear-gradient(to bottom right, $primary-grad-start, $primary-grad-end);
+        background-color: $primary-grad-end;
+    }
+
     /* 积分卡片 */
     .balance-card {
-        margin: 24rpx;
         padding: 32rpx;
-        border-radius: 16rpx;
+        border-radius: $radius-card;
         background-color: $card-bg;
         flex-direction: column;
     }
@@ -333,9 +336,9 @@
     }
 
     .balance-coin {
-        width: 80rpx;
-        height: 80rpx;
-        border-radius: 40rpx;
+        width: 88rpx;
+        height: 88rpx;
+        border-radius: 44rpx;
         background: linear-gradient(to bottom right, #FFD700, #FFA000);
         background-color: #FFA000;
         align-items: center;
@@ -344,7 +347,7 @@
     }
 
     .coin-icon {
-        font-size: 48rpx;
+        font-size: 52rpx;
     }
 
     .balance-info {
@@ -358,7 +361,7 @@
     }
 
     .balance-value {
-        font-size: 56rpx;
+        font-size: 48rpx;
         font-weight: bold;
         color: $text-color;
         margin-top: 4rpx;
@@ -367,34 +370,37 @@
     .balance-exchange {
         padding: 16rpx 32rpx;
         border-radius: 32rpx;
-        background-color: $bg-color;
+        background-color: $primary-tint;
     }
 
     .exchange-text {
         font-size: 26rpx;
-        color: $text-color-secondary;
+        color: $primary-color;
     }
 
     .balance-bottom {
-        margin-top: 20rpx;
-        padding-top: 20rpx;
-        border-top: 1rpx solid $border-color-light;
+        margin-top: 24rpx;
+        padding: 14rpx 0;
+        border-radius: 12rpx;
+        background-color: $warning-tint;
         align-items: center;
     }
 
     .balance-stats {
         font-size: 24rpx;
-        color: $text-color-placeholder;
+        color: $text-color-secondary;
     }
 
-    /* 分组 */
+    /* 分组标题（原型：标题 + 蓝色短下划线，无说明行） */
     .section {
+        margin-top: 8rpx;
         margin-bottom: 16rpx;
     }
 
     .section-header {
-        padding: 16rpx 32rpx 12rpx;
+        padding: 24rpx 32rpx 8rpx;
         flex-direction: column;
+        align-items: flex-start;
     }
 
     .section-title {
@@ -407,27 +413,21 @@
         width: 64rpx;
         height: 8rpx;
         border-radius: 4rpx;
-        background-color: #2979ff;
-        margin-top: 8rpx;
-    }
-
-    .section-desc {
-        font-size: 22rpx;
-        color: $text-color-placeholder;
-        margin-top: 8rpx;
+        background-color: $primary-color;
+        margin-top: 10rpx;
     }
 
     /* 任务卡片 */
     .task-card {
-        margin: 0 24rpx;
+        margin: 20rpx 24rpx 0;
         padding: 0 24rpx;
-        border-radius: 16rpx;
+        border-radius: $radius-card;
         background-color: $card-bg;
         flex-direction: column;
     }
 
     .task-item {
-        padding: 24rpx 0;
+        padding: 28rpx 0;
         border-bottom: 1rpx solid $border-color-light;
         flex-direction: row;
         align-items: center;
@@ -438,28 +438,15 @@
     }
 
     .task-icon-wrap {
-        width: 72rpx;
-        height: 72rpx;
-        border-radius: 16rpx;
+        width: 80rpx;
+        height: 80rpx;
         align-items: center;
         justify-content: center;
         margin-right: 20rpx;
     }
 
-    .icon-daily {
-        background-color: $warning-tint;
-    }
-
-    .icon-newbie {
-        background-color: $success-tint;
-    }
-
-    .icon-other {
-        background-color: $border-color-light;
-    }
-
     .task-icon {
-        font-size: 36rpx;
+        font-size: 48rpx;
     }
 
     .task-content {
@@ -481,34 +468,45 @@
 
     .task-progress {
         font-size: 24rpx;
-        color: #2979ff;
-        margin-left: 8rpx;
+        color: $primary-color;
+        margin-left: 4rpx;
+    }
+
+    .task-desc-row {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 8rpx;
     }
 
     .task-desc {
+        flex: 1;
         font-size: 24rpx;
         color: $text-color-placeholder;
-        margin-top: 8rpx;
         lines: 1;
         text-overflow: ellipsis;
-    }
-
-    .task-points {
-        font-size: 26rpx;
-        font-weight: bold;
-        color: #FF8F00;
         margin-right: 16rpx;
     }
 
-    /* 按钮外观按「是否可领取」二态分派：可领取=动作态橙，其余（去完成/已领取）=非动作灰 */
-    .task-btn {
-        padding: 12rpx 28rpx;
-        border-radius: 28rpx;
+    .task-points {
+        font-size: 24rpx;
+        font-weight: bold;
+        color: $warning-color;
         flex-shrink: 0;
     }
 
-    .task-btn-claim {
-        background-color: #FF8F00;
+    /* 按钮：动作态蓝胶囊 / 已完成灰胶囊（原型 569:4532） */
+    .task-btn {
+        padding: 14rpx 32rpx;
+        border-radius: 32rpx;
+        flex-shrink: 0;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .task-btn-action {
+        background: linear-gradient(to bottom right, $primary-grad-start, $primary-grad-end);
+        background-color: $primary-grad-end;
     }
 
     .task-btn-off {
@@ -519,7 +517,7 @@
         font-size: 24rpx;
     }
 
-    .text-on-claim {
+    .text-on-action {
         color: $text-color-inverse;
     }
 
@@ -553,7 +551,7 @@
     .retry-btn {
         padding: 12rpx 40rpx;
         border-radius: 32rpx;
-        background-color: #2979ff;
+        background-color: $primary-color;
     }
 
     .retry-text {

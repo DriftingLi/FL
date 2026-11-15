@@ -129,8 +129,9 @@ describe('积分商城页（#1942）契约', () => {
     });
 
     it('积分明细页有「去积分商城」入口条，同落点', () => {
-      expect(POINTS_DETAIL).toContain('shop-entry');
-      expect(POINTS_DETAIL).toContain('去积分商城挑好物');
+      // #2523 起入口条按原型 355:1725 收口为浅黄提示条（class notice-bar），文案同「去积分商城」
+      expect(POINTS_DETAIL).toContain('notice-bar');
+      expect(POINTS_DETAIL).toContain('去积分商城');
       expect(POINTS_DETAIL).toMatch(/function onGoShop\(\) : void \{\s*uni\.navigateTo\(\{ url: '\/pages\/points\/points-shop' \}\)/);
     });
   });

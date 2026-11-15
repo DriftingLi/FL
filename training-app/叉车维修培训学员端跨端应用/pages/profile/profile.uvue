@@ -4,7 +4,7 @@
         <app-nav-bar transparent :left-icon="''" title="我的" />
 
         <scroll-view class="content-scroll" scroll-y>
-            <ProfileUserRow :study-minutes="studyMinutes" :completed-courses="completedCourses" :today-checked="todayChecked" @avatar-tap="onChangeAvatar" @edit-nickname="onEditNickname" @checkin-tap="onGoCheckIn" />
+            <ProfileUserRow :study-minutes="studyMinutes" :today-checked="todayChecked" @avatar-tap="onChangeAvatar" @edit-nickname="onEditNickname" @checkin-tap="onGoCheckIn" />
 
             <!-- 学习数据：三张独立卡片 -->
             <view class="stats-row">
@@ -118,14 +118,6 @@
     const studyMinutes = computed<number>(() : number => {
         if (profile.value != null) {
             return profile.value.total_study_duration
-        }
-        return 0
-    })
-
-    /** 已完成课程数（供段位推导） */
-    const completedCourses = computed<number>(() : number => {
-        if (profile.value != null) {
-            return profile.value.completed_courses
         }
         return 0
     })
