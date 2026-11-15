@@ -1,5 +1,5 @@
 <template>
-    <!-- 用户行：头像 + 昵称/等级 + 段位星级 + 签到胶囊 -->
+    <!-- 用户行：头像 + 昵称/等级 + 等级徽章（Lv1-9 规格）+ 签到胶囊 -->
     <view class="user-row">
         <view class="user-avatar" @click.stop="onAvatarTap">
             <image v-if="avatarUrl.length > 0" class="avatar-img" :src="avatarUrl" mode="aspectFill" :webp="true">
@@ -12,12 +12,7 @@
                 <text class="user-lv">Lv{{ userLevel }}</text>
             </view>
             <view class="role-row">
-                <text class="role-icon">🏅</text>
-                <text class="user-role">{{ rankName }}</text>
-                <view class="stars-row">
-                    <text v-for="(s, i) in starList" :key="i"
-                        :class="['star', { 'star-active': i < starCount }]">★</text>
-                </view>
+                <app-level-badge :level="userLevel" />
             </view>
         </view>
         <view class="checkin-pill" @click="onCheckinTap">
@@ -29,15 +24,14 @@
 <script setup lang="uts">
     import { computed } from 'vue'
     import { useAuthStore } from '../../../stores/auth'
+    import appLevelBadge from '../../../components/app-level-badge/app-level-badge.uvue'
 
-    /** 用户行展示数据：学时/完课数来自页面（推导 Lv/段位/星级），头像与昵称读 authStore */
+    /** 用户行展示数据：学时来自页面（推导 Lv，徽章/星级由 app-level-badge 统一渲染），头像与昵称读 authStore */
     const props = withDefaults(defineProps<{
         studyMinutes ?: number
-        completedCourses ?: number
         todayChecked ?: boolean
     }>(), {
         studyMinutes: 0,
-        completedCourses: 0,
         todayChecked: false
     })
 
@@ -74,36 +68,8 @@
         return 5
     }
 
-    /**
-     * 段位：按已完成课程数本地推导（后端无段位字段）
-     * 0 → 初级工，1 → 中级技师，2 → 高级技师，>=3 → 技师
-     */
-    function rankNameFromCompleted(completed : number) : string {
-        if (completed <= 0) return '初级工'
-        if (completed == 1) return '中级技师'
-        if (completed == 2) return '高级技师'
-        return '技师'
-    }
-
-    /** 等级 → 点亮星数（共 5 颗） */
-    function starCountFromLevel(level : number) : number {
-        if (level <= 0) return 0
-        if (level > 5) return 5
-        return level
-    }
-
     const userLevel = computed<number>(() : number => {
         return levelFromHours(props.studyMinutes / 60)
-    })
-
-    const rankName = computed<string>(() : string => {
-        return rankNameFromCompleted(props.completedCourses)
-    })
-
-    const starList : number[] = [1, 2, 3, 4, 5]
-
-    const starCount = computed<number>(() : number => {
-        return starCountFromLevel(userLevel.value)
     })
 
     function onAvatarTap() : void {
@@ -176,32 +142,6 @@
         flex-direction: row;
         align-items: center;
         margin-top: 8rpx;
-    }
-
-    .role-icon {
-        font-size: 26rpx;
-        margin-right: 8rpx;
-    }
-
-    .user-role {
-        font-size: 28rpx;
-        color: #666666;
-    }
-
-    .stars-row {
-        flex-direction: row;
-        align-items: center;
-        margin-left: 24rpx;
-    }
-
-    .star {
-        font-size: 26rpx;
-        color: #FFFFFF;
-        margin-right: 4rpx;
-    }
-
-    .star-active {
-        color: #FDE03B;
     }
 
     .checkin-pill {

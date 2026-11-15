@@ -3,31 +3,32 @@
         <app-nav-bar title="积分明细" @left-click="onBack" divider />
 
         <scroll-view class="content-scroll" scroll-y="true" @scrolltolower="onLoadMore">
-            <!-- 积分余额卡片 -->
+            <!-- 余额卡（原型 355:1725）：白卡居中大数 + 右上「积分规则」入口 -->
             <view class="balance-card">
-                <text class="balance-title">我的积分</text>
+                <view class="balance-side"></view>
                 <text class="balance-value">{{ pointsBalance }}</text>
-                <view class="balance-right" @click="onRulesClick">
-                    <text class="balance-label">积分规则 ›</text>
+                <view class="balance-side balance-side-right">
+                    <view class="balance-rules" @click="onRulesClick">
+                        <text class="balance-rules-text">积分规则 ›</text>
+                    </view>
                 </view>
             </view>
 
-            <!-- 商城入口条（#1942 口径 B）：设计稿的「去积分商城」，落点为商城页 -->
-            <view class="shop-entry" @click="onGoShop">
-                <text class="shop-entry-text">去积分商城挑好物</text>
-                <text class="shop-entry-arrow">›</text>
+            <!-- 商城入口条：根 ADR-0082 积分暂不过期，不写「本月暂无过期积分」这类过期口径 -->
+            <view class="notice-bar" @click="onGoShop">
+                <text class="notice-text">积分永久有效，去积分商城挑选心仪商品</text>
+                <text class="notice-arrow">›</text>
             </view>
 
-            <!-- Tab 切换：收支方向走后端 direction 查询（#512） -->
+            <!-- Tab：收支方向走后端 direction 查询（#512）；「即将过期」随 G1 删除清单退役 -->
             <view class="tab-bar">
-                <view :class="['tab-item', { active: currentTab == 'all' }]" @click="onTabClick('all')">
-                    <text class="tab-text">全部</text>
+                <view class="tab-item" @click="onTabClick('in')">
+                    <text :class="['tab-text', { 'tab-text-active': currentTab == 'in' }]">积分收入</text>
+                    <view :class="['tab-underline', { 'tab-underline-on': currentTab == 'in' }]"></view>
                 </view>
-                <view :class="['tab-item', { active: currentTab == 'in' }]" @click="onTabClick('in')">
-                    <text class="tab-text">积分收入</text>
-                </view>
-                <view :class="['tab-item', { active: currentTab == 'out' }]" @click="onTabClick('out')">
-                    <text class="tab-text">积分支出</text>
+                <view class="tab-item" @click="onTabClick('out')">
+                    <text :class="['tab-text', { 'tab-text-active': currentTab == 'out' }]">积分支出</text>
+                    <view :class="['tab-underline', { 'tab-underline-on': currentTab == 'out' }]"></view>
                 </view>
             </view>
 
@@ -44,19 +45,11 @@
                 </view>
                 <view class="detail-list">
                     <view v-for="item in items" :key="item.id" class="detail-item">
-                        <view :class="['detail-icon-wrap', itemIconClass(item.ref_type)]">
-                            <text class="detail-icon">{{ itemIconText(item.ref_type) }}</text>
-                        </view>
                         <view class="detail-content">
-                            <view class="detail-row">
-                                <text class="detail-action">{{ itemTitle(item.reason, item.delta) }}</text>
-                                <text :class="['detail-points', itemDeltaClass(item.delta)]">{{ itemDeltaText(item.delta) }}</text>
-                            </view>
-                            <view class="detail-row">
-                                <text class="detail-source">{{ itemSourceText(item.ref_type) }}</text>
-                                <text class="detail-date">{{ itemDateText(item.created_at) }}</text>
-                            </view>
+                            <text class="detail-action">{{ itemTitle(item.reason, item.delta) }}</text>
+                            <text class="detail-date">{{ itemDateText(item.created_at) }}</text>
                         </view>
+                        <text :class="['detail-points', itemDeltaClass(item.delta)]">{{ itemDeltaText(item.delta) }}</text>
                     </view>
                 </view>
                 <view v-if="loading" class="loading-more">
@@ -72,7 +65,7 @@
             </view>
         </scroll-view>
 
-        <!-- 底部按钮 -->
+        <!-- 底部按钮（原型：通栏蓝胶囊） -->
         <view class="bottom-button">
             <button class="earn-button" @click="onEarnPoints">赚更多积分</button>
         </view>
@@ -85,15 +78,15 @@
     import { onShow } from '@dcloudio/uni-app'
     import { goBack } from '../../utils/navigation'
     import { getPointsBalanceApi, getPointsLedgerApi } from '../../api/points'
-    import { ledgerReasonLabel, ledgerRefTypeText, ledgerIconClass, ledgerIconGlyph, deltaText, deltaKind } from '../../utils/pointsDisplay'
+    import { ledgerReasonLabel, deltaText } from '../../utils/pointsDisplay'
     import { formatDateTimeStr } from '../../utils/format'
     import type { PointsBalance, PointsLedgerItem } from '../../types/index'
     import type { Page } from '../../api/envelope'
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
     const pointsBalance = ref<number>(0)
-    /** 收支方向 tab：all 全部 / in 收入 / out 支出（透传后端 direction） */
-    const currentTab = ref<string>('all')
+    /** 收支方向 tab：in 收入 / out 支出（透传后端 direction；「即将过期」随 G1 删除清单退役） */
+    const currentTab = ref<string>('in')
     const items = ref<PointsLedgerItem[]>([])
     const page = ref<number>(1)
     const pageSize : number = 20
@@ -112,24 +105,12 @@
         return ledgerReasonLabel(reason, delta)
     }
 
-    function itemSourceText(refType : string) : string {
-        return ledgerRefTypeText(refType)
-    }
-
-    function itemIconClass(refType : string) : string {
-        return ledgerIconClass(refType)
-    }
-
-    function itemIconText(refType : string) : string {
-        return ledgerIconGlyph(refType)
-    }
-
     function itemDeltaText(delta : number) : string {
         return deltaText(delta)
     }
 
     function itemDeltaClass(delta : number) : string {
-        if (deltaKind(delta) == 'in') return 'points-in'
+        if (delta >= 0) return 'points-in'
         return 'points-out'
     }
 
@@ -142,11 +123,10 @@
         uni.navigateTo({ url: '/pages/points/points-shop' })
     }
 
-    /** tab → 后端 direction 查询值（全部不传） */
+    /** tab → 后端 direction 查询值（收入 / 支出二态；后端没有「全部」之外的第三维） */
     function directionOf(tab : string) : string {
-        if (tab == 'in') return 'in'
         if (tab == 'out') return 'out'
-        return ''
+        return 'in'
     }
 
     /** 加载积分余额（失败由 request 层提示，卡片保持 0 不回填占位数） */
@@ -246,79 +226,73 @@
         flex: 1;
     }
 
+    /* 余额卡：白卡居中大数，右列「积分规则」 */
     .balance-card {
         margin: 24rpx;
-        padding: 32rpx;
-        border-radius: 16rpx;
-        background: linear-gradient(to bottom right, #2979ff, #1565c0);
-        background-color: #1565c0;
-        flex-direction: column;
-        align-items: flex-start;
+        padding: 36rpx 32rpx;
+        border-radius: $radius-card;
+        background-color: $card-bg;
+        flex-direction: row;
+        align-items: center;
     }
 
-    .balance-title {
-        font-size: 26rpx;
-        color: rgba(255, 255, 255, 0.8);
-        margin-bottom: 12rpx;
+    .balance-side {
+        flex: 1;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .balance-side-right {
+        justify-content: flex-end;
     }
 
     .balance-value {
-        font-size: 56rpx;
+        font-size: 64rpx;
         font-weight: bold;
-        color: $text-color-inverse;
-        margin-bottom: 16rpx;
+        color: $text-color;
     }
 
-    .balance-right {
-        flex-direction: row;
-        align-items: center;
-        background-color: rgba(255, 255, 255, 0.2);
-        padding: 16rpx 24rpx;
+    .balance-rules-text {
+        font-size: 26rpx;
+        color: $text-color-secondary;
+    }
+
+    /* 商城入口条（浅黄底） */
+    .notice-bar {
+        margin: 0 24rpx 24rpx;
+        padding: 24rpx 28rpx;
         border-radius: 16rpx;
-    }
-
-    .balance-label {
-        font-size: 24rpx;
-        color: $text-color-inverse;
-    }
-
-    /* 商城入口条（#1942） */
-    .shop-entry {
-        margin: 24rpx;
-        padding: 26rpx 32rpx;
-        border-radius: 16rpx;
-        background-color: $card-bg;
+        background-color: $warning-tint;
         flex-direction: row;
         align-items: center;
         justify-content: space-between;
     }
 
-    .shop-entry-text {
+    .notice-text {
+        flex: 1;
         font-size: 26rpx;
         color: $text-color;
+        margin-right: 12rpx;
     }
 
-    .shop-entry-arrow {
+    .notice-arrow {
         font-size: 34rpx;
-        color: $text-color-placeholder;
+        color: $text-color-secondary;
     }
 
+    /* Tab（原型：白卡内文字 + 蓝色短下划线，选中加粗黑字） */
     .tab-bar {
+        margin: 0 24rpx;
+        border-radius: $radius-card;
         background-color: $card-bg;
         flex-direction: row;
-        border-bottom: 1rpx solid $border-color-light;
     }
 
     .tab-item {
         flex: 1;
-        padding: 28rpx 0;
+        padding: 28rpx 0 18rpx;
         align-items: center;
         justify-content: center;
-        border-bottom: 4rpx solid transparent;
-    }
-
-    .tab-item.active {
-        border-bottom-color: #2979ff;
     }
 
     .tab-text {
@@ -326,10 +300,21 @@
         color: $text-color-secondary;
     }
 
-    .tab-item.active .tab-text {
-        color: #2979ff;
+    .tab-text-active {
+        color: $text-color;
         font-weight: bold;
-        font-size: 30rpx;
+    }
+
+    .tab-underline {
+        width: 48rpx;
+        height: 6rpx;
+        border-radius: 3rpx;
+        background-color: $card-bg;
+        margin-top: 10rpx;
+    }
+
+    .tab-underline-on {
+        background-color: $primary-color;
     }
 
     .detail-scroll-inner {
@@ -343,61 +328,17 @@
     .detail-item {
         background-color: $card-bg;
         border-radius: 16rpx;
-        padding: 32rpx;
+        padding: 28rpx 32rpx;
         margin-bottom: 16rpx;
         flex-direction: row;
-        align-items: flex-start;
-    }
-
-    .detail-icon-wrap {
-        width: 72rpx;
-        height: 72rpx;
-        border-radius: 12rpx;
         align-items: center;
-        justify-content: center;
-        margin-right: 20rpx;
-        flex-shrink: 0;
-    }
-
-    .icon-task {
-        background-color: $success-tint;
-    }
-
-    .icon-checkin {
-        background-color: $success-tint;
-    }
-
-    .icon-redeem {
-        background-color: $warning-tint;
-    }
-
-    .icon-community {
-        background-color: #e3f2fd;
-    }
-
-    .icon-admin {
-        background-color: #fbe9e7;
-    }
-
-    .icon-default {
-        background-color: $bg-color;
-    }
-
-    .detail-icon {
-        font-size: 32rpx;
-        color: $text-color-secondary;
+        justify-content: space-between;
     }
 
     .detail-content {
         flex: 1;
         flex-direction: column;
-    }
-
-    .detail-row {
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 8rpx;
+        margin-right: 16rpx;
     }
 
     .detail-action {
@@ -406,30 +347,23 @@
         color: $text-color;
     }
 
+    .detail-date {
+        font-size: 24rpx;
+        color: $text-color-placeholder;
+        margin-top: 8rpx;
+    }
+
     .detail-points {
-        font-size: 32rpx;
+        font-size: 34rpx;
         font-weight: bold;
     }
 
     .points-in {
-        color: #2979ff;
+        color: $primary-color;
     }
 
     .points-out {
         color: #ee0a24;
-    }
-
-    .detail-source {
-        font-size: 22rpx;
-        color: $text-color-placeholder;
-        background-color: $bg-color;
-        padding: 4rpx 12rpx;
-        border-radius: 6rpx;
-    }
-
-    .detail-date {
-        font-size: 22rpx;
-        color: $text-color-placeholder;
     }
 
     .empty-tip {
@@ -457,7 +391,7 @@
     .retry-btn {
         padding: 12rpx 40rpx;
         border-radius: 32rpx;
-        background-color: #2979ff;
+        background-color: $primary-color;
     }
 
     .retry-text {
@@ -485,8 +419,8 @@
         width: 100%;
         height: 96rpx;
         border-radius: 48rpx;
-        background: linear-gradient(to bottom right, #2979ff, #1565c0);
-        background-color: #1565c0;
+        background: linear-gradient(to bottom right, $primary-grad-start, $primary-grad-end);
+        background-color: $primary-grad-end;
         color: $text-color-inverse;
         font-size: 34rpx;
         font-weight: bold;

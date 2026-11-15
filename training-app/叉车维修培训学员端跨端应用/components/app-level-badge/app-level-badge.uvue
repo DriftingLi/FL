@@ -1,0 +1,77 @@
+<template>
+    <!-- 等级徽章（贴片 569:3907）：Lv1-9 → 三档用户 + 星级。徽章色与星数同源，供「我的 / 任务」共用 -->
+    <view class="level-badge">
+        <image v-if="tier == 1" class="level-badge-img" src="/static/icons/level/badge-primary.png" mode="aspectFit"></image>
+        <image v-else-if="tier == 2" class="level-badge-img" src="/static/icons/level/badge-intermediate.png" mode="aspectFit"></image>
+        <image v-else class="level-badge-img" src="/static/icons/level/badge-advanced.png" mode="aspectFit"></image>
+        <text class="level-badge-label">{{ tierLabel }}</text>
+        <view class="level-badge-stars">
+            <image v-for="s in starList" :key="s" class="level-badge-star" src="/static/icons/level/star.png" mode="aspectFit"></image>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { computed } from 'vue'
+
+    /**
+     * 等级徽章规格（贴片 569:3907，2026-11-16 随 B7 #2523 落定）：
+     * - Lv1-Lv3 = 初级用户（2 星，铜橙绶带）
+     * - Lv4-Lv6 = 中级用户（3 星，蓝绶带）
+     * - Lv7-Lv9 = 高级用户（4 星，金绶带）
+     * 等级推导留在消费方（「我的」页按学时算 Lv），本组件只消费最终 Lv 值。
+     */
+    const props = withDefaults(defineProps<{
+        level ?: number
+    }>(), {
+        level: 1
+    })
+
+    const tier = computed<number>(() : number => {
+        if (props.level <= 3) return 1
+        if (props.level <= 6) return 2
+        return 3
+    })
+
+    const tierLabel = computed<string>(() : string => {
+        if (tier.value == 1) return '初级用户'
+        if (tier.value == 2) return '中级用户'
+        return '高级用户'
+    })
+
+    const starList = computed<number[]>(() : number[] => {
+        if (tier.value == 1) return [1, 2]
+        if (tier.value == 2) return [1, 2, 3]
+        return [1, 2, 3, 4]
+    })
+</script>
+
+<style lang="scss">
+    .level-badge {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .level-badge-img {
+        width: 30rpx;
+        height: 40rpx;
+        margin-right: 8rpx;
+    }
+
+    .level-badge-label {
+        font-size: 24rpx;
+        color: $text-color-secondary;
+    }
+
+    .level-badge-stars {
+        flex-direction: row;
+        align-items: center;
+        margin-left: 12rpx;
+    }
+
+    .level-badge-star {
+        width: 24rpx;
+        height: 24rpx;
+        margin-right: 4rpx;
+    }
+</style>

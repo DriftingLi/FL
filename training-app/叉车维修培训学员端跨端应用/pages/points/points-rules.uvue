@@ -2,10 +2,65 @@
     <view class="container" :style="{ height: windowHeight + 'px' }">
         <app-nav-bar title="积分规则" @left-click="onBack" divider />
 
+        <!-- 三 Tab（原型 787:497 基础规则 / 845:719 消费积分详解 / 845:751 任务中心）：页内三态、不新增路由 -->
+        <view class="tab-bar">
+            <view class="tab-item" @click="onTab('basic')">
+                <text :class="['tab-text', { 'tab-text-active': activeTab == 'basic' }]">基础规则</text>
+                <view :class="['tab-underline', { 'tab-underline-on': activeTab == 'basic' }]"></view>
+            </view>
+            <view class="tab-item" @click="onTab('consume')">
+                <text :class="['tab-text', { 'tab-text-active': activeTab == 'consume' }]">消费积分详解</text>
+                <view :class="['tab-underline', { 'tab-underline-on': activeTab == 'consume' }]"></view>
+            </view>
+            <view class="tab-item" @click="onTab('tasks')">
+                <text :class="['tab-text', { 'tab-text-active': activeTab == 'tasks' }]">任务中心</text>
+                <view :class="['tab-underline', { 'tab-underline-on': activeTab == 'tasks' }]"></view>
+            </view>
+        </view>
+
         <scroll-view class="content-scroll" scroll-y="true">
-            <!-- 获得规则：分值与后端任务配置逐条一致（#1943 验收口径） -->
-            <view class="section-card">
-                <text class="section-title">积分怎么获得</text>
+            <!-- Tab 1 基础规则（原型 787:497 三条；有效期口径按根 ADR-0082） -->
+            <view v-if="activeTab == 'basic'" class="section-card">
+                <text class="section-title">基础规则</text>
+                <text class="basic-text">1. 本规则适用于 App 内全部注册学员，积分用于激励学习、考核认证与社区活跃。</text>
+                <text class="basic-text">2. 积分是 App 内虚拟资产，仅限本平台内使用，不可转让、不可赠予、不可兑换现金。</text>
+                <text class="basic-text">3. 每个学员拥有独立积分账户，积分明细实时可查。</text>
+                <text class="section-note">积分暂不过期：当前获得的积分永久有效，不会到期清零。如果将来引入有效期规则，会提前公告并同步更新本页面。</text>
+            </view>
+
+            <!-- Tab 2 消费积分详解：单项分值由商品/课程自身定价决定，不写死在本页 -->
+            <view v-else-if="activeTab == 'consume'" class="section-card">
+                <text class="section-title">积分怎么用</text>
+                <view class="rule-row">
+                    <view class="rule-texts">
+                        <text class="rule-name">兑换课程</text>
+                        <text class="rule-desc">积分兑换的课程在课程详情页展示所需分值</text>
+                    </view>
+                </view>
+                <view class="rule-row">
+                    <view class="rule-texts">
+                        <text class="rule-name">兑换真题套卷</text>
+                        <text class="rule-desc">所需分值在真题页展示</text>
+                    </view>
+                </view>
+                <view class="rule-row">
+                    <view class="rule-texts">
+                        <text class="rule-name">积分商城</text>
+                        <text class="rule-desc">商城商品所需分值在商城页展示</text>
+                    </view>
+                </view>
+                <view class="rule-row">
+                    <view class="rule-texts">
+                        <text class="rule-name">AI 学习助手</text>
+                        <text class="rule-desc">与 AI 学习助手对话按用量扣减积分</text>
+                    </view>
+                </view>
+                <text class="section-note">每一次获得和消耗都会在「积分明细」里有记录。</text>
+            </view>
+
+            <!-- Tab 3 任务中心（原型 845:751）：获得规则分值与后端任务配置逐条一致（#1943 验收口径） -->
+            <view v-else class="section-card">
+                <text class="section-title">任务中心</text>
 
                 <text class="group-title">每日任务（每天 0 点北京时间重置，每项当日可领 1 次）</text>
                 <view class="rule-row">
@@ -83,53 +138,17 @@
 
                 <text class="section-note">问答被采纳、帖子被加精等社区奖励也会加分，实际分值以「积分明细」记录为准。</text>
             </view>
-
-            <!-- 使用规则：单项分值由商品/课程自身定价决定，不写死在本页 -->
-            <view class="section-card">
-                <text class="section-title">积分怎么用</text>
-                <view class="rule-row">
-                    <view class="rule-texts">
-                        <text class="rule-name">兑换课程</text>
-                        <text class="rule-desc">积分兑换的课程在课程详情页展示所需分值</text>
-                    </view>
-                </view>
-                <view class="rule-row">
-                    <view class="rule-texts">
-                        <text class="rule-name">兑换真题套卷</text>
-                        <text class="rule-desc">所需分值在真题页展示</text>
-                    </view>
-                </view>
-                <view class="rule-row">
-                    <view class="rule-texts">
-                        <text class="rule-name">积分商城</text>
-                        <text class="rule-desc">商城商品所需分值在商城页展示</text>
-                    </view>
-                </view>
-                <view class="rule-row">
-                    <view class="rule-texts">
-                        <text class="rule-name">AI 学习助手</text>
-                        <text class="rule-desc">与 AI 学习助手对话按用量扣减积分</text>
-                    </view>
-                </view>
-                <text class="section-note">每一次获得和消耗都会在「积分明细」里有记录。</text>
-            </view>
-
-            <!-- 有效期：根 ADR-0082 裁定积分暂不过期，本页不写过时条款 -->
-            <view class="section-card">
-                <text class="section-title">积分有效期</text>
-                <text class="valid-text">积分暂不过期：当前获得的积分永久有效，不会到期清零。</text>
-                <text class="valid-text">如果将来引入有效期规则，会提前公告并同步更新本页面。</text>
-            </view>
         </scroll-view>
     </view>
 </template>
 
 <script setup lang="uts">
     import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
+    import { ref } from 'vue'
     import { goBack } from '../../utils/navigation'
 
     /**
-     * 积分规则静态页（#1943）。
+     * 积分规则静态页（#1943 起；#2523 按原型 787:497 / 845:719 / 845:751 收口为三 Tab）。
      *
      * 文案事实源（改动先核对这三处，再同步本页）：
      * - 任务分值：backend/migrations 000002 种子 + 000021/000034 调整（现行 10 项任务）
@@ -141,6 +160,13 @@
      * 本页「每日任务」清单需同步补一行。
      */
     const windowHeight = uni.getSystemInfoSync().windowHeight
+    /** 三 Tab 页内态：basic 基础规则 / consume 消费积分详解 / tasks 任务中心 */
+    const activeTab = ref<string>('basic')
+
+    function onTab(tab : string) : void {
+        if (activeTab.value == tab) return
+        activeTab.value = tab
+    }
 
     function onBack() : void {
         goBack()
@@ -158,6 +184,41 @@
         flex: 1;
     }
 
+    /* 三 Tab（原型：白底、选中加粗黑字 + 蓝色短下划线） */
+    .tab-bar {
+        background-color: $card-bg;
+        flex-direction: row;
+    }
+
+    .tab-item {
+        flex: 1;
+        padding: 28rpx 0 18rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .tab-text {
+        font-size: 30rpx;
+        color: $text-color-secondary;
+    }
+
+    .tab-text-active {
+        color: $text-color;
+        font-weight: bold;
+    }
+
+    .tab-underline {
+        width: 48rpx;
+        height: 6rpx;
+        border-radius: 3rpx;
+        background-color: $card-bg;
+        margin-top: 10rpx;
+    }
+
+    .tab-underline-on {
+        background-color: $primary-color;
+    }
+
     .section-card {
         margin: 24rpx;
         padding: 32rpx;
@@ -171,6 +232,13 @@
         font-weight: bold;
         color: $text-color;
         margin-bottom: 20rpx;
+    }
+
+    .basic-text {
+        font-size: 28rpx;
+        color: $text-color;
+        line-height: 44rpx;
+        margin-bottom: 16rpx;
     }
 
     .group-title {
@@ -215,12 +283,5 @@
         font-size: 24rpx;
         color: $text-color-secondary;
         margin-top: 20rpx;
-    }
-
-    .valid-text {
-        font-size: 28rpx;
-        color: $text-color;
-        line-height: 44rpx;
-        margin-bottom: 12rpx;
     }
 </style>

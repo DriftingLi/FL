@@ -24,17 +24,11 @@ function levelFromHours(hours) {
   return 5;
 }
 
-function rankNameFromCompleted(completed) {
-  if (completed <= 0) return '初级工';
-  if (completed === 1) return '中级技师';
-  if (completed === 2) return '高级技师';
-  return '技师';
-}
-
 function starCountFromLevel(level) {
   if (level <= 0) return 0;
-  if (level > 5) return 5;
-  return level;
+  if (level <= 3) return 2;
+  if (level <= 6) return 3;
+  return 4;
 }
 
 function formatPoints(total) {
@@ -81,31 +75,23 @@ describe('「我的」页面派生逻辑', () => {
     });
   });
 
-  describe('rankNameFromCompleted', () => {
-    it('按已完成课程数给出段位', () => {
-      expect(rankNameFromCompleted(0)).toBe('初级工');
-      expect(rankNameFromCompleted(1)).toBe('中级技师');
-      expect(rankNameFromCompleted(2)).toBe('高级技师');
-      expect(rankNameFromCompleted(3)).toBe('技师');
-      expect(rankNameFromCompleted(-1)).toBe('初级工');
-    });
-  });
-
-  describe('starCountFromLevel', () => {
-    it('星级与等级一致且夹在 0..5', () => {
-      expect(starCountFromLevel(1)).toBe(1);
-      expect(starCountFromLevel(3)).toBe(3);
-      expect(starCountFromLevel(5)).toBe(5);
-      expect(starCountFromLevel(6)).toBe(5);
+  describe('starCountFromLevel（#2523 贴片 569:3907：三档 2/3/4 星）', () => {
+    it('Lv1-3 → 2 星、Lv4-6 → 3 星、Lv7-9 → 4 星', () => {
+      expect(starCountFromLevel(1)).toBe(2);
+      expect(starCountFromLevel(3)).toBe(2);
+      expect(starCountFromLevel(4)).toBe(3);
+      expect(starCountFromLevel(6)).toBe(3);
+      expect(starCountFromLevel(7)).toBe(4);
+      expect(starCountFromLevel(9)).toBe(4);
       expect(starCountFromLevel(0)).toBe(0);
       expect(starCountFromLevel(-2)).toBe(0);
     });
 
-    it('等级始终落在页面 starList 的 5 颗星内', () => {
+    it('页面可达 Lv（1-5）的星数落在 2..4', () => {
       for (const hours of [0, 6, 21, 60, 1000]) {
         const stars = starCountFromLevel(levelFromHours(hours));
-        expect(stars).toBeGreaterThanOrEqual(0);
-        expect(stars).toBeLessThanOrEqual(5);
+        expect(stars).toBeGreaterThanOrEqual(2);
+        expect(stars).toBeLessThanOrEqual(4);
       }
     });
   });
