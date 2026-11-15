@@ -1,0 +1,145 @@
+/**
+ * 积分兑换记录（#2518 / G2 #2512 的 G-00 + E-1 裁定）
+ *
+ * 语义是**积分兑换记录，不是订单**：不显示订单号、六态状态机、物流、发货态、售后、晒单、收货人
+ * （G-00 已裁定不建 order / address / logistics / aftersale 四张表）。
+ *
+ * 数据面（票面给定）：
+ *   - `GET /points/ledger?direction=out` 取支出流水，客户端按 `reason` 前缀 `redeem_` 收窄
+ *     —— 后端 ledger 没有 reason 过滤参数，`ai_tokens` 等其它支出混在同一方向里，只能客户端筛。
+ *   - `GET /points/shop/items` 取商品名与 `owned`（权益行存在 = 已到账）。
+ *
+ * 装载协议走 `composables/usePagedList.uts`（ADR-0027）：本文件**不持页码游标**，
+ * 否则 `utils/pagedListAdoptionContract.test.js` 的手写存量棘轮会 +1 判红。
+ *
+ * 为什么另持 `backendPage`：客户端筛掉非兑换流水后，一页可能一条都不剩；
+ * `usePagedList` 的空批次兜底会把 `hasMore` 强制 false（判据 ②），
+ * 于是「本页无兑换、下页有」会提前终止。这里在 `fetchBatch` 内连续取页直到攒到记录或到底，
+ * 页码游标因此必须由本模块自己推进（`usePagedList` 递进来的 page 参数不使用）。
+ */
+import { ref } from 'vue'
+import type { Ref, ComputedRef } from 'vue'
+import { usePagedList } from '../../../composables/usePagedList'
+import type { PagedBatch, UsePagedListResult } from '../../../composables/usePagedList'
+import { getPointsLedgerApi, getShopItemsApi } from '../../../api/points'
+import type { PointsLedgerItem, ShopItem, ShopItemsResult } from '../../../types/index'
+import type { Page } from '../../../api/envelope'
+import { ledgerReasonLabel } from '../../../utils/pointsDisplay'
+import { formatDateTimeStr } from '../../../utils/format'
+
+/** 每页条数（与积分明细同口径） */
+const PAGE_SIZE : number = 20
+
+/** 单次 `onLoadMore` 最多连续取几页后端流水 —— 防止「整段流水全是 AI 消耗」时一次翻到底 */
+const MAX_CHAIN : number = 5
+
+/** 一条兑换记录（模板只消费这个形状，不碰流水原始字段） */
+export type ExchangeRecord = {
+    id : number
+    title : string
+    timeText : string
+    costText : string
+    statusText : string
+    arrived : boolean
+}
+
+/** 本 composable 的显式返回类型（Kotlin error18 规避，先例 useChapterStudy） */
+export type UsePointsExchangeRecordsResult = {
+    items : Ref<ExchangeRecord[]>
+    loading : Ref<boolean>
+    failed : Ref<boolean>
+    isEmpty : ComputedRef<boolean>
+    hasMore : Ref<boolean>
+    loadFirst : () => void
+    onLoadMore : () => void
+    loadShopCatalog : () => void
+}
+
+/** 兑换流水判定：后端 reason 以 `redeem_` 开头（`redeem_course` / `redeem_<sku>`） */
+function isRedeemReason(reason : string) : boolean {
+    return reason.indexOf('redeem_') == 0
+}
+
+export function usePointsExchangeRecords() : UsePointsExchangeRecordsResult {
+    /** 商城在售项：只用来把 sku 翻成商品名 + 判 owned（权益行存在 = 已到账） */
+    const shopItems = ref<ShopItem[]>([]) as Ref<ShopItem[]>
+    /** 后端流水页码游标（本模块自持，见文件头「为什么另持 backendPage」） */
+    let backendPage = 1
+
+    function findShopItem(sku : string) : ShopItem | null {
+        for (let i = 0; i < shopItems.value.length; i++) {
+            if (shopItems.value[i].sku == sku) return shopItems.value[i]
+        }
+        return null
+    }
+
+    /** 流水条目 → 展示记录。商品名优先取商城目录，取不到退回流水事由文案 */
+    function toRecord(item : PointsLedgerItem) : ExchangeRecord {
+        let title = ledgerReasonLabel(item.reason, item.delta)
+        let arrived = true
+        if (item.ref_type == 'shop') {
+            const shop = findShopItem(item.ref_id)
+            if (shop != null) {
+                title = shop.title
+                arrived = shop.owned
+            }
+        }
+        const cost = item.delta < 0 ? -item.delta : item.delta
+        return {
+            id: item.id,
+            title: title,
+            timeText: formatDateTimeStr(item.created_at),
+            costText: '-' + cost.toString() + ' 积分',
+            statusText: arrived ? '已到账' : '待确认',
+            arrived: arrived,
+        } as ExchangeRecord
+    }
+
+    /** 取一页后端流水并筛出兑换记录；筛空且还有下一页时继续取（最多 MAX_CHAIN 页） */
+    function fetchBatch(depth : number) : Promise<PagedBatch<ExchangeRecord>> {
+        const at = backendPage
+        return getPointsLedgerApi(at, PAGE_SIZE, 'out').then((data : Page<PointsLedgerItem>) : Promise<PagedBatch<ExchangeRecord>> => {
+            const out : ExchangeRecord[] = []
+            for (let i = 0; i < data.items.length; i++) {
+                const it = data.items[i]
+                if (!isRedeemReason(it.reason)) continue
+                out.push(toRecord(it))
+            }
+            backendPage = at + 1
+            if (out.length == 0 && data.hasMore && depth < MAX_CHAIN) {
+                return fetchBatch(depth + 1)
+            }
+            return Promise.resolve({ items: out, hasMore: data.hasMore } as PagedBatch<ExchangeRecord>)
+        })
+    }
+
+    const list : UsePagedListResult<ExchangeRecord> = usePagedList<ExchangeRecord>((_page : number) : Promise<PagedBatch<ExchangeRecord>> => {
+        return fetchBatch(1)
+    })
+
+    /** 首屏 / 重试：后端游标归 1，再交给协议重置 */
+    function loadFirst() : void {
+        backendPage = 1
+        list.loadFirst()
+    }
+
+    /** 商品目录只取一次；失败不阻断列表（商品名退回流水事由文案） */
+    function loadShopCatalog() : void {
+        getShopItemsApi().then((data : ShopItemsResult) => {
+            shopItems.value = data.items
+        }).catch((e) => {
+            console.warn('[points-exchange-records] load shop items failed:', e)
+        })
+    }
+
+    return {
+        items: list.items,
+        loading: list.loading,
+        failed: list.failed,
+        isEmpty: list.isEmpty,
+        hasMore: list.hasMore,
+        loadFirst: () : void => loadFirst(),
+        onLoadMore: () : void => list.onLoadMore(),
+        loadShopCatalog: () : void => loadShopCatalog(),
+    } as UsePointsExchangeRecordsResult
+}

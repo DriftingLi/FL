@@ -289,6 +289,13 @@
             }
         },
         {
+            "path": "pages/points/points-exchange-records",
+            "style": {
+                "navigationStyle": "custom",
+                "navigationBarTitleText": "兑换记录"
+            }
+        },
+        {
             "path": "pages/resources/my-purchases",
             "style": {
                 "navigationStyle": "custom",
