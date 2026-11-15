@@ -259,7 +259,7 @@ func assertTableSnapshot(t *testing.T, name string, got *httpx.ErrStatusTable, w
 }
 
 // TestErrStatusTable_Snapshot_Points 积分域表快照（#610：已领取类 400、不存在类 404、兜底 400；
-// #1098 追加：扣罚目标不存在 404、通知写失败 500）。
+// #1098 追加：扣罚目标不存在 404、通知写失败 500；#2548 追加：商品目录四枚运营面哨兵 400）。
 func TestErrStatusTable_Snapshot_Points(t *testing.T) {
 	t.Parallel()
 	assertTableSnapshot(t, "points.ErrStatus", points.ErrStatus, []httpx.ErrStatusEntry{
@@ -271,6 +271,10 @@ func TestErrStatusTable_Snapshot_Points(t *testing.T) {
 		{Sentinel: points.ErrDailyClaimLimit, Status: http.StatusBadRequest},
 		{Sentinel: points.ErrInsufficientPoints, Status: http.StatusBadRequest},
 		{Sentinel: points.ErrAlreadyRedeemed, Status: http.StatusBadRequest},
+		{Sentinel: points.ErrShopCategoryInvalid, Status: http.StatusBadRequest},
+		{Sentinel: points.ErrShopSKUUnregistered, Status: http.StatusBadRequest},
+		{Sentinel: points.ErrShopPriceSourcePinned, Status: http.StatusBadRequest},
+		{Sentinel: points.ErrShopItemInvalid, Status: http.StatusBadRequest},
 		{Sentinel: points.ErrPenaltyNotifyFailed, Status: http.StatusInternalServerError},
 	}, http.StatusBadRequest)
 }

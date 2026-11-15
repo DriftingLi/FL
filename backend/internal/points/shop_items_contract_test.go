@@ -149,7 +149,7 @@ func TestShopItemsListContract(t *testing.T) {
 	}).Error; err != nil {
 		t.Fatalf("插裸键权益失败: %v", err)
 	}
-	res, err := svc.ListShopItems(context.Background(), other.ID)
+	res, err := svc.ListShopItems(context.Background(), other.ID, ShopItemFilter{})
 	if err != nil {
 		t.Fatalf("他人列表失败: %v", err)
 	}
@@ -158,5 +158,32 @@ func TestShopItemsListContract(t *testing.T) {
 	}
 	if otherGold, ok := findShopItem(res.Items, "unlock_gold"); !ok || otherGold.Owned {
 		t.Fatalf("他人不应看到已拥有（裸 sku 权益也不算）, got %+v", res.Items)
+	}
+}
+
+// TestShopItemCategoryCheckOnPostgres 迁移 000057 的 category CHECK 在真库里存在且拦非法值：
+// SQLite 面走 AutoMigrate 不带 CHECK，故这条判据只能由真迁移证明（首跑在 CI）。
+// 目录类断言按 current_schema() 收窄（checks.md 的 PG 两条纪律）。
+func TestShopItemCategoryCheckOnPostgres(t *testing.T) {
+	db := testutil.NewPostgresDB(t)
+	var chk int64
+	if err := db.Raw(`SELECT count(*) FROM pg_constraint
+		WHERE conname = ? AND conrelid = 'points_shop_item'::regclass
+		  AND connamespace = current_schema()::regnamespace`,
+		"chk_points_shop_item_category").Scan(&chk).Error; err != nil {
+		t.Fatalf("查 category CHECK 失败: %v", err)
+	}
+	if chk != 1 {
+		t.Fatalf("迁移 000057 的 category CHECK 在本 schema 不存在（%d 行）", chk)
+	}
+	if err := db.Create(&model.PointsShopItem{
+		SKU: "bad_category_probe", Title: "非法分类", Price: 10, Category: "bogus", Enabled: false,
+	}).Error; err == nil {
+		t.Fatal("category CHECK 未拦住非法值 bogus")
+	}
+	if err := db.Create(&model.PointsShopItem{
+		SKU: "ok_category_probe", Title: "合法分类", Price: 10, Category: "book", Enabled: false,
+	}).Error; err != nil {
+		t.Fatalf("合法分类应可写入: %v", err)
 	}
 }

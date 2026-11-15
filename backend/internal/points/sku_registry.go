@@ -42,7 +42,8 @@ type shopSKUDecl struct {
 // 种子行见 migrations/000049_shop_ai_pro_sku.up.sql，价格以库为事实源。
 const aiProSKU = "ai_pro"
 
-// shopSKUDecls 商城 sku 声明表（key = points_shop_item.sku）。新增商品必须在这里登记读者。
+// shopSKUDecls 商城 sku 声明表（key = points_shop_item.sku）。新增商品必须在这里登记读者，
+// 再经管理端 PUT /api/admin/points/shop/items/{sku} 建行/上架（#2548）；两步缺一，商品不会出现在在售列表。
 var shopSKUDecls = map[string]shopSKUDecl{
 	realPaperUnlockSKU: {
 		EntitlementSKU: nil,

@@ -65,4 +65,6 @@ func TestRouteRegistryCoverage(t *testing.T) {
 // 2026-11-14 #2499 审核队列 4 条（GET /api/admin/chapter-reviews/pending、
 // GET /api/admin/chapter-reviews/{chapter_id}/snapshot、
 // POST /api/admin/chapter-reviews/batch-approve|batch-reject）→ 365。
-const expectedRouteCount = 365
+// 2026-11-15 #2548 商城商品目录管理面 2 条（GET /api/admin/points/shop/items、
+// PUT /api/admin/points/shop/items/{sku}）→ 367。
+const expectedRouteCount = 367
