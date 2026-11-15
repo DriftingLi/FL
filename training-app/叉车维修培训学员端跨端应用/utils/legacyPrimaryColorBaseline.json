@@ -36,8 +36,6 @@
   "pages/forum/forum-detail.uvue": 3,
   "pages/forum/forum.uvue": 3,
   "pages/login/composables/useLoginForm.uts": 1,
-  "pages/mall/components/mall-category-sidebar.uvue": 3,
-  "pages/mall/components/mall-sort-bar.uvue": 1,
   "pages/mall/mall.uvue": 1,
   "pages/points/points-detail.uvue": 6,
   "pages/points/task-center.uvue": 3,
