@@ -1,20 +1,15 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <app-nav-bar title="我的收藏" variant="inverse" @left-click="onBack" />
+        <app-nav-bar title="收藏夹" @left-click="onBack" />
 
-        <!-- 类型筛选 -->
-        <view class="filter-bar">
-            <scroll-view class="filter-scroll" scroll-x="true">
-                <view v-for="(opt, idx) in typeOptions" :key="idx"
-                    :class="['filter-chip', { active: currentType == opt.value }]"
-                    @click="onTypeClick(opt.value)">
-                    <text class="filter-chip-text">{{ opt.label }}</text>
-                </view>
-            </scroll-view>
+        <!-- 类型 Tab（B3 票 2519 按原型 700:7287 收口为分段下划线式；语义保持 Q25 定案的内容类型结构，
+             原型四 tab 中「笔试题/实操技能/综合评审」无后端维度（同 #1608 §8⑤ 判例），不发明映射 -->
+        <view class="type-tab-bar">
+            <app-tabs :tabs="typeLabels" :active-index="typeIndex" @change="onTypeTabChange" />
         </view>
 
         <!-- 类别下钻（#1947 / Q25）：只有「题目」类型有这一层；tagChips 为空 = 整行不渲染 -->
-        <view v-if="tagChips.length > 0" class="filter-bar filter-bar-secondary">
+        <view v-if="tagChips.length > 0" class="filter-bar">
             <scroll-view class="filter-scroll" scroll-x="true">
                 <view v-for="chip in tagChips" :key="chip.tag_id"
                     :class="['filter-chip', { active: tagId == chip.tag_id }]"
@@ -62,9 +57,10 @@
 </template>
 
 <script setup lang="uts">
-    import { ref } from 'vue'
+    import { ref, computed } from 'vue'
     import { onLoad, onShow } from '@dcloudio/uni-app'
     import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
+    import appTabs from '../../components/app-tabs/app-tabs.uvue'
 import { goBack } from '../../utils/navigation'
     import { getFavoritesApi, removeFavoriteApi } from '../../api/favorite'
     import { getTagsApi } from '../../api/course'
@@ -103,6 +99,15 @@ import { goBack } from '../../utils/navigation'
     const VALID_TYPES : string[] = ['course', 'chapter', 'topic', 'featured', 'question', 'job']
 
     const currentType = ref<string>('')
+    /** 类型 Tab 数据（app-tabs 消费）：标签表静态、选中下标随 currentType 派生 */
+    const typeLabels : string[] = []
+    for (let i = 0; i < typeOptions.length; i++) { typeLabels.push(typeOptions[i].label) }
+    const typeIndex = computed<number>(() : number => {
+        for (let i = 0; i < typeOptions.length; i++) {
+            if (typeOptions[i].value == currentType.value) return i
+        }
+        return 0
+    })
     const items = ref<FavoriteItem[]>([])
     const page = ref<number>(1)
     const pageSize = 20
@@ -239,6 +244,12 @@ import { goBack } from '../../utils/navigation'
         loadFavorites(true)
     }
 
+    /** 类型 Tab 入口（app-tabs 按 index 回调，映射回 typeOptions 取值）；定义在 onTypeClick 之后（Kotlin 无前向引用） */
+    function onTypeTabChange(idx : number) : void {
+        if (idx < 0 || idx >= typeOptions.length) return
+        onTypeClick(typeOptions[idx].value)
+    }
+
     function onLoadMore() : void {
         loadFavorites(false)
     }
@@ -339,17 +350,16 @@ import { goBack } from '../../utils/navigation'
         flex-direction: column;
     }
 
-    .filter-bar {
-        background-color: #ffffff;
-        margin: 0 24rpx 16rpx;
-        margin-top: 16rpx;
-        border-radius: 12rpx;
-        border: 1px solid #eeeeee;
+    /* 类型 Tab 行（B3 票 2519 按原型 700:7287）：白底带 + 分段下划线式（app-tabs 承载） */
+    .type-tab-bar {
+        background-color: $bg-header;
+        padding: 8rpx 24rpx;
     }
 
-    /* 二级类别栏（#1947）：与类型栏同形，只是紧贴其下，不再吃一份上边距 */
-    .filter-bar-secondary {
-        margin-top: 0;
+    .filter-bar {
+        background-color: $bg-header;
+        margin: 0 24rpx 16rpx;
+        padding: 8rpx 0;
     }
 
     .filter-scroll {
@@ -359,25 +369,26 @@ import { goBack } from '../../utils/navigation'
         padding: 16rpx;
     }
 
+    /* 类别下钻 chips（B3 票 2519 口径）：未选灰底深字、选中浅蓝底主色字 */
     .filter-chip {
         padding: 10rpx 24rpx;
         border-radius: 32rpx;
-        background-color: #f5f5f5;
+        background-color: $tag-bg-neutral;
         margin-right: 12rpx;
         flex-shrink: 0;
     }
 
     .filter-chip.active {
-        background-color: $primary-color;
+        background-color: $primary-tint;
     }
 
     .filter-chip-text {
         font-size: 24rpx;
-        color: #666666;
+        color: $text-color;
     }
 
     .filter-chip.active .filter-chip-text {
-        color: #ffffff;
+        color: $primary-color;
     }
 
     .content-scroll {

@@ -1,22 +1,26 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <app-nav-bar title="考情资讯" @left-click="onBack" />
+        <app-nav-bar title="资讯" @left-click="onBack" />
+        <!-- 主 Tab（B3 票 2519）：322:9139 贴片规范（app-tabs 承载，以本批为准）；四 tab 口径仍单点 EXAM_INFO_TABS -->
         <view class="tab-bar">
-            <view v-for="(tab, idx) in mainTabs" :key="tab" class="tab-item" @click="onMainTabChange(idx)">
-                <text class="tab-text" :class="{ 'tab-text-active': activeMainTab === idx }" lines="1">{{ tab }}</text>
-                <view v-if="activeMainTab === idx" class="tab-underline"></view>
-            </view>
+            <app-tabs :tabs="mainTabs" :active-index="activeMainTab" @change="onMainTabChange" />
         </view>
         <!-- 「报名入口」「成绩查询」同走考情内容（#1940 Q3 裁定）：文案把「同一批内容」讲清楚 -->
         <view v-if="hintText.length > 0" class="hint-bar">
             <text class="hint-text">{{ hintText }}</text>
         </view>
-        <!-- chips 只在「新闻资讯」tab（#1940 Q4 裁定）：其余 tab 自身已是类别 -->
+        <!-- chips 只在「新闻资讯」tab（#1940 Q4 裁定）：其余 tab 自身已是类别；「全部」贴右（原型 322:8928） -->
         <view v-if="withFilters" class="filter-bar">
-            <view v-for="(tag, idx) in filterTags" :key="tag" class="filter-tag"
-                :class="{ 'filter-tag-active': activeFilter === idx }" @click="onFilterChange(idx)">
-                <text class="filter-tag-text"
-                    :class="{ 'filter-tag-text-active': activeFilter === idx }">{{ tag }}</text>
+            <view class="filter-left">
+                <view v-for="(tag, idx) in leftFilterTags" :key="tag" class="filter-tag"
+                    :class="{ 'filter-tag-active': activeFilter === idx }" @click="onFilterChange(idx)">
+                    <text class="filter-tag-text"
+                        :class="{ 'filter-tag-text-active': activeFilter === idx }">{{ tag }}</text>
+                </view>
+            </view>
+            <view class="filter-tag filter-tag-all" :class="{ 'filter-tag-active': activeFilter === 3 }"
+                @click="onFilterChange(3)">
+                <text class="filter-tag-text" :class="{ 'filter-tag-text-active': activeFilter === 3 }">{{ filterTags[3] }}</text>
             </view>
         </view>
         <scroll-view class="content-scroll" direction="vertical" @scrolltolower="onLoadMore">
@@ -25,8 +29,11 @@
                 @action="onRetry" />
             <app-empty-state v-else-if="items.length == 0 && !loading" icon="📰" text="暂无资讯" />
             <view class="news-list">
-                <view v-for="item in items" :key="item.content_id" class="news-item" @click="onItemClick(item)">
-                    <text class="news-title" lines="2">{{ item.title }}</text>
+                <view v-for="item in items" :key="item.content_id" class="news-card" @click="onItemClick(item)">
+                    <view class="news-title-row">
+                        <text class="news-spark">✨</text>
+                        <text class="news-title" lines="2">{{ item.title }}</text>
+                    </view>
                     <view class="news-meta">
                         <text v-if="item.category_label.length > 0" class="news-category">{{ item.category_label }}</text>
                         <text v-if="item.published_at.length > 0" class="news-date">{{ displayDate(item.published_at) }}</text>
@@ -40,6 +47,14 @@
                 <text class="loading-text">没有更多了</text>
             </view>
         </scroll-view>
+        <!-- 底部 TabBar（原型 322:8928 五项；裁定 4 补「首页」出口）：本页非 tab 页，switchTab 落 tab 页，
+             高亮固定首页与原型一致；图标复用 static/tabbar 现网资产（#2513 口径：优先复用） -->
+        <view class="fake-tabbar">
+            <view v-for="(tab, idx) in fakeTabs" :key="tab.label" class="fake-tab-item" @click="onFakeTabTap(tab)">
+                <image class="fake-tab-icon" :src="'/static/tabbar/' + (idx == 0 ? tab.activeFile : tab.file)" mode="aspectFit" />
+                <text class="fake-tab-label" :class="idx == 0 ? 'fake-tab-label-active' : ''">{{ tab.label }}</text>
+            </view>
+        </view>
     </view>
 </template>
 
@@ -47,6 +62,7 @@
     import { ref, computed } from 'vue'
     import { onLoad } from '@dcloudio/uni-app'
     import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
+    import appTabs from '../../components/app-tabs/app-tabs.uvue'
     import appEmptyState from '../../components/app-empty-state/app-empty-state.uvue'
     import { goBack } from '../../utils/navigation'
     import { getFeaturedContentsApi } from '../../api/featured'
@@ -63,6 +79,8 @@
     /** tab 表与 chips 表的唯一口径在 utils/examInfoTabs：改口径改那里，不改模板 */
     const mainTabs : string[] = EXAM_INFO_TABS
     const filterTags : string[] = EXAM_INFO_FILTERS
+    /** 左侧三枚 chips（「全部」单独贴右、仍是 filterQuery(3) 同一口径）；模板不做切片表达式 */
+    const leftFilterTags : string[] = [filterTags[0], filterTags[1], filterTags[2]]
 
     const activeMainTab = ref<number>(0)
     const activeFilter = ref<number>(0)
@@ -73,6 +91,25 @@
     const noMore = ref<boolean>(false)
     /** 本轮**所有**类别都失败（与「暂无资讯」区分开；#816 口径） */
     const failed = ref<boolean>(false)
+
+    /** 底部 TabBar（裁定 3 定版 + 原型 AI学 仍在现网五 Tab 内）：落点 = 各 tab 页 switchTab */
+    type FakeTab = {
+        label : string
+        file : string        // static/tabbar/ 下的文件名（绑定时拼包内前缀，webp 契约的 /static/ 豁免靠它可见）
+        activeFile : string
+        path : string
+    }
+    const fakeTabs : FakeTab[] = [
+        { label: '首页', file: 'home.png', activeFile: 'home-active.png', path: '/pages/dashboard/dashboard' } as FakeTab,
+        { label: '课程', file: 'course.png', activeFile: 'course-active.png', path: '/pages/courses/courses' } as FakeTab,
+        { label: 'AI学', file: 'ai.png', activeFile: 'ai-active.png', path: '/pages/ai-assistant/ai-assistant' } as FakeTab,
+        { label: '交流', file: 'forum.png', activeFile: 'forum-active.png', path: '/pages/forum/forum' } as FakeTab,
+        { label: '我的', file: 'profile.png', activeFile: 'profile-active.png', path: '/pages/profile/profile' } as FakeTab,
+    ]
+
+    function onFakeTabTap(tab : FakeTab) : void {
+        uni.switchTab({ url: tab.path })
+    }
 
     const withFilters = computed<boolean>(() : boolean => showsFilters(activeMainTab.value))
     const hintText = computed<string>(() : string => tabHint(activeMainTab.value))
@@ -174,36 +211,10 @@
         flex-direction: column;
     }
 
+    /* 主 Tab 带（B3 票 2519）：白底 + app-tabs（322:9139 贴片规范） */
     .tab-bar {
-        height: 80rpx;
-        flex-direction: row;
         background-color: $bg-header;
-        border-bottom: 1rpx solid $border-color-light;
-    }
-
-    .tab-item {
-        flex: 1;
-        align-items: center;
-        position: relative;
-        flex-shrink: 0;
-    }
-
-    .tab-text {
-        font-size: $font-size-md;
-        color: $text-color-secondary;
-    }
-
-    .tab-text-active {
-        color: $primary-color;
-        font-weight: bold;
-    }
-
-    .tab-underline {
-        width: 40rpx;
-        height: 6rpx;
-        border-radius: 3rpx;
-        background-color: $primary-color;
-        margin-top: $spacing-xs;
+        padding: 8rpx 24rpx;
     }
 
     .hint-bar {
@@ -216,53 +227,76 @@
         color: $text-color-secondary;
     }
 
+    /* chips 行（原型 322:8928）：左侧三枚 + 「全部」贴右；选中浅蓝底主色字（实测同族） */
     .filter-bar {
         flex-direction: row;
+        align-items: center;
         background-color: $bg-header;
-        padding: 16rpx 24rpx 20rpx;
-        flex-wrap: wrap;
+        padding: 12rpx 24rpx 20rpx;
+    }
+
+    .filter-left {
+        flex: 1;
+        flex-direction: row;
+        align-items: center;
     }
 
     .filter-tag {
         padding: 10rpx 28rpx;
-        border-radius: 28rpx;
-        background-color: $bg-color;
+        border-radius: $radius-pill;
+        background-color: $tag-bg-neutral;
         margin-right: $spacing-sm;
-        margin-bottom: $spacing-xs;
+    }
+
+    .filter-tag-all {
+        flex-shrink: 0;
+        margin-right: 0;
     }
 
     .filter-tag-active {
-        background-color: $primary-color;
+        background-color: $primary-tint;
     }
 
     .filter-tag-text {
         font-size: $font-size-sm;
-        color: $text-color-secondary;
+        color: $text-color;
     }
 
     .filter-tag-text-active {
-        color: $text-color-inverse;
-        font-weight: 500;
+        color: $primary-color;
     }
 
     .content-scroll {
         flex: 1;
         height: 0;
-        background-color: $bg-header;
     }
 
+    /* 资讯卡（原型 322:8928）：白卡圆角 + ✨ 前缀标题 */
     .news-list {
         flex-direction: column;
-        padding: $spacing-xs 0;
+        padding: $spacing-sm 24rpx 0;
     }
 
-    .news-item {
-        flex-direction: column;
+    .news-card {
+        background-color: $card-bg;
+        border-radius: $radius-card;
         padding: 28rpx 32rpx;
-        border-bottom: 1rpx solid $bg-color;
+        margin-bottom: $spacing-sm;
+        flex-direction: column;
+    }
+
+    .news-title-row {
+        flex-direction: row;
+        align-items: flex-start;
+    }
+
+    .news-spark {
+        font-size: 26rpx;
+        margin-right: 12rpx;
     }
 
     .news-title {
+        flex: 1;
         font-size: $font-size-md;
         color: $text-color;
         lines: 2;
@@ -272,7 +306,7 @@
     .news-meta {
         flex-direction: row;
         align-items: center;
-        margin-top: $spacing-xs;
+        margin-top: $spacing-sm;
     }
 
     .news-category {
@@ -297,5 +331,34 @@
     .loading-text {
         font-size: $font-size-sm;
         color: $text-color-placeholder;
+    }
+
+    /* 底部 TabBar（原型 322:8928）：白底上边框，五项图标 + 标签，选中态=首页（与原型一致） */
+    .fake-tabbar {
+        flex-direction: row;
+        background-color: $tabbar-bg;
+        border-top: 1rpx solid $border-color-light;
+        padding: 12rpx 0 20rpx;
+    }
+
+    .fake-tab-item {
+        flex: 1;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .fake-tab-icon {
+        width: 48rpx;
+        height: 48rpx;
+        margin-bottom: 4rpx;
+    }
+
+    .fake-tab-label {
+        font-size: 20rpx;
+        color: $tabbar-inactive;
+    }
+
+    .fake-tab-label-active {
+        color: $tabbar-active;
     }
 </style>

@@ -1,5 +1,6 @@
 <template>
-    <!-- 培训横幅卡片 ——T06 手术自 practice.uvue 逐段搬出 -->
+    <!-- 培训横幅卡片 ——T06 手术自 practice.uvue 逐段搬出；B3（票 2519）按原型 473:4247 收口：
+         原型此位是插画位图（包体积红线不入包，#2513），CSS 复刻同版式：左标题/副标题、右侧三枚蓝标签 -->
     <view class="banner-card">
         <view class="banner-image-area">
             <view class="banner-forklift">
@@ -9,10 +10,8 @@
                 <text class="banner-title-cn">叉车维修培训</text>
                 <text class="banner-title-sub">规范检修 · 安全作业</text>
             </view>
-            <!-- 右侧标签 -->
+            <!-- 右侧标签（原型只见实操教学 / 案例分析 / 考核发证三枚） -->
             <view class="banner-tags">
-                <text class="banner-tag">维修步骤</text>
-                <text class="banner-tag">安全要点</text>
                 <text class="banner-tag">实操教学</text>
                 <text class="banner-tag">案例分析</text>
                 <text class="banner-tag">考核发证</text>
@@ -25,18 +24,18 @@
     // 纯展示组件：无 props / 无 emit（T06 practice 手术，parent #644）
 </script>
 
-<style>
+<style lang="scss">
     .banner-card {
         margin: 24rpx 24rpx;
-        background-color: #ffffff;
-        border-radius: 20rpx;
+        background-color: $card-bg;
+        border-radius: $radius-card;
         overflow: hidden;
     }
 
     .banner-image-area {
         height: 260rpx;
-        background: linear-gradient(to bottom right, #e8f4ff, #d0e8ff);
-        background-color: #e8f4ff;
+        background: linear-gradient(to bottom right, $gradient-mid, $primary-tint);
+        background-color: $gradient-mid;
         flex-direction: row;
         align-items: center;
         position: relative;
@@ -60,20 +59,19 @@
         right: 0;
         bottom: 0;
         padding: 16rpx 28rpx;
-        background-color: rgba(0, 0, 0, 0.25);
         flex-direction: column;
     }
 
     .banner-title-cn {
-        font-size: 30rpx;
+        font-size: 34rpx;
         font-weight: bold;
-        color: #ffffff;
+        color: $text-strong;
         margin-bottom: 4rpx;
     }
 
     .banner-title-sub {
-        font-size: 22rpx;
-        color: rgba(255, 255, 255, 0.85);
+        font-size: 24rpx;
+        color: $text-color;
     }
 
     .banner-tags {
@@ -85,10 +83,10 @@
 
     .banner-tag {
         font-size: 20rpx;
-        color: #ffffff;
-        background-color: rgba(41, 121, 255, 0.7);
+        color: $text-color-inverse;
+        background-color: $primary-color;
         padding: 6rpx 16rpx;
-        border-radius: 8rpx;
+        border-radius: $radius-sm;
         text-align: center;
         margin-bottom: 8rpx;
     }

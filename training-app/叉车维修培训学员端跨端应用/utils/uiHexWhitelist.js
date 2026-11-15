@@ -21,7 +21,7 @@ module.exports = {
     '#FF6B35': 'pages/recruiter/resumes.uvue 薪资/筛选徽标 + resume-detail.uvue 薪资强调——强调橙，token 表无对应（$warning-color #ff9900 偏黄）',
     '#EEF3FD': 'pages/recruiter/applications.uvue tag-applied 主色浅底——$primary-tint(#ebf5ff) 近似但值不等，视觉回归风险待真机裁',
     '#F5F6FA': 'pages/recruiter/resume-detail.uvue btn-secondary 灰底——页面局部次要按钮底，$bg-color(#F8F8F8) 近似但值不等，待真机裁',
-    '#E0E0E0': 'pages/recruiter/resume-detail.uvue btn-secondary 边框 + pages/practice/practice-do.uvue comment-send-btn/answer-card-item 边框（批2 #1606 并入，同值只立一行）——$border-color(#e5e5e5) 近似但值不等，待真机裁',
+    '#E0E0E0': 'pages/recruiter/resume-detail.uvue btn-secondary 边框（批2 #1606 并入；B3 #2519 起 practice-do 已 token 化不再持此值）——$border-color(#e5e5e5) 近似但值不等，待真机裁',
     '#F7F8FA': 'pages/recruiter/job-edit.uvue field-input/field-textarea/chip 输入底 + resume-edit.uvue field 输入底——\-color(#F8F8F8) 近似但值不等，输入件视觉回归风险待真机裁',
     '#1565C0': 'pages/guide/choose-cert.uvue btn-confirm 渐变深端与实底兜底 + components/cert-selector.uvue 同款按钮——主色深阶，token 表无深阶位；与 points-detail.uvue 会员卡渐变尾色（linear-gradient(#2979ff,#1565c0)）同值（先例）',
     '#888888': 'pages/guide/choose-cert.uvue province-label/error-text 次要说明文字——\-color-secondary(#666666) 偏深、\-color-placeholder(#999999) 偏浅，中间灰无 token；收敛待灰阶 token 票裁',
@@ -58,9 +58,6 @@ module.exports = {
     '#E8F3FF': 'pages/resume/resume-attach.uvue 文件图标浅蓝底——$primary-tint(#ebf5ff) 近似但值不等，待真机裁',
     '#FADCD9': 'pages/resume/resume-attach.uvue 删除按钮浅红底——$danger-tint(#ffebee) 近似但值不等，待真机裁',
     '#F0F7FF': 'pages/practice/practice-do.uvue 选中项/考点标签浅蓝底——$primary-tint 近似但值不等，待真机裁',
-    '#F0FAF0': 'pages/practice/practice-do.uvue 正确项浅绿底——$success-tint(#e8f5e9) 近似但值不等，待真机裁',
-    '#FAFAFA': 'pages/practice/practice-do.uvue 笔记输入底——$bg-color 近似但值不等，输入件视觉回归风险待真机裁',
-    '#FFF5F5': 'pages/practice/practice-do.uvue 错误项浅红底——$danger-tint 近似但值不等，待真机裁',
 
     // ── 批4（#1607 N01 蓝底套 19 页）新增 ──
     '#A0C4FF': 'pages/courses/chapter-view.uvue mark-done-btn--busy 底——主操作蓝 busy 态，token 表无对应',
@@ -68,8 +65,6 @@ module.exports = {
     '#EEF4FF': 'pages/resources/materials.uvue material-icon-box 底——资料图标浅蓝底，$primary-tint(#ebf5ff) 近似但值不等，待真机裁',
     '#D0E4FF': 'pages/notifications/notifications.uvue 状态条边框——浅蓝边框，$primary-tint 近似但值不等，待真机裁',
     '#F8F9FA': 'pages/forum/forum-create.uvue 输入底——$bg-color(#F8F8F8) 近似但值不等，输入件视觉回归风险待真机裁',
-    '#DDDDDD': 'pages/profile/notebook.uvue 编辑区边框——$border-color(#e5e5e5) 近似但值不等，待真机裁',
-    '#EEF3FF': 'pages/profile/notebook.uvue note-tag-standalone 标签浅蓝底——$primary-tint 近似但值不等，待真机裁',
     '#E2622C': 'pages/courses/course-detail.uvue 报名状态强调字色——强调橙红，token 表无对应（$warning-color 偏黄）',
     '#E5484D': 'pages/resources/my-uploads.uvue 审核驳回原因字色——危险红变体，$danger-color(#ff3b30) 语义相同但值不等，待红系 token 收敛裁',
     '#FFF0F0': 'pages/resources/my-uploads.uvue 审核驳回原因浅红底——$danger-tint(#ffebee) 近似但值不等，待真机裁',

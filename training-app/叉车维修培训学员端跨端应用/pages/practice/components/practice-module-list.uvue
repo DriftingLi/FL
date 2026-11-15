@@ -1,5 +1,5 @@
 <template>
-    <!-- 模块练习列表（标签专项） ——T06 手术自 practice.uvue 逐段搬出 -->
+    <!-- 模块练习列表（标签专项） ——T06 手术自 practice.uvue 逐段搬出；B3（票 2519）按原型 473:4247 收口 -->
     <view class="module-section">
         <!-- 骨架屏 -->
         <view v-if="loading && modules.length == 0" class="skeleton-list">
@@ -73,7 +73,7 @@
     }
 </script>
 
-<style>
+<style lang="scss">
     .module-section {
         flex-direction: column;
     }
@@ -84,8 +84,8 @@
     }
 
     .module-card {
-        background-color: #ffffff;
-        border-radius: 16rpx;
+        background-color: $card-bg;
+        border-radius: $radius-card;
         padding: 28rpx;
         margin-bottom: 20rpx;
         flex-direction: row;
@@ -93,10 +93,10 @@
     }
 
     .module-icon {
-        width: 52rpx;
-        height: 52rpx;
-        border-radius: 26rpx;
-        border: 3rpx solid #2979ff;
+        width: 56rpx;
+        height: 56rpx;
+        border-radius: 28rpx;
+        border: 3rpx solid $primary-color;
         align-items: center;
         justify-content: center;
         margin-right: 20rpx;
@@ -105,7 +105,7 @@
 
     .module-icon-text {
         font-size: 30rpx;
-        color: #2979ff;
+        color: $primary-color;
         font-weight: bold;
     }
 
@@ -116,34 +116,34 @@
 
     .module-name {
         font-size: 30rpx;
-        color: #333333;
+        color: $text-color;
         font-weight: 600;
     }
 
     .module-meta {
         font-size: 24rpx;
-        color: #999999;
+        color: $text-color-secondary;
         margin-top: 8rpx;
     }
 
     .module-arrow {
         font-size: 36rpx;
-        color: #cccccc;
+        color: $text-disabled;
         margin-left: 12rpx;
     }
 
     /* ===== 骨架屏 ===== */
     .skeleton-list {
         margin: 0 24rpx;
-        background-color: #ffffff;
-        border-radius: 20rpx;
+        background-color: $card-bg;
+        border-radius: $radius-card;
     }
 
     .skeleton-item {
         padding: 24rpx 28rpx;
         flex-direction: row;
         align-items: center;
-        border-bottom: 1rpx solid #f5f5f5;
+        border-bottom: 1rpx solid $border-color-light;
     }
 
     .skeleton-content {
@@ -152,8 +152,8 @@
     }
 
     .skeleton-line {
-        background-color: #f0f0f0;
-        border-radius: 8rpx;
+        background-color: $border-color-light;
+        border-radius: $radius-sm;
         margin-bottom: 12rpx;
     }
 
@@ -170,7 +170,7 @@
     .skeleton-arrow {
         width: 24rpx;
         height: 24rpx;
-        background-color: #f0f0f0;
+        background-color: $border-color-light;
         border-radius: 4rpx;
         margin-left: 16rpx;
     }
@@ -178,8 +178,8 @@
     /* ===== 错误态 ===== */
     .error-state {
         margin: 0 24rpx;
-        background-color: #ffffff;
-        border-radius: 20rpx;
+        background-color: $card-bg;
+        border-radius: $radius-card;
         padding: 80rpx 0;
         flex-direction: column;
         align-items: center;
@@ -192,26 +192,27 @@
 
     .error-text {
         font-size: 28rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         margin-bottom: 24rpx;
     }
 
+    /* 重试钮（B3 实测口径：本批 473/435/452/769 四屏主按钮原型均为实底 #239EDD，未走渐变） */
     .error-btn {
-        background-color: #2979ff;
-        border-radius: 12rpx;
+        background-color: $primary-color;
+        border-radius: $radius-pill;
         padding: 12rpx 40rpx;
     }
 
     .error-btn-text {
         font-size: 26rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 
     /* ===== 空状态 ===== */
     .empty-state {
         margin: 0 24rpx;
-        background-color: #ffffff;
-        border-radius: 20rpx;
+        background-color: $card-bg;
+        border-radius: $radius-card;
         padding: 80rpx 0;
         flex-direction: column;
         align-items: center;
@@ -224,6 +225,6 @@
 
     .empty-text {
         font-size: 28rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 </style>

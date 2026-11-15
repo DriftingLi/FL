@@ -59,15 +59,17 @@ describe('#1082 入口接线：notebook 占位已接上已注册路由（不是�
 });
 
 describe('#1082 数据面：走 api/note，符号必须真的被导出', () => {
-  it('页面只从 api/note 取数，不直发 request', () => {
+  it('页面取数走域 api、不直发 request（列表走 api/note；题目笔记单条走 api/questionInteraction，ADR-0055 两副面孔）', () => {
     expect(pageScript).toMatch(/from '\.\.\/\.\.\/api\/note'/);
+    expect(pageScript).toMatch(/from '\.\.\/\.\.\/api\/questionInteraction'/);
     expect(pageScript).not.toMatch(/from '[^']*api\/request/);
   });
 
   it('页面用到的 api/note 导出符号都已在该文件 export（缺导出 = 编译期才炸）', () => {
     const imported = /import\s*\{([^}]*)\}\s*from\s*'\.\.\/\.\.\/api\/note'/.exec(pageScript)[1];
     const names = imported.split(',').map((s) => s.trim()).filter(Boolean);
-    expect(names.length).toBeGreaterThanOrEqual(7);
+    // B3 #2519：页面双视图共用 scope=all，NOTE_SCOPE_QUESTION/STANDALONE 留在 api 层不再进页面 import
+    expect(names.length).toBeGreaterThanOrEqual(6);
     for (const n of names) {
       expect({ name: n, exported: api.includes('export function ' + n) || api.includes('export const ' + n) })
         .toEqual({ name: n, exported: true });
@@ -142,38 +144,41 @@ describe('#1082 列表：倒序分页 + 防重入 + 切段重取', () => {
     expect(pageScript).toMatch(/if \(loading\.value\) return/);
   });
 
-  it('切段清空旧筛选的残余行再重取（不混两段的数据）', () => {
-    const fn = pageScript.slice(pageScript.indexOf('function onScopeClick'));
+  it('双视图同源不重取（B3 #2519：最新/分类是同一份列表的两种排法，切视图不发请求、不清屏）', () => {
+    const fn = pageScript.slice(pageScript.indexOf('function onViewMode'));
     const body = fn.slice(0, fn.indexOf('\n    }'));
-    expect(body).toContain('items.value = []');
-    expect(body).toContain('loadNotes()');
-    expect(body).toContain('if (scope.value == val) return');
+    expect(body).toContain('if (viewMode.value == mode) return');
+    expect(body).toContain('viewMode.value = mode');
+    expect(body).not.toContain('loadNotes()');
   });
 
-  it('分段控件三档与后端 scope 同名，且不使用下拉/筛选栏替代', () => {
-    expect(pageScript).toContain("label: '全部', value: NOTE_SCOPE_ALL");
-    expect(pageScript).toContain("label: '题目笔记', value: NOTE_SCOPE_QUESTION");
-    expect(pageScript).toContain("label: '独立笔记', value: NOTE_SCOPE_STANDALONE");
-    expect(pageTemplate).toContain('v-for="(opt, idx) in scopeOptions"');
+  it('双视图 chips 与原型 769:1567/769:1625 同名（最新/分类），scope 三态仍留在 api 层', () => {
+    expect(pageTemplate).toContain('>最新</text>');
+    expect(pageTemplate).toContain('>分类</text>');
+    expect(pageScript).toContain('const scope = ref<string>(NOTE_SCOPE_ALL)');
   });
 
-  it('编辑器复用模块内 InfoDialog 弹窗壳（表单真值源留在页面，先例 personal-info）', () => {
-    expect(pageScript).toContain("import InfoDialog from './components/info-dialog.uvue'");
-    expect(pageTemplate).toMatch(/<InfoDialog[\s\S]*?<\/InfoDialog>/);
-    // 真值源仍在页面：draft / saving 由页面持有
+  it('编辑器是页内新增态（B3 #2519 按原型 769:1854 + G1 Q12 裁定，不再走弹窗壳）', () => {
+    // G1 Q12：769:1854 = notebook 页内新增态 —— 弹窗壳（InfoDialog）退役，整页承载
+    expect(pageScript).not.toContain('import InfoDialog');
+    expect(pageTemplate).not.toContain('<InfoDialog');
+    // 真值源仍在页面：draft / saving 由页面持有，题目挂靠走老契约 upsert
     expect(pageScript).toContain("const draft = ref<string>('')");
     expect(pageScript).toContain('const saving = ref<boolean>(false)');
+    expect(pageScript).toContain('saveNoteApi(editorQuestionId.value, content)');
   });
 });
 
 describe('#1082 卡片：首行标题 + 摘要 + 时间 + 可跳题的题目徽标', () => {
-  it('卡片用 notebookDisplay 的三件套（首行标题 / 摘要 / 徽标），不自己重写截断', () => {
+  it('卡片用 notebookDisplay 的三件套（首行标题 / 摘要 / 分组标签），不自己重写截断', () => {
     expect(pageScript).toMatch(/noteTitle\(content\)/);
     expect(pageScript).toMatch(/noteExcerpt\(content\)/);
-    expect(pageScript).toMatch(/noteBadgeText\(questionContent\)/);
     expect(pageTemplate).toContain('titleText(item.content)');
     expect(pageTemplate).toContain('excerptText(item.content)');
-    expect(pageTemplate).toContain('badgeText(item.question_content)');
+    // 徽标文案（B3 #2519）：卡片顶行改「查看原题」，题干徽标文案随分组标签走 utils/notebookGroups
+    const util = read('utils/notebookDisplay.uts');
+    expect(util).toContain('noteBadgeText(item.question_content)');
+    expect(pageScript).toContain('notebookGroups(items.value)');
   });
 
   it('独立笔记走纯标签、题目笔记走可点徽标（二选一，不是同一块）', () => {
@@ -214,12 +219,11 @@ describe('#1082 编辑：新建独立笔记 + 编辑同构 practice-do（纯文�
     expect(body).toContain('createNoteApi(content, images)');
   });
 
-  it('textarea 上限与 practice-do 的笔记输入框**逐值同构**（从对方源码取，不写死第二份）', () => {
+  it('textarea 上限 2000（B3 #2519：编辑面收敛到笔记本单处，practice-do 不再有第二份输入框）', () => {
+    expect(pageTemplate).toContain('maxlength="2000"');
+    // 反向判据：practice-do 只读展示笔记（loadNote），不再持有 textarea 编辑面
     const practiceDo = read('pages/practice/practice-do.uvue');
-    const m = /class="note-textarea"[^>]*maxlength="(\d+)"/.exec(practiceDo);
-    expect(m).not.toBeNull();
-    expect(pageTemplate).toContain('maxlength="' + m[1] + '"');
-    expect(m[1]).toBe('2000');
+    expect(practiceDo).not.toContain('note-textarea');
   });
 
   it('空内容不许提交（后端 400 前置拦在端上）', () => {

@@ -1,20 +1,20 @@
 <template>
-            <!-- 统计卡片 -->
+            <!-- 统计条（B3 票 2519 按原型 452:2223）：主色渐变整条，白字数字在上、标签在下，中缝细分隔线 -->
             <view class="stats-card">
                 <view class="stat-item">
-                    <text class="stat-label">我的错题</text>
                     <view class="stat-num-row">
                         <text class="stat-num">{{ statsTotal }}</text>
                         <text class="stat-unit">道</text>
                     </view>
+                    <text class="stat-label">我的错题</text>
                 </view>
                 <view class="stat-divider"></view>
                 <view class="stat-item">
-                    <text class="stat-label">今日错题</text>
                     <view class="stat-num-row">
                         <text class="stat-num">{{ todayCount }}</text>
                         <text class="stat-unit">道</text>
                     </view>
+                    <text class="stat-label">今日错题</text>
                 </view>
             </view>
 </template>
@@ -30,16 +30,17 @@
     })
 </script>
 
-<style>
-    /* 统计卡片 */
+<style lang="scss">
+    /* 统计条：主 CTA 渐变（实测 452:2223 与题库统计条同族 #6ECCFD→#0CA2EF，to bottom） */
     .stats-card {
         margin: 24rpx;
-        background-color: #ffffff;
-        border-radius: 16rpx;
+        background: linear-gradient(to bottom, $primary-grad-start, $primary-grad-end);
+        background-color: $primary-grad-start;
+        border-radius: $radius-card;
         padding: 32rpx 0;
         flex-direction: row;
         justify-content: space-around;
-        border: 1rpx solid #eeeeee;
+        align-items: center;
     }
 
     .stat-item {
@@ -52,28 +53,30 @@
         flex-direction: row;
         align-items: flex-start;
         justify-content: center;
+        margin-bottom: 8rpx;
     }
 
     .stat-num {
-        font-size: 48rpx;
+        font-size: 44rpx;
         font-weight: bold;
-        color: #333333;
+        color: $text-color-inverse;
     }
 
     .stat-unit {
         font-size: 24rpx;
-        color: #999999;
+        color: $text-color-inverse;
         margin-left: 8rpx;
+        margin-top: 8rpx;
     }
 
     .stat-label {
-        font-size: 24rpx;
-        color: #999999;
-        margin-bottom: 8rpx;
+        font-size: 26rpx;
+        color: $text-color-inverse;
     }
 
     .stat-divider {
-        width: 1rpx;
-        background-color: #f0f0f0;
+        width: 2rpx;
+        height: 72rpx;
+        background-color: $text-color-inverse;
     }
 </style>

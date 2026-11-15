@@ -412,20 +412,19 @@
         height: 0;
     }
 
-    /* 分组卡片 */
+    /* 分组卡片（B3 票 2519 按原型 452:2223：无描边白卡 + 主色圆圈箭头 + 右侧计数） */
     .group-list {
-        padding: 24rpx;
+        padding: 8rpx 24rpx 24rpx;
         flex-direction: column;
     }
 
     .group-card {
         background-color: $card-bg;
-        border-radius: 16rpx;
+        border-radius: $radius-card;
         padding: 32rpx 24rpx;
         margin-bottom: 20rpx;
         flex-direction: row;
         align-items: center;
-        border: 1rpx solid $border-color-light;
     }
 
     .group-icon {
@@ -449,11 +448,12 @@
         flex: 1;
         font-size: 30rpx;
         color: $text-color;
+        font-weight: 500;
     }
 
     .group-count {
         font-size: 26rpx;
-        color: $text-color-placeholder;
+        color: $text-color-secondary;
         margin-right: 12rpx;
     }
 

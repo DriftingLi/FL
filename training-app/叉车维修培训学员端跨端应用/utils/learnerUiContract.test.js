@@ -113,22 +113,28 @@ describe('settings §8④ 清缓存入口回归 #1606', () => {
 });
 
 describe('批2 特殊页头形态（app-nav-bar 槽位承载）', () => {
-  it('practice 右槽保留 🔍 搜索入口', () => {
+  it('practice 搜索入口保留且按原型 473:4247 落地区行（右槽随批腾空）', () => {
     const src = read('pages/practice/practice.uvue');
-    expect(src).toMatch(/<template #right>[\s\S]*?onSearch[\s\S]*?<\/template>/);
+    // B3（#2519）：原型搜索在地区行右侧（与「全国 ∨」同行），不在导航右槽；入口必须仍真的导航
+    expect(src).toMatch(/class="region-right"[\s\S]*?onSearch[\s\S]*?\/pages\/search\/search/);
+    expect(src).not.toMatch(/<template #right>/);
   });
 
-  it('practice-do 计时+进度下沉固定底条（右槽腾空给胶囊宽度预算，isSingle 隐藏语义保留）', () => {
+  it('practice-do 计时+进度落导航下状态行（原型 435:797；右槽腾空给胶囊宽度预算，isSingle 隐藏语义保留）', () => {
     const src = read('pages/practice/practice-do.uvue');
-    // 右槽不再放两段动态文字：⏱计时+题号进度最长合计约 270rpx，超典型可用槽宽约 164rpx（顶部布局调研 §4.2；票 1847）
+    // 右槽仍不放动态文字：⏱计时+题号进度最长合计约 270rpx，超典型可用槽宽约 164rpx（顶部布局调研 §4.2；票 1847）
     expect(src).not.toMatch(/<template #right>/);
-    // 两段挂到 scroll 结束后的固定底条（scroll 外 = 答题全程可见，锚定 scroll-view 关闭标签防回搬进滚动区），
-    // 且仍在单题承载下隐藏
-    const bar = src.match(/<\/scroll-view>[\s\S]*?class="bottom-bar"[\s\S]*?class="bottom-actions"/);
+    // B3（#2519）：状态行挂导航与滚动区之间（scroll 外 = 答题全程可见），底条只留提交/翻题动作
+    const row = src.match(/<\/app-nav-bar>[\s\S]*?class="status-row"[\s\S]*?<view v-if="session\.loading/);
+    expect(row).not.toBeNull();
+    expect(row[0]).toContain('v-if="!isSingle"');
+    expect(row[0]).toContain('timerText');
+    expect(row[0]).toContain('currentIndex.value + 1');
+    // 底条不再承载计时/进度（上移后的防回搬判据）
+    const bar = src.match(/class="bottom-bar"[\s\S]*?class="bottom-actions"/);
     expect(bar).not.toBeNull();
-    expect(bar[0]).toContain('v-if="!isSingle"');
-    expect(bar[0]).toContain('timerText');
-    expect(bar[0]).toContain('currentIndex.value + 1');
+    expect(bar[0]).not.toContain('timerText');
+    expect(bar[0]).not.toContain('currentIndex');
   });
 
   it('ai-feature 右槽保留 panel-icon 抽屉入口（aiChatDrawerContract 同源交互）', () => {
