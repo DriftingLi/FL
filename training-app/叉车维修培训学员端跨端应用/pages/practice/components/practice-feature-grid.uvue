@@ -1,5 +1,6 @@
 <template>
-    <!-- 功能入口网格 ——T06 手术自 practice.uvue 逐段搬出 -->
+    <!-- 功能入口网格 ——T06 手术自 practice.uvue 逐段搬出；B3（#2519）按原型 473:4247 收口：
+         四入口直接坐在页面渐变上（原型无白卡容器），图标为插画位图（不入包，emoji 承载同位） -->
     <view class="feature-grid">
         <view class="feature-item" @click="onFeatureClick('past_paper')">
             <view class="feature-icon-wrap feature-color-paper">
@@ -38,10 +39,8 @@
 
 <style lang="scss">
     .feature-grid {
-        margin: 0 24rpx 24rpx 24rpx;
-        background-color: #ffffff;
-        border-radius: 20rpx;
-        padding: 28rpx 0;
+        margin: 0 24rpx 28rpx 24rpx;
+        padding: 8rpx 0 0;
         flex-direction: row;
         justify-content: space-around;
     }
@@ -53,36 +52,27 @@
     }
 
     .feature-icon-wrap {
-        width: 80rpx;
-        height: 80rpx;
+        width: 88rpx;
+        height: 88rpx;
         border-radius: 20rpx;
         align-items: center;
         justify-content: center;
         margin-bottom: 12rpx;
+        background-color: $card-bg;
     }
 
-    .feature-color-paper {
-        background-color: #fff8e1;
-    }
-
-    .feature-color-mock {
-        background-color: $success-tint;
-    }
-
-    .feature-color-level {
-        background-color: #e3f2fd;
-    }
-
-    .feature-color-wrong {
-        background-color: #fce4ec;
-    }
+    .feature-color-paper { background-color: $accent-yellow-tint; }
+    .feature-color-mock { background-color: $success-tint; }
+    .feature-color-level { background-color: $primary-tint; }
+    .feature-color-wrong { background-color: $danger-tint; }
 
     .feature-icon-text {
-        font-size: 40rpx;
+        font-size: 44rpx;
     }
 
     .feature-name {
-        font-size: 24rpx;
-        color: #333333;
+        font-size: 26rpx;
+        font-weight: 500;
+        color: $text-color;
     }
 </style>

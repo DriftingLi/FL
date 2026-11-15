@@ -113,9 +113,11 @@ describe('settings §8④ 清缓存入口回归 #1606', () => {
 });
 
 describe('批2 特殊页头形态（app-nav-bar 槽位承载）', () => {
-  it('practice 右槽保留 🔍 搜索入口', () => {
+  it('practice 搜索入口保留且按原型 473:4247 落地区行（右槽随批腾空）', () => {
     const src = read('pages/practice/practice.uvue');
-    expect(src).toMatch(/<template #right>[\s\S]*?onSearch[\s\S]*?<\/template>/);
+    // B3（#2519）：原型搜索在地区行右侧（与「全国 ∨」同行），不在导航右槽；入口必须仍真的导航
+    expect(src).toMatch(/class="region-right"[\s\S]*?onSearch[\s\S]*?\/pages\/search\/search/);
+    expect(src).not.toMatch(/<template #right>/);
   });
 
   it('practice-do 计时+进度下沉固定底条（右槽腾空给胶囊宽度预算，isSingle 隐藏语义保留）', () => {

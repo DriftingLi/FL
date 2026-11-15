@@ -1,12 +1,14 @@
 <template>
     <view class="page" :style="{ height: windowHeight + 'px' }">
-        <app-nav-bar title="题库练习" @left-click="onBack" divider>
-    <template #right><text class="nav-icon" @click="onSearch">🔍</text></template>
-</app-nav-bar>
+        <app-nav-bar title="题库练习" @left-click="onBack" divider></app-nav-bar>
+        <!-- 地区行（原型 473:4247）：「全国 ∨」在左、搜索在右，直接坐在页面浅蓝渐变上，无白条无胶囊底 -->
         <view class="region-bar">
             <view class="region-left" @click="onRegionTap">
                 <text class="region-text">{{ region }}</text>
                 <text class="region-arrow">∨</text>
+            </view>
+            <view class="region-right">
+                <text class="nav-icon" @click="onSearch">🔍</text>
             </view>
         </view>
         <scroll-view class="scroll-content" scroll-y="true" :refresher-enabled="true" :refresher-triggered="isRefreshing" @refresherrefresh="onRefresh">
@@ -53,14 +55,26 @@
 </script>
 
 <style lang="scss">
-    .page { display: flex; flex-direction: column; background-color: $bg-color; }
+    /* 页面画布（原型 473:4247）：顶部浅蓝向下过渡到中性灰，与 tab 页同一渐变族 */
+    .page {
+        display: flex;
+        flex-direction: column;
+        background: linear-gradient(to bottom, $gradient-start, $gradient-end);
+        background-color: $gradient-start;
+    }
     .scroll-content { flex: 1; height: 0; }
-    .region-bar { background-color: $card-bg; padding: 8rpx 24rpx 20rpx; flex-direction: row; align-items: center; }
-    .region-left { flex-direction: row; align-items: center; background-color: #f5f6fa; border-radius: 24rpx; padding: 8rpx 20rpx; }
-    .region-text { font-size: 26rpx; color: $text-color; }
-    .region-arrow { font-size: 20rpx; color: $text-color-placeholder; margin-left: 8rpx; }
+    .region-bar {
+        padding: 8rpx 24rpx 20rpx;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .region-left { flex-direction: row; align-items: center; padding: 8rpx 0; }
+    .region-text { font-size: 32rpx; font-weight: 600; color: $text-color; }
+    .region-arrow { font-size: 24rpx; color: $text-color-secondary; margin-left: 8rpx; }
+    .region-right { flex-direction: row; align-items: center; }
     .safe-bottom { height: 34rpx; }
     /* 页头右槽搜索入口（#2442）：此前全仓无样式定义 ⇒ 命中区只有字形高。
        44rpx 字形 + 上下各 22rpx = 88rpx，触摸目标 44×44。 */
-    .nav-icon { font-size: 44rpx; padding: 22rpx 12rpx; }
+    .nav-icon { font-size: 44rpx; padding: 10rpx 12rpx 10rpx 24rpx; }
 </style>
