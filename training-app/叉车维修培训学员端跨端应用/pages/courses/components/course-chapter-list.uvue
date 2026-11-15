@@ -68,7 +68,6 @@
     /* ===== 通用 section ===== */
     .section {
         background-color: #ffffff;
-        margin-top: 16rpx;
         padding: 28rpx 32rpx;
     }
 

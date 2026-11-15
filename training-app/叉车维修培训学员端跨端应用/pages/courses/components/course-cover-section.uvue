@@ -1,22 +1,20 @@
 <template>
-    <!-- 课程封面区 —— T08 手术自 pages/courses/course-detail.uvue 逐段搬出（parent #646 / ADR-0007）。
-         类名与结构逐字不变；原来直读 detail!.xxx，改为扁平原始 props 下发（数据所有权单一：detail 归页面）。
-         图标与底色由页面按 specialty_id 映射后下发（映射表仍只有页面那一份实现）。
-         #1087：旧 course.category 已退役 ⇒ prop 随之更名 categoryIcon → specialtyIcon，
-         避免「名category 实 specialty」的歧义。 -->
+    <!-- 课程标题卡（#2518 C 方案）：封面区吸收进标题卡 —— 原 280rpx 大图块退成 64rpx 徽标，
+         标题 / 标签 / 简介留在卡内；进度与信息摘要由同级组件接在下面，视觉上同属一张卡。
+         类名 cover-section 与 coverColor / specialtyIcon 两个 prop 由 utils/coursesContract.test.js 落锁。 -->
     <view class="cover-section">
-        <view class="cover-bg" :style="{ backgroundColor: coverColor }">
-            <text class="cover-icon">{{ specialtyIcon }}</text>
-        </view>
-        <view class="cover-info">
-            <text class="cover-title">{{ title }}</text>
-            <view class="cover-tags">
-                <text v-if="levelName.length > 0" class="tag tag-level">{{ levelName }}</text>
-                <text v-if="specialtyName.length > 0" class="tag tag-specialty">{{ specialtyName }}</text>
-                <text v-if="certificateName.length > 0" class="tag tag-cert">{{ certificateName }}</text>
+        <view class="cover-head">
+            <view class="cover-badge" :style="{ backgroundColor: coverColor }">
+                <text class="cover-icon">{{ specialtyIcon }}</text>
             </view>
-            <text class="cover-desc">{{ description.length > 0 ? description : '暂无简介' }}</text>
+            <text class="cover-title">{{ title }}</text>
         </view>
+        <view v-if="levelName.length > 0 || specialtyName.length > 0 || certificateName.length > 0" class="cover-tags">
+            <text v-if="levelName.length > 0" class="tag tag-level">{{ levelName }}</text>
+            <text v-if="specialtyName.length > 0" class="tag tag-specialty">{{ specialtyName }}</text>
+            <text v-if="certificateName.length > 0" class="tag tag-cert">{{ certificateName }}</text>
+        </view>
+        <text v-if="description.length > 0" class="cover-desc">{{ description }}</text>
     </view>
 </template>
 
@@ -41,39 +39,44 @@
 </script>
 
 <style lang="scss">
-    /* ===== 封面区 ===== */
+    /* ===== 标题卡 ===== */
     .cover-section {
         background-color: #ffffff;
+        padding: 28rpx 32rpx 24rpx;
         flex-direction: column;
     }
 
-    .cover-bg {
-        height: 280rpx;
+    .cover-head {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .cover-badge {
+        width: 64rpx;
+        height: 64rpx;
+        border-radius: 16rpx;
         align-items: center;
         justify-content: center;
+        margin-right: 16rpx;
+        flex-shrink: 0;
     }
 
     .cover-icon {
-        font-size: 100rpx;
-    }
-
-    .cover-info {
-        padding: 28rpx 32rpx;
-        flex-direction: column;
+        font-size: 36rpx;
     }
 
     .cover-title {
-        font-size: 40rpx;
+        flex: 1;
+        font-size: 36rpx;
         font-weight: bold;
         color: $text-strong;
-        line-height: 56rpx;
-        margin-bottom: 16rpx;
+        line-height: 50rpx;
     }
 
     .cover-tags {
         flex-direction: row;
         flex-wrap: wrap;
-        margin-bottom: 16rpx;
+        margin-top: 16rpx;
     }
 
     .tag {
@@ -102,6 +105,9 @@
     .cover-desc {
         font-size: 26rpx;
         color: #666666;
-        line-height: 42rpx;
+        line-height: 40rpx;
+        margin-top: 12rpx;
+        lines: 2;
+        text-overflow: ellipsis;
     }
 </style>
