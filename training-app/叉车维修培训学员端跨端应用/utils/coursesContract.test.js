@@ -28,6 +28,7 @@
  * 15) #2531 积分商城导流的落点：onShow 消费一次性意图后必须先切「积分兑换」组（按 paidValues 序号，
  *     不按文案匹配）再 reset 重取，且该分支优先于「证件变更 / 列表为空才重取」两个既有判据。
  *     一次性语义本身由行为腿 utils/courseRedeemIntentBehavior.test.js 真跑验证，此处只锁接线。
+ * 16) #2518 第 3 刀：分类卡 emoji 兜底（📚/📥）→ 0课程 切图包内字面量路径落位（image-assets.md 口径）
  */
 /** harness：读取层归一 + 模块归属面（ADR-0023 票 C 起，本文件不再自建 ROOT / read / walker） */
 const h = require('./contractHarness');
@@ -1071,5 +1072,28 @@ describe('#2531 商城导流落点：onShow 消费意图 → 切积分兑换组 
     expect(iIntent).toBeGreaterThan(-1);
     expect(iCred).toBeGreaterThan(iIntent);
     expect(iEmpty).toBeGreaterThan(iIntent);
+  });
+});
+
+/**
+ * #2518 第 3 刀（课程列表逐像素收口）：顶部分类卡的 emoji 兜底（📚/📥）换成 0课程 两张切图
+ * （原型 442:1636 的 3D 文件夹图位；判定表原判 UNUSED，随本屏结构对齐一并落位）。
+ * 按 docs/agents/image-assets.md「落位时按需加断言」：锁包内字面量路径（imageWebpAttrContract
+ * 的豁免判据只看 :src/src 表达式文本，藏 computed 后面会判漏）与 emoji 兜底退场。
+ * 资料课「内容建设中」态的 🚧 不在原型内、无像素对照依据，不在本锁射程。
+ */
+describe('#2518 分类卡切图落位：包内字面量路径 + emoji 兜底退场', () => {
+  const page = read('pages/courses/courses.uvue');
+
+  it('两张分类卡图标走包内字面量路径，且文件真实存在（出图 = 容器 CSS×2：68×58 / 56×58）', () => {
+    expect(page).toContain('src="/static/icons/courses/folder-material.png"');
+    expect(page).toContain('src="/static/icons/courses/folder-course.png"');
+    expect(exists('static/icons/courses/folder-material.png')).toBe(true);
+    expect(exists('static/icons/courses/folder-course.png')).toBe(true);
+  });
+
+  it('分类卡 emoji 兜底退场：📚 / 📥 不再出现在课程页（🚧 属建设态、不在本锁射程）', () => {
+    expect(page).not.toContain('📚');
+    expect(page).not.toContain('📥');
   });
 });

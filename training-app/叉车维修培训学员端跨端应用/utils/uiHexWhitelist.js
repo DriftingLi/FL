@@ -80,8 +80,8 @@ module.exports = {
     '#C9C9C9': 'pages/forum/check-in.uvue badge-coin-missed 灰金币徽章底——$text-disabled(#cccccc) 近似但值不等，待真机裁',
 
     // ── 批5（#1608 N05 透明页头 7 页）新增 ──
-    '#60A5FA': 'pages/courses/courses.uvue category-card 渐变首色——分类卡页头装饰蓝对（Tailwind blue-400），token 表无渐变对对应',
-    '#3B82F6': 'pages/courses/courses.uvue category-card 渐变尾色/实底兜底——与 #60A5FA 成对，同上',
+    '#6ECCFC': 'pages/courses/courses.uvue category-card 渐变首色——#2518 刀3 按原型 442:1636 实测改垂直渐变（浅青蓝→深青蓝），token 表无渐变对对应（原 #60A5FA/#3B82F6 对随旧视觉一并退役）',
+    '#0FA5F1': 'pages/courses/courses.uvue category-card 渐变尾色/实底兜底——与 #6ECCFC 成对，同上',
     '#8C8C8C': 'pages/profile/profile.uvue stats-label 标签灰——$text-color-placeholder(#999999) 近似但值不等，待灰阶 token 票裁',
     '#E3F0FF': 'pages/resume/resume.uvue user-card 渐变首色——用户卡浅蓝渐变对，$primary-tint(#ebf5ff) 近似但值不等，待真机裁',
     '#CFE4FF': 'pages/resume/resume.uvue user-card 渐变尾色/实底兜底——与 #E3F0FF 成对，同上',
