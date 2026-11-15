@@ -196,10 +196,9 @@
         margin-bottom: 24rpx;
     }
 
-    /* 主 CTA 渐变（#2509 冲突 9）：重试钮随批换渐变，兜底色写在简写之后 */
+    /* 重试钮（B3 实测口径：本批 473/435/452/769 四屏主按钮原型均为实底 #239EDD，未走渐变） */
     .error-btn {
-        background: linear-gradient(to right, $primary-grad-start, $primary-grad-end);
-        background-color: $primary-grad-start;
+        background-color: $primary-color;
         border-radius: $radius-pill;
         padding: 12rpx 40rpx;
     }
