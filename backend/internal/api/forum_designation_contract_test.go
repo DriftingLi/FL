@@ -399,13 +399,21 @@ func TestForumExperienceFilterDoesNotLeak(t *testing.T) {
 		return got
 	}
 
-	// 1. is_experience=true 恰出认定行
-	expTab := list("?is_experience=true")
-	if expTab.Data.Total != 1 {
-		t.Fatalf("经验 Tab 应恰 1 条，实际 %d", expTab.Data.Total)
+	// 1. experience=true 恰出认定行（#2549 新参数名；旧名 is_experience 必须继续生效）
+	for _, query := range []string{"?experience=true", "?is_experience=true"} {
+		expTab := list(query)
+		if expTab.Data.Total != 1 {
+			t.Fatalf("%s 应恰 1 条，实际 %d", query, expTab.Data.Total)
+		}
+		if expTab.Data.Topics[0].Title != "被认定的考经" {
+			t.Fatalf("%s 出错了帖子: %q", query, expTab.Data.Topics[0].Title)
+		}
 	}
-	if expTab.Data.Topics[0].Title != "被认定的考经" {
-		t.Fatalf("经验 Tab 出错了帖子: %q", expTab.Data.Topics[0].Title)
+	// experience=false 是等值过滤（只出非认定行），不是「不传」
+	if got := list("?experience=false"); got.Data.Total != 2 {
+		t.Fatalf("experience=false 应出 2 条非经验帖，实际 %d", got.Data.Total)
+	} else if got.titles()["被认定的考经"] {
+		t.Fatalf("experience=false 混入了经验帖")
 	}
 
 	// 2. ★ 经验帖**留在**讨论 Tab（ADR-0040：认定是叠加标记，与 is_featured 同构——
@@ -423,16 +431,18 @@ func TestForumExperienceFilterDoesNotLeak(t *testing.T) {
 		t.Fatalf("经验帖灌进了问答 Tab")
 	}
 
-	// 4. 非法值 400
-	if rec := doWithToken(t, e.r, e.readerTok, http.MethodGet, "/api/forum/topics?is_experience=bogus", nil); rec.Code != http.StatusBadRequest {
-		t.Fatalf("is_experience 非法值应 400，实际 %d", rec.Code)
+	// 4. 非法值 400（新旧两个参数名同一解析口径）
+	for _, query := range []string{"?experience=bogus", "?is_experience=bogus"} {
+		if rec := doWithToken(t, e.r, e.readerTok, http.MethodGet, "/api/forum/topics"+query, nil); rec.Code != http.StatusBadRequest {
+			t.Fatalf("%s 非法值应 400，实际 %d", query, rec.Code)
+		}
 	}
 
 	// 5. 取消认定只撤标记：从经验 Tab 消失，但本就在讨论区、不因取消而搬走
 	if rec := doWithToken(t, e.r, e.adminTok, http.MethodDelete, fmt.Sprintf("/api/admin/forum/topics/%d/experience", expTopic), nil); rec.Code != http.StatusOK {
 		t.Fatalf("取消认定应 200，实际 %d", rec.Code)
 	}
-	if got := list("?is_experience=true").Data.Total; got != 0 {
+	if got := list("?experience=true").Data.Total; got != 0 {
 		t.Fatalf("取消认定后经验 Tab 应空，实际 %d", got)
 	}
 	if got := list("?scope=general&category=discussion").titles(); !got["被认定的考经"] {

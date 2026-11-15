@@ -184,7 +184,7 @@ var (
 	ErrCategoryInvalid      = errors.New("帖子类别无效")
 	ErrSolvedArgInvalid     = errors.New("solved 参数无效")
 	ErrFeaturedArgInvalid   = errors.New("featured 参数无效")
-	ErrExperienceArgInvalid = errors.New("is_experience 参数无效")
+	ErrExperienceArgInvalid = errors.New("experience 参数无效")
 	ErrSolvedFilterScope    = errors.New("solved 筛选仅对问答帖有意义，请同时指定 category=question")
 	ErrChapterIDRequired    = errors.New("查询章节讨论区需要有效的 chapter_id")
 	ErrTitleLength          = errors.New("标题长度需在 1-100 个字符之间")
@@ -432,9 +432,10 @@ func parseForumFeaturedArg(featured string) (string, error) {
 	}
 }
 
-// parseForumExperienceArg 解析列表查询的 is_experience 参数（ADR-0040）。
+// parseForumExperienceArg 解析列表查询的 experience 参数（#2549 / ADR-0040）。
 // 空 = 不过滤；true = 仅经验认定（经验 Tab）；false = 仅非经验。
 // 与 solved/featured 同构：布尔派生列的等值过滤，随 WHERE 共存于主查询。
+// is_experience 是 Web/管理端沿用的旧参数名，handler 在解析层把两者归一到本函数。
 //
 // 注意与 category=experience **不是**同一件事：那是遗留意图值（存量行已降级、写入已收窄），
 // 保留接受该值只为不让旧客户端拿到 400；它过滤不出任何行，经验 Tab 一律走本参数。
@@ -460,15 +461,15 @@ type TopicListInput struct {
 	Category string // 空或 all = 不过滤；discussion / question / experience = 按类别分流
 	Solved   string // 空或 all = 不过滤；solved / unsolved（#367，仅问答帖有意义）
 	Featured string // 空 = 不过滤；true = 仅精选；false = 仅非精选（#742）
-	// IsExperience 空 = 不过滤；true = 仅备考经验认定；false = 仅非经验（ADR-0040）。
+	// Experience 空 = 不过滤；true = 仅备考经验认定；false = 仅非经验（#2549 / ADR-0040）。
 	// 经验 Tab 的唯一判据——**不要再改回 category=experience**（存量行已降级，过滤不出行）。
-	IsExperience string
-	ChapterID    int
-	Page         int
-	PageSize     int
-	Keyword      string
-	Sort         string // latest（默认）/ hot / created（按发帖时间，#722）
-	Order        string // desc（默认）/ asc
+	Experience string
+	ChapterID  int
+	Page       int
+	PageSize   int
+	Keyword    string
+	Sort       string // latest（默认）/ hot / created（按发帖时间，#722）
+	Order      string // desc（默认）/ asc
 }
 
 // ListTopics 分页查询主题。
@@ -489,7 +490,7 @@ func (s *Service) ListTopics(in TopicListInput) (*ForumTopicPageResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	isExperience, err := parseForumExperienceArg(in.IsExperience)
+	experience, err := parseForumExperienceArg(in.Experience)
 	if err != nil {
 		return nil, err
 	}
@@ -559,9 +560,9 @@ func (s *Service) ListTopics(in TopicListInput) (*ForumTopicPageResult, error) {
 			case "false":
 				q = q.Where("t.is_featured = FALSE")
 			}
-			// 经验认定过滤（ADR-0040）：同上，与 scope/category/solved/featured 共存在一条 WHERE。
+			// 经验认定过滤（#2549 / ADR-0040）：同上，与 scope/category/solved/featured 共存在一条 WHERE。
 			// 经验 Tab 的唯一判据——**不要再改回 category=experience**（存量行已降级，过滤不出行）。
-			switch isExperience {
+			switch experience {
 			case "true":
 				q = q.Where("t.is_experience = TRUE")
 			case "false":
