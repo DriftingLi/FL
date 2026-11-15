@@ -170,7 +170,7 @@ func (h *handler) UploadImage(c *gin.Context) {
 
 // ListTopics 帖子列表
 // @Summary 帖子列表
-// @Description 支持 scope=all|general|chapter，按 category=all|discussion|question|experience、chapter_id/keyword/sort=latest|hot|created 过滤
+// @Description 支持 scope=all|general|chapter，按 category=all|discussion|question|experience、experience=true|false、chapter_id/keyword/sort=latest|hot|created 过滤
 // @Tags 学员端-论坛
 // @Accept json
 // @Produce json
@@ -179,6 +179,7 @@ func (h *handler) UploadImage(c *gin.Context) {
 // @Param category query string false "类别 discussion|question|experience，省略表示不过滤（向后兼容）"
 // @Param featured query string false "精选过滤 true|false，省略表示不过滤（#742）"
 // @Param solved query string false "问答解决态 unsolved|solved|all（省略不过滤；非空时必须同时 category=question，否则 400；非法值 400）"
+// @Param experience query string false "备考经验认定过滤 true|false，省略表示不过滤（#2549；is_experience 为旧参数名，仍接受）"
 // @Param chapter_id query int false "章节ID"
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(10)
@@ -192,35 +193,40 @@ func (h *handler) UploadImage(c *gin.Context) {
 func (h *handler) ListTopics(c *gin.Context) {
 	httpx.Endpoint[listTopicsReq, ForumTopicPageResult]{
 		Parse: func(c *gin.Context) (*listTopicsReq, error) {
+			// 经验 Tab 的判据是管理端认定（ADR-0040）；category=experience 是遗留意图值，
+			// 两者**不是**同一件事，详见 parseForumExperienceArg 的注释。#2549 起对外参数名为
+			// experience，is_experience 是 Web/管理端沿用的旧名，仍接受。
+			experience := c.Query("experience")
+			if experience == "" {
+				experience = c.Query("is_experience")
+			}
 			return &listTopicsReq{
-				Scope:    c.Query("scope"),
-				Category: c.Query("category"),
-				Solved:   c.Query("solved"),
-				Featured: c.Query("featured"),
-				// is_experience 是经验 Tab 的判据（ADR-0040）；category=experience 是遗留意图值，
-				// 两者**不是**同一件事，详见 parseForumExperienceArg 的注释。
-				IsExperience: c.Query("is_experience"),
-				ChapterID:    httpx.QueryIntDefault(c, "chapter_id", 0),
-				Page:         httpx.QueryIntDefault(c, "page", 1),
-				PageSize:     httpx.QueryIntDefault(c, "page_size", 10),
-				Keyword:      c.Query("keyword"),
-				Sort:         c.Query("sort"),
-				Order:        c.Query("order"),
+				Scope:      c.Query("scope"),
+				Category:   c.Query("category"),
+				Solved:     c.Query("solved"),
+				Featured:   c.Query("featured"),
+				Experience: experience,
+				ChapterID:  httpx.QueryIntDefault(c, "chapter_id", 0),
+				Page:       httpx.QueryIntDefault(c, "page", 1),
+				PageSize:   httpx.QueryIntDefault(c, "page_size", 10),
+				Keyword:    c.Query("keyword"),
+				Sort:       c.Query("sort"),
+				Order:      c.Query("order"),
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *listTopicsReq) (*ForumTopicPageResult, error) {
 			return h.svc.ListTopics(TopicListInput{
-				Scope:        req.Scope,
-				Category:     req.Category,
-				Solved:       req.Solved,
-				Featured:     req.Featured,
-				IsExperience: req.IsExperience,
-				ChapterID:    req.ChapterID,
-				Page:         req.Page,
-				PageSize:     req.PageSize,
-				Keyword:      req.Keyword,
-				Sort:         req.Sort,
-				Order:        req.Order,
+				Scope:      req.Scope,
+				Category:   req.Category,
+				Solved:     req.Solved,
+				Featured:   req.Featured,
+				Experience: req.Experience,
+				ChapterID:  req.ChapterID,
+				Page:       req.Page,
+				PageSize:   req.PageSize,
+				Keyword:    req.Keyword,
+				Sort:       req.Sort,
+				Order:      req.Order,
 			})
 		},
 		ErrStatus: ErrStatus,
@@ -522,14 +528,14 @@ type listTopicsReq struct {
 	Category string
 	Solved   string
 	Featured string
-	// IsExperience 经验认定筛选（ADR-0040）：空 = 不过滤；true = 仅经验；false = 仅非经验。
-	IsExperience string
-	ChapterID    int
-	Page         int
-	PageSize     int
-	Keyword      string
-	Sort         string
-	Order        string
+	// Experience 经验认定筛选（#2549 / ADR-0040）：空 = 不过滤；true = 仅经验；false = 仅非经验。
+	Experience string
+	ChapterID  int
+	Page       int
+	PageSize   int
+	Keyword    string
+	Sort       string
+	Order      string
 }
 
 // createTopicReq 发帖请求。

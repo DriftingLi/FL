@@ -7328,7 +7328,7 @@ paths:
       - 管理端-论坛
   /admin/forum/topics:
     get:
-      description: 与学员端列表同一读面（scope/category/featured/chapter_id/keyword/sort/order
+      description: 与学员端列表同一读面（scope/category/featured/experience/chapter_id/keyword/sort/order
         同参数）
       parameters:
       - description: 范围 all|general|chapter
@@ -7342,6 +7342,10 @@ paths:
       - description: 精选过滤 true|false，省略表示不过滤
         in: query
         name: featured
+        type: string
+      - description: 备考经验认定过滤 true|false，省略表示不过滤（#2549；is_experience 为旧参数名，仍接受）
+        in: query
+        name: experience
         type: string
       - description: 章节ID
         in: query
@@ -12529,7 +12533,7 @@ paths:
     get:
       consumes:
       - application/json
-      description: 支持 scope=all|general|chapter，按 category=all|discussion|question|experience、chapter_id/keyword/sort=latest|hot|created
+      description: 支持 scope=all|general|chapter，按 category=all|discussion|question|experience、experience=true|false、chapter_id/keyword/sort=latest|hot|created
         过滤
       parameters:
       - description: 范围 all|general|chapter
@@ -12548,6 +12552,10 @@ paths:
           400；非法值 400）
         in: query
         name: solved
+        type: string
+      - description: 备考经验认定过滤 true|false，省略表示不过滤（#2549；is_experience 为旧参数名，仍接受）
+        in: query
+        name: experience
         type: string
       - description: 章节ID
         in: query

@@ -4175,7 +4175,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "与学员端列表同一读面（scope/category/featured/chapter_id/keyword/sort/order 同参数）",
+                "description": "与学员端列表同一读面（scope/category/featured/experience/chapter_id/keyword/sort/order 同参数）",
                 "produces": [
                     "application/json"
                 ],
@@ -4200,6 +4200,12 @@ const docTemplate = `{
                         "type": "string",
                         "description": "精选过滤 true|false，省略表示不过滤",
                         "name": "featured",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "备考经验认定过滤 true|false，省略表示不过滤（#2549；is_experience 为旧参数名，仍接受）",
+                        "name": "experience",
                         "in": "query"
                     },
                     {
@@ -12772,7 +12778,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "支持 scope=all|general|chapter，按 category=all|discussion|question|experience、chapter_id/keyword/sort=latest|hot|created 过滤",
+                "description": "支持 scope=all|general|chapter，按 category=all|discussion|question|experience、experience=true|false、chapter_id/keyword/sort=latest|hot|created 过滤",
                 "consumes": [
                     "application/json"
                 ],
@@ -12806,6 +12812,12 @@ const docTemplate = `{
                         "type": "string",
                         "description": "问答解决态 unsolved|solved|all（省略不过滤；非空时必须同时 category=question，否则 400；非法值 400）",
                         "name": "solved",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "备考经验认定过滤 true|false，省略表示不过滤（#2549；is_experience 为旧参数名，仍接受）",
+                        "name": "experience",
                         "in": "query"
                     },
                     {

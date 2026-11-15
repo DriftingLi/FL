@@ -44,13 +44,14 @@ func RegisterAdminRoutes(rg *gin.RouterGroup, session *security.Session, svc *Se
 // 否则 /admin/forum/topics 会从 swagger 里消失（文档面缩水，spec #962 片四）。
 //
 // @Summary 管理员查看帖子列表
-// @Description 与学员端列表同一读面（scope/category/featured/chapter_id/keyword/sort/order 同参数）
+// @Description 与学员端列表同一读面（scope/category/featured/experience/chapter_id/keyword/sort/order 同参数）
 // @Tags 管理端-论坛
 // @Produce json
 // @Security BearerAuth
 // @Param scope query string false "范围 all|general|chapter"
 // @Param category query string false "类别 discussion|question|experience，省略表示不过滤"
 // @Param featured query string false "精选过滤 true|false，省略表示不过滤"
+// @Param experience query string false "备考经验认定过滤 true|false，省略表示不过滤（#2549；is_experience 为旧参数名，仍接受）"
 // @Param chapter_id query int false "章节ID"
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(10)
