@@ -46,6 +46,12 @@ export type ShopItem = {
     price : number          // 积分价（以库为事实源，客户端不另存常量）
     stock : number | null   // 库存：null = 不限库存（≠ 0；0 才是售罄）
     owned : boolean         // 当前用户是否已拥有（服务端按人算，与兑换判据同源）
+    // ↓ N1 #2548 给定形状的调用骨架（#2518 第 5 刀）：后端加列 image_url / description /
+    //   category / sort_weight，客户端先接本页有消费点的前两列；expires_at 同款设计位——
+    //   列上线前恒 null（即插即用，形状不再改）。category / sort_weight 暂无客户端消费点，
+    //   不提前接（筛选走 getShopItemsFilteredApi 的 query 参数，不读列表字段）。
+    image_url : string | null   // 商品图（服务端 filestore 转 webp 存 ⇒ 网络图必须 :webp="true"）
+    description : string | null // 商品描述（G-01 裁定：「使用期限」写进 description 文案，不新增 validity 字段）
 }
 
 /** 商城在售列表结果 */

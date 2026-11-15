@@ -80,14 +80,22 @@ function buildPointsClaimResult(obj : UTSJSONObject) : PointsClaimResult {
 	} as PointsClaimResult
 }
 
-/** 从 UTSJSONObject 构造 ShopItem（stock 走 toNumberOrNull：null = 不限库存，不能当 0 售罄） */
+/**
+ * 从 UTSJSONObject 构造 ShopItem（stock 走 toNumberOrNull：null = 不限库存，不能当 0 售罄）。
+ * image_url / description 为 N1 #2548 加列的骨架位（#2518 第 5 刀）：列未上线时后端响应里
+ * 无此键，恒 null——读法与 buildPointsLedgerItem 的 expires_at 设计位同款，上线即插即用。
+ */
 function buildShopItem(obj : UTSJSONObject) : ShopItem {
+	const imageRaw = obj['image_url']
+	const descRaw = obj['description']
 	return {
 		sku: toStr(obj['sku']),
 		title: toStr(obj['title']),
 		price: toNumber(obj['price']),
 		stock: toNumberOrNull(obj['stock']),
 		owned: toBool(obj['owned']),
+		image_url: imageRaw != null ? toStr(imageRaw) : null,
+		description: descRaw != null ? toStr(descRaw) : null,
 	} as ShopItem
 }
 
