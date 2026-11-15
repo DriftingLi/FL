@@ -2,36 +2,39 @@
     <view class="container" :style="{ height: windowHeight + 'px' }">
         <app-nav-bar title="招聘" @left-click="onBack" />
 
-        <!-- 公告/职位双 tab；头像放 tab 行最右端（避开胶囊遮挡区），点入「我的」 -->
-        <view class="tab-row">
-            <view class="tab-item" :class="{ active: recruitTab === 'notice' }" @click="onTabChange('notice')">
-                <text class="tab-text" :class="{ active: recruitTab === 'notice' }">公告</text>
-            </view>
-            <view class="tab-item" :class="{ active: recruitTab === 'job' }" @click="onTabChange('job')">
-                <text class="tab-text" :class="{ active: recruitTab === 'job' }">职位</text>
-            </view>
-            <view class="tab-avatar-btn" @click="onMine">
-                <image v-if="avatarUrl.length > 0" class="tab-avatar" :src="avatarUrl" mode="aspectFill" :webp="true" />
-                <view v-else class="tab-avatar-placeholder">
-                    <text class="tab-avatar-icon">👷</text>
+        <!-- 公告/职位双 tab；头像放 tab 行最右端（避开胶囊遮挡区），点入「我的」。
+             B8 #2524：按原型 700:7139 收口——tab 与筛选条收进同一张白卡（.panel），列表卡片走白卡浮灰底 -->
+        <view class="panel">
+            <view class="tab-row">
+                <view class="tab-item" :class="{ active: recruitTab === 'notice' }" @click="onTabChange('notice')">
+                    <text class="tab-text" :class="{ active: recruitTab === 'notice' }">公告</text>
+                </view>
+                <view class="tab-item" :class="{ active: recruitTab === 'job' }" @click="onTabChange('job')">
+                    <text class="tab-text" :class="{ active: recruitTab === 'job' }">职位</text>
+                </view>
+                <view class="tab-avatar-btn" @click="onMine">
+                    <image v-if="avatarUrl.length > 0" class="tab-avatar" :src="avatarUrl" mode="aspectFill" :webp="true" />
+                    <view v-else class="tab-avatar-placeholder">
+                        <text class="tab-avatar-icon">👷</text>
+                    </view>
                 </view>
             </view>
-        </view>
 
-        <!-- 筛选标签（职位 tab） -->
-        <view class="filter-row" v-if="recruitTab === 'job'">
-            <view v-for="(tag, idx) in filterTags" :key="idx"
-                :class="{ 'filter-tag': true, 'ml-16': idx > 0, 'filter-tag-active': activeFilter == idx }" @click="onFilterChange(idx)">
-                <text class="filter-tag-text" :class="{ 'filter-tag-text-active': activeFilter == idx }">{{ tag.label }}</text>
+            <!-- 筛选标签（职位 tab）：口径见 G2 G-05——「综合排序」下拉与「匹配度」徽标已删，保留现网筛选能力 -->
+            <view class="filter-row" v-if="recruitTab === 'job'">
+                <view v-for="(tag, idx) in filterTags" :key="idx"
+                    :class="{ 'filter-tag': true, 'ml-16': idx > 0, 'filter-tag-active': activeFilter == idx }" @click="onFilterChange(idx)">
+                    <text class="filter-tag-text" :class="{ 'filter-tag-text-active': activeFilter == idx }">{{ tag.label }}</text>
+                </view>
             </view>
-        </view>
 
-        <!-- 证件筛选组（#2422）：选项=当前职位列表里实际要求的证件；「全部证件」即清除，选具体证件走列表 credential_id -->
-        <view class="filter-row filter-row-tight" v-if="recruitTab === 'job' && credentialFilterTags.length > 1">
-            <view v-for="(tag, idx) in credentialFilterTags" :key="tag.credential_id"
-                :class="{ 'filter-tag': true, 'ml-16': idx > 0, 'filter-tag-active': activeCredentialFilter == idx }"
-                @click="onCredentialFilterChange(idx)">
-                <text class="filter-tag-text" :class="{ 'filter-tag-text-active': activeCredentialFilter == idx }">{{ tag.name }}</text>
+            <!-- 证件筛选组（#2422）：选项=当前职位列表里实际要求的证件；「全部证件」即清除，选具体证件走列表 credential_id -->
+            <view class="filter-row filter-row-tight" v-if="recruitTab === 'job' && credentialFilterTags.length > 1">
+                <view v-for="(tag, idx) in credentialFilterTags" :key="tag.credential_id"
+                    :class="{ 'filter-tag': true, 'ml-16': idx > 0, 'filter-tag-active': activeCredentialFilter == idx }"
+                    @click="onCredentialFilterChange(idx)">
+                    <text class="filter-tag-text" :class="{ 'filter-tag-text-active': activeCredentialFilter == idx }">{{ tag.name }}</text>
+                </view>
             </view>
         </view>
 
@@ -43,21 +46,21 @@
             </view>
             <view v-if="recruitTab === 'job'" class="job-list">
                 <view v-for="job in jobs" :key="job.id" class="job-card" @click="onJobDetail(job.id)">
-                    <view class="job-card-header">
-                        <text class="job-company">{{ job.company_name }}</text>
-                    </view>
                     <text class="job-title">{{ job.title }}</text>
+                    <view class="job-meta-row">
+                        <text v-if="job.status == 'open'" class="job-status">正在报名</text>
+                        <text class="job-region">{{ jobMetaOf(job) }}</text>
+                        <text class="job-salary">{{ formatSalary(job) }}</text>
+                    </view>
+                    <!-- G2 G-10：事实字段只渲染后端确有者（供招人数 / 公司规模 / 行业 = N4 未建，不硬塞） -->
+                    <text class="job-line">工作单位：{{ job.company_name.length > 0 ? job.company_name : '未填写' }}</text>
+                    <text class="job-line" numberOfLines="2">任职要求：{{ job.description.length > 0 ? job.description : '暂无描述' }}</text>
                     <!-- 「需持 X 证」（#1945）：单一档语义、无「优先」；多证折叠成「前 N 个 + 等 N 证」，无要求整行不渲染 -->
                     <view v-if="credentialNoticeOf(job).length > 0" class="job-credential-row">
                         <view class="job-credential-chip">
                             <text class="job-credential-text">{{ credentialNoticeOf(job) }}</text>
                         </view>
                     </view>
-                    <view class="job-info-row">
-                        <text class="job-salary">{{ formatSalary(job) }}</text>
-                        <text class="job-location">{{ job.region.length > 0 ? job.region : '未填写' }}</text>
-                    </view>
-                    <text class="job-desc" numberOfLines="2">{{ job.description.length > 0 ? job.description : '暂无描述' }}</text>
                     <view class="job-divider"></view>
                     <view class="job-actions">
                         <view class="job-action-btn job-action-detail" @click.stop="onJobDetail(job.id)">
@@ -192,6 +195,14 @@
         return jobCredentialNotice(job.required_credentials)
     }
 
+    /** 卡面信息行：地区 + 经验要求（G2 G-10：只渲染后端确有的字段，供招/规模/行业不硬塞） */
+    function jobMetaOf(job : JobPosting) : string {
+        const parts : string[] = []
+        if (job.region.length > 0) parts.push(job.region)
+        if (job.experience_req.length > 0) parts.push(job.experience_req)
+        return parts.length > 0 ? parts.join(' · ') : '未填写'
+    }
+
     // ---- 职位列表加载 ----
     async function loadJobs(reset : boolean = false) : Promise<void> {
         if (loading.value) return
@@ -314,7 +325,14 @@
         flex: 1;
     }
 
-    /* 公告/职位双 tab；头像在行最右端（避开小程序胶囊遮挡区） */
+    /* 公告/职位双 tab + 筛选条共处一张白卡（原型 700:7139 的卡内分段） */
+    .panel {
+        background-color: $bg-header;
+        border-radius: $radius-lg;
+        margin: 24rpx 24rpx 0 24rpx;
+    }
+
+    /* 头像在行最右端（避开小程序胶囊遮挡区） */
     .tab-row {
         flex-direction: row;
         align-items: center;
@@ -325,14 +343,9 @@
 
     .tab-item {
         flex: 1;
-        height: 88rpx;
+        height: 96rpx;
         align-items: center;
         justify-content: center;
-        border-bottom: 4rpx solid transparent;
-    }
-
-    .tab-item.active {
-        border-bottom-color: $primary-color;
     }
 
     .tab-text {
@@ -340,6 +353,7 @@
         color: $text-color-secondary;
     }
 
+    /* 原型里选中 tab 只加粗变深，不做下划线胶囊 */
     .tab-text.active {
         color: $text-strong;
         font-weight: bold;
@@ -358,14 +372,14 @@
         width: 56rpx;
         height: 56rpx;
         border-radius: 28rpx;
-        border: 2rpx solid #eeeeee;
+        border: 2rpx solid $border-color-light;
     }
 
     .tab-avatar-placeholder {
         width: 56rpx;
         height: 56rpx;
         border-radius: 28rpx;
-        background-color: #f0f5ff;
+        background-color: $primary-tint;
         align-items: center;
         justify-content: center;
     }
@@ -374,33 +388,30 @@
         font-size: 30rpx;
     }
 
-    /* 筛选标签 */
+    /* 筛选标签：原型是行内文字筛选（无胶囊底色），选中态只换主色 */
     .filter-row {
         flex-direction: row;
         padding: $spacing-sm $spacing-md;
         background-color: $bg-header;
-        border-bottom: 1rpx solid $border-color-light;
     }
 
     .filter-tag {
-        padding: $spacing-xs $spacing-md;
+        padding: 4rpx 0;
         border-radius: $radius-sm;
-        background-color: #f5f5f5;
-        border: 1rpx solid #e0e0e0;
     }
 
     .filter-tag-active {
-        background-color: #e8f0fe;
-        border-color: $primary-color;
+        border-bottom: 4rpx solid $primary-color;
     }
 
     .filter-tag-text {
-        font-size: $font-size-xs;
+        font-size: 26rpx;
         color: $text-color-secondary;
     }
 
     .filter-tag-text-active {
         color: $primary-color;
+        font-weight: bold;
     }
 
     /* 第二组筛选（证件，票 1945）：证件条目可能多于一行 ⇒ 允许折行。
@@ -413,55 +424,52 @@
     /* 职位列表 */
     .job-list {
         flex-direction: column;
-        padding: $spacing-sm $spacing-md;
+        padding: 20rpx 0 0 0;
     }
 
     .job-card {
         background-color: $bg-header;
-        border-radius: $radius-md;
-        padding: $spacing-md;
-        margin-bottom: $spacing-sm;
-        border: 1rpx solid #eeeeee;
+        border-radius: $radius-card;
+        padding: 28rpx 24rpx;
+        margin: 0 24rpx 20rpx 24rpx;
         flex-direction: column;
-    }
-
-    .job-card-header {
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 12rpx;
-    }
-
-    .job-company {
-        font-size: $font-size-xs;
-        color: $text-color-secondary;
-        flex: 1;
     }
 
     .job-title {
         font-size: $font-size-lg;
         font-weight: bold;
-        color: $text-color;
-        margin-bottom: 12rpx;
+        color: $text-strong;
     }
 
-    .job-info-row {
+    /* 标题下信息行：报名态 + 地区/经验（左）+ 薪资（右） */
+    .job-meta-row {
         flex-direction: row;
         align-items: center;
-        justify-content: space-between;
-        margin-bottom: 12rpx;
+        margin-top: 12rpx;
+    }
+
+    .job-status {
+        font-size: 24rpx;
+        color: $primary-color;
+        margin-right: 12rpx;
+    }
+
+    .job-region {
+        flex: 1;
+        font-size: 24rpx;
+        color: $text-color-secondary;
     }
 
     /* 「需持 X 证」行：外行只管布局，底色落在内层 chip（uvue 里文字类样式只上 text） */
     .job-credential-row {
         flex-direction: row;
         align-items: center;
-        margin-bottom: 12rpx;
+        margin-top: 12rpx;
     }
 
     .job-credential-chip {
         flex-direction: row;
-        background-color: #e8f0fe;
+        background-color: $primary-tint;
         border-radius: $radius-sm;
         padding: 4rpx 12rpx;
     }
@@ -474,25 +482,21 @@
     .job-salary {
         font-size: 30rpx;
         font-weight: bold;
-        color: #ff6b35;
+        color: $color-price;
     }
 
-    .job-location {
-        font-size: $font-size-xs;
-        color: $text-color-placeholder;
-    }
-
-    .job-desc {
+    .job-line {
         font-size: 26rpx;
         color: $text-color-secondary;
         line-height: 1.5;
-        margin-bottom: $spacing-sm;
+        margin-top: 8rpx;
     }
 
     .job-divider {
         height: 1rpx;
         background-color: $border-color-light;
-        margin-bottom: $spacing-sm;
+        margin-top: 20rpx;
+        margin-bottom: 16rpx;
     }
 
     .job-actions {

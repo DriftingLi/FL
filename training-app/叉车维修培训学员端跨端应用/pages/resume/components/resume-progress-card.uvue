@@ -1,14 +1,20 @@
 <template>
-    <!-- 简历完善度卡 —— T09 手术自 pages/resume/resume-edit.uvue 逐段搬出，类名与结构逐字不变 -->
+    <!-- 简历完善度卡 —— T09 手术自 pages/resume/resume-edit.uvue 搬出；B8 #2524 按原型 671:5543 / 737:1711 收口：
+         首行「请完善你的简历信息 + 隐私保护」、次行「3D 机器人 + 进度条 + 百分比」。只收原始值 prop，无事件面。 -->
     <view class="progress-card">
-        <view class="progress-text-row">
-            <text class="progress-label">简历完善度</text>
+        <view class="progress-head">
+            <text class="progress-label">请完善你的简历信息</text>
+            <view class="privacy-chip">
+                <text class="privacy-text">隐私保护</text>
+            </view>
+        </view>
+        <view class="progress-body">
+            <image class="progress-robot" src="/static/icons/resume/progress.png" mode="aspectFit" />
+            <view class="progress-track">
+                <view class="progress-fill" :style="{ width: completion + '%' }"></view>
+            </view>
             <text class="progress-pct">{{ completion }}%</text>
         </view>
-        <view class="progress-track">
-            <view class="progress-fill" :style="{ width: completion + '%' }"></view>
-        </view>
-        <text class="progress-tip">完善简历可增加企业推荐机会</text>
     </view>
 </template>
 
@@ -21,15 +27,15 @@
     })
 </script>
 
-<style>
+<style lang="scss">
     .progress-card {
-        background-color: #ffffff;
-        border-radius: 20rpx;
+        background-color: $card-bg;
+        border-radius: $radius-card;
         padding: 28rpx;
         margin-top: 24rpx;
     }
 
-    .progress-text-row {
+    .progress-head {
         flex-direction: row;
         justify-content: space-between;
         align-items: center;
@@ -37,32 +43,52 @@
 
     .progress-label {
         font-size: 28rpx;
-        color: #333333;
+        color: $text-color;
         font-weight: bold;
     }
 
-    .progress-pct {
-        font-size: 28rpx;
-        color: #2979ff;
-        font-weight: bold;
+    /* 「隐私保护」小 chip：底色落 view，文字样式只上 text */
+    .privacy-chip {
+        background-color: $primary-tint;
+        border-radius: $radius-sm;
+        padding: 4rpx 12rpx;
+    }
+
+    .privacy-text {
+        font-size: 20rpx;
+        color: $primary-color;
+    }
+
+    .progress-body {
+        flex-direction: row;
+        align-items: center;
+        margin-top: 20rpx;
+    }
+
+    .progress-robot {
+        width: 60rpx;
+        height: 88rpx;
     }
 
     .progress-track {
-        margin-top: 20rpx;
-        height: 12rpx;
-        border-radius: 6rpx;
+        flex: 1;
+        height: 16rpx;
+        border-radius: 8rpx;
         background-color: #eef1f6;
+        margin-left: 16rpx;
     }
 
     .progress-fill {
-        height: 12rpx;
-        border-radius: 6rpx;
-        background-color: #2979ff;
+        height: 16rpx;
+        border-radius: 8rpx;
+        background-color: $primary-color;
     }
 
-    .progress-tip {
-        margin-top: 12rpx;
-        font-size: 22rpx;
-        color: #999999;
+    .progress-pct {
+        width: 88rpx;
+        text-align: right;
+        font-size: 28rpx;
+        color: $primary-color;
+        font-weight: bold;
     }
 </style>
