@@ -78,13 +78,14 @@ HBuilderX 是**单实例串行资源**——这是架构约束，不是可调优
 - 一次改动一个 commit；改动后补测试、跑过再回话。**改导出符号（常量 / 函数改名）= 同批改钉名断言**——契约测试把名字与字面量都钉死，只改实现必然红；hint 常量还得同步 `docs/agents/ui-hints.md` 的登记行。
 - **动图片前先读 `docs/adr/0066`**：① 包内**禁 webp**（小程序 image 不解析包内 webp，真机/体验版空白，开发者工具是 Chromium 所以看不出来）② 喂**网络图**的 `<image>` 必须写 `:webp="true"`（该属性默认不解析网络 webp；后端把 jpg/png/bmp 转 webp 存，所以封面/头像/验证码一律是网络 webp）③ 新图用**逐张取优的调色板 PNG**，不放大。
 - **动 `static/` 里的图之前先算主包余量**：`G7a` 只打读数**不判红** ⇒ 破线是静默的；读数自己跑 `npm run build:mp-weixin-buildonly` 拿 `mainBytes=`，别拿 dev 产物或旧记录估（2026-11-14 登录页换 7 图后实测 1,419,854 B，距 1.5 MiB 建议线 153,010 B、距 2 MiB 硬限 677,298 B）。
+- **切图落位按 [`docs/agents/image-assets.md`](docs/agents/image-assets.md) 执行**：五档 verdict 决定什么时候做（`PLACEHOLDER` 可插队、`UNIMPLEMENTED` 跟页面实现票、`UNUSED` 并入结构改造批），**别单开换图票**——那是「先补图、后改结构」的返工源。
 - 定时器挂 uni-app 生命周期上管理，别裸用 `setTimeout` / `setInterval`。
 - 跑完 HBuilderX 步骤先 `git status`：`manifest.json` 的 appid 会被回写置空、`pages.json` 会被写入启动页 `condition`——都是本地开发配置、禁止提交。删树前先 `cli project close --path <项目>`。
 - 一件票一个会话，冷启动只读票 + 对应 ADR；新决策回写 ADR 再关票（issue 评论不是必读面）。写 ADR 守中文文件名 + 固定六段 + ≤25 行，见 `docs/refactor-decisions.md`。
 
 ## 按需层（本线 `docs/agents/`）
 
-`guards.md` 守护分类与新增守护三问 · `issue-dispatch.md` 派活与阶段闸门 · `uvue-css.md` 样式与 UTS 约束全表 · `concurrency.md` 锁与时间预算 · `dev-loop.md` 内循环时间账与坑位原文 · `skills.md` 技能供给 · `ai-workflow.md` 专项 AI 工作流与让位表 · `ui-hints.md` UI hint 例外 · `domain.md` / `issue-tracker.md` / `triage-labels.md` / `credential-scope.md` 各按其名。
+`guards.md` 守护分类与新增守护三问 · `issue-dispatch.md` 派活与阶段闸门 · `uvue-css.md` 样式与 UTS 约束全表 · `concurrency.md` 锁与时间预算 · `dev-loop.md` 内循环时间账与坑位原文 · `skills.md` 技能供给 · `ai-workflow.md` 专项 AI 工作流与让位表 · `ui-hints.md` UI hint 例外 · `image-assets.md` 切图落位口径（五档 verdict / 出图尺寸 / 模板写法） · `domain.md` / `issue-tracker.md` / `triage-labels.md` / `credential-scope.md` 各按其名。
 
 Issues 存放在 GitHub Issues（使用 `gh` CLI）。See `docs/agents/issue-tracker.md`.
 AI 安全审计用 DeepSec（Shield）。See `docs/agents/security-scan.md`.
