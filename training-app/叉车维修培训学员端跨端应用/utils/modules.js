@@ -205,6 +205,8 @@ const MODULES = {
       'pages/courses/components/course-chapter-list.uvue',
       'pages/courses/components/course-cover-section.uvue',
       'pages/courses/components/course-info-grid.uvue',
+      'pages/courses/components/course-material-list.uvue',
+      'pages/courses/components/course-tab-bar.uvue',
       'pages/courses/components/course-progress-section.uvue',
       'pages/courses/composables/useChapterStudy.uts',
       'pages/courses/course-detail.uvue',
@@ -593,7 +595,8 @@ const MODULES = {
       'pages/resources/my-uploads.uvue',
     ],
     extractDirs: [],
-    crossModuleConsumers: ['forum'],
+    /** `courses` 自 #2518 起消费 `api/material.uts`（课程详情「资料」Tab 复用资料列表接口，不另起一份）。 */
+    crossModuleConsumers: ['courses', 'forum'],
     budget: BUDGET,
     budgetOverrides: {},
     maxDepth: MAX_DEPTH,

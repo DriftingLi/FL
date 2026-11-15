@@ -142,8 +142,8 @@ describe('页面 ↔ 组件接口对账（本票唯一新增接口面：prop/事
       props += definePropsNames(read(w.comp)).length;
       emits += defineEmitsNames(read(w.comp)).length;
     }
-    expect(props).toBe(26);
-    expect(emits).toBe(5);
+    expect(props).toBe(27);
+    expect(emits).toBe(6);
   });
 
   it('对账锁具备红能力（注入改名必须被抓到，防「解析器失效即假绿」）', () => {

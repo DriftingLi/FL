@@ -1,0 +1,83 @@
+<template>
+    <!-- 课程 / 资料 双 Tab 条（#2518 C 方案，原型 307:7564 / 759:761）。
+         纯展示件：选中态由页面持有（activeTab），本组件只吃 prop + emit 意图。 -->
+    <view class="tab-bar">
+        <view class="tab-tabs">
+            <view class="tab-item" :class="{ 'tab-item--active': activeTab == 'course' }" @click="onSelect('course')">
+                <text class="tab-text" :class="{ 'tab-text--active': activeTab == 'course' }">课程</text>
+            </view>
+            <view class="tab-item" :class="{ 'tab-item--active': activeTab == 'material' }" @click="onSelect('material')">
+                <text class="tab-text" :class="{ 'tab-text--active': activeTab == 'material' }">资料</text>
+            </view>
+        </view>
+        <!-- 整课打包下载：后端无接口，占位（点击给明确提示，不静默） -->
+        <view class="tab-download" @click="onDownload">
+            <text class="tab-download-text">课程下载</text>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    const props = withDefaults(defineProps<{
+        activeTab? : string
+    }>(), {
+        activeTab: 'course'
+    })
+
+    const emit = defineEmits(['change', 'download'])
+
+    function onSelect(tab : string) : void {
+        if (tab == props.activeTab) return
+        emit('change', tab)
+    }
+
+    function onDownload() : void {
+        emit('download')
+    }
+</script>
+
+<style lang="scss">
+    .tab-bar {
+        flex-direction: row;
+        align-items: center;
+        padding: 0 24rpx;
+        border-bottom: 1rpx solid #f0f0f0;
+    }
+
+    .tab-tabs {
+        flex: 1;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .tab-item {
+        padding: 24rpx 8rpx;
+        margin-right: 40rpx;
+        border-bottom: 4rpx solid transparent;
+    }
+
+    .tab-item--active {
+        border-bottom-color: $primary-color;
+    }
+
+    .tab-text {
+        font-size: 30rpx;
+        color: #666666;
+    }
+
+    .tab-text--active {
+        color: #333333;
+        font-weight: bold;
+    }
+
+    .tab-download {
+        padding: 10rpx 24rpx;
+        border-radius: 28rpx;
+        background-color: #f2f6ff;
+    }
+
+    .tab-download-text {
+        font-size: 24rpx;
+        color: $primary-color;
+    }
+</style>

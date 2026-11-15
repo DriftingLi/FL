@@ -1,38 +1,49 @@
 <template>
     <!-- 课程信息网格 —— T08 手术自 pages/courses/course-detail.uvue 逐段搬出（parent #646 / ADR-0007）。
-         类名与结构逐字不变；原来直读 detail!.xxx，改为扁平原始 props（含 durationText：文案由页面算好下发，
-         避免组件层再持一份 formatDuration）。prerequisites 走数组 prop（先例 exam-result-detail-list）。 -->
+         #2518 C 方案：默认压成一行摘要（collapsed），点开才展开六格网格 —— 首屏信息密度贴近原型，
+         六项事实一个不丢。展开态由页面持有（collapsed 是页面状态，组件只吃 prop + emit toggle）。 -->
     <view class="info-grid">
-        <view class="info-item">
-            <text class="info-label">理论学时</text>
-            <text class="info-value">{{ theoryHours > 0 ? theoryHours + ' 学时' : '-' }}</text>
+        <view v-if="collapsed" class="info-summary" @click="onToggle">
+            <text class="info-summary-text">{{ summaryText }}</text>
+            <text class="info-summary-arrow">⌄</text>
         </view>
-        <view class="info-item">
-            <text class="info-label">实操学时</text>
-            <text class="info-value">{{ practiceHours > 0 ? practiceHours + ' 学时' : '-' }}</text>
-        </view>
-        <view class="info-item">
-            <text class="info-label">章节数</text>
-            <text class="info-value">{{ chapterCount }}</text>
-        </view>
-        <view class="info-item">
-            <text class="info-label">课程时长</text>
-            <text class="info-value">{{ durationText }}</text>
-        </view>
-        <view v-if="certificateName.length > 0" class="info-item info-full">
-            <text class="info-label">关联证书</text>
-            <text class="info-value">{{ certificateName }}<text v-if="certificateValidityDays > 0" class="info-sub">（有效期 {{ certificateValidityDays }} 天）</text></text>
-        </view>
-        <view v-if="prerequisites.length > 0" class="info-item info-full">
-            <text class="info-label">前置课程</text>
-            <view class="prereq-list">
-                <text v-for="(pre, idx) in prerequisites" :key="idx" class="prereq-tag">{{ pre.name }}</text>
+        <view v-else class="info-grid-body">
+            <view class="info-item">
+                <text class="info-label">理论学时</text>
+                <text class="info-value">{{ theoryHours > 0 ? theoryHours + ' 学时' : '-' }}</text>
+            </view>
+            <view class="info-item">
+                <text class="info-label">实操学时</text>
+                <text class="info-value">{{ practiceHours > 0 ? practiceHours + ' 学时' : '-' }}</text>
+            </view>
+            <view class="info-item">
+                <text class="info-label">章节数</text>
+                <text class="info-value">{{ chapterCount }}</text>
+            </view>
+            <view class="info-item">
+                <text class="info-label">课程时长</text>
+                <text class="info-value">{{ durationText }}</text>
+            </view>
+            <view v-if="certificateName.length > 0" class="info-item info-full">
+                <text class="info-label">关联证书</text>
+                <text class="info-value">{{ certificateName }}<text v-if="certificateValidityDays > 0" class="info-sub">（有效期 {{ certificateValidityDays }} 天）</text></text>
+            </view>
+            <view v-if="prerequisites.length > 0" class="info-item info-full">
+                <text class="info-label">前置课程</text>
+                <view class="prereq-list">
+                    <text v-for="(pre, idx) in prerequisites" :key="idx" class="prereq-tag">{{ pre.name }}</text>
+                </view>
+            </view>
+            <view class="info-collapse" @click="onToggle">
+                <text class="info-collapse-text">收起</text>
+                <text class="info-summary-arrow">⌃</text>
             </view>
         </view>
     </view>
 </template>
 
 <script setup lang="uts">
+    import { computed } from 'vue'
     import type { CoursePrereq } from '../../../types/index'
 
     const props = withDefaults(defineProps<{
@@ -43,6 +54,7 @@
         certificateName? : string
         certificateValidityDays? : number
         prerequisites? : CoursePrereq[]
+        collapsed? : boolean
     }>(), {
         theoryHours: 0,
         practiceHours: 0,
@@ -50,16 +62,70 @@
         durationText: '-',
         certificateName: '',
         certificateValidityDays: 0,
-        prerequisites: () => [] as CoursePrereq[]
+        prerequisites: () => [] as CoursePrereq[],
+        collapsed: false
+    })
+
+    const emit = defineEmits(['toggle'])
+
+    function onToggle() : void {
+        emit('toggle')
+    }
+
+    /**
+     * 一行摘要：理论 / 实操 / 总时长 / 证书有效期。
+     * 逐段拼接而非 join —— UTS 的数组 join 在 Kotlin 侧形态不稳，字符串累加是既有先例。
+     */
+    const summaryText = computed<string>(() : string => {
+        let text = ''
+        if (props.theoryHours > 0) {
+            text = '理论 ' + props.theoryHours.toString() + 'h'
+        }
+        if (props.practiceHours > 0) {
+            const seg = '实操 ' + props.practiceHours.toString() + 'h'
+            text = text.length > 0 ? text + ' · ' + seg : seg
+        }
+        if (props.durationText.length > 0 && props.durationText != '-') {
+            const seg = '总时长 ' + props.durationText
+            text = text.length > 0 ? text + ' · ' + seg : seg
+        }
+        if (props.certificateValidityDays > 0) {
+            const seg = '证书有效期 ' + props.certificateValidityDays.toString() + ' 天'
+            text = text.length > 0 ? text + ' · ' + seg : seg
+        }
+        return text
     })
 </script>
 
-<style>
+<style lang="scss">
     /* ===== 课程信息网格 ===== */
     .info-grid {
         background-color: #ffffff;
-        margin-top: 16rpx;
-        padding: 28rpx 32rpx;
+        padding: 20rpx 32rpx 24rpx;
+        border-top: 1rpx solid #f5f5f5;
+        flex-direction: column;
+    }
+
+    .info-summary {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .info-summary-text {
+        flex: 1;
+        font-size: 24rpx;
+        color: #666666;
+        line-height: 36rpx;
+    }
+
+    .info-summary-arrow {
+        font-size: 24rpx;
+        color: #999999;
+        margin-left: 12rpx;
+        flex-shrink: 0;
+    }
+
+    .info-grid-body {
         flex-direction: row;
         flex-wrap: wrap;
     }
@@ -105,5 +171,18 @@
         border-radius: 6rpx;
         margin-right: 12rpx;
         margin-top: 6rpx;
+    }
+
+    .info-collapse {
+        width: 100%;
+        flex-direction: row;
+        align-items: center;
+        justify-content: center;
+        padding-top: 8rpx;
+    }
+
+    .info-collapse-text {
+        font-size: 24rpx;
+        color: #999999;
     }
 </style>

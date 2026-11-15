@@ -15,25 +15,34 @@
 
         <!-- 课程内容 -->
         <scroll-view v-else-if="detail != null" class="content-scroll" scroll-y="true">
-            <!-- 课程封面 -->
-            <CourseCoverSection :title="detail!.title" :level-name="detail!.level_name"
-                :specialty-name="detail!.specialty_name" :certificate-name="detail!.certificate_name"
-                :description="detail!.description" :specialty-icon="specialtyIcon" :cover-color="coverColor" />
+            <!-- 标题卡（#2518 C 方案）：封面 + 学习进度 + 信息摘要收进一张卡，
+                 首屏信息层级对齐原型 307:7564（标题 → 进度 → 属性 → Tab → 列表） -->
+            <view class="hero-card">
+                <CourseCoverSection :title="detail!.title" :level-name="detail!.level_name"
+                    :specialty-name="detail!.specialty_name" :certificate-name="detail!.certificate_name"
+                    :description="detail!.description" :specialty-icon="specialtyIcon" :cover-color="coverColor" />
 
-            <!-- 学习进度 -->
-            <CourseProgressSection v-if="isEnrolled" :progress="learningProgress" :completed="learningCompleted"
-                :total-chapters="detail!.chapters.length" />
+                <CourseProgressSection v-if="isEnrolled" :progress="learningProgress" :completed="learningCompleted"
+                    :total-chapters="detail!.chapters.length" />
 
-            <!-- 课程信息网格 -->
-            <CourseInfoGrid :theory-hours="detail!.theory_hours" :practice-hours="detail!.practice_hours"
-                :chapter-count="detail!.chapters.length" :duration-text="durationText"
-                :certificate-name="detail!.certificate_name"
-                :certificate-validity-days="detail!.certificate_validity_days"
-                :prerequisites="detail!.prerequisites" />
+                <CourseInfoGrid :theory-hours="detail!.theory_hours" :practice-hours="detail!.practice_hours"
+                    :chapter-count="detail!.chapters.length" :duration-text="durationText"
+                    :certificate-name="detail!.certificate_name"
+                    :certificate-validity-days="detail!.certificate_validity_days"
+                    :prerequisites="detail!.prerequisites" :collapsed="!infoExpanded" @toggle="onToggleInfo" />
+            </view>
 
-            <!-- 章节列表 -->
-            <CourseChapterList :chapters="detail!.chapters" :completed-ids="completedIds"
-                :continue-chapter-id="continueChapterId" @chapter-click="onChapterClick" />
+            <!-- 课程 / 资料 双 Tab（原型 307:7564 / 759:761） -->
+            <view class="tab-panel">
+                <CourseTabBar :active-tab="activeTab" @change="switchTab" @download="onDownloadAll" />
+
+                <!-- 章节列表 -->
+                <CourseChapterList v-if="activeTab == 'course'" :chapters="detail!.chapters"
+                    :completed-ids="completedIds" :continue-chapter-id="continueChapterId"
+                    @chapter-click="onChapterClick" />
+                <!-- 资料列表（GET /api/materials?course_id=） -->
+                <CourseMaterialList v-else :course-id="courseId" />
+            </view>
 
             <!-- 底部操作栏：CTA 四态由 buildCourseCta 单点派生（免费/已拥有→学习，未拥有→兑换） -->
             <view class="action-bar">
@@ -71,6 +80,8 @@ import { goBack } from '../../utils/navigation'
     import CourseProgressSection from './components/course-progress-section.uvue'
     import CourseInfoGrid from './components/course-info-grid.uvue'
     import CourseChapterList from './components/course-chapter-list.uvue'
+    import CourseMaterialList from './components/course-material-list.uvue'
+    import CourseTabBar from './components/course-tab-bar.uvue'
     import type { CourseDetail, ChapterItem, StudentCourseChapterProgress } from '../../types/index'
 
     const windowHeight = uni.getSystemInfoSync().windowHeight
@@ -89,6 +100,25 @@ import { goBack } from '../../utils/navigation'
     const completedIds = ref<number[]>([])
     // 继续学习的章节 ID
     const continueChapterId = ref<number>(0)
+
+    // ===== #2518 C 方案：课程 / 资料 双 Tab =====
+    /** 当前 Tab：'course' = 章节列表，'material' = 学习资料 */
+    const activeTab = ref<string>('course')
+    /** 信息网格是否展开（默认收起成一行摘要，首屏密度贴近原型 307:7564） */
+    const infoExpanded = ref<boolean>(false)
+
+    function switchTab(tab : string) : void {
+        activeTab.value = tab
+    }
+
+    function onToggleInfo() : void {
+        infoExpanded.value = !infoExpanded.value
+    }
+
+    /** 整课打包下载：后端暂无接口（#2518 票面已记），给明确提示而非静默 */
+    function onDownloadAll() : void {
+        uni.showToast({ title: '整课打包下载暂未开放', icon: 'none' })
+    }
 
     // ===== #1421（移动端 ADR-0031）兑换面状态 =====
     /** 余额读数：null = 读不到（未登录 / 读失败）⇒ CTA 装饰提示整体缺席，干净降级为纯事后 */
@@ -419,6 +449,21 @@ import { goBack } from '../../utils/navigation'
         flex: 1;
         height: 0;
     }
+
+    /* ===== 标题卡（#2518 C 方案）：封面 + 进度 + 信息摘要收进一张白卡 ===== */
+    .hero-card {
+        background-color: #ffffff;
+        margin-bottom: 16rpx;
+        flex-direction: column;
+    }
+
+    /* ===== 课程 / 资料 双 Tab ===== */
+    .tab-panel {
+        background-color: #ffffff;
+        flex-direction: column;
+    }
+
+
 
     /* ===== 操作按钮 ===== */
     .action-bar {

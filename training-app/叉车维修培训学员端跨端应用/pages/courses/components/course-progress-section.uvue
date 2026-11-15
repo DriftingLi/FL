@@ -1,7 +1,7 @@
 <template>
     <!-- 学习进度区 —— T08 手术自 pages/courses/course-detail.uvue 逐段搬出（parent #646 / ADR-0007）。
-         类名与结构逐字不变；原来直读 detail / learningProgress / learningCompleted，改为扁平数字 props。
-         外层 v-if="isEnrolled" 由页面持有（门控是页面状态，不搬）。 -->
+         外层 v-if="isEnrolled" 由页面持有（门控是页面状态，不搬）。
+         #2518 C 方案：压进标题卡内，去掉独立卡片的上下留白，只留一条分隔线。 -->
     <view class="progress-section">
         <view class="progress-header">
             <text class="progress-label">学习进度</text>
@@ -30,8 +30,9 @@
     /* ===== 学习进度 ===== */
     .progress-section {
         background-color: #ffffff;
-        padding: 24rpx 32rpx;
+        padding: 20rpx 32rpx 24rpx;
         border-top: 1rpx solid #f5f5f5;
+        flex-direction: column;
     }
 
     .progress-header {
