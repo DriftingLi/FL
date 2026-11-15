@@ -2,63 +2,118 @@
     <view class="container" :style="{ height: windowHeight + 'px' }">
         <app-nav-bar title="积分商城" @left-click="onBack" divider />
 
-        <scroll-view class="content-scroll" scroll-y="true">
-            <!-- 余额条：与任务中心同一套卡片语言，兑换前先让用户看清手里有多少分 -->
-            <view class="balance-card">
-                <view class="balance-info">
-                    <text class="balance-label">可用积分</text>
-                    <text class="balance-value">{{ pointsBalance }}</text>
+        <view class="main-body">
+            <!-- 左栏三态（821:6396，#2518 第 2 刀）：积分兑换 = 本页态；图书系列 → 商城路由
+                 （821:6678「图书系列」→ 824:6971 边，Q8 两路由不合并，mall 路由已存在；
+                 mall 页自身的视觉改造与反向边随 mall 刀）；热门在原型无出边
+                 （NAV_FLOW 裁定 9：不发明落点），只陈列不接线。 -->
+            <view class="shop-sidebar">
+                <view class="side-item">
+                    <text class="side-text">热门</text>
                 </view>
-                <view class="balance-earn" @click="onEarnPoints">
-                    <text class="earn-text">去赚积分</text>
+                <view class="side-item" @click="onGoMall">
+                    <text class="side-text">图书系列</text>
                 </view>
-            </view>
-
-            <!-- 课程兑换导流（#2531）：静态卡，不探测服务端；文案与课程详情确认弹窗同一口径 -->
-            <view class="course-entry">
-                <view class="course-entry-info">
-                    <text class="course-entry-title">课程兑换</text>
-                    <text class="course-entry-desc">用积分解锁付费课</text>
-                </view>
-                <view class="course-entry-btn" @click="onGoCourseRedeem">
-                    <text class="course-entry-text">去兑换</text>
-                    <text class="course-entry-arrow">›</text>
+                <view class="side-item side-item-active">
+                    <text class="side-text side-text-active">积分兑换</text>
                 </view>
             </view>
 
-            <!-- 三态分离（#408/#409 口径）：失败给重试，空态如实说「暂无可兑换商品」 -->
-            <view v-if="loadFailed && items.length == 0" class="error-tip">
-                <text class="error-text">商品加载失败</text>
-                <view class="retry-btn" @click="loadItems">
-                    <text class="retry-text">重试</text>
+            <view class="content-col">
+                <!-- 筛选栏两态（贴片 807:2035 分类态 / 807:2190 积分范围态）：一次只展开一套 -->
+                <view class="filter-bar">
+                    <view class="filter-trigger" @click="onTogglePanel('category')">
+                        <text :class="['filter-trigger-text', { 'filter-trigger-text-on': filterPanel == 'category' }]">商品分类</text>
+                        <text class="filter-arrow">{{ filterPanel == 'category' ? '∧' : '∨' }}</text>
+                    </view>
+                    <view class="filter-trigger" @click="onTogglePanel('range')">
+                        <text :class="['filter-trigger-text', { 'filter-trigger-text-on': filterPanel == 'range' }]">积分范围</text>
+                        <text class="filter-arrow">{{ filterPanel == 'range' ? '∧' : '∨' }}</text>
+                    </view>
+                    <view class="filter-hot" @click="onHotRedeemable">
+                        <text class="filter-hot-text">可换商品</text>
+                    </view>
                 </view>
-            </view>
-            <view v-else-if="loading && items.length == 0" class="loading-tip">
-                <text class="loading-text">加载中...</text>
-            </view>
-            <view v-else-if="items.length == 0" class="empty-tip">
-                <text class="empty-text">暂无可兑换商品</text>
-            </view>
 
-            <!-- 在售项：可点性只由服务端事实决定（已拥有 / 售罄） -->
-            <view v-if="items.length > 0" class="shop-card">
-                <view v-for="(item, i) in items" :key="item.sku"
-                    :class="['shop-item', { 'shop-item-last': i == items.length - 1 }]">
-                    <view class="shop-content">
-                        <text class="shop-title">{{ item.title }}</text>
-                        <view class="shop-meta">
-                            <text class="shop-price">{{ item.price }} 积分</text>
-                            <text v-if="stockText(item).length > 0" class="shop-stock">{{ stockText(item) }}</text>
+                <!-- 展开面板（815:5332 筛选态）：分类五档 enum 按 N1 #2548；积分范围档位按票面
+                     给定 ≤500 / 500-1000 / >1000（贴片 807:2190 的 1-1000/1001-5000/… 五档不采用，
+                     与 N1 points_min/points_max 形状对齐） -->
+                <view v-if="filterPanel == 'category'" class="filter-panel">
+                    <view v-for="(opt, i) in categoryOptions" :key="opt.value" class="pill"
+                        :class="{ 'pill-active': activeCategoryIdx == i }" @click="onPickCategory(i)">
+                        <text :class="['pill-text', { 'pill-text-active': activeCategoryIdx == i }]">{{ opt.label }}</text>
+                    </view>
+                </view>
+                <view v-if="filterPanel == 'range'" class="filter-panel">
+                    <view v-for="(opt, i) in rangeOptions" :key="opt.value" class="pill"
+                        :class="{ 'pill-active': activeRangeIdx == i }" @click="onPickRange(i)">
+                        <text :class="['pill-text', { 'pill-text-active': activeRangeIdx == i }]">{{ opt.label }}</text>
+                    </view>
+                </view>
+
+                <!-- 列表区：面板展开时整体压暗（蒙层），点蒙层回主态（815:5463 → 821:6396 边） -->
+                <view class="list-area">
+                    <scroll-view class="content-scroll" scroll-y="true">
+                        <!-- 余额条：与任务中心同一套卡片语言，兑换前先让用户看清手里有多少分 -->
+                        <view class="balance-card">
+                            <view class="balance-info">
+                                <text class="balance-label">可用积分</text>
+                                <text class="balance-value">{{ pointsBalance }}</text>
+                            </view>
+                            <view class="balance-earn" @click="onEarnPoints">
+                                <text class="earn-text">去赚积分</text>
+                            </view>
                         </view>
-                    </view>
-                    <view :class="['shop-btn', btnClass(item)]" @click="onRedeem(item)">
-                        <text :class="['shop-btn-text', btnTextClass(item)]">{{ btnText(item) }}</text>
-                    </view>
+
+                        <!-- 课程兑换导流（#2531）：静态卡，不探测服务端；文案与课程详情确认弹窗同一口径 -->
+                        <view class="course-entry">
+                            <view class="course-entry-info">
+                                <text class="course-entry-title">课程兑换</text>
+                                <text class="course-entry-desc">用积分解锁付费课</text>
+                            </view>
+                            <view class="course-entry-btn" @click="onGoCourseRedeem">
+                                <text class="course-entry-text">去兑换</text>
+                                <text class="course-entry-arrow">›</text>
+                            </view>
+                        </view>
+
+                        <!-- 三态分离（#408/#409 口径）：失败给重试，空态如实说「暂无可兑换商品」 -->
+                        <view v-if="loadFailed && items.length == 0" class="error-tip">
+                            <text class="error-text">商品加载失败</text>
+                            <view class="retry-btn" @click="loadItems">
+                                <text class="retry-text">重试</text>
+                            </view>
+                        </view>
+                        <view v-else-if="loading && items.length == 0" class="loading-tip">
+                            <text class="loading-text">加载中...</text>
+                        </view>
+                        <view v-else-if="items.length == 0" class="empty-tip">
+                            <text class="empty-text">暂无可兑换商品</text>
+                        </view>
+
+                        <!-- 在售项：可点性只由服务端事实决定（已拥有 / 售罄） -->
+                        <view v-if="items.length > 0" class="shop-card">
+                            <view v-for="(item, i) in items" :key="item.sku"
+                                :class="['shop-item', { 'shop-item-last': i == items.length - 1 }]">
+                                <view class="shop-content">
+                                    <text class="shop-title">{{ item.title }}</text>
+                                    <view class="shop-meta">
+                                        <text class="shop-price">{{ item.price }} 积分</text>
+                                        <text v-if="stockText(item).length > 0" class="shop-stock">{{ stockText(item) }}</text>
+                                    </view>
+                                </view>
+                                <view :class="['shop-btn', btnClass(item)]" @click="onRedeem(item)">
+                                    <text :class="['shop-btn-text', btnTextClass(item)]">{{ btnText(item) }}</text>
+                                </view>
+                            </view>
+                        </view>
+
+                        <view class="bottom-spacer"></view>
+                    </scroll-view>
+                    <view v-if="filterPanel != ''" class="list-mask" @click="onClosePanel"></view>
                 </view>
             </view>
-
-            <view class="bottom-spacer"></view>
-        </scroll-view>
+        </view>
     </view>
 </template>
 
@@ -67,10 +122,10 @@
     import { ref } from 'vue'
     import { onShow } from '@dcloudio/uni-app'
     import { goBack, requestCourseRedeemIntent } from '../../utils/navigation'
-    import { getPointsBalanceApi, getShopItemsApi, redeemShopItemApi } from '../../api/points'
+    import { getPointsBalanceApi, getShopItemsApi, getShopItemsFilteredApi, redeemShopItemApi } from '../../api/points'
     import { errMsg } from '../../api/helpers'
     import { AI_PRO_SKU } from '../../composables/useAiPro'
-    import type { ShopItem } from '../../types/index'
+    import type { ShopItem, ShopItemsResult } from '../../types/index'
 
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
@@ -81,6 +136,41 @@
     const loadFailed = ref<boolean>(false)
     /** 正在兑换的 sku（空串表示无进行中请求，兼作防重入闸门） */
     const redeemingSku = ref<string>('')
+
+    // ===== 筛选两态（#2518 第 2 刀；形状按 N1 #2548，后端参数未上线前会忽略 query 返回全量）=====
+
+    /** 单个筛选选项（label 进胶囊；分类档用 value，积分范围档只用 min/max） */
+    type ShopFilterOption = {
+        label : string
+        value : string
+        min : number
+        max : number
+    }
+
+    /** 分类五档：'' = 不限；enum 值 = N1 #2548 的 book|material|course|other */
+    const categoryOptions : ShopFilterOption[] = [
+        { label: '不限', value: '', min: 0, max: 0 },
+        { label: '图书', value: 'book', min: 0, max: 0 },
+        { label: '资料', value: 'material', min: 0, max: 0 },
+        { label: '课程', value: 'course', min: 0, max: 0 },
+        { label: '其他', value: 'other', min: 0, max: 0 },
+    ]
+
+    /**
+     * 积分范围档位（票面给定 ≤500 / 500-1000 / >1000）：边界不重叠取 [0,500] / [501,1000] /
+     * [1001,∞)；min/max = 0 表示该参不下发。value 只作 v-for key，不进请求。
+     */
+    const rangeOptions : ShopFilterOption[] = [
+        { label: '不限', value: 'all', min: 0, max: 0 },
+        { label: '≤500', value: 'le500', min: 0, max: 500 },
+        { label: '500-1000', value: '501-1000', min: 501, max: 1000 },
+        { label: '>1000', value: 'gt1000', min: 1001, max: 0 },
+    ]
+
+    /** 当前展开的筛选面板：'' = 都收起（主态）/ 'category' / 'range' */
+    const filterPanel = ref<string>('')
+    const activeCategoryIdx = ref<number>(0)
+    const activeRangeIdx = ref<number>(0)
 
     // ===== 纯映射（须先于调用它们的函数声明，守护规则 A）=====
 
@@ -135,7 +225,16 @@
         loading.value = true
         loadFailed.value = false
         try {
-            const res = await getShopItemsApi()
+            // 无筛选走原动词（既有契约钉死调用形状）；带筛选走 N1 #2548 形状骨架
+            //（getShopItemsFilteredApi：category / points_min / points_max）
+            const cat = categoryOptions[activeCategoryIdx.value].value
+            const range = rangeOptions[activeRangeIdx.value]
+            let res : ShopItemsResult
+            if (cat.length == 0 && range.min == 0 && range.max == 0) {
+                res = await getShopItemsApi()
+            } else {
+                res = await getShopItemsFilteredApi(cat, range.min, range.max)
+            }
             items.value = res.items
         } catch (e) {
             loadFailed.value = true
@@ -162,6 +261,35 @@
     function onGoCourseRedeem() : void {
         requestCourseRedeemIntent()
         uni.switchTab({ url: '/pages/courses/courses' })
+    }
+
+    /** 筛选栏触发：再点同一个即收起（两态互斥，一次只展开一套） */
+    function onTogglePanel(panel : string) : void {
+        filterPanel.value = filterPanel.value == panel ? '' : panel
+    }
+
+    /** 点蒙层回主态（815:5463 → 821:6396 边） */
+    function onClosePanel() : void {
+        filterPanel.value = ''
+    }
+
+    /** 选分类档：收起面板并按新筛选重取（档位变化即发请求，骨架期后端忽略参数返回全量） */
+    function onPickCategory(idx : number) : void {
+        activeCategoryIdx.value = idx
+        filterPanel.value = ''
+        loadItems()
+    }
+
+    /** 选积分范围档：同上（min/max 进 N1 #2548 的 points_min / points_max） */
+    function onPickRange(idx : number) : void {
+        activeRangeIdx.value = idx
+        filterPanel.value = ''
+        loadItems()
+    }
+
+    /** 「可换商品」→ 筛选态（821:6546 → 815:5332 边：原型该态展开的是分类面板） */
+    function onHotRedeemable() : void {
+        filterPanel.value = 'category'
     }
 
     /** 兑换成功后的落点（#1942 验收：权益即时生效、落点可达）：当前唯一可兑权益是 AI 专业版 */
@@ -218,6 +346,12 @@
         })
     }
 
+    /** 左栏「图书系列」→ 商城路由（821:6678 → 824:6971 边；Q8 两路由不合并，mall 页改造不在本刀）。
+     *  放在 handler 区末尾：契约钉 onGoCourseRedeem 后 400 字符内不得出现 navigateTo。 */
+    function onGoMall() : void {
+        uni.navigateTo({ url: '/pages/mall/mall' })
+    }
+
     onShow(() => {
         loadBalance()
         loadItems()
@@ -229,6 +363,141 @@
         flex: 1;
         background-color: $bg-color;
         flex-direction: column;
+    }
+
+    /* 双栏主体：左栏三态 + 右侧内容 */
+    .main-body {
+        flex: 1;
+        flex-direction: row;
+    }
+
+    /* 左栏三态（821:6396）：白底栏，激活档灰底蓝字、与内容区连片 */
+    .shop-sidebar {
+        width: 180rpx;
+        background-color: $card-bg;
+    }
+
+    .side-item {
+        padding: 32rpx 0;
+        align-items: center;
+        justify-content: center;
+        background-color: $card-bg;
+    }
+
+    .side-item-active {
+        background-color: $bg-color;
+    }
+
+    .side-text {
+        font-size: 26rpx;
+        color: $text-color;
+    }
+
+    .side-text-active {
+        font-size: 26rpx;
+        font-weight: bold;
+        color: $primary-color;
+    }
+
+    .content-col {
+        flex: 1;
+        flex-direction: column;
+    }
+
+    /* 筛选栏（贴片 807:2035 / 807:2190 顶行）：分类 / 积分范围居左，可换商品靠右 */
+    .filter-bar {
+        background-color: $card-bg;
+        padding: 20rpx 24rpx;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .filter-trigger {
+        flex: 1;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .filter-trigger-text {
+        font-size: 26rpx;
+        color: $text-color-secondary;
+    }
+
+    .filter-trigger-text-on {
+        font-size: 26rpx;
+        font-weight: bold;
+        color: $text-color;
+    }
+
+    .filter-arrow {
+        margin-left: 6rpx;
+        font-size: 24rpx;
+        color: $text-color-secondary;
+    }
+
+    .filter-hot {
+        padding: 12rpx 28rpx;
+        border-radius: 32rpx;
+        background-color: $bg-color;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .filter-hot-text {
+        font-size: 26rpx;
+        color: $text-color;
+    }
+
+    /* 展开面板（815:5332）：白底胶囊组；换行排列 → 每颗胶囊自带右/下 margin（uvue 无 gap） */
+    .filter-panel {
+        background-color: $card-bg;
+        padding: 8rpx 24rpx 24rpx 24rpx;
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+
+    .pill {
+        padding: 14rpx 40rpx;
+        border-radius: 32rpx;
+        background-color: $bg-color;
+        margin-right: 24rpx;
+        margin-bottom: 20rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .pill-active {
+        background-color: $card-bg;
+        border-width: 1rpx;
+        border-style: solid;
+        border-color: $border-color;
+    }
+
+    .pill-text {
+        font-size: 26rpx;
+        color: $text-color-secondary;
+    }
+
+    .pill-text-active {
+        font-size: 26rpx;
+        font-weight: bold;
+        color: $text-color;
+    }
+
+    /* 列表区：筛选态时蒙层压暗、点击回主态 */
+    .list-area {
+        flex: 1;
+        position: relative;
+    }
+
+    .list-mask {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        z-index: 20;
+        background-color: rgba(0, 0, 0, 0.3);
     }
 
     .content-scroll {
