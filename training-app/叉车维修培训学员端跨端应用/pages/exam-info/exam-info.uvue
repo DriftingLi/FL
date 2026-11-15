@@ -12,7 +12,7 @@
         <!-- chips 只在「新闻资讯」tab（#1940 Q4 裁定）：其余 tab 自身已是类别；「全部」贴右（原型 322:8928） -->
         <view v-if="withFilters" class="filter-bar">
             <view class="filter-left">
-                <view v-for="(tag, idx) in filterTags.slice(0, 3)" :key="tag" class="filter-tag"
+                <view v-for="(tag, idx) in leftFilterTags" :key="tag" class="filter-tag"
                     :class="{ 'filter-tag-active': activeFilter === idx }" @click="onFilterChange(idx)">
                     <text class="filter-tag-text"
                         :class="{ 'filter-tag-text-active': activeFilter === idx }">{{ tag }}</text>
@@ -79,6 +79,8 @@
     /** tab 表与 chips 表的唯一口径在 utils/examInfoTabs：改口径改那里，不改模板 */
     const mainTabs : string[] = EXAM_INFO_TABS
     const filterTags : string[] = EXAM_INFO_FILTERS
+    /** 左侧三枚 chips（「全部」单独贴右、仍是 filterQuery(3) 同一口径）；模板不做切片表达式 */
+    const leftFilterTags : string[] = [filterTags[0], filterTags[1], filterTags[2]]
 
     const activeMainTab = ref<number>(0)
     const activeFilter = ref<number>(0)

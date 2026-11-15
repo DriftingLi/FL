@@ -94,15 +94,8 @@ import { goBack } from '../../utils/navigation'
         { label: '职位', value: 'job' },
     ]
 
-    /** 类型 Tab 的下标真源（app-tabs 按 index 回调，映射回 typeOptions 取值） */
-    const typeLabels : string[] = typeOptions.map((o) : string => o.label)
-    const typeIndex = computed<number>(() : number => {
-        for (let i = 0; i < typeOptions.length; i++) {
-            if (typeOptions[i].value == currentType.value) return i
-        }
-        return 0
-    })
-
+    /** 类型 Tab 的下标真源（app-tabs 按 index 回调，映射回 typeOptions 取值）；
+     *  声明在 currentType 之后（Kotlin 局部无前向引用，wrong-questions 同款纪律） */
     function onTypeTabChange(idx : number) : void {
         if (idx < 0 || idx >= typeOptions.length) return
         onTypeClick(typeOptions[idx].value)
@@ -113,6 +106,15 @@ import { goBack } from '../../utils/navigation'
     const VALID_TYPES : string[] = ['course', 'chapter', 'topic', 'featured', 'question', 'job']
 
     const currentType = ref<string>('')
+    /** 类型 Tab 数据（app-tabs 消费）：标签表静态、选中下标随 currentType 派生 */
+    const typeLabels : string[] = []
+    for (let i = 0; i < typeOptions.length; i++) { typeLabels.push(typeOptions[i].label) }
+    const typeIndex = computed<number>(() : number => {
+        for (let i = 0; i < typeOptions.length; i++) {
+            if (typeOptions[i].value == currentType.value) return i
+        }
+        return 0
+    })
     const items = ref<FavoriteItem[]>([])
     const page = ref<number>(1)
     const pageSize = 20
