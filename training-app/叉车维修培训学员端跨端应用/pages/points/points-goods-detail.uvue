@@ -1,0 +1,298 @@
+<template>
+    <view class="container" :style="{ height: windowHeight + 'px' }">
+        <app-nav-bar title="商品详情" @left-click="onBack" divider />
+
+        <scroll-view class="content-scroll" scroll-y="true">
+            <!-- 商品加载失败给重试（#408/#409 口径：失败不伪装成空态） -->
+            <view v-if="loadFailed && goods == null" class="error-tip">
+                <text class="error-text">商品加载失败</text>
+                <view class="retry-btn" @click="onRetry">
+                    <text class="retry-text">重试</text>
+                </view>
+            </view>
+            <view v-else-if="notFound" class="error-tip">
+                <text class="error-text">商品不存在或不在售</text>
+            </view>
+
+            <view v-else class="goods-body">
+                <!-- 商品主卡（810:3399）：图 = N1 image_url（服务端转 webp 存 ⇒ 网络图必须 :webp="true"）；
+                     列未上线（N1 #2548 骨架位）时空态走包内默认图兜底（image 27 切图，调色板 PNG，
+                     字面量路径）。原型该位即 ai_pro 吉祥物，兜底与原型同图。 -->
+                <view class="hero-card">
+                    <view class="goods-img-wrap">
+                        <image v-if="goodsImageUrl.length > 0" :src="goodsImageUrl" class="goods-img"
+                            mode="aspectFill" :webp="true" />
+                        <image v-else class="goods-img" mode="aspectFit"
+                            src="/static/icons/points-goods/goods-default.png" />
+                    </view>
+                    <text class="goods-title">{{ goodsTitle }}</text>
+                    <view class="price-row">
+                        <text class="price-value">{{ goodsPriceText }}</text>
+                        <text class="price-unit">积分</text>
+                    </view>
+                </view>
+
+                <!-- 注意事项卡（810:3399 蓝卡）：fill 实测 #EBF9FF=$primary-tint、左缘色条 #239EDD=$primary-color。
+                     「使用期限」行按 G-01 裁定不建——商品无期限语义、不新增 validity 字段，使用期限信息
+                     写进 description 随下方商品详情卡直出（G2_FINAL.md G-01）。主要事项切图落位于此。 -->
+                <view class="notice-card">
+                    <view class="notice-head">
+                        <image class="notice-icon" src="/static/icons/points-goods/notice.png" mode="aspectFit" />
+                        <text class="notice-title">注意事项</text>
+                    </view>
+                    <text class="notice-line">兑换前请确认细则</text>
+                    <text v-if="hasStockLimit" class="notice-line">数量有限，兑完即止</text>
+                    <text class="notice-line">不退不换</text>
+                </view>
+
+                <!-- 商品详情卡：description 直出（N1 #2548 骨架位，未上线渲染空态）。
+                     G-01：使用期限按裁定写进 description 文案，数据上线后随本卡一并展示。 -->
+                <view class="desc-card">
+                    <text class="desc-header">商品详情</text>
+                    <text v-if="goodsDescText.length > 0" class="desc-body">{{ goodsDescText }}</text>
+                    <text v-else class="desc-empty">暂无商品详情</text>
+                </view>
+            </view>
+        </scroll-view>
+
+        <!-- 底部兑换条（810:3399）：现有积分 + 立即兑换；可点性只由服务端事实决定（已拥有 / 售罄） -->
+        <view class="redeem-bar">
+            <view class="balance-info">
+                <text class="balance-label">现有积分</text>
+                <text class="balance-value">{{ balanceText }}</text>
+            </view>
+            <view :class="['redeem-btn', { 'redeem-btn-disabled': ctaBlocked }]" @click="onRedeem">
+                <text :class="['redeem-btn-text', { 'redeem-btn-text-disabled': ctaBlocked }]">{{ ctaText }}</text>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
+    import { onLoad } from '@dcloudio/uni-app'
+    import { goBack } from '../../utils/navigation'
+    import { usePointsGoodsDetail } from './composables/usePointsGoodsDetail'
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    const { goods, goodsImageUrl, goodsTitle, goodsPriceText, goodsDescText, hasStockLimit,
+        balanceText, loadFailed, notFound, ctaBlocked, ctaText, load, redeem } = usePointsGoodsDetail()
+
+    /** onLoad 传入的 sku 回声（普通 let 非响应式：仅供失败重试复发同一请求） */
+    let currentSku = ''
+
+    function onBack() : void {
+        goBack()
+    }
+
+    /** 整屏失败重试 */
+    function onRetry() : void {
+        load(currentSku)
+    }
+
+    function onRedeem() : void {
+        redeem()
+    }
+
+    onLoad((options : UTSJSONObject) => {
+        const raw = options['sku']
+        const sku = raw != null ? raw.toString() : ''
+        currentSku = sku
+        load(sku)
+    })
+</script>
+
+<style lang="scss">
+    .container {
+        flex: 1;
+        background-color: $bg-color;
+        flex-direction: column;
+    }
+
+    .content-scroll {
+        flex: 1;
+    }
+
+    .goods-body {
+        flex-direction: column;
+        padding-bottom: 32rpx;
+    }
+
+    .error-tip {
+        align-items: center;
+        padding: 120rpx 0;
+        flex-direction: column;
+    }
+
+    .error-text {
+        font-size: 28rpx;
+        color: $text-color-secondary;
+        margin-bottom: 20rpx;
+    }
+
+    .retry-btn {
+        padding: 20rpx 48rpx;
+        border-radius: 40rpx;
+        background-color: $primary-color;
+    }
+
+    .retry-text {
+        font-size: 26rpx;
+        color: $text-color-inverse;
+    }
+
+    /* ===== 商品主卡（810:3399 顶部白卡，通栏无边距）===== */
+    .hero-card {
+        background-color: $card-bg;
+        padding: 64rpx 60rpx 48rpx;
+        flex-direction: column;
+    }
+
+    .goods-img-wrap {
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+    }
+
+    .goods-img {
+        width: 150rpx;
+        height: 132rpx;
+    }
+
+    .goods-title {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: $text-color;
+        margin-top: 48rpx;
+    }
+
+    .price-row {
+        flex-direction: row;
+        align-items: flex-end;
+        margin-top: 12rpx;
+    }
+
+    .price-value {
+        font-size: 40rpx;
+        font-weight: bold;
+        color: $text-color;
+    }
+
+    .price-unit {
+        font-size: 28rpx;
+        color: $text-color;
+        margin-left: 16rpx;
+        margin-bottom: 4rpx;
+    }
+
+    /* ===== 注意事项卡（810:3399 蓝卡：$primary-tint 底 + $primary-color 左缘色条）===== */
+    .notice-card {
+        margin: 20rpx 46rpx 0;
+        background-color: $primary-tint;
+        border-left: 12rpx solid $primary-color;
+        border-radius: 24rpx;
+        padding: 36rpx 32rpx 36rpx 36rpx;
+        flex-direction: column;
+    }
+
+    .notice-head {
+        flex-direction: row;
+        align-items: center;
+        margin-bottom: 24rpx;
+    }
+
+    .notice-icon {
+        width: 40rpx;
+        height: 40rpx;
+    }
+
+    .notice-title {
+        font-size: 28rpx;
+        font-weight: bold;
+        color: $text-color;
+        margin-left: 16rpx;
+    }
+
+    .notice-line {
+        font-size: 28rpx;
+        color: $text-color;
+        line-height: 48rpx;
+    }
+
+    /* ===== 商品详情卡（810:3399 描述白卡）===== */
+    .desc-card {
+        margin: 20rpx 32rpx 0;
+        background-color: $card-bg;
+        border-radius: 24rpx;
+        padding: 44rpx 48rpx;
+        flex-direction: column;
+    }
+
+    .desc-header {
+        font-size: 28rpx;
+        font-weight: bold;
+        color: $text-color;
+    }
+
+    .desc-body {
+        font-size: 28rpx;
+        color: $text-color-secondary;
+        line-height: 48rpx;
+        margin-top: 24rpx;
+    }
+
+    .desc-empty {
+        font-size: 28rpx;
+        color: $text-color-placeholder;
+        margin-top: 24rpx;
+    }
+
+    /* ===== 底部兑换条（810:3399：现有积分 + 立即兑换胶囊）===== */
+    .redeem-bar {
+        background-color: $card-bg;
+        border-top: 1rpx solid $border-color-light;
+        padding: 20rpx 72rpx;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .balance-info {
+        flex-direction: column;
+    }
+
+    .balance-label {
+        font-size: 24rpx;
+        color: $text-color-secondary;
+    }
+
+    .balance-value {
+        font-size: 44rpx;
+        font-weight: bold;
+        color: $text-color;
+        margin-top: 8rpx;
+    }
+
+    .redeem-btn {
+        width: 224rpx;
+        height: 96rpx;
+        border-radius: 48rpx;
+        background-color: $primary-color;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .redeem-btn-disabled {
+        background-color: $bg-color;
+    }
+
+    .redeem-btn-text {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: $text-color-inverse;
+    }
+
+    .redeem-btn-text-disabled {
+        color: $text-color-placeholder;
+    }
+</style>

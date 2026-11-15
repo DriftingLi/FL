@@ -1,0 +1,232 @@
+/**
+ * 商品详情（#2518 第 5 刀，原型 810:3399）
+ *
+ * 数据面：
+ *   - 商品 = GET /points/shop/items 全量里按 sku 对号（后端无单条路由，不另造；
+ *     列表 DTO 五列现成，image_url / description 是 N1 #2548 加列的骨架位——列未上线恒 null，
+ *     页面渲染空态，即插即用）。
+ *   - 余额 = GET /points/balance（silent 读，失败不挡详情，ADR-0031 决策 3 同款）。
+ *   - 「使用期限」按 G-01 裁定写进 description 文案（不新增 validity 字段），随商品详情卡直出。
+ *
+ * 兑换链路与 points-shop 同一管线（showModal 预判 → redeemShopItemApi；守卫全在服务端，
+ * 客户端不预扣、不本地写「已解锁」）。成功落点：ai_pro 走 #1942 权益落点（switchTab AI 助手，
+ * SKU 常量单点消费 useAiPro，不写字面量）；其余 SKU 走原型边 立即兑换(811:3685) → 608:9111
+ * （G-00 改语义后 608:9111 = pages/points/points-exchange-records 积分兑换记录页）。
+ */
+import { ref, computed } from 'vue'
+import type { Ref, ComputedRef } from 'vue'
+import { getPointsBalanceApi, getShopItemsApi, redeemShopItemApi } from '../../../api/points'
+import { errMsg } from '../../../api/helpers'
+import { AI_PRO_SKU } from '../../../composables/useAiPro'
+import { formatCountFull } from '../../../utils/format'
+import type { ShopItem } from '../../../types/index'
+
+/** 本 composable 的显式返回类型（Kotlin error18 规避，先例 usePointsExchangeRecords） */
+export type UsePointsGoodsDetailResult = {
+    goods : Ref<ShopItem | null>
+    /** 商品图网络地址（'' = 无图，走包内默认图兜底；非空时是网络 webp，模板必须 :webp="true"） */
+    goodsImageUrl : ComputedRef<string>
+    goodsTitle : ComputedRef<string>
+    goodsPriceText : ComputedRef<string>
+    goodsDescText : ComputedRef<string>
+    hasStockLimit : ComputedRef<boolean>
+    balanceText : ComputedRef<string>
+    loading : Ref<boolean>
+    loadFailed : Ref<boolean>
+    redeeming : Ref<boolean>
+    notFound : ComputedRef<boolean>
+    ctaBlocked : ComputedRef<boolean>
+    ctaText : ComputedRef<string>
+    load : (sku : string) => void
+    redeem : () => void
+}
+
+/** 不可兑换：已拥有（服务端判据）或售罄（与 points-shop 的 blocked 同一判定） */
+function blocked(item : ShopItem) : boolean {
+    if (item.owned) return true
+    const s = item.stock
+    if (s != null && s == 0) return true
+    return false
+}
+
+export function usePointsGoodsDetail() : UsePointsGoodsDetailResult {
+    /** 当前商品 sku（onLoad 传入；空串 = 无参数，页面呈现「商品不存在」空态） */
+    let sku = ''
+    const goods = ref<ShopItem | null>(null) as Ref<ShopItem | null>
+    const pointsBalance = ref<number>(0) as Ref<number>
+    const loading = ref<boolean>(false) as Ref<boolean>
+    const loadFailed = ref<boolean>(false) as Ref<boolean>
+    const redeeming = ref<boolean>(false) as Ref<boolean>
+
+    // ===== 投影（模板只消费投影，不碰 ShopItem 原始字段；声明先于引用：UTS 无提升）=====
+    /** 商品图：N1 image_url 骨架位，列未上线恒 null ⇒ 投影成空串（'' = 走包内默认图兜底） */
+    const goodsImageUrl = computed<string>(() : string => {
+        const g = goods.value
+        if (g == null) return ''
+        return g.image_url ?? ''
+    })
+
+    const goodsTitle = computed<string>(() : string => {
+        const g = goods.value
+        return g == null ? '' : g.title
+    })
+
+    const goodsPriceText = computed<string>(() : string => {
+        const g = goods.value
+        return g == null ? '' : g.price.toString()
+    })
+
+    const goodsDescText = computed<string>(() : string => {
+        const g = goods.value
+        return g == null ? '' : (g.description ?? '')
+    })
+
+    /** 库存有限（stock 非 null）才显示「数量有限，兑完即止」——不限库存不撒这个谎 */
+    const hasStockLimit = computed<boolean>(() : boolean => {
+        const g = goods.value
+        return g != null && g.stock != null
+    })
+
+    const balanceText = computed<string>(() : string => {
+        return formatCountFull(pointsBalance.value)
+    })
+
+    /** 找不到商品（含无 sku 参数）≠ 加载失败：空态与错误态在模板里可分（#408/#409 口径） */
+    const notFound = computed<boolean>(() : boolean => {
+        return !loading.value && !loadFailed.value && goods.value == null
+    })
+
+    const ctaBlocked = computed<boolean>(() : boolean => {
+        const g = goods.value
+        if (g == null) return true
+        return blocked(g) || redeeming.value
+    })
+
+    const ctaText = computed<string>(() : string => {
+        const g = goods.value
+        if (g == null) return '立即兑换'
+        if (g.owned) return '已拥有'
+        const s = g.stock
+        if (s != null && s == 0) return '已售罄'
+        if (redeeming.value) return '兑换中'
+        return '立即兑换'
+    })
+
+    // ===== 数据加载 =====
+
+    /** 余额读失败不挡详情（装饰性提示不该制造一次用户没触发的报错，ADR-0031 决策 3） */
+    async function loadBalance() : Promise<void> {
+        try {
+            const bal = await getPointsBalanceApi(true)
+            pointsBalance.value = bal.balance
+        } catch (e) {
+            console.warn('[points-goods-detail] balance failed:', errMsg(e, '余额读取失败'))
+        }
+    }
+
+    async function loadGoods() : Promise<void> {
+        if (sku.length == 0) return
+        loading.value = true
+        loadFailed.value = false
+        try {
+            const res = await getShopItemsApi()
+            let found : ShopItem | null = null
+            for (let i = 0; i < res.items.length; i++) {
+                if (res.items[i].sku == sku) {
+                    found = res.items[i]
+                    break
+                }
+            }
+            goods.value = found
+        } catch (e) {
+            loadFailed.value = true
+            console.warn('[points-goods-detail] load failed:', errMsg(e, '商品加载失败'))
+        }
+        loading.value = false
+    }
+
+    /** 入口：onLoad 传 sku，余额与商品并行取 */
+    function load(s : string) : void {
+        sku = s
+        loadBalance()
+        loadGoods()
+    }
+
+    // ===== 兑换（被调用者先声明）=====
+
+    /** 兑换成功落点：ai_pro = #1942 权益落点（switchTab，SKU 常量单点消费不写字面量）；
+     *  其余 SKU = 原型边 立即兑换(811:3685) → 608:9111（G-00 改语义 = 积分兑换记录页） */
+    function goEntitlementLanding(s : string) : void {
+        if (s == AI_PRO_SKU) {
+            uni.switchTab({ url: '/pages/ai-assistant/ai-assistant' })
+            return
+        }
+        uni.navigateTo({ url: '/pages/points/points-exchange-records' })
+    }
+
+    /** 真正发起兑换：守卫全在服务端（余额 / 已拥有 / 在售），失败后按服务端事实重拉 */
+    async function doRedeem(item : ShopItem) : Promise<void> {
+        if (redeeming.value) return
+        redeeming.value = true
+        try {
+            const res = await redeemShopItemApi(item.sku)
+            redeeming.value = false
+            pointsBalance.value = res.balance
+            uni.showToast({ title: '兑换成功', icon: 'success' })
+            await loadGoods()
+            goEntitlementLanding(item.sku)
+        } catch (e) {
+            redeeming.value = false
+            uni.showToast({ title: errMsg(e, '兑换失败'), icon: 'none' })
+            await loadGoods()
+        }
+    }
+
+    /**
+     * 兑换前提示：把「要扣多少 / 手里有多少」摆进同一句；余额不足时明说会被服务端拒，
+     * 并给「去赚积分」的出路——但不代替服务端裁定（预判不拦截 CTA，ADR-0031 决策 3）。
+     * 文案与 points-shop 的 onRedeem 同一口径。
+     */
+    function redeem() : void {
+        const item = goods.value
+        if (item == null || blocked(item) || redeeming.value) return
+        const short = pointsBalance.value < item.price
+        const content = '该商品需 ' + item.price.toString() + ' 积分，当前可用 ' +
+            pointsBalance.value.toString() + ' 积分。' +
+            (short ? '余额不足，继续兑换会被服务端拒绝。' : '确认兑换？')
+        uni.showModal({
+            title: short ? '积分不足' : '积分兑换',
+            content: content,
+            confirmText: short ? '继续兑换' : '确认兑换',
+            cancelText: short ? '去赚积分' : '取消',
+            // showModal 的 success 回调不可为 async（Kotlin error17），异步动作转独立函数
+            success: (res) => {
+                if (res.confirm) {
+                    doRedeem(item)
+                    return
+                }
+                if (short) {
+                    uni.navigateTo({ url: '/pages/points/task-center' })
+                }
+            }
+        })
+    }
+
+    return {
+        goods: goods,
+        goodsImageUrl: goodsImageUrl,
+        goodsTitle: goodsTitle,
+        goodsPriceText: goodsPriceText,
+        goodsDescText: goodsDescText,
+        hasStockLimit: hasStockLimit,
+        balanceText: balanceText,
+        loading: loading,
+        loadFailed: loadFailed,
+        redeeming: redeeming,
+        notFound: notFound,
+        ctaBlocked: ctaBlocked,
+        ctaText: ctaText,
+        load: (s : string) : void => load(s),
+        redeem: () : void => redeem(),
+    } as UsePointsGoodsDetailResult
+}

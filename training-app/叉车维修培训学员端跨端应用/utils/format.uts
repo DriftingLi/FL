@@ -128,8 +128,24 @@ export function formatCountCompact(n : number) : string {
 
 /**
  * 数字格式化：详情页完整格式（千分位）
- * 12345 → "12,345"
+ * 12345 → "12,345"、1300 → "1,300"（原型 810:3399「现有积分 1,300」）
+ *
+ * 为什么手工逐三位分组：UTS Kotlin 端没有 number.toLocaleString（unresolved reference，
+ * #2518 第 5 刀 ④c 实测——本函数此前零消费、被摇树没编到，首次接线即红）。
+ * 分组只作用于整数位；负号与小数部分原样保留（调用面 = 积分余额，整数语义）。
  */
 export function formatCountFull(n : number) : string {
-	return n.toLocaleString()
+	const text = (n < 0 ? -n : n).toString()
+	const dot = text.indexOf('.')
+	const intPart = dot >= 0 ? text.substring(0, dot) : text
+	const fracPart = dot >= 0 ? text.substring(dot) : ''
+	let grouped = ''
+	for (let i = 0; i < intPart.length; i++) {
+		grouped += intPart.charAt(i)
+		const remain = intPart.length - i
+		if (remain > 1 && remain % 3 == 1) {
+			grouped += ','
+		}
+	}
+	return (n < 0 ? '-' : '') + grouped + fracPart
 }

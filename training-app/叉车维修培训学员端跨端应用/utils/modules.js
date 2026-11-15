@@ -449,8 +449,10 @@ const MODULES = {
     files: [
       'api/points.uts',
       'pages/points/composables/usePointsExchangeRecords.uts',
+      'pages/points/composables/usePointsGoodsDetail.uts',
       'pages/points/points-detail.uvue',
       'pages/points/points-exchange-records.uvue',
+      'pages/points/points-goods-detail.uvue',
       'pages/points/points-rules.uvue',
       'pages/points/points-shop.uvue',
       'pages/points/task-center.uvue',
@@ -459,7 +461,8 @@ const MODULES = {
     // #1421：course-detail.uvue 消费 api/points.uts（redeemCoursePointsApi + getPointsBalanceApi，
     // 兑换面单点归详情但动词单点归 points 域 —— 消费者登记在被消费模块，ADR-0023 ③）
     crossModuleConsumers: ['profile', 'courses'],
-    /** 超预算：points-shop.uvue 722（#2518 第 2 刀：左栏三态 + 筛选两态入页，2026-11-15 实测；模块其余文件均 ≤600） */
+    /** 超预算：points-shop.uvue 722（#2518 第 2 刀：左栏三态 + 筛选两态入页，2026-11-15 实测；
+     *  #2518 第 5 刀新增 usePointsGoodsDetail / points-goods-detail 均 ≤600；模块其余文件均 ≤600） */
     budget: 'pending',
     budgetOverrides: {},
     maxDepth: MAX_DEPTH,
