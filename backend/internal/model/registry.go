@@ -128,6 +128,7 @@ var ModelBlocks = []ModelBlock{
 			&PointsTaskClaim{},
 			&PointsUserProgress{},
 			&PointsShopItem{},
+			&MallView{}, // 游览商城事实源（#2550）：依赖 hrwai_users 与 points_shop_item
 			&UserEntitlement{},
 			&PointsEntryIdem{},
 		},

@@ -111,7 +111,14 @@ type taskMeta struct {
 	// TodayCourseBrowse 今日浏览过的**不同课程**数（#2065，上限 3）：事实源是 course_views 的
 	// 按日去重行，不读 study_record（那条是学习进度语义，看一眼课程不该写脏进度）。
 	TodayCourseBrowse int
-	CourseDone        bool // 完成过 ≥1 节课程
+	// TodayMallBrowse 今日浏览过的**不同商城商品**数（#2550，上限 3）：事实源是 mall_views
+	// 的按日去重行，判据与 browse_course 同形（一天一件商品一笔）。
+	TodayMallBrowse int
+	// TodayGiftRedeem 今日是否完成过积分兑礼（#2550）：三条兑换路径（商城/课程/真题卷）
+	// 都收敛到 redeem 单点并写 reason=redeem_* 的 points_ledger 流水（ADR-0023/0041），
+	// 判据直接读当日流水，不另立第三张事实表。
+	TodayGiftRedeem bool
+	CourseDone      bool // 完成过 ≥1 节课程
 }
 
 // loadTaskMeta 一次查询取齐全部行为判定所需数据（读错误向上传播，沿用 #409 口径）。
@@ -163,6 +170,22 @@ func (s *Service) loadTaskMeta(userID int) (*taskMeta, error) {
 	if m.TodayCourseBrowse > courseBrowseTarget {
 		m.TodayCourseBrowse = courseBrowseTarget
 	}
+	var mallBrowsed int64
+	if err := s.db.Model(&model.MallView{}).Where("user_id = ? AND view_date = ?", userID, today).Count(&mallBrowsed).Error; err != nil {
+		return nil, err
+	}
+	m.TodayMallBrowse = int(mallBrowsed)
+	if m.TodayMallBrowse > mallBrowseTarget {
+		m.TodayMallBrowse = mallBrowseTarget
+	}
+	// 兑礼事件 = 当日不可回退的 redeem_* 积分流水；三条兑换路径共用 redeem 单点，reason 前缀即事件类型。
+	var giftRedeemed int64
+	if err := s.db.Model(&model.PointsLedger{}).
+		Where("user_id = ? AND delta < 0 AND reason LIKE ? AND created_at >= ?", userID, "redeem_%", todayStart).
+		Count(&giftRedeemed).Error; err != nil {
+		return nil, err
+	}
+	m.TodayGiftRedeem = giftRedeemed > 0
 	if err := s.db.Model(&model.StudyRecord{}).Where("student_id = ? AND progress >= 100", userID).Count(&n).Error; err != nil {
 		return nil, err
 	}
@@ -173,6 +196,10 @@ func (s *Service) loadTaskMeta(userID int) (*taskMeta, error) {
 // courseBrowseTarget 「浏览 3 门课程」的达成门槛（#2065）：与配置行的标题/描述同源，
 // 三处（本常量、配置行文案、判据 Progress/Total）一起改才是改口径。
 const courseBrowseTarget = 3
+
+// mallBrowseTarget 「游览商城」的达成门槛（#2550）：原型 569:4532 写明「游览 3 个商品」，
+// 与 courseBrowseTarget 同形——判据按日去重后的不同商品数，不是页面打开次数。
+const mallBrowseTarget = 3
 
 // taskProgress 行为达成判定的结果：claimable 是否可领；progress/total 展示进度。
 type taskProgress struct {
@@ -230,6 +257,16 @@ func taskProgressFor(cfg model.PointsTaskConfig, m *taskMeta) (taskProgress, boo
 			Progress:  m.TodayCourseBrowse,
 			Total:     courseBrowseTarget,
 		}, true
+	case "browse_mall":
+		return taskProgress{
+			Claimable: m.TodayMallBrowse >= mallBrowseTarget,
+			Progress:  m.TodayMallBrowse,
+			Total:     mallBrowseTarget,
+		}, true
+	case "exchange_gift":
+		// 兑礼事实由 points_ledger 的 redeem_* 流水承担；progress 只在 claimable 时由
+		// GetTasks 补成 1/1，与其它「有无达成」型任务同形。
+		return taskProgress{Claimable: m.TodayGiftRedeem, Progress: 0, Total: 1}, true
 	case "daily_login":
 		// 无行为前置（ADR-0054）：每日进任务中心即可领。原判定挂在「当日 user_daily_login 行
 		// 存在」上，而落表取决于客户端是否续期会话（Web 端「本地 token 未过期就直接用」）——
@@ -969,6 +1006,40 @@ func (s *Service) ListShopItems(ctx context.Context, userID int, filter ShopItem
 		})
 	}
 	return &ShopItemsResult{Items: items}, nil
+}
+
+// MallBrowseResult 「游览商城」上报结果（#2550）。
+// Recorded=false 表示**今天已经记过这件商品**（幂等），不是错误：重复进入详情是正常行为。
+type MallBrowseResult struct {
+	Recorded bool `json:"recorded"`
+}
+
+// RecordMallView 记一笔「游览商城商品」（#2550）：学员打开商城商品详情即上报。
+//
+// 三条口径（照 RecordCourseView 先例）：
+//   - 可浏览性与在售列表同一谓词（enabled + 对账表已登记读者）——不给任意 sku 造事实的机会；
+//   - 一天一件商品只记一笔（主键去重，ON CONFLICT DO NOTHING），重复进入不改写、不重复计；
+//   - 写失败如实上抛（ADR-0062 票6）：咽掉会让任务进度静默停在旧值。
+func (s *Service) RecordMallView(userID int, sku string) (*MallBrowseResult, error) {
+	var item model.PointsShopItem
+	err := s.db.Where("sku = ? AND enabled = true", sku).First(&item).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrShopItemUnavailable
+	}
+	if err != nil {
+		return nil, err
+	}
+	if _, _, err := shopRedeemEntitlementKey(sku); err != nil {
+		// 未登记读者 / 价格事实源那一行都不是「在售商品」，与列表同一拒法。
+		return nil, ErrShopItemUnavailable
+	}
+	res := s.db.Exec(
+		"INSERT INTO mall_views (user_id, view_date, sku) VALUES (?,?,?) ON CONFLICT (user_id, view_date, sku) DO NOTHING",
+		userID, s.shanghaiDate(), sku)
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	return &MallBrowseResult{Recorded: res.RowsAffected > 0}, nil
 }
 
 // RedeemShop 兑换商城物品。

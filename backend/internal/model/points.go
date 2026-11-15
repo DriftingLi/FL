@@ -82,6 +82,18 @@ type PointsShopItem struct {
 
 func (PointsShopItem) TableName() string { return "points_shop_item" }
 
+// MallView 「游览商城」按日去重的商品浏览事实（#2550）：学员打开商城商品详情即记一笔。
+// 与 CourseView / ForumTopicView 同构：一天之内同一件商品只记一笔（重复进入不重复计），
+// 主键顺序让任务判据「按人按日 COUNT」走前缀扫描；不复用 points_shop_item（目录不记谁看过）。
+type MallView struct {
+	UserID    int       `gorm:"column:user_id;primaryKey" json:"user_id"`
+	ViewDate  string    `gorm:"column:view_date;primaryKey;type:date" json:"view_date"`
+	SKU       string    `gorm:"column:sku;primaryKey;size:64" json:"sku"`
+	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+func (MallView) TableName() string { return "mall_views" }
+
 // UserEntitlement 用户权益（课程/真题解锁）。
 type UserEntitlement struct {
 	UserID    int       `gorm:"column:user_id;primaryKey" json:"user_id"`
