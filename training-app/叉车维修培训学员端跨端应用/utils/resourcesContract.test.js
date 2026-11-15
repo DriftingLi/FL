@@ -133,7 +133,7 @@ describe('forum 资源入口改跳契约（#760：统一进 forum-create 资源 
   it('forum-create 资源 tab 绝不把 resource 发进发帖接口（按钮隐藏 + onSubmit 早退双守卫）', () => {
     const src = read('pages/forum/forum-create.uvue');
     expect(src).toMatch(/if\s*\(isResourceMode\.value\)\s*return/);
-    expect(src).toMatch(/<view v-if="!isResourceMode" class="submit-section">/);
+    expect(src).toMatch(/<view v-if="!isResourceMode && !isFeedbackMode" class="submit-section">/);
   });
 });
 
@@ -162,11 +162,15 @@ describe('forum-create 归一与资源模式契约（#710 + #760）', () => {
     expect(src).toMatch(/selectedCategory\s*=\s*ref<string>\('discussion'\)/);
     expect(src).not.toMatch(/ref<string>\('general'\)/);
   });
-  it('分类行含资源 tab（value=resource，非假映射 discussion）', () => {
-    expect(src).toMatch(/label:\s*'资源',\s*value:\s*'resource'/);
+  it('模块行只留讨论 / 提问两值（G-08：资源不占类别位，备考经验写侧不再产生）', () => {
+    expect(src).toMatch(/label:\s*'讨论',\s*value:\s*'discussion'/);
+    expect(src).toMatch(/label:\s*'提问',\s*value:\s*'question'/);
+    expect(src).not.toMatch(/label:\s*'资源',\s*value:\s*'resource'/);
   });
-  it('URL scope=resource 进资源模式；其余非法/历史归一', () => {
-    expect(src).toMatch(/s == 'resource' \? 'resource' : normalizeCategory\(s\)/);
+  it('URL scope=resource 进资源模式；scope=feedback 进反馈提交；其余非法/历史归一', () => {
+    expect(src).toMatch(/if \(s == 'resource'\) \{[\s\S]*?resourceMode\.value = true/);
+    expect(src).toMatch(/else if \(s == 'feedback'\) \{[\s\S]*?feedbackMode\.value = true/);
+    expect(src).toMatch(/selectedCategory\.value = normalizeCategory\(s\)/);
   });
   it('编辑回填过 normalizeCategory（帖子永不回填 resource）', () => {
     // #811：回填源改为详情 DTO 的 category（旧写法读不存在的 scope，问答/经验帖一进编辑态即降级 discussion）
@@ -174,7 +178,7 @@ describe('forum-create 归一与资源模式契约（#710 + #760）', () => {
   });
   it('isResourceMode 计算属性且编辑态互斥', () => {
     expect(src).toMatch(/const isResourceMode\s*=\s*computed<boolean>/);
-    expect(src).toMatch(/selectedCategory\.value == 'resource' && !isEdit\.value/);
+    expect(src).toMatch(/resourceMode\.value && !isEdit\.value/);
   });
 });
 

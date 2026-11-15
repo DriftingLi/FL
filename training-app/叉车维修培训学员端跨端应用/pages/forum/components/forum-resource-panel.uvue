@@ -7,7 +7,7 @@
                     <text class="res-coin-icon-text">$</text>
                 </view>
                 <view class="res-coin-info">
-                    <text class="res-coin-label">我的金币</text>
+                    <text class="res-coin-label">我的积分</text>
                     <text class="res-coin-value">{{ coinText }}</text>
                 </view>
             </view>

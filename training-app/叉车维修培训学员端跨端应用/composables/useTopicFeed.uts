@@ -67,10 +67,10 @@ export function useTopicFeed(currentTab : Ref<string>) : UseTopicFeedResult {
         // 后端 scope 白名单仅 all|general|chapter（tab 名不可直传，会被静默当 all），
         // category 白名单只有学员自述的两值 discussion|question（ADR-0040 收窄；
         // 'experience' 仅为旧客户端兼容保留、过滤不出任何行）
-        // 广场只出普通帖（discussion）；问答帖（question）走 category，经验帖走认定 is_experience
+        // 广场只出普通帖（discussion）；问答帖（question）走 category，经验帖走认定 experience 布尔参数
         let scope = 'general'
         let category = 'discussion'
-        let isExperience = ''
+        let experience = ''
         let sort = sortField.value
         let order = sortOrder.value
         if (currentTab.value === 'hot') {
@@ -80,18 +80,18 @@ export function useTopicFeed(currentTab : Ref<string>) : UseTopicFeedResult {
             order = 'desc'
             sort = qaSort.value == 'latest' ? 'latest' : 'hot'
         } else if (currentTab.value === 'experience') {
-            // 备考经验（#706 / ADR-0040）：经验的唯一判据是管理端认定 is_experience（不是 category）；
+            // 备考经验（#706 / ADR-0040 / N2 #2549）：经验的唯一判据是管理端认定（experience=true）；
             // scope=all —— 经验帖可挂章节也可不挂，看全量认定帖。
             // 最多赞→hot，最新→created（发帖时间，#727 排序档），默认→latest（活跃度）
             scope = 'all'
             category = ''
-            isExperience = 'true'
+            experience = 'true'
             order = 'desc'
             sort = expSort.value == 'hot' ? 'hot' : (expSort.value == 'latest' ? 'created' : 'latest')
         }
         const statusParam = currentTab.value === 'hot' ? qaStatus.value : ''
         try {
-            const result = await getForumTopicsApi(page, pageSize, scope, sort, order, category, statusParam, featuredFilter.value, isExperience)
+            const result = await getForumTopicsApi(page, pageSize, scope, sort, order, category, statusParam, featuredFilter.value, experience)
             // 终止判据由 api 层的信封归一给出（ADR-0037 ①：page*pageSize < total），本模块不再自己算
             return {
                 items: result.items,

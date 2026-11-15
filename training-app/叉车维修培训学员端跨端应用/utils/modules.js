@@ -538,7 +538,8 @@ const MODULES = {
     ],
     extractDirs: ['pages/profile/components', 'pages/profile/composables'],
     /** jobs 于 #1946 加入：job-detail.uvue 消费本模块的 api/favorite.uts（详情页收藏按钮） */
-    crossModuleConsumers: ['courses', 'dashboard', 'featured', 'jobs', 'practice', 'resources', 'resume'],
+    /** forum 于 #2521 加入：forum-create 的 scope=feedback 模式消费本模块的 api/feedback.uts（G-09 普通反馈提交） */
+    crossModuleConsumers: ['courses', 'dashboard', 'featured', 'forum', 'jobs', 'practice', 'resources', 'resume'],
     /** 达标但贴近上限：`pages/profile/wrong-questions.uvue` 恰 600 行（先例 profileContract 的落袋锁） */
     budget: BUDGET,
     budgetOverrides: {},

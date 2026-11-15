@@ -3,10 +3,43 @@
         <app-nav-bar :title="headerTitle" variant="inverse" @left-click="onBack" />
 
         <scroll-view class="content-scroll" scroll-y="true">
-            <view class="form-section">
-                <!-- 分类选择 -->
-                <view class="form-item">
-                    <text class="form-label">分类</text>
+            <!-- ===== 反馈模式（G-09）：普通反馈提交 = 单向消息（POST /feedback）；提交后只显示「已提交」态，
+                 不做列表、不做状态流转、不做回复线程，也不带 type / 工单号 / SLA ===== -->
+            <view v-if="isFeedbackMode" class="form-section">
+                <view v-if="feedbackSubmitted" class="feedback-done">
+                    <text class="feedback-done-icon">✓</text>
+                    <text class="feedback-done-title">已提交</text>
+                    <text class="feedback-done-sub">感谢你的反馈，我们会认真查看</text>
+                    <view class="feedback-done-btn" @click="onBack">
+                        <text class="feedback-done-btn-text">返回</text>
+                    </view>
+                </view>
+                <template v-else>
+                    <view class="form-item">
+                        <text class="form-label">反馈内容</text>
+                        <textarea class="feedback-textarea" :maxlength="feedbackContentMax"
+                            placeholder="请描述你遇到的问题或建议（1-1000 字）" v-model="feedbackContent"></textarea>
+                        <text class="form-counter">{{ feedbackContent.length }}/{{ feedbackContentMax }}</text>
+                    </view>
+                    <view class="form-item">
+                        <text class="form-label">联系方式（选填）</text>
+                        <input class="form-input" type="text" :maxlength="80"
+                            placeholder="手机 / 微信 / QQ，方便我们联系你" v-model="feedbackContact" />
+                    </view>
+                    <view class="submit-section submit-section-inline">
+                        <view class="submit-btn" :class="{ disabled: !canSubmitFeedback }" @click="onSubmitFeedback">
+                            <text class="submit-btn-text">{{ feedbackSubmitting ? '提交中...' : '提交' }}</text>
+                        </view>
+                    </view>
+                </template>
+            </view>
+
+            <!-- ===== 发帖 / 资源投稿模式 ===== -->
+            <view v-else class="form-section">
+                <!-- 模块选择（G-08：写侧只留「讨论 / 提问」两值；资源是 URL scope 进来的真模式，
+                     不再占类别位，因此资源态不显示模块行） -->
+                <view v-if="!isResourceMode" class="form-item">
+                    <text class="form-label">模块</text>
                     <view class="category-row">
                         <view v-for="(cat, idx) in categories" :key="idx" class="category-chip"
                             :class="{ active: selectedCategory === cat.value }" @click="onSelectCategory(cat.value)">
@@ -45,7 +78,7 @@
                     :credential-id="credentialId" :credential-name="credentialName" />
             </view>
 
-            <view v-if="!isResourceMode" class="submit-section">
+            <view v-if="!isResourceMode && !isFeedbackMode" class="submit-section">
                 <view class="submit-btn" :class="{ disabled: !canSubmit }" @click="onSubmit">
                     <text class="submit-btn-text">{{ submitLabel }}</text>
                 </view>
@@ -64,6 +97,7 @@ import { goBack } from '../../utils/navigation'
     import { useForumImagePicker } from '../../composables/useForumImagePicker'
     import { FORUM_MAX_TOPIC_IMAGES } from '../../constants/app'
     import { createForumTopicApi, updateForumTopicApi, getForumTopicDetailApi } from '../../api/forum'
+    import { submitFeedbackApi, FEEDBACK_CONTENT_MAX } from '../../api/feedback'
     import { getCurrentCredentialApi } from '../../api/credential'
     import { useAuthStore } from '../../stores/auth'
     import type { ForumTopicDetail } from '../../types/index'
@@ -76,13 +110,13 @@ import { goBack } from '../../utils/navigation'
     const windowHeight = uni.getSystemInfoSync().windowHeight
     const authStore = useAuthStore()
 
-    // ===== 分类选项（#760：资源 tab 承载投稿表单，为真模式非论坛类别） =====
-    // ADR-0040：「备考经验」改为管理端认定，发布口不再提供 —— 分类行三段 = 广场/资源/知识问答
+    // ===== 模块选项（G-08 / ADR-0040：写侧只留「讨论 / 提问」两值）=====
+    // 资源是 URL scope=resource 进来的投稿模式（#760），不占学员可自述的类别位；
+    // 「备考经验」是管理端认定，只读、不再产生新数据（N2 #2549 读参数与 #2521 成对落地）。
     type CategoryOption = { label : string, value : string }
     const categories : CategoryOption[] = [
-        { label: '广场', value: 'discussion' },
-        { label: '资源', value: 'resource' },
-        { label: '知识问答', value: 'question' },
+        { label: '讨论', value: 'discussion' },
+        { label: '提问', value: 'question' },
     ]
 
     // ===== 表单状态 =====
@@ -106,6 +140,18 @@ import { goBack } from '../../utils/navigation'
     // 文件列表与提交在 forum-contribution-form 组件内自持
     const credentialId = ref<number>(0)
     const credentialName = ref<string>('')
+
+    // ===== 两种 URL 模式（Q4+Q14 / Q5）：scope=resource 投稿；scope=feedback 普通反馈提交（G-09） =====
+    const resourceMode = ref<boolean>(false)
+    const feedbackMode = ref<boolean>(false)
+    const feedbackContent = ref<string>('')
+    const feedbackContact = ref<string>('')
+    const feedbackSubmitting = ref<boolean>(false)
+    const feedbackSubmitted = ref<boolean>(false)
+    /** 反馈正文上限与 `api/feedback` 同源（不在页面另抄字面量） */
+    const feedbackContentMax : number = FEEDBACK_CONTENT_MAX
+    /** G-09：反馈不带图片（本模式只做单向文本提交），显式空数组避免 UTS 推断成 any[] */
+    const feedbackNoImages : string[] = []
 
     // ===== 正文格式轴（ADR-0025 P3 输入区形态）=====
     /** 新建态：作者上次声明的档位（根 ADR-0044「首次默认纯文本、之后记住上次选择」） */
@@ -132,10 +178,13 @@ import { goBack } from '../../utils/navigation'
         content.value = value
     }
 
-    /** 资源 tab = 投稿模式；编辑态永不进资源（帖子无 resource 类别） */
+    /** 资源投稿模式（#760）：由 URL scope=resource 进入；编辑态永不进资源（帖子无 resource 类别） */
     const isResourceMode = computed<boolean>(() : boolean => {
-        return selectedCategory.value == 'resource' && !isEdit.value
+        return resourceMode.value && !isEdit.value
     })
+
+    /** 反馈提交模式（G-09）：由 URL scope=feedback 进入，走 POST /feedback 单向提交 */
+    const isFeedbackMode = computed<boolean>(() : boolean => feedbackMode.value)
 
     // ⚠️ 下面两条**必须**排在 `isResourceMode` 之后：UTS 编译到 Kotlin 后**没有变量提升**，
     // 在前面的初始化式里引用后面声明的 computed 会直接 `unresolved reference`（④c 门实测，
@@ -151,6 +200,7 @@ import { goBack } from '../../utils/navigation'
 
     const headerTitle = computed<string>(() : string => {
         if (isEdit.value) return '编辑帖子'
+        if (isFeedbackMode.value) return '提交需求'
         return isResourceMode.value ? '上传资源' : '发布新帖'
     })
 
@@ -170,13 +220,17 @@ import { goBack } from '../../utils/navigation'
         return true
     })
 
+    /** 反馈是否可提交（G-09：正文必填，1–1000 字；图片/类型都不在本模式） */
+    const canSubmitFeedback = computed<boolean>(() : boolean => {
+        if (feedbackSubmitting.value) return false
+        if (feedbackSubmitted.value) return false
+        if (feedbackContent.value.trim().length == 0) return false
+        return true
+    })
+
     // ===== 分类选择 =====
     function onSelectCategory(value : string) : void {
         if (submitting.value) return
-        if (isEdit.value && value == 'resource') {
-            uni.showToast({ title: '编辑帖子不支持资源分类', icon: 'none' })
-            return
-        }
         selectedCategory.value = value
     }
 
@@ -271,11 +325,45 @@ import { goBack } from '../../utils/navigation'
         }
     }
 
+    // ===== 反馈提交（G-09：普通反馈提交，单向消息；POST /feedback，不加 type） =====
+    async function onSubmitFeedback() : Promise<void> {
+        if (feedbackSubmitting.value) return
+        if (feedbackSubmitted.value) return
+        const text = feedbackContent.value.trim()
+        if (text.length == 0) {
+            uni.showToast({ title: '请先写点内容', icon: 'none' })
+            return
+        }
+        feedbackSubmitting.value = true
+        try {
+            // 与「我的 → 帮助中心」的反馈同一接口、同一语义；提交成功只切「已提交」态
+            await submitFeedbackApi(text, feedbackNoImages, feedbackContact.value.trim())
+            feedbackSubmitted.value = true
+        } catch (e) {
+            console.error('[forum-create] feedback submit failed:', e)
+            let msg = '提交失败'
+            if (e instanceof Error) {
+                const errObj = e as Error
+                const m = errObj.message
+                if (m != null && m.length > 0) {
+                    msg = m
+                }
+            }
+            uni.showToast({ title: msg, icon: 'none' })
+        } finally {
+            feedbackSubmitting.value = false
+        }
+    }
+
     // 图片域（选图 / 逐张上传 / 删除 / 预览）整域取自 `composables/useForumImagePicker.uts`
     // —— 与回复栏**同一份实现**（限额只在 constants/app 单点声明），本页不再持第二份流水线。
 
     function onBack() : void {
-        if (title.value.length > 0 || content.value.length > 0) {
+        if (feedbackSubmitted.value) {
+            goBack()
+            return
+        }
+        if (feedbackContent.value.length > 0 || title.value.length > 0 || content.value.length > 0) {
             uni.showModal({
                 title: '提示',
                 content: '确定放弃编辑吗？已输入的内容将丢失。',
@@ -301,12 +389,21 @@ import { goBack } from '../../utils/navigation'
                 loadTopicForEdit(parsedId)
             }
         }
-        // 从 URL 参数接收默认分类：resource 为合法投稿 tab（#760），
-        // 其余非法/历史 scope（含历史 experience）归一（#710 / ADR-0040）
+        // 从 URL 参数接收模式 / 默认分类：
+        //  - scope=resource → 资源投稿模式（#760 / Q5），不占学员可自述的类别位
+        //  - scope=feedback → 普通反馈提交（G-09 / Q4+Q14），走 POST /feedback
+        //  - 其余非法/历史 scope（含历史 experience）归一成 discussion / question（#710 / ADR-0040）
         const scope = options['scope']
         if (scope != null && scope != '') {
             const s = `${scope}`
-            selectedCategory.value = s == 'resource' ? 'resource' : normalizeCategory(s)
+            if (s == 'resource') {
+                resourceMode.value = true
+                selectedCategory.value = 'discussion'
+            } else if (s == 'feedback') {
+                feedbackMode.value = true
+            } else {
+                selectedCategory.value = normalizeCategory(s)
+            }
         }
     })
 
@@ -416,6 +513,62 @@ import { goBack } from '../../utils/navigation'
 
     .submit-btn-text {
         font-size: 32rpx;
+        color: #ffffff;
+        font-weight: bold;
+    }
+
+    /* ===== 反馈模式（G-09）：普通反馈提交（单向消息） ===== */
+    .feedback-textarea {
+        width: 100%;
+        height: 240rpx;
+        background-color: #f8f9fa;
+        border-radius: 12rpx;
+        padding: 20rpx 24rpx;
+        font-size: 30rpx;
+        color: #333333;
+        border: 1rpx solid #e0e0e0;
+    }
+
+    /* 反馈提交按钮在表单卡内，收掉外层的大段底部留白 */
+    .submit-section-inline {
+        padding: 8rpx 0 0;
+    }
+
+    /* 提交成功态：只显示「已提交」，不展示列表 / 状态流转 / 回复线程 */
+    .feedback-done {
+        align-items: center;
+        padding: 80rpx 0;
+    }
+
+    .feedback-done-icon {
+        font-size: 96rpx;
+        color: $success-color;
+    }
+
+    .feedback-done-title {
+        font-size: 36rpx;
+        font-weight: bold;
+        color: #333333;
+        margin-top: 24rpx;
+    }
+
+    .feedback-done-sub {
+        font-size: 26rpx;
+        color: #999999;
+        margin-top: 12rpx;
+    }
+
+    .feedback-done-btn {
+        margin-top: 48rpx;
+        background-color: $primary-color;
+        padding: 16rpx 64rpx;
+        border-radius: 36rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .feedback-done-btn-text {
+        font-size: 28rpx;
         color: #ffffff;
         font-weight: bold;
     }

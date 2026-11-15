@@ -25,9 +25,10 @@ import { FORMAT_TEXT } from '../utils/forumBody'
  * @param sort 排序字段，默认 latest
  * @param order 排序方向，默认 desc
  * @param featured 精选过滤（#742 契约，勿改名）：'true' | 'false'，空串表示不过滤
- * @param isExperience 经验认定过滤（ADR-0040 契约，勿改名）：'true' 仅管理端认定的经验帖，空串表示不过滤
+ * @param experience 经验认定过滤（N2 #2549 形状，2026-11-15 #2521 由 is_experience 切换）：
+ *        'true' 仅管理端认定的经验帖，'false' 仅非经验帖，空串表示不过滤
  */
-export function getForumTopicsApi(page : number = 1, pageSize : number = 10, scope : string = 'general', sort : string = 'latest', order : string = 'desc', category : string = '', status : string = '', featured : string = '', isExperience : string = '') : Promise<Page<ForumTopic>> {
+export function getForumTopicsApi(page : number = 1, pageSize : number = 10, scope : string = 'general', sort : string = 'latest', order : string = 'desc', category : string = '', status : string = '', featured : string = '', experience : string = '') : Promise<Page<ForumTopic>> {
     // 只装筛选维度：页码与每页条数由 getPaged 拼（#1737 收编，ADR-0037 ①）
     const params : UTSJSONObject = {
         scope: scope,
@@ -48,10 +49,11 @@ export function getForumTopicsApi(page : number = 1, pageSize : number = 10, sco
     if (featured.length > 0) {
         params['featured'] = featured
     }
-    // 经验认定过滤（ADR-0040）：经验 Tab 的唯一判据是管理端认定 is_experience，**不是** category
-    // （自称不产生事实：category='experience' 的存量行已被迁移降级为 discussion），空为不传
-    if (isExperience.length > 0) {
-        params['is_experience'] = isExperience
+    // 经验认定过滤（ADR-0040 / N2 #2549）：经验 Tab 的唯一判据是管理端认定（后端列 is_experience），
+    // 查询参数按 N2 给的形状叫 experience，**不是** category（自称不产生事实：存量行已降级），空为不传。
+    // 后端 #2549 未上线前该参数会被忽略；票面明写「先接形状骨架、不必等上线」。
+    if (experience.length > 0) {
+        params['experience'] = experience
     }
     return getPaged<ForumTopic>('/forum/topics', page, pageSize, (obj : UTSJSONObject) : ForumTopic => {
         return buildTopic(obj)

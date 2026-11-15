@@ -31,13 +31,13 @@
     }
 </script>
 
-<style>
-    /* 打卡活动卡片 */
+<style lang="scss">
+    /* 打卡活动卡片（原型 469:2994：浅蓝卡面 + 主色胶囊按钮） */
     .checkin-card {
         margin: 20rpx 24rpx;
         padding: 28rpx 32rpx;
-        border-radius: 16rpx;
-        background-color: #FFF8E1;
+        border-radius: 20rpx;
+        background-color: $primary-tint;
         flex-direction: row;
         align-items: center;
         justify-content: space-between;
@@ -51,23 +51,23 @@
     .checkin-card-title {
         font-size: 30rpx;
         font-weight: bold;
-        color: #333333;
+        color: $text-color;
         margin-bottom: 8rpx;
     }
 
     .checkin-card-date {
         font-size: 22rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         margin-bottom: 4rpx;
     }
 
     .checkin-card-players {
         font-size: 22rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .checkin-card-btn {
-        background-color: #2979ff;
+        background-color: $primary-color;
         padding: 16rpx 32rpx;
         border-radius: 32rpx;
         flex-shrink: 0;
@@ -75,7 +75,7 @@
 
     .checkin-card-btn-text {
         font-size: 26rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
         font-weight: bold;
     }
 </style>

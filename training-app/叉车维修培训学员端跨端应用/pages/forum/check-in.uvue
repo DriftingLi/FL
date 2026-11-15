@@ -54,20 +54,22 @@
             <view v-if="!loadError" class="calendar-grid">
                 <view v-for="(cell, idx) in calendarCells" :key="idx" class="calendar-cell">
                     <view class="cell-day" :class="getCellClass(cell)">
-                        <text class="cell-num" :class="getCellNumClass(cell)">{{ cell.day }}</text>
-                        <!-- 已打卡：蓝色圆 + 白色对勾 -->
+                        <text class="cell-num" :class="getCellNumClass(cell)">{{ cellLabel(cell) }}</text>
+                        <!-- 打卡完成 / 连续签到：蓝底白对勾 -->
                         <view v-if="cell.checked" class="badge badge-check">
                             <text class="badge-check-text">✓</text>
                         </view>
-                        <!-- 今日未打卡 / 本月未到日期：金币徽章 -->
-                        <view v-else-if="!cell.isAdjacent && !cell.isMissed" class="badge badge-coin">
-                            <text class="badge-coin-text">$</text>
-                        </view>
-                        <!-- 过去未打卡：灰色金币徽章 -->
+                        <!-- 逾期未打卡：灰瓦片 + 灰金币；未到打卡日期：白瓦片 + 淡金币 -->
                         <view v-else-if="cell.isMissed" class="badge badge-coin-missed">
                             <text class="badge-coin-missed-text">$</text>
                         </view>
-                        <!-- 相邻月日期：无徽章 -->
+                        <view v-else-if="cell.isFuture" class="badge badge-coin-faded">
+                            <text class="badge-coin-faded-text">$</text>
+                        </view>
+                        <!-- 当月默认（含今日未打卡）：蓝瓦片 + 金金币 -->
+                        <view v-else class="badge badge-coin">
+                            <text class="badge-coin-text">$</text>
+                        </view>
                     </view>
                 </view>
             </view>
@@ -108,6 +110,8 @@ import { goBack } from '../../utils/navigation'
         isToday : boolean
         isAdjacent : boolean
         isMissed : boolean
+        isFuture : boolean
+        isStreak : boolean
     }
 
     function padZero(n : number) : string {
@@ -121,12 +125,26 @@ import { goBack } from '../../utils/navigation'
 
     // 生成整周网格：周一为首列，前导=上月末真实日期，尾部=下月初真实日期
     // 每格日期均由 new Date(y, m-1, d) 归一化产生，星期列与真实日期严格对齐
+    // 瓦片状态按贴片 580:6795（#2521）：打卡完成 / 连续签到 / 默认 / 未打卡成功 / 未到打卡日期
     const calendarCells = computed<CalendarCell[]>(() : CalendarCell[] => {
         const cells : CalendarCell[] = []
         const year = displayYear.value
         const month = displayMonth.value
         const today = new Date()
         const todayStr = dateKey(today)
+        const todayMonthKey = today.getFullYear() + '-' + padZero(today.getMonth() + 1)
+        // 当前连续签到窗口：今天已打卡则从今天往前数，未打卡则从昨天往前数（streak 由 API 给）
+        const streak = consecutiveDays.value
+        let streakStartStr = ''
+        let streakEndStr = ''
+        if (streak > 0) {
+            const anchor = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+            if (!todayChecked.value) anchor.setDate(anchor.getDate() - 1)
+            const start = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate())
+            start.setDate(start.getDate() - (streak - 1))
+            streakStartStr = dateKey(start)
+            streakEndStr = dateKey(anchor)
+        }
         // getDay(): 0=周日；周一为首列时上月末需补的天数
         const firstWeekday = new Date(year, month - 1, 1).getDay()
         const leadCount = firstWeekday == 0 ? 6 : firstWeekday - 1
@@ -165,8 +183,15 @@ import { goBack } from '../../utils/navigation'
                     }
                 }
             }
-            const isMissed = !isAdjacent && !isToday && !checked && dateStr < todayStr
-            cells.push({ day: d, date: dateStr, checked: checked, isToday: isToday, isAdjacent: isAdjacent, isMissed: isMissed } as CalendarCell)
+            // 「未打卡成功」= 逾期未打卡（含相邻月已过去的日期）；「未到」= 下个月（尚未到打卡时间）
+            const isMissed = !checked && dateStr < todayStr
+            const cellMonthKey = dt.getFullYear() + '-' + padZero(dt.getMonth() + 1)
+            const isFuture = cellMonthKey > todayMonthKey
+            const isStreak = checked && streak > 0 && dateStr >= streakStartStr && dateStr <= streakEndStr
+            cells.push({
+                day: d, date: dateStr, checked: checked, isToday: isToday, isAdjacent: isAdjacent,
+                isMissed: isMissed, isFuture: isFuture, isStreak: isStreak,
+            } as CalendarCell)
         }
         // 打印调试：列出所有 checked 的日期
         const checkedDays : string[] = []
@@ -185,21 +210,27 @@ import { goBack } from '../../utils/navigation'
         return displayYear.value == now.getFullYear() && displayMonth.value == now.getMonth() + 1
     })
 
-    // 瓦片四态：今日未打卡=深蓝高亮；已打卡=浅蓝；过去未打卡=灰；默认/未到=白；相邻月=白底淡化
+    /** 连续签到瓦片的数字 = 当前连续天数（贴片 580:6795 的「13」形态）；其余瓦片显示日号 */
+    function cellLabel(cell : CalendarCell) : string {
+        if (cell.isStreak) return consecutiveDays.value.toString()
+        return cell.day.toString()
+    }
+
+    // 瓦片五态：连续签到=黄；打卡完成=白；逾期未打卡=灰；未到=白+淡金币；当月默认=蓝+金金币
     function getCellClass(cell : CalendarCell) : string {
-        if (cell.isAdjacent) return 'cell-adjacent'
+        if (cell.isStreak) return 'cell-streak'
         if (cell.checked) return 'cell-checked'
-        if (cell.isToday) return 'cell-today'
         if (cell.isMissed) return 'cell-missed'
+        if (cell.isFuture) return 'cell-future'
         return 'cell-default'
     }
 
     function getCellNumClass(cell : CalendarCell) : string {
-        if (cell.isAdjacent) return 'num-adjacent'
-        if (cell.isToday) return 'num-today'
+        if (cell.isStreak) return 'num-streak'
         if (cell.checked) return 'num-checked'
         if (cell.isMissed) return 'num-missed'
-        return ''
+        if (cell.isFuture) return 'num-future'
+        return 'num-default'
     }
 
     /** 签到提醒开关：切换并持久化本地偏好 */
@@ -318,20 +349,20 @@ import { goBack } from '../../utils/navigation'
 <style lang="scss">
     .container { display: flex; background-color: #f5f5f5; flex-direction: column; }
     .content-scroll { flex: 1; height: 0; }
-    .checkin-banner { margin: 24rpx; padding: 32rpx; border-radius: 20rpx; background-color: #2979ff; flex-direction: row; align-items: center; justify-content: space-between; }
+    .checkin-banner { margin: 24rpx; padding: 32rpx; border-radius: 20rpx; background-color: $primary-color; flex-direction: row; align-items: center; justify-content: space-between; }
     .banner-left { flex: 1; flex-direction: column; margin-right: 24rpx; }
     .banner-title { font-size: 34rpx; font-weight: bold; color: #ffffff; margin-bottom: 12rpx; }
     .banner-desc-row { flex-direction: row; flex-wrap: wrap; align-items: center; }
     .banner-desc { font-size: 22rpx; color: rgba(255, 255, 255, 0.85); }
     .banner-desc-num { font-size: 26rpx; font-weight: bold; color: #ffffff; }
     .banner-btn { background-color: #ffffff; padding: 16rpx 32rpx; border-radius: 32rpx; flex-shrink: 0; }
-    .banner-btn-text { font-size: 28rpx; font-weight: bold; color: #2979ff; }
+    .banner-btn-text { font-size: 28rpx; font-weight: bold; color: $primary-color; }
     .reminder-row { margin: 24rpx 24rpx 0 24rpx; flex-direction: row; align-items: center; justify-content: space-between; }
     .reminder-label { font-size: 30rpx; font-weight: bold; color: #333333; }
     .reminder-right { flex-direction: row; align-items: center; }
     .reminder-text { font-size: 24rpx; color: #999999; margin-right: 12rpx; }
     .switch { width: 84rpx; height: 48rpx; border-radius: 24rpx; background-color: $checkin-cell-miss; justify-content: center; padding: 0 4rpx; }
-    .switch-on { background-color: #2979ff; justify-content: flex-end; }
+    .switch-on { background-color: $primary-color; justify-content: flex-end; }
     .switch-knob { width: 40rpx; height: 40rpx; border-radius: 20rpx; background-color: #ffffff; }
     .month-bar { flex-direction: row; align-items: center; justify-content: center; padding: 20rpx 0; }
     .month-arrow { width: 64rpx; height: 64rpx; align-items: center; justify-content: center; }
@@ -341,37 +372,41 @@ import { goBack } from '../../utils/navigation'
     .week-item { flex: 1; text-align: center; font-size: 24rpx; color: #999999; }
     .calendar-grid { flex-direction: row; flex-wrap: wrap; padding: 0 16rpx; }
     .calendar-cell { width: 14.28%; align-items: center; padding: 6rpx 2rpx; }
-    /* 圆角方形瓦片：数字在上、状态徽章在下 */
+    /* 圆角方形瓦片：数字在上、状态徽章在下（贴片 580:6795 全状态） */
     .cell-day { width: 84rpx; height: 96rpx; border-radius: 16rpx; background-color: #ffffff; align-items: center; flex-direction: column; }
-    /* 今日未打卡：深蓝高亮瓦片 */
-    .cell-today { background-color: #2979ff; }
-    /* 已打卡：浅蓝瓦片 */
-    .cell-checked { background-color: #dbeafe; }
-    /* 过去未打卡：灰瓦片 */
+    /* 连续签到：黄瓦片；数字位显示当前连续天数（贴片的「13」形态） */
+    .cell-streak { background-color: #ffd666; }
+    /* 打卡完成：白瓦片 + 蓝对勾 */
+    .cell-checked { background-color: #ffffff; }
+    /* 逾期未打卡（含上月）：灰瓦片 + 灰金币 */
     .cell-missed { background-color: #e8e8e8; }
-    /* 默认/未到：白瓦片 */
-    .cell-default { background-color: #ffffff; }
-    /* 相邻月日期：白底淡化 */
-    .cell-adjacent { background-color: #ffffff; }
+    /* 未到打卡日期（下个月）：白瓦片 + 淡金币 */
+    .cell-future { background-color: #ffffff; }
+    /* 当月默认（含今日未打卡）：蓝瓦片 + 金金币 */
+    .cell-default { background-color: $primary-color; }
     .cell-num { font-size: 26rpx; color: #333333; line-height: 30rpx; margin-top: 12rpx; }
-    .num-today { color: #ffffff; font-weight: bold; }
-    .num-checked { color: #1d4ed8; }
+    .num-streak { color: #333333; font-weight: bold; }
+    .num-checked { color: #333333; }
     .num-missed { color: #8a8a8a; }
-    .num-adjacent { color: #cccccc; }
+    .num-future { color: #cccccc; }
+    .num-default { color: #ffffff; font-weight: bold; }
     /* 状态徽章：小圆形，位于数字下方 */
     .badge { width: 34rpx; height: 34rpx; border-radius: 17rpx; align-items: center; justify-content: center; margin-top: 8rpx; }
-    /* 已打卡：蓝底白对勾 */
-    .badge-check { background-color: #2979ff; }
+    /* 打卡完成 / 连续签到：蓝底白对勾 */
+    .badge-check { background-color: $primary-color; }
     .badge-check-text { font-size: 20rpx; color: #ffffff; line-height: 22rpx; font-weight: bold; }
-    /* 今日未打卡/未到：金色金币 */
+    /* 当月默认：金色金币 */
     .badge-coin { background-color: #f6b93e; }
     .badge-coin-text { font-size: 20rpx; color: #ffffff; font-weight: bold; line-height: 22rpx; }
-    /* 过去未打卡：灰色金币 */
+    /* 逾期未打卡：灰色金币 */
     .badge-coin-missed { background-color: #c9c9c9; }
     .badge-coin-missed-text { font-size: 20rpx; color: #ffffff; font-weight: bold; line-height: 22rpx; }
+    /* 未到打卡日期：淡金币（白瓦片上的低对比） */
+    .badge-coin-faded { background-color: #f5e3b3; }
+    .badge-coin-faded-text { font-size: 20rpx; color: #ffffff; font-weight: bold; line-height: 22rpx; }
     /* #1607 §8③ 失败态：错误提示 + 重试钮（色值走既有告警语义白瓦片族，不引新 token） */
     .error-state { align-items: center; padding: 80rpx 24rpx; }
     .error-state-text { font-size: 26rpx; color: #999999; margin-bottom: 24rpx; }
-    .error-retry-btn { background-color: #2979ff; padding: 16rpx 48rpx; border-radius: 32rpx; }
+    .error-retry-btn { background-color: $primary-color; padding: 16rpx 48rpx; border-radius: 32rpx; }
     .error-retry-text { font-size: 28rpx; color: #ffffff; font-weight: bold; }
 </style>
