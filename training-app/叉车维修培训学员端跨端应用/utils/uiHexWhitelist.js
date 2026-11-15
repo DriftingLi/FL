@@ -25,11 +25,10 @@ module.exports = {
     '#F7F8FA': 'pages/recruiter/job-edit.uvue field-input/field-textarea/chip 输入底 + resume-edit.uvue field 输入底——\-color(#F8F8F8) 近似但值不等，输入件视觉回归风险待真机裁',
     '#1565C0': 'pages/guide/choose-cert.uvue btn-confirm 渐变深端与实底兜底 + components/cert-selector.uvue 同款按钮——主色深阶，token 表无深阶位；与 points-detail.uvue 会员卡渐变尾色（linear-gradient(#2979ff,#1565c0)）同值（先例）',
     '#888888': 'pages/guide/choose-cert.uvue province-label/error-text 次要说明文字——\-color-secondary(#666666) 偏深、\-color-placeholder(#999999) 偏浅，中间灰无 token；收敛待灰阶 token 票裁',
-    '#F0F2F5': 'pages/guide/choose-cert.uvue province-bar 胶囊底（\-color(#F8F8F8)/\-color-light(#F0F0F0) 均不等，冷灰胶囊底） + pages/resume/resume-edit.uvue 分割浅灰——待真机裁',
+    '#F0F2F5': 'pages/guide/choose-cert.uvue province-bar 胶囊底（\-color(#F8F8F8)/\-color-light(#F0F0F0) 均不等，冷灰胶囊底）——待真机裁（#2524 起 resume-edit 分割线已改走 \-color-light）',
     '#F5F7FA': 'pages/guide/choose-cert.uvue page 页底——\-color(#F8F8F8) 近似但值不等，视觉回归风险待真机裁',
-    '#EEEEEE': 'pages/jobs/job-list.uvue tab-avatar 边框 + job-card 边框 + batch2 profile 两页分割线/边框——\-color(#e5e5e5)/\-color-light(#f0f0f0) 之间的更浅边框，待真机裁',
-    '#E8F0FE': 'pages/jobs/job-list.uvue filter-tag-active 主色浅底 + pages/practice/practice-do.uvue 题型标签浅蓝底——\-tint(#ebf5ff) 近似但值不等，视觉回归风险待真机裁',
-    '#F0F5FF': 'pages/jobs/job-list.uvue tab-avatar-placeholder 底——\-tint(#ebf5ff) 近似但值不等，视觉回归风险待真机裁',
+    '#EEEEEE': 'batch2 profile 两页分割线/边框——\-color(#e5e5e5)/\-color-light(#f0f0f0) 之间的更浅边框，待真机裁（#2524 起 job-list 的边框已改走 token）',
+    '#E8F0FE': 'pages/practice/practice-do.uvue 题型标签浅蓝底 + 内容精选四页浅底——\-tint(#EBF9FF) 近似但值不等，视觉回归风险待真机裁（#2524 起 job-list 已改走 \-tint）',
 
     // ── 批2（#1606 学员端 14 页）新增 ──
     '#2979FF': 'batch2 多页主操作蓝（option-key-selected/submit-btn/comment-send-active/section-action 等）——历史蓝，值 ≠ $primary-color(#239EDD)，字面替换会全站视觉回归，待主色 token 票裁',

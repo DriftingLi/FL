@@ -246,7 +246,7 @@
     /* ===== 卡片与字段 ===== */
     .card {
         background-color: $card-bg;
-        border-radius: 20rpx;
+        border-radius: $radius-card;
         padding: 28rpx;
         margin-top: 24rpx;
     }
@@ -258,10 +258,11 @@
         margin-bottom: 8rpx;
     }
 
+    /* 原型 671:5543 / 737:1711：单行 104rpx（≈52pt），值靠右、箭头贴右缘 */
     .field-row {
         flex-direction: row;
         align-items: center;
-        min-height: 96rpx;
+        min-height: 104rpx;
     }
 
     .field-label {
@@ -284,6 +285,7 @@
         border: none;
         padding: 0;
         height: 80rpx;
+        text-align: right;
     }
 
     .field-picker {
@@ -313,6 +315,7 @@
         flex: 1;
         flex-direction: row;
         align-items: center;
+        justify-content: flex-end;
     }
 
     .field-range-input {
@@ -333,7 +336,7 @@
 
     .divider {
         height: 1rpx;
-        background-color: #f0f2f5;
+        background-color: $border-color-light;
     }
 
     .area-input {
@@ -384,14 +387,14 @@
         margin-top: 24rpx;
         height: 80rpx;
         border-radius: 40rpx;
-        border: 2rpx dashed #2979ff;
+        border: 2rpx dashed $primary-color;
         align-items: center;
         justify-content: center;
     }
 
     .add-btn-text {
         font-size: 26rpx;
-        color: #2979ff;
+        color: $primary-color;
     }
 
     /* ===== 保存 ===== */
@@ -406,7 +409,7 @@
     .save-btn {
         height: 96rpx;
         border-radius: 48rpx;
-        background-color: #2979ff;
+        background-color: $primary-color;
         align-items: center;
         justify-content: center;
     }

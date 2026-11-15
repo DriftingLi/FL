@@ -42,9 +42,6 @@
   "pages/resources/materials.uvue": 2,
   "pages/resources/my-purchases.uvue": 3,
   "pages/resources/my-uploads.uvue": 1,
-  "pages/resume/components/resume-progress-card.uvue": 2,
   "pages/resume/resume-attach.uvue": 3,
-  "pages/resume/resume-edit.uvue": 3,
-  "pages/resume/resume.uvue": 4,
   "utils/forumDisplay.uts": 1
 }

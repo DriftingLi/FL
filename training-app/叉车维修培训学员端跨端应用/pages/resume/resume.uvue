@@ -33,9 +33,10 @@
                 </view>
             </view>
 
-            <!-- 简历完善度引导（#724 单页合并：真实 ResumeData 八项字段计算，服务端加载完成后未满 100% 展示） -->
+            <!-- 简历完善度引导（#724 单页合并：真实 ResumeData 八项字段计算，服务端加载完成后未满 100% 展示）
+                 B8 #2524：原型 485:5793「去填写简历」卡的 3D 卷轴切图落位；完善度条与文案按既有契约保留 -->
             <view class="resume-guide" v-if="resumeIncomplete">
-                <text class="resume-guide-icon">📄</text>
+                <image class="resume-guide-img" src="/static/icons/resume/resume-guide.png" mode="aspectFit" />
                 <text class="resume-guide-text">去填写简历</text>
                 <view class="resume-guide-prog-wrap">
                     <view class="resume-guide-prog-bar" :style="{ width: resumePct + '%' }"></view>
@@ -46,18 +47,23 @@
                 </view>
             </view>
 
-            <!-- 常用功能 -->
+            <!-- 常用功能：贴片 486:5873 三入口卡（在线简历 / 附件简历 / 求职意向） -->
             <text class="section-title">常用功能</text>
             <view class="func-grid">
                 <view class="func-card" @click="onOnlineResume">
-                    <text class="func-icon">📝</text>
+                    <image class="func-img" src="/static/icons/resume/online.png" mode="aspectFit" />
                     <text class="func-title func-title-online">在线简历</text>
                     <text class="func-desc">优化增加推荐</text>
                 </view>
                 <view class="func-card" @click="onAttachmentResume">
-                    <text class="func-icon">🗂️</text>
+                    <image class="func-img func-img-sm" src="/static/icons/resume/attach.png" mode="aspectFit" />
                     <text class="func-title func-title-attach">附件简历</text>
                     <text class="func-desc">制作/上传</text>
+                </view>
+                <view class="func-card" @click="onIntention">
+                    <image class="func-img func-img-sm" src="/static/icons/resume/intention.png" mode="aspectFit" />
+                    <text class="func-title func-title-attach">求职意向</text>
+                    <text class="func-desc">离职/随时到岗</text>
                 </view>
             </view>
         </scroll-view>
@@ -152,6 +158,15 @@
 
     function onAttachmentResume() : void {
         uni.navigateTo({ url: '/pages/resume/resume-attach' })
+    }
+
+    /**
+     * 求职意向（贴片 486:5873 第三卡）：全原型没有独立「求职意向」屏、NAV_FLOW 也无该屏，
+     * 求职意向的字段面（意向岗位 / 意向地区 / 薪资 / 到岗时间）唯一承载是 resume-edit 的
+     * 「求职期望」卡 ⇒ 按裁定 9「未接线时按上下文推断」落此，不新造路由、不造假数据。
+     */
+    function onIntention() : void {
+        uni.navigateTo({ url: '/pages/resume/resume-edit' })
     }
 
     /**
@@ -265,16 +280,14 @@
         color: #333333;
     }
 
+    /* 原型 485:5793：等级是名字后的纯文本「Lv3」，不是实底胶囊 */
     .lv-badge {
         margin-left: 12rpx;
-        padding: 2rpx 12rpx;
-        border-radius: 16rpx;
-        background-color: #2979ff;
     }
 
     .lv-badge-text {
-        font-size: 22rpx;
-        color: #ffffff;
+        font-size: 28rpx;
+        color: $text-color-secondary;
     }
 
     .stats-row {
@@ -292,9 +305,9 @@
     }
 
     .stat-num {
-        font-size: 34rpx;
+        font-size: 36rpx;
         font-weight: bold;
-        color: #333333;
+        color: $primary-color;
     }
 
     .stat-label {
@@ -313,8 +326,9 @@
         margin-top: 24rpx;
     }
 
-    .resume-guide-icon {
-        font-size: 56rpx;
+    .resume-guide-img {
+        width: 112rpx;
+        height: 120rpx;
     }
 
     .resume-guide-text {
@@ -334,13 +348,13 @@
 
     .resume-guide-prog-bar {
         height: 12rpx;
-        background-color: #2979ff;
+        background-color: $primary-color;
         border-radius: 6rpx;
     }
 
     .resume-guide-sub {
         font-size: 22rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         margin-top: 12rpx;
     }
 
@@ -348,7 +362,7 @@
         margin-top: 20rpx;
         padding: 12rpx 44rpx;
         border-radius: 36rpx;
-        background-color: #2979ff;
+        background-color: $primary-color;
     }
 
     .resume-guide-btn-text {
@@ -371,15 +385,22 @@
     }
 
     .func-card {
-        width: 48%;
+        width: 31.5%;
         align-items: center;
         background-color: #ffffff;
-        border-radius: 20rpx;
-        padding: 32rpx 0;
+        border-radius: $radius-card;
+        padding: 28rpx 8rpx;
     }
 
-    .func-icon {
-        font-size: 56rpx;
+    .func-img {
+        width: 68rpx;
+        height: 80rpx;
+    }
+
+    /* 两枚方形切图（附件简历 / 求职意向）等比不拉伸 */
+    .func-img-sm {
+        width: 80rpx;
+        height: 80rpx;
     }
 
     .func-title {
@@ -389,16 +410,16 @@
     }
 
     .func-title-online {
-        color: #16a34a;
+        color: $success-color;
     }
 
     .func-title-attach {
-        color: #2979ff;
+        color: $primary-color;
     }
 
     .func-desc {
         margin-top: 8rpx;
         font-size: 22rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 </style>
