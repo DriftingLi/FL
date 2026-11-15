@@ -71,12 +71,12 @@ module.exports = {
     '#FFF3A0': 'pages/exam/mock-exam.uvue timer-text.warning 倒计时提醒黄——$warning-color(#ff9900) 偏深，浅黄无 token 对应',
     '#FF9800': '批4 多页（chapter-view/practice-records/mock-exam-records/notebook）进行中/学习中状态橙——$warning-color(#ff9900) 语义相同但值不等，替换会视觉回归，待橙系 token 收敛裁',
     '#FFCDD2': 'pages/forum/forum-detail.uvue header-action-danger 删除字色——蓝底上删除入口浅红，token 表无对应',
-    '#DBEAFE': 'pages/forum/check-in.uvue cell-checked 已打卡浅蓝瓦片——G8 日历套历史色，$primary-tint 近似但值不等，待真机裁',
-    '#1D4ED8': 'pages/forum/check-in.uvue num-checked 已打卡日数字——深蓝文字，token 表无对应',
     '#E8E8E8': 'pages/forum/check-in.uvue cell-missed 过去未打卡灰瓦片——G8 日历套历史色，中性灰无 token 对应',
     '#8A8A8A': 'pages/forum/check-in.uvue num-missed 过去未打卡日数字——中灰文字，$text-color-secondary 偏深，待灰阶 token 票裁',
     '#F6B93E': 'pages/forum/check-in.uvue badge-coin 金币徽章底——金币金，token 表无对应',
     '#C9C9C9': 'pages/forum/check-in.uvue badge-coin-missed 灰金币徽章底——$text-disabled(#cccccc) 近似但值不等，待真机裁',
+    '#FFD666': 'pages/forum/check-in.uvue cell-streak 连续签到黄瓦片——贴片 580:6795 金币黄，token 表无对应（$warning-color 偏橙）',
+    '#F5E3B3': 'pages/forum/check-in.uvue badge-coin-faded 未到打卡日期淡金币——贴片 580:6795 低对比金币，token 表无对应',
 
     // ── 批5（#1608 N05 透明页头 7 页）新增 ──
     '#6ECCFC': 'pages/courses/courses.uvue category-card 渐变首色——#2518 刀3 按原型 442:1636 实测改垂直渐变（浅青蓝→深青蓝），token 表无渐变对对应（原 #60A5FA/#3B82F6 对随旧视觉一并退役）',

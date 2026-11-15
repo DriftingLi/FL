@@ -8,16 +8,17 @@
             </view>
         </view>
 
-        <!-- 知识问答：状态筛选（#740，两态按父票 #707 裁定，标签与 web 一致） -->
+        <!-- 知识问答：状态筛选（原型 849:817 三态顺序 = 已完成 / 进行中 / 全部；
+             值仍是后端 solved 参数的两态 + 全部，映射在 api/forum） -->
         <view class="qa-status-bar">
-            <view class="qa-chip" :class="{ active: qaStatus === '' }" @click="onStatusChange('')">
-                <text class="qa-chip-text" :class="{ active: qaStatus === '' }">全部</text>
+            <view class="qa-chip" :class="{ active: qaStatus === 'resolved' }" @click="onStatusChange('resolved')">
+                <text class="qa-chip-text" :class="{ active: qaStatus === 'resolved' }">已完成</text>
             </view>
             <view class="qa-chip" :class="{ active: qaStatus === 'open' }" @click="onStatusChange('open')">
-                <text class="qa-chip-text" :class="{ active: qaStatus === 'open' }">求助</text>
+                <text class="qa-chip-text" :class="{ active: qaStatus === 'open' }">进行中</text>
             </view>
-            <view class="qa-chip" :class="{ active: qaStatus === 'resolved' }" @click="onStatusChange('resolved')">
-                <text class="qa-chip-text" :class="{ active: qaStatus === 'resolved' }">已解决</text>
+            <view class="qa-chip" :class="{ active: qaStatus === '' }" @click="onStatusChange('')">
+                <text class="qa-chip-text" :class="{ active: qaStatus === '' }">全部</text>
             </view>
         </view>
 
@@ -85,7 +86,7 @@
         width: 52rpx;
         height: 52rpx;
         border-radius: 26rpx;
-        background-color: #2979ff;
+        background-color: $primary-color;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -119,7 +120,7 @@
 
     .qa-chip.active {
         background-color: #e8f3ff;
-        border-color: #2979ff;
+        border-color: $primary-color;
     }
 
     .qa-chip-text {
@@ -128,7 +129,7 @@
     }
 
     .qa-chip-text.active {
-        color: #2979ff;
+        color: $primary-color;
         font-weight: bold;
     }
 </style>

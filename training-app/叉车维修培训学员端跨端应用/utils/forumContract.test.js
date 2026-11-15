@@ -225,8 +225,8 @@ describe('备考经验 tab 接线契约（#706：第四 tab 进场，复用 Topi
     expect(tabBar).toMatch(/@click="onSwitch\('experience'\)"/);
   });
 
-  it('列表查询语义（ADR-0040）：备考经验 scope=all + is_experience=true（判据是管理端认定，不是 category），最多赞→hot、最新→created（#727 排序档）、默认→latest', () => {
-    expect(feed).toMatch(/currentTab\.value === 'experience'[\s\S]*?isExperience = 'true'/);
+  it('列表查询语义（ADR-0040 / N2 #2549）：备考经验 scope=all + experience=true（判据是管理端认定，不是 category），最多赞→hot、最新→created（#727 排序档）、默认→latest', () => {
+    expect(feed).toMatch(/currentTab\.value === 'experience'[\s\S]*?experience = 'true'/);
     // 反向锁：经验不是学员自述的意图，不得退化成 category='experience'（存量行已降级，发它必然空）
     expect(feed).not.toMatch(/category = 'experience'/);
     expect(feed).toMatch(/expSort\.value == 'hot' \? 'hot' : \(expSort\.value == 'latest' \? 'created' : 'latest'\)/);
@@ -257,9 +257,10 @@ describe('备考经验 tab 接线契约（#706：第四 tab 进场，复用 Topi
     // 发帖入口只能落 discussion/question —— 传 experience 后端直接 400
     expect(page).not.toMatch(/scope = 'experience'/);
     expect(createPage).not.toMatch(/value: 'experience'/);
-    expect(createPage).toContain("{ label: '广场', value: 'discussion' }");
-    expect(createPage).toContain("{ label: '资源', value: 'resource' }");
-    expect(createPage).toContain("{ label: '知识问答', value: 'question' }");
+    expect(createPage).toContain("{ label: '讨论', value: 'discussion' }");
+    expect(createPage).toContain("{ label: '提问', value: 'question' }");
+    // G-08：写侧只留两值；资源是 URL scope 进来的投稿模式，不再占类别位
+    expect(createPage).not.toContain("{ label: '资源', value: 'resource' }");
   });
 
   it('经验 tab 无任何发布入口（只读策展流）：搜索栏（含发帖 pill）与空态按钮按 currentTab 隐藏', () => {
@@ -305,7 +306,7 @@ describe('精选筛选契约（#742 批次三：三 Tab 通用精选筛选 + 列
     expect(feed).toContain('onFeaturedChange: (val : string) => onFeaturedChange(val),');
     // #1733：装载协议改由 `usePagedList` 持页，页码经 `fetchPage(page)` 形参进来（不再是 `page.value`）；
     // 九个实参的顺序即 api 契约，逐字锚住（featured 在第 8 位）
-    expect(feed).toContain('getForumTopicsApi(page, pageSize, scope, sort, order, category, statusParam, featuredFilter.value, isExperience)');
+    expect(feed).toContain('getForumTopicsApi(page, pageSize, scope, sort, order, category, statusParam, featuredFilter.value, experience)');
   });
 
   it('壳层接线：三 Tab 显示精选筛选条（资源 Tab 不显示）；切 Tab 精选筛选回全部帖（跨 Tab 不延续，对齐 Web）', () => {
@@ -333,10 +334,10 @@ describe('备考经验认定契约（ADR-0040：is_experience 是管理端认定
   const types = read('types/forum.uts');
   const card = read('pages/forum/components/forum-topic-card.uvue');
 
-  it('api：is_experience 参数按后端契约透传（isExperience=true，空串不传=不过滤；参数名勿改）', () => {
-    expect(src).toMatch(/isExperience : string = ''/);
-    expect(src).toMatch(/if \(isExperience\.length > 0\)/);
-    expect(src).toContain("params['is_experience'] = isExperience");
+  it('api：experience 参数按 N2 #2549 形状透传（experience=true，空串不传=不过滤）', () => {
+    expect(src).toMatch(/experience : string = ''/);
+    expect(src).toMatch(/if \(experience\.length > 0\)/);
+    expect(src).toContain("params['experience'] = experience");
   });
 
   it('api：category 注释不再写「取值含 experience」的旧口径（意图只有两值）', () => {
@@ -361,8 +362,8 @@ describe('备考经验认定契约（ADR-0040：is_experience 是管理端认定
     expect(card).toContain('备考经验');
   });
 
-  it('feed：经验分支清空 category、置 isExperience=true（不把 is_experience 当 category 别名）', () => {
-    expect(feed).toMatch(/currentTab\.value === 'experience'[\s\S]*?category = ''[\s\S]*?isExperience = 'true'/);
+  it('feed：经验分支清空 category、置 experience=true（不把经验认定当 category 别名）', () => {
+    expect(feed).toMatch(/currentTab\.value === 'experience'[\s\S]*?category = ''[\s\S]*?experience = 'true'/);
     expect(feed).not.toMatch(/discussion\|question\|experience/);
   });
 
