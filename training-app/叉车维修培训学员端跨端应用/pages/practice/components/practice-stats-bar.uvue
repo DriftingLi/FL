@@ -1,6 +1,6 @@
 <template>
     <!-- 数据统计栏（主 CTA 渐变 + 内嵌白卡）：数据源 /practice-mode/practice-stats
-         ——T06 手术自 practice.uvue 逐段搬出；B3（#2519）按原型 473:4247 收口：渐变条内浮四张白卡，
+         ——T06 手术自 practice.uvue 逐段搬出；B3（票 2519）按原型 473:4247 收口：渐变条内浮四张白卡，
          前两格数字绿（#14AE50 实测）、天数格蓝、数据报告深字带箭头 -->
     <view class="stat-bar">
         <view class="stat-card">

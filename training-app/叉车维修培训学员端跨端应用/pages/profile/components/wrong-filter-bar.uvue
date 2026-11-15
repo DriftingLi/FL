@@ -59,7 +59,7 @@
 </script>
 
 <style lang="scss">
-    /* 筛选栏（B3 #2519 按原型 452:2223）：chips 坐在统计条下的白底带上，无卡片边框 */
+    /* 筛选栏（B3 票 2519 按原型 452:2223）：chips 坐在统计条下的白底带上，无卡片边框 */
     .filter-bar {
         background-color: $bg-header;
         margin: 0 24rpx;

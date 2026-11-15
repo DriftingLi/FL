@@ -1,5 +1,5 @@
 <template>
-            <!-- 统计条（B3 #2519 按原型 452:2223）：主色渐变整条，白字数字在上、标签在下，中缝细分隔线 -->
+            <!-- 统计条（B3 票 2519 按原型 452:2223）：主色渐变整条，白字数字在上、标签在下，中缝细分隔线 -->
             <view class="stats-card">
                 <view class="stat-item">
                     <view class="stat-num-row">

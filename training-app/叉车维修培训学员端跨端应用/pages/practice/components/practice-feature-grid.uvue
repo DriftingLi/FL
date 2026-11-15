@@ -1,5 +1,5 @@
 <template>
-    <!-- 功能入口网格 ——T06 手术自 practice.uvue 逐段搬出；B3（#2519）按原型 473:4247 收口：
+    <!-- 功能入口网格 ——T06 手术自 practice.uvue 逐段搬出；B3（票 2519）按原型 473:4247 收口：
          四入口直接坐在页面渐变上（原型无白卡容器），图标为插画位图（不入包，emoji 承载同位） -->
     <view class="feature-grid">
         <view class="feature-item" @click="onFeatureClick('past_paper')">

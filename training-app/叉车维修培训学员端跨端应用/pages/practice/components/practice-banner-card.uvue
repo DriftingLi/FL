@@ -1,5 +1,5 @@
 <template>
-    <!-- 培训横幅卡片 ——T06 手术自 practice.uvue 逐段搬出；B3（#2519）按原型 473:4247 收口：
+    <!-- 培训横幅卡片 ——T06 手术自 practice.uvue 逐段搬出；B3（票 2519）按原型 473:4247 收口：
          原型此位是插画位图（包体积红线不入包，#2513），CSS 复刻同版式：左标题/副标题、右侧三枚蓝标签 -->
     <view class="banner-card">
         <view class="banner-image-area">

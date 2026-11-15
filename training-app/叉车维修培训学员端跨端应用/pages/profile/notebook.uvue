@@ -8,7 +8,7 @@
             </template>
         </app-nav-bar>
 
-        <!-- 双视图 chips（B3 #2519 按原型 769:1567/769:1625）：最新 = 时间倒序列表；分类 = 按题分组。
+        <!-- 双视图 chips（B3 票 2519 按原型 769:1567/769:1625）：最新 = 时间倒序列表；分类 = 按题分组。
              数据面仍是 scope=all 一份列表（NOTE_SCOPE_* 三态保留在 api 层，ADR-0055），切视图不重取 -->
         <view v-if="!editorVisible" class="chip-bar">
             <view class="chip" :class="viewMode == 'latest' ? 'chip-active' : ''" @click="onViewMode('latest')">
@@ -428,7 +428,7 @@
     .note-clock { font-size: 26rpx; margin-right: 8rpx; }
     .note-tag { flex-direction: row; align-items: center; padding: 4rpx 8rpx; flex-shrink: 1; }
     .note-tag-standalone { background-color: $primary-tint; border-radius: $radius-sm; padding: 4rpx 12rpx; }
-    /* 题目徽标（B3 #2519）：纯文字链接「查看原题 ›」，无底色；触摸区由 .note-tag 的 padding 保证 */
+    /* 题目徽标（B3 票 2519）：纯文字链接「查看原题 ›」，无底色；触摸区由 .note-tag 的 padding 保证 */
     .note-tag-question { flex-direction: row; align-items: center; padding: 4rpx 8rpx; }
     .note-tag-text-standalone { font-size: 22rpx; color: $primary-color; }
     .note-tag-text { font-size: 26rpx; color: $primary-color; }

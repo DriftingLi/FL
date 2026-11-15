@@ -1,5 +1,5 @@
 <template>
-    <!-- 模块练习列表（标签专项） ——T06 手术自 practice.uvue 逐段搬出；B3（#2519）按原型 473:4247 收口 -->
+    <!-- 模块练习列表（标签专项） ——T06 手术自 practice.uvue 逐段搬出；B3（票 2519）按原型 473:4247 收口 -->
     <view class="module-section">
         <!-- 骨架屏 -->
         <view v-if="loading && modules.length == 0" class="skeleton-list">

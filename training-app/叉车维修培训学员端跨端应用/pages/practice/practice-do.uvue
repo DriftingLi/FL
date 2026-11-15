@@ -1,7 +1,7 @@
 <template>
     <view class="page" :style="{ height: windowHeight + 'px' }">
         <!-- 右槽腾空（票 1847）：⏱计时+题号进度两段最长合计约 270rpx，超典型可用槽宽约 164rpx（顶部布局调研 §4.2）。
-             B3（#2519）按原型 435:797 把计时/进度/答题卡/星标落为导航下的**独立状态行**（仍在胶囊间隙带之外，
+             B3（票 2519）按原型 435:797 把计时/进度/答题卡/星标落为导航下的**独立状态行**（仍在胶囊间隙带之外，
              #1847 的「不顶进页头」约束不破），底条只留提交/翻题动作。 -->
         <app-nav-bar title="" @left-click="onBack" divider></app-nav-bar>
         <view v-if="session.questions.value.length > 0" class="status-row">

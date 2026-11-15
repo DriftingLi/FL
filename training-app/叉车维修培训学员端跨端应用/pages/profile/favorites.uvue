@@ -2,7 +2,7 @@
     <view class="container" :style="{ height: windowHeight + 'px' }">
         <app-nav-bar title="收藏夹" @left-click="onBack" />
 
-        <!-- 类型 Tab（B3 #2519 按原型 700:7287 收口为分段下划线式；语义保持 Q25 定案的内容类型结构，
+        <!-- 类型 Tab（B3 票 2519 按原型 700:7287 收口为分段下划线式；语义保持 Q25 定案的内容类型结构，
              原型四 tab 中「笔试题/实操技能/综合评审」无后端维度（同 #1608 §8⑤ 判例），不发明映射 -->
         <view class="type-tab-bar">
             <app-tabs :tabs="typeLabels" :active-index="typeIndex" @change="onTypeTabChange" />
@@ -349,7 +349,7 @@ import { goBack } from '../../utils/navigation'
         flex-direction: column;
     }
 
-    /* 类型 Tab 行（B3 #2519 按原型 700:7287）：白底带 + 分段下划线式（app-tabs 承载） */
+    /* 类型 Tab 行（B3 票 2519 按原型 700:7287）：白底带 + 分段下划线式（app-tabs 承载） */
     .type-tab-bar {
         background-color: $bg-header;
         padding: 8rpx 24rpx;
@@ -368,7 +368,7 @@ import { goBack } from '../../utils/navigation'
         padding: 16rpx;
     }
 
-    /* 类别下钻 chips（B3 #2519 口径）：未选灰底深字、选中浅蓝底主色字 */
+    /* 类别下钻 chips（B3 票 2519 口径）：未选灰底深字、选中浅蓝底主色字 */
     .filter-chip {
         padding: 10rpx 24rpx;
         border-radius: 32rpx;
