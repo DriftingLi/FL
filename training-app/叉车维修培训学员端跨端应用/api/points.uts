@@ -172,6 +172,29 @@ export function getShopItemsApi() : Promise<ShopItemsResult> {
 }
 
 /**
+ * 商城列表筛选查询（#2518 第 2 刀，N1 #2548 给定形状的调用骨架）：
+ * `category`（book|material|course|other）与 `points_min` / `points_max` 随 query 下发，
+ * 与原型筛选两态（不限/图书/资料/课程/其他、不限/≤500/500-1000/>1000）一一对应。
+ * 后端参数未上线（N1 未合）时未知 query 被忽略、返回全量——骨架先行，参数即插即用，
+ * 不必等 N1 上线（票面明写）。0 / 空串 = 不限，不下发该参；响应形状与 getShopItemsApi 同一
+ * ShopItemsResult，不另造路由。值一律先 toString：buildQuery 对值做 `as string` 强转，
+ * 直接塞 number 在 Kotlin 端会炸。
+ */
+export function getShopItemsFilteredApi(category : string, pointsMin : number, pointsMax : number) : Promise<ShopItemsResult> {
+	const query : UTSJSONObject = {} as UTSJSONObject
+	if (category.length > 0) {
+		query['category'] = category
+	}
+	if (pointsMin > 0) {
+		query['points_min'] = pointsMin.toString()
+	}
+	if (pointsMax > 0) {
+		query['points_max'] = pointsMax.toString()
+	}
+	return getMapped<ShopItemsResult>('/points/shop/items', query, (data : UTSJSONObject) : ShopItemsResult => buildShopItemsResult(data))
+}
+
+/**
  * 商城兑换（POST /points/shop/{sku}/redeem）——后端兑换单管线唯一入口（#920 复用，不新造机制）。
  *
  * 管线的守卫全在服务端：锁 + 已拥有校验（重复兑换 → 400「已兑换」）+ 余额预检

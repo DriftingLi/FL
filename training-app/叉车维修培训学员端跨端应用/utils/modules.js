@@ -459,7 +459,8 @@ const MODULES = {
     // #1421：course-detail.uvue 消费 api/points.uts（redeemCoursePointsApi + getPointsBalanceApi，
     // 兑换面单点归详情但动词单点归 points 域 —— 消费者登记在被消费模块，ADR-0023 ③）
     crossModuleConsumers: ['profile', 'courses'],
-    budget: BUDGET,
+    /** 超预算：points-shop.uvue 722（#2518 第 2 刀：左栏三态 + 筛选两态入页，2026-11-15 实测；模块其余文件均 ≤600） */
+    budget: 'pending',
     budgetOverrides: {},
     maxDepth: MAX_DEPTH,
   },

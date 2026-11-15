@@ -142,4 +142,63 @@ describe('积分商城页（#1942）契约', () => {
       expect(REGISTRY).toMatch(/aiProSKU: \{/);
     });
   });
+
+  describe('⑥ 左栏三态与筛选两态（#2518 第 2 刀；原型 821:6396 主态 + 815:5332 筛选态，贴片 807:2035/807:2190）', () => {
+    /** 模板切片（同 ⑤ 的口径：只在模板里找位置） */
+    const tpl = PAGE.slice(PAGE.indexOf('<template>'), PAGE.lastIndexOf('</template>'));
+
+    it('左栏三态齐：热门（原型无出边，只陈列）/ 图书系列 / 积分兑换（本页态）', () => {
+      const side = tpl.slice(tpl.indexOf('shop-sidebar'), tpl.indexOf('content-col'));
+      expect(side).toContain('热门');
+      expect(side).toContain('图书系列');
+      expect(side).toContain('积分兑换');
+    });
+
+    it('图书系列 → mall 路由（821:6678 → 824:6971 边；Q8 两路由不合并，navigateTo 不 switchTab）', () => {
+      const fn = PAGE.slice(PAGE.indexOf('function onGoMall'));
+      expect(fn.slice(0, 240)).toContain("uni.navigateTo({ url: '/pages/mall/mall' })");
+      expect(fn.slice(0, 240)).not.toContain('uni.switchTab');
+    });
+
+    it('筛选两态：分类五档 enum 按 N1 #2548（book|material|course|other），积分范围档位按票面（≤500/500-1000/>1000）', () => {
+      expect(tpl).toContain('商品分类');
+      expect(tpl).toContain('积分范围');
+      expect(tpl).toContain('可换商品');
+      expect(PAGE).toContain("value: 'book'");
+      expect(PAGE).toContain("value: 'material'");
+      expect(PAGE).toContain("value: 'course'");
+      expect(PAGE).toContain("value: 'other'");
+      expect(PAGE).toContain('≤500');
+      expect(PAGE).toContain('500-1000');
+      expect(PAGE).toContain('>1000');
+    });
+
+    it('筛选骨架：getShopItemsFilteredApi 三参下发同一 /points/shop/items，值走字符串（buildQuery 值强转 as string）', () => {
+      expect(API).toMatch(/export function getShopItemsFilteredApi\(category : string, pointsMin : number, pointsMax : number\) : Promise<ShopItemsResult>/);
+      const fn = API.slice(API.indexOf('function getShopItemsFilteredApi'));
+      expect(fn.slice(0, 900)).toContain("query['category'] = category");
+      expect(fn.slice(0, 900)).toContain("query['points_min'] = pointsMin.toString()");
+      expect(fn.slice(0, 900)).toContain("query['points_max'] = pointsMax.toString()");
+    });
+
+    it('无筛选仍走原动词 getShopItemsApi()（既有契约调用形状不因筛选改道）', () => {
+      const fn = PAGE.slice(PAGE.indexOf('async function loadItems'));
+      expect(fn.slice(0, 900)).toContain('getShopItemsApi()');
+      expect(fn.slice(0, 900)).toContain('getShopItemsFilteredApi(cat, range.min, range.max)');
+    });
+
+    it('「可换商品」→ 展开分类面板（821:6546 → 815:5332 边）；点蒙层回主态（815:5463 → 821:6396 边）', () => {
+      const hot = PAGE.slice(PAGE.indexOf('function onHotRedeemable'));
+      expect(hot.slice(0, 240)).toContain("filterPanel.value = 'category'");
+      const close = PAGE.slice(PAGE.indexOf('function onClosePanel'));
+      expect(close.slice(0, 240)).toMatch(/filterPanel\.value = ''/);
+      expect(tpl).toContain('list-mask');
+    });
+
+    it('筛选态一次只展开一套（面板互斥），蒙层只在展开时出现', () => {
+      expect(tpl).toMatch(/v-if="filterPanel == 'category'"/);
+      expect(tpl).toMatch(/v-if="filterPanel == 'range'"/);
+      expect(tpl).toMatch(/v-if="filterPanel != ''" class="list-mask"/);
+    });
+  });
 });
