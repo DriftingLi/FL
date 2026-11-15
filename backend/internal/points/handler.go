@@ -30,9 +30,21 @@ var ErrStatus = &httpx.ErrStatusTable{
 		{Sentinel: ErrDailyClaimLimit, Status: http.StatusBadRequest},
 		{Sentinel: ErrInsufficientPoints, Status: http.StatusBadRequest},
 		{Sentinel: ErrAlreadyRedeemed, Status: http.StatusBadRequest},
+		{Sentinel: ErrShopCategoryInvalid, Status: http.StatusBadRequest},
+		{Sentinel: ErrShopSKUUnregistered, Status: http.StatusBadRequest},
+		{Sentinel: ErrShopPriceSourcePinned, Status: http.StatusBadRequest},
+		{Sentinel: ErrShopItemInvalid, Status: http.StatusBadRequest},
 		{Sentinel: ErrPenaltyNotifyFailed, Status: http.StatusInternalServerError},
 	},
 	Fallback: http.StatusBadRequest,
+}
+
+// shopItemsErrStatus 在售列表的错误面（#2548）：只把「分类取值非法」当业务 400；
+// DB/权益读失败不命中这张表，走端点骨架的默认 500——不给参数错误背锅。
+var shopItemsErrStatus = &httpx.ErrStatusTable{
+	Entries: []httpx.ErrStatusEntry{
+		{Sentinel: ErrShopCategoryInvalid, Status: http.StatusBadRequest},
+	},
 }
 
 // handler 积分 handler
@@ -202,17 +214,26 @@ func (h *handler) RedeemShop(c *gin.Context) {
 
 // ListShopItems 商城在售列表
 // @Summary 积分商城在售商品
-// @Description 学员查看可兑换商品、积分价、库存与是否已拥有（已拥有与兑换判据同源）；不列未登记权益读者的行
+// @Description 学员查看可兑换商品、积分价、库存与是否已拥有（已拥有与兑换判据同源）；不列未登记权益读者的行。可按分类与积分区间筛选（#2548）
 // @Tags 学员端-积分
 // @Produce json
 // @Security BearerAuth
+// @Param category query string false "商品分类 book|material|course|other（省略=不分类）"
+// @Param points_min query int false "积分下限（闭区间；省略=不设下限）"
+// @Param points_max query int false "积分上限（闭区间；省略=不设上限）"
 // @Success 200 {object} response.R{data=points.ShopItemsResult} "在售列表"
+// @Failure 400 {object} response.R "分类取值非法"
 // @Failure 401 {object} response.R "未认证"
 // @Router /points/shop/items [get]
 func (h *handler) ListShopItems(c *gin.Context) {
 	httpx.Endpoint[struct{}, ShopItemsResult]{
 		Invoke: func(ctx context.Context, _ *struct{}) (*ShopItemsResult, error) {
-			return h.svc.ListShopItems(ctx, middleware.CurrentUserID(c))
+			return h.svc.ListShopItems(ctx, middleware.CurrentUserID(c), ShopItemFilter{
+				Category:  c.Query("category"),
+				PointsMin: httpx.QueryIntPtr(c, "points_min"),
+				PointsMax: httpx.QueryIntPtr(c, "points_max"),
+			})
 		},
+		ErrStatus: shopItemsErrStatus,
 	}.Handle(c)
 }

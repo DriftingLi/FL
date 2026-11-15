@@ -66,12 +66,18 @@ type PointsUserProgress struct {
 func (PointsUserProgress) TableName() string { return "points_user_progress" }
 
 // PointsShopItem 积分商城（真题等，课程兑换走 course.points_price）。
+// ImageURL / Description / Category / SortWeight 是 #2548 的运营元数据：
+// 商品目录是可运营内容，改价、上下架、换图、改文案都不该走发版。
 type PointsShopItem struct {
-	SKU     string `gorm:"column:sku;primaryKey" json:"sku"`
-	Title   string `gorm:"column:title" json:"title"`
-	Price   int    `gorm:"column:price" json:"price"`
-	Stock   *int   `gorm:"column:stock" json:"stock,omitempty"`
-	Enabled bool   `gorm:"column:enabled" json:"enabled"`
+	SKU         string  `gorm:"column:sku;primaryKey" json:"sku"`
+	Title       string  `gorm:"column:title" json:"title"`
+	Price       int     `gorm:"column:price" json:"price"`
+	Stock       *int    `gorm:"column:stock" json:"stock,omitempty"`
+	Enabled     bool    `gorm:"column:enabled" json:"enabled"`
+	ImageURL    *string `gorm:"column:image_url" json:"image_url,omitempty"`
+	Description *string `gorm:"column:description" json:"description,omitempty"`
+	Category    string  `gorm:"column:category;not null;default:other" json:"category"`
+	SortWeight  int     `gorm:"column:sort_weight;not null;default:0" json:"sort_weight"`
 }
 
 func (PointsShopItem) TableName() string { return "points_shop_item" }

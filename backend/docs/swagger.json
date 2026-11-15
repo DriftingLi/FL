@@ -5729,6 +5729,130 @@
                 }
             }
         },
+        "/admin/points/shop/items": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员查看全部积分商品（含下架行）与可兑状态；改价/上下架/换图/改文案走本组端点，不靠发版",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-积分"
+                ],
+                "summary": "商品目录（管理端）",
+                "responses": {
+                    "200": {
+                        "description": "商品目录",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/points.AdminShopItemsResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "无积分管理能力",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/points/shop/items/{sku}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员建/改商品行：改价、上下架、换图、改文案、调分类与排序权重；sku 是主键，重复 PUT 幂等",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-积分"
+                ],
+                "summary": "建/改商品（管理端）",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "商品 SKU",
+                        "name": "sku",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "商品输入 {title,price,stock,enabled,image_url,description,category,sort_weight}",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "已保存",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/points.AdminShopItemDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数非法/分类非法/SKU 未登记/价格事实源不可下架",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "无积分管理能力",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/position": {
             "post": {
                 "security": [
@@ -15193,7 +15317,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "学员查看可兑换商品、积分价、库存与是否已拥有（已拥有与兑换判据同源）；不列未登记权益读者的行",
+                "description": "学员查看可兑换商品、积分价、库存与是否已拥有（已拥有与兑换判据同源）；不列未登记权益读者的行。可按分类与积分区间筛选（#2548）",
                 "produces": [
                     "application/json"
                 ],
@@ -15201,6 +15325,26 @@
                     "学员端-积分"
                 ],
                 "summary": "积分商城在售商品",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "商品分类 book|material|course|other（省略=不分类）",
+                        "name": "category",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "积分下限（闭区间；省略=不设下限）",
+                        "name": "points_min",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "积分上限（闭区间；省略=不设上限）",
+                        "name": "points_max",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "在售列表",
@@ -15218,6 +15362,12 @@
                                     }
                                 }
                             ]
+                        }
+                    },
+                    "400": {
+                        "description": "分类取值非法",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
                         }
                     },
                     "401": {
@@ -29760,6 +29910,56 @@
                 }
             }
         },
+        "points.AdminShopItemDTO": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string",
+                    "x-nullable": true
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "image_url": {
+                    "type": "string",
+                    "x-nullable": true
+                },
+                "price": {
+                    "type": "integer"
+                },
+                "redeemable": {
+                    "description": "Redeemable = 该 SKU 在 sku 对账表里有真读者（与在售列表过滤、兑换放行同源）：\nfalse 的行要么是纯价格事实源（unlock_real_paper），要么是漏登记的商品（上架也不在售）。",
+                    "type": "boolean"
+                },
+                "sku": {
+                    "type": "string"
+                },
+                "sort_weight": {
+                    "type": "integer"
+                },
+                "stock": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "points.AdminShopItemsResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/points.AdminShopItemDTO"
+                    }
+                }
+            }
+        },
         "points.PointsBalanceResult": {
             "type": "object",
             "properties": {
@@ -29899,6 +30099,14 @@
         "points.ShopItemDTO": {
             "type": "object",
             "properties": {
+                "description": {
+                    "type": "string",
+                    "x-nullable": true
+                },
+                "image_url": {
+                    "type": "string",
+                    "x-nullable": true
+                },
                 "owned": {
                     "type": "boolean"
                 },

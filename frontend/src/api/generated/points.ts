@@ -78,6 +78,8 @@ export interface RedeemResult {
 }
 
 export interface ShopItemDTO {
+  description: string | null
+  image_url: string | null
   owned: boolean
   price: number
   sku: string

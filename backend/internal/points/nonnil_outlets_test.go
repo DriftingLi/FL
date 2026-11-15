@@ -18,9 +18,10 @@ import (
 // 前缀 nonnilOutlets 是约定的证据表名：apitypes 的表态锁按它扫目录收键（见
 // internal/apitypes/nullability_lock_test.go 的 nonNilEvidenceSources）。
 var nonnilOutletsPoints = map[string]func(t *testing.T) any{
-	"points.PointsLedgerResult.items": outletPointsLedgerEmpty,
-	"points.PointsTasksResult.tasks":  outletPointsTasksNone,
-	"points.ShopItemsResult.items":    outletShopItemsNone,
+	"points.PointsLedgerResult.items":   outletPointsLedgerEmpty,
+	"points.PointsTasksResult.tasks":    outletPointsTasksNone,
+	"points.ShopItemsResult.items":      outletShopItemsNone,
+	"points.AdminShopItemsResult.items": outletAdminShopItemsNone,
 }
 
 // TestNonNilDeclaredOutletsNeverEmitNull 本域的举证入口（判据本体在 testutil）。
@@ -60,9 +61,20 @@ func outletShopItemsNone(t *testing.T) any {
 	db := testutil.NewMemoryDB(t)
 	student := testutil.SeedStudent(t, db, "商城学员", "x")
 	svc := NewService(db, zap.NewNop(), nil, nil)
-	res, err := svc.ListShopItems(context.Background(), student.ID)
+	res, err := svc.ListShopItems(context.Background(), student.ID, ShopItemFilter{})
 	if err != nil {
 		t.Fatalf("商城在售列表失败: %v", err)
+	}
+	return res
+}
+
+// outletAdminShopItemsNone 管理端商品目录：一行商品都没有时 items 是空集（含下架行语义不影响空集）。
+func outletAdminShopItemsNone(t *testing.T) any {
+	t.Helper()
+	svc := NewService(testutil.NewMemoryDB(t), zap.NewNop(), nil, nil)
+	res, err := svc.AdminListShopItems(context.Background())
+	if err != nil {
+		t.Fatalf("管理端商品目录失败: %v", err)
 	}
 	return res
 }

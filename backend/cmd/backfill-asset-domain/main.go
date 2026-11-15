@@ -141,6 +141,10 @@ var defaultTargets = []target{
 	{Table: "note", Columns: []column{
 		{Name: "images", Kind: kindJSONB},
 	}},
+	// 积分商城商品图（#2548）：运营录入的图同样落在对象存储公开域，换域名要回填。
+	{Table: "points_shop_item", Columns: []column{
+		{Name: "image_url", Kind: kindText},
+	}},
 }
 
 // columnStat 单列的统计：命中行数（含旧前缀的行）与改写行数（dry-run 恒为 0）。

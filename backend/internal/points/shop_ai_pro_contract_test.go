@@ -30,7 +30,7 @@ func TestShopAiProListedAndRedeemable(t *testing.T) {
 	uid := seedUserWithBalance(t, db, 1200)
 	seedAiProShopItem(t, db)
 
-	before, err := svc.ListShopItems(context.Background(), uid)
+	before, err := svc.ListShopItems(context.Background(), uid, ShopItemFilter{})
 	if err != nil {
 		t.Fatalf("列表失败: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestShopAiProListedAndRedeemable(t *testing.T) {
 		t.Fatalf("应写一条 redeem_ai_pro 流水（useAiPro 的判据）, got %d", got)
 	}
 
-	after, err := svc.ListShopItems(context.Background(), uid)
+	after, err := svc.ListShopItems(context.Background(), uid, ShopItemFilter{})
 	if err != nil {
 		t.Fatalf("兑换后列表失败: %v", err)
 	}
@@ -72,7 +72,7 @@ func TestShopAiProListedAndRedeemable(t *testing.T) {
 
 	// 另一个人不复用 seedUserWithBalance：它固定 account/phone，同库二次插入会撞 hrwai_users.phone 的 UNIQUE。
 	otherU := testutil.SeedStudent(t, db, "aiProOther", "pwd")
-	otherList, err := svc.ListShopItems(context.Background(), otherU.ID)
+	otherList, err := svc.ListShopItems(context.Background(), otherU.ID, ShopItemFilter{})
 	if err != nil {
 		t.Fatalf("他人列表失败: %v", err)
 	}
