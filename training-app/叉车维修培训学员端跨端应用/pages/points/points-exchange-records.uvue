@@ -1,0 +1,214 @@
+<template>
+    <view class="container" :style="{ height: windowHeight + 'px' }">
+        <app-nav-bar title="兑换记录" @left-click="onBack" divider />
+
+        <scroll-view class="content-scroll" scroll-y="true" @scrolltolower="onLoadMore">
+            <!-- 语义说明（G-00 裁定）：这里是积分兑换记录，不是订单 —— 没有订单号/物流/售后/晒单 -->
+            <view class="notice-bar">
+                <text class="notice-text">用积分兑换的权益记录，兑换后即时到账</text>
+            </view>
+
+            <view class="record-scroll-inner">
+                <view v-if="failed && items.length == 0" class="error-tip">
+                    <text class="error-text">兑换记录加载失败</text>
+                    <view class="retry-btn" @click="onRetry">
+                        <text class="retry-text">重试</text>
+                    </view>
+                </view>
+                <view v-else-if="isEmpty" class="empty-tip">
+                    <text class="empty-text">还没有兑换记录</text>
+                    <view class="empty-action" @click="onGoShop">
+                        <text class="empty-action-text">去积分商城看看</text>
+                    </view>
+                </view>
+
+                <view class="record-list">
+                    <view v-for="item in items" :key="item.id" class="record-item">
+                        <view class="record-row">
+                            <text class="record-title">{{ item.title }}</text>
+                            <text class="record-cost">{{ item.costText }}</text>
+                        </view>
+                        <view class="record-row">
+                            <text class="record-time">{{ item.timeText }}</text>
+                            <text :class="['record-status', { 'status-ok': item.arrived }]">{{ item.statusText }}</text>
+                        </view>
+                    </view>
+                </view>
+
+                <view v-if="loading" class="loading-more">
+                    <text class="loading-text">加载中...</text>
+                </view>
+                <view v-else-if="failed && items.length > 0" class="loading-more" @click="onRetryMore">
+                    <text class="loading-text">加载失败，点击重试</text>
+                </view>
+                <view v-else-if="!hasMore && items.length > 0" class="loading-more">
+                    <text class="loading-text">没有更多了</text>
+                </view>
+            </view>
+        </scroll-view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
+    import { onShow } from '@dcloudio/uni-app'
+    import { goBack } from '../../utils/navigation'
+    import { usePointsExchangeRecords } from './composables/usePointsExchangeRecords'
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    const { items, loading, failed, isEmpty, hasMore, loadFirst, onLoadMore, loadShopCatalog } = usePointsExchangeRecords()
+
+    function onBack() : void {
+        goBack()
+    }
+
+    /** 整屏失败重试：回到第 1 页重取 */
+    function onRetry() : void {
+        loadFirst()
+    }
+
+    /** 翻页失败重试：协议内部保留已加载部分，重试即续翻 */
+    function onRetryMore() : void {
+        onLoadMore()
+    }
+
+    function onGoShop() : void {
+        uni.navigateTo({ url: '/pages/points/points-shop' })
+    }
+
+    onShow(() => {
+        loadShopCatalog()
+        loadFirst()
+    })
+</script>
+
+<style lang="scss">
+    .container {
+        flex: 1;
+        background-color: $bg-color;
+        flex-direction: column;
+    }
+
+    .content-scroll {
+        flex: 1;
+    }
+
+    .notice-bar {
+        padding: 20rpx 32rpx;
+        background-color: $card-bg;
+        border-bottom: 1rpx solid $border-color-light;
+    }
+
+    .notice-text {
+        font-size: 24rpx;
+        color: $text-color-placeholder;
+    }
+
+    .record-scroll-inner {
+        padding: 24rpx;
+    }
+
+    .record-list {
+        flex-direction: column;
+    }
+
+    .record-item {
+        background-color: $card-bg;
+        border-radius: 16rpx;
+        padding: 32rpx;
+        margin-bottom: 16rpx;
+        flex-direction: column;
+    }
+
+    .record-row {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12rpx;
+    }
+
+    .record-title {
+        flex: 1;
+        font-size: 30rpx;
+        font-weight: bold;
+        color: $text-color;
+        margin-right: 16rpx;
+    }
+
+    .record-cost {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: $text-color;
+    }
+
+    .record-time {
+        font-size: 24rpx;
+        color: $text-color-placeholder;
+    }
+
+    .record-status {
+        font-size: 24rpx;
+        color: $text-color-secondary;
+    }
+
+    .status-ok {
+        color: $success-color;
+    }
+
+    .empty-tip {
+        align-items: center;
+        padding: 120rpx 0;
+        flex-direction: column;
+    }
+
+    .empty-text {
+        font-size: 28rpx;
+        color: $text-color-placeholder;
+        margin-bottom: 32rpx;
+    }
+
+    .empty-action {
+        padding: 20rpx 48rpx;
+        border-radius: 40rpx;
+        background-color: $card-bg;
+        border: 1rpx solid $border-color-light;
+    }
+
+    .empty-action-text {
+        font-size: 26rpx;
+        color: $text-color;
+    }
+
+    .error-tip {
+        align-items: center;
+        padding: 60rpx 0;
+        flex-direction: column;
+    }
+
+    .error-text {
+        font-size: 28rpx;
+        color: $text-color-secondary;
+        margin-bottom: 20rpx;
+    }
+
+    .retry-btn {
+        padding: 20rpx 48rpx;
+        border-radius: 40rpx;
+        background-color: $primary-color;
+    }
+
+    .retry-text {
+        font-size: 26rpx;
+        color: $text-color-inverse;
+    }
+
+    .loading-more {
+        align-items: center;
+        padding: 24rpx 0;
+    }
+
+    .loading-text {
+        font-size: 24rpx;
+        color: $text-color-placeholder;
+    }
+</style>
