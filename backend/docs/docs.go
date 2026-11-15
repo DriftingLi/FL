@@ -15398,6 +15398,76 @@ const docTemplate = `{
                 }
             }
         },
+        "/points/shop/{sku}/browse": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "学员打开商城商品详情即上报（#2550）：一天一件商品只记一笔，重复进入返回 recorded=false（幂等，不是错误）。可浏览性与在售列表同一谓词：未上架 / 未登记权益读者按「不存在」返回",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-积分"
+                ],
+                "summary": "上报游览商城商品",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "商品 SKU",
+                        "name": "sku",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "已记录（recorded=false 表示当日已记过）",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/points.MallBrowseResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "SKU 不能为空",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "商品不存在或已下架",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务端内部错误（含可浏览性查询读不动）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/points/shop/{sku}/redeem": {
             "post": {
                 "security": [
@@ -29976,6 +30046,14 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/points.AdminShopItemDTO"
                     }
+                }
+            }
+        },
+        "points.MallBrowseResult": {
+            "type": "object",
+            "properties": {
+                "recorded": {
+                    "type": "boolean"
                 }
             }
         },

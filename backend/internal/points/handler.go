@@ -67,6 +67,9 @@ func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, svc *Service
 	g.GET("/shop/items", h.ListShopItems)
 	g.POST("/shop/course/:courseId/redeem", h.RedeemCourse)
 	g.POST("/shop/:sku/redeem", h.RedeemShop)
+	// 游览商城商品上报（#2550）：任务中心「游览商城」的事实入口。与 RedeemShop 同一路径段，
+	// 只是动作不同；写要有自己的端点与幂等语义（重复进入 → recorded=false）。
+	g.POST("/shop/:sku/browse", h.RecordMallBrowse)
 }
 
 // GetBalance 获取余额
@@ -210,6 +213,33 @@ func (h *handler) RedeemShop(c *gin.Context) {
 		// #610：哨兵→状态码收编至 ErrStatus（余额不足/已拥有等 → 400），文案零漂移
 		ErrStatus: ErrStatus,
 	}.Handle(c)
+}
+
+// RecordMallBrowse 上报游览商城商品
+// @Summary 上报游览商城商品
+// @Description 学员打开商城商品详情即上报（#2550）：一天一件商品只记一笔，重复进入返回 recorded=false（幂等，不是错误）。可浏览性与在售列表同一谓词：未上架 / 未登记权益读者按「不存在」返回
+// @Tags 学员端-积分
+// @Produce json
+// @Security BearerAuth
+// @Param sku path string true "商品 SKU"
+// @Success 200 {object} response.R{data=points.MallBrowseResult} "已记录（recorded=false 表示当日已记过）"
+// @Failure 400 {object} response.R "SKU 不能为空"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "商品不存在或已下架"
+// @Failure 500 {object} response.R "服务端内部错误（含可浏览性查询读不动）"
+// @Router /points/shop/{sku}/browse [post]
+func (h *handler) RecordMallBrowse(c *gin.Context) {
+	sku := c.Param("sku")
+	if sku == "" {
+		response.BadRequest(c, "sku 不能为空")
+		return
+	}
+	httpx.Endpoint[struct{}, MallBrowseResult]{
+		Invoke: func(ctx context.Context, _ *struct{}) (*MallBrowseResult, error) {
+			return h.svc.RecordMallView(middleware.CurrentUserID(c), sku)
+		},
+	}.WithSuccess(httpx.OkMsg("已记录"), http.StatusInternalServerError).
+		WithSentinelsMsg(http.StatusNotFound, "商品不存在或已下架", ErrShopItemUnavailable).Handle(c)
 }
 
 // ListShopItems 商城在售列表

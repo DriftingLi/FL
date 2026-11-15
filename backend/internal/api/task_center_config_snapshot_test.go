@@ -29,13 +29,15 @@ type taskConfigRow struct {
 	Description string
 }
 
-// expectedTaskConfigs 任务配置的现行事实（2026-10-28 快照，11 行）。
+// expectedTaskConfigs 任务配置的现行事实（2026-11-15 快照，13 行；#2550 加游览商城/完成积分兑礼）。
 // 改这里之前先读报告 §8 Q11 与 Q12+Q19：本表同时是「5 处口径」那五条断言的载体。
 var expectedTaskConfigs = []taskConfigRow{
 	{Code: "browse_course", Title: "浏览 3 门课程", Group: "daily", Points: 5, DailyLimit: 1, EventType: "course_browse", Description: "每日浏览 3 门课程"},
+	{Code: "browse_mall", Title: "游览商城", Group: "daily", Points: 5, DailyLimit: 1, EventType: "mall_browse", Description: "去商城游览 3 个商品"},
 	{Code: "daily_browse", Title: "浏览 3 篇帖子", Group: "daily", Points: 5, DailyLimit: 1, EventType: "forum_view", Description: "每日浏览 3 篇帖子"},
 	{Code: "daily_login", Title: "每日登录", Group: "daily", Points: 5, DailyLimit: 1, EventType: "login", Description: "每日进入任务中心即可领取"},
 	{Code: "daily_quiz", Title: "每日答题 1 次", Group: "daily", Points: 10, DailyLimit: 1, EventType: "question_submit", Description: "每日完成任意练习/模考 1 次"},
+	{Code: "exchange_gift", Title: "完成积分兑礼", Group: "daily", Points: 10, DailyLimit: 1, EventType: "gift_redeem", Description: "完成 1 次积分兑礼"},
 	{Code: "growth_mock", Title: "完成 1 次模考", Group: "daily", Points: 20, DailyLimit: 1, EventType: "mock_submit", Description: "每日完成 1 次模考"},
 	{Code: "growth_post", Title: "发布 1 篇帖子", Group: "daily", Points: 10, DailyLimit: 1, EventType: "topic_create", Description: "每日发布 1 篇帖子"},
 	{Code: "growth_reply", Title: "回复 3 次", Group: "daily", Points: 10, DailyLimit: 1, EventType: "reply_create", Description: "每日回复 3 次"},
@@ -98,15 +100,16 @@ func TestTaskCenterConfigSnapshot_OnPostgres(t *testing.T) {
 	}
 
 	// 5. 今日可得 = daily 组合计（Q11 第 4 条）：不写死数字，按配置求和——
-	//    加了「浏览课程」之后是 65（原 60 + 5），页面同样按 daily 组实时算。
+	//    加「浏览课程」后是 65（原 60 + 5）；#2550 再加游览商城 5 + 完成积分兑礼 10 = 80
+	//    （与原型 569:4532 的「今日可得 +80」对齐），页面同样按 daily 组实时算。
 	dailyTotal := 0
 	for _, r := range rows {
 		if r.Group == "daily" {
 			dailyTotal += r.Points
 		}
 	}
-	if dailyTotal != 65 {
-		t.Fatalf("daily 组今日可得合计 = %d, want 65（60 + 浏览课程 5）；改配置要同步页面口径与本断言", dailyTotal)
+	if dailyTotal != 80 {
+		t.Fatalf("daily 组今日可得合计 = %d, want 80（65 + 游览商城 5 + 完成积分兑礼 10）；改配置要同步页面口径与本断言", dailyTotal)
 	}
 
 	// 6. 领取口径（Q11 第 5 条）：daily_login 的描述说明「进任务中心即可领取」，不再写登录/小程序。
