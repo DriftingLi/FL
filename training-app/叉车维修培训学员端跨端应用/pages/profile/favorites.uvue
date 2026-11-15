@@ -94,13 +94,6 @@ import { goBack } from '../../utils/navigation'
         { label: '职位', value: 'job' },
     ]
 
-    /** 类型 Tab 的下标真源（app-tabs 按 index 回调，映射回 typeOptions 取值）；
-     *  声明在 currentType 之后（Kotlin 局部无前向引用，wrong-questions 同款纪律） */
-    function onTypeTabChange(idx : number) : void {
-        if (idx < 0 || idx >= typeOptions.length) return
-        onTypeClick(typeOptions[idx].value)
-    }
-
     /** 合法类型集（#1946）：路由参数 `type` 来自招聘「我的」三收藏格，越界值一律忽略，
      *  免得把一个后端不认的 target_type 透到查询串上。 */
     const VALID_TYPES : string[] = ['course', 'chapter', 'topic', 'featured', 'question', 'job']
@@ -249,6 +242,12 @@ import { goBack } from '../../utils/navigation'
         tagId.value = 0
         refreshTagChips()
         loadFavorites(true)
+    }
+
+    /** 类型 Tab 入口（app-tabs 按 index 回调，映射回 typeOptions 取值）；定义在 onTypeClick 之后（Kotlin 无前向引用） */
+    function onTypeTabChange(idx : number) : void {
+        if (idx < 0 || idx >= typeOptions.length) return
+        onTypeClick(typeOptions[idx].value)
     }
 
     function onLoadMore() : void {

@@ -51,7 +51,7 @@
              高亮固定首页与原型一致；图标复用 static/tabbar 现网资产（#2513 口径：优先复用） -->
         <view class="fake-tabbar">
             <view v-for="(tab, idx) in fakeTabs" :key="tab.label" class="fake-tab-item" @click="onFakeTabTap(tab)">
-                <image class="fake-tab-icon" :src="idx == 0 ? tab.activeIcon : tab.icon" mode="aspectFit" />
+                <image class="fake-tab-icon" :src="'/static/tabbar/' + (idx == 0 ? tab.activeFile : tab.file)" mode="aspectFit" />
                 <text class="fake-tab-label" :class="idx == 0 ? 'fake-tab-label-active' : ''">{{ tab.label }}</text>
             </view>
         </view>
@@ -95,16 +95,16 @@
     /** 底部 TabBar（裁定 3 定版 + 原型 AI学 仍在现网五 Tab 内）：落点 = 各 tab 页 switchTab */
     type FakeTab = {
         label : string
-        icon : string
-        activeIcon : string
+        file : string        // static/tabbar/ 下的文件名（绑定时拼包内前缀，webp 契约的 /static/ 豁免靠它可见）
+        activeFile : string
         path : string
     }
     const fakeTabs : FakeTab[] = [
-        { label: '首页', icon: '/static/tabbar/home.png', activeIcon: '/static/tabbar/home-active.png', path: '/pages/dashboard/dashboard' } as FakeTab,
-        { label: '课程', icon: '/static/tabbar/course.png', activeIcon: '/static/tabbar/course-active.png', path: '/pages/courses/courses' } as FakeTab,
-        { label: 'AI学', icon: '/static/tabbar/ai.png', activeIcon: '/static/tabbar/ai-active.png', path: '/pages/ai-assistant/ai-assistant' } as FakeTab,
-        { label: '交流', icon: '/static/tabbar/forum.png', activeIcon: '/static/tabbar/forum-active.png', path: '/pages/forum/forum' } as FakeTab,
-        { label: '我的', icon: '/static/tabbar/profile.png', activeIcon: '/static/tabbar/profile-active.png', path: '/pages/profile/profile' } as FakeTab,
+        { label: '首页', file: 'home.png', activeFile: 'home-active.png', path: '/pages/dashboard/dashboard' } as FakeTab,
+        { label: '课程', file: 'course.png', activeFile: 'course-active.png', path: '/pages/courses/courses' } as FakeTab,
+        { label: 'AI学', file: 'ai.png', activeFile: 'ai-active.png', path: '/pages/ai-assistant/ai-assistant' } as FakeTab,
+        { label: '交流', file: 'forum.png', activeFile: 'forum-active.png', path: '/pages/forum/forum' } as FakeTab,
+        { label: '我的', file: 'profile.png', activeFile: 'profile-active.png', path: '/pages/profile/profile' } as FakeTab,
     ]
 
     function onFakeTabTap(tab : FakeTab) : void {
