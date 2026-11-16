@@ -43,7 +43,7 @@
     }
 </script>
 
-<style>
+<style lang="scss">
     /* 举报弹窗 */
     .report-modal-mask {
         position: fixed;
@@ -115,7 +115,7 @@
         flex: 1;
         height: 80rpx;
         border-radius: 40rpx;
-        background-color: #2979ff;
+        background-color: $primary-color;
         align-items: center;
         justify-content: center;
     }

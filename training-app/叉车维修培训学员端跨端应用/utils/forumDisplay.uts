@@ -91,7 +91,7 @@ export const FORUM_MARKDOWN_BOUNDARY_NOTICE : string = '表格与图表显示原
 
 /** 基于 author_id 稳定生成头像背景色 */
 export function getAvatarColor(authorId : number) : string {
-    const colors : string[] = ['#2979ff', '#4caf50', '#ff9800', '#9c27b0', '#e91e63', '#009688', '#795548', '#607d8b']
+    const colors : string[] = ['#239EDD', '#4caf50', '#ff9800', '#9c27b0', '#e91e63', '#009688', '#795548', '#607d8b']
     if (authorId <= 0) return colors[0]
     return colors[authorId % colors.length]
 }

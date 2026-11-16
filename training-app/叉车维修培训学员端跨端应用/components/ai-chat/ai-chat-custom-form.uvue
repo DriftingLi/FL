@@ -88,7 +88,7 @@
 	}
 </script>
 
-<style>
+<style lang="scss">
 	.picker-mask {
 		position: absolute;
 		top: 0;
@@ -176,7 +176,7 @@
 	}
 
 	.custom-btn.primary {
-		background-color: #2979ff;
+		background-color: $primary-color;
 	}
 
 	.custom-btn-text {

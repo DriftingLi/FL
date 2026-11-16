@@ -94,7 +94,7 @@
 
 	.sources-head-action {
 		font-size: 22rpx;
-		color: #2979ff;
+		color: $primary-color;
 		margin-left: 16rpx;
 	}
 

@@ -126,7 +126,7 @@
 	}
 </script>
 
-<style>
+<style lang="scss">
 	.sheet-mask {
 		position: absolute;
 		top: 0;
@@ -192,7 +192,7 @@
 
 	.cap-icon {
 		font-size: 32rpx;
-		color: #2979ff;
+		color: $primary-color;
 		width: 56rpx;
 	}
 

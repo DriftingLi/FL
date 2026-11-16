@@ -53,7 +53,7 @@
     }>(), {
         authorName: '匿名学员',
         authorAvatar: '',
-        avatarColor: '#2979ff',
+        avatarColor: '#239EDD',
         createdAtText: '',
         regionText: '',
         likesCount: 0,
@@ -79,7 +79,7 @@
     }
 </script>
 
-<style>
+<style lang="scss">
     .topic-info {
         flex-direction: row;
         align-items: center;
@@ -92,7 +92,7 @@
         width: 64rpx;
         height: 64rpx;
         border-radius: 32rpx;
-        background-color: #2979ff;
+        background-color: $primary-color;
         align-items: center;
         justify-content: center;
         margin-right: 16rpx;

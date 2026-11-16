@@ -40,7 +40,7 @@
     }
 </script>
 
-<style>
+<style lang="scss">
     /* 排序栏 */
     .sort-bar {
         flex-direction: row;
@@ -71,7 +71,7 @@
 
     .sort-chip.active {
         background-color: #e8f0fe;
-        border: 1rpx solid #2979ff;
+        border: 1rpx solid $primary-color;
     }
 
     .sort-chip-text {
@@ -80,7 +80,7 @@
     }
 
     .sort-chip-text.active {
-        color: #2979ff;
+        color: $primary-color;
         font-weight: bold;
     }
 </style>

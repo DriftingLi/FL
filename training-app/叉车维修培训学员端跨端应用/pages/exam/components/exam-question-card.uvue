@@ -52,7 +52,7 @@
     }
 </script>
 
-<style>
+<style lang="scss">
     /* 题目卡片 */
     .question-card {
         background-color: #ffffff;
@@ -71,7 +71,7 @@
     .question-type-tag {
         font-size: 22rpx;
         color: #ffffff;
-        background-color: #2979ff;
+        background-color: $primary-color;
         padding: 6rpx 16rpx;
         border-radius: 8rpx;
         margin-right: 16rpx;
@@ -109,7 +109,7 @@
 
     .option-selected {
         background-color: #e3f2fd;
-        border-color: #2979ff;
+        border-color: $primary-color;
     }
 
     .option-key {
@@ -123,7 +123,7 @@
     }
 
     .option-key-selected {
-        background-color: #2979ff;
+        background-color: $primary-color;
     }
 
     .option-key-text {

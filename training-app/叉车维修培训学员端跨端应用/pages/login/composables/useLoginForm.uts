@@ -116,7 +116,7 @@ export function useLoginForm(biometric : UseBiometricResult) : UseLoginFormResul
     // 协议勾选
     const agreed = ref<boolean>(false)
 
-    // 协议行强调色：共享件默认值保持着陆页现状（#2979FF），本页按主色 token 传入（#2517 裁定 8）
+    // 协议行强调色：共享件默认值已随本批切到主色 token，本页按主色 token 传入（#2517 裁定 8）
     const agreementAccent : string = '#239EDD'
 
     // 图形验证码（人机验证，生产环境发送短信/邮箱验证码前必填）

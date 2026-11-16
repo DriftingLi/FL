@@ -24,7 +24,7 @@
     }
 </script>
 
-<style>
+<style lang="scss">
     .featured-filter-bar {
         flex-direction: row;
         align-items: center;
@@ -41,7 +41,7 @@
 
     .featured-chip.active {
         background-color: #e8f3ff;
-        border-color: #2979ff;
+        border-color: $primary-color;
     }
 
     .featured-chip-text {
@@ -50,7 +50,7 @@
     }
 
     .featured-chip-text.active {
-        color: #2979ff;
+        color: $primary-color;
         font-weight: bold;
     }
 </style>

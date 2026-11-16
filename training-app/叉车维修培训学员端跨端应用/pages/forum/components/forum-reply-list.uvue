@@ -233,7 +233,7 @@
 
     .reply-sort-chip.active {
         background-color: #e8f0fe;
-        border: 1rpx solid #2979ff;
+        border: 1rpx solid $primary-color;
     }
 
     .reply-sort-text {
@@ -242,7 +242,7 @@
     }
 
     .reply-sort-text.active {
-        color: #2979ff;
+        color: $primary-color;
         font-weight: bold;
     }
 
@@ -397,7 +397,7 @@
 
     .reply-action-text {
         font-size: 24rpx;
-        color: #2979ff;
+        color: $primary-color;
     }
 
     .reply-action-right {
@@ -496,7 +496,7 @@
 
     .replies-more-btn {
         background-color: #e8f0fe;
-        border: 1rpx solid #2979ff;
+        border: 1rpx solid $primary-color;
         border-radius: 32rpx;
         padding: 14rpx 40rpx;
         align-items: center;
@@ -505,7 +505,7 @@
 
     .replies-more-text {
         font-size: 26rpx;
-        color: #2979ff;
+        color: $primary-color;
         font-weight: bold;
     }
 
