@@ -75,7 +75,7 @@
     }
 </script>
 
-<style>
+<style lang="scss">
     /* 新闻资讯板块：标题与 chips 落在页面底色上，只有列表是白卡（原型 404_2195） */
     .news-section {
         margin: 24rpx;

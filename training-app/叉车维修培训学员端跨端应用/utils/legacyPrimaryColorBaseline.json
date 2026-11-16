@@ -3,8 +3,6 @@
   "components/ai-chat/ai-chat-pro-sheet.uvue": 1,
   "components/ai-chat/ai-chat-sources.uvue": 1,
   "components/login-agreement/login-agreement.uvue": 4,
-  "pages/dashboard/components/dashboard-continue-card.uvue": 2,
-  "pages/dashboard/components/dashboard-course-section.uvue": 1,
   "pages/exam/components/exam-action-bar.uvue": 1,
   "pages/exam/components/exam-question-card.uvue": 3,
   "pages/exam/components/exam-result-detail-list.uvue": 1,
