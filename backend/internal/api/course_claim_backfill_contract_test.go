@@ -41,6 +41,10 @@ func TestCourseClaimBackfillOnPostgres(t *testing.T) {
 	if err := db.Create(&lv).Error; err != nil {
 		t.Fatalf("建等级失败: %v", err)
 	}
+	// chapter.tutor_id 有指向 tutor 的外键（migrations/000056）：回填样本必须先建两位真讲师，
+	// 否则章节插不进去、整条回填事实无从验证。
+	tutorA := testutil.SeedTutor(t, db, "backfill_t1", "x")
+	tutorB := testutil.SeedTutor(t, db, "backfill_t2", "x")
 	mkCourse := func(name string) *model.Course {
 		c := model.Course{Name: name, Status: 1,
 			SpecialtyID: ptr(spec.SpecialtyID), LevelID: ptr(lv.LevelID), CreatedAt: testutil.Now()}
@@ -58,14 +62,14 @@ func TestCourseClaimBackfillOnPostgres(t *testing.T) {
 	}
 
 	// 迁移前形状：一门课有多章同属一位讲师（回填要去重成一行），
-	// 另一门课有一章归属讲师 2、一章无主（该课仍应回填讲师 2），
+	// 另一门课有一章归属讲师 B、一章无主（该课仍应回填讲师 B），
 	// 第三门课全部无主（不回填，保持开放认领）。
 	owned := mkCourse("有主课程")
-	mkChapter(owned.CourseID, ptr(1), "章一")
-	mkChapter(owned.CourseID, ptr(1), "章二") // 同一讲师两章 → DISTINCT 后仍一行
+	mkChapter(owned.CourseID, ptr(tutorA.TutorID), "章一")
+	mkChapter(owned.CourseID, ptr(tutorA.TutorID), "章二") // 同一讲师两章 → DISTINCT 后仍一行
 
 	mixed := mkCourse("混合课程")
-	mkChapter(mixed.CourseID, ptr(2), "有主章")
+	mkChapter(mixed.CourseID, ptr(tutorB.TutorID), "有主章")
 	mkChapter(mixed.CourseID, nil, "无主章")
 
 	ownerless := mkCourse("无主课程")
@@ -101,8 +105,8 @@ func TestCourseClaimBackfillOnPostgres(t *testing.T) {
 	if err := db.Where("course_id = ?", owned.CourseID).First(&got).Error; err != nil {
 		t.Fatalf("有主课程未回填认领行: %v", err)
 	}
-	if got.TutorID != 1 || got.Source != model.ClaimSourceSelf {
-		t.Fatalf("回填行 = %+v, want tutor_id=1 source=self", got)
+	if got.TutorID != tutorA.TutorID || got.Source != model.ClaimSourceSelf {
+		t.Fatalf("回填行 = %+v, want tutor_id=%d source=self", got, tutorA.TutorID)
 	}
 	if n := countClaims(owned.CourseID); n != 1 {
 		t.Fatalf("同讲师多章应只回填一行, got %d", n)
@@ -128,7 +132,7 @@ func TestCourseClaimBackfillOnPostgres(t *testing.T) {
 	}
 
 	// 唯一键兜底：绕过回填直接插重复行应被拒（ON CONFLICT 之外的第二道保险）
-	dup := model.TutorCourseClaim{TutorID: 1, CourseID: owned.CourseID, Source: model.ClaimSourceAdmin, CreatedAt: testutil.Now()}
+	dup := model.TutorCourseClaim{TutorID: tutorA.TutorID, CourseID: owned.CourseID, Source: model.ClaimSourceAdmin, CreatedAt: testutil.Now()}
 	if err := db.Create(&dup).Error; err == nil {
 		t.Fatal("重复 (tutor_id, course_id) 应被唯一索引拒绝")
 	}

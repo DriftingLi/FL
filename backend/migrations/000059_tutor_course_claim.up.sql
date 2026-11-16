@@ -16,8 +16,10 @@
 
 CREATE TABLE IF NOT EXISTS tutor_course_claim (
     claim_id   INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    tutor_id   INT         NOT NULL,
-    course_id  INT         NOT NULL,
+    -- 外键与 admin_role_capability 同口径：讲师账号或课程被删时认领行跟着消失。
+    -- 不级联的话会留下指向不存在主体的孤儿行，而「谁在编」正是靠这张表回答的。
+    tutor_id   INT         NOT NULL REFERENCES tutor(tutor_id) ON DELETE CASCADE,
+    course_id  INT         NOT NULL REFERENCES course(course_id) ON DELETE CASCADE,
     -- 枚举由 DB 兜底（B1）：应用层常量写错、手工 SQL 补数据、未来某个脚本忘了走常量表，
     -- 都会在这里被拦住。审计字段一旦混进第三种来源，「自助还是被派」这条判断就失效了。
     source     VARCHAR(16) NOT NULL DEFAULT 'self' CHECK (source IN ('self', 'admin')),
