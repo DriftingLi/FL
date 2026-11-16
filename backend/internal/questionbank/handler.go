@@ -31,6 +31,8 @@ var ErrStatus = &httpx.ErrStatusTable{
 		{Sentinel: ErrQuestionAnswerInvalid, Status: http.StatusBadRequest},
 		{Sentinel: ErrSubmitNotDraft, Status: http.StatusBadRequest},
 		{Sentinel: ErrRejectReasonRequired, Status: http.StatusBadRequest},
+		// #2598 写隔离：题目不是你的 → 403（不用 404 伪装，C3）。
+		{Sentinel: ErrQuestionNotOwned, Status: http.StatusForbidden},
 	},
 }
 
@@ -112,9 +114,11 @@ func ActsAsQuestionEditor(c *gin.Context) bool {
 	return middleware.HasCapability(c, authz.CapQuestionAuthor) || middleware.HasCapability(c, authz.CapQuestionReview)
 }
 
-// EditorQuestionScope 装配编辑面 scope：显式 credential_id 是**筛选轴**（不是可见性口径）。
+// EditorQuestionScope 装配编辑面 scope：显式 credential_id 与 created_by 都是**筛选轴**
+// （不是可见性口径）。created_by 只在编辑面被读（#2598 C2）——学员面用的是另一个类型
+// QuestionReadScope，那里根本没有这一格，所以「按作者收窄题库池」构造不出来。
 func EditorQuestionScope(c *gin.Context) QuestionEditScope {
-	return NewQuestionEditScope(middleware.CredentialIDPtr(c))
+	return NewQuestionEditScope(middleware.CredentialIDPtr(c), httpx.QueryIDPtr(c, "created_by"))
 }
 
 // listQuestionsReq 题目列表查询参数。
@@ -346,9 +350,19 @@ func (h *handler) BatchImport(c *gin.Context) {
 	}.Handle(c)
 }
 
-// questionIDReq 题目 ID 路径参数请求。
+// questionIDReq 题目 ID 路径参数请求。ActorID/ActorType 只由**写路径**（删除 / 提交审核）填，
+// 读路径与审核路径（发布 / 驳回，管理员独占）留零值——归属判据只在写路径上问「是不是你的」。
 type questionIDReq struct {
-	ID int
+	ID        int
+	ActorID   int
+	ActorType string
+}
+
+// actorOf 取当前登录者的 id 与角色（归属谓词的两个入参，单点装配）。
+// 不用 middleware.CurrentUserID 之外的口径：令牌里的 uid 与角色就是这两格的事实源。
+func actorOf(c *gin.Context) (int, string) {
+	id := middleware.CurrentUserID(c)
+	return id, middleware.CurrentRole(c)
 }
 
 // GetQuestion 题目详情
@@ -398,6 +412,7 @@ func (h *handler) GetQuestion(c *gin.Context) {
 type updateQuestionReq struct {
 	ID        int
 	Input     QuestionUpdateInput
+	ActorID   int
 	ActorType string
 }
 
@@ -425,12 +440,11 @@ func (h *handler) UpdateQuestion(c *gin.Context) {
 			if err != nil {
 				return nil, err
 			}
-			role, _ := c.Get(string(middleware.CtxUserRole))
-			roleStr, _ := role.(string)
-			return &updateQuestionReq{ID: id, Input: *input, ActorType: roleStr}, nil
+			actorID, actorType := actorOf(c)
+			return &updateQuestionReq{ID: id, Input: *input, ActorID: actorID, ActorType: actorType}, nil
 		},
 		Invoke: func(ctx context.Context, req *updateQuestionReq) (*QuestionDTO, error) {
-			result, err := h.svc.UpdateQuestion(req.ID, req.Input, req.ActorType)
+			result, err := h.svc.UpdateQuestion(req.ID, req.Input, req.ActorID, req.ActorType)
 			if err != nil {
 				return nil, err
 			}
@@ -461,10 +475,11 @@ func (h *handler) DeleteQuestion(c *gin.Context) {
 			if err != nil {
 				return nil, err
 			}
-			return &questionIDReq{ID: id}, nil
+			actorID, actorType := actorOf(c)
+			return &questionIDReq{ID: id, ActorID: actorID, ActorType: actorType}, nil
 		},
 		Invoke: func(ctx context.Context, req *questionIDReq) (*struct{}, error) {
-			if err := h.svc.DeleteQuestion(req.ID); err != nil {
+			if err := h.svc.DeleteQuestion(req.ID, req.ActorID, req.ActorType); err != nil {
 				return nil, err
 			}
 			return &struct{}{}, nil
@@ -531,10 +546,11 @@ func (h *handler) SubmitQuestion(c *gin.Context) {
 			if err != nil {
 				return nil, err
 			}
-			return &questionIDReq{ID: id}, nil
+			actorID, actorType := actorOf(c)
+			return &questionIDReq{ID: id, ActorID: actorID, ActorType: actorType}, nil
 		},
 		Invoke: func(ctx context.Context, req *questionIDReq) (*QuestionDTO, error) {
-			result, err := h.svc.SubmitQuestion(req.ID)
+			result, err := h.svc.SubmitQuestion(req.ID, req.ActorID, req.ActorType)
 			if err != nil {
 				return nil, err
 			}

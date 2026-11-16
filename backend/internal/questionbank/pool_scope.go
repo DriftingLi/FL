@@ -100,16 +100,26 @@ func (s QuestionReadScope) VisibleByID(db *gorm.DB, questionID int) (bool, error
 // 列表侧那格筛选轴。
 type QuestionEditScope struct {
 	credFilter *int
+	// createdBy 「我创建的」筛选轴（#2598 C2）：nil = 不筛（看全量，C4 读面不变）。
+	//
+	// 它挂在**编辑面** scope 上而不是做成 ListQuestions 的裸参数，是有意的：学员面收的是
+	// QuestionReadScope（另一个类型），于是「学员按作者收窄题库池」在类型上就构造不出来——
+	// 池的可见性口径只该由 scope 回答（ADR-0062 决策 4），加一个裸参数就得靠运行时判身份去拦，
+	// 那是本仓反复否掉的「靠 caller 自觉」。
+	createdBy *int
 }
 
-// NewQuestionEditScope 由入口装配（编辑面请求的显式 credential_id 查询参数；nil = 不加这格筛选）。
-func NewQuestionEditScope(credFilter *int) QuestionEditScope {
-	return QuestionEditScope{credFilter: credFilter}
+// NewQuestionEditScope 由入口装配（编辑面请求的显式 credential_id / created_by 查询参数；
+// 各自 nil = 不加那一格筛选）。
+func NewQuestionEditScope(credFilter, createdBy *int) QuestionEditScope {
+	return QuestionEditScope{credFilter: credFilter, createdBy: createdBy}
 }
 
-// ApplyListFilter 叠上证件筛选轴（归属分区谓词的编辑面用法：nil → 不筛，看全部）。
+// ApplyListFilter 叠上编辑面的两格筛选轴：证件分区（ADR-0056 §2）与「我创建的」（#2598 C2）。
+// 两格都是 nil → 不筛（看全部）。用归属分区具名谓词叠加，不手写 Where。
 func (s QuestionEditScope) ApplyListFilter(q *gorm.DB) *gorm.DB {
-	return scope.EntityOwnedBy(q, "credential_id", s.credFilter)
+	q = scope.EntityOwnedBy(q, "credential_id", s.credFilter)
+	return scope.EntityOwnedBy(q, "created_by", s.createdBy)
 }
 
 // QuestionVisibleOrErr 把 scope 的 by-id 判定翻成错误：读不动 ⇒ 原样上抛（调用方渲染 500），

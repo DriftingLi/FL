@@ -359,6 +359,8 @@ func TestErrStatusTable_Snapshot_QuestionBank(t *testing.T) {
 		{Sentinel: questionbank.ErrQuestionAnswerInvalid, Status: http.StatusBadRequest},
 		{Sentinel: questionbank.ErrSubmitNotDraft, Status: http.StatusBadRequest},
 		{Sentinel: questionbank.ErrRejectReasonRequired, Status: http.StatusBadRequest},
+		// #2598 写隔离：题目不是你的 → 403（C3：不用 404 伪装，编辑面全量可读）。
+		{Sentinel: questionbank.ErrQuestionNotOwned, Status: http.StatusForbidden},
 	}, 0)
 }
 

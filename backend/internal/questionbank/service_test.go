@@ -184,7 +184,7 @@ func TestUpdateQuestion_Success(t *testing.T) {
 	svc, db := newQuestionBankSvc(t)
 	q := testutil.SeedQuestion(t, db, "single_choice", "旧题干", "A")
 	newContent := "新题干"
-	result, err := svc.UpdateQuestion(q.ID, QuestionUpdateInput{Content: &newContent}, "admin")
+	result, err := svc.UpdateQuestion(q.ID, QuestionUpdateInput{Content: &newContent}, adminActorID, "admin")
 	if err != nil {
 		t.Fatalf("更新失败: %v", err)
 	}
@@ -196,7 +196,7 @@ func TestUpdateQuestion_Success(t *testing.T) {
 func TestUpdateQuestion_NotFound(t *testing.T) {
 	svc, _ := newQuestionBankSvc(t)
 	x := "x"
-	_, err := svc.UpdateQuestion(9999, QuestionUpdateInput{Content: &x}, "tutor")
+	_, err := svc.UpdateQuestion(9999, QuestionUpdateInput{Content: &x}, otherTutor, "tutor")
 	if !errors.Is(err, ErrQuestionNotFound) {
 		t.Fatalf("应返回题目不存在，got %v", err)
 	}
@@ -220,10 +220,21 @@ func TestUpdateQuestion_ReviewInvariant(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			svc, db := newQuestionBankSvc(t)
-			q := testutil.SeedQuestion(t, db, "single_choice", "原题干", "A")
-			q.RejectReason = "旧理由"
-			db.Save(q)
-			result, err := svc.UpdateQuestion(q.ID, c.in, c.actor)
+			// #2598 起写路径先验归属：讲师只能改自己创建的题，故夹具必须带作者，
+			// 否则「讲师改内容回 pending」这条不变式根本没机会被执行到。
+			q := seedOwnedQuestion(t, db, ptrInt(ownerTutor))
+			// 题干对齐用例里的 same 基线（seedOwnedQuestion 的默认文案不同）。
+			// 用 Model().Update 只改这两列而不是 db.Save(q)：Save 是整行 UPDATE，
+			// 会把内存行里过期的 UpdatedAt 一起写回去，让夹具的「旧值」污染被测的审核不变式。
+			if err := db.Model(&model.Question{}).Where("id = ?", q.ID).
+				Updates(map[string]any{"content": "原题干", "reject_reason": "旧理由"}).Error; err != nil {
+				t.Fatalf("置夹具旧值失败: %v", err)
+			}
+			actorID := ownerTutor
+			if c.actor == "admin" {
+				actorID = adminActorID
+			}
+			result, err := svc.UpdateQuestion(q.ID, c.in, actorID, c.actor)
 			if err != nil {
 				t.Fatalf("更新失败: %v", err)
 			}
@@ -244,9 +255,9 @@ func TestUpdateQuestion_TagOnlyKeepsStatus(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	q := testutil.SeedQuestion(t, db, "single_choice", "test", "A")
+	q := seedOwnedQuestion(t, db, ptrInt(ownerTutor))
 	ids := []int{tag.ID}
-	result, err := svc.UpdateQuestion(q.ID, QuestionUpdateInput{TagIDs: &ids}, "tutor")
+	result, err := svc.UpdateQuestion(q.ID, QuestionUpdateInput{TagIDs: &ids}, ownerTutor, "tutor")
 	if err != nil {
 		t.Fatalf("纯标签更新失败: %v", err)
 	}
@@ -259,9 +270,12 @@ func TestUpdateQuestion_TagOnlyKeepsStatus(t *testing.T) {
 
 func TestSubmitQuestion_DraftToPending(t *testing.T) {
 	svc, db := newQuestionBankSvc(t)
-	q := testutil.SeedQuestion(t, db, "single_choice", "待提交题", "A")
+	q := seedOwnedQuestion(t, db, ptrInt(ownerTutor))
+	if err := db.Model(&model.Question{}).Where("id = ?", q.ID).Update("content", "待提交题").Error; err != nil {
+		t.Fatalf("置题干失败: %v", err)
+	}
 	db.Model(q).UpdateColumns(map[string]any{"status": "draft", "reject_reason": "题干不完整"})
-	result, err := svc.SubmitQuestion(q.ID)
+	result, err := svc.SubmitQuestion(q.ID, ownerTutor, "tutor")
 	if err != nil {
 		t.Fatalf("提交审核失败: %v", err)
 	}
@@ -272,11 +286,11 @@ func TestSubmitQuestion_DraftToPending(t *testing.T) {
 
 func TestSubmitQuestion_NonDraftRejected(t *testing.T) {
 	svc, db := newQuestionBankSvc(t)
-	q := testutil.SeedQuestion(t, db, "single_choice", "已发布题", "A")
-	if _, err := svc.SubmitQuestion(q.ID); !errors.Is(err, ErrSubmitNotDraft) {
+	q := seedOwnedQuestion(t, db, ptrInt(ownerTutor))
+	if _, err := svc.SubmitQuestion(q.ID, ownerTutor, "tutor"); !errors.Is(err, ErrSubmitNotDraft) {
 		t.Fatalf("published 提交应拒（状态前置），got %v", err)
 	}
-	if _, err := svc.SubmitQuestion(9999); !errors.Is(err, ErrQuestionNotFound) {
+	if _, err := svc.SubmitQuestion(9999, ownerTutor, "tutor"); !errors.Is(err, ErrQuestionNotFound) {
 		t.Fatalf("不存在应 404 哨兵，got %v", err)
 	}
 }
@@ -335,8 +349,8 @@ func TestQuestionContentTouched(t *testing.T) {
 
 func TestDeleteQuestion_Success(t *testing.T) {
 	svc, db := newQuestionBankSvc(t)
-	q := testutil.SeedQuestion(t, db, "single_choice", "test", "A")
-	if err := svc.DeleteQuestion(q.ID); err != nil {
+	q := seedOwnedQuestion(t, db, ptrInt(ownerTutor))
+	if err := svc.DeleteQuestion(q.ID, ownerTutor, "tutor"); err != nil {
 		t.Fatalf("删除失败: %v", err)
 	}
 	_, err := svc.GetQuestion(q.ID)
@@ -347,7 +361,7 @@ func TestDeleteQuestion_Success(t *testing.T) {
 
 func TestDeleteQuestion_NotFound(t *testing.T) {
 	svc, _ := newQuestionBankSvc(t)
-	err := svc.DeleteQuestion(9999)
+	err := svc.DeleteQuestion(9999, ownerTutor, "tutor")
 	if err == nil {
 		t.Fatal("应返回题目不存在")
 	}
@@ -360,7 +374,7 @@ func TestListQuestions_Pagination(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		testutil.SeedQuestion(t, db, "single_choice", "题目前5", "A")
 	}
-	result, err := svc.ListQuestions(1, 2, "", "", "", nil, NewQuestionEditScope(nil), "")
+	result, err := svc.ListQuestions(1, 2, "", "", "", nil, NewQuestionEditScope(nil, nil), "")
 	if err != nil {
 		t.Fatalf("ListQuestions 失败: %v", err)
 	}
@@ -379,7 +393,7 @@ func TestListQuestions_FilterByType(t *testing.T) {
 	svc, db := newQuestionBankSvc(t)
 	testutil.SeedQuestion(t, db, "single_choice", "单选题", "A")
 	testutil.SeedQuestion(t, db, "true_false", "判断题", "true")
-	result, err := svc.ListQuestions(1, 20, "true_false", "", "", nil, NewQuestionEditScope(nil), "")
+	result, err := svc.ListQuestions(1, 20, "true_false", "", "", nil, NewQuestionEditScope(nil, nil), "")
 	if err != nil {
 		t.Fatalf("ListQuestions 失败: %v", err)
 	}
@@ -390,7 +404,7 @@ func TestListQuestions_FilterByType(t *testing.T) {
 
 func TestListQuestions_DefaultPage(t *testing.T) {
 	svc, _ := newQuestionBankSvc(t)
-	result, err := svc.ListQuestions(0, 0, "", "", "", nil, NewQuestionEditScope(nil), "")
+	result, err := svc.ListQuestions(0, 0, "", "", "", nil, NewQuestionEditScope(nil, nil), "")
 	if err != nil {
 		t.Fatalf("ListQuestions 失败: %v", err)
 	}
@@ -531,14 +545,14 @@ func TestQuestionBank_Tags(t *testing.T) {
 	q1, err := qsvc.CreateQuestion(QuestionCreateInput{
 		Type: "single_choice", Content: "法规题", Options: json.RawMessage(`["A","B"]`), Answer: json.RawMessage(`"A"`),
 		TagIDs: []int{tag1.ID},
-	}, nil, "tutor")
+	}, ptrInt(ownerTutor), "tutor")
 	if err != nil {
 		t.Fatalf("创建题目失败: %v", err)
 	}
 	q2, err := qsvc.CreateQuestion(QuestionCreateInput{
 		Type: "true_false", Content: "液压题", Answer: json.RawMessage(`"true"`),
 		TagIDs: []int{tag2.ID},
-	}, nil, "tutor")
+	}, ptrInt(ownerTutor), "tutor")
 	if err != nil {
 		t.Fatalf("创建题目失败: %v", err)
 	}
@@ -547,7 +561,7 @@ func TestQuestionBank_Tags(t *testing.T) {
 	}
 
 	// 按标签过滤
-	byTag, err := qsvc.ListQuestions(1, 20, "", "", "", coerce.IntPtr(tag2.ID), NewQuestionEditScope(nil), "")
+	byTag, err := qsvc.ListQuestions(1, 20, "", "", "", coerce.IntPtr(tag2.ID), NewQuestionEditScope(nil, nil), "")
 	if err != nil {
 		t.Fatalf("ListQuestions 失败: %v", err)
 	}
@@ -564,7 +578,7 @@ func TestQuestionBank_Tags(t *testing.T) {
 
 	// 更新题目时替换标签
 	tagIDs2 := []int{tag2.ID}
-	updated, err := qsvc.UpdateQuestion(q1.ID, QuestionUpdateInput{TagIDs: &tagIDs2}, "tutor")
+	updated, err := qsvc.UpdateQuestion(q1.ID, QuestionUpdateInput{TagIDs: &tagIDs2}, ownerTutor, "tutor")
 	if err != nil {
 		t.Fatalf("更新题目失败: %v", err)
 	}
