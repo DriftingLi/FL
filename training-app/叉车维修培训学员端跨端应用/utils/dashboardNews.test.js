@@ -78,4 +78,44 @@ describe('首页新闻板块取数口径（#1939）', () => {
     );
     expect(out.length).toBe(2);
   });
+
+  /* ══ #2581：原型 404_2195 的四枚分类 chips（点 chip 按类目重取，不做截断后客户端过滤） ══ */
+
+  it('分类 chips 口径：最新=三类按时间 / 热点=三类按浏览量 / 政策法规=仅 news / 全部=三类不筛不排', () => {
+    expect(mod.DASHBOARD_NEWS_FILTERS).toEqual(['最新资讯', '热点关注', '政策法规', '全部']);
+    expect(mod.dashboardNewsCategoriesOf(0)).toEqual(['exam', 'industry', 'news']);
+    expect(mod.dashboardNewsCategoriesOf(1)).toEqual(['exam', 'industry', 'news']);
+    expect(mod.dashboardNewsCategoriesOf(2)).toEqual(['news']);
+    expect(mod.dashboardNewsCategoriesOf(3)).toEqual(['exam', 'industry', 'news']);
+    expect(mod.dashboardNewsSortOf(0)).toBe('latest');
+    expect(mod.dashboardNewsSortOf(1)).toBe('hot');
+    expect(mod.dashboardNewsSortOf(2)).toBe('');
+    expect(mod.dashboardNewsSortOf(3)).toBe('');
+  });
+
+  it('热点关注按浏览量倒序合并（不按发布时间），同浏览量保持先到先得', () => {
+    const a = item(1, '2026-10-01T00:00:00+08:00');
+    a.view_count = 10;
+    const b = item(2, '2026-10-20T00:00:00+08:00');
+    b.view_count = 99;
+    const c = item(3, '2026-10-10T00:00:00+08:00');
+    c.view_count = 10;
+    const out = mod.mergeDashboardNewsByHot([[a], [b, c]], 5);
+    expect(out.map((x) => x.content_id)).toEqual([2, 1, 3]);
+  });
+
+  it('热点口径同样去重并截断', () => {
+    const a = item(7, '2026-10-01T00:00:00+08:00');
+    a.view_count = 5;
+    const b = item(8, '2026-10-02T00:00:00+08:00');
+    b.view_count = 6;
+    const out = mod.mergeDashboardNewsByHot([[a, b], [a]], 1);
+    expect(out.map((x) => x.content_id)).toEqual([8]);
+  });
+
+  it('日期行显示 MM.DD（原型 404_2195 的 09.09 形态）', () => {
+    expect(mod.formatNewsDate('2026-09-09T10:00:00+08:00')).toBe('09.09');
+    expect(mod.formatNewsDate('2026-09-09')).toBe('09.09');
+    expect(mod.formatNewsDate('')).toBe('');
+  });
 });

@@ -1,19 +1,29 @@
 <template>
-    <!-- 新闻资讯板块 ——T05 手术自 dashboard.uvue 逐段搬出；#1939 接三类别真实内容 + 空态 / 失败态 -->
+    <!-- 新闻资讯板块 ——T05 手术自 dashboard.uvue 逐段搬出；#1939 接三类别真实内容 + 空态 / 失败态；
+         #2581 按原型 404_2195 还原：标题下分类 chips + 白卡包列表（序号 + MM.DD 日期） -->
     <view class="news-section">
         <view class="section-header">
             <text class="section-title">新闻资讯</text>
             <text class="section-more" @click="onMore">更多</text>
         </view>
         <view class="section-underline"></view>
+        <!-- 分类 chips：点一枚按该类目重取（映射在 utils/dashboardNews，与考情资讯页同源） -->
+        <view class="news-filter-row">
+            <view v-for="(label, idx) in filters" :key="idx" class="news-filter-tag"
+                :class="{ 'news-filter-tag-active': activeFilter == idx }" @click="onFilterChange(idx)">
+                <text class="news-filter-tag-text"
+                    :class="{ 'news-filter-tag-text-active': activeFilter == idx }">{{ label }}</text>
+            </view>
+        </view>
         <!-- 失败态与空态分开（#816 口径）：拉不到不能说成「暂无资讯」 -->
         <app-empty-state v-if="newsList.length == 0 && failed" text="资讯加载失败" action-text="重试" @action="onRetry" />
         <app-empty-state v-else-if="newsList.length == 0" icon="📰" text="暂无资讯" />
-        <view v-else class="news-list">
-            <view v-for="news in newsList" :key="news.content_id" class="news-item" @click="onNewsClick(news)">
-                <text class="news-icon">+</text>
+        <view v-else class="news-card">
+            <view v-for="(news, idx) in newsList" :key="news.content_id" class="news-item" @click="onNewsClick(news)">
+                <text class="news-icon">✦</text>
+                <text class="news-index">{{ idx + 1 }}、</text>
                 <text class="news-title" :style="{ flex: 1 }">{{ news.title }}</text>
-                <text class="news-date" v-if="news.published_at">{{ news.published_at }}</text>
+                <text class="news-date" v-if="news.published_at">{{ formatNewsDateText(news) }}</text>
             </view>
         </view>
     </view>
@@ -22,17 +32,23 @@
 <script setup lang="uts">
     import type { FeaturedContentItem } from '../../../types/index'
     import appEmptyState from '../../../components/app-empty-state/app-empty-state.uvue'
+    import { DASHBOARD_NEWS_FILTERS, formatNewsDate } from '../../../utils/dashboardNews'
 
     const props = withDefaults(defineProps<{
         newsList? : FeaturedContentItem[]
         /** 三类别**全部**取数失败（与「无数据」区分开） */
         failed? : boolean
+        /** 当前选中的分类 chip（页面/composable 持有，组件不持数据态） */
+        activeFilter? : number
     }>(), {
         newsList: () => [] as FeaturedContentItem[],
-        failed: false
+        failed: false,
+        activeFilter: 0
     })
 
-    const emit = defineEmits(['click', 'more', 'retry'])
+    const emit = defineEmits(['click', 'more', 'retry', 'filterChange'])
+
+    const filters : string[] = DASHBOARD_NEWS_FILTERS
 
     function onNewsClick(news : FeaturedContentItem) : void {
         emit('click', news)
@@ -45,14 +61,24 @@
     function onRetry() : void {
         emit('retry')
     }
+
+    function onFilterChange(idx : number) : void {
+        emit('filterChange', idx)
+    }
+
+    /**
+     * 日期行单点包装（同课程卡 renderCoursePriceText 先例）：模板不能直调 import 函数
+     * （Kotlin 判炸，规则 S），这里只做转发 —— 日期格式语义仍单点在 utils/dashboardNews。
+     */
+    function formatNewsDateText(news : FeaturedContentItem) : string {
+        return formatNewsDate(news.published_at)
+    }
 </script>
 
 <style>
-    /* 新闻资讯板块 */
+    /* 新闻资讯板块：标题与 chips 落在页面底色上，只有列表是白卡（原型 404_2195） */
     .news-section {
         margin: 24rpx;
-        background-color: #FFFFFF;
-        border-radius: 16rpx;
         padding: 24rpx;
     }
 
@@ -83,33 +109,65 @@
         margin-bottom: 16rpx;
     }
 
-    .news-list {
-        flex-direction: column;
+    /* 分类 chips：填充式胶囊（默认灰底灰字、选中浅蓝底蓝字），与课程区筛选胶囊同一套色 */
+    .news-filter-row {
+        flex-direction: row;
+        justify-content: space-between;
+        margin-bottom: 20rpx;
+    }
+
+    .news-filter-tag {
+        padding: 14rpx 28rpx;
+        border-radius: 999rpx;
+        background-color: #ECECEC;
+    }
+
+    .news-filter-tag-active {
+        background-color: #EBF9FF;
+    }
+
+    .news-filter-tag-text {
+        font-size: 24rpx;
+        color: #666666;
+    }
+
+    .news-filter-tag-text-active {
+        color: #239EDD;
+    }
+
+    /* 白卡包列表 */
+    .news-card {
+        background-color: #FFFFFF;
+        border-radius: 16rpx;
+        padding: 8rpx 24rpx;
     }
 
     .news-item {
         flex-direction: row;
         align-items: center;
         padding: 20rpx 0;
-        border-bottom-width: 1rpx;
-        border-bottom-color: #F0F0F0;
     }
 
     .news-icon {
-        font-size: 32rpx;
-        color: #FF6B35;
-        margin-right: 16rpx;
-        font-weight: bold;
+        font-size: 24rpx;
+        color: #FFB300;
+        margin-right: 8rpx;
+    }
+
+    .news-index {
+        font-size: 26rpx;
+        color: #333333;
+        margin-right: 4rpx;
     }
 
     .news-date {
         font-size: 22rpx;
-        color: #cccccc;
+        color: #999999;
         margin-left: 16rpx;
     }
 
     .news-title {
-        font-size: 28rpx;
+        font-size: 26rpx;
         color: #333333;
         lines: 1;
         text-overflow: ellipsis;
