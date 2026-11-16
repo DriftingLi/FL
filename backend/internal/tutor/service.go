@@ -37,8 +37,6 @@ func NewService(db *gorm.DB, uploadFolder string, fileStore *filestore.FileStore
 // 同形缺陷在 api 层会让整条 swagger 路由消失，见 4c488c3c。）
 var ErrChapterFileNotFound = errors.New("文件不存在")
 
-// CourseClaimantsResult 见 course 包；此处未加包装。
-
 // ClaimCourse 讲师自助认领课程（#2596 B3/B5）：委托课程域，本层不加逻辑——认领是课程域的事实。
 func (s *Service) ClaimCourse(tutorID, courseID int) error {
 	return course.ClaimCourse(s.db, tutorID, courseID)
@@ -236,11 +234,7 @@ func (s *Service) UploadChapterFile(chapterID, tutorID int, filename string, fil
 // 认领谓词前置（#2596 / 规格 B2）：提交审核是「把这章推进发布流程」，与写正文同属编辑权，
 // 未认领即拒。
 func (s *Service) SubmitChapterReview(ctx context.Context, chapterID, tutorID int) (*course.ChapterDTO, error) {
-	courseID, err := s.courseIDOfChapter(chapterID)
-	if err != nil {
-		return nil, err
-	}
-	if err := course.RequireCourseClaim(s.db, tutorID, courseID); err != nil {
+	if err := course.RequireChapterClaim(s.db, tutorID, chapterID); err != nil {
 		return nil, err
 	}
 	if err := course.SubmitChapterForReview(ctx, s.db, chapterID, tutorID); err != nil {
@@ -254,20 +248,6 @@ func (s *Service) SubmitChapterReview(ctx context.Context, chapterID, tutorID in
 	return &d, nil
 }
 
-// courseIDOfChapter 由章节 id 取课程 id（本包多处要「先知道是哪门课」）。
-// 章节不存在返回 course.ErrChapterNotFound；查不动的 error 原样上抛（ADR-0064 决策 1）。
-func (s *Service) courseIDOfChapter(chapterID int) (int, error) {
-	var chapter model.Chapter
-	if err := s.db.Select("chapter_id", "course_id").First(&chapter, chapterID).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return 0, course.ErrChapterNotFound
-		}
-		return 0, err
-	}
-	return chapter.CourseID, nil
-}
-
-// UpdateChapterInfo 更新章节信息。
 // UpdateChapterInfo 更新章节信息（讲师面）。tutorID 是当前登录讲师：章节归属为空时
 // 顺手落定（ADR-0095 决策二），非空不动——归属是「作者」而非「最后编辑者」。
 //
@@ -370,9 +350,10 @@ func (s *Service) DeleteChapterFileByID(fileID, tutorID int) (*DeleteFileResult,
 
 // BatchDeleteChapterFiles 批量删除文件。
 //
-// 认领谓词前置（#2596 / 规格 B2）：**先全量校验再删任何一行**。若逐条「能删的删、
-// 不能删的记失败」，未认领的讲师会从失败清单反推出哪些文件存在，而且已经删掉的几行
-// 没法撤回——批量操作要么全权校验过、要么一行不动。孤儿行（未挂章节）同单条口径放行。
+// 认领谓词前置（#2596 / 规格 B2）：删附件同样是改章节。未认领的文件**记失败**而不是整批拒——
+// 批量面的既有语义就是「不能删的进 failed_ids、能删的照删」（见 BatchDeleteFilesResult），
+// 这里再立一套「有未授权就一行不动」等于给同一件事两种语义：调用方拿到 403 时既不知道
+// 是哪几个文件、也丢掉了已经算好的失败清单。整批原子性只属于单条写入，不属于批量删除。
 func (s *Service) BatchDeleteChapterFiles(fileIDs []int, tutorID int) (*BatchDeleteFilesResult, error) {
 	rows := make([]model.ChapterFile, 0, len(fileIDs))
 	failedIDs := make([]int, 0)
@@ -384,7 +365,11 @@ func (s *Service) BatchDeleteChapterFiles(fileIDs []int, tutorID int) (*BatchDel
 		}
 		if chapterFile.ChapterID != nil {
 			if err := course.RequireChapterClaim(s.db, tutorID, *chapterFile.ChapterID); err != nil {
-				return nil, err
+				if errors.Is(err, course.ErrCourseClaimRequired) {
+					failedIDs = append(failedIDs, fid)
+					continue
+				}
+				return nil, err // 查不动的错误原样上抛，不压成「删不掉」（ADR-0064 决策 1）
 			}
 		}
 		rows = append(rows, chapterFile)

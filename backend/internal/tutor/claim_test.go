@@ -84,9 +84,21 @@ func TestWritePathsRejectedWithoutClaim(t *testing.T) {
 		t.Fatalf("删除附件应拒认领, got %v", err)
 	}
 
-	// 4. 批量删除附件
-	if _, err := svc.BatchDeleteChapterFiles([]int{uploaded.FileID}, outsider); !errors.Is(err, course.ErrCourseClaimRequired) {
-		t.Fatalf("批量删除应拒认领, got %v", err)
+	// 4. 批量删除附件：批量面沿用既有「不能删的进 failed_ids」语义，故未认领不是整批报错，
+	//    而是该文件被记进失败清单、且**没有真的删掉**（B2 要求的是「拒」，不是「换个报错方式」）。
+	res, err := svc.BatchDeleteChapterFiles([]int{uploaded.FileID}, outsider)
+	if err != nil {
+		t.Fatalf("批量删除不该整批报错（既有语义是记 failed_ids）: %v", err)
+	}
+	if res.SuccessCount != 0 || res.FailedCount != 1 || len(res.FailedIDs) != 1 || res.FailedIDs[0] != uploaded.FileID {
+		t.Fatalf("未认领的附件应记入 failed_ids 且不删, got %+v", res)
+	}
+	var stillThere int64
+	if err := db.Model(&model.ChapterFile{}).Where("file_id = ?", uploaded.FileID).Count(&stillThere).Error; err != nil {
+		t.Fatalf("查附件行失败: %v", err)
+	}
+	if stillThere != 1 {
+		t.Fatalf("未认领的附件不应被删除, got %d 行", stillThere)
 	}
 
 	// 5. 提交章节审核

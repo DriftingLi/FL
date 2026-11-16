@@ -57,7 +57,7 @@
            但所有写操作禁用并说明原因；后端 403 兜底仍在（本条只是把失败提前说清楚）。 -->
       <div
         v-if="claimState === 'unclaimed'"
-        class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warning/40 bg-warning-soft px-4 py-3 text-sm"
+        class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warn/40 bg-warn-soft px-4 py-3 text-sm"
       >
         <span class="text-ink">认领本课程后才能编辑章节；现在可以先浏览内容</span>
         <UiButton size="small" variant="primary" :loading="claiming" @click="handleClaim">

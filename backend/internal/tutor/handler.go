@@ -198,15 +198,14 @@ func (h *handler) UploadChapterFile(c *gin.Context) {
 	}
 	result, err := h.svc.UploadChapterFile(chapterID, middleware.CurrentUserID(c), file.Filename, content)
 	if err != nil {
-		if errors.Is(err, course.ErrCourseClaimRequired) {
+		switch {
+		case errors.Is(err, course.ErrCourseClaimRequired):
 			response.Forbidden(c, err.Error())
-			return
-		}
-		if errors.Is(err, course.ErrChapterNotFound) {
+		case errors.Is(err, course.ErrChapterNotFound):
 			response.NotFound(c, err.Error())
-			return
+		default:
+			response.BadRequest(c, err.Error())
 		}
-		response.BadRequest(c, err.Error())
 		return
 	}
 	response.SuccessWithMsg(c, "文件上传成功", result)
@@ -474,12 +473,6 @@ func (h *handler) ListCourseClaimants(c *gin.Context) {
 		},
 	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).
 		WithSentinel(model.ErrCourseNotFound, http.StatusNotFound).Handle(c)
-}
-
-// ClaimResult 认领动作返回值（前端凭 claimed 做乐观更新的对账）。
-type ClaimResult struct {
-	CourseID int  `json:"course_id"`
-	Claimed  bool `json:"claimed"`
 }
 
 // idParam :id 路径整型请求（原 internal/api/admin.go:878 的共享私有类型；域包不得引用装配根的私有名，

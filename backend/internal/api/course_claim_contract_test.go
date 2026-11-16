@@ -152,10 +152,14 @@ func TestTutorCourseClaimContract(t *testing.T) {
 	}
 }
 
-// TestTutorWritePathsAllGuardedByClaim 五条写路径 + swap 经 HTTP 全被认领谓词拦住（B2）。
+// TestTutorWritePathsAllGuardedByClaim 六条写路径经 HTTP 全被认领谓词拦住（B2）。
 //
-// 服务层已逐条测过（tutor/claim_test.go），本处再逐条打 HTTP 一次：路由到 service 的接线
-// 也是缺陷高发处（改签名时漏传 tutorID 就会变成「用 0 号讲师查认领」而恰好放行或全拒）。
+// 服务层已逐条测过（tutor/claim_test.go + tutorfile/attach_test.go），本处再逐条打 HTTP 一次：
+// 路由到 service 的接线也是缺陷高发处（改签名时漏传 tutorID 就会变成「用 0 号讲师查认领」
+// 而恰好放行或全拒）。
+//
+// 批量删除不在本组：它的既有语义是「不能删的进 failed_ids」，未认领不会整批 403——
+// 它的取证在服务层（claim_test.go 的 TestWritePathsRejectedWithoutClaim 第 4 条）。
 func TestTutorWritePathsAllGuardedByClaim(t *testing.T) {
 	t.Parallel()
 	testutil.SetTestGinMode()
@@ -215,10 +219,12 @@ func TestTutorWritePathsAllGuardedByClaim(t *testing.T) {
 		{"更新章节", "PUT", fmt.Sprintf("/api/tutor/chapter/%d", ch.ChapterID), `{"title":"x"}`},
 		{"提交审核", "POST", fmt.Sprintf("/api/tutor/chapter/%d/submit-review", ch.ChapterID), ""},
 		{"删除章节附件", "DELETE", fmt.Sprintf("/api/tutor/file/%d", chapterFile.FileID), ""},
-		{"批量删除附件", "POST", "/api/tutor/files/batch-delete",
-			fmt.Sprintf(`{"file_ids":[%d]}`, chapterFile.FileID)},
 		{"章节侧换挂", "POST", fmt.Sprintf("/api/tutor/chapter/%d/files/swap", ch.ChapterID),
 			fmt.Sprintf(`{"old_file_id":%d,"new_file_id":%d}`, fileA.FileID, fileB.FileID)},
+		// 挂接/解挂（#2596 补齐 B2 的两条遗漏路径）：文件是自己的、课不是自己能动的。
+		{"挂接文件到章节", "POST", fmt.Sprintf("/api/tutor/files/%d/attach", fileB.FileID),
+			fmt.Sprintf(`{"chapter_id":%d}`, ch.ChapterID)},
+		{"从章节解挂文件", "POST", fmt.Sprintf("/api/tutor/files/%d/detach", fileA.FileID), ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

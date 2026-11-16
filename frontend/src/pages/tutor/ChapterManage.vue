@@ -11,15 +11,20 @@
       </template>
     </UiPageHeader>
 
-    <!-- 认领条（#2596 D3）：已认领→共认名单+退出；未认领→提示条+认领按钮（写操作由后端 403 兜底）。
-         读面不受认领限制，故未认领也照常能看到章节列表——只是改不动。 -->
+    <!-- 认领条（#2596 D3）：已认领→共认名单+退出；未认领→提示条+认领按钮（写操作由后端 403 兜底）；
+         名单拉失败→显式说「状态未知」并给重试，而不是默默隐藏整条（那样用户会以为这页没有认领这回事，
+         点写按钮才 403）。读面不受认领限制，故未认领也照常能看到章节列表——只是改不动。 -->
     <div
-      v-if="claimLoaded"
+      v-if="claimLoaded || claimFailed"
       class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border px-4 py-3"
-      :class="claimedByMe ? 'border-line bg-ui-soft' : 'border-warning/40 bg-warning-soft'"
+      :class="claimedByMe ? 'border-line bg-ui-soft' : 'border-warn/40 bg-warn-soft'"
     >
       <div class="min-w-0 text-sm">
-        <template v-if="claimedByMe">
+        <template v-if="claimFailed">
+          <span class="font-medium text-ink">认领状态加载失败</span>
+          <span class="text-ink-3">；不影响浏览章节，写操作仍会按后端校验拒绝</span>
+        </template>
+        <template v-else-if="claimedByMe">
           <span class="font-medium text-ink">你已认领本课程</span>
           <span v-if="otherClaimants.length" class="text-ink-3">
             ；同事：{{ otherClaimants.map((c) => c.tutor_name).join('、') }} 也在编
@@ -32,8 +37,11 @@
         </template>
       </div>
       <div class="flex shrink-0 items-center gap-2">
+        <UiButton v-if="claimFailed" size="small" :loading="retryingClaimants" @click="retryClaimants">
+          重试
+        </UiButton>
         <UiButton
-          v-if="!claimedByMe"
+          v-else-if="!claimedByMe"
           size="small"
           variant="primary"
           :loading="claiming"
@@ -190,8 +198,10 @@ function goBack() {
 const claimants = ref<CourseClaimant[]>([])
 const claimedByMe = ref(false)
 const claimLoaded = ref(false)
+const claimFailed = ref(false)
 const claiming = ref(false)
 const releasing = ref(false)
+const retryingClaimants = ref(false)
 
 /** 共认名单里除我之外的人（服务端逐行标 is_me，前端不自己比 id）。 */
 const otherClaimants = computed(() => claimants.value.filter((c) => !c.is_me))
@@ -202,8 +212,11 @@ async function loadClaimants() {
     claimants.value = res.claimants || []
     claimedByMe.value = res.claimed_by_me
     claimLoaded.value = true
+    claimFailed.value = false
   } catch {
-    // 名单拉不到不阻断读章节（拦截器已 toast）；认领条保持隐藏，避免用错状态渲染
+    // 名单拉不到不阻断读章节（拦截器已 toast），但**不能静默藏起来**——
+    // 藏了用户就以为这页没有认领这回事，点写按钮才吃 403。显式落到「状态未知 + 重试」。
+    claimFailed.value = true
   }
 }
 
@@ -250,4 +263,16 @@ onMounted(() => {
   loadChapters()
   loadClaimants()
 })
+
+// 认领条的重试入口：名单是独立于章节列表的一次请求，它的失败不该借用页面的三态骨架
+// （章节列表本身的错误由 useAsyncPage 管）。故单独一个「重拉名单」动作挂在提示条上。
+async function retryClaimants() {
+  if (retryingClaimants.value) return
+  retryingClaimants.value = true
+  try {
+    await loadClaimants()
+  } finally {
+    retryingClaimants.value = false
+  }
+}
 </script>

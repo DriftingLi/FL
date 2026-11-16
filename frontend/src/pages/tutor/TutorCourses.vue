@@ -303,11 +303,11 @@ async function handleClaim(course: TutorCourseRow) {
   }
 }
 
-/** 冲突判定：后端 409「你已认领本课程」。拦截器已 toast，这里只负责把状态拉回真相。 */
+/** 冲突判定：后端 409「你已认领本课程」。只认真实 HTTP 状态码——
+ *  `e.code` 是 axios 的 'ERR_BAD_REQUEST' 这类字符串（比 409 恒不相等），
+ *  `kind` 又把 400/409 一起归成 business（拿它判会把校验失败也当成冲突）。 */
 function isConflict(e: unknown): boolean {
-  const code = (e as { code?: number; response?: { status?: number } })?.code
-    ?? (e as { response?: { status?: number } })?.response?.status
-  return code === 409
+  return (e as { response?: { status?: number } } | null)?.response?.status === 409
 }
 
 /** 重取该课程的真实现状。列表是分页的，故只回填命中的那一行。 */
