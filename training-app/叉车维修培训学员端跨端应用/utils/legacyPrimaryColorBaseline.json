@@ -1,8 +1,5 @@
 {
-  "components/ai-chat/ai-chat-bubble.uvue": 1,
   "components/ai-chat/ai-chat-custom-form.uvue": 1,
-  "components/ai-chat/ai-chat-drawer-left.uvue": 1,
-  "components/ai-chat/ai-chat-model-picker.uvue": 2,
   "components/ai-chat/ai-chat-pro-sheet.uvue": 1,
   "components/ai-chat/ai-chat-sources.uvue": 1,
   "components/login-agreement/login-agreement.uvue": 4,

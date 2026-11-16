@@ -1,7 +1,7 @@
 <template>
 	<view class="ai-page" :style="{ height: pageHeight + 'px' }">
 		<!-- 自定义导航栏 -->
-		<AiChatNav @left-click="toggleSidebarLeft" @menu-click="toggleSidebarRight" />
+		<AiChatNav :drawer-open="sidebarLeft" @left-click="toggleSidebarLeft" @menu-click="toggleSidebarRight" />
 
 		<!-- 功能入口头部（#998）：**移出滚动容器** ⇒ 滑动时天然不丢失（**结构性保证**，不依赖
 		     `position: sticky` —— 该属性在本项目 0 处先例、uvue 支持亦无文档）。
@@ -62,17 +62,22 @@
 			</scroll-view>
 		</view>
 
-		<!-- 底部输入区（专业版带模型选择器） -->
-		<AiChatInput :show-model-bar="proUnlocked" :model-name="currentModelName" :model-readonly="!proUnlocked" :show-image-button="proUnlocked" @send="onInputSend" @model-click="onModelBarClick" @voice-click="onVoiceClick" @image-click="onImageClick" />
+		<!-- 模型下拉的收起遮罩（#2520）：透明层只负责「点面板以外的地方收起」。
+		     必须放在页面层（与抽屉同一层级）才锚定整页，放进输入卡会随组件父级解析。 -->
+		<view v-if="showModelPicker" class="model-mask" @click="showModelPicker = false"></view>
+
+		<!-- 底部输入区（专业版带模型选择器）；模型下拉**内联在输入卡里**（#2520，原型 793:1197）
+		     ⇒ 展开时输入卡向上长，面板正好落在模型芯片下方，且不遮住芯片。 -->
+		<AiChatInput :show-model-bar="proUnlocked" :model-name="currentModelName" :model-readonly="!proUnlocked" :show-image-button="proUnlocked" :model-picker-open="showModelPicker" @send="onInputSend" @model-click="onModelBarClick" @voice-click="onVoiceClick" @image-click="onImageClick">
+			<!-- 模型选择（三条自带 key 路径都由页面侧过门：#1024 ③④⑤） -->
+			<AiChatModelPicker :visible="showModelPicker" :all-models="allModels" :current-model-id="currentModelId" :current-model-source="currentModelSource" @close="showModelPicker = false" @select="selectModel" @custom="onCustomClick" @manage="goManageModels" />
+		</AiChatInput>
 
 		<!-- 左侧会话抽屉 -->
 		<AiChatDrawerLeft :visible="sidebarLeft" :sessions="sessions" :current-session-id="currentSessionId" :status-bar-height="statusBarHeight" @close="sidebarLeft = false" @new-chat="onNewChat" @select="onSelectSession" @delete="onDeleteSession" />
 
 		<!-- 右侧菜单抽屉 -->
 		<AiChatDrawerRight :visible="sidebarRight" :menu-items="rightMenuItems" :status-bar-height="statusBarHeight" @close="sidebarRight = false" @action="onMenuAction" />
-
-		<!-- 模型选择弹窗（三条自带 key 路径都由页面侧过门：#1024 ③④⑤） -->
-		<AiChatModelPicker :visible="showModelPicker" :all-models="allModels" :current-model-id="currentModelId" :current-model-source="currentModelSource" @close="showModelPicker = false" @select="selectModel" @custom="onCustomClick" @manage="goManageModels" />
 
 		<!-- 自定义 API Key 弹窗 -->
 		<AiChatCustomForm :visible="showCustomForm" :custom-model="customModel" :custom-base-url="customBaseUrl" :custom-api-key="customApiKey" @close="closeCustomForm" @update:custom-model="onCustomModelUpdate" @update:custom-base-url="onCustomBaseUrlUpdate" @update:custom-api-key="onCustomApiKeyUpdate" @confirm="confirmCustomModel" />
@@ -670,8 +675,12 @@
 		flex: 1;
 		display: flex;
 		flex-direction: column;
-		/* 底色按设计用实色（非能力限制）；渐变语法口径见 utils/gradientSyntaxContract.test.js（#937） */
-		background-color: #dfeffb;
+		/* #2520：原型 307:6954 页底为**上蓝下浅灰的竖向渐变**（此前是平色 #dfeffb）。
+		   色值走 token（§1.2 / §1.6 裸 hex 机检）；语法口径见 gradientSyntaxContract（#937）：
+		   只写 to 关键字 + 恰好两色、无百分比；实色兜底必须写在 background 简写**之后**。 */
+		position: relative;
+		background: linear-gradient(to bottom, $gradient-start, $gradient-end);
+		background-color: $gradient-end;
 	}
 
 	.main {
@@ -693,9 +702,10 @@
 		margin-bottom: 24rpx;
 	}
 
+	/* #2520：原型为 4 格收口（第 5 格已下线）；格宽随格数放大，图标与标题间距按原型收紧 */
 	.function-item {
 		align-items: center;
-		width: 19%;
+		width: 23%;
 	}
 
 	.function-icon-box {
@@ -723,8 +733,8 @@
 	/*
 	 * 位置：标题**下方独立一行**，不再压图标右上角（2026-10-27 B 版裁定）。两条硬理由：
 	 *   ① 压在图标上会与本格橙黄图标同色系黏成一团（② 首帧实测，加白描边也只能勉强分开）；
-	 *   ② 与标题同行放不下 —— 4 列格宽 19% ≈ 71px（750 设计宽 ÷ 2），「智能维修诊断」6 字
-	 *      @20rpx ≈ 60px，同行只剩 11px，「限免」两个汉字（≈20px）必然把标题挤成两行
+	 *   ② 与标题同行放不下 —— 4 列格宽 23% ≈ 86px（750 设计宽 ÷ 2），「智能维修诊断」6 字
+	 *      @24rpx ≈ 72px，同行只剩 14px，「限免」两个汉字（≈24px）必然把标题挤成两行
 	 *      （原型实测「智能维修诊 / 断」）。这条是纯尺寸推论，换机型不会变。
 	 * 代价如实记：该格比邻格高 ≈ 32rpx，宫格整行高度随最高格走；四格图标仍同基线
 	 * （各格内容自顶排列，行高由最高格决定，矮格不会被拉伸居中）。
@@ -748,10 +758,11 @@
 	}
 
 	.function-title {
-		font-size: 20rpx;
+		/* #2520：原型功能名 ≈12px CSS（24rpx）；4 格后格宽 ≈86px，6 字标题仍单行 */
+		font-size: 24rpx;
 		color: #333333;
 		text-align: center;
-		/* 单行收敛：格宽只够 6 字（71px ≈ 7 字 @20rpx），限免小签再占一行后
+		/* 单行收敛：格宽只够 6 字（86px ≈ 7 字 @24rpx），限免小签再占一行后
 		   任何意外换行都会让四格标题基线错开 */
 		lines: 1;
 	}
@@ -761,11 +772,12 @@
 		margin-bottom: 24rpx;
 	}
 
+	/* #2520：推荐问题卡按原型放宽（卡高 ≈ 100rpx、圆角 20rpx、行距 20rpx） */
 	.prompt-card {
 		background-color: #ffffff;
-		border-radius: 16rpx;
-		padding: 28rpx 24rpx;
-		margin-bottom: 16rpx;
+		border-radius: $radius-card;
+		padding: 32rpx 28rpx;
+		margin-bottom: 20rpx;
 		flex-direction: row;
 		align-items: center;
 		justify-content: space-between;
@@ -779,8 +791,20 @@
 
 	.prompt-arrow {
 		font-size: 36rpx;
-		color: #cccccc;
+		color: #999999;
 		margin-left: 16rpx;
+	}
+
+	/* #2520：模型下拉的透明收起层（页面层锚定整页，见模板注释） */
+	.model-mask {
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		z-index: 200;
+		/* 近乎透明的实色：原型无遮罩压暗，但完全 transparent 的层在部分端上不参与命中 */
+		background-color: rgba(0, 0, 0, 0.02);
 	}
 
 	.chat-area {
@@ -868,7 +892,8 @@
 	   这正是刻意不选 `position: sticky` 的原因（本项目 0 处先例、uvue 支持无文档）。
 	   水平 padding 与 `.pro-scroll` 的 24rpx 对齐，使宫格左右位置与改动前一致。 */
 	.func-head {
-		background-color: #dfeffb;
+		/* #2520：不再自带平色底 —— 让页根渐变透上来（原型功能格区与页底同一条渐变） */
+		background-color: transparent;
 		padding-left: 24rpx;
 		padding-right: 24rpx;
 	}
