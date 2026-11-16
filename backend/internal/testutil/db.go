@@ -4,6 +4,7 @@ package testutil
 
 import (
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -78,15 +79,24 @@ func NewFileDB(t *testing.T) *gorm.DB {
 }
 
 // seedUIDCounter 为测试用户生成递增 uid（雪花语义仅需唯一即可）。
+//
+// 用 atomic 而不是裸 `++`：本包被上百个契约测试共用，其中不少带 `t.Parallel()`。
+// 裸自增是「读-改-写」三步，两个并行测试交错执行会让两行拿到同一个 uid（唯一索引冲突），
+// 而 `go test -race` 会直接把它判成数据竞争——#2597 的 8 个并行契约测试就撞上了这一格。
 var seedUIDCounter int64 = 1000000000000000000
+
+// nextSeedUID 取下一个测试 uid（原子自增）。
+func nextSeedUID() int64 {
+	return atomic.AddInt64(&seedUIDCounter, 1)
+}
 
 // SeedStudent 插入一个测试学员，返回其 ID。
 // username 作为昵称；account 自动派生以保证唯一性；uid 取自递增计数器。
 func SeedStudent(t *testing.T, db *gorm.DB, username, hashedPassword string) *model.HrwaiUser {
 	t.Helper()
-	seedUIDCounter++
+	uid := nextSeedUID()
 	s := &model.HrwaiUser{
-		UID:       seedUIDCounter,
+		UID:       uid,
 		Account:   "acct_" + username,
 		Username:  username,
 		Password:  hashedPassword,
