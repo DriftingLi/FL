@@ -19,7 +19,9 @@
                 <view class="stats-card stats-card-gap" @click="onPointsTap">
                     <view class="stats-value-row">
                         <text class="stats-num stats-num-blue">{{ pointsText }}</text>
-                        <text class="stats-arrow">›</text>
+                        <view class="stats-arrow-wrap">
+                            <text class="stats-arrow">›</text>
+                        </view>
                     </view>
                     <text class="stats-label">可用积分</text>
                 </view>
@@ -27,7 +29,7 @@
 
             <!-- 我的课程 -->
             <view class="course-card" @click="onMyCourses">
-                <text class="course-icon">📁</text>
+                <image class="course-icon" src="/static/icons/profile/my-courses.png" mode="aspectFit" />
                 <text class="course-title">我的课程</text>
                 <view class="course-right">
                     <text class="course-count">{{ courseCount }}个</text>
@@ -35,12 +37,12 @@
                 </view>
             </view>
 
-            <!-- 工具宫格 -->
+            <!-- 工具宫格（#2522：emoji 兜底换 979:1540 切图） -->
             <view class="section-card">
                 <text class="section-title">工具</text>
                 <view class="grid-body">
-                    <view v-for="(item, idx) in toolItems" :key="idx" class="grid-item" @click="onEntryClick(item)">
-                        <text class="grid-icon">{{ item.icon }}</text>
+                    <view v-for="item in toolItems" :key="item.key" class="grid-item" @click="onEntryClick(item)">
+                        <image class="grid-icon" :src="'/static/icons/profile/' + item.icon + '.png'" mode="aspectFit" />
                         <text class="grid-text">{{ item.title }}</text>
                     </view>
                 </view>
@@ -50,8 +52,8 @@
             <view class="section-card section-card-last">
                 <text class="section-title">服务</text>
                 <view class="grid-body">
-                    <view v-for="(item, idx) in serviceItems" :key="idx" class="grid-item" @click="onEntryClick(item)">
-                        <text class="grid-icon">{{ item.icon }}</text>
+                    <view v-for="item in serviceItems" :key="item.key" class="grid-item" @click="onEntryClick(item)">
+                        <image class="grid-icon" :src="'/static/icons/profile/' + item.icon + '.png'" mode="aspectFit" />
                         <text class="grid-text">{{ item.title }}</text>
                     </view>
                 </view>
@@ -73,7 +75,7 @@
     import type { StudentProfile, UpdateProfileParams, StudyStats, PointsBalance, CheckInCalendarResult } from '../../types/index'
     import ProfileUserRow from './components/profile-user-row.uvue'
 
-    /** 宫格入口：path 为空或 available=false 时走占位提示 */
+    /** 宫格入口：icon 是切图文件名（/static/icons/profile/<icon>.png）；path 为空或 available=false 时走占位提示 */
     type ProfileEntry = {
         key : string
         title : string
@@ -138,24 +140,25 @@
         return 0
     })
 
-    /** 工具宫格：条目与顺序对齐原型图 */
+    /** 工具宫格：条目与顺序对齐原型 979:1540（第 5 格按 #2512 裁定落「练习记录」，见 nav 台账） */
     const toolItems : ProfileEntry[] = [
-        { key: 'records', title: '学习记录', icon: '📖', path: '/pages/profile/records', available: true },
-        { key: 'favorites', title: '收藏夹', icon: '⭐', path: '/pages/profile/favorites', available: true },
-        { key: 'wrong-questions', title: '错题本', icon: '📕', path: '/pages/profile/wrong-questions', available: true },
-        { key: 'notebook', title: '笔记本', icon: '📔', path: '/pages/profile/notebook', available: true },
-        { key: 'materials', title: '学习资料', icon: '📚', path: '/pages/resources/materials', available: true },
-        { key: 'jobs', title: '就业在线', icon: '💼', path: '/pages/jobs/job-list', available: true },
-        { key: 'task-center', title: '任务中心', icon: '✅', path: '/pages/points/task-center', available: true },
-        // #1011：练习记录页此前只注册在 pages.json、全 App 无入口（ADR-0051 遗留项）
-        { key: 'practice-records', title: '练习记录', icon: '📊', path: '/pages/profile/practice-records', available: true },
+        { key: 'records', title: '学习记录', icon: 'records', path: '/pages/profile/records', available: true },
+        { key: 'favorites', title: '收藏夹', icon: 'favorites', path: '/pages/profile/favorites', available: true },
+        { key: 'wrong-questions', title: '错题本', icon: 'wrong-questions', path: '/pages/profile/wrong-questions', available: true },
+        { key: 'notebook', title: '笔记本', icon: 'notebook', path: '/pages/profile/notebook', available: true },
+        { key: 'practice-records', title: '练习记录', icon: 'practice-records', path: '/pages/profile/practice-records', available: true },
+        { key: 'materials', title: '学习资料', icon: 'materials', path: '/pages/resources/materials', available: true },
+        { key: 'jobs', title: '就业在线', icon: 'jobs', path: '/pages/jobs/job-list', available: true },
+        { key: 'task-center', title: '任务中心', icon: 'task-center', path: '/pages/points/task-center', available: true },
     ]
 
-    /** 服务宫格：按原型「设置」落在第二行首列 */
+    /** 服务宫格：原型 979:1540 首格按 G2 G-00 改语义为「我的已购」→ 积分兑换记录；
+     *  原型的定位入口按 G-06 已裁定删除、不恢复（#2512）。 */
     const serviceItems : ProfileEntry[] = [
-        { key: 'help', title: '帮助中心', icon: '🎧', path: '/pages/profile/help-center', available: true },
-        { key: 'messages', title: '消息中心', icon: '🔔', path: '/pages/notifications/notifications', available: true },
-        { key: 'settings', title: '设置', icon: '⚙', path: '/pages/profile/settings', available: true },
+        { key: 'purchases', title: '我的已购', icon: 'purchases', path: '/pages/points/points-exchange-records', available: true },
+        { key: 'help', title: '帮助中心', icon: 'help', path: '/pages/profile/help-center', available: true },
+        { key: 'messages', title: '消息中心', icon: 'messages', path: '/pages/notifications/notifications', available: true },
+        { key: 'settings', title: '设置', icon: 'settings', path: '/pages/profile/settings', available: true },
     ]
 
     async function loadProfile() : Promise<void> {
@@ -351,9 +354,9 @@
 
     .stats-card {
         flex: 1;
-        height: 100rpx;
-        background-color: #ffffff;
-        border-radius: 24rpx;
+        height: 108rpx;
+        background-color: $card-bg;
+        border-radius: $radius-card;
         flex-direction: column;
         align-items: center;
         justify-content: center;
@@ -382,10 +385,20 @@
         color: $primary-color;
     }
 
+    /* 原型 979:1540：积分卡右侧是灰底圆形 › */
+    .stats-arrow-wrap {
+        width: 36rpx;
+        height: 36rpx;
+        border-radius: 18rpx;
+        background-color: $bg-color;
+        align-items: center;
+        justify-content: center;
+        margin-left: 8rpx;
+    }
+
     .stats-arrow {
-        font-size: 32rpx;
-        color: $primary-color;
-        margin-left: 4rpx;
+        font-size: 26rpx;
+        color: $text-color-placeholder;
     }
 
     .stats-label {
@@ -398,23 +411,24 @@
     .course-card {
         flex-direction: row;
         align-items: center;
-        height: 138rpx;
-        background-color: #ffffff;
-        border-radius: 24rpx;
+        height: 128rpx;
+        background-color: $card-bg;
+        border-radius: $radius-card;
         margin: 40rpx 24rpx 0 24rpx;
-        padding: 0 40rpx;
+        padding: 0 32rpx;
     }
 
     .course-icon {
-        font-size: 56rpx;
-        margin-right: 26rpx;
+        width: 76rpx;
+        height: 68rpx;
+        margin-right: 20rpx;
     }
 
     .course-title {
         flex: 1;
         font-size: 32rpx;
         font-weight: bold;
-        color: #333333;
+        color: $text-color;
     }
 
     .course-right {
@@ -424,21 +438,21 @@
 
     .course-count {
         font-size: 26rpx;
-        color: #666666;
+        color: $text-color;
     }
 
     .course-arrow {
         font-size: 32rpx;
-        color: #CCCCCC;
+        color: $text-disabled;
         margin-left: 8rpx;
     }
 
     /* 工具 / 服务 分区卡片 */
     .section-card {
-        background-color: #ffffff;
-        border-radius: 24rpx;
+        background-color: $card-bg;
+        border-radius: $radius-card;
         margin: 24rpx 24rpx 0 24rpx;
-        padding-bottom: 24rpx;
+        padding: 0 16rpx 24rpx 16rpx;
     }
 
     .section-card-last {
@@ -446,10 +460,10 @@
     }
 
     .section-title {
-        font-size: 30rpx;
+        font-size: 32rpx;
         font-weight: bold;
-        color: #333333;
-        padding: 24rpx 0 40rpx 40rpx;
+        color: $text-color;
+        padding: 28rpx 0 8rpx 24rpx;
     }
 
     .grid-body {
@@ -461,17 +475,17 @@
         width: 25%;
         flex-direction: column;
         align-items: center;
-        padding: 12rpx 0;
+        padding: 20rpx 0;
     }
 
     .grid-icon {
-        font-size: 60rpx;
-        line-height: 68rpx;
+        width: 68rpx;
+        height: 68rpx;
     }
 
     .grid-text {
         font-size: 26rpx;
-        color: #666666;
-        margin-top: 10rpx;
+        color: $text-color;
+        margin-top: 12rpx;
     }
 </style>
