@@ -28,11 +28,14 @@ type handler struct {
 	svc *Service
 }
 
-// RegisterRoutes 注册 /api/tutor/files 蓝图（需讲师能力）。
+// RegisterRoutes 注册 /api/tutor/files 蓝图（需讲师文件库能力）。
+//
+// #2595：本组从 tutor.access 改挂 tutorfile.manage —— 文件库与课程内容编辑是两件事，
+// 收敛前一个入口键同时盖住两者，「只给文件库、不给章节写」表达不出来。
 func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, svc *Service) {
 	h := &handler{svc: svc}
 
-	g := rg.Group("/tutor", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapTutorAccess))
+	g := rg.Group("/tutor", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapTutorFileManage))
 
 	// POST /api/tutor/files/upload  创建上传会话（init）
 	g.POST("/files/upload", h.InitUpload)

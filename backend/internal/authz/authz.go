@@ -71,6 +71,13 @@ const (
 	// ===== 讲师侧 =====
 	CapTutorAccess    Capability = "tutor.access"    // 讲师工作区入口
 	CapQuestionAuthor Capability = "question.author" // 题库作者（建题/改题/批量导入/上传图片）
+	// #2595：`tutor.access` 原本一键盖住「入口 + 课程读 + 章节写 + 附件增删 + 文件库」，
+	// 表达不出「只读讲师」「只给文件库、不给章节写」。拆成三把：入口与读留在 tutor.access，
+	// 章节写面归 course.author，文件库整组归 tutorfile.manage。
+	// 两键**只绑讲师**、不进 protectedAdminCapabilities —— 管理员今天也打不进讲师面端点
+	// （编辑课程走管理端的 course.manage），授给超管等于凭空扩权。
+	CapCourseAuthor    Capability = "course.author"    // 课程内容作者（章节写/附件增删/提审/图文传图）
+	CapTutorFileManage Capability = "tutorfile.manage" // 讲师个人文件库（分片上传/挂接/改名/删除）
 
 	// ===== 管理端 =====
 	// #1639：管理端能力键**按侧栏叶子切分**（一页一键）。收敛前 admin.access 一个键盖住仪表盘/
@@ -146,8 +153,10 @@ var roleCapabilities = map[Capability][]Role{
 	CapResumePDF:          {RoleStudent},
 	CapResumePDFView:      {RoleRecruiter},
 
-	CapTutorAccess:    {RoleTutor},
-	CapQuestionAuthor: {RoleTutor},
+	CapTutorAccess:     {RoleTutor},
+	CapCourseAuthor:    {RoleTutor},
+	CapTutorFileManage: {RoleTutor},
+	CapQuestionAuthor:  {RoleTutor},
 
 	// ===== 管理端：静态表**不回答** admin 的能力（#1618 段1）=====
 	// 空集 =「这个能力键存在，但它的角色可达面由数据层回答」（受保护角色持有，见

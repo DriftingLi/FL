@@ -35,28 +35,33 @@ func newHandler(svc *Service, fileSvc *filestore.FileStore, uploader VditorUploa
 }
 
 // RegisterRoutes 注册 /api/tutor 蓝图。
+//
+// 守卫分两组（#2595）：读组留 tutor.access，写组挂 course.author。收敛前一个 CapTutorAccess
+// 盖住全部 9 端点，「只读讲师」表达不出来——要给某人课程读权就必然连同改章节与删附件一起给。
 func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, svc *Service, fileSvc *filestore.FileStore, uploader VditorUploader) {
 	h := newHandler(svc, fileSvc, uploader)
 
-	g := rg.Group("/tutor", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapTutorAccess))
+	g := rg.Group("/tutor", middleware.JWTAuth(session))
+	read := g.Group("", middleware.CapabilityRequired(authz.CapTutorAccess))
+	write := g.Group("", middleware.CapabilityRequired(authz.CapCourseAuthor))
 
 	// GET /api/tutor/courses  导师课程列表
-	g.GET("/courses", h.ListCourses)
+	read.GET("/courses", h.ListCourses)
 	// GET /api/tutor/course/:course_id/chapters  课程章节列表（含文件）
-	g.GET("/course/:course_id/chapters", h.GetCourseChapters)
+	read.GET("/course/:course_id/chapters", h.GetCourseChapters)
 	// GET /api/tutor/chapter/:chapter_id  章节详情（含上下章ID + 文件列表）
-	g.GET("/chapter/:chapter_id", h.GetChapterDetail)
+	read.GET("/chapter/:chapter_id", h.GetChapterDetail)
 	// POST /api/tutor/chapter/:chapter_id/upload  上传章节文件
-	g.POST("/chapter/:chapter_id/upload", h.UploadChapterFile)
-	g.POST("/chapter/:chapter_id/submit-review", h.SubmitChapterReview)
+	write.POST("/chapter/:chapter_id/upload", h.UploadChapterFile)
+	write.POST("/chapter/:chapter_id/submit-review", h.SubmitChapterReview)
 	// POST /api/tutor/upload-image  上传图文 Markdown 中的图片（Vditor 格式）
-	g.POST("/upload-image", h.UploadImage)
+	write.POST("/upload-image", h.UploadImage)
 	// PUT /api/tutor/chapter/:chapter_id  更新章节信息
-	g.PUT("/chapter/:chapter_id", h.UpdateChapterInfo)
+	write.PUT("/chapter/:chapter_id", h.UpdateChapterInfo)
 	// DELETE /api/tutor/file/:file_id  删除章节文件
-	g.DELETE("/file/:file_id", h.DeleteChapterFile)
+	write.DELETE("/file/:file_id", h.DeleteChapterFile)
 	// POST /api/tutor/files/batch-delete  批量删除文件
-	g.POST("/files/batch-delete", h.BatchDeleteChapterFiles)
+	write.POST("/files/batch-delete", h.BatchDeleteChapterFiles)
 }
 
 // ListCourses 导师课程列表
