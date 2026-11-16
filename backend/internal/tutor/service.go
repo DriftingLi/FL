@@ -39,7 +39,7 @@ var ErrChapterFileNotFound = errors.New("文件不存在")
 
 // ClaimCourse 讲师自助认领课程（#2596 B3/B5）：委托课程域，本层不加逻辑——认领是课程域的事实。
 func (s *Service) ClaimCourse(tutorID, courseID int) error {
-	return course.ClaimCourse(s.db, tutorID, courseID)
+	return course.ClaimCourse(s.db, tutorID, courseID, model.ClaimSourceSelf)
 }
 
 // ReleaseCourseClaim 讲师退出认领（#2596 B3/B6）。

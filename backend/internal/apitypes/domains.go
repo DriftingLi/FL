@@ -647,6 +647,9 @@ var Domains = []Domain{
 			"admin.TutorListDTO",
 			"auth.TutorRegisterResultDTO",
 			"admin.TutorDeletedDTO",
+			// #2597 D4：讲师课程代分配（三端点共用这两个 DTO）
+			"admin.TutorCourseAssignmentListDTO",
+			"admin.TutorCourseAssignResult",
 			"auth.RecruiterListResult",
 			"auth.RecruiterCreatedDTO",
 			"auth.RecruiterUpdatedDTO",
@@ -686,7 +689,10 @@ var Domains = []Domain{
 			{Method: "DELETE", Path: "/admin/tutor/{tutor_id}"},
 			{Method: "PUT", Path: "/admin/tutor/{tutor_id}/password", NoData: true},
 			{Method: "PUT", Path: "/admin/tutor/{tutor_id}/status"},
-			{Method: "GET", Path: "/admin/recruiters"},
+			// #2597 D4：讲师课程代分配（抽屉的三端点，均挂 tutor.manage）
+			{Method: "GET", Path: "/admin/tutor/{tutor_id}/courses"},
+			{Method: "POST", Path: "/admin/tutor/{tutor_id}/courses"},
+			{Method: "DELETE", Path: "/admin/tutor/{tutor_id}/courses"}, {Method: "GET", Path: "/admin/recruiters"},
 			{Method: "POST", Path: "/admin/recruiters"},
 			{Method: "PUT", Path: "/admin/recruiters/{id}/status"},
 			{Method: "PUT", Path: "/admin/recruiters/{id}"},

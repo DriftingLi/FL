@@ -10,6 +10,7 @@
 package admin
 
 import (
+	"context"
 	"testing"
 
 	"go.uber.org/zap"
@@ -29,6 +30,9 @@ var nonnilOutletsAdmin = map[string]func(t *testing.T) any{
 	"admin.AdminRoleDTO.capabilities":    outletAdminRoleCapabilitiesNonNil,
 	"admin.AdminRoleListDTO.roles":       outletAdminRoleListEmpty,
 	"admin.AdminAccountListDTO.accounts": outletAdminAccountListEmpty,
+	// #2597 D4：讲师课程分配抽屉的两列
+	"admin.TutorCourseAssignmentListDTO.course_ids": outletTutorCourseAssignmentsEmpty,
+	"admin.TutorCourseAssignmentListDTO.items":      outletTutorCourseAssignmentsEmpty,
 }
 
 // TestNonNilDeclaredOutletsNeverEmitNull 本域的举证入口（判据本体在 testutil）。
@@ -106,6 +110,21 @@ func outletAdminCapabilitiesUnknownAdmin(t *testing.T) any {
 	res, err := svc.AdminCapabilitySet(999999)
 	if err != nil {
 		t.Fatalf("能力集出口失败: %v", err)
+	}
+	return res
+}
+
+// outletTutorCourseAssignmentsEmpty 讲师无任何课程分配：两列都发 `[]` 而不是 null。
+//
+// 抽屉直接对 course_ids 做 includes 判断、对 items 做映射，null 会炸（#2597 D4）。
+func outletTutorCourseAssignmentsEmpty(t *testing.T) any {
+	t.Helper()
+	db := testutil.NewMemoryDB(t)
+	tutor := testutil.SeedTutor(t, db, "nonnil_assign", "x")
+	svc := NewService(db, nil, zap.NewNop())
+	res, err := svc.ListTutorCourseAssignments(context.Background(), tutor.TutorID)
+	if err != nil {
+		t.Fatalf("查已分配课程失败: %v", err)
 	}
 	return res
 }

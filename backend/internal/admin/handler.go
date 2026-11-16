@@ -75,6 +75,10 @@ func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, adminSvc *Se
 	tutors.DELETE("/tutor/:tutor_id", h.DeleteTutor)
 	tutors.PUT("/tutor/:tutor_id/password", h.ResetTutorPassword)
 	tutors.PUT("/tutor/:tutor_id/status", h.ToggleTutorStatus)
+	// ===== 课程代分配（#2597 D4）：讲师管理页「分配课程」抽屉 =====
+	tutors.GET("/tutor/:tutor_id/courses", h.ListTutorCourses)
+	tutors.POST("/tutor/:tutor_id/courses", h.AssignTutorCourses)
+	tutors.DELETE("/tutor/:tutor_id/courses", h.RemoveTutorCourses)
 
 	// ===== 统计看板 =====
 	// 仪表盘也读这个端点（同一份概览），故 admin.access 一并作为候选（#1639）。
