@@ -93,10 +93,29 @@
                 </div>
               </template>
               <template #meta>
-                <div class="flex items-center justify-between text-xs text-ink-3">
-                  <span>{{ course.chapter_count || 0 }} 个章节</span>
-                  <UiButton size="small">
+                <div class="flex items-center justify-between gap-2 text-xs text-ink-3">
+                  <span class="flex items-center gap-2">
+                    <span>{{ course.chapter_count || 0 }} 个章节</span>
+                    <!-- 认领状态（#2596 D2）：已认领→标签+管理章节；他人认领→「N 位讲师在编」仍可加入；
+                         未认领→认领按钮。共认是正常形态，故他人已认领不拦人。 -->
+                    <UiTag v-if="course.claimed_by_me" tone="success">已认领</UiTag>
+                    <span v-else-if="(course.claim_count || 0) > 0">{{ course.claim_count }} 位讲师在编</span>
+                  </span>
+                  <UiButton
+                    v-if="course.claimed_by_me"
+                    size="small"
+                    @click.stop="goToChapters(course.course_id)"
+                  >
                     管理章节 <UiIcon name="arrow-right" />
+                  </UiButton>
+                  <UiButton
+                    v-else
+                    size="small"
+                    variant="primary"
+                    :loading="claimingId === course.course_id"
+                    @click.stop="handleClaim(course)"
+                  >
+                    认领课程
                   </UiButton>
                 </div>
               </template>
@@ -148,6 +167,7 @@ import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
+import { ElMessage } from 'element-plus'
 
 /** 导师端课程行：生成 CourseDTO（已含 credential_id，原「TutorCourse 尚未收录」的手写补充随之删除） */
 type TutorCourseRow = CourseDTO
@@ -257,6 +277,52 @@ function onCredentialChange() {
 
 function goToChapters(courseId: number) {
   router.push(href('TutorChapterManage', { id: String(courseId) }))
+}
+
+// ===== 课程认领（#2596 D2/D5）=====
+// 认领成功后**就地更新这一行**（乐观更新：只改这一张卡的 claimed_by_me 与人数），
+// 不整页重载——重载会丢筛选状态、也会让用户刚点的卡滚走。
+const claimingId = ref<number | null>(null)
+
+async function handleClaim(course: TutorCourseRow) {
+  if (claimingId.value !== null) return
+  claimingId.value = course.course_id
+  try {
+    await tutorApi.claimCourse(course.course_id)
+    course.claimed_by_me = true
+    course.claim_count = (course.claim_count || 0) + 1
+    ElMessage.success('已认领，可以开始编辑章节')
+  } catch (e) {
+    // 409＝别人抢先/自己重复认领：刷新该行状态而不是留在旧值上（D5 口径）
+    if (isConflict(e)) {
+      await reloadCourseRow(course.course_id)
+    }
+    // 其余错误由拦截器统一 toast，此处不重复提示
+  } finally {
+    claimingId.value = null
+  }
+}
+
+/** 冲突判定：后端 409「你已认领本课程」。只认真实 HTTP 状态码——
+ *  `e.code` 是 axios 的 'ERR_BAD_REQUEST' 这类字符串（比 409 恒不相等），
+ *  `kind` 又把 400/409 一起归成 business（拿它判会把校验失败也当成冲突）。 */
+function isConflict(e: unknown): boolean {
+  return (e as { response?: { status?: number } } | null)?.response?.status === 409
+}
+
+/** 重取该课程的真实现状。列表是分页的，故只回填命中的那一行。 */
+async function reloadCourseRow(courseId: number) {
+  try {
+    const res = await tutorApi.getCourses({ page: page.value, page_size: pageSize.value })
+    const fresh = res.courses.find((c) => c.course_id === courseId)
+    if (!fresh) return
+    const row = courses.value.find((c) => c.course_id === courseId)
+    if (!row) return
+    row.claimed_by_me = fresh.claimed_by_me
+    row.claim_count = fresh.claim_count
+  } catch {
+    // 拉不回真相就保持原状（拦截器已 toast 过一次，不再叠加）
+  }
 }
 
 onMounted(() => {

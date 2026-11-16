@@ -65,7 +65,11 @@ func outletTutorChapterNoFiles(t *testing.T) any {
 func outletBatchDeleteFilesEmpty(t *testing.T) any {
 	t.Helper()
 	svc := newTutorServiceForTest(t, testutil.NewMemoryDB(t))
-	return svc.BatchDeleteChapterFiles(nil)
+	res, err := svc.BatchDeleteChapterFiles(nil, 0)
+	if err != nil {
+		t.Fatalf("空列表批量删除应成功: %v", err)
+	}
+	return res
 }
 
 // seedVisibleCourse 播一门「已发布 + 已挂载」但**没有章节**的课程，返回其 id。

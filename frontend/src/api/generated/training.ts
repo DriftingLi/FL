@@ -94,6 +94,8 @@ export interface CourseDTO {
   certificate_template_id: number | null
   chapter_count?: number
   chapters?: ChapterDTO[]
+  claim_count?: number
+  claimed_by_me?: boolean
   course_id: number
   cover_image: string
   created_at: string

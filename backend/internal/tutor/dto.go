@@ -16,3 +16,10 @@ type BatchDeleteFilesResult struct {
 	FailedCount  int   `json:"failed_count"`
 	FailedIDs    []int `json:"failed_ids" nullability:"nonnil"`
 }
+
+// ClaimResult 课程认领/退出认领的动作回执（#2596 B3）。claimed 让前端不必再拉一次列表
+// 就能对账乐观更新（认领=true、退出=false）。
+type ClaimResult struct {
+	CourseID int  `json:"course_id"`
+	Claimed  bool `json:"claimed"`
+}

@@ -165,7 +165,7 @@ import { goBack } from '../../utils/navigation'
     }
 
     .filter-chip.active {
-        background-color: #2979ff;
+        background-color: $primary-color;
     }
 
     .filter-chip-text {
@@ -237,7 +237,7 @@ import { goBack } from '../../utils/navigation'
 
     .article-category {
         font-size: 20rpx;
-        color: #2979ff;
+        color: $primary-color;
         background-color: #e8f0fe;
         padding: 4rpx 12rpx;
         border-radius: 6rpx;

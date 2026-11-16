@@ -88,6 +88,14 @@
         </el-form-item>
       </el-form>
     </UiDialog>
+
+    <!-- 分配课程抽屉（#2597 D4）：讲师行上的动作，离开列表就丢了上下文 -->
+    <TutorCourseAssignDrawer
+      v-model="assignDrawerVisible"
+      :tutor-id="assignTarget.tutorId"
+      :tutor-name="assignTarget.tutorName"
+      @saved="load"
+    />
   </div>
 </template>
 
@@ -112,6 +120,7 @@ import UiTag from '@/components/ui/UiTag.vue'
 import { describeRole } from '@/utils/roleWords'
 import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
 import UiInput from '@/components/ui/UiInput.vue'
+import TutorCourseAssignDrawer from './TutorCourseAssignDrawer.vue'
 
 type TutorRow = AdminTutor
 
@@ -144,6 +153,16 @@ const pwdFormRules: FormRules = {
   password: passwordRules
 }
 
+// 分配课程抽屉（#2597 D4）
+const assignDrawerVisible = ref(false)
+const assignTarget = reactive({ tutorId: 0, tutorName: '' })
+
+function openAssignDrawer(row: AdminTutor) {
+  assignTarget.tutorId = row.tutor_id
+  assignTarget.tutorName = row.name
+  assignDrawerVisible.value = true
+}
+
 async function handleToggleStatus(row: TutorRow) {
   try {
     await adminApi.toggleTutorStatus(row.tutor_id)
@@ -174,6 +193,7 @@ const table = useAdminTable<AdminTutor>({
       keyword: filters.keyword ? String(filters.keyword) : undefined
     }),
   actions: {
+    assignCourses: openAssignDrawer,
     resetPwd: openResetPwdDialog,
     toggle: handleToggleStatus,
     delete: deleteRow
@@ -245,6 +265,7 @@ onMounted(() => {
 /** 行内「操作」菜单：低频治理动作（重置密码 / 启停 / 删除）走菜单收纳（登记表「菜单收纳」行） */
 function actionItems(row: AdminTutor): UiMoreMenuItem[] {
   return [
+    { key: 'assignCourses', label: '分配课程' },
     { key: 'resetPwd', label: '重置密码' },
     { key: 'toggle', label: row.status === 1 ? '禁用' : '启用' },
     { key: 'delete', label: '删除', divided: true }

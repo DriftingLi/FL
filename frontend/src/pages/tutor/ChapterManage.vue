@@ -11,6 +11,50 @@
       </template>
     </UiPageHeader>
 
+    <!-- 认领条（#2596 D3）：已认领→共认名单+退出；未认领→提示条+认领按钮（写操作由后端 403 兜底）；
+         名单拉失败→显式说「状态未知」并给重试，而不是默默隐藏整条（那样用户会以为这页没有认领这回事，
+         点写按钮才 403）。读面不受认领限制，故未认领也照常能看到章节列表——只是改不动。 -->
+    <div
+      v-if="claimLoaded || claimFailed"
+      class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border px-4 py-3"
+      :class="claimedByMe ? 'border-line bg-ui-soft' : 'border-warn/40 bg-warn-soft'"
+    >
+      <div class="min-w-0 text-sm">
+        <template v-if="claimFailed">
+          <span class="font-medium text-ink">认领状态加载失败</span>
+          <span class="text-ink-3">；不影响浏览章节，写操作仍会按后端校验拒绝</span>
+        </template>
+        <template v-else-if="claimedByMe">
+          <span class="font-medium text-ink">你已认领本课程</span>
+          <span v-if="otherClaimants.length" class="text-ink-3">
+            ；同事：{{ otherClaimants.map((c) => c.tutor_name).join('、') }} 也在编
+          </span>
+          <span v-else class="text-ink-3">；暂无其他讲师共认</span>
+        </template>
+        <template v-else>
+          <span class="font-medium text-ink">认领本课程后才能编辑章节</span>
+          <span class="text-ink-3">；现在可以先浏览内容再决定</span>
+        </template>
+      </div>
+      <div class="flex shrink-0 items-center gap-2">
+        <UiButton v-if="claimFailed" size="small" :loading="retryingClaimants" @click="retryClaimants">
+          重试
+        </UiButton>
+        <UiButton
+          v-else-if="!claimedByMe"
+          size="small"
+          variant="primary"
+          :loading="claiming"
+          @click="handleClaim"
+        >
+          认领课程
+        </UiButton>
+        <UiButton v-else size="small" :loading="releasing" @click="handleRelease">
+          退出认领
+        </UiButton>
+      </div>
+    </div>
+
     <UiAsyncSection
       :error="loadError"
       :loading="loading"
@@ -76,14 +120,17 @@
 import UiIcon from '@/components/ui/UiIcon.vue'
 import { computed, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { tutorApi, type TutorChapter, type TutorCourse } from '@/api/tutor'
+import { tutorApi, type CourseClaimant, type TutorChapter, type TutorCourse } from '@/api/tutor'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiPageHeader from '@/components/ui/UiPageHeader.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiButton from '@/components/ui/UiButton.vue'
+import { useConfirm } from '@/composables/useConfirm'
 import { useAsyncPage } from '@/composables/useAsyncPage'
+import { ElMessage } from 'element-plus'
 
 type ChapterRow = TutorChapter & { content_type?: string; files?: unknown[] }
 type ContentTone = 'brand' | 'success' | 'warning' | 'danger' | 'neutral'
@@ -145,7 +192,87 @@ function goBack() {
   router.push({ name: 'TutorCourses' })
 }
 
+// ===== 认领条（#2596 D3/D5）=====
+// 「我在不在名单里」由服务端回答（claimed_by_me）：前端拿 user_id 自己比对会多出一条
+// 「我是谁」的判定链，而这本来是服务端一眼可知的事实。
+const claimants = ref<CourseClaimant[]>([])
+const claimedByMe = ref(false)
+const claimLoaded = ref(false)
+const claimFailed = ref(false)
+const claiming = ref(false)
+const releasing = ref(false)
+const retryingClaimants = ref(false)
+
+/** 共认名单里除我之外的人（服务端逐行标 is_me，前端不自己比 id）。 */
+const otherClaimants = computed(() => claimants.value.filter((c) => !c.is_me))
+
+async function loadClaimants() {
+  try {
+    const res = await tutorApi.getCourseClaimants(Number(route.params.id))
+    claimants.value = res.claimants || []
+    claimedByMe.value = res.claimed_by_me
+    claimLoaded.value = true
+    claimFailed.value = false
+  } catch {
+    // 名单拉不到不阻断读章节（拦截器已 toast），但**不能静默藏起来**——
+    // 藏了用户就以为这页没有认领这回事，点写按钮才吃 403。显式落到「状态未知 + 重试」。
+    claimFailed.value = true
+  }
+}
+
+async function handleClaim() {
+  if (claiming.value) return
+  claiming.value = true
+  try {
+    await tutorApi.claimCourse(Number(route.params.id))
+    ElMessage.success('已认领，可以开始编辑章节')
+    await loadClaimants()
+  } catch {
+    // 409 等由拦截器统一 toast；重取名单把状态拉回真相
+    await loadClaimants()
+  } finally {
+    claiming.value = false
+  }
+}
+
+/** 共认名单里除我之外的人（我未认领时就是全部）。 */
+async function handleRelease() {
+  if (releasing.value) return
+  try {
+    // 退出不回溯是这个动作最容易被误解的地方，确认框必须写明（B6）
+    await useConfirm().confirm(
+      '退出后你不能再编辑本课程；已写章节的归属与在审内容不受影响。',
+      '退出认领'
+    )
+  } catch {
+    return // 用户取消
+  }
+  releasing.value = true
+  try {
+    await tutorApi.releaseCourseClaim(Number(route.params.id))
+    ElMessage.success('已退出认领')
+    await loadClaimants()
+  } catch {
+    await loadClaimants()
+  } finally {
+    releasing.value = false
+  }
+}
+
 onMounted(() => {
   loadChapters()
+  loadClaimants()
 })
+
+// 认领条的重试入口：名单是独立于章节列表的一次请求，它的失败不该借用页面的三态骨架
+// （章节列表本身的错误由 useAsyncPage 管）。故单独一个「重拉名单」动作挂在提示条上。
+async function retryClaimants() {
+  if (retryingClaimants.value) return
+  retryingClaimants.value = true
+  try {
+    await loadClaimants()
+  } finally {
+    retryingClaimants.value = false
+  }
+}
 </script>

@@ -40,13 +40,18 @@ type CourseDTO struct {
 	CertificateTemplate   *CertificateTemplateDTO `json:"certificate_template,omitempty" extensions:"x-optional"`
 	CertificateTemplateID *int                    `json:"certificate_template_id" extensions:"x-nullable"`
 	ChapterCount          *int64                  `json:"chapter_count,omitempty" extensions:"x-optional"`
-	CoverImage            string                  `json:"cover_image"`
-	CourseID              int                     `json:"course_id"`
-	CreatedAt             string                  `json:"created_at"`
-	Credential            *CredentialBriefDTO     `json:"credential,omitempty" extensions:"x-optional"`
-	CredentialID          *int                    `json:"credential_id" extensions:"x-nullable"`
-	Description           string                  `json:"description"`
-	Duration              int                     `json:"duration"`
+	// ClaimCount 该课程当前认领讲师数（#2596 D1）。只在**讲师面**列表填（GET /api/tutor/courses）；
+	// 学员端/管理端列表不长这一列，故省略而非 0——「没人认领」与「这个面不报这列」是两件事。
+	ClaimCount *int `json:"claim_count,omitempty" extensions:"x-optional"`
+	// ClaimedByMe 当前登录讲师是否已认领本课程（同上，只讲师面填）。
+	ClaimedByMe  *bool               `json:"claimed_by_me,omitempty" extensions:"x-optional"`
+	CoverImage   string              `json:"cover_image"`
+	CourseID     int                 `json:"course_id"`
+	CreatedAt    string              `json:"created_at"`
+	Credential   *CredentialBriefDTO `json:"credential,omitempty" extensions:"x-optional"`
+	CredentialID *int                `json:"credential_id" extensions:"x-nullable"`
+	Description  string              `json:"description"`
+	Duration     int                 `json:"duration"`
 	// Entitled 权益投影（ADR-0062 决策 3）：该学员是否已持有本课程的读取资格。
 	// 只在**有主体**的读路径填（课程详情）——`GET /api/courses` 是公开面无主体，
 	// 列表上的这一格恒省略；非付费课程恒 true。缺省省略而非 false，避免把「没登录」

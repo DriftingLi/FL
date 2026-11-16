@@ -240,13 +240,13 @@ func TestQuestionReadScopeThreeFormsAgree(t *testing.T) {
 
 	// 编辑面 scope：只有筛选轴，没有池（这是它与学员面的差别，不得被并成一条）。
 	var edited []model.Question
-	if err := NewQuestionEditScope(&credA).ApplyListFilter(db.Model(&model.Question{})).Find(&edited).Error; err != nil {
+	if err := NewQuestionEditScope(&credA, nil).ApplyListFilter(db.Model(&model.Question{})).Find(&edited).Error; err != nil {
 		t.Fatal(err)
 	}
 	if len(edited) != 4 { // 草稿 + 待审 + 池内-A + 真题题：编辑面全量，只按证件筛
 		t.Fatalf("编辑面应读到该证件全量 4 题（含 draft/pending/真题）, got %d", len(edited))
 	}
-	if n := countAll(db, NewQuestionEditScope(nil)); n != 5 {
+	if n := countAll(db, NewQuestionEditScope(nil, nil)); n != 5 {
 		t.Fatalf("编辑面无筛选轴时应看全部 5 题, got %d", n)
 	}
 }

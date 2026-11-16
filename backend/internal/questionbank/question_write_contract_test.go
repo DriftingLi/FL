@@ -21,6 +21,10 @@ import (
 	"forklift-training/internal/testutil"
 )
 
+// qwriteTutorUID 本文件 tutor 令牌的 uid：qwriteIssue 对非 admin 角色固定用 1001 签发。
+// #2598 起写路径先验归属，夹具题的 created_by 必须与之对齐，否则「本人可写」根本进不去。
+const qwriteTutorUID = 1001
+
 func newQuestionWriteEnv(t *testing.T) (*gin.Engine, *config.Config, *gorm.DB) {
 	t.Helper()
 	testutil.SetTestGinMode()
@@ -139,7 +143,7 @@ func TestQuestionSubmitAction(t *testing.T) {
 	t.Parallel()
 	r, cfg, db := newQuestionWriteEnv(t)
 	tutor := qwriteIssue(t, cfg, db, "tutor")
-	q := model.Question{Type: "single_choice", Content: "待提交题", Answer: "A", Status: "draft", CreatedByType: "tutor", CreatedAt: testutil.Now(), UpdatedAt: testutil.Now()}
+	q := model.Question{Type: "single_choice", Content: "待提交题", Answer: "A", Status: "draft", CreatedBy: ptrInt(qwriteTutorUID), CreatedByType: "tutor", CreatedAt: testutil.Now(), UpdatedAt: testutil.Now()}
 	if err := db.Create(&q).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +176,7 @@ func TestQuestionReviewInvariantOverHTTP(t *testing.T) {
 		return row.Status
 	}
 	mkPublished := func(content string) int {
-		q := model.Question{Type: "single_choice", Content: content, Answer: "A", Status: "published", CreatedByType: "tutor", CreatedAt: testutil.Now(), UpdatedAt: testutil.Now()}
+		q := model.Question{Type: "single_choice", Content: content, Answer: "A", Status: "published", CreatedBy: ptrInt(qwriteTutorUID), CreatedByType: "tutor", CreatedAt: testutil.Now(), UpdatedAt: testutil.Now()}
 		if err := db.Create(&q).Error; err != nil {
 			t.Fatal(err)
 		}

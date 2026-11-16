@@ -421,13 +421,16 @@ var Domains = []Domain{
 
 	{
 		Name:  "tutor",
-		Title: "讲师端课程与章节（/api/tutor/*：课程列表 / 章节详情 / 文件上传删除）",
+		Title: "讲师端课程与章节（/api/tutor/*：课程列表 / 章节详情 / 文件上传删除 / 课程认领）",
 		Roots: []string{
 			"tutor.BatchDeleteFilesResult",
 			"course.ChapterDTO",
 			"course.ChapterDetailDTO",
 			"course.ChapterFileDTO",
 			"course.CoursePageResult",
+			// #2596：课程认领的名单与动作回执（名单页/卡片认领直接消费）。
+			"course.CourseClaimantsResult",
+			"tutor.ClaimResult",
 			"tutor.DeleteFileResult",
 			"course.TutorCourseChaptersDTO",
 		},
@@ -443,6 +446,10 @@ var Domains = []Domain{
 			{Method: "POST", Path: "/tutor/chapter/{chapter_id}/submit-review"},
 			{Method: "DELETE", Path: "/tutor/file/{file_id}"},
 			{Method: "POST", Path: "/tutor/files/batch-delete"},
+			// #2596 B3/D1：认领 / 退出认领 / 共认名单。
+			{Method: "POST", Path: "/tutor/course/{course_id}/claim"},
+			{Method: "DELETE", Path: "/tutor/course/{course_id}/claim"},
+			{Method: "GET", Path: "/tutor/course/{course_id}/claims"},
 		},
 	},
 
@@ -640,6 +647,9 @@ var Domains = []Domain{
 			"admin.TutorListDTO",
 			"auth.TutorRegisterResultDTO",
 			"admin.TutorDeletedDTO",
+			// #2597 D4：讲师课程代分配（三端点共用这两个 DTO）
+			"admin.TutorCourseAssignmentListDTO",
+			"admin.TutorCourseAssignResult",
 			"auth.RecruiterListResult",
 			"auth.RecruiterCreatedDTO",
 			"auth.RecruiterUpdatedDTO",
@@ -679,7 +689,10 @@ var Domains = []Domain{
 			{Method: "DELETE", Path: "/admin/tutor/{tutor_id}"},
 			{Method: "PUT", Path: "/admin/tutor/{tutor_id}/password", NoData: true},
 			{Method: "PUT", Path: "/admin/tutor/{tutor_id}/status"},
-			{Method: "GET", Path: "/admin/recruiters"},
+			// #2597 D4：讲师课程代分配（抽屉的三端点，均挂 tutor.manage）
+			{Method: "GET", Path: "/admin/tutor/{tutor_id}/courses"},
+			{Method: "POST", Path: "/admin/tutor/{tutor_id}/courses"},
+			{Method: "DELETE", Path: "/admin/tutor/{tutor_id}/courses"}, {Method: "GET", Path: "/admin/recruiters"},
 			{Method: "POST", Path: "/admin/recruiters"},
 			{Method: "PUT", Path: "/admin/recruiters/{id}/status"},
 			{Method: "PUT", Path: "/admin/recruiters/{id}"},

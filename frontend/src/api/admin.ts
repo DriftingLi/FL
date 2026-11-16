@@ -347,6 +347,25 @@ export const adminApi = {
     return unwrappedRequest.put<StatusResultDTO>(`/admin/tutor/${id}/status`)
   },
 
+  // ===== 讲师课程分配（#2597 D4）=====
+  /** 查某讲师已分配的课程（抽屉「已分配」标识的数据源）。 */
+  getTutorCourses(tutorId: number) {
+    return unwrappedRequest.get<AdminTutorCourseAssignmentList>(`/admin/tutor/${tutorId}/courses`)
+  },
+
+  /** 批量代分配（来源记 admin，重复分配幂等）。 */
+  assignTutorCourses(tutorId: number, courseIds: number[]) {
+    return unwrappedRequest.post<AdminTutorCourseAssignResult>(`/admin/tutor/${tutorId}/courses`, {
+      course_ids: courseIds
+    })
+  },
+
+  /** 批量移除（不回溯：章节作者归属与在审内容不受影响）。 */
+  removeTutorCourses(tutorId: number, courseIds: number[]) {
+    return unwrappedRequest.delete<AdminTutorCourseAssignResult>(`/admin/tutor/${tutorId}/courses`, {
+      data: { course_ids: courseIds }
+    })
+  },
   // ===== 企业招聘者管理（#416） =====
   /** 列表（后端行键 = `items`）。 */
   async getRecruiters(params: AdminRecruitersQuery): Promise<Page<RecruiterListItem>> {
@@ -516,4 +535,24 @@ export const adminApi = {
     const res = await unwrappedRequest.get<AuditLogPageResult>('/admin/audit-logs', { params })
     return toPage(res?.items, res?.total)
   }
+}
+
+/** 讲师课程分配（#2597 D4）：抽屉的「已分配」数据源 */
+export interface AdminTutorCourseAssignment {
+  course_id: number
+  course_name: string
+  /** self = 讲师自助认领；admin = 管理员代分配 */
+  source: 'self' | 'admin'
+  created_at: string
+}
+
+export interface AdminTutorCourseAssignmentList {
+  course_ids: number[]
+  items: AdminTutorCourseAssignment[]
+}
+
+/** 批量分配 / 移除结果：applied = 本次真改动的行数，skipped = 已是目标状态的行数 */
+export interface AdminTutorCourseAssignResult {
+  applied: number
+  skipped: number
 }

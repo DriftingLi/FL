@@ -87,6 +87,8 @@ func TestChapterReviewFlowContract(t *testing.T) {
 	}
 
 	// C2：讲师显式提交审核
+	// #2596：讲师面写路径前置认领谓词，夹具先让该讲师认领本课。
+	seedTutorCourseClaim(t, db, 1, c.CourseID)
 	if rec := do("POST", "/api/tutor/chapter/"+itoa(ch.ChapterID)+"/submit-review", tutorTok, ""); rec.Code != http.StatusOK {
 		t.Fatalf("提交审核应 200, got %d: %s", rec.Code, rec.Body.String())
 	}

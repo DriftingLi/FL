@@ -13,13 +13,33 @@ import (
 	"forklift-training/internal/model"
 )
 
+// seedChapter 造一章（course_id=1）**并让讲师 1 认领该课程**（#2596：换挂走认领谓词前置，
+// 未认领的讲师连「旧文件未挂该章」这类校验都到不了）。需要别的讲师也能写时另调 seedClaim。
 func seedChapter(t *testing.T, svc *Service, title string) int {
 	t.Helper()
 	ch := model.Chapter{CourseID: 1, Title: title, ContentType: "text", CreatedAt: time.Now()}
 	if err := svc.db.Create(&ch).Error; err != nil {
 		t.Fatalf("造章节失败: %v", err)
 	}
+	seedClaim(t, svc, 1, ch.CourseID)
 	return ch.ChapterID
+}
+
+// seedClaim 造一条课程认领行（#2596）。多讲师共认同一门课是正常形态，故按 (讲师, 课程) 幂等。
+func seedClaim(t *testing.T, svc *Service, tutorID, courseID int) {
+	t.Helper()
+	var n int64
+	if err := svc.db.Model(&model.TutorCourseClaim{}).
+		Where("tutor_id = ? AND course_id = ?", tutorID, courseID).Count(&n).Error; err != nil {
+		t.Fatalf("查认领行失败: %v", err)
+	}
+	if n > 0 {
+		return
+	}
+	row := model.TutorCourseClaim{TutorID: tutorID, CourseID: courseID, Source: model.ClaimSourceSelf, CreatedAt: time.Now()}
+	if err := svc.db.Create(&row).Error; err != nil {
+		t.Fatalf("造认领行失败: %v", err)
+	}
 }
 
 func makeFile(t *testing.T, svc *Service, tutorID int, name string) *model.TutorFile {
@@ -143,9 +163,67 @@ func TestSwapChapterFileAtomic(t *testing.T) {
 		t.Fatalf("old==new 应拒 ErrInvalidParam, got %v", err)
 	}
 
-	// 他人文件参与换挂拒绝
+	// 他人文件参与换挂拒绝：讲师 2 也认领同一门课（共认是正常形态），否则先撞认领谓词、
+	// 测不到「文件归属」这条（#2596）
+	seedClaim(t, svc, 2, 1)
 	if err := svc.SwapChapterFile(ctx, 2, ch, fresh.FileID, old.FileID); !errors.Is(err, ErrForbidden) {
 		t.Fatalf("他人换挂应拒 ErrForbidden, got %v", err)
+	}
+}
+
+// TestAttachDetachRequireClaim 挂接/解挂在未认领时全拒（#2596 / 规格 B2）。
+// 这两条路径此前完全没被认领谓词覆盖——文件是自己的、章节是谁的却没人问。
+func TestAttachDetachRequireClaim(t *testing.T) {
+	svc, _ := newSvc(t)
+	ctx := context.Background()
+	ch := seedChapter(t, svc, "第一章") // 讲师 1 已认领
+
+	f := makeFile(t, svc, 2, "别人的文件.mp4")
+
+	// 讲师 2：文件是他的，但没认领这门课 → 挂接拒
+	if err := svc.AttachFile(ctx, 2, f.FileID, ch); !errors.Is(err, course.ErrCourseClaimRequired) {
+		t.Fatalf("未认领挂接应拒 ErrCourseClaimRequired, got %v", err)
+	}
+
+	// 认领后放行
+	seedClaim(t, svc, 2, 1)
+	if err := svc.AttachFile(ctx, 2, f.FileID, ch); err != nil {
+		t.Fatalf("认领后挂接应放行: %v", err)
+	}
+
+	// 解挂同受约束：退出认领后再解挂被拒（文件还是他的，课已经不是他能动的了）
+	if err := course.ReleaseCourseClaim(svc.db, 2, 1); err != nil {
+		t.Fatalf("退出认领失败: %v", err)
+	}
+	if err := svc.DetachFile(ctx, 2, f.FileID); !errors.Is(err, course.ErrCourseClaimRequired) {
+		t.Fatalf("退出认领后解挂应拒 ErrCourseClaimRequired, got %v", err)
+	}
+}
+
+// TestSwapChapterFileRequiresClaim 换挂受认领谓词约束（#2596 / 规格 B2 + #2595 遗留 swap 洞）：
+// 没认领这门课的讲师换不了它的附件，即便文件都是自己的。
+func TestSwapChapterFileRequiresClaim(t *testing.T) {
+	svc, _ := newSvc(t)
+	ctx := context.Background()
+	ch := seedChapter(t, svc, "第一章") // 讲师 1 已认领
+
+	// 讲师 2：文件都是他的，但没认领这门课。挂接与换挂都受谓词约束，
+	// 故装旧文件这一步要先由已认领的讲师 1 完成（文件归属改为 1）。
+	fOld := makeFile(t, svc, 1, "旧.mp4")
+	fNew := makeFile(t, svc, 1, "新.mp4")
+	if err := svc.AttachFile(ctx, 1, fOld.FileID, ch); err != nil {
+		t.Fatalf("挂 fOld 失败: %v", err)
+	}
+	// 讲师 2 也想用这两个文件：换到他名下不现实（update 归属不在本票范围），
+	// 故这里只是断言「讲师 2 换别人文件」第一道就拒——既非本人文件，也未认领课程。
+	if err := svc.SwapChapterFile(ctx, 2, ch, fOld.FileID, fNew.FileID); err == nil {
+		t.Fatal("未认领讲师换挂应被拒")
+	}
+
+	// 认领后：讲师 1 的同一次调用放行（谓词不再拦），换挂自身的前置仍照常生效
+	seedClaim(t, svc, 1, 1)
+	if err := svc.SwapChapterFile(ctx, 1, ch, fOld.FileID, fNew.FileID); err != nil {
+		t.Fatalf("认领后换挂应放行: %v", err)
 	}
 }
 

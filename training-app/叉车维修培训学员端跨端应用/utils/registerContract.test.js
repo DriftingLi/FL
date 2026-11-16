@@ -48,8 +48,12 @@ const LINE_BUDGET = 600;
  * （判据源 ui-spec §9 指标2「lang="scss" 100%、无豁免」；本票 §7.1 同时裁定 register **维持系统导航、不动作**，
  * 故页面既不加页头件也不自垫状态栏）。**块内 39 条规则一字未动** ⇒ 像素面零变化，sha 只因标签属性前进。
  * 用例名照 #1313 的先例不改（红控制凭据按前缀比对），变更史记在本注释里。
+ *
+ * ⚠️ **#2533 第三次显式变更（批 A 旧主色清退，规格 #2493）**：本页 9 处 `#2979ff` 字面值改走
+ * `$primary-color`（#239EDD），**块内 39 条规则数不变**，只有主色声明位的值变 —— 这是规格裁定的
+ * 视觉变更本身（旧蓝 → 达标主色），不是顺手改样式。
  */
-const STYLE_SHA256 = '75d8fe1f8172ace6f8482981f0e6d1c01b8f629cee85c8daef5620566bc71d22';
+const STYLE_SHA256 = '4cbd706a754181186593d6af7bdf7bbc556b0fe5ab2f262a91c55e570f753e84';
 const sha256 = (s) => crypto.createHash('sha256').update(s, 'utf8').digest('hex');
 /** 块内 class 规则数 —— 与 sha256 互为冗余判据：数规则的锁漏属性值改动，sha 锁不漏 */
 const ruleCount = (s) => (s.match(/^\s*\.[a-zA-Z][\w-]*\s*\{/gm) || []).length;
@@ -157,7 +161,8 @@ describe('手术目标页落袋锁（模块全量预算 / 目录 ≤2 层 / 必�
   it('逐字节锁具备判别力（改一字符 / 换一个 class 名 / 删一条规则都必须与该 sha 不同）', () => {
     const style = pageStyle();
     expect(sha256(style.replace('.footer-link {', '.footer-link-x {'))).not.toBe(STYLE_SHA256);
-    expect(sha256(style.replace('#2979ff', '#2979fe'))).not.toBe(STYLE_SHA256);
+    // #2533 起块内已无旧主色字面 ⇒ 变异样本改为「把 token 退回字面值」（同一处声明位的另一种退化）
+    expect(sha256(style.replace('$primary-color', '#239EDD'))).not.toBe(STYLE_SHA256);
     expect(sha256(style.replace('.footer-link {', ''))).not.toBe(STYLE_SHA256);
     // 换 class 名那一条**同时**是规则数判据的盲区（39 → 39 数不出来）—— 这正是补 sha 的理由，留在原地当反例
     expect(ruleCount(style.replace('.footer-link {', '.footer-link-x {'))).toBe(39);

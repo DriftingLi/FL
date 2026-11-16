@@ -7906,6 +7906,230 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/tutor/{tutor_id}/courses": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "列出某讲师已分配的课程（抽屉的「已分配」标识数据源，需 tutor.manage）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-导师"
+                ],
+                "summary": "查讲师已分配的课程",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "讲师 ID",
+                        "name": "tutor_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/admin.TutorCourseAssignmentListDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "无 tutor.manage 能力",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "讲师不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员把一批课程分配给讲师（需 tutor.manage）；来源记「管理员」，重复分配幂等",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-导师"
+                ],
+                "summary": "给讲师代分配课程",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "讲师 ID",
+                        "name": "tutor_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "课程 ID 列表",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/admin.TutorCourseAssignInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/admin.TutorCourseAssignResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误（含课程列表为空）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "无 tutor.manage 能力",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "讲师不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员从讲师身上移除一批课程认领（需 tutor.manage）；**不回溯**——章节作者归属与在审内容不受影响",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-导师"
+                ],
+                "summary": "移除讲师的课程分配",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "讲师 ID",
+                        "name": "tutor_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "课程 ID 列表",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/admin.TutorCourseAssignInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/admin.TutorCourseAssignResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误（含课程列表为空）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "无 tutor.manage 能力",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "讲师不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/tutor/{tutor_id}/password": {
             "put": {
                 "security": [
@@ -20315,6 +20539,172 @@ const docTemplate = `{
                 }
             }
         },
+        "/tutor/course/{course_id}/claim": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "讲师认领该课程以获得其章节的编辑权；多讲师可共认同一门课。已认领返回 409。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "讲师端-课程"
+                ],
+                "summary": "认领课程",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "课程ID",
+                        "name": "course_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/tutor.ClaimResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "课程不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "409": {
+                        "description": "已认领",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "只断今后的编辑权：已写章节的作者归属保留、在审内容照常审完。未认领返回 404 档。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "讲师端-课程"
+                ],
+                "summary": "退出认领",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "课程ID",
+                        "name": "course_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/tutor.ClaimResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "未认领该课程",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/tutor/course/{course_id}/claims": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "返回该课程当前认领的讲师（按认领时间升序），供章节页展示共认者",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "讲师端-课程"
+                ],
+                "summary": "认领讲师名单",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "课程ID",
+                        "name": "course_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/course.CourseClaimantsResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "课程不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/tutor/courses": {
             "get": {
                 "security": [
@@ -26152,6 +26542,66 @@ const docTemplate = `{
                 }
             }
         },
+        "admin.TutorCourseAssignInput": {
+            "type": "object",
+            "properties": {
+                "course_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        "admin.TutorCourseAssignResult": {
+            "type": "object",
+            "properties": {
+                "applied": {
+                    "description": "本次真正新建或改动的认领行数",
+                    "type": "integer"
+                },
+                "skipped": {
+                    "description": "已经是目标状态、无需改动的行数",
+                    "type": "integer"
+                }
+            }
+        },
+        "admin.TutorCourseAssignmentDTO": {
+            "type": "object",
+            "properties": {
+                "course_id": {
+                    "type": "integer"
+                },
+                "course_name": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "description": "认领时间，按升序排",
+                    "type": "string"
+                },
+                "source": {
+                    "description": "self | admin：抽屉要显示「他自己认领的」还是「管理员分配的」",
+                    "type": "string"
+                }
+            }
+        },
+        "admin.TutorCourseAssignmentListDTO": {
+            "type": "object",
+            "properties": {
+                "course_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/admin.TutorCourseAssignmentDTO"
+                    }
+                }
+            }
+        },
         "admin.TutorDTO": {
             "type": "object",
             "properties": {
@@ -27474,6 +27924,16 @@ const docTemplate = `{
                         "$ref": "#/definitions/course.ChapterDTO"
                     }
                 },
+                "claim_count": {
+                    "description": "ClaimCount 该课程当前认领讲师数（#2596 D1）。只在**讲师面**列表填（GET /api/tutor/courses）；\n学员端/管理端列表不长这一列，故省略而非 0——「没人认领」与「这个面不报这列」是两件事。",
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "claimed_by_me": {
+                    "description": "ClaimedByMe 当前登录讲师是否已认领本课程（同上，只讲师面填）。",
+                    "type": "boolean",
+                    "x-optional": true
+                },
                 "course_id": {
                     "type": "integer"
                 },
@@ -27927,6 +28387,40 @@ const docTemplate = `{
                 }
             }
         },
+        "course.CourseClaimant": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "is_me": {
+                    "type": "boolean"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "tutor_id": {
+                    "type": "integer"
+                },
+                "tutor_name": {
+                    "type": "string"
+                }
+            }
+        },
+        "course.CourseClaimantsResult": {
+            "type": "object",
+            "properties": {
+                "claimants": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/course.CourseClaimant"
+                    }
+                },
+                "claimed_by_me": {
+                    "type": "boolean"
+                }
+            }
+        },
         "course.CourseDTO": {
             "type": "object",
             "properties": {
@@ -27955,6 +28449,16 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/course.ChapterDTO"
                     },
+                    "x-optional": true
+                },
+                "claim_count": {
+                    "description": "ClaimCount 该课程当前认领讲师数（#2596 D1）。只在**讲师面**列表填（GET /api/tutor/courses）；\n学员端/管理端列表不长这一列，故省略而非 0——「没人认领」与「这个面不报这列」是两件事。",
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "claimed_by_me": {
+                    "description": "ClaimedByMe 当前登录讲师是否已认领本课程（同上，只讲师面填）。",
+                    "type": "boolean",
                     "x-optional": true
                 },
                 "course_id": {
@@ -31871,6 +32375,17 @@ const docTemplate = `{
                     }
                 },
                 "success_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "tutor.ClaimResult": {
+            "type": "object",
+            "properties": {
+                "claimed": {
+                    "type": "boolean"
+                },
+                "course_id": {
                     "type": "integer"
                 }
             }
