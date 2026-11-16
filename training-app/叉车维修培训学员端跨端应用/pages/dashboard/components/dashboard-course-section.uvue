@@ -52,7 +52,9 @@
     const activeTab = ref<number>(0)
 
     // ---- 筛选标签 ----
-    const filterTags : string[] = ['全部', '实操技能', '综合评审']
+    // #2581：首 chip 按原型 404_2195 由「全部」改「笔试」；后端无对应维度（specialty 只有
+    // 操作/维修/安全/电池，filter 只有 ''|hot|featured）⇒ 与 favorites.uvue:6 先例一致，纯视觉不发明映射。
+    const filterTags : string[] = ['笔试', '实操技能', '综合评审']
     const activeFilter = ref<number>(0)
 
     function onTabChange(idx : number) : void {

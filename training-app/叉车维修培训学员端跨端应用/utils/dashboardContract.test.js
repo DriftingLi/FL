@@ -362,7 +362,8 @@ describe('行为保持点（手术偏离与回退风险的显式钉锁）', () =
     for (const t of ['课程商城', '题库练习', '学习资料', '考情资讯', '全局搜索']) expect(menu).toContain(t);
     const course = read('pages/dashboard/components/dashboard-course-section.uvue');
     expect(course).toContain("['热门课程', '精品课程']");
-    expect(course).toContain("['全部', '实操技能', '综合评审']");
+    // #2581：首 chip 按原型 404_2195 由「全部」改「笔试」（纯视觉，后端无对应维度）
+    expect(course).toContain("['笔试', '实操技能', '综合评审']");
     // #1395：下拉件搬家为共享件 cert-selector（levelNames / 热门考证文案的唯一抄本随件走，
     // 引导页共挂这一件 —— 全仓不许再有第二份胶囊渲染/静态文案抄本）
     const dd = read('components/cert-selector/cert-selector.uvue');
@@ -460,25 +461,35 @@ describe('#1422 课程区接线：DashboardCourseSection 页面↔组件双向�
     expect(show).toContain('loadHotCourses(currentCredentialId.value, filterValues[selectedFilter.value])');
   });
 
-/* ══ #1939 新闻板块：类别口径接线锁（行为腿证明算法对，这里证明**接线没断**） ══ */
-describe('新闻板块类别口径接线（#1939：考情 + 行业新闻 + 政策法规）', () => {
+/* ══ #1939 / #2581 新闻板块：类别口径接线锁（行为腿证明算法对，这里证明**接线没断**） ══ */
+describe('新闻板块类别口径接线（#1939 / #2581：考情 + 行业新闻 + 政策法规，chip 按类目重取）', () => {
   const feeds = read('pages/dashboard/composables/use-dashboard-feeds.uts');
 
-  it('取数口径来自 utils/dashboardNews 单点（类别表不在页面/组合式函数里另抄一份）', () => {
-    expect(feeds).toMatch(/import\s*\{[^}]*DASHBOARD_NEWS_CATEGORIES[^}]*\}\s*from\s*'\.\.\/\.\.\/\.\.\/utils\/dashboardNews'/);
+  it('取数口径来自 utils/dashboardNews 单点（类别表 / chip 映射不在页面或组合式函数里另抄一份）', () => {
     expect(feeds).toMatch(/import\s*\{[^}]*mergeDashboardNews[^}]*\}\s*from\s*'\.\.\/\.\.\/\.\.\/utils\/dashboardNews'/);
+    expect(feeds).toMatch(/import\s*\{[^}]*dashboardNewsCategoriesOf[^}]*\}\s*from\s*'\.\.\/\.\.\/\.\.\/utils\/dashboardNews'/);
+    expect(feeds).toMatch(/import\s*\{[^}]*dashboardNewsSortOf[^}]*\}\s*from\s*'\.\.\/\.\.\/\.\.\/utils\/dashboardNews'/);
   });
 
-  it('按类别各发一次（单请求 / 无 category 都算断），且每条都带 limit 与类别', () => {
-    const body = feeds.slice(feeds.indexOf('async function loadFeaturedContents'));
+  it('按 chip 的类别表各发一次（单请求 / 无 category 都算断），且每条都带 limit、类别与 sort', () => {
+    const body = feeds.slice(feeds.indexOf('async function loadNewsByFilter'));
     const loop = body.slice(0, body.indexOf('\n    }') + 6);
-    expect(loop).toContain('DASHBOARD_NEWS_CATEGORIES.length');
-    expect(loop).toContain('getFeaturedContentsApi(1, DASHBOARD_NEWS_LIMIT, DASHBOARD_NEWS_CATEGORIES[i])');
+    expect(loop).toContain('categories.length');
+    expect(loop).toContain('getFeaturedContentsApi(1, DASHBOARD_NEWS_LIMIT, categories[i], sort)');
     expect(loop).toContain('mergeDashboardNews(groups, DASHBOARD_NEWS_LIMIT)');
+    expect(loop).toContain('mergeDashboardNewsByHot(groups, DASHBOARD_NEWS_LIMIT)');
   });
 
-  it('失败态只在三类全挂时成立（个别类别抖动不清空整块）', () => {
-    expect(feeds).toContain('newsFailed.value = failedCount == DASHBOARD_NEWS_CATEGORIES.length');
+  it('失败态只在当前 chip 的类别全挂时成立（个别类别抖动不清空整块）', () => {
+    expect(feeds).toContain('newsFailed.value = failedCount == categories.length');
+  });
+
+  it('点 chip 重取且选中态留在 composable（页面层零自持状态）', () => {
+    expect(feeds).toContain('const newsFilter = ref<number>(0)');
+    expect(feeds).toContain('async function selectNewsFilter(filterIndex : number)');
+    const page = read('pages/dashboard/dashboard.uvue');
+    expect(page).toContain(':active-filter="newsFilter"');
+    expect(page).toContain('@filter-change="selectNewsFilter"');
   });
 
   it('板块按失败 / 空 / 列表三级渲染，空态复用 app-empty-state（不写死假内容）', () => {

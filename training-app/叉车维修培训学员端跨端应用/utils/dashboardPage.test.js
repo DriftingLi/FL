@@ -126,6 +126,17 @@ describe('首页格式契约（对照设计稿截图）', () => {
     expect(styleBlock).toMatch(/\.section-underline\s*\{[^}]*background-color:\s*#239EDD/);
   });
 
+  it('新闻资讯：四枚分类 chips + 白卡包列表 + 序号与 MM.DD 日期（#2581 原型 404_2195）', () => {
+    expect(template).toContain('class="news-filter-row"');
+    expect(template).toContain('class="news-card"');
+    expect(template).toContain('class="news-index"');
+    // chips 文案单点在 utils/dashboardNews（组件只引用，不另抄一份）
+    expect(script).toContain('DASHBOARD_NEWS_FILTERS');
+    expect(styleBlock).toMatch(/\.news-card\s*\{[^}]*background-color:\s*#FFFFFF/);
+    expect(styleBlock).toMatch(/\.news-filter-tag-active\s*\{[^}]*background-color:\s*#EBF9FF/);
+    expect(styleBlock).toMatch(/\.news-filter-tag-text-active\s*\{[^}]*color:\s*#239EDD/);
+  });
+
   it('筛选胶囊为填充式（无描边）：默认灰底、激活浅蓝底蓝字', () => {
     expect(styleBlock).toMatch(/\.filter-tag\s*\{[^}]*background-color:\s*#ECECEC/);
     expect(styleBlock).toMatch(/\.filter-tag-active\s*\{[^}]*background-color:\s*#EBF9FF/);
