@@ -12,16 +12,14 @@
                 </view>
             </view>
 
-            <!-- 功能设置 -->
+            <!-- 功能设置：关怀模式单独成卡（原型 307:6175 分组）；
+                 「收货地址」入口按 G2 G-06 已裁定删除（虚拟商品无实物收货对象），不按原型恢复 -->
             <view class="section">
                 <view class="card">
-                    <view class="cell" @click="onFeature('address')">
-                        <text class="cell-label">收货地址</text>
-                        <text class="cell-arrow">›</text>
-                    </view>
-                    <view class="cell cell-border-none" @click="onToggleCareMode">
+                    <view class="cell" @click="onToggleCareMode">
                         <text class="cell-label">关怀模式</text>
                         <text class="cell-value">{{ careModeEnabled ? '已开启' : '未开启' }}</text>
+                        <text class="cell-arrow">›</text>
                     </view>
                 </view>
             </view>
@@ -36,19 +34,20 @@
                     <view class="cell" @click="onClearCache">
                         <text class="cell-label">清理缓存</text>
                         <text class="cell-value">{{ cacheSize }}</text>
+                        <text class="cell-arrow">›</text>
                     </view>
                     <view class="cell" @click="onFeature('general')">
                         <text class="cell-label">通用</text>
                         <text class="cell-arrow">›</text>
                     </view>
-                    <view class="cell cell-border-none" @click="onFeature('device')">
+                    <view class="cell" @click="onFeature('device')">
                         <text class="cell-label">登录设备管理</text>
                         <text class="cell-arrow">›</text>
                     </view>
                 </view>
             </view>
 
-            <!-- 隐私 -->
+            <!-- 隐私与关于 -->
             <view class="section">
                 <view class="card">
                     <view class="cell" @click="onFeature('privacy')">
@@ -59,17 +58,11 @@
                         <text class="cell-label">个人信息收集清单</text>
                         <text class="cell-arrow">›</text>
                     </view>
-                    <view class="cell cell-border-none" @click="onFeature('third-party')">
+                    <view class="cell" @click="onFeature('third-party')">
                         <text class="cell-label">第三方收集清单</text>
                         <text class="cell-arrow">›</text>
                     </view>
-                </view>
-            </view>
-
-            <!-- 关于 -->
-            <view class="section">
-                <view class="card">
-                    <view class="cell cell-border-none" @click="onAbout">
+                    <view class="cell" @click="onAbout">
                         <text class="cell-label">关于我们</text>
                         <text class="cell-arrow">›</text>
                     </view>
@@ -183,7 +176,6 @@
 
     function onFeature(type : string) : void {
         const titles = new Map<string, string>()
-        titles.set('address', '收货地址')
         titles.set('notification', '通知设置')
         titles.set('general', '通用设置')
         titles.set('device', '登录设备管理')
@@ -231,19 +223,15 @@
 
     .card {
         background-color: $card-bg;
-        border-radius: 16rpx;
+        border-radius: $radius-card;
         flex-direction: column;
     }
 
+    /* 原型 307:6175：分组卡内行间无分割线，靠行高与留白分组 */
     .cell {
         flex-direction: row;
         align-items: center;
-        padding: 28rpx 24rpx;
-        border-bottom: 1rpx solid $border-color-light;
-    }
-
-    .cell-border-none {
-        border-bottom: none;
+        padding: 32rpx 28rpx;
     }
 
     .cell-label {
@@ -264,18 +252,18 @@
     }
 
     .logout-wrap {
-        padding: 48rpx 32rpx;
+        padding: 40rpx 32rpx;
     }
 
     .logout-btn {
         background-color: $card-bg;
-        border-radius: 48rpx;
-        padding: 24rpx 0;
+        border-radius: $radius-card;
+        padding: 30rpx 0;
         align-items: center;
     }
 
     .logout-text {
         font-size: 32rpx;
-        color: $uni-color-error;
+        color: $text-color;
     }
 </style>
