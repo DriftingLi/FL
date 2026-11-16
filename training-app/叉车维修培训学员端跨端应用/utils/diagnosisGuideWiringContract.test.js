@@ -16,7 +16,8 @@ const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 const read = (p) => readText(path.join(ROOT, p));
 
-const PAGE = read('pages/ai-assistant/ai-feature.uvue');
+// #2593：专项页退役，诊断引导面并入 ai-assistant 的故障诊断 scope
+const PAGE = read('pages/ai-assistant/ai-assistant.uvue');
 const GUIDE_UI = read('components/ai-chat/ai-chat-diagnosis-guide.uvue');
 const COMPOSABLE = read('composables/useDiagnosisGuide.uts');
 const API = read('api/aiAssistant.uts');
@@ -77,15 +78,16 @@ function stripCodeComments(text) {
 function hasFeatureKeyLiteralCompare(src) {
   const code = stripCodeComments(src);
   return /featureKey\s*={2,3}\s*'fault_diagnosis'/.test(code)
-    || /(currentFeatureKey|featureKey)\.value\s*={2,3}\s*'fault_diagnosis'/.test(code);
+    || /(currentFeatureKey|featureKey|activeScope)\.value\s*={2,3}\s*'fault_diagnosis'/.test(code);
 }
 
 describe('诊断引导面接线契约（#2296）', () => {
   describe('① 单一判据函数（票面：诊断专有判定只经一个函数，不按功能键字面比较）', () => {
-    it('页面用 isDiagnosisFeature 定位「本页是不是诊断页」，不做字面比较', () => {
+    it('页面用 isDiagnosisFeature 判「当前 scope 是不是诊断区」，不做字面比较', () => {
       // 判据是「从常量表拿到这个函数」，不是 import 的具体排列（合并 import 不算违背单一判据）
       expect(PAGE).toMatch(/import \{[^}]*\bisDiagnosisFeature\b[^}]*\} from '.\/ai-assistant-constants'/);
-      expect(PAGE).toMatch(/isDiagnosis\.value = isDiagnosisFeature\(item\.featureKey\)/);
+      // #2593：判据的入参从「入口项的键」变成「页内 scope」
+      expect(PAGE).toMatch(/isDiagnosisFeature\(activeScope\.value\)/);
       expect(hasFeatureKeyLiteralCompare(PAGE)).toBe(false);
     });
 
@@ -102,8 +104,8 @@ describe('诊断引导面接线契约（#2296）', () => {
 
     it('检测器有牙：塞一处字面量比较必须判红', () => {
       const mutated = PAGE.replace(
-        'isDiagnosis.value = isDiagnosisFeature(item.featureKey)',
-        "isDiagnosis.value = item.featureKey == 'fault_diagnosis'"
+        'isDiagnosisFeature(activeScope.value)',
+        "activeScope.value == 'fault_diagnosis'"
       );
       expect(mutated).not.toBe(PAGE);
       expect(hasFeatureKeyLiteralCompare(mutated)).toBe(true);
@@ -136,10 +138,14 @@ describe('诊断引导面接线契约（#2296）', () => {
       expect(polling.length).toBe(1);
     });
 
-    it('非诊断页不发引导请求（不白打四个 GET）', () => {
-      const fn = fnBody(PAGE, 'onLoad((options : OnLoadOptions)');
-      expect(fn).toMatch(/if \(isDiagnosis\.value\) \{/);
-      expect(fn).toMatch(/loadDiagnosisIntents\(\)/);
+    it('非诊断 scope 不发引导请求（进页默认通用区，不白打四个 GET）', () => {
+      // 进页不预拉：默认 scope 是通用区（activeScope 空串）
+      const onLoad = fnBody(PAGE, 'onLoad((options : OnLoadOptions)');
+      expect(onLoad).not.toMatch(/loadDiagnosisIntents\(\)/);
+      // 切到诊断 scope 才拉，且按切换后的 scope 判（#2593）
+      const sw = fnBody(PAGE, 'function switchScope');
+      expect(sw).toMatch(/if \(isDiagnosis\.value\) \{/);
+      expect(sw).toMatch(/loadDiagnosisIntents\(\)/);
     });
 
     it('检测器有牙：把留白判定改成恒真必须判红', () => {
@@ -159,7 +165,7 @@ describe('诊断引导面接线契约（#2296）', () => {
     });
 
     it('草稿经 AiChatInput 的 draft 属性送到输入框（不是直接改 useAiChat 的 inputText）', () => {
-      expect(PAGE).toMatch(/<AiChatInput :draft="draftText"/);
+      expect(PAGE).toMatch(/<AiChatInput[^>]*:draft="draftText"/);
       expect(INPUT).toMatch(/draft\?: string/);
       // 判据是「草稿变化会写进输入框」这条语义，不钉具体的取源写法（typed computed 是 ④c 逼出来的）
       expect(INPUT).toMatch(/const draftText = computed<string>/);

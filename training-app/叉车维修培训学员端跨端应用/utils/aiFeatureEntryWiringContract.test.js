@@ -1,20 +1,19 @@
 /**
- * 宫格入口 → 参数化专项页 接线契约（#1040）—— 源码契约测试缝（读源文本、断言语义；
- * 与 aiProGateContract / aiChatModesContract 同款）。
+ * 宫格入口 → 页内 scope 接线契约（#1040 起，2026-11-16 #2593 改写）—— 源码契约测试缝（读源文本、
+ * 断言语义；与 aiProGateContract / aiChatModesContract 同款）。
  *
- * 本文件是 `#921` 版接线契约（`「故障咨询」宫格 → fault_diagnosis`）在**形态变更后**的重写。
- * 形态变更 = 移动端 ADR-0009 的 2026-09-15 修订 ②：入口由「单页 + 宫格，点击在本页带键发一轮」
- * 改为「**通用页 + 参数化专项页**，点击 = `navigateTo` 专项页并带 `featureKey`」。
- * 因此原文件里这些断言**随形态过期**，本文件替换它们：
- *   - 「其余 4 格**不带** featureKey」（#971 范围外那句）—— 现在 4 格**全带**键；
- *   - 「`onFunctionClick` 置 `pendingFeatureKey`」—— 通用页**不再持有**该状态；
- *   - 「`onInputSend` 里取走 → 清空 → 早退守卫」的有序断言 —— 该轮次边界随状态一起消失。
+ * 形态演变（三次，都在移动端 ADR-0009 的修订里）：
+ *   ① #921 版：入口「单页 + 宫格，点击在本页带键发一轮」—— 键是**轮次状态**，踩过「键恒为空」；
+ *   ② #1040 版：ADR-0009 2026-09-15 修订 ②「通用页 + 参数化专项页」—— 点击 = `navigateTo` 专项页；
+ *   ③ 本版（#2593）：ADR-0009 **2026-11-16 修订 ②**「宫格 = 在 AI 助手页内切 scope」——
+ *      专项页 `pages/ai-assistant/ai-feature` **已退役**，键成为**页面状态** `activeScope`：
+ *      切它 = 换区 = 重置当前会话与消息并按新区重列（ADR-0013 2026-11-16 修订新增的不变式）。
  *
- * 行为链现在横跨四处，本文件按这个链分段：
- *   常量表（哪 4 格、带哪些键）→ 通用页（点击 = 跳转，且**结构上**没有键状态）
- *   → 专项页（按键定位、键只进本轮请求体、不吃「用户自选模型」面）→ pages.json（页面已注册）。
- * 键集合 / 展示名 / 限免位与**后端注册表**的等值另在 `aiFeatureRegistryParityContract.test.js`
- * （交付物 5），本文件不重复。
+ * 行为链现在收敛在**同一页**，本文件按这个链分段：
+ *   常量表（哪 4 格、带哪些键与短名）→ 宫格/chip（切 scope，且**不再有跳转点**）
+ *   → 请求体（scoped 分支先 return，不吃用户自选模型）→ 会话分区（带键 ⇒ 有列该区的界面 + 切区重置）
+ *   → chip 选择 fail-closed（未知键不切换、不复活伪入口）。
+ * 键集合 / 展示名 / 限免位与**后端注册表**的等值另在 `aiFeatureRegistryParityContract.test.js`，本文件不重复。
  *
  * 断言纪律（沿用 #921 评审修正，**务必保持**）：本仓踩过的假绿是「存在性断言」——
  * ① 顺序盲（把功能改到完全失效，旧断言仍全绿）；② 越界盲（`slice(indexOf(fn))` 切到文件尾，
@@ -24,12 +23,12 @@
  * 已知边界（如实声明）：契约测试只钉客户端这一半；真机门与本地编译门（移动端 `docs/adr/0008` 的
  * ① / ④）另行执行并在 PR 证据段如实记录。
  *
- * ④ 组是**本次唯一被放宽的硬约束**（ADR-0013 ⑤「不得静默改」，实现 PR 正文须显式声明这一处）：
- * 原锁「建会话**一律不得**带 `feature_key`」，现改为**条件式不变式**「**带键 ⇒ 必有列该区的界面**」。
- * 放宽的理由见 ADR-0013 ②：#921 的回归**不是「带了键」，而是「带了键却没有任何界面列它」**
- * ⇒ 该钉死的是这条不变式，不是「永不带键」这个手段（被否备选「带键建会话但不改守护」也在此列）。
+ * ④ 组是**不变的放宽处**（ADR-0013 ⑤「不得静默改」）：锁的是条件式不变式「**带键 ⇒ 必有列该区的界面**」，
+ * 不是「永不带键」这个手段（#921 的回归不是「带了键」，而是「带了键却没有任何界面列它」）。
+ * 本版把载体从页面换成 scope ⇒ 不变式原样保留，另外把「切区必须重置」并进同一组。
  */
 const path = require('path');
+const fs = require('fs');
 
 /** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
 const { readText } = require('./utsHarness');
@@ -38,15 +37,16 @@ const read = (p) => readText(path.join(ROOT, p));
 
 const CONSTANTS = read('pages/ai-assistant/ai-assistant-constants.uts');
 const PAGE = read('pages/ai-assistant/ai-assistant.uvue');
-const FEATURE_PAGE = read('pages/ai-assistant/ai-feature.uvue');
 const CHAT = read('composables/useAiChat.uts');
-/** #2299 起专项页的唯一选图入口（ADR-0055 放宽 ADR-0009 修订 ②） */
+/** #2299 起专项 scope 的唯一选图入口（ADR-0055 放宽 ADR-0009 修订 ②） */
 const AI_PICKER = read('composables/useAiImagePicker.uts');
 const API = read('api/aiAssistant.uts');
 const TYPES = read('types/ai.uts');
 const PAGES_JSON = JSON.parse(read('pages.json'));
 
-const FEATURE_PAGE_PATH = 'pages/ai-assistant/ai-feature';
+/** 已退役的专项页（#2593）：删页必须是一条完整的手术，本文件按「路径 / 文件 / 引用」三面各钉一条。 */
+const RETIRED_FEATURE_PAGE_PATH = 'pages/ai-assistant/ai-feature';
+const RETIRED_FEATURE_PAGE_FILE = 'pages/ai-assistant/ai-feature.uvue';
 
 /** 取某个函数/箭头函数体（大括号配平，切到闭合处为止）——防止切片越界到文件尾造成假绿。 */
 function fnBody(src, sig) {
@@ -89,25 +89,23 @@ function featureKeys(src) {
   return out;
 }
 
-/** 点击处理器是否「跳转专项页并带键」（判据抽成纯函数，便于对变形样本断言）。 */
-function clickNavigates(src) {
-  return /uni\.navigateTo\(\{ url: '\/pages\/ai-assistant\/ai-feature\?featureKey=' \+ item\.featureKey \}\)/.test(
-    fnBody(src, 'function onFunctionClick')
-  );
+/** 点击处理器是否「切本页 scope」（判据抽成纯函数，便于对变形样本断言）。 */
+function clickSwitchesScope(src) {
+  return /switchScope\(item\.featureKey\)/.test(fnBody(src, 'function onFunctionClick'));
 }
 
-/** 通用页是否**结构上**没有键状态：类型属性/函数体里都不再出现该状态名。 */
-function noRoundKeyState(src) {
-  return !/pendingFeatureKey/.test(stripCodeComments(src));
+/** 页面是否**已无跳转点**：专项页路径不再出现在任何 `uni.navigateTo` 里（注释不算）。 */
+function noNavigateToFeaturePage(src) {
+  return !/navigateTo\([^)]*ai-feature/.test(stripCodeComments(src));
 }
 
-/** 页面交给 `useAiChat(...)` 的**会话作用域**实参名（例 `currentFeatureKey` / `featureScope`）；未调用则 null。 */
+/** 页面交给 `useAiChat(...)` 的**会话作用域**实参名（例 `activeScope`）；未调用则 null。 */
 function scopeArg(src) {
   const m = /useAiChat\(\s*([A-Za-z_$][\w$]*)\s*\)/.exec(stripCodeComments(src));
   return m ? m[1] : null;
 }
 
-/** 该作用域是否**恒为空串**（= 本页会话不带键）：声明为 `ref<string>('')` 且全页无赋值。 */
+/** 该作用域是否**恒为空串**（= 本页会话永不带键）：声明为 `ref<string>('')` 且全页无赋值。 */
 function scopeAlwaysEmpty(src, name) {
   const code = stripCodeComments(src);
   return new RegExp(`const\\s+${name}\\s*=\\s*ref<string>\\(''\\)`).test(code)
@@ -123,13 +121,34 @@ function rendersRegionSessionList(src) {
 }
 
 /**
- * 条件式不变式（ADR-0013）：**带键 ⇒ 必须有列该区的界面**。
- * 不带键的页面自动成立（通用页就是这一支）—— 这不是「一律要界面」，而是「不许只带键不列区」。
+ * 切 scope 是否**重置会话与消息**（ADR-0013 2026-11-16 修订新增的不变式；#2593）。
+ *
+ * 为什么必须钉：列表读的是 `featureScope.value`（现读），消息读的是本页 ref ——
+ * 只改 scope 不重置 ⇒ 抽屉按新区刷新、屏幕上还挂着上一区的对话，学员在「故障咨询」里
+ * 看到通用对话的上下文。这不是样式问题，是归错区。
+ */
+function scopeSwitchResets(src, name) {
+  let fn;
+  try {
+    fn = fnBody(src, 'function switchScope');
+  } catch (e) {
+    return false;
+  }
+  return new RegExp(`${name}\\.value\\s*=`).test(fn)
+    && /currentSession\.value\s*=\s*null/.test(fn)
+    && /messages\.value\s*=\s*\[\]/.test(fn)
+    && /loadSessions\(\)/.test(fn);
+}
+
+/**
+ * 条件式不变式（ADR-0013）：**带键 ⇒ 必须有列该区的界面**，且**切区必须重置**。
+ * 不带键的页面自动成立（通用页就是这一支）—— 不是「一律要界面」，而是「不许只带键不列区」。
  */
 function regionInvariantHolds(src) {
   const arg = scopeArg(src);
   if (arg === null) throw new Error('页面没有调用 useAiChat(...)：会话作用域判据无从判定');
-  return scopeAlwaysEmpty(src, arg) ? true : rendersRegionSessionList(src);
+  if (scopeAlwaysEmpty(src, arg)) return true;
+  return rendersRegionSessionList(src) && scopeSwitchResets(src, arg);
 }
 
 /** 页面是否**按限免位渲染小签**（判据必须是 `item.freePreview`，不是写死的 key 或常显）。 */
@@ -160,15 +179,16 @@ function freeBadgeWired(src) {
   );
 }
 
-describe('宫格入口 → 参数化专项页 接线（#1040）契约', () => {
-  describe('① 常量表：注册表的 4 项专项功能，格格带键', () => {
-    it('宫格项类型：featureKey / freePreview 均为**必填**（没有键的格子写不出来）', () => {
+describe('宫格入口 → 页内 scope 接线（#1040 / #2593）契约', () => {
+  describe('① 常量表：注册表的 4 项专项功能，格格带键与短名', () => {
+    it('宫格项类型：featureKey / freePreview / scopeLabel 均为**必填**（没有键的格子写不出来）', () => {
       const code = stripCodeComments(TYPES);
       expect(code).toMatch(/export type AIFunctionItem = \{/);
       expect(code).toMatch(/featureKey : string/);
       expect(code).toMatch(/freePreview : boolean/);
+      // chip 短名（#2593）：原型 791:750「故障咨询 ⌄」里的那个名字
+      expect(code).toMatch(/scopeLabel : string/);
       // 旧形态的可选声明是被删掉的 —— 留着就等于给「伪入口」留了类型口子
-      // （注释里会提到旧写法，故按去注释后的代码判）
       expect(code).not.toMatch(/featureKey \?: string/);
     });
 
@@ -180,13 +200,9 @@ describe('宫格入口 → 参数化专项页 接线（#1040）契约', () => {
     });
 
     it('「故障代码查询」格已删除（本地 key 与标题双双不得残留）', () => {
-      // 常量文件头注释里必然提到这个名字（解释为什么删）⇒ 按去注释后的代码判
       const code = stripCodeComments(CONSTANTS);
       expect(code).not.toMatch(/'fault-code'/);
       expect(code).not.toMatch(/故障代码查询/);
-      // 宫格因此只剩 4 项（旧的 5 项 = 4 真功能 + 1 伪入口）。
-      // 计数要认「宫格项」的形态（含 title + featureKey）——`RIGHT_MENU_ITEMS` 也是 `{ key: '…' }` 开头，
-      // 用裸 `{ key: '` 计数会把它一起数进来（本文件自测踩过：数出 8）。
       expect((CONSTANTS.match(/^\s*\{ key: '[^']+', title: '[^']+',.*featureKey: '/gm) || []).length).toBe(4);
     });
 
@@ -195,11 +211,19 @@ describe('宫格入口 → 参数化专项页 接线（#1040）契约', () => {
       expect(CONSTANTS).not.toMatch(/title: '故障咨询'/);
     });
 
+    it('chip 短名：诊断格是「故障咨询」，其余三项与本格展示名同值（原型 791:750）', () => {
+      expect(tileLine('fault-consult')).toMatch(/scopeLabel: '故障咨询'/);
+      for (const k of ['drawing', 'exercise', 'knowledge']) {
+        const line = tileLine(k);
+        const title = /title: '([^']+)'/.exec(line)[1];
+        expect(line).toMatch(new RegExp(`scopeLabel: '${title}'`));
+      }
+    });
+
     it('「智能维修诊断」仍接既有键 fault_diagnosis，且带限免声明位', () => {
       const line = tileLine('fault-consult');
       expect(line).toMatch(/featureKey: 'fault_diagnosis'/);
       expect(line).toMatch(/freePreview: true/);
-      // 本地 key 是 UI 标识（图标/引用），不因展示名变更而改
       expect(line).toMatch(/key: 'fault-consult'/);
     });
 
@@ -214,17 +238,12 @@ describe('宫格入口 → 参数化专项页 接线（#1040）契约', () => {
 
     it('限免位在页面上**真被消费**：宫格小签由 `item.freePreview` 决定（只写进常量 = 学员看不到限免）', () => {
       expect(freeBadgeWired(PAGE)).toBe(true);
-      // 判别力：小签删掉 ⇒ 红；判据换成写死常显（不受限免位控制）⇒ 也红；
-      // 只剩底色却没有字形（view 空壳）⇒ 同样红（结构锁必须咬住「限免」二字）
       expect(freeBadgeWired(PAGE.replace(FREE_BADGE_BLOCK, ''))).toBe(false);
       expect(freeBadgeWired(PAGE.replace('v-if="item.freePreview"', ''))).toBe(false);
-      expect(
-        freeBadgeWired(PAGE.replace('<text class="function-free-badge-text">限免</text>', ''))
-      ).toBe(false);
+      expect(freeBadgeWired(PAGE.replace('<text class="function-free-badge-text">限免</text>', ''))).toBe(false);
     });
 
     it('小签在**标题下方**、且不回到绝对定位（形态回退必须红）', () => {
-      // ① 顺序：把整块搬到标题之前（= 回到压图标的老位置）⇒ 红
       const block = (PAGE.match(FREE_BADGE_BLOCK) || [''])[0];
       expect(block.length).toBeGreaterThan(0);
       const movedUp = PAGE.replace(FREE_BADGE_BLOCK, '').replace(
@@ -232,174 +251,173 @@ describe('宫格入口 → 参数化专项页 接线（#1040）契约', () => {
         block + '\n\t\t\t\t\t<text class="function-title">{{ item.title }}</text>'
       );
       expect(freeBadgeWired(movedUp)).toBe(false);
-      // ② 形态：给小签加回 position:absolute ⇒ 红（脱流压图标 = 同色系黏成一团）
-      const absAgain = PAGE.replace(
-        '.function-free-badge {',
-        '.function-free-badge {\n\t\tposition: absolute;'
-      );
+      const absAgain = PAGE.replace('.function-free-badge {', '.function-free-badge {\n\t\tposition: absolute;');
       expect(freeBadgeWired(absAgain)).toBe(false);
     });
   });
 
-  describe('② 点击 = 跳转专项页（不再「在本页带键发一轮」）', () => {
-    it('onFunctionClick 用 navigateTo 跳专项页并带 featureKey', () => {
-      expect(clickNavigates(PAGE)).toBe(true);
+  describe('② 点击 = 在本页切 scope（不再跳转专项页；#2593）', () => {
+    it('onFunctionClick 走 switchScope(item.featureKey)', () => {
+      expect(clickSwitchesScope(PAGE)).toBe(true);
     });
 
-    it('点击不再发预设话、不再置任何键状态', () => {
+    it('点击不再发预设话、不再置任何键状态、也不再 navigateTo 专项页', () => {
       const fn = fnBody(PAGE, 'function onFunctionClick');
       expect(fn).not.toMatch(/sendText\(/);
       expect(fn).not.toMatch(/item\.prompt/);
       expect(fn).not.toMatch(/pendingFeatureKey/);
+      expect(fn).not.toMatch(/navigateTo/);
+      expect(noNavigateToFeaturePage(PAGE)).toBe(true);
     });
 
-    it('把跳转换成「发一轮」的变形样本会被检出（防检测器空跑假绿）', () => {
-      const broken = PAGE.replace(
-        "uni.navigateTo({ url: '/pages/ai-assistant/ai-feature?featureKey=' + item.featureKey })",
-        "sendText(item.title)"
-      );
-      expect(clickNavigates(broken)).toBe(false);
-      expect(fnBody(broken, 'function onFunctionClick')).toMatch(/sendText\(/);
+    it('把切 scope 换回「跳转」或「发一轮」的变形样本会被检出（防检测器空跑假绿）', () => {
+      const jumped = PAGE.replace('switchScope(item.featureKey)', "uni.navigateTo({ url: '/pages/ai-assistant/ai-feature?featureKey=' + item.featureKey })");
+      expect(clickSwitchesScope(jumped)).toBe(false);
+      expect(noNavigateToFeaturePage(jumped)).toBe(false);
+      const chatted = PAGE.replace('switchScope(item.featureKey)', 'sendText(item.title)');
+      expect(clickSwitchesScope(chatted)).toBe(false);
     });
 
-    it('专项页已在 pages.json 注册（没注册 = 点击报「页面不存在」）', () => {
+    it('专项页已从 pages.json 摘除且文件已删（删页的三面手术：路径 / 文件 / 引用）', () => {
       const paths = (PAGES_JSON.pages || []).map((p) => p.path);
-      expect(paths).toContain(FEATURE_PAGE_PATH);
-      // 注册的是**一个**参数化页面，不是 4 个页面文件（ADR-0009 修订 ② 的页面数裁定）
-      expect(paths.filter((p) => p.indexOf('pages/ai-assistant/ai-feature') === 0).length).toBe(1);
+      expect(paths.filter((p) => p.indexOf(RETIRED_FEATURE_PAGE_PATH) === 0).length).toBe(0);
+      expect(fs.existsSync(path.join(ROOT, RETIRED_FEATURE_PAGE_FILE))).toBe(false);
     });
   });
 
-  describe('③ 通用页**结构上**没有键状态（#999 那类缺陷不可能再发生）', () => {
-    it('通用页不再出现 pendingFeatureKey（注释里提过不算，按去注释后的代码判）', () => {
-      expect(noRoundKeyState(PAGE)).toBe(true);
-      // 变形样本自证：把状态加回去 ⇒ 判据变红
-      expect(noRoundKeyState(PAGE.replace('<script setup lang="uts">', "<script setup lang=\"uts\">\nconst pendingFeatureKey = ref<string>('')"))).toBe(false);
+  describe('③ 页内 scope 状态：键是页面状态，请求体按 scope 分支', () => {
+    it("scope 声明为 ref<string>('')，且被 useAiChat 单实例消费", () => {
+      expect(PAGE).toMatch(/const activeScope = ref<string>\(''\)/);
+      expect(scopeArg(PAGE)).toBe('activeScope');
+      // 单实例：不要为「专项模式」再起第二个 useAiChat（那会分叉会话与流式状态）
+      expect((stripCodeComments(PAGE).match(/useAiChat\(/g) || []).length).toBe(1);
     });
 
-    it('通用页发送时功能键显式传空串（第四参恒为空 ⇒ 落通用通道）', () => {
-      const fn = fnBody(PAGE, 'function onInputSend');
-      expect(fn).toMatch(/sendInput\(currentModelName\.value, buildBody, \[\], ''\)/);
-      expect(fn).not.toMatch(/sendInput\(currentModelName\.value, buildBody, \[\], featureKey\)/);
-    });
-
-    it('通用页的 buildBody 不再有「带键就早退」的分支（那是专项页的形态）', () => {
+    it('buildBody 里功能键**恒写**，scoped 分支在写模型字段**之前**就 return（#998）', () => {
       const fn = fnBody(PAGE, 'const buildBody : ChatBodyBuilder');
-      expect(fn).not.toMatch(/featureKey\.length > 0/);
-      // 空串仍显式发送：键字段留着，语义与「不发送」等价
       expect(fn).toMatch(/params\['feature_key'\] = featureKey/);
+      expect(fn).toMatch(/if \(featureKey\.length > 0\) \{[\s\S]*?return params/);
+      // 顺序承重：early return 必须早于 model_source 的写入，否则 scoped 也会把模型字段送出去
+      expect(fn.indexOf('featureKey.length > 0')).toBeLessThan(fn.indexOf("params['model_source']"));
+      // 变形样本：去掉 early return ⇒ 「先 return 再写模型字段」这条判据必须红
+      const leaky = fn.replace(/if \(featureKey\.length > 0\) \{[\s\S]*?return params\n\t\t\}/, '');
+      expect(leaky).not.toMatch(/if \(featureKey\.length > 0\) \{[\s\S]*?return params/);
+      // 另一支变形：把 early return 挪到模型字段之后 ⇒ 顺序判据红
+      const reordered = fn
+        .replace(/if \(featureKey\.length > 0\) \{[\s\S]*?return params\n\t\t\}/, '')
+        .replace("params['model_source'] = currentModelSource.value", "params['model_source'] = currentModelSource.value\n\t\tif (featureKey.length > 0) { return params }");
+      expect(reordered.indexOf('featureKey.length > 0')).toBeGreaterThan(reordered.indexOf("params['model_source']"));
     });
 
-    it('「请先配置自定义模型」的前置校验回到无条件形态（通用页每一轮都适用）', () => {
+    it('scoped 路径不送任何模型字段：专项通道由管理端单绑定解析（#998 / ADR-0009 §7）', () => {
+      const fn = fnBody(PAGE, 'const buildBody : ChatBodyBuilder');
+      const scopedPart = fn.slice(0, fn.indexOf('featureKey.length > 0') >= 0 ? fn.indexOf('featureKey.length > 0') : fn.length);
+      expect(scopedPart).not.toMatch(/model_source/);
+      expect(scopedPart).not.toMatch(/custom_api_key/);
+      expect(scopedPart).not.toMatch(/config_id/);
+      expect(scopedPart).not.toMatch(/user_model_id/);
+    });
+
+    it('通用 scope 仍送用户自选模型三条来源（与从前逐字一致）', () => {
+      const fn = fnBody(PAGE, 'const buildBody : ChatBodyBuilder');
+      expect(fn).toMatch(/params\['model_source'\] = currentModelSource\.value/);
+      expect(fn).toMatch(/params\['config_id'\] = currentModelId\.value/);
+      expect(fn).toMatch(/params\['user_model_id'\] = currentModelId\.value/);
+      expect(fn).toMatch(/params\['custom_api_key'\] = customApiKey\.value\.trim\(\)/);
+    });
+
+    it('模型前置校验只在通用 scope 生效（scoped 早退必须包在 !scoped 分支里）', () => {
       const fn = fnBody(PAGE, 'function onInputSend');
-      expect(fn).toMatch(/if \(currentModelSource\.value == 'custom' && customModel\.value\.trim\(\)\.length == 0\)/);
+      expect(fn).toMatch(/const scoped = activeScope\.value\.length > 0/);
+      expect(fn).toMatch(/if \(!scoped\) \{[\s\S]*?请先配置自定义模型/);
+      // 变形样本：把两条校验移到 scoped 外层（无条件）⇒ 顺序/结构判据红
+      const unconditional = fn.replace('if (!scoped) {', '{');
+      expect(unconditional).not.toMatch(/if \(!scoped\) \{[\s\S]*?请先配置自定义模型/);
+    });
+
+    it('发送把当前 scope 作为第四参透传（空串 = 通用通道）', () => {
+      const fn = fnBody(PAGE, 'function onInputSend');
+      expect(fn).toMatch(/sendInput\(scoped \? scopeTitle\.value : currentModelName\.value, buildBody, picked, activeScope\.value\)/);
+      expect(fn).toMatch(/const picked : string\[\] = isDiagnosis\.value \? pickImages\.value : \[\]/);
     });
   });
 
-  describe('④ 会话分区：**带键 ⇒ 必有列该区的界面**（ADR-0013 条件式守护；本组是本次唯一放宽处）', () => {
+  describe('④ 会话分区：带键 ⇒ 必有列该区的界面 **且** 切区必须重置（ADR-0013 条件式守护）', () => {
     it('底层 api：两处都收 featureKey，且**空串不发键**（缺参 ⇒ 后端落遗留 ai_assistant 区）', () => {
       expect(API).toMatch(/export function getAiSessionsApi\(featureKey : string\)/);
       expect(API).toMatch(/export function createAiSessionApi\(title : string, modelName : string, featureKey : string\)/);
-
       const listFn = fnBody(API, 'export function getAiSessionsApi(featureKey : string)');
       expect(listFn).toMatch(/if \(featureKey\.length > 0\)/);
       expect(listFn).toMatch(/params\['feature_key'\] = featureKey/);
-
       const createFn = fnBody(API, 'export function createAiSessionApi(title : string, modelName : string, featureKey : string)');
       expect(createFn).toMatch(/if \(featureKey\.length > 0\)/);
       expect(createFn).toMatch(/payload\['feature_key'\] = featureKey/);
     });
 
     it('composable 把**页面作用域**透传给 list 与 create（单点，页面不另立一套）', () => {
-      // 后端 ListSessions：featureKey=="" ⇒ FeatureAIAssistant（遗留区）
-      // ⇒ 建会话与列会话**必须同一个作用域**，否则会话落进「没人列」的区（#921 首版实测回归）
       expect(fnBody(CHAT, 'async function loadSessions')).toMatch(/getAiSessionsApi\(featureScope\.value\)/);
       const streamFn = fnBody(CHAT, 'async function doStreamChat');
       expect(streamFn).toMatch(/createAiSessionApi\(sessionTitle, sessionTag, featureScope\.value\)/);
-      // 本轮对话的键仍按轮次走 buildBody —— 「会话归属哪一区」与「本轮用哪个键」是两件事
       expect(streamFn).toMatch(/buildBody\(history, sessionID, featureKey\)/);
     });
 
-    it('专项页：带本区键 **且** 有列该区的界面（⇔ 两向都成立）', () => {
-      expect(scopeArg(FEATURE_PAGE)).toBe('currentFeatureKey');
-      expect(FEATURE_PAGE).toMatch(/currentFeatureKey\.value = item\.featureKey/);
-      expect(rendersRegionSessionList(FEATURE_PAGE)).toBe(true);
-      expect(regionInvariantHolds(FEATURE_PAGE)).toBe(true);
-      // 顺序承重：**先定位键、后拉本区列表**（反了就是「列表查了遗留区」这种假分区）
-      const loadFn = fnBody(FEATURE_PAGE, 'onLoad((options : OnLoadOptions)');
-      expect(loadFn.indexOf('currentFeatureKey.value = item.featureKey')).toBeGreaterThan(-1);
-      expect(loadFn.indexOf('currentFeatureKey.value = item.featureKey')).toBeLessThan(loadFn.indexOf('loadSessions()'));
+    it('本页 scope 可非空 ⇒ 必须有列该区的抽屉（⇔ 两向都成立）', () => {
+      expect(scopeAlwaysEmpty(PAGE, 'activeScope')).toBe(false);
+      expect(rendersRegionSessionList(PAGE)).toBe(true);
+      expect(regionInvariantHolds(PAGE)).toBe(true);
     });
 
-    it('通用页：作用域**恒为空串**（不带键 ⇒ 行为与从前逐字一致），故不受「必有界面」约束', () => {
-      expect(scopeArg(PAGE)).toBe('featureScope');
-      expect(scopeAlwaysEmpty(PAGE, 'featureScope')).toBe(true);
+    it('切 scope 必须重置当前会话与消息，并按新 scope 重新 loadSessions（#2593 新增不变式）', () => {
+      expect(scopeSwitchResets(PAGE, 'activeScope')).toBe(true);
+      const fn = fnBody(PAGE, 'function switchScope');
+      // 顺序承重：先改 scope、后拉列表（反了就是「列表查的是旧区」）
+      expect(fn.indexOf('activeScope.value = key')).toBeGreaterThan(-1);
+      expect(fn.indexOf('activeScope.value = key')).toBeLessThan(fn.indexOf('loadSessions()'));
+      // 等待中不许切：在跑的那一轮请求体已带旧键
+      expect(fn).toMatch(/if \(thinking\.value\)/);
     });
 
-    it('变形样本：专项页少了抽屉 ⇒「带键却无界面」必须被检出（检测器自证）', () => {
-      const broken = FEATURE_PAGE.replace(/<AiChatDrawerLeft[\s\S]*?\/>/, '');
-      expect(rendersRegionSessionList(broken)).toBe(false);
-      expect(regionInvariantHolds(broken)).toBe(false); // 键还在、界面没了 ⇒ 不变式被击穿
+    it('变形样本：切 scope 不重置 / 抽屉缺失 ⇒ 不变式必须被击穿（检测器自证）', () => {
+      const noReset = PAGE.replace(/\t\tcurrentSession\.value = null\n/, '');
+      expect(scopeSwitchResets(noReset, 'activeScope')).toBe(false);
+      expect(regionInvariantHolds(noReset)).toBe(false);
+      const noDrawer = PAGE.replace(/<AiChatDrawerLeft[\s\S]*?\/>/, '');
+      expect(rendersRegionSessionList(noDrawer)).toBe(false);
+      expect(regionInvariantHolds(noDrawer)).toBe(false);
     });
 
-    it('变形样本：专项页不再带键 ⇒ 条件式「不要求界面」那一侧成立（不是「一律要界面」）', () => {
-      const noKey = FEATURE_PAGE.replace('currentFeatureKey.value = item.featureKey', '');
-      expect(scopeAlwaysEmpty(noKey, 'currentFeatureKey')).toBe(true);
-      expect(regionInvariantHolds(noKey)).toBe(true);
-    });
-
-    it('变形样本：通用页被塞进任何键 ⇒「通用页不带键」必须被检出（零回归的另一半）', () => {
-      const broken = PAGE.replace("const featureScope = ref<string>('')", "const featureScope = ref<string>('fault_diagnosis')");
-      expect(scopeAlwaysEmpty(broken, 'featureScope')).toBe(false);
+    it('变形样本：scope 恒为空串 ⇒ 条件式「不要求界面」那一侧成立（不是「一律要界面」）', () => {
+      const noSwitch = PAGE.replace('activeScope.value = key', '');
+      expect(scopeAlwaysEmpty(noSwitch, 'activeScope')).toBe(true);
+      expect(regionInvariantHolds(noSwitch)).toBe(true);
     });
   });
 
-  describe('⑤ 专项页：按键定位，键只进本轮请求体', () => {
-    it('参数来自 onLoad 的 featureKey 查询参数，并按键命中手写清单', () => {
-      const fn = fnBody(FEATURE_PAGE, 'onLoad((options : OnLoadOptions)');
-      expect(fn).toMatch(/options\['featureKey'\]/);
-      expect(fn).toMatch(/findFunctionItem\(/);
+  describe('⑤ chip 选择：fail-closed，未知键既不切换也不复活伪入口', () => {
+    it('chip 下拉列「通用对话 + 四格」，文案取 scopeLabel', () => {
+      expect(PAGE).toMatch(/@click="onScopeSelect\(\)"|@click="onScopeSelect\(''\)"/);
+      expect(PAGE).toMatch(/v-for="\(item, idx\) in functionItems" :key="idx" class="scope-menu-item" @click="onScopeSelect\(item\.featureKey\)"/);
+      expect(PAGE).toMatch(/\{\{ item\.scopeLabel \}\}/);
+      expect(PAGE).toMatch(/\{\{ scopeTitle \}\}/);
     });
 
-    it('未知/缺失的键 fail-closed（不进页）—— 不靠「悄悄退化成通用对话」复活伪入口', () => {
-      const fn = fnBody(FEATURE_PAGE, 'onLoad((options : OnLoadOptions)');
-      expect(fn).toMatch(/if \(item == null\)/);
-      expect(fn).toMatch(/uni\.navigateBack\(\)/);
+    it('未知键 fail-closed：先 findFunctionItem 判空，再切换', () => {
+      const fn = fnBody(PAGE, 'function onScopeSelect');
+      expect(fn).toMatch(/if \(key\.length > 0 && findFunctionItem\(key\) == null\) \{/);
+      expect(fn.indexOf('findFunctionItem(key)')).toBeLessThan(fn.indexOf('switchScope(key)'));
     });
 
-    it('buildBody 把功能键落进请求体', () => {
-      const fn = fnBody(FEATURE_PAGE, 'const buildBody : ChatBodyBuilder');
-      expect(fn).toMatch(/params\['feature_key'\] = featureKey/);
-    });
-
-    it('专项通道不吃「用户自选模型」面：请求体不送 model_source / custom_* / 模型 id（#998 口径）', () => {
-      const fn = fnBody(FEATURE_PAGE, 'const buildBody : ChatBodyBuilder');
-      expect(fn).not.toMatch(/model_source/);
-      expect(fn).not.toMatch(/custom_api_key/);
-      expect(fn).not.toMatch(/config_id/);
-      expect(fn).not.toMatch(/user_model_id/);
-      // 密钥绝不能出现在请求体里（页面同理；注释里解释过该字段名，按去注释后的代码判）
-      expect(stripCodeComments(FEATURE_PAGE)).not.toMatch(/custom_api_key/);
-    });
-
-    it('发送用页面级常量键（没有轮次状态可漏），附图取自统一 picker（#2299）', () => {
-      const fn = fnBody(FEATURE_PAGE, 'function onInputSend');
-      // 附图不是写死的 []：从 pickImages 取值并原样上送（托盘与发送同源）
-      expect(fn).toMatch(/const picked : string\[\] = pickImages\.value/);
-      expect(fn).toMatch(/sendInput\(featureTitle\.value, buildBody, picked, currentFeatureKey\.value\)/);
-      expect(FEATURE_PAGE).toMatch(/const currentFeatureKey = ref<string>\(''\)/);
-    });
-
-    it('专项页不加载模型列表、无模型前置守卫（模型由管理端单绑定解析）', () => {
-      const fn = fnBody(FEATURE_PAGE, 'function onInputSend');
-      expect(fn).not.toMatch(/暂无可用的 AI 模型/);
-      expect(FEATURE_PAGE).not.toMatch(/getAiModelsApi/);
-    });
-
-    it('删掉 fail-closed 分支的变形样本会被检出（防检测器空跑假绿）', () => {
-      const broken = FEATURE_PAGE.replace(/if \(item == null\) \{[\s\S]*?\n\t\t\}/, 'if (false) { }');
-      const fn = fnBody(broken, 'onLoad((options : OnLoadOptions)');
-      expect(fn).not.toMatch(/if \(item == null\)/);
+    it('变形样本：删掉 fail-closed 分支 ⇒ 判据必须红（防检测器空跑假绿）', () => {
+      const broken = PAGE.replace(/if \(key\.length > 0 && findFunctionItem\(key\) == null\) \{[\s\S]*?\n\t\t\}/, '');
+      const fn = fnBody(broken, 'function onScopeSelect');
+      expect(fn).not.toMatch(/if \(key\.length > 0 && findFunctionItem\(key\) == null\) \{/);
+      // 判据本身也咬「顺序」：把切换提到判定之前 ⇒ 红
+      const swapped = fnBody(
+        PAGE.replace(/if \(key\.length > 0 && findFunctionItem\(key\) == null\) \{[\s\S]*?\n\t\t\}/, '')
+          .replace('if (key == activeScope.value) {', 'switchScope(key)\n\t\tif (key == activeScope.value) {'),
+        'function onScopeSelect'
+      );
+      expect(swapped.indexOf('findFunctionItem(key)')).toBe(-1);
     });
   });
 
@@ -421,15 +439,14 @@ describe('宫格入口 → 参数化专项页 接线（#1040）契约', () => {
       expect(PAGE).not.toMatch(/mode\s*:\s*'(normal|expert)'/);
     });
 
-    it('专项页**含**用户上传图片（#2299；ADR-0055 放宽 ADR-0009 修订 ②）—— 肯定式判据', () => {
-      // 放宽不是「删掉旧断言」了事：入口必须真的接上（入口开、托盘在、状态来自统一 picker）
-      expect(FEATURE_PAGE).toMatch(/AiChatImageTray/);
-      expect(FEATURE_PAGE).toMatch(/show-image-button="isDiagnosis"/);
-      expect(FEATURE_PAGE).toMatch(/useAiImagePicker/);
-      expect(FEATURE_PAGE).toMatch(/:images="msg\.images"/);
+    it('诊断 scope **含**用户上传图片（#2299；ADR-0055 放宽 ADR-0009 修订 ②）—— 肯定式判据', () => {
+      expect(PAGE).toMatch(/AiChatImageTray/);
+      // #2593：专项 scope 图片常亮，通用 scope 仍由能力门控（不因并入而放开通用区）
+      expect(PAGE).toMatch(/show-image-button="isDiagnosis \|\| proUnlocked"/);
+      expect(PAGE).toMatch(/useAiImagePicker/);
+      expect(PAGE).toMatch(/:images="msg\.images"/);
       // 「选图只经统一入口」：页面自己不得直调平台选图（否则等于又开一条上传路径）
-      expect(FEATURE_PAGE).not.toMatch(/uni\.chooseImage\s*\(/);
-      // 平台选图在仓内只剩 picker 这一处，且不得复用论坛上传端点
+      expect(PAGE).not.toMatch(/uni\.chooseImage\s*\(/);
       expect(AI_PICKER).toMatch(/uni\.chooseImage\s*\(/);
       expect(AI_PICKER).not.toMatch(/uploadForumImageApi/);
     });

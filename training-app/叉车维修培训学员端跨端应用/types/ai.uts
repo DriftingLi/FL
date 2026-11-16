@@ -117,8 +117,9 @@ export type AIModelOption = {
 /**
  * AI 功能快捷入口（AI 助手宫格项）。
  *
- * **每一项都必须带后端功能键**（`featureKey` 必填）：宫格点击 = 跳转参数化专项页
- * （`pages/ai-assistant/ai-feature`），没有键的格子就是「点了走通用对话」的伪入口 ——
+ * **每一项都必须带后端功能键**（`featureKey` 必填）：宫格点击 = **在 AI 助手页内切 scope**
+ * （ADR-0009 2026-11-16 修订 ②，#2593；专项页 `pages/ai-assistant/ai-feature` 已退役），
+ * 没有键的格子就是「点了走通用对话」的伪入口 ——
  * ADR-0009 2026-09-15 修订 ② 正是据此下线了「故障代码查询」。故字段设为**必填**，
  * 让「新增一格却没接线」在类型层就写不出来（旧形态是可选的 `featureKey ?: string`）。
  *
@@ -131,6 +132,11 @@ export type AIModelOption = {
 export type AIFunctionItem = {
     key : string
     title : string
+    /**
+     * chip 上的**短名**（原型 791:750「故障咨询 ⌄」；#2593）。`title` 是展示名（= 注册表 label），
+     * 长到放不进 chip 时才与它分叉；其余三项与 `title` 同值。
+     */
+    scopeLabel : string
     icon : string          // emoji 字符（无 iconPath 时的兜底）
     iconPath ?: string     // 图片路径（自定义图标）
     featureKey : string    // 后端 AI 功能注册表的功能键（根仓库 ADR-0030 / ADR-0047）
