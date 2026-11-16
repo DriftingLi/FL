@@ -479,7 +479,7 @@ import { goBack } from '../../utils/navigation'
 
     .category-chip.active {
         background-color: #e8f0fe;
-        border: 1rpx solid #2979ff;
+        border: 1rpx solid $primary-color;
     }
 
     .category-chip-text {
@@ -488,7 +488,7 @@ import { goBack } from '../../utils/navigation'
     }
 
     .category-chip-text.active {
-        color: #2979ff;
+        color: $primary-color;
         font-weight: bold;
     }
 
@@ -502,7 +502,7 @@ import { goBack } from '../../utils/navigation'
         width: 100%;
         height: 88rpx;
         border-radius: 44rpx;
-        background-color: #2979ff;
+        background-color: $primary-color;
         align-items: center;
         justify-content: center;
     }

@@ -31,7 +31,10 @@ module.exports = {
     '#E8F0FE': 'pages/practice/practice-do.uvue 题型标签浅蓝底 + 内容精选四页浅底——\-tint(#EBF9FF) 近似但值不等，视觉回归风险待真机裁（#2524 起 job-list 已改走 \-tint）',
 
     // ── 批2（#1606 学员端 14 页）新增 ──
-    '#2979FF': 'batch2 多页主操作蓝（option-key-selected/submit-btn/comment-send-active/section-action 等）——历史蓝，值 ≠ $primary-color(#239EDD)，字面替换会全站视觉回归，待主色 token 票裁',
+    // '#2979FF' —— #2533（规格 #2493 批 A）起退役：受管页并集内 16 页 51 处旧主色已全部改走
+    // $primary-color（脚本侧字面用 '#239EDD'），条目失去承载（§1.6 自检：白名单值必须是真实存在的
+    // 存量声明位，否则就是死条目）。组件目录那部分不在本白名单射程内，由
+    // utils/legacyPrimaryColorRatchetContract.test.js 的逐文件棘轮兜住（批 B #2534 / 批 C #2536 继续清）。
     // '#4A9AFF' —— #2563 起 personal-info 头像兜底改走包内默认头像图（.cell-avatar-placeholder 的浅蓝底随类删除），该值无承载，条目退役
     '#FFF6E5': 'pages/profile/personal-info.uvue 提示条浅橙底——token 表无警告浅底对应（$warning-tint 是 #FFF3E0），语义相近但值不等，待真机裁',
     '#E3F2FD': 'pages/profile/favorites.uvue 收藏封面兜底浅蓝底——token 表无对应浅蓝（$primary-tint 是 #EBF9FF），#2523 起 points-detail 的同值承载退役，此值仍由 favorites 承载',

@@ -117,7 +117,7 @@ import { goBack } from '../../utils/navigation'
     }
 
     .bottom-btn-primary {
-        background-color: #2979ff;
+        background-color: $primary-color;
     }
 
     .bottom-btn-text {
@@ -156,7 +156,7 @@ import { goBack } from '../../utils/navigation'
 
     .retry-btn {
         padding: 16rpx 48rpx;
-        background-color: #2979ff;
+        background-color: $primary-color;
         border-radius: 32rpx;
     }
 
