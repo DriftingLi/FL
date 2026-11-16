@@ -169,14 +169,14 @@ func (h *handler) ListQuestions(c *gin.Context) {
 	httpx.Endpoint[listQuestionsReq, QuestionPageDTO]{
 		Parse: func(c *gin.Context) (*listQuestionsReq, error) {
 			return &listQuestionsReq{
-				Page:     httpx.QueryIntDefault(c, "page", 1),
-				PageSize: httpx.QueryIntDefault(c, "page_size", 20),
-				QType:    c.Query("type"),
-				Status:   c.Query("status"),
-				Keyword:  c.Query("keyword"),
-				TagID:    httpx.QueryIDPtr(c, "tag_id"),
-				Sort:     c.Query("sort"),
-				Editor:   ActsAsQuestionEditor(c),
+				Page:      httpx.QueryIntDefault(c, "page", 1),
+				PageSize:  httpx.QueryIntDefault(c, "page_size", 20),
+				QType:     c.Query("type"),
+				Status:    c.Query("status"),
+				Keyword:   c.Query("keyword"),
+				TagID:     httpx.QueryIDPtr(c, "tag_id"),
+				Sort:      c.Query("sort"),
+				Editor:    ActsAsQuestionEditor(c),
 				CreatedBy: createdByFilterFor(c),
 			}, nil
 		},

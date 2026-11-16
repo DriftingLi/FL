@@ -33,10 +33,17 @@ var ErrQuestionNotOwned = errors.New("只能编辑自己创建的题目")
 //   - created_by 为 NULL 的存量题**只有管理员能写**（规格 C2）——空值不是「人人有份」，
 //     而是「作者未知」，把它判给任何一位讲师都等于凭空授权。
 //
+// actorID <= 0 一律拒（fail closed）：`middleware.CurrentUserID` 在 gin ctx 里取不到 uid 时
+// 返回 0，而 `created_by = 0` 在理论上是可写进库的值（建题时 uid 取失败会传 &0）。
+// 「取不到身份」绝不能退化成「匹配上了某个创建者」——那会把一次鉴权故障变成一次越权。
+//
 // 入参是已载入的题行：三条写路径都要先读行（判断状态、算内容差异），谓词不重复查库。
 func RequireQuestionOwnership(q *model.Question, actorID int, actorType string) error {
 	if actorType == string(authz.RoleAdmin) {
 		return nil
+	}
+	if actorID <= 0 {
+		return ErrQuestionNotOwned
 	}
 	if q.CreatedBy == nil || *q.CreatedBy != actorID {
 		return ErrQuestionNotOwned

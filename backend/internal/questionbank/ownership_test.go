@@ -200,6 +200,43 @@ func TestOwnership_FilterIsRowSetOnly(t *testing.T) {
 	_ = orphan
 }
 
+// TestOwnership_AnonymousActorFailsClosed 取不到身份时一律拒（fail closed）。
+//
+// `middleware.CurrentUserID` 在 ctx 里没有 uid 时返回 0，而 0 是一个**能写进库的合法值**
+// （建题时若 uid 取失败就会传 &0）。若谓词不单独挡这一格，「一次鉴权故障」就会被读成
+// 「匹配上了 created_by=0 的那道题」——把故障变成越权，是安全判据里最坏的失败方向。
+func TestOwnership_AnonymousActorFailsClosed(t *testing.T) {
+	zero := 0
+	cases := []struct {
+		name      string
+		createdBy *int
+	}{
+		{"created_by=0（建题时 uid 取失败留下的行）", &zero},
+		{"created_by=NULL", nil},
+		{"created_by=他人", ptrInt(otherTutor)},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			svc, db := newQuestionBankSvc(t)
+			q := seedOwnedQuestion(t, db, c.createdBy)
+			if err := db.Model(&model.Question{}).Where("id = ?", q.ID).Update("status", "draft").Error; err != nil {
+				t.Fatalf("置 draft 失败: %v", err)
+			}
+			content := "匿名改"
+			// actorID=0 且角色是 tutor：无论题目 created_by 是什么，都必须拒
+			if _, err := svc.UpdateQuestion(q.ID, QuestionUpdateInput{Content: &content}, 0, "tutor"); !errors.Is(err, ErrQuestionNotOwned) {
+				t.Fatalf("取不到身份时应拒, got %v", err)
+			}
+			if _, err := svc.SubmitQuestion(q.ID, 0, "tutor"); !errors.Is(err, ErrQuestionNotOwned) {
+				t.Fatalf("取不到身份时提审应拒, got %v", err)
+			}
+			if err := svc.DeleteQuestion(q.ID, 0, "tutor"); !errors.Is(err, ErrQuestionNotOwned) {
+				t.Fatalf("取不到身份时删除应拒, got %v", err)
+			}
+		})
+	}
+}
+
 // TestOwnership_PredicateIgnoresCourseClaim 两套谓词互不引用（规格硬约束 3）。
 //
 // 判据：给讲师认领一门课（认领行存在），他仍改不了别人写的题；反之，没认领任何课，
