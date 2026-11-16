@@ -54,7 +54,8 @@ describe('#1082 入口接线：notebook 占位已接上已注册路由（不是�
   });
 
   it('「笔记本」仍是原型里的文案与图标（接线不改原型条目）', () => {
-    expect(read('pages/profile/profile.uvue')).toContain("key: 'notebook', title: '笔记本', icon: '📔'");
+    // #2522：视觉基准改 979:1540，宫格图标由 emoji 换成切图文件名（模板拼 /static/icons/profile/<icon>.png）
+    expect(read('pages/profile/profile.uvue')).toContain("key: 'notebook', title: '笔记本', icon: 'notebook'");
   });
 });
 

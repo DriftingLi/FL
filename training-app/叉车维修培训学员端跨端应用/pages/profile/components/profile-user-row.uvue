@@ -85,20 +85,20 @@
     }
 </script>
 
-<style>
-    /* 用户行 */
+<style lang="scss">
+    /* 用户行（原型 979:1540） */
     .user-row {
         flex-direction: row;
         align-items: center;
-        padding: 24rpx 48rpx 0 24rpx;
+        padding: 24rpx 44rpx 0 32rpx;
     }
 
     .user-avatar {
         width: 116rpx;
         height: 116rpx;
         border-radius: 58rpx;
-        background-color: #F5F5F5;
-        border: 4rpx solid #ffffff;
+        background-color: $bg-color;
+        border: 4rpx solid $card-bg;
         align-items: center;
         justify-content: center;
         overflow: hidden;
@@ -124,13 +124,13 @@
     .user-name {
         font-size: 40rpx;
         font-weight: bold;
-        color: #333333;
+        color: $text-color;
     }
 
     .user-lv {
         font-size: 22rpx;
         font-weight: bold;
-        color: #333333;
+        color: $text-color;
         margin-left: 16rpx;
     }
 
@@ -140,11 +140,13 @@
         margin-top: 8rpx;
     }
 
+    /* 原型 979:1540：白底 + 主色描边 + 主色字的胶囊 */
     .checkin-pill {
         height: 52rpx;
         padding: 0 24rpx;
         border-radius: 26rpx;
-        background-color: #EBF9FF;
+        background-color: $card-bg;
+        border: 1rpx solid $primary-color;
         align-items: center;
         justify-content: center;
         margin-left: 16rpx;
@@ -154,6 +156,6 @@
     .checkin-pill-text {
         font-size: 26rpx;
         font-weight: bold;
-        color: #239EDD;
+        color: $primary-color;
     }
 </style>

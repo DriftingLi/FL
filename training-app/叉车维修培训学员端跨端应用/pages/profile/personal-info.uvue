@@ -2,66 +2,61 @@
   <view class="container" :style="{ height: windowHeight + 'px' }">
     <app-nav-bar title="个人信息" @left-click="onBack" divider />
     <scroll-view class="content-scroll" scroll-y="true">
-      <!-- 账号信息 -->
+      <!-- 账号信息：原型 307:6234 每行一张独立白卡（行间无分割线，靠 16rpx 间距分组） -->
       <view class="section">
-        <view class="card">
-          <!-- 修改头像 -->
-          <view class="cell" @click="onEditAvatar">
-            <text class="cell-label">修改头像</text>
-            <view class="cell-avatar-wrap">
-              <image v-if="avatarUrl.length > 0" class="cell-avatar" :src="avatarUrl" mode="aspectFill" :webp="true">
-              </image>
-              <image v-else class="cell-avatar" src="/static/icons/avatar/avatar-default-worker.png" mode="aspectFill" />
-            </view>
-            <text class="cell-arrow">›</text>
+        <!-- 修改头像 -->
+        <view class="cell" @click="onEditAvatar">
+          <text class="cell-label">修改头像</text>
+          <view class="cell-avatar-wrap">
+            <image class="cell-avatar" :src="avatarUrl.length > 0 ? avatarUrl : '/static/icons/avatar/avatar-default-worker.png'"
+              mode="aspectFill" :webp="true" />
           </view>
-          <!-- 昵称（审核流） -->
-          <view class="cell" @click="onEditNickname">
-            <text class="cell-label">昵称</text>
-            <text v-if="hasPending" class="cell-badge">审核中</text>
-            <text class="cell-value">{{ userName }}</text>
-            <text class="cell-arrow">›</text>
-          </view>
-          <!-- 登录账号 -->
-          <view class="cell" @click="onEditAccount">
-            <text class="cell-label">登录账号</text>
-            <text class="cell-value">{{ accountText }}</text>
-            <text class="cell-arrow">›</text>
-          </view>
-          <!-- 手机号 -->
-          <view class="cell" @click="onChangePhone">
-            <text class="cell-label">手机号</text>
-            <text class="cell-value">{{ phoneText }}</text>
-            <text class="cell-arrow">›</text>
-          </view>
-          <!-- 邮箱 -->
-          <view class="cell" @click="onChangeEmail">
-            <text class="cell-label">邮箱</text>
-            <text class="cell-value">{{ emailText }}</text>
-            <text class="cell-arrow">›</text>
-          </view>
-          <!-- 单位（直接生效） -->
-          <view class="cell" @click="onEditCompany">
-            <text class="cell-label">单位</text>
-            <text class="cell-value">{{ companyText }}</text>
-            <text class="cell-arrow">›</text>
-          </view>
-          <!-- 密码（未设置时显示"去设置"） -->
-          <view class="cell cell-border-none" @click="onChangePassword">
-            <text class="cell-label">{{ passwordTitle }}</text>
-            <text v-if="passwordText.length > 0" class="cell-value">{{ passwordText }}</text>
-            <text class="cell-arrow">›</text>
-          </view>
+          <text class="cell-arrow">›</text>
+        </view>
+        <!-- 昵称（审核流） -->
+        <view class="cell" @click="onEditNickname">
+          <text class="cell-label">昵称</text>
+          <text v-if="hasPending" class="cell-badge">审核中</text>
+          <text class="cell-value">{{ userName }}</text>
+          <text class="cell-arrow">›</text>
+        </view>
+        <!-- 登录账号 -->
+        <view class="cell" @click="onEditAccount">
+          <text class="cell-label">登录账号</text>
+          <text class="cell-value">{{ accountText }}</text>
+          <text class="cell-arrow">›</text>
+        </view>
+        <!-- 手机号 -->
+        <view class="cell" @click="onChangePhone">
+          <text class="cell-label">手机号</text>
+          <text class="cell-value">{{ phoneText }}</text>
+          <text class="cell-arrow">›</text>
+        </view>
+        <!-- 邮箱 -->
+        <view class="cell" @click="onChangeEmail">
+          <text class="cell-label">邮箱</text>
+          <text class="cell-value">{{ emailText }}</text>
+          <text class="cell-arrow">›</text>
+        </view>
+        <!-- 单位（直接生效） -->
+        <view class="cell" @click="onEditCompany">
+          <text class="cell-label">单位</text>
+          <text class="cell-value">{{ companyText }}</text>
+          <text class="cell-arrow">›</text>
+        </view>
+        <!-- 密码（未设置时显示"去设置"） -->
+        <view class="cell" @click="onChangePassword">
+          <text class="cell-label">{{ passwordTitle }}</text>
+          <text v-if="passwordText.length > 0" class="cell-value">{{ passwordText }}</text>
+          <text class="cell-arrow">›</text>
         </view>
       </view>
 
       <!-- 账号管理 -->
       <view class="section">
-        <view class="card">
-          <view class="cell cell-border-none" @click="onDeleteAccount">
-            <text class="cell-label cell-label-danger">注销账号</text>
-            <text class="cell-arrow">›</text>
-          </view>
+        <view class="cell" @click="onDeleteAccount">
+          <text class="cell-label cell-label-danger">注销账号</text>
+          <text class="cell-arrow">›</text>
         </view>
       </view>
     </scroll-view>
@@ -388,21 +383,14 @@
     padding: 0 32rpx;
   }
 
-  .card {
-    background-color: $card-bg;
-    border-radius: 16rpx;
-    flex-direction: column;
-  }
-
+  /* 原型 307:6234：每行一张独立白卡（16rpx 圆角 + 16rpx 行距，无分割线） */
   .cell {
     flex-direction: row;
     align-items: center;
-    padding: 28rpx 24rpx;
-    border-bottom: 1rpx solid $border-color-light;
-  }
-
-  .cell-border-none {
-    border-bottom: none;
+    padding: 32rpx 28rpx;
+    background-color: $card-bg;
+    border-radius: $radius-md;
+    margin-bottom: 16rpx;
   }
 
   .cell-label {

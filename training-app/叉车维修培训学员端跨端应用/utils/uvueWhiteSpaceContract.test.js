@@ -467,10 +467,13 @@ describe('uvue `white-space` 承载面契约（#1113）', () => {
       expect([...(classCarriers(tpl).get('code-btn-text') || [])]).toEqual(['text']);
       // 下界 30 → **27** 是一次显式决定（#1554）：本页退出入口整块撤净，
       // `.logout-wrap` / `.logout-btn` / `.logout-text` 三个类随模板一起删除 ⇒ 映射条目 -3。
-      // 21 → **19** 同理由（#2563）：头像兜底由 emoji 换成包内默认头像图，
-      // `.cell-avatar-placeholder` / `.cell-avatar-icon` 两个类随模板一起删除 ⇒ 映射条目 -2。
+      // 21 → **19** 是 #2563 + #2522 的同一处决定：头像兜底从「蓝底 <view> + 👤 <text>」收成单个
+      // `<image>`（`/static/icons/avatar/avatar-default-worker.png`），`.cell-avatar-placeholder` /
+      // `.cell-avatar-icon` 两个类随 v-else 分支一起删除 ⇒ 映射条目 -2。
+      // 19 → **17** 同属 #2522：按原型 307:6234 把「一张卡包 7 行」改成「每行一张独立白卡」，
+      // `.card` 与 `.cell-border-none` 两个类随包裹层一起删除 ⇒ 映射条目再 -2。
       // 判据的角色没变（证明解析器在这一页真抓到了丰富映射、不是「零命中」假绿），只是**基数**跟着 UI 走。
-      expect(classCarriers(tpl).size).toBeGreaterThanOrEqual(19);
+      expect(classCarriers(tpl).size).toBeGreaterThanOrEqual(17);
 
       // 全仓映射总量（class → 承载）—— 塌成 0 时第 3 条测试会「零命中」假绿
       const totalMapped = scanned.reduce((n, s) => n + s.carriers.size, 0);
