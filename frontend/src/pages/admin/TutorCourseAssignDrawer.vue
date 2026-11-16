@@ -42,7 +42,7 @@
       <UiAsyncSection
         :loading="loading"
         :error="loadError !== null"
-        :empty="filteredCourses.length === 0"
+        :empty="isEmptyCourses"
         empty-text="没有可分配的课程"
         @retry="loadAll"
       >
@@ -106,6 +106,12 @@ const filteredCourses = computed(() => {
   if (!kw) return courses.value
   return courses.value.filter(c => c.name.toLowerCase().includes(kw))
 })
+
+// 空态判据必须具名（守卫 #1101 只认脚本里声明过的标识符，模板内联的
+// `filteredCourses.length === 0` 会被 scripts/check-async-section.mjs 判红）。
+// 这里的「空」是**筛选后为空**（有课程但搜索无匹配），不是「后端没数据」——
+// 后者由 loadError/首次加载覆盖，所以不复用 useAsyncPage 的 isEmpty。
+const isEmptyCourses = computed(() => filteredCourses.value.length === 0)
 
 function assignedSource(courseId: number): string | null {
   return assignments.value.get(courseId)?.source ?? null
