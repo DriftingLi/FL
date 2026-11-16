@@ -27,7 +27,7 @@
                 <view class="reply-avatar" :style="{ backgroundColor: item.avatarColor }">
                     <image v-if="item.authorAvatar.length > 0" class="reply-avatar-img"
                         :src="item.authorAvatar" mode="aspectFill" :webp="true" />
-                    <text v-else class="reply-avatar-text">{{ item.authorInitial }}</text>
+                    <image v-else class="reply-avatar-img" src="/static/icons/avatar/avatar-default-worker.png" mode="aspectFill" />
                 </view>
                 <view class="reply-info">
                     <text
@@ -276,12 +276,6 @@
         align-items: center;
         justify-content: center;
         margin-right: 16rpx;
-    }
-
-    .reply-avatar-text {
-        font-size: 24rpx;
-        color: #ffffff;
-        font-weight: bold;
     }
 
     .reply-avatar-img {

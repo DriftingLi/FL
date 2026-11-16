@@ -11,9 +11,7 @@
             <view class="cell-avatar-wrap">
               <image v-if="avatarUrl.length > 0" class="cell-avatar" :src="avatarUrl" mode="aspectFill" :webp="true">
               </image>
-              <view v-else class="cell-avatar-placeholder">
-                <text class="cell-avatar-icon">👤</text>
-              </view>
+              <image v-else class="cell-avatar" src="/static/icons/avatar/avatar-default-worker.png" mode="aspectFill" />
             </view>
             <text class="cell-arrow">›</text>
           </view>
@@ -455,19 +453,6 @@
     width: 80rpx;
     height: 80rpx;
     border-radius: 40rpx;
-  }
-
-  .cell-avatar-placeholder {
-    width: 80rpx;
-    height: 80rpx;
-    border-radius: 40rpx;
-    background-color: #4a9aff;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .cell-avatar-icon {
-    font-size: 44rpx;
   }
 
   /* 弹窗输入样式（slot 内容归本页作用域；壳样式在 InfoDialog） */

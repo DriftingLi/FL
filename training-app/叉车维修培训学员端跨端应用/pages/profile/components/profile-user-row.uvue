@@ -4,7 +4,7 @@
         <view class="user-avatar" @click.stop="onAvatarTap">
             <image v-if="avatarUrl.length > 0" class="avatar-img" :src="avatarUrl" mode="aspectFill" :webp="true">
             </image>
-            <text v-else class="avatar-icon">👤</text>
+            <image v-else class="avatar-img" src="/static/icons/avatar/avatar-default-youth.png" mode="aspectFill" />
         </view>
         <view class="user-info" @click="onInfoTap">
             <view class="name-row">
@@ -108,10 +108,6 @@
         width: 116rpx;
         height: 116rpx;
         border-radius: 58rpx;
-    }
-
-    .avatar-icon {
-        font-size: 56rpx;
     }
 
     .user-info {

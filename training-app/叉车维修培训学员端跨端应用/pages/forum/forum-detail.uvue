@@ -23,7 +23,7 @@
             <!-- 帖子内容 -->
             <view v-if="topic != null" class="topic-section">
                 <!--   <text class="topic-title">{{ topic.title }}</text> -->
-                <ForumTopicHeader :author-name="tAuthorName" :author-initial="tAuthorInitial"
+                <ForumTopicHeader :author-name="tAuthorName"
                     :author-avatar="tAuthorAvatar" :avatar-color="tAvatarColor" :created-at-text="tCreatedAtText"
                     :region-text="tRegionText"
                     :likes-count="tLikesCount" :liked="tLiked" :favorited="tFavorited"
@@ -103,7 +103,7 @@
 import { goBack } from '../../utils/navigation'
     import { formatDateTimeStr } from '../../utils/format'
     import type { ForumReplyDisplay } from '../../utils/forumDetailDisplay'
-    import { resolveFileUrl, getAuthorInitial, getAvatarColor, regionLabel } from '../../utils/forumDisplay'
+    import { resolveFileUrl, getAvatarColor, regionLabel } from '../../utils/forumDisplay'
     import { FORUM_MAX_REPLY_IMAGES } from '../../constants/app'
     import { createKeyboardHeightTracker, panelBottomPx, panelMaxHeightPx } from '../../utils/replyPanelLayout'
     import type { ForumReply } from '../../types/index'
@@ -157,11 +157,6 @@ import { goBack } from '../../utils/navigation'
         const t = topic.value
         if (t == null) return '匿名学员'
         return t.author_name.length > 0 ? t.author_name : '匿名学员'
-    })
-    const tAuthorInitial = computed<string>(() : string => {
-        const t = topic.value
-        if (t == null) return '学'
-        return getAuthorInitial(t.author_name)
     })
     const tAuthorAvatar = computed<string>(() : string => {
         const t = topic.value
@@ -262,7 +257,6 @@ import { goBack } from '../../utils/navigation'
                 id: r.id,
                 authorId: r.author_id,
                 authorName: r.author_name.length > 0 ? r.author_name : '匿名学员',
-                authorInitial: getAuthorInitial(r.author_name),
                 authorAvatar: r.author_avatar,
                 avatarColor: getAvatarColor(r.author_id),
                 createdAtText: formatDateTimeStr(r.created_at),
