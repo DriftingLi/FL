@@ -83,7 +83,7 @@
     }
 </script>
 
-<style>
+<style lang="scss">
     /* 内容 Tab */
     .tab-row {
         flex-direction: row;
@@ -111,7 +111,7 @@
         width: 40rpx;
         height: 6rpx;
         border-radius: 3rpx;
-        background-color: #2979ff;
+        background-color: $primary-color;
     }
 
     /* 筛选标签 */
