@@ -58,7 +58,7 @@ describe('讲师域页键拆分', () => {
   })
 
   it('入口键不再盖住写面与文件库（拆键的核心判据）', () => {
-    // 三个写/库页面若仍挂 tutor.access，等于本票没做——入口键一枚就能同时拿到读、写、文件库。
+    // 写/库页面若仍挂 tutor.access，等于本票没做——入口键一枚就能同时拿到读、写、文件库。
     const writeOrLib = ['TutorChapterEdit', 'TutorFileLibrary']
     for (const name of writeOrLib) {
       const page = pages.find(p => p.name === name)
