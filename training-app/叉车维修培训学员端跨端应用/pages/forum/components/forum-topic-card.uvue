@@ -297,7 +297,7 @@
         width: 44rpx;
         height: 44rpx;
         border-radius: 22rpx;
-        background-color: #2979ff;
+        background-color: $primary-color;
         align-items: center;
         justify-content: center;
         margin-right: 12rpx;

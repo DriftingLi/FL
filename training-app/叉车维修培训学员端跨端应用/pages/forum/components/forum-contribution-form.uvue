@@ -269,7 +269,7 @@
     }
 </script>
 
-<style>
+<style lang="scss">
     .attach-card { background-color: #ffffff; border-radius: 16rpx; padding: 32rpx; margin-bottom: 24rpx; flex-direction: column; }
     .attach-label { font-size: 28rpx; font-weight: bold; color: #333333; margin-bottom: 16rpx; }
     .method-row { flex-direction: row; align-items: center; padding: 24rpx 0; }
@@ -292,12 +292,12 @@
     .upload-total { font-size: 24rpx; color: #999999; margin-top: 4rpx; }
     .credential-row { margin-top: 24rpx; flex-direction: row; align-items: center; justify-content: space-between; }
     .credential-label { font-size: 28rpx; font-weight: bold; color: #333333; }
-    .credential-name { font-size: 28rpx; color: #2979ff; }
+    .credential-name { font-size: 28rpx; color: $primary-color; }
     .submit-section { padding: 0 0 64rpx; align-items: center; }
     /* #816：失败原因常驻页内（不再只写 console） */
     .submit-error-box { width: 100%; background-color: #FFF0F0; border-radius: 12rpx; padding: 16rpx 20rpx; margin-bottom: 20rpx; }
     .submit-error-text { font-size: 24rpx; color: #e5484d; }
-    .submit-btn { width: 100%; height: 88rpx; border-radius: 44rpx; background-color: #2979ff; align-items: center; justify-content: center; }
+    .submit-btn { width: 100%; height: 88rpx; border-radius: 44rpx; background-color: $primary-color; align-items: center; justify-content: center; }
     .submit-btn.disabled { background-color: #cccccc; }
     .submit-btn-text { font-size: 32rpx; color: #ffffff; font-weight: bold; }
 </style>

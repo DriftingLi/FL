@@ -27,7 +27,7 @@
     }
 </script>
 
-<style>
+<style lang="scss">
     .exp-filter-bar {
         flex-direction: row;
         align-items: center;
@@ -44,7 +44,7 @@
 
     .exp-chip.active {
         background-color: #e8f3ff;
-        border-color: #2979ff;
+        border-color: $primary-color;
     }
 
     .exp-chip-text {
@@ -53,7 +53,7 @@
     }
 
     .exp-chip-text.active {
-        color: #2979ff;
+        color: $primary-color;
         font-weight: bold;
     }
 </style>

@@ -58,7 +58,7 @@
     }
 
     .tab-item.active {
-        border-bottom-color: #2979ff;
+        border-bottom-color: $primary-color;
     }
 
     .tab-text {

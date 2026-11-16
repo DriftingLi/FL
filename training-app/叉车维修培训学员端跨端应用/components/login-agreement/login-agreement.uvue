@@ -31,8 +31,8 @@
     }>(), {
         agreed: false,
         channel: 'phone',
-        // 默认值 = 着陆页现状（历史蓝），登录页按主色 token 传入（#2517 裁定 8：共享件走 prop + 默认值）
-        accent: '#2979FF',
+        // 默认值 = 主色 token 值，页面可按需经 prop 覆盖（#2517 裁定 8：共享件走 prop + 默认值）
+        accent: '#239EDD',
     })
 
     const emit = defineEmits(['toggle', 'agreement', 'register'])
@@ -76,7 +76,7 @@
     }
 </script>
 
-<style>
+<style lang="scss">
     /* 前缀 la- = login-agreement，自带命名空间避免与宿主页 class 相撞；
        margin-bottom 是从登录页 .form-item 吸收过来的（父页 .form-item 不再作用于组件根节点）。
        数值逐字取自登录页原 .agree-row/.checkbox/.checkbox-checked/.check-mark/.agree-text/.agree-link。 */
@@ -100,8 +100,8 @@
     }
 
     .la-checkbox--checked {
-        background-color: #2979ff;
-        border-color: #2979ff;
+        background-color: $primary-color;
+        border-color: $primary-color;
     }
 
     .la-check-mark {
@@ -115,6 +115,6 @@
     }
 
     .la-link {
-        color: #2979ff;
+        color: $primary-color;
     }
 </style>

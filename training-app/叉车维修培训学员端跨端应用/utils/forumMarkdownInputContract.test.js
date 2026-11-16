@@ -112,7 +112,8 @@ describe('数据档位与视图档位**形态不同**：前者胶囊（永久保
   });
 
   it('视图档位 = 下划线 tab（靠 border-bottom 表达选中，不是第二个胶囊）', () => {
-    expect(input).toMatch(/\.view-tab\.active \{[\s\S]*?border-bottom: 4rpx solid #2979ff/);
+    // #2536（规格 #2493 批 B+C）：旧主色 #2979ff 清退后，下划线改走 $primary-color
+    expect(input).toMatch(/\.view-tab\.active \{[\s\S]*?border-bottom: 4rpx solid \$primary-color/);
     // 两组不共用样式类 —— 共用就是「用户分不清哪组会永久保存」
     const formatClasses = ['format-row', 'format-chip', 'format-chip-text'];
     for (const cls of formatClasses) {

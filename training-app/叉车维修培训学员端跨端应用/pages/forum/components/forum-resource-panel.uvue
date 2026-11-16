@@ -82,7 +82,7 @@
     }
 </script>
 
-<style>
+<style lang="scss">
     .content-scroll {
         flex: 1;
         height: 0;
@@ -195,7 +195,7 @@
         color: #333333;
     }
     .res-title-red { color: #E5484D; }
-    .res-title-blue { color: #2979ff; }
+    .res-title-blue { color: $primary-color; }
     .res-title-green { color: #22A45D; }
-    .res-title-sky { color: #2979ff; }
+    .res-title-sky { color: $primary-color; }
 </style>

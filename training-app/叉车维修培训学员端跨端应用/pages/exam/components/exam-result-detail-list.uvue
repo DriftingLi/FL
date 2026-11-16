@@ -60,7 +60,7 @@
     .detail-type-tag {
         font-size: 20rpx;
         color: #ffffff;
-        background-color: #2979ff;
+        background-color: $primary-color;
         padding: 4rpx 12rpx;
         border-radius: 6rpx;
         margin-right: 12rpx;

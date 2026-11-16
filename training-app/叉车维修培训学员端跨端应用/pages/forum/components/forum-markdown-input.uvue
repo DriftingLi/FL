@@ -270,7 +270,7 @@
 
     .format-chip.active {
         background-color: #e8f0fe;
-        border: 1rpx solid #2979ff;
+        border: 1rpx solid $primary-color;
     }
 
     .format-chip-text {
@@ -279,7 +279,7 @@
     }
 
     .format-chip-text.active {
-        color: #2979ff;
+        color: $primary-color;
         font-weight: bold;
     }
 
@@ -305,7 +305,7 @@
     }
 
     .view-tab.active {
-        border-bottom: 4rpx solid #2979ff;
+        border-bottom: 4rpx solid $primary-color;
     }
 
     .view-tab-text {
@@ -314,7 +314,7 @@
     }
 
     .view-tab-text.active {
-        color: #2979ff;
+        color: $primary-color;
         font-weight: bold;
     }
 
@@ -382,7 +382,7 @@
 
     .toolbar-item-text {
         font-size: 28rpx;
-        color: #2979ff;
+        color: $primary-color;
         font-family: monospace;
     }
 

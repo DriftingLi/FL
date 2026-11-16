@@ -47,7 +47,7 @@
     }
 </script>
 
-<style>
+<style lang="scss">
     /* 底部操作区：包一层 column 容器承载原页面同级的两段（视觉与内层 padding 逐字不变） */
     .action-area {
         flex-direction: column;
@@ -73,7 +73,7 @@
     }
 
     .action-btn-primary {
-        background-color: #2979ff;
+        background-color: $primary-color;
     }
 
     .action-btn-text {
