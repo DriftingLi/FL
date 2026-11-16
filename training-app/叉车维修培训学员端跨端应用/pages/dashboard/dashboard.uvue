@@ -26,7 +26,7 @@
             @confirm="onConfirmCredential" @province-tap="onProvinceTap" />
 
         <scroll-view class="content-scroll" scroll-y="true">
-            <!-- Banner 海报（图内含标题与"实际教学·案例分析·考核发证"文案） -->
+            <!-- Banner 海报（原型 404_2195 的 Rectangle 39：704x320 = 352x160 容器 2x，图内含「叉车维修培训」整版文案） -->
             <view class="banner" @click="onBannerClick">
                 <image class="banner-img" src="/static/Rectangle_39.png" mode="widthFix"></image>
             </view>

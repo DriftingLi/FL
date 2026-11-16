@@ -71,7 +71,7 @@ const styleBlock = moduleFiles().map((f) => {
   return m ? m[1] : '';
 }).join('\n');
 
-/** 解析形如 { key, title, icon, color, path, available } 的宫格条目数组（T05 手术后住 MenuGrid 组件） */
+/** 解析形如 { key, title, icon, path, available } 的宫格条目数组（T05 手术后住 MenuGrid 组件；icon = static/icons/dashboard 下文件名） */
 function menuEntries() {
   const menuSrc = readText(path.join(COMPONENT_DIR, 'dashboard-menu-grid.uvue'));
   const decl = menuSrc.indexOf('const menuItems :');
@@ -118,6 +118,25 @@ describe('首页格式契约（对照设计稿截图）', () => {
       expect(item.available).toBe(true);
       expect(item.path.length).toBeGreaterThan(0);
       expect(item.icon.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('宫格图标为原型 404_2195 切图（#2609）：包内 PNG 字面量路径、emoji 兜底退场、切图真在包里', () => {
+    const entries = menuEntries();
+    // 只看宫格件本身（整页模板含其他组件的 emoji，如课程区兜底）
+    const gridTpl = readText(path.join(COMPONENT_DIR, 'dashboard-menu-grid.uvue'));
+    // 原型 4 格 3D 插画 + 第 5 格（#1846 搜索）用原型页头线性放大镜
+    expect(gridTpl).toContain('class="menu-icon-img"');
+    expect(gridTpl).toMatch(/<image[^>]*:src="'\/static\/icons\/dashboard\/' \+ item\.icon \+ '\.png'"/);
+    // 包内图一律 PNG（ADR-0066 ①）；不再有 emoji 圆角块兜底
+    expect(gridTpl).not.toContain('menu-icon-box');
+    for (const emoji of ['🛒', '📚', '📣', '🔍']) {
+      expect(gridTpl).not.toContain(emoji);
+    }
+    for (const item of entries) {
+      const asset = path.join(ROOT, 'static', 'icons', 'dashboard', item.icon + '.png');
+      expect(fs.existsSync(asset)).toBe(true);
+      expect(fs.statSync(asset).size).toBeGreaterThan(0);
     }
   });
 
