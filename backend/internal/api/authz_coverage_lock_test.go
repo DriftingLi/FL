@@ -117,10 +117,14 @@ var wantTutorRoutes = []tutorRouteGate{
 	{http.MethodPost, "/files/batch-delete", authz.CapCourseAuthor},
 }
 
-// wantTutorFileRoutes 文件库整组全部挂 tutorfile.manage（spec A2）。
+// wantTutorFileRoutes 文件库蓝图的路由账本（spec A2 + #2595 裁定）：除章节侧换挂外全部挂
+// tutorfile.manage。
 //
 // 这一组不拆读/写：文件库的读写一律按归属导师收口（tutorfile/service.go 的 ErrForbidden），
 // 能力键只回答「这个人能不能进文件库」，粒度再细就落进数据级谓词该管的地方了。
+//
+// swap 是唯一例外：它长在本蓝图里但改的是**章节**的附件挂接（并 MarkChapterDraft），
+// 故挂 course.author —— 键跟着它改变的资源走。
 var wantTutorFileRoutes = []tutorRouteGate{
 	{http.MethodPost, "/files/upload", authz.CapTutorFileManage},
 	{http.MethodGet, "/files/upload/:session_id", authz.CapTutorFileManage},
@@ -131,7 +135,7 @@ var wantTutorFileRoutes = []tutorRouteGate{
 	{http.MethodPost, "/files/:file_id/attach", authz.CapTutorFileManage},
 	{http.MethodPost, "/files/:file_id/detach", authz.CapTutorFileManage},
 	{http.MethodPost, "/files/:file_id/rename", authz.CapTutorFileManage},
-	{http.MethodPost, "/chapter/:chapter_id/files/swap", authz.CapTutorFileManage},
+	{http.MethodPost, "/chapter/:chapter_id/files/swap", authz.CapCourseAuthor},
 	{http.MethodDelete, "/files/:file_id", authz.CapTutorFileManage},
 }
 

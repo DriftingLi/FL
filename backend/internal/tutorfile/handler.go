@@ -32,33 +32,39 @@ type handler struct {
 //
 // #2595：本组从 tutor.access 改挂 tutorfile.manage —— 文件库与课程内容编辑是两件事，
 // 收敛前一个入口键同时盖住两者，「只给文件库、不给章节写」表达不出来。
+//
+// 换挂（swap）例外：它虽然长在文件库蓝图里（handler 与 service 都在本域），做的是**章节侧**
+// 的事——改的是章节的附件挂接并把章节打回草稿，所以挂 course.author 而不是 tutorfile.manage。
+// 规则是「键跟着它改变的资源走」：改自己的文件库 → tutorfile.manage，改别人的课程 → course.author。
 func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, svc *Service) {
 	h := &handler{svc: svc}
 
-	g := rg.Group("/tutor", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapTutorFileManage))
+	g := rg.Group("/tutor", middleware.JWTAuth(session))
+	lib := g.Group("", middleware.CapabilityRequired(authz.CapTutorFileManage))
+	chapterWrite := g.Group("", middleware.CapabilityRequired(authz.CapCourseAuthor))
 
 	// POST /api/tutor/files/upload  创建上传会话（init）
-	g.POST("/files/upload", h.InitUpload)
+	lib.POST("/files/upload", h.InitUpload)
 	// GET /api/tutor/files/upload/:session_id  断点续传清单（已收分片序号）
-	g.GET("/files/upload/:session_id", h.GetUploadSession)
+	lib.GET("/files/upload/:session_id", h.GetUploadSession)
 	// PUT /api/tutor/files/upload/:session_id/chunk/:part_number  上传分片
-	g.PUT("/files/upload/:session_id/chunk/:part_number", h.UploadChunk)
+	lib.PUT("/files/upload/:session_id/chunk/:part_number", h.UploadChunk)
 	// POST /api/tutor/files/upload/:session_id/complete  拼装产出文件行
-	g.POST("/files/upload/:session_id/complete", h.CompleteUpload)
+	lib.POST("/files/upload/:session_id/complete", h.CompleteUpload)
 	// POST /api/tutor/files/upload/:session_id/abort  放弃会话
-	g.POST("/files/upload/:session_id/abort", h.AbortUpload)
+	lib.POST("/files/upload/:session_id/abort", h.AbortUpload)
 	// GET /api/tutor/files  文件库列表
-	g.GET("/files", h.ListFiles)
+	lib.GET("/files", h.ListFiles)
 	// POST /api/tutor/files/:file_id/attach  单挂挂接到章节
-	g.POST("/files/:file_id/attach", h.AttachFile)
+	lib.POST("/files/:file_id/attach", h.AttachFile)
 	// POST /api/tutor/files/:file_id/detach  取消挂接回库
-	g.POST("/files/:file_id/detach", h.DetachFile)
+	lib.POST("/files/:file_id/detach", h.DetachFile)
 	// POST /api/tutor/files/:file_id/rename  改名（仅显示名）
-	g.POST("/files/:file_id/rename", h.RenameFile)
+	lib.POST("/files/:file_id/rename", h.RenameFile)
 	// POST /api/tutor/chapter/:chapter_id/files/swap  章节侧换挂（挂新 + 旧回库，spec B6）
-	g.POST("/chapter/:chapter_id/files/swap", h.SwapChapterFile)
+	chapterWrite.POST("/chapter/:chapter_id/files/swap", h.SwapChapterFile)
 	// DELETE /api/tutor/files/:file_id  删除文件
-	g.DELETE("/files/:file_id", h.DeleteFile)
+	lib.DELETE("/files/:file_id", h.DeleteFile)
 }
 
 // InitUpload 创建上传会话 POST /api/tutor/files/upload
