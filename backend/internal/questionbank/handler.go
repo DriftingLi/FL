@@ -114,19 +114,11 @@ func ActsAsQuestionEditor(c *gin.Context) bool {
 	return middleware.HasCapability(c, authz.CapQuestionAuthor) || middleware.HasCapability(c, authz.CapQuestionReview)
 }
 
-// createdByFilterFor 「我创建的」筛选轴的入口装配（#2598 C2）：
-// 只对**编辑面**生效——学员面（题库池）根本没有「创建者」这个概念，让它接受这个参数
-// 等于给学员面开一条按作者收窄池的旁路（池的可见性口径只该由 scope 回答，C4）。
-func createdByFilterFor(c *gin.Context) *int {
-	if !ActsAsQuestionEditor(c) {
-		return nil
-	}
-	return httpx.QueryIDPtr(c, "created_by")
-}
-
-// EditorQuestionScope 装配编辑面 scope：显式 credential_id 是**筛选轴**（不是可见性口径）。
+// EditorQuestionScope 装配编辑面 scope：显式 credential_id 与 created_by 都是**筛选轴**
+// （不是可见性口径）。created_by 只在编辑面被读（#2598 C2）——学员面用的是另一个类型
+// QuestionReadScope，那里根本没有这一格，所以「按作者收窄题库池」构造不出来。
 func EditorQuestionScope(c *gin.Context) QuestionEditScope {
-	return NewQuestionEditScope(middleware.CredentialIDPtr(c))
+	return NewQuestionEditScope(middleware.CredentialIDPtr(c), httpx.QueryIDPtr(c, "created_by"))
 }
 
 // listQuestionsReq 题目列表查询参数。
@@ -142,8 +134,6 @@ type listQuestionsReq struct {
 	// Editor 决定走哪一半读面（能力分流，见 ActsAsQuestionEditor）：
 	// true = 编辑面（draft/pending 全量 + 证件筛选轴），false = 学员面（题库池）。
 	Editor bool
-	// CreatedBy 「我创建的」筛选轴（#2598 C2）：只在编辑面有效，nil = 不筛（C4 读面不变）。
-	CreatedBy *int
 }
 
 // ListQuestions 题目列表分页
@@ -169,15 +159,14 @@ func (h *handler) ListQuestions(c *gin.Context) {
 	httpx.Endpoint[listQuestionsReq, QuestionPageDTO]{
 		Parse: func(c *gin.Context) (*listQuestionsReq, error) {
 			return &listQuestionsReq{
-				Page:      httpx.QueryIntDefault(c, "page", 1),
-				PageSize:  httpx.QueryIntDefault(c, "page_size", 20),
-				QType:     c.Query("type"),
-				Status:    c.Query("status"),
-				Keyword:   c.Query("keyword"),
-				TagID:     httpx.QueryIDPtr(c, "tag_id"),
-				Sort:      c.Query("sort"),
-				Editor:    ActsAsQuestionEditor(c),
-				CreatedBy: createdByFilterFor(c),
+				Page:     httpx.QueryIntDefault(c, "page", 1),
+				PageSize: httpx.QueryIntDefault(c, "page_size", 20),
+				QType:    c.Query("type"),
+				Status:   c.Query("status"),
+				Keyword:  c.Query("keyword"),
+				TagID:    httpx.QueryIDPtr(c, "tag_id"),
+				Sort:     c.Query("sort"),
+				Editor:   ActsAsQuestionEditor(c),
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *listQuestionsReq) (*QuestionPageDTO, error) {
@@ -187,7 +176,7 @@ func (h *handler) ListQuestions(c *gin.Context) {
 			// listQuestions），「挂能力守卫」会直接打断它 —— 该端点进「学员可读面」台账的理由
 			// 由 ADR-0062 票 5 的台账逐条登记（本票只把它的读面收进池）。
 			if req.Editor {
-				return h.svc.ListQuestions(req.Page, req.PageSize, req.QType, req.Status, req.Keyword, req.TagID, EditorQuestionScope(c), req.Sort, req.CreatedBy)
+				return h.svc.ListQuestions(req.Page, req.PageSize, req.QType, req.Status, req.Keyword, req.TagID, EditorQuestionScope(c), req.Sort)
 			}
 			return h.svc.ListPoolQuestions(req.Page, req.PageSize, req.QType, req.Keyword, req.TagID, StudentQuestionScope(c), req.Sort)
 		},

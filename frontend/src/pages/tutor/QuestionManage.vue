@@ -42,11 +42,13 @@
         />
         <UiButton variant="primary" @click="loadData">查询</UiButton>
         <UiButton v-if="hasFilters" variant="ghost" @click="resetFilters">重置</UiButton>
-        <!-- 「我创建的」筛选（#2598 C2）：讲师编辑面专属轴，一眼分清「哪些题我能动手」 -->
-        <label class="ml-auto flex cursor-pointer items-center gap-2 text-sm text-ink-soft">
-          <UiSwitch v-model="mineOnly" size="small" @change="applyMineFilter" />
-          <span>只看我创建的</span>
-        </label>
+        <!-- 「我创建的」筛选（#2598 C2）：讲师编辑面专属轴，一眼分清「哪些题我能动手」。
+             用 el-switch 的 active-text 而不是 label 包裹：el-switch 内部是 role=switch 的
+             可交互元素，外面再套一层 label 会让点击文字触发两次 toggle（一次来自 label 转发、
+             一次来自 switch 自身），且读屏会把文字读成第二遍。 -->
+        <div class="ml-auto flex items-center gap-2 text-sm text-ink-soft">
+          <UiSwitch v-model="mineOnly" size="small" active-text="只看我创建的" @change="applyMineFilter" />
+        </div>
       </div>
     </UiCard>
 

@@ -223,10 +223,13 @@ func TestUpdateQuestion_ReviewInvariant(t *testing.T) {
 			// #2598 起写路径先验归属：讲师只能改自己创建的题，故夹具必须带作者，
 			// 否则「讲师改内容回 pending」这条不变式根本没机会被执行到。
 			q := seedOwnedQuestion(t, db, ptrInt(ownerTutor))
-			// 题干与用例里的 same 基线对齐：内存行同步改，否则 db.Save 会把旧题干写回去
-			q.Content = "原题干"
-			q.RejectReason = "旧理由"
-			db.Save(q)
+			// 题干对齐用例里的 same 基线（seedOwnedQuestion 的默认文案不同）。
+			// 用 Model().Update 只改这两列而不是 db.Save(q)：Save 是整行 UPDATE，
+			// 会把内存行里过期的 UpdatedAt 一起写回去，让夹具的「旧值」污染被测的审核不变式。
+			if err := db.Model(&model.Question{}).Where("id = ?", q.ID).
+				Updates(map[string]any{"content": "原题干", "reject_reason": "旧理由"}).Error; err != nil {
+				t.Fatalf("置夹具旧值失败: %v", err)
+			}
 			actorID := ownerTutor
 			if c.actor == "admin" {
 				actorID = adminActorID
@@ -371,7 +374,7 @@ func TestListQuestions_Pagination(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		testutil.SeedQuestion(t, db, "single_choice", "题目前5", "A")
 	}
-	result, err := svc.ListQuestions(1, 2, "", "", "", nil, NewQuestionEditScope(nil), "", nil)
+	result, err := svc.ListQuestions(1, 2, "", "", "", nil, NewQuestionEditScope(nil, nil), "")
 	if err != nil {
 		t.Fatalf("ListQuestions 失败: %v", err)
 	}
@@ -390,7 +393,7 @@ func TestListQuestions_FilterByType(t *testing.T) {
 	svc, db := newQuestionBankSvc(t)
 	testutil.SeedQuestion(t, db, "single_choice", "单选题", "A")
 	testutil.SeedQuestion(t, db, "true_false", "判断题", "true")
-	result, err := svc.ListQuestions(1, 20, "true_false", "", "", nil, NewQuestionEditScope(nil), "", nil)
+	result, err := svc.ListQuestions(1, 20, "true_false", "", "", nil, NewQuestionEditScope(nil, nil), "")
 	if err != nil {
 		t.Fatalf("ListQuestions 失败: %v", err)
 	}
@@ -401,7 +404,7 @@ func TestListQuestions_FilterByType(t *testing.T) {
 
 func TestListQuestions_DefaultPage(t *testing.T) {
 	svc, _ := newQuestionBankSvc(t)
-	result, err := svc.ListQuestions(0, 0, "", "", "", nil, NewQuestionEditScope(nil), "", nil)
+	result, err := svc.ListQuestions(0, 0, "", "", "", nil, NewQuestionEditScope(nil, nil), "")
 	if err != nil {
 		t.Fatalf("ListQuestions 失败: %v", err)
 	}
@@ -558,7 +561,7 @@ func TestQuestionBank_Tags(t *testing.T) {
 	}
 
 	// 按标签过滤
-	byTag, err := qsvc.ListQuestions(1, 20, "", "", "", coerce.IntPtr(tag2.ID), NewQuestionEditScope(nil), "", nil)
+	byTag, err := qsvc.ListQuestions(1, 20, "", "", "", coerce.IntPtr(tag2.ID), NewQuestionEditScope(nil, nil), "")
 	if err != nil {
 		t.Fatalf("ListQuestions 失败: %v", err)
 	}

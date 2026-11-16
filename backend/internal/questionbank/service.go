@@ -667,7 +667,7 @@ type QuestionRejectResultDTO struct {
 // 为什么不把两个公开入口也合并成一个：「池的已发布不可被入参绕开」这道锁靠的是**签名差异**
 // ——学员面不收 status、编辑面收 QuestionEditScope（ADR-0062 决策 4）。合并入口就是把那道锁拆了。
 func (s *Service) listQuestions(page, pageSize int, qType, status, keyword string, tagID *int,
-	narrow func(*gorm.DB) *gorm.DB, createdBy *int, sortBy string) (*QuestionPageDTO, error) {
+	narrow func(*gorm.DB) *gorm.DB, sortBy string) (*QuestionPageDTO, error) {
 	// 排序口径（#412）：缺省保持现状「最新提交优先」（created_at DESC, id ASC）；
 	// 讲师端显式传 id_asc 请求按 ID 升序，翻页时 ID 单调推进、不再呈锯齿跳回。
 	// #1096：排序位由变参改显式命名参数（空串 = 缺省口径）。
@@ -688,9 +688,6 @@ func (s *Service) listQuestions(page, pageSize int, qType, status, keyword strin
 		if tagID != nil {
 			q = q.Where("id IN (SELECT question_id FROM question_tag_relation WHERE tag_id = ?)", *tagID)
 		}
-		// 「我创建的」筛选轴（#2598 C2）：只收行集，与归属谓词不同源——
-		// 筛掉别人的题不会让别人的题变得可写，反之亦然。
-		q = applyCreatedByFilter(q, createdBy)
 		return narrow(q)
 	})
 	if err != nil {
@@ -704,10 +701,11 @@ func (s *Service) listQuestions(page, pageSize int, qType, status, keyword strin
 // 编辑面 scope 必传（ADR-0062 决策 4）：证件轴是筛选而非可见性，形态与学员面不同名、不可互换。
 // 学员侧列表走 ListPoolQuestions（同一入口按能力分流，见 api/question_bank.go）。
 //
-// createdBy 是「我创建的」筛选轴（#2598 C2）：nil = 看全量（C4 读面不变，默认行为）；
-// 非 nil = 只看该讲师创建的题。它**只管行集**，不参与任何写判定。
-func (s *Service) ListQuestions(page, pageSize int, qType string, status, keyword string, tagID *int, scope QuestionEditScope, sortBy string, createdBy *int) (*QuestionPageDTO, error) {
-	return s.listQuestions(page, pageSize, qType, status, keyword, tagID, scope.ApplyListFilter, createdBy, sortBy)
+// 「我创建的」筛选轴（#2598 C2）住在 QuestionEditScope 里，不是本方法的裸参数：
+// 它只影响行集、不参与写判定，而**学员面根本拿不到 QuestionEditScope**——于是
+// 「学员按作者收窄题库池」在类型上构造不出来（见 pool_scope.go 的说明）。
+func (s *Service) ListQuestions(page, pageSize int, qType string, status, keyword string, tagID *int, scope QuestionEditScope, sortBy string) (*QuestionPageDTO, error) {
+	return s.listQuestions(page, pageSize, qType, status, keyword, tagID, scope.ApplyListFilter, sortBy)
 }
 
 // ListPoolQuestions 题目列表**学员面**（ADR-0062 决策 4）：池口径由 scope 承载，
@@ -715,7 +713,7 @@ func (s *Service) ListQuestions(page, pageSize int, qType string, status, keywor
 // 出口 DTO 形态与按 id 直取的学员面一致（含答案/解析——池内的题本就可以作答并看到解析），
 // 差异只在行集：draft / pending / 源标记真题题 / 非当前证件一律不出现在结果里。
 func (s *Service) ListPoolQuestions(page, pageSize int, qType, keyword string, tagID *int, scope QuestionReadScope, sortBy string) (*QuestionPageDTO, error) {
-	return s.listQuestions(page, pageSize, qType, "", keyword, tagID, scope.Apply, nil, sortBy)
+	return s.listQuestions(page, pageSize, qType, "", keyword, tagID, scope.Apply, sortBy)
 }
 
 // questionPage 题目分页信封装配（两条列表路径共用：DTO 出口与标签批量附加只有一处实现）。

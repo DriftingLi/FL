@@ -177,7 +177,7 @@ func TestOwnership_FilterIsRowSetOnly(t *testing.T) {
 	orphan := seedOwnedQuestion(t, db, nil) // 空创建者：不属于任何人的「我创建的」
 
 	// created_by = 本人：只出自己那道
-	got, err := svc.ListQuestions(1, 20, "", "", "", nil, NewQuestionEditScope(nil), "", ptrInt(ownerTutor))
+	got, err := svc.ListQuestions(1, 20, "", "", "", nil, NewQuestionEditScope(nil, ptrInt(ownerTutor)), "")
 	if err != nil {
 		t.Fatalf("带筛选的列表失败: %v", err)
 	}
@@ -190,7 +190,7 @@ func TestOwnership_FilterIsRowSetOnly(t *testing.T) {
 	}
 
 	// 不带筛选：全量（C4 读面不变，含空创建者题）
-	all, err := svc.ListQuestions(1, 20, "", "", "", nil, NewQuestionEditScope(nil), "", nil)
+	all, err := svc.ListQuestions(1, 20, "", "", "", nil, NewQuestionEditScope(nil, nil), "")
 	if err != nil {
 		t.Fatalf("无筛选的列表失败: %v", err)
 	}

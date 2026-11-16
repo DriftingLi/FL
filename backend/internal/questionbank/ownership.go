@@ -13,8 +13,6 @@ package questionbank
 import (
 	"errors"
 
-	"gorm.io/gorm"
-
 	"forklift-training/internal/authz"
 	"forklift-training/internal/model"
 )
@@ -49,16 +47,4 @@ func RequireQuestionOwnership(q *model.Question, actorID int, actorType string) 
 		return ErrQuestionNotOwned
 	}
 	return nil
-}
-
-// applyCreatedByFilter 「我创建的」筛选轴（规格 C2 的前端诉求在后端的落点）：
-// nil → 不筛（看全量，C4 读面不变）；非 nil → created_by = 该讲师。
-//
-// 与归属谓词**不同源**：这个只影响列表行集，不参与任何写判定。写判定永远走
-// RequireQuestionOwnership —— 列表筛掉别人的题不会让别人的题变得可写，反之亦然。
-func applyCreatedByFilter(query *gorm.DB, createdBy *int) *gorm.DB {
-	if createdBy == nil {
-		return query
-	}
-	return query.Where("created_by = ?", *createdBy)
 }
