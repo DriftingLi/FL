@@ -1032,6 +1032,16 @@ definitions:
         items:
           $ref: '#/definitions/course.ChapterDTO'
         type: array
+      claim_count:
+        description: |-
+          ClaimCount 该课程当前认领讲师数（#2596 D1）。只在**讲师面**列表填（GET /api/tutor/courses）；
+          学员端/管理端列表不长这一列，故省略而非 0——「没人认领」与「这个面不报这列」是两件事。
+        type: integer
+        x-optional: true
+      claimed_by_me:
+        description: ClaimedByMe 当前登录讲师是否已认领本课程（同上，只讲师面填）。
+        type: boolean
+        x-optional: true
       course_id:
         type: integer
       cover_image:
@@ -1346,6 +1356,28 @@ definitions:
       recorded:
         type: boolean
     type: object
+  course.CourseClaimant:
+    properties:
+      created_at:
+        type: string
+      is_me:
+        type: boolean
+      source:
+        type: string
+      tutor_id:
+        type: integer
+      tutor_name:
+        type: string
+    type: object
+  course.CourseClaimantsResult:
+    properties:
+      claimants:
+        items:
+          $ref: '#/definitions/course.CourseClaimant'
+        type: array
+      claimed_by_me:
+        type: boolean
+    type: object
   course.CourseDTO:
     properties:
       certificate_name:
@@ -1365,6 +1397,16 @@ definitions:
         items:
           $ref: '#/definitions/course.ChapterDTO'
         type: array
+        x-optional: true
+      claim_count:
+        description: |-
+          ClaimCount 该课程当前认领讲师数（#2596 D1）。只在**讲师面**列表填（GET /api/tutor/courses）；
+          学员端/管理端列表不长这一列，故省略而非 0——「没人认领」与「这个面不报这列」是两件事。
+        type: integer
+        x-optional: true
+      claimed_by_me:
+        description: ClaimedByMe 当前登录讲师是否已认领本课程（同上，只讲师面填）。
+        type: boolean
         x-optional: true
       course_id:
         type: integer
@@ -4021,6 +4063,13 @@ definitions:
           type: integer
         type: array
       success_count:
+        type: integer
+    type: object
+  tutor.ClaimResult:
+    properties:
+      claimed:
+        type: boolean
+      course_id:
         type: integer
     type: object
   tutor.DeleteFileResult:
@@ -17063,6 +17112,103 @@ paths:
       security:
       - BearerAuth: []
       summary: 导师端课程章节
+      tags:
+      - 讲师端-课程
+  /tutor/course/{course_id}/claim:
+    delete:
+      consumes:
+      - application/json
+      description: 只断今后的编辑权：已写章节的作者归属保留、在审内容照常审完。未认领返回 404 档。
+      parameters:
+      - description: 课程ID
+        in: path
+        name: course_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/tutor.ClaimResult'
+              type: object
+        "404":
+          description: 未认领该课程
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 退出认领
+      tags:
+      - 讲师端-课程
+    post:
+      consumes:
+      - application/json
+      description: 讲师认领该课程以获得其章节的编辑权；多讲师可共认同一门课。已认领返回 409。
+      parameters:
+      - description: 课程ID
+        in: path
+        name: course_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/tutor.ClaimResult'
+              type: object
+        "404":
+          description: 课程不存在
+          schema:
+            $ref: '#/definitions/response.R'
+        "409":
+          description: 已认领
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 认领课程
+      tags:
+      - 讲师端-课程
+  /tutor/course/{course_id}/claims:
+    get:
+      description: 返回该课程当前认领的讲师（按认领时间升序），供章节页展示共认者
+      parameters:
+      - description: 课程ID
+        in: path
+        name: course_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/course.CourseClaimantsResult'
+              type: object
+        "404":
+          description: 课程不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 认领讲师名单
       tags:
       - 讲师端-课程
   /tutor/courses:

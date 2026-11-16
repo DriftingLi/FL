@@ -456,6 +456,11 @@ func (s *Service) ListFiles(ctx context.Context, tutorID int, filter FileFilter)
 
 // AttachFile 单挂挂接（spec B2）：文件行带章节归属，空=在库未挂。单挂互斥——已挂其他章
 // 拒绝并明示（先解挂再挂）；挂到同章幂等。挂接后随该章节送审（块 C 的文件挂接清单引用它）。
+//
+// 认领谓词前置（#2596 / 规格 B2）：挂接改的是**章节**的附件清单并把它打回草稿，与
+// 「管自己的文件库」是两件事。能力键仍归 tutorfile.manage（#2595 的账本口径），但那把键
+// 只回答「能不能进文件库」；「这门课的章节你能不能动」由域谓词回答，两者正交。
+// 位置在文件归属校验之后、章节读取之前：先把「文件是不是你的」答完，再答「课是不是你能动的」。
 func (s *Service) AttachFile(ctx context.Context, tutorID, fileID, chapterID int) error {
 	file, err := s.loadFile(ctx, tutorID, fileID)
 	if err != nil {
@@ -466,6 +471,9 @@ func (s *Service) AttachFile(ctx context.Context, tutorID, fileID, chapterID int
 			return nil
 		}
 		return fmt.Errorf("%w: 文件已挂接到其他章节（#%d），先解挂再挂接", ErrInvalidState, *file.ChapterID)
+	}
+	if err := course.RequireChapterClaim(s.db, tutorID, chapterID); err != nil {
+		return err
 	}
 	var ch model.Chapter
 	if err := s.db.WithContext(ctx).First(&ch, "chapter_id = ?", chapterID).Error; err != nil {
@@ -483,10 +491,18 @@ func (s *Service) AttachFile(ctx context.Context, tutorID, fileID, chapterID int
 }
 
 // DetachFile 取消挂接回库（spec B2）：chapter_id 清空回到未挂状态。重复解挂幂等。
+//
+// 认领谓词前置（#2596）：解挂同样会改章节的附件清单并打回草稿。空挂（早已在库）幂等返回，
+// 不查认领——那时它不碰任何章节，也就没有「这门课你能不能动」的问题。
 func (s *Service) DetachFile(ctx context.Context, tutorID, fileID int) error {
 	file, err := s.loadFile(ctx, tutorID, fileID)
 	if err != nil {
 		return err
+	}
+	if file.ChapterID != nil {
+		if err := course.RequireChapterClaim(s.db, tutorID, *file.ChapterID); err != nil {
+			return err
+		}
 	}
 	if err := s.db.WithContext(ctx).Model(&model.TutorFile{}).
 		Where("file_id = ?", fileID).Update("chapter_id", nil).Error; err != nil {
@@ -503,6 +519,13 @@ func (s *Service) DetachFile(ctx context.Context, tutorID, fileID int) error {
 func (s *Service) SwapChapterFile(ctx context.Context, tutorID, chapterID, oldFileID, newFileID int) error {
 	if oldFileID == newFileID {
 		return fmt.Errorf("%w: 新旧文件不能相同", ErrInvalidParam)
+	}
+	// 认领谓词前置（#2596 / 规格 B2 + #2595 遗留的 swap 洞）：换挂改的是**章节**的附件挂接
+	// 并把章节打回草稿，与「管自己的文件库」是两件事。能力键已归 course.author（#2595 裁定），
+	// 但能力键只回答「能不能用这一组端点」，不回答「有没有权改这门课」——故谓词仍必须前置。
+	// 放在文件归属校验之前：先答「你有没有资格动这门课」，再说「这两个文件是不是你的」。
+	if err := course.RequireChapterClaim(s.db, tutorID, chapterID); err != nil {
+		return err
 	}
 	old, err := s.loadFile(ctx, tutorID, oldFileID)
 	if err != nil {

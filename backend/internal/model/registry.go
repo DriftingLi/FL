@@ -58,6 +58,7 @@ var ModelBlocks = []ModelBlock{
 	{
 		Name: "导师文件库与分片上传",
 		Models: []any{
+			&TutorCourseClaim{}, // 课程认领（#2596）：依赖 tutor（上块）与 course（培训目录块）
 			&TutorFile{},
 			&TutorUploadSession{}, // 先建会话：tutor_upload_part 外键指向它
 			&TutorUploadPart{},

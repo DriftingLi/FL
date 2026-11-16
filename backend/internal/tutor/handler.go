@@ -4,6 +4,7 @@ package tutor
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -62,6 +63,12 @@ func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, svc *Service
 	write.DELETE("/file/:file_id", h.DeleteChapterFile)
 	// POST /api/tutor/files/batch-delete  批量删除文件
 	write.POST("/files/batch-delete", h.BatchDeleteChapterFiles)
+	// POST /api/tutor/course/:course_id/claim  讲师自助认领该课程（#2596 B3）
+	write.POST("/course/:course_id/claim", h.ClaimCourse)
+	// DELETE /api/tutor/course/:course_id/claim  讲师退出认领（#2596 B3/B6）
+	write.DELETE("/course/:course_id/claim", h.ReleaseCourseClaim)
+	// GET /api/tutor/course/:course_id/claims  该课程的共认讲师名单（#2596 D1）
+	read.GET("/course/:course_id/claims", h.ListCourseClaimants)
 }
 
 // ListCourses 导师课程列表
@@ -91,7 +98,7 @@ func (h *handler) ListCourses(c *gin.Context) {
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *tutorCourseListReq) (*course.CoursePageResult, error) {
-			result, err := h.svc.GetCourses(req.Page, req.PageSize, req.CredentialID, req.SpecialtyID, req.LevelID)
+			result, err := h.svc.GetCourses(req.Page, req.PageSize, req.CredentialID, req.SpecialtyID, req.LevelID, middleware.CurrentUserID(c))
 			if err != nil {
 				return nil, err
 			}
@@ -189,9 +196,16 @@ func (h *handler) UploadChapterFile(c *gin.Context) {
 		response.ServerError(c, "文件上传失败")
 		return
 	}
-	result, err := h.svc.UploadChapterFile(chapterID, file.Filename, content)
+	result, err := h.svc.UploadChapterFile(chapterID, middleware.CurrentUserID(c), file.Filename, content)
 	if err != nil {
-		response.BadRequest(c, err.Error())
+		switch {
+		case errors.Is(err, course.ErrCourseClaimRequired):
+			response.Forbidden(c, err.Error())
+		case errors.Is(err, course.ErrChapterNotFound):
+			response.NotFound(c, err.Error())
+		default:
+			response.BadRequest(c, err.Error())
+		}
 		return
 	}
 	response.SuccessWithMsg(c, "文件上传成功", result)
@@ -257,7 +271,8 @@ func (h *handler) UpdateChapterInfo(c *gin.Context) {
 			return h.svc.UpdateChapterInfo(req.ID, middleware.CurrentUserID(c), req.Input)
 		},
 	}.WithSuccess(httpx.OkMsg("章节更新成功"), http.StatusInternalServerError).
-		WithSentinel(course.ErrChapterNotFound, http.StatusNotFound).Handle(c)
+		WithSentinel(course.ErrChapterNotFound, http.StatusNotFound).
+		WithSentinel(course.ErrCourseClaimRequired, http.StatusForbidden).Handle(c)
 }
 
 // SubmitChapterReview 提交章节审核
@@ -288,6 +303,7 @@ func (h *handler) SubmitChapterReview(c *gin.Context) {
 		},
 	}.WithSuccess(httpx.OkMsg("已提交审核"), http.StatusInternalServerError).
 		WithSentinel(course.ErrChapterNotFound, http.StatusNotFound).
+		WithSentinel(course.ErrCourseClaimRequired, http.StatusForbidden).
 		WithSentinel(course.ErrChapterReviewPending, http.StatusBadRequest).Handle(c)
 }
 
@@ -313,10 +329,12 @@ func (h *handler) DeleteChapterFile(c *gin.Context) {
 			return &idParam{ID: id}, nil
 		},
 		Invoke: func(ctx context.Context, req *idParam) (*DeleteFileResult, error) {
-			return h.svc.DeleteChapterFileByID(req.ID)
+			return h.svc.DeleteChapterFileByID(req.ID, middleware.CurrentUserID(c))
 		},
 	}.WithSuccess(httpx.OkMsg("文件删除成功"), http.StatusInternalServerError).
-		WithSentinel(ErrChapterFileNotFound, http.StatusNotFound).Handle(c)
+		WithSentinel(ErrChapterFileNotFound, http.StatusNotFound).
+		WithSentinel(course.ErrCourseClaimRequired, http.StatusForbidden).
+		WithSentinel(course.ErrChapterNotFound, http.StatusNotFound).Handle(c)
 }
 
 // BatchDeleteChapterFiles 批量删除文件
@@ -344,12 +362,13 @@ func (h *handler) BatchDeleteChapterFiles(c *gin.Context) {
 			return req, nil
 		},
 		Invoke: func(ctx context.Context, req *batchDeleteFilesReq) (*BatchDeleteFilesResult, error) {
-			return h.svc.BatchDeleteChapterFiles(req.FileIDs), nil
+			return h.svc.BatchDeleteChapterFiles(req.FileIDs, middleware.CurrentUserID(c))
 		},
 		Render: func(c *gin.Context, _ *batchDeleteFilesReq, resp *BatchDeleteFilesResult) {
 			response.SuccessWithMsg(c, "成功删除"+strconv.Itoa(resp.SuccessCount)+"个文件", resp)
 		},
-	}.Handle(c)
+	}.WithSentinel(course.ErrCourseClaimRequired, http.StatusForbidden).
+		WithSentinel(course.ErrChapterNotFound, http.StatusNotFound).Handle(c)
 }
 
 // batchDeleteFilesReq 批量删除文件请求体。
@@ -364,6 +383,96 @@ type tutorCourseListReq struct {
 	CredentialID *int
 	SpecialtyID  *int
 	LevelID      *int
+}
+
+// ===== 课程认领（#2596 / 规格 B3、B5、B6、D1）=====
+
+// ClaimCourse 讲师自助认领课程
+// @Summary 认领课程
+// @Description 讲师认领该课程以获得其章节的编辑权；多讲师可共认同一门课。已认领返回 409。
+// @Tags 讲师端-课程
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param course_id path int true "课程ID"
+// @Success 200 {object} response.R{data=tutor.ClaimResult} "success"
+// @Failure 404 {object} response.R "课程不存在"
+// @Failure 409 {object} response.R "已认领"
+// @Router /tutor/course/{course_id}/claim [post]
+func (h *handler) ClaimCourse(c *gin.Context) {
+	httpx.Endpoint[idParam, ClaimResult]{
+		Parse: func(c *gin.Context) (*idParam, error) {
+			id, err := httpx.PathInt(c, "course_id", "课程ID无效")
+			if err != nil {
+				return nil, err
+			}
+			return &idParam{ID: id}, nil
+		},
+		Invoke: func(ctx context.Context, req *idParam) (*ClaimResult, error) {
+			if err := h.svc.ClaimCourse(middleware.CurrentUserID(c), req.ID); err != nil {
+				return nil, err
+			}
+			return &ClaimResult{CourseID: req.ID, Claimed: true}, nil
+		},
+	}.WithSuccess(httpx.OkMsg("已认领，可以开始编辑章节"), http.StatusInternalServerError).
+		WithSentinel(model.ErrCourseNotFound, http.StatusNotFound).
+		WithSentinel(course.ErrCourseAlreadyClaimed, http.StatusConflict).Handle(c)
+}
+
+// ReleaseCourseClaim 讲师退出认领
+// @Summary 退出认领
+// @Description 只断今后的编辑权：已写章节的作者归属保留、在审内容照常审完。未认领返回 404 档。
+// @Tags 讲师端-课程
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param course_id path int true "课程ID"
+// @Success 200 {object} response.R{data=tutor.ClaimResult} "success"
+// @Failure 404 {object} response.R "未认领该课程"
+// @Router /tutor/course/{course_id}/claim [delete]
+func (h *handler) ReleaseCourseClaim(c *gin.Context) {
+	httpx.Endpoint[idParam, ClaimResult]{
+		Parse: func(c *gin.Context) (*idParam, error) {
+			id, err := httpx.PathInt(c, "course_id", "课程ID无效")
+			if err != nil {
+				return nil, err
+			}
+			return &idParam{ID: id}, nil
+		},
+		Invoke: func(ctx context.Context, req *idParam) (*ClaimResult, error) {
+			if err := h.svc.ReleaseCourseClaim(middleware.CurrentUserID(c), req.ID); err != nil {
+				return nil, err
+			}
+			return &ClaimResult{CourseID: req.ID, Claimed: false}, nil
+		},
+	}.WithSuccess(httpx.OkMsg("已退出认领"), http.StatusInternalServerError).
+		WithSentinel(course.ErrCourseNotClaimed, http.StatusNotFound).Handle(c)
+}
+
+// ListCourseClaimants 课程共认讲师名单
+// @Summary 认领讲师名单
+// @Description 返回该课程当前认领的讲师（按认领时间升序），供章节页展示共认者
+// @Tags 讲师端-课程
+// @Produce json
+// @Security BearerAuth
+// @Param course_id path int true "课程ID"
+// @Success 200 {object} response.R{data=course.CourseClaimantsResult} "success"
+// @Failure 404 {object} response.R "课程不存在"
+// @Router /tutor/course/{course_id}/claims [get]
+func (h *handler) ListCourseClaimants(c *gin.Context) {
+	httpx.Endpoint[idParam, course.CourseClaimantsResult]{
+		Parse: func(c *gin.Context) (*idParam, error) {
+			id, err := httpx.PathInt(c, "course_id", "课程ID无效")
+			if err != nil {
+				return nil, err
+			}
+			return &idParam{ID: id}, nil
+		},
+		Invoke: func(ctx context.Context, req *idParam) (*course.CourseClaimantsResult, error) {
+			return h.svc.ListCourseClaimants(middleware.CurrentUserID(c), req.ID)
+		},
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).
+		WithSentinel(model.ErrCourseNotFound, http.StatusNotFound).Handle(c)
 }
 
 // idParam :id 路径整型请求（原 internal/api/admin.go:878 的共享私有类型；域包不得引用装配根的私有名，

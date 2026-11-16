@@ -421,13 +421,16 @@ var Domains = []Domain{
 
 	{
 		Name:  "tutor",
-		Title: "讲师端课程与章节（/api/tutor/*：课程列表 / 章节详情 / 文件上传删除）",
+		Title: "讲师端课程与章节（/api/tutor/*：课程列表 / 章节详情 / 文件上传删除 / 课程认领）",
 		Roots: []string{
 			"tutor.BatchDeleteFilesResult",
 			"course.ChapterDTO",
 			"course.ChapterDetailDTO",
 			"course.ChapterFileDTO",
 			"course.CoursePageResult",
+			// #2596：课程认领的名单与动作回执（名单页/卡片认领直接消费）。
+			"course.CourseClaimantsResult",
+			"tutor.ClaimResult",
 			"tutor.DeleteFileResult",
 			"course.TutorCourseChaptersDTO",
 		},
@@ -443,6 +446,10 @@ var Domains = []Domain{
 			{Method: "POST", Path: "/tutor/chapter/{chapter_id}/submit-review"},
 			{Method: "DELETE", Path: "/tutor/file/{file_id}"},
 			{Method: "POST", Path: "/tutor/files/batch-delete"},
+			// #2596 B3/D1：认领 / 退出认领 / 共认名单。
+			{Method: "POST", Path: "/tutor/course/{course_id}/claim"},
+			{Method: "DELETE", Path: "/tutor/course/{course_id}/claim"},
+			{Method: "GET", Path: "/tutor/course/{course_id}/claims"},
 		},
 	},
 

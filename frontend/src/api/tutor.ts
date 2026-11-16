@@ -10,6 +10,8 @@ import type {
   ChapterDTO,
   ChapterDetailDTO,
   ChapterFileDTO,
+  ClaimResult,
+  CourseClaimantsResult,
   CourseDTO,
   CoursePageResult,
   DeleteFileResult,
@@ -21,11 +23,14 @@ export type {
   ChapterDTO,
   ChapterDetailDTO,
   ChapterFileDTO,
+  ClaimResult,
+  CourseClaimant,
+  CourseClaimantsResult,
   CourseDTO,
   CoursePageResult,
   DeleteFileResult,
   TutorCourseChaptersDTO
-}
+} from './generated/tutor'
 
 /** 查询入参（不生成，ADR-0048 决策 3） */
 export interface TutorCoursesQuery {
@@ -53,7 +58,15 @@ export interface BatchDeleteFilesPayload {
 /** 课程摘要（导师端）= 生成 CourseDTO 的子集，单一事实源派生 */
 export type TutorCourse = Pick<
   CourseDTO,
-  'course_id' | 'name' | 'cover_image' | 'description' | 'chapter_count' | 'specialty_id' | 'level_id'
+  | 'course_id'
+  | 'name'
+  | 'cover_image'
+  | 'description'
+  | 'chapter_count'
+  | 'specialty_id'
+  | 'level_id'
+  | 'claim_count'
+  | 'claimed_by_me'
 >
 
 /** 导师章节 = 生成 ChapterDTO 的子集，单一事实源派生 */
@@ -104,5 +117,22 @@ export const tutorApi = {
   /** 批量删除：后端返回 {success_count,failed_count,failed_ids}（此前被当成无载荷） */
   batchDeleteFiles(data: BatchDeleteFilesPayload) {
     return unwrappedRequest.post<BatchDeleteFilesResult>('/tutor/files/batch-delete', data)
+  },
+
+  // ===== 课程认领（#2596 / 规格 B3、D1、D2）=====
+
+  /** 认领课程：成功后可编辑其章节；重复认领后端回 409「你已认领本课程」 */
+  claimCourse(courseId: number) {
+    return unwrappedRequest.post<ClaimResult>(`/tutor/course/${courseId}/claim`)
+  },
+
+  /** 退出认领：只断今后的编辑权，已写章节的归属与在审内容不受影响 */
+  releaseCourseClaim(courseId: number) {
+    return unwrappedRequest.delete<ClaimResult>(`/tutor/course/${courseId}/claim`)
+  },
+
+  /** 该课程的共认讲师名单（章节页认领条展示） */
+  getCourseClaimants(courseId: number) {
+    return unwrappedRequest.get<CourseClaimantsResult>(`/tutor/course/${courseId}/claims`)
   }
 }
