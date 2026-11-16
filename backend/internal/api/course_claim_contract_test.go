@@ -21,6 +21,98 @@ import (
 	"forklift-training/internal/testutil"
 )
 
+// TestTutorCourseClaimSurvivesReviewFlow 退出认领不回溯（B6）：认领 → 提审 → 退出 →
+// 管理员照常审完。这条是 B6 里最容易说错的一半——「退出不回溯」既包括章节作者归属保留，
+// 也包括**已经提交的在审内容不因为退出认领而卡住**（管理员路径不经认领谓词）。
+func TestTutorCourseClaimSurvivesReviewFlow(t *testing.T) {
+	t.Parallel()
+	testutil.SetTestGinMode()
+	db := testutil.NewMemoryDB(t)
+
+	ptr := func(v int) *int { return &v }
+	spec := model.Specialty{Code: "claim-review", Name: "认领审核", SortOrder: 1, Status: 1}
+	if err := db.Create(&spec).Error; err != nil {
+		t.Fatalf("建方向失败: %v", err)
+	}
+	lv := model.CourseLevel{Code: "claim-review-lv", Name: "入门", SortOrder: 1, Status: 1}
+	if err := db.Create(&lv).Error; err != nil {
+		t.Fatalf("建等级失败: %v", err)
+	}
+	c := model.Course{Name: "认领审核课程", Status: 1,
+		SpecialtyID: ptr(spec.SpecialtyID), LevelID: ptr(lv.LevelID), CreatedAt: testutil.Now()}
+	if err := db.Create(&c).Error; err != nil {
+		t.Fatalf("建课程失败: %v", err)
+	}
+	ch := model.Chapter{CourseID: c.CourseID, Title: "在审章", Content: "v1 正文",
+		ContentType: "text", OrderNum: 1, CreatedAt: testutil.Now()}
+	if err := db.Create(&ch).Error; err != nil {
+		t.Fatalf("建章节失败: %v", err)
+	}
+
+	cfg := &config.Config{JWTSecretKey: "claim-review-secret", AuthCookie: config.AuthCookieConfig{Name: "hrwai_token"}}
+	r := NewRouter(newContractDeps(t, db, cfg))
+	tutor := testutil.SeedTutor(t, db, "tutor_claim_review", "hash")
+	tutorTok := slice6Token(t, cfg, tutor.TutorID, tutor.Username, "tutor")
+
+	do := func(method, path, token, body string) *httptest.ResponseRecorder {
+		var buf *bytes.Buffer
+		if body != "" {
+			buf = bytes.NewBufferString(body)
+		} else {
+			buf = bytes.NewBuffer(nil)
+		}
+		req, _ := http.NewRequest(method, path, buf)
+		req.Header.Set("Authorization", "Bearer "+token)
+		if body != "" {
+			req.Header.Set("Content-Type", "application/json")
+		}
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		return rec
+	}
+	claimPath := fmt.Sprintf("/api/tutor/course/%d/claim", c.CourseID)
+	submitPath := fmt.Sprintf("/api/tutor/chapter/%d/submit-review", ch.ChapterID)
+	approvePath := fmt.Sprintf("/api/admin/chapter/%d/approve-review", ch.ChapterID)
+
+	// 认领 → 提审
+	if rec := do("POST", claimPath, tutorTok, ""); rec.Code != http.StatusOK {
+		t.Fatalf("认领应 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if rec := do("POST", submitPath, tutorTok, ""); rec.Code != http.StatusOK {
+		t.Fatalf("提审应 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// 退出认领（在审内容照常审完）
+	if rec := do("DELETE", claimPath, tutorTok, ""); rec.Code != http.StatusOK {
+		t.Fatalf("退出认领应 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// 管理员路径不经认领谓词：审核队列仍能看到、能过审
+	adminTok := adminTokenWithAccount(t, cfg, db, "admin_claim_review")
+	rec := do("GET", "/api/admin/chapter-reviews/pending", adminTok, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("审核队列应 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte(itoa(ch.ChapterID))) {
+		t.Fatalf("退出认领后在审章节应仍在队列里, body = %s", rec.Body.String())
+	}
+	if rec := do("POST", approvePath, adminTok, ""); rec.Code != http.StatusOK {
+		t.Fatalf("退出认领后管理员应仍能过审, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// 章节作者归属保留（不回溯的另一半）
+	var got model.Chapter
+	if err := db.First(&got, ch.ChapterID).Error; err != nil {
+		t.Fatalf("读章节失败: %v", err)
+	}
+	if got.TutorID == nil || *got.TutorID != tutor.TutorID {
+		t.Fatalf("退出后章节归属应仍为 %d, got %v", tutor.TutorID, got.TutorID)
+	}
+	if got.ReviewStatus != "published" {
+		t.Fatalf("过审后 review_status 应为 published, got %q", got.ReviewStatus)
+	}
+}
+
 // TestTutorCourseClaimContract 认领端点全流程：未认领写 403 → 认领 200 → 再写 200 →
 // 重复认领 409 → 名单含本人 → 退出 200 → 再写 403 → 重复退出 404。
 func TestTutorCourseClaimContract(t *testing.T) {

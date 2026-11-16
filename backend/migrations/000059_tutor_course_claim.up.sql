@@ -18,7 +18,9 @@ CREATE TABLE IF NOT EXISTS tutor_course_claim (
     claim_id   INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     tutor_id   INT         NOT NULL,
     course_id  INT         NOT NULL,
-    source     VARCHAR(16) NOT NULL DEFAULT 'self',
+    -- 枚举由 DB 兜底（B1）：应用层常量写错、手工 SQL 补数据、未来某个脚本忘了走常量表，
+    -- 都会在这里被拦住。审计字段一旦混进第三种来源，「自助还是被派」这条判断就失效了。
+    source     VARCHAR(16) NOT NULL DEFAULT 'self' CHECK (source IN ('self', 'admin')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 COMMENT ON TABLE tutor_course_claim IS '讲师课程认领（多对多；退出不回溯章节作者归属）';
