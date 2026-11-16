@@ -86,6 +86,8 @@ func TestTutorNotificationMailboxContract(t *testing.T) {
 	}
 
 	// 1. 讲师提交 → 管理员过审 → 投递
+	// #2596：讲师面写路径前置认领谓词，夹具先让讲师 11 认领本课。
+	seedTutorCourseClaim(t, db, sharedID, c.CourseID)
 	if rec := do("POST", "/api/tutor/chapter/"+itoa(ch.ChapterID)+"/submit-review", tutorTok, ""); rec.Code != http.StatusOK {
 		t.Fatalf("提交审核应 200, got %d: %s", rec.Code, rec.Body.String())
 	}

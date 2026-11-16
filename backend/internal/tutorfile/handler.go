@@ -446,6 +446,10 @@ func writeServiceError(c *gin.Context, err error) {
 		response.Conflict(c, err.Error())
 	case errors.Is(err, course.ErrChapterNotFound):
 		response.NotFound(c, err.Error())
+	case errors.Is(err, course.ErrCourseClaimRequired):
+		// 认领谓词（#2596）：换挂改的是章节挂接，未认领该课程即拒。403 而非 404——
+		// 章节存在这件事不是秘密（读面不受认领限制，讲师看得见）。
+		response.Forbidden(c, err.Error())
 	default:
 		response.ServerErrorCause(c, "文件库操作失败", err)
 	}

@@ -1,5 +1,5 @@
 // 生成文件，勿手改（ADR-0019 契约 codegen 专项 / ADR-0048 按域解冻；spec #940 片五③、#952 片一）。
-// 域：讲师端课程与章节（/api/tutor/*：课程列表 / 章节详情 / 文件上传删除）
+// 域：讲师端课程与章节（/api/tutor/*：课程列表 / 章节详情 / 文件上传删除 / 课程认领）
 // 唯一事实源：后端注解 → backend/docs/swagger.json（CI 有新鲜度锁：backend-lint 的 swagger 步骤）。
 // 再生成：cd backend && go run ./cmd/gen-apitypes
 // 同步契约：backend/internal/apitypes/codegen_test.go 把本文件与注解渲染结果全等比对。
@@ -14,8 +14,11 @@
 //   POST /tutor/chapter/{chapter_id}/submit-review
 //   DELETE /tutor/file/{file_id}
 //   POST /tutor/files/batch-delete
+//   POST /tutor/course/{course_id}/claim
+//   DELETE /tutor/course/{course_id}/claim
+//   GET  /tutor/course/{course_id}/claims
 //
-// 覆盖的 Go 类型：CertificateTemplateDTO / ChapterDTO / ChapterDetailDTO / ChapterFileDTO / CourseBriefDTO / CourseDTO / CoursePageResult / CredentialBriefDTO / LevelBriefDTO / SpecialtyBriefDTO / TutorCourseChaptersDTO / BatchDeleteFilesResult / DeleteFileResult
+// 覆盖的 Go 类型：CertificateTemplateDTO / ChapterDTO / ChapterDetailDTO / ChapterFileDTO / CourseBriefDTO / CourseClaimant / CourseClaimantsResult / CourseDTO / CoursePageResult / CredentialBriefDTO / LevelBriefDTO / SpecialtyBriefDTO / TutorCourseChaptersDTO / BatchDeleteFilesResult / ClaimResult / DeleteFileResult
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -88,12 +91,27 @@ export interface CourseBriefDTO {
   name: string
 }
 
+export interface CourseClaimant {
+  created_at: string
+  is_me: boolean
+  source: string
+  tutor_id: number
+  tutor_name: string
+}
+
+export interface CourseClaimantsResult {
+  claimants: CourseClaimant[]
+  claimed_by_me: boolean
+}
+
 export interface CourseDTO {
   certificate_name?: string
   certificate_template?: CertificateTemplateDTO
   certificate_template_id: number | null
   chapter_count?: number
   chapters?: ChapterDTO[]
+  claim_count?: number
+  claimed_by_me?: boolean
   course_id: number
   cover_image: string
   created_at: string
@@ -155,6 +173,11 @@ export interface BatchDeleteFilesResult {
   failed_count: number
   failed_ids: number[]
   success_count: number
+}
+
+export interface ClaimResult {
+  claimed: boolean
+  course_id: number
 }
 
 export interface DeleteFileResult {

@@ -93,6 +93,8 @@ func TestChapterReviewQueueContract(t *testing.T) {
 	}
 
 	// 讲师逐章提交（顺序决定队列排序）
+	// #2596：讲师面写路径前置认领谓词，夹具先让该讲师认领本课。
+	seedTutorCourseClaim(t, db, 11, c.CourseID)
 	for i := range submitted {
 		if rec := do("POST", "/api/tutor/chapter/"+itoa(submitted[i].ChapterID)+"/submit-review", tutorTok, ""); rec.Code != http.StatusOK {
 			t.Fatalf("提交章节 %d 应 200, got %d: %s", submitted[i].ChapterID, rec.Code, rec.Body.String())
@@ -327,6 +329,8 @@ func TestChapterReviewQueueBatchPartialFailure(t *testing.T) {
 	admin := testutil.SeedAdmin(t, db, "admin_partial", "x")
 	adminTok, _ := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).
 		Issue(admin.AdminID, admin.Username, "admin")
+	// #2596：讲师 21 认领本课（下面要经讲师面提交一次审核）。
+	seedTutorCourseClaim(t, db, 21, c.CourseID)
 
 	do := func(method, path, token, body string) *httptest.ResponseRecorder {
 		var buf *bytes.Buffer

@@ -37,13 +37,73 @@ func NewService(db *gorm.DB, uploadFolder string, fileStore *filestore.FileStore
 // 同形缺陷在 api 层会让整条 swagger 路由消失，见 4c488c3c。）
 var ErrChapterFileNotFound = errors.New("文件不存在")
 
+// CourseClaimantsResult 见 course 包；此处未加包装。
+
+// ClaimCourse 讲师自助认领课程（#2596 B3/B5）：委托课程域，本层不加逻辑——认领是课程域的事实。
+func (s *Service) ClaimCourse(tutorID, courseID int) error {
+	return course.ClaimCourse(s.db, tutorID, courseID)
+}
+
+// ReleaseCourseClaim 讲师退出认领（#2596 B3/B6）。
+func (s *Service) ReleaseCourseClaim(tutorID, courseID int) error {
+	return course.ReleaseCourseClaim(s.db, tutorID, courseID)
+}
+
+// ListCourseClaimants 课程共认讲师名单（#2596 D1）。课程不存在时返回 model.ErrCourseNotFound
+// ——「没有认领人」与「没有这门课」是两件事，前者是空名单 200。
+//
+// ClaimedByMe 由本层算（tutorID 就是当前讲师）：前端不必自己比对 id，
+// 「我在不在名单里」在本层一次查询里就能答完。
+func (s *Service) ListCourseClaimants(tutorID, courseID int) (*course.CourseClaimantsResult, error) {
+	var c model.Course
+	if err := s.db.Select("course_id").First(&c, courseID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, model.ErrCourseNotFound
+		}
+		return nil, err
+	}
+	claimants, err := course.ListCourseClaimants(s.db, courseID)
+	if err != nil {
+		return nil, err
+	}
+	claimedByMe := false
+	for i := range claimants {
+		if claimants[i].TutorID == tutorID {
+			claimants[i].IsMe = true
+			claimedByMe = true
+		}
+	}
+	return &course.CourseClaimantsResult{Claimants: claimants, ClaimedByMe: claimedByMe}, nil
+}
+
 // GetCourses 导师课程列表（与学员端同口径：已上架 + 已挂载方向/等级/证件，ADR-0012 §2），
 // 附学习学员数；实现收敛到课程列表 module（ListCourses）。
-func (s *Service) GetCourses(page, pageSize int, credentialID, specialtyID, levelID *int) (course.CoursePageResult, error) {
-	return course.ListCourses(s.db, page, pageSize, course.CourseListOptions{
+//
+// 认领两列（#2596 D1）：claimed_by_me 与 claim_count 由一次联表聚合算出（不逐课程 N+1），
+// 且**只对讲师面列表填**——学员端/管理端列表不长这两列（CourseDTO 上可空省略）。
+func (s *Service) GetCourses(page, pageSize int, credentialID, specialtyID, levelID *int, tutorID int) (course.CoursePageResult, error) {
+	result, err := course.ListCourses(s.db, page, pageSize, course.CourseListOptions{
 		OnlyMounted: true, CredentialID: credentialID, SpecialtyID: specialtyID, LevelID: levelID,
 		WithStudentCount: true, DefaultPageSize: 10,
 	})
+	if err != nil {
+		return result, err
+	}
+	ids := make([]int, 0, len(result.Courses))
+	for i := range result.Courses {
+		ids = append(ids, result.Courses[i].CourseID)
+	}
+	counts, mine, err := course.BatchCourseClaimStats(s.db, ids, tutorID)
+	if err != nil {
+		return result, err
+	}
+	for i := range result.Courses {
+		n := counts[result.Courses[i].CourseID]
+		claimed := mine[result.Courses[i].CourseID]
+		result.Courses[i].ClaimCount = &n
+		result.Courses[i].ClaimedByMe = &claimed
+	}
+	return result, nil
 }
 
 // GetCourseChapters 导师章节列表（含文件）。
@@ -102,13 +162,19 @@ func (s *Service) GetChapterDetail(chapterID int) (*course.ChapterDetailDTO, err
 }
 
 // UploadChapterFile 上传章节文件。
-func (s *Service) UploadChapterFile(chapterID int, filename string, fileContent []byte) (*course.ChapterFileDTO, error) {
+//
+// 认领谓词前置（#2596 / 规格 B2）：能进讲师面 ≠ 能改这门课的章节。tutorID 是当前登录
+// 讲师，未认领该课程即拒（course.ErrCourseClaimRequired → 403）。
+func (s *Service) UploadChapterFile(chapterID, tutorID int, filename string, fileContent []byte) (*course.ChapterFileDTO, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, course.ErrChapterNotFound
 		}
 		return nil, err // 查不动不得被读成「不存在」（ADR-0064 决策 1）
+	}
+	if err := course.RequireCourseClaim(s.db, tutorID, chapter.CourseID); err != nil {
+		return nil, err
 	}
 	if filename == "" {
 		return nil, errors.New("文件名不能为空")
@@ -166,7 +232,17 @@ func (s *Service) UploadChapterFile(chapterID int, filename string, fileContent 
 
 // SubmitChapterReview 提交审核（#2498 C2 显式动作）：冻结整章快照（正文+文件挂接清单）
 // 进在审槽；同章单 pending（C8）。审核期间讲师改的是草稿，不影响在审内容（C4）。
+//
+// 认领谓词前置（#2596 / 规格 B2）：提交审核是「把这章推进发布流程」，与写正文同属编辑权，
+// 未认领即拒。
 func (s *Service) SubmitChapterReview(ctx context.Context, chapterID, tutorID int) (*course.ChapterDTO, error) {
+	courseID, err := s.courseIDOfChapter(chapterID)
+	if err != nil {
+		return nil, err
+	}
+	if err := course.RequireCourseClaim(s.db, tutorID, courseID); err != nil {
+		return nil, err
+	}
 	if err := course.SubmitChapterForReview(ctx, s.db, chapterID, tutorID); err != nil {
 		return nil, err
 	}
@@ -178,9 +254,24 @@ func (s *Service) SubmitChapterReview(ctx context.Context, chapterID, tutorID in
 	return &d, nil
 }
 
+// courseIDOfChapter 由章节 id 取课程 id（本包多处要「先知道是哪门课」）。
+// 章节不存在返回 course.ErrChapterNotFound；查不动的 error 原样上抛（ADR-0064 决策 1）。
+func (s *Service) courseIDOfChapter(chapterID int) (int, error) {
+	var chapter model.Chapter
+	if err := s.db.Select("chapter_id", "course_id").First(&chapter, chapterID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return 0, course.ErrChapterNotFound
+		}
+		return 0, err
+	}
+	return chapter.CourseID, nil
+}
+
 // UpdateChapterInfo 更新章节信息。
 // UpdateChapterInfo 更新章节信息（讲师面）。tutorID 是当前登录讲师：章节归属为空时
 // 顺手落定（ADR-0095 决策二），非空不动——归属是「作者」而非「最后编辑者」。
+//
+// 认领谓词前置（#2596 / 规格 B2）：未认领该课程的讲师不能改它的章节。
 func (s *Service) UpdateChapterInfo(chapterID, tutorID int, in *course.ChapterInput) (*course.ChapterDTO, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
@@ -188,6 +279,9 @@ func (s *Service) UpdateChapterInfo(chapterID, tutorID int, in *course.ChapterIn
 			return nil, course.ErrChapterNotFound
 		}
 		return nil, err // 查不动不得被读成「不存在」（ADR-0064 决策 1）
+	}
+	if err := course.RequireCourseClaim(s.db, tutorID, chapter.CourseID); err != nil {
+		return nil, err
 	}
 	if in == nil {
 		in = &course.ChapterInput{}
@@ -226,13 +320,21 @@ func (s *Service) UpdateChapterInfo(chapterID, tutorID int, in *course.ChapterIn
 }
 
 // DeleteChapterFileByID 删除章节文件。
-func (s *Service) DeleteChapterFileByID(fileID int) (*DeleteFileResult, error) {
+//
+// 认领谓词前置（#2596 / 规格 B2）：删附件同样是改章节。文件未挂章节（ChapterID 为空）时
+// 无处可认领——这类孤儿行只可能是历史遗留，允许删（否则永远清不掉）；挂着的必须有认领。
+func (s *Service) DeleteChapterFileByID(fileID, tutorID int) (*DeleteFileResult, error) {
 	var chapterFile model.ChapterFile
 	if err := s.db.First(&chapterFile, fileID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrChapterFileNotFound
 		}
 		return nil, err // 查不动不得被读成「不存在」（ADR-0064 决策 1）
+	}
+	if chapterFile.ChapterID != nil {
+		if err := course.RequireChapterClaim(s.db, tutorID, *chapterFile.ChapterID); err != nil {
+			return nil, err
+		}
 	}
 	if s.fileStore != nil {
 		_ = s.fileStore.Delete(chapterFile.FileURL)
@@ -267,8 +369,12 @@ func (s *Service) DeleteChapterFileByID(fileID int) (*DeleteFileResult, error) {
 }
 
 // BatchDeleteChapterFiles 批量删除文件。
-func (s *Service) BatchDeleteChapterFiles(fileIDs []int) *BatchDeleteFilesResult {
-	successCount := 0
+//
+// 认领谓词前置（#2596 / 规格 B2）：**先全量校验再删任何一行**。若逐条「能删的删、
+// 不能删的记失败」，未认领的讲师会从失败清单反推出哪些文件存在，而且已经删掉的几行
+// 没法撤回——批量操作要么全权校验过、要么一行不动。孤儿行（未挂章节）同单条口径放行。
+func (s *Service) BatchDeleteChapterFiles(fileIDs []int, tutorID int) (*BatchDeleteFilesResult, error) {
+	rows := make([]model.ChapterFile, 0, len(fileIDs))
 	failedIDs := make([]int, 0)
 	for _, fid := range fileIDs {
 		var chapterFile model.ChapterFile
@@ -276,6 +382,17 @@ func (s *Service) BatchDeleteChapterFiles(fileIDs []int) *BatchDeleteFilesResult
 			failedIDs = append(failedIDs, fid)
 			continue
 		}
+		if chapterFile.ChapterID != nil {
+			if err := course.RequireChapterClaim(s.db, tutorID, *chapterFile.ChapterID); err != nil {
+				return nil, err
+			}
+		}
+		rows = append(rows, chapterFile)
+	}
+
+	successCount := 0
+	for i := range rows {
+		chapterFile := rows[i]
 		if s.fileStore != nil {
 			_ = s.fileStore.Delete(chapterFile.FileURL)
 		}
@@ -304,5 +421,5 @@ func (s *Service) BatchDeleteChapterFiles(fileIDs []int) *BatchDeleteFilesResult
 		SuccessCount: successCount,
 		FailedCount:  len(failedIDs),
 		FailedIDs:    failedIDs,
-	}
+	}, nil
 }

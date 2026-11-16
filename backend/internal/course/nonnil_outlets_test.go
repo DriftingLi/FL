@@ -39,6 +39,8 @@ var nonnilOutletsCourse = map[string]func(t *testing.T) any{
 	"course.ChapterReviewSnapshotDTO.files": outletSnapshotNoFiles,
 	"course.BatchApproveResult.failures":    outletBatchApproveNoFailures,
 	"course.BatchRejectResult.failures":     outletBatchRejectNoFailures,
+	// #2596 D1：无人认领的课程发空名单 `[]`（章节页的共认名单直接 v-for，null 会炸）。
+	"course.CourseClaimantsResult.claimants": outletNoClaimants,
 }
 
 // TestNonNilDeclaredOutletsNeverEmitNull 本域的举证入口（判据本体在 testutil）。
@@ -163,6 +165,18 @@ func outletBatchRejectNoFailures(t *testing.T) any {
 		t.Fatalf("空批量驳回失败: %v", err)
 	}
 	return res
+}
+
+// outletNoClaimants 无人认领的课程：名单发 `[]` 而不是 null（#2596 D1）。
+// 走真实出口 ListCourseClaimants（tutor.Service 那层只是加了「课程存在」前置再回它）。
+func outletNoClaimants(t *testing.T) any {
+	t.Helper()
+	db := testutil.NewMemoryDB(t)
+	claimants, err := ListCourseClaimants(db, seedVisibleCourse(t, db))
+	if err != nil {
+		t.Fatalf("空名单查询失败: %v", err)
+	}
+	return CourseClaimantsResult{Claimants: claimants}
 }
 
 // seedVisibleCourse 播一门「已发布 + 已挂载」但**没有章节**的课程，返回其 id。

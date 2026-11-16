@@ -20315,6 +20315,172 @@ const docTemplate = `{
                 }
             }
         },
+        "/tutor/course/{course_id}/claim": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "讲师认领该课程以获得其章节的编辑权；多讲师可共认同一门课。已认领返回 409。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "讲师端-课程"
+                ],
+                "summary": "认领课程",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "课程ID",
+                        "name": "course_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/tutor.ClaimResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "课程不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "409": {
+                        "description": "已认领",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "只断今后的编辑权：已写章节的作者归属保留、在审内容照常审完。未认领返回 404 档。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "讲师端-课程"
+                ],
+                "summary": "退出认领",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "课程ID",
+                        "name": "course_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/tutor.ClaimResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "未认领该课程",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/tutor/course/{course_id}/claims": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "返回该课程当前认领的讲师（按认领时间升序），供章节页展示共认者",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "讲师端-课程"
+                ],
+                "summary": "认领讲师名单",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "课程ID",
+                        "name": "course_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/course.CourseClaimantsResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "课程不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/tutor/courses": {
             "get": {
                 "security": [
@@ -27474,6 +27640,16 @@ const docTemplate = `{
                         "$ref": "#/definitions/course.ChapterDTO"
                     }
                 },
+                "claim_count": {
+                    "description": "ClaimCount 该课程当前认领讲师数（#2596 D1）。只在**讲师面**列表填（GET /api/tutor/courses）；\n学员端/管理端列表不长这一列，故省略而非 0——「没人认领」与「这个面不报这列」是两件事。",
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "claimed_by_me": {
+                    "description": "ClaimedByMe 当前登录讲师是否已认领本课程（同上，只讲师面填）。",
+                    "type": "boolean",
+                    "x-optional": true
+                },
                 "course_id": {
                     "type": "integer"
                 },
@@ -27927,6 +28103,40 @@ const docTemplate = `{
                 }
             }
         },
+        "course.CourseClaimant": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "is_me": {
+                    "type": "boolean"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "tutor_id": {
+                    "type": "integer"
+                },
+                "tutor_name": {
+                    "type": "string"
+                }
+            }
+        },
+        "course.CourseClaimantsResult": {
+            "type": "object",
+            "properties": {
+                "claimants": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/course.CourseClaimant"
+                    }
+                },
+                "claimed_by_me": {
+                    "type": "boolean"
+                }
+            }
+        },
         "course.CourseDTO": {
             "type": "object",
             "properties": {
@@ -27955,6 +28165,16 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/course.ChapterDTO"
                     },
+                    "x-optional": true
+                },
+                "claim_count": {
+                    "description": "ClaimCount 该课程当前认领讲师数（#2596 D1）。只在**讲师面**列表填（GET /api/tutor/courses）；\n学员端/管理端列表不长这一列，故省略而非 0——「没人认领」与「这个面不报这列」是两件事。",
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "claimed_by_me": {
+                    "description": "ClaimedByMe 当前登录讲师是否已认领本课程（同上，只讲师面填）。",
+                    "type": "boolean",
                     "x-optional": true
                 },
                 "course_id": {
@@ -31871,6 +32091,17 @@ const docTemplate = `{
                     }
                 },
                 "success_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "tutor.ClaimResult": {
+            "type": "object",
+            "properties": {
+                "claimed": {
+                    "type": "boolean"
+                },
+                "course_id": {
                     "type": "integer"
                 }
             }

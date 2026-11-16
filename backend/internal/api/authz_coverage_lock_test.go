@@ -102,12 +102,16 @@ type tutorRouteGate struct {
 	want   authz.Capability
 }
 
-// wantTutorRoutes 讲师域 9 条路由的挂键账本（spec A2）：读三端点留 tutor.access，写六端点挂
-// course.author。写面含附件上传删除与图文传图——它们改的都是章节内容。
+// wantTutorRoutes 讲师域 12 条路由的挂键账本（spec A2 + #2596 B3/D1）：读四端点留 tutor.access，
+// 写八端点挂 course.author。写面含附件上传删除与图文传图——它们改的都是章节内容；
+// 认领/退出认领（#2596）改的是编辑权本身，与写章节同属 course.author（规格 B3）。
 var wantTutorRoutes = []tutorRouteGate{
 	{http.MethodGet, "/courses", authz.CapTutorAccess},
 	{http.MethodGet, "/course/:course_id/chapters", authz.CapTutorAccess},
 	{http.MethodGet, "/chapter/:chapter_id", authz.CapTutorAccess},
+	// 共认名单是**读**面（#2596 D1）：它不泄露「谁能编辑」，只报「谁在编」，
+	// 而读面不受认领限制是同一条规格原则（B4）。
+	{http.MethodGet, "/course/:course_id/claims", authz.CapTutorAccess},
 
 	{http.MethodPost, "/chapter/:chapter_id/upload", authz.CapCourseAuthor},
 	{http.MethodPost, "/chapter/:chapter_id/submit-review", authz.CapCourseAuthor},
@@ -115,6 +119,10 @@ var wantTutorRoutes = []tutorRouteGate{
 	{http.MethodPut, "/chapter/:chapter_id", authz.CapCourseAuthor},
 	{http.MethodDelete, "/file/:file_id", authz.CapCourseAuthor},
 	{http.MethodPost, "/files/batch-delete", authz.CapCourseAuthor},
+	// 认领/退出认领（#2596 B3）：挂 course.author —— 「能不能自己认领一门课来写」
+	// 与「能不能写章节」是同一个能力，拆开会让只读讲师多一个无意义的键。
+	{http.MethodPost, "/course/:course_id/claim", authz.CapCourseAuthor},
+	{http.MethodDelete, "/course/:course_id/claim", authz.CapCourseAuthor},
 }
 
 // wantTutorFileRoutes 文件库蓝图的路由账本（spec A2 + #2595 裁定）：除章节侧换挂外全部挂

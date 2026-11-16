@@ -325,6 +325,8 @@ func TestSlice6TutorEnvelopeKeys(t *testing.T) {
 	if err := db.Create(chapterFile).Error; err != nil {
 		t.Fatalf("插入章节文件失败: %v", err)
 	}
+	// #2596：讲师面写路径前置认领谓词（下面要 PUT 章节 + 删两个文件），故先落认领行。
+	seedTutorCourseClaim(t, db, tutor.TutorID, course.CourseID)
 
 	rec := catalogRequest(t, r, token, "GET", "/api/tutor/courses", "")
 	slice6AssertKeys(t, rec, 200, "courses", "page", "pages", "total")

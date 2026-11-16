@@ -35,12 +35,12 @@
           <UiButton
             size="small"
             :loading="submittingReview"
-            :disabled="chapterDetail.review_status === 'pending'"
+            :disabled="!canWrite || chapterDetail.review_status === 'pending'"
             @click="submitReview"
           >
             <UiIcon name="upload" /> 提交审核
           </UiButton>
-          <UiButton size="small" @click="openMetaDialog">
+          <UiButton size="small" :disabled="!canWrite" @click="openMetaDialog">
             <UiIcon name="pencil" /> 编辑信息
           </UiButton>
         </template>
@@ -51,6 +51,18 @@
         class="mb-4 rounded-lg border border-bad-soft bg-bad-soft px-4 py-3 text-sm text-bad-strong"
       >
         上次驳回理由：{{ chapterDetail.reject_reason }}
+      </div>
+
+      <!-- 未认领降级（#2596 D3）：直达本页也可能没认领这门课。读面不受限（内容照常展示），
+           但所有写操作禁用并说明原因；后端 403 兜底仍在（本条只是把失败提前说清楚）。 -->
+      <div
+        v-if="claimState === 'unclaimed'"
+        class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warning/40 bg-warning-soft px-4 py-3 text-sm"
+      >
+        <span class="text-ink">认领本课程后才能编辑章节；现在可以先浏览内容</span>
+        <UiButton size="small" variant="primary" :loading="claiming" @click="handleClaim">
+          认领课程
+        </UiButton>
       </div>
 
       <UiCard class="mb-6">
@@ -70,7 +82,7 @@
                   <UiButton
                     size="small"
                     :loading="savingContent"
-                    :disabled="!contentChanged"
+                    :disabled="!canWrite || !contentChanged"
                     @click="saveContent"
                   >
                     <UiIcon name="check" /> 保存正文
@@ -104,10 +116,10 @@
                 <div class="mb-3 flex items-center justify-between">
                   <h3 class="text-sm font-semibold text-ink">已上传文件（{{ group.files.length }}）</h3>
                   <div class="flex items-center gap-2">
-                    <UiButton size="small" @click="openLibraryPicker(group.type)">
+                    <UiButton size="small" :disabled="!canWrite" @click="openLibraryPicker(group.type)">
                       <UiIcon name="folder-open" /> 从文件库挂接
                     </UiButton>
-                    <UiButton size="small" @click="openUploadDialog(group.type)">
+                    <UiButton size="small" :disabled="!canWrite" @click="openUploadDialog(group.type)">
                       <UiIcon name="upload" /> 上传{{ group.label }}
                     </UiButton>
                   </div>
@@ -133,6 +145,7 @@
                         variant="text"
                         size="small"
                         aria-label="换文件"
+                        :disabled="!canWrite"
                         @click.stop="openLibraryPicker(group.type, file)"
                       >
                         换文件
@@ -141,6 +154,7 @@
                         variant="text"
                         size="small"
                         class="text-bad"
+                        :disabled="!canWrite"
                         aria-label="取消挂接"
                         @click.stop="handleDetachFile(file)"
                       >
@@ -152,6 +166,7 @@
                       variant="text"
                       size="small"
                       class="text-bad"
+                      :disabled="!canWrite"
                       aria-label="删除文件"
                       @click.stop="handleDeleteFile(file)"
                     >
@@ -288,7 +303,7 @@
             <span class="truncate text-sm text-ink" :title="f.file_name">{{ f.file_name }}</span>
             <span class="text-xs text-ink-3">{{ formatSize(f.file_size) }}</span>
           </div>
-          <UiButton size="small" variant="primary" @click="handleAttachLibrary(f)">
+          <UiButton size="small" variant="primary" :disabled="!canWrite" @click="handleAttachLibrary(f)">
             {{ libraryMode === 'swap' ? '换入' : '挂接' }}
           </UiButton>
         </div>
@@ -327,6 +342,43 @@ import { useConfirm } from '@/composables/useConfirm'
 
 const route = useRoute()
 const router = useRouter()
+
+// ===== 认领状态（#2596 D3）=====
+// 'unknown' 是刻意的初值：名单还没拉回来时**不能**当作「已认领」（否则未认领讲师会先看到
+// 可点的写按钮、点下去才 403），也不能当作「未认领」（已认领者会看到一条莫名的提示条）。
+// 故初值禁用写操作、但不显示提示条；名单回来后再落成 claimed / unclaimed。
+const claimState = ref<'unknown' | 'claimed' | 'unclaimed'>('unknown')
+const claiming = ref(false)
+const canWrite = computed(() => claimState.value === 'claimed')
+
+async function loadClaimState() {
+  const courseId = Number(route.params.courseId)
+  if (!courseId) {
+    // 直达本页时 URL 缺课程 id：无法判定认领，按未认领降级（fail closed，后端 403 兜底仍在）
+    claimState.value = 'unclaimed'
+    return
+  }
+  try {
+    const res = await tutorApi.getCourseClaimants(courseId)
+    claimState.value = res.claimed_by_me ? 'claimed' : 'unclaimed'
+  } catch {
+    // 名单拉不到：保持 unknown（写操作保持禁用），不猜
+  }
+}
+
+async function handleClaim() {
+  if (claiming.value) return
+  claiming.value = true
+  try {
+    await tutorApi.claimCourse(Number(route.params.courseId))
+    ElMessage.success('已认领，可以开始编辑章节')
+    claimState.value = 'claimed'
+  } catch {
+    await loadClaimState()
+  } finally {
+    claiming.value = false
+  }
+}
 
 const chapterDetail = ref<TutorChapterDetail | null>(null)
 const courseName = ref('')
@@ -703,6 +755,7 @@ watch(activeTab, () => {
 
 onMounted(() => {
   loadChapterDetail()
+  loadClaimState()
 })
 </script>
 

@@ -504,6 +504,13 @@ func (s *Service) SwapChapterFile(ctx context.Context, tutorID, chapterID, oldFi
 	if oldFileID == newFileID {
 		return fmt.Errorf("%w: 新旧文件不能相同", ErrInvalidParam)
 	}
+	// 认领谓词前置（#2596 / 规格 B2 + #2595 遗留的 swap 洞）：换挂改的是**章节**的附件挂接
+	// 并把章节打回草稿，与「管自己的文件库」是两件事。能力键已归 course.author（#2595 裁定），
+	// 但能力键只回答「能不能用这一组端点」，不回答「有没有权改这门课」——故谓词仍必须前置。
+	// 放在文件归属校验之前：先答「你有没有资格动这门课」，再说「这两个文件是不是你的」。
+	if err := course.RequireChapterClaim(s.db, tutorID, chapterID); err != nil {
+		return err
+	}
 	old, err := s.loadFile(ctx, tutorID, oldFileID)
 	if err != nil {
 		return err

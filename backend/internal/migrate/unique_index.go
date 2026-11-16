@@ -79,6 +79,9 @@ var criticalUniqueIndexes = []UniqueIndexSpec{
 		DDL: "CREATE UNIQUE INDEX idx_job_applications_applied_unique ON job_applications (job_posting_id, student_user_id) WHERE status = 'applied'"},
 	{Name: "idx_job_reports_student_job_unique", Table: "job_reports", Migration: "000015_job_postings.up.sql",
 		DDL: "CREATE UNIQUE INDEX idx_job_reports_student_job_unique ON job_reports (job_posting_id, student_user_id)"},
+	// ===== 000059_tutor_course_claim.up.sql（#2596 课程认领：并发重复认领的唯一键兜底）=====
+	{Name: "idx_tutor_course_claim_unique", Table: "tutor_course_claim", Migration: "000059_tutor_course_claim.up.sql",
+		DDL: "CREATE UNIQUE INDEX IF NOT EXISTS idx_tutor_course_claim_unique ON tutor_course_claim (tutor_id, course_id)"},
 }
 
 // CriticalUniqueIndexes 返回登记表副本（testutil 建库后补跑、check-columns 对账共用同一宿主）。
