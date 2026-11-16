@@ -42,6 +42,11 @@
         />
         <UiButton variant="primary" @click="loadData">查询</UiButton>
         <UiButton v-if="hasFilters" variant="ghost" @click="resetFilters">重置</UiButton>
+        <!-- 「我创建的」筛选（#2598 C2）：讲师编辑面专属轴，一眼分清「哪些题我能动手」 -->
+        <label class="ml-auto flex cursor-pointer items-center gap-2 text-sm text-ink-soft">
+          <UiSwitch v-model="mineOnly" size="small" @change="applyMineFilter" />
+          <span>只看我创建的</span>
+        </label>
       </div>
     </UiCard>
 
@@ -66,6 +71,14 @@
         </el-table-column>
         <el-table-column label="证件" width="140">
           <template #default="{ row }">{{ credentials.find(c => c.id === row.credential_id)?.name || '—' }}</template>
+        </el-table-column>
+        <!-- 创建者（#2598 C2）：讲师要一眼看出哪些题能动手；空创建者是历史遗留，只有管理员能动 -->
+        <el-table-column label="创建者" width="110">
+          <template #default="{ row }">
+            <UiTag v-if="row.created_by == null" tone="neutral">历史题</UiTag>
+            <UiTag v-else-if="row.created_by === currentUserId" tone="success">我</UiTag>
+            <span v-else class="text-ink-soft">其他讲师</span>
+          </template>
         </el-table-column>
         <el-table-column prop="content" label="题干" show-overflow-tooltip />
         <el-table-column label="状态" width="120">
@@ -163,6 +176,8 @@ import UiAlert from '@/components/ui/UiAlert.vue'
 import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 import UiSelect, { type UiSelectOption } from '@/components/ui/UiSelect.vue'
+import UiSwitch from '@/components/ui/UiSwitch.vue'
+import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
 const statusMap: Record<string, string> = { draft: '草稿', pending: '待审核', published: '已发布' }
@@ -196,6 +211,13 @@ const QUESTION_STATUS_OPTIONS: UiSelectOption[] = [
 const browseCredentialId = ref<number | null>(null)
 const questions = ref<Question[]>([])
 const filters = ref({ type: '', status: '', keyword: '' })
+/**
+ * 「只看我创建的」（#2598 C2）：把 created_by 传成当前讲师的 id，由服务端筛行集。
+ * 不在前端做本地过滤——列表是分页的，本地筛会把「本页内有几条」错当成「一共有几条」。
+ */
+const mineOnly = ref(false)
+const authStore = useAuthStore()
+const currentUserId = computed(() => authStore.userInfo?.user_id ?? 0)
 const detailVisible = ref(false)
 const currentQuestion = ref<(Question & { reject_reason?: string }) | null>(null)
 
@@ -215,6 +237,8 @@ const {
   // #412：讲师端显式请求按 ID 升序，翻页时 ID 单调推进（默认「最新提交优先」保留给其它调用方）。
   const params: any = { page: page.value, page_size: pageSize.value, sort: 'id_asc', ...filters.value }
   if (browseCredentialId.value) params.credential_id = browseCredentialId.value
+  // 「只看我创建的」：带自己的 id（0 表示身份还没落定，此时不筛也比筛出错好）
+  if (mineOnly.value && currentUserId.value > 0) params.created_by = currentUserId.value
   const res = await questionBankApi.getQuestions(params)
   // 票 6（ADR-0060 决策 6）：容器键中立化——本域的行不再叫 questions，一律 items
   return res
@@ -229,7 +253,8 @@ const hasFilters = computed(
     browseCredentialId.value !== null ||
     filters.value.type !== '' ||
     filters.value.status !== '' ||
-    filters.value.keyword.trim() !== ''
+    filters.value.keyword.trim() !== '' ||
+    mineOnly.value
 )
 
 onMounted(() => {
@@ -246,9 +271,16 @@ async function loadCredentials() {
   }
 }
 
+/** 切换「只看我创建的」：筛的是全量，必须回到第 1 页再取 */
+function applyMineFilter() {
+  page.value = 1
+  loadData()
+}
+
 function resetFilters() {
   browseCredentialId.value = null
   filters.value = { type: '', status: '', keyword: '' }
+  mineOnly.value = false
   page.value = 1
   loadData()
 }

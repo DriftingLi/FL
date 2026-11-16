@@ -31,6 +31,8 @@ var ErrStatus = &httpx.ErrStatusTable{
 		{Sentinel: ErrQuestionAnswerInvalid, Status: http.StatusBadRequest},
 		{Sentinel: ErrSubmitNotDraft, Status: http.StatusBadRequest},
 		{Sentinel: ErrRejectReasonRequired, Status: http.StatusBadRequest},
+		// #2598 写隔离：题目不是你的 → 403（不用 404 伪装，C3）。
+		{Sentinel: ErrQuestionNotOwned, Status: http.StatusForbidden},
 	},
 }
 
@@ -112,6 +114,16 @@ func ActsAsQuestionEditor(c *gin.Context) bool {
 	return middleware.HasCapability(c, authz.CapQuestionAuthor) || middleware.HasCapability(c, authz.CapQuestionReview)
 }
 
+// createdByFilterFor 「我创建的」筛选轴的入口装配（#2598 C2）：
+// 只对**编辑面**生效——学员面（题库池）根本没有「创建者」这个概念，让它接受这个参数
+// 等于给学员面开一条按作者收窄池的旁路（池的可见性口径只该由 scope 回答，C4）。
+func createdByFilterFor(c *gin.Context) *int {
+	if !ActsAsQuestionEditor(c) {
+		return nil
+	}
+	return httpx.QueryIDPtr(c, "created_by")
+}
+
 // EditorQuestionScope 装配编辑面 scope：显式 credential_id 是**筛选轴**（不是可见性口径）。
 func EditorQuestionScope(c *gin.Context) QuestionEditScope {
 	return NewQuestionEditScope(middleware.CredentialIDPtr(c))
@@ -130,6 +142,8 @@ type listQuestionsReq struct {
 	// Editor 决定走哪一半读面（能力分流，见 ActsAsQuestionEditor）：
 	// true = 编辑面（draft/pending 全量 + 证件筛选轴），false = 学员面（题库池）。
 	Editor bool
+	// CreatedBy 「我创建的」筛选轴（#2598 C2）：只在编辑面有效，nil = 不筛（C4 读面不变）。
+	CreatedBy *int
 }
 
 // ListQuestions 题目列表分页
@@ -163,6 +177,7 @@ func (h *handler) ListQuestions(c *gin.Context) {
 				TagID:    httpx.QueryIDPtr(c, "tag_id"),
 				Sort:     c.Query("sort"),
 				Editor:   ActsAsQuestionEditor(c),
+				CreatedBy: createdByFilterFor(c),
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *listQuestionsReq) (*QuestionPageDTO, error) {
@@ -172,7 +187,7 @@ func (h *handler) ListQuestions(c *gin.Context) {
 			// listQuestions），「挂能力守卫」会直接打断它 —— 该端点进「学员可读面」台账的理由
 			// 由 ADR-0062 票 5 的台账逐条登记（本票只把它的读面收进池）。
 			if req.Editor {
-				return h.svc.ListQuestions(req.Page, req.PageSize, req.QType, req.Status, req.Keyword, req.TagID, EditorQuestionScope(c), req.Sort)
+				return h.svc.ListQuestions(req.Page, req.PageSize, req.QType, req.Status, req.Keyword, req.TagID, EditorQuestionScope(c), req.Sort, req.CreatedBy)
 			}
 			return h.svc.ListPoolQuestions(req.Page, req.PageSize, req.QType, req.Keyword, req.TagID, StudentQuestionScope(c), req.Sort)
 		},
@@ -346,9 +361,19 @@ func (h *handler) BatchImport(c *gin.Context) {
 	}.Handle(c)
 }
 
-// questionIDReq 题目 ID 路径参数请求。
+// questionIDReq 题目 ID 路径参数请求。ActorID/ActorType 只由**写路径**（删除 / 提交审核）填，
+// 读路径与审核路径（发布 / 驳回，管理员独占）留零值——归属判据只在写路径上问「是不是你的」。
 type questionIDReq struct {
-	ID int
+	ID        int
+	ActorID   int
+	ActorType string
+}
+
+// actorOf 取当前登录者的 id 与角色（归属谓词的两个入参，单点装配）。
+// 不用 middleware.CurrentUserID 之外的口径：令牌里的 uid 与角色就是这两格的事实源。
+func actorOf(c *gin.Context) (int, string) {
+	id := middleware.CurrentUserID(c)
+	return id, middleware.CurrentRole(c)
 }
 
 // GetQuestion 题目详情
@@ -398,6 +423,7 @@ func (h *handler) GetQuestion(c *gin.Context) {
 type updateQuestionReq struct {
 	ID        int
 	Input     QuestionUpdateInput
+	ActorID   int
 	ActorType string
 }
 
@@ -425,12 +451,11 @@ func (h *handler) UpdateQuestion(c *gin.Context) {
 			if err != nil {
 				return nil, err
 			}
-			role, _ := c.Get(string(middleware.CtxUserRole))
-			roleStr, _ := role.(string)
-			return &updateQuestionReq{ID: id, Input: *input, ActorType: roleStr}, nil
+			actorID, actorType := actorOf(c)
+			return &updateQuestionReq{ID: id, Input: *input, ActorID: actorID, ActorType: actorType}, nil
 		},
 		Invoke: func(ctx context.Context, req *updateQuestionReq) (*QuestionDTO, error) {
-			result, err := h.svc.UpdateQuestion(req.ID, req.Input, req.ActorType)
+			result, err := h.svc.UpdateQuestion(req.ID, req.Input, req.ActorID, req.ActorType)
 			if err != nil {
 				return nil, err
 			}
@@ -461,10 +486,11 @@ func (h *handler) DeleteQuestion(c *gin.Context) {
 			if err != nil {
 				return nil, err
 			}
-			return &questionIDReq{ID: id}, nil
+			actorID, actorType := actorOf(c)
+			return &questionIDReq{ID: id, ActorID: actorID, ActorType: actorType}, nil
 		},
 		Invoke: func(ctx context.Context, req *questionIDReq) (*struct{}, error) {
-			if err := h.svc.DeleteQuestion(req.ID); err != nil {
+			if err := h.svc.DeleteQuestion(req.ID, req.ActorID, req.ActorType); err != nil {
 				return nil, err
 			}
 			return &struct{}{}, nil
@@ -531,10 +557,11 @@ func (h *handler) SubmitQuestion(c *gin.Context) {
 			if err != nil {
 				return nil, err
 			}
-			return &questionIDReq{ID: id}, nil
+			actorID, actorType := actorOf(c)
+			return &questionIDReq{ID: id, ActorID: actorID, ActorType: actorType}, nil
 		},
 		Invoke: func(ctx context.Context, req *questionIDReq) (*QuestionDTO, error) {
-			result, err := h.svc.SubmitQuestion(req.ID)
+			result, err := h.svc.SubmitQuestion(req.ID, req.ActorID, req.ActorType)
 			if err != nil {
 				return nil, err
 			}

@@ -453,10 +453,17 @@ func (s *Service) GetQuestion(id int) (QuestionDTO, error) {
 //   - 讲师（非 admin）修改已发布题的内容 → 回 pending 重审（暂离题库池），并清驳回理由；
 //   - 管理员即审核者，修改保持原状态即时生效（自审无意义）；
 //   - 纯分区属性（标签）修改不动状态。
-func (s *Service) UpdateQuestion(id int, in QuestionUpdateInput, actorType string) (QuestionDTO, error) {
+//
+// 归属判定前置（#2598 / 规格 C1）：载入题行之后立刻验，不合规即 ErrQuestionNotOwned（403）。
+// 位置在「校验入参」之前是有意的——先答「你能不能动这道题」，再答「你给的字段对不对」；
+// 反过来的话，未授权者能靠错误文案差异探测出题目的题型/凭证等字段约束。
+func (s *Service) UpdateQuestion(id int, in QuestionUpdateInput, actorID int, actorType string) (QuestionDTO, error) {
 	var q model.Question
 	if err := s.db.First(&q, id).Error; err != nil {
 		return QuestionDTO{}, ErrQuestionNotFound
+	}
+	if err := RequireQuestionOwnership(&q, actorID, actorType); err != nil {
+		return QuestionDTO{}, err
 	}
 	if in.Type != nil && !slices.Contains(ValidQuestionTypes, *in.Type) {
 		return QuestionDTO{}, ErrQuestionTypeInvalid
@@ -566,10 +573,16 @@ func applyQuestionUpdateFields(q *model.Question, in QuestionUpdateInput) {
 
 // SubmitQuestion 显式「提交审核」动作（票 6）：draft → pending，清空驳回理由。
 // 取代旧「编辑时顺手把 status 传回去」的实现巧合（前端 QuestionManage 的提交按钮改接本端点）。
-func (s *Service) SubmitQuestion(id int) (QuestionDTO, error) {
+//
+// 归属判定前置（#2598 / 规格 C1）：提审等于「把这题推进发布流程」，与改它同属编辑权。
+// 位置在状态前置之前——先答「是不是你的」，再答「它能不能提交」。
+func (s *Service) SubmitQuestion(id, actorID int, actorType string) (QuestionDTO, error) {
 	var q model.Question
 	if err := s.db.First(&q, id).Error; err != nil {
 		return QuestionDTO{}, ErrQuestionNotFound
+	}
+	if err := RequireQuestionOwnership(&q, actorID, actorType); err != nil {
+		return QuestionDTO{}, err
 	}
 	if q.Status != "draft" {
 		return QuestionDTO{}, ErrSubmitNotDraft
@@ -586,12 +599,17 @@ func (s *Service) SubmitQuestion(id int) (QuestionDTO, error) {
 }
 
 // DeleteQuestion 删除题目，并清理题图存储文件。
-func (s *Service) DeleteQuestion(id int) error {
+//
+// 归属判定前置（#2598 / 规格 C1）：删除是最不可逆的写路径，归属判定在这里尤其不能漏。
+func (s *Service) DeleteQuestion(id, actorID int, actorType string) error {
 	var q model.Question
 	if err := s.db.First(&q, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return ErrQuestionNotFound
 		}
+		return err
+	}
+	if err := RequireQuestionOwnership(&q, actorID, actorType); err != nil {
 		return err
 	}
 	if err := s.db.Delete(&q).Error; err != nil {
@@ -649,7 +667,7 @@ type QuestionRejectResultDTO struct {
 // 为什么不把两个公开入口也合并成一个：「池的已发布不可被入参绕开」这道锁靠的是**签名差异**
 // ——学员面不收 status、编辑面收 QuestionEditScope（ADR-0062 决策 4）。合并入口就是把那道锁拆了。
 func (s *Service) listQuestions(page, pageSize int, qType, status, keyword string, tagID *int,
-	narrow func(*gorm.DB) *gorm.DB, sortBy string) (*QuestionPageDTO, error) {
+	narrow func(*gorm.DB) *gorm.DB, createdBy *int, sortBy string) (*QuestionPageDTO, error) {
 	// 排序口径（#412）：缺省保持现状「最新提交优先」（created_at DESC, id ASC）；
 	// 讲师端显式传 id_asc 请求按 ID 升序，翻页时 ID 单调推进、不再呈锯齿跳回。
 	// #1096：排序位由变参改显式命名参数（空串 = 缺省口径）。
@@ -670,6 +688,9 @@ func (s *Service) listQuestions(page, pageSize int, qType, status, keyword strin
 		if tagID != nil {
 			q = q.Where("id IN (SELECT question_id FROM question_tag_relation WHERE tag_id = ?)", *tagID)
 		}
+		// 「我创建的」筛选轴（#2598 C2）：只收行集，与归属谓词不同源——
+		// 筛掉别人的题不会让别人的题变得可写，反之亦然。
+		q = applyCreatedByFilter(q, createdBy)
 		return narrow(q)
 	})
 	if err != nil {
@@ -682,8 +703,11 @@ func (s *Service) listQuestions(page, pageSize int, qType, status, keyword strin
 // 不排源标记真题题，status 由调用方按需筛——这些正是审核队列与题目管理页的本职。
 // 编辑面 scope 必传（ADR-0062 决策 4）：证件轴是筛选而非可见性，形态与学员面不同名、不可互换。
 // 学员侧列表走 ListPoolQuestions（同一入口按能力分流，见 api/question_bank.go）。
-func (s *Service) ListQuestions(page, pageSize int, qType string, status, keyword string, tagID *int, scope QuestionEditScope, sortBy string) (*QuestionPageDTO, error) {
-	return s.listQuestions(page, pageSize, qType, status, keyword, tagID, scope.ApplyListFilter, sortBy)
+//
+// createdBy 是「我创建的」筛选轴（#2598 C2）：nil = 看全量（C4 读面不变，默认行为）；
+// 非 nil = 只看该讲师创建的题。它**只管行集**，不参与任何写判定。
+func (s *Service) ListQuestions(page, pageSize int, qType string, status, keyword string, tagID *int, scope QuestionEditScope, sortBy string, createdBy *int) (*QuestionPageDTO, error) {
+	return s.listQuestions(page, pageSize, qType, status, keyword, tagID, scope.ApplyListFilter, createdBy, sortBy)
 }
 
 // ListPoolQuestions 题目列表**学员面**（ADR-0062 决策 4）：池口径由 scope 承载，
@@ -691,7 +715,7 @@ func (s *Service) ListQuestions(page, pageSize int, qType string, status, keywor
 // 出口 DTO 形态与按 id 直取的学员面一致（含答案/解析——池内的题本就可以作答并看到解析），
 // 差异只在行集：draft / pending / 源标记真题题 / 非当前证件一律不出现在结果里。
 func (s *Service) ListPoolQuestions(page, pageSize int, qType, keyword string, tagID *int, scope QuestionReadScope, sortBy string) (*QuestionPageDTO, error) {
-	return s.listQuestions(page, pageSize, qType, "", keyword, tagID, scope.Apply, sortBy)
+	return s.listQuestions(page, pageSize, qType, "", keyword, tagID, scope.Apply, nil, sortBy)
 }
 
 // questionPage 题目分页信封装配（两条列表路径共用：DTO 出口与标签批量附加只有一处实现）。
