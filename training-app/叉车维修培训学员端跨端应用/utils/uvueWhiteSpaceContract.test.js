@@ -467,8 +467,8 @@ describe('uvue `white-space` 承载面契约（#1113）', () => {
       expect([...(classCarriers(tpl).get('code-btn-text') || [])]).toEqual(['text']);
       // 下界 30 → **27** 是一次显式决定（#1554）：本页退出入口整块撤净，
       // `.logout-wrap` / `.logout-btn` / `.logout-text` 三个类随模板一起删除 ⇒ 映射条目 -3。
-      // 27 → **19** 是 #2522 的显式决定：头像兜底从「蓝底 <view> + 👤 <text>」收成单个
-      // `<image>`（`/static/icons/profile/avatar.png`），`.cell-avatar-placeholder` /
+      // 21 → **19** 是 #2563 + #2522 的同一处决定：头像兜底从「蓝底 <view> + 👤 <text>」收成单个
+      // `<image>`（`/static/icons/avatar/avatar-default-worker.png`），`.cell-avatar-placeholder` /
       // `.cell-avatar-icon` 两个类随 v-else 分支一起删除 ⇒ 映射条目 -2。
       // 19 → **17** 同属 #2522：按原型 307:6234 把「一张卡包 7 行」改成「每行一张独立白卡」，
       // `.card` 与 `.cell-border-none` 两个类随包裹层一起删除 ⇒ 映射条目再 -2。

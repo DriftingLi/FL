@@ -8,7 +8,7 @@
         <view class="cell" @click="onEditAvatar">
           <text class="cell-label">修改头像</text>
           <view class="cell-avatar-wrap">
-            <image class="cell-avatar" :src="avatarUrl.length > 0 ? avatarUrl : '/static/icons/profile/avatar.png'"
+            <image class="cell-avatar" :src="avatarUrl.length > 0 ? avatarUrl : '/static/icons/avatar/avatar-default-worker.png'"
               mode="aspectFill" :webp="true" />
           </view>
           <text class="cell-arrow">›</text>

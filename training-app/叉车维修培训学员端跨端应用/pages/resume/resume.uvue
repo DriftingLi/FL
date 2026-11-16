@@ -7,9 +7,7 @@
             <view class="user-card">
                 <view class="user-row">
                     <image v-if="avatarUrl.length > 0" class="avatar" :src="avatarUrl" mode="aspectFill" :webp="true" />
-                    <view v-else class="avatar avatar-placeholder">
-                        <text class="avatar-icon">👷</text>
-                    </view>
+                    <image v-else class="avatar" src="/static/icons/avatar/avatar-default-worker.png" mode="aspectFill" />
                     <view class="user-meta">
                         <text class="user-name">{{ userName }}</text>
                         <view class="lv-badge">
@@ -257,15 +255,6 @@
         height: 96rpx;
         border-radius: 48rpx;
         background-color: #ffffff;
-    }
-
-    .avatar-placeholder {
-        align-items: center;
-        justify-content: center;
-    }
-
-    .avatar-icon {
-        font-size: 52rpx;
     }
 
     .user-meta {

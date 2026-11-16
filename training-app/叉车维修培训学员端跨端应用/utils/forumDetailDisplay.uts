@@ -9,7 +9,6 @@ export type ForumReplyDisplay = {
     id : number
     authorId : number
     authorName : string
-    authorInitial : string
     authorAvatar : string
     avatarColor : string
     createdAtText : string

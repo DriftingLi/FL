@@ -32,6 +32,7 @@ module.exports = {
 
     // ── 批2（#1606 学员端 14 页）新增 ──
     '#2979FF': 'batch2 多页主操作蓝（option-key-selected/submit-btn/comment-send-active/section-action 等）——历史蓝，值 ≠ $primary-color(#239EDD)，字面替换会全站视觉回归，待主色 token 票裁',
+    // '#4A9AFF' —— #2563 起 personal-info 头像兜底改走包内默认头像图（.cell-avatar-placeholder 的浅蓝底随类删除），该值无承载，条目退役
     '#FFF6E5': 'pages/profile/personal-info.uvue 提示条浅橙底——token 表无警告浅底对应（$warning-tint 是 #FFF3E0），语义相近但值不等，待真机裁',
     '#E3F2FD': 'pages/profile/favorites.uvue 收藏封面兜底浅蓝底——token 表无对应浅蓝（$primary-tint 是 #EBF9FF），#2523 起 points-detail 的同值承载退役，此值仍由 favorites 承载',
     '#EE0A24': 'batch2 points 两页危险文字/删除按钮——$danger-color(#ff3b30) 语义相同但值不等（vant 系红），替换会视觉回归，待红系 token 收敛裁',

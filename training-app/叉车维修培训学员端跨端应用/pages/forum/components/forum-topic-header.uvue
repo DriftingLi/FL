@@ -3,7 +3,7 @@
         <view class="author-avatar" :style="{ backgroundColor: avatarColor }">
             <image v-if="authorAvatar.length > 0" class="author-avatar-img"
                 :src="authorAvatar" mode="aspectFill" :webp="true" />
-            <text v-else class="author-avatar-text">{{ authorInitial }}</text>
+            <image v-else class="author-avatar-img" src="/static/icons/avatar/avatar-default-worker.png" mode="aspectFill" />
         </view>
         <view class="author-info">
             <text class="author-name">{{ authorName }}</text>
@@ -38,7 +38,6 @@
     // 扁平原始类型 props（全仓先例）；展示文案与权限位由壳层预解析下发
     withDefaults(defineProps<{
         authorName? : string
-        authorInitial? : string
         authorAvatar? : string
         avatarColor? : string
         createdAtText? : string
@@ -53,7 +52,6 @@
         canDelete? : boolean
     }>(), {
         authorName: '匿名学员',
-        authorInitial: '学',
         authorAvatar: '',
         avatarColor: '#2979ff',
         createdAtText: '',
@@ -98,12 +96,6 @@
         align-items: center;
         justify-content: center;
         margin-right: 16rpx;
-    }
-
-    .author-avatar-text {
-        font-size: 28rpx;
-        color: #ffffff;
-        font-weight: bold;
     }
 
     .author-avatar-img {

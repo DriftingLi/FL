@@ -14,9 +14,7 @@
                 </view>
                 <view class="tab-avatar-btn" @click="onMine">
                     <image v-if="avatarUrl.length > 0" class="tab-avatar" :src="avatarUrl" mode="aspectFill" :webp="true" />
-                    <view v-else class="tab-avatar-placeholder">
-                        <text class="tab-avatar-icon">👷</text>
-                    </view>
+                    <image v-else class="tab-avatar" src="/static/icons/avatar/avatar-default-worker.png" mode="aspectFill" />
                 </view>
             </view>
 
@@ -373,19 +371,6 @@
         height: 56rpx;
         border-radius: 28rpx;
         border: 2rpx solid $border-color-light;
-    }
-
-    .tab-avatar-placeholder {
-        width: 56rpx;
-        height: 56rpx;
-        border-radius: 28rpx;
-        background-color: $primary-tint;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .tab-avatar-icon {
-        font-size: 30rpx;
     }
 
     /* 筛选标签：原型是行内文字筛选（无胶囊底色），选中态只换主色 */
