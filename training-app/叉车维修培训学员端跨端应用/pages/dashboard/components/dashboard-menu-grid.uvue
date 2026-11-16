@@ -1,11 +1,9 @@
 <template>
-    <!-- 功能入口网格 -->
+    <!-- 功能入口网格（原型 404_2195：四格 3D 插画、无彩色底块；#1846 的「全局搜索」是现网独有第 5 格） -->
     <view class="menu-grid">
         <view v-for="(item, idx) in menuItems" :key="idx" class="menu-item"
             :class="{ 'menu-item--col4': idx < 5 }" @click="onMenuClick(item)">
-            <view class="menu-icon-box" :style="{ backgroundColor: item.color }">
-                <text class="menu-icon-text">{{ item.icon }}</text>
-            </view>
+            <image class="menu-icon-img" :src="'/static/icons/dashboard/' + item.icon + '.png'" mode="aspectFit" />
             <text class="menu-label">{{ item.title }}</text>
         </view>
     </view>
@@ -18,8 +16,8 @@
     type MenuItem = {
         key : string
         title : string
+        /** static/icons/dashboard 下的文件名（不含 .png），出图尺寸 = 44px 容器 × 2 */
         icon : string
-        color : string
         path : string
         available : boolean
         /** #1846：搜索自页头右槽移入宫格。搜索页「取消」走 navigateBack，须压栈进入；其余主目的地维持 reLaunch 清栈 */
@@ -27,12 +25,12 @@
     }
 
     const menuItems : MenuItem[] = [
-        { key: 'course-mall', title: '课程商城', icon: '🛒', color: '#FF6B35', path: '/pages/mall/mall', available: true },
-        { key: 'question-bank', title: '题库练习', icon: '📚', color: '#4ECDC4', path: '/pages/practice/practice', available: true },
-        { key: 'materials', title: '学习资料', icon: '📚', color: '#2979ff', path: '/pages/resources/materials', available: true },
-        { key: 'exam-info', title: '考情资讯', icon: '📣', color: '#96CEB4', path: '/pages/exam-info/exam-info', available: true },
-        // #1846：页头 🔍 的页内可达落点（色值复用本格既有蓝，不新色）
-        { key: 'search', title: '全局搜索', icon: '🔍', color: '#2979ff', path: '/pages/search/search', available: true, push: true },
+        { key: 'course-mall', title: '课程商城', icon: 'grid-course-mall', path: '/pages/mall/mall', available: true },
+        { key: 'question-bank', title: '题库练习', icon: 'grid-question-bank', path: '/pages/practice/practice', available: true },
+        { key: 'materials', title: '学习资料', icon: 'grid-materials', path: '/pages/resources/materials', available: true },
+        { key: 'exam-info', title: '考情资讯', icon: 'grid-exam-info', path: '/pages/exam-info/exam-info', available: true },
+        // #1846：页头搜索图标的页内可达落点（原型宫格只有 4 格，此格用原型页头的线性放大镜切图）
+        { key: 'search', title: '全局搜索', icon: 'grid-search', path: '/pages/search/search', available: true, push: true },
     ]
 
     function onMenuClick(item : MenuItem) : void {
@@ -68,21 +66,16 @@
         width: 25%;
     }
 
-    .menu-icon-box {
+    /* 插画为 44x40 / 38x38 原比例，统一装进 88rpx 方框居中（原型格内图标高 40） */
+    .menu-icon-img {
         width: 88rpx;
         height: 88rpx;
-        border-radius: 20rpx;
-        margin-bottom: 12rpx;
-        align-items: center;
-        justify-content: center;
+        margin-bottom: 8rpx;
     }
 
-    .menu-icon-text {
-        font-size: 44rpx;
-    }
-
+    /* 原型 404_2195 宫格标签 14px */
     .menu-label {
-        font-size: 24rpx;
+        font-size: 28rpx;
         color: #333333;
     }
 </style>
