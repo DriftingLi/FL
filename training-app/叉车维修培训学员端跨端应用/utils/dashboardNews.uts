@@ -5,6 +5,10 @@
  * 公司动态（company）与产品资讯（product）不进 app，公告（notice）不重复进首页。
  * 后端公开列表只支持**单个** category（#2063 边界：不加多值参数）⇒ 消费侧按类别各发一次，
  * 本模块只负责合并。纯函数、不碰网络，故 utsHarness 能真执行（断言产物而不是源码片段）。
+ *
+ * #2581：原型 404_2195 的四个分类 chips（最新资讯 / 热点关注 / 政策法规 / 全部）也收在这里——
+ * chip→(类别表, sort) 是产品口径而不是渲染细节；映射与考情资讯页 `utils/examInfoTabs.uts`
+ * 的 `filterQuery` 同源（#1940），两处改口径必须一起改。
  */
 import type { FeaturedContentItem } from '../types/index'
 
@@ -13,6 +17,32 @@ export const DASHBOARD_NEWS_CATEGORIES : string[] = ['exam', 'industry', 'news']
 
 /** 板块卡片位 */
 export const DASHBOARD_NEWS_LIMIT : number = 5
+
+/** 分类 chips（原型 404_2195；顺序即展示顺序） */
+export const DASHBOARD_NEWS_FILTERS : string[] = ['最新资讯', '热点关注', '政策法规', '全部']
+
+/**
+ * chip → 取数类别表。
+ * 「政策法规」锁到 news 单类（与 examInfoTabs.filterQuery 的 chip 2 同一映射）；
+ * 其余三个 chip 仍是首页三类合并（ADR-0045：不扩到六类）。
+ */
+export function dashboardNewsCategoriesOf(filterIndex : number) : string[] {
+    if (filterIndex == 2) {
+        const policy : string[] = ['news']
+        return policy
+    }
+    return DASHBOARD_NEWS_CATEGORIES
+}
+
+/**
+ * chip → 排序参数。空串 = 不传（后端缺省 latest）。
+ * 热点关注按浏览量（与官网归档页「热点资讯」同一条），最新资讯显式 latest，其余不筛不排。
+ */
+export function dashboardNewsSortOf(filterIndex : number) : string {
+    if (filterIndex == 1) return 'hot'
+    if (filterIndex == 0) return 'latest'
+    return ''
+}
 
 /**
  * 排序键：把 `YYYY-MM-DDTHH:mm:ss` 压成一个整数（年*13 + 月 每级进位都 ≤ 4 位，跨端安全）。
@@ -34,10 +64,20 @@ function sortKeyOf(publishedAt : string) : number {
 }
 
 /**
+ * 在 at 处插入一项。手写 push 组装，不用 splice/slice —— 两者在 UTS 跨端支持面没把握，
+ * 手写循环在 Kotlin / Swift / 小程序三端都稳。
+ */
+function insertAt(sorted : FeaturedContentItem[], item : FeaturedContentItem, at : number) : FeaturedContentItem[] {
+    const next : FeaturedContentItem[] = []
+    for (let k = 0; k < at; k++) next.push(sorted[k])
+    next.push(item)
+    for (let k = at; k < sorted.length; k++) next.push(sorted[k])
+    return next
+}
+
+/**
  * 插入一项并按 published_at 倒序落位；同 content_id 已在表内则跳过（去重）。
  * 空发布时间**垫底**而不是当最新：缺发布时间的内容不该霸占首页第一条。
- * 不用 Array.sort 的比较器、不用 splice/slice —— 两者在 UTS 跨端支持面没把握，
- * 手写 push 组装在 Kotlin / Swift / 小程序三端都稳。
  */
 function insertByPublishedDesc(sorted : FeaturedContentItem[], item : FeaturedContentItem) : FeaturedContentItem[] {
     for (let d = 0; d < sorted.length; d++) {
@@ -52,11 +92,26 @@ function insertByPublishedDesc(sorted : FeaturedContentItem[], item : FeaturedCo
             break
         }
     }
-    const next : FeaturedContentItem[] = []
-    for (let k = 0; k < at; k++) next.push(sorted[k])
-    next.push(item)
-    for (let k = at; k < sorted.length; k++) next.push(sorted[k])
-    return next
+    return insertAt(sorted, item, at)
+}
+
+/**
+ * 插入一项并按 view_count 倒序落位；同 content_id 已在表内则跳过（去重）。
+ * 浏览量相同保持先到先得（不重排）——热点口径只回答「谁更热」，同热不制造顺序。
+ */
+function insertByViewDesc(sorted : FeaturedContentItem[], item : FeaturedContentItem) : FeaturedContentItem[] {
+    for (let d = 0; d < sorted.length; d++) {
+        if (sorted[d].content_id == item.content_id) return sorted
+    }
+    const key = item.view_count
+    let at = sorted.length
+    for (let j = 0; j < sorted.length; j++) {
+        if (key > sorted[j].view_count) {
+            at = j
+            break
+        }
+    }
+    return insertAt(sorted, item, at)
 }
 
 /** 多个类别的条目 → 去重 → 按发布时间倒序 → 取前 limit（limit <= 0 表示不限） */
@@ -74,4 +129,27 @@ export function mergeDashboardNews(groups : FeaturedContentItem[][], limit : num
         return cut
     }
     return sorted
+}
+
+/** 热点关注口径：多个类别的条目 → 去重 → 按浏览量倒序 → 取前 limit（limit <= 0 表示不限） */
+export function mergeDashboardNewsByHot(groups : FeaturedContentItem[][], limit : number) : FeaturedContentItem[] {
+    let sorted : FeaturedContentItem[] = []
+    for (let g = 0; g < groups.length; g++) {
+        const rows = groups[g]
+        for (let i = 0; i < rows.length; i++) {
+            sorted = insertByViewDesc(sorted, rows[i])
+        }
+    }
+    if (limit > 0 && sorted.length > limit) {
+        const cut : FeaturedContentItem[] = []
+        for (let i = 0; i < limit; i++) cut.push(sorted[i])
+        return cut
+    }
+    return sorted
+}
+
+/** 首页新闻行日期：`YYYY-MM-DD…` → `MM.DD`（原型 404_2195 的 09.09 形态）；不足 10 位原样返回 */
+export function formatNewsDate(publishedAt : string) : string {
+    if (publishedAt.length < 10) return publishedAt
+    return publishedAt.substring(5, 7) + '.' + publishedAt.substring(8, 10)
 }
