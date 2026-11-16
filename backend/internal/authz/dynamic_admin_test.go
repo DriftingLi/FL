@@ -51,6 +51,14 @@ func TestEmptyRowsAreExactlyProtectedSet(t *testing.T) {
 	// 反向不要求「受保护清单里的都必须是空行」：contribution.review / catalog.author / question.author
 	// 是讲师与超管**共有**的能力，它们的静态行（tutor）必须保留 —— 讲师侧不能因为管理端动态化而失权。
 	// 受保护清单里的每一项都不得含动态角色，由 TestNoStaticRowListsDynamicRole 覆盖。
+	//
+	// #2595 追加一条：讲师侧新拆出的 course.author / tutorfile.manage **不得**进受保护清单 ——
+	// 它们不是「超管也持有的」能力，管理员今天打不进讲师面端点。
+	for _, c := range []Capability{CapCourseAuthor, CapTutorFileManage} {
+		if protected[c] {
+			t.Fatalf("能力 %q 只绑讲师，不应进受保护管理角色能力全集", c)
+		}
+	}
 }
 
 // TestEveryCapabilityReachable 每个能力键都至少有一条可达路径（静态行或受保护角色），

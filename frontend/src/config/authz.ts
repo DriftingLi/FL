@@ -34,6 +34,7 @@ export type AuthzCapability =
   | 'content.generate'
   | 'contribution.review'
   | 'contribution.submit'
+  | 'course.author'
   | 'course.learn'
   | 'course.manage'
   | 'credential.manage'
@@ -73,6 +74,7 @@ export type AuthzCapability =
   | 'student.access'
   | 'tutor.access'
   | 'tutor.manage'
+  | 'tutorfile.manage'
   | 'valuation.config'
   | 'valuation.use'
 
@@ -86,7 +88,7 @@ export const DYNAMIC_ROLES: readonly AuthzRole[] = ['admin']
 /** 角色 → 能力集合（按能力键字典序，生成序稳定）。 */
 export const ROLE_CAPABILITIES: Readonly<Record<AuthzRole, readonly AuthzCapability[]>> = {
   hrwai_user: ['ai_assistant.use', 'check_in.use', 'contact.respond', 'contribution.submit', 'course.learn', 'faq.read', 'favorite.manage', 'feedback.submit', 'forum.participate', 'job.apply', 'job.report', 'material.read', 'mock_exam.take', 'notification.use', 'points.use', 'question.practice', 'real_exam.take', 'resume.manage', 'resume.pdf', 'search.use', 'student.access', 'valuation.use'],
-  tutor: ['catalog.author', 'contribution.review', 'notification.use', 'question.author', 'tutor.access'],
+  tutor: ['catalog.author', 'contribution.review', 'course.author', 'notification.use', 'question.author', 'tutor.access', 'tutorfile.manage'],
   // admin 有意为空：其能力由数据层回答（GET /admin/me/capabilities），本表对该角色 fail closed。
   admin: [],
   recruiter: ['application.review', 'contact.request', 'job.manage', 'recruit.access', 'recruit.resume_pdf'],

@@ -8,8 +8,10 @@
 // 「这个内容不存在」；另有精选 Create/Update 两格相反（默认面 400 ⇒ 写库故障被答成参数错误）。
 //
 // 覆盖范围如实登记（不夸大）：
-//   - 讲师面 4 个端点（/api/tutor/…）**在本台账里以带 CapTutorAccess 的 token 打**；
-//     若装配链拿不到该能力位，台账会把它们从表里摘掉并在下方注明原因——**不假装覆盖**。
+//   - 讲师面 4 个端点（/api/tutor/…）**在本台账里以讲师 token（#2595 起讲师三键全拿）打**；
+//     若装配链拿不到能力位，台账会把它们从表里摘掉并在下方注明原因——**不假装覆盖**。
+//     拆键后这 4 条里 PUT /chapter/:id 与 DELETE /file/:id 走 course.author，读两条走
+//     tutor.access，讲师默认三键全拿故不受影响；逐条挂键由 authz_coverage_lock_test.go 锁。
 //   - /api/courses（列表）与 /api/admin/courses（列表）无路径 id、无 404 档，不在本表内；
 //     它们的分页/筛选档由既有契约测试覆盖。
 package api

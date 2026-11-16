@@ -45,6 +45,8 @@ export const CAPABILITY_LABELS: Readonly<Record<AuthzCapability, string>> = {
   'content.generate': '内容生成',
   'contribution.review': '投稿审核',
   'contribution.submit': '资料投稿',
+  // #2595：tutor.access 拆三把后新增的两键。
+  'course.author': '课程内容编辑（章节写/附件上传删除/提审/图文传图）',
   'course.learn': '课程与章节学习',
   'course.manage': '课程管理',
   'credential.manage': '证件管理',
@@ -84,6 +86,7 @@ export const CAPABILITY_LABELS: Readonly<Record<AuthzCapability, string>> = {
   'student.access': '学员工作区入口',
   'tutor.access': '讲师工作区入口',
   'tutor.manage': '讲师管理',
+  'tutorfile.manage': '讲师文件库（分片上传/挂接/改名/删除）',
   'valuation.config': '残值系数配置',
   'valuation.use': '残值评估'
 }
@@ -136,6 +139,7 @@ export const CAPABILITY_DOMAIN_LABELS: Readonly<Record<CapabilityDomain, string>
   statistics: '统计',
   student: '学员',
   tutor: '讲师',
+  tutorfile: '讲师文件库',
   valuation: '残值评估'
 }
 

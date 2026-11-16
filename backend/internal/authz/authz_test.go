@@ -70,6 +70,19 @@ func TestCapabilitiesStableAndComplete(t *testing.T) {
 	if !contains(got, CapContributionReview) {
 		t.Fatalf("讲师应拥有 contribution.review: %v", got)
 	}
+	// #2595：tutor.access 拆成三把，讲师默认三键全拿（静态表保证「行为零变化」，spec A6）。
+	for _, want := range []Capability{CapTutorAccess, CapCourseAuthor, CapTutorFileManage} {
+		if !contains(got, want) {
+			t.Fatalf("讲师应拥有 %q: %v", want, got)
+		}
+	}
+	// 两把新键只绑讲师，不授给超管 —— 管理员今天也打不进讲师面端点（编辑课程走管理端的
+	// course.manage），授给超管等于凭空扩权。受保护清单的对应锁在 dynamic_admin_test.go。
+	for _, c := range []Capability{CapCourseAuthor, CapTutorFileManage} {
+		if len(RolesFor(c)) != 1 || RolesFor(c)[0] != RoleTutor {
+			t.Fatalf("能力 %q 应只绑讲师，实际绑 %v", c, RolesFor(c))
+		}
+	}
 	if contains(got, CapForumModerate) {
 		t.Fatalf("讲师不应拥有管理端 forum.moderate: %v", got)
 	}
