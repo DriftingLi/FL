@@ -29,7 +29,7 @@
             <view class="qa-author">
                 <view class="author-avatar" :style="{ backgroundColor: avatarColor }">
                     <image v-if="authorAvatar.length > 0" class="author-avatar-img" :src="authorAvatarUrl" mode="aspectFill" :webp="true" />
-                    <text v-else class="author-avatar-text">{{ authorInitial }}</text>
+                    <image v-else class="author-avatar-img" src="/static/icons/avatar/avatar-default-worker.png" mode="aspectFill" />
                 </view>
                 <view class="qa-author-text">
                     <text class="author-name">{{ displayName }}</text>
@@ -56,7 +56,7 @@
         <view class="topic-author-row">
             <view class="author-avatar" :style="{ backgroundColor: avatarColor }">
                 <image v-if="authorAvatar.length > 0" class="author-avatar-img" :src="authorAvatarUrl" mode="aspectFill" :webp="true" />
-                <text v-else class="author-avatar-text">{{ authorInitial }}</text>
+                <image v-else class="author-avatar-img" src="/static/icons/avatar/avatar-default-worker.png" mode="aspectFill" />
             </view>
             <text class="author-name">{{ displayName }}</text>
             <text class="topic-time">{{ dateText }}</text>
@@ -86,7 +86,6 @@
         getContentPreview,
         getFirstImages,
         resolveFileUrl,
-        getAuthorInitial,
         getAvatarColor,
     } from '../../../utils/forumDisplay'
     import { formatDateStr, formatCountCompact } from '../../../utils/format'
@@ -140,7 +139,6 @@
     const moreImageUrl = computed<string>(() : string => props.images.length > 3 ? resolveFileUrl(props.images[3]) : '')
     const moreCount = computed<number>(() : number => props.images.length > 3 ? props.images.length - 3 : 0)
     const displayName = computed<string>(() : string => props.authorName.length > 0 ? props.authorName : '匿名学员')
-    const authorInitial = computed<string>(() : string => getAuthorInitial(props.authorName))
     const avatarColor = computed<string>(() : string => getAvatarColor(props.authorId))
     const dateText = computed<string>(() : string => formatDateStr(props.createdAt))
     const authorAvatarUrl = computed<string>(() : string => resolveFileUrl(props.authorAvatar))
@@ -303,12 +301,6 @@
         align-items: center;
         justify-content: center;
         margin-right: 12rpx;
-    }
-
-    .author-avatar-text {
-        font-size: 22rpx;
-        color: #ffffff;
-        font-weight: bold;
     }
 
     .author-avatar-img {
