@@ -187,7 +187,7 @@
     .nickname-input { flex: 1; height: 96rpx; font-size: 30rpx; color: #333333; border: none; background-color: transparent; }
     .input-hint { font-size: 22rpx; color: #BBBBBB; margin-top: 12rpx; }
     .submit-area { padding: 40rpx 56rpx; align-items: center; }
-    .btn-submit { width: 100%; height: 96rpx; border-radius: 48rpx; background-color: #2979ff; align-items: center; justify-content: center; }
+    .btn-submit { width: 100%; height: 96rpx; border-radius: 48rpx; background-color: $primary-color; align-items: center; justify-content: center; }
     .btn-submit-text { font-size: 34rpx; font-weight: bold; color: #ffffff; }
     .btn-disabled { opacity: 0.5; }
     .skip-hint { font-size: 26rpx; color: #999999; margin-top: 32rpx; border-bottom-width: 1rpx; border-bottom-style: solid; border-bottom-color: #999999; padding-bottom: 2rpx; }

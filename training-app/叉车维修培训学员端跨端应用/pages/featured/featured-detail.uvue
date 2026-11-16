@@ -272,7 +272,7 @@
 
     .meta-category {
         font-size: 22rpx;
-        color: #2979ff;
+        color: $primary-color;
         background-color: #e8f0fe;
         padding: 4rpx 14rpx;
         border-radius: 8rpx;
@@ -318,7 +318,7 @@
 
     .link-item-text {
         font-size: 28rpx;
-        color: #2979ff;
+        color: $primary-color;
         lines: 1;
         text-overflow: ellipsis;
     }
@@ -351,7 +351,7 @@
 
     .nav-title {
         font-size: 28rpx;
-        color: #2979ff;
+        color: $primary-color;
         lines: 1;
         text-overflow: ellipsis;
     }

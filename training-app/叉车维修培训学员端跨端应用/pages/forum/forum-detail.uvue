@@ -165,7 +165,7 @@ import { goBack } from '../../utils/navigation'
     })
     const tAvatarColor = computed<string>(() : string => {
         const t = topic.value
-        if (t == null) return '#2979ff'
+        if (t == null) return '#239EDD'
         return getAvatarColor(t.author_id)
     })
     const tCreatedAtText = computed<string>(() : string => {
@@ -474,7 +474,7 @@ import { goBack } from '../../utils/navigation'
     }
 
     .reply-btn {
-        background-color: #2979ff;
+        background-color: $primary-color;
         padding: 16rpx 32rpx;
         border-radius: 36rpx;
         align-items: center;
@@ -508,7 +508,7 @@ import { goBack } from '../../utils/navigation'
 
     .reply-trigger-act {
         font-size: 28rpx;
-        color: #2979ff;
+        color: $primary-color;
         font-weight: bold;
     }
 
