@@ -206,12 +206,17 @@
 		border-radius: 16rpx;
 	}
 
+	/* #2520（原型 791:750）：会话态是「用户浅灰气泡靠右 + 助手正文直接落在页底」，
+	   不再是两种实色气泡。用户气泡改浅灰底深字；助手侧去底色与内边距，正文与页面同一平面。 */
 	.message-row.user .message-bubble {
-		background-color: #2979ff;
+		background-color: #ededed;
+		max-width: 560rpx;
 	}
 
 	.message-row.assistant .message-bubble {
-		background-color: #ffffff;
+		background-color: transparent;
+		padding: 0;
+		max-width: 690rpx;
 	}
 
 	.message-text {
@@ -221,7 +226,7 @@
 	}
 
 	.message-row.user .message-text {
-		color: #ffffff;
+		color: #333333;
 	}
 
 	.user-images {
@@ -260,6 +265,8 @@
 	   删干净是让「气泡不再有第二份刻度」成为可读出来的事实。
 
 	   保留不动的三样：用户消息的 `.message-text`（#1443 纯文本逐字节不变）、
-	   `.message-bubble` 外壳（max-width 600rpx / padding 20rpx 24rpx / 圆角 16rpx）、
-	   以及 `.message-actions` —— 本票只换**正文块怎么排**，不碰外壳。 */
+	   `.message-actions`，以及助手正文的 MarkdownBlocks 消费面。
+
+	   #2520 只动**气泡外壳的配色**（原型 791:750）：用户浅灰、助手透明无内边距；
+	   正文块怎么排仍只在 markdown-blocks 一处。 */
 </style>

@@ -5,14 +5,23 @@
 		     #2479：一级页标题居中于**屏幕中心** ⇒ 页头第一行右槽必须为空，⋯（右抽屉的唯一
 		     可见入口，移动端 ADR-0063 决定 4）下沉到标题栏下方工具栏行（:show-toolbar）。 -->
 		<AppNavBar
-			title="AI 助手"
+			title="基础版 ✨"
 			:subtitle="subtitle"
+			:subtitle-accent="true"
 			:transparent="transparent"
 			:left-icon="leftIcon"
 			:center-title="centerTitle"
 			:show-toolbar="true"
 			@left-click="onLeftClick"
 		>
+			<!-- #2520：左槽字形改原型切图（image 36 / 35，灰 / 蓝两态随抽屉开合）。
+			     保留 `leftIcon` 非空（页头件按它决定是否上抛 leftClick，见 app-nav-bar）⇒
+			     命中区由本插槽的 88rpx 方块撑足。 -->
+			<template #left>
+				<view class="nav-panel-box">
+					<image class="nav-panel-img" :src="drawerOpen ? '/static/icons/ai-chat/panel-active.png' : '/static/icons/ai-chat/panel.png'" mode="aspectFit" />
+				</view>
+			</template>
 			<template #toolbar>
 				<view class="chat-menu-action" @click="onMenuClick">
 					<text class="chat-menu-glyph">⋯</text>
@@ -36,6 +45,8 @@
 		 * 变成「☰ AI 助手 ⋯」挤在左边；聊天页要的是三段式居中（2026-10-27 裁定）。
 		 */
 		centerTitle?: boolean
+		/** #2520：左槽面板图标的两态 —— 抽屉打开时用蓝色版（原型 307:7035） */
+		drawerOpen?: boolean
 	}>(), {
 		statusBarHeight: 0,
 		subtitle: '维修助手',
@@ -45,8 +56,10 @@
 		// 的命中区不存在（抽屉早在 #947 就修好了，却没有任何可点面），会话只能在标题上
 		// 「点一下碰巧出来」—— 那正是 #1677 A 的「有动作、无可点面」形态。
 		// 字形用 BMP 符号 ☰（U+2630），与本仓先例 recruiter-tab-bar 同源（刻意避开非 BMP 代理对 emoji）。
+		// #2520：渲染面改切图插槽，但 prop 仍须非空 —— 页头件按它决定是否上抛 leftClick。
 		leftIcon: '☰',
-		centerTitle: true
+		centerTitle: true,
+		drawerOpen: false
 	})
 
 	const emit = defineEmits(['leftClick', 'menuClick'])
@@ -64,6 +77,19 @@
 	/* #2479：⋯ 落在标题栏下方工具栏行（.nav-bar-toolbar 自身 row + justify-content: flex-end，
 	   见 app-nav-bar.uvue）。字形用 BMP 符号 ⋯（U+22EF），同 leftIcon ☰ 的避代理对口径；
 	   88rpx 方块 = 44×44 触摸目标下限（<text> 只有文字高，命中区由外层 view 撑足）。 */
+	/* #2520：面板图标（原型 image 36 / 35，40rpx = 20px CSS ×2 出图）；外框 88rpx 保证 44×44 命中区 */
+	.nav-panel-box {
+		width: 88rpx;
+		height: 88rpx;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.nav-panel-img {
+		width: 40rpx;
+		height: 40rpx;
+	}
+
 	.chat-menu-action {
 		width: 88rpx;
 		height: 88rpx;

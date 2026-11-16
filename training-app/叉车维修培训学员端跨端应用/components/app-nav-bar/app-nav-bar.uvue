@@ -11,7 +11,7 @@
                 @click="onTitleBlockClick">
                 <text v-if="title.length > 0" class="nav-bar-title"
                     :class="[titleColorClass, titleTextClass]">{{ title }}</text>
-                <text v-if="subtitle.length > 0" class="nav-bar-subtitle" :class="titleColorClass">{{ subtitle }}</text>
+                <text v-if="subtitle.length > 0" class="nav-bar-subtitle" :class="[titleColorClass, subtitleAccent ? 'nav-bar-subtitle--accent' : '']">{{ subtitle }}</text>
             </view>
             <view v-if="rightIcons.length > 0" class="nav-bar-right" :style="rightSlotStyle">
                 <view v-for="(icon, idx) in rightIcons" :key="idx" class="nav-bar-right-item"
@@ -70,6 +70,11 @@
          * 未在本仓验证过，故用显式开关 —— 页面传了 `#toolbar` 再开。
          */
         showToolbar ?: boolean
+        /**
+         * 副标题强调（#2520，原型 307:6954）：副标题走主色 + 32rpx 半粗，用于 AI 助手
+         * 「基础版 ✨ / 维修助手」两级页头。默认 false ⇒ 其余调用方零 diff。
+         */
+        subtitleAccent ?: boolean
     }>(), {
         title: '',
         leftIcon: '‹',
@@ -79,7 +84,8 @@
         subtitle: '',
         divider: false,
         centerTitle: false,
-        showToolbar: false
+        showToolbar: false,
+        subtitleAccent: false
     })
 
     const emit = defineEmits(['leftClick', 'rightClick', 'titleClick'])
@@ -361,6 +367,14 @@
         font-size: 24rpx;
         color: $text-color-secondary;
         margin-top: 4rpx;
+    }
+
+    /* #2520：副标题强调（AI 助手「维修助手」蓝字，原型 307:6954/307:7035/793:1197） */
+    .nav-bar-subtitle--accent {
+        font-size: 32rpx;
+        font-weight: 600;
+        color: $primary-color;
+        margin-top: 2rpx;
     }
 
     .nav-bar-icon {

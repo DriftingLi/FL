@@ -1,28 +1,32 @@
 <template>
-	<view class="input-card">
-		<!-- 上排：占位符 + 发送 -->
+	<view class="input-card" :class="{ active: modelPickerOpen }">
+		<!-- 上排：占位符 + 发送（#2520：发送键改原型切图，展开态用深一档的蓝箭头） -->
 		<view class="input-top">
 			<input :value="inputText" class="chat-input" :placeholder="placeholder" confirm-type="send" @input="onInputChange" @confirm="onSend" />
-			<text class="send-btn" :class="{ disabled: !sendEnabled || disabled }" @click="onSend">&#10148;</text>
+			<image class="send-img" :class="{ disabled: !sendEnabled || disabled }" :src="modelPickerOpen ? '/static/icons/ai-chat/send-active.png' : '/static/icons/ai-chat/send.png'" mode="aspectFit" @click="onSend" />
 		</view>
-		<!-- 下排：模型芯片 + 动作按钮 -->
+		<!-- 下排：模型芯片 + 动作按钮（#2520：附件 / 麦克风改原型切图，展开态转蓝） -->
 		<view class="input-bottom">
 			<view v-if="showModelBar" class="model-chip" @click="onModelClick">
 				<text class="model-logo">&#10022;</text>
 				<text class="model-name">{{ modelName }}</text>
 				<text v-if="modelDesc.length > 0" class="model-desc">{{ modelDesc }}</text>
-				<text v-if="!modelReadonly" class="model-arrow">&#8964;</text>
+				<image v-if="!modelReadonly && !modelPickerOpen" class="model-arrow-img" src="/static/icons/ai-chat/chevron-model.png" mode="aspectFit" />
+				<text v-if="!modelReadonly && modelPickerOpen" class="model-arrow-up">&#8963;</text>
 			</view>
 			<view class="action-group">
-				<view v-if="showImageButton" class="action-btn" @click="onImageClick">
-					<text class="action-icon">&#128206;</text>
+				<view v-if="showImageButton" class="action-btn" :class="{ active: modelPickerOpen }" @click="onImageClick">
+					<image class="action-img" :src="modelPickerOpen ? '/static/icons/ai-chat/paperclip-active.png' : '/static/icons/ai-chat/paperclip.png'" mode="aspectFit" />
 					<text v-if="imageCount > 0" class="action-badge">{{ imageCount }}</text>
 				</view>
-				<view class="action-btn" @click="onVoiceClick">
-					<text class="action-icon">&#128266;</text>
+				<view class="action-btn" :class="{ active: modelPickerOpen }" @click="onVoiceClick">
+					<image class="action-img" :src="modelPickerOpen ? '/static/icons/ai-chat/mic-active.png' : '/static/icons/ai-chat/mic.png'" mode="aspectFit" />
 				</view>
 			</view>
 		</view>
+		<!-- #2520：模型下拉内核（页面经默认插槽塞入 AiChatModelPicker）——放在卡内 ⇒ 展开时整卡向上长，
+		     面板落在芯片下方且不遮住芯片（原型 793:1197 的几何）。 -->
+		<slot></slot>
 	</view>
 </template>
 
@@ -42,6 +46,8 @@
 		imageCount?: number
 		/** 外部塞进输入框的草稿（诊断引导组好句后由页面写入；改它就等于预填输入框） */
 		draft?: string
+		/** #2520：模型下拉是否展开（驱动芯片箭头方向、发送键与附件图标的蓝态、卡片描边） */
+		modelPickerOpen?: boolean
 	}>(), {
 		placeholder: '提出你想要知道的问题',
 		showModelBar: false,
@@ -51,7 +57,8 @@
 		disabled: false,
 		showImageButton: false,
 		imageCount: 0,
-		draft: ''
+		draft: '',
+		modelPickerOpen: false
 	})
 
 	// `text-change`：把用户的每一次输入抛给页面（故障码体检要「正在输入」这个信号，#2297）。
@@ -108,18 +115,23 @@
 	}
 </script>
 
-<style>
+<style lang="scss">
+	/* #2520：输入卡按原型 307:6954 / 793:1197 收口 —— 20rpx 圆角、浅描边；下拉展开时描边转主色 */
 	.input-card {
 		background-color: #ffffff;
-		border-radius: 24rpx;
+		border-radius: 20rpx;
 		margin: 12rpx 20rpx;
-		padding: 20rpx 20rpx 14rpx 20rpx;
-		border: 1rpx solid #eaf2f8;
+		padding: 20rpx 24rpx 16rpx 24rpx;
+		border: 1rpx solid #e6eef5;
+	}
+
+	.input-card.active {
+		border-color: $primary-color;
 	}
 
 	.input-top {
 		flex-direction: row;
-		align-items: flex-start;
+		align-items: center;
 	}
 
 	.chat-input {
@@ -129,14 +141,15 @@
 		color: #333333;
 	}
 
-	.send-btn {
-		font-size: 40rpx;
-		color: #6db8e8;
-		padding: 8rpx 4rpx 8rpx 16rpx;
+	/* 发送键切图（原型 image 33 / 33-0：常态浅蓝、展开态深蓝，40×36rpx = 20×18 CSS ×2） */
+	.send-img {
+		width: 40rpx;
+		height: 36rpx;
+		margin-left: 16rpx;
 	}
 
-	.send-btn.disabled {
-		color: #cfe6f5;
+	.send-img.disabled {
+		opacity: 0.35;
 	}
 
 	.input-bottom {
@@ -146,12 +159,13 @@
 		margin-top: 8rpx;
 	}
 
+	/* 模型芯片：原型为圆角矩形（非胶囊），14rpx 圆角 + 浅灰底 */
 	.model-chip {
 		flex-direction: row;
 		align-items: center;
-		background-color: #f5f5f5;
-		border-radius: 32rpx;
-		padding: 10rpx 20rpx;
+		background-color: #f5f6f8;
+		border-radius: 14rpx;
+		padding: 10rpx 18rpx;
 		flex: 1;
 		margin-right: 12rpx;
 	}
@@ -159,13 +173,13 @@
 	.model-logo {
 		font-size: 26rpx;
 		color: #6e5bff;
-		margin-right: 10rpx;
+		margin-right: 8rpx;
 	}
 
 	.model-name {
 		font-size: 24rpx;
-		color: #666666;
-		margin-right: 10rpx;
+		color: #555555;
+		margin-right: 8rpx;
 	}
 
 	.model-desc {
@@ -174,8 +188,14 @@
 		color: #9a9a9a;
 	}
 
-	.model-arrow {
-		font-size: 22rpx;
+	.model-arrow-img {
+		width: 34rpx;
+		height: 34rpx;
+		margin-left: 8rpx;
+	}
+
+	.model-arrow-up {
+		font-size: 24rpx;
 		color: #999999;
 		margin-left: 8rpx;
 	}
@@ -189,15 +209,20 @@
 		width: 64rpx;
 		height: 64rpx;
 		border-radius: 32rpx;
-		background-color: #f5f5f5;
+		background-color: #f5f6f8;
 		align-items: center;
 		justify-content: center;
 		margin-left: 12rpx;
 	}
 
-	.action-icon {
-		font-size: 30rpx;
-		color: #8a8a8a;
+	/* 下拉展开态：原型里两个圆钮同转浅蓝底 + 蓝图标 */
+	.action-btn.active {
+		background-color: #e8f4fd;
+	}
+
+	.action-img {
+		width: 40rpx;
+		height: 40rpx;
 	}
 
 	.action-badge {
