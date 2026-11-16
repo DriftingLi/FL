@@ -230,7 +230,7 @@
 
 	.mode-tab-active {
 		background-color: #E8F3FF;
-		border-color: #2979ff;
+		border-color: $primary-color;
 	}
 
 	.mode-tab-text {
@@ -239,7 +239,7 @@
 	}
 
 	.mode-tab-text-active {
-		color: #2979ff;
+		color: $primary-color;
 		font-weight: bold;
 	}
 
@@ -305,9 +305,9 @@
 		line-height: 96rpx;
 		padding: 0;
 		font-size: 26rpx;
-		color: #2979ff;
+		color: $primary-color;
 		background-color: #ffffff;
-		border: 2rpx solid #2979ff;
+		border: 2rpx solid $primary-color;
 		border-radius: 48rpx;
 		text-align: center;
 	}
@@ -381,8 +381,8 @@
 	}
 
 	.checkbox-checked {
-		background-color: #2979ff;
-		border-color: #2979ff;
+		background-color: $primary-color;
+		border-color: $primary-color;
 	}
 
 	.check-mark {
@@ -396,7 +396,7 @@
 	}
 
 	.agree-link {
-		color: #2979ff;
+		color: $primary-color;
 	}
 
 	/* 注册按钮 */
@@ -406,7 +406,7 @@
 		height: 96rpx;
 		line-height: 96rpx;
 		border-radius: 48rpx;
-		background-color: #2979ff;
+		background-color: $primary-color;
 		color: #ffffff;
 		font-size: 34rpx;
 		font-weight: bold;
@@ -432,7 +432,7 @@
 
 	.footer-link {
 		font-size: 26rpx;
-		color: #2979ff;
+		color: $primary-color;
 		margin-left: 8rpx;
 	}
 </style>

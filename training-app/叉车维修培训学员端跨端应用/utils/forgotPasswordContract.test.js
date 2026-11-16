@@ -57,8 +57,12 @@ const LINE_BUDGET = 600;
  * ⚠️ **#1609 第二次显式变更（批6 N06 收口）**：同 register —— 本批只把开标签 `<style>` 补成
  * `<style lang="scss">`（ui-spec §9 指标2「lang="scss" 100%、无豁免」；§7.1 裁定本页维持系统导航、不动作，
  * 故不加页头件也不自垫状态栏）。**块内 45 条规则一字未动** ⇒ 像素面零变化，sha 只因标签属性前进。
+ *
+ * ⚠️ **#2533 第三次显式变更（批 A 旧主色清退，规格 #2493）**：本页 6 处 `#2979ff` 字面值改走
+ * `$primary-color`（#239EDD），**块内 45 条规则数不变**，只有主色声明位的值变 —— 这是规格裁定的
+ * 视觉变更本身（旧蓝 → 达标主色），不是顺手改样式。
  */
-const STYLE_SHA256 = '7d5efd51118864739510077f9a4d91dbeb609ae827ab71aec30b1637faae2e5d';
+const STYLE_SHA256 = '4878f3d0f9c61650f9476eacf9e1715009249e54d98595a3438c6f8bc84351fa';
 
 /** 页面块（template / script / style）。模板**有嵌套** `<template v-if>` ⇒ 闭合取最后一个 */
 function block(src, tag) {
@@ -167,7 +171,8 @@ describe('样式块逐字节冻结（UI 像素级不变的最强静态证据面�
   it('判断力（改一处声明 / 删一条规则都必须与该 sha 不同）', () => {
     const style = pageStyle();
     expect(sha256(style.replace('.footer-link {', '.footer-link-x {'))).not.toBe(STYLE_SHA256);
-    expect(sha256(style.replace('#2979ff', '#2979fe'))).not.toBe(STYLE_SHA256);
+    // #2533 起块内已无旧主色字面 ⇒ 变异样本改为「把 token 退回字面值」（同一处声明位的另一种退化）
+    expect(sha256(style.replace('$primary-color', '#239EDD'))).not.toBe(STYLE_SHA256);
     const ruleCount = (s) => (s.match(/^\s*\.[a-zA-Z][\w-]*\s*\{/gm) || []).length;
     expect(ruleCount(style.replace('.footer-link {', ''))).toBe(44);
   });

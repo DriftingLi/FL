@@ -259,7 +259,7 @@
     }
 
     .action-btn-ghost {
-        background-color: #2979ff;
+        background-color: $primary-color;
         margin-right: 20rpx;
     }
 
@@ -291,7 +291,7 @@
 
     .upload-plus {
         font-size: 72rpx;
-        color: #2979ff;
+        color: $primary-color;
         font-weight: 300;
     }
 
@@ -324,7 +324,7 @@
 
     .tip-dot {
         font-size: 28rpx;
-        color: #2979ff;
+        color: $primary-color;
         margin-right: 12rpx;
     }
 
