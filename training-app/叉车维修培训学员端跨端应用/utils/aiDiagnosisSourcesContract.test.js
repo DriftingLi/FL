@@ -32,9 +32,8 @@ const TYPES_INDEX = read('types/index.uts');
 const SOURCES = read('components/ai-chat/ai-chat-sources.uvue');
 const BUBBLE = read('components/ai-chat/ai-chat-bubble.uvue');
 const PAGE = read('pages/ai-assistant/ai-assistant.uvue');
-// 专项页（#1040 / PR #1059 之后的**诊断入口**）：诊断对话现在只发生在这一页 —— 只给通用页
-// 接线等于把本票交付到用户到不了的页面。
-const FEATURE_PAGE = read('pages/ai-assistant/ai-feature.uvue');
+// 诊断入口的唯一载体（#2593 / ADR-0009 2026-11-16 修订 ②）：专项页已退役，诊断对话是同一页
+// 的 fault_diagnosis scope ⇒ 本文件全部判据读 PAGE，按 isDiagnosis / activeScope 断言。
 
 /** 取某个函数体（大括号配平，切到闭合处为止）—— 防止切片越界到文件尾造成假绿。 */
 function fnBody(src, sig) {
@@ -284,9 +283,9 @@ describe('#988 诊断来源资料消费契约', () => {
       expect(BUBBLE).toMatch(/sources\s*:\s*\(\)\s*=>\s*\[\]\s*as\s*AiDiagnosisSource\[\]/);
     });
 
-    it('两个页面都把消息上的 sources 传进气泡（通用页 + 专项页）', () => {
+    it('页面把消息上的 sources 传进气泡（通用区与专项 scope 共用同一处）', () => {
       expect(PAGE).toContain(':sources="msg.sources"');
-      expect(FEATURE_PAGE).toContain(':sources="msg.sources"');
+      expect(PAGE.match(/:sources="msg\.sources"/g).length).toBe(1);
     });
   });
 
@@ -316,33 +315,42 @@ describe('#988 诊断来源资料消费契约', () => {
   });
 
   // ────────────────────────────────────────────────────────────────
-  describe('⑨ 专项页不得引入模型前置校验（#1059 结构性口径；替代原「带键豁免」断言）', () => {
+  describe('⑨ 专项 scope 不得引入模型前置校验（#2593 结构口径；替代 #1059 的「专项页」断言）', () => {
     // 背景：#988 早期的第二个提交曾给**通用页**的守卫加 `featureKey.length == 0` 前缀，让带键通道
-    // 绕开「平台模型列表为空」这道门。**该实现已作废**：PR #1059（#1040）把专项对话搬到了
-    // `ai-feature.uvue`，该页不加载模型列表、也不设模型前置校验 ⇒ 那个问题被**结构性**消解。
-    // 本组守护的是**新结构**：若有人把通用页那道守卫（或同类早退）复制进专项页，就等于把 #1045
-    // 报过的缺陷重新引入一次 —— 平台模型列表为空时，专项通道会再次静默失效（只弹 toast、不发请求）。
-    it('专项页的 onInputSend 不做任何模型前置校验', () => {
-      const fn = fnBody(FEATURE_PAGE, 'function onInputSend');
+    // 绕开「平台模型列表为空」这道门。**该实现已作废**：#1040 把专项对话搬到独立页，#2593 又把它
+    // 并成同一页的 scope ⇒ 结构性判据改为「两条模型校验都只在通用分支（if (!scoped)）里」。
+    // 本组守护的是**新结构**：若有人把通用区那道守卫挪到 scope 判断之外，就等于把 #1045 报过的
+    // 缺陷重新引入一次 —— 平台模型列表为空时，专项 scope 会再次静默失效（只弹 toast、不发请求）。
+
+    /** 模型前置校验是否只出现在通用分支里：const picked 之后的尾巴不该再有模型列表判断。 */
+    function modelGuardsOnlyInGeneric(src) {
+      const fn = fnBody(src, 'function onInputSend');
+      const cut = fn.indexOf('const picked');
+      if (cut < 0) return false;
+      const tail = fn.slice(cut);
+      if (/models\.value\.length|userModels\.value\.length|请先配置自定义模型/.test(tail)) return false;
+      return fn.indexOf('if (!scoped) {') > -1;
+    }
+
+    it('专项 scope 的发送路径不做任何模型前置校验', () => {
+      const fn = fnBody(PAGE, 'function onInputSend');
       expect(fn.length).toBeGreaterThan(0);              // 锚点：函数在
       expect(fn).toContain('sendInput(');                // 锚点：它确实在发送
-      expect(fn).not.toContain('暂无可用的 AI 模型');
-      expect(fn).not.toContain('models.value.length');
-      expect(fn).not.toContain('userModels.value.length');
+      expect(fn).toContain('if (!scoped) {');            // 锚点：通用分支存在
+      expect(modelGuardsOnlyInGeneric(PAGE)).toBe(true);
     });
 
-    it('⑨b 检测器自检：把通用页那道守卫注入专项页后必须判红', () => {
-      const fn = fnBody(FEATURE_PAGE, 'function onInputSend');
-      const mutated = FEATURE_PAGE.replace(fn, fn.replace(
-        'inputText.value = text',
-        "if (models.value.length == 0) { uni.showToast({ title: '暂无可用的 AI 模型', icon: 'none' }); return }\n\t\tinputText.value = text"));
-      const m = fnBody(mutated, 'function onInputSend');
-      expect(m).toContain('暂无可用的 AI 模型');
+    it('⑨b 检测器自检：把模型守卫挪出通用分支后必须判红', () => {
+      const fn = fnBody(PAGE, 'function onInputSend');
+      const mutated = PAGE.replace(fn, fn.replace(
+        'if (!canSend(text, picked.length)) return',
+        "if (models.value.length == 0) { uni.showToast({ title: '暂无可用的 AI 模型', icon: 'none' }); return }\n\t\tif (!canSend(text, picked.length)) return"));
+      expect(modelGuardsOnlyInGeneric(mutated)).toBe(false);
     });
 
-    it('专项页也不加载模型列表（与「不做前置校验」互为佐证）', () => {
-      expect(FEATURE_PAGE).not.toContain('getAiModelsApi');
-      expect(FEATURE_PAGE).not.toContain('loadModels');
+    it('专项 scope 不消费模型列表：模型栏与模型选择器都按 !isScoped 收起', () => {
+      expect(PAGE).toContain(':show-model-bar="proUnlocked && !isScoped"');
+      expect(PAGE).toMatch(/<AiChatModelPicker[^>]*v-if="!isScoped"/);
     });
   });
 });

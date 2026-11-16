@@ -446,7 +446,7 @@
 
 | 套 | 成员数 | 代表页 |
 |---|---|---|
-| G1 | 4 | ai-feature、mock-exam、forum-detail、practice-do |
+| G1 | 3 | mock-exam、forum-detail、practice-do（`ai-feature` 随 #2593 并入 `ai-assistant` 的页内 scope） |
 | G2 | 5 | tabBar 五页 |
 | G3 | 21 | 通用列表页（my-forum 移出后） |
 | G4 | 8 | 表单页族 |
@@ -529,7 +529,7 @@ hex 匹配口径：`<style>` 块**声明位** hex（3 位归一 6 位）；不�
 **600 行预算（#1598 口径）**：
 - 执法口径 = `utils/contractHarness.js` 的 `fileLines`（`readText(f).split('\n').length` 总行数；CRLF 由 `utils/utsHarness.js:165` normalizeEol 归一）。
 - **单向门**：不得新增 >600 行文件。**存量超限是观测项不作门**：触及哪份就在该 PR 贴 `fileLines` 前后对比。双向门与「拆文件另开票」冲突且必假红，不采。
-- 存量超 600（全树 9 份，2026-10-10 实测）：`.uvue` 6 份（ai-assistant 839、recruiter/resume-detail 731、search 702、ai-feature 629、ai-settings 621、points/task-center 617）+ `.uts` 3 份（api/recruit.uts 778、api/request.uts 712、api/aiAssistant.uts 667）。骨架层对其中 5/6 份是减行（净 −35..−40），唯一增：ai-assistant.uvue 净 0..+3（839→842）。
+- 存量超 600（全树 9 份，2026-10-10 实测）：`.uvue` 5 份（ai-assistant 839、recruiter/resume-detail 731、search 702、ai-settings 621、points/task-center 617；`ai-feature` 629 随 #2593 退役）+ `.uts` 3 份（api/recruit.uts 778、api/request.uts 712、api/aiAssistant.uts 667）。骨架层对其中 5/6 份是减行（净 −35..−40），唯一增：ai-assistant.uvue 净 0..+3（839→842）。
 
 **App 端影响面**（2026-10-10 裁定）：本规范只管**小程序端**；`.uvue` 两端共用 ⇒ **显式承认连带**（App 端样式随改随走），不设 App 端验证门，验证留给 App 轮。
 

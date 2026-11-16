@@ -148,11 +148,10 @@ function probe(ctx) {
     "$mfPartial = Get-FullRepoManifestData -Ticket '1864' -PlannedPages @('pages/index/index','pages/login/login','pages/register/register') -Screenshots @('pages_login_login') -Redirected @([pscustomobject]@{ Page='pages/index/index'; Name='pages_index_index'; To='pages/dashboard/dashboard'; Seconds=12 }) -OutputDir $env:FR_OUT5",
     "Write-Output ('FR9D_PARTIAL_DIR_MISSING=' + (@($mfPartial.DirMissing) -join ','))",
     // ---- FR12：带参页参数通道（#1864）----
-    // ① 白名单真读仓内数据文件：ai-feature 有值，两个详情页因真实 id 需登录态而留空 ⇒ 不注入（不冒充）。
+    // ① 白名单真读仓内数据文件：两个详情页因真实 id 需登录态而留空 ⇒ 不注入（不冒充）；
+    //    #2593 起专项页退役，映射为空 ⇒ 已退役页不得再出现在键里。
     "$pq = Get-PageQueryMap -Path (Join-Path $env:FR_LIB 'auto-screenshot-pagequery.json')",
-    "Write-Output ('FR12_HAS_AIFEATURE=' + [bool]$pq.ContainsKey('pages/ai-assistant/ai-feature'))",
-    "Write-Output ('FR12_AIFEATURE_Q=' + [string]$pq['pages/ai-assistant/ai-feature'])",
-    "Write-Output ('FR12_HAS_JOBDETAIL=' + [bool]$pq.ContainsKey('pages/jobs/job-detail'))",
+    "Write-Output ('FR12_HAS_RETIRED=' + [bool]$pq.ContainsKey('pages/ai-assistant/ai-feature'))",
     "Write-Output ('FR12_COUNT=' + @($pq.Keys).Count)",
     // ② 参数行重解析：`&` 必须原样到达 cli，不能被 pwsh 当运算符吃掉。
     "$line = ConvertTo-CliArgLine -CliArgs @('launch','app-android','--pageQuery','id=1&lang=zh','--pagePath','pages/jobs/job-detail')",
@@ -408,11 +407,10 @@ describe('-FullRepo 全仓逐页载体（运行期，#2078）', () => {
 
   test('FR12: 带参页参数通道——白名单真读，且 `&` 经 wrap 重解析后原样到达', () => {
     // ① 白名单真读仓内数据文件（不写死页名/参数值）
-    expect(field(probeRun.stdout, 'FR12_HAS_AIFEATURE')).toBe('True');
-    expect(field(probeRun.stdout, 'FR12_AIFEATURE_Q')).toBe('featureKey=fault_diagnosis');
-    // 两个详情页的真实 id 需登录态才能取 ⇒ 留空 = 不注入，该页按原样弹回记 Skipped（不冒充绿）
-    expect(field(probeRun.stdout, 'FR12_HAS_JOBDETAIL')).toBe('False');
-    expect(Number(field(probeRun.stdout, 'FR12_COUNT'))).toBe(1);
+    // #2593：专项页退役 ⇒ 它的键必须消失；两个详情页的真实 id 需登录态才能取 ⇒ 留空 = 不注入，
+    // 该页按原样弹回记 Skipped（不冒充绿）⇒ 映射当前为空表。
+    expect(field(probeRun.stdout, 'FR12_HAS_RETIRED')).toBe('False');
+    expect(Number(field(probeRun.stdout, 'FR12_COUNT'))).toBe(0);
     // ② 参数行：`&` 必须被单引号包住（双引号只防拆词、不防运算符）
     expect(field(probeRun.stdout, 'FR12_LINE')).toContain("'id=1&lang=zh'");
     expect(field(probeRun.stdout, 'FR12_AMP_QUOTED')).toBe('True');

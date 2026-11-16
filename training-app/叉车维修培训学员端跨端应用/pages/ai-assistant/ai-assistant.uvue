@@ -3,15 +3,16 @@
 		<!-- 自定义导航栏 -->
 		<AiChatNav :drawer-open="sidebarLeft" @left-click="toggleSidebarLeft" @menu-click="toggleSidebarRight" />
 
-		<!-- 功能入口头部（#998）：**移出滚动容器** ⇒ 滑动时天然不丢失（**结构性保证**，不依赖
-		     `position: sticky` —— 该属性在本项目 0 处先例、uvue 支持亦无文档）。
-		     `^` 收起 / `v` 展开；默认展开、不跨会话记忆（维护者 2026-09-15 口径）。
-		     代价如实记：头部位于档位横幅**之上**，横幅不再是首屏第一个元素。 -->
+	<!-- 功能入口头部（#998 → #2593 页内 scope）：**移出滚动容器** ⇒ 滑动时天然不丢失（**结构性保证**，不依赖
+	     `position: sticky` —— 该属性在本项目 0 处先例、uvue 支持亦无文档）。
+	     通用 scope：宫格 + `^ / v` 收起展开（默认展开、不跨会话记忆，维护者 2026-09-15 口径）。
+	     专项 scope：宫格收起为「当前区 ⌄」chip（原型 791:750），chip 下拉可换区或回通用对话。
+	     代价如实记：头部位于档位横幅**之上**，横幅不再是首屏第一个元素（专项 scope 下无横幅，代价只在通用区）。 -->
 		<view class="func-head">
-			<view class="func-head-handle" @click="toggleFunctionHeader">
+			<view v-if="!isScoped" class="func-head-handle" @click="toggleFunctionHeader">
 				<text class="func-head-arrow">{{ functionHeaderCollapsed ? 'v' : '^' }}</text>
 			</view>
-			<view v-if="!functionHeaderCollapsed" class="function-grid">
+			<view v-if="!isScoped && !functionHeaderCollapsed" class="function-grid">
 				<view v-for="(item, idx) in functionItems" :key="idx" class="function-item" @click="onFunctionClick(item)">
 					<view class="function-icon-box">
 						<image v-if="item.iconPath && item.iconPath.length > 0" class="function-icon-img" :src="item.iconPath" mode="aspectFit" :webp="true" />
@@ -28,6 +29,22 @@
 					</view>
 				</view>
 			</view>
+			<!-- 专项 scope：宫格让位给 scope chip（原型 791:750 的「故障咨询 ⌄」）。
+			     chip 就是「本页会话作用域」的可见面 —— 切它 = 换区 = 重置当前会话并重列该区（ADR-0013）。 -->
+			<view v-if="isScoped" class="scope-bar">
+				<view class="scope-chip" @click="toggleScopeMenu">
+					<text class="scope-chip-text">{{ scopeTitle }}</text>
+					<text class="scope-chip-arrow">{{ scopeMenuOpen ? '^' : 'v' }}</text>
+				</view>
+			</view>
+			<view v-if="isScoped && scopeMenuOpen" class="scope-menu">
+				<view class="scope-menu-item" @click="onScopeSelect('')">
+					<text class="scope-menu-text">通用对话</text>
+				</view>
+				<view v-for="(item, idx) in functionItems" :key="idx" class="scope-menu-item" @click="onScopeSelect(item.featureKey)">
+					<text class="scope-menu-text">{{ item.scopeLabel }}</text>
+				</view>
+			</view>
 		</view>
 
 		<!-- 主内容区 -->
@@ -35,14 +52,32 @@
 			<scroll-view class="pro-scroll" scroll-y="true" :scroll-into-view="scrollIntoViewId" scroll-with-animation>
 				<!-- 专业版档位横幅（#920）：未解锁=橙 +「查看权益」；已解锁=绿 + 只读状态。
 				     配色按设计用**实色**（两态实色更干净；不是能力限制 —— #937 真机实测已证伪「本机型不绘制渐变」） -->
-				<view class="pro-banner" :class="proUnlocked ? 'pro-banner-unlocked' : ''" @click="openProSheet">
+				<view v-if="!isScoped" class="pro-banner" :class="proUnlocked ? 'pro-banner-unlocked' : ''" @click="openProSheet">
 					<text class="pro-banner-title" :class="proUnlocked ? 'pro-title-unlocked' : ''">{{ proBannerTitle }}</text>
 					<text class="pro-banner-sub" :class="proUnlocked ? 'pro-sub-unlocked' : ''">{{ proBannerSub }}</text>
 					<text class="pro-banner-go" :class="proUnlocked ? 'pro-go-unlocked' : ''">{{ proBannerCta }}</text>
 				</view>
 
-				<!-- 快捷提示语 -->
-				<view class="prompt-list">
+				<!-- 诊断空态欢迎区（#2296，随专项 scope 并入 #2593）：品牌快选 + 常见问题。
+				     取数失败 / health.ok=false 时 guideVisible 为 false ⇒ **整块不渲染**（不留「点了必失败」的按钮）。 -->
+				<view v-if="isDiagnosis && guideVisible && messages.length == 0" class="welcome-area">
+					<view class="welcome-brand-row">
+						<view v-for="b in brands" :key="b.id" class="welcome-brand" @click="onPickBrandCard(b.id)">
+							<text class="welcome-brand-icon">{{ b.icon }}</text>
+							<text class="welcome-brand-name">{{ b.name }}</text>
+							<text v-if="b.tagline.length > 0" class="welcome-brand-tagline">{{ b.tagline }}</text>
+						</view>
+					</view>
+					<view v-if="faq.length > 0" class="welcome-faq">
+						<text class="welcome-faq-title">大家常问</text>
+						<view v-for="(f, idx) in faq" :key="idx" class="welcome-faq-row" @click="onPickFaq(f.q)">
+							<text class="welcome-faq-q">{{ f.q }}</text>
+						</view>
+					</view>
+				</view>
+
+				<!-- 快捷提示语（通用 scope 专有：专项 scope 有自己的欢迎区） -->
+				<view v-if="!isScoped" class="prompt-list">
 					<view v-for="(p, idx) in quickPrompts" :key="idx" class="prompt-card" @click="sendText(p)">
 						<text class="prompt-text">{{ p }}</text>
 						<text class="prompt-arrow">&#8250;</text>
@@ -51,7 +86,7 @@
 
 				<!-- 聊天消息 -->
 				<view v-if="messages.length > 0" class="chat-area">
-					<AiChatBubble v-for="(msg, idx) in messages" :key="idx" :role="msg.role" :content="msg.content" :sources="msg.sources" :meta="msg.meta" :show-actions="msg.role == 'assistant'" :is-last="idx == messages.length - 1" @copy="onCopyText(msg.content)" @retry="onRetry" />
+					<AiChatBubble v-for="(msg, idx) in messages" :key="idx" :role="msg.role" :content="msg.content" :sources="msg.sources" :images="msg.images" :meta="msg.meta" :show-actions="msg.role == 'assistant'" :is-last="idx == messages.length - 1" @copy="onCopyText(msg.content)" @retry="onRetry" />
 					<view v-if="thinking" class="message-row assistant">
 						<view class="message-bubble thinking">
 							<text class="message-text">{{ thinkingLabel }}</text>
@@ -66,12 +101,30 @@
 		     必须放在页面层（与抽屉同一层级）才锚定整页，放进输入卡会随组件父级解析。 -->
 		<view v-if="showModelPicker" class="model-mask" @click="showModelPicker = false"></view>
 
-		<!-- 底部输入区（专业版带模型选择器）；模型下拉**内联在输入卡里**（#2520，原型 793:1197）
-		     ⇒ 展开时输入卡向上长，面板正好落在模型芯片下方，且不遮住芯片。 -->
-		<AiChatInput :show-model-bar="proUnlocked" :model-name="currentModelName" :model-readonly="!proUnlocked" :show-image-button="proUnlocked" :model-picker-open="showModelPicker" @send="onInputSend" @model-click="onModelBarClick" @voice-click="onVoiceClick" @image-click="onImageClick">
-			<!-- 模型选择（三条自带 key 路径都由页面侧过门：#1024 ③④⑤） -->
-			<AiChatModelPicker :visible="showModelPicker" :all-models="allModels" :current-model-id="currentModelId" :current-model-source="currentModelSource" @close="showModelPicker = false" @select="selectModel" @custom="onCustomClick" @manage="goManageModels" />
+		<!-- 引导入口：只在诊断 scope 且引导数据可用时出现（guideVisible 单一判据） -->
+		<view v-if="isDiagnosis && guideVisible" class="guide-entry" @click="openGuide">
+			<text class="guide-entry-text">{{ guideEntryLabel }}</text>
+		</view>
+
+		<!-- 故障码体检（#2297）：输入框正上方一行，只渲染 known / typo；format / 未收录 / 未输入 / 取数失败
+		     都**整行不渲染**（安静不打扰是判据）。点这一行 = 追问句替换进输入框（不自动发送）。 -->
+		<view v-if="isDiagnosis && codeHintView.visible" class="code-hint" @click="onCodeHintTap">
+			<text :class="codeHintView.kind == 'known' ? 'code-hint-text' : 'code-hint-text code-hint-text-warn'">{{ codeHintView.text }}</text>
+			<text v-if="codeHintView.followUp.length > 0" class="code-hint-action">追问 ›</text>
+		</view>
+
+		<!-- 待发图片托盘（#2299）：只在诊断 scope、且有内容/上传中出现；发送后由 picker.clear() 收空 -->
+		<AiChatImageTray v-if="isDiagnosis" :images="pickImages" :uploading-count="pickUploading" :max-images="aiMaxImages" @remove="onRemoveImage" @preview="onPreviewImage" />
+
+		<!-- 底部输入区（专业版带模型选择器）；专项 scope 下**无模型芯片** —— 专项通道不吃用户自选模型（#998）
+		     ⇒ 模型下拉**内联在输入卡里**（#2520，原型 793:1197）。 -->
+		<AiChatInput :show-model-bar="proUnlocked && !isScoped" :model-name="currentModelName" :model-readonly="!proUnlocked" :show-image-button="isDiagnosis || proUnlocked" :image-count="pickImages.length" :draft="draftText" :reset-signal="scopeResetSignal" :model-picker-open="showModelPicker" @send="onInputSend" @model-click="onModelBarClick" @voice-click="onVoiceClick" @image-click="onImageClick" @text-change="onDraftInput">
+			<!-- 模型选择（三条自带 key 路径都由页面侧过门：#1024 ③④⑤）；专项 scope 下整块不渲染 -->
+			<AiChatModelPicker v-if="!isScoped" :visible="showModelPicker" :all-models="allModels" :current-model-id="currentModelId" :current-model-source="currentModelSource" @close="showModelPicker = false" @select="selectModel" @custom="onCustomClick" @manage="goManageModels" />
 		</AiChatInput>
+
+		<!-- 诊断引导面板（#2296）：四步状态机与组句在 useDiagnosisGuide，本页只转动作 -->
+		<AiChatDiagnosisGuide :visible="guideOpen" :brands="brands" :state="guideState" :second-items="secondItems" :fault-items="faultItems" :second-loading="secondLoading" :fault-loading="faultLoading" :sentence="sentence" @close="closeGuide" @pick-brand="pickBrand" @pick-second="pickSecond" @pick-fault="pickFault" @update-extra="updateExtra" @jump="jumpStep" @confirm="onConfirmSentence" />
 
 		<!-- 左侧会话抽屉 -->
 		<AiChatDrawerLeft :visible="sidebarLeft" :sessions="sessions" :current-session-id="currentSessionId" :status-bar-height="statusBarHeight" @close="sidebarLeft = false" @new-chat="onNewChat" @select="onSelectSession" @delete="onDeleteSession" />
@@ -89,12 +142,13 @@
 </template>
 
 <script setup lang="uts">
-	import { onLoad, onShow } from '@dcloudio/uni-app'
-	import { ref, computed } from 'vue'
+	import { onLoad, onShow, onUnload } from '@dcloudio/uni-app'
+	import { ref, computed, watch } from 'vue'
 	import { useAuthStore } from '../../stores/auth'
 	import {
 		getAiModelsApi,
 		getAiUserModelsApi,
+		checkDiagnosisCodeApi,
 	} from '../../api/aiAssistant'
 	import { useAiChat } from '../../composables/useAiChat'
 	import {
@@ -105,10 +159,15 @@
 	} from '../../composables/useAiModelSelection'
 	import type { ChatBodyBuilder } from '../../composables/useAiChat'
 	import { useAiPro } from '../../composables/useAiPro'
-	import type { AiModel, AiUserModel, AIModelOption, AiChatMessage, AiSession, AIFunctionItem } from '../../types/index'
+	import { useDiagnosisGuide } from '../../composables/useDiagnosisGuide'
+	import { useAiImagePicker } from '../../composables/useAiImagePicker'
+	import { useDiagnosisCodeHint } from '../../composables/useDiagnosisCodeHint'
+	import { canSend } from '../../utils/aiImageQuota'
+	import { AI_MAX_IMAGES } from '../../config/env'
+	import type { AiModel, AiUserModel, AIModelOption, AiChatMessage, AiSession, AIFunctionItem, DiagnosisCodeHint } from '../../types/index'
 
 	import { STORAGE_KEY_AI_SELECTED_USER_MODEL } from '../../constants/app'
-	import { FUNCTION_ITEMS, QUICK_PROMPTS, RIGHT_MENU_ITEMS } from './ai-assistant-constants'
+	import { FUNCTION_ITEMS, QUICK_PROMPTS, RIGHT_MENU_ITEMS, isDiagnosisFeature } from './ai-assistant-constants'
 	import type { MenuItem } from './ai-assistant-constants'
 	import AiChatNav from '../../components/ai-chat/ai-chat-nav.uvue'
 	import AiChatBubble from '../../components/ai-chat/ai-chat-bubble.uvue'
@@ -118,6 +177,8 @@
 	import AiChatModelPicker from '../../components/ai-chat/ai-chat-model-picker.uvue'
 	import AiChatCustomForm from '../../components/ai-chat/ai-chat-custom-form.uvue'
 	import AiChatProSheet from '../../components/ai-chat/ai-chat-pro-sheet.uvue'
+	import AiChatDiagnosisGuide from '../../components/ai-chat/ai-chat-diagnosis-guide.uvue'
+	import AiChatImageTray from '../../components/ai-chat/ai-chat-image-tray.uvue'
 
 
 	const auth = useAuthStore()
@@ -138,12 +199,31 @@
 
 
 
-	// 聊天核心逻辑。
-	// 会话作用域**恒为空串**：通用页的会话一律落遗留 `ai_assistant` 区（空串 ⇒ 不发
-	// `feature_key`，与从前逐字一致 ⇒ 零回归）。分区由专项页承担 —— 它把自己的功能键当作用域
-	// 传进同一个 composable（ADR-0013）；本页**不得**在这里塞任何键：给会话带键却没有「列该区」
-	// 的界面时，会话在「最近对话」里永久不可见（#921 首版实测回归）。
-	const featureScope = ref<string>('')
+	// 页内会话作用域（#2593；ADR-0013 2026-11-16 修订）：空串 = 通用区；非空 = 该功能键的专项区。
+	// **会话归属 = 本页状态**：宫格点击在本页切 scope（不再推入专项页），list/create 都带这个键，
+	// 抽屉（AiChatDrawerLeft）就是「列该区」的那个界面 —— 缺了它，带键会话在「最近对话」里永久不可见
+	// （#921 首版实测回归形态）。通用区恒传空串 ⇒ 遗留 `ai_assistant` 区，与从前逐字一致。
+	const activeScope = ref<string>('')
+
+	const isScoped = computed<boolean>(() : boolean => activeScope.value.length > 0)
+
+	// 「诊断专有 UI」的**唯一判据**（读注册表 `adapter` 列，ADR-0047 §7）：禁止比较功能键字面量。
+	const isDiagnosis = computed<boolean>(() : boolean => isDiagnosisFeature(activeScope.value))
+
+	// scope chip 的文案：通用区不渲染 chip；专项区用清单的短名（fault_diagnosis = 故障咨询，见 scopeLabel）
+	const scopeTitle = computed<string>(() : string => {
+		for (let i = 0; i < FUNCTION_ITEMS.length; i++) {
+			if (FUNCTION_ITEMS[i].featureKey == activeScope.value) {
+				return FUNCTION_ITEMS[i].scopeLabel
+			}
+		}
+		return '通用对话'
+	})
+
+	// chip 下拉的开合（只影响 chip 自身，不进会话状态）
+	const scopeMenuOpen = ref<boolean>(false)
+	// 清空信号：切 scope 时 +1，让输入框丢掉上一区没发出去的字（见 ai-chat-input 的 `resetSignal`）
+	const scopeResetSignal = ref<number>(0)
 
 	const {
 		statusBarHeight,
@@ -163,7 +243,7 @@
 		toggleSidebarLeft,
 		toggleSidebarRight,
 		sendInput,
-	} = useAiChat(featureScope)
+	} = useAiChat(activeScope)
 
 	// 抽屉的「当前会话 id」：模板里直接写 `currentSession?.id ?? 0` 会让 mp-weixin 产物残留
 	// `??`（ES2020），微信上传接口按 ES2019 解析产物，直接拒传（#2419 实测
@@ -178,12 +258,55 @@
 	})
 
 
-	// 等待态文案（#2389）：后端 `status` 帧驱动；没有阶段文案时回落到「思考中...」。
+	// 等待态（#2298 / #2389）：三件事一块做 ——
+	// 1) 已等秒数：等待期间每秒 +1，让「在跑」与「卡住」在界面上可区分（规格决策 17）；
+	// 2) 诊断 scope 常亮：微信「切后台 5 秒未结束即 fail interrupted」与 timeout 取值无关，能挡的只有屏息；
+	// 3) 计时器跟着等待态关：请求结束（成功 / 失败 / 超时 / 截断）后不能继续跳秒，更不能串到下一轮。
+	const thinkingSeconds = ref<number>(0)
+	// 文案优先级（#2389）：后端阶段文案 > 已等秒数 > 兜底「思考中...」。
 	const thinkingLabel = computed<string>(() : string => {
 		if (statusText.value.length > 0) {
 			return statusText.value
 		}
-		return '思考中...'
+		if (thinkingSeconds.value <= 0) {
+			return '思考中...'
+		}
+		return '思考中... 已等 ' + thinkingSeconds.value + ' 秒'
+	})
+	let thinkingTimer : number | null = null
+	let keepScreenOnByThinking : boolean = false
+
+	function stopThinkingTimer() : void {
+		const t = thinkingTimer
+		if (t != null) {
+			clearInterval(t)
+			thinkingTimer = null
+		}
+	}
+
+	function restoreScreenOn() : void {
+		if (keepScreenOnByThinking) {
+			keepScreenOnByThinking = false
+			uni.setKeepScreenOn({ keepScreenOn: false })
+		}
+	}
+
+	watch(thinking, (active : boolean) : void => {
+		// 每一轮先收旧计时器：上一轮的 interval 若还在跑，秒数会从上一轮的值接着涨（串轮）
+		stopThinkingTimer()
+		if (!active) {
+			thinkingSeconds.value = 0
+			restoreScreenOn()
+			return
+		}
+		thinkingSeconds.value = 0
+		if (isDiagnosis.value && !keepScreenOnByThinking) {
+			keepScreenOnByThinking = true
+			uni.setKeepScreenOn({ keepScreenOn: true })
+		}
+		thinkingTimer = setInterval(() : void => {
+			thinkingSeconds.value = thinkingSeconds.value + 1
+		}, 1000)
 	})
 
 	// 视图状态
@@ -270,17 +393,135 @@
 		return proUnlocked.value ? '已解锁' : '查看权益'
 	})
 
-	// 通用对话请求体。本页**不带**专项功能键：宫格点击已改为跳转专项页（ADR-0009 2026-09-15 修订 ②），
-	// 键只由 `pages/ai-assistant/ai-feature.uvue` 的页面状态提供。这里的 `featureKey` 恒为空串，
-	// 空串即通用通道（后端按通用助手解析模型与计费）。专项通道「不吃自定义模型」那条口径
-	// 随形态移到专项页 —— 那一页干脆不送 `model_source` / `custom_*`（见其 buildBody 注释）。
+	// ===== 专项 scope 的诊断面（#2593：ai-feature 页并入本页）=====
+	//
+	// 取数、留白判定、四步状态机与组句全在 useDiagnosisGuide；本页只做三件事：渲染欢迎区、
+	// 把选出来的句子写进输入框、把面板动作转给 composable。
+
+	// 灌进输入框的草稿（引导面板「填入输入框」/ FAQ 快选）：页面级 ref，发送后清空。
+	// 为什么不直接改 inputText —— 那是 composable 的内部状态，输入框的 :value 只在挂载时取一次。
+	const draftText = ref<string>('')
+
+	// 故障码体检（#2297）：状态 → 文案在纯函数 utils/diagnosisCodeHint.uts（只有 known / typo 可见）；
+	// 防抖 / 过期丢弃 / 失败静默在 composable。查询函数由本页注入，便于行为用例注入假取数。
+	const { view: codeHintView, onInput: onCodeHintInput, clear: clearCodeHint, dispose: disposeCodeHint } = useDiagnosisCodeHint((q : string) : Promise<DiagnosisCodeHint> => checkDiagnosisCodeApi(q))
+
+	// 随问图片（#2299）：选图 / 逐张上传 / 托盘的状态全在 picker，本页只转发动作。
+	// 顶层 ref 才能在模板里自动解包（嵌套在对象里不会），故三个值拆出来一份引用。
+	const imagePicker = useAiImagePicker()
+	const pickImages = imagePicker.images
+	const pickUploading = imagePicker.uploadingCount
+	const aiMaxImages = AI_MAX_IMAGES
+
+	const {
+		brands,
+		faq,
+		guideVisible,
+		guideOpen,
+		state: guideState,
+		secondItems,
+		faultItems,
+		secondLoading,
+		faultLoading,
+		sentence,
+		loadIntents: loadDiagnosisIntents,
+		openGuide,
+		openGuideWithBrand,
+		closeGuide,
+		pickBrand,
+		pickSecond,
+		pickFault,
+		updateExtra,
+		jumpStep,
+	} = useDiagnosisGuide()
+
+	/** 引导入口的胶囊文案：一眼看出当前选到哪一步 */
+	const guideEntryLabel = computed<string>(() : string => {
+		if (guideState.value.selection.faultName.length > 0) {
+			return '引导选问题 · ' + guideState.value.selection.faultName
+		}
+		return guideOpen.value ? '收起引导' : '引导选问题'
+	})
+
+	/**
+	 * 按键定位宫格项（fail-closed 的判据源）：清单是移动端手写，键集合与注册表由 parity 契约锁住。
+	 * 声明在调用方之前 —— Kotlin 局部函数不支持前向引用（UTS error18）。
+	 */
+	function findFunctionItem(featureKey : string) : AIFunctionItem | null {
+		for (let i = 0; i < FUNCTION_ITEMS.length; i++) {
+			if (FUNCTION_ITEMS[i].featureKey == featureKey) {
+				return FUNCTION_ITEMS[i]
+			}
+		}
+		return null
+	}
+
+	/**
+	 * 切 scope = 换区（ADR-0013 2026-11-16 修订**新增的不变式**）：必须重置当前会话与消息，
+	 * 并按新 scope 重新列会话。只改 activeScope 而不重置 ⇒ 列表按新区刷新、屏幕上却还挂着上一区的
+	 * 消息，学员会在「故障咨询」里看到通用对话的上下文。
+	 * 等待中不许切：在跑的那一轮请求体已带旧键，切了会让回复落进错的区。
+	 */
+	function switchScope(key : string) : void {
+		if (thinking.value) {
+			uni.showToast({ title: '请等待当前回复完成', icon: 'none' })
+			return
+		}
+		activeScope.value = key
+		scopeResetSignal.value = scopeResetSignal.value + 1
+		scopeMenuOpen.value = false
+		showModelPicker.value = false
+		currentSession.value = null
+		messages.value = []
+		inputText.value = ''
+		draftText.value = ''
+		clearCodeHint()
+		imagePicker.clear()
+		loadSessions()
+		if (isDiagnosis.value) {
+			loadDiagnosisIntents()
+		}
+	}
+
+	/**
+	 * chip 下拉选中：`''` = 回通用对话；其余必须命中清单（fail-closed）—— 未知键既不切换、
+	 * 也不复活伪入口（ADR-0009 修订 ② 下线「故障代码查询」的口径：注册表里没有的键就是伪入口）。
+	 */
+	function onScopeSelect(key : string) : void {
+		if (key.length > 0 && findFunctionItem(key) == null) {
+			uni.showToast({ title: '功能入口不存在', icon: 'none' })
+			return
+		}
+		if (key == activeScope.value) {
+			scopeMenuOpen.value = false
+			return
+		}
+		switchScope(key)
+	}
+
+	function toggleScopeMenu() : void {
+		scopeMenuOpen.value = !scopeMenuOpen.value
+	}
+
+	/**
+	 * 请求体：键**恒取本轮 scope**（空串 = 通用区，非空 = 该功能键的区）。
+	 *
+	 * 通用区与从前逐字一致：送用户自选模型的来源（model_source / config_id / user_model_id / custom_*）。
+	 * 专项区**不送**任何模型字段：后端 ResolveChatSettings 的专项分支命中 featureChatKeys 后按管理端
+	 * 单绑定解析模型，并**忽略**选择子里的模型来源（ai_config_service.go 原文「防绕过」）⇒ 送了也是死字段；
+	 * 而 custom_api_key 是明文密钥，更不该发出去（维护者 2026-09-15 口径：#998）。故 scoped 分支在写模型
+	 * 字段**之前**就 return。
+	 */
 	const buildBody : ChatBodyBuilder = (history : AiChatMessage[], sessionID : number, featureKey : string) : UTSJSONObject => {
 		const params : UTSJSONObject = {
 			session_id: sessionID,
-			model_source: currentModelSource.value,
 			messages: history,
 		}
 		params['feature_key'] = featureKey
+		if (featureKey.length > 0) {
+			return params
+		}
+		params['model_source'] = currentModelSource.value
 		if (currentModelSource.value == 'admin') {
 			params['config_id'] = currentModelId.value
 		} else if (currentModelSource.value == 'user') {
@@ -293,27 +534,44 @@
 		return params
 	}
 
-	// 发送：本页恒为通用对话 —— `sendInput` 的第四参（功能键）显式传空串。
-	// 从前「先取走 → 再清空」那套轮次边界（#999 真机实测的键恒为空）随 `pendingFeatureKey` 一起消失：
-	// 通用页**结构上**不再持有功能键，也就没有「从早退分支漏键」这条路径了。
+	/**
+	 * 发送：第四参 = 当前 scope（空串 = 通用区，非空 = 该功能键的区）。
+	 *
+	 * 通用区保留两条模型前置校验（#1044 / #1062 的长期状态文案）；专项区跳过 —— 专项通道的模型
+	 * 由管理端单绑定解析，本页在专项 scope 下也**不加载模型列表**（本页仍有列表，但专项区不消费它）。
+	 * 有图无字也放行：判定与 sendInput 的早退同源（canSend 单一判据）。
+	 */
 	function onInputSend(text : string) : void {
-		if (models.value.length == 0 && userModels.value.length == 0 && currentModelSource.value != 'custom') {
-			// 平台模型为空是**长期状态**（#1044 裁定「通用对话接受不可用」）⇒ 这句是学员长期看到的文案，
-			// 必须指向可执行动作（#1062）。先给对**所有**学员都可走的路径：自定义模型的入口与配置面
-			// 都在专业版门内（未解锁时右侧菜单过滤掉 `custom-models`、设置页 user/custom 来源整行不渲染，#1024）
-			// ⇒ 只写「去配置自定义模型」对未解锁学员是死路一条，那正是本句要防的回归。
-			// 字数上限（①a 真机实测，2026-09-16，Redmi 23049RAD8C / b32d8398）：uni.showToast 的文本区是
-			// **两行 × 18 字** —— 首版文案 37 字，末字「型」不渲染（OCR 三帧一致）⇒ 定稿压到 34 字。
-			// 改这句时**必须数字数**，别超过 36（留余量），否则线上就是缺字的文案。
-			uni.showToast({ title: '平台模型未配置，请联系管理员；专业版可在「对话设置」中配置自定义模型', icon: 'none' })
-			return
+		const scoped = activeScope.value.length > 0
+		if (!scoped) {
+			if (models.value.length == 0 && userModels.value.length == 0 && currentModelSource.value != 'custom') {
+				// 平台模型为空是**长期状态**（#1044 裁定「通用对话接受不可用」）⇒ 这句是学员长期看到的文案，
+				// 必须指向可执行动作（#1062）。先给对**所有**学员都可走的路径：自定义模型的入口与配置面
+				// 都在专业版门内（未解锁时右侧菜单过滤掉 `custom-models`、设置页 user/custom 来源整行不渲染，#1024）
+				// ⇒ 只写「去配置自定义模型」对未解锁学员是死路一条，那正是本句要防的回归。
+				// 字数上限（①a 真机实测，2026-09-16，Redmi 23049RAD8C / b32d8398）：uni.showToast 的文本区是
+				// **两行 × 18 字** —— 首版文案 37 字，末字「型」不渲染（OCR 三帧一致）⇒ 定稿压到 34 字。
+				// 改这句时**必须数字数**，别超过 36（留余量），否则线上就是缺字的文案。
+				uni.showToast({ title: '平台模型未配置，请联系管理员；专业版可在「对话设置」中配置自定义模型', icon: 'none' })
+				return
+			}
+			if (currentModelSource.value == 'custom' && customModel.value.trim().length == 0) {
+				uni.showToast({ title: '请先配置自定义模型', icon: 'none' })
+				return
+			}
 		}
-		if (currentModelSource.value == 'custom' && customModel.value.trim().length == 0) {
-			uni.showToast({ title: '请先配置自定义模型', icon: 'none' })
-			return
-		}
+		const picked : string[] = isDiagnosis.value ? pickImages.value : []
+		if (!canSend(text, picked.length)) return
 		inputText.value = text
-		sendInput(currentModelName.value, buildBody, [], '')
+		// 发出去之后草稿作废：下一次发送不能把同一句再塞回输入框（否则点两次发送像卡住）
+		draftText.value = ''
+		// 发送后输入框清空 ⇒ 那一行体检结果必须一起消失（票面 AC：清空输入后提示消失）
+		clearCodeHint()
+		sendInput(scoped ? scopeTitle.value : currentModelName.value, buildBody, picked, activeScope.value)
+		// 图已随本轮发出 ⇒ 待发托盘清空、名额归还
+		if (picked.length > 0) {
+			imagePicker.clear()
+		}
 	}
 
 	function sendText(text : string) : void {
@@ -330,8 +588,21 @@
 		uni.showToast({ title: '语音输入开发中', icon: 'none' })
 	}
 
+	// 附件入口（📎）：只在诊断 scope 出现（:show-image-button 同源判据）；其余 scope 保持既有提示
 	function onImageClick() : void {
+		if (isDiagnosis.value) {
+			imagePicker.onAddImage()
+			return
+		}
 		uni.showToast({ title: '图片发送开发中', icon: 'none' })
+	}
+
+	function onRemoveImage(index : number) : void {
+		imagePicker.onRemoveImage(index)
+	}
+
+	function onPreviewImage(index : number) : void {
+		imagePicker.onPreviewImage(index)
 	}
 
 	function getLastUserMessage() : string {
@@ -347,6 +618,8 @@
 		const lastUserMsg = getLastUserMessage()
 		if (lastUserMsg.length > 0) {
 			inputText.value = lastUserMsg
+			draftText.value = ''
+			clearCodeHint()
 			onInputSend(lastUserMsg)
 		}
 	}
@@ -411,11 +684,52 @@
 		}
 	}
 
-	// 宫格入口 = **跳转参数化专项页**（ADR-0009 2026-09-15 修订 ②；#921 的「在本页带键发一轮」作废）。
-	// 键由目标页持有、只进本轮对话请求体 ⇒ 本页不再有任何轮次级的键状态。
-	// 不再发 `item.prompt`：专项页由用户自己输入（宫格项已无 `prompt` 字段）。
+	// 宫格点击 = **在本页切 scope**（ADR-0009 2026-11-16 修订 ②）：不再推入专项页。
+	// 专项页 pages/ai-assistant/ai-feature 已随本票退役（并入本页的一个 scope），全仓不再有跳转点。
 	function onFunctionClick(item : AIFunctionItem) : void {
-		uni.navigateTo({ url: '/pages/ai-assistant/ai-feature?featureKey=' + item.featureKey })
+		switchScope(item.featureKey)
+	}
+
+	/**
+	 * 输入框每敲一下都进来（诊断 scope 唯一的「正在输入」信号）。
+	 * ① 非诊断 scope 一次体检查询都不发（codeHintView 恒不可见）；
+	 * ② 顺带把输入镜像进 draftText：输入框由外部草稿驱动，若页面不跟着走，学员删光后再点
+	 *    **同一条**提示时 draftText 没有变化 ⇒ 组件里那个 watch 不触发 ⇒ 输入框不回填。
+	 */
+	function onDraftInput(value : string) : void {
+		draftText.value = value
+		if (!isDiagnosis.value) return
+		onCodeHintInput(value)
+	}
+
+	/** 点体检提示行：追问句**替换**输入框内容（不自动发送，学员可改），随后收掉这一行 */
+	function onCodeHintTap() : void {
+		const followUp = codeHintView.value.followUp
+		if (followUp.length == 0) return
+		draftText.value = followUp
+		clearCodeHint()
+	}
+
+	/** 欢迎区点品牌卡：带品牌预选进面板，直接落到第二层 */
+	function onPickBrandCard(brandId : string) : void {
+		openGuideWithBrand(brandId)
+	}
+
+	/** 欢迎区点常见问题：直接填进输入框（FAQ 是现成的一句话，不经引导面） */
+	function onPickFaq(question : string) : void {
+		draftText.value = question
+		// 换了一句话，上一句的体检结果不再是「当前这句」的说明
+		clearCodeHint()
+	}
+
+	/**
+	 * 引导面板「填入输入框」：组好的句子交给输入框，**不自动发送**（票面判据：可编辑后再发送）。
+	 * 组句模板的补充说明（故障码 / 时机 / 异响位置）由学员自己写，那是唯一能补回命中率的手段。
+	 */
+	function onConfirmSentence(text : string) : void {
+		draftText.value = text
+		clearCodeHint()
+		closeGuide()
 	}
 
 	// 持久化设置：三 source 归一化规则单源在 composables/useAiModelSelection.uts（#1732）
@@ -668,6 +982,15 @@
 		// 由门读完之后的那次调用（refreshProState → applyPendingSelectedUserModel）消费。
 		applyPendingSelectedUserModel()
 	})
+	/**
+	 * 页面卸载：停等待态计时器 / 收屏息 / 取消还没到点的体检计时器
+	 * （uni-app x 没有 onUnmounted，页面卸载钩子是 onUnload）。
+	 */
+	onUnload(() : void => {
+		stopThinkingTimer()
+		restoreScreenOn()
+		disposeCodeHint()
+	})
 </script>
 
 <style lang="scss">
@@ -909,4 +1232,156 @@
 		color: #8aa9c0;
 	}
 
+	/* ===== scope chip（#2593）：专项 scope 下宫格收起为「当前区 ⌄」 ===== */
+	.scope-bar {
+		flex-direction: row;
+		align-items: center;
+		padding-top: 8rpx;
+		padding-bottom: 12rpx;
+	}
+
+	.scope-chip {
+		flex-direction: row;
+		align-items: center;
+		background-color: #ffffff;
+		border: 1rpx solid $border-color-light;
+		border-radius: $radius-pill;
+		padding: 10rpx 22rpx;
+	}
+
+	.scope-chip-text {
+		font-size: 26rpx;
+		color: $text-color;
+	}
+
+	.scope-chip-arrow {
+		font-size: 22rpx;
+		color: $text-color-placeholder;
+		margin-left: 10rpx;
+	}
+
+	.scope-menu {
+		flex-direction: column;
+		background-color: #ffffff;
+		border: 1rpx solid $border-color-light;
+		border-radius: $radius-md;
+		margin-bottom: 16rpx;
+		padding-top: 6rpx;
+		padding-bottom: 6rpx;
+	}
+
+	.scope-menu-item {
+		padding: 20rpx 24rpx;
+	}
+
+	.scope-menu-text {
+		font-size: 26rpx;
+		color: $text-color;
+	}
+
+	/* ===== 诊断空态欢迎区（#2296，随 scope 并入 #2593）===== */
+	.welcome-area {
+		flex-direction: column;
+		margin-bottom: 24rpx;
+	}
+
+	.welcome-brand-row {
+		flex-direction: row;
+		flex-wrap: wrap;
+	}
+
+	.welcome-brand {
+		flex-direction: column;
+		border-width: 1rpx;
+		border-style: solid;
+		border-color: $border-color;
+		border-radius: $radius-lg;
+		padding: 20rpx;
+		margin-right: 16rpx;
+		margin-bottom: 16rpx;
+		background-color: $card-bg;
+		min-width: 300rpx;
+	}
+
+	.welcome-brand-icon {
+		font-size: 40rpx;
+	}
+
+	.welcome-brand-name {
+		font-size: 28rpx;
+		font-weight: bold;
+		color: $text-color;
+		margin-top: 8rpx;
+	}
+
+	.welcome-brand-tagline {
+		font-size: 22rpx;
+		color: $text-color-placeholder;
+		margin-top: 4rpx;
+	}
+
+	.welcome-faq {
+		flex-direction: column;
+		margin-top: 8rpx;
+	}
+
+	.welcome-faq-title {
+		font-size: 24rpx;
+		color: $text-color-placeholder;
+		margin-bottom: 8rpx;
+	}
+
+	.welcome-faq-row {
+		border-width: 1rpx;
+		border-style: solid;
+		border-color: $border-color-light;
+		border-radius: $radius-md;
+		padding: 16rpx 20rpx;
+		margin-bottom: 12rpx;
+		background-color: $card-bg;
+	}
+
+	.welcome-faq-q {
+		font-size: 26rpx;
+		color: $text-color-secondary;
+	}
+
+	/* ===== 引导入口 / 故障码体检行（#2296 / #2297）===== */
+	.guide-entry {
+		align-items: flex-start;
+		padding-left: 24rpx;
+		padding-right: 24rpx;
+		padding-top: 8rpx;
+		padding-bottom: 8rpx;
+	}
+
+	.guide-entry-text {
+		font-size: 24rpx;
+		color: $uni-color-primary;
+	}
+
+	.code-hint {
+		flex-direction: row;
+		align-items: center;
+		padding: 12rpx 28rpx;
+	}
+
+	/* 文字样式落 <text>（落 <view> 上原生端静默忽略并逐处打 error，见 uvueFontCarrierContract） */
+	.code-hint-text {
+		flex: 1;
+		font-size: 24rpx;
+		line-height: 1.5;
+		color: $text-color-secondary;
+	}
+
+	/* typo 是「你填得不对」，用警示色；known 才用次级文字色 */
+	.code-hint-text-warn {
+		color: $warning-color;
+	}
+
+	.code-hint-action {
+		font-size: 24rpx;
+		color: $uni-color-primary;
+		margin-left: 12rpx;
+	}
 </style>

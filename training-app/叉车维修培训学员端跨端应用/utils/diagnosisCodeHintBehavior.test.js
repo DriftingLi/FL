@@ -21,7 +21,8 @@ const { loadUts, readText } = require('./utsHarness');
 
 const HINT_UTS = path.join(__dirname, 'diagnosisCodeHint.uts');
 const COMPOSABLE_UTS = path.join(__dirname, '..', 'composables', 'useDiagnosisCodeHint.uts');
-const PAGE_UVUE = path.join(__dirname, '..', 'pages', 'ai-assistant', 'ai-feature.uvue');
+// #2593：专项页退役，体检行并入 ai-assistant 的故障诊断 scope
+const PAGE_UVUE = path.join(__dirname, '..', 'pages', 'ai-assistant', 'ai-assistant.uvue');
 const INPUT_UVUE = path.join(__dirname, '..', 'components', 'ai-chat', 'ai-chat-input.uvue');
 const API_UTS = path.join(__dirname, '..', 'api', 'aiAssistant.uts');
 
@@ -270,7 +271,7 @@ describe('接线（行为测试自己搭依赖，接线断了它照样绿 ⇒ �
     expect(page).toContain('@click="onCodeHintTap"');
     expect(page).toContain('@text-change="onDraftInput"');
     expect(page).toContain('codeHintView.followUp.length > 0');
-    expect(page).toContain('onUnload(() => {');
+    expect(page).toMatch(/onUnload\(\(\)\s*(:\s*void)?\s*=>\s*\{/);
     expect(page).toContain('disposeCodeHint()');
     // 「把内容拼进输入框」的落点：追问句写回 draftText（替换，不自动发送）
     expect(page).toContain('draftText.value = followUp');

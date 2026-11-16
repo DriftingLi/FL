@@ -48,6 +48,12 @@
 		draft?: string
 		/** #2520：模型下拉是否展开（驱动芯片箭头方向、发送键与附件图标的蓝态、卡片描边） */
 		modelPickerOpen?: boolean
+		/**
+		 * 清空信号（#2593）：页面切 scope = 换区，输入框里上一区没发出去的字必须一起消失。
+		 * 不能只靠 `draft` 置空 —— 学员手打的字从不进 `draft`，`'' → ''` 也不会触发 watch。
+		 * 约定：页面每切一次 scope 就 +1，组件见到变化就把内部输入清空。
+		 */
+		resetSignal?: number
 	}>(), {
 		placeholder: '提出你想要知道的问题',
 		showModelBar: false,
@@ -58,6 +64,7 @@
 		showImageButton: false,
 		imageCount: 0,
 		draft: '',
+		resetSignal: 0,
 		modelPickerOpen: false
 	})
 
@@ -77,10 +84,22 @@
 
 	// Kotlin 侧对 watch 回调参数推不出类型（cannot infer type / unresolved reference），
 	// 故显式标注 + 经一个 typed computed 取源（#2296 实测 ④c 抓出）。
+	//
+	// 空串也要写进去（#2593 改）：切 scope 时页面把草稿置空，输入框必须跟着空 ——
+	// 旧实现「非空才写」会让上一区的残留文字跟着学员走到新区，看起来像串区。
 	watch(draftText, (v : string) => {
-		if (v.length > 0) {
-			inputText.value = v
-		}
+		inputText.value = v
+	})
+
+	// 清空信号：页面切 scope 时 +1（见 `resetSignal` 契约）。不接在草稿上是因为手打的字不进草稿。
+	const resetSignalValue = computed<number>(() : number => {
+		const s = props.resetSignal
+		if (s == null) return 0
+		return s as number
+	})
+
+	watch(resetSignalValue, (v : number) => {
+		inputText.value = ''
 	})
 
 	function onInputChange(e : InputEvent) : void {

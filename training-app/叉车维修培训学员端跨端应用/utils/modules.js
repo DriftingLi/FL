@@ -173,7 +173,6 @@ const MODULES = {
       'composables/useAiPro.uts',
       'pages/ai-assistant/ai-assistant-constants.uts',
       'pages/ai-assistant/ai-assistant.uvue',
-      'pages/ai-assistant/ai-feature.uvue',
       'pages/ai-assistant/ai-settings.uvue',
       'pages/ai-assistant/custom-models.uvue',
     ],
@@ -189,7 +188,7 @@ const MODULES = {
      * （商城兑换成功后的落点判定与 AI 专业版能力门同一个 SKU，不许各写一份字面量）⇒ 登记 points。
      */
     crossModuleConsumers: ['points'],
-    /** 超预算：ai-assistant.uvue 822 / ai-feature 606 / api/aiAssistant.uts 633（ai-settings 583 已进预算，#1732 摘走设置读写与归一化） */
+    /** 超预算：ai-assistant.uvue / api/aiAssistant.uts 633（ai-settings 583 已进预算，#1732 摘走设置读写与归一化；ai-feature 606 已随 #2593 退役） */
     budget: 'pending',
     budgetOverrides: {},
     maxDepth: MAX_DEPTH,

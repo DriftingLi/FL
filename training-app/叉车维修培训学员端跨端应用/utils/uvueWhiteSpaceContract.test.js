@@ -26,7 +26,7 @@
  *      内联 `style="…"` 只过 ① 不过 ②（本仓现测 0 处）。
  *
  * 票面坑位 2：**必须先剥离 CSS 注释** —— 解释这个坑位的注释里本身写着 `white-space: nowrap`
- * （`pages/profile/help-center.uvue:248`、`pages/ai-assistant/ai-feature.uvue:538`），不剥注释就会把
+ * （`pages/profile/help-center.uvue:363`、`pages/forum/components/forum-markdown-input.uvue:361`），不剥注释就会把
  * 说明本身判红（#1081 的 `utils/helpCenterContract.test.js` 就是因此加了 `stripCssComments`）。
  *
  * 形态沿用本仓既有全仓守护（先例 `utils/gradientSyntaxContract.test.js`，同为「uvue 不支持某 CSS 写法」）：
@@ -448,7 +448,7 @@ describe('uvue `white-space` 承载面契约（#1113）', () => {
       expect(FILES.length).toBeGreaterThan(100);
 
       // 本票 5 处被删的 class 至今仍挂在 <scroll-view> 上 —— 若映射塌了，第 3 条测试的「零命中」就是假绿
-      // （原 6 处含 ai-feature.uvue diag-chips，随 #2262 诊断面板摘除，类与模板一起删除，不再是登记条目）
+      // （原 6 处含 ai-feature.uvue diag-chips，随 #2262 诊断面板摘除；该页本身又在 #2593 退役）
       const removed = [
         ['pages/profile/favorites.uvue', 'filter-scroll'],
         ['pages/profile/records.uvue', 'filter-scroll'],

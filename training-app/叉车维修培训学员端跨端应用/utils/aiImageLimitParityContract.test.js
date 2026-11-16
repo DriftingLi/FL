@@ -20,7 +20,8 @@ const REPO_ROOT = path.join(__dirname, '..', '..', '..');
 const BACKEND_ADAPTER = path.join(REPO_ROOT, 'backend', 'internal', 'aiassistant', 'diagnosis_adapter.go');
 const ENV_FILE = path.join(__dirname, '..', 'config', 'env.uts');
 const PICKER_FILE = path.join(__dirname, '..', 'composables', 'useAiImagePicker.uts');
-const FEATURE_PAGE = path.join(__dirname, '..', 'pages', 'ai-assistant', 'ai-feature.uvue');
+// #2593：专项页退役，诊断 scope 并入 ai-assistant（托盘与名额都在这页）
+const FEATURE_PAGE = path.join(__dirname, '..', 'pages', 'ai-assistant', 'ai-assistant.uvue');
 
 /** 取源码里唯一一个数字字面量；取不到 = 锚点漂了，抛错即红（不静默降级） */
 function numOf(src, re, what) {

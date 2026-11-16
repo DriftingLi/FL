@@ -24,7 +24,8 @@ const ROOT = path.join(__dirname, '..');
 const ENV_UTS = readText(path.join(ROOT, 'config', 'env.uts'));
 const API_UTS = readText(path.join(ROOT, 'api', 'aiAssistant.uts'));
 const CHAT_UTS = readText(path.join(ROOT, 'composables', 'useAiChat.uts'));
-const FEATURE_PAGE = readText(path.join(ROOT, 'pages', 'ai-assistant', 'ai-feature.uvue'));
+// #2593 起等待态与常亮跟随页内 scope（ai-feature 已退役）⇒ 判据读 ai-assistant 页。
+const FEATURE_PAGE = readText(path.join(ROOT, 'pages', 'ai-assistant', 'ai-assistant.uvue'));
 
 describe('#2298 单一超时口径', () => {
   it('客户端超时 = 330000（服务端 300 s + 30 s 余量），且注释指回后端那一行', () => {

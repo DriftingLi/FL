@@ -60,7 +60,7 @@ function collectSource(dir, acc = []) {
  * 再从 `=>` 起按**花括号**配平补上函数体。
  *
  * ⚠️ 为什么不用「找下一个行首 `}`」那种启发式：本仓缩进**空格与制表符混用**，
- * 实测 `pages/ai-assistant/ai-feature.uvue` 用 tab ⇒ 按 `\n    }`（四空格）切**永远找不到**，
+ * 实测 `pages/ai-assistant/ai-assistant.uvue` 用 tab ⇒ 按 `\n    }`（四空格）切**永远找不到**，
  * 函数体会一路延伸到文件结尾（静默把整个 `<style>` 当成函数体）。
  * 配平则与缩进风格、行尾（本仓有 CRLF 文件）完全无关。
  */
@@ -146,7 +146,7 @@ function fnDeclBody(src, startIdx) {
  *
  * ⚠️ 为什么**不按变量名**（`options['x']`）匹配：实测本仓至少四种写法，按名字切会大面积漏
  * —— `options['x']`、`_options` + `const opts = _options as UTSJSONObject` 别名后 `opts['id']`
- * （先例 featured-detail / job-detail）、`onLoad((options : OnLoadOptions) => …)`（先例 ai-feature）、
+ * （先例 featured-detail / job-detail）、`onLoad((options : OnLoadOptions) => …)`（先例 ai-assistant）、
  * 以及委托 `session.applyOptions(options)`。而 `onLoad` 体内的 `['字符串']` 访问，
  * 其键**就是** query 参数键（页面入参只从 query 来），与变量怎么命名无关 ⇒ 按「括号字符串键」收。
  *

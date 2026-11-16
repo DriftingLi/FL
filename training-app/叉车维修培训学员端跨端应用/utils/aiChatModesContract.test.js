@@ -60,7 +60,10 @@ describe('双模式 models 消费契约', () => {
     });
 
     it('admin 源请求体由 currentModelSource 驱动（语义断言，非子串巧合）', () => {
-      expect(pageSrc).toContain('model_source: currentModelSource.value');
+      // #2593：请求体由对象字面量改为 params['…'] 逐键写入，且 scoped 早退必须发生在 model_source 之前
+      // （专项通道不吃用户自选模型）⇒ 顺序本身是契约，按顺序断言而不是子串
+      expect(pageSrc).toMatch(/if \(featureKey\.length > 0\) \{\s*return params\s*\}[\s\S]*?params\['model_source'\] = currentModelSource\.value/);
+      expect(pageSrc).not.toMatch(/model_source: currentModelSource\.value/);
     });
   });
   });

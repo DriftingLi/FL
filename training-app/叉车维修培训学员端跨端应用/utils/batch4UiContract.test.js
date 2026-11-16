@@ -215,7 +215,7 @@ describe('§1.6 白名单文件自检（批4 扫描面）', () => {
     ];
     const batch3 = [
       'pages/profile/settings.uvue', 'pages/profile/personal-info.uvue', 'pages/profile/wrong-questions.uvue',
-      'pages/points/points-detail.uvue', 'pages/points/task-center.uvue', 'pages/ai-assistant/ai-feature.uvue',
+      'pages/points/points-detail.uvue', 'pages/points/task-center.uvue',
       'pages/ai-assistant/ai-settings.uvue', 'pages/ai-assistant/custom-models.uvue', 'pages/practice/practice.uvue',
       'pages/practice/practice-report.uvue', 'pages/jobs/job-detail.uvue', 'pages/resume/resume-edit.uvue',
       'pages/resume/resume-attach.uvue', 'pages/practice/practice-do.uvue',

@@ -17,14 +17,13 @@ const read = h.read;
 
 const WHITELIST = require('./uiHexWhitelist');
 
-/** 批2 十四页（N×G 落位真源 #1592：全部 N03） */
+/** 批2 十三页（N×G 落位真源 #1592：全部 N03；#2593 起 ai-feature 退役 ⇒ 十四页减一） */
 const PAGES = [
   'pages/profile/settings.uvue',
   'pages/profile/personal-info.uvue',
   'pages/profile/wrong-questions.uvue',
   'pages/points/points-detail.uvue',
   'pages/points/task-center.uvue',
-  'pages/ai-assistant/ai-feature.uvue',
   'pages/ai-assistant/ai-settings.uvue',
   'pages/ai-assistant/custom-models.uvue',
   'pages/practice/practice.uvue',
@@ -137,9 +136,9 @@ describe('批2 特殊页头形态（app-nav-bar 槽位承载）', () => {
     expect(bar[0]).not.toContain('currentIndex');
   });
 
-  it('ai-feature 右槽保留 panel-icon 抽屉入口（aiChatDrawerContract 同源交互）', () => {
-    const src = read('pages/ai-assistant/ai-feature.uvue');
-    expect(src).toMatch(/<template #right>[\s\S]*?toggleSidebarLeft[\s\S]*?<\/template>/);
+  it('AI 助手页保留左上抽屉入口（aiChatDrawerContract 同源交互；#2593 起专项页并入本页）', () => {
+    const src = read('pages/ai-assistant/ai-assistant.uvue');
+    expect(src).toMatch(/<AiChatNav[^>]*@left-click="toggleSidebarLeft"/);
     // statusBarHeight 是 useAiChat 的 ref，抽屉组件仍消费它——不得误删
     expect(src).toContain(':status-bar-height="statusBarHeight"');
   });

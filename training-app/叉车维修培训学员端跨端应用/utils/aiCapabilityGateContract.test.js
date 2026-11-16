@@ -52,9 +52,11 @@ describe('AI 助手专业版能力门（proUnlocked）契约', () => {
   });
 
   it('② 输入区：模型芯片与附件按钮都按 proUnlocked 渲染，芯片在锁定时只读', () => {
-    expect(page).toMatch(/:show-model-bar="proUnlocked"/);
+    // #2593：专项 scope 隐藏模型芯片（专项通道不吃用户自选模型）、图片按钮由诊断面常亮，
+    // 两处都保留 proUnlocked 作为通用区的门（不是另立判据）
+    expect(page).toMatch(/:show-model-bar="proUnlocked && !isScoped"/);
     expect(page).toMatch(/:model-readonly="!proUnlocked"/);
-    expect(page).toMatch(/:show-image-button="proUnlocked"/);
+    expect(page).toMatch(/:show-image-button="isDiagnosis \|\| proUnlocked"/);
   });
 
   it('③ 模型芯片点击走 onModelBarClick（而不是直接打开选择器）', () => {
