@@ -2,6 +2,15 @@
     <view class="container" :style="{ height: windowHeight + 'px' }">
         <app-nav-bar title="帮助中心" variant="inverse" @left-click="onBack" />
 
+        <!-- 欢迎区（视觉对齐原型 783:292；搜索/分类/服务区的**结构**仍以 #1081/#1950 契约为准） -->
+        <view class="welcome">
+            <image class="welcome-mascot" src="/static/icons/help-center/mascot.png" mode="aspectFit" />
+            <view class="welcome-texts">
+                <text class="welcome-title">欢迎来到叉车维修培训系统帮助中心</text>
+                <text class="welcome-sub">请问有什么可以帮你的～</text>
+            </view>
+        </view>
+
         <!-- 端上搜索：问题或答案命中即算（口径同 Web 帮助中心，不新增搜索接口） -->
         <view class="search-bar">
             <text class="search-icon">🔍</text>
@@ -62,16 +71,19 @@
             <view class="service-card">
                 <text class="service-title">服务</text>
                 <view class="service-row" @click="onOpenFeedback">
+                    <image class="service-icon" src="/static/icons/help-center/feedback-write.png" mode="aspectFit" />
                     <text class="service-label">意见反馈</text>
                     <text class="service-desc">问题提交后有落点，可附图</text>
                     <text class="service-arrow">▸</text>
                 </view>
                 <view class="service-row" @click="onToggleHistory">
+                    <image class="service-icon" src="/static/icons/help-center/feedback-records.png" mode="aspectFit" />
                     <text class="service-label">我的反馈</text>
                     <text class="service-desc">查看处理状态</text>
                     <text class="service-arrow">{{ historyVisible ? '▾' : '▸' }}</text>
                 </view>
                 <view class="service-row" @click="onOpenCustomerService">
+                    <image class="service-icon" src="/static/icons/help-center/headset.png" mode="aspectFit" />
                     <text class="service-label">在线客服</text>
                     <text class="service-desc">AI 学助手，随时可问</text>
                     <text class="service-arrow">▸</text>
@@ -275,13 +287,45 @@ import { goBack } from '../../utils/navigation'
 <style lang="scss">
     .container {
         flex: 1;
-        background-color: #f5f5f5;
+        /* 原型 783:292：浅蓝渐变页底（与 courses/forum 等浅蓝页同款通用渐变对） */
+        background: linear-gradient(to bottom, $gradient-start, $gradient-end);
+        background-color: $bg-color;
         flex-direction: column;
+    }
+
+    /* 欢迎区（原型 783:292：吉祥物 + 欢迎语） */
+    .welcome {
+        flex-direction: row;
+        align-items: center;
+        padding: 8rpx 32rpx 24rpx 32rpx;
+    }
+
+    .welcome-mascot {
+        width: 124rpx;
+        height: 156rpx;
+        margin-right: 24rpx;
+    }
+
+    .welcome-texts {
+        flex: 1;
+        flex-direction: column;
+    }
+
+    .welcome-title {
+        font-size: 28rpx;
+        font-weight: bold;
+        line-height: 40rpx;
+        color: $text-color;
+    }
+
+    .welcome-sub {
+        font-size: 26rpx;
+        color: $text-color-secondary;
+        margin-top: 8rpx;
     }
 
     /* 搜索栏 */
     .search-bar {
-        background-color: $primary-color;
         padding: 0 32rpx 24rpx 32rpx;
         flex-direction: row;
         align-items: center;
@@ -294,12 +338,12 @@ import { goBack } from '../../utils/navigation'
 
     .search-input {
         flex: 1;
-        height: 68rpx;
-        background-color: #ffffff;
-        border-radius: 34rpx;
-        padding: 0 24rpx;
+        height: 72rpx;
+        background-color: $card-bg;
+        border-radius: $radius-pill;
+        padding: 0 28rpx;
         font-size: 26rpx;
-        color: #333333;
+        color: $text-color;
     }
 
     .search-clear {
@@ -312,7 +356,7 @@ import { goBack } from '../../utils/navigation'
 
     .search-clear-text {
         font-size: 30rpx;
-        color: #ffffff;
+        color: $text-color-secondary;
     }
 
     /* 分类 chip 行（横滑）：靠 flex-direction:row + 子项 flex-shrink:0 撑出横向溢出。
@@ -321,31 +365,32 @@ import { goBack } from '../../utils/navigation'
        `style property white-space is only supported on <text>|<button>. there is an error on
        <scroll-view class="category-scroll" …>`）。旧的 `.filter-scroll` 写法照抄不得。 */
     .category-scroll {
-        background-color: #f5f5f5;
+        background-color: transparent;
         flex-direction: row;
         align-items: center;
-        padding: 20rpx 24rpx;
+        padding: 8rpx 24rpx 20rpx 24rpx;
     }
 
     .category-chip {
         padding: 10rpx 24rpx;
         border-radius: 32rpx;
-        background-color: #ffffff;
+        background-color: $card-bg;
         margin-right: 16rpx;
         flex-shrink: 0;
     }
 
     .category-chip-active {
-        background-color: $primary-color;
+        background-color: $tag-bg-neutral;
     }
 
     .category-text {
         font-size: 24rpx;
-        color: #666666;
+        color: $text-color-secondary;
     }
 
     .category-text-active {
-        color: #ffffff;
+        font-weight: bold;
+        color: $text-color;
     }
 
     /* 内容区 */
@@ -386,21 +431,21 @@ import { goBack } from '../../utils/navigation'
     /* 问答分组 */
     .group-list {
         flex-direction: column;
-        padding: 8rpx 24rpx 40rpx 24rpx;
+        padding: 0 24rpx 24rpx 24rpx;
     }
 
     .group-card {
-        background-color: #ffffff;
-        border-radius: 16rpx;
-        padding: 8rpx 24rpx;
-        margin-bottom: 16rpx;
+        background-color: $card-bg;
+        border-radius: $radius-card;
+        padding: 8rpx 28rpx;
+        margin-bottom: 24rpx;
     }
 
     .group-title {
-        font-size: 26rpx;
+        font-size: 32rpx;
         font-weight: bold;
-        color: #999999;
-        padding: 20rpx 0 8rpx 0;
+        color: $text-color;
+        padding: 24rpx 0 8rpx 0;
     }
 
     .entry {
@@ -411,18 +456,18 @@ import { goBack } from '../../utils/navigation'
         flex-direction: row;
         align-items: center;
         justify-content: space-between;
-        padding: 24rpx 0;
+        padding: 28rpx 0;
     }
 
     .entry-question {
         flex: 1;
         font-size: 28rpx;
-        color: #333333;
+        color: $text-color;
     }
 
     .entry-arrow {
         font-size: 28rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         margin-left: 16rpx;
     }
 
@@ -441,35 +486,41 @@ import { goBack } from '../../utils/navigation'
         line-height: 42rpx;
     }
 
-    /* 服务区（#1950）：入口列表 + 历史 */
+    /* 服务区（#1950）：入口列表 + 历史（三条入口的结构不动，仅换视觉承载） */
     .service-card {
-        background-color: #ffffff;
-        border-radius: 16rpx;
-        padding: 8rpx 24rpx 16rpx 24rpx;
-        margin: 8rpx 24rpx 40rpx 24rpx;
+        background-color: $card-bg;
+        border-radius: $radius-card;
+        padding: 8rpx 28rpx 16rpx 28rpx;
+        margin: 0 24rpx 40rpx 24rpx;
         flex-direction: column;
     }
 
     .service-title {
-        font-size: 26rpx;
+        font-size: 32rpx;
         font-weight: bold;
-        color: #999999;
-        padding: 20rpx 0 8rpx 0;
+        color: $text-color;
+        padding: 24rpx 0 8rpx 0;
     }
 
     .service-row {
         flex-direction: row;
         align-items: center;
-        padding: 24rpx 0;
+        padding: 28rpx 0;
         border-bottom-width: 1rpx;
         border-bottom-style: solid;
-        border-bottom-color: #f0f0f0;
+        border-bottom-color: $border-color-light;
+    }
+
+    .service-icon {
+        width: 52rpx;
+        height: 52rpx;
+        margin-right: 20rpx;
     }
 
     .service-label {
         font-size: 28rpx;
-        color: #333333;
-        width: 160rpx;
+        color: $text-color;
+        width: 150rpx;
     }
 
     .service-desc {
