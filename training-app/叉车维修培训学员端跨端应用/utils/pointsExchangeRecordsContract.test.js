@@ -20,6 +20,8 @@ const path = require('path');
 const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 const read = (p) => readText(path.join(ROOT, p));
+/** pages.json 路由拍平（#2579 起非 tabBar 页整目录切进分包，分包 path 是相对 root 的短名） */
+const { registeredRoutes } = require('../scripts/lib/pages-routes.js');
 
 const PAGE = read('pages/points/points-exchange-records.uvue');
 
@@ -54,7 +56,7 @@ describe('积分兑换记录页（#2518）契约', () => {
 
     it('页面标题与路由标题都是「兑换记录」', () => {
       expect(PAGE).toContain('title="兑换记录"');
-      expect(PAGES_JSON).toContain('"path": "pages/points/points-exchange-records"');
+      expect(registeredRoutes(PAGES_JSON)).toContain('pages/points/points-exchange-records');
       expect(PAGES_JSON).toContain('"navigationBarTitleText": "兑换记录"');
     });
 

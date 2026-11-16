@@ -48,6 +48,8 @@ const path = require('path');
 
 /** 读源码一律经共享读者归一 EOL（ADR-0019）；跑模块一律经共享执行器（#1237） */
 const { readText, loadUts } = require('./utsHarness');
+/** pages.json 路由拍平（#2579 起非 tabBar 页整目录切进分包，分包 path 是相对 root 的短名） */
+const { registeredRoutes } = require('../scripts/lib/pages-routes.js');
 const ROOT = path.join(__dirname, '..');
 const PAGE = 'pages/profile/favorites.uvue';
 /** 落点表的唯一实现（本守护的被测物） */
@@ -159,7 +161,7 @@ describe('#1089 我的收藏落点：五类条目各有正确落点', () => {
   });
 
   it('落点路由全部在 pages.json 注册（防幻影路由）', () => {
-    const pagesJson = read('pages.json');
+    const routes = registeredRoutes(read('pages.json'));
     const urls = [
       click(fav('chapter', 31, 7)).navigations[0],
       click(fav('question', 99)).navigations[0],
@@ -170,7 +172,7 @@ describe('#1089 我的收藏落点：五类条目各有正确落点', () => {
     ];
     expect(urls.filter((u) => !u)).toEqual([]);
     for (const u of urls) {
-      expect(pagesJson).toContain('"' + u.replace(/^\//, '').split('?')[0] + '"');
+      expect(routes).toContain(u.replace(/^\//, '').split('?')[0]);
     }
   });
 });

@@ -20,6 +20,8 @@
 const h = require('./contractHarness');
 const ROOT = h.ROOT;
 const read = h.read;
+/** pages.json 路由拍平（#2579 起非 tabBar 页整目录切进分包，分包 path 是相对 root 的短名） */
+const { registeredRoutes } = require('../scripts/lib/pages-routes.js');
 
 describe('就业在线导航链契约（#705 招聘→我的，单页合并版）', () => {
   const list = read('pages/jobs/job-list.uvue');
@@ -73,9 +75,9 @@ describe('就业在线导航链契约（#705 招聘→我的，单页合并版�
   });
 
   it('简历三页路由均已在 pages.json 注册（无死链）', () => {
-    const pagesJson = read('pages.json');
+    const routes = registeredRoutes(read('pages.json'));
     for (const route of ['pages/resume/resume', 'pages/resume/resume-edit', 'pages/resume/resume-attach']) {
-      expect(pagesJson).toContain(`"${route}"`);
+      expect(routes).toContain(route);
     }
   });
 });

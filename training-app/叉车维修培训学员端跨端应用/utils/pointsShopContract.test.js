@@ -20,6 +20,8 @@ const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 const REPO = path.join(ROOT, '..', '..');
 const read = (p) => readText(path.join(ROOT, p));
+/** pages.json 路由拍平（#2579 起非 tabBar 页整目录切进分包，分包 path 是相对 root 的短名） */
+const { registeredRoutes } = require('../scripts/lib/pages-routes.js');
 
 const PAGE = read('pages/points/points-shop.uvue');
 const API = read('api/points.uts');
@@ -77,7 +79,7 @@ describe('积分商城页（#1942）契约', () => {
     });
 
     it('页面已在 pages.json 登记（未登记 ⇒ 路由打不开）', () => {
-      expect(PAGES_JSON).toContain('"path": "pages/points/points-shop"');
+      expect(registeredRoutes(PAGES_JSON)).toContain('pages/points/points-shop');
       expect(PAGES_JSON).toContain('"navigationBarTitleText": "积分商城"');
     });
   });

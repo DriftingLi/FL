@@ -9,6 +9,8 @@ const path = require('path');
 
 /** 读源码一律经共享读者归一 EOL（ADR-0019）：与检出平台无关，Windows CRLF 也免疫。 */
 const { readText } = require('./utsHarness');
+/** pages.json 路由拍平（#2579 起非 tabBar 页整目录切进分包，分包 path 是相对 root 的短名） */
+const { registeredRoutes } = require('../scripts/lib/pages-routes.js');
 const SRC_PATH = path.join(__dirname, 'searchDisplay.uts');
 const src = readText(SRC_PATH);
 
@@ -228,9 +230,10 @@ describe('searchItemPath：落点（ADR-0049 决策 2「搜到但打不开不合
       searchItemPath({ type: t, id: 1, parent_id: 1 }),
     );
     expect(paths.filter((p) => p.length === 0)).toEqual([]);
+    const routes = registeredRoutes(pagesJson);
     for (const p of paths) {
       const route = p.replace(/^\//, '').split('?')[0];
-      expect(pagesJson).toContain('"' + route + '"');
+      expect(routes).toContain(route);
     }
   });
 });

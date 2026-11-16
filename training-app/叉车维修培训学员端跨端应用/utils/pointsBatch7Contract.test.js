@@ -17,6 +17,8 @@ const fs = require('fs');
 const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 const read = (p) => readText(path.join(ROOT, p));
+/** pages.json 路由拍平（#2579 起非 tabBar 页整目录切进分包，分包 path 是相对 root 的短名） */
+const { registeredRoutes } = require('../scripts/lib/pages-routes.js');
 
 const TASK = read('pages/points/task-center.uvue');
 const DETAIL = read('pages/points/points-detail.uvue');
@@ -38,8 +40,9 @@ function tplOf(src) {
 
 describe('#2523 激励批：三页路由与页内态', () => {
   it('三条路由都在 pages.json 已注册（本批不新增路由，票面 3 路由）', () => {
+    const routes = registeredRoutes(PAGES_JSON);
     for (const p of ['pages/points/task-center', 'pages/points/points-detail', 'pages/points/points-rules']) {
-      expect(PAGES_JSON).toContain(`"path": "${p}"`);
+      expect(routes).toContain(p);
     }
   });
 
