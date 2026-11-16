@@ -301,7 +301,7 @@
 
     .create-pill-text {
         font-size: 28rpx;
-        color: #2979ff;
+        color: $primary-color;
         font-weight: bold;
     }
 
@@ -335,7 +335,7 @@
     }
 
     .empty-btn {
-        background-color: #2979ff;
+        background-color: $primary-color;
         padding: 16rpx 48rpx;
         border-radius: 32rpx;
     }
@@ -364,7 +364,7 @@
         width: 96rpx;
         height: 96rpx;
         border-radius: 48rpx;
-        background-color: #2979ff;
+        background-color: $primary-color;
         align-items: center;
         justify-content: center;
         box-shadow: 0rpx 4rpx 8rpx rgba(0, 0, 0, 0.3);

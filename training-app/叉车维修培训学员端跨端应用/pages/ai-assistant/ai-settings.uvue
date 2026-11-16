@@ -437,7 +437,7 @@
 
 	.section-add {
 		font-size: 26rpx;
-		color: #2979ff;
+		color: $primary-color;
 		font-weight: 600;
 		padding: 6rpx 12rpx;
 		margin-right: 8rpx;
@@ -451,7 +451,7 @@
 
 	.add-model-text {
 		font-size: 28rpx;
-		color: #2979ff;
+		color: $primary-color;
 		font-weight: 600;
 	}
 
@@ -504,14 +504,14 @@
 	}
 
 	.radio-on {
-		border-color: #2979ff;
+		border-color: $primary-color;
 	}
 
 	.radio-dot {
 		width: 22rpx;
 		height: 22rpx;
 		border-radius: 11rpx;
-		background-color: #2979ff;
+		background-color: $primary-color;
 	}
 
 	.form-card {
@@ -569,7 +569,7 @@
 
 	.save-btn {
 		height: 88rpx;
-		background-color: #2979ff;
+		background-color: $primary-color;
 		border-radius: 44rpx;
 		align-items: center;
 		justify-content: center;

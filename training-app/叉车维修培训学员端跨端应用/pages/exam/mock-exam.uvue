@@ -161,7 +161,7 @@ import { goBack } from '../../utils/navigation'
 
     .progress-bar {
         height: 12rpx;
-        background-color: #2979ff;
+        background-color: $primary-color;
         border-radius: 6rpx;
     }
 
@@ -192,8 +192,8 @@ import { goBack } from '../../utils/navigation'
     }
 
     .palette-chip.palette-current {
-        background-color: #2979ff;
-        border-color: #2979ff;
+        background-color: $primary-color;
+        border-color: $primary-color;
     }
 
     .palette-chip.palette-answered {
@@ -260,7 +260,7 @@ import { goBack } from '../../utils/navigation'
     .retry-btn {
         margin-top: 24rpx;
         padding: 16rpx 48rpx;
-        background-color: #2979ff;
+        background-color: $primary-color;
         border-radius: 40rpx;
     }
 
