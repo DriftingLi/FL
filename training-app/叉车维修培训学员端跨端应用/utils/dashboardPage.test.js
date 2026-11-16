@@ -21,7 +21,12 @@ const PAGES_JSON = path.join(ROOT, 'pages.json');
 
 const src = readText(PAGE_PATH);
 const pagesConf = JSON.parse(readText(PAGES_JSON));
-const registeredPages = new Set(pagesConf.pages.map((p) => p.path));
+// 注册面 = pages ∪ subPackages（subPackages 的 path 相对各自 root）——#2579 起非 tabBar 页整目录切出主包，
+// 只认 pages 段会把分包页误判成死链（同 #2430 招聘端切分包时的口径）。
+const registeredPages = new Set([
+  ...pagesConf.pages.map((p) => p.path),
+  ...(pagesConf.subPackages || []).flatMap((sp) => (sp.pages || []).map((p) => `${sp.root}/${p.path}`)),
+]);
 const tabPages = new Set(
   pagesConf.tabBar && pagesConf.tabBar.list ? pagesConf.tabBar.list.map((t) => t.pagePath) : []
 );

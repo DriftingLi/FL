@@ -15,6 +15,8 @@
 const h = require('./contractHarness');
 const ROOT = h.ROOT;
 const read = h.read;
+/** pages.json 路由拍平（#2579 起非 tabBar 页整目录切进分包，分包 path 是相对 root 的短名） */
+const { registeredRoutes } = require('../scripts/lib/pages-routes.js');
 
 /**
  * 抹掉块注释与行注释（`://` 例外，防误杀 URL 字面量）。
@@ -262,7 +264,7 @@ describe('points-rules.uvue 静态规则页（#1943：分值对齐后端配置 +
   });
 
   it('pages.json 注册规则页路由', () => {
-    expect(read('pages.json')).toContain('pages/points/points-rules');
+    expect(registeredRoutes(read('pages.json'))).toContain('pages/points/points-rules');
   });
 });
 

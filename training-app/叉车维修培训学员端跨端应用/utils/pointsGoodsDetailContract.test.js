@@ -21,6 +21,8 @@ const fs = require('fs');
 const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 const read = (p) => readText(path.join(ROOT, p));
+/** pages.json 路由拍平（#2579 起非 tabBar 页整目录切进分包，分包 path 是相对 root 的短名） */
+const { registeredRoutes } = require('../scripts/lib/pages-routes.js');
 
 const PAGE = read('pages/points/points-goods-detail.uvue');
 const COMPOSABLE = read('pages/points/composables/usePointsGoodsDetail.uts');
@@ -40,7 +42,7 @@ const COMPOSABLE_NO_COMMENT = COMPOSABLE
 describe('商品详情页（#2518 第 5 刀）契约', () => {
   describe('① 路由与页面形状', () => {
     it('页面已在 pages.json 登记（未登记 ⇒ 路由打不开），custom 导航照兑换记录先例', () => {
-      expect(PAGES_JSON).toContain('"path": "pages/points/points-goods-detail"');
+      expect(registeredRoutes(PAGES_JSON)).toContain('pages/points/points-goods-detail');
       expect(PAGES_JSON).toContain('"navigationBarTitleText": "商品详情"');
     });
 

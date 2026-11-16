@@ -30,6 +30,8 @@ const path = require('path');
 const h = require('./contractHarness');
 /** 读取层归一只有一份（ADR-0019）：本条同时要读后端的 Go 真源，故直接取 `readText` 本体 */
 const { readText } = h;
+/** pages.json 路由拍平（#2579 起非 tabBar 页整目录切进分包，分包 path 是相对 root 的短名） */
+const { registeredRoutes } = require('../scripts/lib/pages-routes.js');
 
 const ROOT = h.ROOT;
 const read = h.read;
@@ -504,7 +506,7 @@ describe('删除禁区「resume 不用删」：行为保持点逐项仍在', () 
   });
 
   it('模块文件集合不减：三条路由与四个 api 消费点仍在', () => {
-    const routes = [...read('pages.json').matchAll(/"path"\s*:\s*"([^"]+)"/g)].map((m) => m[1]);
+    const routes = registeredRoutes(read('pages.json'));
     for (const r of ['pages/resume/resume', 'pages/resume/resume-edit', 'pages/resume/resume-attach']) {
       expect(routes).toContain(r);
     }

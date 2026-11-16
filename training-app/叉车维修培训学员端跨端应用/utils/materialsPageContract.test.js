@@ -22,6 +22,9 @@ const path = require('path');
 const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 const read = (rel) => readText(path.join(ROOT, rel));
+/** pages.json 路由拍平（#2579 起非 tabBar 页整目录切进分包，分包 path 是相对 root 的短名） */
+const { registeredRoutes } = require('../scripts/lib/pages-routes.js');
+
 const exists = (rel) => fs.existsSync(path.join(ROOT, rel));
 
 describe('学习资料入口（#814）', () => {
@@ -52,7 +55,7 @@ describe('考试中心页已删（#814 升级式推翻 #810 保留裁定）', ()
   });
 
   it('pages.json 无 pages/exam/exam 路由', () => {
-    const routes = [...read('pages.json').matchAll(/"path"\s*:\s*"([^"]+)"/g)].map((m) => m[1]);
+    const routes = registeredRoutes(read('pages.json'));
     expect(routes).not.toContain('pages/exam/exam');
   });
 
@@ -68,7 +71,7 @@ describe('学习资料页实现（pages/resources/materials.uvue）', () => {
 
   it('页面已注册且存在', () => {
     expect(exists('pages/resources/materials.uvue')).toBe(true);
-    expect(read('pages.json')).toContain('pages/resources/materials');
+    expect(registeredRoutes(read('pages.json'))).toContain('pages/resources/materials');
   });
 
   it('数据源走 api/material（页面层不 import request）', () => {

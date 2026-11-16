@@ -338,7 +338,13 @@ describe('删除禁区「exam 不用删」：行为保持点逐项仍在', () =>
   });
 
   it('模块文件集合不减：两条路由与模块文件均在（不删页面/路由）', () => {
-    const routes = [...read('pages.json').matchAll(/"path"\s*:\s*"([^"]+)"/g)].map((m) => m[1]);
+    // 注册面 = pages ∪ subPackages（subPackages 的 path 相对各自 root）——#2579 起 exam 整目录切出主包，
+    // 只按裸 path 正则取会把分包页读成 "mock-exam" 而误判成路由被删（同 #2430 招聘端口径）。
+    const conf = JSON.parse(read('pages.json'));
+    const routes = [
+      ...(conf.pages || []).map((p) => p.path),
+      ...(conf.subPackages || []).flatMap((sp) => (sp.pages || []).map((p) => `${sp.root}/${p.path}`)),
+    ];
     expect(routes).toContain('pages/exam/mock-exam');
     expect(routes).toContain('pages/exam/mock-exam-result');
     for (const rel of [
