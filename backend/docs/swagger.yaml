@@ -145,6 +145,46 @@ definitions:
       status:
         type: integer
     type: object
+  admin.TutorCourseAssignInput:
+    properties:
+      course_ids:
+        items:
+          type: integer
+        type: array
+    type: object
+  admin.TutorCourseAssignResult:
+    properties:
+      applied:
+        description: 本次真正新建或改动的认领行数
+        type: integer
+      skipped:
+        description: 已经是目标状态、无需改动的行数
+        type: integer
+    type: object
+  admin.TutorCourseAssignmentDTO:
+    properties:
+      course_id:
+        type: integer
+      course_name:
+        type: string
+      created_at:
+        description: 认领时间，按升序排
+        type: string
+      source:
+        description: self | admin：抽屉要显示「他自己认领的」还是「管理员分配的」
+        type: string
+    type: object
+  admin.TutorCourseAssignmentListDTO:
+    properties:
+      course_ids:
+        items:
+          type: integer
+        type: array
+      items:
+        items:
+          $ref: '#/definitions/admin.TutorCourseAssignmentDTO'
+        type: array
+    type: object
   admin.TutorDTO:
     properties:
       created_at:
@@ -9628,6 +9668,142 @@ paths:
       security:
       - BearerAuth: []
       summary: 删除导师
+      tags:
+      - 管理端-导师
+  /admin/tutor/{tutor_id}/courses:
+    delete:
+      consumes:
+      - application/json
+      description: 管理员从讲师身上移除一批课程认领（需 tutor.manage）；**不回溯**——章节作者归属与在审内容不受影响
+      parameters:
+      - description: 讲师 ID
+        in: path
+        name: tutor_id
+        required: true
+        type: integer
+      - description: 课程 ID 列表
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/admin.TutorCourseAssignInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/admin.TutorCourseAssignResult'
+              type: object
+        "400":
+          description: 参数错误（含课程列表为空）
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: 无 tutor.manage 能力
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 讲师不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 移除讲师的课程分配
+      tags:
+      - 管理端-导师
+    get:
+      description: 列出某讲师已分配的课程（抽屉的「已分配」标识数据源，需 tutor.manage）
+      parameters:
+      - description: 讲师 ID
+        in: path
+        name: tutor_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/admin.TutorCourseAssignmentListDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: 无 tutor.manage 能力
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 讲师不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 查讲师已分配的课程
+      tags:
+      - 管理端-导师
+    post:
+      consumes:
+      - application/json
+      description: 管理员把一批课程分配给讲师（需 tutor.manage）；来源记「管理员」，重复分配幂等
+      parameters:
+      - description: 讲师 ID
+        in: path
+        name: tutor_id
+        required: true
+        type: integer
+      - description: 课程 ID 列表
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/admin.TutorCourseAssignInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/admin.TutorCourseAssignResult'
+              type: object
+        "400":
+          description: 参数错误（含课程列表为空）
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: 无 tutor.manage 能力
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 讲师不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 给讲师代分配课程
       tags:
       - 管理端-导师
   /admin/tutor/{tutor_id}/password:

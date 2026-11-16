@@ -82,10 +82,23 @@ func HasCourseClaim(db *gorm.DB, tutorID, courseID int) (bool, error) {
 	return n > 0, nil
 }
 
-// ClaimCourse 讲师自助认领（B3/B5）：已认领返回 ErrCourseAlreadyClaimed 而不是静默成功——
-// 前端要把「你已经在里面了」和「刚成功」分开显示。并发重复认领由唯一索引兜底，
-// 冲突同样翻译成 ErrCourseAlreadyClaimed（否则并发时一条路径 409、另一条 500）。
-func ClaimCourse(db *gorm.DB, tutorID, courseID int) error {
+// ClaimCourse 认领课程（B3/B5）——**讲师自助与管理端代分配共用这一条 INSERT**。
+//
+// source 由调用方给出（`model.ClaimSourceSelf` / `model.ClaimSourceAdmin`）：管理端代分配
+// 与讲师自助写的是同一张表同一行形状，差别只在来源列。若为管理端再写一份 INSERT，
+// 表上的 UNIQUE (tutor_id,course_id) 与 CHECK (source IN (...)) 就有两个执行点，
+// 冲突处理迟早漂成不一致（一处 409、一处静默成功）。
+//
+// 冲突语义按来源分档（#2597 拍板）：
+//   - 讲师自助重复认领 → ErrCourseAlreadyClaimed（409）：前端要把「你已经在里面了」
+//     和「刚成功」分开显示；
+//   - 管理端代分配遇到已有行 → **成功**，且把 source 升级为 'admin'。理由：那是管理员
+//     把一条自助认领转成正式分配，与讲师自己重复点按钮不是同一件事；若返回 409，
+//     管理员就永远无法把「讲师自己认领的」变成「分配给他的」，而这两者在审计上不同。
+//     已有行本来就是 admin 来源时零改动（幂等）。
+//
+// 并发重复认领由唯一索引兜底，冲突同样走上面两条分支（否则并发时一条路径 409、另一条 500）。
+func ClaimCourse(db *gorm.DB, tutorID, courseID int, source string) error {
 	var c model.Course
 	if err := db.Select("course_id").First(&c, courseID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -93,14 +106,27 @@ func ClaimCourse(db *gorm.DB, tutorID, courseID int) error {
 		}
 		return err
 	}
-	row := model.TutorCourseClaim{TutorID: tutorID, CourseID: courseID, Source: model.ClaimSourceSelf}
+	row := model.TutorCourseClaim{TutorID: tutorID, CourseID: courseID, Source: source}
 	if err := db.Create(&row).Error; err != nil {
-		if dberr.IsDuplicateError(err) {
+		if !dberr.IsDuplicateError(err) {
+			return err
+		}
+		if source != model.ClaimSourceAdmin {
 			return ErrCourseAlreadyClaimed
 		}
-		return err
+		// 管理端代分配：已有行 → 升级来源并成功（已认领过的讲师不该让管理员吃 409）
+		return db.Model(&model.TutorCourseClaim{}).
+			Where("tutor_id = ? AND course_id = ?", tutorID, courseID).
+			Update("source", model.ClaimSourceAdmin).Error
 	}
 	return nil
+}
+
+// AssignCourse 管理端代分配课程（#2597 D4）：语义同 ClaimCourse 的 admin 分支，
+// 独立成具名函数是因为**调用方的意图不同**——讲师面调 ClaimCourse(self)，
+// 管理端调本函数，读代码时不必追 source 常量就能看出「这是代分配」。
+func AssignCourse(db *gorm.DB, tutorID, courseID int) error {
+	return ClaimCourse(db, tutorID, courseID, model.ClaimSourceAdmin)
 }
 
 // ReleaseCourseClaim 讲师退出认领（B6）：只断**今后**的编辑权——章节作者归属保留
