@@ -13,6 +13,12 @@
  * （tab=points → 积分兑换，缺省/未知 → 热门）。热门用的是两路列表的前 6 条（hotCourses / hotItems），
  * 图书系列走 category=book 的筛选动词，积分兑换 = points_price 非空课程 + 积分商品全量。
  *
+ * #2619 T3 起筛选只剩「积分范围」一个控件（ADR-0072 决策 7-8）：它只作用于积分商品，
+ * 故只在图书系列 / 积分兑换两分区可见，档位变化即按 points_min / points_max 重取两路积分商品
+ * （「不限」档也重取，只是回到全量取源）；排序四档与「商品分类」五档一并退役——前者无后端参数、
+ * 后者与左栏分区职责重复。热门段取的是**未筛**全量的前 6（它没有可见控件，不能让筛选在这里变成
+ * 一个用户清不掉的隐藏状态）。
+ *
  * 课程路（mall 页）：`/courses` 是公开路由，服务端 CredentialScoped 兜底永不生效
  * （见 api/course.uts 文件头、docs/agents/credential-scope.md）⇒ 必须显式下发当前证件；
  * mall 是 pushed 页（每次进入重新 onLoad），故只在 startCourses 取一次证件、不在 onShow 跟切换。
@@ -27,7 +33,7 @@ import { AI_PRO_SKU } from '../../../composables/useAiPro'
 import type { CourseItem, ShopItem, ShopItemsResult } from '../../../types/index'
 import type { Page } from '../../../api/envelope'
 
-/** 单个筛选选项（label 进胶囊；分类档用 value，积分范围档只用 min/max） */
+/** 单个筛选选项（label 进胶囊；积分范围档只用 min/max，value 只作 v-for key） */
 export type MallFilterOption = {
     label : string
     value : string
@@ -40,14 +46,12 @@ export type UseMallResult = {
     /** 课程路 */
     courses : Ref<CourseItem[]>
     hotCourses : Ref<CourseItem[]>
-    activeSort : Ref<number>
     activeCategory : Ref<number>
     coursesLoading : Ref<boolean>
     coursesNoMore : Ref<boolean>
     coursesLoadError : Ref<boolean>
     loadCourses : (reset : boolean) => void
     loadMoreCourses : () => void
-    setSort : (idx : number) => void
     setCategory : (idx : number) => void
     /** 四态首屏（tab 决定初始分区；两源各一次装载） */
     startMall : (tab : string) => void
@@ -61,11 +65,11 @@ export type UseMallResult = {
     loadFailed : Ref<boolean>
     bookItems : Ref<ShopItem[]>
     bookLoading : Ref<boolean>
+    /** 图书系列一路的失败标记（与积分商品路分开：两路各自失败，错误态不能互相冒充） */
+    bookLoadFailed : Ref<boolean>
     shopCoverUrl : (item : ShopItem) => string
-    categoryOptions : MallFilterOption[]
+    /** 单筛选控件：「积分范围」三档 + 「不限」复位（只作用于积分商品） */
     rangeOptions : MallFilterOption[]
-    filterPanel : Ref<string>
-    activeCategoryIdx : Ref<number>
     activeRangeIdx : Ref<number>
     stockText : (item : ShopItem) => string
     blocked : (item : ShopItem) => boolean
@@ -74,18 +78,15 @@ export type UseMallResult = {
     btnTextClass : (item : ShopItem) => string
     loadBalance : () => void
     loadItems : () => void
+    /** 图书系列一路的装载（重试位与档位变化共用；两路各自独立失败） */
+    loadBookItems : () => void
     onRedeem : (item : ShopItem) => void
-    onTogglePanel : (panel : string) => void
-    onClosePanel : () => void
-    onPickCategory : (idx : number) => void
     onPickRange : (idx : number) => void
-    onHotRedeemable : () => void
     onEarnPoints : () => void
 }
 
 export function useMall() : UseMallResult {
     // ===== 课程路状态（声明先于引用它的函数：UTS 无提升，后置声明即 Kotlin 编译错）=====
-    const activeSort = ref<number>(0)
     // 四态（ADR-0072 决策 2 的 MECE 分区）：0 热门 / 1 课程 / 2 图书系列 / 3 积分兑换 —— 全是本页态
     const activeCategory = ref<number>(0)
     const courses = ref<CourseItem[]>([]) as Ref<CourseItem[]>
@@ -106,6 +107,7 @@ export function useMall() : UseMallResult {
     /** 图书系列分区（#2618 T2 按类型取源：category=book）；T3 再在它上面接筛选与兑换三态 */
     const bookItems = ref<ShopItem[]>([]) as Ref<ShopItem[]>
     const bookLoading = ref<boolean>(false)
+    const bookLoadFailed = ref<boolean>(false)
 
     // ===== 四态分区的切片/派生（都在装载处更新一次，模板只读 ref，不在渲染里算）=====
     /** 热门课程段 = 课程前 6（固定条数，无「查看更多」翻页态） */
@@ -117,30 +119,21 @@ export function useMall() : UseMallResult {
     /** 正在兑换的 sku（空串表示无进行中请求，兼作防重入闸门） */
     const redeemingSku = ref<string>('')
 
-    // ===== 筛选两态（#2518 第 2 刀；形状按 N1 #2548，后端参数未上线前会忽略 query 返回全量）=====
-    /** 分类五档：'' = 不限；enum 值 = N1 #2548 的 book|material|course|other */
-    const categoryOptions : MallFilterOption[] = [
-        { label: '不限', value: '', min: 0, max: 0 },
-        { label: '图书', value: 'book', min: 0, max: 0 },
-        { label: '资料', value: 'material', min: 0, max: 0 },
-        { label: '课程', value: 'course', min: 0, max: 0 },
-        { label: '其他', value: 'other', min: 0, max: 0 },
-    ]
-
+    // ===== 单筛选控件（#2619 T3；后端参数已上线：#2548 形状 category / points_min / points_max）=====
     /**
-     * 积分范围档位（票面给定 ≤500 / 500-1000 / >1000）：边界不重叠取 [0,500] / [501,1000] /
-     * [1001,∞)；min/max = 0 表示该参不下发。value 只作 v-for key，不进请求。
+     * 积分范围档位（票面给定 ≤500 / 500-1000 / >1000）：标签按闭区间读，实际下发为
+     * price ≤ 500 / 500 ≤ price ≤ 1000 / price ≥ 1001；边界值 500 两侧都算 —— 档位是「在预算内挑」，
+     * 重叠不会给出歧义，反倒是把 500 只算进一侧会让「500-1000」这个标签少一档。
+     * min/max = 0 表示该侧不下发。「不限」是复位档不是第四档——没有它，选完区间就没有回头路
+     * （控件只在两个积分商品分区可见，去别的分区也清不掉）。value 只作 v-for key，不进请求。
      */
     const rangeOptions : MallFilterOption[] = [
         { label: '不限', value: 'all', min: 0, max: 0 },
         { label: '≤500', value: 'le500', min: 0, max: 500 },
-        { label: '500-1000', value: '501-1000', min: 501, max: 1000 },
+        { label: '500-1000', value: '500-1000', min: 500, max: 1000 },
         { label: '>1000', value: 'gt1000', min: 1001, max: 0 },
     ]
 
-    /** 当前展开的筛选面板：'' = 都收起（主态）/ 'category' / 'range' */
-    const filterPanel = ref<string>('')
-    const activeCategoryIdx = ref<number>(0)
     const activeRangeIdx = ref<number>(0)
 
     // ===== 纯映射（须先于调用它们的函数声明，守护规则 A）=====
@@ -253,11 +246,6 @@ export function useMall() : UseMallResult {
         loadCourses(false)
     }
 
-    function setSort(idx : number) : void {
-        activeSort.value = idx
-        loadCourses(true)
-    }
-
     /** 左栏四态：只换内容区，不跳转、不重发请求（两路列表在 startMall 已装载；#2618 验收 ①） */
     function setCategory(idx : number) : void {
         activeCategory.value = idx
@@ -288,33 +276,37 @@ export function useMall() : UseMallResult {
     async function loadItems() : Promise<void> {
         loading.value = true
         loadFailed.value = false
+        const range = rangeOptions[activeRangeIdx.value]
         try {
-            // 无筛选走原动词（既有契约钉死调用形状）；带筛选走 N1 #2548 形状骨架
-            //（getShopItemsFilteredApi：category / points_min / points_max）
-            const cat = categoryOptions[activeCategoryIdx.value].value
-            const range = rangeOptions[activeRangeIdx.value]
+            // 无范围档走原动词（既有契约钉死调用形状）；带档走 N1 #2548 形状骨架
+            //（getShopItemsFilteredApi：category / points_min / points_max）。
+            // 积分兑换分区的商品段是「全量」，故 category 传空串（api 层空串即不下发该参）
             let res : ShopItemsResult
-            if (cat.length == 0 && range.min == 0 && range.max == 0) {
+            if (range.min == 0 && range.max == 0) {
                 res = await getShopItemsApi()
+                // 热门段只吃未筛全量的前 6：它没有可见控件，不能留一个用户清不掉的隐藏筛选
+                hotItems.value = res.items.slice(0, 6)
             } else {
-                res = await getShopItemsFilteredApi(cat, range.min, range.max)
+                res = await getShopItemsFilteredApi('', range.min, range.max)
             }
             items.value = res.items
-            hotItems.value = res.items.slice(0, 6)
         } catch (e) {
             loadFailed.value = true
-            console.warn('[points-shop] items failed:', errMsg(e, '商品加载失败'))
+            console.warn('[mall] items failed:', errMsg(e, '商品加载失败'))
         }
         loading.value = false
     }
 
-    /** 图书系列分区装载（T2 只读呈现；失败只留空列表 + 空态，不挡其他分区） */
+    /** 图书系列分区装载（按类型取源 category=book，外加「积分范围」两档；失败只留空列表 + 空态，不挡其他分区） */
     async function loadBookItems() : Promise<void> {
         bookLoading.value = true
+        bookLoadFailed.value = false
+        const range = rangeOptions[activeRangeIdx.value]
         try {
-            const res : ShopItemsResult = await getShopItemsFilteredApi('book', 0, 0)
+            const res : ShopItemsResult = await getShopItemsFilteredApi('book', range.min, range.max)
             bookItems.value = res.items
         } catch (e) {
+            bookLoadFailed.value = true
             console.warn('[mall] book items failed:', errMsg(e, '图书加载失败'))
         }
         bookLoading.value = false
@@ -336,33 +328,16 @@ export function useMall() : UseMallResult {
         uni.navigateTo({ url: '/pages/points/task-center' })
     }
 
-    /** 筛选栏触发：再点同一个即收起（两态互斥，一次只展开一套） */
-    function onTogglePanel(panel : string) : void {
-        filterPanel.value = filterPanel.value == panel ? '' : panel
-    }
-
-    /** 点蒙层回主态（815:5463 → 821:6396 边） */
-    function onClosePanel() : void {
-        filterPanel.value = ''
-    }
-
-    /** 选分类档：收起面板并按新筛选重取（档位变化即发请求，骨架期后端忽略参数返回全量） */
-    function onPickCategory(idx : number) : void {
-        activeCategoryIdx.value = idx
-        filterPanel.value = ''
-        loadItems()
-    }
-
-    /** 选积分范围档：同上（min/max 进 N1 #2548 的 points_min / points_max） */
+    /**
+     * 「积分范围」档位变化：按新档重取两路积分商品（min/max 进 N1 #2548 的 points_min / points_max）。
+     * 两路都重取而不是只重取当前分区那份：图书系列与积分兑换共用同一档位，只刷一路会让另一路
+     * 停在旧档上（切回去才发现的错数据比多一次请求糟）。
+     */
     function onPickRange(idx : number) : void {
+        if (activeRangeIdx.value == idx) return
         activeRangeIdx.value = idx
-        filterPanel.value = ''
         loadItems()
-    }
-
-    /** 「可换商品」→ 筛选态（821:6546 → 815:5332 边：原型该态展开的是分类面板） */
-    function onHotRedeemable() : void {
-        filterPanel.value = 'category'
+        loadBookItems()
     }
 
     /** 兑换成功后的落点（#1942 验收：权益即时生效、落点可达）：当前唯一可兑权益是 AI 专业版 */
@@ -382,12 +357,14 @@ export function useMall() : UseMallResult {
             pointsBalance.value = res.balance
             uni.showToast({ title: '兑换成功', icon: 'success' })
             await loadItems()
+            await loadBookItems()
             goEntitlementLanding(item.sku)
         } catch (e) {
             redeemingSku.value = ''
             uni.showToast({ title: errMsg(e, '兑换失败'), icon: 'none' })
             // 失败后按服务端事实重拉：已拥有 / 售罄 / 下架都在这一步被纠正
             await loadItems()
+            await loadBookItems()
         }
     }
 
@@ -422,14 +399,12 @@ export function useMall() : UseMallResult {
     return {
         courses: courses,
         hotCourses: hotCourses,
-        activeSort: activeSort,
         activeCategory: activeCategory,
         coursesLoading: coursesLoading,
         coursesNoMore: coursesNoMore,
         coursesLoadError: coursesLoadError,
         loadCourses: (reset : boolean) : void => { loadCourses(reset) },
         loadMoreCourses: () : void => loadMoreCourses(),
-        setSort: (idx : number) : void => setSort(idx),
         setCategory: (idx : number) : void => setCategory(idx),
         startMall: (tab : string) : void => startMall(tab),
         hotItems: hotItems,
@@ -440,11 +415,9 @@ export function useMall() : UseMallResult {
         loadFailed: loadFailed,
         bookItems: bookItems,
         bookLoading: bookLoading,
+        bookLoadFailed: bookLoadFailed,
         shopCoverUrl: (item : ShopItem) : string => shopCoverUrl(item),
-        categoryOptions: categoryOptions,
         rangeOptions: rangeOptions,
-        filterPanel: filterPanel,
-        activeCategoryIdx: activeCategoryIdx,
         activeRangeIdx: activeRangeIdx,
         stockText: (item : ShopItem) : string => stockText(item),
         blocked: (item : ShopItem) : boolean => blocked(item),
@@ -453,12 +426,9 @@ export function useMall() : UseMallResult {
         btnTextClass: (item : ShopItem) : string => btnTextClass(item),
         loadBalance: () : void => { loadBalance() },
         loadItems: () : void => { loadItems() },
+        loadBookItems: () : void => { loadBookItems() },
         onRedeem: (item : ShopItem) : void => onRedeem(item),
-        onTogglePanel: (panel : string) : void => onTogglePanel(panel),
-        onClosePanel: () : void => onClosePanel(),
-        onPickCategory: (idx : number) : void => onPickCategory(idx),
         onPickRange: (idx : number) : void => onPickRange(idx),
-        onHotRedeemable: () : void => onHotRedeemable(),
         onEarnPoints: () : void => onEarnPoints(),
     } as UseMallResult
 }

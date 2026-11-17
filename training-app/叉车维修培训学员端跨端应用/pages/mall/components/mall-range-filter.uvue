@@ -1,0 +1,83 @@
+<template>
+	<!-- 「积分范围」单控件（#2619 T3 / ADR-0072 决策 7）：三档 + 「不限」复位，只作用于积分商品。
+	     形态 = 一排胶囊常驻：点一次即生效（档位变化就重取，不做「只换高亮」的假控件），
+	     无触发器、无展开面板、无蒙层 ⇒ 高度恒定，切分区不产生第二次布局跳动。
+	     通栏放在双栏主体之上而不是内容列里：内容列在 230rpx 侧栏右侧只剩 ~520rpx，
+	     四个胶囊连同档名放不进一行（放进去会挤成两行 ⇒ 恰恰违反「固定高度占位」）。
+	     分类五档与它的快捷入口「可换商品」已随合并页退役：分区本身按商品类型切了。
+	     命中区按 docs/ui-spec.md §5.11 撑到 88rpx（视觉胶囊可以更小），@click 挂命中区。 -->
+	<view class="range-bar">
+		<text class="range-label">积分范围</text>
+		<view v-for="(opt, i) in rangeOptions" :key="opt.value" class="range-pill-hit" @click="onPick(i)">
+			<view class="range-pill" :class="{ 'range-pill-active': activeRangeIdx == i }">
+				<text :class="['range-pill-text', { 'range-pill-text-active': activeRangeIdx == i }]">{{ opt.label }}</text>
+			</view>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+	import type { MallFilterOption } from '../composables/useMall.uts'
+
+	defineProps<{
+		rangeOptions : MallFilterOption[]
+		activeRangeIdx : number
+	}>()
+	const emit = defineEmits(['pickRange'])
+
+	function onPick(idx : number) : void {
+		emit('pickRange', idx)
+	}
+</script>
+
+<style lang="scss">
+	/* 筛选栏（88rpx：与已退役的排序栏同高，占位槽高度不变） */
+	.range-bar {
+		height: 88rpx;
+		padding-left: 20rpx;
+		padding-right: 20rpx;
+		flex-direction: row;
+		align-items: center;
+		background-color: $card-bg;
+		border-bottom: 1rpx solid $bg-color;
+	}
+
+	.range-label {
+		font-size: 24rpx;
+		color: $text-color-secondary;
+		margin-right: 8rpx;
+	}
+
+	/* 命中区：88rpx 高（触摸目标口径），视觉胶囊在它内部居中 */
+	.range-pill-hit {
+		height: 88rpx;
+		padding-left: 6rpx;
+		padding-right: 6rpx;
+		align-items: center;
+		justify-content: center;
+	}
+
+	/* 视觉胶囊：默认淡底，选中主色实心（同档互斥，一次只有一个选中） */
+	.range-pill {
+		height: 56rpx;
+		padding-left: 24rpx;
+		padding-right: 24rpx;
+		border-radius: 28rpx;
+		background-color: $bg-color;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.range-pill-active {
+		background-color: $primary-color;
+	}
+
+	.range-pill-text {
+		font-size: 24rpx;
+		color: $text-color-secondary;
+	}
+
+	.range-pill-text-active {
+		color: $text-color-inverse;
+	}
+</style>
