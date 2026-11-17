@@ -17,6 +17,9 @@
                      色随文案走（原型两态：免费红 / 付费深灰），判定与文案同一单点 priceIsFree。
                      经本地包装函数转发（模板直调 import 函数会被 Kotlin 判炸，规则 S）。 -->
                 <text :class="priceIsFree(pointsPrice) ? 'product-price-free' : 'product-price-paid'">{{ coursePriceText(pointsPrice) }}</text>
+                <!-- #2618 验收 ④：右下「查看详情」是整卡点击的可见affordance（卡整体 @click 抛 productClick，
+                     这里不再挂自己的 handler —— uni-app 点击冒泡会让一次点击推两次详情页） -->
+                <text class="product-more">查看详情</text>
             </view>
         </view>
     </view>
@@ -121,5 +124,11 @@
         font-size: 32rpx;
         font-weight: bold;
         color: $text-color;
+    }
+
+    /* 「查看详情」（#2618 T2）：卡右下的进入提示，右对齐由 .product-meta-row 的 space-between 承担 */
+    .product-more {
+        font-size: 24rpx;
+        color: $primary-color;
     }
 </style>

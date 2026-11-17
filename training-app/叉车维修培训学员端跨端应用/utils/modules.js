@@ -425,6 +425,7 @@ const MODULES = {
       'pages/mall/components/mall-course-card.uvue',
       'pages/mall/components/mall-float-actions.uvue',
       'pages/mall/components/mall-hot-section.uvue',
+      'pages/mall/components/mall-shop-card.uvue',
       'pages/mall/components/mall-sort-bar.uvue',
       'pages/mall/composables/useMall.uts',
       'pages/mall/mall.uvue',

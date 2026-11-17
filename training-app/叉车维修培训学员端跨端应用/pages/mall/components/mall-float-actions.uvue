@@ -1,59 +1,24 @@
 <template>
-	<!-- 悬浮按钮组（824:6971 实测：右侧白色竖胶囊，宽 106rpx、全圆角，右缘 40rpx；
-	     展开态 = ∧ 折叠钮置顶 + 首页/分享/搜索（图标+小字），与原型画出的展开态一致）。
-	     #1421（移动端 ADR-0031）：原型无「回到顶部」位，原 no-op scrollToTop 按钮随本刀退役；
-	     首页/分享线形图标无切图素材，维持字形/emoji 承载，搜索位吃切图。 -->
-	<view class="float-pill">
-		<!-- 折叠/展开 -->
-		<view class="float-item" @click="toggleFloatMenu">
-			<text class="float-toggle">{{ showFloatMenu ? '∧' : '∨' }}</text>
-		</view>
-		<!-- 展开菜单 -->
-		<view v-if="showFloatMenu" class="float-item" @click="goHome">
-			<text class="float-icon">🏠</text>
-			<text class="float-label">首页</text>
-		</view>
-		<view v-if="showFloatMenu" class="float-item" @click="onShare">
-			<text class="float-icon">🔗</text>
-			<text class="float-label">分享</text>
-		</view>
-		<!-- 搜索（收起态常驻；展开态为菜单末项） -->
-		<view class="float-item" @click="onSearchClick">
-			<image class="float-search-img" src="/static/icons/mall/search.png" mode="aspectFit" />
-			<text class="float-label">搜索</text>
-		</view>
+	<!-- 右下角悬浮搜索（#2618 验收 ⑤）：旧三钮胶囊（首页 / 分享 / 搜索）收敛成单搜索按钮 ——
+	     首页与分享在合并货架页各有正经入口（首页 tab、导航栏），胶囊里那两个是重复入口。
+	     搜首页槽外部小程序头像不在这里，它在导航栏 #right 槽，保留不动。 -->
+	<view class="float-search" @click="onSearch()">
+		<image class="float-search-img" src="/static/icons/mall/search.png" mode="aspectFit" />
+		<text class="float-search-label">搜索</text>
 	</view>
 </template>
 
 <script setup lang="uts">
-	import { ref } from 'vue'
-
-	// ---- 悬浮按钮 ----
-	const showFloatMenu = ref<boolean>(false)
-
 	const emit = defineEmits(['search'])
 
-	function goHome() : void {
-		uni.switchTab({ url: '/pages/index/index' })
-	}
-
-	function onShare() : void {
-		uni.showToast({ title: '分享功能开发中', icon: 'none' })
-	}
-
-	function onSearchClick() : void {
+	function onSearch() : void {
 		emit('search')
-	}
-
-	function toggleFloatMenu() : void {
-		showFloatMenu.value = !showFloatMenu.value
 	}
 </script>
 
 <style lang="scss">
-	/* ===== 悬浮胶囊（原型：白色竖胶囊、全圆角、右侧 40rpx；底部位置沿用现网 200rpx——
-	     原型画幅裁不到胶囊底缘，无实测依据不动它）===== */
-	.float-pill {
+	/* ===== 悬浮搜索按钮 ===== */
+	.float-search {
 		position: fixed;
 		right: 40rpx;
 		bottom: 200rpx;
@@ -67,28 +32,12 @@
 		padding-bottom: 16rpx;
 	}
 
-	.float-item {
-		flex-direction: column;
-		align-items: center;
-		padding-top: 14rpx;
-		padding-bottom: 14rpx;
-	}
-
-	.float-toggle {
-		font-size: 28rpx;
-		color: $text-color-secondary;
-	}
-
-	.float-icon {
-		font-size: 32rpx;
-	}
-
 	.float-search-img {
 		width: 32rpx;
 		height: 32rpx;
 	}
 
-	.float-label {
+	.float-search-label {
 		font-size: 22rpx;
 		color: $text-color;
 		margin-top: 6rpx;
