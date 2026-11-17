@@ -83,6 +83,14 @@ func NewRouter(deps *Deps) *gin.Engine {
 		api.Use(middleware.AdminCapabilityResolver(deps.AdminSvc))
 	}
 
+	// 讲师能力解析源（#2599 / 规格 E4）：与管理员那条并列注入，两条链路各查各的表
+	// （admin_role / tutor_role），互不引用 —— 讲师角色变更不影响管理员判定，反之亦然。
+	// 未注入时讲师作为动态角色一律 fail closed；本票尚未翻转 dynamicRoles（#2600 才翻），
+	// 故今天的讲师判定仍走静态表，这条注入是为下一票铺路且已可被契约测试直接驱动。
+	if deps.TutorSvc != nil {
+		api.Use(middleware.TutorCapabilityResolver(deps.TutorSvc))
+	}
+
 	// 邮箱验证码注册/登录（发码需过图形验证码）
 	// 手机号验证码注册/登录（发码需过图形验证码）
 	// 微信扫码登录（框架占位）

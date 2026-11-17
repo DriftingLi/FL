@@ -311,12 +311,19 @@ func (s *Service) ToggleHrwaiUserStatus(ctx context.Context, id int) (int16, err
 // ===== DTO（JSON 契约与 B7 前的 map key 逐字一致，前端零改动约束）=====
 
 // TutorDTO 导师（列表项）。
+//
+// 角色三列（#2599 / 规格 E7）：RoleID=0 表示**未挂角色**（新建讲师默认 NULL，取能力集得空集）；
+// RoleName/Protected 让讲师管理页不必再拉一次角色表就能显示「全权讲师（受保护）」这类标识。
+// 三列都由 GetTutors 一次批量解析（不按行查库，避免 N+1）。
 type TutorDTO struct {
 	TutorID   int    `json:"tutor_id"`
 	Username  string `json:"username"`
 	Name      string `json:"name"`
 	Status    int16  `json:"status"`
 	CreatedAt string `json:"created_at"`
+	RoleID    int    `json:"role_id"`
+	RoleName  string `json:"role_name"`
+	Protected bool   `json:"protected"`
 }
 
 // TutorListDTO 导师列表信封。
@@ -367,8 +374,24 @@ func (s *Service) GetTutors(page, pageSize int, keyword string) (*TutorListDTO, 
 		return nil, err
 	}
 	items := make([]TutorDTO, 0, len(tutors))
+	// 角色一次批量解析（#2599 / 规格 E7）：讲师列表每页 10 行，逐行查角色表是 10 次往返，
+	// 而角色表只有个位数行 —— 一次全取再按 id 映射，行数增长也不改查询次数。
+	roles := map[int]model.TutorRole{}
+	var allRoles []model.TutorRole
+	if err := s.db.Find(&allRoles).Error; err != nil {
+		return nil, err
+	}
+	for _, r := range allRoles {
+		roles[r.RoleID] = r
+	}
 	for i := range tutors {
-		items = append(items, tutorToDTO(&tutors[i]))
+		dto := tutorToDTO(&tutors[i])
+		if tutors[i].RoleID != nil {
+			if r, ok := roles[*tutors[i].RoleID]; ok {
+				dto.RoleID, dto.RoleName, dto.Protected = r.RoleID, r.Name, r.Protected
+			}
+		}
+		items = append(items, dto)
 	}
 	return &TutorListDTO{
 		Total:  total,

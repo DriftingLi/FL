@@ -92,15 +92,42 @@ func (AdminRoleCapability) TableName() string { return "admin_role_capability" }
 var ErrTutorNotFound = errors.New("讲师不存在")
 
 type Tutor struct {
-	TutorID   int       `gorm:"column:tutor_id;primaryKey" json:"tutor_id"`
-	Username  string    `gorm:"column:username;uniqueIndex" json:"username"`
-	Password  string    `gorm:"column:password" json:"-"`
-	Name      string    `gorm:"column:name" json:"name"`
-	Status    int16     `gorm:"column:status;default:1" json:"status"`
+	TutorID  int    `gorm:"column:tutor_id;primaryKey" json:"tutor_id"`
+	Username string `gorm:"column:username;uniqueIndex" json:"username"`
+	Password string `gorm:"column:password" json:"-"`
+	Name     string `gorm:"column:name" json:"name"`
+	Status   int16  `gorm:"column:status;default:1" json:"status"`
+	// RoleID 所挂讲师角色（#2599 / 规格 E2）。NULL = **未授权**（fail closed）：新建讲师默认
+	// 不挂角色，在管理员显式分配之前拿不到任何讲师能力 —— 与 admin.role_id 同一姿势。
+	RoleID    *int      `gorm:"column:role_id" json:"role_id,omitempty"`
 	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
 func (Tutor) TableName() string { return "tutor" }
+
+// TutorRole 讲师角色（#2599 / 规格 E1）：管理员给不同讲师分配不同能力面的载体。
+//
+// protected 角色（全权讲师）**不由本表回答能力**：它的能力恒为 authz.ProtectedTutorCapabilities()
+// 全量 —— 能力词表的唯一事实源仍是 internal/authz，故 protected 角色在 tutor_role_capability 里
+// 没有行。这与 admin_role / AdminRole 是同一条口径。
+type TutorRole struct {
+	RoleID    int       `gorm:"column:role_id;primaryKey" json:"role_id"`
+	Name      string    `gorm:"column:name;uniqueIndex" json:"name"`
+	Protected bool      `gorm:"column:protected" json:"protected"`
+	Remark    string    `gorm:"column:remark" json:"remark"`
+	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt time.Time `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (TutorRole) TableName() string { return "tutor_role" }
+
+// TutorRoleCapability 讲师角色的能力行（能力键取值域 = authz 能力表的讲师侧键）。
+type TutorRoleCapability struct {
+	RoleID     int    `gorm:"column:role_id;primaryKey" json:"role_id"`
+	Capability string `gorm:"column:capability;primaryKey" json:"capability"`
+}
+
+func (TutorRoleCapability) TableName() string { return "tutor_role_capability" }
 
 // ===== 25. 资料修改审核 =====
 

@@ -23,3 +23,13 @@ type ClaimResult struct {
 	CourseID int  `json:"course_id"`
 	Claimed  bool `json:"claimed"`
 }
+
+// TutorCapabilitiesDTO 当前讲师的有效能力集（#2599 / 规格 F1，形状与 admin.AdminCapabilitiesDTO 一致）。
+type TutorCapabilitiesDTO struct {
+	// Capabilities 有效能力键；未挂角色时为空数组（**不是 null** —— 契约由
+	// apitypes 的可空性锁按 nullability 声明核对）。
+	Capabilities []string `json:"capabilities" nullability:"nonnil"`
+	// Granted 是否已挂角色。false = 未授权（role_id 为 NULL）或账号不存在。
+	// 前端据此区分「还没分配角色」与「角色里什么都没勾」：两者都是空集，但话术不同。
+	Granted bool `json:"granted"`
+}

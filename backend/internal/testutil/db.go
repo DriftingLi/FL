@@ -36,6 +36,18 @@ func applyCriticalUniqueIndexes(t *testing.T, db *gorm.DB) {
 	}
 }
 
+// applyTutorRoleChain 在 AutoMigrate 之后补建讲师角色链（#2599 / 规格 E1）。
+//
+// 生产库由迁移 000061 建表 + seed 四模板 + 存量讲师挂全权角色；测试库走 AutoMigrate 不跑迁移，
+// 故这里补同一件事，否则「预置角色存在」这类断言在测试环境恒红。宿主与关键唯一索引同处
+// （都是「迁移在测试侧的那一半」），两侧一致性由 PG 契约测试对账。
+func applyTutorRoleChain(t *testing.T, db *gorm.DB) {
+	t.Helper()
+	if err := migrate.EnsureTutorRoleChain(db); err != nil {
+		t.Fatalf("测试库补建讲师角色链失败: %v", err)
+	}
+}
+
 // NewMemoryDB 返回一个内存中的 sqlite 数据库，已 AutoMigrate 全部表 + 补建关键唯一索引。
 // 每个测试用例应独立调用以获得隔离的数据库实例。
 func NewMemoryDB(t *testing.T) *gorm.DB {
@@ -50,6 +62,7 @@ func NewMemoryDB(t *testing.T) *gorm.DB {
 		t.Fatalf("AutoMigrate 失败: %v", err)
 	}
 	applyCriticalUniqueIndexes(t, db)
+	applyTutorRoleChain(t, db)
 	return db
 }
 
@@ -75,6 +88,7 @@ func NewFileDB(t *testing.T) *gorm.DB {
 		t.Fatalf("AutoMigrate 失败: %v", err)
 	}
 	applyCriticalUniqueIndexes(t, db)
+	applyTutorRoleChain(t, db)
 	return db
 }
 

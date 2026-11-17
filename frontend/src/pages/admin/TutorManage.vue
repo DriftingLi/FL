@@ -23,6 +23,14 @@
       <el-table-column prop="tutor_id" label="ID" width="70" align="center" />
       <el-table-column prop="username" label="用户名" min-width="160" />
       <el-table-column prop="name" label="姓名" min-width="140" />
+      <el-table-column label="角色" min-width="150">
+        <template #default="{ row }">
+          <UiTag v-if="row.role_id" :tone="row.protected ? 'warning' : 'info'" size="small">
+            {{ row.role_name }}
+          </UiTag>
+          <UiTag v-else tone="neutral" size="small">未授权</UiTag>
+        </template>
+      </el-table-column>
       <el-table-column label="状态" width="100" align="center">
         <template #default="{ row }">
           <UiTag :tone="row.status === 1 ? 'success' : 'danger'" size="small">
@@ -96,6 +104,33 @@
       :tutor-name="assignTarget.tutorName"
       @saved="load"
     />
+
+    <!-- 挂角色弹窗（#2599 E7）：与「分配课程」同为讲师行动作，但改的是能力面 -->
+    <UiDialog
+      v-model="roleDialogVisible"
+      title="分配讲师角色"
+      width="440px"
+      destroy-on-close
+      confirm-text="保存"
+      :confirm-loading="roleSubmitting"
+      @confirm="handleAssignRole"
+    >
+      <div class="role-dialog-body">
+        <p class="role-dialog-target">讲师：{{ roleTarget.tutorName }}</p>
+        <UiSelect
+          v-model="roleTarget.roleId"
+          :options="roleOptions"
+          placeholder="选择讲师角色"
+          clearable
+          style="width: 100%"
+        />
+        <p class="role-dialog-hint">
+          不选即摘掉角色（该讲师将失去全部讲师权限）。变更最多 40 秒后生效。
+        </p>
+      </div>
+    </UiDialog>
+
+    <TutorRolePanel />
   </div>
 </template>
 
@@ -120,7 +155,9 @@ import UiTag from '@/components/ui/UiTag.vue'
 import { describeRole } from '@/utils/roleWords'
 import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
 import UiInput from '@/components/ui/UiInput.vue'
+import UiSelect from '@/components/ui/UiSelect.vue'
 import TutorCourseAssignDrawer from './TutorCourseAssignDrawer.vue'
+import TutorRolePanel from './TutorRolePanel.vue'
 
 type TutorRow = AdminTutor
 
@@ -163,6 +200,43 @@ function openAssignDrawer(row: AdminTutor) {
   assignDrawerVisible.value = true
 }
 
+// 挂角色弹窗（#2599 E7）
+const roleDialogVisible = ref(false)
+const roleSubmitting = ref(false)
+const roleTarget = reactive({ tutorId: 0, tutorName: '', roleId: null as number | null })
+const roleOptions = ref<Array<{ label: string; value: number }>>([])
+
+async function openRoleDialog(row: AdminTutor) {
+  roleTarget.tutorId = row.tutor_id
+  roleTarget.tutorName = row.name
+  roleTarget.roleId = row.role_id > 0 ? row.role_id : null
+  roleDialogVisible.value = true
+  try {
+    const res = await adminApi.listTutorRoles()
+    roleOptions.value = (res?.roles ?? []).map(r => ({
+      label: r.protected ? `${r.name}（全权）` : r.name,
+      value: r.role_id
+    }))
+  } catch (error) {
+    console.error('加载讲师角色失败:', error)
+    /* 错误已由拦截器提示 */
+  }
+}
+
+async function handleAssignRole() {
+  roleSubmitting.value = true
+  try {
+    await adminApi.assignTutorRole(roleTarget.tutorId, roleTarget.roleId ?? 0)
+    ElMessage.success('已保存')
+    roleDialogVisible.value = false
+    load()
+  } catch (error) {
+    console.error('分配讲师角色失败:', error)
+  } finally {
+    roleSubmitting.value = false
+  }
+}
+
 async function handleToggleStatus(row: TutorRow) {
   try {
     await adminApi.toggleTutorStatus(row.tutor_id)
@@ -194,6 +268,7 @@ const table = useAdminTable<AdminTutor>({
     }),
   actions: {
     assignCourses: openAssignDrawer,
+    assignRole: openRoleDialog,
     resetPwd: openResetPwdDialog,
     toggle: handleToggleStatus,
     delete: deleteRow
@@ -266,6 +341,7 @@ onMounted(() => {
 function actionItems(row: AdminTutor): UiMoreMenuItem[] {
   return [
     { key: 'assignCourses', label: '分配课程' },
+    { key: 'assignRole', label: '分配角色' },
     { key: 'resetPwd', label: '重置密码' },
     { key: 'toggle', label: row.status === 1 ? '禁用' : '启用' },
     { key: 'delete', label: '删除', divided: true }

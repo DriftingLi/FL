@@ -54,7 +54,9 @@ import type {
   TutorDTO,
   TutorDeletedDTO,
   TutorListDTO,
-  TutorRegisterResultDTO
+  TutorRegisterResultDTO,
+  TutorRoleDTO,
+  TutorRoleListDTO
 } from './generated/admin'
 
 export type {
@@ -85,7 +87,9 @@ export type {
   TutorDTO as AdminTutor,
   TutorDeletedDTO as AdminTutorDeleteResult,
   TutorListDTO as AdminTutorPageData,
-  TutorRegisterResultDTO as AdminTutorCreated
+  TutorRegisterResultDTO as AdminTutorCreated,
+  TutorRoleDTO as AdminTutorRole,
+  TutorRoleListDTO as AdminTutorRoleList
 }
 
 // ===== 入参（query / body）—— 不生成，ADR-0048 决策 3 =====
@@ -226,6 +230,13 @@ export interface AdminRolePayload {
   capabilities: string[]
 }
 
+/** 讲师角色入参（#2599 E7）：能力键只收讲师侧 7 键。 */
+export interface AdminTutorRolePayload {
+  name: string
+  remark?: string
+  capabilities: string[]
+}
+
 /** 管理员账号写面入参（#1632）：role_id 省略或 0 = 先建号、后挂角色（未授权即什么都看不到）。 */
 export interface AdminAccountPayload {
   username: string
@@ -345,6 +356,35 @@ export const adminApi = {
 
   toggleTutorStatus(id: number) {
     return unwrappedRequest.put<StatusResultDTO>(`/admin/tutor/${id}/status`)
+  },
+
+  // ===== 讲师角色链（#2599 E7）=====
+  //
+  // 为什么与「管理角色」分成两组接口而不是共用一个：两边的能力键收口面不同
+  // （讲师角色只收讲师侧 7 键，管理员侧键一律 400），共用一组会把这个差异藏进入参校验里。
+  /** 讲师角色列表（含每个角色的能力键）。 */
+  listTutorRoles() {
+    return unwrappedRequest.get<TutorRoleListDTO>('/admin/tutor-roles')
+  },
+
+  /** 新建讲师角色；能力键必须是讲师侧键，管理员侧键会被 400 拒。 */
+  createTutorRole(data: AdminTutorRolePayload) {
+    return unwrappedRequest.post<TutorRoleDTO>('/admin/tutor-roles', data)
+  },
+
+  /** 改讲师角色名 / 备注 / 能力集；受保护的全权讲师一律 409。 */
+  updateTutorRole(roleId: number, data: AdminTutorRolePayload) {
+    return unwrappedRequest.put<TutorRoleDTO>(`/admin/tutor-roles/${roleId}`, data)
+  },
+
+  /** 删讲师角色；受保护角色或仍被讲师挂着的角色 409。 */
+  deleteTutorRole(roleId: number) {
+    return unwrappedRequest.delete<null>(`/admin/tutor-roles/${roleId}`)
+  },
+
+  /** 给讲师挂角色 / 换角色；roleId = 0 表示摘掉角色（未授权）。 */
+  assignTutorRole(tutorId: number, roleId: number) {
+    return unwrappedRequest.put<TutorDTO>(`/admin/tutor/${tutorId}/role`, { role_id: roleId })
   },
 
   // ===== 讲师课程分配（#2597 D4）=====

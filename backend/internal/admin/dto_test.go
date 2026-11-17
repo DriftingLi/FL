@@ -6,7 +6,10 @@ import "testing"
 
 func TestAdminDTOShapeLock(t *testing.T) {
 	tutor := TutorDTO{TutorID: 1, Username: "tutor01", Name: "王老师", Status: 1, CreatedAt: "2026-08-01T10:00:00"}
-	assertShapeLock(t, tutor, "tutor_id", "username", "name", "status", "created_at")
+	// #2599 E7：讲师角色三列是**追加**的（role_id / role_name / protected），既有 5 个 key
+	// 逐字未动 —— 前端老消费面按 key 取值，多出来的列不影响它；新消费面（讲师管理页角色列）
+	// 才读这三列。B7 的「零改动」约束在这里指的是**不改既有 key 的名字与含义**。
+	assertShapeLock(t, tutor, "tutor_id", "username", "name", "status", "created_at", "role_id", "role_name", "protected")
 
 	list := TutorListDTO{Total: 3, Page: 1, Tutors: []TutorDTO{tutor}}
 	assertShapeLock(t, list, "total", "page", "tutors")

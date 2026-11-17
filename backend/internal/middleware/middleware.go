@@ -28,6 +28,8 @@ const (
 	CtxRequestID ContextKey = "request_id"
 	// CtxCapabilityResolver 动态角色能力解析源（#1618 段1）
 	CtxCapabilityResolver ContextKey = "capability_resolver"
+	// CtxTutorCapabilityResolver 讲师能力解析源（#2599 / 规格 E4）
+	CtxTutorCapabilityResolver ContextKey = "tutor_capability_resolver"
 )
 
 // CapabilityResolver 动态角色（admin）有效能力集的解析源（#1618 段1）。
@@ -44,6 +46,24 @@ type CapabilityResolver interface {
 	AdminCapabilities(adminID int) (map[authz.Capability]struct{}, bool, error)
 }
 
+// TutorCapabilitySource 讲师有效能力集的解析源（#2599 / 规格 E3、E4）。
+//
+// **为什么另立一个接口，而不是给 CapabilityResolver 加第二个方法**（规格 E4 的「并列」）：
+// 加方法会让「注入源」这个角色被迫同时回答两类账号 —— 生产上注入的是 admin.Service，
+// 它没有、也不该有讲师的表；反过来给讲师侧注入 admin.Service 更是错位。并列接口让两条链路
+// 各自只有自己的实现，既有管理员链路（含测试 stub 与估值模块的注入面）逐字不动。
+//
+// 命名说明：接口叫 Source（与注入器 TutorCapabilityResolver 区分开 —— Go 的包级标识符
+// 不能同名，而注入器要与 AdminCapabilityResolver 保持同一命名习惯，那是装配根调用的名字）。
+type TutorCapabilitySource interface {
+	// TutorCapabilities 返回该讲师的有效能力集。
+	//
+	// 返回值语义与 AdminCapabilities 逐条对齐：第二个 = 是否已挂角色（NULL role_id 即未授权，
+	// **这是判定结果**），第三个 = 查询故障（守卫渲染 500，不伪装成 403）。
+	// 两条链路互不读取对方的表，故讲师角色变更不影响管理员判定，反之亦然。
+	TutorCapabilities(tutorID int) (map[authz.Capability]struct{}, bool, error)
+}
+
 // AdminCapabilityResolver 把解析源注入 context（装配根挂在 /api 组上）。
 //
 // 它**不读 claims**，因此与各域组内 JWTAuth 的先后无关：根组的中间件必然先跑。
@@ -57,6 +77,18 @@ func AdminCapabilityResolver(r CapabilityResolver) gin.HandlerFunc {
 	}
 }
 
+// TutorCapabilityResolver 注入讲师能力解析源（与 AdminCapabilityResolver 并列，同样挂 /api 组）。
+//
+// 两个注入器都挂在根组、都只写各自的 context 键，互不覆盖；守卫按角色取对应那个。
+func TutorCapabilityResolver(r TutorCapabilitySource) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if r != nil {
+			c.Set(string(CtxTutorCapabilityResolver), r)
+		}
+		c.Next()
+	}
+}
+
 // capabilityResolverFrom 读出请求上下文里的解析源。
 func capabilityResolverFrom(c *gin.Context) (CapabilityResolver, bool) {
 	v, ok := c.Get(string(CtxCapabilityResolver))
@@ -64,6 +96,16 @@ func capabilityResolverFrom(c *gin.Context) (CapabilityResolver, bool) {
 		return nil, false
 	}
 	r, ok := v.(CapabilityResolver)
+	return r, ok
+}
+
+// tutorCapabilityResolverFrom 读出请求上下文里的讲师解析源。
+func tutorCapabilityResolverFrom(c *gin.Context) (TutorCapabilitySource, bool) {
+	v, ok := c.Get(string(CtxTutorCapabilityResolver))
+	if !ok {
+		return nil, false
+	}
+	r, ok := v.(TutorCapabilitySource)
 	return r, ok
 }
 
@@ -258,6 +300,10 @@ func HasCapability(c *gin.Context, capability authz.Capability) bool {
 //
 // 多参即**任一命中**（#1639）；动态角色无论几个候选只解析一次能力集 —— 逐个候选各查一次库
 // 会把「一次判定」变成 N 次查询，而候选越多只会发生在共享只读面上。
+//
+// 动态角色按角色分派解析源（#2599 / 规格 E4）：管理员走 AdminCapabilities（角色表 admin_role），
+// 讲师走 TutorCapabilities（角色表 tutor_role）。两条链路各查各的表、各有各的缓存，
+// 互不引用 —— 讲师角色的变更不会改变管理员判定，反之亦然。
 func requireCapability(c *gin.Context, candidates ...authz.Capability) (bool, error) {
 	role := authz.Role(CurrentRole(c))
 	if !authz.IsDynamicRole(role) {
@@ -268,11 +314,7 @@ func requireCapability(c *gin.Context, candidates ...authz.Capability) (bool, er
 		}
 		return false, nil
 	}
-	resolver, ok := capabilityResolverFrom(c)
-	if !ok {
-		return false, nil
-	}
-	caps, granted, err := resolver.AdminCapabilities(CurrentUserID(c))
+	caps, granted, err := dynamicCapabilities(c, role)
 	if err != nil {
 		return false, err
 	}
@@ -285,6 +327,27 @@ func requireCapability(c *gin.Context, candidates ...authz.Capability) (bool, er
 		}
 	}
 	return false, nil
+}
+
+// dynamicCapabilities 按角色挑解析源（#2599 规格 E4 的分派点）。
+//
+// 未知动态角色返回「未授权 + 无故障」：动态角色集合只会从 authz 一处增长，走到 default 说明
+// 集合与这里的分派不同步 —— fail closed 比放行安全（与 authz.Has 对未知角色的处理同口径）。
+func dynamicCapabilities(c *gin.Context, role authz.Role) (map[authz.Capability]struct{}, bool, error) {
+	switch role {
+	case authz.RoleTutor:
+		resolver, ok := tutorCapabilityResolverFrom(c)
+		if !ok {
+			return nil, false, nil
+		}
+		return resolver.TutorCapabilities(CurrentUserID(c))
+	default:
+		resolver, ok := capabilityResolverFrom(c)
+		if !ok {
+			return nil, false, nil
+		}
+		return resolver.AdminCapabilities(CurrentUserID(c))
+	}
 }
 
 // CurrentUserID 从 gin.Context 读取当前登录用户 ID(未登录返回 0)。
