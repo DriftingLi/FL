@@ -1,0 +1,107 @@
+<template>
+    <!-- 积分商品卡（#2617 T1 自 points-shop.uvue 搬出）：在售项的可点性只由服务端事实决定
+         （已拥有 / 售罄），按钮文案与配色由 useMall 的映射函数算好后流入，卡不自判 -->
+    <view :class="['shop-item', { 'shop-item-last': last }]">
+        <view class="shop-content">
+            <text class="shop-title">{{ item.title }}</text>
+            <view class="shop-meta">
+                <text class="shop-price">{{ item.price }} 积分</text>
+                <text v-if="stockLabel.length > 0" class="shop-stock">{{ stockLabel }}</text>
+            </view>
+        </view>
+        <view :class="['shop-btn', btnClass]" @click="onRedeem">
+            <text :class="['shop-btn-text', btnTextClass]">{{ btnLabel }}</text>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import type { ShopItem } from '../../../types/index'
+
+    defineProps<{
+        item : ShopItem
+        last : boolean
+        stockLabel : string
+        btnLabel : string
+        btnClass : string
+        btnTextClass : string
+    }>()
+    const emit = defineEmits(['redeem'])
+
+    function onRedeem() : void {
+        emit('redeem')
+    }
+</script>
+
+<style lang="scss">
+    .shop-item {
+        padding: 28rpx 0;
+        border-bottom: 1rpx solid $border-color-light;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .shop-item-last {
+        border-bottom-width: 0;
+    }
+
+    .shop-content {
+        flex: 1;
+        flex-direction: column;
+    }
+
+    .shop-title {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: $text-color;
+    }
+
+    .shop-meta {
+        margin-top: 10rpx;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .shop-price {
+        font-size: 26rpx;
+        color: $warning-color;
+        margin-right: 16rpx;
+    }
+
+    .shop-stock {
+        font-size: 22rpx;
+        color: $text-color-placeholder;
+    }
+
+    .shop-btn {
+        min-width: 132rpx;
+        padding: 14rpx 28rpx;
+        border-radius: 32rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .shop-btn-active {
+        background-color: $primary-color;
+    }
+
+    .shop-btn-busy {
+        background-color: $bg-color;
+    }
+
+    .shop-btn-disabled {
+        background-color: $bg-color;
+    }
+
+    .shop-btn-text {
+        font-size: 26rpx;
+    }
+
+    .shop-btn-text-active {
+        color: $text-color-inverse;
+    }
+
+    .shop-btn-text-disabled {
+        color: $text-color-placeholder;
+    }
+</style>

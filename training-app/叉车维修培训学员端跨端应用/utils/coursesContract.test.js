@@ -688,6 +688,8 @@ describe('#1421 兑换闭环：DTO 迁出 · CTA 单点消费 · 购物车族绝
   const API = 'api/course.uts';
   const MALL = 'pages/mall/mall.uvue';
   const SORT_BAR = 'pages/mall/components/mall-sort-bar.uvue';
+  const CARD = 'pages/mall/components/mall-course-card.uvue';
+  const HOT = 'pages/mall/components/mall-hot-section.uvue';
   const DETAIL = 'pages/courses/course-detail.uvue';
   const CHAPTER = 'pages/courses/chapter-view.uvue';
   const CTA_FN = 'utils/coursePointsCta.uts';
@@ -726,10 +728,11 @@ describe('#1421 兑换闭环：DTO 迁出 · CTA 单点消费 · 购物车族绝
     expect(cta).toContain('export function buildCourseCta');
     expect(cta).toContain('export function renderCoursePrice');
     // 货架价格行吃单点：import renderCoursePrice + 本地包装转发（模板直调 import 函数会被 Kotlin 判炸，规则 S）
-    const mall = stripAll(read(MALL));
-    expect(mall).toMatch(/import\s*\{\s*renderCoursePrice\s*\}\s*from\s*'\.\.\/\.\.\/utils\/coursePointsCta'/);
+    // #2617 T1：货架价格行随课程卡拆件迁入 CARD（深一层，import 路径多一段）
+    const mall = stripAll(read(MALL) + read(CARD));
+    expect(mall).toMatch(/import\s*\{\s*renderCoursePrice\s*\}\s*from\s*'\.\.\/\.\.\/\.\.\/utils\/coursePointsCta'/);
     expect(mall).toMatch(/function\s+coursePriceText\s*\([^)]*\)\s*:\s*string\s*\{[\s\S]{0,80}?return\s+renderCoursePrice\(/);
-    expect(tplOf(mall)).toContain('coursePriceText(item)');
+    expect(tplOf(read(MALL)) + tplOf(read(CARD))).toContain('coursePriceText(item)');
     // 详情 CTA 吃单点：buildCourseCta 是唯一派生入口，文案与提示都从它的产物来
     const detail = stripAll(read(DETAIL));
     expect(detail).toMatch(/import\s*\{[^}]*buildCourseCta[^}]*\}\s*from\s*'\.\.\/\.\.\/utils\/coursePointsCta'/);
@@ -741,8 +744,9 @@ describe('#1421 兑换闭环：DTO 迁出 · CTA 单点消费 · 购物车族绝
   });
 
   it('mall 购物车族零出现：🛒 / onCart / 数量选择器 / 销量行 / ¥ 全部绝迹，且无孤儿本地函数', () => {
-    const src = stripAll(read(MALL));
-    const tpl = tplOf(src);
+    // #2617 T1：拆件后零出现面扩到课程卡与热门区（否则判据被拆件掏空）
+    const src = stripAll(read(MALL) + read(CARD) + read(HOT));
+    const tpl = tplOf(stripAll(read(MALL))) + tplOf(stripAll(read(CARD))) + tplOf(stripAll(read(HOT)));
     expect(tpl).not.toContain('🛒');
     expect(tpl).not.toContain('¥');
     expect(src).not.toContain('onCart');

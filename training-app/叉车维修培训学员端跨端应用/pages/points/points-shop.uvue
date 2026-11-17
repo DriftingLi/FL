@@ -20,50 +20,18 @@
             </view>
 
             <view class="content-col">
-                <!-- 筛选栏两态（贴片 807:2035 分类态 / 807:2190 积分范围态）：一次只展开一套 -->
-                <view class="filter-bar">
-                    <view class="filter-trigger" @click="onTogglePanel('category')">
-                        <text :class="['filter-trigger-text', { 'filter-trigger-text-on': filterPanel == 'category' }]">商品分类</text>
-                        <text class="filter-arrow">{{ filterPanel == 'category' ? '∧' : '∨' }}</text>
-                    </view>
-                    <view class="filter-trigger" @click="onTogglePanel('range')">
-                        <text :class="['filter-trigger-text', { 'filter-trigger-text-on': filterPanel == 'range' }]">积分范围</text>
-                        <text class="filter-arrow">{{ filterPanel == 'range' ? '∧' : '∨' }}</text>
-                    </view>
-                    <view class="filter-hot" @click="onHotRedeemable">
-                        <text class="filter-hot-text">可换商品</text>
-                    </view>
-                </view>
-
-                <!-- 展开面板（815:5332 筛选态）：分类五档 enum 按 N1 #2548；积分范围档位按票面
-                     给定 ≤500 / 500-1000 / >1000（贴片 807:2190 的 1-1000/1001-5000/… 五档不采用，
-                     与 N1 points_min/points_max 形状对齐） -->
-                <view v-if="filterPanel == 'category'" class="filter-panel">
-                    <view v-for="(opt, i) in categoryOptions" :key="opt.value" class="pill"
-                        :class="{ 'pill-active': activeCategoryIdx == i }" @click="onPickCategory(i)">
-                        <text :class="['pill-text', { 'pill-text-active': activeCategoryIdx == i }]">{{ opt.label }}</text>
-                    </view>
-                </view>
-                <view v-if="filterPanel == 'range'" class="filter-panel">
-                    <view v-for="(opt, i) in rangeOptions" :key="opt.value" class="pill"
-                        :class="{ 'pill-active': activeRangeIdx == i }" @click="onPickRange(i)">
-                        <text :class="['pill-text', { 'pill-text-active': activeRangeIdx == i }]">{{ opt.label }}</text>
-                    </view>
-                </view>
+                <!-- 筛选栏 + 展开面板（#2617 T1 起是独立组件；展开态仍由 useMall 的 filterPanel 持有） -->
+                <points-filter-bar :filter-panel="filterPanel" :active-category-idx="activeCategoryIdx"
+                    :active-range-idx="activeRangeIdx" :category-options="categoryOptions"
+                    :range-options="rangeOptions" @toggle="onTogglePanel" @pick-category="onPickCategory"
+                    @pick-range="onPickRange" @hot="onHotRedeemable" />
 
                 <!-- 列表区：面板展开时整体压暗（蒙层），点蒙层回主态（815:5463 → 821:6396 边） -->
                 <view class="list-area">
                     <scroll-view class="content-scroll" scroll-y="true">
-                        <!-- 余额条：与任务中心同一套卡片语言，兑换前先让用户看清手里有多少分 -->
-                        <view class="balance-card">
-                            <view class="balance-info">
-                                <text class="balance-label">可用积分</text>
-                                <text class="balance-value">{{ pointsBalance }}</text>
-                            </view>
-                            <view class="balance-earn" @click="onEarnPoints">
-                                <text class="earn-text">去赚积分</text>
-                            </view>
-                        </view>
+                        <!-- 余额条：与任务中心同一套卡片语言，兑换前先让用户看清手里有多少分
+                             （#2617 T1 起是独立组件） -->
+                        <points-balance-card :points="pointsBalance" @earn="onEarnPoints" />
 
                         <!-- 课程兑换导流（#2531）：静态卡，不探测服务端；文案与课程详情确认弹窗同一口径 -->
                         <view class="course-entry">
@@ -91,21 +59,12 @@
                             <text class="empty-text">暂无可兑换商品</text>
                         </view>
 
-                        <!-- 在售项：可点性只由服务端事实决定（已拥有 / 售罄） -->
+                        <!-- 在售项：可点性只由服务端事实决定（已拥有 / 售罄）；行样式在商品卡组件里 -->
                         <view v-if="items.length > 0" class="shop-card">
-                            <view v-for="(item, i) in items" :key="item.sku"
-                                :class="['shop-item', { 'shop-item-last': i == items.length - 1 }]">
-                                <view class="shop-content">
-                                    <text class="shop-title">{{ item.title }}</text>
-                                    <view class="shop-meta">
-                                        <text class="shop-price">{{ item.price }} 积分</text>
-                                        <text v-if="stockText(item).length > 0" class="shop-stock">{{ stockText(item) }}</text>
-                                    </view>
-                                </view>
-                                <view :class="['shop-btn', btnClass(item)]" @click="onRedeem(item)">
-                                    <text :class="['shop-btn-text', btnTextClass(item)]">{{ btnText(item) }}</text>
-                                </view>
-                            </view>
+                            <points-shop-card v-for="(item, i) in items" :key="item.sku" :item="item"
+                                :last="i == items.length - 1" :stock-label="stockText(item)"
+                                :btn-label="btnText(item)" :btn-class="btnClass(item)"
+                                :btn-text-class="btnTextClass(item)" @redeem="onRedeem(item)" />
                         </view>
 
                         <view class="bottom-spacer"></view>
@@ -119,138 +78,25 @@
 
 <script setup lang="uts">
     import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
-    import { ref } from 'vue'
+    import pointsBalanceCard from './components/points-balance-card.uvue'
+    import pointsFilterBar from './components/points-filter-bar.uvue'
+    import pointsShopCard from './components/points-shop-card.uvue'
     import { onShow } from '@dcloudio/uni-app'
     import { goBack, requestCourseRedeemIntent } from '../../utils/navigation'
-    import { getPointsBalanceApi, getShopItemsApi, getShopItemsFilteredApi, redeemShopItemApi } from '../../api/points'
-    import { errMsg } from '../../api/helpers'
-    import { AI_PRO_SKU } from '../../composables/useAiPro'
-    import type { ShopItem, ShopItemsResult } from '../../types/index'
+    import { useMall } from '../../mall/composables/useMall'
 
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
-    // ===== 状态（声明先于引用它的函数：UTS 无提升，后置声明即 Kotlin 编译错）=====
-    const pointsBalance = ref<number>(0)
-    const items = ref<ShopItem[]>([])
-    const loading = ref<boolean>(false)
-    const loadFailed = ref<boolean>(false)
-    /** 正在兑换的 sku（空串表示无进行中请求，兼作防重入闸门） */
-    const redeemingSku = ref<string>('')
-
-    // ===== 筛选两态（#2518 第 2 刀；形状按 N1 #2548，后端参数未上线前会忽略 query 返回全量）=====
-
-    /** 单个筛选选项（label 进胶囊；分类档用 value，积分范围档只用 min/max） */
-    type ShopFilterOption = {
-        label : string
-        value : string
-        min : number
-        max : number
-    }
-
-    /** 分类五档：'' = 不限；enum 值 = N1 #2548 的 book|material|course|other */
-    const categoryOptions : ShopFilterOption[] = [
-        { label: '不限', value: '', min: 0, max: 0 },
-        { label: '图书', value: 'book', min: 0, max: 0 },
-        { label: '资料', value: 'material', min: 0, max: 0 },
-        { label: '课程', value: 'course', min: 0, max: 0 },
-        { label: '其他', value: 'other', min: 0, max: 0 },
-    ]
-
-    /**
-     * 积分范围档位（票面给定 ≤500 / 500-1000 / >1000）：边界不重叠取 [0,500] / [501,1000] /
-     * [1001,∞)；min/max = 0 表示该参不下发。value 只作 v-for key，不进请求。
-     */
-    const rangeOptions : ShopFilterOption[] = [
-        { label: '不限', value: 'all', min: 0, max: 0 },
-        { label: '≤500', value: 'le500', min: 0, max: 500 },
-        { label: '500-1000', value: '501-1000', min: 501, max: 1000 },
-        { label: '>1000', value: 'gt1000', min: 1001, max: 0 },
-    ]
-
-    /** 当前展开的筛选面板：'' = 都收起（主态）/ 'category' / 'range' */
-    const filterPanel = ref<string>('')
-    const activeCategoryIdx = ref<number>(0)
-    const activeRangeIdx = ref<number>(0)
-
-    // ===== 纯映射（须先于调用它们的函数声明，守护规则 A）=====
-
-    /** 库存文案：null = 不限库存（后端 x-nullable，null ≠ 0；0 才是售罄） */
-    function stockText(item : ShopItem) : string {
-        const s = item.stock
-        if (s == null) return ''
-        if (s == 0) return '已售罄'
-        return '仅剩 ' + s.toString() + ' 件'
-    }
-
-    /** 不可点：已拥有（服务端判据）或售罄 */
-    function blocked(item : ShopItem) : boolean {
-        if (item.owned) return true
-        const s = item.stock
-        if (s != null && s == 0) return true
-        return false
-    }
-
-    function btnText(item : ShopItem) : string {
-        if (item.owned) return '已拥有'
-        const s = item.stock
-        if (s != null && s == 0) return '已售罄'
-        if (redeemingSku.value == item.sku) return '兑换中'
-        return '兑换'
-    }
-
-    function btnClass(item : ShopItem) : string {
-        if (blocked(item)) return 'shop-btn-disabled'
-        if (redeemingSku.value == item.sku) return 'shop-btn-busy'
-        return 'shop-btn-active'
-    }
-
-    function btnTextClass(item : ShopItem) : string {
-        if (blocked(item)) return 'shop-btn-text-disabled'
-        return 'shop-btn-text-active'
-    }
-
-    // ===== 数据加载 =====
-
-    /** 余额读失败不挡列表（装饰性提示不该制造一次用户没触发的报错，ADR-0031 决策 3） */
-    async function loadBalance() : Promise<void> {
-        try {
-            const bal = await getPointsBalanceApi(true)
-            pointsBalance.value = bal.balance
-        } catch (e) {
-            console.warn('[points-shop] balance failed:', errMsg(e, '余额读取失败'))
-        }
-    }
-
-    async function loadItems() : Promise<void> {
-        loading.value = true
-        loadFailed.value = false
-        try {
-            // 无筛选走原动词（既有契约钉死调用形状）；带筛选走 N1 #2548 形状骨架
-            //（getShopItemsFilteredApi：category / points_min / points_max）
-            const cat = categoryOptions[activeCategoryIdx.value].value
-            const range = rangeOptions[activeRangeIdx.value]
-            let res : ShopItemsResult
-            if (cat.length == 0 && range.min == 0 && range.max == 0) {
-                res = await getShopItemsApi()
-            } else {
-                res = await getShopItemsFilteredApi(cat, range.min, range.max)
-            }
-            items.value = res.items
-        } catch (e) {
-            loadFailed.value = true
-            console.warn('[points-shop] items failed:', errMsg(e, '商品加载失败'))
-        }
-        loading.value = false
-    }
-
-    // ===== 跳转与兑换（被调用者先声明）=====
+    // #2617 T1：余额 / 列表 / 筛选 / 三态与全部动作都在 useMall，页面只解构消费（页面壳层零自持状态）
+    const {
+        pointsBalance, items, loading, loadFailed, categoryOptions, rangeOptions, filterPanel,
+        activeCategoryIdx, activeRangeIdx, stockText, btnText, btnClass, btnTextClass,
+        loadBalance, loadItems, onRedeem, onTogglePanel, onClosePanel, onPickCategory, onPickRange,
+        onHotRedeemable, onEarnPoints,
+    } = useMall()
 
     function onBack() : void {
         goBack()
-    }
-
-    function onEarnPoints() : void {
-        uni.navigateTo({ url: '/pages/points/task-center' })
     }
 
     /**
@@ -263,91 +109,7 @@
         uni.switchTab({ url: '/pages/courses/courses' })
     }
 
-    /** 筛选栏触发：再点同一个即收起（两态互斥，一次只展开一套） */
-    function onTogglePanel(panel : string) : void {
-        filterPanel.value = filterPanel.value == panel ? '' : panel
-    }
-
-    /** 点蒙层回主态（815:5463 → 821:6396 边） */
-    function onClosePanel() : void {
-        filterPanel.value = ''
-    }
-
-    /** 选分类档：收起面板并按新筛选重取（档位变化即发请求，骨架期后端忽略参数返回全量） */
-    function onPickCategory(idx : number) : void {
-        activeCategoryIdx.value = idx
-        filterPanel.value = ''
-        loadItems()
-    }
-
-    /** 选积分范围档：同上（min/max 进 N1 #2548 的 points_min / points_max） */
-    function onPickRange(idx : number) : void {
-        activeRangeIdx.value = idx
-        filterPanel.value = ''
-        loadItems()
-    }
-
-    /** 「可换商品」→ 筛选态（821:6546 → 815:5332 边：原型该态展开的是分类面板） */
-    function onHotRedeemable() : void {
-        filterPanel.value = 'category'
-    }
-
-    /** 兑换成功后的落点（#1942 验收：权益即时生效、落点可达）：当前唯一可兑权益是 AI 专业版 */
-    function goEntitlementLanding(sku : string) : void {
-        if (sku == AI_PRO_SKU) {
-            uni.switchTab({ url: '/pages/ai-assistant/ai-assistant' })
-        }
-    }
-
-    /** 真正发起兑换：守卫全在服务端（余额 / 已拥有 / 在售），客户端不预扣、不本地写「已解锁」 */
-    async function doRedeem(item : ShopItem) : Promise<void> {
-        if (redeemingSku.value.length > 0) return
-        redeemingSku.value = item.sku
-        try {
-            const res = await redeemShopItemApi(item.sku)
-            redeemingSku.value = ''
-            pointsBalance.value = res.balance
-            uni.showToast({ title: '兑换成功', icon: 'success' })
-            await loadItems()
-            goEntitlementLanding(item.sku)
-        } catch (e) {
-            redeemingSku.value = ''
-            uni.showToast({ title: errMsg(e, '兑换失败'), icon: 'none' })
-            // 失败后按服务端事实重拉：已拥有 / 售罄 / 下架都在这一步被纠正
-            await loadItems()
-        }
-    }
-
-    /**
-     * 兑换前提示：把「要扣多少 / 手里有多少」摆进同一句；余额不足时明说会被服务端拒，
-     * 并给「去赚积分」的出路——但**不代替服务端裁定**（预判不拦截 CTA，ADR-0031 决策 3）。
-     */
-    function onRedeem(item : ShopItem) : void {
-        if (blocked(item) || redeemingSku.value.length > 0) return
-        const short = pointsBalance.value < item.price
-        const content = '该商品需 ' + item.price.toString() + ' 积分，当前可用 ' +
-            pointsBalance.value.toString() + ' 积分。' +
-            (short ? '余额不足，继续兑换会被服务端拒绝。' : '确认兑换？')
-        uni.showModal({
-            title: short ? '积分不足' : '积分兑换',
-            content: content,
-            confirmText: short ? '继续兑换' : '确认兑换',
-            cancelText: short ? '去赚积分' : '取消',
-            // showModal 的 success 回调不可为 async（Kotlin error17），异步动作转独立函数
-            success: (res) => {
-                if (res.confirm) {
-                    doRedeem(item)
-                    return
-                }
-                if (short) {
-                    onEarnPoints()
-                }
-            }
-        })
-    }
-
-    /** 左栏「图书系列」→ 商城路由（821:6678 → 824:6971 边；Q8 两路由不合并，mall 页改造不在本刀）。
-     *  放在 handler 区末尾：契约钉 onGoCourseRedeem 后 400 字符内不得出现 navigateTo。 */
+    /** 左栏「图书系列」→ 商城路由（821:6678 → 824:6971 边；Q8 两路由不合并，mall 页改造不在本刀）。 */
     function onGoMall() : void {
         uni.navigateTo({ url: '/pages/mall/mall' })
     }
@@ -404,85 +166,7 @@
         flex-direction: column;
     }
 
-    /* 筛选栏（贴片 807:2035 / 807:2190 顶行）：分类 / 积分范围居左，可换商品靠右 */
-    .filter-bar {
-        background-color: $card-bg;
-        padding: 20rpx 24rpx;
-        flex-direction: row;
-        align-items: center;
-    }
-
-    .filter-trigger {
-        flex: 1;
-        flex-direction: row;
-        align-items: center;
-    }
-
-    .filter-trigger-text {
-        font-size: 26rpx;
-        color: $text-color-secondary;
-    }
-
-    .filter-trigger-text-on {
-        font-size: 26rpx;
-        font-weight: bold;
-        color: $text-color;
-    }
-
-    .filter-arrow {
-        margin-left: 6rpx;
-        font-size: 24rpx;
-        color: $text-color-secondary;
-    }
-
-    .filter-hot {
-        padding: 12rpx 28rpx;
-        border-radius: 32rpx;
-        background-color: $bg-color;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .filter-hot-text {
-        font-size: 26rpx;
-        color: $text-color;
-    }
-
-    /* 展开面板（815:5332）：白底胶囊组；换行排列 → 每颗胶囊自带右/下 margin（uvue 无 gap） */
-    .filter-panel {
-        background-color: $card-bg;
-        padding: 8rpx 24rpx 24rpx 24rpx;
-        flex-direction: row;
-        flex-wrap: wrap;
-    }
-
-    .pill {
-        padding: 14rpx 40rpx;
-        border-radius: 32rpx;
-        background-color: $bg-color;
-        margin-right: 24rpx;
-        margin-bottom: 20rpx;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .pill-active {
-        background-color: $card-bg;
-        border-width: 1rpx;
-        border-style: solid;
-        border-color: $border-color;
-    }
-
-    .pill-text {
-        font-size: 26rpx;
-        color: $text-color-secondary;
-    }
-
-    .pill-text-active {
-        font-size: 26rpx;
-        font-weight: bold;
-        color: $text-color;
-    }
+    /* 筛选栏 / 展开面板样式随 #2617 T1 迁入 pages/points/components/points-filter-bar.uvue */
 
     /* 列表区：筛选态时蒙层压暗、点击回主态 */
     .list-area {
@@ -504,43 +188,7 @@
         flex: 1;
     }
 
-    /* 余额卡片 */
-    .balance-card {
-        margin: 24rpx;
-        padding: 32rpx;
-        border-radius: 16rpx;
-        background-color: $card-bg;
-        flex-direction: row;
-        align-items: center;
-    }
-
-    .balance-info {
-        flex: 1;
-        flex-direction: column;
-    }
-
-    .balance-label {
-        font-size: 24rpx;
-        color: $text-color-placeholder;
-    }
-
-    .balance-value {
-        font-size: 56rpx;
-        font-weight: bold;
-        color: $text-color;
-        margin-top: 4rpx;
-    }
-
-    .balance-earn {
-        padding: 16rpx 32rpx;
-        border-radius: 32rpx;
-        background-color: $bg-color;
-    }
-
-    .earn-text {
-        font-size: 26rpx;
-        color: $text-color-secondary;
-    }
+    /* 余额卡样式随 #2617 T1 迁入 pages/points/components/points-balance-card.uvue */
 
     /* 课程兑换导流卡（#2531）：与余额卡同一套卡片语言，位置固定在余额卡之后、商品列表之前 */
     .course-entry {
@@ -636,84 +284,13 @@
         color: $text-color-placeholder;
     }
 
-    /* 商品列表 */
+    /* 商品列表（行样式随 #2617 T1 迁入 pages/points/components/points-shop-card.uvue） */
     .shop-card {
         margin: 0 24rpx;
         padding: 0 24rpx;
         border-radius: 16rpx;
         background-color: $card-bg;
         flex-direction: column;
-    }
-
-    .shop-item {
-        padding: 28rpx 0;
-        border-bottom: 1rpx solid $border-color-light;
-        flex-direction: row;
-        align-items: center;
-    }
-
-    .shop-item-last {
-        border-bottom-width: 0;
-    }
-
-    .shop-content {
-        flex: 1;
-        flex-direction: column;
-    }
-
-    .shop-title {
-        font-size: 30rpx;
-        font-weight: bold;
-        color: $text-color;
-    }
-
-    .shop-meta {
-        margin-top: 10rpx;
-        flex-direction: row;
-        align-items: center;
-    }
-
-    .shop-price {
-        font-size: 26rpx;
-        color: $warning-color;
-        margin-right: 16rpx;
-    }
-
-    .shop-stock {
-        font-size: 22rpx;
-        color: $text-color-placeholder;
-    }
-
-    .shop-btn {
-        min-width: 132rpx;
-        padding: 14rpx 28rpx;
-        border-radius: 32rpx;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .shop-btn-active {
-        background-color: $primary-color;
-    }
-
-    .shop-btn-busy {
-        background-color: $bg-color;
-    }
-
-    .shop-btn-disabled {
-        background-color: $bg-color;
-    }
-
-    .shop-btn-text {
-        font-size: 26rpx;
-    }
-
-    .shop-btn-text-active {
-        color: $text-color-inverse;
-    }
-
-    .shop-btn-text-disabled {
-        color: $text-color-placeholder;
     }
 
     .bottom-spacer {
