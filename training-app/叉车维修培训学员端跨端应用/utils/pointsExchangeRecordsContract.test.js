@@ -125,7 +125,7 @@ describe('积分兑换记录页（#2518）契约', () => {
       expect(PAGE).toMatch(/v-if="failed && items\.length == 0"/);
       expect(PAGE).toMatch(/v-else-if="isEmpty"/);
       expect(PAGE).toContain('还没有兑换记录');
-      expect(PAGE).toContain("uni.navigateTo({ url: '/pages/points/points-shop' })");
+      expect(PAGE).toContain("uni.navigateTo({ url: '/pages/mall/mall?tab=points' })");
     });
 
     it('页脚三态：加载中 / 翻页失败可重试 / 没有更多了', () => {

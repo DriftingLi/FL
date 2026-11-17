@@ -98,17 +98,19 @@ describe('积分商城页（#1942）契约', () => {
   });
 
   describe('③ 两个入口（口径 B）', () => {
-    it('任务中心「去兑换」不再是 toast 死按钮', () => {
+    it('任务中心「去兑换」不再是 toast 死按钮（#2620 起落合并页的积分兑换分区）', () => {
       const fn = TASK_CENTER.slice(TASK_CENTER.indexOf('function goExchange'));
-      expect(fn.slice(0, 240)).toContain("uni.navigateTo({ url: '/pages/points/points-shop' })");
+      expect(fn.slice(0, 240)).toContain("uni.navigateTo({ url: '/pages/mall/mall?tab=points' })");
       expect(fn.slice(0, 240)).not.toContain('功能开发中');
     });
 
-    it('积分明细页有「去积分商城」入口条，同落点', () => {
-      // #2523 起入口条按原型 355:1725 收口为浅黄提示条（class notice-bar），文案同「去积分商城」
+    it('积分明细页有「去商城」入口条，同落点', () => {
+      // #2523 起入口条按原型 355:1725 收口为浅黄提示条（class notice-bar）；
+      // #2620 起文案不再把「积分商城」当页面名（词表：它只指兑换管线）
       expect(POINTS_DETAIL).toContain('notice-bar');
-      expect(POINTS_DETAIL).toContain('去积分商城');
-      expect(POINTS_DETAIL).toMatch(/function onGoShop\(\) : void \{\s*uni\.navigateTo\(\{ url: '\/pages\/points\/points-shop' \}\)/);
+      expect(POINTS_DETAIL).toContain('去商城');
+      expect(POINTS_DETAIL).not.toContain('去积分商城');
+      expect(POINTS_DETAIL).toMatch(/function onGoShop\(\) : void \{\s*uni\.navigateTo\(\{ url: '\/pages\/mall\/mall\?tab=points' \}\)/);
     });
   });
 

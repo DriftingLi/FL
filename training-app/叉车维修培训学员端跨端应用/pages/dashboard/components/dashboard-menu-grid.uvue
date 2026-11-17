@@ -25,7 +25,8 @@
     }
 
     const menuItems : MenuItem[] = [
-        { key: 'course-mall', title: '课程商城', icon: 'grid-course-mall', path: '/pages/mall/mall', available: true },
+        // #2620：「课程商城」收为旧名（词表）——学员看到的只有一个货架，叫「商城」
+        { key: 'course-mall', title: '商城', icon: 'grid-course-mall', path: '/pages/mall/mall', available: true },
         { key: 'question-bank', title: '题库练习', icon: 'grid-question-bank', path: '/pages/practice/practice', available: true },
         { key: 'materials', title: '学习资料', icon: 'grid-materials', path: '/pages/resources/materials', available: true },
         { key: 'exam-info', title: '考情资讯', icon: 'grid-exam-info', path: '/pages/exam-info/exam-info', available: true },

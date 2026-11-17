@@ -446,7 +446,7 @@
                 "path": "mall",
                 "style": {
                     "navigationStyle": "custom",
-                    "navigationBarTitleText": "课程商城"
+                    "navigationBarTitleText": "商城"
                 }
             }
         ]

@@ -18,7 +18,7 @@
                 <view v-else-if="isEmpty" class="empty-tip">
                     <text class="empty-text">还没有兑换记录</text>
                     <view class="empty-action" @click="onGoShop">
-                        <text class="empty-action-text">去积分商城看看</text>
+                        <text class="empty-action-text">去商城看看</text>
                     </view>
                 </view>
 
@@ -72,8 +72,9 @@
         onLoadMore()
     }
 
+    /** 空态「去商城」：落合并页的「积分兑换」分区（#2620 入口收敛，同一深链） */
     function onGoShop() : void {
-        uni.navigateTo({ url: '/pages/points/points-shop' })
+        uni.navigateTo({ url: '/pages/mall/mall?tab=points' })
     }
 
     onShow(() => {
