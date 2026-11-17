@@ -191,6 +191,12 @@ definitions:
         type: string
       name:
         type: string
+      protected:
+        type: boolean
+      role_id:
+        type: integer
+      role_name:
+        type: string
       status:
         type: integer
       tutor_id:
@@ -212,6 +218,28 @@ definitions:
       tutors:
         items:
           $ref: '#/definitions/admin.TutorDTO'
+        type: array
+    type: object
+  admin.TutorRoleDTO:
+    properties:
+      capabilities:
+        items:
+          type: string
+        type: array
+      name:
+        type: string
+      protected:
+        type: boolean
+      remark:
+        type: string
+      role_id:
+        type: integer
+    type: object
+  admin.TutorRoleListDTO:
+    properties:
+      roles:
+        items:
+          $ref: '#/definitions/admin.TutorRoleDTO'
         type: array
     type: object
   aiassistant.AIAssistantModeModels:
@@ -4118,6 +4146,21 @@ definitions:
         type: boolean
       file_id:
         type: integer
+    type: object
+  tutor.TutorCapabilitiesDTO:
+    properties:
+      capabilities:
+        description: |-
+          Capabilities 有效能力键；未挂角色时为空数组（**不是 null** —— 契约由
+          apitypes 的可空性锁按 nullability 声明核对）。
+        items:
+          type: string
+        type: array
+      granted:
+        description: |-
+          Granted 是否已挂角色。false = 未授权（role_id 为 NULL）或账号不存在。
+          前端据此区分「还没分配角色」与「角色里什么都没勾」：两者都是空集，但话术不同。
+        type: boolean
     type: object
   tutorfile.AttachRequest:
     properties:
@@ -9636,6 +9679,143 @@ paths:
       summary: 添加导师
       tags:
       - 管理端-导师
+  /admin/tutor-roles:
+    get:
+      description: 列出全部讲师角色及其能力键（受保护的全权讲师返回讲师侧能力全集）
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/admin.TutorRoleListDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 讲师角色列表
+      tags:
+      - 管理端-权限
+    post:
+      consumes:
+      - application/json
+      description: 新建讲师角色并落能力键（能力键必须是讲师侧 7 键之一，管理员侧键一律拒）
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 角色已创建
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/admin.TutorRoleDTO'
+              type: object
+        "400":
+          description: 参数错误 / 未知能力键
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "409":
+          description: 角色名已存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 新建讲师角色
+      tags:
+      - 管理端-权限
+  /admin/tutor-roles/{role_id}:
+    delete:
+      description: 删除讲师角色；受保护角色与仍被讲师挂着的角色一律拒绝
+      parameters:
+      - description: 角色 ID
+        in: path
+        name: role_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 已删除
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 角色不存在
+          schema:
+            $ref: '#/definitions/response.R'
+        "409":
+          description: 受保护角色不可删 / 角色仍在使用
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 删除讲师角色
+      tags:
+      - 管理端-权限
+    put:
+      consumes:
+      - application/json
+      description: 改角色名 / 备注 / 能力集；受保护的全权讲师角色一律拒绝
+      parameters:
+      - description: 角色 ID
+        in: path
+        name: role_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 已保存
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/admin.TutorRoleDTO'
+              type: object
+        "400":
+          description: 参数错误 / 未知能力键
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 角色不存在
+          schema:
+            $ref: '#/definitions/response.R'
+        "409":
+          description: 受保护角色不可改 / 角色名已存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 修改讲师角色
+      tags:
+      - 管理端-权限
   /admin/tutor/{tutor_id}:
     delete:
       description: 管理员删除导师账号，返回被删除的 tutor_id
@@ -9846,6 +10026,50 @@ paths:
       summary: 重置导师密码
       tags:
       - 管理端-导师
+  /admin/tutor/{tutor_id}/role:
+    put:
+      consumes:
+      - application/json
+      description: 挂 / 换 / 摘讲师角色；role_id=0 表示摘掉（未授权）。摘掉最后一个全权讲师会被拒
+      parameters:
+      - description: 讲师 ID
+        in: path
+        name: tutor_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 已保存
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/admin.TutorDTO'
+              type: object
+        "400":
+          description: 讲师ID无效
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 讲师或角色不存在
+          schema:
+            $ref: '#/definitions/response.R'
+        "409":
+          description: 必须保留至少一个全权讲师
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 给讲师挂角色
+      tags:
+      - 管理端-权限
   /admin/tutor/{tutor_id}/status:
     put:
       description: 管理员切换导师状态，返回切换后的新状态
@@ -17883,6 +18107,34 @@ paths:
       summary: 完成上传
       tags:
       - 讲师端-文件库
+  /tutor/me/capabilities:
+    get:
+      description: 登录后前端拉取「我的讲师能力」，用于路由守卫与侧栏过滤（#2599 / 规格 F1）
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/tutor.TutorCapabilitiesDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: 非讲师身份
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 当前讲师的有效能力集
+      tags:
+      - 讲师端-账号
   /tutor/upload-image:
     post:
       consumes:

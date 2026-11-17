@@ -17,8 +17,9 @@
 //   POST /tutor/course/{course_id}/claim
 //   DELETE /tutor/course/{course_id}/claim
 //   GET  /tutor/course/{course_id}/claims
+//   GET  /tutor/me/capabilities
 //
-// 覆盖的 Go 类型：CertificateTemplateDTO / ChapterDTO / ChapterDetailDTO / ChapterFileDTO / CourseBriefDTO / CourseClaimant / CourseClaimantsResult / CourseDTO / CoursePageResult / CredentialBriefDTO / LevelBriefDTO / SpecialtyBriefDTO / TutorCourseChaptersDTO / BatchDeleteFilesResult / ClaimResult / DeleteFileResult
+// 覆盖的 Go 类型：CertificateTemplateDTO / ChapterDTO / ChapterDetailDTO / ChapterFileDTO / CourseBriefDTO / CourseClaimant / CourseClaimantsResult / CourseDTO / CoursePageResult / CredentialBriefDTO / LevelBriefDTO / SpecialtyBriefDTO / TutorCourseChaptersDTO / BatchDeleteFilesResult / ClaimResult / DeleteFileResult / TutorCapabilitiesDTO
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -183,4 +184,9 @@ export interface ClaimResult {
 export interface DeleteFileResult {
   deleted: boolean
   file_id: number
+}
+
+export interface TutorCapabilitiesDTO {
+  capabilities: string[]
+  granted: boolean
 }

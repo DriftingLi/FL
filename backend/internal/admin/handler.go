@@ -79,6 +79,14 @@ func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, adminSvc *Se
 	tutors.GET("/tutor/:tutor_id/courses", h.ListTutorCourses)
 	tutors.POST("/tutor/:tutor_id/courses", h.AssignTutorCourses)
 	tutors.DELETE("/tutor/:tutor_id/courses", h.RemoveTutorCourses)
+	// ===== 讲师角色链（#2599 E7）：角色 CRUD + 讲师挂角色 =====
+	// 同挂 tutor.manage：改讲师角色与改讲师账号是同一件事的两个面，拆键会让
+	// 「能建号不能授权」这种半截权限出现。
+	tutors.GET("/tutor-roles", h.ListTutorRoles)
+	tutors.POST("/tutor-roles", h.CreateTutorRole)
+	tutors.PUT("/tutor-roles/:role_id", h.UpdateTutorRole)
+	tutors.DELETE("/tutor-roles/:role_id", h.DeleteTutorRole)
+	tutors.PUT("/tutor/:tutor_id/role", h.AssignTutorRole)
 
 	// ===== 统计看板 =====
 	// 仪表盘也读这个端点（同一份概览），故 admin.access 一并作为候选（#1639）。
