@@ -61,8 +61,11 @@ func TestTutorNotificationMailboxContract(t *testing.T) {
 		return tok
 	}
 	// 故意让讲师与学员撞同一个数字 id：这正是「两个 id 空间不可互读」要防的场景。
-	const sharedID = 11
-	tutorTok := sign(sharedID, "tutor_notif", "tutor")
+	// #2600 起讲师能力由所挂角色回答，故讲师必须先用 SeedTutor 建出来（它拿到 tutor_id=1），
+	// 随后建的学员同样拿到 id=1 —— 撞号是这张票要防的真实形态，不是夹具凑数。
+	notifTutor := testutil.SeedTutor(t, db, "tutor_notif", "x")
+	sharedID := notifTutor.TutorID
+	tutorTok := sign(sharedID, notifTutor.Username, "tutor")
 	student := testutil.SeedStudent(t, db, "student_notif", "x")
 	studentTok := sign(student.ID, student.Username, "hrwai_user")
 	admin := testutil.SeedAdmin(t, db, "admin_notif", "x")
@@ -202,8 +205,9 @@ func TestChapterAdminEditNotifiesAuthorContract(t *testing.T) {
 	if err := db.Create(&c).Error; err != nil {
 		t.Fatalf("创建课程失败: %v", err)
 	}
-	// 章节已有稳定归属（讲师 21），但**没有** pending 槽——C7 通知不能依赖 submitted_by。
-	const authorID = 21
+	// 章节已有稳定归属（由 authorTutor 建出的讲师），但**没有** pending 槽——C7 通知不能依赖 submitted_by。
+	authorTutor := testutil.SeedTutor(t, db, "tutor_author", "x")
+	authorID := authorTutor.TutorID
 	ch := model.Chapter{CourseID: c.CourseID, Title: "被管理员改的章", Content: "旧正文",
 		ContentType: "text", OrderNum: 1, TutorID: ptr(authorID), CreatedAt: testutil.Now()}
 	if err := db.Create(&ch).Error; err != nil {
@@ -220,7 +224,7 @@ func TestChapterAdminEditNotifiesAuthorContract(t *testing.T) {
 		}
 		return tok
 	}
-	tutorTok := sign(authorID, "tutor_author", "tutor")
+	tutorTok := sign(authorID, authorTutor.Username, "tutor")
 	admin := testutil.SeedAdmin(t, db, "admin_edit", "x")
 	adminTok := sign(admin.AdminID, admin.Username, "admin")
 

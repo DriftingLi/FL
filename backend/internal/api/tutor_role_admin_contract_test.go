@@ -56,7 +56,9 @@ type tutorRoleFixture struct {
 func newTutorRoleFixture(t *testing.T) *tutorRoleFixture {
 	t.Helper()
 	r, cfg, db := newSlice6Env(t)
-	tutor := testutil.SeedTutor(t, db, "role_chain_tutor", "x")
+	// 刻意用**未挂角色**的讲师：#2600 起「新建讲师默认未授权」是规格 E2 的对外承诺，
+	// 而本文件正好要锁「未挂角色 → 空集」「挂上角色 → 模板」「TTL 内改角色不生效」三件事。
+	tutor := testutil.SeedUnassignedTutor(t, db, "role_chain_tutor", "x")
 	return &tutorRoleFixture{
 		t: t, r: r, db: db, cfg: cfg,
 		tutorID:  tutor.TutorID,

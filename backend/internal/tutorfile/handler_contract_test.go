@@ -21,13 +21,21 @@ import (
 	"forklift-training/internal/security"
 	"forklift-training/internal/storage"
 	"forklift-training/internal/testutil"
+	"forklift-training/internal/tutorcap"
 )
 
 // newTutorFileRouter 装配文件库蓝图测试路由器（与装配根 NewRouter 的讲师端注册同义）。
+//
+// #2600 起讲师能力由「所挂角色」回答（静态表不再回答 tutor），故这里必须先把本文件用到的
+// 两个讲师账号（tutor_a=1、tutor_b=2）真实建出来并挂上全权讲师角色 —— 否则每个端点都会
+// 以「权限不足」403，看起来像业务坏了。两个账号由 SeedTutor 依次建出，自增主键即 1、2，
+// 与各用例里既有的硬编码 id 一致（每用例独立内存库，主键从 1 起）。
 func newTutorFileRouter(t *testing.T) (*gin.Engine, *Service, *config.Config) {
 	t.Helper()
 	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
+	testutil.SeedTutor(t, db, "tutor_a", "x")
+	testutil.SeedTutor(t, db, "tutor_b", "x")
 	cfg := &config.Config{
 		JWTSecretKey: "tutorfile-secret",
 		AuthCookie:   config.AuthCookieConfig{Name: "hrwai_token"},
@@ -39,6 +47,7 @@ func newTutorFileRouter(t *testing.T) (*gin.Engine, *Service, *config.Config) {
 	r := gin.New()
 	api := r.Group("/api")
 	api.Use(middleware.AdminCapabilityResolver(admincap.New(db, zap.NewNop())))
+	api.Use(middleware.TutorCapabilityResolver(tutorcap.New(db, zap.NewNop())))
 	RegisterRoutes(api, sess, svc)
 	return r, svc, cfg
 }

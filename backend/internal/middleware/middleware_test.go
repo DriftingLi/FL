@@ -65,6 +65,26 @@ func newTestRouterWithResolver(cfg *config.Config, resolver CapabilityResolver, 
 	return r
 }
 
+// newTestRouterWithResolvers 同时注入管理端与讲师端解析源（#2600 起按角色分派）。
+func newTestRouterWithResolvers(cfg *config.Config, admin CapabilityResolver, tutor TutorCapabilitySource, capabilities ...authz.Capability) *gin.Engine {
+	r := gin.New()
+	sess := security.SessionFromConfigWithBlacklist(cfg, security.NewMemoryBlacklist())
+	handlers := []gin.HandlerFunc{AdminCapabilityResolver(admin)}
+	if tutor != nil {
+		handlers = append(handlers, TutorCapabilityResolver(tutor))
+	}
+	handlers = append(handlers, JWTAuth(sess))
+	protected := r.Group("/protected", handlers...)
+	if len(capabilities) > 0 {
+		protected.Use(CapabilityRequired(capabilities[0]))
+	}
+	protected.GET("/endpoint", func(c *gin.Context) {
+		uid, _ := c.Get(string(CtxUserID))
+		c.JSON(200, gin.H{"user_id": uid})
+	})
+	return r
+}
+
 // stubCapabilityResolver 动态角色能力解析源的测试替身。
 type stubCapabilityResolver struct {
 	caps    map[authz.Capability]struct{}
@@ -73,6 +93,17 @@ type stubCapabilityResolver struct {
 }
 
 func (s stubCapabilityResolver) AdminCapabilities(int) (map[authz.Capability]struct{}, bool, error) {
+	return s.caps, s.granted, s.err
+}
+
+// stubTutorCapabilityResolver 讲师端能力解析源的测试替身（#2600）。
+type stubTutorCapabilityResolver struct {
+	caps    map[authz.Capability]struct{}
+	granted bool
+	err     error
+}
+
+func (s stubTutorCapabilityResolver) TutorCapabilities(int) (map[authz.Capability]struct{}, bool, error) {
 	return s.caps, s.granted, s.err
 }
 
@@ -303,10 +334,47 @@ func TestOptionalAuth_LogoutRevokesRefreshOnly(t *testing.T) {
 	}
 }
 
-// 静态角色（讲师）的能力仍由 authz 能力表回答。
+// 静态角色（学员）的能力仍由 authz 能力表回答（#2600 起讲师也成了动态角色，
+// 讲师这一侧的对应用例见 TestCapabilityRequired_TutorUsesTutorResolver）。
 func TestCapabilityRequired_Allowed_StaticRole(t *testing.T) {
 	cfg := &config.Config{JWTSecretKey: testSecret}
-	r := newTestRouter(cfg, authz.CapQuestionAuthor) // [tutor]
+	r := newTestRouter(cfg, authz.CapStudentAccess) // [hrwai_user]
+
+	token := generateToken(t, 1, "student01", "hrwai_user")
+	req, _ := http.NewRequest("GET", "/protected/endpoint", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("学员拥有 student.access，应被允许，得到 %d", w.Code)
+	}
+}
+
+// 讲师的能力自 #2600 起由数据层回答：静态表已清空，故**没有讲师解析源**时必须 fail closed。
+func TestCapabilityRequired_TutorWithoutResolverFailsClosed(t *testing.T) {
+	cfg := &config.Config{JWTSecretKey: testSecret}
+	r := newTestRouter(cfg, authz.CapQuestionAuthor)
+
+	token := generateToken(t, 1, "tutor01", "tutor")
+	req, _ := http.NewRequest("GET", "/protected/endpoint", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != 403 {
+		t.Fatalf("未注入讲师解析源时讲师应被拒绝 (403)，得到 %d", w.Code)
+	}
+}
+
+// 讲师走**讲师**解析源（规格 E4 的按角色分派）：只注入管理端解析源不算数。
+func TestCapabilityRequired_TutorUsesTutorResolver(t *testing.T) {
+	cfg := &config.Config{JWTSecretKey: testSecret}
+	r := newTestRouterWithResolvers(cfg,
+		stubCapabilityResolver{caps: capSet(authz.CapQuestionAuthor), granted: true},
+		stubTutorCapabilityResolver{caps: capSet(authz.CapQuestionAuthor), granted: true},
+		authz.CapQuestionAuthor,
+	)
 
 	token := generateToken(t, 1, "tutor01", "tutor")
 	req, _ := http.NewRequest("GET", "/protected/endpoint", nil)
@@ -315,7 +383,27 @@ func TestCapabilityRequired_Allowed_StaticRole(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	if w.Code != 200 {
-		t.Fatalf("讲师拥有 question.author，应被允许，得到 %d", w.Code)
+		t.Fatalf("讲师解析源给出 question.author，应被允许，得到 %d", w.Code)
+	}
+}
+
+// 讲师解析源给出空集 ⇒ 403（fail closed），与管理员同一口径。
+func TestCapabilityRequired_TutorResolverEmptyDenies(t *testing.T) {
+	cfg := &config.Config{JWTSecretKey: testSecret}
+	r := newTestRouterWithResolvers(cfg,
+		nil,
+		stubTutorCapabilityResolver{caps: nil, granted: false},
+		authz.CapQuestionAuthor,
+	)
+
+	token := generateToken(t, 1, "tutor01", "tutor")
+	req, _ := http.NewRequest("GET", "/protected/endpoint", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != 403 {
+		t.Fatalf("讲师未挂角色应被拒绝 (403)，得到 %d", w.Code)
 	}
 }
 

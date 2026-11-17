@@ -193,6 +193,11 @@ const pagesData = [
   // 本行此前声明 question.author 与后端不一致（#2595 顺带修，spec A4）。
   { name: 'TutorQuestionTags', path: '/training/tutor/question-tags', component: () => import('@/pages/tutor/QuestionTags.vue'), layout: 'tutor', workspace: 'tutor', requiresAuth: true, capability: 'catalog.author', nav: { group: 'tutor', label: '标签管理', icon: 'bookmark', order: 4 } },
   { name: 'TutorFileLibrary', path: '/training/tutor/files', component: () => import('@/pages/tutor/TutorFileLibrary.vue'), layout: 'tutor', workspace: 'tutor', requiresAuth: true, capability: 'tutorfile.manage', nav: { group: 'tutor', label: '文件库', icon: 'folder-open', order: 5 } },
+  // 讲师端「无讲师权限」页（#2600 / 规格 F5）：未挂角色或能力集装载失败时落这里。
+  // 刻意**不**复用管理端 NoAccess：那一页的指引是「联系超级管理员分配角色」，
+  // 印给讲师会把人指向错误的求助对象。本页不声明 capability（否则它自己也要被判权限，
+  // 空集账号永远落不到它上面）。
+  { name: 'TutorNoAccess', path: '/training/tutor/no-access', component: () => import('@/pages/tutor/NoAccess.vue'), layout: 'tutor', workspace: 'tutor', requiresAuth: true, title: '无讲师权限' },
 
   // 残值评估的公开界面已迁门户仓（valuation.hrwai.cn/valuation，2026-10）；
   // 本仓只保留管理端的「残值配置」（ValuationConfigManage），它挂在 manage 工作区下。

@@ -59,7 +59,9 @@ func TestChapterReviewFlowContract(t *testing.T) {
 		}
 		return tok
 	}
-	tutorTok := sign(1, "tutor_review", "tutor")
+	// #2600 起讲师能力由所挂角色回答：令牌必须对应真实且挂了角色的讲师行。
+	reviewTutor := testutil.SeedTutor(t, db, "tutor_review", "x")
+	tutorTok := sign(reviewTutor.TutorID, reviewTutor.Username, "tutor")
 	admin := testutil.SeedAdmin(t, db, "admin_review", "x")
 	adminTok := sign(admin.AdminID, admin.Username, "admin")
 	stuTok := sign(int(stu.ID), stu.Account, "hrwai_user")
@@ -88,7 +90,7 @@ func TestChapterReviewFlowContract(t *testing.T) {
 
 	// C2：讲师显式提交审核
 	// #2596：讲师面写路径前置认领谓词，夹具先让该讲师认领本课。
-	seedTutorCourseClaim(t, db, 1, c.CourseID)
+	seedTutorCourseClaim(t, db, reviewTutor.TutorID, c.CourseID)
 	if rec := do("POST", "/api/tutor/chapter/"+itoa(ch.ChapterID)+"/submit-review", tutorTok, ""); rec.Code != http.StatusOK {
 		t.Fatalf("提交审核应 200, got %d: %s", rec.Code, rec.Body.String())
 	}

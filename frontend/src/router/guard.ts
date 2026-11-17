@@ -25,8 +25,7 @@
 import type { RouteLocationRaw } from 'vue-router'
 import type { SubdomainType } from '@/utils/subdomain'
 import { getTargetSubdomainForPath } from '@/utils/subdomain'
-import { resolveWorkspaceForRole } from '@/utils/authRedirect'
-import { adminLandingPage } from '@/config/navigation'
+import { adminLandingPage, tutorLandingPage } from '@/config/navigation'
 import type { AuthzCapability } from '@/config/authz'
 import { holdsCapability, isDynamicRole } from '@/utils/authzRuntime'
 import type { RouteName } from '@/config/pages'
@@ -251,7 +250,12 @@ function workspaceFallback(input: GuardInput, state: GuardState): GuardDecision 
       return { action: 'redirect', to: { name: landing } }
     }
     if (state.role === 'tutor') {
-      return { action: 'redirect', to: resolveWorkspaceForRole(state.role) }
+      // #2600 / 规格 F6：讲师落点按能力集挑，不能写死仪表盘 —— 未挂角色的讲师
+      // 在仪表盘上也要 `tutor.access`，写死就会落在自己看不见的页上再回弹（#1638 同型）。
+      const landing = tutorLandingPage(capability =>
+        holdsCapability(state.role, state.capabilities, capability)
+      )
+      return { action: 'redirect', to: { name: landing } }
     }
     // 其余 → 学员工作区
     return { action: 'redirect', to: '/training' }

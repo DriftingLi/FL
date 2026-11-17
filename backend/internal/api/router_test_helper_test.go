@@ -4,14 +4,18 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"forklift-training/internal/admincap"
 	"forklift-training/internal/config"
+	"forklift-training/internal/middleware"
 	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/storage"
 	"forklift-training/internal/testutil"
+	"forklift-training/internal/tutorcap"
 )
 
 // seedMu 串行化本测试包对 testutil.SeedStudent 的调用（#1366）。
@@ -31,6 +35,16 @@ func seedStudent(t *testing.T, db *gorm.DB, username, hashedPassword string) *mo
 	seedMu.Lock()
 	defer seedMu.Unlock()
 	return testutil.SeedStudent(t, db, username, hashedPassword)
+}
+
+// useCapabilityResolvers 给自组路由挂上两份能力解析源，与装配根 NewRouter 的两条同源。
+//
+// 手工 `gin.New()` 的契约测试必须调它：管理员的能力自 #1618 段1 起、讲师的能力自 #2600 起
+// 都由数据层回答（静态表不再回答这两种角色），缺任一解析源都会让对应身份在**所有**端点上一律 403 ——
+// 那时测试会以「权限不足」的形式失败，看起来像业务逻辑坏了。
+func useCapabilityResolvers(api *gin.RouterGroup, db *gorm.DB) {
+	api.Use(middleware.AdminCapabilityResolver(admincap.New(db, zap.NewNop())))
+	api.Use(middleware.TutorCapabilityResolver(tutorcap.New(db, zap.NewNop())))
 }
 
 // newContractDeps 构建契约测试用的完整装配根（storage 与导出 store 传 nil，被测蓝图不使用）。

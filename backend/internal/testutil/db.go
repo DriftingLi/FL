@@ -148,14 +148,36 @@ func SeedAdmin(t *testing.T, db *gorm.DB, username, hashedPassword string) *mode
 	return a
 }
 
-// SeedTutor 插入一个测试导师。
+// SeedTutor 插入一个测试讲师，并挂上「全权讲师」受保护角色。
+//
+// 自 #2600 起讲师的能力由「所挂角色」回答（静态表不再回答 tutor），故这里必须同时建出受保护
+// （全权讲师）角色并挂上 —— 否则每个讲师面契约测试都会因能力为空而 403。生产侧同一件事由
+// 迁移 000061 的 seed + 回填完成（测试面走 SQLite AutoMigrate，不跑迁移）。
+//
+// 需要「未授权讲师」的用例用 SeedUnassignedTutor（#2600 的 fail-closed 断言就靠它）。
 func SeedTutor(t *testing.T, db *gorm.DB, username, hashedPassword string) *model.Tutor {
+	t.Helper()
+	roleID, err := migrate.EnsureProtectedTutorRole(db)
+	if err != nil {
+		t.Fatalf("确保受保护讲师角色失败: %v", err)
+	}
+	return seedTutorWithRoleID(t, db, username, hashedPassword, &roleID)
+}
+
+// SeedUnassignedTutor 插入一个**未挂角色**的测试讲师（role_id = NULL ⇒ 能力集为空，fail closed）。
+func SeedUnassignedTutor(t *testing.T, db *gorm.DB, username, hashedPassword string) *model.Tutor {
+	t.Helper()
+	return seedTutorWithRoleID(t, db, username, hashedPassword, nil)
+}
+
+func seedTutorWithRoleID(t *testing.T, db *gorm.DB, username, hashedPassword string, roleID *int) *model.Tutor {
 	t.Helper()
 	tu := &model.Tutor{
 		Username:  username,
 		Password:  hashedPassword,
 		Name:      username,
 		Status:    1,
+		RoleID:    roleID,
 		CreatedAt: Now(),
 	}
 	if err := db.Create(tu).Error; err != nil {

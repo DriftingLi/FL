@@ -23,7 +23,7 @@ func TestCapabilityTableShape(t *testing.T) {
 	}
 }
 
-// Has：按「角色 → 能力」判定，未知角色一律不通过（fail closed）。
+// Has：按「角色 → 能力」判定，未知角色与动态角色一律不通过（fail closed）。
 func TestHas(t *testing.T) {
 	cases := []struct {
 		role Role
@@ -32,11 +32,12 @@ func TestHas(t *testing.T) {
 	}{
 		{RoleStudent, CapForumParticipate, true},
 		{RoleStudent, CapForumModerate, false},
-		// 管理端能力自 #1618 段1 起由数据层回答：静态判据对 admin 一律 false（fail closed），
-		// 实际可达面见 middleware.HasCapability 与 admin.Service.AdminCapabilities。
+		// 管理端能力自 #1618 段1 起由数据层回答、讲师侧自 #2600 起同理：静态判据对二者一律
+		// false（fail closed），实际可达面见 middleware.HasCapability 与两个 resolver。
 		{RoleAdmin, CapForumModerate, false},
 		{RoleAdmin, CapForumParticipate, false},
-		{RoleTutor, CapContributionReview, true},
+		{RoleTutor, CapContributionReview, false},
+		{RoleTutor, CapTutorAccess, false},
 		{RoleAdmin, CapContributionReview, false},
 		{RoleStudent, CapContributionReview, false},
 		{RoleRecruiter, CapRecruitAccess, true},
@@ -55,36 +56,34 @@ func TestHas(t *testing.T) {
 
 // Capabilities：返回该角色的全部能力，顺序稳定（用于 codegen 与断言）。
 //
-// 静态角色的集合由本测试锁；动态角色（admin）的静态集合**必须为空** —— 它的可达面由数据层回答，
-// 前端生成物的 admin 行因此有意为空（#1618 段1）。
+// 静态角色的集合由本测试锁；两个动态角色（admin / tutor）的静态集合**必须为空** ——
+// 它们的可达面由数据层回答，前端生成物的对应行因此有意为空。
 func TestCapabilitiesStableAndComplete(t *testing.T) {
-	got := Capabilities(RoleTutor)
+	// 学员与招聘者是**静态角色**，他们的集合仍由本表回答（翻转只动讲师与管理端）。
+	got := Capabilities(RoleStudent)
 	if len(got) == 0 {
-		t.Fatal("讲师能力集合不得为空")
+		t.Fatal("学员能力集合不得为空")
 	}
 	for i := 1; i < len(got); i++ {
 		if got[i-1] >= got[i] {
 			t.Fatalf("能力集合必须按字典序稳定输出: %v", got)
 		}
 	}
-	if !contains(got, CapContributionReview) {
-		t.Fatalf("讲师应拥有 contribution.review: %v", got)
-	}
-	// #2595：tutor.access 拆成三把，讲师默认三键全拿（静态表保证「行为零变化」，spec A6）。
-	for _, want := range []Capability{CapTutorAccess, CapCourseAuthor, CapTutorFileManage} {
-		if !contains(got, want) {
-			t.Fatalf("讲师应拥有 %q: %v", want, got)
-		}
-	}
-	// 两把新键只绑讲师，不授给超管 —— 管理员今天也打不进讲师面端点（编辑课程走管理端的
-	// course.manage），授给超管等于凭空扩权。受保护清单的对应锁在 dynamic_admin_test.go。
-	for _, c := range []Capability{CapCourseAuthor, CapTutorFileManage} {
-		if len(RolesFor(c)) != 1 || RolesFor(c)[0] != RoleTutor {
-			t.Fatalf("能力 %q 应只绑讲师，实际绑 %v", c, RolesFor(c))
-		}
+	if !contains(got, CapCourseLearn) {
+		t.Fatalf("学员应拥有 course.learn: %v", got)
 	}
 	if contains(got, CapForumModerate) {
-		t.Fatalf("讲师不应拥有管理端 forum.moderate: %v", got)
+		t.Fatalf("学员不应拥有管理端 forum.moderate: %v", got)
+	}
+	rec := Capabilities(RoleRecruiter)
+	if !contains(rec, CapRecruitAccess) || contains(rec, CapStudentAccess) {
+		t.Fatalf("招聘者能力集合异常: %v", rec)
+	}
+	// #2600：讲师成为动态角色 ⇒ 静态集合必须为空（能力由 tutor_role 回答）。
+	// 讲师侧那 7 键的可达性由 ProtectedTutorCapabilities() 与 resolver 保证，
+	// 不再由本表回答 —— 这正是「授权链上线」这件事在能力表上的表现。
+	if caps := Capabilities(RoleTutor); len(caps) != 0 {
+		t.Fatalf("动态角色 tutor 的静态能力集合必须为空（由数据层回答），实际 %v", caps)
 	}
 	if len(Capabilities(RoleAdmin)) != 0 {
 		t.Fatal("动态角色 admin 的静态能力集合必须为空（由数据层回答）")

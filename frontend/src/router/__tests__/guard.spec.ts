@@ -319,10 +319,11 @@ describe('workspaceFallback 的子域身份不变式（回落出口不得跨子�
     ['tutor'],
     ['admin']
   ] as const)('%s Cookie 开 training. 受限页 → 清态回 /login（原为角色回落弹 mentor./manage.）', (role) => {
-    // admin 是动态角色：能力集未落定先被 4b 补拉一轮（一次冗余请求，随后被清态），故显式 settled
+    // admin 与 tutor 都是动态角色（#2600 起讲师也走数据层）：能力集未落定会先被 4b 补拉一轮
+    // （一次冗余请求，随后被清态），故两者都显式 settled。
     const d = resolveGuardDecision(
       trainingHome,
-      state({ subdomain: 'training', role, ...(role === 'admin' ? settled(['admin.access']) : {}) })
+      state({ subdomain: 'training', role, ...settled([role === 'admin' ? 'admin.access' : 'tutor.access']) })
     )
     expect(d).toEqual({ action: 'redirect', to: { path: '/login', query: { redirect: '/training' } }, clearAuth: true })
   })
@@ -341,7 +342,25 @@ describe('workspaceFallback 的子域身份不变式（回落出口不得跨子�
   })
 
   it('IP 直连（无子域概念）→ 角色回落照旧（行为不变）', () => {
-    expect(resolveGuardDecision(input(), state({ role: 'tutor', ipDirect: true }))).toEqual({ action: 'redirect', to: '/training/tutor' })
+    // #2600 / F6：讲师落点按能力集算 —— 有 tutor.access 落仪表盘（与本改动前逐字一致）。
+    expect(
+      resolveGuardDecision(input(), state({ role: 'tutor', ipDirect: true, ...settled(['tutor.access']) }))
+    ).toEqual({ action: 'redirect', to: { name: 'TutorDashboard' } })
+    // 未挂角色（空集）→ 落「无讲师权限」页，而不是它看不见的仪表盘。
+    expect(resolveGuardDecision(input(), state({ role: 'tutor', ipDirect: true, ...settled([]) }))).toEqual({
+      action: 'redirect',
+      to: { name: 'TutorNoAccess' }
+    })
+    // 只有标签管理权（题库讲师形态之一）：仪表盘不可达 → 按侧栏顺序取第一个可达页。
+    // 注意不能拿 TutorChapterEdit 举例——它没有 nav 项（只能经课程页带参进入），
+    // 侧栏顺序里不存在，按 F6「按侧栏导航顺序挑」它永远不该成为落点。
+    expect(
+      resolveGuardDecision(input(), state({ role: 'tutor', ipDirect: true, ...settled(['catalog.author']) }))
+    ).toEqual({ action: 'redirect', to: { name: 'TutorQuestionTags' } })
+    // 只有一个非导航能力位（如 course.author）：侧栏里没有可达叶子 → 落无权限页。
+    expect(
+      resolveGuardDecision(input(), state({ role: 'tutor', ipDirect: true, ...settled(['course.author']) }))
+    ).toEqual({ action: 'redirect', to: { name: 'TutorNoAccess' } })
     expect(
       resolveGuardDecision(input(), state({ role: 'admin', ipDirect: true, ...settled(['admin.access']) }))
     ).toEqual({ action: 'redirect', to: { name: 'AdminDashboard' } })
@@ -365,7 +384,7 @@ describe('roleStep', () => {
     expect(
       resolveGuardDecision(
         input({ meta: { requiresAuth: true, roles: ['hrwai_user', 'tutor'], workspace: 'training' } }),
-        state({ role: 'tutor' })
+        state({ role: 'tutor', ...settled(['tutor.access']) })
       )
     ).toEqual({ action: 'allow' })
     expect(
@@ -396,13 +415,13 @@ describe('roleStep', () => {
   })
 
   it('tutor 闯学员区 → 回导师工作台（training. 子域上清态回登录页，#1651）', () => {
-    // IP 直连（无子域概念）：同域自回落照旧
+    // IP 直连（无子域概念）：同域自回落照旧（#2600 / F6：落点按能力集算，有 tutor.access → 仪表盘）
     expect(
-      resolveGuardDecision(input(), state({ role: 'tutor', ipDirect: true }))
-    ).toEqual({ action: 'redirect', to: '/training/tutor' })
+      resolveGuardDecision(input(), state({ role: 'tutor', ipDirect: true, ...settled(['tutor.access']) }))
+    ).toEqual({ action: 'redirect', to: { name: 'TutorDashboard' } })
     // training. 子域：/training 不属于 tutor → 清态回本子域登录页，而非经边界弹 mentor.
     expect(
-      resolveGuardDecision(input(), state({ role: 'tutor', subdomain: 'training' }))
+      resolveGuardDecision(input(), state({ role: 'tutor', subdomain: 'training', ...settled(['tutor.access']) }))
     ).toEqual({ action: 'redirect', to: { path: '/login', query: { redirect: '/training' } }, clearAuth: true })
   })
 
@@ -435,7 +454,7 @@ describe('credentialStep', () => {
     expect(
       resolveGuardDecision(
         input({ meta: { requiresAuth: true, workspace: 'training' } }),
-        state({ role: 'tutor', credential: 'none' })
+        state({ role: 'tutor', credential: 'none', ...settled(['tutor.access']) })
       )
     ).toEqual({ action: 'allow' })
     expect(resolveGuardDecision(input(), state({ ipDirect: true, credential: 'none' }))).toEqual({ action: 'allow' })

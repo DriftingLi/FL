@@ -24,9 +24,10 @@ const authzTSTemplate = `// 生成文件，勿手改（ADR-0047 §1 授权能力
 // 用法：页面/路由声明「需要什么能力」（AuthzCapability），角色可达面由 ROLE_CAPABILITIES
 // 回答。**不要**在前端另抄一份角色清单——那是本文件要消灭的东西。
 //
-// 例外：'admin' 的能力**不来自本表**（#1618 段1）——管理端权限由超管按角色分配，运行时经
-// GET /admin/me/capabilities 下发。ROLE_CAPABILITIES.admin 因此**有意为空**，
-// hasCapability('admin', …) 恒为 false 是 fail closed；消费面（路由守卫 / 侧栏过滤）必须读运行时能力集。
+// 例外：动态角色（DYNAMIC_ROLES：'admin' 与 'tutor'）的能力**不来自本表**——管理端权限由超管
+// 按角色分配、讲师权限由管理员按讲师角色分配，运行时分别经 GET /admin/me/capabilities 与
+// GET /tutor/me/capabilities 下发。ROLE_CAPABILITIES 对它们**有意为空**，
+// hasCapability(动态角色, …) 恒为 false 是 fail closed；消费面（路由守卫 / 侧栏过滤）必须读运行时能力集。
 
 export type AuthzRole =
 %s
@@ -35,8 +36,8 @@ export type AuthzCapability =
 %s
 
 /**
- * 能力由**数据层**回答的角色（#1618 段1）：它们的可达面必须读运行时能力集
- * （GET /admin/me/capabilities），本表对它们 fail closed。
+ * 能力由**数据层**回答的角色：它们的可达面必须读运行时能力集
+ * （admin → GET /admin/me/capabilities；tutor → GET /tutor/me/capabilities），本表对它们 fail closed。
  */
 export const DYNAMIC_ROLES: readonly AuthzRole[] = [%s]
 
@@ -84,7 +85,7 @@ func RenderFrontendAuthzTS() (string, error) {
 			return "", fmt.Errorf("角色 %q 没有任何能力，拒绝生成（能力表不完整）", r)
 		}
 		if IsDynamicRole(r) {
-			fmt.Fprintf(&table, "  // %s 有意为空：其能力由数据层回答（GET /admin/me/capabilities），本表对该角色 fail closed。\n", r)
+			fmt.Fprintf(&table, "  // %s 有意为空：其能力由数据层回答（见 DYNAMIC_ROLES 的注释），本表对该角色 fail closed。\n", r)
 		}
 		parts := make([]string, 0, len(list))
 		for _, c := range list {

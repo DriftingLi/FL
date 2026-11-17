@@ -28,7 +28,11 @@ const EXPECTED: Record<string, string> = {
   TutorQuestionCreate: 'question.author',
 
   // A4：与后端 tagG 的 catalog.author 对齐（此前误写成 question.author）
-  TutorQuestionTags: 'catalog.author'
+  TutorQuestionTags: 'catalog.author',
+
+  // #2600 / 规格 F5：无讲师权限页**刻意不挂能力键**（它就是空集的落点，再要求能力即自锁）。
+  // 用空串表达「本页必须无 capability」，与上面「必须挂某键」在同一张表里对照着看。
+  TutorNoAccess: ''
 }
 
 describe('讲师域页键拆分', () => {
@@ -38,8 +42,10 @@ describe('讲师域页键拆分', () => {
 
     for (const page of tutorPages) {
       const want = EXPECTED[page.name]
-      expect(want, `讲师域页 ${page.name} 未在本锁的清单里——新页面请先确认它该挂哪个键`).toBeTruthy()
-      expect(page.capability, `页面 ${page.name} 的能力键`).toBe(want)
+      // toBeDefined 而不是 toBeTruthy：无权限页的期望值是空串（= 必须无键），toBeTruthy 会把它误判成「没登记」。
+      expect(want, `讲师域页 ${page.name} 未在本锁的清单里——新页面请先确认它该挂哪个键`).toBeDefined()
+      // 空串 = 该页必须**没有** capability（无权限页）。其余页逐字比对。
+      expect(page.capability ?? '', `页面 ${page.name} 的能力键`).toBe(want)
     }
   })
 

@@ -33,7 +33,7 @@ func seedRole(t *testing.T, db *gorm.DB, name string, caps ...authz.Capability) 
 // seedTutorWithRole 建讲师并挂角色（roleID=0 表示不挂）。
 func seedTutorWithRole(t *testing.T, db *gorm.DB, username string, roleID int) *model.Tutor {
 	t.Helper()
-	tutor := testutil.SeedTutor(t, db, username, "x")
+	tutor := testutil.SeedUnassignedTutor(t, db, username, "x")
 	if roleID > 0 {
 		if err := db.Model(&model.Tutor{}).Where("tutor_id = ?", tutor.TutorID).
 			Update("role_id", roleID).Error; err != nil {
@@ -94,7 +94,7 @@ func TestTutorCapabilities_FourTemplates(t *testing.T) {
 // （规格 E2 fail closed）。
 func TestTutorCapabilities_UnassignedIsEmptyAndNotGranted(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	tutor := testutil.SeedTutor(t, db, "unassigned", "x")
+	tutor := testutil.SeedUnassignedTutor(t, db, "unassigned", "x")
 
 	caps, granted, err := New(db, nil).TutorCapabilities(tutor.TutorID)
 	if err != nil {
@@ -133,7 +133,7 @@ func TestTutorCapabilities_EmptyRoleIsGrantedButEmpty(t *testing.T) {
 // 这条不是性能洁癖：未授权讲师恰恰是最可能被反复尝试的那类请求，不缓存就会每次打库。
 func TestTutorCapabilities_CachesEmptyGrant(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
-	tutor := testutil.SeedTutor(t, db, "cache_empty", "x")
+	tutor := testutil.SeedUnassignedTutor(t, db, "cache_empty", "x")
 	resolver := New(db, nil)
 
 	if _, granted, err := resolver.TutorCapabilities(tutor.TutorID); err != nil || granted {
@@ -258,7 +258,7 @@ func TestTutorCapabilities_PredicateIgnoresAdminRole(t *testing.T) {
 		}
 	}
 
-	tutor := testutil.SeedTutor(t, db, "admin_leak", "x")
+	tutor := testutil.SeedUnassignedTutor(t, db, "admin_leak", "x")
 	caps, granted, err := New(db, nil).TutorCapabilities(tutor.TutorID)
 	if err != nil {
 		t.Fatalf("取能力集失败: %v", err)
