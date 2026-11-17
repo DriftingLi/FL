@@ -68,10 +68,8 @@ func newPoolLeakFixture(t *testing.T) *poolLeakFixture {
 	if err := db.Create(&student).Error; err != nil {
 		t.Fatalf("建学员失败: %v", err)
 	}
-	tutor := model.Tutor{Username: "scope_w14_tutor", Password: "x", Name: "讲师", Status: 1, CreatedAt: testutil.Now()}
-	if err := db.Create(&tutor).Error; err != nil {
-		t.Fatalf("建讲师失败: %v", err)
-	}
+	// #2600 起讲师能力由所挂角色回答：必须用 SeedTutor（挂全权讲师角色），裸建行会一律 403。
+	tutor := testutil.SeedTutor(t, db, "scope_w14_tutor", "x")
 
 	f := &poolLeakFixture{t: t, db: db, cred: credA}
 	f.studentID = int(student.ID)
@@ -114,6 +112,7 @@ func newPoolLeakFixture(t *testing.T) *poolLeakFixture {
 
 	r := gin.New()
 	api := r.Group("/api")
+	useCapabilityResolvers(api, db)
 	// 同一装配链，只是多给一个真存储：笔记图片的「文件真实存在」那一档（#2069）要在
 	// ErrStatus 面打得出 400，nil storage 会让它落成 500（ErrNoteStorageUnconfigured）。
 	deps := newContractDepsWithStorage(t, db, cfg, storage.NewLocalStorage(t.TempDir()))

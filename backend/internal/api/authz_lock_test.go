@@ -113,11 +113,11 @@ func TestAuthzLock_CapabilityNaming(t *testing.T) {
 		if strings.HasPrefix(key, ".") || strings.HasSuffix(key, ".") {
 			t.Errorf("能力键 %q 的资源域或动作不得为空", key)
 		}
-		// 空行 = 该能力的可达面由数据层回答（受保护管理角色持有，#1618 段1）。
-		// 「空行 ⇔ 在受保护清单里」由 internal/authz 的 dynamic_admin_test.go 双向锁定，
+		// 空行 = 该能力的可达面由数据层回答（受保护角色持有：管理端 #1618 段1、讲师端 #2600）。
+		// 「空行 ⊆ 两张受保护清单」由 internal/authz 的 dynamic_admin_test.go 锁定，
 		// 这里只确认它不是没人认领的孤儿键。
-		if len(authz.RolesFor(c)) == 0 && !isProtectedAdminCapability(c) {
-			t.Errorf("能力 %q 没有任何角色，也不在受保护管理角色能力全集里（孤儿键）", key)
+		if len(authz.RolesFor(c)) == 0 && !isProtectedAdminCapability(c) && !isProtectedTutorCapability(c) {
+			t.Errorf("能力 %q 没有任何角色，也不在两张受保护角色能力全集里（孤儿键）", key)
 		}
 	}
 }
@@ -164,6 +164,17 @@ func TestAuthzLock_RoleGuardRetired(t *testing.T) {
 // （#1618 段1 起管理端能力改为数据层回答）。判据来自 authz 自己的声明，不在这里另抄一份清单。
 func isProtectedAdminCapability(c authz.Capability) bool {
 	for _, p := range authz.ProtectedAdminCapabilities() {
+		if p == c {
+			return true
+		}
+	}
+	return false
+}
+
+// isProtectedTutorCapability 该能力是否由受保护（全权讲师）角色持有（#2600 起讲师侧同样动态化）。
+// 两张清单**有意重叠**（question.author 等是超管与全权讲师共有），故本函数只做并集的一半。
+func isProtectedTutorCapability(c authz.Capability) bool {
+	for _, p := range authz.ProtectedTutorCapabilities() {
 		if p == c {
 			return true
 		}

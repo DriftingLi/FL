@@ -239,6 +239,32 @@ export function adminLandingPage(holds: (capability: AuthzCapability) => boolean
   return firstAccessiblePage(adminNav, holds) ?? ADMIN_NO_ACCESS
 }
 
+// ===== 讲师端落点（#2600 / 规格 F6）=====
+//
+// 与管理端同一条判据、同一种失败形态：讲师自 #2600 起也是动态角色，能力集可能为空
+// （新建讲师未挂角色）或只覆盖一部分页（题库讲师没有 `course.author`）。此时若把落点
+// 写死成 `/training/tutor`（仪表盘），就会落在它看不见的页上 —— 守卫再回弹，形成
+// 「整页空白 / 无限重定向」那类线上形态（管理端 #1638 已经踩过一次）。
+
+/** 讲师端首页（标签栏的固定页默认落点）。 */
+export const TUTOR_DASHBOARD: RouteName = 'TutorDashboard'
+/** 讲师端「无讲师权限」页（能力集为空的讲师落这里，不复用管理端同页）。 */
+export const TUTOR_NO_ACCESS: RouteName = 'TutorNoAccess'
+
+/**
+ * 讲师端落点：仪表盘的能力位满足就是仪表盘；否则按侧栏顺序的第一个可达页；
+ * 一个都没有 → 「无讲师权限」页。
+ *
+ * 与 `adminLandingPage` 同形而非合并：两者的侧栏树与无权限页都不同（讲师端页脚指引是
+ * 「联系管理员分配角色」，管理端是「联系超级管理员」），合成一个函数就要在里面按角色分支，
+ * 反而把两份不同的落点口径缠在一处。
+ */
+export function tutorLandingPage(holds: (capability: AuthzCapability) => boolean): RouteName {
+  const dashboard = pages.find(p => p.name === TUTOR_DASHBOARD)
+  if (!dashboard?.capability || holds(dashboard.capability)) return TUTOR_DASHBOARD
+  return firstAccessiblePage(tutorNav, holds) ?? TUTOR_NO_ACCESS
+}
+
 /**
  * 进 keep-alive 缓存的组件名清单（#1620）：= 该工作区描述符里 `keepAlive: true` 的页面路由名。
  *

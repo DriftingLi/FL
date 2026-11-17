@@ -81,13 +81,13 @@ func outletBatchDeleteFilesEmpty(t *testing.T) any {
 func outletTutorCapabilitiesUnassigned(t *testing.T) any {
 	t.Helper()
 	db := testutil.NewMemoryDB(t)
-	tutor := testutil.SeedTutor(t, db, "nonnil_caps", "x")
+	tutor := testutil.SeedUnassignedTutor(t, db, "nonnil_caps", "x")
 	res, err := newTutorServiceForTest(t, db).TutorCapabilitySet(tutor.TutorID)
 	if err != nil {
 		t.Fatalf("能力集出口失败: %v", err)
 	}
 	if res.Granted {
-		t.Fatalf("新建讲师默认不挂角色，granted 应为 false")
+		t.Fatalf("未挂角色的讲师 granted 应为 false")
 	}
 	return res
 }

@@ -8,8 +8,20 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import SidebarLayout from './SidebarLayout.vue'
-import { roleNavigation } from '@/config/navigation'
+import { roleNavigation, filterNavByCapability } from '@/config/navigation'
+import { useAuthStore } from '@/stores/auth'
+import { holdsCapability } from '@/utils/authzRuntime'
 
-const tutorNav = roleNavigation.tutor
+const authStore = useAuthStore()
+
+// 讲师能力自 #2600 起由数据层回答（所挂角色的能力集）：导航按**运行时能力集**过滤 ——
+// 管理员把某项权限收回后，该菜单项在下一次能力集刷新时消失，而不是留在侧栏里点进去才 403。
+// 判据与守卫同源（holdsCapability），因此「侧栏显示什么」与「守卫放行什么」不会分叉。
+const tutorNav = computed(() =>
+  filterNavByCapability(roleNavigation.tutor, capability =>
+    holdsCapability(authStore.userInfo?.role, authStore.capabilities, capability)
+  )
+)
 </script>

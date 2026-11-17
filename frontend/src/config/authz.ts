@@ -7,9 +7,10 @@
 // 用法：页面/路由声明「需要什么能力」（AuthzCapability），角色可达面由 ROLE_CAPABILITIES
 // 回答。**不要**在前端另抄一份角色清单——那是本文件要消灭的东西。
 //
-// 例外：'admin' 的能力**不来自本表**（#1618 段1）——管理端权限由超管按角色分配，运行时经
-// GET /admin/me/capabilities 下发。ROLE_CAPABILITIES.admin 因此**有意为空**，
-// hasCapability('admin', …) 恒为 false 是 fail closed；消费面（路由守卫 / 侧栏过滤）必须读运行时能力集。
+// 例外：动态角色（DYNAMIC_ROLES：'admin' 与 'tutor'）的能力**不来自本表**——管理端权限由超管
+// 按角色分配、讲师权限由管理员按讲师角色分配，运行时分别经 GET /admin/me/capabilities 与
+// GET /tutor/me/capabilities 下发。ROLE_CAPABILITIES 对它们**有意为空**，
+// hasCapability(动态角色, …) 恒为 false 是 fail closed；消费面（路由守卫 / 侧栏过滤）必须读运行时能力集。
 
 export type AuthzRole =
   | 'hrwai_user'
@@ -80,16 +81,17 @@ export type AuthzCapability =
 
 
 /**
- * 能力由**数据层**回答的角色（#1618 段1）：它们的可达面必须读运行时能力集
- * （GET /admin/me/capabilities），本表对它们 fail closed。
+ * 能力由**数据层**回答的角色：它们的可达面必须读运行时能力集
+ * （admin → GET /admin/me/capabilities；tutor → GET /tutor/me/capabilities），本表对它们 fail closed。
  */
-export const DYNAMIC_ROLES: readonly AuthzRole[] = ['admin']
+export const DYNAMIC_ROLES: readonly AuthzRole[] = ['admin', 'tutor']
 
 /** 角色 → 能力集合（按能力键字典序，生成序稳定）。 */
 export const ROLE_CAPABILITIES: Readonly<Record<AuthzRole, readonly AuthzCapability[]>> = {
   hrwai_user: ['ai_assistant.use', 'check_in.use', 'contact.respond', 'contribution.submit', 'course.learn', 'faq.read', 'favorite.manage', 'feedback.submit', 'forum.participate', 'job.apply', 'job.report', 'material.read', 'mock_exam.take', 'notification.use', 'points.use', 'question.practice', 'real_exam.take', 'resume.manage', 'resume.pdf', 'search.use', 'student.access', 'valuation.use'],
-  tutor: ['catalog.author', 'contribution.review', 'course.author', 'notification.use', 'question.author', 'tutor.access', 'tutorfile.manage'],
-  // admin 有意为空：其能力由数据层回答（GET /admin/me/capabilities），本表对该角色 fail closed。
+  // tutor 有意为空：其能力由数据层回答（见 DYNAMIC_ROLES 的注释），本表对该角色 fail closed。
+  tutor: [],
+  // admin 有意为空：其能力由数据层回答（见 DYNAMIC_ROLES 的注释），本表对该角色 fail closed。
   admin: [],
   recruiter: ['application.review', 'contact.request', 'job.manage', 'recruit.access', 'recruit.resume_pdf'],
 }

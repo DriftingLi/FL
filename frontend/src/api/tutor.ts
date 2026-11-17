@@ -15,6 +15,7 @@ import type {
   CourseDTO,
   CoursePageResult,
   DeleteFileResult,
+  TutorCapabilitiesDTO,
   TutorCourseChaptersDTO
 } from './generated/tutor'
 
@@ -29,6 +30,7 @@ export type {
   CourseDTO,
   CoursePageResult,
   DeleteFileResult,
+  TutorCapabilitiesDTO,
   TutorCourseChaptersDTO
 } from './generated/tutor'
 
@@ -134,5 +136,17 @@ export const tutorApi = {
   /** 该课程的共认讲师名单（章节页认领条展示） */
   getCourseClaimants(courseId: number) {
     return unwrappedRequest.get<CourseClaimantsResult>(`/tutor/course/${courseId}/claims`)
+  },
+
+  // ===== 我的能力集（#2600 / 规格 F1）=====
+
+  /**
+   * 取当前讲师的能力集与「是否已挂角色」。
+   *
+   * 该端点只挂登录守卫、不挂能力键——未授权讲师也必须能拿到 `granted=false` 的空集，
+   * 否则前端画不出「还没有讲师权限」页（会先撞 403）。失败即抛错，由 store 落空集。
+   */
+  fetchMyCapabilities() {
+    return unwrappedRequest.get<TutorCapabilitiesDTO>('/tutor/me/capabilities')
   }
 }
