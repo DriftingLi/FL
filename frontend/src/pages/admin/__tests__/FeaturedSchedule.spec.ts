@@ -23,6 +23,8 @@ const baseForm = (over: Partial<FeaturedFormValues> = {}): FeaturedFormValues =>
   summary: '摘要',
   cover_image: '/static/uploads/featured/a.webp',
   content: '正文',
+  content_type: 'markdown',
+  docx_url: '',
   sort_order: 0,
   status: 0,
   published_at: null,

@@ -40,6 +40,8 @@ import '@/assets/styles/vditor-dark.css'
 // 预加载中文语言包，挂载到 window.VditorI18n，避免 Vditor 运行时从 CDN (unpkg.com) 请求 i18n 文件导致 404
 import 'vditor/dist/js/i18n/zh_CN.js'
 import { useAuthStore } from '@/stores/auth'
+// 内容排版按钮（颜色 / 字号 / 对齐 / 图片居中）：命令体是纯函数，按钮定义在独立文件里
+import { createContentToolbarItems, type ContentToolbarItem } from './markdownEditorToolbar'
 
 const props = withDefaults(defineProps<{
   modelValue: string
@@ -48,9 +50,18 @@ const props = withDefaults(defineProps<{
   /** 图片上传地址（绝对或相对路径，如 /api/admin/featured-content/upload-image）。
    *  传入后即可在编辑器内直接上传图片到后端，否则图片以 base64 嵌入。 */
   uploadUrl?: string
+  /**
+   * 是否显示内容排版按钮（对齐 / 文字颜色 / 字号 / 图片居中）。
+   *
+   * 默认关：这几个命令产出的是**内嵌 HTML**，而全站只有 Web 端会渲染它
+   * （移动端解析器不认 HTML、论坛与 AI 面一律转义，见 ADR-0046）。
+   * 只有「Web 章节正文」与「内容精选」这两个读者面才给开。
+   */
+  contentStyles?: boolean
 }>(), {
   placeholder: '请输入 Markdown 内容...',
-  height: 500
+  height: 500,
+  contentStyles: false
 })
 
 const emit = defineEmits(['update:modelValue'])
@@ -68,6 +79,27 @@ const MODE_OPTIONS = [
   { label: '预览编辑', value: 'ir' },
   { label: '源码', value: 'sv' }
 ]
+
+/**
+ * 内置工具栏（Vditor 预置项）。
+ *
+ * 内容排版那五个按钮（对齐 / 颜色 / 字号 / 图片居中）不是 Vditor 预置项，
+ * 它们是 `IMenuItem` 形状的自定义项，由 `createContentToolbarItems` 生成后追加在
+ * 表格与代码块之后 —— 位置选在那里，是因为它们和「表格 / 代码」同属「往正文里放结构」。
+ */
+const BASE_TOOLBAR = [
+  'headings', 'bold', 'italic', 'strike', '|',
+  'list', 'ordered-list', 'quote', 'line', '|',
+  'link', 'table', 'code'
+]
+
+/** 组装完整工具栏：内容排版按钮插在「表格 / 代码」之后、「撤销」之前 */
+function buildToolbar(): Array<string | ContentToolbarItem> {
+  const tail = ['|', 'undo', 'redo', 'fullscreen', 'preview']
+  if (!props.contentStyles) return [...BASE_TOOLBAR, ...tail]
+  // getter 而不是实例：切模式 / 切主题都会重建实例，命令要拿到当下那一个
+  return [...BASE_TOOLBAR, ...createContentToolbarItems(() => vditor), ...tail]
+}
 
 /** UiUnderlineTabs 的载荷是 string，这里收窄回 Vditor 的两档 */
 function onModeChange(value: string) {
@@ -142,12 +174,7 @@ function createVditor(targetMode: 'ir' | 'sv', valueToRestore?: string) {
     // 使用本地 CDN 路径，避免从 jsdelivr/unpkg 远程加载 method.min.js 等运行时模块导致国内访问慢
     // 由 vite.config.ts 中的 vditor-static 插件把 node_modules/vditor/dist 复制到 /vditor/
     cdn: '/vditor',
-    toolbar: [
-      'headings', 'bold', 'italic', 'strike', '|',
-      'list', 'ordered-list', 'quote', 'line', '|',
-      'link', 'table', 'code', '|',
-      'undo', 'redo', 'fullscreen', 'preview'
-    ],
+    toolbar: buildToolbar(),
     toolbarConfig: {
       pin: true
     },

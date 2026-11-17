@@ -44,29 +44,66 @@
         <el-form-item label="正文" prop="content">
           <div class="w-full">
             <!--
-              三端交集子集提示（ADR-0046 / #902）：门户与移动端都不渲染表格与公式，
-              作者在这里被明确告知，而不是发布后才发现读者看到的是一堆竖线。
-              **只提示不阻断**：判据留在编辑器与文档，不做后端强校验。
+              正文形态（2026-11）：markdown = 编辑器正文；docx = 导入原始 Word 文件。
+              切到 docx 后编辑器整体隐藏 —— 两种形态互斥，留着编辑器只会让人以为改的是同一份内容。
             -->
-            <UiAlert
-              v-if="outsideSubsetLabels.length"
-              class="mb-2"
-              type="warning"
-              :closable="false"
-              show-icon
-              :title="outsideNotice"
-              description="保存与发布不受影响；发布端预览里能看到读者实际看到的样子。"
-            />
-            <MarkdownEditor
-              ref="markdownEditorRef"
-              v-model="form.content"
-              :height="560"
-              :upload-url="uploadUrl"
-              placeholder="请输入正文内容（支持 Markdown 语法，可直接粘贴图片）..."
-            />
-            <div class="mt-2 flex justify-end">
-              <UiButton size="small" @click="openPreview">发布端预览</UiButton>
-            </div>
+            <UiRadioGroup v-model="form.content_type" class="content-type-switch">
+              <el-radio value="markdown">Markdown 正文</el-radio>
+              <el-radio value="docx">导入 Word 文档</el-radio>
+            </UiRadioGroup>
+
+            <template v-if="form.content_type === 'docx'">
+              <div class="docx-panel">
+                <UiUpload
+                  class="docx-uploader"
+                  :show-file-list="false"
+                  :http-request="handleDocxUpload"
+                  accept=".docx"
+                >
+                  <UiButton :loading="docxUploading">
+                    <UiIcon name="plus" />
+                    <span>{{ form.docx_url ? '重新上传 .docx' : '选择 .docx 文件' }}</span>
+                  </UiButton>
+                </UiUpload>
+                <div v-if="form.docx_url" class="docx-file">
+                  <UiIcon name="file-text" />
+                  <span class="docx-name">{{ docxFileName }}</span>
+                  <UiButton variant="danger" link @click="clearDocx">移除</UiButton>
+                </div>
+                <div class="docx-hint">
+                  上传后读者端按 Word 原样排版渲染（不经 Markdown）。改内容请改 Word 后重新上传；
+                  单文件不超过 50MB，仅支持 .docx。
+                </div>
+              </div>
+            </template>
+
+            <template v-else>
+              <!--
+                三端交集子集提示（ADR-0046 / #902）：移动端不渲染公式，
+                作者在这里被明确告知，而不是发布后才发现读者看到的是一堆美元符号。
+                **只提示不阻断**：判据留在编辑器与文档，不做后端强校验。
+              -->
+              <UiAlert
+                v-if="outsideSubsetLabels.length"
+                class="mb-2"
+                type="warning"
+                :closable="false"
+                show-icon
+                :title="outsideNotice"
+                description="保存与发布不受影响；发布端预览里能看到读者实际看到的样子。"
+              />
+              <MarkdownEditor
+                ref="markdownEditorRef"
+                v-model="form.content"
+                :height="560"
+                :upload-url="uploadUrl"
+                content-styles
+                placeholder="请输入正文内容（支持 Markdown 语法，可直接粘贴图片）..."
+              />
+              <div class="mt-2 flex justify-end">
+                <UiButton size="small" @click="openPreview">发布端预览</UiButton>
+              </div>
+            </template>
           </div>
         </el-form-item>
 
@@ -172,6 +209,8 @@ const { loading, run: loadDetail } = useAsyncPage(
       form.summary = d.summary || ''
       form.cover_image = d.cover_image || ''
       form.content = d.content || ''
+      form.content_type = d.content_type || 'markdown'
+      form.docx_url = d.docx_url || ''
       form.sort_order = d.sort_order || 0
       // 定时项在库里是草稿（靠保持草稿态实现不可见），故必须按 scheduled_at 回填成
       // 「发布 + 该时间」；照抄 status 会让编辑器在保存时把定时取消（#1748 的关键规则）。
@@ -195,11 +234,48 @@ const form = reactive({
   summary: '',
   cover_image: '',
   content: '',
+  // 正文形态（2026-11）：markdown = 编辑器正文；docx = 导入原始 Word 文件（读者端 docx-preview 渲染）
+  content_type: 'markdown' as string,
+  docx_url: '',
   sort_order: 0,
   status: 0 as number,
   // null = 留空 = 保存后立即发布（#1748）；空串是提交面的事，表单里只用 null 表达「没填」
   published_at: null as Date | null
 })
+
+/** docx 文件名（从 URL 末段还原：<原名>_<毫秒时间戳>.docx） */
+const docxFileName = computed(() => {
+  if (!form.docx_url) return ''
+  const last = form.docx_url.split('/').pop() || ''
+  return last.replace(/_\d{13}(\.docx)$/i, '$1')
+})
+
+const docxUploading = ref(false)
+
+/** 上传 .docx：成功后落 docx_url 并切到 docx 形态（免得作者传完了还停在 Markdown 页签） */
+async function handleDocxUpload(option: any) {
+  const file = option.file as File
+  if (!file) return
+  if (!/\.docx$/i.test(file.name)) {
+    ElMessage.error('仅支持 .docx 文件')
+    return
+  }
+  docxUploading.value = true
+  try {
+    const res = await adminFeaturedApi.uploadDocx(file)
+    form.docx_url = res?.docx_url || ''
+    form.content_type = 'docx'
+    ElMessage.success('文档上传成功')
+  } catch (e: any) {
+    // 错误已由全局拦截器提示（400 会带后端文案，如「文档超过 50MB」）
+  } finally {
+    docxUploading.value = false
+  }
+}
+
+function clearDocx() {
+  form.docx_url = ''
+}
 
 /** 提示文案（规则单点在 describePublishTime，与提交面的语义矩阵同源） */
 const publishHint = computed(() => describePublishTime(form.published_at))
@@ -273,7 +349,7 @@ async function handleSave() {
 
   // 主动从 MarkdownEditor 获取最新正文（避免 v-model 在 ir 模式下偶发未同步）
   let latestContent = form.content
-  if (markdownEditorRef.value) {
+  if (form.content_type === 'markdown' && markdownEditorRef.value) {
     const latest = markdownEditorRef.value.getValue()
     if (latest) {
       form.content = latest
@@ -281,7 +357,13 @@ async function handleSave() {
     }
   }
 
-  if (!latestContent.trim()) {
+  // 正文校验按形态分叉：markdown 看正文非空，docx 看文件在不在
+  if (form.content_type === 'docx') {
+    if (!form.docx_url) {
+      ElMessage.warning('请先上传 .docx 文档')
+      return
+    }
+  } else if (!latestContent.trim()) {
     ElMessage.warning('正文内容不能为空')
     return
   }
@@ -407,6 +489,39 @@ onMounted(() => {
 .publish-hint {
   font-size: var(--text-xs);
   line-height: 1.6;
+  color: var(--color-text-tertiary);
+}
+
+.content-type-switch {
+  margin-bottom: 12px;
+}
+
+.docx-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 16px;
+  border: 1px dashed var(--color-border-dark);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-page);
+}
+
+.docx-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text-primary);
+  font-size: var(--text-sm);
+}
+
+.docx-name {
+  word-break: break-all;
+}
+
+.docx-hint {
+  font-size: var(--text-xs);
+  line-height: 1.7;
   color: var(--color-text-tertiary);
 }
 

@@ -53,39 +53,40 @@ func TestFeaturedDTOShapes(t *testing.T) {
 	}), listWant)
 
 	detailWant := []string{
-		"category", "category_label", "content", "content_id", "cover_image", "created_at",
-		"next", "prev", "published_at", "related", "sort_order", "source", "status",
-		"summary", "title", "updated_at", "view_count",
+		"category", "category_label", "content", "content_id", "content_type", "cover_image",
+		"created_at", "docx_url", "next", "prev", "published_at", "related", "sort_order",
+		"source", "status", "summary", "title", "updated_at", "view_count",
 	}
 	assertKeys(t, jsonTopLevelKeys(t, FeaturedContentDetailDTO{
 		Category: "news", CategoryLabel: "资讯", Content: "content", ContentID: 1,
-		CoverImage: "cover.png", CreatedAt: pub, PublishedAt: &pub,
-		Related: []FeaturedContentDTO{}, SortOrder: 1, Source: "src", Status: 1,
-		Summary: "summary", Title: "title", UpdatedAt: pub, ViewCount: 2,
+		ContentType: "markdown", CoverImage: "cover.png", CreatedAt: pub, DocxURL: "",
+		PublishedAt: &pub, Related: []FeaturedContentDTO{}, SortOrder: 1, Source: "src",
+		Status: 1, Summary: "summary", Title: "title", UpdatedAt: pub, ViewCount: 2,
 	}), detailWant)
 
 	adminWant := []string{
-		"category", "category_label", "content", "content_id", "cover_image", "created_at",
-		"published_at", "scheduled_at", "sort_order", "source", "status", "summary", "title",
-		"updated_at", "view_count",
+		"category", "category_label", "content", "content_id", "content_type", "cover_image",
+		"created_at", "docx_url", "published_at", "scheduled_at", "sort_order", "source",
+		"status", "summary", "title", "updated_at", "view_count",
 	}
 	assertKeys(t, jsonTopLevelKeys(t, FeaturedContentAdminDetailDTO{
 		Category: "news", CategoryLabel: "资讯", Content: "content", ContentID: 1,
-		CoverImage: "cover.png", CreatedAt: pub, PublishedAt: &pub, ScheduledAt: &pub,
-		SortOrder: 1, Source: "src", Status: 1, Summary: "summary", Title: "title",
-		UpdatedAt: pub, ViewCount: 2,
+		ContentType: "docx", CoverImage: "cover.png", CreatedAt: pub, DocxURL: "u.docx",
+		PublishedAt: &pub, ScheduledAt: &pub, SortOrder: 1, Source: "src", Status: 1,
+		Summary: "summary", Title: "title", UpdatedAt: pub, ViewCount: 2,
 	}), adminWant)
 
 	// 管理端列表项（#1748 新增）：公开列表项 + scheduled_at —— 公开那份不加（公开接口零变更）。
 	adminListWant := []string{
-		"category", "category_label", "content_id", "cover_image", "created_at",
+		"category", "category_label", "content_id", "content_type", "cover_image", "created_at",
 		"published_at", "scheduled_at", "sort_order", "source", "status", "summary", "title",
 		"updated_at", "view_count",
 	}
 	assertKeys(t, jsonTopLevelKeys(t, FeaturedContentAdminListDTO{
-		Category: "news", CategoryLabel: "资讯", ContentID: 1, CoverImage: "cover.png",
-		CreatedAt: pub, PublishedAt: &pub, ScheduledAt: &pub, SortOrder: 1, Source: "src",
-		Status: 1, Summary: "summary", Title: "title", UpdatedAt: pub, ViewCount: 2,
+		Category: "news", CategoryLabel: "资讯", ContentID: 1, ContentType: "markdown",
+		CoverImage: "cover.png", CreatedAt: pub, PublishedAt: &pub, ScheduledAt: &pub,
+		SortOrder: 1, Source: "src", Status: 1, Summary: "summary", Title: "title",
+		UpdatedAt: pub, ViewCount: 2,
 	}), adminListWant)
 
 	navWant := []string{"category", "category_label", "content_id", "published_at", "title"}

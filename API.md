@@ -689,11 +689,13 @@ Query：`page`（默认 1）、`page_size`（默认 10）、`category` ∈ `comp
 
 **GET /api/featured-content/:id**
 
-响应 200：data 为列表项 + `content`（正文）、`related`（相关资讯数组）、`prev`/`next`（上/下一篇导航，null 表示无）。
+响应 200：data 为列表项 + `content`（正文）、`content_type`（`markdown` / `docx`）、`docx_url`（docx 正文的文件地址，markdown 时为空串）、`related`（相关资讯数组）、`prev`/`next`（上/下一篇导航，null 表示无）。
 
 **POST /api/featured-content/:id/view**：请求体 `{}`，响应 200 data 为 `{ content_id, view_count }`。
 
-**正文格式口径（ADR-0046）**：`content` 是 **Markdown**，由管理端撰写，门户（Nuxt）与移动端各自渲染。正文子集是**三端交集**——标题 / 列表 / 引用 / 代码块 / 图片 / 链接；**不含表格与公式**（门户与移动端都不渲染，写了读者看到的是原始文本）。管理端编辑器在正文越界时给出可见提示，**服务端不做强校验**（不阻断保存与发布——误伤存量与未来合法内容的成本高于收益）。
+**正文格式口径（ADR-0046）**：`content` 是 **Markdown**，由管理端撰写，门户（Nuxt）、Web 与移动端各自渲染。正文子集——标题 / 列表 / 引用 / 代码块 / 图片 / 链接 / **表格**；**不含公式**（移动端不渲染，写了读者看到的是原始文本；门户与 Web 都渲染表格与公式）。管理端编辑器在正文越界时给出可见提示，**服务端不做强校验**（不阻断保存与发布——误伤存量与未来合法内容的成本高于收益）。
+
+**两种正文形态（2026-11，ADR-0046 决定 7）**：`content_type = markdown`（默认）时读者端渲染 `content`；`content_type = docx` 时正文是 `docx_url` 指向的**原始 Word 文件**，读者端用 docx-preview 按 OOXML 还原排版、**不经 Markdown**（此时 `content` 为空串）。门户与 Web 学员端都渲染 docx；**移动端不渲染**（uni-app x 无 DOM），显示摘要与「请在网页端查看完整排版」——要求移动端读者读全的内容必须用 markdown 形态。两种形态互斥：保存 markdown 会清空 `docx_url`，保存 docx 会清空 `content`。
 
 ---
 
@@ -1165,6 +1167,7 @@ multipart/form-data：`file`。响应 200：data 为 `{ "url": "/static/uploads/
 | DELETE | `/api/admin/featured-content/:id` | 删除 |
 | POST | `/api/admin/featured-content/:id/publish` | 发布（可选发布时间；无 body = 立即发布） |
 | POST | `/api/admin/featured-content/upload-image` | 上传封面图 |
+| POST | `/api/admin/featured-content/upload-docx` | 上传 docx 正文文件（multipart `file`，仅 `.docx`，≤ 50MB） |
 
 **时间与状态（#1748 / ADR-0076）**
 
@@ -1172,7 +1175,7 @@ multipart/form-data：`file`。响应 200：data 为 `{ "url": "/static/uploads/
 
 **POST /api/admin/featured-content**
 
-请求体：`{ "title": "标题", "category": "news", "summary": "摘要", "cover_image": "/static/uploads/...", "content": "正文 Markdown", "source": "官网", "status": 1, "sort_order": 1, "published_at": "2026-10-20T09:00:00+08:00" }`
+请求体：`{ "title": "标题", "category": "news", "summary": "摘要", "cover_image": "/static/uploads/...", "content": "正文 Markdown", "content_type": "markdown", "docx_url": "", "source": "官网", "status": 1, "sort_order": 1, "published_at": "2026-10-20T09:00:00+08:00" }`
 
 `published_at`（可选，严格 RFC3339，范围 2000-01-01 ～ 现在 + 10 年）决定这次保存落在哪种状态：
 
@@ -1186,7 +1189,11 @@ multipart/form-data：`file`。响应 200：data 为 `{ "url": "/static/uploads/
 
 时间格式不合法或越界 → 400；创建 / 更新都适用同一张表。**空串也算「指定了时间」**——它只在 `status = 1` 下等同于「用现在」，`status = 0` 时与具体时刻同样判 400（草稿不排期）。更新时缺省 `published_at` 且**没有点名 `status`** = 只改内容、排期原样保留；点了 `status` 而没带时间 = 状态落定（转草稿即取消定时）。
 
-`content`（正文）：**Markdown，落在三端交集子集内**——标题 / 列表 / 引用 / 代码块 / 图片 / 链接；**不含表格与公式**（门户与移动端不渲染，ADR-0046）。管理端编辑器在越界时给出可见提示，服务端不校验、不阻断。
+`content`（正文）：**Markdown**——标题 / 列表 / 引用 / 代码块 / 图片 / 链接 / **表格**；**不含公式**（移动端不渲染，ADR-0046；表格自 2026-11 起门户与 Web 均渲染）。正文另可用编辑器工具栏插入的**内嵌 HTML**（居中 / 左对齐 / 文字颜色 / 字号 / 图片居中，写法为 `<span style="…">`），这些样式门户与 Web 渲染、移动端退回纯文本。管理端编辑器在越界时给出可见提示，服务端不校验、不阻断。
+
+`content_type`（正文形态，2026-11 / ADR-0046 决定 7）：缺省或 `markdown` = 正文走 `content`；`docx` = 正文是 `docx_url` 指向的**原始 Word 文件**（读者端 docx-preview 渲染、不经 Markdown）。两档之外 → 400。`docx_url` 必须是本站 `featured/docx/` 前缀的附件地址（即由下面的上传端点产生），否则 → 400；`content_type = markdown` 时该字段被忽略并清空。两种形态互斥：落库时按 `content_type` 清空另一列。
+
+**POST /api/admin/featured-content/upload-docx**：multipart/form-data，字段名 `file`；仅接受 `.docx`，单文件 ≤ 50MB。响应 200 data 为 `{ "docx_url": "/static/uploads/featured/docx/<名称>_<毫秒>.docx", "file_name": "<原文文件名>", "file_size": 123456 }`。非 `.docx` 或地址不合法 → 400；超过 50MB → 400。
 
 **POST /api/admin/featured-content/:id/publish**：请求体可选 `{ "published_at": "2026-10-20T09:00:00+08:00" }`。无 body = 立即发布（草稿与定时中都适用，定时项可提前上线）；带未来时刻 = 转为定时中；已发布且无 body 时幂等（不改发布时间）。
 

@@ -50,6 +50,75 @@ var (
 	ErrFeaturedImageInvalid    = errors.New("图片地址无效（仅支持本站上传的精选图片）")
 )
 
+// 正文形态（2026-11）：docx 文章以「原始文件 + 类型标记」存储，正文不再是 Markdown。
+// 两个取值各自具名，避免各处散落字面量。
+const (
+	FeaturedContentTypeMarkdown = "markdown"
+	FeaturedContentTypeDocx     = "docx"
+)
+
+// docx 形态的两件输入事实（与上面三条同族：都是「客户端该改请求」而不是「服务端坏了」）。
+var (
+	ErrFeaturedContentTypeInvalid = errors.New("正文类型无效（仅支持 markdown / docx）")
+	ErrFeaturedDocxURLInvalid     = errors.New("文档地址无效（仅支持本站上传的 .docx 文件）")
+	ErrFeaturedDocxTooLarge       = errors.New("文档超过 50MB，请压缩后重新上传")
+)
+
+// normalizeContentType 归一正文类型：空串 = markdown（与库层 DEFAULT 同义），
+// 其余必须落在两档之内 —— 非法值一律报错而不是静默回落，否则作者的意图会被悄悄改写。
+func normalizeContentType(raw string) (string, error) {
+	switch raw {
+	case "":
+		return FeaturedContentTypeMarkdown, nil
+	case FeaturedContentTypeMarkdown, FeaturedContentTypeDocx:
+		return raw, nil
+	default:
+		return "", ErrFeaturedContentTypeInvalid
+	}
+}
+
+// featuredDocxGate docx 正文的归属门禁：docx 文章必须带本站 featured/docx 前缀的文件 URL，
+// markdown 文章不许带（否则库里会出现「类型说 A、文件说 B」的半截行）。
+//
+// 与 featuredImageGate 同一判据形态（新出现才校验、存量放行），差别在于 docx 是**单值**：
+// 没有「内容里还引用着别的文件」这一层，故一次相等判断即可。
+func featuredDocxGate(oldType, oldURL, newType, newURL string) error {
+	if newType != FeaturedContentTypeDocx {
+		if newURL != "" && newURL != oldURL {
+			return ErrFeaturedDocxURLInvalid
+		}
+		return nil
+	}
+	if newURL == "" {
+		return ErrFeaturedDocxURLInvalid
+	}
+	if newURL == oldURL {
+		return nil // 存量文件放行（编辑未改不动）
+	}
+	if !filestore.IsSiteAttachmentURL(newURL, filestore.FeaturedDocxDirPrefix) {
+		return ErrFeaturedDocxURLInvalid
+	}
+	return nil
+}
+
+// featuredContentBody 按类型清理正文列：docx 文章的正文不在 content 里，
+// 落库时置空而不是留着上一次的 Markdown —— 否则「切成 docx 再切回 markdown」
+// 会看到一份既不属于 markdown 也没人渲染的残留正文。
+func featuredContentBody(contentType, content string) string {
+	if contentType == FeaturedContentTypeDocx {
+		return ""
+	}
+	return content
+}
+
+// featuredDocxURL 同上的镜像：markdown 文章不挂 docx 文件。
+func featuredDocxURL(contentType, docxURL string) string {
+	if contentType == FeaturedContentTypeDocx {
+		return docxURL
+	}
+	return ""
+}
+
 // CategoryLabel 返回分类的中文标签。
 func (s *Service) CategoryLabel(category string) string {
 	return featuredCategoryLabel(category)
@@ -204,6 +273,13 @@ func (s *Service) Create(in FeaturedContentInput) (*FeaturedContentAdminDetailDT
 	if in.Category == "" || !s.IsValidCategory(in.Category) {
 		return nil, ErrFeaturedCategoryInvalid
 	}
+	contentType, err := normalizeContentType(in.ContentType)
+	if err != nil {
+		return nil, err
+	}
+	if err := featuredDocxGate("", "", contentType, in.DocxURL); err != nil {
+		return nil, err
+	}
 	if err := featuredImageGate("", "", in.CoverImage, in.Content); err != nil {
 		return nil, err
 	}
@@ -235,7 +311,9 @@ func (s *Service) Create(in FeaturedContentInput) (*FeaturedContentAdminDetailDT
 		Title:       in.Title,
 		Summary:     in.Summary,
 		CoverImage:  in.CoverImage,
-		Content:     in.Content,
+		Content:     featuredContentBody(contentType, in.Content),
+		ContentType: contentType,
+		DocxURL:     featuredDocxURL(contentType, in.DocxURL),
 		Category:    in.Category,
 		Source:      in.Source,
 		Status:      plan.Status,
@@ -274,6 +352,24 @@ func (s *Service) Update(id int, in FeaturedContentUpdateInput) (*FeaturedConten
 	if err := featuredImageGate(item.CoverImage, item.Content, newCover, newContent); err != nil {
 		return nil, err
 	}
+	// 正文形态先落定，再由它决定 content / docx_url 两列各自的写面（featuredDocxGate 只认「新出现」的文件）。
+	newType := item.ContentType
+	if in.ContentType != nil {
+		normalized, err := normalizeContentType(*in.ContentType)
+		if err != nil {
+			return nil, err
+		}
+		newType = normalized
+	}
+	newDocx := item.DocxURL
+	if in.DocxURL != nil {
+		newDocx = *in.DocxURL
+	}
+	if err := featuredDocxGate(item.ContentType, item.DocxURL, newType, newDocx); err != nil {
+		return nil, err
+	}
+	item.ContentType = newType
+	item.DocxURL = featuredDocxURL(newType, newDocx)
 	if in.Title != nil && *in.Title != "" {
 		item.Title = *in.Title
 	}
@@ -295,6 +391,8 @@ func (s *Service) Update(id int, in FeaturedContentUpdateInput) (*FeaturedConten
 	if in.Content != nil {
 		item.Content = *in.Content
 	}
+	// 正文列与类型列同一次落定：docx 文章不保留 Markdown 正文（见 featuredContentBody）。
+	item.Content = featuredContentBody(newType, item.Content)
 	if in.Source != nil {
 		item.Source = *in.Source
 	}
@@ -358,15 +456,16 @@ func (s *Service) Delete(id int) (*FeaturedDeleteResult, error) {
 	if err := s.db.Delete(&item).Error; err != nil {
 		return nil, err
 	}
-	// 清理封面与正文图片（仅清理本站 featured 子目录文件，外部链接不动）
-	s.deleteFeaturedImages(item.CoverImage, item.Content)
+	// 清理封面、正文图片与 docx 文件（仅清理本站 featured 前缀下的文件，外部链接不动）
+	s.deleteFeaturedImages(item.CoverImage, item.Content, item.DocxURL)
 	return &FeaturedDeleteResult{ContentID: id}, nil
 }
 
-// deleteFeaturedImages 清理精选内容关联的图片存储文件。
-// cover 为封面 URL；content 正文中 ![...](url) 语法引用的图片 URL 会被提取。
-// 仅删除 featured/ 子目录（local /static/uploads/featured/、R2 <domain>/featured/）下的文件。
-func (s *Service) deleteFeaturedImages(cover, content string) {
+// deleteFeaturedImages 清理精选内容关联的存储文件。
+// cover 为封面 URL；content 正文中 ![...](url) 语法引用的图片 URL 会被提取；docxURL 为 docx 正文文件。
+// 仅删除 featured/ 前缀下的文件（local /static/uploads/featured/、R2 <domain>/featured/）；
+// docx 文件住在 featured/docx/，被同一前缀覆盖。
+func (s *Service) deleteFeaturedImages(cover, content, docxURL string) {
 	if s.fileSvc == nil {
 		return
 	}
@@ -378,6 +477,9 @@ func (s *Service) deleteFeaturedImages(cover, content string) {
 		if filestore.IsSiteAttachmentURL(u, filestore.FeaturedImageDirPrefix) {
 			urls = append(urls, u)
 		}
+	}
+	if docxURL != "" && filestore.IsSiteAttachmentURL(docxURL, filestore.FeaturedDocxDirPrefix) {
+		urls = append(urls, docxURL)
 	}
 	s.fileSvc.DeleteFiles(urls)
 }
@@ -450,6 +552,28 @@ func (s *Service) SaveImage(content []byte, filename string) (string, error) {
 		return "", errors.New("文件服务未初始化")
 	}
 	return s.fileSvc.Save(content, filename, filestore.FeaturedImageDirPrefix)
+}
+
+// FeaturedDocxMaxSize docx 导入的体积上限（50MB）。
+//
+// 为什么不复用投稿域的 20MB：投稿是学员交作业、文件进了还要审核，20MB 足够；
+// 精选 docx 是**对外发布物**，带图的 Word 动辄二三十兆，卡在 20MB 只会让作者反复压图。
+// 数值取 filestore 的 default 档（50MB），与「未特别分档的文档」口径一致。
+const FeaturedDocxMaxSize = 50 * 1024 * 1024
+
+// SaveDocx 保存导入的 .docx 到 featured/docx/ 子目录，返回访问 URL。
+// 校验三件：扩展名必须是 docx、大小 ≤ FeaturedDocxMaxSize、字节可读。
+func (s *Service) SaveDocx(content []byte, filename string) (string, error) {
+	if s.fileSvc == nil {
+		return "", errors.New("文件服务未初始化")
+	}
+	if filestore.FileExtension(filename) != "docx" {
+		return "", ErrFeaturedDocxURLInvalid
+	}
+	if int64(len(content)) > FeaturedDocxMaxSize {
+		return "", ErrFeaturedDocxTooLarge
+	}
+	return s.fileSvc.Save(content, filename, filestore.FeaturedDocxDirPrefix)
 }
 
 // featuredImageGate 精选写面归属门禁（第十二波票 4，与论坛走同一条判据）：

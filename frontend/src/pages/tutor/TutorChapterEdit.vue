@@ -95,6 +95,7 @@
                 v-model="editContent"
                 :height="560"
                 :upload-url="chapterImageUploadUrl"
+                content-styles
                 placeholder="请输入章节正文内容（支持 Markdown 语法，可粘贴或上传图片）..."
               />
             </div>

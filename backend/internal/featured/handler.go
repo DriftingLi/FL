@@ -50,6 +50,7 @@ func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, svc *Service
 	g.DELETE("/featured-content/:id", h.Delete)
 	g.POST("/featured-content/:id/publish", h.Publish)
 	g.POST("/featured-content/upload-image", h.UploadImage)
+	g.POST("/featured-content/upload-docx", h.UploadDocx)
 }
 
 // GetPublicList 精选内容列表
@@ -209,9 +210,9 @@ func (h *handler) AdminDetail(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param body body object false "内容输入 {title,category,summary,cover_image,content,source,status,sort_order,published_at}"
+// @Param body body object false "内容输入 {title,category,summary,cover_image,content,content_type,docx_url,source,status,sort_order,published_at}"
 // @Success 201 {object} response.R{data=featured.FeaturedContentAdminDetailDTO} "内容创建成功"
-// @Failure 400 {object} response.R "请求数据无效 / 标题不能为空 / 分类无效 / 图片地址无效 / 发布时间无效 / 草稿不能指定发布时间"
+// @Failure 400 {object} response.R "请求数据无效 / 标题不能为空 / 分类无效 / 图片地址无效 / 正文类型无效 / 文档地址无效 / 发布时间无效 / 草稿不能指定发布时间"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 500 {object} response.R "服务器内部错误（写库失败等真故障，不再冒充参数错误）"
 // @Router /admin/featured-content [post]
@@ -230,6 +231,8 @@ func (h *handler) Create(c *gin.Context) {
 		WithSentinel(ErrFeaturedTitleRequired, http.StatusBadRequest).
 		WithSentinel(ErrFeaturedCategoryInvalid, http.StatusBadRequest).
 		WithSentinel(ErrFeaturedImageInvalid, http.StatusBadRequest).
+		WithSentinel(ErrFeaturedContentTypeInvalid, http.StatusBadRequest).
+		WithSentinel(ErrFeaturedDocxURLInvalid, http.StatusBadRequest).
 		WithSentinel(ErrFeaturedPublishTimeInvalid, http.StatusBadRequest).
 		WithSentinel(ErrFeaturedDraftWithPublishTime, http.StatusBadRequest).Handle(c)
 }
@@ -241,9 +244,9 @@ func (h *handler) Create(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "内容 ID"
-// @Param body body object false "内容输入 {title,category,summary,cover_image,content,source,status,sort_order,published_at}"
+// @Param body body object false "内容输入 {title,category,summary,cover_image,content,content_type,docx_url,source,status,sort_order,published_at}"
 // @Success 200 {object} response.R{data=featured.FeaturedContentAdminDetailDTO} "内容更新成功"
-// @Failure 400 {object} response.R "请求数据无效 / 分类无效 / 图片地址无效 / 发布时间无效 / 草稿不能指定发布时间"
+// @Failure 400 {object} response.R "请求数据无效 / 分类无效 / 图片地址无效 / 正文类型无效 / 文档地址无效 / 发布时间无效 / 草稿不能指定发布时间"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "内容不存在"
 // @Failure 500 {object} response.R "服务器内部错误"
@@ -260,6 +263,8 @@ func (h *handler) Update(c *gin.Context) {
 		WithSentinel(ErrFeaturedContentNotFound, http.StatusNotFound).
 		WithSentinel(ErrFeaturedCategoryInvalid, http.StatusBadRequest).
 		WithSentinel(ErrFeaturedImageInvalid, http.StatusBadRequest).
+		WithSentinel(ErrFeaturedContentTypeInvalid, http.StatusBadRequest).
+		WithSentinel(ErrFeaturedDocxURLInvalid, http.StatusBadRequest).
 		WithSentinel(ErrFeaturedPublishTimeInvalid, http.StatusBadRequest).
 		WithSentinel(ErrFeaturedDraftWithPublishTime, http.StatusBadRequest).Handle(c)
 }
@@ -325,6 +330,47 @@ func (h *handler) Publish(c *gin.Context) {
 func (h *handler) UploadImage(c *gin.Context) {
 	// 封面/内嵌图存 featured 目录（Service.SaveImage 单点）
 	h.uploader(c, h.fileSvc, h.svc.SaveImage)
+}
+
+// @Summary 上传精选内容 docx 文档
+// @Description 导入原始 .docx（不转 Markdown）：返回文件 URL，随文章以 content_type=docx 提交；单文件 ≤50MB
+// @Tags 管理端-精选内容
+// @Accept multipart/form-data
+// @Produce json
+// @Security BearerAuth
+// @Param file formData file true ".docx 文件"
+// @Success 200 {object} response.R{data=featured.FeaturedDocxUploadResult} "success"
+// @Failure 400 {object} response.R "未找到上传文件 / 文档地址无效 / 文档超过 50MB"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/featured-content/upload-docx [post]
+// UploadDocx 上传 docx 文档 POST /api/admin/featured-content/upload-docx
+//
+// 不复用 uploadVditorImage：那条路的校验是 ValidateImage（只放图片类别），
+// 且响应是 Vditor 约定的非统一信封；本端点服务于本仓自己的类型切换表单。
+func (h *handler) UploadDocx(c *gin.Context) {
+	httpx.Endpoint[struct{}, FeaturedDocxUploadResult]{
+		Invoke: func(ctx context.Context, _ *struct{}) (*FeaturedDocxUploadResult, error) {
+			file, err := c.FormFile("file")
+			if err != nil {
+				return nil, httpx.BadRequest("未找到上传文件")
+			}
+			content, err := filestore.ReadMultipartFile(file)
+			if err != nil {
+				return nil, httpx.BadRequest("读取文件失败")
+			}
+			url, err := h.svc.SaveDocx(content, file.Filename)
+			if err != nil {
+				return nil, err
+			}
+			return &FeaturedDocxUploadResult{
+				DocxURL:  url,
+				FileName: file.Filename,
+				FileSize: file.Size,
+			}, nil
+		},
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).
+		WithSentinel(ErrFeaturedDocxURLInvalid, http.StatusBadRequest).
+		WithSentinel(ErrFeaturedDocxTooLarge, http.StatusBadRequest).Handle(c)
 }
 
 // featuredListReq 公开内容精选列表查询参数。

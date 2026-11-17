@@ -467,15 +467,16 @@ func TestFeaturedContract_AdminEndpoints(t *testing.T) {
 		map[string]any{"title": "精选一", "category": "industry", "summary": "摘要", "content": "正文"})
 	created := adminObject(t, rec, http.StatusCreated)
 	// FeaturedContentAdminDetailDTO 全字段必填（published_at / scheduled_at 可空但键在）
-	assertKeysExact(t, created, "category", "category_label", "content", "content_id", "cover_image",
-		"created_at", "published_at", "scheduled_at", "sort_order", "source", "status", "summary",
-		"title", "updated_at", "view_count")
+	assertKeysExact(t, created, "category", "category_label", "content", "content_id", "content_type",
+		"cover_image", "created_at", "docx_url", "published_at", "scheduled_at", "sort_order",
+		"source", "status", "summary", "title", "updated_at", "view_count")
 	contentID := jsonInt(t, created["content_id"])
 
 	rec = doWithToken(t, r, token, http.MethodGet, fmt.Sprintf("/api/admin/featured-content/%d", contentID), nil)
 	assertKeysExact(t, adminObject(t, rec, http.StatusOK), "category", "category_label", "content",
-		"content_id", "cover_image", "created_at", "published_at", "scheduled_at", "sort_order",
-		"source", "status", "summary", "title", "updated_at", "view_count")
+		"content_id", "content_type", "cover_image", "created_at", "docx_url", "published_at",
+		"scheduled_at", "sort_order", "source", "status", "summary", "title", "updated_at",
+		"view_count")
 
 	rec = doWithToken(t, r, token, http.MethodPut, fmt.Sprintf("/api/admin/featured-content/%d", contentID),
 		map[string]any{"title": "精选一改"})
