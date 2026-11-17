@@ -186,8 +186,9 @@ const MODULES = {
      *
      * #1942：`pages/points/points-shop.uvue` 消费 `composables/useAiPro.uts` 的 `AI_PRO_SKU`
      * （商城兑换成功后的落点判定与 AI 专业版能力门同一个 SKU，不许各写一份字面量）⇒ 登记 points。
+     * #2617 T1：`pages/mall/composables/useMall.uts` 同引 `AI_PRO_SKU`（积分商品兑换成功的落点判定）⇒ 追加 mall。
      */
-    crossModuleConsumers: ['points'],
+    crossModuleConsumers: ['points', 'mall'],
     /** 超预算：ai-assistant.uvue / api/aiAssistant.uts 633（ai-settings 583 已进预算，#1732 摘走设置读写与归一化；ai-feature 606 已随 #2593 退役） */
     budget: 'pending',
     budgetOverrides: {},
@@ -421,11 +422,14 @@ const MODULES = {
     extraDirs: [],
     files: [
       'pages/mall/components/mall-category-sidebar.uvue',
+      'pages/mall/components/mall-course-card.uvue',
       'pages/mall/components/mall-float-actions.uvue',
+      'pages/mall/components/mall-hot-section.uvue',
       'pages/mall/components/mall-sort-bar.uvue',
+      'pages/mall/composables/useMall.uts',
       'pages/mall/mall.uvue',
     ],
-    extractDirs: ['pages/mall/components'],
+    extractDirs: ['pages/mall/components', 'pages/mall/composables'],
     /** 消费 `courses` 的 `api/course.uts` / `dashboard` 的 `api/credential.uts`（登记在各自所有者） */
     crossModuleConsumers: [],
     budget: BUDGET,
@@ -450,6 +454,9 @@ const MODULES = {
       'api/points.uts',
       'pages/points/composables/usePointsExchangeRecords.uts',
       'pages/points/composables/usePointsGoodsDetail.uts',
+      'pages/points/components/points-balance-card.uvue',
+      'pages/points/components/points-filter-bar.uvue',
+      'pages/points/components/points-shop-card.uvue',
       'pages/points/points-detail.uvue',
       'pages/points/points-exchange-records.uvue',
       'pages/points/points-goods-detail.uvue',
@@ -457,13 +464,13 @@ const MODULES = {
       'pages/points/points-shop.uvue',
       'pages/points/task-center.uvue',
     ],
-    extractDirs: [],
+    extractDirs: ['pages/points/components'],
     // #1421：course-detail.uvue 消费 api/points.uts（redeemCoursePointsApi + getPointsBalanceApi，
     // 兑换面单点归详情但动词单点归 points 域 —— 消费者登记在被消费模块，ADR-0023 ③）
-    crossModuleConsumers: ['profile', 'courses'],
-    /** 超预算：points-shop.uvue 722（#2518 第 2 刀：左栏三态 + 筛选两态入页，2026-11-15 实测；
-     *  #2518 第 5 刀新增 usePointsGoodsDetail / points-goods-detail 均 ≤600；模块其余文件均 ≤600） */
-    budget: 'pending',
+    // #2617 T1：mall 的 useMall.uts 也消费 api/points.uts（商城页与积分商城共享状态层）⇒ 追加 mall。
+    crossModuleConsumers: ['profile', 'courses', 'mall'],
+    /** #2617 T1：points-shop 722 → 300（状态下沉 useMall + 余额卡/筛选栏/商品卡拆件），模块全部文件已 ≤600 ⇒ pending 摘除 */
+    budget: BUDGET,
     budgetOverrides: {},
     maxDepth: MAX_DEPTH,
   },

@@ -257,11 +257,11 @@ describe('#1107 消费面接线：页面/组合式函数把证件交给 api', ()
     expect(page).toContain('if (browseCredentialId.value != prevCredentialId)');
   });
 
-  it('商城页：进入前解析当前证件并随 /courses 下发', () => {
-    const page = read('pages/mall/mall.uvue');
-    expect(page).toContain('const browseCredentialId = ref<number>(0)');
-    expect(page).toContain('loadBrowseCredential().then(');
-    expect(page).toContain('getCourseListApi(page.value, pageSize, 0, 0, browseCredentialId.value)');
+  it('商城页（#2617 T1 起状态与证件装载在 useMall）：进入前解析当前证件并随 /courses 下发', () => {
+    const state = read('pages/mall/composables/useMall.uts');
+    expect(state).toContain('const browseCredentialId = ref<number>(0)');
+    expect(state).toContain('loadBrowseCredential().then(');
+    expect(state).toContain('getCourseListApi(page.value, pageSize, 0, 0, browseCredentialId.value)');
   });
 
   it('练习总览：标签题数按当前证件取（与抽题池同口径）', () => {
