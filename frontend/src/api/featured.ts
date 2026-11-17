@@ -10,7 +10,8 @@ import type {
   FeaturedContentDetailDTO,
   FeaturedContentDTO,
   FeaturedContentPageResult,
-  FeaturedDeleteResult
+  FeaturedDeleteResult,
+  FeaturedDocxUploadResult
 } from './generated/featured'
 
 // 响应类型**不再手写**：唯一事实源是后端注解 → backend/docs/swagger.json →
@@ -21,7 +22,7 @@ import type {
 // 全可选 interface（凭空多出 content 字段、可选性全面放宽），与注解产物不一一对应，
 // 归类②「手写类型过时」→ 删旧名，列表用 FeaturedContentDTO、详情用 FeaturedContentAdminDetailDTO。
 // #1748 起管理端列表单独一份行类型（多一列 scheduled_at）：公开 DTO 一行未动。
-export type { FeaturedContentDTO, FeaturedContentAdminListDTO, FeaturedContentAdminDetailDTO, FeaturedContentAdminPageResult, FeaturedContentPageResult, FeaturedDeleteResult }
+export type { FeaturedContentDTO, FeaturedContentAdminListDTO, FeaturedContentAdminDetailDTO, FeaturedContentAdminPageResult, FeaturedContentPageResult, FeaturedDeleteResult, FeaturedDocxUploadResult }
 
 /** 内容精选分类标签映射 */
 export const featuredCategoryLabels: Record<string, string> = {
@@ -78,13 +79,16 @@ export const adminFeaturedApi = {
     return unwrappedRequest.get<FeaturedContentAdminDetailDTO>(`/admin/featured-content/${id}`)
   },
 
-  /** 创建内容精选（published_at：#1748 可选发布时间，RFC3339；缺省 = 立即发布，空串 = 用现在） */
+  /** 创建内容精选（published_at：#1748 可选发布时间，RFC3339；缺省 = 立即发布，空串 = 用现在）
+   *  content_type / docx_url（2026-11）：省略 = markdown；docx 文章必须带 docx_url */
   create(data: {
     title: string
     category: string
     summary?: string
     cover_image?: string
     content?: string
+    content_type?: string
+    docx_url?: string
     source?: string
     status?: number
     sort_order?: number
@@ -100,6 +104,8 @@ export const adminFeaturedApi = {
     summary?: string
     cover_image?: string
     content?: string
+    content_type?: string
+    docx_url?: string
     source?: string
     status?: number
     sort_order?: number
@@ -145,5 +151,19 @@ export const adminFeaturedApi = {
       code: number
       data: { errFiles: string[]; succMap: Record<string, string> }
     }
+  },
+
+  /**
+   * 上传 docx 文档（2026-11 导入原始 Word）。
+   *
+   * 与 uploadImage 的差别：本端点回**统一信封**（{code,message,data}），走正常拦截器即可；
+   * 只有 Vditor 那个端点因为第三方协议才要绕开。单文件上限 50MB（后端也校验一次）。
+   */
+  uploadDocx(file: File) {
+    const fd = new FormData()
+    fd.append('file', file)
+    return unwrappedRequest.post<FeaturedDocxUploadResult>('/admin/featured-content/upload-docx', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
   }
 }

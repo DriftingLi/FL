@@ -66,10 +66,19 @@
   font-size: var(--text-sm);
 }
 
+/*
+ * 表头默认左对齐，但**让作者写的对齐生效**（2026-11）：GFM 表格的 `:--`/`:-:`/`--:`
+ * 会被 marked 渲染成 th 的 align 属性，而 th 的浏览器默认是居中对齐 ——
+ * 裸写 text-align:left 会盖掉属性，作者右对齐的数字列在读者端永远显示成左对齐。
+ * 故用 :not([align]) 只在作者没指定时才补默认值（与门户 assets/css/markdown.css 同口径）。
+ */
+.markdown-body thead th:not([align]) {
+  text-align: left;
+}
+
 .markdown-body thead th {
   background-color: #f5f7fa;
   font-weight: 600;
-  text-align: left;
   padding: 10px 12px;
   border: 1px solid #ebeef5;
   color: #303133;
@@ -223,3 +232,15 @@
   color: var(--color-danger, #f56c6c);
 }
 
+/*
+ * 正文内嵌 HTML 排版（2026-11，编辑器工具栏产出）：居中/左对齐外壳与图片居中。
+ * 作者写法是 `<span style="display:block;text-align:center">`，行内样式本就优先，
+ * 这里只补一件它做不到的事 —— 父级 text-align 对 `display:block` 的 img 无效，
+ * 而工具栏「图片居中」产的正是 `<img style="display:block;margin:0 auto">`。
+ */
+.markdown-body img[style*='margin:0 auto'],
+.markdown-body img[style*='margin: 0 auto'] {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}

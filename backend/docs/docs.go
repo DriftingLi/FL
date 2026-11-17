@@ -3405,7 +3405,7 @@ const docTemplate = `{
                 "summary": "创建精选内容",
                 "parameters": [
                     {
-                        "description": "内容输入 {title,category,summary,cover_image,content,source,status,sort_order,published_at}",
+                        "description": "内容输入 {title,category,summary,cover_image,content,content_type,docx_url,source,status,sort_order,published_at}",
                         "name": "body",
                         "in": "body",
                         "schema": {
@@ -3433,7 +3433,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "请求数据无效 / 标题不能为空 / 分类无效 / 图片地址无效 / 发布时间无效 / 草稿不能指定发布时间",
+                        "description": "请求数据无效 / 标题不能为空 / 分类无效 / 图片地址无效 / 正文类型无效 / 文档地址无效 / 发布时间无效 / 草稿不能指定发布时间",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -3446,6 +3446,67 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "服务器内部错误（写库失败等真故障，不再冒充参数错误）",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/featured-content/upload-docx": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "导入原始 .docx（不转 Markdown）：返回文件 URL，随文章以 content_type=docx 提交；单文件 ≤50MB",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-精选内容"
+                ],
+                "summary": "上传精选内容 docx 文档",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": ".docx 文件",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/featured.FeaturedDocxUploadResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "未找到上传文件 / 文档地址无效 / 文档超过 50MB",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -3580,7 +3641,7 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "内容输入 {title,category,summary,cover_image,content,source,status,sort_order,published_at}",
+                        "description": "内容输入 {title,category,summary,cover_image,content,content_type,docx_url,source,status,sort_order,published_at}",
                         "name": "body",
                         "in": "body",
                         "schema": {
@@ -3608,7 +3669,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "请求数据无效 / 分类无效 / 图片地址无效 / 发布时间无效 / 草稿不能指定发布时间",
+                        "description": "请求数据无效 / 分类无效 / 图片地址无效 / 正文类型无效 / 文档地址无效 / 发布时间无效 / 草稿不能指定发布时间",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -29359,10 +29420,16 @@ const docTemplate = `{
                 "content_id": {
                     "type": "integer"
                 },
+                "content_type": {
+                    "type": "string"
+                },
                 "cover_image": {
                     "type": "string"
                 },
                 "created_at": {
+                    "type": "string"
+                },
+                "docx_url": {
                     "type": "string"
                 },
                 "published_at": {
@@ -29407,6 +29474,9 @@ const docTemplate = `{
                 },
                 "content_id": {
                     "type": "integer"
+                },
+                "content_type": {
+                    "type": "string"
                 },
                 "cover_image": {
                     "type": "string"
@@ -29525,10 +29595,16 @@ const docTemplate = `{
                 "content_id": {
                     "type": "integer"
                 },
+                "content_type": {
+                    "type": "string"
+                },
                 "cover_image": {
                     "type": "string"
                 },
                 "created_at": {
+                    "type": "string"
+                },
+                "docx_url": {
                     "type": "string"
                 },
                 "next": {
@@ -29594,6 +29670,20 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "content_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "featured.FeaturedDocxUploadResult": {
+            "type": "object",
+            "properties": {
+                "docx_url": {
+                    "type": "string"
+                },
+                "file_name": {
+                    "type": "string"
+                },
+                "file_size": {
                     "type": "integer"
                 }
             }

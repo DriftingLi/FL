@@ -1,5 +1,5 @@
 // 生成文件，勿手改（ADR-0019 契约 codegen 专项 / ADR-0048 按域解冻；spec #940 片五③、#952 片一）。
-// 域：内容精选管理端（/api/admin/featured-content*：列表 / 详情 / 增删改 / 发布 / 图片上传）
+// 域：内容精选管理端（/api/admin/featured-content*：列表 / 详情 / 增删改 / 发布 / 图片上传 / docx 导入）
 // 唯一事实源：后端注解 → backend/docs/swagger.json（CI 有新鲜度锁：backend-lint 的 swagger 步骤）。
 // 再生成：cd backend && go run ./cmd/gen-apitypes
 // 同步契约：backend/internal/apitypes/codegen_test.go 把本文件与注解渲染结果全等比对。
@@ -14,8 +14,9 @@
 //   DELETE /admin/featured-content/{id}
 //   POST /admin/featured-content/{id}/publish
 //   POST /admin/featured-content/upload-image
+//   POST /admin/featured-content/upload-docx
 //
-// 覆盖的 Go 类型：FeaturedContentAdminDetailDTO / FeaturedContentAdminListDTO / FeaturedContentAdminPageResult / FeaturedContentDTO / FeaturedContentDetailDTO / FeaturedContentPageResult / FeaturedDeleteResult / FeaturedNavDTO
+// 覆盖的 Go 类型：FeaturedContentAdminDetailDTO / FeaturedContentAdminListDTO / FeaturedContentAdminPageResult / FeaturedContentDTO / FeaturedContentDetailDTO / FeaturedContentPageResult / FeaturedDeleteResult / FeaturedDocxUploadResult / FeaturedNavDTO
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -32,8 +33,10 @@ export interface FeaturedContentAdminDetailDTO {
   category_label: string
   content: string
   content_id: number
+  content_type: string
   cover_image: string
   created_at: string
+  docx_url: string
   published_at: string | null
   scheduled_at: string | null
   sort_order: number
@@ -49,6 +52,7 @@ export interface FeaturedContentAdminListDTO {
   category: string
   category_label: string
   content_id: number
+  content_type: string
   cover_image: string
   created_at: string
   published_at: string | null
@@ -90,8 +94,10 @@ export interface FeaturedContentDetailDTO {
   category_label: string
   content: string
   content_id: number
+  content_type: string
   cover_image: string
   created_at: string
+  docx_url: string
   next: FeaturedNavDTO
   prev: FeaturedNavDTO
   published_at: string | null
@@ -114,6 +120,12 @@ export interface FeaturedContentPageResult {
 
 export interface FeaturedDeleteResult {
   content_id: number
+}
+
+export interface FeaturedDocxUploadResult {
+  docx_url: string
+  file_name: string
+  file_size: number
 }
 
 export interface FeaturedNavDTO {

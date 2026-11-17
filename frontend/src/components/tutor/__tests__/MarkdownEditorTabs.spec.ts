@@ -20,6 +20,7 @@ vi.mock('vditor', () => ({ default: vditorCtor }))
 interface VditorOptions {
   mode?: string
   value?: string
+  toolbar?: unknown[]
   after?: () => void
 }
 
@@ -42,9 +43,9 @@ function installVditorMock(autoReady = true): VditorInstance[] {
   return instances
 }
 
-function mountEditor() {
+function mountEditor(extraProps: Record<string, unknown> = {}) {
   return mount(MarkdownEditor, {
-    props: { modelValue: '正文', height: 400 },
+    props: { modelValue: '正文', height: 400, ...extraProps },
     global: { plugins: [epLite()] }
   })
 }
@@ -86,5 +87,81 @@ describe('MarkdownEditor 模式 tab（预览编辑 / 源码）', () => {
     expect(instances[0].destroy).toHaveBeenCalled()
     // 切档后把当前值带进新实例，内容不丢
     expect(instances[1].options.value).toBe('正文')
+  })
+})
+
+describe('MarkdownEditor 内容排版按钮（contentStyles）', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  /** 从 Vditor 选项里挑出自定义项（字符串项是预置按钮名） */
+  function customItems(options: VditorOptions) {
+    return (options.toolbar ?? []).filter((item): item is { name: string; tip: string; click: unknown } =>
+      typeof item === 'object' && item !== null && 'name' in item
+    )
+  }
+
+  it('默认不给内容排版按钮：产出内嵌 HTML，移动端与论坛面不渲染', async () => {
+    const instances = installVditorMock()
+    mountEditor()
+    await flushPromises()
+    expect(customItems(instances[0].options)).toHaveLength(0)
+  })
+
+  it('contentStyles 打开后追加 5 个自定义项：两个对齐 + 图片居中 + 颜色 + 字号', async () => {
+    const instances = installVditorMock()
+    mountEditor({ contentStyles: true })
+    await flushPromises()
+    expect(customItems(instances[0].options).map((i) => i.name)).toEqual([
+      'align-center',
+      'align-left',
+      'image-center',
+      'color',
+      'font-size'
+    ])
+  })
+
+  it('预置按钮顺序不受影响：内容排版项只插在表格/代码之后、撤销之前', async () => {
+    const instances = installVditorMock()
+    mountEditor({ contentStyles: true })
+    await flushPromises()
+    const toolbar = (instances[0].options.toolbar ?? []) as Array<string | { name: string }>
+    const names = toolbar.map((i) => (typeof i === 'string' ? i : i.name))
+    expect(names.indexOf('table')).toBeLessThan(names.indexOf('align-center'))
+    expect(names.indexOf('font-size')).toBeLessThan(names.indexOf('undo'))
+    expect(names[names.length - 1]).toBe('preview')
+  })
+
+  it('颜色与字号是子菜单，各带五档 / 四档', async () => {
+    const instances = installVditorMock()
+    mountEditor({ contentStyles: true })
+    await flushPromises()
+    const items = customItems(instances[0].options) as Array<{ name: string; toolbar?: unknown[] }>
+    const color = items.find((i) => i.name === 'color')
+    const font = items.find((i) => i.name === 'font-size')
+    expect(color?.toolbar).toHaveLength(5)
+    expect(font?.toolbar).toHaveLength(4)
+  })
+
+  it('点击「文本居中」把选区包成 display:block 外壳（命令走真实实例，不碰内部 IVditor）', async () => {
+    const instances = installVditorMock()
+    const w = mountEditor({ contentStyles: true })
+    await flushPromises()
+
+    // 给替身补上命令用到的两个方法（真实实例上有，替身此前只做了 getValue/setValue）
+    const instance = vditorCtor.mock.instances[0] as unknown as Record<string, unknown>
+    const insertMD = vi.fn()
+    instance.getSelection = () => '选中的文字'
+    instance.insertMD = insertMD
+    instance.focus = vi.fn()
+
+    const items = customItems(instances[0].options) as Array<{ name: string; click: (e: Event, v: unknown) => void }>
+    const center = items.find((i) => i.name === 'align-center')!
+    // 第二个参数刻意传内部替身：命令必须忽略它、用闭包里的真实实例
+    center.click(new Event('click'), { notAVditor: true })
+    void w
+
+    expect(insertMD).toHaveBeenCalledWith(
+      '<span style="display:block;text-align:center">选中的文字</span>'
+    )
   })
 })

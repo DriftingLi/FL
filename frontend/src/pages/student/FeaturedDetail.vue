@@ -28,8 +28,21 @@
       </div>
       <img v-if="detail.cover_image" :src="detail.cover_image" alt="" class="mt-4 w-full rounded-card" />
 
-      <!-- 内容精选属可信面，正文子集取三端交集（ADR-0046）：subset=featured -->
-      <PublishMarkdown :content="detail.content" subset="featured" class="mt-4 rounded-card bg-panel p-5 shadow-card" />
+      <!--
+        正文按形态分叉（2026-11）：markdown 走发布端渲染（可信面，ADR-0046 subset=featured）；
+        docx 走 docx-preview 直接渲染原始 Word —— 它不经 Markdown，故不参与子集判定。
+      -->
+      <DocxDocument
+        v-if="isDocx"
+        :src="detail.docx_url"
+        class="mt-4 rounded-card bg-panel p-5 shadow-card"
+      />
+      <PublishMarkdown
+        v-else
+        :content="detail.content"
+        subset="featured"
+        class="mt-4 rounded-card bg-panel p-5 shadow-card"
+      />
 
       <section v-if="detail.related.length > 0" class="mt-4 rounded-card bg-panel p-5 shadow-card">
         <h2 class="mb-2 text-base font-semibold text-ink">相关阅读</h2>
@@ -65,6 +78,7 @@ import { featuredApi } from '@/api/featured'
 import type { FeaturedContentDetailDTO } from '@/api/generated/featured'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import PublishMarkdown from '@/components/render/PublishMarkdown.vue'
+import DocxDocument from '@/components/render/DocxDocument.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
@@ -93,6 +107,9 @@ const { loading, loadError, retrying, isEmpty, retry, run } = useAsyncPage(
 )
 
 const publishedText = computed(() => ((detail.value?.published_at ?? detail.value?.created_at) ?? '').slice(0, 10))
+
+/** 正文是否为导入的原始 Word（2026-11）：是则换 docx-preview 渲染，不看 content */
+const isDocx = computed(() => detail.value?.content_type === 'docx' && !!detail.value?.docx_url)
 
 function goBack() {
   router.back()

@@ -783,7 +783,7 @@ var Domains = []Domain{
 
 	{
 		Name:  "featured",
-		Title: "内容精选管理端（/api/admin/featured-content*：列表 / 详情 / 增删改 / 发布 / 图片上传）",
+		Title: "内容精选管理端（/api/admin/featured-content*：列表 / 详情 / 增删改 / 发布 / 图片上传 / docx 导入）",
 		// 公开精选端点（/featured-contents、/featured-content/{id}、/featured-content/{id}/view）
 		// 的主要消费者是独立 Nuxt 门户仓（ADR-0001）；**详情**自 ADR-0049 决策 4 起多了一个
 		// 消费者：训练域 Web 的「内容精选详情页」（搜索结果落点），故详情类型与端点在此登记。
@@ -793,6 +793,7 @@ var Domains = []Domain{
 			"featured.FeaturedContentAdminDetailDTO",
 			"featured.FeaturedContentDetailDTO",
 			"featured.FeaturedDeleteResult",
+			"featured.FeaturedDocxUploadResult", // docx 导入（2026-11）
 		},
 		Endpoints: []Endpoint{
 			{Method: "GET", Path: "/featured-contents"},
@@ -804,6 +805,7 @@ var Domains = []Domain{
 			{Method: "DELETE", Path: "/admin/featured-content/{id}"},
 			{Method: "POST", Path: "/admin/featured-content/{id}/publish"},
 			{Method: "POST", Path: "/admin/featured-content/upload-image", NoData: true},
+			{Method: "POST", Path: "/admin/featured-content/upload-docx"},
 		},
 	},
 

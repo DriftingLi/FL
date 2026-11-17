@@ -15,6 +15,7 @@ const (
 	ForumImageDirPrefix         = "images/forum"        // 论坛图片：上传 + 写面门禁 + 悬空回收
 	AIAssistantImageDirPrefix   = "images/ai-assistant" // AI 助手对话图片
 	FeaturedImageDirPrefix      = "featured"            // 内容精选封面与正文内嵌图
+	FeaturedDocxDirPrefix       = "featured/docx"       // 内容精选导入的原始 Word（2026-11）
 	ContributionFileDirPrefix   = "contributions"       // 投稿附件文件
 	AvatarImageDirPrefix        = "avatars"             // 头像（走审核队列）
 	ResumeFileDirPrefix         = "resumes"             // 简历 PDF
@@ -35,6 +36,7 @@ var AttachmentDirPrefixes = []string{
 	ForumImageDirPrefix,
 	AIAssistantImageDirPrefix,
 	FeaturedImageDirPrefix,
+	FeaturedDocxDirPrefix,
 	ContributionFileDirPrefix,
 	AvatarImageDirPrefix,
 	ResumeFileDirPrefix,

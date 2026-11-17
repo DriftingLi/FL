@@ -91,6 +91,10 @@ export interface FeaturedFormValues {
   summary: string
   cover_image: string
   content: string
+  /** 正文形态（2026-11）：markdown = 编辑器正文；docx = 导入的原始 Word 文件 */
+  content_type: string
+  /** docx 文件的访问 URL（仅 content_type=docx 时有值） */
+  docx_url: string
   sort_order: number
   status: number
   published_at: Date | null
@@ -103,6 +107,8 @@ export interface FeaturedPayload {
   summary: string
   cover_image: string
   content: string
+  content_type: string
+  docx_url: string
   sort_order: number
   status: number
   published_at?: string
@@ -137,6 +143,8 @@ export function buildFeaturedPayload(
     summary: form.summary,
     cover_image: form.cover_image,
     content: options.content ?? form.content,
+    content_type: form.content_type,
+    docx_url: form.docx_url,
     sort_order: form.sort_order,
     status: form.status
   }

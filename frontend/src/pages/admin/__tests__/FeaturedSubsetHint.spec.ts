@@ -60,33 +60,31 @@ afterEach(() => {
   wrapper = null
 })
 
-describe('FeaturedContentEdit 三端交集子集（#902）', () => {
-  it('正文含表格时给出可见提示（点名门户与移动端不渲染）', async () => {
+describe('FeaturedContentEdit 子集提示（#902；表格 2026-11 放开）', () => {
+  it('正文含表格时**不**提示：门户与 Web 都渲染表格', async () => {
     wrapper = mountPage()
     await flushPromises()
-    expect(wrapper.find('.el-alert').exists()).toBe(false)
-
     await wrapper.find('.md-editor-stub').setValue(TABLE)
     await flushPromises()
-
-    const alert = wrapper.find('.el-alert')
-    expect(alert.exists()).toBe(true)
-    expect(alert.text()).toContain('门户与移动端不渲染')
-    expect(alert.text()).toContain('表格')
+    expect(wrapper.find('.el-alert').exists()).toBe(false)
   })
 
-  it('正文含公式时同样给出提示', async () => {
+  it('正文含公式时给出提示，主语只点名移动端', async () => {
     wrapper = mountPage()
     await flushPromises()
     await wrapper.find('.md-editor-stub').setValue('扭矩 $T = 9550P/n$ 时按此取值')
     await flushPromises()
-    expect(wrapper.find('.el-alert').text()).toContain('公式')
+    const alert = wrapper.find('.el-alert')
+    expect(alert.exists()).toBe(true)
+    expect(alert.text()).toContain('移动端不渲染')
+    expect(alert.text()).toContain('公式')
+    expect(alert.text()).not.toContain('门户')
   })
 
-  it('子集内语法不触发提示', async () => {
+  it('子集内语法不触发提示（含表格）', async () => {
     wrapper = mountPage()
     await flushPromises()
-    await wrapper.find('.md-editor-stub').setValue(PLAIN)
+    await wrapper.find('.md-editor-stub').setValue(`${TABLE}\n\n${PLAIN}`)
     await flushPromises()
     expect(wrapper.find('.el-alert').exists()).toBe(false)
   })
@@ -97,7 +95,7 @@ describe('FeaturedContentEdit 三端交集子集（#902）', () => {
     wrapper = mountPage()
     await flushPromises()
 
-    await wrapper.find('.md-editor-stub').setValue(TABLE)
+    await wrapper.find('.md-editor-stub').setValue('扭矩 $T = 9550P/n$')
     await wrapper.find('input').setValue('标题')
     await flushPromises()
 
@@ -110,7 +108,7 @@ describe('FeaturedContentEdit 三端交集子集（#902）', () => {
 })
 
 describe('FeaturedContentEdit 发布端预览（#903）', () => {
-  it('预览按交集渲染：没有表格、公式保持源码，并说明越界语法', async () => {
+  it('预览按交集渲染：表格是真表格、公式保持源码，说明只点名移动端', async () => {
     wrapper = mountPage()
     await flushPromises()
     await wrapper.find('.md-editor-stub').setValue(`${TABLE}\n\n扭矩 $T = 9550P/n$ 时按此取值`)
@@ -123,10 +121,10 @@ describe('FeaturedContentEdit 发布端预览（#903）', () => {
 
     const dialog = wrapper.find('.el-dialog')
     expect(dialog.exists()).toBe(true)
-    expect(dialog.find('table').exists()).toBe(false)
+    expect(dialog.find('table').exists()).toBe(true)
     expect(dialog.find('.katex').exists()).toBe(false)
-    expect(dialog.text()).toContain('| 参数 | 值 |')
+    expect(dialog.text()).toContain('扭矩')
     expect(dialog.text()).toContain('$T = 9550P/n$')
-    expect(dialog.text()).toContain('门户与移动端不渲染')
+    expect(dialog.text()).toContain('移动端不渲染')
   })
 })

@@ -73,11 +73,15 @@ func (AsyncTask) TableName() string { return "async_task" }
 // ===== 20. 内容精选（公司动态 / 行业新闻 等） =====
 
 type FeaturedContent struct {
-	ContentID   int        `gorm:"column:content_id;primaryKey" json:"content_id"`
-	Title       string     `gorm:"column:title" json:"title"`
-	Summary     string     `gorm:"column:summary" json:"summary"`
-	CoverImage  string     `gorm:"column:cover_image" json:"cover_image"`
-	Content     string     `gorm:"column:content" json:"content"`
+	ContentID  int    `gorm:"column:content_id;primaryKey" json:"content_id"`
+	Title      string `gorm:"column:title" json:"title"`
+	Summary    string `gorm:"column:summary" json:"summary"`
+	CoverImage string `gorm:"column:cover_image" json:"cover_image"`
+	Content    string `gorm:"column:content" json:"content"`
+	// ContentType 正文形态（2026-11）：markdown = 编辑器正文；docx = 导入的原始 Word 文件，正文改看 DocxURL。
+	ContentType string `gorm:"column:content_type;default:markdown" json:"content_type"`
+	// DocxURL 原始 .docx 文件的访问 URL（仅 content_type=docx 时非空，存 featured/docx/ 子目录）。
+	DocxURL     string     `gorm:"column:docx_url" json:"docx_url"`
 	Category    string     `gorm:"column:category;default:industry" json:"category"`
 	Source      string     `gorm:"column:source" json:"source"`
 	Status      int16      `gorm:"column:status;default:0" json:"status"`

@@ -1816,9 +1816,13 @@ definitions:
         type: string
       content_id:
         type: integer
+      content_type:
+        type: string
       cover_image:
         type: string
       created_at:
+        type: string
+      docx_url:
         type: string
       published_at:
         type: string
@@ -1849,6 +1853,8 @@ definitions:
         type: string
       content_id:
         type: integer
+      content_type:
+        type: string
       cover_image:
         type: string
       created_at:
@@ -1927,9 +1933,13 @@ definitions:
         type: string
       content_id:
         type: integer
+      content_type:
+        type: string
       cover_image:
         type: string
       created_at:
+        type: string
+      docx_url:
         type: string
       next:
         $ref: '#/definitions/featured.FeaturedNavDTO'
@@ -1973,6 +1983,15 @@ definitions:
   featured.FeaturedDeleteResult:
     properties:
       content_id:
+        type: integer
+    type: object
+  featured.FeaturedDocxUploadResult:
+    properties:
+      docx_url:
+        type: string
+      file_name:
+        type: string
+      file_size:
         type: integer
     type: object
   featured.FeaturedNavDTO:
@@ -6993,7 +7012,7 @@ paths:
       - application/json
       description: 管理员创建内容（status 缺省为草稿）
       parameters:
-      - description: 内容输入 {title,category,summary,cover_image,content,source,status,sort_order,published_at}
+      - description: 内容输入 {title,category,summary,cover_image,content,content_type,docx_url,source,status,sort_order,published_at}
         in: body
         name: body
         schema:
@@ -7011,7 +7030,8 @@ paths:
                   $ref: '#/definitions/featured.FeaturedContentAdminDetailDTO'
               type: object
         "400":
-          description: 请求数据无效 / 标题不能为空 / 分类无效 / 图片地址无效 / 发布时间无效 / 草稿不能指定发布时间
+          description: 请求数据无效 / 标题不能为空 / 分类无效 / 图片地址无效 / 正文类型无效 / 文档地址无效 / 发布时间无效
+            / 草稿不能指定发布时间
           schema:
             $ref: '#/definitions/response.R'
         "401":
@@ -7104,7 +7124,7 @@ paths:
         name: id
         required: true
         type: integer
-      - description: 内容输入 {title,category,summary,cover_image,content,source,status,sort_order,published_at}
+      - description: 内容输入 {title,category,summary,cover_image,content,content_type,docx_url,source,status,sort_order,published_at}
         in: body
         name: body
         schema:
@@ -7122,7 +7142,7 @@ paths:
                   $ref: '#/definitions/featured.FeaturedContentAdminDetailDTO'
               type: object
         "400":
-          description: 请求数据无效 / 分类无效 / 图片地址无效 / 发布时间无效 / 草稿不能指定发布时间
+          description: 请求数据无效 / 分类无效 / 图片地址无效 / 正文类型无效 / 文档地址无效 / 发布时间无效 / 草稿不能指定发布时间
           schema:
             $ref: '#/definitions/response.R'
         "401":
@@ -7185,6 +7205,43 @@ paths:
       security:
       - BearerAuth: []
       summary: 发布精选内容
+      tags:
+      - 管理端-精选内容
+  /admin/featured-content/upload-docx:
+    post:
+      consumes:
+      - multipart/form-data
+      description: 导入原始 .docx（不转 Markdown）：返回文件 URL，随文章以 content_type=docx 提交；单文件
+        ≤50MB
+      parameters:
+      - description: .docx 文件
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/featured.FeaturedDocxUploadResult'
+              type: object
+        "400":
+          description: 未找到上传文件 / 文档地址无效 / 文档超过 50MB
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 上传精选内容 docx 文档
       tags:
       - 管理端-精选内容
   /admin/featured-content/upload-image:

@@ -28,13 +28,17 @@ type FeaturedContentDTO struct {
 }
 
 // FeaturedContentDetailDTO 公开详情（列表项 + 正文 + 相关资讯 + 上/下一篇）。
+// content_type / docx_url（2026-11）：docx 文章的正文不在 content 里，读者端凭这两个键
+// 换成「下载原始 .docx 并用 docx-preview 渲染」。
 type FeaturedContentDetailDTO struct {
 	Category      string               `json:"category"`
 	CategoryLabel string               `json:"category_label"`
 	Content       string               `json:"content"`
 	ContentID     int                  `json:"content_id"`
+	ContentType   string               `json:"content_type"`
 	CoverImage    string               `json:"cover_image"`
 	CreatedAt     string               `json:"created_at"`
+	DocxURL       string               `json:"docx_url"`
 	Next          *FeaturedNavDTO      `json:"next"`
 	Prev          *FeaturedNavDTO      `json:"prev"`
 	PublishedAt   *string              `json:"published_at" extensions:"x-nullable"`
@@ -55,8 +59,10 @@ type FeaturedContentAdminDetailDTO struct {
 	CategoryLabel string  `json:"category_label"`
 	Content       string  `json:"content"`
 	ContentID     int     `json:"content_id"`
+	ContentType   string  `json:"content_type"`
 	CoverImage    string  `json:"cover_image"`
 	CreatedAt     string  `json:"created_at"`
+	DocxURL       string  `json:"docx_url"`
 	PublishedAt   *string `json:"published_at" extensions:"x-nullable"`
 	ScheduledAt   *string `json:"scheduled_at" extensions:"x-nullable"`
 	SortOrder     int     `json:"sort_order"`
@@ -77,6 +83,7 @@ type FeaturedContentAdminListDTO struct {
 	Category      string  `json:"category"`
 	CategoryLabel string  `json:"category_label"`
 	ContentID     int     `json:"content_id"`
+	ContentType   string  `json:"content_type"`
 	CoverImage    string  `json:"cover_image"`
 	CreatedAt     string  `json:"created_at"`
 	PublishedAt   *string `json:"published_at" extensions:"x-nullable"`
@@ -117,12 +124,15 @@ type FeaturedContentPageResult struct {
 
 // FeaturedContentInput 创建内容精选入参。
 // published_at（#1748）：可选发布时间，RFC3339；缺省 = 立即发布，空串 = 用当前时间。
+// content_type / docx_url（2026-11）：省略 = markdown；docx 文章必须带 docx_url。
 type FeaturedContentInput struct {
 	Title       string  `json:"title"`
 	Category    string  `json:"category"`
 	Summary     string  `json:"summary"`
 	CoverImage  string  `json:"cover_image"`
 	Content     string  `json:"content"`
+	ContentType string  `json:"content_type"`
+	DocxURL     string  `json:"docx_url"`
 	Source      string  `json:"source"`
 	Status      *int16  `json:"status"`
 	SortOrder   *int    `json:"sort_order"`
@@ -136,10 +146,22 @@ type FeaturedContentUpdateInput struct {
 	Summary     *string `json:"summary"`
 	CoverImage  *string `json:"cover_image"`
 	Content     *string `json:"content"`
+	ContentType *string `json:"content_type"`
+	DocxURL     *string `json:"docx_url"`
 	Source      *string `json:"source"`
 	Status      *int16  `json:"status"`
 	SortOrder   *int    `json:"sort_order"`
 	PublishedAt *string `json:"published_at"`
+}
+
+// FeaturedDocxUploadResult docx 上传结果（POST /admin/featured-content/upload-docx）。
+//
+// 不复用 Vditor 信封：那个信封是给编辑器内嵌图用的（code/msg/errFiles/succMap），
+// 文档上传的消费者是本仓自己的类型切换表单，不是第三方编辑器。
+type FeaturedDocxUploadResult struct {
+	DocxURL  string `json:"docx_url"`
+	FileName string `json:"file_name"`
+	FileSize int64  `json:"file_size"`
 }
 
 // FeaturedDeleteResult 删除结果。
@@ -180,8 +202,10 @@ func featuredContentDetailDTO(c *model.FeaturedContent) FeaturedContentDetailDTO
 		CategoryLabel: base.CategoryLabel,
 		Content:       c.Content,
 		ContentID:     base.ContentID,
+		ContentType:   c.ContentType,
 		CoverImage:    base.CoverImage,
 		CreatedAt:     base.CreatedAt,
+		DocxURL:       c.DocxURL,
 		PublishedAt:   base.PublishedAt,
 		Related:       []FeaturedContentDTO{},
 		SortOrder:     base.SortOrder,
@@ -201,8 +225,10 @@ func featuredContentAdminDetailDTO(c *model.FeaturedContent) FeaturedContentAdmi
 		CategoryLabel: base.CategoryLabel,
 		Content:       c.Content,
 		ContentID:     base.ContentID,
+		ContentType:   c.ContentType,
 		CoverImage:    base.CoverImage,
 		CreatedAt:     base.CreatedAt,
+		DocxURL:       c.DocxURL,
 		PublishedAt:   base.PublishedAt,
 		ScheduledAt:   timefmt.FormatTimePtr(c.ScheduledAt),
 		SortOrder:     base.SortOrder,
@@ -220,6 +246,7 @@ func featuredContentAdminListDTO(c *model.FeaturedContent) FeaturedContentAdminL
 		Category:      c.Category,
 		CategoryLabel: featuredCategoryLabel(c.Category),
 		ContentID:     c.ContentID,
+		ContentType:   c.ContentType,
 		CoverImage:    c.CoverImage,
 		CreatedAt:     timefmt.FormatISO(c.CreatedAt),
 		PublishedAt:   featuredPublishedAt(c.PublishedAt),
