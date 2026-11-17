@@ -45,8 +45,9 @@
                 </view>
                 <view class="rule-row">
                     <view class="rule-texts">
-                        <text class="rule-name">积分商城</text>
-                        <text class="rule-desc">商城商品所需分值在商城页展示</text>
+                        <!-- #2620：「积分商城」此后只指兑换管线，不再当页面名 ⇒ 规则名用「商城兑换」 -->
+                        <text class="rule-name">商城兑换</text>
+                        <text class="rule-desc">积分商品所需分值在商城「积分兑换」分区展示</text>
                     </view>
                 </view>
                 <view class="rule-row">

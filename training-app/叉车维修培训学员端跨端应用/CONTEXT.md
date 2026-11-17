@@ -53,13 +53,27 @@ _Avoid_: 叫它「开屏页 / 欢迎页 / splash」并据此认为它应当每�
 域定义见根仓库 CONTEXT.md「资料投稿（contribution）」词条族；本节只记移动端映射（#710）。
 
 **资源 tab（forum-resource-panel）**：
-论坛页资源分区的 2x2 入口：课程商城 / 我的已购 / 我的上传 / 上传资源。「上传资源」格子与资源区的创建入口（header「发帖」/搜索栏）一律跳 `forum-create?scope=resource`——统一发布页（#760），资源 tab 承载投稿表单，独立页 upload-resource 已退役。
+论坛页资源分区的 2x2 入口：课程 / 我的已购 / 我的上传 / 上传资源（第一格落点是课程列表，故不叫「商城」；「课程商城」是旧名，见下文「商城（mall）」）。「上传资源」格子与资源区的创建入口（header「发帖」/搜索栏）一律跳 `forum-create?scope=resource`——统一发布页（#760），资源 tab 承载投稿表单，独立页 upload-resource 已退役。
 
 **统一发布页（forum-create）**：
 分类行三 tab（ADR-0040 后）：广场/资源/知识问答——**「备考经验」不再是发布选项**（学员不能自称考经，它是管理端认定）。资源=投稿表单（文件方式三行〔微信聊天文档/本地文件上传/选择压缩文件，白名单 pdf/doc/docx/ppt/pptx/xls/xlsx/zip/mp4、单 ≤20MB、合计 ≤50MB、≤5 个前置校验〕+ 标题 ≤120 + 简介 + 目标证件取当前证件〔无证件阻断〕；链路先传后交：逐个 POST `/contributions/upload-file` 暂存 → POST `/contributions` 建稿，API 封装 `api/contribution.uts`）；其余三 tab=发帖表单（标题 ≤100 + 正文 + 图片 ≤9，`createForumTopicApi`，category 即 tab scope）。resource 永不发进发帖接口（isResourceMode 分流 + 编辑回填 normalizeCategory 双守卫）。
 
 **我的已购（my-purchases）**：
 已购课程 = GET `/student/courses`（我的课程，根仓库 ADR-0017）口径——后端**无购买概念**（课程全开放，`points_price` 积分兑换无已兑清单 endpoint），真「已购清单」如需支持另立后端票；不要再用 profile.course_progress 假充已购（契约测试已钉）。
+
+## 商城与积分（移动端映射）
+
+域定义见根仓库 CONTEXT.md「积分商城（points shop）」「权益（entitlement）」词条族；本节只记移动端的页面口径（移动端 [ADR-0072](docs/adr/0072-商城与积分商城合并为单一货架页（2026-11-17 裁定）.md)，#2608 / #2620 落地）。
+
+**商城（mall）**：
+学员用积分获取课程与积分商品的**唯一货架页**（`pages/mall/mall`）：左栏四态——热门 / 课程 / 图书系列 / 积分兑换——在**页内切换**，分区**按商品类型切、不按数据源表切**（热门 = 课程前 6 + 积分商品前 6 + 两条「查看全部」）。初始分区由 query 决定：`tab=points` 落「积分兑换」，缺省或未知值落「热门」；凡通往兑换的入口（任务中心的「去兑换」与 `browse_mall`/`exchange_gift` 两条任务路由、积分明细提示条、兑换记录空态）一律落 `/pages/mall/mall?tab=points`。**旧名**：「课程商城」——合并前的课程货架页与其宫格文案，已随本词条收掉，可见文案一律「商城」。
+
+_Avoid_：叫它「课程商城」（旧名）或「积分商城」（那是兑换管线，见下条）；把四个分区当成四个页面（合并前就是两次页面跳转、两套筛选与三态）。
+
+**积分商城（points shop）**：
+本端**只用来指兑换管线**（锁 + 已拥有 + 余额预检 + 幂等键 `redeem:{sku}:{userID}`），**不再指页面**：它的页面形态已并入「商城（mall）」，旧路由 `pages/points/points-shop` 从路由表删除由 #2621 收口，入口一律改指 `tab=points`。文案里出现「积分兑换」时，指的是商城的一个分区，不是这个管线；这条管线写出的流水，事由在积分明细里显示为「**商城兑换**」（`utils/pointsDisplay.uts` 的 `redeem_<sku>` 前缀档），所以「商城兑换」是流水事由的既有叫法、不是新造的页面名。
+
+_Avoid_：把「积分商城」当成一个页面/入口名；把「积分兑换」（分区名）与「积分商城」（管线）当同义词。
 
 ## 用户体系
 

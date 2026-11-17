@@ -12,6 +12,8 @@
  *
  * #2618 T2 起本文件同时守「四态货架骨架」：四态结构、按类型取源、课程卡进详情、余额卡常驻、
  * 悬浮收敛为单搜索钮、热门固定条数混排、页内切换不跳转（票面验收 ①-⑦ 的机器可判部分）。
+ * #2620 T4 起再守「入口收敛 + 文案统一 + 词表」：四处入口同一深链 tab=points、路由表标题 / 页头 /
+ * 首页宫格为「商城」、「课程商城」旧名与一次性跨页意图两半清零（旧页与旧路由下线归 T5 #2621）。
  */
 /** harness：读取层归一 + 模块归属面（ADR-0023 票 C 起，本文件不再自建 ROOT / read / walker） */
 const h = require('./contractHarness');
@@ -342,5 +344,75 @@ describe('#2617 T1 页面状态下沉与组件拆分（预重构，行为不变�
   it('四态结构仍在页面（拆组件不改显示时机）', () => {
     expect(page).toMatch(/v-if="activeCategory === 0"/);
     expect(page).toMatch(/v-else-if="activeCategory === 2"/);
+  });
+});
+
+describe('#2620 T4 入口收敛到 tab=points + 词表文案统一（#2518 Q8 反转的收尾一刀）', () => {
+  const page = read('pages/mall/mall.uvue');
+  const state = read('pages/mall/composables/useMall.uts');
+  const task = read('pages/points/task-center.uvue');
+  const detail = read('pages/points/points-detail.uvue');
+  const records = read('pages/points/points-exchange-records.uvue');
+  const grid = read('pages/dashboard/components/dashboard-menu-grid.uvue');
+  /** 合并页「积分兑换」分区的深链（ADR-0072 决策 3：初始分区由 query 决定） */
+  const MERGED = '/pages/mall/mall?tab=points';
+  /** 模板切片（剥注释：头注里的退役说明不是学员可见文案） */
+  const tplOf = (src) => src
+    .slice(src.indexOf('<template>'), src.lastIndexOf('</template>'))
+    .replace(/<!--[\s\S]*?-->/g, '');
+
+  it('① 任务中心两条路由定义与「去兑换」都落合并页的积分兑换分区', () => {
+    // browse_mall / exchange_gift 两项奖励都发生在货架页 ⇒ 落点带 tab=points，点完就走
+    expect(task).toContain("if (code == 'browse_mall' || code == 'exchange_gift') return { url: '/pages/mall/mall?tab=points', tab: false } as TaskRoute");
+    const go = task.slice(task.indexOf('function goExchange'));
+    expect(go.slice(0, 240)).toContain("uni.navigateTo({ url: '/pages/mall/mall?tab=points' })");
+  });
+
+  it('② 积分明细提示条与兑换记录返回入口同落点（看余额顺势去花分、看完记录接着挑）', () => {
+    const detailGo = detail.slice(detail.indexOf('function onGoShop'));
+    expect(detailGo.slice(0, 200)).toContain("uni.navigateTo({ url: '/pages/mall/mall?tab=points' })");
+    const recordsGo = records.slice(records.indexOf('function onGoShop'));
+    expect(recordsGo.slice(0, 200)).toContain("uni.navigateTo({ url: '/pages/mall/mall?tab=points' })");
+    // 三个文件里出现的每个商城深链都必须是同一份 query（新增入口自动纳入，多带参数即红）
+    const urls = [task, detail, records].flatMap((src) => [...src.matchAll(/'(\/pages\/mall\/mall[^']*)'/g)].map((m) => m[1]));
+    expect(urls.length).toBeGreaterThan(0);
+    for (const u of urls) expect(u).toBe(MERGED);
+  });
+
+  it('③ 生产端与消费端同一深链口径：入口带 tab=points，合并页 onLoad 读 options[\'tab\']', () => {
+    expect(page).toContain("options['tab']");
+    expect(state).toMatch(/tab == 'points' \? 3 : 0/);
+  });
+
+  it('④ 文案统一：路由表标题 / 页头 / 首页宫格都是「商城」', () => {
+    const conf = JSON.parse(read('pages.json'));
+    const mallPkg = (conf.subPackages || []).find((s) => s.root === 'pages/mall');
+    expect(mallPkg).toBeTruthy();
+    expect(mallPkg.pages[0].style.navigationBarTitleText).toBe('商城');
+    expect(page).toContain('title="商城"');
+    expect(grid).toContain("title: '商城'");
+    expect(grid).toContain("path: '/pages/mall/mall'");
+  });
+
+  it('⑤ 「课程商城」旧名清零：学员可见处不再出现该叫法', () => {
+    // 无 <template> 的文件（纯脚本件）读原文，不让 tplOf 在缺模板时切片成空串静默过
+    const visible = (src) => (src.includes('<template>') ? tplOf(src) : src);
+    const offenders = [...h.sourceFilesIn('pages'), ...h.sourceFilesIn('components')]
+      .filter((f) => visible(read(f)).includes('课程商城'));
+    expect(offenders).toEqual([]);
+  });
+
+  it('⑥ 词表口径落进可见文案：「积分商城」只指兑换管线，不再当页面名出现在入口里', () => {
+    // 入口文案（提示条 / 空态按钮）写的是落点那个页面的名字：商城
+    for (const src of [detail, records]) expect(tplOf(src)).not.toContain('积分商城');
+    expect(tplOf(detail)).toContain('商城');
+    expect(tplOf(records)).toContain('商城');
+  });
+
+  it('⑦ 跨页意图机制两半清零：全工程源文件无 courseRedeemIntent 引用（写入 + 消费都无）', () => {
+    // 射程 = 整个工程（`sourceFilesIn('.')` 已跳过 node_modules / unpackage 等构建面，见 contractHarness），
+    // 不按目录白名单挑：意图机制的写入方落过 utils、消费方落过页面，漏扫的目录就是下一次复活的藏身处
+    const offenders = h.sourceFilesIn('.').filter((f) => /courseredeemintent/i.test(read(f)));
+    expect(offenders).toEqual([]);
   });
 });

@@ -70,8 +70,8 @@ describe('#2523 task-center：N3 #2550 两项新任务的形状骨架', () => {
     expect(TASK).toContain("if (code == 'exchange_gift') return '🎁'");
   });
 
-  it('「去完成」落积分商城（两项奖励都发生在商城页），不落论坛/课程', () => {
-    expect(TASK).toContain("if (code == 'browse_mall' || code == 'exchange_gift') return { url: '/pages/points/points-shop', tab: false } as TaskRoute");
+  it('「去完成」落商城的积分兑换分区（两项奖励都发生在货架页），不落论坛/课程', () => {
+    expect(TASK).toContain("if (code == 'browse_mall' || code == 'exchange_gift') return { url: '/pages/mall/mall?tab=points', tab: false } as TaskRoute");
     for (const line of TASK.split(/\r?\n/).filter((l) => l.includes("'browse_mall'") || l.includes("'exchange_gift'"))) {
       expect(line).not.toContain('forum');
       expect(line).not.toContain('courses');

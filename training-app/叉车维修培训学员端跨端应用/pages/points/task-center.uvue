@@ -151,8 +151,9 @@
         if (code == 'newbie_first_course') return { url: '/pages/courses/courses', tab: true } as TaskRoute
         // #1944「浏览 3 门课程」落课程列表；daily_browse 是论坛帖子浏览，两者不得同落点
         if (code == 'browse_course') return { url: '/pages/courses/courses', tab: true } as TaskRoute
-        // N3 #2550 待上线：两项奖励都发生在积分商城（游览商品 / 完成兑礼），落商城页；后端落地前 code 不会下发
-        if (code == 'browse_mall' || code == 'exchange_gift') return { url: '/pages/points/points-shop', tab: false } as TaskRoute
+        // N3 #2550 待上线：两项奖励都发生在货架页（游览商品 / 完成兑礼）⇒ 落合并页的积分兑换分区
+        //（#2620 入口收敛：tab=points 直接落「积分兑换」，点完就走不再找；后端落地前 code 不会下发）
+        if (code == 'browse_mall' || code == 'exchange_gift') return { url: '/pages/mall/mall?tab=points', tab: false } as TaskRoute
         return { url: '', tab: false } as TaskRoute
     }
 
@@ -293,9 +294,9 @@
         goBack()
     }
 
-    /** #1942：积分商城页已落地，这里不再是 toast「功能开发中」的死按钮 */
+    /** #1942 起是活按钮；#2620 起落合并页的「积分兑换」分区（与任务路由同一落点） */
     function goExchange() : void {
-        uni.navigateTo({ url: '/pages/points/points-shop' })
+        uni.navigateTo({ url: '/pages/mall/mall?tab=points' })
     }
 
     onShow(() => {

@@ -16,7 +16,7 @@
 
             <!-- 商城入口条：根 ADR-0082 积分暂不过期，不写「本月暂无过期积分」这类过期口径 -->
             <view class="notice-bar" @click="onGoShop">
-                <text class="notice-text">积分永久有效，去积分商城挑选心仪商品</text>
+                <text class="notice-text">积分永久有效，去商城兑换心仪商品</text>
                 <text class="notice-arrow">›</text>
             </view>
 
@@ -118,9 +118,9 @@
         return formatDateTimeStr(createdAt)
     }
 
-    /** 商城入口：与任务中心「去兑换」同落点（#1942） */
+    /** 商城入口：与任务中心「去兑换」同落点（#1942），#2620 起落合并页的「积分兑换」分区 */
     function onGoShop() : void {
-        uni.navigateTo({ url: '/pages/points/points-shop' })
+        uni.navigateTo({ url: '/pages/mall/mall?tab=points' })
     }
 
     /** tab → 后端 direction 查询值（收入 / 支出二态；后端没有「全部」之外的第三维） */

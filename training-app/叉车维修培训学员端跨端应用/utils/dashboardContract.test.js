@@ -359,7 +359,9 @@ describe('行为保持点（手术偏离与回退风险的显式钉锁）', () =
 
   it('静态数据完整性：宫格 5 入口（#1846 搜索自页头移入）/ Tab 2 / 筛选标签 3 / 热门考证 2（课程 4 卡 mock 已由 #1422 退役，绝迹锁见 coursesContract #1422 组）', () => {
     const menu = read('pages/dashboard/components/dashboard-menu-grid.uvue');
-    for (const t of ['课程商城', '题库练习', '学习资料', '考情资讯', '全局搜索']) expect(menu).toContain(t);
+    // #2620：「课程商城」收为旧名（词表），宫格文案改为「商城」——钉整行，注释里的沿革说明不算文案
+    for (const t of ['题库练习', '学习资料', '考情资讯', '全局搜索']) expect(menu).toContain(t);
+    expect(menu).toContain("{ key: 'course-mall', title: '商城', icon: 'grid-course-mall', path: '/pages/mall/mall', available: true }");
     const course = read('pages/dashboard/components/dashboard-course-section.uvue');
     expect(course).toContain("['热门课程', '精品课程']");
     // #2581：首 chip 按原型 404_2195 由「全部」改「笔试」（纯视觉，后端无对应维度）
