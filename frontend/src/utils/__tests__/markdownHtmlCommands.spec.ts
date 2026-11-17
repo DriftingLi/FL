@@ -15,55 +15,54 @@ import {
 } from '../markdownHtmlCommands'
 
 describe('内容排版命令：对齐', () => {
-  it('居中用 display:block 外壳包住选区（保住内部 markdown 的行内解析）', () => {
-    expect(alignSelection('一段文字', 'center')).toBe(
-      '<span style="display:block;text-align:center">一段文字</span>'
-    )
+  // 用块级 <div align>：IR 模式下**只有块级 HTML 会被渲染成预览**，行内 span 只显示灰色源码标签，
+  // 作者点完看不出任何变化；而且 span 包在 <p> 里时 display:block 也撑不出居中（2026-11 实测）。
+  it('居中用块级 div 外壳，IR 里才会真的显示成居中', () => {
+    expect(alignSelection('一段文字', 'center')).toBe('<div align="center">一段文字</div>')
   })
 
   it('左对齐是显式外壳，不是「什么都不做」——作者用它把居中改回来', () => {
-    expect(alignSelection('一段文字', 'left')).toBe(
-      '<span style="display:block;text-align:left">一段文字</span>'
-    )
+    expect(alignSelection('一段文字', 'left')).toBe('<div align="left">一段文字</div>')
   })
 
   it('选区为空时插占位文字，作者直接打字即可覆盖', () => {
-    expect(alignSelection('', 'center')).toBe(
-      `<span style="display:block;text-align:center">${PLACEHOLDER_TEXT}</span>`
-    )
+    expect(alignSelection('', 'center')).toBe(`<div align="center">${PLACEHOLDER_TEXT}</div>`)
   })
 
   it('选区已是同一种外壳时去壳（再点一次撤销）', () => {
-    const wrapped = '<span style="display:block;text-align:center">文字</span>'
+    const wrapped = '<div align="center">文字</div>'
     expect(alignSelection(wrapped, 'center')).toBe('文字')
   })
 
   it('换成另一种对齐时不去壳——两种外壳不同，包一层新的才是作者要的', () => {
-    const wrapped = '<span style="display:block;text-align:center">文字</span>'
-    expect(alignSelection(wrapped, 'left')).toBe(
-      '<span style="display:block;text-align:left"><span style="display:block;text-align:center">文字</span></span>'
-    )
+    const wrapped = '<div align="center">文字</div>'
+    expect(alignSelection(wrapped, 'left')).toBe('<div align="left"><div align="center">文字</div></div>')
   })
 
-  it('内部 markdown 原样保留（加粗 / 链接 / 图片语法都不转义）', () => {
+  it('选区里的 markdown 图片语法转成 HTML img（块级容器内部不再解析 markdown）', () => {
     const md = '**粗体** 与 [链接](https://a.b) 还有 ![图](https://a.b/c.png)'
-    expect(alignSelection(md, 'center')).toContain('**粗体**')
-    expect(alignSelection(md, 'center')).toContain('[链接](https://a.b)')
-    expect(alignSelection(md, 'center')).toContain('![图](https://a.b/c.png)')
+    const result = alignSelection(md, 'center')
+    // 图片必须转掉，否则块级容器里是字面量 ![图](url)
+    expect(result).toBe(
+      '<div align="center">**粗体** 与 [链接](https://a.b) 还有 <img src="https://a.b/c.png" alt="图"></div>'
+    )
   })
 })
 
 describe('内容排版命令：图片居中', () => {
-  it('与文本居中是同一条命令——包住 markdown 图片语法，不改写成 HTML img', () => {
+  it('包住图片并把语法转成 img（块级容器里不解析 markdown）', () => {
     expect(centerImageSelection('![故障码表](https://x/a.png)')).toBe(
-      '<span style="display:block;text-align:center">![故障码表](https://x/a.png)</span>'
+      '<div align="center"><img src="https://x/a.png" alt="故障码表"></div>'
     )
   })
 
   it('空选区走占位文字路径（作者还没选图就点了按钮）', () => {
-    expect(centerImageSelection('')).toBe(
-      `<span style="display:block;text-align:center">${PLACEHOLDER_TEXT}</span>`
-    )
+    expect(centerImageSelection('')).toBe(`<div align="center">${PLACEHOLDER_TEXT}</div>`)
+  })
+
+  it('图片已是居中块时再点一次去壳', () => {
+    const wrapped = '<div align="center"><img src="https://x/a.png" alt="图"></div>'
+    expect(centerImageSelection(wrapped)).toBe('<img src="https://x/a.png" alt="图">')
   })
 })
 

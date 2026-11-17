@@ -233,14 +233,20 @@
 }
 
 /*
- * 正文内嵌 HTML 排版（2026-11，编辑器工具栏产出）：居中/左对齐外壳与图片居中。
- * 作者写法是 `<span style="display:block;text-align:center">`，行内样式本就优先，
- * 这里只补一件它做不到的事 —— 父级 text-align 对 `display:block` 的 img 无效，
- * 而工具栏「图片居中」产的正是 `<img style="display:block;margin:0 auto">`。
+ * 正文内嵌 HTML 排版（2026-11，编辑器工具栏产出）。
+ *
+ * 作者写法是 `<div align="center">…</div>`（见 utils/markdownHtmlCommands 的 alignTag：
+ * 块级 HTML 才会被 Vditor 的 IR 模式渲染预览，行内 span 只显示灰色源码标签）。
+ *
+ * 这里要补的是 `align` 属性**管不到图片**这件事：`align` 等价于给容器设 text-align，
+ * 而 text-align 只作用于行内内容 —— 浏览器默认把 img 当行内替换元素排，正常情况下能居中；
+ * 但一旦作者（或本仓的按钮）给 img 写了 `display:block`，父级 text-align 就失效了，
+ * 必须靠 margin auto 拉回来。
+ *
+ * ⚠️ 只对 `align="center"` 生效：对 `align="left"` 也拉 margin auto 会把图片居中，
+ * 正好和作者要的相反。
  */
-.markdown-body img[style*='margin:0 auto'],
-.markdown-body img[style*='margin: 0 auto'] {
-  display: block;
+.markdown-body div[align='center'] img {
   margin-left: auto;
   margin-right: auto;
 }
