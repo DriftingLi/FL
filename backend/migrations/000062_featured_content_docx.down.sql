@@ -1,4 +1,4 @@
--- 回滚 000061：删掉 content_type / docx_url 及其 CHECK 约束（逆序）。
+-- 回滚 000062：删掉 content_type / docx_url 及其 CHECK 约束（逆序）。
 --
 -- 该两列是本票新增 ⇒ 回滚只丢失「docx 文章的类型标记与文件指向」：那些行的 content 本就是空串，
 -- 回滚后退化成一篇正文为空的 Markdown 文章（管理端看得见、可重新编辑），

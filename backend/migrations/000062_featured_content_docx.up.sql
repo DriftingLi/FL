@@ -12,7 +12,7 @@
 -- 第二条用 CHECK 钉住；第一条不加 CHECK —— 与 000043 的取舍同源：存量语义由写库侧兜，
 -- 库层只钉「取值域」这种永不误伤历史数据的约束。
 --
--- 存量行全部是 Markdown 正文 ⇒ 默认值 'markdown' 让 000061 之前写入的内容无需回填。
+-- 存量行全部是 Markdown 正文 ⇒ 默认值 'markdown' 让本迁移之前写入的内容无需回填。
 
 ALTER TABLE featured_content
     ADD COLUMN IF NOT EXISTS content_type VARCHAR(16) NOT NULL DEFAULT 'markdown';
