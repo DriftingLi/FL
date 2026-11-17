@@ -146,16 +146,20 @@ func TestTutorRoleCRUD(t *testing.T) {
 // TestTutorRoleRejectsAdminCapability 讲师角色不能承载管理员侧能力键。
 //
 // 这是规格硬约束 5 的机检面：讲师一旦拿到 question.review，就绕过了「先审后发」。
+// `tutor.manage` 单独列出来是因为它是**自锁面**的那一格：若能把它挂进讲师角色，
+// 讲师就能给自己改角色 —— 而本仓的结构性答案是「这条路由只在管理域，讲师侧根本没有它」。
 func TestTutorRoleRejectsAdminCapability(t *testing.T) {
 	f := newTutorRoleFixture(t)
-	code, raw := f.do(http.MethodPost, "/api/admin/tutor-roles", f.adminTok, map[string]any{
-		"name": "偷审核权", "capabilities": []string{"question.review"},
-	})
-	if code != http.StatusBadRequest {
-		t.Fatalf("挂管理员侧能力键应 400，得到 %d: %s", code, raw)
-	}
-	if _, ok := f.roleByName("偷审核权"); ok {
-		t.Fatalf("被拒的角色不应落库")
+	for _, forbidden := range []string{"question.review", "chapter.review", "tutor.manage", "admin.access"} {
+		code, raw := f.do(http.MethodPost, "/api/admin/tutor-roles", f.adminTok, map[string]any{
+			"name": "偷" + forbidden, "capabilities": []string{forbidden},
+		})
+		if code != http.StatusBadRequest {
+			t.Fatalf("挂管理员侧能力键 %q 应 400，得到 %d: %s", forbidden, code, raw)
+		}
+		if _, ok := f.roleByName("偷" + forbidden); ok {
+			t.Fatalf("被拒的角色 %q 不应落库", forbidden)
+		}
 	}
 }
 
