@@ -210,9 +210,8 @@ import { goBack } from '../../utils/navigation'
         return displayYear.value == now.getFullYear() && displayMonth.value == now.getMonth() + 1
     })
 
-    /** 连续签到瓦片的数字 = 当前连续天数（贴片 580:6795 的「13」形态）；其余瓦片显示日号 */
+    /** 所有瓦片数字位一律显示日号；连续签到状态只由黄底（cell-streak）+ 蓝底白勾徽章表达，不再占用数字位 */
     function cellLabel(cell : CalendarCell) : string {
-        if (cell.isStreak) return consecutiveDays.value.toString()
         return cell.day.toString()
     }
 
@@ -374,7 +373,7 @@ import { goBack } from '../../utils/navigation'
     .calendar-cell { width: 14.28%; align-items: center; padding: 6rpx 2rpx; }
     /* 圆角方形瓦片：数字在上、状态徽章在下（贴片 580:6795 全状态） */
     .cell-day { width: 84rpx; height: 96rpx; border-radius: 16rpx; background-color: #ffffff; align-items: center; flex-direction: column; }
-    /* 连续签到：黄瓦片；数字位显示当前连续天数（贴片的「13」形态） */
+    /* 连续签到：黄瓦片；数字位仍显示日号，连续状态由底色+白勾徽章表达 */
     .cell-streak { background-color: #ffd666; }
     /* 打卡完成：白瓦片 + 蓝对勾 */
     .cell-checked { background-color: #ffffff; }
