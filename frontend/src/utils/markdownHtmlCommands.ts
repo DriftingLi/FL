@@ -82,13 +82,62 @@ export const CONTENT_FONT_SIZES: readonly ContentFontSizeItem[] = [
 /** 选区为空时的占位文字：插入即选中，作者直接打字即可覆盖 */
 export const PLACEHOLDER_TEXT = '在此输入文字'
 
-const HTML_CLOSE = '</span>'
-
 /**
- * 对齐外壳：`display:block` 让 text-align 对整段生效，同时保住内部 markdown 的行内解析。
+ * 对齐外壳：**块级** div，用 `align` 属性而不是 `text-align`。
+ *
+ * 为什么不是行内 `<span style="display:block;text-align:center">`（2026-11 改，ADR-0046 决定 9）：
+ *
+ *   1. **Vditor 的 IR 模式只给块级 HTML 做渲染预览**。行内 HTML 一律显示成灰色源码标签
+ *      （`.vditor-ir__marker`），作者点完按钮看不出任何变化，以为「没生效」——这是关于这批
+ *      按钮被反馈最多的一条。
+ *   2. 行内 span 包在 `<p>` 里时，`display:block` 只能撑满**段落自身的宽度**，段落本身仍
+ *      跟着文档左对齐，视觉上根本不居中。
+ *   3. 块级 div 里的行内 span（颜色、字号）**照样能渲染**（实测），所以颜色/字号不受影响。
+ *
+ * 用 `align` 属性而非 `style="text-align:…"`：门户与移动端 WebView 对两者的支持等价，
+ * 但 `align` 更短、且与本仓 `markdown.css` 里 `thead th:not([align])` 那套口径同源。
  */
 function alignTag(align: ContentAlign): string {
-  return `<span style="display:block;text-align:${align}">`
+  return `<div align="${align}">`
+}
+
+/**
+ * 块级图片容器：`<div align="center"><img …></div>`。
+ *
+ * 图片必须写成 HTML `<img>`：块级容器内部不再解析 markdown，`![alt](url)` 会原样显示成
+ * 字面量。由 `markdownImagesToHtml` 负责把选区里的图片语法转过来。
+ */
+function blockImageTag(align: ContentAlign): string {
+  return `<div align="${align}">`
+}
+
+/**
+ * 把选区里的 markdown 图片语法转成 HTML `<img>`。
+ *
+ * 只转 `![alt](url)` 这一种最常见的形态（含可选的 `"title"`）。链接地址里可能有括号，
+ * 所以按「首个 `)` 收尾」取——足够覆盖本站上传与外部图床的实际写法，也不至于贪婪到
+ * 吃掉后面的内容。
+ *
+ * 非图片的内容原样返回，调用方据此判断「这段里到底有没有图」。
+ */
+export function markdownImagesToHtml(text: string): string {
+  return text.replace(
+    /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g,
+    (_match, alt: string, src: string, title?: string) => {
+      const titleAttr = title ? ` title="${escapeAttr(title)}"` : ''
+      return `<img src="${escapeAttr(src)}" alt="${escapeAttr(alt)}"${titleAttr}>`
+    }
+  )
+}
+
+/** 属性值转义：alt 里出现的引号会把 img 标签撑破，进而破坏整段 HTML */
+function escapeAttr(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+/** 选区里是否有 markdown 图片语法——决定「图片居中」要不要走 HTML 分支 */
+export function hasMarkdownImage(text: string): boolean {
+  return /!\[[^\]]*\]\([^)\s]+/.test(text)
 }
 
 /**
@@ -103,38 +152,60 @@ function fontSizeTag(declaration: string): string {
  * 已包过同一种外壳则去壳，否则包上。
  * 只认「选区自身就是完整外壳」这一种形态——Vditor 没有读取选区的 API，
  * 选区内侧/外侧相邻的标签都看不见，所以不做更聪明的相邻判断。
+ *
+ * `closeTag` 必须与 `open` 配对：对齐/图片用的是 `div`，颜色/字号用的是 `span`，
+ * 写死成 `</span>` 会让「再点一次去壳」对 div 完全失效。
  */
-function wrapOrUnwrap(selected: string, open: string, placeholder: string): string {
+function wrapOrUnwrap(selected: string, open: string, closeTag: string, placeholder: string): string {
   const body = selected || placeholder
-  if (body.startsWith(open) && body.endsWith(HTML_CLOSE)) {
-    return body.slice(open.length, body.length - HTML_CLOSE.length)
+  if (body.startsWith(open) && body.endsWith(closeTag)) {
+    return body.slice(open.length, body.length - closeTag.length)
   }
-  return open + body + HTML_CLOSE
+  return open + body + closeTag
 }
 
-/** 文本对齐：居中 / 左对齐 */
+/**
+ * 文本对齐：居中 / 左对齐。
+ *
+ * 选区里含 markdown 图片语法时，先把它转成 `<img>` ——块级容器内部不解析 markdown，
+ * 不转的话图片会显示成字面量 `![图](url)`。
+ */
 export function alignSelection(selected: string, align: ContentAlign): string {
-  return wrapOrUnwrap(selected, alignTag(align), PLACEHOLDER_TEXT)
+  return wrapOrUnwrap(withImagesAsHtml(selected), alignTag(align), '</div>', PLACEHOLDER_TEXT)
+}
+
+/** 把选区里的图片语法转成 HTML（块级容器内部不再解析 markdown，见 alignTag 的说明） */
+function withImagesAsHtml(text: string): string {
+  return hasMarkdownImage(text) ? markdownImagesToHtml(text) : text
 }
 
 /** 文字颜色 */
 export function colorSelection(selected: string, color: string): string {
-  return wrapOrUnwrap(selected, `<span style="color:${color}">`, PLACEHOLDER_TEXT)
+  return wrapOrUnwrap(selected, `<span style="color:${color}">`, '</span>', PLACEHOLDER_TEXT)
 }
 
 /** 字号 */
 export function fontSizeSelection(selected: string, declaration: string): string {
-  return wrapOrUnwrap(selected, fontSizeTag(declaration), PLACEHOLDER_TEXT)
+  return wrapOrUnwrap(selected, fontSizeTag(declaration), '</span>', PLACEHOLDER_TEXT)
 }
 
 /**
- * 图片居中：与文本居中是同一条命令。
+ * 图片居中：把整段图片语法包进块级容器。
  *
- * 图片在 markdown 里是行内元素（`![alt](src)`），包上 `display:block` 后 `text-align:center`
- * 就作用在它的位置上——**不需要**把 markdown 图片改写成 HTML `<img>` 标签，
- * 于是图片的中文 alt、后续换图、以及门户端的 `loading="lazy"` 补全（门户 renderMarkdown
- * 会给每个 img 补属性）都照旧有效。
+ * ⚠️ 这里必须产出**块级 `<div align="center">`**，且图片要是 HTML `<img>` 标签 ——
+ * 两个原因都是在真实环境里踩出来的（2026-11，见 ADR-0046 决定 9）：
+ *
+ *   1. 行内 `<span style="display:block;text-align:center">![图](url)</span>` 在 Vditor 的 IR
+ *      模式里**只显示灰色源码标签、不渲染预览**，作者点完看不出任何变化；
+ *   2. 更糟的是它会让 `getSelection()` 返回空串 —— 工具按钮随后按「空选区」处理，
+ *      插入占位文字 `在此输入文字` **把图片本身覆盖掉**，内容直接丢失。
+ *
+ * 块级 HTML 才会被 Vditor 当作 html-block 渲染预览（实测 `.vditor-ir__preview` 里
+ * `<div align="center"><img …></div>` 正常显示），所以图片必须转成 `img` 标签。
+ *
+ * 代价与取舍：块级 HTML **内部不再解析 markdown**，所以图片段里的中文 alt 只能靠
+ * `alt` 属性、不能带加粗等行内语法。图片段落本来也不该有这些，可接受。
  */
 export function centerImageSelection(selected: string): string {
-  return alignSelection(selected, 'center')
+  return wrapOrUnwrap(withImagesAsHtml(selected), blockImageTag('center'), '</div>', PLACEHOLDER_TEXT)
 }
