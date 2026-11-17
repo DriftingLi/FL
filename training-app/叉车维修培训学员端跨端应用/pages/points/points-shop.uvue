@@ -83,7 +83,7 @@
     import pointsShopCard from './components/points-shop-card.uvue'
     import { onShow } from '@dcloudio/uni-app'
     import { goBack, requestCourseRedeemIntent } from '../../utils/navigation'
-    import { useMall } from '../../mall/composables/useMall'
+    import { useMall } from '../mall/composables/useMall.uts'
 
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
