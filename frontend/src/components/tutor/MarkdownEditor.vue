@@ -105,8 +105,11 @@ function buildToolbar(targetMode: 'ir' | 'sv'): Array<string | ContentToolbarIte
   // 表格增删行列**不受 contentStyles 门控**：它改的是 Markdown 表格结构、不产出内嵌 HTML，
   // 与那道「只有 Web 章节面才渲染 HTML」的闸门无关。
   const tableItems = targetMode === 'ir' ? createTableToolbarItems(() => vditor) : []
-  if (!props.contentStyles) return [...BASE_TOOLBAR, ...tableItems, ...tail]
-  return [...BASE_TOOLBAR, ...tableItems, ...createContentToolbarItems(() => vditor), ...tail]
+  // 分隔符不只是好看：从「表格」到「字号」有 9 个连续 25px 图标，中间不断开的话作者没法
+  // 一眼分出「改结构」和「改样式」两族（2026-11 反馈「按钮都长得一样」）。
+  const tableGroup = tableItems.length > 0 ? ['|', ...tableItems] : []
+  if (!props.contentStyles) return [...BASE_TOOLBAR, ...tableGroup, ...tail]
+  return [...BASE_TOOLBAR, ...tableGroup, '|', ...createContentToolbarItems(() => vditor), ...tail]
 }
 
 /** UiUnderlineTabs 的载荷是 string，这里收窄回 Vditor 的两档 */

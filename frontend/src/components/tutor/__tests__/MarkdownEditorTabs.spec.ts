@@ -171,7 +171,7 @@ describe('MarkdownEditor 内容排版按钮（contentStyles）', () => {
     expect(font?.toolbar).toHaveLength(4)
   })
 
-  it('点击「文本居中」把选区包成 display:block 外壳（命令走真实实例，不碰内部 IVditor）', async () => {
+  it('点击「文本居中」把选区包成块级 div 外壳（命令走真实实例，不碰内部 IVditor）', async () => {
     const instances = installVditorMock()
     const w = mountEditor({ contentStyles: true })
     await flushPromises()
@@ -189,8 +189,6 @@ describe('MarkdownEditor 内容排版按钮（contentStyles）', () => {
     center.click(new Event('click'), { notAVditor: true })
     void w
 
-    expect(insertMD).toHaveBeenCalledWith(
-      '<span style="display:block;text-align:center">选中的文字</span>'
-    )
+    expect(insertMD).toHaveBeenCalledWith('<div align="center">选中的文字</div>')
   })
 })
