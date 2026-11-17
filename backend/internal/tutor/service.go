@@ -14,6 +14,7 @@ import (
 	"forklift-training/internal/course"
 	"forklift-training/internal/filestore"
 	"forklift-training/internal/model"
+	"forklift-training/internal/tutorcap"
 )
 
 // Service 导师服务。
@@ -24,11 +25,18 @@ type Service struct {
 	slideRenderer *course.SlideRenderer
 
 	logger *zap.Logger
+
+	// caps 讲师有效能力集解析器（#2599 / 规格 E3）：与 admincap 并列的独立解析器，
+	// 实现落在 internal/tutorcap（域包测试要复用它，放在这里会成环）。
+	caps *tutorcap.Resolver
 }
 
 // NewService 创建导师服务实例。
 func NewService(db *gorm.DB, uploadFolder string, fileStore *filestore.FileStore, slideRenderer *course.SlideRenderer, logger *zap.Logger) *Service {
-	return &Service{db: db, uploadFolder: uploadFolder, fileStore: fileStore, slideRenderer: slideRenderer, logger: logger}
+	return &Service{
+		db: db, uploadFolder: uploadFolder, fileStore: fileStore, slideRenderer: slideRenderer,
+		logger: logger, caps: tutorcap.New(db, logger),
+	}
 }
 
 // ErrChapterFileNotFound 章节文件行不存在（课程章节的附件，与「章节不存在」是两件事）。

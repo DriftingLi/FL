@@ -70,4 +70,4 @@ func TestRouteRegistryCoverage(t *testing.T) {
 // 2026-11-15 #2550 游览商城商品上报端点 1 条（POST /api/points/shop/{sku}/browse）→ 368。
 // 2026-11-16 #2596 课程认领 3 条（POST/DELETE /api/tutor/course/{course_id}/claim、
 // GET /api/tutor/course/{course_id}/claims）→ 371。
-const expectedRouteCount = 374
+const expectedRouteCount = 380

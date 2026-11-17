@@ -19,6 +19,11 @@
 //   GET  /admin/tutor/{tutor_id}/courses
 //   POST /admin/tutor/{tutor_id}/courses
 //   DELETE /admin/tutor/{tutor_id}/courses
+//   GET  /admin/tutor-roles
+//   POST /admin/tutor-roles
+//   PUT  /admin/tutor-roles/{role_id}
+//   DELETE /admin/tutor-roles/{role_id}
+//   PUT  /admin/tutor/{tutor_id}/role
 //   GET  /admin/recruiters
 //   POST /admin/recruiters
 //   PUT  /admin/recruiters/{id}/status
@@ -68,7 +73,7 @@
 //   GET  /admin/export/questions
 //   GET  /admin/export/evaluations
 //
-// 覆盖的 Go 类型：AdminAccountDTO / AdminAccountListDTO / AdminCapabilitiesDTO / AdminOverviewDTO / AdminRoleDTO / AdminRoleListDTO / AdminStatisticsDTO / CourseStatDTO / HrwaiUserCreatedDTO / HrwaiUserPageResult / HrwaiUserSummary / StatusResultDTO / TutorCourseAssignResult / TutorCourseAssignmentDTO / TutorCourseAssignmentListDTO / TutorDTO / TutorDeletedDTO / TutorListDTO / AIConfigDTO / FeatureBindingDTO / AuditLogPageResult / ProfileChangeRequestDTO / ProfileChangeRequestPageResult / RecruiterCreatedDTO / RecruiterListItem / RecruiterListResult / RecruiterPasswordResetResult / RecruiterUpdatedDTO / TutorRegisterResultDTO / ChapterGenResult / GenTaskStatus / GenerateContentResultDTO / AdminCourseDetailDTO / BatchApproveResult / BatchRejectResult / BatchReviewFailureDTO / CertificateTemplateDTO / ChapterDTO / ChapterFileDTO / ChapterReviewQueueItemDTO / ChapterReviewQueueResult / ChapterReviewSnapshotDTO / CourseBriefDTO / CourseDTO / CoursePageResult / CredentialBriefDTO / DeleteChapterResult / DeleteCourseResult / LevelBriefDTO / SpecialtyBriefDTO / AuditLog
+// 覆盖的 Go 类型：AdminAccountDTO / AdminAccountListDTO / AdminCapabilitiesDTO / AdminOverviewDTO / AdminRoleDTO / AdminRoleListDTO / AdminStatisticsDTO / CourseStatDTO / HrwaiUserCreatedDTO / HrwaiUserPageResult / HrwaiUserSummary / StatusResultDTO / TutorCourseAssignResult / TutorCourseAssignmentDTO / TutorCourseAssignmentListDTO / TutorDTO / TutorDeletedDTO / TutorListDTO / TutorRoleDTO / TutorRoleListDTO / AIConfigDTO / FeatureBindingDTO / AuditLogPageResult / ProfileChangeRequestDTO / ProfileChangeRequestPageResult / RecruiterCreatedDTO / RecruiterListItem / RecruiterListResult / RecruiterPasswordResetResult / RecruiterUpdatedDTO / TutorRegisterResultDTO / ChapterGenResult / GenTaskStatus / GenerateContentResultDTO / AdminCourseDetailDTO / BatchApproveResult / BatchRejectResult / BatchReviewFailureDTO / CertificateTemplateDTO / ChapterDTO / ChapterFileDTO / ChapterReviewQueueItemDTO / ChapterReviewQueueResult / ChapterReviewSnapshotDTO / CourseBriefDTO / CourseDTO / CoursePageResult / CredentialBriefDTO / DeleteChapterResult / DeleteCourseResult / LevelBriefDTO / SpecialtyBriefDTO / AuditLog
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -181,6 +186,9 @@ export interface TutorCourseAssignmentListDTO {
 export interface TutorDTO {
   created_at: string
   name: string
+  protected: boolean
+  role_id: number
+  role_name: string
   status: number
   tutor_id: number
   username: string
@@ -194,6 +202,18 @@ export interface TutorListDTO {
   page: number
   total: number
   tutors: TutorDTO[]
+}
+
+export interface TutorRoleDTO {
+  capabilities: string[]
+  name: string
+  protected: boolean
+  remark: string
+  role_id: number
+}
+
+export interface TutorRoleListDTO {
+  roles: TutorRoleDTO[]
 }
 
 export interface AIConfigDTO {

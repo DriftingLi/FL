@@ -33,6 +33,9 @@ var nonnilOutletsAdmin = map[string]func(t *testing.T) any{
 	// #2597 D4：讲师课程分配抽屉的两列
 	"admin.TutorCourseAssignmentListDTO.course_ids": outletTutorCourseAssignmentsEmpty,
 	"admin.TutorCourseAssignmentListDTO.items":      outletTutorCourseAssignmentsEmpty,
+	// #2599 E7：讲师角色链（受保护角色能力由代码回答；空能力角色是最容易发 null 的那格）
+	"admin.TutorRoleDTO.capabilities": outletTutorRoleCapabilitiesEmpty,
+	"admin.TutorRoleListDTO.roles":    outletTutorRoleListEmpty,
 }
 
 // TestNonNilDeclaredOutletsNeverEmitNull 本域的举证入口（判据本体在 testutil）。
@@ -125,6 +128,30 @@ func outletTutorCourseAssignmentsEmpty(t *testing.T) any {
 	res, err := svc.ListTutorCourseAssignments(context.Background(), tutor.TutorID)
 	if err != nil {
 		t.Fatalf("查已分配课程失败: %v", err)
+	}
+	return res
+}
+
+// outletTutorRoleCapabilitiesEmpty 新建的空能力讲师角色：capabilities 是 `[]` 而不是 null
+// （#2599 E7）。这一格走的是「角色存在但一个键都没勾」——非 protected 分支、且能力行为空，
+// 正是最容易发出 null 的那条路径。
+func outletTutorRoleCapabilitiesEmpty(t *testing.T) any {
+	t.Helper()
+	svc := NewService(testutil.NewMemoryDB(t), nil, zap.NewNop())
+	dto, err := svc.CreateTutorRole("空能力讲师", "", nil)
+	if err != nil {
+		t.Fatalf("建讲师角色失败: %v", err)
+	}
+	return dto
+}
+
+// outletTutorRoleListEmpty 讲师角色列表：空库时 roles 是空集。
+func outletTutorRoleListEmpty(t *testing.T) any {
+	t.Helper()
+	svc := NewService(testutil.NewMemoryDB(t), nil, zap.NewNop())
+	res, err := svc.ListTutorRoles()
+	if err != nil {
+		t.Fatalf("讲师角色列表失败: %v", err)
 	}
 	return res
 }
