@@ -3,9 +3,9 @@
          （已拥有 / 售罄），按钮文案与配色由 useMall 的映射函数算好后流入，卡不自判 -->
     <view :class="['shop-item', { 'shop-item-last': last }]">
         <view class="shop-content">
-            <text class="shop-title">{{ item.title }}</text>
+            <text class="shop-title">{{ title }}</text>
             <view class="shop-meta">
-                <text class="shop-price">{{ item.price }} 积分</text>
+                <text class="shop-price">{{ price }} 积分</text>
                 <text v-if="stockLabel.length > 0" class="shop-stock">{{ stockLabel }}</text>
             </view>
         </view>
@@ -16,10 +16,11 @@
 </template>
 
 <script setup lang="uts">
-    import type { ShopItem } from '../../../types/index'
-
     defineProps<{
-        item : ShopItem
+        // 拍平成标量 props（ADR-0007 规则 N/P）：裸对象类型挂 defineProps 会被 uvue 编译成 Any
+        // （#2617 T1 ④c 实测 kotlin unresolved reference title/price）
+        title : string
+        price : number
         last : boolean
         stockLabel : string
         btnLabel : string

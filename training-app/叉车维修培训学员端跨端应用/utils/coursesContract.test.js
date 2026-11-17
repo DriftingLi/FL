@@ -732,7 +732,8 @@ describe('#1421 兑换闭环：DTO 迁出 · CTA 单点消费 · 购物车族绝
     const mall = stripAll(read(MALL) + read(CARD));
     expect(mall).toMatch(/import\s*\{\s*renderCoursePrice\s*\}\s*from\s*'\.\.\/\.\.\/\.\.\/utils\/coursePointsCta'/);
     expect(mall).toMatch(/function\s+coursePriceText\s*\([^)]*\)\s*:\s*string\s*\{[\s\S]{0,80}?return\s+renderCoursePrice\(/);
-    expect(tplOf(read(MALL)) + tplOf(read(CARD))).toContain('coursePriceText(item)');
+    // #2617 T1：卡的对象 prop 拍平成标量 props（ADR-0007 规则 N/P）⇒ 模板实参随之为标量 pointsPrice
+    expect(tplOf(read(MALL)) + tplOf(read(CARD))).toMatch(/\{\{\s*coursePriceText\(pointsPrice\)\s*\}\}/);
     // 详情 CTA 吃单点：buildCourseCta 是唯一派生入口，文案与提示都从它的产物来
     const detail = stripAll(read(DETAIL));
     expect(detail).toMatch(/import\s*\{[^}]*buildCourseCta[^}]*\}\s*from\s*'\.\.\/\.\.\/utils\/coursePointsCta'/);

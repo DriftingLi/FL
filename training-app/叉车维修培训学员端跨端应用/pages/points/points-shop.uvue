@@ -61,8 +61,8 @@
 
                         <!-- 在售项：可点性只由服务端事实决定（已拥有 / 售罄）；行样式在商品卡组件里 -->
                         <view v-if="items.length > 0" class="shop-card">
-                            <points-shop-card v-for="(item, i) in items" :key="item.sku" :item="item"
-                                :last="i == items.length - 1" :stock-label="stockText(item)"
+                            <points-shop-card v-for="(item, i) in items" :key="item.sku" :title="item.title"
+                                :price="item.price" :last="i == items.length - 1" :stock-label="stockText(item)"
                                 :btn-label="btnText(item)" :btn-class="btnClass(item)"
                                 :btn-text-class="btnTextClass(item)" @redeem="onRedeem(item)" />
                         </view>

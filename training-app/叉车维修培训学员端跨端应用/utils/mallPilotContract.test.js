@@ -79,7 +79,7 @@ describe('#2518 第 4 刀（商城逐像素收口 824:6971）：默认书封 · 
   const card = read('pages/mall/components/mall-course-card.uvue');
 
   it('默认书封：cover_url 兜底走包内路径拼接（表达式含 /static/ 才过 imageWebpAttrContract 豁免），五种书封文件在位', () => {
-    expect(card).toMatch(/:src="'\/static\/icons\/mall\/cover-' \+ defaultCoverName\(item\) \+ '\.png'"/);
+    expect(card).toMatch(/:src="'\/static\/icons\/mall\/cover-' \+ defaultCoverName\(title\) \+ '\.png'"/);
     for (const f of ['cover-ebook', 'cover-material-pro', 'cover-material-aux', 'cover-material-skill', 'cover-textbook']) {
       expect(h.exists(`static/icons/mall/${f}.png`)).toBe(true);
     }

@@ -35,7 +35,8 @@
                     <text class="empty-text">暂无商品</text>
                 </view>
                 <!-- 课程卡（#2617 T1 起是独立组件）；跳转归页面，卡只回抛 -->
-                <MallCourseCard v-for="(item, idx) in courses" :key="idx" :item="item"
+                <MallCourseCard v-for="(item, idx) in courses" :key="idx" :title="item.title"
+                    :cover-url="item.cover_url" :points-price="item.points_price"
                     @product-click="onProductClick(item)" />
                 <view v-if="coursesLoading" class="loading-more">
                     <text class="loading-text">加载中...</text>
