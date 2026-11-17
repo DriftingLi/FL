@@ -29,6 +29,15 @@ import {
   PLACEHOLDER_TEXT,
   type ContentAlign
 } from '@/utils/markdownHtmlCommands'
+import {
+  cellFromRange,
+  deleteColumn,
+  deleteRow,
+  insertColumn,
+  insertRowBelow,
+  type TableCell,
+  type TableCommandResult
+} from '@/utils/markdownTableCommands'
 
 /** Vditor 的工具栏项形状（`IMenuItem` 的本地镜像：那个类型没从包入口导出） */
 export interface ContentToolbarItem {
@@ -70,6 +79,12 @@ const FONT_SIZE_ICON = icon('<path d="M2.5 12 6 4l3.5 8M3.8 9.5h4.4"/><path d="M
 
 /** 图片居中图标：方框 + 居中的竖线标记 */
 const IMAGE_CENTER_ICON = icon('<rect x="2.5" y="3" width="11" height="10" rx="1.2"/><path d="M5 10.5 7 8l1.7 1.7L10 9l1.5 1.5"/><circle cx="10.3" cy="6" r="0.9" fill="currentColor" stroke="none"/>')
+
+/** 表格增删图标：表格框 + 指明「往哪边加 / 删哪条」的箭头或减号 */
+const TABLE_INSERT_ROW_ICON = icon('<rect x="2.5" y="2.5" width="11" height="4" rx="0.8"/><path d="M2.5 9.5h11M6 12.5h4"/><path d="M8 9.2v3.6"/><path d="M6.6 11.2 8 12.6l1.4-1.4"/>')
+const TABLE_INSERT_COLUMN_ICON = icon('<rect x="2.5" y="2.5" width="4" height="11" rx="0.8"/><path d="M9.5 2.5v11M12.5 6v4"/><path d="M9.2 8h3.6"/><path d="M11.2 6.6 12.6 8l-1.4 1.4"/>')
+const TABLE_DELETE_ROW_ICON = icon('<rect x="2.5" y="2.5" width="11" height="4" rx="0.8"/><path d="M2.5 9.5h11"/><path d="M6 12h4" stroke-dasharray="1.6 1.4"/>')
+const TABLE_DELETE_COLUMN_ICON = icon('<rect x="2.5" y="2.5" width="4" height="11" rx="0.8"/><path d="M9.5 2.5v11"/><path d="M12 7.5v2" stroke-dasharray="1.6 1.4"/>')
 
 /**
  * 写回选区。
@@ -140,6 +155,100 @@ export function createContentToolbarItems(getVditor: () => Vditor | null): Conte
       toolbar: fontSizeItems
     }
   ]
+}
+
+/**
+ * 生成表格结构工具栏项（插入行 / 插入列 / 删除行 / 删除列）。
+ *
+ * 为什么需要：Vditor 自带的这四条只挂在 **wysiwyg 模式**的 popover 上，本项目用 IR，
+ * IR 没有 popover ⇒ 原生按钮永不出现（见 `utils/markdownTableCommands` 的说明）。
+ *
+ * 只在 IR 模式下挂出来（源码模式没有表格 DOM，命令无处落脚）。
+ *
+ * 命令执行照实测顺序三件事，缺一件就出错（探针 probe5）：
+ *   1. 改 DOM（`utils/markdownTableCommands`）；
+ *   2. `undo.addToUndoStack` —— 否则这次改动不可撤销；
+ *   3. `options.input(getValue())` —— 否则 `getValue()` 是对的、但父组件 v-model 还是旧值，
+ *      保存时写回旧内容。**不要**改用手动派发 `new Event('input')`（实测不生效）。
+ */
+export function createTableToolbarItems(getVditor: () => Vditor | null): ContentToolbarItem[] {
+  const run = (command: (cell: TableCell) => TableCommandResult) => {
+    const vditor = getVditor()
+    if (!vditor) return
+    const cell = cellFromRange(currentRange(vditor))
+    if (!cell) {
+      vditor.tip(TABLE_FAILURE_TIPS['no-cell'], 2000)
+      return
+    }
+    const result = command(cell)
+    if (!result.ok) {
+      vditor.tip(TABLE_FAILURE_TIPS[result.failure], 2500)
+      return
+    }
+    // 命令已改完 DOM：进 undo 栈 + 通知父组件（顺序见上方注释）
+    vditor.vditor.undo?.addToUndoStack?.(vditor.vditor)
+    vditor.vditor.options.input?.(vditor.getValue())
+    placeCaret(result.caret)
+    vditor.focus()
+  }
+
+  return [
+    {
+      name: 'table-insert-row',
+      tip: '在下方插入一行',
+      icon: TABLE_INSERT_ROW_ICON,
+      click: () => run(insertRowBelow)
+    },
+    {
+      name: 'table-insert-column',
+      tip: '在右侧插入一列',
+      icon: TABLE_INSERT_COLUMN_ICON,
+      click: () => run((cell) => insertColumn(cell))
+    },
+    {
+      name: 'table-delete-row',
+      tip: '删除当前行',
+      icon: TABLE_DELETE_ROW_ICON,
+      click: () => run(deleteRow)
+    },
+    {
+      name: 'table-delete-column',
+      tip: '删除当前列',
+      icon: TABLE_DELETE_COLUMN_ICON,
+      click: () => run(deleteColumn)
+    }
+  ]
+}
+
+/** 命令失败时的人话提示：静默不动比报错更让人困惑 */
+const TABLE_FAILURE_TIPS: Record<string, string> = {
+  'no-cell': '请先把光标放进表格的某个格子里，再点这个按钮',
+  'header-row': '表头行不能删除（要减列请用「删除当前列」）',
+  'last-column': '这是最后一列了 —— 要整张表格删掉，请选中它按 Delete'
+}
+
+/**
+ * 取当前选区。
+ *
+ * 优先用浏览器实时选区（真实鼠标点工具栏不会夺焦，实测选区仍在）；拿不到再退回
+ * Vditor 在 blur 时保存的 `vditor.ir.range`（用户点过别处再回来点按钮的情形）。
+ */
+function currentRange(vditor: Vditor): Range | null {
+  const live = typeof window !== 'undefined' ? window.getSelection() : null
+  if (live && live.rangeCount > 0) return live.getRangeAt(0)
+  return vditor.vditor.ir?.range ?? null
+}
+
+/** 把光标放进命令指定的格子（没有就什么都不做，别抢走用户原本的位置） */
+function placeCaret(cell: TableCell | undefined): void {
+  if (!cell || typeof window === 'undefined') return
+  const selection = window.getSelection()
+  if (!selection) return
+  const range = document.createRange()
+  range.selectNodeContents(cell)
+  range.collapse(true)
+  selection.removeAllRanges()
+  selection.addRange(range)
 }
 
 /** 选区为空时插入的占位文字（使用说明与组件共用一份） */
