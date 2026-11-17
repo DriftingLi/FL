@@ -1,81 +1,162 @@
 <template>
-    <!-- 必买清单（热门分区；原型只画了「图书系列」激活态，本区保持现网形态）——#2617 T1 自 mall.uvue 搬出 -->
-    <view v-if="items.length > 0" class="must-buy-section">
-        <text class="section-title">必买清单</text>
-        <view class="must-buy-grid">
-            <view v-for="(item, idx) in items" :key="idx" class="must-buy-card" @click="onCardClick(item)">
-                <view class="must-buy-img-wrap">
-                    <image v-if="item.cover_url" :src="item.cover_url" class="must-buy-img"
-                        mode="aspectFill" :webp="true" />
-                    <view v-else class="must-buy-img-placeholder"></view>
-                </view>
-                <text class="must-buy-title">{{ item.title }}</text>
-            </view>
-        </view>
-    </view>
+	<!-- 热门分区（#2618 验收 ③）：课程前 6 + 积分商品前 6 两段混排，固定条数、不做无限加载；
+	     每段右上角「查看全部」把用户带到对应分区（页内切换，不跳转）。
+	     旧的热门清单区已退役并入本段课程部分（ADR-0072 决策 4）。积分商品卡在 T2 只读呈现，
+	     页内兑换三态是 T3 的面。 -->
+	<view class="hot-section">
+		<view class="hot-head">
+			<text class="hot-title">热门课程</text>
+			<text class="hot-more" @click="onMoreCourses()">查看全部</text>
+		</view>
+		<view class="hot-grid">
+			<view v-for="(course, ci) in courses" :key="course.course_id" class="hot-card"
+				@click="onCourseClick(ci)">
+				<view class="hot-img-wrap">
+					<image v-if="course.cover_url.length > 0" class="hot-img" :src="course.cover_url"
+						:webp="true" mode="aspectFill" />
+					<view v-else class="hot-img-placeholder"></view>
+				</view>
+				<text class="hot-name">{{ course.title }}</text>
+				<text class="hot-price" :class="priceClass(course.points_price)">{{ hotPriceText(course.points_price) }}</text>
+			</view>
+		</view>
+
+		<view class="hot-head">
+			<text class="hot-title">热门积分商品</text>
+			<text class="hot-more" @click="onMorePoints()">查看全部</text>
+		</view>
+		<view class="hot-grid">
+			<view v-for="(it, pi) in items" :key="it.sku" class="hot-card">
+				<view class="hot-img-wrap">
+					<image v-if="hasCover(it)" class="hot-img" :src="coverOf(it)" :webp="true" mode="aspectFill" />
+					<view v-else class="hot-img-placeholder"></view>
+				</view>
+				<text class="hot-name">{{ it.title }}</text>
+				<text class="hot-price hot-price-paid">{{ it.price }} 积分</text>
+			</view>
+		</view>
+	</view>
 </template>
 
 <script setup lang="uts">
-    import type { CourseItem } from '../../../types/index'
+	import { renderCoursePrice } from '../../../utils/coursePointsCta'
+	import type { CourseItem, ShopItem } from '../../../types/index'
 
-    defineProps<{ items : CourseItem[] }>()
-    const emit = defineEmits(['productClick'])
+	const props = defineProps<{
+		courses : CourseItem[]
+		items : ShopItem[]
+	}>()
 
-    function onCardClick(item : CourseItem) : void {
-        emit('productClick', item)
-    }
+	const emit = defineEmits(['productClick', 'moreCourses', 'morePoints'])
+
+	/** 价格文案单点：与 mall-course-card 同一函数（消费页不各写一份，见 utils/coursePointsCta.uts 头注） */
+	function hotPriceText(pointsPrice : number | null) : string {
+		return renderCoursePrice(pointsPrice)
+	}
+
+	function priceClass(pointsPrice : number | null) : string {
+		return hotPriceText(pointsPrice) == '免费' ? 'hot-price-free' : 'hot-price-paid'
+	}
+
+	/** image_url 可空（后端 x-nullable）：先判空再取，喂 <image> 的 src 恒为 string */
+	function hasCover(item : ShopItem) : boolean {
+		const u = item.image_url
+		return u != null && u.length > 0
+	}
+
+	function coverOf(item : ShopItem) : string {
+		const u = item.image_url
+		if (u == null) return ''
+		return u
+	}
+
+	function onCourseClick(idx : number) : void {
+		emit('productClick', props.courses[idx])
+	}
+
+	function onMoreCourses() : void {
+		emit('moreCourses')
+	}
+
+	function onMorePoints() : void {
+		emit('morePoints')
+	}
 </script>
 
 <style lang="scss">
-    /* ===== 必买清单区域（原型未画本态，保持现网形态：白卡语言随列表底色补底）===== */
-    .must-buy-section {
-        padding: 20rpx;
-        background-color: $card-bg;
-        border-bottom: 1rpx solid $bg-color;
-    }
+	/* ===== 热门分区 ===== */
+	.hot-section {
+		padding: 20rpx;
+		background-color: $card-bg;
+		border-bottom: 1rpx solid $bg-color;
+	}
 
-    .section-title {
-        font-size: 30rpx;
-        font-weight: bold;
-        color: $text-color;
-        margin-bottom: 20rpx;
-    }
+	.hot-head {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 20rpx;
+	}
 
-    .must-buy-grid {
-        flex-direction: row;
-        flex-wrap: wrap;
-        justify-content: space-between;
-    }
+	.hot-title {
+		font-size: 30rpx;
+		font-weight: bold;
+		color: $text-color;
+	}
 
-    .must-buy-card {
-        width: 48%;
-        margin-bottom: 20rpx;
-    }
+	.hot-more {
+		font-size: 24rpx;
+		color: $primary-color;
+	}
 
-    .must-buy-img-wrap {
-        width: 100%;
-        height: 160rpx;
-        border-radius: 12rpx;
-        background-color: $bg-color;
-        overflow: hidden;
-    }
+	.hot-grid {
+		flex-direction: row;
+		flex-wrap: wrap;
+		justify-content: space-between;
+	}
 
-    .must-buy-img {
-        width: 100%;
-        height: 100%;
-    }
+	.hot-card {
+		width: 48%;
+		margin-bottom: 20rpx;
+	}
 
-    .must-buy-img-placeholder {
-        width: 100%;
-        height: 100%;
-        background-color: #e8e8e8;
-    }
+	.hot-img-wrap {
+		width: 100%;
+		height: 160rpx;
+		border-radius: 12rpx;
+		background-color: $bg-color;
+		overflow: hidden;
+	}
 
-    .must-buy-title {
-        font-size: 24rpx;
-        color: $text-color;
-        margin-top: 12rpx;
-        lines: 2;
-        text-overflow: ellipsis;
-    }
+	.hot-img {
+		width: 100%;
+		height: 160rpx;
+	}
+
+	.hot-img-placeholder {
+		width: 100%;
+		height: 160rpx;
+		background-color: #e8e8e8;
+	}
+
+	.hot-name {
+		font-size: 24rpx;
+		color: $text-color;
+		margin-top: 12rpx;
+		lines: 2;
+		text-overflow: ellipsis;
+	}
+
+	.hot-price {
+		font-size: 24rpx;
+		margin-top: 8rpx;
+	}
+
+	.hot-price-free {
+		color: $color-price;
+	}
+
+	.hot-price-paid {
+		color: $text-color;
+	}
 </style>

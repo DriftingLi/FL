@@ -244,7 +244,7 @@ describe('批6 mall 补漏（裁定 A：#1595 台账行 25 判 N03，批3 清单
 
   it('商城私有组件接线与证件随 /courses 下发两处行为锁不受页头迁移影响（#1609 只动页头；#2617 T1 起证件装载在 useMall）', () => {
     const s = read(MALL);
-    for (const c of ['mall-sort-bar', 'mall-category-sidebar', 'mall-float-actions', 'mall-course-card', 'mall-hot-section']) {
+    for (const c of ['mall-sort-bar', 'mall-category-sidebar', 'mall-float-actions', 'mall-course-card', 'mall-hot-section', 'mall-shop-card']) {
       expect(s).toContain(`./components/${c}.uvue`);
     }
     expect(read('pages/mall/composables/useMall.uts')).toContain('getCourseListApi(page.value, pageSize, 0, 0, browseCredentialId.value)');

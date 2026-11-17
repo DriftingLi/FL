@@ -1,9 +1,9 @@
 <template>
-	<!-- 左侧分类栏（824:6971 实测：栏宽 230rpx，行高 116rpx，文字左对齐缩进 40rpx，
-	     激活 = 灰底($bg-color) + 主色粗体，无左缘色条；原型只画了「图书系列」激活态）。
-	     三态 = 热门 / 图书系列（本页态）+ 积分兑换（不是本页态：点击经 categoryChange(2)
-	     由页面跳积分商城，824:7014 → 821:6396 边，Q8 两路由不合并）。
-    	     VIP 套餐位退役：原型本屏左栏为 热门/图书系列/积分兑换，无 VIP 位（红字特殊态随之清退）。 -->
+	<!-- 左侧货架四态栏（824:6971 实测：栏宽 230rpx，行高 116rpx，文字左对齐缩进 40rpx，
+	     激活 = 灰底($bg-color) + 主色粗体，无左缘色条）。
+	     四态 = 热门 / 课程 / 图书系列 / 积分兑换，全部是本页态（#2618 反转 #2518 Q8：
+	     合并页内切换只换内容区，不再跳积分商城）。MECE 口径见 ADR-0072 决策 2。
+	     VIP 套餐位退役：原型本屏左栏为 热门/图书系列/积分兑换，无 VIP 位（红字特殊态随之清退）。 -->
 	<scroll-view class="category-sidebar" scroll-y="true">
 		<view v-for="(cat, idx) in categories" :key="idx" class="category-item"
 			:class="{ 'category-active': activeCategory === idx }"
@@ -20,10 +20,12 @@
 		id : number
 	}
 
+	// 顺序即分区号：0 热门 / 1 课程 / 2 图书系列 / 3 积分兑换（useMall.activeCategory 同口径）
 	const categories : CategoryItem[] = [
 		{ name: '热门', id: 0 },
-		{ name: '图书系列', id: 1 },
-		{ name: '积分兑换', id: 2 },
+		{ name: '课程', id: 1 },
+		{ name: '图书系列', id: 2 },
+		{ name: '积分兑换', id: 3 },
 	]
 
 	const props = withDefaults(defineProps<{

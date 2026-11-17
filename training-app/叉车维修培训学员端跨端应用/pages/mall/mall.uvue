@@ -10,44 +10,89 @@
             </template>
         </AppNavBar>
 
-        <!-- 排序栏（824:6971 实测：88rpx 高、商品左锚定带主色胶囊下划线、右端搜索位） -->
-        <MallSortBar :active-sort="activeSort" @sort-change="onSortChange" @search="onSearch" />
+        <!-- 余额卡常驻页头下方，四态可见（#2618 验收 ⑤） -->
+        <PointsBalanceCard :points="pointsBalance" @earn="onEarnPoints" />
+
+        <!-- 排序栏（#2618 T2：它只对课程列表有意义 ⇒ 只在课程分区显示；T3 整体退役）。
+             位置与 T1 相同（双栏主体之前的通栏），课程分区观感零变化 -->
+        <MallSortBar v-if="activeCategory === 1" :active-sort="activeSort"
+            @sort-change="onSortChange" @search="onSearch" />
 
         <!-- 双栏主体 -->
         <view class="main-body">
-            <!-- 左侧分类栏（热门/图书系列 = 本页态；积分兑换 → 积分商城，见 onCategoryChange） -->
+            <!-- 左侧货架四态栏（热门 / 课程 / 图书系列 / 积分兑换，全部页内切换，见 onCategoryChange） -->
             <MallCategorySidebar :active-category="activeCategory" @category-change="onCategoryChange" />
 
-            <!-- 右侧商品列表（原型 824:6971：灰底列表 + 白卡通栏、卡距 20rpx） -->
+            <!-- 右侧内容区：四态各一层 partition，切换只换这里的内容（#2618 验收 ①） -->
             <scroll-view class="product-list" scroll-y="true" @scrolltolower="onLoadMore">
-                <!-- 必买清单区域（热门分类时显示）——#2617 T1 起是独立组件，空列表由组件自身 v-if 收口 -->
-                <MallHotSection v-if="activeCategory === 0" :items="hotCourses" @product-click="onProductClick" />
+                <!-- ① 热门：课程前 6 + 积分商品前 6 混排，固定条数不做无限加载（验收 ③）。
+                     空列表由组件自身收口 -->
+                <view v-if="activeCategory === 0" class="partition">
+                    <MallHotSection :courses="hotCourses" :items="hotItems" @product-click="onProductClick"
+                        @more-courses="onShowCourses" @more-points="onShowPoints" />
+                </view>
 
-                <!-- 商品列表 -->
-                <!-- #1331/#816：失败态与「暂无商品」分开 —— 5xx/断网不伪装成空货架，给可见错误 + 重试位 -->
-                <view v-if="coursesLoadError && courses.length == 0 && !coursesLoading" class="empty-tip">
-                    <text class="empty-text">商品加载失败，请检查网络后重试</text>
-                    <view class="retry-btn" @click="loadCourses(true)">
-                        <text class="retry-btn-text">重试</text>
+                <!-- ② 课程：全部课程，免费标「免费」、付费标「N 积分」（验收 ④） -->
+                <view v-else-if="activeCategory === 1" class="partition">
+                    <!-- #1331/#816：失败态与「暂无商品」分开 —— 5xx/断网不伪装成空货架，给可见错误 + 重试位 -->
+                    <view v-if="coursesLoadError && courses.length == 0 && !coursesLoading" class="empty-tip">
+                        <text class="empty-text">商品加载失败，请检查网络后重试</text>
+                        <view class="retry-btn" @click="loadCourses(true)">
+                            <text class="retry-btn-text">重试</text>
+                        </view>
+                    </view>
+                    <view v-else-if="courses.length == 0 && !coursesLoading" class="empty-tip">
+                        <text class="empty-text">暂无商品</text>
+                    </view>
+                    <!-- 整卡点击进课程详情页（兑换确认在详情页做，列表里不误扣分）；跳转归页面，卡只回抛 -->
+                    <MallCourseCard v-for="(item, idx) in courses" :key="item.course_id" :title="item.title"
+                        :cover-url="item.cover_url" :points-price="item.points_price"
+                        @product-click="onProductClick(item)" />
+                    <view v-if="coursesLoading" class="loading-more">
+                        <text class="loading-text">加载中...</text>
+                    </view>
+                    <view v-if="coursesNoMore && courses.length > 0" class="loading-more">
+                        <text class="loading-text">没有更多了</text>
                     </view>
                 </view>
-                <view v-else-if="courses.length == 0 && !coursesLoading" class="empty-tip">
-                    <text class="empty-text">暂无商品</text>
+
+                <!-- ③ 图书系列：category=book 的积分商品（T2 只读呈现，筛选与兑换三态是 T3 的面） -->
+                <view v-else-if="activeCategory === 2" class="partition">
+                    <view v-if="bookItems.length == 0 && !bookLoading" class="empty-tip">
+                        <text class="empty-text">暂无商品</text>
+                    </view>
+                    <MallShopCard v-for="(it, bi) in bookItems" :key="it.sku" :title="it.title"
+                        :cover-url="shopCoverUrl(it)" :price="it.price" :stock-label="stockText(it)" />
+                    <view v-if="bookLoading" class="loading-more">
+                        <text class="loading-text">加载中...</text>
+                    </view>
                 </view>
-                <!-- 课程卡（#2617 T1 起是独立组件）；跳转归页面，卡只回抛 -->
-                <MallCourseCard v-for="(item, idx) in courses" :key="idx" :title="item.title"
-                    :cover-url="item.cover_url" :points-price="item.points_price"
-                    @product-click="onProductClick(item)" />
-                <view v-if="coursesLoading" class="loading-more">
-                    <text class="loading-text">加载中...</text>
-                </view>
-                <view v-if="coursesNoMore && courses.length > 0" class="loading-more">
-                    <text class="loading-text">没有更多了</text>
+
+                <!-- ④ 积分兑换：points_price 非空的课程段 + 积分商品全量（ADR-0072 决策 2 的 MECE 口径） -->
+                <view v-else class="partition">
+                    <view v-if="redeemableCourses.length == 0 && items.length == 0 && !loading && !coursesLoading"
+                        class="empty-tip">
+                        <text class="empty-text">暂无商品</text>
+                    </view>
+                    <view v-if="redeemableCourses.length > 0" class="partition-head">
+                        <text class="partition-title">积分课程</text>
+                    </view>
+                    <MallCourseCard v-for="(item, ri) in redeemableCourses" :key="item.course_id" :title="item.title"
+                        :cover-url="item.cover_url" :points-price="item.points_price"
+                        @product-click="onProductClick(item)" />
+                    <view v-if="items.length > 0" class="partition-head">
+                        <text class="partition-title">积分商品</text>
+                    </view>
+                    <MallShopCard v-for="(it, si) in items" :key="it.sku" :title="it.title"
+                        :cover-url="shopCoverUrl(it)" :price="it.price" :stock-label="stockText(it)" />
+                    <view v-if="loading || coursesLoading" class="loading-more">
+                        <text class="loading-text">加载中...</text>
+                    </view>
                 </view>
             </scroll-view>
         </view>
 
-        <!-- 悬浮按钮组 -->
+        <!-- 右下角单搜索按钮（旧三钮胶囊收敛，验收 ⑤） -->
         <MallFloatActions @search="onSearch" />
     </view>
 </template>
@@ -59,40 +104,49 @@
     import MallSortBar from './components/mall-sort-bar.uvue'
     import MallCategorySidebar from './components/mall-category-sidebar.uvue'
     import MallCourseCard from './components/mall-course-card.uvue'
+    import MallShopCard from './components/mall-shop-card.uvue'
     import MallHotSection from './components/mall-hot-section.uvue'
     import MallFloatActions from './components/mall-float-actions.uvue'
+    import PointsBalanceCard from '../points/components/points-balance-card.uvue'
     import AppNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { useMall } from './composables/useMall'
 
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
-    // #2617 T1：分区 / 课程列表 / 三态全在 useMall，页面只解构消费（页面壳层零自持状态）
+    // #2617 T1 / #2618 T2：四态 / 两路列表 / 余额 / 三态全在 useMall，页面只解构消费（页面壳层零自持状态）
     const {
-        courses, hotCourses, activeSort, activeCategory, coursesLoading, coursesNoMore, coursesLoadError,
-        loadCourses, loadMoreCourses, setSort, setCategory, startCourses,
+        courses, hotCourses, hotItems, redeemableCourses, bookItems, bookLoading,
+        activeSort, activeCategory, coursesLoading, coursesNoMore, coursesLoadError,
+        pointsBalance, items, loading, loadCourses, loadMoreCourses, setSort, setCategory,
+        startMall, shopCoverUrl, stockText, onEarnPoints,
     } = useMall()
 
     function onSortChange(idx : number) : void {
         setSort(idx)
     }
 
-    /** 左栏「积分兑换」→ 积分商城（824:7014 → 821:6396 边；Q8 两路由不合并，互跳即两路由互跳） */
-    function onGoPointsShop() : void {
-        uni.navigateTo({ url: '/pages/points/points-shop' })
+    /**
+     * 左栏四态一律页内切换（#2618 反转 #2518 Q8）：只换内容区、不发请求 —— 两路列表在 startMall
+     * 已随首屏装载，分区之间是同一批数据的切片（ADR-0072 决策 2）。
+     */
+    function onCategoryChange(idx : number) : void {
+        setCategory(idx)
     }
 
-    function onCategoryChange(idx : number) : void {
-        if (idx == 2) {
-            onGoPointsShop()
-            return
-        }
-        setCategory(idx)
+    /** 热门段「查看全部」→ 对应分区（验收 ③） */
+    function onShowCourses() : void {
+        setCategory(1)
+    }
+
+    function onShowPoints() : void {
+        setCategory(3)
     }
 
     function onLoadMore() : void {
         loadMoreCourses()
     }
 
+    /** 整卡点击进课程详情（验收 ④）：兑换确认在详情页做，列表里点不扣分 */
     function onProductClick(item : CourseItem) : void {
         uni.navigateTo({ url: '/pages/courses/course-detail?id=' + item.course_id })
     }
@@ -105,10 +159,12 @@
         goBack()
     }
 
-    // onLoad 必须带 options 形参：Kotlin Function1<OnLoadOptions, Unit>，零参即 error17
-    // 证件解析与首屏装载都在 useMall.startCourses（内部用 .then 串，回调保持 Unit）
+    // onLoad 必须带 options 形参：Kotlin Function1<OnLoadOptions, Unit>，零参即 error17。
+    // tab 深链（#2618 验收 ②）：tab=points 落「积分兑换」，缺省或未知值落「热门」。
+    // 键取 options['tab'] 索引形态（utils/navQueryKeyContract.test.js 按括号字符串键解析）。
     onLoad((options : OnLoadOptions) => {
-        startCourses()
+        const rawTab = options['tab']
+        startMall(rawTab != null ? rawTab.toString() : '')
     })
 </script>
 
@@ -138,12 +194,28 @@
         flex-direction: row;
     }
 
-    /* ===== 右侧商品列表（原型：灰底通栏 + 白卡、卡距 20rpx）=====
-       必买清单区样式随 #2617 T1 迁入 components/mall-hot-section.uvue，
-       商品卡样式迁入 components/mall-course-card.uvue */
+    /* ===== 右侧内容区（原型：灰底通栏 + 白卡、卡距 20rpx）=====
+       热门区样式在 components/mall-hot-section.uvue，课程卡在 mall-course-card.uvue，
+       积分商品只读卡在 mall-shop-card.uvue */
     .product-list {
         flex: 1;
         background-color: $bg-color;
+    }
+
+    /* 分区容器（四态各一层）：只承载分区内小标题与卡片，颜色留给卡片自身 */
+    .partition {
+        flex-direction: column;
+    }
+
+    .partition-head {
+        padding: 20rpx 20rpx 8rpx 20rpx;
+        background-color: $bg-color;
+    }
+
+    .partition-title {
+        font-size: 28rpx;
+        font-weight: bold;
+        color: $text-color;
     }
 
     /* ===== 空状态 ===== */

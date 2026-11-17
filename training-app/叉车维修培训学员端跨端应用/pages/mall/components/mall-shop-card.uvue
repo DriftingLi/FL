@@ -1,0 +1,87 @@
+<template>
+	<!-- 积分商品只读卡（#2618 T2）：图书系列与积分兑换分区用。T2 只呈现商品事实，
+	     页内兑换三态（按钮/不可点/兑换中）是 T3 的面 —— 本卡不带 emit、不带按钮。 -->
+	<view class="shop-card">
+		<view class="shop-cover-wrap">
+			<image v-if="coverUrl.length > 0" class="shop-cover" :src="coverUrl" :webp="true" mode="aspectFill" />
+			<view v-else class="shop-cover-placeholder"></view>
+		</view>
+		<view class="shop-body">
+			<text class="shop-name">{{ title }}</text>
+			<view class="shop-meta-row">
+				<text class="shop-price">{{ price }} 积分</text>
+				<text v-if="stockLabel.length > 0" class="shop-stock">{{ stockLabel }}</text>
+			</view>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+	// 标量 props（裸对象类型挂 defineProps 会被 uvue 编译成 Any，见 mall-course-card 头注）
+	const props = defineProps<{
+		title : string
+		coverUrl : string
+		price : number
+		stockLabel : string
+	}>()
+</script>
+
+<style lang="scss">
+	/* ===== 积分商品只读卡 ===== */
+	.shop-card {
+		flex-direction: row;
+		padding: 20rpx;
+		background-color: $card-bg;
+		margin-bottom: 20rpx;
+	}
+
+	.shop-cover-wrap {
+		width: 135rpx;
+		height: 135rpx;
+		background-color: $bg-color;
+		overflow: hidden;
+		margin-right: 24rpx;
+		flex-shrink: 0;
+	}
+
+	.shop-cover {
+		width: 135rpx;
+		height: 135rpx;
+	}
+
+	.shop-cover-placeholder {
+		width: 135rpx;
+		height: 135rpx;
+		background-color: #e8e8e8;
+	}
+
+	.shop-body {
+		flex: 1;
+		flex-direction: column;
+		justify-content: space-between;
+	}
+
+	.shop-name {
+		font-size: 28rpx;
+		color: $text-color;
+		lines: 2;
+		text-overflow: ellipsis;
+	}
+
+	.shop-meta-row {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		margin-top: 12rpx;
+	}
+
+	.shop-price {
+		font-size: 28rpx;
+		color: $color-price;
+	}
+
+	.shop-stock {
+		font-size: 24rpx;
+		color: $text-color-placeholder;
+	}
+</style>

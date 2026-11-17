@@ -8,6 +8,11 @@
  * points-shop 不多打课程请求（#2617 验收 ③）。两路状态刻意不同名：合并页要同时持有课程与积分商品
  * 两份列表，同名 ref 会把「哪一路在加载」变成隐性约定。
  *
+ * #2618 T2 起 mall 页是四态货架（热门 0 / 课程 1 / 图书系列 2 / 积分兑换 3，ADR-0072 决策 2）：
+ * 左栏页内切换只改 activeCategory，不再跳转积分商城；初始分区由 onLoad 的 tab 决定
+ * （tab=points → 积分兑换，缺省/未知 → 热门）。热门用的是两路列表的前 6 条（hotCourses / hotItems），
+ * 图书系列走 category=book 的筛选动词，积分兑换 = points_price 非空课程 + 积分商品全量。
+ *
  * 课程路（mall 页）：`/courses` 是公开路由，服务端 CredentialScoped 兜底永不生效
  * （见 api/course.uts 文件头、docs/agents/credential-scope.md）⇒ 必须显式下发当前证件；
  * mall 是 pushed 页（每次进入重新 onLoad），故只在 startCourses 取一次证件、不在 onShow 跟切换。
@@ -44,12 +49,19 @@ export type UseMallResult = {
     loadMoreCourses : () => void
     setSort : (idx : number) => void
     setCategory : (idx : number) => void
-    startCourses : () => void
+    /** 四态首屏（tab 决定初始分区；两源各一次装载） */
+    startMall : (tab : string) => void
+    /** 四态分区的切片/派生 */
+    hotItems : Ref<ShopItem[]>
+    redeemableCourses : Ref<CourseItem[]>
     /** 积分商品路 */
     pointsBalance : Ref<number>
     items : Ref<ShopItem[]>
     loading : Ref<boolean>
     loadFailed : Ref<boolean>
+    bookItems : Ref<ShopItem[]>
+    bookLoading : Ref<boolean>
+    shopCoverUrl : (item : ShopItem) => string
     categoryOptions : MallFilterOption[]
     rangeOptions : MallFilterOption[]
     filterPanel : Ref<string>
@@ -74,10 +86,9 @@ export type UseMallResult = {
 export function useMall() : UseMallResult {
     // ===== 课程路状态（声明先于引用它的函数：UTS 无提升，后置声明即 Kotlin 编译错）=====
     const activeSort = ref<number>(0)
-    // 0 热门 / 1 图书系列 = 本页态；2 积分兑换不是本页态，选中即跳积分商城（Q8 两路由互跳）
+    // 四态（ADR-0072 决策 2 的 MECE 分区）：0 热门 / 1 课程 / 2 图书系列 / 3 积分兑换 —— 全是本页态
     const activeCategory = ref<number>(0)
     const courses = ref<CourseItem[]>([]) as Ref<CourseItem[]>
-    const hotCourses = ref<CourseItem[]>([]) as Ref<CourseItem[]>
     const page = ref<number>(1)
     const pageSize = 12
     const coursesLoading = ref<boolean>(false)
@@ -92,6 +103,17 @@ export function useMall() : UseMallResult {
     const items = ref<ShopItem[]>([]) as Ref<ShopItem[]>
     const loading = ref<boolean>(false)
     const loadFailed = ref<boolean>(false)
+    /** 图书系列分区（#2618 T2 按类型取源：category=book）；T3 再在它上面接筛选与兑换三态 */
+    const bookItems = ref<ShopItem[]>([]) as Ref<ShopItem[]>
+    const bookLoading = ref<boolean>(false)
+
+    // ===== 四态分区的切片/派生（都在装载处更新一次，模板只读 ref，不在渲染里算）=====
+    /** 热门课程段 = 课程前 6（固定条数，无「查看更多」翻页态） */
+    const hotCourses = ref<CourseItem[]>([]) as Ref<CourseItem[]>
+    /** 热门积分商品段 = 积分商品前 6 */
+    const hotItems = ref<ShopItem[]>([]) as Ref<ShopItem[]>
+    /** 积分兑换分区的课程段 = points_price 非空的课程（分区按商品类型切，不按数据源表切） */
+    const redeemableCourses = ref<CourseItem[]>([]) as Ref<CourseItem[]>
     /** 正在兑换的 sku（空串表示无进行中请求，兼作防重入闸门） */
     const redeemingSku = ref<string>('')
 
@@ -158,6 +180,25 @@ export function useMall() : UseMallResult {
         return 'shop-btn-text-active'
     }
 
+    /** 积分兑换分区的课程段：points_price 非空（可空槽是非空引用判不了的，显式比 null） */
+    function redeemableList(list : CourseItem[]) : CourseItem[] {
+        const out : CourseItem[] = []
+        for (let i = 0; i < list.length; i++) {
+            const it = list[i]
+            if (it.points_price != null) {
+                out.push(it)
+            }
+        }
+        return out
+    }
+
+    /** 积分商品封面：image_url 可空，拍平成标量给卡片（裸对象挂 defineProps 会被编译成 Any） */
+    function shopCoverUrl(item : ShopItem) : string {
+        const u = item.image_url
+        if (u == null) return ''
+        return u
+    }
+
     // ===== 课程路装载 =====
 
     async function loadBrowseCredential() : Promise<void> {
@@ -190,10 +231,9 @@ export function useMall() : UseMallResult {
             } else {
                 courses.value = courses.value.concat(result.items)
             }
-            // 热门分类时加载必买清单
-            if (activeCategory.value === 0 && reset) {
-                hotCourses.value = result.items.slice(0, 4)
-            }
+            // 四态切片随装载更新（热门段固定前 6；积分兑换课程段按 points_price 过滤）
+            hotCourses.value = courses.value.slice(0, 6)
+            redeemableCourses.value = redeemableList(courses.value)
             if (courses.value.length >= result.total || result.items.length == 0) {
                 coursesNoMore.value = true
             } else {
@@ -207,7 +247,9 @@ export function useMall() : UseMallResult {
         }
     }
 
+    /** 只有课程分区有「加载更多」：热门是固定条数（#2618 验收 ③），其余分区是只读全量 */
     function loadMoreCourses() : void {
+        if (activeCategory.value != 1) return
         loadCourses(false)
     }
 
@@ -216,9 +258,9 @@ export function useMall() : UseMallResult {
         loadCourses(true)
     }
 
+    /** 左栏四态：只换内容区，不跳转、不重发请求（两路列表在 startMall 已装载；#2618 验收 ①） */
     function setCategory(idx : number) : void {
         activeCategory.value = idx
-        loadCourses(true)
     }
 
     /**
@@ -258,11 +300,36 @@ export function useMall() : UseMallResult {
                 res = await getShopItemsFilteredApi(cat, range.min, range.max)
             }
             items.value = res.items
+            hotItems.value = res.items.slice(0, 6)
         } catch (e) {
             loadFailed.value = true
             console.warn('[points-shop] items failed:', errMsg(e, '商品加载失败'))
         }
         loading.value = false
+    }
+
+    /** 图书系列分区装载（T2 只读呈现；失败只留空列表 + 空态，不挡其他分区） */
+    async function loadBookItems() : Promise<void> {
+        bookLoading.value = true
+        try {
+            const res : ShopItemsResult = await getShopItemsFilteredApi('book', 0, 0)
+            bookItems.value = res.items
+        } catch (e) {
+            console.warn('[mall] book items failed:', errMsg(e, '图书加载失败'))
+        }
+        bookLoading.value = false
+    }
+
+    /**
+     * 四态首屏装载：tab 决定初始分区（tab=points → 积分兑换，缺省/未知 → 热门，ADR-0072 决策 2）。
+     * 课程与积分商品两源各打一次，余额与图书系列随首屏一起拿。
+     */
+    function startMall(tab : string) : void {
+        activeCategory.value = tab == 'points' ? 3 : 0
+        loadBalance()
+        loadItems()
+        loadBookItems()
+        startCourses()
     }
 
     function onEarnPoints() : void {
@@ -364,11 +431,16 @@ export function useMall() : UseMallResult {
         loadMoreCourses: () : void => loadMoreCourses(),
         setSort: (idx : number) : void => setSort(idx),
         setCategory: (idx : number) : void => setCategory(idx),
-        startCourses: () : void => startCourses(),
+        startMall: (tab : string) : void => startMall(tab),
+        hotItems: hotItems,
+        redeemableCourses: redeemableCourses,
         pointsBalance: pointsBalance,
         items: items,
         loading: loading,
         loadFailed: loadFailed,
+        bookItems: bookItems,
+        bookLoading: bookLoading,
+        shopCoverUrl: (item : ShopItem) : string => shopCoverUrl(item),
         categoryOptions: categoryOptions,
         rangeOptions: rangeOptions,
         filterPanel: filterPanel,
