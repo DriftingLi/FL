@@ -74,6 +74,10 @@
                   上传后读者端按 Word 原样排版渲染（不经 Markdown）。改内容请改 Word 后重新上传；
                   单文件不超过 50MB，仅支持 .docx。
                 </div>
+                <!-- docx 也要能预览：读者看到的就是 Word 原样，作者上传后得能先确认一遍 -->
+                <div v-if="form.docx_url" class="mt-2 flex justify-end">
+                  <UiButton size="small" @click="openPreview">发布端预览</UiButton>
+                </div>
               </div>
             </template>
 
@@ -154,6 +158,7 @@
       v-model="previewVisible"
       subset="featured"
       :content="previewContent"
+      :docx-url="previewDocxUrl"
       subtitle="门户访客与移动端学员看到的样子。"
     />
   </div>
@@ -300,9 +305,12 @@ const outsideNotice = computed(() => outsideSubsetNotice(outsideSubsetLabels.val
 // 发布端预览（#903）：同讲师端，取编辑器最新值快照，不写回表单、不发请求
 const previewVisible = ref(false)
 const previewContent = ref('')
+// docx 形态下预览直接看那个文件（#2631）：两种形态互斥，谁有值就渲染谁
+const previewDocxUrl = ref('')
 
 function openPreview() {
   previewContent.value = markdownEditorRef.value?.getValue() || form.content
+  previewDocxUrl.value = form.content_type === 'docx' ? form.docx_url : ''
   previewVisible.value = true
 }
 

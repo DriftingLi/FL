@@ -41,7 +41,7 @@ import '@/assets/styles/vditor-dark.css'
 import 'vditor/dist/js/i18n/zh_CN.js'
 import { useAuthStore } from '@/stores/auth'
 // 内容排版按钮（颜色 / 字号 / 对齐 / 图片居中）：命令体是纯函数，按钮定义在独立文件里
-import { createContentToolbarItems, type ContentToolbarItem } from './markdownEditorToolbar'
+import { createContentToolbarItems, createTableToolbarItems, type ContentToolbarItem } from './markdownEditorToolbar'
 
 const props = withDefaults(defineProps<{
   modelValue: string
@@ -93,12 +93,20 @@ const BASE_TOOLBAR = [
   'link', 'table', 'code'
 ]
 
-/** 组装完整工具栏：内容排版按钮插在「表格 / 代码」之后、「撤销」之前 */
-function buildToolbar(): Array<string | ContentToolbarItem> {
+/**
+ * 组装完整工具栏：内容排版按钮插在「表格 / 代码」之后、「撤销」之前
+ *
+ * @param targetMode 正在创建的模式：表格增删只在 IR 挂出 —— 源码模式没有表格 DOM，
+ *   命令无处落脚（点了只会弹「请先把光标放进表格」的提示，不如不显示）。
+ */
+function buildToolbar(targetMode: 'ir' | 'sv'): Array<string | ContentToolbarItem> {
   const tail = ['|', 'undo', 'redo', 'fullscreen', 'preview']
-  if (!props.contentStyles) return [...BASE_TOOLBAR, ...tail]
   // getter 而不是实例：切模式 / 切主题都会重建实例，命令要拿到当下那一个
-  return [...BASE_TOOLBAR, ...createContentToolbarItems(() => vditor), ...tail]
+  // 表格增删行列**不受 contentStyles 门控**：它改的是 Markdown 表格结构、不产出内嵌 HTML，
+  // 与那道「只有 Web 章节面才渲染 HTML」的闸门无关。
+  const tableItems = targetMode === 'ir' ? createTableToolbarItems(() => vditor) : []
+  if (!props.contentStyles) return [...BASE_TOOLBAR, ...tableItems, ...tail]
+  return [...BASE_TOOLBAR, ...tableItems, ...createContentToolbarItems(() => vditor), ...tail]
 }
 
 /** UiUnderlineTabs 的载荷是 string，这里收窄回 Vditor 的两档 */
@@ -154,11 +162,49 @@ function buildUploadConfig() {
   }
 }
 
+/**
+ * 全屏层级（修「全屏后退不出」）。
+ *
+ * Vditor 默认 `fullscreen.index = 90`，而应用顶栏 / 侧栏是 `var(--z-fixed)` = 1030
+ * （`assets/styles/design-tokens.css`）—— 全屏后顶栏照旧压在编辑器之上，
+ * 工具栏连同「退出全屏」那个按钮都被盖住、点不到。实测（临时探针 fs4.html）：
+ * index=90 时 `document.elementFromPoint(按钮中心)` 命中顶栏（`btnReachable:false`），
+ * index 抬高后命中按钮自身（`true`）。
+ *
+ * 取值 = `--z-fixed` + 1：高于顶栏、仍低于 `--z-modal-backdrop`(1040)，
+ * 于是全屏期间弹出的确认框还盖得住编辑器（否则用户看不见它、以为卡死）。
+ * 令牌在浏览器里读、读不到才退兜底 —— 写死数字会在令牌调整后重新被压住。
+ */
+function fullscreenIndex(): number {
+  if (typeof document === 'undefined') return 1031
+  const fixed = Number.parseInt(
+    getComputedStyle(document.documentElement).getPropertyValue('--z-fixed'),
+    10
+  )
+  return (Number.isFinite(fixed) ? fixed : 1030) + 1
+}
+
+/**
+ * 释放全屏留下的滚动锁。
+ *
+ * Vditor 进全屏时把 `document.body.style.overflow` 设成 `hidden`，但它的
+ * `destroy`（`vditor/dist/index.js`）只清自己元素的 innerHTML / class / style，
+ * **不动 body** —— 在全屏态切模式或切主题（本组件 destroy + 重建）就会把整页
+ * 永久锁死滚动。所以销毁全屏态实例前，由我们把这把锁还回去。
+ */
+function releaseBodyScrollLock(instance: Vditor | null) {
+  if (!instance || typeof document === 'undefined') return
+  if (instance.vditor?.element?.classList.contains('vditor--fullscreen')) {
+    document.body.style.overflow = ''
+  }
+}
+
 // 创建 vditor 实例（切换模式时复用）
 // valueToRestore：切换模式时，等 after 回调触发后再用 setValue 恢复内容
 function createVditor(targetMode: 'ir' | 'sv', valueToRestore?: string) {
   if (!vditorRef.value) return
   // 销毁旧实例
+  releaseBodyScrollLock(vditor)
   vditor?.destroy()
   vditor = null
   // 重建期间禁止交互
@@ -174,7 +220,9 @@ function createVditor(targetMode: 'ir' | 'sv', valueToRestore?: string) {
     // 使用本地 CDN 路径，避免从 jsdelivr/unpkg 远程加载 method.min.js 等运行时模块导致国内访问慢
     // 由 vite.config.ts 中的 vditor-static 插件把 node_modules/vditor/dist 复制到 /vditor/
     cdn: '/vditor',
-    toolbar: buildToolbar(),
+    toolbar: buildToolbar(targetMode),
+    // 全屏时编辑器要盖过应用顶栏（见 fullscreenIndex 的说明）
+    fullscreen: { index: fullscreenIndex() },
     toolbarConfig: {
       pin: true
     },
@@ -270,6 +318,7 @@ watch(isDark, () => {
 })
 
 onBeforeUnmount(() => {
+  releaseBodyScrollLock(vditor)
   vditor?.destroy()
   vditor = null
 })

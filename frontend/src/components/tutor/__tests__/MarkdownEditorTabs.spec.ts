@@ -104,7 +104,31 @@ describe('MarkdownEditor 内容排版按钮（contentStyles）', () => {
     const instances = installVditorMock()
     mountEditor()
     await flushPromises()
-    expect(customItems(instances[0].options)).toHaveLength(0)
+    // 表格那四项不受门控（见下一条），这里只看「排版类」是否被挡住
+    const styleItems = customItems(instances[0].options).filter((i) => !i.name.startsWith('table-'))
+    expect(styleItems).toHaveLength(0)
+  })
+
+  it('表格增删按钮不受 contentStyles 门控：它改的是 Markdown 结构、不产出 HTML', async () => {
+    const instances = installVditorMock()
+    mountEditor()
+    await flushPromises()
+    expect(customItems(instances[0].options).map((i) => i.name)).toEqual([
+      'table-insert-row',
+      'table-insert-column',
+      'table-delete-row',
+      'table-delete-column'
+    ])
+  })
+
+  it('切到源码模式不挂表格按钮：源码模式没有表格 DOM，命令无处落脚', async () => {
+    const instances = installVditorMock()
+    const w = mountEditor()
+    await flushPromises()
+    await w.findComponent(UiUnderlineTabs).findAll('button')[1].trigger('click')
+    await flushPromises()
+    const last = instances[instances.length - 1]
+    expect(customItems(last.options).map((i) => i.name)).toEqual([])
   })
 
   it('contentStyles 打开后追加 5 个自定义项：两个对齐 + 图片居中 + 颜色 + 字号', async () => {
@@ -112,6 +136,10 @@ describe('MarkdownEditor 内容排版按钮（contentStyles）', () => {
     mountEditor({ contentStyles: true })
     await flushPromises()
     expect(customItems(instances[0].options).map((i) => i.name)).toEqual([
+      'table-insert-row',
+      'table-insert-column',
+      'table-delete-row',
+      'table-delete-column',
       'align-center',
       'align-left',
       'image-center',
@@ -126,7 +154,8 @@ describe('MarkdownEditor 内容排版按钮（contentStyles）', () => {
     await flushPromises()
     const toolbar = (instances[0].options.toolbar ?? []) as Array<string | { name: string }>
     const names = toolbar.map((i) => (typeof i === 'string' ? i : i.name))
-    expect(names.indexOf('table')).toBeLessThan(names.indexOf('align-center'))
+    expect(names.indexOf('table')).toBeLessThan(names.indexOf('table-insert-row'))
+    expect(names.indexOf('table-delete-column')).toBeLessThan(names.indexOf('align-center'))
     expect(names.indexOf('font-size')).toBeLessThan(names.indexOf('undo'))
     expect(names[names.length - 1]).toBe('preview')
   })
