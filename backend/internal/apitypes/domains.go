@@ -432,6 +432,8 @@ var Domains = []Domain{
 			"course.CourseClaimantsResult",
 			"tutor.ClaimResult",
 			"tutor.DeleteFileResult",
+			// #2599 F1：我的讲师能力集（形状与 admin.AdminCapabilitiesDTO 一致）
+			"tutor.TutorCapabilitiesDTO",
 			"course.TutorCourseChaptersDTO",
 		},
 		Endpoints: []Endpoint{
@@ -450,6 +452,8 @@ var Domains = []Domain{
 			{Method: "POST", Path: "/tutor/course/{course_id}/claim"},
 			{Method: "DELETE", Path: "/tutor/course/{course_id}/claim"},
 			{Method: "GET", Path: "/tutor/course/{course_id}/claims"},
+			// #2599 F1：我的讲师能力集（只挂登录守卫，未授权讲师也要能取到空集）。
+			{Method: "GET", Path: "/tutor/me/capabilities"},
 		},
 	},
 
@@ -650,6 +654,9 @@ var Domains = []Domain{
 			// #2597 D4：讲师课程代分配（三端点共用这两个 DTO）
 			"admin.TutorCourseAssignmentListDTO",
 			"admin.TutorCourseAssignResult",
+			// #2599 E7：讲师角色链（角色 CRUD 两型 + 讲师挂角色回讲师 DTO）
+			"admin.TutorRoleDTO",
+			"admin.TutorRoleListDTO",
 			"auth.RecruiterListResult",
 			"auth.RecruiterCreatedDTO",
 			"auth.RecruiterUpdatedDTO",
@@ -692,7 +699,13 @@ var Domains = []Domain{
 			// #2597 D4：讲师课程代分配（抽屉的三端点，均挂 tutor.manage）
 			{Method: "GET", Path: "/admin/tutor/{tutor_id}/courses"},
 			{Method: "POST", Path: "/admin/tutor/{tutor_id}/courses"},
-			{Method: "DELETE", Path: "/admin/tutor/{tutor_id}/courses"}, {Method: "GET", Path: "/admin/recruiters"},
+			{Method: "DELETE", Path: "/admin/tutor/{tutor_id}/courses"},
+			// #2599 E7：讲师角色链（角色 CRUD + 讲师挂角色，均挂 tutor.manage）
+			{Method: "GET", Path: "/admin/tutor-roles"},
+			{Method: "POST", Path: "/admin/tutor-roles"},
+			{Method: "PUT", Path: "/admin/tutor-roles/{role_id}"},
+			{Method: "DELETE", Path: "/admin/tutor-roles/{role_id}", NoData: true},
+			{Method: "PUT", Path: "/admin/tutor/{tutor_id}/role"}, {Method: "GET", Path: "/admin/recruiters"},
 			{Method: "POST", Path: "/admin/recruiters"},
 			{Method: "PUT", Path: "/admin/recruiters/{id}/status"},
 			{Method: "PUT", Path: "/admin/recruiters/{id}"},

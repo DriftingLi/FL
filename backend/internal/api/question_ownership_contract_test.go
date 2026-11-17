@@ -16,12 +16,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"forklift-training/internal/admincap"
 	"forklift-training/internal/config"
-	"forklift-training/internal/middleware"
 	"forklift-training/internal/model"
 	"forklift-training/internal/questionbank"
 	"forklift-training/internal/security"
@@ -50,10 +47,9 @@ func newOwnershipEnv(t *testing.T) *ownershipEnv {
 	cfg := &config.Config{JWTSecretKey: "ownership-secret", AuthCookie: config.AuthCookieConfig{Name: "hrwai_token"}}
 	r := gin.New()
 	api := r.Group("/api")
-	// 管理端能力解析源（#1618 段1）：题库存根里没有它，管理员令牌会被一律 403
-	// （admin 的能力自数据层回答，静态表不再回答 admin）。本文件要验「管理员直通」，
-	// 因此必须挂上——这与装配根 NewRouter 里的那条是同一份实现。
-	api.Use(middleware.AdminCapabilityResolver(admincap.New(db, zap.NewNop())))
+	// 两份能力解析源（#1618 段1 / #2600）：题库存根里没有它们，管理员与讲师令牌都会被一律 403。
+	// 本文件要验「管理员直通」与「本人放行」，因此必须挂上——与装配根 NewRouter 里的那两条同源。
+	useCapabilityResolvers(api, db)
 	deps := newContractDeps(t, db, cfg)
 	questionbank.RegisterRoutes(api, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.QuestionBankSvc, deps.FileSvc)
 

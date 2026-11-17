@@ -45,6 +45,11 @@ func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, svc *Service
 	g := rg.Group("/tutor", middleware.JWTAuth(session))
 	read := g.Group("", middleware.CapabilityRequired(authz.CapTutorAccess))
 	write := g.Group("", middleware.CapabilityRequired(authz.CapCourseAuthor))
+	// 我的能力集（#2599 / 规格 F1）：**只挂登录守卫、不挂能力键** —— 未授权讲师
+	// （role_id 为 NULL）也必须能取到空集，否则会撞出 403 而无法显示「还没有权限」页。
+	// 与 admin 的 /admin/me/capabilities 同姿势（那条也不挂 CapAdminAccess）。
+	me := g.Group("")
+	me.GET("/me/capabilities", h.MyCapabilities)
 
 	// GET /api/tutor/courses  导师课程列表
 	read.GET("/courses", h.ListCourses)
@@ -69,6 +74,35 @@ func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, svc *Service
 	write.DELETE("/course/:course_id/claim", h.ReleaseCourseClaim)
 	// GET /api/tutor/course/:course_id/claims  该课程的共认讲师名单（#2596 D1）
 	read.GET("/course/:course_id/claims", h.ListCourseClaimants)
+}
+
+// @Summary 当前讲师的有效能力集
+// @Description 登录后前端拉取「我的讲师能力」，用于路由守卫与侧栏过滤（#2599 / 规格 F1）
+// @Tags 讲师端-账号
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.R{data=tutor.TutorCapabilitiesDTO} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 403 {object} response.R "非讲师身份"
+// @Router /tutor/me/capabilities [get]
+// MyCapabilities 当前讲师的有效能力集 GET /api/tutor/me/capabilities
+func (h *handler) MyCapabilities(c *gin.Context) {
+	httpx.Endpoint[myCapabilitiesReq, TutorCapabilitiesDTO]{
+		Parse: func(c *gin.Context) (*myCapabilitiesReq, error) {
+			if middleware.CurrentRole(c) != string(authz.RoleTutor) {
+				return nil, &httpx.ParseError{Status: http.StatusForbidden, Message: "权限不足"}
+			}
+			return &myCapabilitiesReq{TutorID: middleware.CurrentUserID(c)}, nil
+		},
+		Invoke: func(ctx context.Context, req *myCapabilitiesReq) (*TutorCapabilitiesDTO, error) {
+			return h.svc.TutorCapabilitySet(req.TutorID)
+		},
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
+}
+
+// myCapabilitiesReq 本端点的输入（端点无参数，只带出身份）。
+type myCapabilitiesReq struct {
+	TutorID int
 }
 
 // ListCourses 导师课程列表

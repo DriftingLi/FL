@@ -3,6 +3,7 @@ import { ref, computed, customRef } from 'vue'
 import type { Ref } from 'vue'
 import { authApi } from '@/api/auth'
 import { adminApi } from '@/api/admin'
+import { tutorApi } from '@/api/tutor'
 import { getValidAccessToken } from '@/api/client'
 import { isDynamicRole } from '@/utils/authzRuntime'
 import type { UserProfile } from '@/types/user'
@@ -164,18 +165,22 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
-   * 拉取当前管理员的运行时能力集（#1618 段1）。
+   * 拉取当前动态角色（管理员 / 讲师）的运行时能力集。
    *
    * fail closed：拉取失败一律落空集，**不保留上一份** —— 上一份可能已被超管改小，
    * 留着它等于让「刚被收回权限的人」继续看到菜单（点进去才 403）。
-   * 非动态角色不发请求（学员/讲师/招聘者的可达面由静态表回答）。
+   * 非动态角色不发请求（学员/招聘者的可达面由静态表回答）。
+   *
+   * 端点按角色分派（#2600 / 规格 F2）：管理员走 `/admin/me/capabilities`，讲师走
+   * `/tutor/me/capabilities` —— 两个域的可见面互不相同，合成一个端点会把两边口径缠在一起。
    *
    * 返回的 Promise 在**状态落定**（ready / failed）后 resolve，且**必然落定**（两条分支都写
    * capabilityState）—— 守卫的 load-capabilities 决策据此把可见性判定推迟到落定之后（#1645），
    * 落定承诺也是「这一步不会二次触发」的前提。
    */
   function loadCapabilities(): Promise<void> {
-    if (!isDynamicRole(userInfo.value?.role)) {
+    const role = userInfo.value?.role
+    if (!isDynamicRole(role)) {
       capabilities.value = []
       capabilityState.value = 'idle'
       return Promise.resolve()
@@ -185,7 +190,10 @@ export const useAuthStore = defineStore('auth', () => {
     capabilityState.value = 'loading'
     capabilityInFlight = (async () => {
       try {
-        const res = await adminApi.fetchMyCapabilities()
+        const res =
+          role === 'tutor'
+            ? await tutorApi.fetchMyCapabilities()
+            : await adminApi.fetchMyCapabilities()
         if (generation !== capabilityGeneration) return
         capabilities.value = res?.capabilities ?? []
         capabilityState.value = 'ready'

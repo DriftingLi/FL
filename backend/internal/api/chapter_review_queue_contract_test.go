@@ -71,7 +71,9 @@ func TestChapterReviewQueueContract(t *testing.T) {
 		}
 		return tok
 	}
-	tutorTok := sign(11, "tutor_queue", "tutor")
+	// #2600 起讲师能力由所挂角色回答：令牌必须对应真实且挂了角色的讲师行。
+	queueTutor := testutil.SeedTutor(t, db, "tutor_queue", "x")
+	tutorTok := sign(queueTutor.TutorID, queueTutor.Username, "tutor")
 	admin := testutil.SeedAdmin(t, db, "admin_queue", "x")
 	adminTok := sign(admin.AdminID, admin.Username, "admin")
 
@@ -94,7 +96,7 @@ func TestChapterReviewQueueContract(t *testing.T) {
 
 	// 讲师逐章提交（顺序决定队列排序）
 	// #2596：讲师面写路径前置认领谓词，夹具先让该讲师认领本课。
-	seedTutorCourseClaim(t, db, 11, c.CourseID)
+	seedTutorCourseClaim(t, db, queueTutor.TutorID, c.CourseID)
 	for i := range submitted {
 		if rec := do("POST", "/api/tutor/chapter/"+itoa(submitted[i].ChapterID)+"/submit-review", tutorTok, ""); rec.Code != http.StatusOK {
 			t.Fatalf("提交章节 %d 应 200, got %d: %s", submitted[i].ChapterID, rec.Code, rec.Body.String())
@@ -216,8 +218,8 @@ func TestChapterReviewQueueContract(t *testing.T) {
 		if n.UserID != nil {
 			t.Fatalf("讲师通知不得落 user_id（会投给撞号的无关学员），got user_id=%d", *n.UserID)
 		}
-		if n.TutorID == nil || *n.TutorID != 11 {
-			t.Fatalf("通知收件人应为章节作者讲师 %d, got %v", 11, n.TutorID)
+		if n.TutorID == nil || *n.TutorID != queueTutor.TutorID {
+			t.Fatalf("通知收件人应为章节作者讲师 %d, got %v", queueTutor.TutorID, n.TutorID)
 		}
 		if !strings.Contains(n.Title, "通过") {
 			t.Fatalf("过审通知标题应含「通过」, got %q", n.Title)
@@ -266,8 +268,8 @@ func TestChapterReviewQueueContract(t *testing.T) {
 		t.Fatalf("过审 2 条 + 驳回 1 条应共 3 条站内信, got %d", len(rejectNotices))
 	}
 	latest := rejectNotices[0]
-	if latest.TutorID == nil || *latest.TutorID != 11 {
-		t.Fatalf("驳回通知收件人应为讲师 %d, got %v", 11, latest.TutorID)
+	if latest.TutorID == nil || *latest.TutorID != queueTutor.TutorID {
+		t.Fatalf("驳回通知收件人应为讲师 %d, got %v", queueTutor.TutorID, latest.TutorID)
 	}
 	if !strings.Contains(latest.Title, "驳回") {
 		t.Fatalf("驳回通知标题应含「驳回」, got %q", latest.Title)
@@ -324,13 +326,13 @@ func TestChapterReviewQueueBatchPartialFailure(t *testing.T) {
 
 	cfg := &config.Config{JWTSecretKey: "queue-partial-secret", AuthCookie: config.AuthCookieConfig{Name: "hrwai_token"}}
 	r := NewRouter(newContractDeps(t, db, cfg))
-	tutorTok, _ := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).
-		Issue(21, "tutor_partial", "tutor")
+	partialTutor := testutil.SeedTutor(t, db, "tutor_partial", "x")
+	tutorTok := slice6Token(t, cfg, partialTutor.TutorID, partialTutor.Username, "tutor")
 	admin := testutil.SeedAdmin(t, db, "admin_partial", "x")
 	adminTok, _ := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).
 		Issue(admin.AdminID, admin.Username, "admin")
 	// #2596：讲师 21 认领本课（下面要经讲师面提交一次审核）。
-	seedTutorCourseClaim(t, db, 21, c.CourseID)
+	seedTutorCourseClaim(t, db, partialTutor.TutorID, c.CourseID)
 
 	do := func(method, path, token, body string) *httptest.ResponseRecorder {
 		var buf *bytes.Buffer

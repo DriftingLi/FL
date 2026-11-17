@@ -102,6 +102,18 @@ type tutorRouteGate struct {
 	want   authz.Capability
 }
 
+// wantTutorLoginOnlyRoutes 讲师域**只挂登录守卫、不挂能力键**的路由（#2599 规格 F1）。
+//
+// 单列一张表而不是给 tutorRouteGate 加字段：这批路由与「挂哪个键」是两条正交的判据 ——
+// 混进同一张表会让「漏挂守卫」和「刻意不挂」在结构上长得一样（空的 Capability 也是合法值）。
+// 未列进本表、又落在无守卫组上的路由一律判红（见 TestTutorDomainRouteCapabilityMapping）。
+var wantTutorLoginOnlyRoutes = []tutorRouteGate{
+	// 我的能力集：未授权讲师（role_id 为 NULL）也必须能取到空集，否则前端撞 403 就画不出
+	// 「还没有权限」页；与 /admin/me/capabilities 同姿势（那条也不挂 CapAdminAccess）。
+	// 身份由端点内 Parse 的角色判定兜住（非讲师一律 403）。
+	{http.MethodGet, "/me/capabilities", ""},
+}
+
 // wantTutorRoutes 讲师域 12 条路由的挂键账本（spec A2 + #2596 B3/D1）：读四端点留 tutor.access，
 // 写八端点挂 course.author。写面含附件上传删除与图文传图——它们改的都是章节内容；
 // 认领/退出认领（#2596）改的是编辑权本身，与写章节同属 course.author（规格 B3）。
@@ -156,17 +168,22 @@ var wantTutorFileRoutes = []tutorRouteGate{
 func TestTutorDomainRouteCapabilityMapping(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
-		file string
-		want []tutorRouteGate
+		file      string
+		want      []tutorRouteGate
+		loginOnly []tutorRouteGate
 	}{
-		{"internal/tutor/handler.go", wantTutorRoutes},
-		{"internal/tutorfile/handler.go", wantTutorFileRoutes},
+		{"internal/tutor/handler.go", wantTutorRoutes, wantTutorLoginOnlyRoutes},
+		{"internal/tutorfile/handler.go", wantTutorFileRoutes, nil},
 	} {
 		t.Run(tc.file, func(t *testing.T) {
-			got := parseRouteGates(t, tc.file, "RegisterRoutes")
+			got, unguarded := parseRouteGates(t, tc.file, "RegisterRoutes")
 			want := make(map[string]authz.Capability, len(tc.want))
 			for _, g := range tc.want {
 				want[g.method+" "+g.path] = g.want
+			}
+			loginOnly := make(map[string]bool, len(tc.loginOnly))
+			for _, g := range tc.loginOnly {
+				loginOnly[g.method+" "+g.path] = true
 			}
 			for route, wantCap := range want {
 				gotCap, ok := got[route]
@@ -178,9 +195,24 @@ func TestTutorDomainRouteCapabilityMapping(t *testing.T) {
 					t.Errorf("路由 %q 挂在 %q 上，应为 %q", route, gotCap, wantCap)
 				}
 			}
+			for route := range loginOnly {
+				if !unguarded[route] {
+					gotCap, ok := got[route]
+					if !ok {
+						t.Errorf("%s 里找不到「只挂登录」路由 %q", tc.file, route)
+						continue
+					}
+					t.Errorf("路由 %q 应为只挂登录守卫（不挂能力键），实际挂在 %q 上", route, gotCap)
+				}
+			}
 			for route, gotCap := range got {
 				if _, ok := want[route]; !ok {
 					t.Errorf("%s 新增了账本未登记的路由 %q（挂在 %q）——请确认它该挂哪个键并更新账本", tc.file, route, gotCap)
+				}
+			}
+			for route := range unguarded {
+				if !loginOnly[route] {
+					t.Errorf("%s 新增了账本未登记的**无守卫**路由 %q —— 请确认它确实只要登录并登记到 wantTutorLoginOnlyRoutes", tc.file, route)
 				}
 			}
 			if len(got) == 0 {
@@ -214,6 +246,7 @@ func TestTutorDomainReachabilityUnchanged(t *testing.T) {
 	}
 
 	all := append(append([]tutorRouteGate{}, wantTutorRoutes...), wantTutorFileRoutes...)
+	all = append(all, wantTutorLoginOnlyRoutes...)
 	for _, g := range all {
 		// 请求打填充过的路径；查路由表用**原始**路径——gin 的 Routes() 返回注册时的 :param 形态。
 		pattern := "/api/tutor" + g.path
@@ -256,8 +289,10 @@ var tutorGuardConsts = map[string]authz.Capability{
 //	x := parent.Group(prefix[, middleware.CapabilityRequired(authz.CapX)])
 //	x.GET(path, handler)
 //
-// 认不出的一律 Fatal 而不是记成「无守卫」：锁跟不上写法就等于锁没了。
-func parseRouteGates(t *testing.T, filePath, funcName string) map[string]authz.Capability {
+// 第二个返回值是**只挂登录、不挂能力键**的路由（#2599 规格 F1 的「我的能力集」）：
+// 这类路由必须落在无守卫组上，与「漏挂守卫」是两件事，故分开返回、由账本的 loginOnly 位认领。
+// 认不出的写法一律 Fatal 而不是记成「无守卫」：锁跟不上写法就等于锁没了。
+func parseRouteGates(t *testing.T, filePath, funcName string) (map[string]authz.Capability, map[string]bool) {
 	t.Helper()
 	src := testutil.FindCode(t, testutil.ScanBackendCode(t), filePath)
 	fset := token.NewFileSet()
@@ -276,10 +311,12 @@ func parseRouteGates(t *testing.T, filePath, funcName string) map[string]authz.C
 	}
 
 	// groupCap 路由组变量 → 守卫能力；known 记录见过的组变量。
-	// 「组存在但没有守卫能力」是合法的（JWTAuth 组本身不挂能力），但**在它上面注册路由**不合法。
+	// 「组存在但没有守卫能力」是合法的（JWTAuth 组本身不挂能力），在它上面注册的路由
+	// 落进 loginOnly 集合，由账本显式认领。
 	groupCap := map[string]authz.Capability{}
 	known := map[string]bool{}
 	out := map[string]authz.Capability{}
+	loginOnly := map[string]bool{}
 
 	ast.Inspect(fn.Body, func(n ast.Node) bool {
 		switch node := n.(type) {
@@ -336,14 +373,14 @@ func parseRouteGates(t *testing.T, filePath, funcName string) map[string]authz.C
 			}
 			cap, ok := groupCap[recv.Name]
 			if !ok {
-				t.Fatalf("%s: 路由 %s %s 挂在组 %q 上，而该组没有能力守卫——漏挂守卫或本锁认不出",
-					filePath, method, routePath, recv.Name)
+				loginOnly[method+" "+routePath] = true
+				return true
 			}
 			out[method+" "+routePath] = cap
 		}
 		return true
 	})
-	return out
+	return out, loginOnly
 }
 
 // guardConstInGroupCall 取 Group(...) 调用里 CapabilityRequired(authz.CapX) 的常量名；没有守卫返回 ""。

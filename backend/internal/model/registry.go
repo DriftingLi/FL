@@ -35,7 +35,9 @@ var ModelBlocks = []ModelBlock{
 			&Admin{},
 
 			&AdminRoleCapability{},
+			&TutorRole{}, // 先建角色：tutor.role_id 外键指向它（#2599 E1）
 			&Tutor{},
+			&TutorRoleCapability{},
 		},
 	},
 	{

@@ -27,6 +27,9 @@ var nonnilOutletsTutor = map[string]func(t *testing.T) any{
 	"course.TutorCourseChaptersDTO.chapters":  outletTutorCourseChaptersEmpty,
 	"course.ChapterDTO.files":                 outletTutorChapterNoFiles,
 	"tutor.BatchDeleteFilesResult.failed_ids": outletBatchDeleteFilesEmpty,
+	// #2599 F1：未挂角色的讲师取能力集 = 空集，这是最容易发出 null 的那一格
+	// （解析器返回 nil map，出口靠 make([]string, 0, len) 起手）。
+	"tutor.TutorCapabilitiesDTO.capabilities": outletTutorCapabilitiesUnassigned,
 }
 
 // TestNonNilDeclaredOutletsNeverEmitNull 本域的举证入口（判据本体在 testutil）。
@@ -68,6 +71,23 @@ func outletBatchDeleteFilesEmpty(t *testing.T) any {
 	res, err := svc.BatchDeleteChapterFiles(nil, 0)
 	if err != nil {
 		t.Fatalf("空列表批量删除应成功: %v", err)
+	}
+	return res
+}
+
+// outletTutorCapabilitiesUnassigned 未挂角色的讲师取能力集：capabilities 必须是 `[]` 而不是 null
+// （#2599 F1）。这一格是「未授权讲师」的正常态 —— 前端要靠它画「还没有权限」页，
+// 拿不到空数组就得自己兜 null，而判据 5 要的正是出口自己兑现 nonnil。
+func outletTutorCapabilitiesUnassigned(t *testing.T) any {
+	t.Helper()
+	db := testutil.NewMemoryDB(t)
+	tutor := testutil.SeedUnassignedTutor(t, db, "nonnil_caps", "x")
+	res, err := newTutorServiceForTest(t, db).TutorCapabilitySet(tutor.TutorID)
+	if err != nil {
+		t.Fatalf("能力集出口失败: %v", err)
+	}
+	if res.Granted {
+		t.Fatalf("未挂角色的讲师 granted 应为 false")
 	}
 	return res
 }

@@ -138,7 +138,7 @@ var roleCapabilities = map[Capability][]Role{
 	CapMaterialRead:       {RoleStudent},
 	CapCheckInUse:         {RoleStudent},
 	CapPointsUse:          {RoleStudent},
-	CapNotificationUse:    {RoleStudent, RoleTutor},
+	CapNotificationUse:    {RoleStudent},
 	CapAIAssistantUse:     {RoleStudent},
 	CapContributionSubmit: {RoleStudent},
 	CapValuationUse:       {RoleStudent},
@@ -153,10 +153,17 @@ var roleCapabilities = map[Capability][]Role{
 	CapResumePDF:          {RoleStudent},
 	CapResumePDFView:      {RoleRecruiter},
 
-	CapTutorAccess:     {RoleTutor},
-	CapCourseAuthor:    {RoleTutor},
-	CapTutorFileManage: {RoleTutor},
-	CapQuestionAuthor:  {RoleTutor},
+	// ===== 讲师侧：静态表**不回答** tutor 的能力（#2600 / 规格 E2）=====
+	// 与下面管理端同一姿势：讲师能力自 #2600 起由数据层回答（tutor.role_id → tutor_role），
+	// 静态行一律清空。空行不是「没有角色能拿到」，而是「可达面不由本表回答」——
+	// 全权讲师持有的那 7 键见 protectedTutorCapabilities。
+	//
+	// 为什么必须清空而不是留着旧值：Has(RoleTutor, …) 对动态角色一律 false（fail closed），
+	// 留着旧值只是给 codegen 与前端生成物留一份**会漂移的第二事实源**。
+	CapTutorAccess:     {},
+	CapCourseAuthor:    {},
+	CapTutorFileManage: {},
+	CapQuestionAuthor:  {},
 
 	// ===== 管理端：静态表**不回答** admin 的能力（#1618 段1）=====
 	// 空集 =「这个能力键存在，但它的角色可达面由数据层回答」（受保护角色持有，见
@@ -177,8 +184,8 @@ var roleCapabilities = map[Capability][]Role{
 	CapFeaturedManage:     {},
 	CapQuestionReview:     {},
 	CapChapterReview:      {},
-	CapContributionReview: {RoleTutor},
-	CapCatalogAuthor:      {RoleTutor},
+	CapContributionReview: {},
+	CapCatalogAuthor:      {},
 	CapProfileReview:      {},
 	CapPointsAdmin:        {},
 	CapAuditRead:          {},
@@ -245,12 +252,12 @@ func ProtectedAdminCapabilities() []Capability {
 	return out
 }
 
-// dynamicRoles 能力**不由静态表回答**的角色（#1618 段1）：它们的可达面来自数据层
-// （管理员所挂角色），静态表对这些角色一律 fail closed。
+// dynamicRoles 能力**不由静态表回答**的角色（#1618 段1 起 admin、#2600 起 tutor）：
+// 它们的可达面来自数据层（账号所挂角色的能力行），静态表对这些角色一律 fail closed。
 //
 // 声明在此（而不是散在 Has / Capabilities / codegen 各写一遍），是为了让「谁是动态角色」只有
-// 一个来源：codegen 依此跳过它们的 ROLE_CAPABILITIES 行，锁测试依此确认没有第二个动态角色。
-var dynamicRoles = []Role{RoleAdmin}
+// 一个来源：codegen 依此跳过它们的 ROLE_CAPABILITIES 行，锁测试依此确认没有第三个动态角色。
+var dynamicRoles = []Role{RoleAdmin, RoleTutor}
 
 // DynamicRoles 返回能力动态化的角色（按声明序）。
 func DynamicRoles() []Role {

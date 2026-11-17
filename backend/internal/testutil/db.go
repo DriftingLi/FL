@@ -36,6 +36,18 @@ func applyCriticalUniqueIndexes(t *testing.T, db *gorm.DB) {
 	}
 }
 
+// applyTutorRoleChain 在 AutoMigrate 之后补建讲师角色链（#2599 / 规格 E1）。
+//
+// 生产库由迁移 000061 建表 + seed 四模板 + 存量讲师挂全权角色；测试库走 AutoMigrate 不跑迁移，
+// 故这里补同一件事，否则「预置角色存在」这类断言在测试环境恒红。宿主与关键唯一索引同处
+// （都是「迁移在测试侧的那一半」），两侧一致性由 PG 契约测试对账。
+func applyTutorRoleChain(t *testing.T, db *gorm.DB) {
+	t.Helper()
+	if err := migrate.EnsureTutorRoleChain(db); err != nil {
+		t.Fatalf("测试库补建讲师角色链失败: %v", err)
+	}
+}
+
 // NewMemoryDB 返回一个内存中的 sqlite 数据库，已 AutoMigrate 全部表 + 补建关键唯一索引。
 // 每个测试用例应独立调用以获得隔离的数据库实例。
 func NewMemoryDB(t *testing.T) *gorm.DB {
@@ -50,6 +62,7 @@ func NewMemoryDB(t *testing.T) *gorm.DB {
 		t.Fatalf("AutoMigrate 失败: %v", err)
 	}
 	applyCriticalUniqueIndexes(t, db)
+	applyTutorRoleChain(t, db)
 	return db
 }
 
@@ -75,6 +88,7 @@ func NewFileDB(t *testing.T) *gorm.DB {
 		t.Fatalf("AutoMigrate 失败: %v", err)
 	}
 	applyCriticalUniqueIndexes(t, db)
+	applyTutorRoleChain(t, db)
 	return db
 }
 
@@ -134,14 +148,36 @@ func SeedAdmin(t *testing.T, db *gorm.DB, username, hashedPassword string) *mode
 	return a
 }
 
-// SeedTutor 插入一个测试导师。
+// SeedTutor 插入一个测试讲师，并挂上「全权讲师」受保护角色。
+//
+// 自 #2600 起讲师的能力由「所挂角色」回答（静态表不再回答 tutor），故这里必须同时建出受保护
+// （全权讲师）角色并挂上 —— 否则每个讲师面契约测试都会因能力为空而 403。生产侧同一件事由
+// 迁移 000061 的 seed + 回填完成（测试面走 SQLite AutoMigrate，不跑迁移）。
+//
+// 需要「未授权讲师」的用例用 SeedUnassignedTutor（#2600 的 fail-closed 断言就靠它）。
 func SeedTutor(t *testing.T, db *gorm.DB, username, hashedPassword string) *model.Tutor {
+	t.Helper()
+	roleID, err := migrate.EnsureProtectedTutorRole(db)
+	if err != nil {
+		t.Fatalf("确保受保护讲师角色失败: %v", err)
+	}
+	return seedTutorWithRoleID(t, db, username, hashedPassword, &roleID)
+}
+
+// SeedUnassignedTutor 插入一个**未挂角色**的测试讲师（role_id = NULL ⇒ 能力集为空，fail closed）。
+func SeedUnassignedTutor(t *testing.T, db *gorm.DB, username, hashedPassword string) *model.Tutor {
+	t.Helper()
+	return seedTutorWithRoleID(t, db, username, hashedPassword, nil)
+}
+
+func seedTutorWithRoleID(t *testing.T, db *gorm.DB, username, hashedPassword string, roleID *int) *model.Tutor {
 	t.Helper()
 	tu := &model.Tutor{
 		Username:  username,
 		Password:  hashedPassword,
 		Name:      username,
 		Status:    1,
+		RoleID:    roleID,
 		CreatedAt: Now(),
 	}
 	if err := db.Create(tu).Error; err != nil {

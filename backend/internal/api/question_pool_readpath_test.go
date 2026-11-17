@@ -29,6 +29,7 @@ func TestQuestionByIdReadPathEnforcesPool(t *testing.T) {
 	cfg := &config.Config{JWTSecretKey: "pool-read-secret", AuthCookie: config.AuthCookieConfig{Name: "hrwai_token"}}
 	r := gin.New()
 	api := r.Group("/api")
+	useCapabilityResolvers(api, db)
 	deps := newContractDeps(t, db, cfg)
 	questionbank.RegisterRoutes(api, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.QuestionBankSvc, deps.FileSvc)
 	practicemode.RegisterRoutes(api, deps.RouterDeps().Session, deps.RouterDeps().CredentialScope, deps.PracticeModeSvc)
@@ -38,10 +39,8 @@ func TestQuestionByIdReadPathEnforcesPool(t *testing.T) {
 	if err := db.Create(&student).Error; err != nil {
 		t.Fatalf("建学员失败: %v", err)
 	}
-	tutor := model.Tutor{Username: "pool_read_tutor", Password: "x", Name: "讲师", Status: 1, CreatedAt: testutil.Now()}
-	if err := db.Create(&tutor).Error; err != nil {
-		t.Fatalf("建导师失败: %v", err)
-	}
+	// #2600 起讲师能力由所挂角色回答：必须用 SeedTutor（挂全权讲师角色），裸建行会一律 403。
+	tutor := testutil.SeedTutor(t, db, "pool_read_tutor", "x")
 
 	mkQ := func(content, status string, cred *int) model.Question {
 		q := model.Question{

@@ -1,0 +1,81 @@
+<template>
+    <!-- 必买清单（热门分区；原型只画了「图书系列」激活态，本区保持现网形态）——#2617 T1 自 mall.uvue 搬出 -->
+    <view v-if="items.length > 0" class="must-buy-section">
+        <text class="section-title">必买清单</text>
+        <view class="must-buy-grid">
+            <view v-for="(item, idx) in items" :key="idx" class="must-buy-card" @click="onCardClick(item)">
+                <view class="must-buy-img-wrap">
+                    <image v-if="item.cover_url" :src="item.cover_url" class="must-buy-img"
+                        mode="aspectFill" :webp="true" />
+                    <view v-else class="must-buy-img-placeholder"></view>
+                </view>
+                <text class="must-buy-title">{{ item.title }}</text>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import type { CourseItem } from '../../../types/index'
+
+    defineProps<{ items : CourseItem[] }>()
+    const emit = defineEmits(['productClick'])
+
+    function onCardClick(item : CourseItem) : void {
+        emit('productClick', item)
+    }
+</script>
+
+<style lang="scss">
+    /* ===== 必买清单区域（原型未画本态，保持现网形态：白卡语言随列表底色补底）===== */
+    .must-buy-section {
+        padding: 20rpx;
+        background-color: $card-bg;
+        border-bottom: 1rpx solid $bg-color;
+    }
+
+    .section-title {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: $text-color;
+        margin-bottom: 20rpx;
+    }
+
+    .must-buy-grid {
+        flex-direction: row;
+        flex-wrap: wrap;
+        justify-content: space-between;
+    }
+
+    .must-buy-card {
+        width: 48%;
+        margin-bottom: 20rpx;
+    }
+
+    .must-buy-img-wrap {
+        width: 100%;
+        height: 160rpx;
+        border-radius: 12rpx;
+        background-color: $bg-color;
+        overflow: hidden;
+    }
+
+    .must-buy-img {
+        width: 100%;
+        height: 100%;
+    }
+
+    .must-buy-img-placeholder {
+        width: 100%;
+        height: 100%;
+        background-color: #e8e8e8;
+    }
+
+    .must-buy-title {
+        font-size: 24rpx;
+        color: $text-color;
+        margin-top: 12rpx;
+        lines: 2;
+        text-overflow: ellipsis;
+    }
+</style>

@@ -14,6 +14,7 @@ import (
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
 	"forklift-training/internal/training"
+	"forklift-training/internal/tutorcap"
 )
 
 // newQuestionBankContractRouter 自装题库域写面，语义与 internal/api 的
@@ -31,6 +32,8 @@ func newQuestionBankContractRouter(t *testing.T, db *gorm.DB, cfg *config.Config
 	api := r.Group("/api")
 	// 管理端能力解析源（#1618 段1）：自建路由与装配根 NewRouter 挂同一份实现，缺了它管理端端点一律 403。
 	api.Use(middleware.AdminCapabilityResolver(admincap.New(db, zap.NewNop())))
+	// 讲师端能力解析源（#2600）：讲师自此后也是动态角色，缺了它讲师面端点一律 403。
+	api.Use(middleware.TutorCapabilityResolver(tutorcap.New(db, zap.NewNop())))
 	RegisterRoutes(api, sess, training.NewService(db, zap.NewNop()), svc, fileSvc)
 	return r
 }

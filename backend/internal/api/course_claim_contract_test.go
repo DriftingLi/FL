@@ -13,11 +13,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"forklift-training/internal/config"
 	"forklift-training/internal/model"
-	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
 )
 
@@ -282,12 +280,13 @@ func TestTutorWritePathsAllGuardedByClaim(t *testing.T) {
 		t.Fatalf("建章节文件失败: %v", err)
 	}
 	// 文件库文件 + 认领（供 swap 用：swap 需要讲师自己的两个文件）
-	fileA := model.TutorFile{TutorID: 1, FileURL: "/uploads/a.mp4", FileName: "a.mp4",
+	guard := testutil.SeedTutor(t, db, "tutor_guard", "x")
+	fileA := model.TutorFile{TutorID: guard.TutorID, FileURL: "/uploads/a.mp4", FileName: "a.mp4",
 		ContentType: "video", FileSize: 10, ChapterID: &ch.ChapterID, CreatedAt: testutil.Now()}
 	if err := db.Create(&fileA).Error; err != nil {
 		t.Fatalf("建文件 A 失败: %v", err)
 	}
-	fileB := model.TutorFile{TutorID: 1, FileURL: "/uploads/b.mp4", FileName: "b.mp4",
+	fileB := model.TutorFile{TutorID: guard.TutorID, FileURL: "/uploads/b.mp4", FileName: "b.mp4",
 		ContentType: "video", FileSize: 10, CreatedAt: testutil.Now()}
 	if err := db.Create(&fileB).Error; err != nil {
 		t.Fatalf("建文件 B 失败: %v", err)
@@ -295,12 +294,8 @@ func TestTutorWritePathsAllGuardedByClaim(t *testing.T) {
 
 	cfg := &config.Config{JWTSecretKey: "claim-guard-secret", AuthCookie: config.AuthCookieConfig{Name: "hrwai_token"}}
 	r := NewRouter(newContractDeps(t, db, cfg))
-	// 讲师 id 用 1，与上面文件行的归属对齐
-	tutorTok, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).
-		Issue(1, "tutor_guard", "tutor")
-	if err != nil {
-		t.Fatalf("签 token 失败: %v", err)
-	}
+	// 讲师身份与上面文件行的归属同源（#2600 起讲师能力由所挂角色回答，必须是真实账号）
+	tutorTok := slice6Token(t, cfg, guard.TutorID, guard.Username, "tutor")
 
 	cases := []struct {
 		name   string
@@ -337,7 +332,7 @@ func TestTutorWritePathsAllGuardedByClaim(t *testing.T) {
 	}
 
 	// 认领后换挂放行（403 不是永远拒绝）：这是唯一需要额外前置的一条（两个文件都得是自己的）
-	if err := db.Create(&model.TutorCourseClaim{TutorID: 1, CourseID: c.CourseID,
+	if err := db.Create(&model.TutorCourseClaim{TutorID: guard.TutorID, CourseID: c.CourseID,
 		Source: model.ClaimSourceSelf, CreatedAt: testutil.Now()}).Error; err != nil {
 		t.Fatalf("造认领行失败: %v", err)
 	}

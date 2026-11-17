@@ -1,0 +1,63 @@
+<template>
+    <!-- 余额条（#2617 T1 自 points-shop.uvue 搬出）：与任务中心同一套卡片语言，
+         兑换前先让用户看清手里有多少分；常驻全分区（spec #2608 决策 9） -->
+    <view class="balance-card">
+        <view class="balance-info">
+            <text class="balance-label">可用积分</text>
+            <text class="balance-value">{{ points }}</text>
+        </view>
+        <view class="balance-earn" @click="onEarn">
+            <text class="earn-text">去赚积分</text>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    /** 可用积分读数（余额读失败时由 composable 保留 0，与现状一致） */
+    defineProps<{ points : number }>()
+    const emit = defineEmits(['earn'])
+
+    function onEarn() : void {
+        emit('earn')
+    }
+</script>
+
+<style lang="scss">
+    /* 余额卡片 */
+    .balance-card {
+        margin: 24rpx;
+        padding: 32rpx;
+        border-radius: 16rpx;
+        background-color: $card-bg;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .balance-info {
+        flex: 1;
+        flex-direction: column;
+    }
+
+    .balance-label {
+        font-size: 24rpx;
+        color: $text-color-placeholder;
+    }
+
+    .balance-value {
+        font-size: 56rpx;
+        font-weight: bold;
+        color: $text-color;
+        margin-top: 4rpx;
+    }
+
+    .balance-earn {
+        padding: 16rpx 32rpx;
+        border-radius: 32rpx;
+        background-color: $bg-color;
+    }
+
+    .earn-text {
+        font-size: 26rpx;
+        color: $text-color-secondary;
+    }
+</style>

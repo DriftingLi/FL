@@ -6,6 +6,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { flushPromises } from '@vue/test-utils'
 import { authApi } from '@/api/auth'
 import { adminApi } from '@/api/admin'
+import { tutorApi } from '@/api/tutor'
 import { useAuthStore } from '@/stores/auth'
 
 vi.mock('@/api/auth', () => ({
@@ -14,9 +15,13 @@ vi.mock('@/api/auth', () => ({
 vi.mock('@/api/admin', () => ({
   adminApi: { fetchMyCapabilities: vi.fn() }
 }))
+vi.mock('@/api/tutor', () => ({
+  tutorApi: { fetchMyCapabilities: vi.fn() }
+}))
 
 const getUserInfo = vi.mocked(authApi.getUserInfo)
 const fetchMyCapabilities = vi.mocked(adminApi.fetchMyCapabilities)
+const fetchTutorCapabilities = vi.mocked(tutorApi.fetchMyCapabilities)
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -155,5 +160,47 @@ describe('能力集装载状态机（#1645）', () => {
     expect(fetchMyCapabilities).toHaveBeenCalledTimes(2)
     expect(store.capabilityState).toBe('ready')
     expect(store.capabilities).toEqual(['audit.read'])
+  })
+})
+
+describe('讲师端能力集拉取（#2600 / 规格 F2）', () => {
+  it('登录为讲师：走讲师端点，不走管理端端点', async () => {
+    getUserInfo.mockResolvedValue({ account: 'tutor1', role: 'tutor', user_id: 9, username: 'tutor1' })
+    fetchTutorCapabilities.mockResolvedValue({ capabilities: ['tutor.access', 'question.author'], granted: true })
+
+    const store = useAuthStore()
+    store.setAuthData({ token: 't-tutor', role: 'tutor', account: 'tutor1', user_id: 9 } as never)
+    await flushPromises()
+
+    expect(fetchTutorCapabilities).toHaveBeenCalledTimes(1)
+    // 两个域的可见面不同，端点不得混用（混用会把管理端能力集当成讲师能力集）
+    expect(fetchMyCapabilities).not.toHaveBeenCalled()
+    expect(store.capabilities).toEqual(['tutor.access', 'question.author'])
+    expect(store.capabilityState).toBe('ready')
+  })
+
+  it('未挂角色的讲师：落空集但仍是 ready（「真的没有权限」，不是装载失败）', async () => {
+    getUserInfo.mockResolvedValue({ account: 'tutor2', role: 'tutor', user_id: 10, username: 'tutor2' })
+    fetchTutorCapabilities.mockResolvedValue({ capabilities: [], granted: false })
+
+    const store = useAuthStore()
+    store.setAuthData({ token: 't-tutor2', role: 'tutor', account: 'tutor2', user_id: 10 } as never)
+    await flushPromises()
+
+    expect(store.capabilities).toEqual([])
+    expect(store.capabilityState).toBe('ready')
+  })
+
+  it('讲师能力集拉取失败 → 空集 + failed（不保留旧份，前端据此画「加载失败」而非「没有权限」）', async () => {
+    getUserInfo.mockResolvedValue({ account: 'tutor3', role: 'tutor', user_id: 11, username: 'tutor3' })
+    fetchTutorCapabilities.mockRejectedValue(new Error('boom'))
+
+    const store = useAuthStore()
+    store.setAuthData({ token: 't-tutor3', role: 'tutor', account: 'tutor3', user_id: 11 } as never)
+    await flushPromises()
+
+    expect(store.capabilities).toEqual([])
+    expect(store.capabilityState).toBe('failed')
+    expect(store.capabilitiesSettled).toBe(true)
   })
 })

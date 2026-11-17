@@ -126,14 +126,13 @@ func TestTutorCoursesListContract(t *testing.T) {
 	}
 	r := gin.New()
 	api := r.Group("/api")
+	useCapabilityResolvers(api, db)
 	deps := newContractDeps(t, db, cfg)
 	tutor.RegisterRoutes(api, deps.RouterDeps().Session, deps.TutorSvc, deps.FileSvc, uploadVditorImage)
 
-	token, err := security.NewSession(cfg.JWTSecretKey, time.Hour, security.CookieConfig{}).
-		Issue(1, "tutor1", "tutor")
-	if err != nil {
-		t.Fatalf("签发 token 失败: %v", err)
-	}
+	// #2600 起讲师能力由所挂角色回答：令牌必须对应真实且挂了角色的讲师行。
+	tutor := testutil.SeedTutor(t, db, "courses_tutor1", "x")
+	token := slice6Token(t, cfg, tutor.TutorID, tutor.Username, "tutor")
 
 	req, _ := http.NewRequest("GET", "/api/tutor/courses", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
