@@ -90,7 +90,7 @@ describe('G-09：反馈改单向提交，需求详情屏不实现', () => {
   })
 })
 
-describe('签到贴片 580:6795：五态瓦片与连续签到数字', () => {
+describe('签到贴片 580:6795：五态瓦片与日号显示', () => {
   const checkin = read(CHECKIN)
 
   it('五态 class 全在：连续签到 / 打卡完成 / 未打卡成功 / 未到 / 默认', () => {
@@ -99,8 +99,9 @@ describe('签到贴片 580:6795：五态瓦片与连续签到数字', () => {
     }
   })
 
-  it('连续签到瓦片的数字位显示连续天数（不是日号）', () => {
-    expect(checkin).toMatch(/if \(cell\.isStreak\) return consecutiveDays\.value\.toString\(\)/)
+  it('所有瓦片数字位一律显示日号（连续天数只由黄底+勾表达）', () => {
+    expect(checkin).toMatch(/function cellLabel\(cell : CalendarCell\) : string \{\s*return cell\.day\.toString\(\)\s*\}/)
+    expect(checkin).not.toMatch(/if \(cell\.isStreak\) return consecutiveDays\.value\.toString\(\)/)
     expect(checkin).toContain('cellLabel(cell)')
   })
 
