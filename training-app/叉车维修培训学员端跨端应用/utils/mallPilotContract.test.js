@@ -58,7 +58,8 @@ describe('api 收紧契约（getCourseListApi 经 requestMapped 出口家族）'
 
 describe('模块私有组件接线契约（Q17 安置：pages/<module>/components/ 显式 import）', () => {
   const page = read('pages/mall/mall.uvue');
-  const COMPONENTS = ['mall-sort-bar', 'mall-category-sidebar', 'mall-float-actions', 'mall-course-card', 'mall-hot-section', 'mall-shop-card'];
+  // #2619 T3：排序栏整体退役（四档无后端支撑），筛选收成「积分范围」单控件 ⇒ 清单随之换人
+  const COMPONENTS = ['mall-range-filter', 'mall-category-sidebar', 'mall-float-actions', 'mall-course-card', 'mall-hot-section', 'mall-shop-card'];
 
   it.each(COMPONENTS)('组件文件存在于 pages/mall/components/%s.uvue', (name) => {
     expect(h.exists(`pages/mall/components/${name}.uvue`)).toBe(true);
@@ -69,7 +70,7 @@ describe('模块私有组件接线契约（Q17 安置：pages/<module>/component
   });
 
   it('主页面模板实际使用六个组件标签（非只 import 不用；PascalCase 先例同 AiChatNav）', () => {
-    expect(page).toMatch(/<MallSortBar[\s/>]/);
+    expect(page).toMatch(/<MallRangeFilter[\s/>]/);
     expect(page).toMatch(/<MallCategorySidebar[\s/>]/);
     expect(page).toMatch(/<MallFloatActions[\s/>]/);
     expect(page).toMatch(/<MallCourseCard[\s/>]/);
@@ -92,12 +93,11 @@ describe('#2518 第 4 刀（商城逐像素收口 824:6971）：默认书封 · 
     expect(card).not.toContain('product-img-placeholder');
   });
 
-  it('搜索位吃切图（排序栏 + 悬浮搜索共用一个 32×32 资产），🔍 emoji 兜底退场', () => {
+  it('搜索位吃切图（搜索钮共用一个 32×32 资产），🔍 emoji 兜底退场；排序栏已随 T3 退役', () => {
     expect(h.exists('static/icons/mall/search.png')).toBe(true);
-    expect(read('pages/mall/components/mall-sort-bar.uvue')).toContain('/static/icons/mall/search.png');
     expect(read('pages/mall/components/mall-float-actions.uvue')).toContain('/static/icons/mall/search.png');
-    expect(read('pages/mall/components/mall-sort-bar.uvue')).not.toContain('🔍');
     expect(read('pages/mall/components/mall-float-actions.uvue')).not.toContain('🔍');
+    expect(h.exists('pages/mall/components/mall-sort-bar.uvue')).toBe(false);
   });
 
   it('左栏四态齐备（热门/课程/图书系列/积分兑换），VIP 套餐位退役', () => {
@@ -191,14 +191,133 @@ describe('#2618 T2 四态货架骨架（合并为单一货架页，ADR-0072）',
   });
 
   it('⑥ 两源按类型取源：课程走课程列表动词、图书系列走 category=book、积分兑换吃 points_price 非空', () => {
-    expect(state).toContain('getShopItemsFilteredApi(\'book\', 0, 0)');
+    // #2619 T3 起「积分范围」两档参数进图书系列取源（图书系列也显筛选控件）
+    expect(state).toContain("getShopItemsFilteredApi('book', range.min, range.max)");
     const start = state.indexOf('function redeemableList');
     expect(start).toBeGreaterThan(-1);
     expect(state.slice(start, state.indexOf('\n    }', start))).toContain('it.points_price != null');
-    // 只读商品卡：T2 不带兑换按钮（三态是 T3 的面）
+    // 兑换调用只在状态层（卡只回抛 redeem 事件，卡内不直连 api）
     const shopCard = read('pages/mall/components/mall-shop-card.uvue');
-    expect(shopCard).not.toContain("emit('redeem')");
     expect(shopCard).not.toContain('redeemShopItemApi');
+    expect(shopCard).not.toContain('getPointsBalanceApi');
+  });
+});
+
+describe('#2619 T3 积分商品分区 + 兑换三态 + 单筛选控件 + 排序退役', () => {
+  const page = read('pages/mall/mall.uvue');
+  const state = read('pages/mall/composables/useMall.uts');
+  const card = read('pages/mall/components/mall-shop-card.uvue');
+  const filter = read('pages/mall/components/mall-range-filter.uvue');
+  const tpl = page.slice(page.indexOf('<template>'), page.lastIndexOf('</template>'));
+  /** 标签类判据只在模板里找：注释（含「XX 已退役」说明）不算标签（本仓既有口径同此，见 coursesContract stripAll） */
+  const tplOf = (src) => src
+    .slice(src.indexOf('<template>'), src.lastIndexOf('</template>'))
+    .replace(/<!--[\s\S]*?-->/g, '');
+
+  it('① 积分兑换分区 = points_price 非空课程段 + 积分商品全量；图书系列只看 category=book', () => {
+    // 分区 3：课程段（points_price 非空）+ 商品段（全量 items）同屏，两个小标题都在
+    const part3 = tpl.slice(tpl.indexOf('v-else class="partition"'));
+    expect(part3).toContain('积分课程');
+    expect(part3).toContain('积分商品');
+    expect(part3).toContain('<MallCourseCard');
+    expect(part3).toContain('<MallShopCard');
+    // 图书系列仍只看 category=book（服务端参数，DTO 无 category 字段 ⇒ 客户端切不出来）
+    expect(state).toContain("getShopItemsFilteredApi('book', range.min, range.max)");
+    // 积分兑换的商品段是「全量」：loadItems 不带 category 参数
+    expect(state).toContain("getShopItemsFilteredApi('', range.min, range.max)");
+  });
+
+  it('② 积分商品卡页内兑换：三态（已拥有 / 已售罄 / 兑换中）+ 确认弹窗 + 余额不足明说 + 不预扣', () => {
+    // 卡只呈现（按钮文案与配色由状态层算好流入），回抛 redeem 事件
+    expect(card).toContain('btnLabel');
+    expect(card).toContain(':class="[\'shop-btn\', btnClass]"');
+    expect(card).toContain(':class="[\'shop-btn-text\', btnTextClass]"');
+    expect(card).toContain("emit('redeem')");
+    // 三态单点：btnText 的判定顺序 = 已拥有 → 已售罄 → 兑换中 → 兑换
+    expect(state).toContain("if (item.owned) return '已拥有'");
+    expect(state).toContain("if (s != null && s == 0) return '已售罄'");
+    expect(state).toContain("if (redeemingSku.value == item.sku) return '兑换中'");
+    // 确认弹窗 + 余额不足明说，仍由服务端裁定、不预扣
+    expect(state).toContain('uni.showModal');
+    expect(state).toContain('余额不足，继续兑换会被服务端拒绝。');
+    expect(state).toMatch(/redeemShopItemApi\(item\.sku\)/);
+    expect(state).not.toMatch(/pointsBalance\.value = pointsBalance\.value -/);
+    // 两个分区都把三态接上（按钮文案/配色/事件三件齐）
+    const bindings = tpl.match(/<MallShopCard[\s\S]*?\/>/g) || [];
+    expect(bindings.length).toBeGreaterThan(1);
+    for (const b of bindings) {
+      expect(b).toContain(':btn-label="btnText(');
+      expect(b).toContain(':btn-class="btnClass(');
+      expect(b).toContain(':btn-text-class="btnTextClass(');
+      expect(b).toContain('@redeem="onRedeem(');
+    }
+    // 按钮命中区同样撑到 88rpx（视觉胶囊 60rpx），@click 挂命中区
+    expect(card).toMatch(/\.shop-btn-hit \{[^}]*height:\s*88rpx/);
+    expect(card).toContain('@click="onRedeem"');
+  });
+
+  it('③a 两路积分商品失败不伪装成空货架：可见错误 + 重试位（#1331 口径）', () => {
+    // 档位变化会重取，重取也会失败 ⇒ 两个积分商品分区都要有错误分支，不能只留「暂无商品」
+    expect(tpl).toContain('商品加载失败，请检查网络后重试');
+    // 两路各有独立的失败标记：图书系列失败不能被积分商品路的成败冒充
+    expect(tpl).toMatch(/v-if="bookLoadFailed && bookItems\.length == 0 && !bookLoading"/);
+    expect(tpl).toMatch(/v-if="loadFailed && items\.length == 0 && !loading"/);
+    expect(state).toContain('bookLoadFailed : Ref<boolean>');
+    expect(tpl.match(/@click="onRetryItems"/g) || []).toHaveLength(2);
+    // 重试位重载两路（只刷一路会让另一分区停在失败态）
+    expect(page).toMatch(/function onRetryItems\(\) : void \{[\s\S]{0,120}?loadItems\(\)[\s\S]{0,80}?loadBookItems\(\)/);
+  });
+
+  it('③ 筛选栏只剩「积分范围」单控件：三档 + 「不限」复位，只在图书系列 / 积分兑换显示', () => {
+    // 组件里只有一套档位（无分类触发器、无「可换商品」快捷入口）
+    expect(filter).toContain('积分范围');
+    expect(tplOf(filter)).not.toContain('商品分类');
+    expect(tplOf(filter)).not.toContain('可换商品');
+    // 三档 + 不限：档位表只此一份（rangeOptions），标签逐字，且标签读作闭区间
+    //（500 两侧都算：把 500 只算进「≤500」会让「500-1000」这个标签少一档）
+    expect(state).toContain("label: '不限'");
+    expect(state).toContain("label: '≤500'");
+    expect(state).toContain("label: '500-1000'");
+    expect(state).toContain("label: '>1000'");
+    expect(state).toContain("{ label: '500-1000', value: '500-1000', min: 500, max: 1000 }");
+    expect(state).not.toContain('categoryOptions');
+    // 触摸目标：视觉胶囊可以更小，命中区按 docs/ui-spec.md §5.11 撑到 88rpx 且 @click 挂命中区
+    expect(filter).toMatch(/\.range-pill-hit \{[^}]*height:\s*88rpx/);
+    expect(filter).toContain('<view v-for="(opt, i) in rangeOptions" :key="opt.value" class="range-pill-hit" @click="onPick(i)">');
+    // 分区可见性：只在 2 / 3 两个含积分商品的分区出现
+    const m = tpl.match(/<MallRangeFilter[^>]*v-if="([^"]+)"/);
+    expect(m).not.toBeNull();
+    expect(m[1]).toContain('activeCategory === 2');
+    expect(m[1]).toContain('activeCategory === 3');
+    // 切分区高度不跳：控件槽常驻、固定高度（占位不随分区增减）
+    expect(tpl).toMatch(/<view class="filter-slot">[\s\S]*?<MallRangeFilter/);
+    const slotStyle = page.slice(page.indexOf('.filter-slot {'));
+    expect(slotStyle.slice(0, slotStyle.indexOf('}'))).toMatch(/height:\s*88rpx/);
+  });
+
+  it('④ 退役清零：商品分类 / 可换商品 / 课程兑换导流卡 / 四档排序栏 标签与实现不存；搜索仍在悬浮钮', () => {
+    expect(h.exists('pages/mall/components/mall-sort-bar.uvue')).toBe(false);
+    expect(h.exists('pages/points/components/points-filter-bar.uvue')).toBe(false);
+    expect(page).not.toContain('MallSortBar');
+    // 退役标签在商城 / 积分商城 / 筛选栏的模板里都不许复活（头注里的退役说明不算标签）
+    const pointsShop = read('pages/points/points-shop.uvue');
+    for (const src of [page, pointsShop, filter]) {
+      const t = tplOf(src);
+      expect(t).not.toContain('商品分类');
+      expect(t).not.toContain('可换商品');
+      expect(t).not.toContain('用积分解锁付费课');
+    }
+    // 实现面同日清零（分类档位表 / 面板态 / 排序态都不在状态层）
+    expect(state).not.toContain('categoryOptions');
+    expect(state).not.toContain('filterPanel');
+    expect(state).not.toContain('activeSort');
+    expect(state).not.toContain('setSort');
+    // 一次性跨页意图（导流卡唯一的消费者）两半都退役
+    const nav = read('utils/navigation.uts');
+    expect(nav).not.toContain('CourseRedeemIntent');
+    expect(read('pages/courses/courses.uvue')).not.toContain('CourseRedeemIntent');
+    // 搜索能力不丢：仍在右下角悬浮钮（排序栏右端那一位已随排序栏退役）
+    expect(read('pages/mall/components/mall-float-actions.uvue')).toContain("emit('search')");
   });
 });
 

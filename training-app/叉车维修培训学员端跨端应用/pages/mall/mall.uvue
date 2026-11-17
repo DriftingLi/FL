@@ -13,10 +13,14 @@
         <!-- 余额卡常驻页头下方，四态可见（#2618 验收 ⑤） -->
         <PointsBalanceCard :points="pointsBalance" @earn="onEarnPoints" />
 
-        <!-- 排序栏（#2618 T2：它只对课程列表有意义 ⇒ 只在课程分区显示；T3 整体退役）。
-             位置与 T1 相同（双栏主体之前的通栏），课程分区观感零变化 -->
-        <MallSortBar v-if="activeCategory === 1" :active-sort="activeSort"
-            @sort-change="onSortChange" @search="onSearch" />
+        <!-- 筛选槽定高常驻（#2619 验收 ③）：控件只作用于积分商品，故只在图书系列 / 积分兑换
+             两分区出现；槽位本身不随分区增减 ⇒ 切分区内容不跳（旧排序栏的不定高显隐会跳）。
+             档位变化经 useMall.onPickRange 按 points_min / points_max 重取两路积分商品，
+             确认弹窗与余额预判也在那里 —— 页面只做转发 -->
+        <view class="filter-slot">
+            <MallRangeFilter v-if="activeCategory === 2 || activeCategory === 3" :range-options="rangeOptions"
+                :active-range-idx="activeRangeIdx" @pick-range="onPickRange" />
+        </view>
 
         <!-- 双栏主体 -->
         <view class="main-body">
@@ -56,21 +60,37 @@
                     </view>
                 </view>
 
-                <!-- ③ 图书系列：category=book 的积分商品（T2 只读呈现，筛选与兑换三态是 T3 的面） -->
+                <!-- ③ 图书系列：category=book 的积分商品（#2619 T3 起页内兑换 + 积分范围筛选） -->
                 <view v-else-if="activeCategory === 2" class="partition">
-                    <view v-if="bookItems.length == 0 && !bookLoading" class="empty-tip">
+                    <!-- 档位重取也会失败 ⇒ 同一套 #1331 口径：失败给可见错误 + 重试，不伪装成「暂无商品」 -->
+                    <view v-if="bookLoadFailed && bookItems.length == 0 && !bookLoading" class="empty-tip">
+                        <text class="empty-text">商品加载失败，请检查网络后重试</text>
+                        <view class="retry-btn" @click="onRetryItems">
+                            <text class="retry-btn-text">重试</text>
+                        </view>
+                    </view>
+                    <view v-else-if="bookItems.length == 0 && !bookLoading" class="empty-tip">
                         <text class="empty-text">暂无商品</text>
                     </view>
                     <MallShopCard v-for="(it, bi) in bookItems" :key="it.sku" :title="it.title"
-                        :cover-url="shopCoverUrl(it)" :price="it.price" :stock-label="stockText(it)" />
+                        :cover-url="shopCoverUrl(it)" :price="it.price" :stock-label="stockText(it)"
+                        :btn-label="btnText(it)" :btn-class="btnClass(it)" :btn-text-class="btnTextClass(it)"
+                        @redeem="onRedeem(it)" />
                     <view v-if="bookLoading" class="loading-more">
                         <text class="loading-text">加载中...</text>
                     </view>
                 </view>
 
-                <!-- ④ 积分兑换：points_price 非空的课程段 + 积分商品全量（ADR-0072 决策 2 的 MECE 口径） -->
+                <!-- ④ 积分兑换：points_price 非空的课程段 + 积分商品全量（ADR-0072 决策 2 的 MECE 口径）。
+                     课程段今天为空是数据现实（没有课程有积分价），不是缺陷 -->
                 <view v-else class="partition">
-                    <view v-if="redeemableCourses.length == 0 && items.length == 0 && !loading && !coursesLoading"
+                    <view v-if="loadFailed && items.length == 0 && !loading" class="empty-tip">
+                        <text class="empty-text">商品加载失败，请检查网络后重试</text>
+                        <view class="retry-btn" @click="onRetryItems">
+                            <text class="retry-btn-text">重试</text>
+                        </view>
+                    </view>
+                    <view v-else-if="redeemableCourses.length == 0 && items.length == 0 && !loading && !coursesLoading"
                         class="empty-tip">
                         <text class="empty-text">暂无商品</text>
                     </view>
@@ -84,7 +104,9 @@
                         <text class="partition-title">积分商品</text>
                     </view>
                     <MallShopCard v-for="(it, si) in items" :key="it.sku" :title="it.title"
-                        :cover-url="shopCoverUrl(it)" :price="it.price" :stock-label="stockText(it)" />
+                        :cover-url="shopCoverUrl(it)" :price="it.price" :stock-label="stockText(it)"
+                        :btn-label="btnText(it)" :btn-class="btnClass(it)" :btn-text-class="btnTextClass(it)"
+                        @redeem="onRedeem(it)" />
                     <view v-if="loading || coursesLoading" class="loading-more">
                         <text class="loading-text">加载中...</text>
                     </view>
@@ -92,7 +114,7 @@
             </scroll-view>
         </view>
 
-        <!-- 右下角单搜索按钮（旧三钮胶囊收敛，验收 ⑤） -->
+        <!-- 右下角单搜索按钮（旧三钮胶囊收敛，验收 ⑤；排序栏退役后搜索能力只在这里） -->
         <MallFloatActions @search="onSearch" />
     </view>
 </template>
@@ -101,7 +123,7 @@
     import { onLoad } from '@dcloudio/uni-app'
     import { goBack } from '../../utils/navigation'
     import type { CourseItem } from '../../types/index'
-    import MallSortBar from './components/mall-sort-bar.uvue'
+    import MallRangeFilter from './components/mall-range-filter.uvue'
     import MallCategorySidebar from './components/mall-category-sidebar.uvue'
     import MallCourseCard from './components/mall-course-card.uvue'
     import MallShopCard from './components/mall-shop-card.uvue'
@@ -113,17 +135,16 @@
 
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
-    // #2617 T1 / #2618 T2：四态 / 两路列表 / 余额 / 三态全在 useMall，页面只解构消费（页面壳层零自持状态）
+    // #2617 T1 / #2618 T2 / #2619 T3：四态 / 两路列表 / 余额 / 三态 / 筛选全在 useMall，页面只解构消费
+    // （页面壳层零自持状态）。档位变化经 onPickRange 按 points_min / points_max 重取两路积分商品，
+    // 积分商品页内兑换（确认弹窗 / 余额预判 / 服务端裁定）经 onRedeem —— 页面都不自造第二份状态。
     const {
-        courses, hotCourses, hotItems, redeemableCourses, bookItems, bookLoading,
-        activeSort, activeCategory, coursesLoading, coursesNoMore, coursesLoadError,
-        pointsBalance, items, loading, loadCourses, loadMoreCourses, setSort, setCategory,
+        courses, hotCourses, hotItems, redeemableCourses, bookItems, bookLoading, bookLoadFailed, loadFailed,
+        activeCategory, coursesLoading, coursesNoMore, coursesLoadError,
+        pointsBalance, items, loading, loadCourses, loadMoreCourses, loadItems, loadBookItems, setCategory,
         startMall, shopCoverUrl, stockText, onEarnPoints,
+        rangeOptions, activeRangeIdx, onPickRange, onRedeem, btnText, btnClass, btnTextClass,
     } = useMall()
-
-    function onSortChange(idx : number) : void {
-        setSort(idx)
-    }
 
     /**
      * 左栏四态一律页内切换（#2618 反转 #2518 Q8）：只换内容区、不发请求 —— 两路列表在 startMall
@@ -140,6 +161,12 @@
 
     function onShowPoints() : void {
         setCategory(3)
+    }
+
+    /** 两路积分商品重试（#1331：失败态给重试位，与「暂无商品」分开；档位重取失败也走这里） */
+    function onRetryItems() : void {
+        loadItems()
+        loadBookItems()
     }
 
     function onLoadMore() : void {
@@ -194,9 +221,14 @@
         flex-direction: row;
     }
 
+    /* 筛选槽：常驻定高（与已退役排序栏同档 88rpx），切分区不增减 */
+    .filter-slot {
+        height: 88rpx;
+    }
+
     /* ===== 右侧内容区（原型：灰底通栏 + 白卡、卡距 20rpx）=====
        热门区样式在 components/mall-hot-section.uvue，课程卡在 mall-course-card.uvue，
-       积分商品只读卡在 mall-shop-card.uvue */
+       积分商品卡在 mall-shop-card.uvue，筛选栏在 mall-range-filter.uvue */
     .product-list {
         flex: 1;
         background-color: $bg-color;

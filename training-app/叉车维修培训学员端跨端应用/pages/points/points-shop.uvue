@@ -2,11 +2,18 @@
     <view class="container" :style="{ height: windowHeight + 'px' }">
         <app-nav-bar title="积分商城" @left-click="onBack" divider />
 
+        <!-- 单筛选控件（#2619 T3）：只剩「积分范围」三档 + 「不限」复位，通栏放在双栏主体之上
+             （胶囊一行放不进 180rpx 侧栏右侧的内容列）。分类五档面板、它的快捷入口「可换商品」、
+             点蒙层回主态三件一并退役 —— 分区本身按商品类型切之后，面板里的分类划分与左栏重复
+             （ADR-0072 决策 7） -->
+        <MallRangeFilter :range-options="rangeOptions" :active-range-idx="activeRangeIdx"
+            @pick-range="onPickRange" />
+
         <view class="main-body">
-            <!-- 左栏三态（821:6396，#2518 第 2 刀）：积分兑换 = 本页态；图书系列 → 商城路由
+            <!-- 左栏三态（821:6396）：积分兑换 = 本页态；图书系列 → 商城路由
                  （821:6678「图书系列」→ 824:6971 边，Q8 两路由不合并，mall 路由已存在；
-                 mall 页自身的视觉改造与反向边随 mall 刀）；热门在原型无出边
-                 （NAV_FLOW 裁定 9：不发明落点），只陈列不接线。 -->
+                 热门在原型无出边（NAV_FLOW 裁定 9：不发明落点），只陈列不接线。
+                 #2619 T3 起本页是合并页的过渡形态：入口收敛（tab=points）与整页下线分别在 T4 / T5） -->
             <view class="shop-sidebar">
                 <view class="side-item">
                     <text class="side-text">热门</text>
@@ -20,79 +27,56 @@
             </view>
 
             <view class="content-col">
-                <!-- 筛选栏 + 展开面板（#2617 T1 起是独立组件；展开态仍由 useMall 的 filterPanel 持有） -->
-                <points-filter-bar :filter-panel="filterPanel" :active-category-idx="activeCategoryIdx"
-                    :active-range-idx="activeRangeIdx" :category-options="categoryOptions"
-                    :range-options="rangeOptions" @toggle="onTogglePanel" @pick-category="onPickCategory"
-                    @pick-range="onPickRange" @hot="onHotRedeemable" />
+                <scroll-view class="content-scroll" scroll-y="true">
+                    <!-- 余额条：与任务中心同一套卡片语言，兑换前先让用户看清手里有多少分
+                         （#2617 T1 起是独立组件） -->
+                    <points-balance-card :points="pointsBalance" @earn="onEarnPoints" />
 
-                <!-- 列表区：面板展开时整体压暗（蒙层），点蒙层回主态（815:5463 → 821:6396 边） -->
-                <view class="list-area">
-                    <scroll-view class="content-scroll" scroll-y="true">
-                        <!-- 余额条：与任务中心同一套卡片语言，兑换前先让用户看清手里有多少分
-                             （#2617 T1 起是独立组件） -->
-                        <points-balance-card :points="pointsBalance" @earn="onEarnPoints" />
+                    <!-- 三态分离（#408/#409 口径）：失败给重试，空态如实说「暂无可兑换商品」 -->
+                    <view v-if="loadFailed && items.length == 0" class="error-tip">
+                        <text class="error-text">商品加载失败</text>
+                        <view class="retry-btn" @click="loadItems">
+                            <text class="retry-text">重试</text>
+                        </view>
+                    </view>
+                    <view v-else-if="loading && items.length == 0" class="loading-tip">
+                        <text class="loading-text">加载中...</text>
+                    </view>
+                    <view v-else-if="items.length == 0" class="empty-tip">
+                        <text class="empty-text">暂无可兑换商品</text>
+                    </view>
 
-                        <!-- 课程兑换导流（#2531）：静态卡，不探测服务端；文案与课程详情确认弹窗同一口径 -->
-                        <view class="course-entry">
-                            <view class="course-entry-info">
-                                <text class="course-entry-title">课程兑换</text>
-                                <text class="course-entry-desc">用积分解锁付费课</text>
-                            </view>
-                            <view class="course-entry-btn" @click="onGoCourseRedeem">
-                                <text class="course-entry-text">去兑换</text>
-                                <text class="course-entry-arrow">›</text>
-                            </view>
-                        </view>
+                    <!-- 在售项：可点性只由服务端事实决定（已拥有 / 售罄）；行样式在商品卡组件里 -->
+                    <view v-if="items.length > 0" class="shop-card">
+                        <points-shop-card v-for="(item, i) in items" :key="item.sku" :title="item.title"
+                            :price="item.price" :last="i == items.length - 1" :stock-label="stockText(item)"
+                            :btn-label="btnText(item)" :btn-class="btnClass(item)"
+                            :btn-text-class="btnTextClass(item)" @redeem="onRedeem(item)" />
+                    </view>
 
-                        <!-- 三态分离（#408/#409 口径）：失败给重试，空态如实说「暂无可兑换商品」 -->
-                        <view v-if="loadFailed && items.length == 0" class="error-tip">
-                            <text class="error-text">商品加载失败</text>
-                            <view class="retry-btn" @click="loadItems">
-                                <text class="retry-text">重试</text>
-                            </view>
-                        </view>
-                        <view v-else-if="loading && items.length == 0" class="loading-tip">
-                            <text class="loading-text">加载中...</text>
-                        </view>
-                        <view v-else-if="items.length == 0" class="empty-tip">
-                            <text class="empty-text">暂无可兑换商品</text>
-                        </view>
-
-                        <!-- 在售项：可点性只由服务端事实决定（已拥有 / 售罄）；行样式在商品卡组件里 -->
-                        <view v-if="items.length > 0" class="shop-card">
-                            <points-shop-card v-for="(item, i) in items" :key="item.sku" :title="item.title"
-                                :price="item.price" :last="i == items.length - 1" :stock-label="stockText(item)"
-                                :btn-label="btnText(item)" :btn-class="btnClass(item)"
-                                :btn-text-class="btnTextClass(item)" @redeem="onRedeem(item)" />
-                        </view>
-
-                        <view class="bottom-spacer"></view>
-                    </scroll-view>
-                    <view v-if="filterPanel != ''" class="list-mask" @click="onClosePanel"></view>
-                </view>
+                    <view class="bottom-spacer"></view>
+                </scroll-view>
             </view>
         </view>
     </view>
 </template>
 
 <script setup lang="uts">
+    import { onShow } from '@dcloudio/uni-app'
     import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import pointsBalanceCard from './components/points-balance-card.uvue'
-    import pointsFilterBar from './components/points-filter-bar.uvue'
     import pointsShopCard from './components/points-shop-card.uvue'
-    import { onShow } from '@dcloudio/uni-app'
-    import { goBack, requestCourseRedeemIntent } from '../../utils/navigation'
+    import MallRangeFilter from '../mall/components/mall-range-filter.uvue'
+    import { goBack } from '../../utils/navigation'
     import { useMall } from '../mall/composables/useMall.uts'
 
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
     // #2617 T1：余额 / 列表 / 筛选 / 三态与全部动作都在 useMall，页面只解构消费（页面壳层零自持状态）
     const {
-        pointsBalance, items, loading, loadFailed, categoryOptions, rangeOptions, filterPanel,
-        activeCategoryIdx, activeRangeIdx, stockText, btnText, btnClass, btnTextClass,
-        loadBalance, loadItems, onRedeem, onTogglePanel, onClosePanel, onPickCategory, onPickRange,
-        onHotRedeemable, onEarnPoints,
+        pointsBalance, items, loading, loadFailed, rangeOptions, activeRangeIdx,
+        stockText, btnText, btnClass, btnTextClass,
+        loadBalance, loadItems, onRedeem, onPickRange, onEarnPoints,
     } = useMall()
 
     function onBack() : void {
@@ -100,16 +84,9 @@
     }
 
     /**
-     * 课程兑换导流（#2531）：课程列表是 tabBar 页，switchTab 带不了 query ⇒ 先把一次性意图
-     * 写进导航模块，进去后由课程页 onShow 消费（切到「积分兑换」组并按该组重取）。
-     * 显式用 switchTab 而不是 navigateTo：后者打开的是页面栈里的新页，会和 tabBar 上的课程页各活一份。
+     * 左栏「图书系列」→ 商城路由（821:6678 → 824:6971 边；Q8 两路由不合并，合并页改造在 T2-T5）。
+     * #2619 T3 起本页不再有「课程兑换」导流卡，它依赖的一次性跨页意图机制随之整体退役。
      */
-    function onGoCourseRedeem() : void {
-        requestCourseRedeemIntent()
-        uni.switchTab({ url: '/pages/courses/courses' })
-    }
-
-    /** 左栏「图书系列」→ 商城路由（821:6678 → 824:6971 边；Q8 两路由不合并，mall 页改造不在本刀）。 */
     function onGoMall() : void {
         uni.navigateTo({ url: '/pages/mall/mall' })
     }
@@ -166,76 +143,13 @@
         flex-direction: column;
     }
 
-    /* 筛选栏 / 展开面板样式随 #2617 T1 迁入 pages/points/components/points-filter-bar.uvue */
-
-    /* 列表区：筛选态时蒙层压暗、点击回主态 */
-    .list-area {
-        flex: 1;
-        position: relative;
-    }
-
-    .list-mask {
-        position: absolute;
-        left: 0;
-        right: 0;
-        top: 0;
-        bottom: 0;
-        z-index: 20;
-        background-color: rgba(0, 0, 0, 0.3);
-    }
+    /* 筛选栏样式在 pages/mall/components/mall-range-filter.uvue（#2619 T3 起两页共用一个控件） */
 
     .content-scroll {
         flex: 1;
     }
 
     /* 余额卡样式随 #2617 T1 迁入 pages/points/components/points-balance-card.uvue */
-
-    /* 课程兑换导流卡（#2531）：与余额卡同一套卡片语言，位置固定在余额卡之后、商品列表之前 */
-    .course-entry {
-        margin: 0 24rpx 24rpx 24rpx;
-        padding: 28rpx 32rpx;
-        border-radius: 16rpx;
-        background-color: $card-bg;
-        flex-direction: row;
-        align-items: center;
-    }
-
-    .course-entry-info {
-        flex: 1;
-        flex-direction: column;
-    }
-
-    .course-entry-title {
-        font-size: 30rpx;
-        font-weight: bold;
-        color: $text-color;
-    }
-
-    .course-entry-desc {
-        margin-top: 8rpx;
-        font-size: 24rpx;
-        color: $text-color-placeholder;
-    }
-
-    .course-entry-btn {
-        height: 88rpx;
-        padding: 0 32rpx;
-        border-radius: 32rpx;
-        background-color: $bg-color;
-        flex-direction: row;
-        align-items: center;
-    }
-
-    .course-entry-text {
-        font-size: 26rpx;
-        color: $primary-color;
-    }
-
-    .course-entry-arrow {
-        margin-left: 6rpx;
-        font-size: 28rpx;
-        color: $primary-color;
-    }
 
     /* 错误态 / 加载态 / 空态 */
     .error-tip {

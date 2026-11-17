@@ -7,11 +7,11 @@
  *   ② 可点性只由服务端事实决定：已拥有 / 售罄 ⇒ 按钮不可点；
  *   ③ 兑换必须过确认，且余额不足要明说（但仍由服务端裁定，不客户端预扣）；
  *   ④ 入口与落点：任务中心死按钮 + 积分明细 banner → 商城页；成功后落到权益页（AI 助手）。
- *   ⑤ 课程兑换导流（#2531）：余额卡之后、商品列表之前的一张**静态**卡；CTA = 写一次性跨页意图
- *      + switchTab 到课程列表（不是 navigateTo）；打开商城不多发任何证件 / 课程请求。
+ *   ⑤ 课程兑换导流卡（#2531）已于 #2619 T3 退役（连同它依赖的一次性跨页意图两半）；本页此刻是
+ *      合并页的过渡形态，入口收敛与整页下线分别在 #2620 / #2621。
  *   —— #2617 T1（页面状态下沉 + 组件拆分，行为不变）后的读法调整：
  *   符号 / 函数名类断言读 SRC（页面 + pages/mall/composables/useMall.uts），模板类断言读 TPL_ALL
- *   （页面模板 + points-filter-bar 组件模板）；「不自持状态」「不探测服务端」这类判据仍只读 PAGE。
+ *   （页面模板 + 共用的「积分范围」筛选栏模板）；「不自持状态」「不探测服务端」这类判据仍只读 PAGE。
  *
  * 已知边界（如实声明）：本文件只钉客户端这一半；可兑性由后端对账表（shopSKUDecls）决定，
  * 那边由 backend/internal/points/sku_registry_test.go 与 shop_ai_pro_contract_test.go 钉住。
@@ -29,13 +29,14 @@ const { registeredRoutes } = require('../scripts/lib/pages-routes.js');
 const PAGE = read('pages/points/points-shop.uvue');
 /** #2617 T1：页面状态与动作下沉的双页共享 composable（积分商品路在这里） */
 const MALL_STATE = read('pages/mall/composables/useMall.uts');
-/** #2617 T1：筛选栏（含两套展开面板）拆出的组件，模板类断言读它的模板 */
-const FILTER_BAR = read('pages/points/components/points-filter-bar.uvue');
+/** #2619 T3：筛选栏收成「积分范围」单控件，两页共用 mall 模块那一份（分类面板与「可换商品」退役） */
+const FILTER_BAR = read('pages/mall/components/mall-range-filter.uvue');
 /** 符号 / 函数名类断言读的并集：页面壳层 + 下沉后的家 */
 const SRC = PAGE + '\n' + MALL_STATE;
-/** 模板类断言读的并集：页面模板 + 筛选栏组件模板 */
-const TPL_ALL = PAGE.slice(PAGE.indexOf('<template>'), PAGE.lastIndexOf('</template>'))
-  + FILTER_BAR.slice(FILTER_BAR.indexOf('<template>'), FILTER_BAR.lastIndexOf('</template>'));
+/** 模板类断言读的并集：页面模板 + 共用的「积分范围」筛选栏模板（注释剥离：头注里的退役说明不算标签） */
+const stripTplComments = (s) => s.replace(/<!--[\s\S]*?-->/g, '');
+const TPL_ALL = stripTplComments(PAGE.slice(PAGE.indexOf('<template>'), PAGE.lastIndexOf('</template>')))
+  + stripTplComments(FILTER_BAR.slice(FILTER_BAR.indexOf('<template>'), FILTER_BAR.lastIndexOf('</template>')));
 const API = read('api/points.uts');
 const TYPES = read('types/points.uts');
 const TASK_CENTER = read('pages/points/task-center.uvue');
@@ -96,45 +97,6 @@ describe('积分商城页（#1942）契约', () => {
     });
   });
 
-  describe('⑤ 课程兑换导流卡（#2531：只加一张静态卡，不动兑换链路）', () => {
-    /** 只在模板里找位置，避免样式块里的同名选择器把顺序判据弄虚 */
-    const tpl = PAGE.slice(PAGE.indexOf('<template>'), PAGE.lastIndexOf('</template>'));
-
-    it('卡片位置固定：余额卡之后、商品列表之前（三件文案齐）', () => {
-      const iBalance = tpl.indexOf('balance-card');
-      const iEntry = tpl.indexOf('course-entry');
-      const iShop = tpl.indexOf('shop-card');
-      expect(iBalance).toBeGreaterThan(-1);
-      expect(iEntry).toBeGreaterThan(iBalance);
-      expect(iShop).toBeGreaterThan(iEntry);
-      expect(tpl).toContain('课程兑换');
-      expect(tpl).toContain('去兑换');
-      // 与课程详情确认弹窗「用积分解锁付费课」同一口径：不写价格、不写营销话
-      expect(tpl).toContain('用积分解锁付费课');
-    });
-
-    it('CTA = 写一次性意图 + switchTab 到课程列表（navigateTo 会开出与 tabBar 各活一份的第二页）', () => {
-      const fn = PAGE.slice(PAGE.indexOf('function onGoCourseRedeem'));
-      const body = fn.slice(0, fn.indexOf('\n    }'));
-      expect(body).toMatch(/requestCourseRedeemIntent()/);
-      expect(body).toContain("uni.switchTab({ url: '/pages/courses/courses' })");
-      expect(body).not.toContain('uni.navigateTo');
-      // 意图写的是导航模块里那一个（不是页面里自造的第三个状态）
-      expect(PAGE).toContain("import { goBack, requestCourseRedeemIntent } from '../../utils/navigation'");
-    });
-
-    it('不探测服务端：打开商城仍然只发余额 + 列表两次请求，没有课程 / 证件请求', () => {
-      const show = PAGE.slice(PAGE.indexOf('onShow('));
-      expect(show.slice(0, 120)).toMatch(/loadBalance\(\)\s*loadItems\(\)/);
-      expect(PAGE).not.toMatch(/getCourseListApi|getCurrentCredentialApi/);
-    });
-
-    it('导流只走课程列表：卡片里不出现实物商城 / mall 的入口', () => {
-      const card = tpl.slice(tpl.indexOf('course-entry'), tpl.indexOf('shop-card'));
-      expect(card).not.toMatch(/mall|实物商城|商品商城/);
-    });
-  });
-
   describe('③ 两个入口（口径 B）', () => {
     it('任务中心「去兑换」不再是 toast 死按钮', () => {
       const fn = TASK_CENTER.slice(TASK_CENTER.indexOf('function goExchange'));
@@ -158,8 +120,8 @@ describe('积分商城页（#1942）契约', () => {
     });
   });
 
-  describe('⑥ 左栏三态与筛选两态（#2518 第 2 刀；原型 821:6396 主态 + 815:5332 筛选态，贴片 807:2035/807:2190）', () => {
-    /** 模板切片（同 ⑤ 的口径：只在模板里找位置） */
+  describe('⑥ 左栏三态与单筛选控件（#2518 第 2 刀的三态 + #2619 T3 的筛选收口）', () => {
+    /** 模板切片（同既有口径：只在模板里找位置，避免样式块里的同名选择器把判据弄虚） */
     const tpl = PAGE.slice(PAGE.indexOf('<template>'), PAGE.lastIndexOf('</template>'));
 
     it('左栏三态齐：热门（原型无出边，只陈列）/ 图书系列 / 积分兑换（本页态）', () => {
@@ -175,14 +137,15 @@ describe('积分商城页（#1942）契约', () => {
       expect(fn.slice(0, 240)).not.toContain('uni.switchTab');
     });
 
-    it('筛选两态：分类五档 enum 按 N1 #2548（book|material|course|other），积分范围档位按票面（≤500/500-1000/>1000）', () => {
-      expect(TPL_ALL).toContain('商品分类');
+    it('筛选只剩「积分范围」单控件（三档 + 不限复位）：分类五档 / 可换商品 / 展开面板 / 蒙层全退役', () => {
       expect(TPL_ALL).toContain('积分范围');
-      expect(TPL_ALL).toContain('可换商品');
-      expect(SRC).toContain("value: 'book'");
-      expect(SRC).toContain("value: 'material'");
-      expect(SRC).toContain("value: 'course'");
-      expect(SRC).toContain("value: 'other'");
+      expect(TPL_ALL).not.toContain('商品分类');
+      expect(TPL_ALL).not.toContain('可换商品');
+      // 面板与蒙层两件随分类面板一起退役：单控件常驻，没有第二层可展开
+      expect(TPL_ALL).not.toContain('list-mask');
+      expect(TPL_ALL).not.toContain('filter-panel');
+      expect(SRC).not.toContain('categoryOptions');
+      expect(SRC).not.toContain('filterPanel');
       expect(SRC).toContain('≤500');
       expect(SRC).toContain('500-1000');
       expect(SRC).toContain('>1000');
@@ -196,26 +159,21 @@ describe('积分商城页（#1942）契约', () => {
       expect(fn.slice(0, 900)).toContain("query['points_max'] = pointsMax.toString()");
     });
 
-    it('无筛选仍走原动词 getShopItemsApi()（既有契约调用形状不因筛选改道）', () => {
+    it('无筛选仍走原动词 getShopItemsApi()；带范围档时 category 传空串（商品段是「全量」）', () => {
       const fn = SRC.slice(SRC.indexOf('async function loadItems'));
       expect(fn.slice(0, 900)).toContain('getShopItemsApi()');
-      expect(fn.slice(0, 900)).toContain('getShopItemsFilteredApi(cat, range.min, range.max)');
+      expect(fn.slice(0, 900)).toContain("getShopItemsFilteredApi('', range.min, range.max)");
     });
 
-    it('「可换商品」→ 展开分类面板（821:6546 → 815:5332 边）；点蒙层回主态（815:5463 → 821:6396 边）', () => {
-      const hot = SRC.slice(SRC.indexOf('function onHotRedeemable'));
-      expect(hot.slice(0, 240)).toContain("filterPanel.value = 'category'");
-      const close = SRC.slice(SRC.indexOf('function onClosePanel'));
-      expect(close.slice(0, 240)).toMatch(/filterPanel\.value = ''/);
-      expect(tpl).toContain('list-mask');
-    });
-
-    it('筛选态一次只展开一套（面板互斥），蒙层只在展开时出现', () => {
-      expect(TPL_ALL).toMatch(/v-if="filterPanel == 'category'"/);
-      expect(TPL_ALL).toMatch(/v-if="filterPanel == 'range'"/);
-      expect(tpl).toMatch(/v-if="filterPanel != ''" class="list-mask"/);
+    it('档位变化即重取两路（不是「只换高亮再重载同一份数据」的假控件）', () => {
+      const fn = SRC.slice(SRC.indexOf('function onPickRange'));
+      const body = fn.slice(0, fn.indexOf('\n    }'));
+      expect(body).toContain('activeRangeIdx.value = idx');
+      expect(body).toContain('loadItems()');
+      expect(body).toContain('loadBookItems()');
     });
   });
+
   describe('⑦ #2617 T1 组件拆分与页面壳层零自持状态（行为不变，断言强度不变）', () => {
     it('页面壳层不自持状态：ref / reactive / computed 全在 useMall（口径同 pointsExchangeRecordsContract）', () => {
       expect(PAGE).not.toMatch(/import\s*\{[^}]*\bref\b[^}]*\}\s*from\s*'vue'/);
@@ -224,13 +182,15 @@ describe('积分商城页（#1942）契约', () => {
       expect(PAGE).toContain('useMall()');
     });
 
-    it('余额卡 / 筛选栏 / 商品卡各有独立组件文件，页面显式 import 并在模板使用（kebab 标签，⑤ 的顺序断言读它）', () => {
-      const COMPONENTS = ['points-balance-card', 'points-filter-bar', 'points-shop-card'];
+    it('余额卡 / 商品卡各有独立组件文件（筛选栏 #2619 T3 起与合并页共用 mall 模块那一份）', () => {
+      const COMPONENTS = ['points-balance-card', 'points-shop-card'];
       for (const name of COMPONENTS) {
         expect(read('pages/points/components/' + name + '.uvue')).toContain('<template>');
         expect(PAGE).toContain('./components/' + name + '.uvue');
         expect(PAGE).toContain('<' + name);
       }
+      expect(PAGE).toContain("'../mall/components/mall-range-filter.uvue'");
+      expect(PAGE).toContain('<MallRangeFilter');
     });
   });
 });
