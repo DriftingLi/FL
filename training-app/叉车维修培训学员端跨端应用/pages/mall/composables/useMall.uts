@@ -1,0 +1,392 @@
+/**
+ * 商城 / 积分商城共享状态（#2617 T1 预重构）
+ *
+ * 为什么两页共用一个 composable：T2 起 /pages/mall/mall 与 /pages/points/points-shop 合并为单一
+ * 货架页（反转 #2518 Q8），合并前先把「分区 + 两路列表 + 余额 + 筛选 + 三态」从两个页面壳层搬到这里，
+ * 页面只解构消费（#2617 验收 ①）。本刀**行为零变化**：两路装载都是显式动作
+ * （loadCourses / loadItems），创建 composable 不发任何请求 —— mall 页不多打积分商品请求，
+ * points-shop 不多打课程请求（#2617 验收 ③）。两路状态刻意不同名：合并页要同时持有课程与积分商品
+ * 两份列表，同名 ref 会把「哪一路在加载」变成隐性约定。
+ *
+ * 课程路（mall 页）：`/courses` 是公开路由，服务端 CredentialScoped 兜底永不生效
+ * （见 api/course.uts 文件头、docs/agents/credential-scope.md）⇒ 必须显式下发当前证件；
+ * mall 是 pushed 页（每次进入重新 onLoad），故只在 startCourses 取一次证件、不在 onShow 跟切换。
+ */
+import { ref } from 'vue'
+import type { Ref } from 'vue'
+import { getCourseListApi } from '../../../api/course'
+import { getCurrentCredentialApi } from '../../../api/credential'
+import { getPointsBalanceApi, getShopItemsApi, getShopItemsFilteredApi, redeemShopItemApi } from '../../../api/points'
+import { errMsg } from '../../../api/helpers'
+import { AI_PRO_SKU } from '../../../composables/useAiPro'
+import type { CourseItem, ShopItem, ShopItemsResult } from '../../../types/index'
+import type { Page } from '../../../api/envelope'
+
+/** 单个筛选选项（label 进胶囊；分类档用 value，积分范围档只用 min/max） */
+export type MallFilterOption = {
+    label : string
+    value : string
+    min : number
+    max : number
+}
+
+/** 本 composable 的显式返回类型（Kotlin error18 规避，先例 usePointsExchangeRecords） */
+export type UseMallResult = {
+    /** 课程路 */
+    courses : Ref<CourseItem[]>
+    hotCourses : Ref<CourseItem[]>
+    activeSort : Ref<number>
+    activeCategory : Ref<number>
+    coursesLoading : Ref<boolean>
+    coursesNoMore : Ref<boolean>
+    coursesLoadError : Ref<boolean>
+    loadCourses : (reset : boolean) => void
+    loadMoreCourses : () => void
+    setSort : (idx : number) => void
+    setCategory : (idx : number) => void
+    startCourses : () => void
+    /** 积分商品路 */
+    pointsBalance : Ref<number>
+    items : Ref<ShopItem[]>
+    loading : Ref<boolean>
+    loadFailed : Ref<boolean>
+    categoryOptions : MallFilterOption[]
+    rangeOptions : MallFilterOption[]
+    filterPanel : Ref<string>
+    activeCategoryIdx : Ref<number>
+    activeRangeIdx : Ref<number>
+    stockText : (item : ShopItem) => string
+    blocked : (item : ShopItem) => boolean
+    btnText : (item : ShopItem) => string
+    btnClass : (item : ShopItem) => string
+    btnTextClass : (item : ShopItem) => string
+    loadBalance : () => void
+    loadItems : () => void
+    onRedeem : (item : ShopItem) => void
+    onTogglePanel : (panel : string) => void
+    onClosePanel : () => void
+    onPickCategory : (idx : number) => void
+    onPickRange : (idx : number) => void
+    onHotRedeemable : () => void
+    onEarnPoints : () => void
+}
+
+export function useMall() : UseMallResult {
+    // ===== 课程路状态（声明先于引用它的函数：UTS 无提升，后置声明即 Kotlin 编译错）=====
+    const activeSort = ref<number>(0)
+    // 0 热门 / 1 图书系列 = 本页态；2 积分兑换不是本页态，选中即跳积分商城（Q8 两路由互跳）
+    const activeCategory = ref<number>(0)
+    const courses = ref<CourseItem[]>([]) as Ref<CourseItem[]>
+    const hotCourses = ref<CourseItem[]>([]) as Ref<CourseItem[]>
+    const page = ref<number>(1)
+    const pageSize = 12
+    const coursesLoading = ref<boolean>(false)
+    const coursesNoMore = ref<boolean>(false)
+    /** #1331：首屏失败标记 —— 失败与「暂无商品」分开（#816 口径），5xx/断网不伪装成空货架，给可见错误 + 重试位 */
+    const coursesLoadError = ref<boolean>(false)
+    /** 「浏览指定」证件：随请求下发的分区参数（自解释名，与 Web api/client 半边同口径 #1106） */
+    const browseCredentialId = ref<number>(0)
+
+    // ===== 积分商品路状态 =====
+    const pointsBalance = ref<number>(0)
+    const items = ref<ShopItem[]>([]) as Ref<ShopItem[]>
+    const loading = ref<boolean>(false)
+    const loadFailed = ref<boolean>(false)
+    /** 正在兑换的 sku（空串表示无进行中请求，兼作防重入闸门） */
+    const redeemingSku = ref<string>('')
+
+    // ===== 筛选两态（#2518 第 2 刀；形状按 N1 #2548，后端参数未上线前会忽略 query 返回全量）=====
+    /** 分类五档：'' = 不限；enum 值 = N1 #2548 的 book|material|course|other */
+    const categoryOptions : MallFilterOption[] = [
+        { label: '不限', value: '', min: 0, max: 0 },
+        { label: '图书', value: 'book', min: 0, max: 0 },
+        { label: '资料', value: 'material', min: 0, max: 0 },
+        { label: '课程', value: 'course', min: 0, max: 0 },
+        { label: '其他', value: 'other', min: 0, max: 0 },
+    ]
+
+    /**
+     * 积分范围档位（票面给定 ≤500 / 500-1000 / >1000）：边界不重叠取 [0,500] / [501,1000] /
+     * [1001,∞)；min/max = 0 表示该参不下发。value 只作 v-for key，不进请求。
+     */
+    const rangeOptions : MallFilterOption[] = [
+        { label: '不限', value: 'all', min: 0, max: 0 },
+        { label: '≤500', value: 'le500', min: 0, max: 500 },
+        { label: '500-1000', value: '501-1000', min: 501, max: 1000 },
+        { label: '>1000', value: 'gt1000', min: 1001, max: 0 },
+    ]
+
+    /** 当前展开的筛选面板：'' = 都收起（主态）/ 'category' / 'range' */
+    const filterPanel = ref<string>('')
+    const activeCategoryIdx = ref<number>(0)
+    const activeRangeIdx = ref<number>(0)
+
+    // ===== 纯映射（须先于调用它们的函数声明，守护规则 A）=====
+
+    /** 库存文案：null = 不限库存（后端 x-nullable，null ≠ 0；0 才是售罄） */
+    function stockText(item : ShopItem) : string {
+        const s = item.stock
+        if (s == null) return ''
+        if (s == 0) return '已售罄'
+        return '仅剩 ' + s.toString() + ' 件'
+    }
+
+    /** 不可点：已拥有（服务端判据）或售罄 */
+    function blocked(item : ShopItem) : boolean {
+        if (item.owned) return true
+        const s = item.stock
+        if (s != null && s == 0) return true
+        return false
+    }
+
+    function btnText(item : ShopItem) : string {
+        if (item.owned) return '已拥有'
+        const s = item.stock
+        if (s != null && s == 0) return '已售罄'
+        if (redeemingSku.value == item.sku) return '兑换中'
+        return '兑换'
+    }
+
+    function btnClass(item : ShopItem) : string {
+        if (blocked(item)) return 'shop-btn-disabled'
+        if (redeemingSku.value == item.sku) return 'shop-btn-busy'
+        return 'shop-btn-active'
+    }
+
+    function btnTextClass(item : ShopItem) : string {
+        if (blocked(item)) return 'shop-btn-text-disabled'
+        return 'shop-btn-text-active'
+    }
+
+    // ===== 课程路装载 =====
+
+    async function loadBrowseCredential() : Promise<void> {
+        try {
+            const cred = await getCurrentCredentialApi()
+            if (cred != null) {
+                browseCredentialId.value = cred!.id
+            }
+        } catch (e) {
+            console.warn('[mall] load credential failed:', e)
+        }
+    }
+
+    async function loadCourses(reset : boolean = false) : Promise<void> {
+        if (coursesLoading.value) return
+        if (reset) {
+            page.value = 1
+            coursesNoMore.value = false
+        }
+        if (coursesNoMore.value && !reset) return
+
+        coursesLoading.value = true
+        try {
+            // ADR-0037 信封归一（PR-B）：`getCourseListApi` 返回 `Page<CourseItem>`（items/total/hasMore），
+            // 本路只消费 items/total，装载行为不变；旧 DTO 名 `CourseListResult` 由 PR-F 清尾删除。
+            const result : Page<CourseItem> = await getCourseListApi(page.value, pageSize, 0, 0, browseCredentialId.value)
+            coursesLoadError.value = false
+            if (reset) {
+                courses.value = result.items
+            } else {
+                courses.value = courses.value.concat(result.items)
+            }
+            // 热门分类时加载必买清单
+            if (activeCategory.value === 0 && reset) {
+                hotCourses.value = result.items.slice(0, 4)
+            }
+            if (courses.value.length >= result.total || result.items.length == 0) {
+                coursesNoMore.value = true
+            } else {
+                page.value = page.value + 1
+            }
+        } catch (e) {
+            console.error('[mall] load failed:', e)
+            coursesLoadError.value = true
+        } finally {
+            coursesLoading.value = false
+        }
+    }
+
+    function loadMoreCourses() : void {
+        loadCourses(false)
+    }
+
+    function setSort(idx : number) : void {
+        activeSort.value = idx
+        loadCourses(true)
+    }
+
+    function setCategory(idx : number) : void {
+        activeCategory.value = idx
+        loadCourses(true)
+    }
+
+    /**
+     * 首屏装载：onLoad 必须带 options 形参（Kotlin Function1<OnLoadOptions, Unit>，零参即 error17），
+     * 回到调必须是 Unit（非 Promise）⇒ 用 .then 串证件解析，不写 async 回调。
+     */
+    function startCourses() : void {
+        loadBrowseCredential().then(() : void => {
+            loadCourses(true)
+        })
+    }
+
+    // ===== 积分商品路装载与兑换 =====
+
+    /** 余额读失败不挡列表（装饰性提示不该制造一次用户没触发的报错，ADR-0031 决策 3） */
+    async function loadBalance() : Promise<void> {
+        try {
+            const bal = await getPointsBalanceApi(true)
+            pointsBalance.value = bal.balance
+        } catch (e) {
+            console.warn('[points-shop] balance failed:', errMsg(e, '余额读取失败'))
+        }
+    }
+
+    async function loadItems() : Promise<void> {
+        loading.value = true
+        loadFailed.value = false
+        try {
+            // 无筛选走原动词（既有契约钉死调用形状）；带筛选走 N1 #2548 形状骨架
+            //（getShopItemsFilteredApi：category / points_min / points_max）
+            const cat = categoryOptions[activeCategoryIdx.value].value
+            const range = rangeOptions[activeRangeIdx.value]
+            let res : ShopItemsResult
+            if (cat.length == 0 && range.min == 0 && range.max == 0) {
+                res = await getShopItemsApi()
+            } else {
+                res = await getShopItemsFilteredApi(cat, range.min, range.max)
+            }
+            items.value = res.items
+        } catch (e) {
+            loadFailed.value = true
+            console.warn('[points-shop] items failed:', errMsg(e, '商品加载失败'))
+        }
+        loading.value = false
+    }
+
+    function onEarnPoints() : void {
+        uni.navigateTo({ url: '/pages/points/task-center' })
+    }
+
+    /** 筛选栏触发：再点同一个即收起（两态互斥，一次只展开一套） */
+    function onTogglePanel(panel : string) : void {
+        filterPanel.value = filterPanel.value == panel ? '' : panel
+    }
+
+    /** 点蒙层回主态（815:5463 → 821:6396 边） */
+    function onClosePanel() : void {
+        filterPanel.value = ''
+    }
+
+    /** 选分类档：收起面板并按新筛选重取（档位变化即发请求，骨架期后端忽略参数返回全量） */
+    function onPickCategory(idx : number) : void {
+        activeCategoryIdx.value = idx
+        filterPanel.value = ''
+        loadItems()
+    }
+
+    /** 选积分范围档：同上（min/max 进 N1 #2548 的 points_min / points_max） */
+    function onPickRange(idx : number) : void {
+        activeRangeIdx.value = idx
+        filterPanel.value = ''
+        loadItems()
+    }
+
+    /** 「可换商品」→ 筛选态（821:6546 → 815:5332 边：原型该态展开的是分类面板） */
+    function onHotRedeemable() : void {
+        filterPanel.value = 'category'
+    }
+
+    /** 兑换成功后的落点（#1942 验收：权益即时生效、落点可达）：当前唯一可兑权益是 AI 专业版 */
+    function goEntitlementLanding(sku : string) : void {
+        if (sku == AI_PRO_SKU) {
+            uni.switchTab({ url: '/pages/ai-assistant/ai-assistant' })
+        }
+    }
+
+    /** 真正发起兑换：守卫全在服务端（余额 / 已拥有 / 在售），客户端不预扣、不本地写「已解锁」 */
+    async function doRedeem(item : ShopItem) : Promise<void> {
+        if (redeemingSku.value.length > 0) return
+        redeemingSku.value = item.sku
+        try {
+            const res = await redeemShopItemApi(item.sku)
+            redeemingSku.value = ''
+            pointsBalance.value = res.balance
+            uni.showToast({ title: '兑换成功', icon: 'success' })
+            await loadItems()
+            goEntitlementLanding(item.sku)
+        } catch (e) {
+            redeemingSku.value = ''
+            uni.showToast({ title: errMsg(e, '兑换失败'), icon: 'none' })
+            // 失败后按服务端事实重拉：已拥有 / 售罄 / 下架都在这一步被纠正
+            await loadItems()
+        }
+    }
+
+    /**
+     * 兑换前提示：把「要扣多少 / 手里有多少」摆进同一句；余额不足时明说会被服务端拒，
+     * 并给「去赚积分」的出路——但**不代替服务端裁定**（预判不拦截 CTA，ADR-0031 决策 3）。
+     */
+    function onRedeem(item : ShopItem) : void {
+        if (blocked(item) || redeemingSku.value.length > 0) return
+        const short = pointsBalance.value < item.price
+        const content = '该商品需 ' + item.price.toString() + ' 积分，当前可用 ' +
+            pointsBalance.value.toString() + ' 积分。' +
+            (short ? '余额不足，继续兑换会被服务端拒绝。' : '确认兑换？')
+        uni.showModal({
+            title: short ? '积分不足' : '积分兑换',
+            content: content,
+            confirmText: short ? '继续兑换' : '确认兑换',
+            cancelText: short ? '去赚积分' : '取消',
+            // showModal 的 success 回调不可为 async（Kotlin error17），异步动作转独立函数
+            success: (res) => {
+                if (res.confirm) {
+                    doRedeem(item)
+                    return
+                }
+                if (short) {
+                    onEarnPoints()
+                }
+            }
+        })
+    }
+
+    return {
+        courses: courses,
+        hotCourses: hotCourses,
+        activeSort: activeSort,
+        activeCategory: activeCategory,
+        coursesLoading: coursesLoading,
+        coursesNoMore: coursesNoMore,
+        coursesLoadError: coursesLoadError,
+        loadCourses: (reset : boolean) : void => { loadCourses(reset) },
+        loadMoreCourses: () : void => loadMoreCourses(),
+        setSort: (idx : number) : void => setSort(idx),
+        setCategory: (idx : number) : void => setCategory(idx),
+        startCourses: () : void => startCourses(),
+        pointsBalance: pointsBalance,
+        items: items,
+        loading: loading,
+        loadFailed: loadFailed,
+        categoryOptions: categoryOptions,
+        rangeOptions: rangeOptions,
+        filterPanel: filterPanel,
+        activeCategoryIdx: activeCategoryIdx,
+        activeRangeIdx: activeRangeIdx,
+        stockText: (item : ShopItem) : string => stockText(item),
+        blocked: (item : ShopItem) : boolean => blocked(item),
+        btnText: (item : ShopItem) : string => btnText(item),
+        btnClass: (item : ShopItem) : string => btnClass(item),
+        btnTextClass: (item : ShopItem) : string => btnTextClass(item),
+        loadBalance: () : void => { loadBalance() },
+        loadItems: () : void => { loadItems() },
+        onRedeem: (item : ShopItem) : void => onRedeem(item),
+        onTogglePanel: (panel : string) : void => onTogglePanel(panel),
+        onClosePanel: () : void => onClosePanel(),
+        onPickCategory: (idx : number) : void => onPickCategory(idx),
+        onPickRange: (idx : number) : void => onPickRange(idx),
+        onHotRedeemable: () : void => onHotRedeemable(),
+        onEarnPoints: () : void => onEarnPoints(),
+    } as UseMallResult
+}
