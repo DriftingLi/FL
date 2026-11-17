@@ -71,7 +71,7 @@ type target struct {
 // defaultTargets 回填清单（显式枚举，不全库扫列）。
 //
 // 覆盖范围 = 「对象存储里会被写成绝对 URL」的全部列 + 可能内嵌图片链接的 Markdown 正文：
-// 内容精选（封面 / 正文 / 摘要）、课程封面、章节（正文 / 附件 / 幻灯片）、章节文件、
+// 内容精选（封面 / 正文 / 摘要 / 导入的原始 Word）、课程封面、章节（正文 / 附件 / 幻灯片）、章节文件、
 // 证书模板、题库（题图 / 题干）、学员头像、投稿文件、招聘简历卡（PDF / 工作照 / 证书）、
 // 论坛主题与回复（正文 / 图集）、AI 助手消息图片、学员反馈图片（#2070）。
 //
@@ -81,6 +81,7 @@ var defaultTargets = []target{
 	{Table: "featured_content", Columns: []column{
 		{Name: "cover_image", Kind: kindText},
 		{Name: "content", Kind: kindText},
+		{Name: "docx_url", Kind: kindText},
 		{Name: "summary", Kind: kindText},
 	}},
 	{Table: "course", Columns: []column{
