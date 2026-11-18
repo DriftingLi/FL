@@ -162,9 +162,9 @@ describe('forum-create 归一与资源模式契约（#710 + #760）', () => {
     expect(src).toMatch(/selectedCategory\s*=\s*ref<string>\('discussion'\)/);
     expect(src).not.toMatch(/ref<string>\('general'\)/);
   });
-  it('模块行只留讨论 / 提问两值（G-08：资源不占类别位，备考经验写侧不再产生）', () => {
-    expect(src).toMatch(/label:\s*'讨论',\s*value:\s*'discussion'/);
-    expect(src).toMatch(/label:\s*'提问',\s*value:\s*'question'/);
+  it('模块行只留广场 / 知识问答两值（G-08：资源不占类别位，备考经验写侧不再产生）', () => {
+    expect(src).toMatch(/label:\s*'广场',\s*value:\s*'discussion'/);
+    expect(src).toMatch(/label:\s*'知识问答',\s*value:\s*'question'/);
     expect(src).not.toMatch(/label:\s*'资源',\s*value:\s*'resource'/);
   });
   it('URL scope=resource 进资源模式；scope=feedback 进反馈提交；其余非法/历史归一', () => {
