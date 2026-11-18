@@ -82,7 +82,46 @@ cd backend && go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 ```
 
 **CI 里已经跑着**：`security-scan` job 装固定版本的 `govulncheck`（v1.7.0）跑全后端，前端跑
-`npm audit --audit-level=high`，Dockerfile 走 Trivy —— 这道门 PR 上本来就有，本地跑只是为了推之前先看见。
+`npm run audit`（= `better-npm-audit audit --level high --require-notes --require-expiry`），
+Dockerfile 走 Trivy —— 这道门 PR 上本来就有，本地跑只是为了推之前先看见。
+
+### 3.1 上游还没修的高危：登记成「有期限的例外」，别让整仓红着等
+
+裸 `npm audit --audit-level=high` 的毛病是**不给时间概念**：只要 npm 数据源多出一条还没有修复版的
+advisory，全仓所有前端 PR 立刻无法合并，而真正要修的地方可能根本不在我们手里。2026-11-18 就撞了一次
+（`picomatch` CVE-2026-112366，`patched: null`，上游 5 个修复 PR 全没合，`vite` / `vitest` /
+`vue-router` / `vue-tsc` / `unplugin` / `tinyglobby` / `fdir` 全锁 `^4.0.7`）。
+
+处理方式：前端门改走 `better-npm-audit`，例外写在 **`frontend/.nsprc`**：
+
+```json
+{
+  "1247710": {
+    "notes": "为什么可以接受：不可达 / 不进产物 / 上游无修复版，写清判据",
+    "expiry": "2026-12-18"
+  }
+}
+```
+
+规矩四条：
+
+- **必须有 `notes` 和 `expiry`** —— 命令里带了 `--require-notes --require-expiry`，缺一条门就红；
+- **只登记 `patched: null`（上游没修复版）或确认不可达的条目**；能升级解决的不许登记，去升级；
+- **写清可达性判据**，别只写「已知风险」。例：`picomatch` 那条写的是「构建/测试工具链，不进生产包
+  （`frontend/dist` 全量搜 `POSIX_REGEX_SOURCE|picomatch|extglobs` 零命中），且没有把攻击者可控的
+  glob 模式交给它编译的输入面」；
+- **到期自动重新判红**，届时要么上游已修（升级 + 删条目），要么重新审一遍再续期。例外交给时间，
+  不交给遗忘。
+
+本地复现时注意：`better-npm-audit` 走 `npm audit` 的 JSON 输出，**npmmirror 等镜像没有
+`/-/npm/v1/security/*` 端点**，会报 `audit endpoint returned an error`。本机要跑就指定官方源：
+
+```bash
+cd frontend && npm_config_registry=https://registry.npmjs.org npm run audit
+```
+
+CI 用的就是官方源，无需额外配置。
+
 
 本仓实测（2026-11-12）：用**生产同款** `go1.26.11` 跑 → `0 vulnerabilities`（标准库 0 条可达）；
 用当时的本机 `go1.27.1` 跑 → `13 vulnerabilities from the Go standard library` 全部可达。

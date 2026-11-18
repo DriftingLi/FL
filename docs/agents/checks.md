@@ -117,6 +117,20 @@ CI 的 `migration-check`（`ci.yml` Stage 6）在服务容器 `postgres:18-alpin
 
 改动触及认证/授权/密钥/DB 连接/AI 生成代码时，跑 `python -m deepsec shield scan backend frontend/src`，确认无新增 critical/high（已知误报见 `docs/agents/security-scan.md`）。
 
+### 前端依赖门：`npm run audit`（better-npm-audit + `.nsprc` 有期限例外）
+
+2026-11-18 起 `security-scan` 的前端半边不再跑裸 `npm audit --audit-level=high`，改跑
+`cd frontend && npm run audit`（= `better-npm-audit audit --level high --require-notes --require-expiry`）。
+
+- **为什么改**：裸 audit 没有时间概念。只要 npm 数据源多一条**上游还没修**的 advisory，全仓所有前端 PR
+  立刻无法合并，而真正要修的地方不在我们手里。判据、例外格式与四条规矩见
+  `docs/agents/security-scan.md`「上游还没修的高危」段。
+- **例外登记在 `frontend/.nsprc`**，每条必须带 `notes`（写清不可达判据，不是「已知风险」四个字）和
+  `expiry`；缺任一条门就红，到期自动重新判红。
+- **本地复现要指定官方源**：`better-npm-audit` 依赖 `npm audit --json`，npmmirror 等镜像没有
+  `/-/npm/v1/security/*` 端点会报 `audit endpoint returned an error` ——
+  `npm_config_registry=https://registry.npmjs.org npm run audit`。CI 走官方源无需配置。
+
 ### 依赖告警面：Dependabot alerts ≠ 可触达漏洞（2026-10-24 清理，#1873）
 
 - **「有没有漏洞」以 `govulncheck ./...` 为准**（CI 的 `security-scan` 每次跑同一条命令），不以安全页上的告警数。

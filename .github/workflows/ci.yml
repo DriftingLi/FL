@@ -413,7 +413,10 @@ jobs:
       - name: npm 依赖漏洞扫描
         if: needs.changes.outputs.frontend == 'true'
         working-directory: frontend
-        run: npm audit --audit-level=high
+        # 用 better-npm-audit 而不是裸 npm audit：裸 audit 会为「上游还没修」的 advisory
+        # 卡死全仓（先例见 #1745 / c912e043）。例外登记在 frontend/.nsprc，
+        # 每条必须有 notes 与到期日，过期即重新判红 —— 例外交给时间，不交给遗忘。
+        run: npm run audit
 
       - name: Dockerfile 安全分析
         uses: aquasecurity/trivy-action@v0.36.0

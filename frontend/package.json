@@ -8,7 +8,8 @@
     "build": "vite build && node scripts/precompress.mjs",
     "preview": "vite preview",
     "test": "vitest run",
-    "type-check": "vue-tsc --noEmit"
+    "type-check": "vue-tsc --noEmit",
+    "audit": "better-npm-audit audit --level high --require-notes --require-expiry"
   },
   "dependencies": {
     "@fontsource/dm-sans": "^5.3.0",
@@ -46,6 +47,7 @@
     "@vitejs/plugin-vue": "^6.0.10",
     "@vitest/coverage-istanbul": "^5.1.0",
     "@vue/test-utils": "^2.5.1",
+    "better-npm-audit": "^4.2.1",
     "happy-dom": "^21.0.3",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.7.3",
