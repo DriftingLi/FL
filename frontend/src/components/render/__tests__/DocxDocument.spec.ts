@@ -88,4 +88,102 @@ describe('DocxDocument', () => {
     expect(body.innerHTML).not.toContain('旧文档')
     wrapper.unmount()
   })
+
+  // ── 图片加载不出来（2026-11 用户反馈「word 文档预览的图片有时候会加载不出来」）──
+  //
+  // docx-preview 有两类静默留白，实测都不是「网络抖动」：
+  //   1. 外部链接图片（TargetMode="External"）⇒ img.src 被设成字符串 "null"、naturalWidth 0；
+  //   2. EMF/WMF 这类浏览器不认的矢量图 ⇒ src 正常、complete 为 true，但 naturalWidth 0。
+  // 组件要能识别它们并给出可见提示，而不是让作者对着一块空白猜。
+  describe('图片加载不出来的识别', () => {
+    /** 让 renderAsync 往正文容器里塞指定图片，模拟 docx-preview 的产物 */
+    function renderProducing(images: Array<{ src: string | null; naturalWidth: number }>) {
+      renderAsync.mockImplementation((_blob: Blob, body: HTMLElement) => {
+        body.innerHTML = ''
+        for (const spec of images) {
+          const img = document.createElement('img')
+          if (spec.src !== null) img.setAttribute('src', spec.src)
+          // happy-dom 里 naturalWidth 恒为 0，用 defineProperty 钉住，模拟「解码成功/失败」
+          Object.defineProperty(img, 'complete', { value: true, configurable: true })
+          Object.defineProperty(img, 'naturalWidth', { value: spec.naturalWidth, configurable: true })
+          body.appendChild(img)
+        }
+        return Promise.resolve()
+      })
+    }
+
+    it('外部链接的图片（src 是字符串 "null"）标成 external 并给出提示', async () => {
+      renderProducing([{ src: null, naturalWidth: 0 }])
+      const wrapper = mountDoc(DOCX_URL)
+      await flushPromises()
+
+      const img = wrapper.find('.docx-document__body img')
+      expect(img.exists()).toBe(true)
+      expect(img.attributes('data-docx-image-failed')).toBe('external')
+      expect(wrapper.text()).toContain('有 1 张图片无法显示')
+      wrapper.unmount()
+    })
+
+    it('浏览器解不开的格式（complete 但 naturalWidth 0）标成 format', async () => {
+      renderProducing([{ src: 'blob:http://localhost/emf', naturalWidth: 0 }])
+      const wrapper = mountDoc(DOCX_URL)
+      await flushPromises()
+
+      expect(wrapper.find('.docx-document__body img').attributes('data-docx-image-failed')).toBe('format')
+      expect(wrapper.text()).toContain('有 1 张图片无法显示')
+      wrapper.unmount()
+    })
+
+    it('正常图片不误伤：不标记、不弹提示', async () => {
+      renderProducing([{ src: 'blob:http://localhost/ok', naturalWidth: 200 }])
+      const wrapper = mountDoc(DOCX_URL)
+      await flushPromises()
+
+      const img = wrapper.find('.docx-document__body img')
+      expect(img.attributes('data-docx-image-failed')).toBeUndefined()
+      expect(wrapper.text()).not.toContain('张图片无法显示')
+      wrapper.unmount()
+    })
+
+    it('多张里只有坏的那几张计数，提示写的是坏图数', async () => {
+      renderProducing([
+        { src: 'blob:http://localhost/ok', naturalWidth: 200 },
+        { src: null, naturalWidth: 0 },
+        { src: 'blob:http://localhost/emf', naturalWidth: 0 }
+      ])
+      const wrapper = mountDoc(DOCX_URL)
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('有 2 张图片无法显示')
+      wrapper.unmount()
+    })
+
+    it('还没解码完的图片（complete=false）先不判失败，等 load 之后再复查', async () => {
+      renderAsync.mockImplementation((_blob: Blob, body: HTMLElement) => {
+        body.innerHTML = ''
+        const img = document.createElement('img')
+        img.setAttribute('src', 'blob:http://localhost/pending')
+        // complete=false + naturalWidth 0：这是「正在加载」，不是「解不开」
+        Object.defineProperty(img, 'complete', { value: false, configurable: true })
+        Object.defineProperty(img, 'naturalWidth', { value: 0, configurable: true })
+        body.appendChild(img)
+        return Promise.resolve()
+      })
+      const wrapper = mountDoc(DOCX_URL)
+      await flushPromises()
+
+      // 加载中的图不该被误判
+      expect(wrapper.find('.docx-document__body img').attributes('data-docx-image-failed')).toBeUndefined()
+      expect(wrapper.text()).not.toContain('张图片无法显示')
+
+      // 模拟 load 事件落地后仍然 naturalWidth 0（真解不开）
+      const img = wrapper.find('.docx-document__body img').element as HTMLImageElement
+      Object.defineProperty(img, 'complete', { value: true, configurable: true })
+      img.dispatchEvent(new Event('load'))
+      await flushPromises()
+
+      expect(wrapper.find('.docx-document__body img').attributes('data-docx-image-failed')).toBe('format')
+      wrapper.unmount()
+    })
+  })
 })
