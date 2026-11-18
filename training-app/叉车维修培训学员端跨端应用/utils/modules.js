@@ -333,6 +333,7 @@ const MODULES = {
       'composables/useTopicDetail.uts',
       'composables/useTopicFeed.uts',
       'pages/forum/check-in.uvue',
+      'pages/forum/composables/useForumCreateForm.uts',
       'pages/forum/components/forum-checkin-card.uvue',
       'pages/forum/components/forum-contribution-form.uvue',
       'pages/forum/components/forum-experience-sort-bar.uvue',

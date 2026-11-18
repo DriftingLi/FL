@@ -43,8 +43,9 @@
             </view>
         </view>
 
-        <!-- 保真检查：序列化时被降级 / 被丢弃的项，**持续可见**（R3）。空串时不渲染。 -->
-        <text v-if="fidelityNotice.length > 0" class="fidelity-notice">{{ fidelityNotice }}</text>
+        <!-- 保真检查：序列化时被降级 / 被丢弃的项，**持续可见**（R3）。空串时不渲染。
+             宿主可关掉本行自己渲染（#2641 发帖页要把它放到提交按钮附近，AC③）—— 两处只出现一次。 -->
+        <text v-if="showFidelityNotice && fidelityNotice.length > 0" class="fidelity-notice">{{ fidelityNotice }}</text>
 
         <!-- 两条功能提示（ui-hints 的明确例外，别当装饰删）：属地披露 + Markdown 边界提示 -->
         <text v-if="showRegionNotice" class="region-notice">{{ regionNotice }}</text>
@@ -104,6 +105,8 @@
         placeholder?: string
         showImages?: boolean
         showRegionNotice?: boolean
+        /** 是否由本组件渲染保真提示行。宿主把它挪到别处（如提交按钮附近）时传 false，避免两处重复 */
+        showFidelityNotice?: boolean
         uploading?: boolean
     }>(), {
         previewImages: () => [] as string[],
@@ -113,6 +116,7 @@
         placeholder: '',
         showImages: true,
         showRegionNotice: true,
+        showFidelityNotice: true,
         uploading: false
     })
 

@@ -120,7 +120,8 @@ describe('编辑器侧无图片插入入口：正文不产出 ![alt](url)（R3�
     });
 
     it('丢弃提示是**持续可见**的一行，不是 toast', () => {
-        expect(input).toContain('<text v-if="fidelityNotice.length > 0" class="fidelity-notice">');
+        // #2641：宿主可关掉本行自己渲染（发帖页要把它放到提交按钮附近，AC③）——两处只出现一次
+        expect(input).toContain('<text v-if="showFidelityNotice && fidelityNotice.length > 0" class="fidelity-notice">');
         expect(input).toContain('richFidelityNotice(issues.value)');
         expect(input).not.toContain('showToast');
         expect(input).not.toContain('showModal');

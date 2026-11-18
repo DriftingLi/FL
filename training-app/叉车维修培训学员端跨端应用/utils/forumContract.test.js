@@ -219,6 +219,8 @@ describe('备考经验 tab 接线契约（#706：第四 tab 进场，复用 Topi
   const tabBar = read('pages/forum/components/forum-tab-bar.uvue');
   const expBar = read('pages/forum/components/forum-experience-sort-bar.uvue');
   const createPage = read('pages/forum/forum-create.uvue');
+  // #2641：发帖页表单域整域搬进 composable（页面壳层零自持状态），类别行判据随之落在这里
+  const createForm = read('pages/forum/composables/useForumCreateForm.uts');
 
   it('tab-bar 有备考经验 tab，点击 onSwitch(experience)', () => {
     expect(tabBar).toContain('备考经验');
@@ -256,11 +258,11 @@ describe('备考经验 tab 接线契约（#706：第四 tab 进场，复用 Topi
     // 经验 tab 是只读策展流：列表查询走认定 is_experience=true（见上一条），
     // 发帖入口只能落 discussion/question —— 传 experience 后端直接 400
     expect(page).not.toMatch(/scope = 'experience'/);
-    expect(createPage).not.toMatch(/value: 'experience'/);
-    expect(createPage).toContain("{ label: '广场', value: 'discussion' }");
-    expect(createPage).toContain("{ label: '知识问答', value: 'question' }");
+    expect(createForm).not.toMatch(/value: 'experience'/);
+    expect(createForm).toContain("{ label: '广场', value: 'discussion' }");
+    expect(createForm).toContain("{ label: '知识问答', value: 'question' }");
     // G-08：写侧只留两值；资源是 URL scope 进来的投稿模式，不再占类别位
-    expect(createPage).not.toContain("{ label: '资源', value: 'resource' }");
+    expect(createForm).not.toContain("{ label: '资源', value: 'resource' }");
   });
 
   it('经验 tab 无任何发布入口（只读策展流）：搜索栏（含发帖 pill）与空态按钮按 currentTab 隐藏', () => {

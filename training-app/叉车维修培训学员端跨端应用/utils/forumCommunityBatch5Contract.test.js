@@ -15,6 +15,8 @@ const TAB_BAR = 'pages/forum/components/forum-tab-bar.uvue'
 const FEED = 'composables/useTopicFeed.uts'
 const API = 'api/forum.uts'
 const CREATE = 'pages/forum/forum-create.uvue'
+/** #2641：发帖页表单域整域搬进 composable（页面壳层零自持状态），模式 / 提交判据随之落在这里 */
+const CREATE_FORM = 'pages/forum/composables/useForumCreateForm.uts'
 const DETAIL = 'pages/forum/forum-detail.uvue'
 const CHECKIN = 'pages/forum/check-in.uvue'
 
@@ -42,35 +44,36 @@ describe('forum 四 Tab 与 N2 #2549 experience 参数', () => {
 })
 
 describe('G-08：发帖模块只留广场 / 知识问答两值', () => {
-  const create = read(CREATE)
+  const form = read(CREATE_FORM)
 
   it('模块行两值：广场 / 知识问答；资源与备考经验都不占写侧类别位', () => {
-    expect(create).toContain("{ label: '广场', value: 'discussion' }")
-    expect(create).toContain("{ label: '知识问答', value: 'question' }")
-    expect(create).not.toContain("{ label: '资源', value: 'resource' }")
-    expect(create).not.toContain("{ label: '备考经验', value: 'experience' }")
+    expect(form).toContain("{ label: '广场', value: 'discussion' }")
+    expect(form).toContain("{ label: '知识问答', value: 'question' }")
+    expect(form).not.toContain("{ label: '资源', value: 'resource' }")
+    expect(form).not.toContain("{ label: '备考经验', value: 'experience' }")
   })
 
   it('资源仍是 URL scope=resource 的真模式（投稿表单不流入发帖接口）', () => {
-    expect(create).toMatch(/if \(s == 'resource'\) \{[\s\S]*?resourceMode\.value = true/)
-    expect(create).toMatch(/if \(isResourceMode\.value\) return/)
+    expect(form).toMatch(/if \(s == 'resource'\) \{[\s\S]*?resourceMode\.value = true/)
+    expect(form).toMatch(/if \(isResourceMode\.value\) return/)
   })
 })
 
 describe('G-09：反馈改单向提交，需求详情屏不实现', () => {
   const create = read(CREATE)
+  const form = read(CREATE_FORM)
   const detail = read(DETAIL)
 
   it('forum-create 有 scope=feedback 模式，且走现有 POST /feedback（submitFeedbackApi）', () => {
-    expect(create).toMatch(/else if \(s == 'feedback'\) \{[\s\S]*?feedbackMode\.value = true/)
-    expect(create).toContain('submitFeedbackApi')
-    expect(create).toContain("import { submitFeedbackApi, FEEDBACK_CONTENT_MAX } from '../../api/feedback'")
+    expect(form).toMatch(/else if \(s == 'feedback'\) \{[\s\S]*?feedbackMode\.value = true/)
+    expect(form).toContain('submitFeedbackApi')
+    expect(form).toContain("import { submitFeedbackApi, FEEDBACK_CONTENT_MAX } from '../../../api/feedback'")
   })
 
   it('反馈无 type / 无工单号 / 无回复线程：提交载荷只有正文 + 图 + 联系方式', () => {
-    expect(create).toMatch(/submitFeedbackApi\(text, feedbackNoImages, feedbackContact\.value\.trim\(\)\)/)
+    expect(form).toMatch(/submitFeedbackApi\(text, feedbackNoImages, feedbackContact\.value\.trim\(\)\)/)
     for (const banned of ['feedbackType', 'ticketNo', 'workOrder', 'replyThread']) {
-      expect(create).not.toContain(banned)
+      expect(form).not.toContain(banned)
     }
   })
 
