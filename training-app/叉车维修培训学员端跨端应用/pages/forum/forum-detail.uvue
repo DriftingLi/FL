@@ -57,17 +57,24 @@
         </view>
 
         <!-- 半屏浮层（⑪-1/⑪-4）：全屏遮罩阻断阅读（列表滚不动）+ 从底部升起、贴键盘上沿的面板。
-             面板 `bottom` 由 uni.onKeyboardHeightChange 去抖后驱动；输入区形态本身仍是共享组件
-             ForumMarkdownInput，原样搬进、不改形态（⑪-2）。遮罩点击收起，面板 @click.stop 防误收。 -->
+             面板 `bottom` 由 uni.onKeyboardHeightChange 去抖后驱动。输入区按端分流（ADR-0073 ⑤）：
+             能力端（App/H5/微信）用 WYSIWYG；支付宝/百度/头条保留记号工具栏 ForumMarkdownInput。
+             两态共用同一个草稿（composable 持有）与同一组图片/事件，遮罩点击收起、面板 @click.stop 防误收。 -->
         <view v-if="replyExpanded" class="reply-panel-mask" @click="onCollapseReply">
             <view class="reply-panel" :style="{ marginBottom: panelBottom + 'px', maxHeight: panelMaxHeight + 'px' }"
                 @click.stop>
-                <ForumMarkdownInput :content="replyContent" :preview-images="replyPreviewImages"
+                <!-- #ifndef MP-ALIPAY || MP-BAIDU || MP-TOUTIAO -->
+                <ForumWysiwygInput v-if="useWysiwyg" ref="replyWysiwygRef" :preview-images="replyPreviewImages"
                     :image-count="replyImages.length" variant="reply" :max-images="replyImageLimit"
-                    :maxlength="10000" placeholder="写下你的回复..."
-                    :format="replyFormat" :show-format-switch="true"
-                    :uploading="uploadingReplyImage"
-                    @update:content="onReplyContentChange" @update:format="onReplyFormatChange"
+                    :maxlength="10000" placeholder="写下你的回复..." :uploading="uploadingReplyImage"
+                    @update:markdown="onReplyContentChange"
+                    @add-image="onAddReplyImage" @remove-image="onRemoveReplyImage"
+                    @preview-image="onPreviewReplyImage" @keyboard-height="keyboardTracker" />
+                <!-- #endif -->
+                <ForumMarkdownInput v-if="!useWysiwyg" :content="replyContent" :preview-images="replyPreviewImages"
+                    :image-count="replyImages.length" variant="reply" :max-images="replyImageLimit"
+                    :maxlength="10000" placeholder="写下你的回复..." :uploading="uploadingReplyImage"
+                    @update:content="onReplyContentChange"
                     @add-image="onAddReplyImage" @remove-image="onRemoveReplyImage"
                     @preview-image="onPreviewReplyImage" />
                 <view class="reply-actions">
@@ -96,6 +103,9 @@
     import ForumReplyList from './components/forum-reply-list.uvue'
     import ForumReportDialog from './components/forum-report-dialog.uvue'
     import ForumMarkdownInput from './components/forum-markdown-input.uvue'
+    // #ifndef MP-ALIPAY || MP-BAIDU || MP-TOUTIAO
+    import ForumWysiwygInput from '../../components/forum-wysiwyg-input.uvue'
+    // #endif
     import { useTopicDetail } from '../../composables/useTopicDetail'
     import { useReplyComposer } from '../../composables/useReplyComposer'
     import { useReport } from '../../composables/useReport'
@@ -112,6 +122,9 @@ import { goBack } from '../../utils/navigation'
     const replyImageLimit : number = FORUM_MAX_REPLY_IMAGES
 
     const windowHeight = uni.getSystemInfoSync().windowHeight
+    /** WYSIWYG 组件实例：@某人 点击时经 expose 的 insertMention 写入（一次性点击写入，非状态投影） */
+    type ReplyWysiwygInstance = { insertMention : (name : string) => void }
+    const replyWysiwygRef = ref<ReplyWysiwygInstance | null>(null)
 
     // ===== 三域 composable 接线：详情核心 / 回复输入 / 举报 =====
     const detail = useTopicDetail()
@@ -124,9 +137,8 @@ import { goBack } from '../../utils/navigation'
     } = detail
     const composer = useReplyComposer()
     const {
-        replyContent, replyImages, replyPreviewImages, uploadingReplyImage, submitting, replyFormat,
-        canSubmitReply,
-        onFormatChange: onReplyFormatChange,
+        replyContent, replyImages, replyPreviewImages, uploadingReplyImage, submitting,
+        canSubmitReply, useWysiwyg,
         onAddReplyImage, onRemoveReplyImage, onPreviewReplyImage,
     } = composer
 
@@ -326,7 +338,15 @@ import { goBack } from '../../utils/navigation'
         // 再写，走的是「已挂载后 :value 反应式更新」这条与工具栏插入同源、已验证可用的路径。
         replyExpanded.value = true
         nextTick(() => {
-            replyContent.value = '@' + name + ' '
+            if (useWysiwyg.value) {
+                // WYSIWYG 的 delta 留在组件内，宿主不能直写 replyContent（那样只改草稿、编辑器无感）。
+                // 经组件 expose 的 insertMention 走 insertText 逃生舱；组件 ready 前的点击由它内部暂存。
+                const w = replyWysiwygRef.value
+                if (w != null) w.insertMention(name)
+            } else {
+                // 平台例外：记号输入区是受控 :value，直接改草稿即回显（原路径保留）
+                replyContent.value = '@' + name + ' '
+            }
         })
     }
 

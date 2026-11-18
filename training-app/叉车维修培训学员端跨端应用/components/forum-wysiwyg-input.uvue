@@ -151,6 +151,8 @@
     const markdownLength = ref<number>(0)
 
     let editorCtx : EditorContext | null = null
+    /** @某人 在 editor ready 之前点击时的暂存串（onEditorReady 后补写，避免丢失） */
+    let pendingMention : string = ''
 
     const isReply = computed<boolean>(() : boolean => props.variant == 'reply')
     const fidelityNotice = computed<string>(() : string => richFidelityNotice(issues.value))
@@ -181,11 +183,24 @@
         })
     }
 
+    /** 拿到 ctx 后把暂存串写进去（onEditorReady 的 success 回调里调用） */
+    function ctx_insertMentionText(ctx : EditorContext, text : string) : void {
+        ctx.insertText({
+            text: text,
+            success: () => { refreshFromEditor() }
+        })
+    }
+
     function onEditorReady() : void {
         const options : CreateEditorContextAsyncOptions = {
             id: EDITOR_ID,
             success: (context : EditorContext) => {
                 editorCtx = context
+                if (pendingMention.length > 0) {
+                    const text = pendingMention
+                    pendingMention = ''
+                    ctx_insertMentionText(context, text)
+                }
                 refreshFromEditor()
             },
             fail: (_error : UniError) => {}
@@ -269,6 +284,42 @@
     function onPreviewImage(index : number) : void {
         emit('preview-image', index)
     }
+
+    /**
+     * 供宿主写入「@某人」提名字串（#2642）。
+     *
+     * 为什么是 expose 方法而不是 prop/computed：@某人是由**已经发生的点击**驱动的一次性写入，
+     * 不是状态的持续投影 —— 用 prop 驱动会让「点两次同一个人」因值未变而不触发。宿主在点击
+     * 回调里取组件实例调本方法，走 editor 的 insertText 逃生舱（与记号同一条路径），插入后
+     * 统一经 refreshFromEditor 回流，保真提示与序列化同源。
+     *
+     * 失焦时序：@某人 点击会让 editor 先 blur（readOnly=true），故与 onActionTap 同款绕行 ——
+     * 延迟一个 tick 再 insertText，避免 readOnly 下的写入被吞。
+     */
+    function insertMention(name : string) : void {
+        const ctx = editorCtx
+        const text = '@' + name + ' '
+        if (ctx == null) {
+            pendingMention = text
+            return
+        }
+        if (readOnly.value) {
+            setTimeout(() => {
+                ctx.insertText({
+                    text: text,
+                    success: () => { refreshFromEditor() }
+                })
+                readOnly.value = false
+            }, 0)
+            return
+        }
+        ctx.insertText({
+            text: text,
+            success: () => { refreshFromEditor() }
+        })
+    }
+
+    defineExpose({ insertMention })
 
     /**
      * 键盘弹起：只**上报**高度，不在组件内加偏移 —— 回复浮层的面板 bottom 由宿主按同一个值驱动
