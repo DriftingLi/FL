@@ -4,6 +4,7 @@
  * 全部是**源码接线锁**（.uvue / .uts 不可 jest import，沿用仓内同款缝）；它不构成 ③ 门证据，
  * 只守「实现面不回潮」——真判据是票面 AC 与真机（#2644）。
  */
+const fs = require('fs')
 const path = require('path')
 const { readText } = require('./utsHarness')
 
@@ -26,12 +27,15 @@ describe('AC① 新发帖：一律 markdown 落库，输入形态只剩一种', 
     expect(form).not.toContain('authorFormat')
   })
 
-  it('作者格式偏好彻底退出：页面与表单域都不再读写记忆位', () => {
+  it('作者格式偏好彻底退出：页面与表单域都不再碰已退役的记忆位', () => {
+    // #2643 起模块本体已删 ⇒ 钉「模块路径 + 存储键」这两个回不来的名字，而不是
+    // readAuthorFormat / writeAuthorFormat 这类已不存在的函数名（钉死名字会随删除变成空断言）。
     for (const src of [page, form]) {
-      expect(src).not.toContain('readAuthorFormat')
-      expect(src).not.toContain('writeAuthorFormat')
-      expect(src).not.toContain('normalizeAuthorFormat')
+      expect(src).not.toContain('forumFormatPreference')
+      expect(src).not.toContain('forum_author_content_format')
     }
+    // 模块本体与它的存储键一起下线（#2643）：谁把记忆位加回来，这条先红
+    expect(fs.existsSync(path.join(ROOT, 'utils', 'forumFormatPreference.uts'))).toBe(false)
     // 档位胶囊不再出现（旧组件仍收该 prop，但恒传 false）
     expect(page).toContain(':show-format-switch="false"')
     expect(page).not.toContain('showFormatSwitch')

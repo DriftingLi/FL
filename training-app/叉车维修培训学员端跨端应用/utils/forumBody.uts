@@ -27,7 +27,8 @@ import type { MarkdownBlock } from '../types/index'
  * 正文格式：**纯文本**（缺省档）。归一后只会是它或 `markdown` 两者之一。
  *
  * 它在 P3 之前只是「归一后的另一个取值」，没有常量名；输入区形态落地后**作者侧**也需要这两个
- * 取值（数据档位控件 + `utils/forumFormatPreference.uts` 的记忆位），故在此立名 ——
+ * 取值，故在此立名。作者侧的数据档位控件与格式记忆位已随 #2643 退役；`text` 仍在读侧承重 ——
+ * 存量 text 帖按原格式直出、资源投稿态恒纯文本（`useForumCreateForm` 的 effectiveFormat）。
  * 格式词汇表仍然只有这一处（别在页面里再写字面量 `'markdown'` / `'text'`）。
  */
 export const FORMAT_TEXT = 'text'
