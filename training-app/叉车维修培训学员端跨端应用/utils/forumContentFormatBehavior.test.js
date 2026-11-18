@@ -28,7 +28,7 @@ const { loadUts, readText } = require('./utsHarness');
 const { envelopeBindings } = require('./requestUtsHarness');
 
 // 格式轴的真执行（含它的两个上游）只从夹具取：#1472 起 forumBody 又多一个运行期依赖，
-// 各套件各自抄注入表 = 每次加依赖都要改 N 处（本文件与 forumFormatPreferenceBehavior 各中过一次）。
+// 各套件各自抄注入表 = 每次加依赖都要改 N 处（本文件就中过一次）。
 const { forumBodyModule } = require('./forumChainHarness');
 
 const API_DIR = path.join(__dirname, '..', 'api');

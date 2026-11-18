@@ -195,15 +195,13 @@ describe('编辑态不给档位控件，只按帖子**原格式**决定形态（
     expect(form).not.toMatch(/updateForumTopicApi\([^)]*content_format/);
   });
 
-  it('作者记忆位两腿都退出：发帖侧 #2641 已撤、回复侧 #2642 已撤，序列化产物固定发 markdown', () => {
-    expect(createPage).not.toContain('readAuthorFormat');
-    expect(form).not.toContain('readAuthorFormat');
-    expect(form).not.toContain('writeAuthorFormat');
-    expect(form).not.toContain('normalizeAuthorFormat');
+  it('作者记忆位两腿都退出：发帖侧 #2641 已撤、回复侧 #2642 已撤，模块与存储键 #2643 下线', () => {
+    // 模块本体已删 ⇒ 钉「模块路径 + 存储键」，不钉已不存在的函数名（#2643）
+    for (const src of [createPage, form, composer]) {
+      expect(src).not.toContain('forumFormatPreference');
+      expect(src).not.toContain('forum_author_content_format');
+    }
     // 回复侧（本票）：不再读写作者格式偏好，序列化产物固定发 markdown
-    expect(composer).not.toContain('readAuthorFormat');
-    expect(composer).not.toContain('normalizeAuthorFormat');
-    expect(composer).not.toContain('writeAuthorFormat');
     expect(composer).toContain('FORMAT_MARKDOWN');
     expect(composer).not.toContain('replyFormat');
     // 平台例外与发帖面同一口径：编译期摘除，不是运行期探测
