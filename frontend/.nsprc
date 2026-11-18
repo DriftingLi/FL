@@ -1,0 +1,6 @@
+{
+  "1247710": {
+    "notes": "picomatch ReDoS（CVE-2026-112366 / GHSA-fc5q-39xc-vjpf）。上游 micromatch/picomatch 至今没有修复版（advisory 的 patched 为 null，npm 最新即 4.0.7，2026-11-17 开的 5 个修复 PR #260/#262/#263/#264/#265 均未合并），vite/vitest/vue-router/vue-tsc/unplugin/tinyglobby/fdir 全部锁 ^4.0.7，无法靠升级消除。可达性：这条链是构建与测试工具链，不进生产包（frontend/dist 全量搜 POSIX_REGEX_SOURCE/picomatch/extglobs 零命中），且触发条件是攻击者能构造恶意 glob 模式并交给 picomatch 编译，本项目没有这样的输入面。到期后重审：若上游已发修复版则升级并删除本条。",
+    "expiry": "2026-12-18"
+  }
+}

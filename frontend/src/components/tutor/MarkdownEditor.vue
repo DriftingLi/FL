@@ -353,4 +353,33 @@ defineExpose({
 .md-loading {
   background: color-mix(in srgb, var(--color-bg-card) 85%, transparent);
 }
+
+/*
+ * 工具栏悬浮提示翻到按钮下方。
+ *
+ * Vditor 把气泡定位在按钮**上方**（`__n` / `__ne` / `__nw` 三种都是 `bottom:100%`），
+ * 而工具栏贴着 `.md-vditor-host` 的上边界、host 又是 `overflow:hidden`（要它裁掉编辑区
+ * 溢出，见模板 :22）—— 气泡整块落在 host 之外，实测只剩 4px 边缘可见（页面
+ * /admin/featured-content/edit/1，粗体按钮 top 725、气泡 top ≈ 694、host top 724）。
+ * 于是「悬停看不到任何说明」直接退化成「这些按钮不知道怎么用」。
+ *
+ * 为什么不改成 `tipPosition: 's'`：那只能改我们自己的自定义项，Vditor 内置的 13 个
+ * （标题 / 粗体 / 列表 / 撤销 / 全屏 …）的方位写死在它的 CSS 里、改不到，而它们同样被裁。
+ * 所以由这条规则统一接管：往下展开 + 水平居中对齐，`::before` 那个小三角一并隐藏
+ * （它按「在上方」定位，翻下来后会浮在按钮上面）。
+ *
+ * 已实测 24 个按钮（含「全屏切换 <Ctrl+'>」这条最宽的 102px）气泡都落在 host 水平范围内。
+ */
+.md-vditor-host :deep(.vditor-toolbar .vditor-tooltipped)::after {
+  top: 100%;
+  right: auto;
+  bottom: auto;
+  left: 50%;
+  margin: 6px 0 0;
+  transform: translateX(-50%);
+}
+
+.md-vditor-host :deep(.vditor-toolbar .vditor-tooltipped)::before {
+  display: none;
+}
 </style>
