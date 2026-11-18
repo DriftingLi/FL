@@ -1,0 +1,198 @@
+/**
+ * Delta → Markdown 序列化管线（#2638，Parent #2631）
+ *
+ * WYSIWYG 编辑器（Quill 内核）与论坛档之间唯一的可测 seam。
+ * 三层状态模型里它守「编辑模型 → 存储格式」这一段：编辑器给 getContents 的 delta（JSON 串），
+ * 本模块出论坛档 SUBSET_FORUM 能表达的 Markdown 源串 + 保真检查差集。
+ *
+ * 第一性原理（为什么载体是 delta 不是 HTML）：
+ * - HTML 会把普通空格写成实体、字号/颜色写成 inline style、把不支持的块静默拉平；
+ *   delta 保留普通空格与语义 attributes，序列化可按论坛档显式降级并记账。
+ * - 宁可「降级 + 上报」也不静默丢内容：凡论坛档表达不了的格式（下划线/对齐/缩进/字号/颜色/
+ *   上下标/背景色）一律保留文本、丢样式；图片 op 丢弃并记一条 issue（R3 禁静默丢失）。
+ * - 编辑器 statuschange 的 link:true 是布尔、URL 不可恢复 ⇒ 不从 delta 造链接；
+ *   链接一律走字面记号 [文字](url)，由记号构造器产出、序列化原样穿过。
+ *
+ * 本文件为纯函数、不依赖 DOM / uni API，Node 侧经 utils/utsHarness.js 真执行。
+ */
+
+export const MARKER_QUOTE = 'quote'
+export const MARKER_CODE_BLOCK = 'code-block'
+export const MARKER_CODE_INLINE = 'code-inline'
+export const MARKER_LINK = 'link'
+
+export const MARKER_KINDS : string[] = [MARKER_QUOTE, MARKER_CODE_BLOCK, MARKER_CODE_INLINE, MARKER_LINK]
+
+export function markerLabel(kind : string) : string {
+    if (kind == MARKER_QUOTE) return '> 引用'
+    if (kind == MARKER_CODE_BLOCK) return '代码块'
+    if (kind == MARKER_CODE_INLINE) return '行内代码'
+    if (kind == MARKER_LINK) return '链接'
+    return kind
+}
+
+/**
+ * 有选区 ⇒ 包裹选中文字；无选区 ⇒ 插入可替换模板。
+ * 返回值直接交给 editorContext.insertText 作用于当前选区（编辑器无 setSelection，光标落点由它决定）。
+ */
+export function buildMarker(kind : string, selected : string) : string {
+    const has = selected.length > 0
+    if (kind == MARKER_QUOTE) {
+        if (!has) return '> 引用内容'
+        const lines = selected.split('\n')
+        const out : string[] = []
+        for (let i = 0; i < lines.length; i++) out.push('> ' + lines[i])
+        return out.join('\n')
+    }
+    if (kind == MARKER_CODE_BLOCK) {
+        if (!has) return '```\n代码块\n```'
+        return '```\n' + selected + '\n```'
+    }
+    if (kind == MARKER_CODE_INLINE) {
+        if (!has) return '`行内代码`'
+        return '`' + selected + '`'
+    }
+    if (kind == MARKER_LINK) {
+        if (!has) return '[链接文字](https://example.com)'
+        return '[' + selected + '](https://example.com)'
+    }
+    return ''
+}
+
+const HASHES : string[] = ['', '#', '##', '###', '####', '#####', '######']
+
+const ISSUE_IMAGE = 'image-dropped'
+const ISSUE_UNSUPPORTED = 'style-dropped'
+
+function attr(attrs : UTSJSONObject | null, key : string) : any | null {
+    if (attrs == null) return null
+    return attrs[key]
+}
+
+function isTrue(v : any | null) : boolean {
+    return v != null && v != false
+}
+
+function asText(v : any | null) : string {
+    if (v == null) return ''
+    if (typeof v == 'string') return v as string
+    return v.toString()
+}
+
+function asObj(raw : any | null) : UTSJSONObject | null {
+    if (raw == null) return null
+    return raw as UTSJSONObject
+}
+
+function asObjectArray(raw : any | null) : Array<UTSJSONObject> {
+    if (raw == null) return [] as Array<UTSJSONObject>
+    return raw as Array<UTSJSONObject>
+}
+
+function applyInline(text : string, attrs : UTSJSONObject | null, issues : string[]) : string {
+    if (text.length == 0) return text
+    if (isTrue(attr(attrs, 'code'))) return '`' + text + '`'
+    let s = text
+    if (isTrue(attr(attrs, 'strike'))) s = '~~' + s + '~~'
+    if (isTrue(attr(attrs, 'italic'))) s = '*' + s + '*'
+    if (isTrue(attr(attrs, 'bold'))) s = '**' + s + '**'
+    const unsupported : string[] = ['underline', 'background', 'color', 'size', 'script', 'align', 'indent']
+    for (let i = 0; i < unsupported.length; i++) {
+        if (isTrue(attr(attrs, unsupported[i]))) {
+            issues.push(ISSUE_UNSUPPORTED + ':' + unsupported[i])
+        }
+    }
+    return s
+}
+
+function blockPrefix(attrs : UTSJSONObject | null) : string {
+    const header = attr(attrs, 'header')
+    if (header != null) {
+        const n = parseInt(asText(header))
+        if (n >= 1 && n <= 6) return HASHES[n] + ' '
+    }
+    const list = asText(attr(attrs, 'list'))
+    if (list == 'bullet') return '- '
+    if (list == 'ordered') return '1. '
+    if (list == 'checked' || list == 'unchecked') return '- '
+    if (isTrue(attr(attrs, 'blockquote'))) return '> '
+    return ''
+}
+
+function blockKind(attrs : UTSJSONObject | null) : string {
+    if (attr(attrs, 'header') != null) return 'header'
+    if (asText(attr(attrs, 'list')).length > 0) return 'list'
+    if (isTrue(attr(attrs, 'blockquote'))) return 'quote'
+    return ''
+}
+
+export type DeltaSerializeResult = {
+    markdown : string,
+    issues : string[],
+    isEmpty : boolean,
+}
+
+export function serializeDelta(deltaJson : string) : DeltaSerializeResult {
+    const issues : string[] = []
+    let root : UTSJSONObject | null = null
+    try {
+        root = asObj(JSON.parse(deltaJson))
+    } catch (_e) {
+        root = null
+    }
+    if (root == null) {
+        return { markdown: '', issues: issues, isEmpty: true }
+    }
+    const ops = asObjectArray(root['ops'])
+    const lines : string[] = []
+    let inline = ''
+    let lastKind = ''
+    let inFence = false
+    function push(line : string, kind : string) : void {
+        if (line.length == 0 && kind.length == 0) return
+        const fence = line.indexOf('```') == 0
+        if (fence) inFence = !inFence
+        if (fence || inFence) kind = 'code'
+        if (kind.length > 0 && lastKind.length > 0 && kind != lastKind) lines.push('')
+        if (kind.length == 0 && lastKind.length > 0) lines.push('')
+        lines.push(line)
+        lastKind = kind
+    }
+    for (let i = 0; i < ops.length; i++) {
+        const op = ops[i]
+        const attrs = asObj(op['attributes'])
+        const insert = op['insert']
+        if (insert == null) continue
+        if (typeof insert == 'string') {
+            const text = insert as string
+            const parts = text.split('\n')
+            for (let p = 0; p < parts.length; p++) {
+                if (p > 0) {
+                    push(blockPrefix(attrs) + inline, blockKind(attrs))
+                    inline = ''
+                }
+                inline += applyInline(parts[p], attrs, issues)
+            }
+        } else {
+            const obj = asObj(insert)
+            if (obj == null) continue
+            if (isTrue(obj['divider'])) {
+                if (inline.length > 0) { push(inline, ''); inline = '' }
+                push('---', 'divider')
+            }
+            const image = obj['image']
+            if (image != null) {
+                if (inline.length > 0) { push(inline, ''); inline = '' }
+                issues.push(ISSUE_IMAGE)
+            }
+        }
+    }
+    if (inline.length > 0) push(inline, '')
+    while (lines.length > 0 && lines[lines.length - 1].length == 0) lines.pop()
+    const markdown = lines.join('\n')
+    return { markdown: markdown, issues: issues, isEmpty: markdown.trim().length == 0 }
+}
+
+export function deltaToMarkdown(deltaJson : string) : string {
+    return serializeDelta(deltaJson).markdown
+}
