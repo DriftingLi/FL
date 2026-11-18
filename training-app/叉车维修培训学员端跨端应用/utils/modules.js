@@ -321,6 +321,11 @@ const MODULES = {
       'api/checkin.uts',
       'api/forum.uts',
       'api/forumDto.uts',
+      // 'components/forum-wysiwyg-input.uvue' —— #2640：WYSIWYG 输入组件，被发帖页与回复浮层
+      // 两个页面共用（跨页共享件，同 components/ai-chat、components/cert-selector 的先例）。
+      // 落 components/ 而非 pages/forum/components/：后者是 forum 的 extractDirs，未接线的
+      // 新组件会被 A6「拆出物零孤儿」判红；接入在 #2641 / #2642 两票。
+      'components/forum-wysiwyg-input.uvue',
       'composables/useForumImagePicker.uts',
       'composables/useReplyComposer.uts',
       'composables/useReport.uts',
