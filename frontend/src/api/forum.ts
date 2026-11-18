@@ -27,7 +27,7 @@ export type ForumCategory = 'discussion' | 'question' | 'experience'
 
 /**
  * 学员可自述的发帖意图（ADR-0040）：'备考经验'已改为管理端认定，
- * 学员只能声明"想讨论什么"（讨论 / 提问），不能声明"产出了什么"。
+ * 学员只能声明"想讨论什么"（广场 / 知识问答），不能声明"产出了什么"。
  * 发帖与编辑的 category 入参只接受这两个值。
  */
 export type ForumPublishCategory = 'discussion' | 'question'
