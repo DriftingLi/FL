@@ -36,7 +36,7 @@
 
             <!-- ===== 发帖 / 资源投稿模式 ===== -->
             <view v-else class="form-section">
-                <!-- 模块选择（G-08：写侧只留「讨论 / 提问」两值；资源是 URL scope 进来的真模式，
+                <!-- 模块选择（G-08：写侧只留「广场 / 知识问答」两值；资源是 URL scope 进来的真模式，
                      不再占类别位，因此资源态不显示模块行） -->
                 <view v-if="!isResourceMode" class="form-item">
                     <text class="form-label">模块</text>
@@ -110,13 +110,13 @@ import { goBack } from '../../utils/navigation'
     const windowHeight = uni.getSystemInfoSync().windowHeight
     const authStore = useAuthStore()
 
-    // ===== 模块选项（G-08 / ADR-0040：写侧只留「讨论 / 提问」两值）=====
+    // ===== 模块选项（G-08 / ADR-0040：写侧只留「广场 / 知识问答」两值）=====
     // 资源是 URL scope=resource 进来的投稿模式（#760），不占学员可自述的类别位；
     // 「备考经验」是管理端认定，只读、不再产生新数据（N2 #2549 读参数与 #2521 成对落地）。
     type CategoryOption = { label : string, value : string }
     const categories : CategoryOption[] = [
-        { label: '讨论', value: 'discussion' },
-        { label: '提问', value: 'question' },
+        { label: '广场', value: 'discussion' },
+        { label: '知识问答', value: 'question' },
     ]
 
     // ===== 表单状态 =====
