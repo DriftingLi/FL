@@ -22,7 +22,7 @@ import { submitFeedbackApi, FEEDBACK_CONTENT_MAX } from '../../../api/feedback'
 import { getCurrentCredentialApi } from '../../../api/credential'
 import { goBack } from '../../../utils/navigation'
 
-/** 写侧模块选项（G-08 / ADR-0040：只留「讨论 / 提问」两值） */
+/** 写侧模块选项（G-08 / ADR-0040：只留「广场 / 知识问答」两值） */
 export type ForumCategoryOption = { label : string, value : string }
 
 export type UseForumCreateFormResult = {
@@ -72,12 +72,12 @@ export type UseForumCreateFormResult = {
 }
 
 export function useForumCreateForm() : UseForumCreateFormResult {
-    // ===== 模块选项（G-08 / ADR-0040：写侧只留「讨论 / 提问」两值）=====
+    // ===== 模块选项（G-08 / ADR-0040：写侧只留「广场 / 知识问答」两值）=====
     // 资源是 URL scope=resource 进来的投稿模式（#760），不占学员可自述的类别位；
     // 「备考经验」是管理端认定，只读、不再产生新数据（N2 #2549 读参数与 #2521 成对落地）。
     const categories : ForumCategoryOption[] = [
-        { label: '讨论', value: 'discussion' },
-        { label: '提问', value: 'question' },
+        { label: '广场', value: 'discussion' },
+        { label: '知识问答', value: 'question' },
     ]
 
     // ===== 表单状态 =====

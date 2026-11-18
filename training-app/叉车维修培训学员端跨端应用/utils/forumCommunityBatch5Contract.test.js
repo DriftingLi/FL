@@ -43,12 +43,12 @@ describe('forum 四 Tab 与 N2 #2549 experience 参数', () => {
   })
 })
 
-describe('G-08：发帖模块只留讨论 / 提问两值', () => {
+describe('G-08：发帖模块只留广场 / 知识问答两值', () => {
   const form = read(CREATE_FORM)
 
-  it('模块行两值：讨论 / 提问；资源与备考经验都不占写侧类别位', () => {
-    expect(form).toContain("{ label: '讨论', value: 'discussion' }")
-    expect(form).toContain("{ label: '提问', value: 'question' }")
+  it('模块行两值：广场 / 知识问答；资源与备考经验都不占写侧类别位', () => {
+    expect(form).toContain("{ label: '广场', value: 'discussion' }")
+    expect(form).toContain("{ label: '知识问答', value: 'question' }")
     expect(form).not.toContain("{ label: '资源', value: 'resource' }")
     expect(form).not.toContain("{ label: '备考经验', value: 'experience' }")
   })

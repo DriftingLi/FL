@@ -39,7 +39,7 @@
 
                 <!-- ===== 发帖 / 资源投稿模式 ===== -->
                 <view v-else class="form-section">
-                    <!-- 模块选择（G-08：写侧只留「讨论 / 提问」两值；资源是 URL scope 进来的真模式，
+                    <!-- 模块选择（G-08：写侧只留「广场 / 知识问答」两值；资源是 URL scope 进来的真模式，
                           不再占类别位，因此资源态不显示模块行） -->
                     <view v-if="!isResourceMode" class="form-item">
                         <text class="form-label">模块</text>
