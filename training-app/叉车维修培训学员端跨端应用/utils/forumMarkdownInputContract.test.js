@@ -46,13 +46,21 @@ const form = read(FORM_REL);
 // ===== ① 形态只有一份：发帖与回复共用同一个组件 =====
 
 describe('形态只有一份：发帖表单与回复栏共用同一个输入区组件（根 ADR-0052 决策①）', () => {
-  it('两个宿主都显式 import 同一个组件（各自 import 自己那份就是形态分家了）', () => {
-    for (const [rel, src] of [[CREATE_REL, createPage], [DETAIL_REL, detailPage]]) {
-      expect([rel, src.includes("from './components/forum-markdown-input.uvue'")]).toEqual([rel, true]);
-    }
-    // 形态的差异只允许由 `variant` prop 表达（两处不是两份实现）
+  it('发帖用共享记号输入区；回复浮层改用 WYSIWYG（能力端）/ 保留记号输入区（平台例外）', () => {
+    // 发帖面（#2641 尚未接 WYSIWYG）继续用共享记号输入区
+    expect(createPage).toContain("from './components/forum-markdown-input.uvue'");
     expect(createPage).toContain('variant="topic"');
+    // 回复面（本票 #2642）：能力端走 WYSIWYG，平台例外仍用同一份记号输入区
+    expect(detailPage).toContain("from '../../components/forum-wysiwyg-input.uvue'");
     expect(detailPage).toContain('variant="reply"');
+  });
+
+  it('平台例外在**编译期**摘掉 WYSIWYG（与发帖面同一口径），页面不自己探测端别', () => {
+    // 无 editor 的小程序上，组件连 import 都不该进包 —— 运行期 if 挡不住「模块不存在」的编译错误
+    expect(detailPage).toContain('#ifndef MP-ALIPAY || MP-BAIDU || MP-TOUTIAO');
+    // ADR-0032：平台判据全仓唯一（composables/useLoginProviders.uts），页面不得再探测
+    expect(detailPage).not.toContain('uniPlatform');
+    expect(detailPage).not.toContain('getProviderSync');
   });
 
   it('旧的重复形态已退场：页面里不再自持 textarea / 回复行输入（否则会与组件里的那份漂移）', () => {
@@ -187,15 +195,19 @@ describe('编辑态不给档位控件，只按帖子**原格式**决定形态（
     expect(form).not.toMatch(/updateForumTopicApi\([^)]*content_format/);
   });
 
-  it('新建态不再读写作者记忆位（#2641：发帖侧偏好彻底退出；回复侧留待 #2642）', () => {
+  it('作者记忆位两腿都退出：发帖侧 #2641 已撤、回复侧 #2642 已撤，序列化产物固定发 markdown', () => {
     expect(createPage).not.toContain('readAuthorFormat');
     expect(form).not.toContain('readAuthorFormat');
     expect(form).not.toContain('writeAuthorFormat');
     expect(form).not.toContain('normalizeAuthorFormat');
-    // 回复侧本票不动，记忆位仍由它持有
-    expect(composer).toContain('const replyFormat = ref<string>(readAuthorFormat())');
-    expect(composer).toContain('const next = normalizeAuthorFormat(value)');
-    expect(composer).toContain('writeAuthorFormat(next)');
+    // 回复侧（本票）：不再读写作者格式偏好，序列化产物固定发 markdown
+    expect(composer).not.toContain('readAuthorFormat');
+    expect(composer).not.toContain('normalizeAuthorFormat');
+    expect(composer).not.toContain('writeAuthorFormat');
+    expect(composer).toContain('FORMAT_MARKDOWN');
+    expect(composer).not.toContain('replyFormat');
+    // 平台例外与发帖面同一口径：编译期摘除，不是运行期探测
+    expect(composer).toContain('#ifdef MP-ALIPAY || MP-BAIDU || MP-TOUTIAO');
   });
 });
 

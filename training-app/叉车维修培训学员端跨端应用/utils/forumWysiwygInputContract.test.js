@@ -232,6 +232,18 @@ describe('对外契约：只 emit 序列化后的 markdown 与保真检查结果
 
 // ===== ⑨ 样式红线（本票新增的判据，全仓口径另由 uvueFontCarrierContract 执法）=====
 
+describe('宿主写入通道（#2642 @某人）：组件暴露 insertMention，一次点击一次写入', () => {
+    it('defineExpose 暴露 insertMention；写入走 insertText 逃生舱并回流保真检查', () => {
+        expect(input).toContain('defineExpose({ insertMention })');
+        expect(input).toContain('function insertMention(');
+        // 写入路径与记号同源：insertText + refreshFromEditor（不是另起一套 setContent）
+        expect(input).toContain('ctx.insertText({');
+        // ready 之前点击的暂存：避免 @某人 因编辑器未挂载而丢失
+        expect(input).toContain('pendingMention');
+        expect(input).toContain('ctx_insertMentionText(context, text)');
+    });
+});
+
 describe('样式红线：scss + 只用 class 选择器 + 编辑器本体不承载文字样式', () => {
     it('<style> 必须 lang="scss"', () => {
         expect(input).toContain('<style lang="scss">');
