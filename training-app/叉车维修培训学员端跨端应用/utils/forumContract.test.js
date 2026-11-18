@@ -257,8 +257,8 @@ describe('备考经验 tab 接线契约（#706：第四 tab 进场，复用 Topi
     // 发帖入口只能落 discussion/question —— 传 experience 后端直接 400
     expect(page).not.toMatch(/scope = 'experience'/);
     expect(createPage).not.toMatch(/value: 'experience'/);
-    expect(createPage).toContain("{ label: '讨论', value: 'discussion' }");
-    expect(createPage).toContain("{ label: '提问', value: 'question' }");
+    expect(createPage).toContain("{ label: '广场', value: 'discussion' }");
+    expect(createPage).toContain("{ label: '知识问答', value: 'question' }");
     // G-08：写侧只留两值；资源是 URL scope 进来的投稿模式，不再占类别位
     expect(createPage).not.toContain("{ label: '资源', value: 'resource' }");
   });
