@@ -1,12 +1,11 @@
 /**
- * 商城 / 积分商城共享状态（#2617 T1 预重构）
+ * 商城页状态（#2617 T1 预重构；#2621 T5 起本页是唯一货架页）
  *
- * 为什么两页共用一个 composable：T2 起 /pages/mall/mall 与 /pages/points/points-shop 合并为单一
- * 货架页（反转 #2518 Q8），合并前先把「分区 + 两路列表 + 余额 + 筛选 + 三态」从两个页面壳层搬到这里，
- * 页面只解构消费（#2617 验收 ①）。本刀**行为零变化**：两路装载都是显式动作
- * （loadCourses / loadItems），创建 composable 不发任何请求 —— mall 页不多打积分商品请求，
- * points-shop 不多打课程请求（#2617 验收 ③）。两路状态刻意不同名：合并页要同时持有课程与积分商品
- * 两份列表，同名 ref 会把「哪一路在加载」变成隐性约定。
+ * 来路：T1 把「分区 + 两路列表 + 余额 + 筛选 + 三态」从两个页面壳层（合并页 + 旧积分商城页）
+ * 搬进这里，页面只解构消费（#2617 验收 ①）；T2 起两页合成单一货架页（反转 #2518 Q8），
+ * 旧页与旧路由已在 T5 下线 ⇒ 今天只有一个消费者。两路装载都是显式动作（loadCourses / loadItems），
+ * 创建 composable 不发任何请求 —— 打开商城不多打一次没问过的请求。两路状态刻意不同名：合并页要同时
+ * 持有课程与积分商品两份列表，同名 ref 会把「哪一路在加载」变成隐性约定。
  *
  * #2618 T2 起 mall 页是四态货架（热门 0 / 课程 1 / 图书系列 2 / 积分兑换 3，ADR-0072 决策 2）：
  * 左栏页内切换只改 activeCategory，不再跳转积分商城；初始分区由 onLoad 的 tab 决定
@@ -269,7 +268,7 @@ export function useMall() : UseMallResult {
             const bal = await getPointsBalanceApi(true)
             pointsBalance.value = bal.balance
         } catch (e) {
-            console.warn('[points-shop] balance failed:', errMsg(e, '余额读取失败'))
+            console.warn('[mall] balance failed:', errMsg(e, '余额读取失败'))
         }
     }
 

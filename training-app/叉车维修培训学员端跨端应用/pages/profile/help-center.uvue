@@ -132,7 +132,7 @@ import { goBack } from '../../utils/navigation'
     import feedbackDialog from './components/feedback-dialog.uvue'
     import noteImageStrip from './components/note-image-strip.uvue'
 
-    /** AI 学助手（tabBar 页，只能走 switchTab；先例 pages/points/points-shop.uvue:148） */
+    /** AI 学助手（tabBar 页，只能走 switchTab；先例 pages/mall/composables/useMall.uts 的 goEntitlementLanding） */
     const AI_ASSISTANT_ROUTE = '/pages/ai-assistant/ai-assistant'
 
     const windowHeight = uni.getSystemInfoSync().windowHeight

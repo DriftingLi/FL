@@ -8,7 +8,7 @@
  *      页面渲染空态（票面「不必等 N1 上线，即插即用」）；
  *   ② G-01：「使用期限」写进 description 文案，**不新增 validity 字段** ⇒ 页面不得出现
  *      独立的「使用期限」数据行（注释里的裁定解释不算渲染内容，剥注释后判）；
- *   ③ 兑换链路：与 points-shop 同一管线（showModal 预判 → redeemShopItemApi，守卫全在服务端）；
+ *   ③ 兑换链路：与商城页内兑换同一管线（showModal 预判 → redeemShopItemApi，守卫全在服务端）；
  *      落点 ai_pro 走 #1942 权益落点，SKU 常量单点消费 useAiPro、不写字面量；
  *   ④ 切图落位：image 27（商品图兜底）与 主要事项（注意事项图标）包内字面量路径、文件在位。
  *
@@ -101,7 +101,7 @@ describe('商品详情页（#2518 第 5 刀）契约', () => {
     });
   });
 
-  describe('④ 兑换链路：与 points-shop 同一管线', () => {
+  describe('④ 兑换链路：与商城页内兑换同一管线', () => {
     it('CTA 可点性只由服务端事实决定（已拥有 / 售罄），停用词四态齐', () => {
       expect(COMPOSABLE).toMatch(/if \(item\.owned\) return true/);
       expect(COMPOSABLE).toMatch(/if \(s != null && s == 0\) return true/);
