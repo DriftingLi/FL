@@ -321,13 +321,6 @@
                 }
             },
             {
-                "path": "points-shop",
-                "style": {
-                    "navigationStyle": "custom",
-                    "navigationBarTitleText": "积分商城"
-                }
-            },
-            {
                 "path": "points-exchange-records",
                 "style": {
                     "navigationStyle": "custom",

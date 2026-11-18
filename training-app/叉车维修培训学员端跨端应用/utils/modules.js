@@ -184,9 +184,10 @@ const MODULES = {
      * 决策意图由对账兜底：`search` 真的接线那天，`consumerFacts().unregistered` 会判红并要求登记
      * （不拿一条假声明去保真）。
      *
-     * #1942：`pages/points/points-shop.uvue` 消费 `composables/useAiPro.uts` 的 `AI_PRO_SKU`
-     * （商城兑换成功后的落点判定与 AI 专业版能力门同一个 SKU，不许各写一份字面量）⇒ 登记 points。
-     * #2617 T1：`pages/mall/composables/useMall.uts` 同引 `AI_PRO_SKU`（积分商品兑换成功的落点判定）⇒ 追加 mall。
+     * #1942：旧积分商城页曾消费 `composables/useAiPro.uts` 的 `AI_PRO_SKU`
+     * （兑换成功后的落点判定与 AI 专业版能力门同一个 SKU，不许各写一份字面量）；该页已在 #2621 T5
+     * 下线，`AI_PRO_SKU` 的消费者只剩 mall 的 useMall.uts（#2617 T1）——points 保留登记是因为
+     * `pages/points/composables/usePointsGoodsDetail.uts` 同引它。
      */
     crossModuleConsumers: ['points', 'mall'],
     /** 超预算：ai-assistant.uvue / api/aiAssistant.uts 633（ai-settings 583 已进预算，#1732 摘走设置读写与归一化；ai-feature 606 已随 #2593 退役） */
@@ -421,6 +422,7 @@ const MODULES = {
   mall: {
     extraDirs: [],
     files: [
+      'pages/mall/components/mall-balance-card.uvue',
       'pages/mall/components/mall-category-sidebar.uvue',
       'pages/mall/components/mall-course-card.uvue',
       'pages/mall/components/mall-float-actions.uvue',
@@ -455,21 +457,20 @@ const MODULES = {
       'api/points.uts',
       'pages/points/composables/usePointsExchangeRecords.uts',
       'pages/points/composables/usePointsGoodsDetail.uts',
-      'pages/points/components/points-balance-card.uvue',
-      'pages/points/components/points-shop-card.uvue',
       'pages/points/points-detail.uvue',
       'pages/points/points-exchange-records.uvue',
       'pages/points/points-goods-detail.uvue',
       'pages/points/points-rules.uvue',
-      'pages/points/points-shop.uvue',
       'pages/points/task-center.uvue',
     ],
-    extractDirs: ['pages/points/components'],
+    // #2621 T5：旧积分商城页与其私有商品卡随合并页收口下线；余额卡迁入 mall 的组件面
+    //（#2617 T1 它曾由两页共用，页下线后只剩合并页一个消费者 ⇒ 归属随消费者走）
+    extractDirs: [],
     // #1421：course-detail.uvue 消费 api/points.uts（redeemCoursePointsApi + getPointsBalanceApi，
     // 兑换面单点归详情但动词单点归 points 域 —— 消费者登记在被消费模块，ADR-0023 ③）
-    // #2617 T1：mall 的 useMall.uts 也消费 api/points.uts（商城页与积分商城共享状态层）⇒ 追加 mall。
+    // #2617 T1：mall 的 useMall.uts 也消费 api/points.uts（合并页承载积分商品路的状态层）⇒ 追加 mall。
     crossModuleConsumers: ['profile', 'courses', 'mall'],
-    /** #2617 T1：points-shop 722 → 300（状态下沉 useMall + 余额卡/筛选栏/商品卡拆件），模块全部文件已 ≤600 ⇒ pending 摘除 */
+    /** #2621 T5：旧积分商城页与其私有商品卡随合并页收口下线（余下文件均 ≤600） */
     budget: BUDGET,
     budgetOverrides: {},
     maxDepth: MAX_DEPTH,

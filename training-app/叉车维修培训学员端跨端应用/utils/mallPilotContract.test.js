@@ -13,12 +13,19 @@
  * #2618 T2 起本文件同时守「四态货架骨架」：四态结构、按类型取源、课程卡进详情、余额卡常驻、
  * 悬浮收敛为单搜索钮、热门固定条数混排、页内切换不跳转（票面验收 ①-⑦ 的机器可判部分）。
  * #2620 T4 起再守「入口收敛 + 文案统一 + 词表」：四处入口同一深链 tab=points、路由表标题 / 页头 /
- * 首页宫格为「商城」、「课程商城」旧名与一次性跨页意图两半清零（旧页与旧路由下线归 T5 #2621）。
+ * 首页宫格为「商城」、「课程商城」旧名与一次性跨页意图两半清零。
+ *
+ * #2621 T5 是整件合并的收口：旧「积分商城」路由与旧页下线（无兼容重定向）、页私有组件随页退役，
+ * 原 `utils/pointsShopContract.test.js` 的有效断言（列表接口 / 筛选骨架 / 页内兑换管线 / 后端对账表）
+ * 迁到本文件末尾——被删页的套件不再单留一份，也不新建第二个测试文件。
  */
+const path = require('path');
 /** harness：读取层归一 + 模块归属面（ADR-0023 票 C 起，本文件不再自建 ROOT / read / walker） */
 const h = require('./contractHarness');
 const ROOT = h.ROOT;
 const read = h.read;
+/** pages.json 路由拍平（#2579 起非一级页整目录切进分包，分包 path 是相对 root 的短名）——不硬写路由表字面量 */
+const { registeredRoutes } = require('../scripts/lib/pages-routes.js');
 
 describe('api 收紧契约（getCourseListApi 经 requestMapped 出口家族）', () => {
   const src = read('api/course.uts');
@@ -61,7 +68,8 @@ describe('api 收紧契约（getCourseListApi 经 requestMapped 出口家族）'
 describe('模块私有组件接线契约（Q17 安置：pages/<module>/components/ 显式 import）', () => {
   const page = read('pages/mall/mall.uvue');
   // #2619 T3：排序栏整体退役（四档无后端支撑），筛选收成「积分范围」单控件 ⇒ 清单随之换人
-  const COMPONENTS = ['mall-range-filter', 'mall-category-sidebar', 'mall-float-actions', 'mall-course-card', 'mall-hot-section', 'mall-shop-card'];
+  // #2621 T5：余额卡随旧页下线迁入本模块（它只剩合并页一个消费者）⇒ 清单补一件
+  const COMPONENTS = ['mall-balance-card', 'mall-range-filter', 'mall-category-sidebar', 'mall-float-actions', 'mall-course-card', 'mall-hot-section', 'mall-shop-card'];
 
   it.each(COMPONENTS)('组件文件存在于 pages/mall/components/%s.uvue', (name) => {
     expect(h.exists(`pages/mall/components/${name}.uvue`)).toBe(true);
@@ -71,7 +79,8 @@ describe('模块私有组件接线契约（Q17 安置：pages/<module>/component
     expect(page).toContain(`./components/${name}.uvue`);
   });
 
-  it('主页面模板实际使用六个组件标签（非只 import 不用；PascalCase 先例同 AiChatNav）', () => {
+  it('主页面模板实际使用七个组件标签（非只 import 不用；PascalCase 先例同 AiChatNav）', () => {
+    expect(page).toMatch(/<MallBalanceCard[\s/>]/);
     expect(page).toMatch(/<MallRangeFilter[\s/>]/);
     expect(page).toMatch(/<MallCategorySidebar[\s/>]/);
     expect(page).toMatch(/<MallFloatActions[\s/>]/);
@@ -182,7 +191,8 @@ describe('#2618 T2 四态货架骨架（合并为单一货架页，ADR-0072）',
 
   it('⑤ 余额卡常驻页头下方（四态可见）；悬浮只余单搜索钮', () => {
     // 常驻 = 组件标签上不挂 v-if（用「标签内无 v-if」判，避免误伤同页其他 v-if）
-    const m = page.match(/<PointsBalanceCard[^>]*>/);
+    // #2621 T5：旧页下线后余额卡只剩本页一个消费者 ⇒ 迁入 mall 的组件面（mall-balance-card）
+    const m = page.match(/<MallBalanceCard[^>]*>/);
     expect(m).not.toBeNull();
     expect(m[0]).not.toContain('v-if');
     const float = read('pages/mall/components/mall-float-actions.uvue');
@@ -301,9 +311,9 @@ describe('#2619 T3 积分商品分区 + 兑换三态 + 单筛选控件 + 排序�
     expect(h.exists('pages/mall/components/mall-sort-bar.uvue')).toBe(false);
     expect(h.exists('pages/points/components/points-filter-bar.uvue')).toBe(false);
     expect(page).not.toContain('MallSortBar');
-    // 退役标签在商城 / 积分商城 / 筛选栏的模板里都不许复活（头注里的退役说明不算标签）
-    const pointsShop = read('pages/points/points-shop.uvue');
-    for (const src of [page, pointsShop, filter]) {
+    // 退役标签在商城页 / 筛选栏的模板里都不许复活（头注里的退役说明不算标签）。
+    // #2621 T5：旧积分商城页已删，它的「标签不许复活」由下文 T5 ② 的全工程源文件面扫兜住
+    for (const src of [page, filter]) {
       const t = tplOf(src);
       expect(t).not.toContain('商品分类');
       expect(t).not.toContain('可换商品');
@@ -414,5 +424,92 @@ describe('#2620 T4 入口收敛到 tab=points + 词表文案统一（#2518 Q8 �
     // 不按目录白名单挑：意图机制的写入方落过 utils、消费方落过页面，漏扫的目录就是下一次复活的藏身处
     const offenders = h.sourceFilesIn('.').filter((f) => /courseredeemintent/i.test(read(f)));
     expect(offenders).toEqual([]);
+  });
+});
+
+describe('#2621 T5 旧路由与旧页下线 + 契约迁移（整件合并的收口票）', () => {
+  const page = read('pages/mall/mall.uvue');
+  const state = read('pages/mall/composables/useMall.uts');
+  const api = read('api/points.uts');
+  const types = read('types/points.uts');
+  const conf = read('pages.json');
+  const routes = registeredRoutes(conf);
+  /** 后端可兑性对账表（真源不在本端，只钉「同源」这一层）：仓库根 = 移动端工程根上溯两级 */
+  const REGISTRY = h.readText(path.join(ROOT, '..', '..', 'backend', 'internal', 'points', 'sku_registry.go'));
+
+  it('① 旧路由从路由表消失、旧页与它的私有卡片文件一并删除（无兼容重定向）', () => {
+    expect(routes).not.toContain('pages/points/points-shop');
+    expect(h.exists('pages/points/points-shop.uvue')).toBe(false);
+    // 卡片唯一消费者就是被删的页 ⇒ 随页下线，不在 points 域里留第二份三态渲染器
+    expect(h.exists('pages/points/components/points-shop-card.uvue')).toBe(false);
+    // 不做旧路径兼容重定向：无外部深链，运行时也没有路由重定向机制
+    expect(conf).not.toContain('redirect');
+  });
+
+  it('② 退役清零：全工程源文件无旧路由字面量残留（入口 / 深链 / 重定向 / 注释引用都不许复活）', () => {
+    // 射程同 ⑦：整个工程源文件面，不按目录白名单挑（漏扫的目录就是下一次复活的藏身处）
+    const offenders = h.sourceFilesIn('.').filter((f) => read(f).includes('points-shop'));
+    expect(offenders).toEqual([]);
+  });
+
+  it('③ 合并页是唯一货架路由（路由表里再没有第二个通向货架的登记）', () => {
+    expect(routes).toContain('pages/mall/mall');
+    expect(routes.filter((r) => /(^|\/)mall$/.test(r))).toEqual(['pages/mall/mall']);
+  });
+
+  it('④ 契约迁移·列表接口：单动词 /points/shop/items；stock 与 owned 都照抄服务端', () => {
+    expect(api).toMatch(/export function getShopItemsApi\(\) : Promise<ShopItemsResult>/);
+    expect(api).toMatch(/getMapped<ShopItemsResult>\('\/points\/shop\/items'/);
+    // stock 用 toNumberOrNull（null 是不限库存，当 0 会把在售项标成售罄）
+    expect(api).toMatch(/stock: toNumberOrNull\(obj\['stock'\]\)/);
+    expect(types).toMatch(/stock : number \| null/);
+    // owned 照抄服务端，不在客户端重算（否则「列表说没拥有、兑换说已拥有」）
+    expect(api).toMatch(/owned: toBool\(obj\['owned'\]\)/);
+    expect(types).toMatch(/owned : boolean/);
+  });
+
+  it('⑤ 契约迁移·筛选骨架：三参下发同一个动词，值走字符串；无档走原动词（商品段是全量）', () => {
+    expect(api).toMatch(/export function getShopItemsFilteredApi\(category : string, pointsMin : number, pointsMax : number\) : Promise<ShopItemsResult>/);
+    const fn = api.slice(api.indexOf('function getShopItemsFilteredApi'));
+    expect(fn.slice(0, 900)).toContain("query['category'] = category");
+    expect(fn.slice(0, 900)).toContain("query['points_min'] = pointsMin.toString()");
+    expect(fn.slice(0, 900)).toContain("query['points_max'] = pointsMax.toString()");
+    const load = state.slice(state.indexOf('async function loadItems'));
+    expect(load.slice(0, 900)).toContain('getShopItemsApi()');
+    expect(load.slice(0, 900)).toContain("getShopItemsFilteredApi('', range.min, range.max)");
+  });
+
+  it('⑥ 契约迁移·档位变化即重取两路（不是「只换高亮再重载同一份数据」的假控件）', () => {
+    const fn = state.slice(state.indexOf('function onPickRange'));
+    const body = fn.slice(0, fn.indexOf('\n    }'));
+    expect(body).toContain('activeRangeIdx.value = idx');
+    expect(body).toContain('loadItems()');
+    expect(body).toContain('loadBookItems()');
+  });
+
+  it('⑦ 契约迁移·可点性只由服务端事实决定；成功后按服务端回包刷新余额与列表并落权益页', () => {
+    // 已拥有 / 售罄 ⇒ 不可点，且防重入（兑换请求在途时再点无效）
+    expect(state).toMatch(/if \(item\.owned\) return true/);
+    expect(state).toMatch(/if \(blocked\(item\) \|\| redeemingSku\.value\.length > 0\) return/);
+    // 成功回流：余额只认服务端回包，列表重拉（owned 态以服务端为准），不客户端预扣
+    expect(state).toMatch(/pointsBalance\.value = res\.balance/);
+    expect(state).toMatch(/await loadItems\(\)/);
+    expect(state).toMatch(/if \(sku == AI_PRO_SKU\)/);
+    expect(state).toMatch(/uni\.switchTab\(\{ url: '\/pages\/ai-assistant\/ai-assistant' \}\)/);
+    expect(state).not.toMatch(/pointsBalance\.value = pointsBalance\.value -/);
+  });
+
+  it('⑧ 契约迁移·后端对账表同源：ai_pro 登记了权益读者，键形状是 (ai_pro, ai_pro)', () => {
+    expect(REGISTRY).toContain('const aiProSKU = "ai_pro"');
+    expect(REGISTRY).toMatch(/EntitlementSKU: func\(_ string\) string \{ return aiProSKU \}/);
+    expect(REGISTRY).toMatch(/aiProSKU: \{/);
+  });
+
+  it('⑨ 契约迁移·余额卡随页下线迁入 mall 组件面（消费者归位），页面用它的 PascalCase 标签', () => {
+    expect(h.exists('pages/mall/components/mall-balance-card.uvue')).toBe(true);
+    expect(page).toContain("'./components/mall-balance-card.uvue'");
+    expect(page).toMatch(/<MallBalanceCard[\s/>]/);
+    // 旧家（points 域的组件目录）随旧页下线一并消失，不留第二份
+    expect(h.exists('pages/points/components')).toBe(false);
   });
 });

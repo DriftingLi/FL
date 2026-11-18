@@ -10,8 +10,8 @@
             </template>
         </AppNavBar>
 
-        <!-- 余额卡常驻页头下方，四态可见（#2618 验收 ⑤） -->
-        <PointsBalanceCard :points="pointsBalance" @earn="onEarnPoints" />
+        <!-- 余额卡常驻页头下方，四态可见（#2618 验收 ⑤；#2621 T5 起它是 mall 自己的组件） -->
+        <MallBalanceCard :points="pointsBalance" @earn="onEarnPoints" />
 
         <!-- 筛选槽定高常驻（#2619 验收 ③）：控件只作用于积分商品，故只在图书系列 / 积分兑换
              两分区出现；槽位本身不随分区增减 ⇒ 切分区内容不跳（旧排序栏的不定高显隐会跳）。
@@ -129,7 +129,7 @@
     import MallShopCard from './components/mall-shop-card.uvue'
     import MallHotSection from './components/mall-hot-section.uvue'
     import MallFloatActions from './components/mall-float-actions.uvue'
-    import PointsBalanceCard from '../points/components/points-balance-card.uvue'
+    import MallBalanceCard from './components/mall-balance-card.uvue'
     import AppNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { useMall } from './composables/useMall'
 

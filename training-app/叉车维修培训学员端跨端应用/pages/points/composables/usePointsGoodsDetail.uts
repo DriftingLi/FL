@@ -8,7 +8,7 @@
  *   - 余额 = GET /points/balance（silent 读，失败不挡详情，ADR-0031 决策 3 同款）。
  *   - 「使用期限」按 G-01 裁定写进 description 文案（不新增 validity 字段），随商品详情卡直出。
  *
- * 兑换链路与 points-shop 同一管线（showModal 预判 → redeemShopItemApi；守卫全在服务端，
+ * 兑换链路与商城页内兑换同一管线（showModal 预判 → redeemShopItemApi；守卫全在服务端，
  * 客户端不预扣、不本地写「已解锁」）。成功落点：ai_pro 走 #1942 权益落点（switchTab AI 助手，
  * SKU 常量单点消费 useAiPro，不写字面量）；其余 SKU 走原型边 立即兑换(811:3685) → 608:9111
  * （G-00 改语义后 608:9111 = pages/points/points-exchange-records 积分兑换记录页）。
@@ -41,7 +41,7 @@ export type UsePointsGoodsDetailResult = {
     redeem : () => void
 }
 
-/** 不可兑换：已拥有（服务端判据）或售罄（与 points-shop 的 blocked 同一判定） */
+/** 不可兑换：已拥有（服务端判据）或售罄（与商城页 useMall 的 blocked 同一判定） */
 function blocked(item : ShopItem) : boolean {
     if (item.owned) return true
     const s = item.stock
@@ -185,7 +185,7 @@ export function usePointsGoodsDetail() : UsePointsGoodsDetailResult {
     /**
      * 兑换前提示：把「要扣多少 / 手里有多少」摆进同一句；余额不足时明说会被服务端拒，
      * 并给「去赚积分」的出路——但不代替服务端裁定（预判不拦截 CTA，ADR-0031 决策 3）。
-     * 文案与 points-shop 的 onRedeem 同一口径。
+     * 文案与商城页 useMall.onRedeem 同一口径。
      */
     function redeem() : void {
         const item = goods.value
