@@ -1,0 +1,234 @@
+/**
+ * WYSIWYG 输入区的**按钮集 / 回显判据 / 保真提示**（#2640，Parent #2631）
+ *
+ * 本模块是 T2 唯一的可测 seam：组件（`components/forum-wysiwyg-input.uvue`）只做接线，
+ * 所有「哪些按钮存在」「点亮判据是什么」「降级怎么告诉作者」都落在这里，Node 侧经 utils/utsHarness.js 真执行。
+ *
+ * 第一性原理（为什么按钮集是数据、不是模板里的硬编码）：
+ * - 格式边界由**三处共守**（ADR-0073）：自家按钮集 / 序列化器 / 发布前保真检查。按钮集是其中**唯一**
+ *   面向作者的那一处 —— 它一旦多出一枚论坛档渲染不出的按钮，作者就会「点了白点」。
+ *   把它做成可执行的数据，才能用一条断言钉住「按钮集 ⊆ 论坛档可表达格式」。
+ * - 回显判据一律取 `getContents` 的 delta，不取 `@statuschange` 的 detail：statuschange 是**累积快照**
+ *   （一次事件带全部生效格式），且「没收到事件」不等于「没生效」—— 事件是通知，不是事实源。
+ * - 记号四件（引用 / 代码块 / 行内代码 / 链接）**不是格式**，是字面 Markdown 记号：它们走
+ *   `insertText` 逃生舱（editor 的 link 属性会丢 URL、code 属性是 no-op），故 kind 记 `marker`，
+ *   id 与 T1 的 `MARKER_KINDS` 同值，序列化时原样穿过。
+ */
+
+/** 触摸目标下限（R2）。88rpx ≈ 44px @2x，与移动端 AGENTS.md 的 44×44 同源，本票按 88rpx 写死。 */
+export const RICH_TOUCH_TARGET_RPX = 88
+
+/** 常驻三键（下划线永久退出、行内代码不作常驻 —— 票面判据） */
+export const RICH_ACTION_BOLD = 'bold'
+export const RICH_ACTION_ITALIC = 'italic'
+export const RICH_ACTION_STRIKE = 'strike'
+
+/** 二级面板「格式」组：走 editor 的 format / insertDivider */
+export const RICH_ACTION_HEADER = 'header'
+export const RICH_ACTION_LIST = 'list'
+export const RICH_ACTION_DIVIDER = 'divider'
+
+/** 二级面板「记号」组：走 insertText 逃生舱，id 与 T1 的 MARKER_KINDS 同值 */
+export const RICH_ACTION_QUOTE = 'quote'
+export const RICH_ACTION_CODE_BLOCK = 'code-block'
+export const RICH_ACTION_CODE_INLINE = 'code-inline'
+export const RICH_ACTION_LINK = 'link'
+
+/** 动作的落地方式：format（editor.format）/ divider（insertDivider）/ marker（getSelectionText + insertText） */
+export const RICH_KIND_FORMAT = 'format'
+export const RICH_KIND_DIVIDER = 'divider'
+export const RICH_KIND_MARKER = 'marker'
+
+/** 正文图片被丢弃时的**持续可见**提示（R3：非一闪而过的 toast） */
+export const RICH_IMAGE_NOTICE = '正文图片已忽略，请用下方＋添加'
+
+export type RichAction = {
+    id : string,
+    label : string,
+    kind : string,
+    /** kind == format 时交给 editor.format 的属性名；其余 kind 为空串 */
+    formatName : string,
+    /** kind == format 时交给 editor.format 的值；null = 切换语义（已应用则取消） */
+    formatValue : string | null,
+}
+
+export type RichPanelGroup = {
+    id : string,
+    label : string,
+    actions : RichAction[],
+}
+
+function formatAction(id : string, label : string) : RichAction {
+    return { id: id, label: label, kind: RICH_KIND_FORMAT, formatName: id, formatValue: null } as RichAction
+}
+
+function markerAction(id : string, label : string) : RichAction {
+    return { id: id, label: label, kind: RICH_KIND_MARKER, formatName: '', formatValue: null } as RichAction
+}
+
+/**
+ * 常驻三键。**恰好三枚**：粗体 / 斜体 / 删除线。
+ * 下划线永久退出（论坛档渲染不出，且序列化器会记 style-dropped:underline）；
+ * 行内代码不作常驻（它是记号，落在二级面板的「记号」组）。
+ */
+export function richPrimaryActions() : RichAction[] {
+    return [
+        formatAction(RICH_ACTION_BOLD, '粗体'),
+        formatAction(RICH_ACTION_ITALIC, '斜体'),
+        formatAction(RICH_ACTION_STRIKE, '删除线'),
+    ]
+}
+
+/**
+ * 二级面板两组：格式（标题 / 列表 / 分割线）与记号（引用 / 代码块 / 行内代码 / 链接）。
+ * 容量余量 = 0（R1）：组内不再留空位，也不为塞按钮缩小触摸目标。
+ */
+export function richPanelGroups() : RichPanelGroup[] {
+    return [
+        {
+            id: 'format',
+            label: '格式',
+            actions: [
+                formatAction(RICH_ACTION_HEADER, '标题'),
+                formatAction(RICH_ACTION_LIST, '列表'),
+                { id: RICH_ACTION_DIVIDER, label: '分割线', kind: RICH_KIND_DIVIDER, formatName: '', formatValue: null } as RichAction,
+            ],
+        },
+        {
+            id: 'marker',
+            label: '记号',
+            actions: [
+                markerAction(RICH_ACTION_QUOTE, '引用'),
+                markerAction(RICH_ACTION_CODE_BLOCK, '代码块'),
+                markerAction(RICH_ACTION_CODE_INLINE, '行内代码'),
+                markerAction(RICH_ACTION_LINK, '链接'),
+            ],
+        },
+    ]
+}
+
+/** 按 id 取动作（常驻 + 面板全表）。未知 id 返回 null —— 模板不自己拼动作对象。 */
+export function richActionById(id : string) : RichAction | null {
+    const primary = richPrimaryActions()
+    for (let i = 0; i < primary.length; i++) {
+        if (primary[i].id == id) return primary[i]
+    }
+    const groups = richPanelGroups()
+    for (let g = 0; g < groups.length; g++) {
+        const actions = groups[g].actions
+        for (let a = 0; a < actions.length; a++) {
+            if (actions[a].id == id) return actions[a]
+        }
+    }
+    return null
+}
+
+function asObj(raw : any | null) : UTSJSONObject | null {
+    if (raw == null) return null
+    return raw as UTSJSONObject
+}
+
+function asObjectArray(raw : any | null) : Array<UTSJSONObject> {
+    if (raw == null) return [] as Array<UTSJSONObject>
+    return raw as Array<UTSJSONObject>
+}
+
+function isTrue(v : any | null) : boolean {
+    return v != null && v != false
+}
+
+function asText(v : any | null) : string {
+    if (v == null) return ''
+    if (typeof v == 'string') return v as string
+    return v.toString()
+}
+
+/**
+ * 回显判据：从 delta 推导「此刻点亮哪些按钮」。
+ *
+ * 取**最后一个文本 op** 的行内属性 + **最后一个 op**（含换行 op）的块级属性：
+ * Quill 的 delta 把行内格式挂在文字 op 上、把块级格式（header / list）挂在换行 op 上，
+ * 只看最后一个 op 会丢掉行内格式，只看文字 op 会丢掉块级格式。
+ *
+ * 累积语义：一个 op 的 attributes 是**该处全部生效格式**的快照（bold + italic 同时为 true），
+ * 故逐键读、不取「第一个命中的键」。
+ */
+export function richActiveFromDelta(deltaJson : string) : string[] {
+    const out : string[] = []
+    let root : UTSJSONObject | null = null
+    try {
+        root = asObj(JSON.parse(deltaJson))
+    } catch (_e) {
+        root = null
+    }
+    if (root == null) return out
+    const ops = asObjectArray(root['ops'])
+    let inlineAttrs : UTSJSONObject | null = null
+    let blockAttrs : UTSJSONObject | null = null
+    for (let i = 0; i < ops.length; i++) {
+        const insert = ops[i]['insert']
+        if (insert == null) continue
+        if (typeof insert != 'string') continue
+        const text = insert as string
+        if (text.length == 0) continue
+        const attrs = asObj(ops[i]['attributes'])
+        if (text == '\n') {
+            blockAttrs = attrs
+            continue
+        }
+        inlineAttrs = attrs
+        blockAttrs = attrs
+    }
+    if (inlineAttrs != null) {
+        if (isTrue(inlineAttrs['bold'])) out.push(RICH_ACTION_BOLD)
+        if (isTrue(inlineAttrs['italic'])) out.push(RICH_ACTION_ITALIC)
+        if (isTrue(inlineAttrs['strike'])) out.push(RICH_ACTION_STRIKE)
+        if (isTrue(inlineAttrs['code'])) out.push(RICH_ACTION_CODE_INLINE)
+    }
+    if (blockAttrs != null) {
+        if (blockAttrs['header'] != null) out.push(RICH_ACTION_HEADER)
+        if (asText(blockAttrs['list']).length > 0) out.push(RICH_ACTION_LIST)
+        if (isTrue(blockAttrs['blockquote'])) out.push(RICH_ACTION_QUOTE)
+    }
+    return out
+}
+
+/** 论坛档表达不了的属性 → 作者看得懂的名字（与 T1 的 style-dropped:<attr> 取值一一对应） */
+function styleLabel(attr : string) : string {
+    if (attr == 'underline') return '下划线'
+    if (attr == 'align') return '对齐'
+    if (attr == 'size') return '字号'
+    if (attr == 'color') return '颜色'
+    if (attr == 'background') return '背景色'
+    if (attr == 'script') return '上下标'
+    if (attr == 'indent') return '缩进'
+    return attr
+}
+
+/**
+ * 保真检查提示：把 T1 的 issues 翻成**持续可见**的一行文案（空 issues ⇒ 空串，组件据此不渲染该行）。
+ *
+ * 为什么是「序列化时降级 + 提示」而不是「粘贴时清洗」：uni-app x 的 editor 没有 paste 钩子
+ * （票面已认这条兜底路径）。降级发生在序列化，提示必须跟着同一次序列化出现，否则作者永远不知道
+ * 自己写的下划线/字号没进正文。
+ */
+export function richFidelityNotice(issues : string[]) : string {
+    const styles : string[] = []
+    let hasImage = false
+    for (let i = 0; i < issues.length; i++) {
+        const issue = issues[i]
+        if (issue == 'image-dropped') {
+            hasImage = true
+            continue
+        }
+        const prefix = 'style-dropped:'
+        if (issue.indexOf(prefix) == 0) {
+            const label = styleLabel(issue.substring(prefix.length))
+            if (styles.indexOf(label) < 0) styles.push(label)
+        }
+    }
+    const parts : string[] = []
+    if (styles.length > 0) parts.push(styles.join('、') + '已降级为纯文本')
+    if (hasImage) parts.push(RICH_IMAGE_NOTICE)
+    return parts.join('；')
+}

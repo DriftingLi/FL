@@ -1,0 +1,498 @@
+<template>
+    <!-- 论坛正文的**所见即所得输入区**（#2640 / ADR-0073）：发帖表单与回复浮层共用同一份形态。
+         它被当作**输入法**而不是新内容格式 —— 编辑时是真富文本，对外只吐 T1 序列化后的论坛档 Markdown。
+         三条边界（ADR-0073「三处共守」）在本组件里的落点：
+           · 按钮集 = utils/forumWysiwygInput 的数据（常驻三键 + 二级面板两组），不多一枚论坛档渲染不出的按钮；
+           · 序列化 = utils/forumDeltaMarkdown（delta → 论坛档 Markdown + 保真 issues）；
+           · 保真提示 = 本组件把 issues 渲染成**持续可见**的一行（不是 toast）。
+         图片只有下方单一 `＋` 入口：编辑器侧不提供插入入口，粘进正文的图片在序列化时丢弃并提示（R3）。 -->
+    <view class="wysiwyg-input">
+        <view class="editor-box">
+            <!-- 白名单重建（showEditor=false → true）留给宿主：editor 的初始化属性只在挂载时生效，
+                 本组件不重建，避免把「重建」变成一条隐式副作用。 -->
+            <editor v-if="showEditor" id="forum-wysiwyg-editor" class="rich-editor"
+                :class="isReply ? 'rich-editor-reply' : ''" :read-only="readOnly"
+                :placeholder="placeholder" :show-img-size="false" :show-img-toolbar="false"
+                :show-img-resize="false" @ready="onEditorReady" @focus="onEditorFocus"
+                @blur="onEditorBlur" @input="onEditorInput" @statuschange="onStatusChange" />
+        </view>
+
+        <!-- 常驻三键（粗体 / 斜体 / 删除线）+ 二级面板开关。触摸目标 88rpx（R2）。 -->
+        <view class="primary-row">
+            <view v-for="(act, idx) in primaryActions" :key="act.id" class="tool-btn"
+                :class="{ active: isActive(act.id), 'ml-16': idx > 0 }" @click="onActionTap(act.id)">
+                <text class="tool-btn-text" :class="{ active: isActive(act.id) }">{{ act.label }}</text>
+            </view>
+            <view class="tool-btn tool-btn-more ml-16" :class="{ active: panelOpen }" @click="onTogglePanel">
+                <text class="tool-btn-text" :class="{ active: panelOpen }">{{ panelOpen ? '收起' : '更多' }}</text>
+            </view>
+        </view>
+
+        <!-- 二级面板：格式组（标题 / 列表 / 分割线）+ 记号组（引用 / 代码块 / 行内代码 / 链接）。
+             记号四件走 insertText 逃生舱（editor 的 link 属性丢 URL、code 属性 no-op）。 -->
+        <view v-if="panelOpen" class="panel">
+            <view v-for="(group, gi) in panelGroups" :key="group.id" class="panel-group"
+                :class="{ 'mt-16': gi > 0 }">
+                <text class="panel-group-title">{{ group.label }}</text>
+                <view class="panel-row">
+                    <view v-for="act in group.actions" :key="act.id" class="panel-btn"
+                        :class="{ active: isActive(act.id) }" @click="onActionTap(act.id)">
+                        <text class="panel-btn-text" :class="{ active: isActive(act.id) }">{{ act.label }}</text>
+                    </view>
+                </view>
+            </view>
+        </view>
+
+        <!-- 保真检查：序列化时被降级 / 被丢弃的项，**持续可见**（R3）。空串时不渲染。 -->
+        <text v-if="fidelityNotice.length > 0" class="fidelity-notice">{{ fidelityNotice }}</text>
+
+        <!-- 两条功能提示（ui-hints 的明确例外，别当装饰删）：属地披露 + Markdown 边界提示 -->
+        <text v-if="showRegionNotice" class="region-notice">{{ regionNotice }}</text>
+        <text class="boundary-notice">{{ boundaryNotice }}</text>
+
+        <text v-if="!isReply" class="counter-text">{{ counterText }}</text>
+
+        <!-- 图片区：**单一入口**（一个 `＋` 方块 → 系统选择器）。缩略图 key 用图片 URL 本身
+             （上传 URL 是服务端毫秒时间戳命名、逐张串行上传 ⇒ 不会重复）。 -->
+        <view v-if="showImages" class="image-row">
+            <view v-for="(img, idx) in previewImages" :key="img" class="image-cell">
+                <image class="image-thumb" :src="img" mode="aspectFill" @click="onPreviewImage(idx)" :webp="true" />
+                <view class="image-remove" @click.stop="onRemoveImage(idx)">
+                    <text class="image-remove-text">×</text>
+                </view>
+            </view>
+            <view v-if="imageCount < maxImages" class="image-add" @click="onAddImage">
+                <text class="image-add-icon">{{ uploading ? '…' : '＋' }}</text>
+                <text v-if="variant != 'reply'" class="image-add-text">{{ uploading ? '上传中' : imageCounter }}</text>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref, computed, onUnmounted } from 'vue'
+    import { buildMarker, serializeDelta } from '../utils/forumDeltaMarkdown'
+    import { FORUM_MARKDOWN_BOUNDARY_NOTICE, FORUM_REGION_NOTICE } from '../utils/forumDisplay'
+    import {
+        RICH_KIND_DIVIDER,
+        RICH_KIND_MARKER,
+        richActionById,
+        richActiveFromDelta,
+        richFidelityNotice,
+        richPanelGroups,
+        richPrimaryActions,
+    } from '../utils/forumWysiwygInput'
+    import type { RichAction, RichPanelGroup } from '../utils/forumWysiwygInput'
+
+    /** editor 的 id 与 createEditorContextAsync 的 id 必须同值；一页只挂一个本组件（发帖页 / 回复浮层各一页）。 */
+    const EDITOR_ID : string = 'forum-wysiwyg-editor'
+
+    /** 两条功能提示的文案**单点**在 utils/forumDisplay（模板不直调 import 函数，先落局部标识）。 */
+    const regionNotice : string = FORUM_REGION_NOTICE
+    const boundaryNotice : string = FORUM_MARKDOWN_BOUNDARY_NOTICE
+
+    const props = withDefaults(defineProps<{
+        /** 已选图片的**预览 URL**（父层预解析；原始路径留在父层用于提交） */
+        previewImages?: string[]
+        /** 已选图片数量（只为限额判据，不读原始路径） */
+        imageCount?: number
+        /** 该面的图片限额。**必填**：限额唯一来源是 constants/app，组件不持第三个缺省值。 */
+        maxImages: number
+        /** 'topic'（发帖表单）/ 'reply'（底部回复栏）—— 两处形态差异只在这个 prop 上 */
+        variant?: string
+        maxlength?: number
+        placeholder?: string
+        showImages?: boolean
+        showRegionNotice?: boolean
+        uploading?: boolean
+    }>(), {
+        previewImages: () => [] as string[],
+        imageCount: 0,
+        variant: 'topic',
+        maxlength: 10000,
+        placeholder: '',
+        showImages: true,
+        showRegionNotice: true,
+        uploading: false
+    })
+
+    /**
+     * 对外只吐两样：序列化后的 markdown 与保真检查结果（票面判据）。
+     * 编辑态（delta / 选区 / 点亮）**不出组件** —— 那是输入法的内部状态，不是内容格式。
+     */
+    const emit = defineEmits<{
+        (e: 'update:markdown', value: string): void
+        (e: 'update:issues', value: string[]): void
+        (e: 'add-image'): void
+        (e: 'remove-image', index: number): void
+        (e: 'preview-image', index: number): void
+        /** 键盘高度（px）。宿主据此重定位（回复浮层的面板 bottom）；组件自身不加偏移，避免双重位移。 */
+        (e: 'keyboard-height', height: number): void
+    }>()
+
+    /** 按钮集是数据、不是模板硬编码：常驻三键与面板两组都取自 utils/forumWysiwygInput 的唯一实现。 */
+    const primaryActions : RichAction[] = richPrimaryActions()
+    const panelGroups : RichPanelGroup[] = richPanelGroups()
+
+    const showEditor = ref<boolean>(true)
+    /**
+     * 失焦后置 true：保住编辑器选区，让「点格式按钮」不因失焦而丢选区。
+     * 点按钮时把 format 推到下一个 tick 执行，执行完立刻恢复可编辑（票面判据的绕行路径）。
+     */
+    const readOnly = ref<boolean>(false)
+    const panelOpen = ref<boolean>(false)
+    /** 点亮集合：**一律由 getContents 的 delta 推导**（statuschange 只是通知，不是事实源） */
+    const activeIds = ref<string[]>([])
+    const issues = ref<string[]>([])
+    const markdownLength = ref<number>(0)
+
+    let editorCtx : EditorContext | null = null
+
+    const isReply = computed<boolean>(() : boolean => props.variant == 'reply')
+    const fidelityNotice = computed<string>(() : string => richFidelityNotice(issues.value))
+    const counterText = computed<string>(() : string => markdownLength.value.toString() + '/' + props.maxlength.toString())
+    const imageCounter = computed<string>(() : string => props.imageCount.toString() + '/' + props.maxImages.toString())
+
+    function isActive(id : string) : boolean {
+        return activeIds.value.indexOf(id) >= 0
+    }
+
+    /**
+     * 唯一的事实刷新点：getContents → 序列化 → 点亮集合。
+     * input / statuschange / 每次按钮动作之后都走这里，于是「点亮」与「产物」永远同源。
+     */
+    function refreshFromEditor() : void {
+        const ctx = editorCtx
+        if (ctx == null) return
+        ctx.getContents({
+            success: (res) => {
+                const deltaJson = JSON.stringify(res.delta)
+                const result = serializeDelta(deltaJson)
+                markdownLength.value = result.markdown.length
+                issues.value = result.issues
+                activeIds.value = richActiveFromDelta(deltaJson)
+                emit('update:markdown', result.markdown)
+                emit('update:issues', result.issues)
+            }
+        })
+    }
+
+    function onEditorReady() : void {
+        const options : CreateEditorContextAsyncOptions = {
+            id: EDITOR_ID,
+            success: (context : EditorContext) => {
+                editorCtx = context
+                refreshFromEditor()
+            },
+            fail: (_error : UniError) => {}
+        }
+        uni.createEditorContextAsync(options)
+    }
+
+    function onEditorFocus() : void {
+        readOnly.value = false
+    }
+
+    function onEditorBlur() : void {
+        readOnly.value = true
+    }
+
+    function onEditorInput(_event : UniEditorInputEvent) : void {
+        refreshFromEditor()
+    }
+
+    /**
+     * statuschange 的 detail 是**累积快照**（一次带全部生效格式），且「没收到事件」不等于「没生效」。
+     * 故这里不读 detail，只把它当「状态可能变了」的信号，事实仍取 delta。
+     */
+    function onStatusChange(_event : UniEditorStatusChangeEvent) : void {
+        refreshFromEditor()
+    }
+
+    function applyAction(action : RichAction) : void {
+        const ctx = editorCtx
+        if (ctx == null) return
+        if (action.kind == RICH_KIND_DIVIDER) {
+            ctx.insertDivider({
+                success: () => { refreshFromEditor() }
+            })
+            return
+        }
+        if (action.kind == RICH_KIND_MARKER) {
+            // 记号逃生舱：有选区包裹选区、无选区插可替换模板；一律 insertText，不经 editor 的 link/code 属性
+            ctx.getSelectionText({
+                success: (res) => {
+                    const text = buildMarker(action.id, res.text)
+                    if (text.length == 0) return
+                    ctx.insertText({
+                        text: text,
+                        success: () => { refreshFromEditor() }
+                    })
+                }
+            })
+            return
+        }
+        // format(name, null) 是切换语义（对已应用样式的选区设置会取消样式）
+        ctx.format(action.formatName, action.formatValue)
+        setTimeout(() => { refreshFromEditor() }, 0)
+    }
+
+    function onActionTap(id : string) : void {
+        const action = richActionById(id)
+        if (action == null) return
+        if (readOnly.value) {
+            setTimeout(() => {
+                applyAction(action)
+                readOnly.value = false
+            }, 0)
+            return
+        }
+        applyAction(action)
+    }
+
+    function onTogglePanel() : void {
+        panelOpen.value = !panelOpen.value
+    }
+
+    function onAddImage() : void {
+        emit('add-image')
+    }
+
+    function onRemoveImage(index : number) : void {
+        emit('remove-image', index)
+    }
+
+    function onPreviewImage(index : number) : void {
+        emit('preview-image', index)
+    }
+
+    /**
+     * 键盘弹起：只**上报**高度，不在组件内加偏移 —— 回复浮层的面板 bottom 由宿主按同一个值驱动
+     * （utils/replyPanelLayout.panelBottomPx），组件再加一份就是双重位移。
+     */
+    let keyboardAlive = true
+
+    uni.onKeyboardHeightChange((res) => {
+        if (keyboardAlive) emit('keyboard-height', res.height)
+    })
+
+    onUnmounted(() => {
+        // 只关自己的回调：无参 `offKeyboardHeightChange()` 会把**宿主页**自己的监听一起摘掉
+        // （forum-detail 的 keyboardTracker 就在同一个页面上），故这里用标志位让回调失效。
+        keyboardAlive = false
+    })
+</script>
+
+<style lang="scss">
+    .wysiwyg-input {
+        flex-direction: column;
+    }
+
+    .editor-box {
+        flex-direction: column;
+    }
+
+    /* 编辑器本体：只放盒模型与底色。文字类样式（font-size / color）**不能**落在这里 ——
+       uvue 只把它们认给 <text>|<button>|<input>|<textarea>，落在 <editor> 上会被判错并忽略
+       （机检 utils/uvueFontCarrierContract.test.js）。 */
+    .rich-editor {
+        height: 400rpx;
+        background-color: #f8f9fa;
+        border-radius: 12rpx;
+        padding: 24rpx;
+        border: 1rpx solid #e0e0e0;
+    }
+
+    /* 回复栏里比发帖矮一档，别把回复栏顶到半屏 */
+    .rich-editor-reply {
+        height: 220rpx;
+        padding: 16rpx;
+    }
+
+    /* ===== 常驻三键（触摸目标 88rpx，R2）===== */
+    .primary-row {
+        flex-direction: row;
+        align-items: center;
+        margin-top: 16rpx;
+    }
+
+    .tool-btn {
+        width: 88rpx;
+        height: 88rpx;
+        border-radius: 12rpx;
+        background-color: #f5f7fa;
+        border: 1rpx solid #e4e7ed;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .tool-btn.active {
+        background-color: #e8f0fe;
+        border: 1rpx solid $primary-color;
+    }
+
+    .tool-btn-more {
+        width: 120rpx;
+    }
+
+    .tool-btn-text {
+        font-size: 26rpx;
+        color: #333333;
+    }
+
+    .tool-btn-text.active {
+        color: $primary-color;
+        font-weight: bold;
+    }
+
+    .ml-16 {
+        margin-left: 16rpx;
+    }
+
+    .mt-16 {
+        margin-top: 16rpx;
+    }
+
+    /* ===== 二级面板 ===== */
+    .panel {
+        margin-top: 16rpx;
+        padding: 16rpx;
+        border-radius: 12rpx;
+        background-color: #fafbfc;
+        border: 1rpx solid #e4e7ed;
+    }
+
+    .panel-group {
+        flex-direction: column;
+    }
+
+    .panel-group-title {
+        font-size: 22rpx;
+        color: #999999;
+        margin-bottom: 8rpx;
+    }
+
+    .panel-row {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+
+    .panel-btn {
+        min-width: 88rpx;
+        height: 88rpx;
+        padding: 0 24rpx;
+        margin-right: 16rpx;
+        margin-bottom: 16rpx;
+        border-radius: 12rpx;
+        background-color: #ffffff;
+        border: 1rpx solid #e4e7ed;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .panel-btn.active {
+        background-color: #e8f0fe;
+        border: 1rpx solid $primary-color;
+    }
+
+    .panel-btn-text {
+        font-size: 26rpx;
+        color: #333333;
+    }
+
+    .panel-btn-text.active {
+        color: $primary-color;
+        font-weight: bold;
+    }
+
+    /* ===== 保真检查提示（持续可见，R3）===== */
+    .fidelity-notice {
+        font-size: 22rpx;
+        color: #e6a23c;
+        margin-top: 12rpx;
+    }
+
+    /* ===== 功能提示（两条都是 ui-conventions 的明确例外，别当装饰删）===== */
+    .region-notice {
+        font-size: 22rpx;
+        color: #999999;
+        margin-top: 12rpx;
+    }
+
+    .boundary-notice {
+        font-size: 22rpx;
+        color: #999999;
+        margin-top: 8rpx;
+    }
+
+    .counter-text {
+        font-size: 22rpx;
+        color: #999999;
+        text-align: right;
+        margin-top: 8rpx;
+    }
+
+    /* ===== 图片区 ===== */
+    .image-row {
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        margin-top: 16rpx;
+    }
+
+    .image-cell {
+        width: 160rpx;
+        height: 160rpx;
+        margin-right: 16rpx;
+        margin-bottom: 16rpx;
+        position: relative;
+    }
+
+    .image-thumb {
+        width: 160rpx;
+        height: 160rpx;
+        border-radius: 12rpx;
+        background-color: #f0f0f0;
+    }
+
+    .image-remove {
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 40rpx;
+        height: 40rpx;
+        border-radius: 0 0 0 12rpx;
+        background-color: rgba(0, 0, 0, 0.55);
+        align-items: center;
+        justify-content: center;
+    }
+
+    .image-remove-text {
+        font-size: 28rpx;
+        color: #ffffff;
+        line-height: 1;
+    }
+
+    .image-add {
+        width: 160rpx;
+        height: 160rpx;
+        margin-right: 16rpx;
+        margin-bottom: 16rpx;
+        border: 2rpx dashed #c0c4cc;
+        border-radius: 12rpx;
+        background-color: #fafbfc;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .image-add-icon {
+        font-size: 44rpx;
+        color: #909399;
+    }
+
+    .image-add-text {
+        font-size: 22rpx;
+        color: #909399;
+        margin-top: 8rpx;
+    }
+</style>
