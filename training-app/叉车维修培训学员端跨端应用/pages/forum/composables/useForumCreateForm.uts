@@ -1,0 +1,437 @@
+/**
+ * 发帖页表单域（#2641 / Parent #2631）：状态与动作全归本件，页面壳层零自持状态。
+ *
+ * 为什么整域搬进 composable：T2（#2640）第 8 条验收要求「发帖 / 回复两处共用同一组件，页面壳层
+ * 零自持状态」——页面只留模板 / 生命周期 / 薄包装。本件同时承载 #2641 的三条新判据：
+ *   · 新建一律 `content_format=markdown`（作者格式偏好彻底退出，不再读写记忆位）；
+ *   · 编辑旧帖按原 `content_format` 回填、PUT 不带 `content_format`（编辑不变式，P1 已落锁）；
+ *   · 发布前保真检查（`fidelityNotice`）与「序列化结果空 / 纯空白 ⇒ 禁用提交」。
+ *
+ * 输入形态只有一种（能力端）：`useRichEditor` 为真时页面挂 WYSIWYG 组件；编辑态 / 资源投稿态 /
+ * 无 editor 的平台（支付宝 / 百度 / 头条小程序，AC⑤）仍走记号工具栏组件 —— 那是**同一份**旧形态，
+ * 不是第三种。
+ */
+import { ref, computed } from 'vue'
+import type { Ref, ComputedRef } from 'vue'
+import { FORMAT_MARKDOWN, FORMAT_TEXT } from '../../../utils/forumBody'
+import { richFidelityNotice } from '../../../utils/forumWysiwygInput'
+import { useForumImagePicker } from '../../../composables/useForumImagePicker'
+import { FORUM_MAX_TOPIC_IMAGES } from '../../../constants/app'
+import { createForumTopicApi, updateForumTopicApi, getForumTopicDetailApi } from '../../../api/forum'
+import { submitFeedbackApi, FEEDBACK_CONTENT_MAX } from '../../../api/feedback'
+import { getCurrentCredentialApi } from '../../../api/credential'
+import { goBack } from '../../../utils/navigation'
+
+/** 写侧模块选项（G-08 / ADR-0040：只留「讨论 / 提问」两值） */
+export type ForumCategoryOption = { label : string, value : string }
+
+export type UseForumCreateFormResult = {
+    categories : ForumCategoryOption[]
+    isEdit : Ref<boolean>
+    title : Ref<string>
+    content : Ref<string>
+    selectedCategory : Ref<string>
+    submitting : Ref<boolean>
+    loadingDetail : Ref<boolean>
+    images : Ref<string[]>
+    imagePreviewUrls : ComputedRef<string[]>
+    uploadingImage : Ref<boolean>
+    credentialId : Ref<number>
+    credentialName : Ref<string>
+    isResourceMode : ComputedRef<boolean>
+    isFeedbackMode : ComputedRef<boolean>
+    feedbackContent : Ref<string>
+    feedbackContact : Ref<string>
+    feedbackSubmitting : Ref<boolean>
+    feedbackSubmitted : Ref<boolean>
+    feedbackContentMax : number
+    /** 能力端是否挂 WYSIWYG（编辑态 / 资源态 / 无 editor 平台为 false） */
+    useRichEditor : ComputedRef<boolean>
+    /** 记号工具栏组件实际生效的档位（编辑态 = 原格式；资源态 = 纯文本；新建 = markdown） */
+    effectiveFormat : ComputedRef<string>
+    /** 发布前保真检查的一行文案（空串 = 无落差，页面据此不渲染该行） */
+    fidelityNotice : ComputedRef<string>
+    keyboardHeight : Ref<number>
+    headerTitle : ComputedRef<string>
+    submitLabel : ComputedRef<string>
+    canSubmit : ComputedRef<boolean>
+    canSubmitFeedback : ComputedRef<boolean>
+    onSelectCategory : (value : string) => void
+    onContentChange : (value : string) => void
+    onMarkdownChange : (value : string) => void
+    onIssuesChange : (value : string[]) => void
+    onKeyboardHeight : (height : number) => void
+    onAddImage : () => void
+    onRemoveImage : (index : number) => void
+    onPreviewImage : (index : number) => void
+    onSubmit : () => Promise<void>
+    onSubmitFeedback : () => Promise<void>
+    onBack : () => void
+    initFromOptions : (options : UTSJSONObject) => void
+    loadCredential : () => Promise<void>
+}
+
+export function useForumCreateForm() : UseForumCreateFormResult {
+    // ===== 模块选项（G-08 / ADR-0040：写侧只留「讨论 / 提问」两值）=====
+    // 资源是 URL scope=resource 进来的投稿模式（#760），不占学员可自述的类别位；
+    // 「备考经验」是管理端认定，只读、不再产生新数据（N2 #2549 读参数与 #2521 成对落地）。
+    const categories : ForumCategoryOption[] = [
+        { label: '讨论', value: 'discussion' },
+        { label: '提问', value: 'question' },
+    ]
+
+    // ===== 表单状态 =====
+    const isEdit = ref<boolean>(false)
+    const editTopicId = ref<number>(0)
+    const title = ref<string>('')
+    const content = ref<string>('')
+    const selectedCategory = ref<string>('discussion')
+    const submitting = ref<boolean>(false)
+    const loadingDetail = ref<boolean>(false)
+    /**
+     * 图片域整域取自**共享流水线**（发帖与回复同一份实现：选图 / 逐张上传 / 删除 / 预览）。
+     * 解构后名字与页内既有引用（`images` / `imagePreviewUrls` / `uploadingImage` / 三个处理器）一一对应。
+     */
+    const {
+        images, previewImages: imagePreviewUrls, uploading: uploadingImage,
+        onAddImage, onRemoveImage, onPreviewImage,
+    } = useForumImagePicker(FORUM_MAX_TOPIC_IMAGES)
+    // 资源投稿态（#760）：证件由壳层持有（onShow 跟随证件切换刷新），
+    // 文件列表与提交在 forum-contribution-form 组件内自持
+    const credentialId = ref<number>(0)
+    const credentialName = ref<string>('')
+
+    // ===== 两种 URL 模式（Q4+Q14 / Q5）：scope=resource 投稿；scope=feedback 普通反馈提交（G-09） =====
+    const resourceMode = ref<boolean>(false)
+    const feedbackMode = ref<boolean>(false)
+    const feedbackContent = ref<string>('')
+    const feedbackContact = ref<string>('')
+    const feedbackSubmitting = ref<boolean>(false)
+    const feedbackSubmitted = ref<boolean>(false)
+    /** 反馈正文上限与 `api/feedback` 同源（不在页面另抄字面量） */
+    const feedbackContentMax : number = FEEDBACK_CONTENT_MAX
+    /** G-09：反馈不带图片（本模式只做单向文本提交），显式空数组避免 UTS 推断成 any[] */
+    const feedbackNoImages : string[] = []
+
+    // ===== 正文格式轴（#2641：作者格式偏好已退出，只剩「编辑态原格式」这一条只读轴）=====
+    /** 编辑态：**帖子原格式**，只读 —— PUT 载荷按编辑不变式不带 `content_format`（P1 已落锁），
+        故编辑态不给档位控件，只按原格式决定给不给编写预览与工具栏 */
+    const editFormat = ref<string>(FORMAT_TEXT)
+
+    // ===== WYSIWYG 输入区（#2641）=====
+    /** 序列化时被丢弃 / 降级的项（组件上抛；页面据此在提交按钮附近持续可见地列出） */
+    const richIssues = ref<string[]>([])
+    /** 键盘高度（px）：组件只报原始高度，本件直接落值，页面据此给滚动区留出底部空间 */
+    const keyboardHeight = ref<number>(0)
+
+    /** 正文变更（记号工具栏组件上抛；工具栏插入也走这条回流，故草稿必须由本件持有） */
+    function onContentChange(value : string) : void {
+        content.value = value
+    }
+
+    /** WYSIWYG 序列化产物（#2641 AC①：提交的 content 就是它，不再有第二种输入形态） */
+    function onMarkdownChange(value : string) : void {
+        content.value = value
+    }
+
+    function onIssuesChange(value : string[]) : void {
+        richIssues.value = value
+    }
+
+    function onKeyboardHeight(height : number) : void {
+        keyboardHeight.value = height
+    }
+
+    /** 资源投稿模式（#760）：由 URL scope=resource 进入；编辑态永不进资源（帖子无 resource 类别） */
+    const isResourceMode = computed<boolean>(() : boolean => {
+        return resourceMode.value && !isEdit.value
+    })
+
+    /** 反馈提交模式（G-09）：由 URL scope=feedback 进入，走 POST /feedback 单向提交 */
+    const isFeedbackMode = computed<boolean>(() : boolean => feedbackMode.value)
+
+    /**
+     * 平台例外（AC⑤）：支付宝 / 百度 / 头条小程序没有 editor 组件，发帖仍走现有记号工具栏。
+     * 用**编译期**条件编译而不是运行时探测：无 editor 的平台上 WYSIWYG 组件连 import 都不该进包
+     * （页面模板与 import 同用 `#ifndef` 守卫），否则该平台编译期就会因未知组件失败。
+     */
+    let richEditorSupported : boolean = true
+    // #ifdef MP-ALIPAY || MP-BAIDU || MP-TOUTIAO
+    richEditorSupported = false
+    // #endif
+
+    /** 能力端唯一 WYSIWYG 形态：编辑态（无 markdown→delta 反向解析，回填不了）与资源态都不挂 */
+    const useRichEditor = computed<boolean>(() : boolean => {
+        if (!richEditorSupported) return false
+        if (isEdit.value) return false
+        if (isResourceMode.value) return false
+        return true
+    })
+
+    // ⚠️ 下面几条**必须**排在 `isResourceMode` / `useRichEditor` 之后：UTS 编译到 Kotlin 后
+    // **没有变量提升**，在前面的初始化式里引用后面声明的 computed 会直接 `unresolved reference`
+    // （④c 门实测，见移动端 `AGENTS.md` 的 UTS 限制表最后几行）。
+    /** 记号工具栏组件实际生效的档位：资源投稿走投稿接口、**没有**格式契约 ⇒ 恒纯文本；
+        编辑态按原格式（零回归）；新建一律 markdown（AC①：不再有作者自选档位） */
+    const effectiveFormat = computed<string>(() : string => {
+        if (isResourceMode.value) return FORMAT_TEXT
+        return isEdit.value ? editFormat.value : FORMAT_MARKDOWN
+    })
+
+    /** 发布前保真检查（AC③）：只在 WYSIWYG 形态下有意义，其余形态恒空串 */
+    const fidelityNotice = computed<string>(() : string => {
+        if (!useRichEditor.value) return ''
+        return richFidelityNotice(richIssues.value)
+    })
+
+    const headerTitle = computed<string>(() : string => {
+        if (isEdit.value) return '编辑帖子'
+        if (isFeedbackMode.value) return '提交需求'
+        return isResourceMode.value ? '上传资源' : '发布新帖'
+    })
+
+    /** 提交按钮文案（资源模式提交在组件内，壳层按钮仅论坛态） */
+    const submitLabel = computed<string>(() : string => {
+        if (submitting.value) return isEdit.value ? '保存中...' : '发布中...'
+        return isEdit.value ? '保存修改' : '发布'
+    })
+
+    /** 是否可提交（AC③：序列化结果空 / 纯空白 ⇒ 禁用；content 在 WYSIWYG 形态下就是序列化产物） */
+    const canSubmit = computed<boolean>(() : boolean => {
+        if (submitting.value) return false
+        if (uploadingImage.value) return false
+        if (loadingDetail.value) return false
+        if (title.value.trim().length == 0) return false
+        if (content.value.trim().length == 0) return false
+        return true
+    })
+
+    /** 反馈是否可提交（G-09：正文必填，1–1000 字；图片/类型都不在本模式） */
+    const canSubmitFeedback = computed<boolean>(() : boolean => {
+        if (feedbackSubmitting.value) return false
+        if (feedbackSubmitted.value) return false
+        if (feedbackContent.value.trim().length == 0) return false
+        return true
+    })
+
+    // ===== 分类选择 =====
+    function onSelectCategory(value : string) : void {
+        if (submitting.value) return
+        selectedCategory.value = value
+    }
+
+    /** 非法/历史类别值归一（#710，ADR-0040 收窄）：后端发帖/编辑只认 discussion/question，
+        旧默认 general、资源域残留 resource 与历史 experience 一律归 discussion——
+        历史值读回来归一而非抛错，防「帖子类别无效」400 */
+    function normalizeCategory(value : string) : string {
+        if (value == 'question') return value
+        return 'discussion'
+    }
+
+    /** 加载当前证件（投稿目标；onShow 刷新以跟随证件切换，下发给投稿组件） */
+    async function loadCredential() : Promise<void> {
+        try {
+            const cred = await getCurrentCredentialApi()
+            credentialId.value = cred != null ? cred.id : 0
+            credentialName.value = cred != null ? cred.name : ''
+        } catch (e) {
+            credentialId.value = 0
+            credentialName.value = ''
+        }
+    }
+
+    // ===== 加载帖子数据（编辑模式） =====
+    async function loadTopicForEdit(topicId : number) : Promise<void> {
+        loadingDetail.value = true
+        uni.showLoading({ title: '加载中...' })
+        try {
+            const data = await getForumTopicDetailApi(topicId)
+            title.value = data.title
+            content.value = data.content
+            images.value = data.images.slice()
+            // #811：编辑态回填读 category（详情 DTO 只回 category，不回 scope——
+            // 旧写法读 data.scope 恒为 buildTopicDetail 垫的 'general'，任何问答帖/经验帖
+            // 一进编辑态就被归一成 discussion，保存即降级类别）
+            selectedCategory.value = normalizeCategory(data.category)
+            // #1240 P3：编辑态把该帖的**原格式**读进来（只读）。它是「按原格式给不给编写预览与工具栏」
+            // 的判据；不写回任何载荷 —— 编辑不变式要求 PUT 不带 content_format（ADR-0044 / P1 已落锁）。
+            editFormat.value = data.content_format
+        } catch (e) {
+            console.error('[forum-create] loadTopicForEdit failed:', e)
+            uni.showToast({ title: '加载帖子失败', icon: 'none' })
+            setTimeout(() => { goBack() }, 1000)
+        } finally {
+            loadingDetail.value = false
+            uni.hideLoading()
+        }
+    }
+
+    // ===== 提交 =====
+    async function onSubmit() : Promise<void> {
+        if (submitting.value) return
+        if (uploadingImage.value || loadingDetail.value) return
+        // 资源模式的提交与按钮在 forum-contribution-form 内；壳层按钮已隐藏，
+        // 此处双保险：resource 永不流入发帖接口
+        if (isResourceMode.value) return
+        if (title.value.trim().length == 0) {
+            uni.showToast({ title: '请输入标题', icon: 'none' })
+            return
+        }
+        if (content.value.trim().length == 0) {
+            uni.showToast({ title: '请输入内容', icon: 'none' })
+            return
+        }
+
+        submitting.value = true
+        uni.showLoading({ title: isEdit.value ? '保存中...' : '发布中...' })
+        try {
+            if (isEdit.value) {
+                // 编辑不变式（P1 已落锁）：PUT 不带 content_format，正文按原格式原样回传
+                await updateForumTopicApi(editTopicId.value, title.value.trim(), content.value.trim(), images.value, selectedCategory.value)
+                uni.showToast({ title: '修改成功', icon: 'success' })
+            } else {
+                // #2641 AC①：新建一律 markdown —— content 是编辑器序列化产物（或记号工具栏产出的 markdown），
+                // 作者格式偏好已退出，不再有「不带字段」这种缺省表达
+                await createForumTopicApi(title.value.trim(), content.value.trim(), images.value, selectedCategory.value, FORMAT_MARKDOWN)
+                uni.showToast({ title: '发布成功', icon: 'success' })
+            }
+            setTimeout(() => { goBack() }, 1000)
+        } catch (e) {
+            console.error('[forum-create] submit failed:', e)
+            let msg = isEdit.value ? '修改失败' : '发布失败'
+            if (e instanceof Error) {
+                const errObj = e as Error
+                const m = errObj.message
+                if (m != null && m.length > 0) {
+                    msg = m
+                }
+            }
+            uni.showToast({ title: msg, icon: 'none' })
+        } finally {
+            submitting.value = false
+            uni.hideLoading()
+        }
+    }
+
+    // ===== 反馈提交（G-09：普通反馈提交，单向消息；POST /feedback，不加 type） =====
+    async function onSubmitFeedback() : Promise<void> {
+        if (feedbackSubmitting.value) return
+        if (feedbackSubmitted.value) return
+        const text = feedbackContent.value.trim()
+        if (text.length == 0) {
+            uni.showToast({ title: '请先写点内容', icon: 'none' })
+            return
+        }
+        feedbackSubmitting.value = true
+        try {
+            // 与「我的 → 帮助中心」的反馈同一接口、同一语义；提交成功只切「已提交」态
+            await submitFeedbackApi(text, feedbackNoImages, feedbackContact.value.trim())
+            feedbackSubmitted.value = true
+        } catch (e) {
+            console.error('[forum-create] feedback submit failed:', e)
+            let msg = '提交失败'
+            if (e instanceof Error) {
+                const errObj = e as Error
+                const m = errObj.message
+                if (m != null && m.length > 0) {
+                    msg = m
+                }
+            }
+            uni.showToast({ title: msg, icon: 'none' })
+        } finally {
+            feedbackSubmitting.value = false
+        }
+    }
+
+    function onBack() : void {
+        if (feedbackSubmitted.value) {
+            goBack()
+            return
+        }
+        if (feedbackContent.value.length > 0 || title.value.length > 0 || content.value.length > 0) {
+            uni.showModal({
+                title: '提示',
+                content: '确定放弃编辑吗？已输入的内容将丢失。',
+                success: (res) => {
+                    if (res.confirm) {
+                        goBack()
+                    }
+                }
+            })
+        } else {
+            goBack()
+        }
+    }
+
+    // ===== 初始化：根据 URL 参数决定新建/编辑模式 =====
+    function initFromOptions(options : UTSJSONObject) : void {
+        const id = options['id']
+        if (id != null) {
+            const parsedId = parseInt(`${id}`)
+            if (parsedId > 0) {
+                isEdit.value = true
+                editTopicId.value = parsedId
+                loadTopicForEdit(parsedId)
+            }
+        }
+        // 从 URL 参数接收模式 / 默认分类：
+        //  - scope=resource → 资源投稿模式（#760 / Q5），不占学员可自述的类别位
+        //  - scope=feedback → 普通反馈提交（G-09 / Q4+Q14），走 POST /feedback
+        //  - 其余非法/历史 scope（含历史 experience）归一成 discussion / question（#710 / ADR-0040）
+        const scope = options['scope']
+        if (scope != null && scope != '') {
+            const s = `${scope}`
+            if (s == 'resource') {
+                resourceMode.value = true
+                selectedCategory.value = 'discussion'
+            } else if (s == 'feedback') {
+                feedbackMode.value = true
+            } else {
+                selectedCategory.value = normalizeCategory(s)
+            }
+        }
+    }
+
+    return {
+        categories: categories,
+        isEdit: isEdit,
+        title: title,
+        content: content,
+        selectedCategory: selectedCategory,
+        submitting: submitting,
+        loadingDetail: loadingDetail,
+        images: images,
+        imagePreviewUrls: imagePreviewUrls,
+        uploadingImage: uploadingImage,
+        credentialId: credentialId,
+        credentialName: credentialName,
+        isResourceMode: isResourceMode,
+        isFeedbackMode: isFeedbackMode,
+        feedbackContent: feedbackContent,
+        feedbackContact: feedbackContact,
+        feedbackSubmitting: feedbackSubmitting,
+        feedbackSubmitted: feedbackSubmitted,
+        feedbackContentMax: feedbackContentMax,
+        useRichEditor: useRichEditor,
+        effectiveFormat: effectiveFormat,
+        fidelityNotice: fidelityNotice,
+        keyboardHeight: keyboardHeight,
+        headerTitle: headerTitle,
+        submitLabel: submitLabel,
+        canSubmit: canSubmit,
+        canSubmitFeedback: canSubmitFeedback,
+        onSelectCategory: (value : string) => onSelectCategory(value),
+        onContentChange: (value : string) => onContentChange(value),
+        onMarkdownChange: (value : string) => onMarkdownChange(value),
+        onIssuesChange: (value : string[]) => onIssuesChange(value),
+        onKeyboardHeight: (height : number) => onKeyboardHeight(height),
+        onAddImage: () => onAddImage(),
+        onRemoveImage: (index : number) => onRemoveImage(index),
+        onPreviewImage: (index : number) => onPreviewImage(index),
+        onSubmit: () => onSubmit(),
+        onSubmitFeedback: () => onSubmitFeedback(),
+        onBack: () => onBack(),
+        initFromOptions: (options : UTSJSONObject) => initFromOptions(options),
+        loadCredential: () => loadCredential(),
+    } as UseForumCreateFormResult
+}

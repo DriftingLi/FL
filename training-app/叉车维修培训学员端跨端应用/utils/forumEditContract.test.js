@@ -21,7 +21,8 @@ const ROOT = path.join(__dirname, '..');
 const read = (rel) => readText(path.join(ROOT, rel));
 
 describe('论坛编辑链路契约（#811）', () => {
-  const create = read('pages/forum/forum-create.uvue');
+  // #2641：发帖页表单域整域搬进 composable（页面壳层零自持状态），编辑链路判据随之落在这里
+  const create = read('pages/forum/composables/useForumCreateForm.uts');
   const api = read('api/forum.uts');
   const types = read('types/forum.uts');
 
@@ -37,11 +38,12 @@ describe('论坛编辑链路契约（#811）', () => {
     expect(create).toMatch(
       /await updateForumTopicApi\(editTopicId\.value, title\.value\.trim\(\), content\.value\.trim\(\), images\.value, selectedCategory\.value\)/
     );
-    // #1240 P3 起新建路径**末位多带一个格式声明**（作者的档位）；编辑路径仍不带（编辑不变式）
+    // #2641 起新建路径**末位恒为 markdown**（作者格式偏好已退出，content 是编辑器序列化产物）；
+    // 编辑路径仍不带（编辑不变式）
     expect(create).toMatch(
-      /await createForumTopicApi\(title\.value\.trim\(\), content\.value\.trim\(\), images\.value, selectedCategory\.value, authorFormat\.value\)/
+      /await createForumTopicApi\(title\.value\.trim\(\), content\.value\.trim\(\), images\.value, selectedCategory\.value, FORMAT_MARKDOWN\)/
     );
-    expect(create).not.toMatch(/updateForumTopicApi\([^)]*authorFormat/);
+    expect(create).not.toMatch(/updateForumTopicApi\([^)]*content_format/);
   });
 
   it('updateForumTopicApi：PUT /forum/topics/{id}，载荷 title/content/images（category 非空才带）', () => {

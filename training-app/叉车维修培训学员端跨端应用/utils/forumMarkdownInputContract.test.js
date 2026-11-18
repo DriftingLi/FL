@@ -34,11 +34,14 @@ const CREATE_REL = 'pages/forum/forum-create.uvue';
 const DETAIL_REL = 'pages/forum/forum-detail.uvue';
 const COMPOSER_REL = 'composables/useReplyComposer.uts';
 const PICKER_REL = 'composables/useForumImagePicker.uts';
+/** #2641：发帖页表单域整域搬进 composable（页面壳层零自持状态），格式轴判据随之落在这里 */
+const FORM_REL = 'pages/forum/composables/useForumCreateForm.uts';
 
 const input = read(INPUT_REL);
 const createPage = read(CREATE_REL);
 const detailPage = read(DETAIL_REL);
 const composer = read(COMPOSER_REL);
+const form = read(FORM_REL);
 
 // ===== ① 形态只有一份：发帖与回复共用同一个组件 =====
 
@@ -168,28 +171,30 @@ describe('图片走**单一入口**：一个 `＋` 方块弹系统选择器（�
 // ===== ⑤ 编辑态：不出现档位控件，按帖子原格式呈现（Q5 裁定）=====
 
 describe('编辑态不给档位控件，只按帖子**原格式**决定形态（编辑不变式的形态侧）', () => {
-  it('控件闸门 = 非编辑 且 非资源态（两者都存不下格式声明）', () => {
-    expect(createPage).toContain(':show-format-switch="showFormatSwitch"');
-    // 闸门表达式本身就是判据：编辑态与资源态各由一个合取项挡掉
-    expect(createPage).toContain('=> !isEdit.value && !isResourceMode.value)');
+  it('档位控件已整体退出（#2641：作者格式偏好不再存在，输入形态只剩一种）', () => {
+    // 旧组件仍收这个 prop（平台例外 / 编辑态 / 资源态还在用它），但发帖页恒传 false
+    expect(createPage).toContain(':show-format-switch="false"');
+    expect(createPage).not.toContain('showFormatSwitch');
+    expect(form).not.toContain('authorFormat');
   });
 
   it('编辑态回填读详情 DTO 的 `content_format`（选择形态的依据），且**不写回载荷**', () => {
-    expect(createPage).toContain('editFormat.value = data.content_format');
-    // 生效档位：资源态恒纯文本；编辑态用帖子原格式；新建态用作者记忆位
-    expect(createPage).toMatch(/if \(isResourceMode\.value\) return FORMAT_TEXT/);
-    expect(createPage).toMatch(/return isEdit\.value \? editFormat\.value : authorFormat\.value/);
+    expect(form).toContain('editFormat.value = data.content_format');
+    // 生效档位：资源态恒纯文本；编辑态用帖子原格式；新建态一律 markdown（#2641 AC①）
+    expect(form).toMatch(/if \(isResourceMode\.value\) return FORMAT_TEXT/);
+    expect(form).toMatch(/return isEdit\.value \? editFormat\.value : FORMAT_MARKDOWN/);
     // 「不写回载荷」的行为面由 forumContentFormatBehavior 真执行承重（PUT 键集合不含 content_format）
-    expect(createPage).not.toMatch(/updateForumTopicApi\([^)]*content_format/);
+    expect(form).not.toMatch(/updateForumTopicApi\([^)]*content_format/);
   });
 
-  it('新建态用作者记忆位（根 ADR-0044「记住上次选择」），切换即**归一后**写回记忆与本地值', () => {
-    expect(createPage).toContain('const authorFormat = ref<string>(readAuthorFormat())');
+  it('新建态不再读写作者记忆位（#2641：发帖侧偏好彻底退出；回复侧留待 #2642）', () => {
+    expect(createPage).not.toContain('readAuthorFormat');
+    expect(form).not.toContain('readAuthorFormat');
+    expect(form).not.toContain('writeAuthorFormat');
+    expect(form).not.toContain('normalizeAuthorFormat');
+    // 回复侧本票不动，记忆位仍由它持有
     expect(composer).toContain('const replyFormat = ref<string>(readAuthorFormat())');
-    // 归一必须发生在**赋值处**：本地值随后直接进载荷，只归一存储侧会让脏值漏出去
-    expect(createPage).toContain('const next = normalizeAuthorFormat(value)');
     expect(composer).toContain('const next = normalizeAuthorFormat(value)');
-    expect(createPage).toContain('writeAuthorFormat(next)');
     expect(composer).toContain('writeAuthorFormat(next)');
   });
 });

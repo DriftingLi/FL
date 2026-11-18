@@ -64,7 +64,8 @@ describe('提交链路契约（#760：forum-contribution-form 组件承载投稿
     expect(src).toMatch(/maxFiles\s*=\s*5/);
   });
   it('证件门槛：壳层取证件下发，组件无证件阻断投稿', () => {
-    expect(shell).toContain('getCurrentCredentialApi');
+    // #2641：取证件搬到 composable（页面壳层零自持状态），下发仍在页面模板
+    expect(read('pages/forum/composables/useForumCreateForm.uts')).toContain('getCurrentCredentialApi');
     expect(src).toMatch(/props\.credentialId\s*<=\s*0/);
   });
   it('壳层接线：组件 import + 资源模式渲染并下发 title/intro/credential', () => {
@@ -131,9 +132,12 @@ describe('forum 资源入口改跳契约（#760：统一进 forum-create 资源 
     expect(offenders).toEqual([]);
   });
   it('forum-create 资源 tab 绝不把 resource 发进发帖接口（按钮隐藏 + onSubmit 早退双守卫）', () => {
-    const src = read('pages/forum/forum-create.uvue');
-    expect(src).toMatch(/if\s*\(isResourceMode\.value\)\s*return/);
-    expect(src).toMatch(/<view v-if="!isResourceMode && !isFeedbackMode" class="submit-section">/);
+    // #2641：表单域整域搬进 composable，早退守卫在那边；模板闸门仍在页面
+    const form = read('pages/forum/composables/useForumCreateForm.uts');
+    expect(form).toMatch(/if\s*\(isResourceMode\.value\)\s*return/);
+    expect(read('pages/forum/forum-create.uvue')).toMatch(
+      /<view v-if="!isResourceMode && !isFeedbackMode" class="submit-section">/
+    );
   });
 });
 
@@ -157,7 +161,8 @@ describe('api/contribution.uts 路由与类型契约', () => {
 });
 
 describe('forum-create 归一与资源模式契约（#710 + #760）', () => {
-  const src = read('pages/forum/forum-create.uvue');
+  // #2641：发帖页表单域整域搬进 composable（页面壳层零自持状态），归一与模式判据随之落在这里
+  const src = read('pages/forum/composables/useForumCreateForm.uts');
   it('默认类别为 discussion（非 general/resource）', () => {
     expect(src).toMatch(/selectedCategory\s*=\s*ref<string>\('discussion'\)/);
     expect(src).not.toMatch(/ref<string>\('general'\)/);
