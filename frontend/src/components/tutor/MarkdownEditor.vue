@@ -212,11 +212,14 @@ function createVditor(targetMode: 'ir' | 'sv', valueToRestore?: string) {
   vditor = null
   // 重建期间禁止交互
   isReady.value = false
+  // 记下这次真正交给 Vditor 的初始值：after 回调里要拿它和「那时的最新值」比，
+  // 才能知道 ready 期间内容有没有被换掉（见 after 里的补齐逻辑）
+  const initialValue = valueToRestore ?? (props.modelValue || '')
 
   vditor = new Vditor(vditorRef.value, {
     height: props.height - 40, // 减去 tab 栏高度
     mode: targetMode,
-    value: props.modelValue || '',
+    value: initialValue,
     placeholder: props.placeholder,
     // 传入预加载的中文语言包，避免 Vditor 从 CDN (unpkg.com) 加载 i18n 文件导致 404
     i18n: (typeof window !== 'undefined' ? (window as any).VditorI18n : undefined) || undefined,
@@ -249,6 +252,20 @@ function createVditor(targetMode: 'ir' | 'sv', valueToRestore?: string) {
       if (valueToRestore && vditor) {
         try {
           vditor.setValue(valueToRestore, true)
+        } catch (e) {
+          console.warn('Vditor setValue 失败:', e)
+        }
+      } else if (vditor && props.modelValue !== initialValue) {
+        // ready 期间内容被换掉了 —— 必须补一次，否则永久丢失。
+        //
+        // 真实时序（打开已有内容的编辑页）：父组件 onMounted 里发请求取详情，
+        // Vditor 的模块（lute 等）要从 /vditor/dist/js/... 异步拉。请求先回来时
+        // 父组件把 modelValue 从 '' 改成正文，那时 isReady 还是 false，
+        // 下面那个 watch 会整条丢弃（:286 的 `if (!vditor || !isReady.value) return`）；
+        // 而这里原先只在切模式（valueToRestore 有值）时才 setValue，
+        // 首屏这条路径没人补 ⇒ 编辑器停在创建时的空串，用户看到的就是「什么都没加载」。
+        try {
+          vditor.setValue(props.modelValue || '')
         } catch (e) {
           console.warn('Vditor setValue 失败:', e)
         }
