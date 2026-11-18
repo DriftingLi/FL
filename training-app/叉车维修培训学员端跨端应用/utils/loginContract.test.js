@@ -153,8 +153,9 @@ const LINE_BUDGET = 600;
  * `UseLoginFormResult`，页面只解构消费；两态路径以字面量 `/static/…` 写在模板三元里
  * （包内图不吃 webp 属性，`utils/imageWebpAttrContract` 按「:src 里出现 /static/」判豁免）。
  * ⇒ 两把 sha 同步前进；其余每一条行为断言逐字节不变。
+ * ⚠️ **登录页页脚文案收敛**：移除「· 学员端」，模板锁随之更新；样式未变。
  */
-const TEMPLATE_SHA256 = '1ea92b34bd182e895ce8b7f1698faa4d1789e36ba076abb162602c517df41216';
+const TEMPLATE_SHA256 = 'cbfacd4c20687bd317a53998b26758b5962cdf0e2ee3b5a197c5ecc4b47312c1';
 const STYLE_SHA256 = '8e5082666242eb21090df12234bb781ac8c2af0de6c4e1f7761c7355ef9ab8d5';
 
 /** 页面块（template / script / style）。模板**有嵌套** `<template v-if>` ⇒ 闭合取最后一个 */
