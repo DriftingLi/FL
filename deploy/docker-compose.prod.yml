@@ -113,6 +113,44 @@ services:
         max-file: "3"
 
   # ==========================================
+  # 拍卖数据 collector（spec #2671 / 票 #2672）：独立 Python 服务，不进 Go 后端。
+  # profile "collector"：tracer bullet 阶段只有 batch 模式（一次性命令），没有常驻 daemon，
+  # 故默认不随主编排拉起；由运维显式 `docker compose --profile collector run --rm collector batch ...`
+  # 或后续票接入 daemon 模式后改常驻。镜像默认值登记在 backend/internal/deploy/topology.go
+  # 的 EnvVars 声明表（COLLECTOR_IMAGE，漂移锁钉住），但本票无常驻 daemon，不参与 deploy.py
+  # 的镜像更新/回滚生命周期。
+  # ==========================================
+  collector:
+    build:
+      context: ..
+      dockerfile: collector/Dockerfile
+    image: ${COLLECTOR_IMAGE:-forklift-collector:latest}
+    container_name: forklift-collector-prod
+    restart: "no"
+    profiles: ["collector"]
+    environment:
+      DATABASE_URL: postgres://${DB_USER:-forklift}:${DB_PASSWORD}@postgres:5432/forklift_training?sslmode=disable
+      TZ: Asia/Shanghai
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - forklift-net
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+        reservations:
+          memory: 64M
+          cpus: "0.1"
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  # ==========================================
   # Go 后端服务（仅内网可访问，通过前端 Nginx 反代）
   # PPT 转图片功能由 libreoffice sidecar 容器提供
   # ==========================================
