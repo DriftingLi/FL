@@ -182,6 +182,9 @@
 - **抽取版本（extraction version）**：市场公告经 LLM 抽取成结构化规格时，写回样本的 prompt 版本（ADR-0097，`collector/extract/prompt.py` 的 `PROMPT_VERSION`）；它与 system prompt 同源，回答「这条样本是哪个版本抽的」。抽取值附逐字段置信度，原始描述留底不被覆盖。
 - **抽检队列（review queue）**：`market_sample_review_queue`（ADR-0097）——关键字段置信度缺失或 < 0.75、或价格抽取失败的样本各入一行可查对象（含原因与明细），供人工复核。它不等于「有效标签集」：入队样本需复核后才可能被清洗/匹配成弱标签；`label_eligible=false` 的样本绝不可进标签集。
   _Avoid_: 把入队样本当有效标签；把 raw 行（`clean_status='raw'`）当市场真值。
+- **清洗状态与剔除原因（clean status / rejection reason）**：市场样本经 ADR-0098 的单模块版本化七规则清洗后的状态（`clean_status`：`raw` / `cleaned` / `rejected`）。批量包价 / 报废无电池 / 占位价 / 面议 / 区间报价 / 车商重复帖各按具名原因剔除（`rejection_reason` 留底可审计）；溢价 > 评估价 × 1.5 是 `cleaned` + `premium_anomaly=true` 的**标记降权**，不是剔除。清洗是纯函数、可重跑（`collector reclean`）而不重爬。
+  _Avoid_: 把溢价样本当剔除样本（降权保留竞价证据）；把 `clean_status='raw'` 的行当已清洗可校准。
+- **清洗版本（clean version）**：清洗规则模块的版本（ADR-0098，`collector/clean/rules.py` 的 `CLEAN_VERSION`），落库到 `market_transactions.clean_version`（迁移 000065）——回答「这行是哪版规则判的」。与抽取版本 `PROMPT_VERSION` 各自独立：规则升级后可用同一批留底行重跑、按版本分离两代质量。
 
 ## 门户与内容
 

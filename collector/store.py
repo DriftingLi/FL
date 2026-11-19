@@ -25,6 +25,7 @@ _COLUMNS = (
     "appraisal_price",
     "auction_date",
     "clean_status",
+    "clean_version",
     "rejection_reason",
     "field_confidence",
     "extraction_version",
@@ -54,17 +55,19 @@ def _insert_sql() -> str:
     )
 
 
+def _jsonb(value: Any, column: str):
+    """按列类型决定是否包 Jsonb——INSERT 与 UPDATE 共用，避免两处各记一份规则。"""
+    if column in _JSONB_COLUMNS and value is not None:
+        from psycopg.types.json import Jsonb
+
+        return Jsonb(value)
+    return value
+
+
 def insert_sample(conn: "psycopg.Connection", sample: RawSample) -> int:
     """把一条 raw 样本落进 market_transactions，返回新行 id（调用方负责事务）。"""
-    from psycopg.types.json import Jsonb
-
     row = sample.to_row()
-    values: list[Any] = []
-    for col in _COLUMNS:
-        value = row[col]
-        if col in _JSONB_COLUMNS and value is not None:
-            value = Jsonb(value)
-        values.append(value)
+    values = [_jsonb(row[col], col) for col in _COLUMNS]
     return conn.execute(_insert_sql() + " RETURNING id", values).fetchone()[0]
 
 
@@ -77,3 +80,72 @@ def enqueue_review(
         "VALUES (%s, %s, %s)",
         (sample_id, reason, detail),
     )
+
+
+# 重跑清洗读回的列：原文留底 + 抽取结果 + 当前清洗状态。不含匹配/标签列（下游 #2675）。
+_FETCH_COLUMNS = (
+    "id", "channel", "source_url", "raw_description", "structured_specs",
+    "raw_price", "raw_price_kind", "appraisal_price", "field_confidence",
+    "clean_status", "clean_version", "rejection_reason", "premium_anomaly", "label_eligible",
+)
+
+
+def fetch_samples(conn: "psycopg.Connection") -> list[tuple[int, Any]]:
+    """读回已入库样本（id + RawSample），供重跑清洗用；调用方负责连接/schema。"""
+    from .models import RawSample
+
+    rows = conn.execute(
+        "SELECT " + ", ".join(_FETCH_COLUMNS) + " FROM market_transactions ORDER BY id"
+    ).fetchall()
+    result: list[tuple[int, RawSample]] = []
+    for row in rows:
+        (
+            sid, channel, source_url, raw_description, structured_specs,
+            raw_price, raw_price_kind, appraisal_price, field_confidence,
+            clean_status, clean_version, rejection_reason, premium_anomaly, label_eligible,
+        ) = row
+        sample = RawSample(
+            channel=channel,
+            source_url=source_url,
+            raw_description=raw_description,
+            structured_specs=structured_specs or {},
+            raw_price=raw_price,
+            raw_price_kind=raw_price_kind,
+            appraisal_price=appraisal_price,
+            field_confidence=field_confidence or {},
+            clean_status=clean_status,
+            clean_version=clean_version,
+            rejection_reason=rejection_reason,
+            premium_anomaly=premium_anomaly,
+            label_eligible=label_eligible,
+        )
+        result.append((sid, sample))
+    return result
+
+
+def update_clean_result(
+    conn: "psycopg.Connection", sample_id: int, cleaned: Any
+) -> None:
+    """把重跑清洗的结果写回清洗列 + 结构字段；采集来源 channel/source_url 不动。
+
+    原文留底 jsonb 里被剥离的身份字段与脱敏后的 body 一并写回（PIPL：留底亦不含
+    买受人身份）；抽取版本、匹配与标签列均不动——清洗只负责清洗列与结构字段。
+    clean_version 记录产出本行结果所用的规则版本，供后续按版本分离重跑。
+    """
+    conn.execute(
+        "UPDATE market_transactions SET "
+        "clean_status = %s, clean_version = %s, rejection_reason = %s, "
+        "premium_anomaly = %s, label_eligible = %s, structured_specs = %s, "
+        "raw_description = %s WHERE id = %s",
+        (
+            cleaned.clean_status,
+            cleaned.clean_version,
+            cleaned.rejection_reason,
+            cleaned.premium_anomaly,
+            cleaned.label_eligible,
+            _jsonb(cleaned.structured_specs, "structured_specs"),
+            _jsonb(cleaned.raw_description, "raw_description"),
+            sample_id,
+        ),
+    )
+
