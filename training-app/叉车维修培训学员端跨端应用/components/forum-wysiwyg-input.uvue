@@ -59,7 +59,7 @@
 
 <script setup lang="uts">
     import { ref, computed, onUnmounted } from 'vue'
-    import { buildMarker, serializeDelta } from '../utils/forumDeltaMarkdown'
+    import { buildMarker, serializeDelta, settleMarkerInsert } from '../utils/forumDeltaMarkdown'
     import { FORUM_MARKDOWN_BOUNDARY_NOTICE, FORUM_REGION_NOTICE } from '../utils/forumDisplay'
     import ForumWysiwygToolbar from './forum-wysiwyg-toolbar.uvue'
     import {
@@ -154,6 +154,11 @@
     const pasteHint = ref<string>('')
 
     let editorCtx : EditorContext | null = null
+    /**
+     * 最近一次 getContents 拿到的 delta（JSON 串）。
+     * 记号动作要在「写之前」的文档上做拼合（#2659：insertText 不删选区，得自己收敛），故必须缓存。
+     */
+    let lastDeltaJson : string = ''
     /** @某人 在 editor ready 之前点击时的暂存串（onEditorReady 后补写，避免丢失） */
     let pendingMention : string = ''
     /** 「粘贴」在 editor ready 之前点击时的暂存串（onEditorReady 后补写） */
@@ -178,6 +183,7 @@
         ctx.getContents({
             success: (res) => {
                 const deltaJson = JSON.stringify(res.delta)
+                lastDeltaJson = deltaJson
                 const result = serializeDelta(deltaJson)
                 markdownLength.value = result.markdown.length
                 issues.value = result.issues
@@ -353,14 +359,17 @@
             return
         }
         if (action.kind == RICH_KIND_MARKER) {
-            // 记号逃生舱：有选区包裹选区、无选区插可替换模板；一律 insertText，不经 editor 的 link/code 属性
+            // 记号逃生舱：有选区包裹选区、无选区插可替换模板；一律 insertText，不经 editor 的 link/code 属性。
+            // 写之前先把文档快照下来 —— 收敛要靠它反推落点（insertText 不删选区，见 settleMarkerInsert）。
+            const preDelta = lastDeltaJson
             ctx.getSelectionText({
                 success: (res) => {
-                    const text = buildMarker(action.id, res.text)
+                    const selected = res.text
+                    const text = buildMarker(action.id, selected)
                     if (text.length == 0) return
                     ctx.insertText({
                         text: text,
-                        success: () => { refreshFromEditor() }
+                        success: () => { settleMarkerInsert(ctx, preDelta, selected, text, refreshFromEditor) }
                     })
                 }
             })

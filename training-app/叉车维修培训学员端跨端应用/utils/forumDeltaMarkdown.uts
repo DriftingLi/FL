@@ -14,6 +14,10 @@
  *   链接一律走字面记号 [文字](url)，由记号构造器产出、序列化原样穿过。
  *
  * 本文件为纯函数、不依赖 DOM / uni API，Node 侧经 utils/utsHarness.js 真执行。
+ *
+ * 唯一例外是文件末尾的 settleMarkerInsert（#2659）：它把 reconcileMarkerInsert 的结论写回编辑器。
+ * 判定与落地是同一件事的两半，分开放会让「什么算缺陷形」与「缺陷形怎么修」漂成两套口径；
+ * 它不引入任何 import，模块仍是零依赖。
  */
 
 export const MARKER_QUOTE = 'quote'
@@ -33,7 +37,11 @@ export function markerLabel(kind : string) : string {
 
 /**
  * 有选区 ⇒ 包裹选中文字；无选区 ⇒ 插入可替换模板。
- * 返回值直接交给 editorContext.insertText 作用于当前选区（编辑器无 setSelection，光标落点由它决定）。
+ *
+ * 注意（#2659 真机取证）：把返回值交给 editorContext.insertText **并不会**替换选区 ——
+ * 实测 insertText 只在光标处写入（"abc" 全选 → 点引用 → "> abcabc"，计数 +5 而非 +2），
+ * 编辑器也没有删除选区 / 查询选区偏移的 API。故调用方必须在写完之后用
+ * reconcileMarkerInsert 把文档收敛到唯一正确形态；本函数只负责「记号长什么样」。
  */
 export function buildMarker(kind : string, selected : string) : string {
     const has = selected.length > 0
@@ -197,4 +205,176 @@ export function serializeDelta(deltaJson : string) : DeltaSerializeResult {
 
 export function deltaToMarkdown(deltaJson : string) : string {
     return serializeDelta(deltaJson).markdown
+}
+
+/**
+ * delta 的纯文本投影（只累加字符串 insert；图片/分割线等原子 op 不计长度）。
+ *
+ * 记号拼合要在**字符坐标**上比对前后两份文档，故必须有这个投影；它也是落点定位的唯一口径
+ * （编辑器给的选区信息只有文本、没有偏移）。
+ */
+export function deltaPlainText(deltaJson : string) : string {
+    let root : UTSJSONObject | null = null
+    try {
+        root = asObj(JSON.parse(deltaJson))
+    } catch (_e) {
+        root = null
+    }
+    if (root == null) return ''
+    const ops = asObjectArray(root['ops'])
+    let out = ''
+    for (let i = 0; i < ops.length; i++) {
+        const insert = ops[i]['insert']
+        if (insert != null && typeof insert == 'string') out += insert as string
+    }
+    return out
+}
+
+function opJson(text : string, attrs : any | null) : string {
+    if (attrs == null) return '{"insert":' + JSON.stringify(text) + '}'
+    return '{"insert":' + JSON.stringify(text) + ',"attributes":' + JSON.stringify(attrs) + '}'
+}
+
+function clampPos(v : number) : number {
+    return v > 0 ? v : 0
+}
+
+/** 在 pre 的字符坐标 [start, start+removeLen) 上删掉一段，并在 start 处插入 marker 纯文本 op */
+function spliceDelta(preDeltaJson : string, start : number, removeLen : number, marker : string) : string {
+    let root : UTSJSONObject | null = null
+    try {
+        root = asObj(JSON.parse(preDeltaJson))
+    } catch (_e) {
+        root = null
+    }
+    if (root == null) return ''
+    const ops = asObjectArray(root['ops'])
+    const pieces : string[] = []
+    const cut = start + removeLen
+    let pos = 0
+    let inserted = false
+    for (let i = 0; i < ops.length; i++) {
+        const op = ops[i]
+        const insert = op['insert']
+        if (insert == null) continue
+        if (typeof insert != 'string') {
+            // 图片 / 分割线是零宽度原子：原样留在原位，不参与字符区间
+            pieces.push(JSON.stringify(op))
+            continue
+        }
+        const text = insert as string
+        const opStart = pos
+        const opEnd = pos + text.length
+        pos = opEnd
+        const attrs = op['attributes']
+        if (opEnd <= start) {
+            pieces.push(opJson(text, attrs))
+            continue
+        }
+        if (opStart >= cut) {
+            if (!inserted) {
+                pieces.push(opJson(marker, null))
+                inserted = true
+            }
+            pieces.push(opJson(text, attrs))
+            continue
+        }
+        const keepBefore = text.substring(0, clampPos(start - opStart))
+        const keepAfter = text.substring(clampPos(cut - opStart))
+        if (keepBefore.length > 0) pieces.push(opJson(keepBefore, attrs))
+        if (!inserted) {
+            pieces.push(opJson(marker, null))
+            inserted = true
+        }
+        if (keepAfter.length > 0) pieces.push(opJson(keepAfter, attrs))
+    }
+    if (!inserted) pieces.push(opJson(marker, null))
+    return '{"ops":[' + pieces.join(',') + ']}'
+}
+
+function occurrencesOf(text : string, needle : string) : number[] {
+    const out : number[] = []
+    if (needle.length == 0) return out
+    let from = text.indexOf(needle)
+    while (from >= 0) {
+        out.push(from)
+        from = text.indexOf(needle, from + 1)
+    }
+    return out
+}
+
+/**
+ * 把「记号已写入、但选区没被替换」的文档收敛成唯一正确形态（#2659）。
+ *
+ * 第一性原理：编辑器只给了两件事实 —— 选区文本（无偏移）与写入后的整份 delta；
+ * 它不给「删除选区」，也不给「设置选区」。所以「替换选区」这件事只能由调用方自己兑现：
+ * 先让 insertText 写，再**用写入结果反推落点**（结构比对：post 去掉 marker 是否还原成 pre），
+ * 最后用 setContents 把 pre 在 [落点, 落点+选区长度) 这一段的原文换成 marker。
+ *
+ * 安全底线（本节是判据，不是说明）：
+ * - 形状只认两种：已正确（post == pre[:s] + marker + pre[s+len:]）⇒ 返回 null 什么都不做；
+ *   实测缺陷形（post == pre[:s] + marker + pre[s:]）⇒ 返回修复后的 delta。
+ * - 其余任何形状一律返回 null —— **宁可不修，不可误删**。平台哪天把 insertText 改对，本函数自动退化成 no-op。
+ * - 落点 s 优先取「选区文本在原文中唯一出现」的位置；不唯一时退回结构比对（写在前缀是否恰好还原成 pre）。
+ */
+export function reconcileMarkerInsert(preDeltaJson : string, selected : string, marker : string, postDeltaJson : string) : string | null {
+    if (selected.length == 0 || marker.length == 0) return null
+    const preText = deltaPlainText(preDeltaJson)
+    const postText = deltaPlainText(postDeltaJson)
+    if (preText.length == 0) return null
+
+    let start = -1
+    const seen = occurrencesOf(preText, selected)
+    if (seen.length == 1) {
+        start = seen[0]
+    } else {
+        // 选区在原文里出现 0 次或多次：只能靠「写在哪里」反推 —— 去掉 marker 后必须还原成 pre
+        const marks = occurrencesOf(postText, marker)
+        for (let i = 0; i < marks.length; i++) {
+            const p = marks[i]
+            const restored = postText.substring(0, p) + postText.substring(p + marker.length)
+            if (restored == preText && preText.length >= p + selected.length
+                && preText.substring(p, p + selected.length) == selected) {
+                start = p
+                break
+            }
+        }
+    }
+    if (start < 0) return null
+    if (preText.length < start + selected.length) return null
+    if (preText.substring(start, start + selected.length) != selected) return null
+
+    const replaced = preText.substring(0, start) + marker + preText.substring(start + selected.length)
+    if (postText == replaced) return null
+    const inserted = preText.substring(0, start) + marker + preText.substring(start)
+    if (postText != inserted) return null
+    return spliceDelta(preDeltaJson, start, selected.length, marker)
+}
+/**
+ * 把 reconcileMarkerInsert 的结论写回编辑器（#2659）。
+ *
+ * 三种结局：已正确 / 无选区 / 形状不认识 ⇒ 只回调 onDone（不动文档）；实测缺陷形 ⇒ setContents 改写。
+ * 编辑器没有删除选区 / 设置选区的 API，故「替换选区」只能由调用方在写入之后自己兑现。
+ */
+export function settleMarkerInsert(ctx : EditorContext, preDelta : string, selected : string, marker : string, onDone : () => void) : void {
+    if (selected.length == 0 || preDelta.length == 0) {
+        onDone()
+        return
+    }
+    ctx.getContents({
+        success: (post) => {
+            const repaired = reconcileMarkerInsert(preDelta, selected, marker, JSON.stringify(post.delta))
+            if (repaired == null) {
+                onDone()
+                return
+            }
+            const options : UniEditorElementSetContentsOptions = {
+                delta: JSON.parse(repaired),
+                success: () => { onDone() },
+                fail: (_error : UniEditorElementOptionsFailRes) => { onDone() }
+            }
+            ctx.setContents(options)
+        },
+        fail: (_error : UniEditorElementOptionsFailRes) => { onDone() }
+    })
 }
