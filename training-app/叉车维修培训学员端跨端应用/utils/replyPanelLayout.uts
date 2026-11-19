@@ -28,10 +28,14 @@ export function createKeyboardHeightTracker(setter : (h : number) => void) : (h 
 }
 
 /**
- * 面板 bottom（px）：开着时贴键盘上沿 = 当前键盘高度；关闭时归 0（沉底、不占键盘位）。
+ * 面板 bottom（px）：只在视口不随键盘移动的平台补键盘高度；已调整视口的平台不再重复偏移。
  */
-export function panelBottomPx(keyboardHeightPx : number, panelOpen : boolean) : number {
-	return panelOpen ? keyboardHeightPx : 0
+export function panelBottomPx(
+	keyboardHeightPx : number,
+	panelOpen : boolean,
+	viewportResizesForKeyboard : boolean = false
+) : number {
+	return panelOpen && !viewportResizesForKeyboard ? keyboardHeightPx : 0
 }
 
 /**
