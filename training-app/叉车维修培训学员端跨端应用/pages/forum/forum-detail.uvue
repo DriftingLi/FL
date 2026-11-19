@@ -22,16 +22,19 @@
 
             <!-- 帖子内容 -->
             <view v-if="topic != null" class="topic-section">
-                <!--   <text class="topic-title">{{ topic.title }}</text> -->
                 <ForumTopicHeader :author-name="tAuthorName"
                     :author-avatar="tAuthorAvatar" :avatar-color="tAvatarColor" :created-at-text="tCreatedAtText"
                     :region-text="tRegionText"
-                    :likes-count="tLikesCount" :liked="tLiked" :favorited="tFavorited"
-                    :replies-count="tRepliesCount"
                     :views-count="tViewsCount" :can-delete="canDelete"
-                    @toggle-like="onToggleLike" @toggle-favorite="onToggleFavorite" @delete="onDelete" />
+                    @delete="onDelete" />
+                <!-- 标题（#2690）：作者行下方、正文上方，两行截断；空标题整段不渲染 -->
+                <text v-if="tTitle.length > 0" class="topic-title" lines="2">{{ tTitle }}</text>
                 <!-- 正文格式由壳层扁平下发（ADR-0025 P2）：组件不读 topic，档位决策在 utils/forumBody -->
                 <ForumTopicBody :content="topicContent" :format="topicFormat" :image-urls="topicImages" />
+                <!-- 互动行（#2690）：点赞 / 收藏 / 回复数移到正文下方，浏览数留在作者行 -->
+                <ForumTopicActions :likes-count="tLikesCount" :liked="tLiked" :favorited="tFavorited"
+                    :replies-count="tRepliesCount" @toggle-like="onToggleLike"
+                    @toggle-favorite="onToggleFavorite" />
             </view>
 
             <!-- 回复列表 -->
@@ -100,6 +103,7 @@
     import { computed, ref, nextTick } from 'vue'
     import { onLoad, onUnload } from '@dcloudio/uni-app'
     import ForumTopicHeader from './components/forum-topic-header.uvue'
+    import ForumTopicActions from './components/forum-topic-actions.uvue'
     import ForumTopicBody from './components/forum-topic-body.uvue'
     import ForumReplyList from './components/forum-reply-list.uvue'
     import ForumReportDialog from './components/forum-report-dialog.uvue'
@@ -174,6 +178,11 @@ import { goBack } from '../../utils/navigation'
      * 帖子头部展示字段（扁平下发：模板不直读可空 topic 成员，Kotlin 可空接收者规避）
      * 帖子图片预解析为完整 URL：模板中不再调用 resolveFileUrl（UTS 模板函数解析不稳定）
      */
+    const tTitle = computed<string>(() : string => {
+        const t = topic.value
+        if (t == null) return ''
+        return t.title
+    })
     const tAuthorName = computed<string>(() : string => {
         const t = topic.value
         if (t == null) return '匿名学员'
@@ -458,7 +467,7 @@ import { goBack } from '../../utils/navigation'
     }
 
     .topic-title {
-        font-size: 36rpx;
+        font-size: 32rpx;
         font-weight: bold;
         color: #333333;
         line-height: 1.5;

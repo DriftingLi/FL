@@ -354,6 +354,7 @@ const MODULES = {
       'pages/forum/components/forum-resource-panel.uvue',
       'pages/forum/components/forum-square-sort-bar.uvue',
       'pages/forum/components/forum-tab-bar.uvue',
+      'pages/forum/components/forum-topic-actions.uvue',
       'pages/forum/components/forum-topic-body.uvue',
       'pages/forum/components/forum-topic-card.uvue',
       'pages/forum/components/forum-topic-header.uvue',
