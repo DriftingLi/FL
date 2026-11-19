@@ -14,6 +14,10 @@
  *   链接一律走字面记号 [文字](url)，由记号构造器产出、序列化原样穿过。
  *
  * 本文件为纯函数、不依赖 DOM / uni API，Node 侧经 utils/utsHarness.js 真执行。
+ *
+ * 唯一例外是文件末尾的 settleMarkerInsert（#2659）：它把 reconcileMarkerInsert 的结论写回编辑器。
+ * 判定与落地是同一件事的两半，分开放会让「什么算缺陷形」与「缺陷形怎么修」漂成两套口径；
+ * 它不引入任何 import，模块仍是零依赖。
  */
 
 export const MARKER_QUOTE = 'quote'
@@ -345,4 +349,32 @@ export function reconcileMarkerInsert(preDeltaJson : string, selected : string, 
     const inserted = preText.substring(0, start) + marker + preText.substring(start)
     if (postText != inserted) return null
     return spliceDelta(preDeltaJson, start, selected.length, marker)
+}
+/**
+ * 把 reconcileMarkerInsert 的结论写回编辑器（#2659）。
+ *
+ * 三种结局：已正确 / 无选区 / 形状不认识 ⇒ 只回调 onDone（不动文档）；实测缺陷形 ⇒ setContents 改写。
+ * 编辑器没有删除选区 / 设置选区的 API，故「替换选区」只能由调用方在写入之后自己兑现。
+ */
+export function settleMarkerInsert(ctx : EditorContext, preDelta : string, selected : string, marker : string, onDone : () => void) : void {
+    if (selected.length == 0 || preDelta.length == 0) {
+        onDone()
+        return
+    }
+    ctx.getContents({
+        success: (post) => {
+            const repaired = reconcileMarkerInsert(preDelta, selected, marker, JSON.stringify(post.delta))
+            if (repaired == null) {
+                onDone()
+                return
+            }
+            const options : UniEditorElementSetContentsOptions = {
+                delta: JSON.parse(repaired),
+                success: () => { onDone() },
+                fail: (_error : UniEditorElementOptionsFailRes) => { onDone() }
+            }
+            ctx.setContents(options)
+        },
+        fail: (_error : UniEditorElementOptionsFailRes) => { onDone() }
+    })
 }

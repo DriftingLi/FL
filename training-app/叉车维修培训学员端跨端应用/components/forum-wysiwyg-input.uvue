@@ -59,7 +59,7 @@
 
 <script setup lang="uts">
     import { ref, computed, onUnmounted } from 'vue'
-    import { buildMarker, reconcileMarkerInsert, serializeDelta } from '../utils/forumDeltaMarkdown'
+    import { buildMarker, serializeDelta, settleMarkerInsert } from '../utils/forumDeltaMarkdown'
     import { FORUM_MARKDOWN_BOUNDARY_NOTICE, FORUM_REGION_NOTICE } from '../utils/forumDisplay'
     import ForumWysiwygToolbar from './forum-wysiwyg-toolbar.uvue'
     import {
@@ -349,39 +349,6 @@
         refreshFromEditor()
     }
 
-    /**
-     * 写完记号后的收敛（#2659）。
-     *
-     * insertText 只把文本写进当前光标、**不删选区**（真机取证：abc 全选 → 点引用 → "> abcabc"），
-     * 编辑器也没有删除选区 / 设置选区的 API。故写完之后读回整份文档，交给
-     * utils/forumDeltaMarkdown 的 reconcileMarkerInsert 判定：
-     *   · 已正确 ⇒ 什么都不做（只 refresh，平台语义正常时本函数就是一次读回）；
-     *   · 实测缺陷形 ⇒ setContents 把文档改写成「选区被记号替换」的唯一正确形态；
-     *   · 形状不认识 ⇒ 同样不动手（宁可不修，不可误删）。
-     */
-    function settleMarkerInsert(ctx : EditorContext, preDelta : string, selected : string, marker : string) : void {
-        if (selected.length == 0 || preDelta.length == 0) {
-            refreshFromEditor()
-            return
-        }
-        ctx.getContents({
-            success: (post) => {
-                const repaired = reconcileMarkerInsert(preDelta, selected, marker, JSON.stringify(post.delta))
-                if (repaired == null) {
-                    refreshFromEditor()
-                    return
-                }
-                const options : UniEditorElementSetContentsOptions = {
-                    delta: JSON.parse(repaired),
-                    success: () => { refreshFromEditor() },
-                    fail: (_error : UniEditorElementOptionsFailRes) => { refreshFromEditor() }
-                }
-                ctx.setContents(options)
-            },
-            fail: (_error : UniEditorElementOptionsFailRes) => { refreshFromEditor() }
-        })
-    }
-
     function applyAction(action : RichAction) : void {
         const ctx = editorCtx
         if (ctx == null) return
@@ -402,7 +369,7 @@
                     if (text.length == 0) return
                     ctx.insertText({
                         text: text,
-                        success: () => { settleMarkerInsert(ctx, preDelta, selected, text) }
+                        success: () => { settleMarkerInsert(ctx, preDelta, selected, text, refreshFromEditor) }
                     })
                 }
             })
