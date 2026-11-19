@@ -67,10 +67,10 @@
         width: 25%;
     }
 
-    /* 插画为 44x40 / 38x38 原比例，统一装进 88rpx 方框居中（原型格内图标高 40） */
+    /* 插画统一装进方框居中，缩小后保留原比例与标签间距 */
     .menu-icon-img {
-        width: 88rpx;
-        height: 88rpx;
+        width: 80rpx;
+        height: 80rpx;
         margin-bottom: 8rpx;
     }
 

@@ -45,6 +45,16 @@ describe('⑪-1/⑪-2 面板 bottom 与半屏上限', () => {
     expect(panelBottomPx(0, true)).toBe(0);
   });
 
+  it('微信键盘已缩小可视区时，不再重复扣键盘高度把面板顶出屏幕', () => {
+    const { panelBottomPx } = layout();
+    // Screenshot geometry normalized from the reported 768x1668 device capture.
+    const visibleHeight = 477;
+    const keyboardHeight = 357;
+    const panelHeight = 135;
+    const panelTop = visibleHeight - panelBottomPx(keyboardHeight, true, true) - panelHeight;
+    expect(panelTop).toBeGreaterThanOrEqual(0);
+  });
+
   it('面板高度上限约半屏（向下取整，不越过窗口一半）', () => {
     const { panelMaxHeightPx } = layout();
     expect(panelMaxHeightPx(800)).toBe(400);
