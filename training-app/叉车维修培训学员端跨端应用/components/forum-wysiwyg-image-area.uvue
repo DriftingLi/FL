@@ -1,0 +1,157 @@
+<template>
+    <!-- 正文图片区（#2689 决策 3）：两态 + 选满隐藏。纯展示件 —— 图片列表与计数由宿主给，
+         动作一律 emit 回去（上传 / 删除 / 预览都在宿主那侧，本件不持状态）。
+         回复浮层（variant=reply）保持旧小方块，等 T3 再收。 -->
+    <view class="image-area">
+        <!-- 未选图态：整宽浅底卡片，一个入口 + 一句限额说明 -->
+        <view v-if="imageCount == 0 && !isReply" class="image-empty" @click="onAdd">
+            <text class="image-empty-title">{{ uploading ? '上传中' : '＋ 添加图片' }}</text>
+            <text class="image-empty-hint">支持添加图片，最多 {{ maxImages }} 张</text>
+        </view>
+        <!-- 已选图态：缩略图行 + 末尾「继续添加」；选满后入口整体消失 -->
+        <view v-else class="image-row">
+            <view v-for="(img, idx) in previewImages" :key="img" class="image-cell">
+                <image class="image-thumb" :src="img" mode="aspectFill" @click="onPreview(idx)" :webp="true" />
+                <view class="image-remove" @click.stop="onRemove(idx)">
+                    <text class="image-remove-text">×</text>
+                </view>
+            </view>
+            <view v-if="imageCount < maxImages" class="image-add" @click="onAdd">
+                <text class="image-add-icon">{{ uploading ? '…' : '＋' }}</text>
+                <text v-if="!isReply" class="image-add-text">{{ uploading ? '上传中' : '继续添加' }}</text>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { computed } from 'vue'
+
+    const props = withDefaults(defineProps<{
+        /** 已上传图片的预览 URL（顺序即展示顺序） */
+        previewImages?: string[],
+        /** 已选张数（含上传中的那张） */
+        imageCount?: number,
+        /** 本载体上限（发帖 9 / 回复 3，由宿主从 constants 取） */
+        maxImages: number,
+        /** 'topic' | 'reply'：回复浮层保持旧小方块 */
+        variant?: string,
+        /** 上传中：入口显示「…」而不是「＋」 */
+        uploading?: boolean,
+    }>(), {
+        previewImages: () => [] as string[],
+        imageCount: 0,
+        variant: 'topic',
+        uploading: false,
+    })
+
+    const emit = defineEmits<{
+        (e: 'add-image'): void
+        (e: 'remove-image', index: number): void
+        (e: 'preview-image', index: number): void
+    }>()
+
+    const isReply = computed<boolean>(() : boolean => props.variant == 'reply')
+
+    function onAdd() : void {
+        emit('add-image')
+    }
+
+    function onRemove(index : number) : void {
+        emit('remove-image', index)
+    }
+
+    function onPreview(index : number) : void {
+        emit('preview-image', index)
+    }
+</script>
+
+<style lang="scss">
+    .image-area {
+        flex-direction: column;
+    }
+
+    /* 未选图态（#2689 决策 3）：整宽浅底卡片，一个入口 + 一句限额说明 */
+    .image-empty {
+        margin-top: 16rpx;
+        padding: 32rpx;
+        border: 2rpx dashed #c0c4cc;
+        border-radius: 12rpx;
+        background-color: #fafbfc;
+        align-items: center;
+    }
+
+    .image-empty-title {
+        font-size: 28rpx;
+        color: #606266;
+    }
+
+    .image-empty-hint {
+        font-size: 22rpx;
+        color: #999999;
+        margin-top: 8rpx;
+    }
+
+    .image-row {
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        margin-top: 16rpx;
+    }
+
+    .image-cell {
+        width: 160rpx;
+        height: 160rpx;
+        margin-right: 16rpx;
+        margin-bottom: 16rpx;
+        position: relative;
+    }
+
+    .image-thumb {
+        width: 160rpx;
+        height: 160rpx;
+        border-radius: 12rpx;
+        background-color: #f0f0f0;
+    }
+
+    .image-remove {
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 40rpx;
+        height: 40rpx;
+        border-radius: 0 0 0 12rpx;
+        background-color: rgba(0, 0, 0, 0.55);
+        align-items: center;
+        justify-content: center;
+    }
+
+    .image-remove-text {
+        font-size: 28rpx;
+        color: #ffffff;
+        line-height: 1;
+    }
+
+    .image-add {
+        width: 160rpx;
+        height: 160rpx;
+        margin-right: 16rpx;
+        margin-bottom: 16rpx;
+        border: 2rpx dashed #c0c4cc;
+        border-radius: 12rpx;
+        background-color: #fafbfc;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .image-add-icon {
+        font-size: 44rpx;
+        color: #909399;
+    }
+
+    .image-add-text {
+        font-size: 22rpx;
+        color: #909399;
+        margin-top: 8rpx;
+    }
+</style>
