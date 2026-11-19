@@ -57,7 +57,8 @@
         </view>
 
         <!-- 半屏浮层（⑪-1/⑪-4）：全屏遮罩阻断阅读（列表滚不动）+ 从底部升起、贴键盘上沿的面板。
-             面板 `bottom` 由 uni.onKeyboardHeightChange 去抖后驱动。输入区按端分流（ADR-0073 ⑤）：
+             视口不随键盘移动的平台用 uni.onKeyboardHeightChange 去抖后驱动 bottom；微信端不重复偏移。
+             输入区按端分流（ADR-0073 ⑤）：
              能力端（App/H5/微信）用 WYSIWYG；支付宝/百度/头条保留记号工具栏 ForumMarkdownInput。
              两态共用同一个草稿（composable 持有）与同一组图片/事件，遮罩点击收起、面板 @click.stop 防误收。 -->
         <view v-if="replyExpanded" class="reply-panel-mask" @click="onCollapseReply">
@@ -149,7 +150,15 @@ import { goBack } from '../../utils/navigation'
     const keyboardTracker = createKeyboardHeightTracker((h : number) => {
         keyboardHeight.value = h
     })
-    const panelBottom = computed<number>(() : number => panelBottomPx(keyboardHeight.value, replyExpanded.value))
+    const panelBottom = computed<number>(() : number => {
+        // 微信编辑器会随键盘缩小可视区，面板已贴在新视口底部，不再重复扣键盘高度。
+        // #ifdef MP-WEIXIN
+        return panelBottomPx(keyboardHeight.value, replyExpanded.value, true)
+        // #endif
+        // #ifndef MP-WEIXIN
+        return panelBottomPx(keyboardHeight.value, replyExpanded.value)
+        // #endif
+    })
     const panelMaxHeight = computed<number>(() : number => panelMaxHeightPx(windowHeight))
 
     /** 正文变更（组件上抛；工具栏插入也走这条回流，故草稿由 composable 持有） */
