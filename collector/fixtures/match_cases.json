@@ -1,0 +1,50 @@
+{
+  "layer7": {
+    "specs": {"brand": "杭叉", "vehicle_type": "CPCD30", "series": "CPCD", "tonnage": 3.0, "config_type": "标准", "mast_type": "二节", "mast_height_mm": 3000},
+    "price": 42000,
+    "candidates": [
+      {"brand": "杭叉", "vehicle_type": "CPCD30", "series": "CPCD", "tonnage": 3.0, "config_type": "标准", "mast_type": "二节", "mast_height_mm": 3000, "original_price": 50000}
+    ],
+    "expect_level": "exact7"
+  },
+  "layer4": {
+    "specs": {"brand": "杭叉", "vehicle_type": "CPCD30", "series": "CPCD", "tonnage": 3.0},
+    "price": 42000,
+    "candidates": [
+      {"brand": "杭叉", "vehicle_type": "CPCD30", "series": "CPCD", "tonnage": 3.0, "config_type": "高配", "mast_type": "三节", "mast_height_mm": 4500, "original_price": 50000}
+    ],
+    "expect_level": "brand_vehicle_series_tonnage"
+  },
+  "layer3": {
+    "specs": {"brand": "合力", "vehicle_type": "CPCD50", "tonnage": 5.0},
+    "price": 60000,
+    "candidates": [
+      {"brand": "合力", "vehicle_type": "CPCD50", "series": "CPCD-X", "tonnage": 5.0, "config_type": "标准", "mast_type": "二节", "mast_height_mm": 3000, "original_price": 80000}
+    ],
+    "expect_level": "brand_vehicle_tonnage"
+  },
+  "median": {
+    "specs": {"brand": "杭叉", "vehicle_type": "CPCD30", "series": "CPCD", "tonnage": 3.0},
+    "price": 42000,
+    "candidates": [
+      {"brand": "杭叉", "vehicle_type": "CPCD30", "series": "CPCD", "tonnage": 3.0, "config_type": "A", "mast_type": "二节", "mast_height_mm": 3000, "original_price": 40000},
+      {"brand": "杭叉", "vehicle_type": "CPCD30", "series": "CPCD", "tonnage": 3.0, "config_type": "B", "mast_type": "二节", "mast_height_mm": 3000, "original_price": 50000},
+      {"brand": "杭叉", "vehicle_type": "CPCD30", "series": "CPCD", "tonnage": 3.0, "config_type": "C", "mast_type": "三节", "mast_height_mm": 4500, "original_price": 60000}
+    ],
+    "expect_level": "brand_vehicle_series_tonnage"
+  },
+  "median_even": {
+    "specs": {"brand": "杭叉", "vehicle_type": "CPCD30", "tonnage": 3.0},
+    "price": 42000,
+    "candidates": [
+      {"brand": "杭叉", "vehicle_type": "CPCD30", "series": "X1", "tonnage": 3.0, "original_price": 40000},
+      {"brand": "杭叉", "vehicle_type": "CPCD30", "series": "X2", "tonnage": 3.0, "original_price": 60000}
+    ],
+    "expect_level": "brand_vehicle_tonnage"
+  },
+  "unmatched": {
+    "specs": {"brand": "陌生牌", "vehicle_type": "XYZ999", "tonnage": 9.0},
+    "price": 10000,
+    "candidates": []
+  }
+}

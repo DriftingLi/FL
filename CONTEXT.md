@@ -185,6 +185,9 @@
 - **清洗状态与剔除原因（clean status / rejection reason）**：市场样本经 ADR-0098 的单模块版本化七规则清洗后的状态（`clean_status`：`raw` / `cleaned` / `rejected`）。批量包价 / 报废无电池 / 占位价 / 面议 / 区间报价 / 车商重复帖各按具名原因剔除（`rejection_reason` 留底可审计）；溢价 > 评估价 × 1.5 是 `cleaned` + `premium_anomaly=true` 的**标记降权**，不是剔除。清洗是纯函数、可重跑（`collector reclean`）而不重爬。
   _Avoid_: 把溢价样本当剔除样本（降权保留竞价证据）；把 `clean_status='raw'` 的行当已清洗可校准。
 - **清洗版本（clean version）**：清洗规则模块的版本（ADR-0098，`collector/clean/rules.py` 的 `CLEAN_VERSION`），落库到 `market_transactions.clean_version`（迁移 000065）——回答「这行是哪版规则判的」。与抽取版本 `PROMPT_VERSION` 各自独立：规则升级后可用同一批留底行重跑、按版本分离两代质量。
+- **匹配层级（match level）**：市场样本匹配原价的降级层次（ADR-0099）——精确 7 字段 → 品牌+车型+系列+吨位 → 品牌+车型+吨位，落 `market_transactions.match_level`。多命中取原价**中位数**，原价区间（`min/max/count/width`）落 `matched_original_range`，区间相对宽度进 `field_confidence["matched_original_price"]`。校准专用，**不复用**评估路径的取最高价模糊匹配。
+- **匹配版本（match version）**：匹配器版本（ADR-0099，`collector/match/matcher.py` 的 `MATCH_VERSION`），落库到 `market_transactions.match_version`（迁移 000066）——与抽取版本、清洗版本各自独立，回答「这行标签是哪版匹配器打的」，规则升级可分离重跑。
+  _Avoid_: 用评估路径的模糊匹配（取最高价）打市场标签（系统性压低偏差）；把未匹配样本当无标签资格（其 `label_eligible` 仍为真，只是标签留空待补原价 `collector rematch`）。
 
 ## 门户与内容
 
