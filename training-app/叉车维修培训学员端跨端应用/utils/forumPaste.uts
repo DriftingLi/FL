@@ -1,0 +1,278 @@
+/**
+ * 剪贴板粘贴 → 纯文本归一（#2658，Parent #2631）
+ *
+ * 为什么需要这一层（第一性原理）：uni-app x 的 <editor> 没有 paste 钩子，Android 原生层把
+ * text/html 的 clipdata 整段丢弃 —— 富文本粘贴既不进 delta、也不发 @input，序列化器的降级 /
+ * 记账路径永远不触发，于是「静默丢失」。本模块把「粘贴」从原生手势里**取回来**：宿主读剪贴板
+ * 原文交给 normalizePastedText，归一成纯文本后走 editorContext.insertText（与打字同一条路径
+ * ⇒ 一定发 @input、一定进序列化），格式按 ADR-0073 修订口径整段降级为纯文本。
+ *
+ * 为什么归一必须自己做：uni.getClipboardData 在多数 Android 应用上返回 text/plain 那一份，
+ * 但只带 text/html 的剪贴板会原样吐出 HTML 源串。若直接 insertText，正文里就会出现裸标签与
+ * &nbsp; —— 正是论坛档明令禁止的产物（AC：产物无 HTML / 无 &nbsp; / 无图片语法）。
+ *
+ * 本文件为纯函数、零 import、不依赖 DOM / uni API，Node 侧经 utils/utsHarness.js 真执行。
+ */
+
+/** 按钮文案（模板不硬编码中文，与按钮集同一套「文案单点在 utils」的约定） */
+export const PASTE_LABEL : string = '粘贴'
+
+/** 粘贴成功后的保真提示：**持续可见**直到正文变化（AC：不静默降级） */
+export const PASTE_NOTICE_DEGRADED : string = '已按纯文本粘贴，原格式未保留'
+
+/** 剪贴板里没有可插入的文字 */
+export const PASTE_NOTICE_EMPTY : string = '剪贴板里没有可粘贴的文字'
+
+/** 读不到剪贴板（部分 Android 设备把读剪贴板列为单独权限） */
+export const PASTE_NOTICE_UNREADABLE : string = '读不到剪贴板，请长按编辑器选「以纯文本形式粘贴」'
+
+/** 写入失败（编辑器被原生层卡住）时的退路：系统菜单的「以纯文本形式粘贴」是已验证可用的路径 */
+export const PASTE_NOTICE_INSERT_FAILED : string = '插入失败，请长按编辑器选「以纯文本形式粘贴」'
+
+/** 原生粘贴被丢弃后的提示：指向本组件自己的「粘贴」按钮（不自动插入，避免误插） */
+export const PASTE_HINT_AFTER_DROP : string = '粘贴没生效？点「粘贴」按钮插入剪贴板里的纯文本'
+
+/** 提示的触发门槛：聚焦不足这么久的多半是「点进来又点走」，不是一次粘贴尝试 */
+export const PASTE_HINT_MIN_FOCUS_MS : number = 800
+
+/**
+ * 保真提示的存活窗口：粘贴自身的 @input 在毫秒级内到达，不能把它当成「作者改了内容」；
+ * 超过这个窗口的第一次输入才算内容变化，提示随之消失。
+ */
+export const PASTE_NOTICE_TTL_MS : number = 400
+
+const BLOCK_TAGS : string[] = [
+    'p', 'div', 'br', 'li', 'ul', 'ol', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'tr', 'td', 'th', 'table', 'blockquote', 'pre', 'section', 'article',
+    'header', 'footer', 'hr', 'figure', 'figcaption', 'dl', 'dt', 'dd'
+]
+
+const LETTERS : string = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
+const DIGITS : string = '0123456789'
+
+/** 标签名：去空白、去前导 /、截到第一个空格或自闭合斜杠 */
+function tagName(raw : string) : string {
+    let s = raw.trim().toLowerCase()
+    if (s.length > 0 && s.charAt(0) == '/') s = s.substring(1)
+    // end 必须是 number 而不是 Int：indexOf 在 UTS 里返回 Number，Int 变量接不住（④c 实测报错）
+    let end : number = s.length
+    const sp = s.indexOf(' ')
+    if (sp >= 0 && sp < end) end = sp
+    const sl = s.indexOf('/')
+    if (sl >= 0 && sl < end) end = sl
+    return s.substring(0, end)
+}
+
+function isBlockTag(name : string) : boolean {
+    for (let i = 0; i < BLOCK_TAGS.length; i++) {
+        if (BLOCK_TAGS[i] == name) return true
+    }
+    return false
+}
+
+/**
+ * 从 '<' 后开始读一个合法标签名（字母开头、字母数字续写），返回其后一个字符的位置；
+ * 名字不合法返回 -1。用来把「真的像标签」和「文中碰巧出现了尖括号」分开。
+ */
+function readTagWord(raw : string, start : number, end : number) : number {
+    let i = start
+    if (i < end && raw.charAt(i) == '/') i++
+    const head = i
+    while (i < end && LETTERS.indexOf(raw.charAt(i)) >= 0) i++
+    if (i == head) return -1
+    while (i < end && DIGITS.indexOf(raw.charAt(i)) >= 0) i++
+    return i
+}
+
+/**
+ * 是不是 HTML 源串（而不是纯文本）。
+ *
+ * 判据刻意保守：尖括号里必须是**合法标签名**，且名字后面紧跟空格 / 斜杠 / 标签收尾。
+ * 光看「< 后面是字母」会把 if (a<b) then c>d 判成标签，然后把它剥成半截正文。
+ */
+function looksLikeHtml(raw : string) : boolean {
+    let i = 0
+    while (i < raw.length) {
+        const lt = raw.indexOf('<', i)
+        if (lt < 0) return false
+        const gt = raw.indexOf('>', lt + 1)
+        if (gt < 0) return false
+        if (gt > lt + 1) {
+            const c = raw.charAt(lt + 1)
+            // <!DOCTYPE / <!-- --> / <![CDATA[：感叹号开头一律当 HTML
+            if (c == '!') return true
+            const wordEnd = readTagWord(raw, lt + 1, gt)
+            if (wordEnd > 0) {
+                const next = wordEnd < gt ? raw.charAt(wordEnd) : ''
+                if (next.length == 0 || next == ' ' || next == '/') return true
+            }
+        }
+        i = gt + 1
+    }
+    return false
+}
+
+/** 追加一个换行，但不在已有的换行后再叠一个（</li></ul> 不该造出空行） */
+function newline(out : string) : string {
+    if (out.length > 0 && out.charAt(out.length - 1) == '\n') return out
+    return out + '\n'
+}
+
+/** 剥标签：块级标签换成换行（保住段落 / 列表的行结构），其余换成空格 */
+function stripHtmlToText(raw : string) : string {
+    let out = ''
+    let i = 0
+    while (i < raw.length) {
+        const lt = raw.indexOf('<', i)
+        if (lt < 0) {
+            out += raw.substring(i)
+            break
+        }
+        if (lt > i) out += raw.substring(i, lt)
+        const gt = raw.indexOf('>', lt + 1)
+        if (gt < 0) {
+            out += raw.substring(lt)
+            break
+        }
+        const rawTag = raw.substring(lt + 1, gt).trim()
+        const name = tagName(rawTag)
+        const closing = rawTag.length > 0 && rawTag.charAt(0) == '/'
+        // 只有「块级闭合」与 br/hr 才换行：开标签也换行会把每个段落拆成两行
+        if (name == 'br' || name == 'hr') out = newline(out)
+        else if (closing && isBlockTag(name)) out = newline(out)
+        else out += ' '
+        i = gt + 1
+    }
+    return out
+}
+
+/** 命名实体 → 字符；未知实体返回空串（调用方据此原样保留） */
+function entityText(name : string) : string {
+    if (name == 'nbsp' || name == '#160' || name == '#xa0') return ' '
+    if (name == 'amp') return '&'
+    if (name == 'lt') return '<'
+    if (name == 'gt') return '>'
+    if (name == 'quot') return '"'
+    if (name == 'apos' || name == '#39') return "'"
+    return ''
+}
+
+/** 解实体：只认常见命名实体与 nbsp 的两种数字写法，其余原样保留（不猜） */
+function decodeEntities(raw : string) : string {
+    let out = ''
+    let i = 0
+    while (i < raw.length) {
+        const ch = raw.charAt(i)
+        if (ch == '&') {
+            const semi = raw.indexOf(';', i + 1)
+            if (semi > i + 1 && semi - i <= 8) {
+                const rep = entityText(raw.substring(i + 1, semi).toLowerCase())
+                if (rep.length > 0) {
+                    out += rep
+                    i = semi + 1
+                    continue
+                }
+            }
+        }
+        out += ch
+        i++
+    }
+    return out
+}
+
+/** 行内空白折叠：连续空格 / 制表 / 不换行空格 → 单个普通空格，再去首尾 */
+function collapseSpaces(line : string) : string {
+    let out = ''
+    let lastSpace = false
+    for (let i = 0; i < line.length; i++) {
+        const ch = line.charAt(i)
+        if (ch == ' ' || ch == '\t' || ch == '\u00a0') {
+            if (!lastSpace) out += ' '
+            lastSpace = true
+        } else {
+            out += ch
+            lastSpace = false
+        }
+    }
+    return out.trim()
+}
+
+/** 行级空白折叠：逐行折叠、连续空行压成一行、去首尾空行 */
+function collapseWhitespace(text : string) : string {
+    const rawLines = text.split('\n')
+    const out : string[] = []
+    for (let i = 0; i < rawLines.length; i++) {
+        const line = collapseSpaces(rawLines[i])
+        if (line.length == 0) {
+            if (out.length > 0 && out[out.length - 1].length > 0) out.push('')
+        } else {
+            out.push(line)
+        }
+    }
+    while (out.length > 0 && out[out.length - 1].length == 0) out.pop()
+    return out.join('\n')
+}
+
+/**
+ * 去掉 Markdown 图片语法 `![alt](url)`。
+ * 论坛档的图片只有下方 `＋` 单一入口（ADR-0025 ⑨ / R3），正文里出现图片语法等于绕过入口。
+ */
+function stripMarkdownImages(raw : string) : string {
+    let out = ''
+    let i = 0
+    while (i < raw.length) {
+        if (raw.charAt(i) == '!' && i + 1 < raw.length && raw.charAt(i + 1) == '[') {
+            const closeBracket = raw.indexOf(']', i + 2)
+            if (closeBracket > 0 && closeBracket + 1 < raw.length && raw.charAt(closeBracket + 1) == '(') {
+                const closeParen = raw.indexOf(')', closeBracket + 2)
+                if (closeParen > 0) {
+                    i = closeParen + 1
+                    continue
+                }
+            }
+        }
+        out += raw.charAt(i)
+        i++
+    }
+    return out
+}
+
+/**
+ * 剪贴板原文 → 可插入编辑器的纯文本。
+ *
+ * 两条分支（判据见 looksLikeHtml）：像 HTML 就剥标签 + 解实体 + 折叠空白；否则只解实体、
+ * 把不换行空格换成普通空格、去首尾。两支最后都去图片语法 —— 产物必须能直接进论坛档。
+ */
+export function normalizePastedText(raw : string) : string {
+    if (raw.length == 0) return ''
+    let text = raw
+    if (looksLikeHtml(text)) {
+        text = stripHtmlToText(text)
+        text = decodeEntities(text)
+        text = collapseWhitespace(text)
+    } else {
+        text = decodeEntities(text)
+        text = text.split('\u00a0').join(' ')
+        text = text.trim()
+    }
+    text = stripMarkdownImages(text)
+    return text.trim()
+}
+
+/**
+ * 失焦时该不该提示「粘贴没生效」。
+ *
+ * 三个条件缺一不可：正文为空（有内容就说明粘贴/输入成功过）、剪贴板里有字（否则没什么可提示的）、
+ * 聚焦够久（短促的点进点出不是粘贴尝试）。判据是纯函数 ⇒ 行为腿可直接钉边界。
+ */
+export function shouldOfferPasteHint(focusedMs : number, contentLength : number, clipboardLength : number) : boolean {
+    if (contentLength > 0) return false
+    if (clipboardLength <= 0) return false
+    return focusedMs >= PASTE_HINT_MIN_FOCUS_MS
+}
+
+/** 保真提示该不该被这次输入清掉（粘贴自身那次 @input 不算内容变化） */
+export function shouldClearPasteNotice(setAtMs : number, nowMs : number) : boolean {
+    if (setAtMs <= 0) return false
+    return nowMs - setAtMs > PASTE_NOTICE_TTL_MS
+}

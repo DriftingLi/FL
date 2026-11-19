@@ -174,6 +174,15 @@ describe('子集安全：产物只用论坛档能渲染的记号', () => {
         expect(md.includes('&')).toBe(false);
     });
 
+    // 粘贴与输入法都会把不换行空格带进来；它长得像空格、但不是空格，留进正文等于把
+    // HTML 的 &nbsp; 换个壳带过去（#2658 产物红线）。
+    it('不换行空格（U+00A0）归一成普通空格', () => {
+        const m = mod();
+        const md = m.serializeDelta(delta([{ insert: 'a\u00a0b' }, { insert: '\n' }])).markdown;
+        expect(md).toBe('a b');
+        expect(md.includes('\u00a0')).toBe(false);
+    });
+
     it('序列化不生成 HTML / 空格实体 / 正文内嵌图片语法', () => {
         const m = mod();
         // 富文本属性（字号/颜色/对齐等）必须降级为纯文本，不能翻译成 inline style / &nbsp; / HTML 标签
