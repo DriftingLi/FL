@@ -443,7 +443,36 @@
         })
     }
 
-    defineExpose({ insertMention })
+    /**
+     * 清空编辑器正文（#2691：宿主在「发送成功」后调用）。
+     *
+     * 为什么必须由组件自己清：正文的**事实源**是 editor 的 delta，宿主只持有序列化产物；
+     * 只把 `replyContent` 置空不会动编辑器 —— 浮层改成常驻挂载后，下次展开会看到已发送的旧正文。
+     * 未 ready 时把待写串一并清掉，避免 ready 后把旧内容补写回来。
+     */
+    function clear() : void {
+        pendingMention = ''
+        pendingPasteText = ''
+        const ctx = editorCtx
+        if (ctx == null) return
+        ctx.clear({
+            success: () => {
+                lastDeltaJson = ''
+                markdownLength.value = 0
+                const noIssues : string[] = []
+                const noActive : string[] = []
+                issues.value = noIssues
+                activeIds.value = noActive
+                pasteNotice.value = ''
+                pasteNoticeAt.value = 0
+                pasteHint.value = ''
+                emit('update:markdown', '')
+                emit('update:issues', noIssues)
+            }
+        })
+    }
+
+    defineExpose({ insertMention, clear })
 
     /**
      * 键盘弹起：只**上报**高度，不在组件内加偏移 —— 回复浮层的面板 bottom 由宿主按同一个值驱动

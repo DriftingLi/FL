@@ -59,39 +59,19 @@
             </view>
         </view>
 
-        <!-- 半屏浮层（⑪-1/⑪-4）：全屏遮罩阻断阅读（列表滚不动）+ 从底部升起、贴键盘上沿的面板。
-             视口不随键盘移动的平台用 uni.onKeyboardHeightChange 去抖后驱动 bottom；微信端不重复偏移。
-             输入区按端分流（ADR-0073 ⑤）：
-             能力端（App/H5/微信）用 WYSIWYG；支付宝/百度/头条保留记号工具栏 ForumMarkdownInput。
-             两态共用同一个草稿（composable 持有）与同一组图片/事件，遮罩点击收起、面板 @click.stop 防误收。 -->
-        <view v-if="replyExpanded" class="reply-panel-mask" @click="onCollapseReply">
-            <view class="reply-panel" :style="{ marginBottom: panelBottom + 'px', maxHeight: panelMaxHeight + 'px' }"
-                @click.stop>
-                <!-- #ifndef MP-ALIPAY || MP-BAIDU || MP-TOUTIAO -->
-                <ForumWysiwygInput v-if="useWysiwyg" ref="replyWysiwygRef" :preview-images="replyPreviewImages"
-                    :image-count="replyImages.length" variant="reply" :max-images="replyImageLimit"
-                    :maxlength="10000" placeholder="写下你的回复..." :uploading="uploadingReplyImage"
-                    @update:markdown="onReplyContentChange"
-                    @add-image="onAddReplyImage" @remove-image="onRemoveReplyImage"
-                    @preview-image="onPreviewReplyImage" @keyboard-height="keyboardTracker" />
-                <!-- #endif -->
-                <ForumMarkdownInput v-if="!useWysiwyg" :content="replyContent" :preview-images="replyPreviewImages"
-                    :image-count="replyImages.length" variant="reply" :max-images="replyImageLimit"
-                    :maxlength="10000" placeholder="写下你的回复..." :uploading="uploadingReplyImage"
-                    @update:content="onReplyContentChange"
-                    @add-image="onAddReplyImage" @remove-image="onRemoveReplyImage"
-                    @preview-image="onPreviewReplyImage" />
-                <view class="reply-actions">
-                    <view class="reply-collapse" @click="onCollapseReply">
-                        <text class="reply-collapse-text">收起</text>
-                    </view>
-                    <view class="reply-btn" :class="{ disabled: !canSubmitReply }"
-                        @click="onSubmitReply">
-                        <text class="reply-btn-text">{{ submitting ? '发送中' : '发送' }}</text>
-                    </view>
-                </view>
-            </view>
-        </view>
+        <!-- 半屏浮层（⑪-1/⑪-4；#2691 重排）：遮罩 + 头部 + 输入区 + 底部操作区整体收进
+             `forum-reply-panel`（本页 600 行预算，按 ADR-0023 ③「拆而不覆盖」处理）。
+             本页只接线：展开态 / 已挂载态 / 面板尺寸 / 头部标题 / 草稿与图片 / 提交与收起。 -->
+        <ForumReplyPanel v-if="replyMounted" ref="replyPanelRef" :mounted="replyMounted"
+            :expanded="replyExpanded" :panel-bottom="panelBottom" :panel-max-height="panelMaxHeight"
+            :header-text="replyHeaderText" :use-wysiwyg="useWysiwyg" :content="replyContent"
+            :images="replyImages" :preview-images="replyPreviewImages" :uploading="uploadingReplyImage"
+            :submitting="submitting" :can-submit="canSubmitReply" :max-images="replyImageLimit"
+            :show-add-image="showReplyAddImage"
+            @collapse="onCollapseReply" @update:content="onReplyContentChange"
+            @add-image="onAddReplyImage" @remove-image="onRemoveReplyImage"
+            @preview-image="onPreviewReplyImage" @keyboard-height="keyboardTracker"
+            @submit="onSubmitReply" />
 
         <!-- 举报弹窗 -->
         <ForumReportDialog v-if="showReportModal" :report-target-type="reportTargetType"
@@ -107,10 +87,7 @@
     import ForumTopicBody from './components/forum-topic-body.uvue'
     import ForumReplyList from './components/forum-reply-list.uvue'
     import ForumReportDialog from './components/forum-report-dialog.uvue'
-    import ForumMarkdownInput from './components/forum-markdown-input.uvue'
-    // #ifndef MP-ALIPAY || MP-BAIDU || MP-TOUTIAO
-    import ForumWysiwygInput from '../../components/forum-wysiwyg-input.uvue'
-    // #endif
+    import ForumReplyPanel from './components/forum-reply-panel.uvue'
     import { useTopicDetail } from '../../composables/useTopicDetail'
     import { useReplyComposer } from '../../composables/useReplyComposer'
     import { useReport } from '../../composables/useReport'
@@ -127,9 +104,12 @@ import { goBack } from '../../utils/navigation'
     const replyImageLimit : number = FORUM_MAX_REPLY_IMAGES
 
     const windowHeight = uni.getSystemInfoSync().windowHeight
-    /** WYSIWYG 组件实例：@某人 点击时经 expose 的 insertMention 写入（一次性点击写入，非状态投影） */
-    type ReplyWysiwygInstance = { insertMention : (name : string) => void }
-    const replyWysiwygRef = ref<ReplyWysiwygInstance | null>(null)
+    /** 回复浮层实例：@某人 点击时经 expose 的 insertMention 写入；发送成功后经 clear 清正文 */
+    type ReplyPanelInstance = {
+        insertMention : (name : string) => void,
+        clear : () => void,
+    }
+    const replyPanelRef = ref<ReplyPanelInstance | null>(null)
 
     // ===== 三域 composable 接线：详情核心 / 回复输入 / 举报 =====
     const detail = useTopicDetail()
@@ -143,12 +123,25 @@ import { goBack } from '../../utils/navigation'
     const composer = useReplyComposer()
     const {
         replyContent, replyImages, replyPreviewImages, uploadingReplyImage, submitting,
-        canSubmitReply, useWysiwyg,
-        onAddReplyImage, onRemoveReplyImage, onPreviewReplyImage,
+        canSubmitReply, useWysiwyg, replyHeaderText,
+        onReplyToUser, onAddReplyImage, onRemoveReplyImage, onPreviewReplyImage,
     } = composer
 
     /** 底部回复浮层展开态（点常驻触发条 / @某人 升起半屏面板，遮罩点击或发送成功后收起） */
     const replyExpanded = ref<boolean>(false)
+    /**
+     * 浮层是否**已挂载过**（#2691 草稿保留）。
+     *
+     * 首次打开必须在可见状态下挂载：editor 在 `display:none` 里 ready 可能失败。故首次打开照旧
+     * 挂载（`replyMounted` 置 true 且 `replyExpanded` 置 true），之后收起只切隐藏态、不卸载 ——
+     * 文字 / 图片 / `@` 态都留在组件内，重开即见。
+     */
+    const replyMounted = ref<boolean>(false)
+
+    /** 底部「＋ 添加图片」入口：仅能力端（弱端输入区自带入口，避免重复）；选满即消失 */
+    const showReplyAddImage = computed<boolean>(() : boolean => {
+        return useWysiwyg.value && replyImages.value.length < replyImageLimit
+    })
     // ⑪-4：去抖后的键盘高度，驱动浮层面板 bottom 贴键盘上沿（replyPanelLayout 纯逻辑，③ 可执行）。
     const keyboardHeight = ref<number>(0)
     const keyboardTracker = createKeyboardHeightTracker((h : number) => {
@@ -347,6 +340,15 @@ import { goBack } from '../../utils/navigation'
     }
 
     // ===== 回复某条回复 =====
+    /**
+     * 升起半屏浮层（触发条见模板 `.reply-trigger`，浮层见 `forum-reply-panel`）。
+     * 首次打开才挂载（见 `replyMounted` 注释）；已挂载过则只切回可见。
+     */
+    function openReplyPanel() : void {
+        replyMounted.value = true
+        replyExpanded.value = true
+    }
+
     function onReplyToUserById(id : number) : void {
         const r = replyById(id)
         if (r == null) return
@@ -354,12 +356,14 @@ import { goBack } from '../../utils/navigation'
         // 先展开、等输入组件挂载完成再写草稿：收起态下组件未挂载，原生 <input> 的
         // :value 不认「挂载那一帧之前」刚写的值（实测点回复后框是空的）。nextTick 后
         // 再写，走的是「已挂载后 :value 反应式更新」这条与工具栏插入同源、已验证可用的路径。
-        replyExpanded.value = true
+        // #2691：`@` 态记在 composable（草稿的一部分），头部标题据此显示「回复 @昵称」。
+        onReplyToUser(name)
+        openReplyPanel()
         nextTick(() => {
             if (useWysiwyg.value) {
                 // WYSIWYG 的 delta 留在组件内，宿主不能直写 replyContent（那样只改草稿、编辑器无感）。
-                // 经组件 expose 的 insertMention 走 insertText 逃生舱；组件 ready 前的点击由它内部暂存。
-                const w = replyWysiwygRef.value
+                // 经浮层 expose 的 insertMention 转给输入区走 insertText 逃生舱；组件 ready 前的点击由它内部暂存。
+                const w = replyPanelRef.value
                 if (w != null) w.insertMention(name)
             } else {
                 // 平台例外：记号输入区是受控 :value，直接改草稿即回显（原路径保留）
@@ -368,9 +372,8 @@ import { goBack } from '../../utils/navigation'
         })
     }
 
-    /** 升起 / 收起半屏浮层（触发条见模板 `.reply-trigger`，浮层见 `.reply-panel`） */
     function onOpenReply() : void {
-        replyExpanded.value = true
+        openReplyPanel()
     }
 
     function onCollapseReply() : void {
@@ -384,7 +387,13 @@ import { goBack } from '../../utils/navigation'
     function onSubmitReply() : void {
         composer.onSubmitReply(topicId.value, (reply : ForumReply) => {
             afterReplyPosted(reply)
-            // 发送成功后收起，回到极简触发条（onPosted 仅在提交成功路径触发，见 useReplyComposer）
+            // 发送成功：先清编辑器正文（此刻面板仍可见，原生 clear 命令已发出），再收起。
+            // 浮层常驻挂载后不清会残留已发送内容 —— 文字由组件 clear() 清，图片与 @ 态由 composable 清。
+            if (useWysiwyg.value) {
+                const w = replyPanelRef.value
+                if (w != null) w.clear()
+            }
+            // 收起，回到极简触发条（onPosted 仅在提交成功路径触发，见 useReplyComposer）
             replyExpanded.value = false
         })
     }
@@ -482,51 +491,8 @@ import { goBack } from '../../utils/navigation'
         border-top: 1rpx solid #eeeeee;
     }
 
-    /* 半屏浮层（⑪-1）：全屏遮罩阻断阅读（列表滚不动）；面板贴键盘上沿（bottom 由 :style 动态给）。
-       形状照仓内先例 pages/practice/practice-do.uvue 的 .answer-card-mask / .answer-card-sheet。 */
-    .reply-panel-mask {
-        position: fixed;
-        left: 0;
-        top: 0;
-        right: 0;
-        bottom: 0;
-        background-color: rgba(0, 0, 0, 0.5);
-        justify-content: flex-end;
-    }
-
-    /* 面板是遮罩的普通 flex 子（**不做 fixed**），靠 mask 的 flex-end 落到底、用 margin-bottom 抬到
-       键盘上沿 —— 照 practice-do .answer-card-sheet 的可用形态。旧写法把面板也做成 fixed，会被
-       fixed 遮罩在 z 序上盖住 ⇒ 点输入先命中遮罩而收起（①a 真机抓获）。 */
-    .reply-panel {
-        background-color: #ffffff;
-        border-radius: 24rpx 24rpx 0 0;
-        padding: 24rpx;
-        flex-direction: column;
-    }
-
-    .reply-actions {
-        flex-direction: row;
-        justify-content: flex-end;
-        align-items: center;
-        margin-top: 8rpx;
-    }
-
-    .reply-btn {
-        background-color: $primary-color;
-        padding: 16rpx 32rpx;
-        border-radius: 36rpx;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .reply-btn.disabled {
-        background-color: #cccccc;
-    }
-
-    .reply-btn-text {
-        font-size: 28rpx;
-        color: #ffffff;
-    }
+    /* 半屏浮层的遮罩 / 面板 / 头部 / 底部操作区样式随组件搬到
+       `pages/forum/components/forum-reply-panel.uvue`（#2691，ADR-0023 ③ 拆而不覆盖）。 */
 
     /* 收起态：极简触发条（复刻输入行的胶囊形态，占位远小于展开态） */
     .reply-trigger {
@@ -548,18 +514,5 @@ import { goBack } from '../../utils/navigation'
         font-size: 28rpx;
         color: $primary-color;
         font-weight: bold;
-    }
-
-    /* 展开态：发送按钮左侧的「收起」 */
-    .reply-collapse {
-        padding: 16rpx 8rpx;
-        margin-right: 24rpx;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .reply-collapse-text {
-        font-size: 28rpx;
-        color: #666666;
     }
 </style>

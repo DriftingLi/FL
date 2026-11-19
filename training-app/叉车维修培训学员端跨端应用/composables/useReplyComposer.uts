@@ -33,6 +33,17 @@ export type UseReplyComposerResult = {
     canSubmitReply : ComputedRef<boolean>
     /** 输入区形态：能力端 WYSIWYG，平台例外（支付宝/百度/头条）恒 false ⇒ 页面挂记号工具栏 */
     useWysiwyg : ComputedRef<boolean>
+    /**
+     * 本次草稿的 `@` 目标昵称（空串 = 无 `@`）。
+     *
+     * 为什么放在这里而不是页面：`@` 态是**草稿的一部分**（发送成功要跟文字/图片一起清），
+     * 页面壳层零自持状态（移动端 AGENTS.md「代码规范」）。
+     */
+    replyMentionName : Ref<string>
+    /** 浮层头部标题（#2691）：有 `@` 且正文里确实带着它 ⇒「回复 @昵称」，否则「回复」 */
+    replyHeaderText : ComputedRef<string>
+    /** 记下本次 `@` 的目标（`@某人` 唤起时由页面写入，正文由输入区自己插） */
+    onReplyToUser : (name : string) => void
     onSubmitReply : (topicId : number, onPosted : (reply : ForumReply) => void) => Promise<void>
     onAddReplyImage : () => void
     onRemoveReplyImage : (index : number) => void
@@ -66,6 +77,25 @@ export function useReplyComposer() : UseReplyComposerResult {
         return replyContent.value.trim().length > 0 && !submitting.value
     })
 
+    /**
+     * `@` 态（#2691）：只记「这次是回复谁」，正文里的 `@昵称` 由输入区自己插。
+     * 头部标题按「正文里是否真的还带着它」判 —— 用户把 `@昵称` 删掉后标题自动退回「回复」，
+     * 不会出现「头说回复 @张三、正文里没有张三」的错位。
+     */
+    const replyMentionName = ref<string>('')
+
+    const replyHeaderText = computed<string>(() : string => {
+        const name = replyMentionName.value
+        if (name.length > 0 && replyContent.value.indexOf('@' + name) >= 0) {
+            return '回复 @' + name
+        }
+        return '回复'
+    })
+
+    function onReplyToUser(name : string) : void {
+        replyMentionName.value = name
+    }
+
     /** 提交回复（WYSIWYG 序列化产物固定按 Markdown 落库） */
     async function onSubmitReply(topicId : number, onPosted : (reply : ForumReply) => void) : Promise<void> {
         if (replyContent.value.trim().length == 0) {
@@ -77,8 +107,11 @@ export function useReplyComposer() : UseReplyComposerResult {
         try {
             const reply = await replyForumTopicApi(topicId, replyContent.value.trim(), replyImages.value, FORMAT_MARKDOWN)
             onPosted(reply)
+            // 发送成功 = 本次草稿整体作废（#2691）：文字 / 图片 / `@` 态一起清，回到极简触发条。
+            // 编辑器内部正文由页面在 onPosted 回调里经组件 expose 的 clear() 清（delta 的事实源在组件内）。
             replyContent.value = ''
             replyImages.value = []
+            replyMentionName.value = ''
             uni.showToast({ title: '回复成功', icon: 'success' })
         } catch (e) {
             console.error('[forum-detail] reply failed:', e)
@@ -96,6 +129,9 @@ export function useReplyComposer() : UseReplyComposerResult {
         submitting: submitting,
         canSubmitReply: canSubmitReply,
         useWysiwyg: useWysiwyg,
+        replyMentionName: replyMentionName,
+        replyHeaderText: replyHeaderText,
+        onReplyToUser: (name : string) => onReplyToUser(name),
         onSubmitReply: (topicId : number, onPosted : (reply : ForumReply) => void) => onSubmitReply(topicId, onPosted),
         onAddReplyImage: () => picker.onAddImage(),
         onRemoveReplyImage: (index : number) => picker.onRemoveImage(index),
