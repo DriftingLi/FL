@@ -1,10 +1,12 @@
 """collector 领域数据结构。
 
-字段与迁移 000063（+ #2673 的 000064 label_eligible、#2674 的 000065 clean_version）一一对应。
+字段与迁移 000063（+ #2673 的 000064 label_eligible、#2674 的 000065 clean_version、
+#2675 的 000066 match_version）一一对应。
 raw 留底三列（渠道 / 来源 URL / 原始描述 jsonb）不可变（买受人身份按 PIPL 剥离）；
 抽取结果（结构化规格 / 置信度 / 价格 / 抽取版本 / 标签资格）由 #2673 的抽取管线写回，
-清洗状态 / 剔除原因 / 溢价标记由 #2674 的单模块版本化规则写回；
-匹配 / 残值率标签仍由后续票填。新增字段只需改这里 + store 列清单 + 迁移。
+清洗状态 / 剔除原因 / 溢价标记由 #2674 的单模块版本化规则写回，
+匹配层级 / 原价区间 / 残值率标签由 #2675 的校准专用匹配器写回。
+新增字段只需改这里 + store 列清单 + 迁移。
 """
 
 from __future__ import annotations
@@ -36,6 +38,7 @@ class RawSample:
     field_confidence: dict[str, Any] = field(default_factory=dict)
     extraction_version: str | None = None
     match_level: str | None = None
+    match_version: str | None = None
     matched_original_range: dict[str, Any] = field(default_factory=dict)
     premium_anomaly: bool = False
     residual_rate_label: float | None = None

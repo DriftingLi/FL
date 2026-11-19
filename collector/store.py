@@ -30,6 +30,7 @@ _COLUMNS = (
     "field_confidence",
     "extraction_version",
     "match_level",
+    "match_version",
     "matched_original_range",
     "premium_anomaly",
     "residual_rate_label",
@@ -121,6 +122,45 @@ def fetch_samples(conn: "psycopg.Connection") -> list[tuple[int, Any]]:
         )
         result.append((sid, sample))
     return result
+
+
+_PRICE_CANDIDATE_COLUMNS = (
+    "brand", "vehicle_type", "series", "tonnage", "config_type",
+    "mast_type", "mast_height_mm", "original_price",
+)
+
+
+def load_price_candidates(conn: "psycopg.Connection") -> list[dict[str, Any]]:
+    """从 original_prices 直读全部匹配候选（#2675）。
+
+    与后端 eval 路径读同一张真表，但匹配语义是独立的纯函数（分层 + 中位数），
+    不复用取最高价的模糊匹配。候选量级为数百行，全量读入即可。
+    """
+    rows = conn.execute(
+        "SELECT " + ", ".join(_PRICE_CANDIDATE_COLUMNS) + " FROM original_prices"
+    ).fetchall()
+    return [dict(zip(_PRICE_CANDIDATE_COLUMNS, row)) for row in rows]
+
+
+def update_match_result(
+    conn: "psycopg.Connection", sample_id: int, matched: Any
+) -> None:
+    """把匹配结果写回匹配/标签列（供补原价后重跑匹配；抽取/清洗列不动）。"""
+    conn.execute(
+        "UPDATE market_transactions SET "
+        "match_level = %s, match_version = %s, matched_original_price = %s, "
+        "matched_original_range = %s, residual_rate_label = %s, "
+        "field_confidence = %s WHERE id = %s",
+        (
+            matched.match_level,
+            matched.match_version,
+            matched.matched_original_price,
+            _jsonb(matched.matched_original_range, "matched_original_range"),
+            matched.residual_rate_label,
+            _jsonb(matched.field_confidence, "field_confidence"),
+            sample_id,
+        ),
+    )
 
 
 def update_clean_result(

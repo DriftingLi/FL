@@ -1,14 +1,15 @@
-"""collector CLI：fixture 进 → 抽取 → 清洗 → market_transactions 行 + 抽检队列出。
+"""collector CLI：fixture 进 → 抽取 → 清洗 → 匹配 → market_transactions 行 + 抽检队列出。
 
-三段分离（spec #2671）：采集层只 fetch + 原始留底，抽取与清洗是独立的纯函数阶段，
-入库只做写。清洗不依赖抓取，故可重跑：
+三段分离（spec #2671）：采集层只 fetch + 原始留底，抽取 / 清洗 / 匹配是独立的纯函数
+阶段，入库只做写。清洗与匹配不依赖抓取，故可重跑：
 
     python3 -m collector.cli batch <fixture.html> [--dsn URL] [--search-path SCHEMA]
     python3 -m collector.cli reclean [--dsn URL] [--search-path SCHEMA]
+    python3 -m collector.cli rematch [--dsn URL] [--search-path SCHEMA]
 
 `--dsn` 缺省取环境变量 DATABASE_URL，`SECRET_KEY` 用于解密 ai_configs.api_key
 （均与后端同源）。`--search-path` 用于契约测试把整条链路收窄在随机 schema。
-抽取 / 清洗均可注入 seam：测试用录制 fixture + 纯函数打桩（确定性、不测 prompt 质量）。
+抽取 / 清洗 / 匹配均可注入 seam：测试用录制 fixture + 纯函数打桩（确定性、不测 prompt 质量）。
 """
 
 from __future__ import annotations
@@ -23,12 +24,15 @@ from .clean import CLEAN_REVIEW_REASONS, clean
 from .extract.config import FEATURE_KEY, resolve_config
 from .extract.llm import extract
 from .extract.service import apply_extraction
+from .match import match
 from .parsers.rmfysszc import parse_announcement
 from .store import (
     enqueue_review,
     fetch_samples,
     insert_sample,
+    load_price_candidates,
     update_clean_result,
+    update_match_result,
 )
 
 
@@ -40,11 +44,14 @@ def run_batch(
     extractor: Callable | None = None,
     secret_key: str | None = None,
     cleaner: Callable | None = None,
+    matcher: Callable | None = None,
+    price_candidates: list[dict] | None = None,
 ) -> int:
-    """处理一份 fixture：解析 → 直读配置 → 抽取 → 清洗 → 写回同一行 + 抽检入队。
+    """处理一份 fixture：解析 → 配置 → 抽取 → 清洗 → 匹配 → 写回同一行 + 抽检入队。
 
-    返回落库行数。extractor / cleaner 为可注入 seam：测试用录制 fixture 打桩；
-    生产不传则走真实 LLM 调用 + 版本化清洗规则模块。
+    返回落库行数。extractor / cleaner / matcher 为可注入 seam：测试用录制 fixture
+    打桩；生产不传则走真实 LLM + 版本化清洗规则 + 校准专用分层匹配器。
+    price_candidates 可注入以避免测试里真建 original_prices 表。
     """
     import psycopg
     from psycopg import sql
@@ -60,6 +67,7 @@ def run_batch(
 
     secret_key = secret_key if secret_key is not None else os.environ.get("SECRET_KEY", "")
     clean_fn = cleaner or clean
+    match_fn = matcher or match
 
     with psycopg.connect(dsn) as conn:
         if search_path:
@@ -68,13 +76,19 @@ def run_batch(
             )
         # 配置直读与写回同在一个连接 / 事务：要么整批样本+队列行都在，要么都不在。
         config = resolve_config(conn, FEATURE_KEY, secret_key)
+        candidates = (
+            price_candidates if price_candidates is not None
+            else load_price_candidates(conn)
+        )
         with conn.transaction():
             for sample in samples:
                 extraction = extract(sample.raw_description["body"], config, extractor)
                 updated, review = apply_extraction(sample, extraction)
                 # 清洗是独立纯函数阶段：只吃已抽取样本 + 同批样本（去重信号）。
                 cleaned, clean_review = clean_fn(updated, existing=samples)
-                sample_id = insert_sample(conn, cleaned)
+                # 匹配是独立纯函数阶段：从 PG 直读候选原价，取中位数、不取最高价。
+                matched = match_fn(cleaned, candidates)
+                sample_id = insert_sample(conn, matched)
                 for reason, detail in review + clean_review:
                     enqueue_review(conn, sample_id, reason, detail)
     return len(samples)
@@ -122,6 +136,43 @@ def run_reclean(
     return len(rows)
 
 
+def run_rematch(
+    dsn: str | None = None,
+    search_path: str = "",
+    *,
+    matcher: Callable | None = None,
+    price_candidates: list[dict] | None = None,
+) -> int:
+    """补原价后重跑匹配：读回已入库行，重算匹配/标签列，不重爬、不动抽取/清洗。
+
+    未匹配样本 label_eligible 保留、residual_rate_label 留空，补入原价后重跑可回收标签。
+    返回重算行数。
+    """
+    import psycopg
+    from psycopg import sql
+
+    dsn = dsn or os.environ.get("DATABASE_URL") or ""
+    if not dsn:
+        raise RuntimeError("缺少 DATABASE_URL（或 --dsn）")
+
+    match_fn = matcher or match
+    with psycopg.connect(dsn) as conn:
+        if search_path:
+            conn.execute(
+                sql.SQL("SET search_path TO {}").format(sql.Identifier(search_path))
+            )
+        candidates = (
+            price_candidates if price_candidates is not None
+            else load_price_candidates(conn)
+        )
+        rows = fetch_samples(conn)
+        with conn.transaction():
+            for sample_id, sample in rows:
+                matched = match_fn(sample, candidates)
+                update_match_result(conn, sample_id, matched)
+    return len(rows)
+
+
 def _add_common_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--dsn", default=None, help="PG 连接串（缺省取 DATABASE_URL）")
     parser.add_argument(
@@ -140,13 +191,18 @@ def main(argv: list[str] | None = None) -> int:
     reclean = sub.add_parser("reclean", help="重跑清洗（读回已入库行，不重爬）")
     _add_common_args(reclean)
 
+    rematch = sub.add_parser("rematch", help="补原价后重跑匹配（读回已入库行，不重爬）")
+    _add_common_args(rematch)
+
     args = parser.parse_args(argv)
 
     try:
         if args.command == "batch":
             count = run_batch(args.fixture, args.dsn, args.search_path)
-        else:
+        elif args.command == "reclean":
             count = run_reclean(args.dsn, args.search_path)
+        else:
+            count = run_rematch(args.dsn, args.search_path)
     except (OSError, RuntimeError) as exc:
         print(f"collector {args.command} 失败: {exc}", file=sys.stderr)
         return 1

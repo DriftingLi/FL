@@ -67,10 +67,31 @@ class CollectorBatchE2EContractTest(unittest.TestCase):
 
         cls.conn.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(cls.schema)))
         # 执行真实迁移文件（不是复制 DDL）：000063 建样本表，000064 加标记列 + 队列，
-        # 000065 加清洗版本列（#2674 收口）。
-        for pattern in ("000063_*.up.sql", "000064_*.up.sql", "000065_*.up.sql"):
+        # 000065 加清洗版本列（#2674），000066 加匹配版本列（#2675 收口）。
+        for pattern in (
+            "000063_*.up.sql", "000064_*.up.sql", "000065_*.up.sql", "000066_*.up.sql",
+        ):
             migration = next(MIGRATION_DIR.glob(pattern))
             cls.conn.execute(migration.read_text(encoding="utf-8"))
+        cls.conn.commit()
+
+        # 最小 original_prices 形状（镜像 000001 baseline 被读取的 7 字段 + 原价），
+        # 让「从 PG 直读候选原价 + 分层匹配」在本 schema 内可断言。
+        cls.conn.execute(
+            """
+            CREATE TABLE original_prices (
+                id BIGSERIAL PRIMARY KEY,
+                brand VARCHAR(50) NOT NULL,
+                vehicle_type VARCHAR(50) NOT NULL,
+                series VARCHAR(50) NOT NULL,
+                tonnage NUMERIC(5,2) NOT NULL,
+                config_type VARCHAR(50) NOT NULL,
+                mast_type VARCHAR(50) NOT NULL,
+                mast_height_mm INTEGER NOT NULL,
+                original_price NUMERIC(12,2) NOT NULL
+            )
+            """
+        )
         cls.conn.commit()
 
         # 最小 ai_configs / ai_feature_bindings 形状（镜像 000001 baseline 被读取的列），
@@ -333,6 +354,202 @@ class CollectorBatchE2EContractTest(unittest.TestCase):
         )
         self.assertEqual(rows[0][0], "rejected")
         self.assertIn("bulk_lot_no_per_unit", rows[0][1])
+
+    # ---- #2675 匹配阶段：分层 / 中位数 / 残值率 / 未匹配留空 ----
+
+    def test_match_layer_median_residual_rate_written_back(self):
+        """fixture（杭叉 CPCD30/series CPCD/3t，成交价 42000）→ 4 字段层命中，
+        播 3 条原价候选 40000/50000/60000 → 中位数 50000、残值率 0.84、区间入表、版本落库。
+        """
+        from collector.cli import run_batch
+
+        with self.psycopg.connect(
+            DATABASE_URL, options=f"-c search_path={self.schema}"
+        ) as conn:
+            with conn.cursor() as cur:
+                cur.executemany(
+                    "INSERT INTO original_prices "
+                    "(brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                    [
+                        ("杭叉", "CPCD30", "CPCD", 3.0, "A", "二节", 3000, 40000),
+                        ("杭叉", "CPCD30", "CPCD", 3.0, "B", "二节", 3000, 50000),
+                        ("杭叉", "CPCD30", "CPCD", 3.0, "C", "三节", 4500, 60000),
+                    ],
+                )
+            conn.commit()
+
+        count = run_batch(
+            str(FIXTURES / "rmfysszc_announcement.html"),
+            DATABASE_URL,
+            search_path=self.schema,
+            extractor=_stub_from_file("rmfysszc_extraction_stub.json"),
+            secret_key=MASTER_KEY,
+        )
+        self.assertEqual(count, 1)
+        rows = self._read(
+            "SELECT match_level, matched_original_price, matched_original_range, "
+            "residual_rate_label, match_version, label_eligible "
+            "FROM market_transactions WHERE source_url = %s",
+            (EXPECTED_SOURCE_URL,),
+        )
+        # 该 URL 在前面的用例也插过行；取刚插入的匹配结果不为真空的那条。
+        matched = [r for r in rows if r[0] is not None]
+        self.assertGreaterEqual(len(matched), 1)
+        level, original, rng, residual, version, eligible = matched[0]
+        self.assertEqual(level, "brand_vehicle_series_tonnage")
+        self.assertEqual(float(original), 50000.0)  # 中位数，不是最高价 60000
+        self.assertEqual(rng["min"], 40000.0)
+        self.assertEqual(rng["max"], 60000.0)
+        self.assertEqual(rng["count"], 3)
+        self.assertAlmostEqual(float(residual), 42000 / 50000, places=6)
+        self.assertEqual(version, "v1")  # 精确钉版本，不只 startswith('v')
+        self.assertTrue(eligible)
+
+    def test_unmatched_keeps_label_eligible_with_null_label(self):
+        """无候选原价 → 不写标签、不进校准集，但 label_eligible 保持价格抽取成功语义。"""
+        from collector.cli import run_batch
+
+        count = run_batch(
+            str(FIXTURES / "rmfysszc_announcement.html"),
+            DATABASE_URL,
+            search_path=self.schema,
+            extractor=_stub_from_file("rmfysszc_extraction_stub.json"),
+            secret_key=MASTER_KEY,
+            price_candidates=[],  # 强制无匹配，且本用例不依赖前面播的价格表
+        )
+        self.assertEqual(count, 1)
+        rows = self._read(
+            "SELECT match_level, matched_original_price, residual_rate_label, label_eligible "
+            "FROM market_transactions WHERE source_url = %s ORDER BY id DESC LIMIT 1",
+            (EXPECTED_SOURCE_URL,),
+        )
+        self.assertEqual(len(rows), 1)
+        self.assertIsNone(rows[0][0])
+        self.assertIsNone(rows[0][1])
+        self.assertIsNone(rows[0][2])
+        self.assertTrue(rows[0][3])
+
+    def _run_match_layer(self, url, extraction, candidates):
+        """用 match_layer.html fixture + 指定抽取 payload 在真 PG 上跑一次 batch。"""
+        from collector.cli import run_batch
+
+        payload = json.dumps(extraction, ensure_ascii=False)
+        count = run_batch(
+            str(FIXTURES / "match_layer.html"),
+            DATABASE_URL,
+            search_path=self.schema,
+            extractor=_stub_from_payload(payload),
+            secret_key=MASTER_KEY,
+            price_candidates=candidates,
+        )
+        self.assertEqual(count, 1)
+        return self._read(
+            "SELECT match_level, matched_original_price, residual_rate_label, match_version "
+            "FROM market_transactions WHERE source_url = %s ORDER BY id DESC LIMIT 1",
+            (url,),
+        )[0]
+
+    def test_exact7_layer_on_real_pg(self):
+        """7 字段全齐 → exact7 层命中，版本精确为 v1（不是只 startswith('v')）。"""
+        extraction = {
+            "structured_specs": {
+                "brand": "杭叉", "model": "CPCD30", "series": "CPCD", "tonnage": 3.0,
+                "config_type": "标准", "mast_type": "二节", "mast_height_mm": 3000,
+            },
+            "field_confidence": {"brand": 0.9},
+            "raw_price": 42000, "raw_price_kind": "deal",
+        }
+        candidates = [{
+            "brand": "杭叉", "vehicle_type": "CPCD30", "series": "CPCD", "tonnage": 3.0,
+            "config_type": "标准", "mast_type": "二节", "mast_height_mm": 3000,
+            "original_price": 50000.0,
+        }]
+        url = "https://www.rmfysszc.com/auction/notice/2026/12001.html"
+        level, original, residual, version = self._run_match_layer(url, extraction, candidates)
+        self.assertEqual(level, "exact7")
+        self.assertEqual(float(original), 50000.0)
+        self.assertAlmostEqual(float(residual), 42000 / 50000, places=6)
+        self.assertEqual(version, "v1")
+
+    def test_brand_vehicle_tonnage_layer_on_real_pg(self):
+        """只给 品牌+车型+吨位（缺 series/config/mast）→ 3 字段层命中。"""
+        extraction = {
+            "structured_specs": {"brand": "合力", "model": "CPCD50", "tonnage": 5.0},
+            "field_confidence": {"brand": 0.9},
+            "raw_price": 60000, "raw_price_kind": "deal",
+        }
+        candidates = [{
+            "brand": "合力", "vehicle_type": "CPCD50", "series": "CPCD-X", "tonnage": 5.0,
+            "config_type": "标准", "mast_type": "二节", "mast_height_mm": 3000,
+            "original_price": 80000.0,
+        }]
+        url = "https://www.rmfysszc.com/auction/notice/2026/12001.html"
+        level, original, residual, version = self._run_match_layer(url, extraction, candidates)
+        self.assertEqual(level, "brand_vehicle_tonnage")
+        self.assertEqual(float(original), 80000.0)
+        self.assertAlmostEqual(float(residual), 60000 / 80000, places=6)
+
+    def test_wrong_value_candidate_excluded_on_real_pg(self):
+        """列齐全但规格值不同的原价不得命中——真表全 NOT NULL，此用例防「全表误匹配」。"""
+        extraction = {
+            "structured_specs": {
+                "brand": "杭叉", "model": "CPCD30", "series": "CPCD", "tonnage": 3.0,
+            },
+            "field_confidence": {"brand": 0.9},
+            "raw_price": 42000, "raw_price_kind": "deal",
+        }
+        candidates = [
+            {"brand": "合力", "vehicle_type": "CPCD50", "series": "CPCD", "tonnage": 5.0,
+             "config_type": "A", "mast_type": "二节", "mast_height_mm": 3000,
+             "original_price": 1000000.0},
+        ]
+        url = "https://www.rmfysszc.com/auction/notice/2026/12001.html"
+        level, original, residual, version = self._run_match_layer(url, extraction, candidates)
+        self.assertIsNone(level)
+        self.assertIsNone(original)
+        self.assertIsNone(residual)
+
+    def test_rematch_recovers_label_without_refetch(self):
+        """补入原价后 rematch：未匹配行回收标签，抽取/清洗列不动。"""
+        from collector.cli import run_batch, run_rematch
+
+        url = "https://www.rmfysszc.com/auction/notice/2026/12002.html"
+        # 先用空候选落一行未匹配样本（独立 URL，避免跨用例干扰）。
+        run_batch(
+            str(FIXTURES / "match_rematch.html"),
+            DATABASE_URL,
+            search_path=self.schema,
+            extractor=_stub_from_file("rmfysszc_extraction_stub.json"),
+            secret_key=MASTER_KEY,
+            price_candidates=[],
+        )
+        before = self._read(
+            "SELECT id, extraction_version, clean_version, match_level, residual_rate_label "
+            "FROM market_transactions WHERE source_url = %s",
+            (url,),
+        )[0]
+        self.assertIsNone(before[3])  # 当前未匹配
+
+        # 只对该样本补入原价；rematch 读回全表但对其它行无害（候选只匹配本规格）。
+        candidates = [{
+            "brand": "杭叉", "vehicle_type": "CPCD30", "series": "CPCD", "tonnage": 3.0,
+            "config_type": "标准", "mast_type": "二节", "mast_height_mm": 3000,
+            "original_price": 50000.0,
+        }]
+        count = run_rematch(
+            DATABASE_URL, search_path=self.schema, price_candidates=candidates
+        )
+        self.assertGreaterEqual(count, 1)
+        after = self._read(
+            "SELECT extraction_version, clean_version, match_level, residual_rate_label "
+            "FROM market_transactions WHERE id = %s",
+            (before[0],),
+        )[0]
+        self.assertEqual(after[0], before[1])  # 抽取版本不动
+        self.assertEqual(after[1], before[2])  # 清洗版本不动
+        self.assertEqual(after[2], "brand_vehicle_series_tonnage")
+        self.assertAlmostEqual(float(after[3]), 42000 / 50000, places=6)
 
 
 def _stub_from_payload(payload):
