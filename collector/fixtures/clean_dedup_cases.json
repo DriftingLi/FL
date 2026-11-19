@@ -1,0 +1,40 @@
+{
+  "schema_version": "v1",
+  "image_hash_case": {
+    "new": {
+      "structured_specs": {"brand": "杭叉", "model": "CPCD30", "image_hashes": ["aaa111", "bbb222"]},
+      "field_confidence": {"brand": 0.95, "raw_price": 0.95},
+      "raw_price": 42000,
+      "raw_price_kind": "deal",
+      "appraisal_price": 40000
+    },
+    "existing": [
+      {"structured_specs": {"brand": "杭叉", "model": "CPCD30", "image_hashes": ["aaa111", "other999"]}, "raw_description": {"body": "完全不同的描述文本"}, "source_url": "u1"}
+    ]
+  },
+  "description_similarity_case": {
+    "new": {
+      "body": "合力 CPCD50 叉车，2019年出厂，工时3200小时，起拍价55000元，车况良好（重发帖）",
+      "structured_specs": {"brand": "合力", "model": "CPCD50", "tonnage": 5.0},
+      "field_confidence": {"brand": 0.95, "raw_price": 0.95},
+      "raw_price": 55000,
+      "raw_price_kind": "deal",
+      "appraisal_price": 50000
+    },
+    "existing": [
+      {"structured_specs": {"brand": "合力", "model": "CPCD50", "tonnage": 5.0}, "raw_description": {"body": "合力 CPCD50 叉车，2019年出厂，工时3200小时，起拍价55000元，车况良好"}, "source_url": "u2"}
+    ]
+  },
+  "same_company_cross_city_case": {
+    "new": {
+      "structured_specs": {"brand": "杭叉", "model": "CPCD30", "tonnage": 3.0, "seller": "华东叉车商行", "city": "南京"},
+      "field_confidence": {"brand": 0.95, "raw_price": 0.95},
+      "raw_price": 43000,
+      "raw_price_kind": "deal",
+      "appraisal_price": 40000
+    },
+    "existing": [
+      {"structured_specs": {"brand": "杭叉", "model": "CPCD30", "tonnage": 3.0, "seller": "华东叉车商行", "city": "苏州"}, "raw_description": {"body": "另一段描述"}, "source_url": "u3"}
+    ]
+  }
+}

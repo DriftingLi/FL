@@ -66,8 +66,9 @@ class CollectorBatchE2EContractTest(unittest.TestCase):
         cls.conn.commit()
 
         cls.conn.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(cls.schema)))
-        # 执行真实迁移文件（不是复制 DDL）：000063 建样本表，000064 加标记列 + 队列。
-        for pattern in ("000063_*.up.sql", "000064_*.up.sql"):
+        # 执行真实迁移文件（不是复制 DDL）：000063 建样本表，000064 加标记列 + 队列，
+        # 000065 加清洗版本列（#2674 收口）。
+        for pattern in ("000063_*.up.sql", "000064_*.up.sql", "000065_*.up.sql"):
             migration = next(MIGRATION_DIR.glob(pattern))
             cls.conn.execute(migration.read_text(encoding="utf-8"))
         cls.conn.commit()
@@ -154,7 +155,8 @@ class CollectorBatchE2EContractTest(unittest.TestCase):
         rows = self._read(
             "SELECT channel, source_url, raw_description, structured_specs, "
             "field_confidence, extraction_version, raw_price, label_eligible "
-            "FROM market_transactions"
+            "FROM market_transactions WHERE source_url = %s",
+            (EXPECTED_SOURCE_URL,),
         )
         self.assertEqual(len(rows), 1)
         (channel, source_url, raw, specs, confidence, version, price, eligible) = rows[0]
@@ -212,6 +214,134 @@ class CollectorBatchE2EContractTest(unittest.TestCase):
             (failed_url,),
         )
         self.assertIn("price_extraction_failed", [r[0] for r in queue])
+
+    # ---- #2674 清洗阶段：fixture 进 → 清洗状态 / 剔除原因 / 溢价标记 / 身份剥离 行出 ----
+
+    def _stub_named_case(self, case_name):
+        """从 clean_noise_cases.json 取某 case 的 extraction 作为录制抽取输出。"""
+        cases = json.loads(
+            (FIXTURES / "clean_noise_cases.json").read_text(encoding="utf-8")
+        )
+        payload = json.dumps(cases[case_name]["extraction"], ensure_ascii=False)
+        return _stub_from_payload(payload)
+
+    def test_clean_premium_is_marked_not_rejected(self):
+        from collector.cli import run_batch
+
+        url = "https://www.rmfysszc.com/auction/notice/2026/11003.html"
+        count = run_batch(
+            str(FIXTURES / "clean_premium.html"),
+            DATABASE_URL,
+            search_path=self.schema,
+            extractor=self._stub_named_case("premium"),
+            secret_key=MASTER_KEY,
+        )
+        self.assertEqual(count, 1)
+        rows = self._read(
+            "SELECT clean_status, premium_anomaly, rejection_reason, label_eligible, clean_version "
+            "FROM market_transactions WHERE source_url = %s",
+            (url,),
+        )
+        self.assertEqual(len(rows), 1)
+        status, premium, reason, eligible, clean_version = rows[0]
+        self.assertEqual(status, "cleaned")
+        self.assertTrue(premium)
+        self.assertIsNone(reason)
+        self.assertTrue(eligible)
+        # 清洗版本必须落库，才可回答「这行是哪版规则判的」。
+        self.assertEqual(clean_version, "v1")
+        queue = self._read(
+            "SELECT q.reason FROM market_sample_review_queue q "
+            "JOIN market_transactions m ON m.id = q.sample_id WHERE m.source_url = %s",
+            (url,),
+        )
+        self.assertIn("premium_anomaly", [r[0] for r in queue])
+
+    def test_clean_bulk_lot_is_rejected_with_reason(self):
+        from collector.cli import run_batch
+
+        url = "https://www.rmfysszc.com/auction/notice/2026/11004.html"
+        count = run_batch(
+            str(FIXTURES / "clean_bulk_lot.html"),
+            DATABASE_URL,
+            search_path=self.schema,
+            extractor=self._stub_named_case("bulk_lot"),
+            secret_key=MASTER_KEY,
+        )
+        self.assertEqual(count, 1)
+        rows = self._read(
+            "SELECT clean_status, rejection_reason, label_eligible "
+            "FROM market_transactions WHERE source_url = %s",
+            (url,),
+        )
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0][0], "rejected")
+        self.assertIn("bulk_lot_no_per_unit", rows[0][1])
+        self.assertFalse(rows[0][2])
+
+    def test_clean_identity_stripped_from_stored_row(self):
+        from collector.cli import run_batch
+
+        url = "https://www.rmfysszc.com/auction/notice/2026/11005.html"
+        count = run_batch(
+            str(FIXTURES / "clean_identity.html"),
+            DATABASE_URL,
+            search_path=self.schema,
+            extractor=self._stub_named_case("identity"),
+            secret_key=MASTER_KEY,
+        )
+        self.assertEqual(count, 1)
+        rows = self._read(
+            "SELECT clean_status, structured_specs, raw_description "
+            "FROM market_transactions WHERE source_url = %s",
+            (url,),
+        )
+        self.assertEqual(len(rows), 1)
+        status, specs, raw = rows[0]
+        self.assertEqual(status, "cleaned")
+        for key in ("buyer_name", "bidder_no", "id_no"):
+            self.assertNotIn(key, specs)
+            self.assertNotIn(key, raw)
+        # PIPL：连原文留底正文里的行内身份值也不得落库。
+        body = raw["body"]
+        self.assertNotIn("张三", body)
+        self.assertNotIn("A1234", body)
+        self.assertIn("买受人", body)  # 非身份原文保留
+        self.assertIn("42000 元竞得", body)
+
+    def test_reclean_recomputes_without_refetch(self):
+        """重跑清洗：直接 UPDATE 一行成 bulk_lot 特征，reclean 后重新判为 rejected。"""
+        from collector.cli import run_reclean
+
+        url = "https://www.rmfysszc.com/auction/notice/2026/11001.html"
+        # 把已清洗的样本结构字段改成批量包价特征，用 reclean 重算（不重爬公告）。
+        with self.psycopg.connect(
+            DATABASE_URL, options=f"-c search_path={self.schema}"
+        ) as conn:
+            conn.execute(
+                "UPDATE market_transactions SET structured_specs = %s "
+                "WHERE source_url = %s",
+                (json.dumps({"brand": "合力", "bulk_lot": True, "lot_count": 3}), url),
+            )
+            conn.commit()
+        count = run_reclean(DATABASE_URL, search_path=self.schema)
+        self.assertGreaterEqual(count, 1)
+        rows = self._read(
+            "SELECT clean_status, rejection_reason FROM market_transactions "
+            "WHERE source_url = %s",
+            (url,),
+        )
+        self.assertEqual(rows[0][0], "rejected")
+        self.assertIn("bulk_lot_no_per_unit", rows[0][1])
+
+
+def _stub_from_payload(payload):
+    """录制好的提取器 stub：返回固定 payload，同时证明配置被读取并解密。"""
+    def extractor(messages, config):
+        assert config.model == "stub-model", config
+        assert config.api_key == "sk-test-vector-2673", config
+        return payload
+    return extractor
 
 
 if __name__ == "__main__":

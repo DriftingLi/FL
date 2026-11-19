@@ -1,0 +1,92 @@
+{
+  "clean": {
+    "extraction": {
+      "structured_specs": {"brand": "杭叉", "model": "CPCD30", "series": "CPCD", "tonnage": 3.0, "year": 2019, "engine_hours": 3200},
+      "field_confidence": {"brand": 0.97, "model": 0.95, "series": 0.93, "tonnage": 0.91, "year": 0.93, "engine_hours": 0.88, "raw_price": 0.96},
+      "raw_price": 42000,
+      "raw_price_kind": "listing",
+      "appraisal_price": 42000
+    },
+    "expect": {"clean_status": "cleaned", "premium_anomaly": false, "label_eligible": true}
+  },
+  "bulk_lot": {
+    "extraction": {
+      "structured_specs": {"brand": "合力", "lot_count": 3, "bulk_lot": true},
+      "field_confidence": {"brand": 0.9, "raw_price": 0.9},
+      "raw_price": 90000,
+      "raw_price_kind": "listing",
+      "appraisal_price": 90000
+    },
+    "expect": {"clean_status": "rejected", "reason_contains": "bulk_lot_no_per_unit", "label_eligible": false}
+  },
+  "scrapped": {
+    "extraction": {
+      "structured_specs": {"brand": "合力", "model": "CPCD30", "tonnage": 3.0, "scrapped": true},
+      "field_confidence": {"brand": 0.95, "raw_price": 0.9},
+      "raw_price": 2000,
+      "raw_price_kind": "deal",
+      "appraisal_price": null
+    },
+    "expect": {"clean_status": "rejected", "reason_contains": "scrapped_or_no_battery", "label_eligible": false}
+  },
+  "no_battery": {
+    "extraction": {
+      "structured_specs": {"brand": "杭叉", "model": "CPD15", "tonnage": 1.5, "has_battery": false},
+      "field_confidence": {"brand": 0.92, "raw_price": 0.9},
+      "raw_price": 1500,
+      "raw_price_kind": "deal",
+      "appraisal_price": null
+    },
+    "expect": {"clean_status": "rejected", "reason_contains": "scrapped_or_no_battery", "label_eligible": false}
+  },
+  "placeholder_price": {
+    "extraction": {
+      "structured_specs": {"brand": "合力", "model": "CPCD70", "tonnage": 7.0},
+      "field_confidence": {"brand": 0.9, "raw_price": 0.99},
+      "raw_price": 8,
+      "raw_price_kind": "listing",
+      "appraisal_price": 8
+    },
+    "expect": {"clean_status": "rejected", "reason_contains": "placeholder_price", "label_eligible": false}
+  },
+  "negotiable": {
+    "extraction": {
+      "structured_specs": {"brand": "合力", "model": "CPCD30", "tonnage": 3.0, "price_text": "面议"},
+      "field_confidence": {"brand": 0.9, "raw_price": 0.1},
+      "raw_price": null,
+      "raw_price_kind": null,
+      "appraisal_price": null
+    },
+    "expect": {"clean_status": "rejected", "reason_contains": "negotiable_price", "label_eligible": false}
+  },
+  "range_price": {
+    "extraction": {
+      "structured_specs": {"brand": "杭叉", "model": "CPCD30", "tonnage": 3.0, "price_text": "4万-5万", "price_range": [40000, 50000]},
+      "field_confidence": {"brand": 0.9, "raw_price": 0.3},
+      "raw_price": null,
+      "raw_price_kind": null,
+      "appraisal_price": null
+    },
+    "expect": {"clean_status": "rejected", "reason_contains": "range_price", "label_eligible": false}
+  },
+  "premium": {
+    "extraction": {
+      "structured_specs": {"brand": "杭叉", "model": "CPCD30", "tonnage": 3.0},
+      "field_confidence": {"brand": 0.95, "raw_price": 0.97},
+      "raw_price": 42000,
+      "raw_price_kind": "deal",
+      "appraisal_price": 20000
+    },
+    "expect": {"clean_status": "cleaned", "premium_anomaly": true, "label_eligible": true, "review_reason": "premium_anomaly"}
+  },
+  "identity": {
+    "extraction": {
+      "structured_specs": {"brand": "杭叉", "model": "CPCD30", "tonnage": 3.0, "buyer_name": "张三", "bidder_no": "A1234"},
+      "field_confidence": {"brand": 0.95, "raw_price": 0.97},
+      "raw_price": 42000,
+      "raw_price_kind": "deal",
+      "appraisal_price": 40000
+    },
+    "expect": {"clean_status": "cleaned", "premium_anomaly": false, "no_identity": true}
+  }
+}
