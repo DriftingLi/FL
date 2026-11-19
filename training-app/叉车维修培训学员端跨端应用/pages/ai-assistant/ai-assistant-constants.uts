@@ -16,7 +16,7 @@ import type { AIFunctionItem } from '../../types/index'
  * - 每一项都带 `featureKey`；点击 = **在 AI 助手页内切 scope**（ADR-0009 2026-11-16 修订 ②，#2593），
  *   不再是「跳转专项页」、也不是「在本页带键发一轮」。键是页面状态 `activeScope`，切它 = 换区 =
  *   重置当前会话并按新区重列（ADR-0013 修订）。专项页 `pages/ai-assistant/ai-feature` 已退役。
- * - `scopeLabel` 是 chip 上的**短名**（原型 791:750 的「故障咨询 ⌄」）。注册表 label 才是展示名
+ * - `scopeLabel` 是 chip 上的**短名**（原型 791:750 的「智能维修诊断 ⌄」）。注册表 label 才是展示名
  *   （`title`），两者不同时才需要这个位；其余三项与本格 `title` 同值。
  *
  * 记法：本文件引用的 ADR-0030 / ADR-0032 / ADR-0047 属**根仓库**编号体系（见根 docs/adr/），
@@ -31,7 +31,7 @@ export const FUNCTION_ITEMS : AIFunctionItem[] = [
     // —— 本格即其继任者，故复用既有键 fault_diagnosis（#921）。
     // 本地 key 仍是 `fault-consult`：它是 UI 标识（图标/引用），不因展示名与形态变更而改。
     // freePreview=true 是注册表的**限免声明位**（本格限免、不扣积分），本清单如实镜像。
-    { key: 'fault-consult', title: '智能维修诊断', scopeLabel: '故障咨询', icon: '\uD83D\uDC77', iconPath: '/static/icons/ai-functions/fault-consult.png', featureKey: 'fault_diagnosis', freePreview: true, adapter: 'diagnosis' },
+    { key: 'fault-consult', title: '智能维修诊断', scopeLabel: '智能维修诊断', icon: '\uD83D\uDC77', iconPath: '/static/icons/ai-functions/fault-consult.png', featureKey: 'fault_diagnosis', freePreview: true, adapter: 'diagnosis' },
     { key: 'drawing', title: '图纸识别', scopeLabel: '图纸识别', icon: '\uD83D\uDCDC', iconPath: '/static/icons/ai-functions/drawing-recognition.png', featureKey: 'drawing_recognition', freePreview: false, adapter: 'llm' },
     { key: 'exercise', title: '习题解答', scopeLabel: '习题解答', icon: '\uD83D\uDCDD', iconPath: '/static/icons/ai-functions/exercise-solving.png', featureKey: 'exercise_solving', freePreview: false, adapter: 'llm' },
     { key: 'knowledge', title: '维保知识', scopeLabel: '维保知识', icon: '\uD83D\uDD27', iconPath: '/static/icons/ai-functions/maintenance-knowledge.png', featureKey: 'maintenance_knowledge', freePreview: false, adapter: 'llm' },
