@@ -602,8 +602,9 @@ describe('IP 属地契约（ADR-0045：发布那一刻的快照，市优先退�
     expect(inputComponent).toContain('<text v-if="showRegionNotice" class="region-notice">{{ regionNotice }}</text>');
     // 缺省 true ⇒ 回复栏不传该 prop 也照常显示（回复必落属地）
     expect(inputComponent).toContain('showRegionNotice: true');
-    // 发帖表单在**资源态**不显示（资源走投稿接口、不落属地）
-    expect(createPage).toContain(':show-region-notice="!isResourceMode"');
+    // 发帖表单在**资源态**不显示（资源走投稿接口、不落属地）：资源分支的弱端输入区显式关掉；
+    // 能力端 WYSIWYG 只出现在非资源态那张卡里，不传该 prop（缺省 true）即显示（#2689 单卡）。
+    expect(createPage).toContain(':show-region-notice="false"');
     expect(detailPage).toContain('variant="reply"');
   });
 

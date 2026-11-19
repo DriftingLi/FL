@@ -330,6 +330,10 @@ const MODULES = {
       // 撞上 600 预算，本票按 ADR-0023 ③「拆而不覆盖」处理）。只被上面那个输入组件消费，
       // 同属跨页共享件的那条家；未落 pages/forum/components/ 的理由同上（A6 零孤儿）。
       'components/forum-wysiwyg-toolbar.uvue',
+      // 'components/forum-wysiwyg-image-area.uvue' —— #2689：图片区两态从输入区拆出（输入区 634 行
+      // 撞上 600 预算，同 #2658 按 ADR-0023 ③「拆而不覆盖」处理）。纯展示件：列表与计数由宿主给，
+      // 动作一律 emit 回去；只被上面那个输入组件消费，家与理由同上。
+      'components/forum-wysiwyg-image-area.uvue',
       'composables/useForumImagePicker.uts',
       'composables/useReplyComposer.uts',
       'composables/useReport.uts',

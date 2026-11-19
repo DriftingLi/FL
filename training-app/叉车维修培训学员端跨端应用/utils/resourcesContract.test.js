@@ -70,7 +70,11 @@ describe('提交链路契约（#760：forum-contribution-form 组件承载投稿
   });
   it('壳层接线：组件 import + 资源模式渲染并下发 title/intro/credential', () => {
     expect(shell).toMatch(/import ForumContributionForm from '\.\/components\/forum-contribution-form\.uvue'/);
-    expect(shell).toMatch(/<ForumContributionForm v-if="isResourceMode"[\s\S]*?:credential-id="credentialId"/);
+    // #2689：发帖页改单卡后，资源投稿整块成为 `v-else` 分支（原 `v-if="isResourceMode"` 的包裹层
+    // 变成分支本身），组件仍只在资源态渲染并下发 title/intro/credential。
+    expect(shell).toMatch(
+      /<view v-else class="form-section">[\s\S]*?<ForumContributionForm :title="title"[\s\S]*?:credential-id="credentialId"/
+    );
   });
 });
 
@@ -136,7 +140,7 @@ describe('forum 资源入口改跳契约（#760：统一进 forum-create 资源 
     const form = read('pages/forum/composables/useForumCreateForm.uts');
     expect(form).toMatch(/if\s*\(isResourceMode\.value\)\s*return/);
     expect(read('pages/forum/forum-create.uvue')).toMatch(
-      /<view v-if="!isResourceMode && !isFeedbackMode" class="submit-section">/
+      /<view v-else-if="!isResourceMode" class="post-card">[\s\S]*?class="submit-btn"/
     );
   });
 });

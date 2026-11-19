@@ -64,20 +64,21 @@ describe('AC② 编辑旧帖：按原格式回填，PUT 不带 content_format', 
   })
 })
 
-describe('AC③ 发布前保真检查：提交按钮附近持续可见 + 空正文禁用', () => {
-  it('保真提示行在提交按钮**之前**渲染（同一 .submit-section 内）', () => {
-    const section = page.slice(
-      page.indexOf('<view v-if="!isResourceMode && !isFeedbackMode" class="submit-section">')
-    )
-    const notice = section.indexOf('<text v-if="fidelityNotice.length > 0" class="fidelity-notice">')
-    const button = section.indexOf('class="submit-btn"')
-    expect(notice).toBeGreaterThan(-1)
-    expect(button).toBeGreaterThan(notice)
+describe('AC③ 发布前保真检查：并进组件提示带（#2689 决策 4）+ 空正文禁用', () => {
+  it('保真提示由组件提示带渲染，页面不再单独渲染一行', () => {
+    // #2689：保真 / 粘贴 / 属地 / 边界合并成一条提示带，页面级 .fidelity-notice 已退场
+    expect(page).not.toContain('class="fidelity-notice"')
+    expect(page).not.toContain(':show-fidelity-notice="false"')
+    expect(wysiwyg).toContain('noticeBand')
+    expect(wysiwyg).toContain('richFidelityNotice(issues.value)')
   })
 
-  it('组件内那行由宿主关掉，两处只出现一次', () => {
-    expect(page).toContain(':show-fidelity-notice="false"')
-    expect(wysiwyg).toContain('showFidelityNotice && fidelityNotice.length > 0')
+  it('提示带在提交按钮之前（同一张卡内，正文下方）', () => {
+    const card = page.slice(page.indexOf('class="post-card"'))
+    const input = card.indexOf('<ForumWysiwygInput')
+    const button = card.indexOf('class="submit-btn"')
+    expect(input).toBeGreaterThan(-1)
+    expect(button).toBeGreaterThan(input)
   })
 
   it('序列化结果空 / 纯空白 ⇒ 提交按钮禁用', () => {
