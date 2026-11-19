@@ -3,7 +3,7 @@
  *
  * ## 这是**接线守护**，不是 ③ 门证据（`docs/agents/guards.md`）
  *
- * 它守的是「形态接线没有被悄悄拆掉」：常驻三键还在、触摸目标没被缩小、编辑器侧没有图片入口、
+ * 它守的是「形态接线没有被悄悄拆掉」：常驻四键还在、触摸目标没被缩小、编辑器侧没有图片入口、
  * 记号还走 insertText 逃生舱、点亮还取 delta。这些都是**源码结构**，node 里跑不出来
  * （`.uvue` 的模板/样式不参与 UTS 行为缝）。
  *
@@ -15,9 +15,10 @@
  *
  * ## 判据来源（逐条对应票面验收标准，不自己加戏）
  *
- * 常驻 3 枚 = 粗体/斜体/删除线（下划线永久退出、行内代码不作常驻）；二级面板两组；
- * 触摸目标 ≥88rpx（R2）；面板容量余量 = 0（R1）；点亮以 getContents 的 delta 为准；
- * 记号走 insertText；编辑器侧无图片入口、正文图片丢弃并**持续可见**提示（R3）；
+ * 常驻 4 枚 = 粗体/斜体/删除线/列表（下划线永久退出、行内代码不作常驻），加「更多」开关 = 5 个触摸目标；
+ * 二级面板两组 + 操作组（粘贴）；触摸目标 ≥88rpx（R2）；面板容量余量 = 0（R1）；
+ * 点亮以 getContents 的 delta 为准；记号走 insertText；编辑器侧无图片入口、正文图片丢弃并**持续可见**提示（R3）；
+ * 图片入口两态、提示带合并成一行、字数在正文右下（#2689）；
  * 失焦后点按钮走 readOnly 绕行；键盘高度上报给宿主、组件不自加偏移。
  */
 const path = require('path');
@@ -29,13 +30,16 @@ const read = (rel) => readText(path.join(ROOT, rel));
 
 const INPUT_REL = 'components/forum-wysiwyg-input.uvue';
 const TOOLBAR_REL = 'components/forum-wysiwyg-toolbar.uvue';
+/** #2689：图片区两态从输入区拆成独立展示件（输入区撞 600 预算，ADR-0023 ③ 拆而不覆盖）。 */
+const IMAGE_AREA_REL = 'components/forum-wysiwyg-image-area.uvue';
 const MODEL_REL = 'utils/forumWysiwygInput.uts';
 /** #2659：收敛判定与落地（reconcileMarkerInsert / settleMarkerInsert）在 delta 管线里，与序列化同文件。 */
 const DELTA_REL = 'utils/forumDeltaMarkdown.uts';
 
 const input = read(INPUT_REL);
-/** #2658：格式工具条（常驻三键 + 粘贴 + 面板）拆成独立件，按钮集与触摸目标的判据落在它身上。 */
+/** #2658：格式工具条（常驻四键 + 更多面板）拆成独立件，按钮集与触摸目标的判据落在它身上。 */
 const toolbar = read(TOOLBAR_REL);
+const imageArea = read(IMAGE_AREA_REL);
 const model = read(MODEL_REL);
 const delta = read(DELTA_REL);
 
@@ -55,9 +59,9 @@ function stripComments(src) {
     return src.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
 }
 
-// ===== ① 常驻三键：数据驱动，恰好三枚 =====
+// ===== ① 常驻四键：数据驱动，恰好四枚 + 「更多」开关 = 5 个触摸目标 =====
 
-describe('常驻三键由数据驱动（按钮集是单点，不是模板硬编码）', () => {
+describe('常驻四键由数据驱动（按钮集是单点，不是模板硬编码）', () => {
     it('工具条遍历 richPrimaryActions 的结果，不自己列按钮', () => {
         expect(toolbar).toContain('const primaryActions : RichAction[] = richPrimaryActions()');
         expect(toolbar).toContain('v-for="(act, idx) in primaryActions"');
@@ -66,6 +70,30 @@ describe('常驻三键由数据驱动（按钮集是单点，不是模板硬编�
         expect(toolbar).toContain("(e: 'action', id: string): void");
         expect(toolbar).toContain("emit('action', id)");
         expect(input).toContain('<ForumWysiwygToolbar :active-ids="activeIds" @action="onActionTap" @paste="onPasteTap" />');
+    });
+
+    it('常驻行恰好 5 个触摸目标：4 枚数据动作 + 「更多」开关（#2689 决策 2）', () => {
+        // 4 枚来自 richPrimaryActions 的 v-for，第 5 枚是硬编码的「更多」开关
+        expect(toolbar).toContain('v-for="(act, idx) in primaryActions"');
+        expect(toolbar).toContain('class="tool-btn tool-btn-more ml-16"');
+        // 常驻行里不再有独立的「粘贴」键（粘贴已收进面板「操作」组）
+        expect(toolbar).not.toContain('tool-btn-paste');
+    });
+
+    it('B / I / S 是**真字形**不是图片：加粗 / 斜体 / 删除线（细线模拟）', () => {
+        expect(toolbar).toContain('{{ act.glyph }}');
+        expect(toolbar).toContain("'tool-glyph-bold': act.glyphStyle == 'bold'");
+        expect(toolbar).toContain("'tool-glyph-italic': act.glyphStyle == 'italic'");
+        expect(toolbar).toContain("'tool-glyph-strike': act.glyphStyle == 'strike'");
+        expect(toolbar).toContain('.tool-glyph-bold {');
+        expect(toolbar).toContain('font-weight: bold;');
+        expect(toolbar).toContain('.tool-glyph-italic {');
+        expect(toolbar).toContain('font-style: italic;');
+        // uvue 不支持 text-decoration ⇒ 删除线用绝对定位细线模拟
+        expect(toolbar).toContain('.strike-line {');
+        expect(toolbar).toContain('position: absolute;');
+        // 字形不是图片：常驻行里没有 <image>
+        expect(toolbar).not.toContain('<image');
     });
 
     it('模板里不出现中文按钮名（文案单点在 utils/forumWysiwygInput）', () => {
@@ -122,20 +150,59 @@ describe('编辑器侧无图片插入入口：正文不产出 ![alt](url)（R3�
     });
 
     it('图片只有一个入口：下方 ＋ 方块 → emit add-image', () => {
-        expect(input).toContain('@click="onAddImage"');
+        expect(imageArea).toContain('@click="onAdd"');
+        expect(imageArea).toContain("emit('add-image')");
+        expect(imageArea).toContain("'＋'");
+        // 输入区只把动作原样转出去，自己不画入口
+        expect(input).toContain('@add-image="onAddImage"');
         expect(input).toContain("emit('add-image')");
-        expect(input).toContain("'＋'");
         // 双入口（拍照 / 相册各一枚）已退场
-        expect(input).not.toContain("onAddImage('camera')");
-        expect(input).not.toContain("onAddImage('album')");
+        expect(imageArea).not.toContain("onAddImage('camera')");
+        expect(imageArea).not.toContain("onAddImage('album')");
     });
 
-    it('丢弃提示是**持续可见**的一行，不是 toast', () => {
-        // #2641：宿主可关掉本行自己渲染（发帖页要把它放到提交按钮附近，AC③）——两处只出现一次
-        expect(input).toContain('<text v-if="showFidelityNotice && fidelityNotice.length > 0" class="fidelity-notice">');
+    it('图片入口两态（#2689 决策 3）：未选图整宽卡片 / 已选图缩略图行 + 继续添加 / 选满隐藏', () => {
+        expect(imageArea).toContain('v-if="imageCount == 0 && !isReply"');
+        expect(imageArea).toContain('class="image-empty"');
+        expect(imageArea).toContain('支持添加图片，最多 {{ maxImages }} 张');
+        expect(imageArea).toContain('v-if="imageCount < maxImages"');
+        expect(imageArea).toContain("{{ uploading ? '上传中' : '继续添加' }}");
+        // 缩略图右上 × 可删
+        expect(imageArea).toContain('class="image-remove"');
+        expect(imageArea).toContain('@click.stop="onRemove(idx)"');
+    });
+
+    it('字数在正文右下（#2689 决策 5）：工具条之后、图片之前', () => {
+        const toolbarAt = input.indexOf('<ForumWysiwygToolbar');
+        const counterAt = input.indexOf('class="counter-text"');
+        const imageAt = input.indexOf('<ForumWysiwygImageArea');
+        expect(toolbarAt).toBeGreaterThan(-1);
+        expect(counterAt).toBeGreaterThan(toolbarAt);
+        expect(imageAt).toBeGreaterThan(counterAt);
+        expect(input).toContain("markdownLength.value.toString() + '/' + props.maxlength.toString()");
+    });
+
+    it('丢弃提示并进提示带：**持续可见**的一行，不是 toast（#2689 决策 4）', () => {
+        expect(input).toContain('<view v-if="noticeBand.length > 0" class="notice-band"');
         expect(input).toContain('richFidelityNotice(issues.value)');
         expect(input).not.toContain('showToast');
         expect(input).not.toContain('showModal');
+    });
+
+    it('提示带：保真 / 粘贴 / 属地 / 边界合并成一行，多条用「；」连接，无提示不占位', () => {
+        const band = bodyOf(input, 'const noticeBand = computed<string>');
+        expect(band).toContain('fidelityNotice.value');
+        expect(band).toContain('pasteNotice.value');
+        expect(band).toContain('pasteHint.value');
+        expect(band).toContain('regionNotice');
+        expect(band).toContain('boundaryNotice');
+        expect(band).toContain("parts.join('；')");
+        // 同一时刻最多一行：四个旧提示行各自独立的模板节点已退场
+        expect(input).not.toContain('class="fidelity-notice"');
+        expect(input).not.toContain('class="paste-notice"');
+        expect(input).not.toContain('class="paste-hint-row"');
+        expect(input).not.toContain('class="region-notice"');
+        expect(input).not.toContain('class="boundary-notice"');
     });
 });
 
@@ -220,10 +287,12 @@ describe('失焦后点格式按钮仍可用：readOnly 保住选区，format 推
 // ===== ⑥b 粘贴：原生粘贴丢弃 text/html，改走「粘贴」按钮 → insertText（#2658）=====
 
 describe('粘贴走 insertText 同一条 content-change 路径（原生粘贴会整段丢弃 text/html）', () => {
-    it('常驻行有「粘贴」按钮，文案取自 utils/forumPaste 不硬编码', () => {
+    it('「粘贴」收在面板「操作」组，文案取自 utils/forumPaste 不硬编码', () => {
         expect(toolbar).toContain('@click="onPaste"');
         expect(toolbar).toContain('{{ pasteLabel }}');
         expect(toolbar).toContain('const pasteLabel : string = PASTE_LABEL');
+        // #2689：粘贴不再是常驻键，落在面板第三组「操作」
+        expect(toolbar).toContain('>操作</text>');
         // 接缝两端都在：工具条 emit paste，输入区把粘贴落地
         expect(toolbar).toContain("emit('paste')");
         expect(input).toContain('@paste="onPasteTap"');
@@ -245,11 +314,14 @@ describe('粘贴走 insertText 同一条 content-change 路径（原生粘贴会
         expect(insert).toContain('refreshFromEditor()');
     });
 
-    it('降级提示是持续可见的一行，不是 toast', () => {
-        expect(input).toContain('<text v-if="pasteNotice.length > 0" class="paste-notice">');
+    it('降级提示并进提示带，不是 toast（#2689 决策 4）', () => {
+        expect(input).toContain('<view v-if="noticeBand.length > 0" class="notice-band"');
+        // 粘贴提示在时整条可点，走「粘贴」按钮同一条路径
+        expect(input).toContain(":class=\"{ 'notice-band-tap': pasteHint.length > 0 }\"");
+        expect(input).toContain('@click="onNoticeBandTap"');
+        expect(bodyOf(input, 'function onNoticeBandTap()')).toContain('onPasteTap()');
         expect(toolbar).not.toContain('showToast');
         expect(toolbar).not.toContain('showModal');
-        expect(input).toContain('<view v-if="pasteHint.length > 0" class="paste-hint-row" @click="onPasteTap">');
         expect(input).not.toContain('showToast');
         expect(input).not.toContain('showModal');
     });

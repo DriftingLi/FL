@@ -39,6 +39,15 @@ export const RICH_KIND_FORMAT = 'format'
 export const RICH_KIND_DIVIDER = 'divider'
 export const RICH_KIND_MARKER = 'marker'
 
+/**
+ * 常驻键字形的**真样式**（#2689 决策 2）：B 真加粗、I 真斜体、S 真删除线（细线模拟）、≡ 纯字形。
+ * 字形是文字不是图片 —— 图片字形在弱网/深色下会糊，且无法随点亮态换色。
+ */
+export const RICH_GLYPH_STYLE_BOLD = 'bold'
+export const RICH_GLYPH_STYLE_ITALIC = 'italic'
+export const RICH_GLYPH_STYLE_STRIKE = 'strike'
+export const RICH_GLYPH_STYLE_PLAIN = 'plain'
+
 /** 正文图片被丢弃时的**持续可见**提示（R3：非一闪而过的 toast） */
 export const RICH_IMAGE_NOTICE = '正文图片已忽略，请用下方＋添加'
 
@@ -50,6 +59,12 @@ export type RichAction = {
     formatName : string,
     /** kind == format 时交给 editor.format 的值；null = 切换语义（已应用则取消） */
     formatValue : string | null,
+    /** 常驻键的字形（B / I / S / ≡）；面板项为空串（面板用 icon） */
+    glyph : string,
+    /** 常驻键字形的真样式，取 RICH_GLYPH_STYLE_*；面板项为 plain */
+    glyphStyle : string,
+    /** 面板项的图标字形（H / ≡ / — / ❝ / </> / ` / 🔗）；常驻键为空串 */
+    icon : string,
 }
 
 export type RichPanelGroup = {
@@ -58,30 +73,41 @@ export type RichPanelGroup = {
     actions : RichAction[],
 }
 
-function formatAction(id : string, label : string) : RichAction {
-    return { id: id, label: label, kind: RICH_KIND_FORMAT, formatName: id, formatValue: null } as RichAction
+function richAction(id : string, label : string, kind : string, formatName : string,
+    glyph : string, glyphStyle : string, icon : string) : RichAction {
+    return {
+        id: id, label: label, kind: kind, formatName: formatName, formatValue: null,
+        glyph: glyph, glyphStyle: glyphStyle, icon: icon,
+    } as RichAction
 }
 
-function markerAction(id : string, label : string) : RichAction {
-    return { id: id, label: label, kind: RICH_KIND_MARKER, formatName: '', formatValue: null } as RichAction
+function formatAction(id : string, label : string, glyph : string, glyphStyle : string, icon : string) : RichAction {
+    return richAction(id, label, RICH_KIND_FORMAT, id, glyph, glyphStyle, icon)
+}
+
+function markerAction(id : string, label : string, icon : string) : RichAction {
+    return richAction(id, label, RICH_KIND_MARKER, '', '', RICH_GLYPH_STYLE_PLAIN, icon)
 }
 
 /**
- * 常驻三键。**恰好三枚**：粗体 / 斜体 / 删除线。
+ * 常驻键（#2689 决策 2）：粗体 / 斜体 / 删除线 / 列表 —— 恰好四枚数据动作，加「更多」开关共 5 个触摸目标。
  * 下划线永久退出（论坛档渲染不出，且序列化器会记 style-dropped:underline）；
  * 行内代码不作常驻（它是记号，落在二级面板的「记号」组）。
+ * 列表同时留在面板「格式」组：常驻是快捷入口、面板是全菜单，重复是刻意的。
  */
 export function richPrimaryActions() : RichAction[] {
     return [
-        formatAction(RICH_ACTION_BOLD, '粗体'),
-        formatAction(RICH_ACTION_ITALIC, '斜体'),
-        formatAction(RICH_ACTION_STRIKE, '删除线'),
+        formatAction(RICH_ACTION_BOLD, '粗体', 'B', RICH_GLYPH_STYLE_BOLD, ''),
+        formatAction(RICH_ACTION_ITALIC, '斜体', 'I', RICH_GLYPH_STYLE_ITALIC, ''),
+        formatAction(RICH_ACTION_STRIKE, '删除线', 'S', RICH_GLYPH_STYLE_STRIKE, ''),
+        formatAction(RICH_ACTION_LIST, '列表', '≡', RICH_GLYPH_STYLE_PLAIN, ''),
     ]
 }
 
 /**
  * 二级面板两组：格式（标题 / 列表 / 分割线）与记号（引用 / 代码块 / 行内代码 / 链接）。
  * 容量余量 = 0（R1）：组内不再留空位，也不为塞按钮缩小触摸目标。
+ * 每项带中文名 + 图标字形（#2689 决策 2：面板项不能只有符号）。
  */
 export function richPanelGroups() : RichPanelGroup[] {
     return [
@@ -89,19 +115,19 @@ export function richPanelGroups() : RichPanelGroup[] {
             id: 'format',
             label: '格式',
             actions: [
-                formatAction(RICH_ACTION_HEADER, '标题'),
-                formatAction(RICH_ACTION_LIST, '列表'),
-                { id: RICH_ACTION_DIVIDER, label: '分割线', kind: RICH_KIND_DIVIDER, formatName: '', formatValue: null } as RichAction,
+                formatAction(RICH_ACTION_HEADER, '标题', '', RICH_GLYPH_STYLE_PLAIN, 'H'),
+                formatAction(RICH_ACTION_LIST, '列表', '', RICH_GLYPH_STYLE_PLAIN, '≡'),
+                richAction(RICH_ACTION_DIVIDER, '分割线', RICH_KIND_DIVIDER, '', '', RICH_GLYPH_STYLE_PLAIN, '—'),
             ],
         },
         {
             id: 'marker',
             label: '记号',
             actions: [
-                markerAction(RICH_ACTION_QUOTE, '引用'),
-                markerAction(RICH_ACTION_CODE_BLOCK, '代码块'),
-                markerAction(RICH_ACTION_CODE_INLINE, '行内代码'),
-                markerAction(RICH_ACTION_LINK, '链接'),
+                markerAction(RICH_ACTION_QUOTE, '引用', '❝'),
+                markerAction(RICH_ACTION_CODE_BLOCK, '代码块', '</>'),
+                markerAction(RICH_ACTION_CODE_INLINE, '行内代码', '`'),
+                markerAction(RICH_ACTION_LINK, '链接', '🔗'),
             ],
         },
     ]

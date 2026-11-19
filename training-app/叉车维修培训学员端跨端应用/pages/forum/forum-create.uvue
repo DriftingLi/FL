@@ -37,67 +37,71 @@
                     </template>
                 </view>
 
-                <!-- ===== 发帖 / 资源投稿模式 ===== -->
-                <view v-else class="form-section">
-                    <!-- 模块选择（G-08：写侧只留「广场 / 知识问答」两值；资源是 URL scope 进来的真模式，
-                          不再占类别位，因此资源态不显示模块行） -->
-                    <view v-if="!isResourceMode" class="form-item">
-                        <text class="form-label">模块</text>
-                        <view class="category-row">
-                            <view v-for="(cat, idx) in categories" :key="idx" class="category-chip"
-                                :class="{ active: selectedCategory === cat.value }" @click="onSelectCategory(cat.value)">
-                                <text class="category-chip-text"
-                                    :class="{ active: selectedCategory === cat.value }">{{ cat.label }}</text>
-                            </view>
+                <!-- ===== 发帖 / 编辑：单卡（#2689 决策 1）===== -->
+                <view v-else-if="!isResourceMode" class="post-card">
+                    <!-- 模块 chips：收到标题上方一行（G-08：写侧只留「广场 / 知识问答」两值） -->
+                    <view class="category-row">
+                        <view v-for="cat in categories" :key="cat.value" class="category-chip"
+                            :class="{ active: selectedCategory === cat.value }" @click="onSelectCategory(cat.value)">
+                            <text class="category-chip-text"
+                                :class="{ active: selectedCategory === cat.value }">{{ cat.label }}</text>
                         </view>
                     </view>
 
+                    <!-- 标题：无边框大字，去掉 label 文本（#2689 决策 1） -->
+                    <input class="post-title" type="text" placeholder="请输入标题（1-100 字）" :maxlength="100"
+                        v-model="title" />
+                    <text class="post-title-counter">{{ title.length }}/100</text>
+
+                    <!-- 输入区形态（#2641 / ADR-0073）：能力端**唯一** WYSIWYG 形态，对外只吐序列化后的
+                         markdown 与保真检查结果；无 editor 的平台仍走记号工具栏组件 —— 同一份旧形态。
+                         保真 / 粘贴 / 属地 / 边界提示由组件合并成一条提示带（#2689 决策 4）。 -->
+                    <!-- #ifndef MP-ALIPAY || MP-BAIDU || MP-TOUTIAO -->
+                    <ForumWysiwygInput v-if="useRichEditor" :preview-images="imagePreviewUrls"
+                        :image-count="images.length" :max-images="topicImageLimit"
+                        placeholder="请输入内容（1-10000 字）" :uploading="uploadingImage"
+                        @update:markdown="onMarkdownChange" @update:issues="onIssuesChange"
+                        @add-image="onAddImage" @remove-image="onRemoveImage"
+                        @preview-image="onPreviewImage" @keyboard-height="onKeyboardHeight" />
+                    <!-- #endif -->
+                    <ForumMarkdownInput v-if="!useRichEditor" :content="content"
+                        :preview-images="imagePreviewUrls" :image-count="images.length" variant="topic"
+                        :max-images="topicImageLimit" :maxlength="10000" placeholder="请输入内容（1-10000 字）"
+                        :format="effectiveFormat" :show-format-switch="false" :uploading="uploadingImage"
+                        @update:content="onContentChange" @add-image="onAddImage"
+                        @remove-image="onRemoveImage" @preview-image="onPreviewImage" />
+
+                    <!-- 底部只留一个主按钮（#2689 决策 1） -->
+                    <view class="post-submit">
+                        <view class="submit-btn" :class="{ disabled: !canSubmit }" @click="onSubmit">
+                            <text class="submit-btn-text">{{ submitLabel }}</text>
+                        </view>
+                    </view>
+                </view>
+
+                <!-- ===== 资源投稿（#760）：保持旧布局（label + 简介 + 投稿表单），本票不动 ===== -->
+                <view v-else class="form-section">
                     <view class="form-item">
                         <text class="form-label">标题</text>
-                        <input class="form-input" type="text"
-                            :placeholder="isResourceMode ? '请输入资源标题（1-120 字）' : '请输入标题（1-100 字）'"
-                            :maxlength="isResourceMode ? 120 : 100" v-model="title" />
-                        <text class="form-counter">{{ title.length }}/{{ isResourceMode ? 120 : 100 }}</text>
+                        <input class="form-input" type="text" placeholder="请输入资源标题（1-120 字）"
+                            :maxlength="120" v-model="title" />
+                        <text class="form-counter">{{ title.length }}/120</text>
                     </view>
 
                     <view class="form-item">
-                        <text class="form-label">{{ isResourceMode ? '简介' : '内容' }}</text>
-                        <!-- 输入区形态（#2641 / ADR-0073）：能力端**唯一** WYSIWYG 形态，对外只吐序列化后的
-                             markdown 与保真检查结果；编辑态（无 markdown→delta 反向解析，回填不了）、
-                             资源投稿态（无格式契约）与无 editor 的平台仍走记号工具栏组件 —— 同一份旧形态，
-                             不是第三种。保真提示由本页在提交按钮附近渲染（AC③），组件内那行关掉。 -->
-                        <!-- #ifndef MP-ALIPAY || MP-BAIDU || MP-TOUTIAO -->
-                        <ForumWysiwygInput v-if="useRichEditor" :preview-images="imagePreviewUrls"
-                            :image-count="images.length" :max-images="topicImageLimit"
-                            placeholder="请输入内容（1-10000 字）" :show-fidelity-notice="false"
-                            :uploading="uploadingImage" @update:markdown="onMarkdownChange"
-                            @update:issues="onIssuesChange" @add-image="onAddImage"
-                            @remove-image="onRemoveImage" @preview-image="onPreviewImage"
-                            @keyboard-height="onKeyboardHeight" />
-                        <!-- #endif -->
-                        <ForumMarkdownInput v-if="!useRichEditor" :content="content"
-                            :preview-images="imagePreviewUrls" :image-count="images.length" variant="topic"
-                            :max-images="topicImageLimit" :maxlength="isResourceMode ? 2000 : 10000"
-                            :placeholder="isResourceMode ? '介绍这份资料的内容与用途（≤2000 字）' : '请输入内容（1-10000 字）'"
-                            :format="effectiveFormat" :show-format-switch="false"
-                            :show-images="!isResourceMode" :show-region-notice="!isResourceMode"
-                            :uploading="uploadingImage" @update:content="onContentChange"
-                            @add-image="onAddImage" @remove-image="onRemoveImage"
-                            @preview-image="onPreviewImage" />
+                        <text class="form-label">简介</text>
+                        <ForumMarkdownInput :content="content" :preview-images="imagePreviewUrls"
+                            :image-count="images.length" variant="topic" :max-images="topicImageLimit"
+                            :maxlength="2000" placeholder="介绍这份资料的内容与用途（≤2000 字）"
+                            :format="effectiveFormat" :show-format-switch="false" :show-images="false"
+                            :show-region-notice="false" :uploading="uploadingImage"
+                            @update:content="onContentChange" @add-image="onAddImage"
+                            @remove-image="onRemoveImage" @preview-image="onPreviewImage" />
                     </view>
 
                     <!-- 资源投稿表单（#760）：私有组件承载，状态自持；primitive props 单向下发 -->
-                    <ForumContributionForm v-if="isResourceMode" :title="title" :intro="content"
-                        :credential-id="credentialId" :credential-name="credentialName" />
-                </view>
-
-                <view v-if="!isResourceMode && !isFeedbackMode" class="submit-section">
-                    <!-- 发布前保真检查（AC③）：有丢弃 / 降级项时**持续可见**地列在提交按钮上方，
-                         不是一闪而过的 toast；无落差时整行不渲染。 -->
-                    <text v-if="fidelityNotice.length > 0" class="fidelity-notice">{{ fidelityNotice }}</text>
-                    <view class="submit-btn" :class="{ disabled: !canSubmit }" @click="onSubmit">
-                        <text class="submit-btn-text">{{ submitLabel }}</text>
-                    </view>
+                    <ForumContributionForm :title="title" :intro="content" :credential-id="credentialId"
+                        :credential-name="credentialName" />
                 </view>
             </view>
         </scroll-view>
@@ -126,7 +130,7 @@
         categories, title, content, selectedCategory, images, imagePreviewUrls, uploadingImage,
         credentialId, credentialName, isResourceMode, isFeedbackMode, feedbackContent,
         feedbackContact, feedbackSubmitting, feedbackSubmitted, feedbackContentMax,
-        useRichEditor, effectiveFormat, fidelityNotice, keyboardHeight, headerTitle,
+        useRichEditor, effectiveFormat, keyboardHeight, headerTitle,
         submitLabel, canSubmit, canSubmitFeedback, onSelectCategory, onContentChange,
         onMarkdownChange, onIssuesChange, onKeyboardHeight, onAddImage, onRemoveImage,
         onPreviewImage, onSubmit, onSubmitFeedback, onBack, initFromOptions, loadCredential,
@@ -153,8 +157,18 @@
         flex-direction: column;
     }
 
-    /* 表单区 */
+    /* 表单区（资源投稿 / 反馈模式沿用） */
     .form-section {
+        background-color: #ffffff;
+        margin: 24rpx;
+        border-radius: 16rpx;
+        padding: 32rpx;
+        border: 1px solid #eeeeee;
+        flex-direction: column;
+    }
+
+    /* 发帖单卡（#2689 决策 1）：标题 / 正文 / 工具栏 / 图片 / 提示 / 发布按钮同处一张卡 */
+    .post-card {
         background-color: #ffffff;
         margin: 24rpx;
         border-radius: 16rpx;
@@ -186,6 +200,22 @@
     }
 
     .form-counter {
+        font-size: 22rpx;
+        color: #999999;
+        text-align: right;
+        margin-top: 8rpx;
+    }
+
+    /* 单卡标题：无边框大字（去掉 label 与输入框底色） */
+    .post-title {
+        height: 88rpx;
+        font-size: 34rpx;
+        font-weight: bold;
+        color: #333333;
+        margin-top: 16rpx;
+    }
+
+    .post-title-counter {
         font-size: 22rpx;
         color: #999999;
         text-align: right;
@@ -228,14 +258,9 @@
         align-items: center;
     }
 
-    /* 发布前保真检查（AC③）：持续可见、列在提交按钮上方 */
-    .fidelity-notice {
-        font-size: 24rpx;
-        /* 走 token：ui-spec §9 明令声明位禁裸 hex（batch4/batch6 机检） */
-        color: $warning-color;
-        line-height: 1.5;
-        margin-bottom: 16rpx;
-        text-align: center;
+    /* 单卡内的主按钮：卡底一行，不再单独占一个区块 */
+    .post-submit {
+        margin-top: 24rpx;
     }
 
     .submit-btn {
