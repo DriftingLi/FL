@@ -262,3 +262,77 @@ describe('成对取证：坏实现必红', () => {
         expect(mod().buildMarker(mod().MARKER_LINK, '文字')).toBe('[文字](https://example.com)');
     });
 });
+
+// ===== ⑦ 记号替换选区：写完之后把文档收敛到唯一正确形态（#2659）=====
+
+describe('记号写入选区：有选区一律替换、不重复（#2659 真机缺陷形收敛）', () => {
+    it('实测缺陷形（写在选区前、原文没删）→ 收敛成 "> abc"', () => {
+        const m = mod();
+        const repaired = m.reconcileMarkerInsert(delta([{ insert: 'abc' }]), 'abc', '> abc', delta([{ insert: '> abcabc' }]));
+        expect(repaired).not.toBeNull();
+        expect(m.deltaPlainText(repaired)).toBe('> abc');
+    });
+
+    it('平台语义正常（就地替换）→ 返回 null，绝不再改一遍', () => {
+        const m = mod();
+        expect(m.reconcileMarkerInsert(delta([{ insert: 'abc' }]), 'abc', '> abc', delta([{ insert: '> abc' }]))).toBeNull();
+    });
+
+    it('无选区（插模板）→ 返回 null，替换是选区专属语义', () => {
+        const m = mod();
+        expect(m.reconcileMarkerInsert(delta([{ insert: 'abc' }]), '', '> 引用内容', delta([{ insert: 'abc> 引用内容' }]))).toBeNull();
+    });
+
+    it('选区在原文中段且唯一 → 收敛为就地替换，前后文原样', () => {
+        const m = mod();
+        const repaired = m.reconcileMarkerInsert(
+            delta([{ insert: '前言 abc 后语' }]), 'abc', '`abc`',
+            delta([{ insert: '前言 `abc`abc 后语' }]),
+        );
+        expect(m.deltaPlainText(repaired)).toBe('前言 `abc` 后语');
+    });
+
+    it('收敛保留选区外的行内属性（粗体不被冲掉）', () => {
+        const m = mod();
+        const repaired = m.reconcileMarkerInsert(
+            delta([{ insert: '粗体', attributes: { bold: true } }, { insert: '普通abc' }]), 'abc', '`abc`',
+            delta([
+                { insert: '粗体', attributes: { bold: true } },
+                { insert: '普通' },
+                { insert: '`abc`' },
+                { insert: 'abc' },
+            ]),
+        );
+        expect(m.deltaPlainText(repaired)).toBe('粗体普通`abc`');
+        expect(m.deltaToMarkdown(repaired)).toBe('**粗体**普通`abc`');
+    });
+
+    it('选区文本重复时靠「写在哪儿」反推落点（去掉 marker 必须还原成原文）', () => {
+        const m = mod();
+        const repaired = m.reconcileMarkerInsert(delta([{ insert: 'ab ab' }]), 'ab', '> ab', delta([{ insert: '> abab ab' }]));
+        expect(m.deltaPlainText(repaired)).toBe('> ab ab');
+    });
+
+    it('形状不认识（既不是已正确也不是缺陷形）→ 返回 null，宁可不修不可误删', () => {
+        const m = mod();
+        expect(m.reconcileMarkerInsert(delta([{ insert: 'abc' }]), 'abc', '> abc', delta([{ insert: 'xyz' }]))).toBeNull();
+        // 选区文本与原文对不上（脏输入）同样不动手
+        expect(m.reconcileMarkerInsert(delta([{ insert: 'abc' }]), 'zz', '> zz', delta([{ insert: '> zzabc' }]))).toBeNull();
+    });
+
+    it('deltaPlainText 只累加文本 op（图片/分割线零宽度）', () => {
+        const m = mod();
+        expect(m.deltaPlainText(delta([{ insert: 'a' }, { insert: { image: 'http://x/a.png' } }, { insert: 'b' }]))).toBe('ab');
+        expect(m.deltaPlainText('not json')).toBe('');
+    });
+});
+
+describe('收敛判据的成对取证：拆掉安全闸必须红', () => {
+    it('去掉「形状不认识就不动手」→ 陌生形状被误改写（证明闸有牙）', () => {
+        const bad = loadMutated([['if (postText != inserted) return null', 'if (false) return null']]);
+        const args = [delta([{ insert: 'abc' }]), 'abc', '> abc', delta([{ insert: 'xyz' }])];
+        expect(bad.reconcileMarkerInsert(...args)).not.toBeNull();  // 坏实现：动手了
+        expect(mod().reconcileMarkerInsert(...args)).toBeNull();      // 正实现：不动手
+    });
+});
+

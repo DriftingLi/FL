@@ -133,8 +133,16 @@ describe('编辑器侧无图片插入入口：正文不产出 ![alt](url)（R3�
 describe('记号四件走 insertText 逃生舱（editor 的 link 丢 URL、code 是 no-op）', () => {
     it('有选区包裹 / 无选区插模板，都经 buildMarker + insertText', () => {
         expect(input).toContain('ctx.getSelectionText({');
-        expect(input).toContain('buildMarker(action.id, res.text)');
+        expect(input).toContain('buildMarker(action.id, selected)');
         expect(input).toContain('ctx.insertText({');
+    });
+
+    it('插入后必须收敛：insertText 在真机上不删选区（#2659），写成后按 delta 复核并 setContents', () => {
+        const apply = bodyOf(input, 'function applyAction(');
+        expect(apply).toContain('settleMarkerInsert(ctx, preDelta, selected, text)');
+        const settle = bodyOf(input, 'function settleMarkerInsert(');
+        expect(settle).toContain('reconcileMarkerInsert(');
+        expect(settle).toContain('ctx.setContents(');
     });
 
     it('不调用 insertLink（链接输出 [文字](URL) 由作者自填 URL）', () => {
