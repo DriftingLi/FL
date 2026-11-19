@@ -164,7 +164,9 @@ export function serializeDelta(deltaJson : string) : DeltaSerializeResult {
         const insert = op['insert']
         if (insert == null) continue
         if (typeof insert == 'string') {
-            const text = insert as string
+            // 不换行空格（U+00A0）归一成普通空格：粘贴 / 输入法都可能带进来，
+            // 论坛档只认普通空格，产物里出现它等于把 HTML 的 &nbsp; 换了个壳带进正文。
+            const text = (insert as string).split('\u00a0').join(' ')
             const parts = text.split('\n')
             for (let p = 0; p < parts.length; p++) {
                 if (p > 0) {
