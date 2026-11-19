@@ -18,6 +18,11 @@ const (
 	FeatureDrawingRecognition     = "drawing_recognition"
 	FeatureExerciseSolving        = "exercise_solving"
 	FeatureFaultDiagnosis         = "fault_diagnosis"
+	// FeatureMarketSampleExtract 市场样本 LLM 抽取（spec #2671 / #2673）。
+	// 非对话、批处理的后台功能：注册仅为让管理端绑定 API（isValidFeature）可为它首次配置
+	// api_key；真实 prompt 由 collector 版本化拥有（collector/extract/prompt.py），
+	// 不经本站对话传输，故 billed=false、无 slug、不进前端 codegen 生成面。
+	FeatureMarketSampleExtract = "market_sample_extract"
 )
 
 // forkliftExpertSystemPrompt 叉车维修专家系统提示词（通用助手与未注册功能的兜底提示词）。
@@ -136,6 +141,11 @@ const (
 	aiAdapterDiagnosis aiAdapter = "diagnosis"
 )
 
+// marketSampleExtractSystemPrompt 占位声明位：真实抽取 prompt 版本化在 collector 侧
+// （collector/extract/prompt.py），这里只满足注册表「非对话行也须显式声明提示词」的卫生约束，
+// 不参与任何对话消费。绑定配置时管理端展示用它做标签，不用于生成。
+const marketSampleExtractSystemPrompt = `市场样本结构化抽取：由 collector 的版本化 prompt 执行，非本站对话功能。`
+
 // aiFeatureRegistry AI 功能注册表（唯一事实源，ADR-0030 决策 1）。
 // 行序 = 绑定列表展示序；遗留兼容位列于末尾、不进展示列表。
 var aiFeatureRegistry = []aiFeature{
@@ -149,6 +159,8 @@ var aiFeatureRegistry = []aiFeature{
 	{name: FeatureDrawingRecognition, label: "图纸识别", systemPrompt: drawingRecognitionSystemPrompt, bindingKind: bindingAdminSingle, billed: true, adapter: aiAdapterLLM, slug: "drawing"},
 	{name: FeatureExerciseSolving, label: "习题解答", systemPrompt: exerciseSolvingSystemPrompt, bindingKind: bindingAdminSingle, billed: true, adapter: aiAdapterLLM, slug: "exercise"},
 	{name: FeatureFaultDiagnosis, label: "智能维修诊断", systemPrompt: diagnosisSystemPrompt, bindingKind: bindingAdminSingle, billed: true, freePreview: true, adapter: aiAdapterDiagnosis, slug: "fault-diagnosis"},
+	// 非对话后台批处理功能（#2673）：仅占绑定位，不进前端 codegen 生成面。
+	{name: FeatureMarketSampleExtract, label: "市场样本抽取", systemPrompt: marketSampleExtractSystemPrompt, bindingKind: bindingAdminSingle, billed: false, adapter: aiAdapterLLM},
 	// 遗留兼容：ai_assistant 多绑定回退位（仅解析存量绑定，不供新绑定）
 	{name: FeatureAIAssistant, label: "AI 助手对话", systemPrompt: forkliftExpertSystemPrompt, bindingKind: bindingAssistantLegacy, billed: true, adapter: aiAdapterLLM},
 }

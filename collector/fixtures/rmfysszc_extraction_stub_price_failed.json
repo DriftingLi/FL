@@ -1,0 +1,22 @@
+{
+  "structured_specs": {
+    "brand": "杭叉",
+    "model": "CPCD30",
+    "series": "CPCD",
+    "tonnage": 3.0,
+    "year": 2019,
+    "engine_hours": 3200
+  },
+  "field_confidence": {
+    "brand": 0.97,
+    "model": 0.95,
+    "series": 0.93,
+    "tonnage": 0.91,
+    "year": 0.93,
+    "engine_hours": 0.88,
+    "raw_price": 0.41
+  },
+  "raw_price": null,
+  "raw_price_kind": null,
+  "appraisal_price": null
+}
