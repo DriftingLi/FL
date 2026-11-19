@@ -54,7 +54,8 @@ const DIGITS : string = '0123456789'
 function tagName(raw : string) : string {
     let s = raw.trim().toLowerCase()
     if (s.length > 0 && s.charAt(0) == '/') s = s.substring(1)
-    let end = s.length
+    // end 必须是 number 而不是 Int：indexOf 在 UTS 里返回 Number，Int 变量接不住（④c 实测报错）
+    let end : number = s.length
     const sp = s.indexOf(' ')
     if (sp >= 0 && sp < end) end = sp
     const sl = s.indexOf('/')
