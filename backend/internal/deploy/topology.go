@@ -37,6 +37,7 @@ var EnvVars = []EnvVar{
 	{Name: "AUTH_COOKIE_SECURE", Default: "true", Desc: "Cookie 是否仅 HTTPS"},
 	{Name: "BACKEND_HOST_PORT", Default: "8080", Desc: "后端对外发布端口"},
 	{Name: "BACKEND_IMAGE", Default: "forklift-backend:latest", Desc: "后端镜像"},
+	{Name: "COLLECTOR_IMAGE", Default: "forklift-collector:latest", Desc: "独立采集器镜像（#2672；profile-gated，daemon 化前不参与 deploy.py 镜像更新）"},
 	{Name: "COMPOSE_PROJECT_NAME", Default: "forklift-training", Desc: "Compose 项目名（固定以保留命名卷，ADR-0088）"},
 	{Name: "DB_USER", Default: "forklift", Desc: "Postgres 用户"},
 	{Name: "DIAGNOSIS_V2_OSS_BASE", Default: "https://hrwai-guangzhou.oss-cn-beijing.aliyuncs.com/forklift/repair_img", Desc: "外部诊断助手回答配图的 OSS 基准（ADR-0091 白名单）"},

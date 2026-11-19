@@ -1,0 +1,9 @@
+# collector 运行时依赖。
+#
+# - psycopg[binary]：PG 驱动（生产批命令与端到端契约测试共用）；
+# - python-dotenv：可选 env 读取（本票只用 os.environ，暂不需要，故不列）。
+# 标准库（html.parser / argparse / json / dataclasses / secrets）不需声明。
+#
+# 版本下界取 psycopg 3.2（Python 3.14 已受支持）；不钉死上界，随镜像构建取稳定版。
+
+psycopg[binary]>=3.2
