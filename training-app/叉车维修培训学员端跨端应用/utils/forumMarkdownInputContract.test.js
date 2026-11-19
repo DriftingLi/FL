@@ -34,22 +34,33 @@ const CREATE_REL = 'pages/forum/forum-create.uvue';
 const DETAIL_REL = 'pages/forum/forum-detail.uvue';
 const COMPOSER_REL = 'composables/useReplyComposer.uts';
 const PICKER_REL = 'composables/useForumImagePicker.uts';
+/** #2641：发帖页表单域整域搬进 composable（页面壳层零自持状态），格式轴判据随之落在这里 */
+const FORM_REL = 'pages/forum/composables/useForumCreateForm.uts';
 
 const input = read(INPUT_REL);
 const createPage = read(CREATE_REL);
 const detailPage = read(DETAIL_REL);
 const composer = read(COMPOSER_REL);
+const form = read(FORM_REL);
 
 // ===== ① 形态只有一份：发帖与回复共用同一个组件 =====
 
 describe('形态只有一份：发帖表单与回复栏共用同一个输入区组件（根 ADR-0052 决策①）', () => {
-  it('两个宿主都显式 import 同一个组件（各自 import 自己那份就是形态分家了）', () => {
-    for (const [rel, src] of [[CREATE_REL, createPage], [DETAIL_REL, detailPage]]) {
-      expect([rel, src.includes("from './components/forum-markdown-input.uvue'")]).toEqual([rel, true]);
-    }
-    // 形态的差异只允许由 `variant` prop 表达（两处不是两份实现）
+  it('发帖用共享记号输入区；回复浮层改用 WYSIWYG（能力端）/ 保留记号输入区（平台例外）', () => {
+    // 发帖面（#2641 尚未接 WYSIWYG）继续用共享记号输入区
+    expect(createPage).toContain("from './components/forum-markdown-input.uvue'");
     expect(createPage).toContain('variant="topic"');
+    // 回复面（本票 #2642）：能力端走 WYSIWYG，平台例外仍用同一份记号输入区
+    expect(detailPage).toContain("from '../../components/forum-wysiwyg-input.uvue'");
     expect(detailPage).toContain('variant="reply"');
+  });
+
+  it('平台例外在**编译期**摘掉 WYSIWYG（与发帖面同一口径），页面不自己探测端别', () => {
+    // 无 editor 的小程序上，组件连 import 都不该进包 —— 运行期 if 挡不住「模块不存在」的编译错误
+    expect(detailPage).toContain('#ifndef MP-ALIPAY || MP-BAIDU || MP-TOUTIAO');
+    // ADR-0032：平台判据全仓唯一（composables/useLoginProviders.uts），页面不得再探测
+    expect(detailPage).not.toContain('uniPlatform');
+    expect(detailPage).not.toContain('getProviderSync');
   });
 
   it('旧的重复形态已退场：页面里不再自持 textarea / 回复行输入（否则会与组件里的那份漂移）', () => {
@@ -168,29 +179,33 @@ describe('图片走**单一入口**：一个 `＋` 方块弹系统选择器（�
 // ===== ⑤ 编辑态：不出现档位控件，按帖子原格式呈现（Q5 裁定）=====
 
 describe('编辑态不给档位控件，只按帖子**原格式**决定形态（编辑不变式的形态侧）', () => {
-  it('控件闸门 = 非编辑 且 非资源态（两者都存不下格式声明）', () => {
-    expect(createPage).toContain(':show-format-switch="showFormatSwitch"');
-    // 闸门表达式本身就是判据：编辑态与资源态各由一个合取项挡掉
-    expect(createPage).toContain('=> !isEdit.value && !isResourceMode.value)');
+  it('档位控件已整体退出（#2641：作者格式偏好不再存在，输入形态只剩一种）', () => {
+    // 旧组件仍收这个 prop（平台例外 / 编辑态 / 资源态还在用它），但发帖页恒传 false
+    expect(createPage).toContain(':show-format-switch="false"');
+    expect(createPage).not.toContain('showFormatSwitch');
+    expect(form).not.toContain('authorFormat');
   });
 
   it('编辑态回填读详情 DTO 的 `content_format`（选择形态的依据），且**不写回载荷**', () => {
-    expect(createPage).toContain('editFormat.value = data.content_format');
-    // 生效档位：资源态恒纯文本；编辑态用帖子原格式；新建态用作者记忆位
-    expect(createPage).toMatch(/if \(isResourceMode\.value\) return FORMAT_TEXT/);
-    expect(createPage).toMatch(/return isEdit\.value \? editFormat\.value : authorFormat\.value/);
+    expect(form).toContain('editFormat.value = data.content_format');
+    // 生效档位：资源态恒纯文本；编辑态用帖子原格式；新建态一律 markdown（#2641 AC①）
+    expect(form).toMatch(/if \(isResourceMode\.value\) return FORMAT_TEXT/);
+    expect(form).toMatch(/return isEdit\.value \? editFormat\.value : FORMAT_MARKDOWN/);
     // 「不写回载荷」的行为面由 forumContentFormatBehavior 真执行承重（PUT 键集合不含 content_format）
-    expect(createPage).not.toMatch(/updateForumTopicApi\([^)]*content_format/);
+    expect(form).not.toMatch(/updateForumTopicApi\([^)]*content_format/);
   });
 
-  it('新建态用作者记忆位（根 ADR-0044「记住上次选择」），切换即**归一后**写回记忆与本地值', () => {
-    expect(createPage).toContain('const authorFormat = ref<string>(readAuthorFormat())');
-    expect(composer).toContain('const replyFormat = ref<string>(readAuthorFormat())');
-    // 归一必须发生在**赋值处**：本地值随后直接进载荷，只归一存储侧会让脏值漏出去
-    expect(createPage).toContain('const next = normalizeAuthorFormat(value)');
-    expect(composer).toContain('const next = normalizeAuthorFormat(value)');
-    expect(createPage).toContain('writeAuthorFormat(next)');
-    expect(composer).toContain('writeAuthorFormat(next)');
+  it('作者记忆位两腿都退出：发帖侧 #2641 已撤、回复侧 #2642 已撤，模块与存储键 #2643 下线', () => {
+    // 模块本体已删 ⇒ 钉「模块路径 + 存储键」，不钉已不存在的函数名（#2643）
+    for (const src of [createPage, form, composer]) {
+      expect(src).not.toContain('forumFormatPreference');
+      expect(src).not.toContain('forum_author_content_format');
+    }
+    // 回复侧（本票）：不再读写作者格式偏好，序列化产物固定发 markdown
+    expect(composer).toContain('FORMAT_MARKDOWN');
+    expect(composer).not.toContain('replyFormat');
+    // 平台例外与发帖面同一口径：编译期摘除，不是运行期探测
+    expect(composer).toContain('#ifdef MP-ALIPAY || MP-BAIDU || MP-TOUTIAO');
   });
 });
 

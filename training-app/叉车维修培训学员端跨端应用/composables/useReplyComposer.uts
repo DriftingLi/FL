@@ -5,13 +5,17 @@
  *
  * P3 之后**图片流水线不再在本文件里**：选图 / 上传 / 删除 / 预览统一走
  * `composables/useForumImagePicker.uts`（发帖面同一份实现），本文件只做域名映射与提交。
+ *
+ * #2642（ADR-0073）：回复经 WYSIWYG 输入区，序列化产物按论坛档 Markdown 落库，
+ * 故提交固定带 `content_format=markdown` —— 作者格式偏好**退出输入路径**（不再读写记忆位）。
+ * 输入区的保真检查只产出「持续可见提示」，不禁用提交；此处仍只按 trim 空闸门拦空/纯空白。
  */
 import { ref, computed } from 'vue'
 import type { Ref, ComputedRef } from 'vue'
 import { replyForumTopicApi } from '../api/forum'
 import { useForumImagePicker } from './useForumImagePicker'
-import { normalizeAuthorFormat, readAuthorFormat, writeAuthorFormat } from '../utils/forumFormatPreference'
 import { FORUM_MAX_REPLY_IMAGES } from '../constants/app'
+import { FORMAT_MARKDOWN } from '../utils/forumBody'
 import type { ForumReply } from '../types/index'
 
 export type UseReplyComposerResult = {
@@ -27,9 +31,8 @@ export type UseReplyComposerResult = {
      * 两处口径不一致时「纯空白」会让按钮亮着却点了没反应（评审发现的那处静默 return）。
      */
     canSubmitReply : ComputedRef<boolean>
-    /** 回复的正文格式声明（ADR-0025 P3）：与发帖**共用**一个记忆位（`utils/forumFormatPreference`） */
-    replyFormat : Ref<string>
-    onFormatChange : (value : string) => void
+    /** 输入区形态：能力端 WYSIWYG，平台例外（支付宝/百度/头条）恒 false ⇒ 页面挂记号工具栏 */
+    useWysiwyg : ComputedRef<boolean>
     onSubmitReply : (topicId : number, onPosted : (reply : ForumReply) => void) => Promise<void>
     onAddReplyImage : () => void
     onRemoveReplyImage : (index : number) => void
@@ -39,11 +42,6 @@ export type UseReplyComposerResult = {
 export function useReplyComposer() : UseReplyComposerResult {
     const replyContent = ref<string>('')
     const submitting = ref<boolean>(false)
-    /**
-     * 回复的格式声明：初值取作者上次的选择（根 ADR-0044）。回复**没有编辑入口**，
-     * 故这里不存在「编辑态格式只读」那条约束 —— 档位控件在回复栏始终可见。
-     */
-    const replyFormat = ref<string>(readAuthorFormat())
 
     /** 图片域整域取自共享流水线（限额由 `constants/app` 单点给出） */
     const picker = useForumImagePicker(FORUM_MAX_REPLY_IMAGES)
@@ -51,24 +49,24 @@ export function useReplyComposer() : UseReplyComposerResult {
     const replyPreviewImages = picker.previewImages
     const uploadingReplyImage = picker.uploading
 
+    /**
+     * 平台例外（ADR-0073 ⑤）：支付宝 / 百度 / 头条小程序没有 editor 组件，回复仍走记号工具栏。
+     * 与发帖面（useForumCreateForm）同一口径：**编译期**摘除 —— 无 editor 的平台上 WYSIWYG
+     * 连 import 都不该进包（页面模板与 import 同用 `#ifndef` 守卫），否则该平台编译期就会因未知组件失败。
+     */
+    let richEditorSupported : boolean = true
+    // #ifdef MP-ALIPAY || MP-BAIDU || MP-TOUTIAO
+    richEditorSupported = false
+    // #endif
+
+    /** 回复恒无「编辑态 / 资源态」回落，能力端只有 WYSIWYG 一种形态 */
+    const useWysiwyg = computed<boolean>(() : boolean => richEditorSupported)
+
     const canSubmitReply = computed<boolean>(() : boolean => {
         return replyContent.value.trim().length > 0 && !submitting.value
     })
 
-    /**
-     * 档位切换：**先归一**再落本地值与记忆位。
-     *
-     * 为什么赋值前也要归一：本地值随后**直接进提交载荷**（`replyForumTopicApi` 的 `content_format`），
-     * 而契约外取值后端会 400 —— 归一只在存储侧做的话，脏值仍会从载荷漏出去
-     * （ADR P3 回记第 4 条：读与写两个方向都归一，契约外的取值既不进存储也不漏出来）。
-     */
-    function onFormatChange(value : string) : void {
-        const next = normalizeAuthorFormat(value)
-        replyFormat.value = next
-        writeAuthorFormat(next)
-    }
-
-    /** 提交回复 */
+    /** 提交回复（WYSIWYG 序列化产物固定按 Markdown 落库） */
     async function onSubmitReply(topicId : number, onPosted : (reply : ForumReply) => void) : Promise<void> {
         if (replyContent.value.trim().length == 0) {
             uni.showToast({ title: '请输入回复内容', icon: 'none' })
@@ -77,7 +75,7 @@ export function useReplyComposer() : UseReplyComposerResult {
         if (submitting.value) return
         submitting.value = true
         try {
-            const reply = await replyForumTopicApi(topicId, replyContent.value.trim(), replyImages.value, replyFormat.value)
+            const reply = await replyForumTopicApi(topicId, replyContent.value.trim(), replyImages.value, FORMAT_MARKDOWN)
             onPosted(reply)
             replyContent.value = ''
             replyImages.value = []
@@ -97,8 +95,7 @@ export function useReplyComposer() : UseReplyComposerResult {
         uploadingReplyImage: uploadingReplyImage,
         submitting: submitting,
         canSubmitReply: canSubmitReply,
-        replyFormat: replyFormat,
-        onFormatChange: (value : string) => onFormatChange(value),
+        useWysiwyg: useWysiwyg,
         onSubmitReply: (topicId : number, onPosted : (reply : ForumReply) => void) => onSubmitReply(topicId, onPosted),
         onAddReplyImage: () => picker.onAddImage(),
         onRemoveReplyImage: (index : number) => picker.onRemoveImage(index),

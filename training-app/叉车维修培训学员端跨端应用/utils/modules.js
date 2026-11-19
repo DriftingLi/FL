@@ -326,6 +326,10 @@ const MODULES = {
       // 落 components/ 而非 pages/forum/components/：后者是 forum 的 extractDirs，未接线的
       // 新组件会被 A6「拆出物零孤儿」判红；接入在 #2641 / #2642 两票。
       'components/forum-wysiwyg-input.uvue',
+      // 'components/forum-wysiwyg-toolbar.uvue' —— #2658：格式工具条从输入区拆出（输入区 553 → 729 行
+      // 撞上 600 预算，本票按 ADR-0023 ③「拆而不覆盖」处理）。只被上面那个输入组件消费，
+      // 同属跨页共享件的那条家；未落 pages/forum/components/ 的理由同上（A6 零孤儿）。
+      'components/forum-wysiwyg-toolbar.uvue',
       'composables/useForumImagePicker.uts',
       'composables/useReplyComposer.uts',
       'composables/useReport.uts',
@@ -333,6 +337,7 @@ const MODULES = {
       'composables/useTopicDetail.uts',
       'composables/useTopicFeed.uts',
       'pages/forum/check-in.uvue',
+      'pages/forum/composables/useForumCreateForm.uts',
       'pages/forum/components/forum-checkin-card.uvue',
       'pages/forum/components/forum-contribution-form.uvue',
       'pages/forum/components/forum-experience-sort-bar.uvue',
