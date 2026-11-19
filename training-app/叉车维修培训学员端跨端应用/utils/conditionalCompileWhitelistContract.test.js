@@ -15,7 +15,8 @@
  * - 棘轮：每文件**允许减少**，**不允许增加**（含「基线外新文件出现指令行」——那等于从 0 增到 N）。
  *
  * ## 基线（2026-11-06 现测 9 文件 / 66 行，与 #2331 票面逐行一致；#2641 显式加白 2 文件 /
- * 6 行 ⇒ 11 文件 / 72 行；#2642 回复面同一口径再加白 2 文件 / 6 行 ⇒ 13 文件 / 78 行）
+ * 6 行 ⇒ 11 文件 / 72 行；#2642 回复面同一口径再加白 2 文件 / 6 行 ⇒ 13 文件 / 78 行；
+ * 2026-11-19 微信回复面新增模板分支 4 行 ⇒ 13 文件 / 82 行）
  * 基线是**策略**不是**现值**：降到 0 的文件也留在表里（留在表里才挡得住它再长回来）。
  * 只减不增 ⇒ 删分叉的票可以顺手把对应数字下调，**不要**为了「测试绿」而整体重算基线。
  *
@@ -46,7 +47,8 @@ const BASE = {
   // #2642（回复面，与 #2641 同一口径）：回复浮层与它的 composable 也要在编译期摘掉 WYSIWYG
   // （模板 + import 两处 => 4 行；composable 里 #ifdef/#endif 2 行）。
   'composables/useReplyComposer.uts': 2,
-  'pages/forum/forum-detail.uvue': 4,
+  // 微信端可视区随键盘收缩，不再叠加 keyboardheightchange，因此脚本侧需要平台分流。
+  'pages/forum/forum-detail.uvue': 8,
   'pages/resume/resume-attach.uvue': 4,
   'utils/externalLinkDispatch.uts': 4,
   'utils/secureStorage.uts': 12,
@@ -103,9 +105,9 @@ describe('条件编译白名单：#ifdef / #ifndef / #endif 只减不增（#2331
     expect(violations(sources())).toEqual([]);
   });
 
-  it('基线与现值同量级（78 行基线不许悄悄翻倍）', () => {
+  it('基线与现值同量级（82 行基线不许悄悄翻倍）', () => {
     const base = Object.values(BASE).reduce((a, b) => a + b, 0);
-    expect(base).toBe(78);
+    expect(base).toBe(82);
   });
 });
 
