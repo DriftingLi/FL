@@ -1,8 +1,9 @@
 """collector 领域数据结构。
 
-本票（#2672）只落 raw 样本：渠道 / 来源 URL / 原始描述 jsonb 三项可断言；
-抽取 / 清洗 / 匹配尚未接入，全部置默认值。字段与迁移 000063 一一对应，
-后续票把各阶段结果映射到同一行的其余列，不需改表。
+字段与迁移 000063（+ #2673 的 000064 label_eligible）一一对应。
+raw 留底三列（渠道 / 来源 URL / 原始描述 jsonb）不可变；抽取结果（结构化规格 /
+置信度 / 价格 / 抽取版本 / 标签资格）由 #2673 的抽取管线写回同一行，
+清洗 / 匹配 / 残值率标签仍由后续票填。新增字段只需改这里 + store 列清单 + 迁移。
 """
 
 from __future__ import annotations
@@ -37,6 +38,8 @@ class RawSample:
     premium_anomaly: bool = False
     residual_rate_label: float | None = None
     matched_original_price: float | None = None
+    # #2673：价格抽取成功才为真；raw 阶段（未抽取）默认 false，不会被误当有效标签。
+    label_eligible: bool = False
 
     def to_row(self) -> dict[str, Any]:
         """转成迁移 000063 的列名 → 值（jsonb 列由 store 层处理自适应）。"""

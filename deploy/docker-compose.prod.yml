@@ -130,6 +130,8 @@ services:
     profiles: ["collector"]
     environment:
       DATABASE_URL: postgres://${DB_USER:-forklift}:${DB_PASSWORD}@postgres:5432/forklift_training?sslmode=disable
+      # #2673：解密 ai_configs.api_key（与后端同一个 SECRET_KEY；与 ai_feature_bindings 共享 PG）。
+      SECRET_KEY: ${SECRET_KEY}
       TZ: Asia/Shanghai
     depends_on:
       postgres:

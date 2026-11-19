@@ -33,6 +33,7 @@ _COLUMNS = (
     "premium_anomaly",
     "residual_rate_label",
     "matched_original_price",
+    "label_eligible",
 )
 
 # 由 Python dict 写入、列类型为 jsonb 的列。与迁移 000063 保持一致。
@@ -53,8 +54,8 @@ def _insert_sql() -> str:
     )
 
 
-def insert_sample(conn: "psycopg.Connection", sample: RawSample) -> None:
-    """把一条 raw 样本落进 market_transactions（调用方负责事务）。"""
+def insert_sample(conn: "psycopg.Connection", sample: RawSample) -> int:
+    """把一条 raw 样本落进 market_transactions，返回新行 id（调用方负责事务）。"""
     from psycopg.types.json import Jsonb
 
     row = sample.to_row()
@@ -64,4 +65,15 @@ def insert_sample(conn: "psycopg.Connection", sample: RawSample) -> None:
         if col in _JSONB_COLUMNS and value is not None:
             value = Jsonb(value)
         values.append(value)
-    conn.execute(_insert_sql(), values)
+    return conn.execute(_insert_sql() + " RETURNING id", values).fetchone()[0]
+
+
+def enqueue_review(
+    conn: "psycopg.Connection", sample_id: int, reason: str, detail: str | None
+) -> None:
+    """把需人工复核的样本写进 market_sample_review_queue（调用方负责事务）。"""
+    conn.execute(
+        "INSERT INTO market_sample_review_queue (sample_id, reason, detail) "
+        "VALUES (%s, %s, %s)",
+        (sample_id, reason, detail),
+    )
