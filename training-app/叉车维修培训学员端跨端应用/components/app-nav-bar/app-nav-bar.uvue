@@ -2,9 +2,11 @@
     <view class="nav-bar" :class="[navBgClass, { 'nav-bar--transparent': transparent, 'nav-bar--divider': divider }]">
         <view class="status-bar" :class="statusBarBgClass" :style="{ height: safeArea.statusBarHeight + 'px' }"></view>
         <view class="nav-bar-body">
-            <view class="nav-bar-side nav-bar-left" :class="leftSlotFloatClass" @click="onLeftClick">
+            <view class="nav-bar-side nav-bar-left"
+                :class="[leftSlotFloatClass, { 'nav-bar-left--back': leftIcon == '‹' }]" @click="onLeftClick">
                 <slot name="left">
-                    <text v-if="leftIcon.length > 0" class="nav-bar-icon" :class="titleColorClass">{{ leftIcon }}</text>
+                    <text v-if="leftIcon.length > 0" class="nav-bar-icon"
+                        :class="[titleColorClass, { 'nav-bar-icon--back': leftIcon == '‹' }]">{{ leftIcon }}</text>
                 </slot>
             </view>
             <view v-if="title.length > 0 || subtitle.length > 0" class="nav-bar-title-block" :class="titleBlockClass"
@@ -273,6 +275,14 @@
         justify-content: flex-start;
     }
 
+    .nav-bar-left--back {
+        width: 88rpx;
+        height: 88rpx;
+        justify-content: center;
+        align-items: center;
+        margin-right: 0;
+    }
+
     /* 居中形态侧槽脱流（#2479）：只在居中形态挂上（见 leftSlotFloatClass / rightSlotFloatClass）。
        一级页的右槽即使空置也仍在 DOM 里，流内它就吃掉 rightSlotStyle 的胶囊让位宽度，把标题
        中心挤到 268rpx；出流后标题块独占整行，中心回到屏幕中心 375rpx。
@@ -380,6 +390,10 @@
     .nav-bar-icon {
         font-size: 44rpx;
         color: $text-color;
+    }
+
+    .nav-bar-icon--back {
+        font-size: 56rpx;
     }
 
     .nav-bar-inverse-text {

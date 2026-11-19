@@ -247,7 +247,7 @@
 - 状态栏占位：由本件内部按 `useSafeArea()` 取值渲染，**页面不再自带 `<view class="status-bar">`**
 - 右侧按钮区：右边界**不得越过微信胶囊左边界**（`getMenuButtonBoundingClientRect().left` − 安全间距），也不得写死魔数
 - 标题：`$font-size-xl`（36rpx），font-weight **600**（#2509 R2 冲突 12：原型 51 条大标题 **0 处 700**，w500/w600 收敛为 600；阅读刻度 `$md-weight-heading` 仍 700，不随动）；**一级页（无返回箭头）居中于屏幕中心**（#2479 / ADR-0069），**二级页**（有返回箭头）在返回箭头后**左对齐**（ADR-0067 决定 5）；标题铺满标题块内容盒，过长省略，不覆盖右槽动作（#2480）
-- 左侧返回按钮：`‹` 字符，`44rpx`
+- 左侧返回按钮：`‹` 字符，`56rpx`；左槽自身承接 `88rpx × 88rpx` 点击区
 - 右侧图标：`44rpx`
 - 背景：随页头套走（§7：N01 `$primary-color` / N02–N03 `$bg-header` / N05 `transparent` 页面自垫 / N06 白名单无页头）
 
@@ -457,7 +457,7 @@
 | G9 | 1 | 组合壳 `practice`（§6.9 形态：多区组合壳，成员唯一） |
 
 **共同格**（所有 N×G 组合）：页头件 88rpx + padding 统一 `0 $spacing-md`；标题 `$font-size-xl` bold；
-左 `‹` / 右图标 44rpx；内容区卡片 `$radius-md` + `$spacing-md`、无阴影；分隔线 `$border-color`。
+左返回箭头 `‹` 56rpx / 点击区 88rpx × 88rpx；其他左图标与右图标 44rpx；内容区卡片 `$radius-md` + `$spacing-md`、无阴影；分隔线 `$border-color`。
 
 ### 7.3 N×G 全表真源与逐页验收
 
