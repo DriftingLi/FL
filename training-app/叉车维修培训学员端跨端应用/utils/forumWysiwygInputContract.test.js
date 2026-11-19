@@ -165,11 +165,20 @@ describe('编辑器侧无图片插入入口：正文不产出 ![alt](url)（R3�
         expect(imageArea).toContain('v-if="imageCount == 0 && !isReply"');
         expect(imageArea).toContain('class="image-empty"');
         expect(imageArea).toContain('支持添加图片，最多 {{ maxImages }} 张');
-        expect(imageArea).toContain('v-if="imageCount < maxImages"');
+        // #2691：回复面（variant=reply）的添加入口交给浮层底部按钮，本组件不再画末尾「＋」方块
+        expect(imageArea).toContain('v-if="!isReply && imageCount < maxImages"');
         expect(imageArea).toContain("{{ uploading ? '上传中' : '继续添加' }}");
         // 缩略图右上 × 可删
         expect(imageArea).toContain('class="image-remove"');
         expect(imageArea).toContain('@click.stop="onRemove(idx)"');
+    });
+
+    it('#2691 回复面图片带：独立浅底带 + 顶部细分隔线，无图时整块不渲染', () => {
+        // 有图才出现（回复面不渲染空态卡）
+        expect(imageArea).toContain('v-if="visible"');
+        expect(imageArea).toContain("'image-band': isReply");
+        expect(imageArea).toContain("'image-row-band': isReply");
+        expect(imageArea).toMatch(/\.image-band\s*\{[^}]*border-top:/);
     });
 
     it('字数在正文右下（#2689 决策 5）：工具条之后、图片之前', () => {
@@ -387,7 +396,7 @@ describe('对外契约：只 emit 序列化后的 markdown 与保真检查结果
 
 describe('宿主写入通道（#2642 @某人）：组件暴露 insertMention，一次点击一次写入', () => {
     it('defineExpose 暴露 insertMention；写入走 insertText 逃生舱并回流保真检查', () => {
-        expect(input).toContain('defineExpose({ insertMention })');
+        expect(input).toContain('defineExpose({ insertMention, clear })');
         expect(input).toContain('function insertMention(');
         // 写入路径与记号同源：insertText + refreshFromEditor（不是另起一套 setContent）
         expect(input).toContain('ctx.insertText({');

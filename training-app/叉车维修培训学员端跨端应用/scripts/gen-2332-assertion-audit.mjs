@@ -31,8 +31,8 @@ const allCases = extractCases(src);
 const entries = allCases.map((c, i) => ({ c, i })).filter((e) => !e.c.desc.includes(META_DESC));
 const cases = entries.map((e) => e.c);
 
-if (cases.length !== 80) {
-  console.error('[2332] 声明单元应为 80，现抽到 ' + cases.length + '（已排除元守护组）；先对齐 utils/forumContractAudit.js');
+if (cases.length !== 81) {
+  console.error('[2332] 声明单元应为 81，现抽到 ' + cases.length + '（已排除元守护组）；先对齐 utils/forumContractAudit.js');
   process.exit(1);
 }
 
@@ -128,7 +128,7 @@ const out = [
   '',
   '分组清单：' + descs.map((d) => TICK + d + TICK).join(' · ') + '。',
   '',
-  '> 票面写「覆盖全部 76 用例」—— 76 指 ' + TICK + 'it(' + TICK + ' 声明；另有 4 条 ' + TICK + 'it.each' + TICK + '（分别展开 8 与 4）同样是声明单元，故本表按 **80 条声明 / 88 条运行时用例** 逐条登记，取值只多不少。',
+  '> 票面写「覆盖全部 76 用例」—— 76 指 ' + TICK + 'it(' + TICK + ' 声明；另有 4 条 ' + TICK + 'it.each' + TICK + '（分别展开 8 与 4）同样是声明单元，故本表按 **81 条声明 / 89 条运行时用例** 逐条登记，取值只多不少。',
   '',
   '## 3. 处置表（逐条）',
   '',

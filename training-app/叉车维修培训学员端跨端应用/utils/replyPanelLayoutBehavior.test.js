@@ -5,6 +5,8 @@
  * 这些只有**跑起来看驱动次数与产出数值**才算数。断言 `.uvue` 里出现过 `onKeyboardHeightChange`
  * 是接线守护（不构成 ③ 门证据，见 docs/agents/guards.md），去抖被改坏（同值也驱动）它照样绿。
  *
+ * #2691 起上限从「半屏」改为「视口 60%」：断言同步改值，判据仍是「跑函数看产出数值」。
+ *
  * 缝：`utils/utsHarness.js` 的 `loadUts` 真执行 `utils/replyPanelLayout.uts`（先例 forumBodyBehavior）。
  *
  * **成对取证**（③ 判据③）：末组用「去掉同值守卫」的坏 tracker 证明去抖判据**有牙** ——
@@ -37,7 +39,7 @@ describe('⑪-4 键盘高度去抖：相同 height 不重复驱动面板 bottom'
   });
 });
 
-describe('⑪-1/⑪-2 面板 bottom 与半屏上限', () => {
+describe('⑪-1/⑪-2 面板 bottom 与 60% 上限', () => {
   it('面板开着时 bottom = 当前键盘高度；关闭时 bottom 归 0', () => {
     const { panelBottomPx } = layout();
     expect(panelBottomPx(280, true)).toBe(280);
@@ -55,11 +57,12 @@ describe('⑪-1/⑪-2 面板 bottom 与半屏上限', () => {
     expect(panelTop).toBeGreaterThanOrEqual(0);
   });
 
-  it('面板高度上限约半屏（向下取整，不越过窗口一半）', () => {
+  it('面板高度上限 = 视口 60%（向下取整，不越过窗口六成）', () => {
     const { panelMaxHeightPx } = layout();
-    expect(panelMaxHeightPx(800)).toBe(400);
-    expect(panelMaxHeightPx(801)).toBe(400);   // 半屏取整
-    expect(panelMaxHeightPx(667)).toBe(333);
+    expect(panelMaxHeightPx(800)).toBe(480);
+    expect(panelMaxHeightPx(801)).toBe(480);   // 480.6 向下取整
+    expect(panelMaxHeightPx(667)).toBe(400);   // 400.2 向下取整
+    expect(panelMaxHeightPx(1000)).toBe(600);
   });
 });
 

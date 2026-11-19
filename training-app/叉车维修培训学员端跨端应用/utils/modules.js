@@ -350,6 +350,10 @@ const MODULES = {
       'pages/forum/components/forum-markdown-input.uvue',
       'pages/forum/components/forum-qa-header.uvue',
       'pages/forum/components/forum-reply-list.uvue',
+      // 'pages/forum/components/forum-reply-panel.uvue' —— #2691：回复浮层（遮罩 + 头部 + 输入区 +
+      // 底部操作区）从详情页拆出（详情页 653 行撞上 600 预算，按 ADR-0023 ③「拆而不覆盖」处理）。
+      // 只被 forum-detail 消费；草稿 / 图片 / 提交态仍由页面 composable 持有，本件只接线与转发。
+      'pages/forum/components/forum-reply-panel.uvue',
       'pages/forum/components/forum-report-dialog.uvue',
       'pages/forum/components/forum-resource-panel.uvue',
       'pages/forum/components/forum-square-sort-bar.uvue',
