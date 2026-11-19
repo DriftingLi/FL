@@ -4,7 +4,12 @@
         <text v-if="!isMarkdown" class="content-text">{{ content }}</text>
         <!-- Markdown 档：按**论坛子集**解析后的块；渲染分支在 forum-markdown-blocks，本组件不持 -->
         <ForumMarkdownBlocks v-else :blocks="blocks" />
-        <view v-if="imageUrls.length > 0" class="img-grid">
+        <!-- 单图（#2690）：原比例不裁切，宽占满正文区；浅底 16:9 起高缓解加载后下跳 -->
+        <view v-if="imageUrls.length == 1" class="img-single" @click="onPreview(0)">
+            <image class="img-single-thumb" :src="imageUrls[0]" mode="widthFix" :webp="true" />
+        </view>
+        <!-- 多图（#2690）：3 列 1:1 裁切，点开进原图预览（起始索引 = 点击位） -->
+        <view v-else-if="imageUrls.length > 1" class="img-grid">
             <view v-for="(img, idx) in imageUrls" :key="idx" class="img-cell"
                 @click="onPreview(idx)">
                 <image class="img-thumb" :src="img" mode="aspectFill" :webp="true" />
@@ -55,6 +60,20 @@
     }
 
     /* 图片墙（帖子/回复展示） */
+    /* 单图（#2690）：widthFix 原比例；壳层浅底 16:9 起高，缓解加载后的一次下跳 */
+    .img-single {
+        margin-top: 24rpx;
+        border-radius: 12rpx;
+        background-color: #f0f0f0;
+        min-height: 386rpx;
+    }
+
+    .img-single-thumb {
+        width: 100%;
+        border-radius: 12rpx;
+    }
+
+    /* 多图（#2690）：3 列 1:1 —— 单元格 210rpx + 16rpx 间距 ×3 = 678rpx，正文区宽 686rpx */
     .img-grid {
         flex-direction: row;
         flex-wrap: wrap;
@@ -62,15 +81,15 @@
     }
 
     .img-cell {
-        width: 200rpx;
-        height: 200rpx;
+        width: 210rpx;
+        height: 210rpx;
         margin-right: 16rpx;
         margin-bottom: 16rpx;
     }
 
     .img-thumb {
-        width: 200rpx;
-        height: 200rpx;
+        width: 210rpx;
+        height: 210rpx;
         border-radius: 12rpx;
         background-color: #f0f0f0;
     }

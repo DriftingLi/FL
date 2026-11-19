@@ -244,7 +244,7 @@ describe('§1.6 白名单文件自检（批4 扫描面）', () => {
     ];
     // #2262 摘除 ai-feature 诊断面板后，#6DB8E8 唯一承载移至 components/ai-chat/ai-chat-input.uvue —— 扫描面随之补入组件文件
     // #2523 起 #E3F2FD 在批次并集内的承载只剩 favorites（points-detail 提示条改浅黄），#FF8F00 的承载是 forum-topic-header 状态标签 —— 两者一并补入扫描面
-    const all = PAGES.concat(batch1, batch1605, batch3, batch5, batch6, ['components/ai-chat/ai-chat-input.uvue', 'pages/profile/favorites.uvue', 'pages/forum/components/forum-topic-header.uvue']).map((p) => styleBlock(read(p)).toUpperCase()).join('\n');
+    const all = PAGES.concat(batch1, batch1605, batch3, batch5, batch6, ['components/ai-chat/ai-chat-input.uvue', 'pages/profile/favorites.uvue', 'pages/forum/components/forum-topic-header.uvue', 'pages/forum/components/forum-topic-actions.uvue']).map((p) => styleBlock(read(p)).toUpperCase()).join('\n');
     for (const value of Object.keys(WHITELIST)) {
       expect(all).toContain(value);
     }
