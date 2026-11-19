@@ -124,7 +124,7 @@ function rendersRegionSessionList(src) {
  * 切 scope 是否**重置会话与消息**（ADR-0013 2026-11-16 修订新增的不变式；#2593）。
  *
  * 为什么必须钉：列表读的是 `featureScope.value`（现读），消息读的是本页 ref ——
- * 只改 scope 不重置 ⇒ 抽屉按新区刷新、屏幕上还挂着上一区的对话，学员在「故障咨询」里
+ * 只改 scope 不重置 ⇒ 抽屉按新区刷新、屏幕上还挂着上一区的对话，学员在「智能维修诊断」里
  * 看到通用对话的上下文。这不是样式问题，是归错区。
  */
 function scopeSwitchResets(src, name) {
@@ -186,7 +186,7 @@ describe('宫格入口 → 页内 scope 接线（#1040 / #2593）契约', () => 
       expect(code).toMatch(/export type AIFunctionItem = \{/);
       expect(code).toMatch(/featureKey : string/);
       expect(code).toMatch(/freePreview : boolean/);
-      // chip 短名（#2593）：原型 791:750「故障咨询 ⌄」里的那个名字
+      // chip 短名（#2593）：原型 791:750「智能维修诊断 ⌄」里的那个名字
       expect(code).toMatch(/scopeLabel : string/);
       // 旧形态的可选声明是被删掉的 —— 留着就等于给「伪入口」留了类型口子
       expect(code).not.toMatch(/featureKey \?: string/);
@@ -206,13 +206,13 @@ describe('宫格入口 → 页内 scope 接线（#1040 / #2593）契约', () => 
       expect((CONSTANTS.match(/^\s*\{ key: '[^']+', title: '[^']+',.*featureKey: '/gm) || []).length).toBe(4);
     });
 
-    it('展示名跟注册表：「故障咨询」→「智能维修诊断」', () => {
+    it('展示名跟注册表：「智能维修诊断」→「智能维修诊断」', () => {
       expect(tileLine('fault-consult')).toMatch(/title: '智能维修诊断'/);
       expect(CONSTANTS).not.toMatch(/title: '故障咨询'/);
     });
 
-    it('chip 短名：诊断格是「故障咨询」，其余三项与本格展示名同值（原型 791:750）', () => {
-      expect(tileLine('fault-consult')).toMatch(/scopeLabel: '故障咨询'/);
+    it('chip 短名：诊断格是「智能维修诊断」，其余三项与本格展示名同值（原型 791:750）', () => {
+      expect(tileLine('fault-consult')).toMatch(/scopeLabel: '智能维修诊断'/);
       for (const k of ['drawing', 'exercise', 'knowledge']) {
         const line = tileLine(k);
         const title = /title: '([^']+)'/.exec(line)[1];
