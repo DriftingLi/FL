@@ -1,0 +1,185 @@
+<template>
+    <!-- 论坛正文输入区的**格式工具条**（#2658 拆分，ADR-0073 R1/R2）：常驻三键 + 粘贴 + 二级面板。
+         它只渲染、不碰编辑器 —— 按钮集是 utils/forumWysiwygInput 的数据，动作一律 emit 回输入区，
+         由输入区那侧持有 editorCtx 决定怎么落地。这样「有哪些按钮」与「按钮怎么生效」各自只有一处。 -->
+    <view class="wysiwyg-toolbar">
+        <!-- 常驻三键（粗体 / 斜体 / 删除线）+ 粘贴 + 二级面板开关。触摸目标 88rpx（R2）。 -->
+        <view class="primary-row">
+            <view v-for="(act, idx) in primaryActions" :key="act.id" class="tool-btn"
+                :class="{ active: isActive(act.id), 'ml-16': idx > 0 }" @click="onAction(act.id)">
+                <text class="tool-btn-text" :class="{ active: isActive(act.id) }">{{ act.label }}</text>
+            </view>
+            <!-- 粘贴：原生长按粘贴会整段丢弃 text/html（#2658），这条按钮把剪贴板内容取回来走 insertText -->
+            <view class="tool-btn tool-btn-paste ml-16" @click="onPaste">
+                <text class="tool-btn-text">{{ pasteLabel }}</text>
+            </view>
+            <view class="tool-btn tool-btn-more ml-16" :class="{ active: panelOpen }" @click="onTogglePanel">
+                <text class="tool-btn-text" :class="{ active: panelOpen }">{{ panelOpen ? '收起' : '更多' }}</text>
+            </view>
+        </view>
+
+        <!-- 二级面板：格式组（标题 / 列表 / 分割线）+ 记号组（引用 / 代码块 / 行内代码 / 链接）。
+             记号四件走 insertText 逃生舱（editor 的 link 属性丢 URL、code 属性 no-op）。 -->
+        <view v-if="panelOpen" class="panel">
+            <view v-for="(group, gi) in panelGroups" :key="group.id" class="panel-group"
+                :class="{ 'mt-16': gi > 0 }">
+                <text class="panel-group-title">{{ group.label }}</text>
+                <view class="panel-row">
+                    <view v-for="act in group.actions" :key="act.id" class="panel-btn"
+                        :class="{ active: isActive(act.id) }" @click="onAction(act.id)">
+                        <text class="panel-btn-text" :class="{ active: isActive(act.id) }">{{ act.label }}</text>
+                    </view>
+                </view>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref } from 'vue'
+    import { PASTE_LABEL } from '../utils/forumPaste'
+    import { richPanelGroups, richPrimaryActions } from '../utils/forumWysiwygInput'
+    import type { RichAction, RichPanelGroup } from '../utils/forumWysiwygInput'
+
+    /** 「粘贴」按钮文案（模板不硬编码中文，文案单点在 utils/forumPaste） */
+    const pasteLabel : string = PASTE_LABEL
+
+    const props = withDefaults(defineProps<{
+        /** 点亮集合（**一律由输入区从 getContents 的 delta 推导**后传进来；工具条不自己判事实） */
+        activeIds?: string[]
+    }>(), {
+        activeIds: () => [] as string[],
+    })
+
+    /**
+     * 只向上吐「哪个动作被点了」与「粘贴被点了」两件事 ——
+     * 怎么执行（format / insertDivider / insertText）留在输入区，因为那需要 editorCtx。
+     */
+    const emit = defineEmits<{
+        (e: 'action', id: string): void
+        (e: 'paste'): void
+    }>()
+
+    /** 按钮集是数据、不是模板硬编码：常驻三键与面板两组都取自 utils/forumWysiwygInput 的唯一实现。 */
+    const primaryActions : RichAction[] = richPrimaryActions()
+    const panelGroups : RichPanelGroup[] = richPanelGroups()
+    const panelOpen = ref<boolean>(false)
+
+    function isActive(id : string) : boolean {
+        return props.activeIds.indexOf(id) >= 0
+    }
+
+    function onAction(id : string) : void {
+        emit('action', id)
+    }
+
+    function onPaste() : void {
+        emit('paste')
+    }
+
+    function onTogglePanel() : void {
+        panelOpen.value = !panelOpen.value
+    }
+</script>
+
+<style lang="scss">
+    .wysiwyg-toolbar {
+        flex-direction: column;
+    }
+
+    /* ===== 常驻三键（触摸目标 88rpx，R2）===== */
+    .primary-row {
+        flex-direction: row;
+        align-items: center;
+        margin-top: 16rpx;
+    }
+
+    .tool-btn {
+        width: 88rpx;
+        height: 88rpx;
+        border-radius: 12rpx;
+        background-color: #f5f7fa;
+        border: 1rpx solid #e4e7ed;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .tool-btn.active {
+        background-color: #e8f0fe;
+        border: 1rpx solid $primary-color;
+    }
+
+    .tool-btn-more {
+        width: 120rpx;
+    }
+
+    .tool-btn-text {
+        font-size: 26rpx;
+        color: #333333;
+    }
+
+    .tool-btn-text.active {
+        color: $primary-color;
+        font-weight: bold;
+    }
+
+    .ml-16 {
+        margin-left: 16rpx;
+    }
+
+    .mt-16 {
+        margin-top: 16rpx;
+    }
+
+    /* ===== 二级面板 ===== */
+    .panel {
+        margin-top: 16rpx;
+        padding: 16rpx;
+        border-radius: 12rpx;
+        background-color: #fafbfc;
+        border: 1rpx solid #e4e7ed;
+    }
+
+    .panel-group {
+        flex-direction: column;
+    }
+
+    .panel-group-title {
+        font-size: 22rpx;
+        color: #999999;
+        margin-bottom: 8rpx;
+    }
+
+    .panel-row {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+
+    .panel-btn {
+        min-width: 88rpx;
+        height: 88rpx;
+        padding: 0 24rpx;
+        margin-right: 16rpx;
+        margin-bottom: 16rpx;
+        border-radius: 12rpx;
+        background-color: #ffffff;
+        border: 1rpx solid #e4e7ed;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .panel-btn.active {
+        background-color: #e8f0fe;
+        border: 1rpx solid $primary-color;
+    }
+
+    .panel-btn-text {
+        font-size: 26rpx;
+        color: #333333;
+    }
+
+    .panel-btn-text.active {
+        color: $primary-color;
+        font-weight: bold;
+    }
+</style>

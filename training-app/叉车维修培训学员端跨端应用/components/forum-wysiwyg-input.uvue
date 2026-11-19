@@ -8,8 +8,9 @@
          图片只有下方单一 `＋` 入口：编辑器侧不提供插入入口，粘进正文的图片在序列化时丢弃并提示（R3）。 -->
     <view class="wysiwyg-input">
         <view class="editor-box">
-            <!-- 白名单重建（showEditor=false → true）留给宿主：editor 的初始化属性只在挂载时生效，
-                 本组件不重建，避免把「重建」变成一条隐式副作用。 -->
+            <!-- 重建（showEditor=false → true）只用于一条**显式**的恢复路径：粘贴写入失败且正文为空时
+                 重建一次编辑器再写（#2658「失败后不可再聚焦」）。其余情况不重建 —— editor 的初始化
+                 属性只在挂载时生效，把重建变成隐式副作用会丢正文。 -->
             <editor v-if="showEditor" id="forum-wysiwyg-editor" class="rich-editor"
                 :class="isReply ? 'rich-editor-reply' : ''" :read-only="readOnly"
                 :placeholder="placeholder" :show-img-size="false" :show-img-toolbar="false"
@@ -17,35 +18,21 @@
                 @blur="onEditorBlur" @input="onEditorInput" @statuschange="onStatusChange" />
         </view>
 
-        <!-- 常驻三键（粗体 / 斜体 / 删除线）+ 二级面板开关。触摸目标 88rpx（R2）。 -->
-        <view class="primary-row">
-            <view v-for="(act, idx) in primaryActions" :key="act.id" class="tool-btn"
-                :class="{ active: isActive(act.id), 'ml-16': idx > 0 }" @click="onActionTap(act.id)">
-                <text class="tool-btn-text" :class="{ active: isActive(act.id) }">{{ act.label }}</text>
-            </view>
-            <view class="tool-btn tool-btn-more ml-16" :class="{ active: panelOpen }" @click="onTogglePanel">
-                <text class="tool-btn-text" :class="{ active: panelOpen }">{{ panelOpen ? '收起' : '更多' }}</text>
-            </view>
-        </view>
-
-        <!-- 二级面板：格式组（标题 / 列表 / 分割线）+ 记号组（引用 / 代码块 / 行内代码 / 链接）。
-             记号四件走 insertText 逃生舱（editor 的 link 属性丢 URL、code 属性 no-op）。 -->
-        <view v-if="panelOpen" class="panel">
-            <view v-for="(group, gi) in panelGroups" :key="group.id" class="panel-group"
-                :class="{ 'mt-16': gi > 0 }">
-                <text class="panel-group-title">{{ group.label }}</text>
-                <view class="panel-row">
-                    <view v-for="act in group.actions" :key="act.id" class="panel-btn"
-                        :class="{ active: isActive(act.id) }" @click="onActionTap(act.id)">
-                        <text class="panel-btn-text" :class="{ active: isActive(act.id) }">{{ act.label }}</text>
-                    </view>
-                </view>
-            </view>
-        </view>
+        <!-- 格式工具条（常驻三键 + 粘贴 + 二级面板）拆成独立件：它只渲染并 emit 动作，
+             怎么落地由本组件按 editorCtx 决定（#2658 拆分，行数预算 ADR-0023）。 -->
+        <ForumWysiwygToolbar :active-ids="activeIds" @action="onActionTap" @paste="onPasteTap" />
 
         <!-- 保真检查：序列化时被降级 / 被丢弃的项，**持续可见**（R3）。空串时不渲染。
              宿主可关掉本行自己渲染（#2641 发帖页要把它放到提交按钮附近，AC③）—— 两处只出现一次。 -->
         <text v-if="showFidelityNotice && fidelityNotice.length > 0" class="fidelity-notice">{{ fidelityNotice }}</text>
+
+        <!-- 粘贴结果提示（持续可见直到正文变化）：降级 / 空剪贴板 / 读不到，三种都**不静默** -->
+        <text v-if="pasteNotice.length > 0" class="paste-notice">{{ pasteNotice }}</text>
+
+        <!-- 原生粘贴被丢弃后的提示：整行可点，点了就走「粘贴」按钮同一条路径 -->
+        <view v-if="pasteHint.length > 0" class="paste-hint-row" @click="onPasteTap">
+            <text class="paste-hint-text">{{ pasteHint }}</text>
+        </view>
 
         <!-- 两条功能提示（ui-hints 的明确例外，别当装饰删）：属地披露 + Markdown 边界提示 -->
         <text v-if="showRegionNotice" class="region-notice">{{ regionNotice }}</text>
@@ -74,16 +61,26 @@
     import { ref, computed, onUnmounted } from 'vue'
     import { buildMarker, serializeDelta } from '../utils/forumDeltaMarkdown'
     import { FORUM_MARKDOWN_BOUNDARY_NOTICE, FORUM_REGION_NOTICE } from '../utils/forumDisplay'
+    import ForumWysiwygToolbar from './forum-wysiwyg-toolbar.uvue'
+    import {
+        PASTE_HINT_AFTER_DROP,
+        PASTE_HINT_MIN_FOCUS_MS,
+        PASTE_NOTICE_DEGRADED,
+        PASTE_NOTICE_EMPTY,
+        PASTE_NOTICE_INSERT_FAILED,
+        PASTE_NOTICE_UNREADABLE,
+        normalizePastedText,
+        shouldClearPasteNotice,
+        shouldOfferPasteHint,
+    } from '../utils/forumPaste'
     import {
         RICH_KIND_DIVIDER,
         RICH_KIND_MARKER,
         richActionById,
         richActiveFromDelta,
         richFidelityNotice,
-        richPanelGroups,
-        richPrimaryActions,
     } from '../utils/forumWysiwygInput'
-    import type { RichAction, RichPanelGroup } from '../utils/forumWysiwygInput'
+    import type { RichAction } from '../utils/forumWysiwygInput'
 
     /** editor 的 id 与 createEditorContextAsync 的 id 必须同值；一页只挂一个本组件（发帖页 / 回复浮层各一页）。 */
     const EDITOR_ID : string = 'forum-wysiwyg-editor'
@@ -91,6 +88,12 @@
     /** 两条功能提示的文案**单点**在 utils/forumDisplay（模板不直调 import 函数，先落局部标识）。 */
     const regionNotice : string = FORUM_REGION_NOTICE
     const boundaryNotice : string = FORUM_MARKDOWN_BOUNDARY_NOTICE
+    /**
+     * 失焦后只读态的最长保持时间（ms）。
+     * 只读是为了保住选区让格式按钮生效，但它同时挡住「点编辑器重新聚焦」——
+     * 一次被原生层丢弃的粘贴会让编辑器失焦，只读若一直挂着，作者就再也点不进去（#2658）。
+     */
+    const READONLY_HOLD_MS : number = 800
 
     const props = withDefaults(defineProps<{
         /** 已选图片的**预览 URL**（父层预解析；原始路径留在父层用于提交） */
@@ -134,34 +137,36 @@
         (e: 'keyboard-height', height: number): void
     }>()
 
-    /** 按钮集是数据、不是模板硬编码：常驻三键与面板两组都取自 utils/forumWysiwygInput 的唯一实现。 */
-    const primaryActions : RichAction[] = richPrimaryActions()
-    const panelGroups : RichPanelGroup[] = richPanelGroups()
-
     const showEditor = ref<boolean>(true)
     /**
      * 失焦后置 true：保住编辑器选区，让「点格式按钮」不因失焦而丢选区。
      * 点按钮时把 format 推到下一个 tick 执行，执行完立刻恢复可编辑（票面判据的绕行路径）。
      */
     const readOnly = ref<boolean>(false)
-    const panelOpen = ref<boolean>(false)
     /** 点亮集合：**一律由 getContents 的 delta 推导**（statuschange 只是通知，不是事实源） */
     const activeIds = ref<string[]>([])
     const issues = ref<string[]>([])
     const markdownLength = ref<number>(0)
+    /** 粘贴结果提示（持续可见直到正文变化）与其设置时刻（用于区分「粘贴自身那次 @input」） */
+    const pasteNotice = ref<string>('')
+    const pasteNoticeAt = ref<number>(0)
+    /** 原生粘贴被丢弃后的提示行（空串 = 不渲染） */
+    const pasteHint = ref<string>('')
 
     let editorCtx : EditorContext | null = null
     /** @某人 在 editor ready 之前点击时的暂存串（onEditorReady 后补写，避免丢失） */
     let pendingMention : string = ''
+    /** 「粘贴」在 editor ready 之前点击时的暂存串（onEditorReady 后补写） */
+    let pendingPasteText : string = ''
+    /** 本次聚焦的起点时刻（判「这次失焦是不是一次粘贴尝试」） */
+    let focusAt : number = 0
+    /** 重建编辑器只试一次，避免 insertText 持续失败时来回重建 */
+    let pasteRebuildTried : boolean = false
 
     const isReply = computed<boolean>(() : boolean => props.variant == 'reply')
     const fidelityNotice = computed<string>(() : string => richFidelityNotice(issues.value))
     const counterText = computed<string>(() : string => markdownLength.value.toString() + '/' + props.maxlength.toString())
     const imageCounter = computed<string>(() : string => props.imageCount.toString() + '/' + props.maxImages.toString())
-
-    function isActive(id : string) : boolean {
-        return activeIds.value.indexOf(id) >= 0
-    }
 
     /**
      * 唯一的事实刷新点：getContents → 序列化 → 点亮集合。
@@ -191,6 +196,91 @@
         })
     }
 
+    function showPasteNotice(text : string) : void {
+        pasteNotice.value = text
+        pasteNoticeAt.value = Date.now()
+    }
+
+    /**
+     * 把归一后的纯文本写进编辑器。
+     *
+     * 为什么绕开原生粘贴（#2658 根因）：uni-app x 的 editor 没有 paste 钩子，Android 原生层
+     * 把 text/html 的 clipdata 整段丢弃（0 字、无 @input、无 statuschange）。insertText 与打字
+     * 同一条路径 ⇒ 一定发 @input、一定进序列化，格式按 ADR-0073 修订口径整段降级为纯文本。
+     */
+    function insertPastedText(text : string) : void {
+        const ctx = editorCtx
+        if (ctx == null) {
+            pendingPasteText = text
+            return
+        }
+        if (readOnly.value) {
+            setTimeout(() => {
+                readOnly.value = false
+                insertPastedText(text)
+            }, 0)
+            return
+        }
+        pasteHint.value = ''
+        ctx.insertText({
+            text: text,
+            success: () => {
+                pasteRebuildTried = false
+                showPasteNotice(PASTE_NOTICE_DEGRADED)
+                refreshFromEditor()
+            },
+            fail: () => {
+                // 编辑器被原生层卡住（#2658 的「失败后不可再聚焦」）：正文为空时重建一次再写
+                if (markdownLength.value == 0 && !pasteRebuildTried) {
+                    pasteRebuildTried = true
+                    pendingPasteText = text
+                    editorCtx = null
+                    showEditor.value = false
+                    setTimeout(() => { showEditor.value = true }, 50)
+                    return
+                }
+                showPasteNotice(PASTE_NOTICE_INSERT_FAILED)
+            }
+        })
+    }
+
+    /**
+     * 失焦时判断「这次是不是一次被丢弃的粘贴」：正文为空 + 聚焦够久 + 剪贴板里有字。
+     * 只提示、不自动插入 —— 自动插入会在「点进编辑器又点走」时凭空多出一段内容。
+     */
+    function detectDroppedPaste() : void {
+        const focusedMs = focusAt > 0 ? Date.now() - focusAt : 0
+        focusAt = 0
+        if (markdownLength.value > 0) return
+        if (focusedMs < PASTE_HINT_MIN_FOCUS_MS) return
+        uni.getClipboardData({
+            success: (res) => {
+                const text = normalizePastedText(res.data)
+                if (shouldOfferPasteHint(focusedMs, markdownLength.value, text.length)) {
+                    pasteHint.value = PASTE_HINT_AFTER_DROP
+                }
+            },
+            fail: () => {}
+        })
+    }
+
+    /** 「粘贴」按钮：读剪贴板 → 归一成纯文本 → insertText（与打字同一条 content-change 路径） */
+    function onPasteTap() : void {
+        uni.getClipboardData({
+            success: (res) => {
+                const text = normalizePastedText(res.data)
+                if (text.length == 0) {
+                    showPasteNotice(PASTE_NOTICE_EMPTY)
+                    return
+                }
+                insertPastedText(text)
+            },
+            fail: () => {
+                showPasteNotice(PASTE_NOTICE_UNREADABLE)
+            }
+        })
+    }
+
     function onEditorReady() : void {
         const options : CreateEditorContextAsyncOptions = {
             id: EDITOR_ID,
@@ -201,6 +291,17 @@
                     pendingMention = ''
                     ctx_insertMentionText(context, text)
                 }
+                if (pendingPasteText.length > 0) {
+                    const text = pendingPasteText
+                    pendingPasteText = ''
+                    context.insertText({
+                        text: text,
+                        success: () => {
+                            showPasteNotice(PASTE_NOTICE_DEGRADED)
+                            refreshFromEditor()
+                        }
+                    })
+                }
                 refreshFromEditor()
             },
             fail: (_error : UniError) => {}
@@ -210,13 +311,27 @@
 
     function onEditorFocus() : void {
         readOnly.value = false
+        focusAt = Date.now()
+        pasteHint.value = ''
     }
 
+    /**
+     * 失焦：短暂置只读保住选区（点格式按钮不丢选区），随后**必须**放开。
+     * 只读若一直挂着，一次被原生层丢弃的粘贴就会让编辑器再也点不进去（#2658）。
+     */
     function onEditorBlur() : void {
         readOnly.value = true
+        setTimeout(() => { readOnly.value = false }, READONLY_HOLD_MS)
+        detectDroppedPaste()
     }
 
     function onEditorInput(_event : UniEditorInputEvent) : void {
+        // 粘贴自身那次 @input 不能把刚设的提示清掉（TTL 内不清），之后任何正文变化都清
+        if (shouldClearPasteNotice(pasteNoticeAt.value, Date.now())) {
+            pasteNotice.value = ''
+            pasteNoticeAt.value = 0
+        }
+        pasteHint.value = ''
         refreshFromEditor()
     }
 
@@ -267,10 +382,6 @@
             return
         }
         applyAction(action)
-    }
-
-    function onTogglePanel() : void {
-        panelOpen.value = !panelOpen.value
     }
 
     function onAddImage() : void {
@@ -364,107 +475,32 @@
         padding: 16rpx;
     }
 
-    /* ===== 常驻三键（触摸目标 88rpx，R2）===== */
-    .primary-row {
-        flex-direction: row;
-        align-items: center;
-        margin-top: 16rpx;
-    }
-
-    .tool-btn {
-        width: 88rpx;
-        height: 88rpx;
-        border-radius: 12rpx;
-        background-color: #f5f7fa;
-        border: 1rpx solid #e4e7ed;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .tool-btn.active {
-        background-color: #e8f0fe;
-        border: 1rpx solid $primary-color;
-    }
-
-    .tool-btn-more {
-        width: 120rpx;
-    }
-
-    .tool-btn-text {
-        font-size: 26rpx;
-        color: #333333;
-    }
-
-    .tool-btn-text.active {
-        color: $primary-color;
-        font-weight: bold;
-    }
-
-    .ml-16 {
-        margin-left: 16rpx;
-    }
-
-    .mt-16 {
-        margin-top: 16rpx;
-    }
-
-    /* ===== 二级面板 ===== */
-    .panel {
-        margin-top: 16rpx;
-        padding: 16rpx;
-        border-radius: 12rpx;
-        background-color: #fafbfc;
-        border: 1rpx solid #e4e7ed;
-    }
-
-    .panel-group {
-        flex-direction: column;
-    }
-
-    .panel-group-title {
-        font-size: 22rpx;
-        color: #999999;
-        margin-bottom: 8rpx;
-    }
-
-    .panel-row {
-        flex-direction: row;
-        flex-wrap: wrap;
-    }
-
-    .panel-btn {
-        min-width: 88rpx;
-        height: 88rpx;
-        padding: 0 24rpx;
-        margin-right: 16rpx;
-        margin-bottom: 16rpx;
-        border-radius: 12rpx;
-        background-color: #ffffff;
-        border: 1rpx solid #e4e7ed;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .panel-btn.active {
-        background-color: #e8f0fe;
-        border: 1rpx solid $primary-color;
-    }
-
-    .panel-btn-text {
-        font-size: 26rpx;
-        color: #333333;
-    }
-
-    .panel-btn-text.active {
-        color: $primary-color;
-        font-weight: bold;
-    }
-
     /* ===== 保真检查提示（持续可见，R3）===== */
     .fidelity-notice {
         font-size: 22rpx;
         color: #e6a23c;
         margin-top: 12rpx;
+    }
+
+    /* ===== 粘贴结果提示（#2658：降级 / 空剪贴板 / 读不到，三种都不静默）===== */
+    .paste-notice {
+        font-size: 22rpx;
+        color: #e6a23c;
+        margin-top: 12rpx;
+    }
+
+    /* 原生粘贴被丢弃后的提示行：整行可点，走「粘贴」按钮同一条路径 */
+    .paste-hint-row {
+        margin-top: 12rpx;
+        padding: 12rpx 16rpx;
+        border-radius: 12rpx;
+        background-color: #fdf6ec;
+        border: 1rpx solid #f5dab1;
+    }
+
+    .paste-hint-text {
+        font-size: 22rpx;
+        color: #e6a23c;
     }
 
     /* ===== 功能提示（两条都是 ui-conventions 的明确例外，别当装饰删）===== */

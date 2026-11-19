@@ -28,9 +28,12 @@ const ROOT = path.join(__dirname, '..');
 const read = (rel) => readText(path.join(ROOT, rel));
 
 const INPUT_REL = 'components/forum-wysiwyg-input.uvue';
+const TOOLBAR_REL = 'components/forum-wysiwyg-toolbar.uvue';
 const MODEL_REL = 'utils/forumWysiwygInput.uts';
 
 const input = read(INPUT_REL);
+/** #2658：格式工具条（常驻三键 + 粘贴 + 面板）拆成独立件，按钮集与触摸目标的判据落在它身上。 */
+const toolbar = read(TOOLBAR_REL);
 const model = read(MODEL_REL);
 
 /** 取某个函数/方法的函数体（从签名到下一个同缩进的 `}`），用于「这个函数里不许出现 X」类判据。 */
@@ -52,18 +55,23 @@ function stripComments(src) {
 // ===== ① 常驻三键：数据驱动，恰好三枚 =====
 
 describe('常驻三键由数据驱动（按钮集是单点，不是模板硬编码）', () => {
-    it('模板遍历 richPrimaryActions 的结果，不自己列按钮', () => {
-        expect(input).toContain('const primaryActions : RichAction[] = richPrimaryActions()');
-        expect(input).toContain('v-for="(act, idx) in primaryActions"');
-        expect(input).toContain('@click="onActionTap(act.id)"');
+    it('工具条遍历 richPrimaryActions 的结果，不自己列按钮', () => {
+        expect(toolbar).toContain('const primaryActions : RichAction[] = richPrimaryActions()');
+        expect(toolbar).toContain('v-for="(act, idx) in primaryActions"');
+        expect(toolbar).toContain('@click="onAction(act.id)"');
+        // 拆分的接缝：工具条只 emit，输入区持有 editorCtx 才决定怎么落地
+        expect(toolbar).toContain("(e: 'action', id: string): void");
+        expect(toolbar).toContain("emit('action', id)");
+        expect(input).toContain('<ForumWysiwygToolbar :active-ids="activeIds" @action="onActionTap" @paste="onPasteTap" />');
     });
 
     it('模板里不出现中文按钮名（文案单点在 utils/forumWysiwygInput）', () => {
-        const markup = stripComments(input);
-        for (const label of ['粗体', '斜体', '删除线', '引用', '代码块', '行内代码', '链接']) {
-            expect([label, markup.includes(label)]).toEqual([label, false]);
+        for (const src of [stripComments(input), stripComments(toolbar)]) {
+            for (const label of ['粗体', '斜体', '删除线', '引用', '代码块', '行内代码', '链接']) {
+                expect([label, src.includes(label)]).toEqual([label, false]);
+            }
         }
-        expect(markup).toContain('{{ act.label }}');
+        expect(stripComments(toolbar)).toContain('{{ act.label }}');
     });
 
     it('下划线不在按钮集里（永久退出），行内代码不作常驻', () => {
@@ -79,24 +87,24 @@ describe('常驻三键由数据驱动（按钮集是单点，不是模板硬编�
 
 describe('触摸目标 ≥88rpx（R2）：常驻键、面板键、更多键都不缩小', () => {
     it('常驻键 88×88rpx', () => {
-        expect(input).toMatch(/\.tool-btn \{[\s\S]*?width: 88rpx;[\s\S]*?height: 88rpx;/);
+        expect(toolbar).toMatch(/\.tool-btn \{[\s\S]*?width: 88rpx;[\s\S]*?height: 88rpx;/);
     });
 
     it('面板键高度 88rpx、最小宽度 88rpx（不为塞按钮缩小）', () => {
-        expect(input).toMatch(/\.panel-btn \{[\s\S]*?min-width: 88rpx;[\s\S]*?height: 88rpx;/);
+        expect(toolbar).toMatch(/\.panel-btn \{[\s\S]*?min-width: 88rpx;[\s\S]*?height: 88rpx;/);
     });
 
     it('「更多」键只加宽不加高（120rpx × 88rpx）', () => {
-        expect(input).toMatch(/\.tool-btn-more \{[\s\S]*?width: 120rpx;/);
+        expect(toolbar).toMatch(/\.tool-btn-more \{[\s\S]*?width: 120rpx;/);
     });
 
     it('88 这个数只有一处来源：模型常量与样式表交叉对齐（防两处各写一份漂移）', () => {
         const declared = model.match(/RICH_TOUCH_TARGET_RPX = (\d+)/);
         expect(declared).not.toBeNull();
         const rpx = declared[1] + 'rpx';
-        expect(input).toContain('width: ' + rpx + ';');
-        expect(input).toContain('height: ' + rpx + ';');
-        expect(input).toContain('min-width: ' + rpx + ';');
+        expect(toolbar).toContain('width: ' + rpx + ';');
+        expect(toolbar).toContain('height: ' + rpx + ';');
+        expect(toolbar).toContain('min-width: ' + rpx + ';');
     });
 });
 
@@ -185,6 +193,67 @@ describe('失焦后点格式按钮仍可用：readOnly 保住选区，format 推
         expect(tap).toContain('setTimeout(() => {');
         expect(tap).toContain('applyAction(action)');
         expect(tap).toContain('readOnly.value = false');
+    });
+
+    // #2658：只读态会挡住「点编辑器重新聚焦」。一次被原生层丢弃的粘贴会让编辑器失焦，
+    // 只读若一直挂着，作者就再也点不进去，只能退出重进。
+    it('只读态必须自己放开：失焦后 READONLY_HOLD_MS 到点恢复可编辑', () => {
+        const blur = bodyOf(input, 'function onEditorBlur()');
+        expect(blur).toContain('readOnly.value = true');
+        expect(blur).toContain('setTimeout(() => { readOnly.value = false }, READONLY_HOLD_MS)');
+        expect(input).toContain('const READONLY_HOLD_MS : number =');
+    });
+});
+
+// ===== ⑥b 粘贴：原生粘贴丢弃 text/html，改走「粘贴」按钮 → insertText（#2658）=====
+
+describe('粘贴走 insertText 同一条 content-change 路径（原生粘贴会整段丢弃 text/html）', () => {
+    it('常驻行有「粘贴」按钮，文案取自 utils/forumPaste 不硬编码', () => {
+        expect(toolbar).toContain('@click="onPaste"');
+        expect(toolbar).toContain('{{ pasteLabel }}');
+        expect(toolbar).toContain('const pasteLabel : string = PASTE_LABEL');
+        // 接缝两端都在：工具条 emit paste，输入区把粘贴落地
+        expect(toolbar).toContain("emit('paste')");
+        expect(input).toContain('@paste="onPasteTap"');
+        expect(input).toContain('function onPasteTap()');
+    });
+
+    it('读剪贴板 → 归一 → insertText，且失败分支都有可见提示', () => {
+        const tap = bodyOf(input, 'function onPasteTap()');
+        expect(tap).toContain('uni.getClipboardData({');
+        expect(tap).toContain('normalizePastedText(res.data)');
+        expect(tap).toContain('insertPastedText(text)');
+        expect(tap).toContain('PASTE_NOTICE_EMPTY');
+        expect(tap).toContain('PASTE_NOTICE_UNREADABLE');
+
+        const insert = bodyOf(input, 'function insertPastedText(');
+        expect(insert).toContain('ctx.insertText({');
+        expect(insert).toContain('PASTE_NOTICE_DEGRADED');
+        expect(insert).toContain('PASTE_NOTICE_INSERT_FAILED');
+        expect(insert).toContain('refreshFromEditor()');
+    });
+
+    it('降级提示是持续可见的一行，不是 toast', () => {
+        expect(input).toContain('<text v-if="pasteNotice.length > 0" class="paste-notice">');
+        expect(toolbar).not.toContain('showToast');
+        expect(toolbar).not.toContain('showModal');
+        expect(input).toContain('<view v-if="pasteHint.length > 0" class="paste-hint-row" @click="onPasteTap">');
+        expect(input).not.toContain('showToast');
+        expect(input).not.toContain('showModal');
+    });
+
+    it('原生粘贴被丢弃后给可点提示，判据来自纯逻辑模块', () => {
+        const blur = bodyOf(input, 'function onEditorBlur()');
+        expect(blur).toContain('detectDroppedPaste()');
+        const detect = bodyOf(input, 'function detectDroppedPaste()');
+        expect(detect).toContain('shouldOfferPasteHint(');
+        expect(detect).toContain('PASTE_HINT_AFTER_DROP');
+    });
+
+    it('粘贴自身那次 @input 不清提示，之后任何正文变化都清', () => {
+        const handler = bodyOf(input, 'function onEditorInput(');
+        expect(handler).toContain('shouldClearPasteNotice(pasteNoticeAt.value, Date.now())');
+        expect(handler).toContain("pasteNotice.value = ''");
     });
 });
 
