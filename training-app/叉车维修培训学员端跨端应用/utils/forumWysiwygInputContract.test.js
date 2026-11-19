@@ -30,11 +30,14 @@ const read = (rel) => readText(path.join(ROOT, rel));
 const INPUT_REL = 'components/forum-wysiwyg-input.uvue';
 const TOOLBAR_REL = 'components/forum-wysiwyg-toolbar.uvue';
 const MODEL_REL = 'utils/forumWysiwygInput.uts';
+/** #2659：收敛判定与落地（reconcileMarkerInsert / settleMarkerInsert）在 delta 管线里，与序列化同文件。 */
+const DELTA_REL = 'utils/forumDeltaMarkdown.uts';
 
 const input = read(INPUT_REL);
 /** #2658：格式工具条（常驻三键 + 粘贴 + 面板）拆成独立件，按钮集与触摸目标的判据落在它身上。 */
 const toolbar = read(TOOLBAR_REL);
 const model = read(MODEL_REL);
+const delta = read(DELTA_REL);
 
 /** 取某个函数/方法的函数体（从签名到下一个同缩进的 `}`），用于「这个函数里不许出现 X」类判据。 */
 function bodyOf(src, signature) {
@@ -141,8 +144,17 @@ describe('编辑器侧无图片插入入口：正文不产出 ![alt](url)（R3�
 describe('记号四件走 insertText 逃生舱（editor 的 link 丢 URL、code 是 no-op）', () => {
     it('有选区包裹 / 无选区插模板，都经 buildMarker + insertText', () => {
         expect(input).toContain('ctx.getSelectionText({');
-        expect(input).toContain('buildMarker(action.id, res.text)');
+        expect(input).toContain('buildMarker(action.id, selected)');
         expect(input).toContain('ctx.insertText({');
+    });
+
+    it('插入后必须收敛：insertText 在真机上不删选区（#2659），写成后按 delta 复核并 setContents', () => {
+        const apply = bodyOf(input, 'function applyAction(');
+        expect(apply).toContain('settleMarkerInsert(ctx, preDelta, selected, text, refreshFromEditor)');
+        // 顶层函数（0 缩进）的收尾是 "\n}"，bodyOf 会在内层 "\n    }" 处截断 ⇒ 从签名切到文件末尾
+        const settle = delta.slice(delta.indexOf('export function settleMarkerInsert('));
+        expect(settle).toContain('reconcileMarkerInsert(');
+        expect(settle).toContain('ctx.setContents(');
     });
 
     it('不调用 insertLink（链接输出 [文字](URL) 由作者自填 URL）', () => {
