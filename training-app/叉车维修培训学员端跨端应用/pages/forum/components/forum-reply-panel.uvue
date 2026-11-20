@@ -181,7 +181,7 @@
        fixed 遮罩在 z 序上盖住 ⇒ 点输入先命中遮罩而收起（①a 真机抓获）。 */
     .reply-panel {
         background-color: #ffffff;
-        border-radius: 24rpx 24rpx 0 0;
+        border-radius: 20rpx 20rpx 0 0;
         padding: 24rpx;
         flex-direction: column;
     }
@@ -235,7 +235,8 @@
     }
 
     .reply-add-image {
-        padding: 16rpx 8rpx;
+        min-height: 88rpx;
+        padding: 0 8rpx;
         align-items: center;
         justify-content: center;
     }
@@ -247,8 +248,9 @@
 
     .reply-btn {
         background-color: $primary-color;
-        padding: 16rpx 32rpx;
-        border-radius: 36rpx;
+        min-height: 88rpx;
+        padding: 0 32rpx;
+        border-radius: 16rpx;
         align-items: center;
         justify-content: center;
     }

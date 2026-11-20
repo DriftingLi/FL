@@ -54,8 +54,9 @@ function onFavorite() : void {
         flex-direction: row;
         align-items: center;
         margin-right: 16rpx;
-        padding: 8rpx 16rpx;
-        border-radius: 24rpx;
+        min-height: 88rpx;
+        padding: 0 16rpx;
+        border-radius: 16rpx;
         background-color: #f5f5f5;
         border: 1px solid #eeeeee;
     }
@@ -73,7 +74,7 @@ function onFavorite() : void {
     .stat-like-icon {
         font-size: 28rpx;
         color: #999999;
-        margin-right: 6rpx;
+        margin-right: 8rpx;
     }
 
     .stat-like-icon-liked {

@@ -435,8 +435,8 @@ import { goBack } from '../../utils/navigation'
     }
 
     .nav-action {
-        width: 64rpx;
-        height: 64rpx;
+        width: 88rpx;
+        height: 88rpx;
         align-items: center;
         justify-content: center;
     }
@@ -486,7 +486,7 @@ import { goBack } from '../../utils/navigation'
     /* 底部回复栏（形态本身在 forum-markdown-input，本页只留外壳与发送按钮） */
     .reply-bar {
         flex-direction: column;
-        padding: 12rpx 24rpx;
+        padding: 16rpx 24rpx;
         background-color: #ffffff;
         border-top: 1rpx solid #eeeeee;
     }
@@ -499,10 +499,10 @@ import { goBack } from '../../utils/navigation'
         flex-direction: row;
         align-items: center;
         justify-content: space-between;
-        height: 72rpx;
-        background-color: #f5f5f5;
-        border-radius: 36rpx;
-        padding: 0 28rpx;
+        height: 88rpx;
+        background-color: $bg-color;
+        border-radius: 16rpx;
+        padding: 0 24rpx;
     }
 
     .reply-trigger-ph {
