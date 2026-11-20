@@ -188,6 +188,13 @@
 - **匹配层级（match level）**：市场样本匹配原价的降级层次（ADR-0099）——精确 7 字段 → 品牌+车型+系列+吨位 → 品牌+车型+吨位，落 `market_transactions.match_level`。多命中取原价**中位数**，原价区间（`min/max/count/width`）落 `matched_original_range`，区间相对宽度进 `field_confidence["matched_original_price"]`。校准专用，**不复用**评估路径的取最高价模糊匹配。
 - **匹配版本（match version）**：匹配器版本（ADR-0099，`collector/match/matcher.py` 的 `MATCH_VERSION`），落库到 `market_transactions.match_version`（迁移 000066）——与抽取版本、清洗版本各自独立，回答「这行标签是哪版匹配器打的」，规则升级可分离重跑。
   _Avoid_: 用评估路径的模糊匹配（取最高价）打市场标签（系统性压低偏差）；把未匹配样本当无标签资格（其 `label_eligible` 仍为真，只是标签留空待补原价 `collector rematch`）。
+- **未匹配待审队列（unmatched review queue）**：`market_unmatched_queue` 视图（ADR-0100，迁移 000067）——按 品牌×型号×吨位 聚合的**未匹配**样本组，含样本数与成交价区间（`price_min`/`price_max`），按样本数降序。口径 = `label_eligible` 且 `residual_rate_label IS NULL` 且 `clean_status <> 'rejected'`：已匹配的不用补原价、被剔除的补了也没用、价格抽取失败的补了也回收不了标签（它们归抽检队列）。人工据聚合结果（样本多的组优先）补原价条目，补入后 `collector rematch` 回收标签。
+  _Avoid_: 把它与抽检队列（`market_sample_review_queue`，ADR-0097）混为一谈——后者是「抽取质量待复核」，前者是「缺原价可匹配」；把已匹配/被剔除/价格抽取失败样本算进待审；在 Python 里另写一份聚合实现（口径只留视图一份）。
+- **原价反哺（price feedback）**：人工补 `original_prices` 条目后重跑匹配回收残值率标签的过程（ADR-0100）。**不自动写回原价表**——原价表是评估域既有事实源，人工审核是质量闸门；`collector rematch` 只读原价表、重算匹配/标签列，抽取与清洗列不动，回收结果与首次匹配同口径（同一 `match()` 纯函数 + 同一 `match_version`）。
+- **历史回补（backfill）**：`collector backfill --list-url <列表页>` 一条命令完成「列表页发现 → 年份窗口过滤（2015–2026）→ 跳过已入库 → 逐个抓详情 → 走全管线 → 得率报告」（ADR-0101）。回补**不另写管线**，与 `batch` 共用同一段抽取/清洗/匹配；幂等靠 `source_url` 判重，已入库的详情页连抓取都跳过。
+  _Avoid_: 为回补复制一份抽取/清洗/匹配（两份实现必然漂移，同一公告会得出不同标签）；把「一条命令」理解成「一条命令自动抓任何站点」——robots 禁止的站点默认抓不到。
+- **采集合规窗口（crawl compliance window）**：采集层必须同时满足的四条——robots 遵从（默认禁止即不抓，人工 `--allow-robots-override` 才放行且记审计）、诚实 UA（含产品标识 + 可联系邮箱，不伪装浏览器）、限速 ≤1 req/2s（下限写死不可配小）、暂时性失败指数退避（2s→4s→8s，封顶 30s）。读不到 robots 时 fail-closed（按全站禁止处理），「没读到」不等于「没有限制」。
+  _Avoid_: 把 robots 的 `Disallow: /` 当成「技术上抓得到就抓」；为赶进度把限速间隔调小；fail-open（读不到 robots 就当没限制）。
 
 ## 门户与内容
 

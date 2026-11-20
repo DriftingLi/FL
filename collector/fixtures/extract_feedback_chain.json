@@ -1,0 +1,22 @@
+{
+  "structured_specs": {
+    "brand": "比亚迪",
+    "model": "CB70",
+    "series": "CB",
+    "tonnage": 7.0,
+    "year": 2021,
+    "engine_hours": 1500
+  },
+  "field_confidence": {
+    "brand": 0.95,
+    "model": 0.94,
+    "series": 0.9,
+    "tonnage": 0.93,
+    "year": 0.9,
+    "engine_hours": 0.88,
+    "raw_price": 0.96
+  },
+  "raw_price": 61000,
+  "raw_price_kind": "deal",
+  "appraisal_price": 61000
+}

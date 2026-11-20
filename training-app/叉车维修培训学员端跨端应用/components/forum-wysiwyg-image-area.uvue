@@ -138,8 +138,8 @@
         position: absolute;
         top: 0;
         right: 0;
-        width: 40rpx;
-        height: 40rpx;
+        width: 88rpx;
+        height: 88rpx;
         border-radius: 0 0 0 12rpx;
         background-color: rgba(0, 0, 0, 0.55);
         align-items: center;
