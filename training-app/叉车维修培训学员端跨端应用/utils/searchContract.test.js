@@ -114,6 +114,19 @@ describe('M3 封装层与 token 化', () => {
     expect(SEARCH_PAGE).not.toContain('热门搜索');
   });
 
+  it('历史和分类列表使用稳定业务 key', () => {
+    expect(SEARCH_PAGE).toContain('v-for="kw in searchHistory" :key="kw"');
+    expect(SEARCH_PAGE).toContain(':key="category.value"');
+  });
+
+  it('新关键词搜索开始前先清空旧结果', () => {
+    const start = SEARCH_PAGE.indexOf('async function onSearch()');
+    const end = SEARCH_PAGE.indexOf('function onLoadMore()', start);
+    const onSearch = SEARCH_PAGE.slice(start, end);
+    expect(onSearch).toContain('allResult.value = emptySearchResult()');
+    expect(onSearch).toContain('typedResult.value = emptyPagedResult()');
+  });
+
   it('分区标题不使用装饰竖条或浅色标题底', () => {
     expect(SEARCH_PAGE).not.toContain('class="section-accent"');
     const style = styleBlock(SEARCH_PAGE);
@@ -128,6 +141,10 @@ describe('M3 封装层与 token 化', () => {
   it('触摸区达标：清空 ✕ 与历史删除 ✕ 的命中区 88rpx（44px，AGENTS 下限）', () => {
     const style = styleBlock(SEARCH_PAGE);
     expect(style).toMatch(/\.search-clear\s*\{[^}]*height:\s*88rpx/);
+    expect(style).toMatch(/\.history-clear\s*\{[^}]*min-width:\s*88rpx/);
+    expect(style).toMatch(/\.history-clear\s*\{[^}]*height:\s*88rpx/);
+    expect(style).toMatch(/\.history-tag-text\s*\{[^}]*min-width:\s*88rpx/);
+    expect(style).toMatch(/\.history-tag-text\s*\{[^}]*height:\s*88rpx/);
     expect(style).toMatch(/\.history-tag-delete\s*\{[^}]*width:\s*88rpx/);
     expect(style).toMatch(/\.history-tag-delete\s*\{[^}]*height:\s*88rpx/);
   });

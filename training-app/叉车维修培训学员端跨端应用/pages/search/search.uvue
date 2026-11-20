@@ -19,7 +19,7 @@
 					<text class="history-clear" @click="onClearHistory">清空</text>
 				</view>
 				<view class="history-tags">
-					<view v-for="(kw, idx) in searchHistory" :key="idx" class="history-tag mr-16-mb-16">
+					<view v-for="kw in searchHistory" :key="kw" class="history-tag mr-16-mb-16">
 						<text class="history-tag-text" @click="onHistoryClick(kw)">{{ kw }}</text>
 						<text class="history-tag-delete" @click="onRemoveHistory(kw)">×</text>
 					</view>
@@ -29,7 +29,7 @@
 			<view class="category-section">
 				<text class="category-title">搜索内容</text>
 				<view class="category-grid">
-					<view v-for="(category, idx) in searchCategories" :key="idx" class="category-card"
+					<view v-for="(category, idx) in searchCategories" :key="category.value" class="category-card"
 						:class="{ 'category-card--right': idx % 2 == 1, 'category-card--bottom': idx >= 2 }"
 						@click="onCategoryClick(category.value)">
 						<image class="category-icon" :src="category.icon" mode="aspectFit" :webp="true" />
@@ -187,14 +187,18 @@
 		} as SearchPagedResult
 	}
 
-	const allResult = ref<SearchResult>({
-		keyword: '',
-		courses: { ...emptySection },
-		chapters: { ...emptySection },
-		questions: { ...emptySection },
-		contents: { ...emptySection },
-		topics: { ...emptySection },
-	} as SearchResult)
+	function emptySearchResult() : SearchResult {
+		return {
+			keyword: '',
+			courses: { ...emptySection },
+			chapters: { ...emptySection },
+			questions: { ...emptySection },
+			contents: { ...emptySection },
+			topics: { ...emptySection },
+		} as SearchResult
+	}
+
+	const allResult = ref<SearchResult>(emptySearchResult())
 
 	const typedResult = ref<SearchPagedResult>(emptyPagedResult())
 
@@ -356,6 +360,7 @@
 		saveHistory(kw)
 		page.value = 1
 		activeTypeIdx.value = 0
+		allResult.value = emptySearchResult()
 		typedResult.value = emptyPagedResult()
 		hasSearched.value = true
 		await runSearch(1, false)
@@ -749,9 +754,13 @@
 	}
 
 	.history-clear {
+		min-width: 88rpx;
+		height: 88rpx;
 		font-size: $font-size-sm;
 		color: $primary-color;
-		padding: 12rpx 0 12rpx 16rpx;
+		padding-left: 16rpx;
+		line-height: 88rpx;
+		text-align: right;
 	}
 
 	.history-tags {
@@ -769,9 +778,12 @@
 	}
 
 	.history-tag-text {
+		min-width: 88rpx;
+		height: 88rpx;
 		font-size: 26rpx;
 		color: $primary-color;
 		padding-right: 4rpx;
+		line-height: 88rpx;
 	}
 
 	.history-tag-delete {
