@@ -6,7 +6,10 @@
 	<view class="shop-card">
 		<view class="shop-cover-wrap">
 			<image v-if="coverUrl.length > 0" class="shop-cover" :src="coverUrl" :webp="true" mode="aspectFill" />
-			<view v-else class="shop-cover-placeholder"></view>
+			<!-- image_url 为 NULL 是数据现实（000057 只加列不填值）⇒ 落详情页同一张吉祥物，
+			     不再给 #e8e8e8 灰块；静态 src 不挂 :webp（包内 PNG 不吃 webp 属性，ADR-0066 ①） -->
+			<image v-else class="shop-cover" mode="aspectFit"
+				src="/static/icons/points-goods/goods-default.png" />
 		</view>
 		<view class="shop-body">
 			<text class="shop-name">{{ title }}</text>
@@ -64,12 +67,6 @@
 	.shop-cover {
 		width: 135rpx;
 		height: 135rpx;
-	}
-
-	.shop-cover-placeholder {
-		width: 135rpx;
-		height: 135rpx;
-		background-color: #e8e8e8;
 	}
 
 	.shop-body {

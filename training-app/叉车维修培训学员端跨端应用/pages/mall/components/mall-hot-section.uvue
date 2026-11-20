@@ -14,7 +14,10 @@
 				<view class="hot-img-wrap">
 					<image v-if="course.cover_url.length > 0" class="hot-img" :src="course.cover_url"
 						:webp="true" mode="aspectFill" />
-					<view v-else class="hot-img-placeholder"></view>
+					<!-- 无图兜底与课程卡同一单点（utils/mallCover.uts）：热门段不再落 #e8e8e8 灰块，
+					     路径字面量留在表达式里以过 imageWebpAttrContract 豁免 -->
+					<image v-else class="hot-img" mode="aspectFill"
+						:src="'/static/icons/mall/cover-' + coverNameOf(course.title) + '.png'" />
 				</view>
 				<text class="hot-name">{{ course.title }}</text>
 				<text class="hot-price" :class="priceClass(course.points_price)">{{ hotPriceText(course.points_price) }}</text>
@@ -29,7 +32,9 @@
 			<view v-for="(it, pi) in items" :key="it.sku" class="hot-card">
 				<view class="hot-img-wrap">
 					<image v-if="hasCover(it)" class="hot-img" :src="coverOf(it)" :webp="true" mode="aspectFill" />
-					<view v-else class="hot-img-placeholder"></view>
+					<!-- 积分商品无图兜底 = 详情页同一张吉祥物（静态 src 不挂 :webp：包内 PNG 不吃 webp 属性） -->
+					<image v-else class="hot-img" mode="aspectFit"
+						src="/static/icons/points-goods/goods-default.png" />
 				</view>
 				<text class="hot-name">{{ it.title }}</text>
 				<text class="hot-price hot-price-paid">{{ it.price }} 积分</text>
@@ -40,6 +45,7 @@
 
 <script setup lang="uts">
 	import { renderCoursePrice } from '../../../utils/coursePointsCta'
+	import { courseCoverName } from '../../../utils/mallCover'
 	import type { CourseItem, ShopItem } from '../../../types/index'
 
 	const props = defineProps<{
@@ -56,6 +62,14 @@
 
 	function priceClass(pointsPrice : number | null) : string {
 		return hotPriceText(pointsPrice) == '免费' ? 'hot-price-free' : 'hot-price-paid'
+	}
+
+	/**
+	 * 默认书封名单点包装（规则 S）：模板不能直调 import 函数（Kotlin error18），这里只做转发 ——
+	 * 名称 → 书封的映射单点在 utils/mallCover.uts，与 mall-course-card 同吃一份。
+	 */
+	function coverNameOf(title : string) : string {
+		return courseCoverName(title)
 	}
 
 	/** image_url 可空（后端 x-nullable）：先判空再取，喂 <image> 的 src 恒为 string */
@@ -131,12 +145,6 @@
 	.hot-img {
 		width: 100%;
 		height: 160rpx;
-	}
-
-	.hot-img-placeholder {
-		width: 100%;
-		height: 160rpx;
-		background-color: #e8e8e8;
 	}
 
 	.hot-name {

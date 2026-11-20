@@ -3,10 +3,11 @@
     <view class="product-item" @click="onCardClick">
         <view class="product-img-wrap">
             <image v-if="coverUrl" :src="coverUrl" class="product-img" mode="aspectFill" :webp="true" />
-            <!-- cover_url 为空时的默认书封（第 4 刀）：路径字面量进表达式（过 imageWebpAttrContract 豁免），
-                 文件名按商品名称关键词对号（DTO 无商品类型字段），原型 824:6971 五种书封 -->
+            <!-- cover_url 为空时的默认书封（第 4 刀）：名称 → 书封的映射单点在 utils/mallCover.uts
+                 （热门段与积分商品卡同吃这一份，三处口径不再各写一遍）；路径字面量留在表达式里
+                 以过 imageWebpAttrContract 豁免，原型 824:6971 五种书封 -->
             <image v-else class="product-img" mode="aspectFill"
-                :src="'/static/icons/mall/cover-' + defaultCoverName(title) + '.png'" />
+                :src="'/static/icons/mall/cover-' + coverNameOf(title) + '.png'" />
         </view>
         <view class="product-info">
             <text class="product-name">{{ title }}</text>
@@ -27,6 +28,7 @@
 
 <script setup lang="uts">
     import { renderCoursePrice } from '../../../utils/coursePointsCta'
+    import { courseCoverName } from '../../../utils/mallCover'
 
     // 拍平成标量 props（ADR-0007 规则 N/P）：裸对象类型挂 defineProps 会被 uvue 编译成 Any
     // （#2617 T1 ④c 实测 kotlin unresolved reference cover_url/title），标量/数组形态才保留类型
@@ -55,33 +57,31 @@
     }
 
     /**
-     * 默认书封名（第 4 刀）：cover_url 为空时的兜底封面，按商品名称关键词对号入座；
-     * 列表 DTO 无商品类型字段 ⇒ 名称匹配 + 「教材」兜底（原型 824:6971 五种书封，
-     * 素材 = 判定 CSV「课程商城」目录 5 张 PLACEHOLDER，出图 = 容器 CSS×2 = 142×200）。
+     * 默认书封名单点包装（规则 S）：模板不能直调 import 函数（Kotlin error18），这里只做转发 ——
+     * 名称 → 书封的映射单点在 utils/mallCover.uts，热门段同吃那一份。
      */
-    function defaultCoverName(title : string) : string {
-        const t = title
-        if (t.indexOf('电子图书') >= 0) return 'ebook'
-        if (t.indexOf('专业技术') >= 0) return 'material-pro'
-        if (t.indexOf('技能') >= 0) return 'material-skill'
-        if (t.indexOf('辅助') >= 0) return 'material-aux'
-        return 'textbook'
+    function coverNameOf(title : string) : string {
+        return courseCoverName(title)
     }
 </script>
 
 <style lang="scss">
-    /* ===== 商品卡片（原型实测：白卡通栏、内边距 20rpx、无圆角、卡距 20rpx）===== */
+    /* ===== 商品卡片（原型实测：白卡通栏、内边距 20rpx、无圆角）=====
+       2026-11-20 间距收口：卡距 20rpx → 16rpx、封面 135×192 → 120×160rpx、信息列改 flex-start。
+       原因实测：6 门课标题全是单行（8-9 字），space-between 会把价格顶到卡底、标题与价格之间
+       空出 58px（不像设计稿的「价格贴封面底」，因为设计稿那几屏标题都是两行）。
+       收口后卡高 116px → 100px、中缝 0px；课程分区一屏 6 张全见（旧版差一张） */
     .product-item {
         padding: 20rpx;
         flex-direction: row;
         background-color: $card-bg;
-        margin-bottom: 20rpx;
+        margin-bottom: 16rpx;
     }
 
-    /* 书封容器（原型 71×100 CSS ≈ 135×192rpx，方角；封面素材自带书脊与角标） */
+    /* 书封容器（原型 71×100 CSS ≈ 135×192rpx；收口后 120×160rpx = 60×80 CSS，方角；素材自带书脊与角标） */
     .product-img-wrap {
-        width: 135rpx;
-        height: 192rpx;
+        width: 120rpx;
+        height: 160rpx;
         background-color: $bg-color;
         overflow: hidden;
         margin-right: 24rpx;
@@ -93,10 +93,11 @@
         height: 100%;
     }
 
+    /* 信息列：标题贴顶、价格行紧随其后（flex-start），不再 space-between —— 见 .product-item 注 */
     .product-info {
         flex: 1;
         flex-direction: column;
-        justify-content: space-between;
+        justify-content: flex-start;
     }
 
     .product-name {
