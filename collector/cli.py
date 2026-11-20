@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import unicodedata
 from pathlib import Path
 from typing import Callable
 
@@ -31,6 +32,7 @@ from .store import (
     fetch_samples,
     insert_sample,
     load_price_candidates,
+    load_unmatched_queue,
     update_clean_result,
     update_match_result,
 )
@@ -173,6 +175,73 @@ def run_rematch(
     return len(rows)
 
 
+def run_unmatched(dsn: str | None = None, search_path: str = "") -> list[dict]:
+    """查未匹配待审队列（迁移 000067 的聚合视图），返回聚合组列表（#2676）。
+
+    只读：人工据聚合结果补原价条目，补入后 `collector rematch` 重跑回收标签。
+    """
+    import psycopg
+    from psycopg import sql
+
+    dsn = dsn or os.environ.get("DATABASE_URL") or ""
+    if not dsn:
+        raise RuntimeError("缺少 DATABASE_URL（或 --dsn）")
+
+    with psycopg.connect(dsn) as conn:
+        if search_path:
+            conn.execute(
+                sql.SQL("SET search_path TO {}").format(sql.Identifier(search_path))
+            )
+        return load_unmatched_queue(conn)
+
+
+def _print_unmatched(groups: list[dict]) -> None:
+    """把待审队列聚合组打印成对齐表格（品牌/型号/吨位/样本数/价格区间）。
+
+    表头与 `UNMATCHED_GROUP_COLUMNS` 同序（品牌/型号/吨位/样本数/价格区间），
+    避免列名契约与展示顺序两处手抄漂移。宽度按显示宽度算（CJK 占 2 列）。
+    """
+    if not groups:
+        print("未匹配待审队列：空（无待审样本）")
+        return
+    header = ("品牌", "型号", "吨位", "样本数", "成交价区间")
+    rows = [
+        (
+            str(g.get("brand") or "-"),
+            str(g.get("model") or "-"),
+            "-" if g.get("tonnage") is None else str(g.get("tonnage")),
+            str(g.get("sample_count")),
+            _price_range_text(g.get("price_min"), g.get("price_max")),
+        )
+        for g in groups
+    ]
+    widths = [
+        max(_display_width(header[i]), *(_display_width(r[i]) for r in rows))
+        for i in range(len(header))
+    ]
+    print("  ".join(_pad(h, widths[i]) for i, h in enumerate(header)))
+    for row in rows:
+        print("  ".join(_pad(c, widths[i]) for i, c in enumerate(row)))
+    print(f"\n共 {len(groups)} 组、{sum(g['sample_count'] for g in groups)} 条待审样本")
+
+
+def _display_width(text: str) -> int:
+    """终端显示宽度：CJK 全角字符占 2 列，其余占 1 列。"""
+    return sum(2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1 for ch in text)
+
+
+def _pad(text: str, width: int) -> str:
+    return text + " " * max(0, width - _display_width(text))
+
+
+def _price_range_text(low, high) -> str:
+    if low is None and high is None:
+        return "-"
+    if low == high:
+        return f"{float(low):.2f}"
+    return f"{float(low):.2f} ~ {float(high):.2f}"
+
+
 def _add_common_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--dsn", default=None, help="PG 连接串（缺省取 DATABASE_URL）")
     parser.add_argument(
@@ -194,6 +263,11 @@ def main(argv: list[str] | None = None) -> int:
     rematch = sub.add_parser("rematch", help="补原价后重跑匹配（读回已入库行，不重爬）")
     _add_common_args(rematch)
 
+    unmatched = sub.add_parser(
+        "unmatched", help="查未匹配待审队列（品牌×型号×吨位聚合）"
+    )
+    _add_common_args(unmatched)
+
     args = parser.parse_args(argv)
 
     try:
@@ -201,6 +275,10 @@ def main(argv: list[str] | None = None) -> int:
             count = run_batch(args.fixture, args.dsn, args.search_path)
         elif args.command == "reclean":
             count = run_reclean(args.dsn, args.search_path)
+        elif args.command == "unmatched":
+            groups = run_unmatched(args.dsn, args.search_path)
+            _print_unmatched(groups)
+            return 0
         else:
             count = run_rematch(args.dsn, args.search_path)
     except (OSError, RuntimeError) as exc:

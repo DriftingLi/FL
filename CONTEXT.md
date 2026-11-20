@@ -188,6 +188,9 @@
 - **匹配层级（match level）**：市场样本匹配原价的降级层次（ADR-0099）——精确 7 字段 → 品牌+车型+系列+吨位 → 品牌+车型+吨位，落 `market_transactions.match_level`。多命中取原价**中位数**，原价区间（`min/max/count/width`）落 `matched_original_range`，区间相对宽度进 `field_confidence["matched_original_price"]`。校准专用，**不复用**评估路径的取最高价模糊匹配。
 - **匹配版本（match version）**：匹配器版本（ADR-0099，`collector/match/matcher.py` 的 `MATCH_VERSION`），落库到 `market_transactions.match_version`（迁移 000066）——与抽取版本、清洗版本各自独立，回答「这行标签是哪版匹配器打的」，规则升级可分离重跑。
   _Avoid_: 用评估路径的模糊匹配（取最高价）打市场标签（系统性压低偏差）；把未匹配样本当无标签资格（其 `label_eligible` 仍为真，只是标签留空待补原价 `collector rematch`）。
+- **未匹配待审队列（unmatched review queue）**：`market_unmatched_queue` 视图（ADR-0100，迁移 000067）——按 品牌×型号×吨位 聚合的**未匹配**样本组，含样本数与成交价区间（`price_min`/`price_max`），按样本数降序。口径 = `label_eligible` 且 `residual_rate_label IS NULL` 且 `clean_status <> 'rejected'`：已匹配的不用补原价、被剔除的补了也没用、价格抽取失败的补了也回收不了标签（它们归抽检队列）。人工据聚合结果（样本多的组优先）补原价条目，补入后 `collector rematch` 回收标签。
+  _Avoid_: 把它与抽检队列（`market_sample_review_queue`，ADR-0097）混为一谈——后者是「抽取质量待复核」，前者是「缺原价可匹配」；把已匹配/被剔除/价格抽取失败样本算进待审；在 Python 里另写一份聚合实现（口径只留视图一份）。
+- **原价反哺（price feedback）**：人工补 `original_prices` 条目后重跑匹配回收残值率标签的过程（ADR-0100）。**不自动写回原价表**——原价表是评估域既有事实源，人工审核是质量闸门；`collector rematch` 只读原价表、重算匹配/标签列，抽取与清洗列不动，回收结果与首次匹配同口径（同一 `match()` 纯函数 + 同一 `match_version`）。
 
 ## 门户与内容
 
