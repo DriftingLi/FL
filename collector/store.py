@@ -163,6 +163,16 @@ def update_match_result(
     )
 
 
+def load_unmatched_queue(conn: "psycopg.Connection") -> list[dict[str, Any]]:
+    """读未匹配待审队列聚合视图（迁移 000067），供 CLI 打印 / 运维核查（#2676）。"""
+    from .review import UNMATCHED_GROUP_COLUMNS
+
+    rows = conn.execute(
+        "SELECT " + ", ".join(UNMATCHED_GROUP_COLUMNS) + " FROM market_unmatched_queue"
+    ).fetchall()
+    return [dict(zip(UNMATCHED_GROUP_COLUMNS, row)) for row in rows]
+
+
 def update_clean_result(
     conn: "psycopg.Connection", sample_id: int, cleaned: Any
 ) -> None:
