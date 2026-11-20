@@ -94,14 +94,35 @@ describe('M3 封装层与 token 化', () => {
     const style = styleBlock(SEARCH_PAGE);
     expect(style).toMatch(/\.status-bar\s*\{[^}]*background-color:\s*\$primary-color/);
     expect(style).toMatch(/\.search-header\s*\{[^}]*background-color:\s*\$primary-color/);
+    expect(SEARCH_PAGE).toContain('class="search-cancel"');
     expect(style).toMatch(/\.search-page\s*\{[^}]*background-color:\s*\$bg-tint/);
   });
 
-  it('每个分区有色彩锚点：主色浅底标题带 + 主色小竖条', () => {
-    expect(SEARCH_PAGE).toContain('class="section-accent"');
+  it('初始态提供真实的最近搜索与现有业务分类入口，不伪造热门搜索', () => {
+    expect(SEARCH_PAGE).toContain('最近搜索');
+    expect(SEARCH_PAGE).toContain('搜索内容');
+    expect(SEARCH_PAGE).toContain('onCategoryClick(category.value)');
+    expect(SEARCH_PAGE).toContain('category.icon');
+    expect(SEARCH_PAGE).toContain('/static/tabbar/course.png');
+    expect(SEARCH_PAGE).toContain('/static/icons/answer-card.png');
+    expect(SEARCH_PAGE).toContain('/static/icons/star.png');
+    expect(SEARCH_PAGE).toContain('/static/tabbar/forum.png');
+    expect(SEARCH_PAGE).toMatch(/if \(value == 'course'\) \{\s*uni\.switchTab\(\{ url: '\/pages\/courses\/courses' \}\)/);
+    expect(SEARCH_PAGE).toMatch(/if \(value == 'topic'\) \{\s*uni\.switchTab\(\{ url: '\/pages\/forum\/forum' \}\)/);
+    expect(SEARCH_PAGE).toContain("'/pages/practice/practice'");
+    expect(SEARCH_PAGE).toContain("'/pages/featured/featured-list'");
+    expect(SEARCH_PAGE).not.toContain('热门搜索');
+  });
+
+  it('分区标题不使用装饰竖条或浅色标题底', () => {
+    expect(SEARCH_PAGE).not.toContain('class="section-accent"');
     const style = styleBlock(SEARCH_PAGE);
-    expect(style).toMatch(/\.section-header\s*\{[^}]*background-color:\s*\$primary-tint/);
-    expect(style).toMatch(/\.section-accent\s*\{[^}]*background-color:\s*\$primary-color/);
+    expect(style).not.toMatch(/\.section-header\s*\{[^}]*background-color:/);
+    expect(style).not.toContain('.section-accent');
+  });
+
+  it('结果行不重复增加右箭头装饰', () => {
+    expect(SEARCH_PAGE).not.toContain('item-arrow');
   });
 
   it('触摸区达标：清空 ✕ 与历史删除 ✕ 的命中区 88rpx（44px，AGENTS 下限）', () => {
