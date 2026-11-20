@@ -2,9 +2,9 @@
     <!-- 论坛正文的**所见即所得输入区**（#2640 / ADR-0073）：发帖表单与回复浮层共用同一份形态。
          它被当作**输入法**而不是新内容格式 —— 编辑时是真富文本，对外只吐 T1 序列化后的论坛档 Markdown。
          三条边界（ADR-0073「三处共守」）在本组件里的落点：
-           · 按钮集 = utils/forumWysiwygInput 的数据（常驻三键 + 二级面板两组），不多一枚论坛档渲染不出的按钮；
+           · 按钮集 = utils/forumWysiwygInput 的数据（常驻四键 + 二级面板三组），不多一枚论坛档渲染不出的按钮；
            · 序列化 = utils/forumDeltaMarkdown（delta → 论坛档 Markdown + 保真 issues）；
-           · 保真提示 = 本组件把 issues 渲染成**持续可见**的一行（不是 toast）。
+           · 保真提示 = 本组件把 issues 并进提示带（不是 toast）。
          图片只有下方单一 `＋` 入口：编辑器侧不提供插入入口，粘进正文的图片在序列化时丢弃并提示（R3）。 -->
     <view class="wysiwyg-input">
         <view class="editor-box">
@@ -18,41 +18,24 @@
                 @blur="onEditorBlur" @input="onEditorInput" @statuschange="onStatusChange" />
         </view>
 
-        <!-- 格式工具条（常驻三键 + 粘贴 + 二级面板）拆成独立件：它只渲染并 emit 动作，
+        <!-- 格式工具条（常驻四键 + 更多面板）拆成独立件：它只渲染并 emit 动作，
              怎么落地由本组件按 editorCtx 决定（#2658 拆分，行数预算 ADR-0023）。 -->
         <ForumWysiwygToolbar :active-ids="activeIds" @action="onActionTap" @paste="onPasteTap" />
 
-        <!-- 保真检查：序列化时被降级 / 被丢弃的项，**持续可见**（R3）。空串时不渲染。
-             宿主可关掉本行自己渲染（#2641 发帖页要把它放到提交按钮附近，AC③）—— 两处只出现一次。 -->
-        <text v-if="showFidelityNotice && fidelityNotice.length > 0" class="fidelity-notice">{{ fidelityNotice }}</text>
-
-        <!-- 粘贴结果提示（持续可见直到正文变化）：降级 / 空剪贴板 / 读不到，三种都**不静默** -->
-        <text v-if="pasteNotice.length > 0" class="paste-notice">{{ pasteNotice }}</text>
-
-        <!-- 原生粘贴被丢弃后的提示：整行可点，点了就走「粘贴」按钮同一条路径 -->
-        <view v-if="pasteHint.length > 0" class="paste-hint-row" @click="onPasteTap">
-            <text class="paste-hint-text">{{ pasteHint }}</text>
-        </view>
-
-        <!-- 两条功能提示（ui-hints 的明确例外，别当装饰删）：属地披露 + Markdown 边界提示 -->
-        <text v-if="showRegionNotice" class="region-notice">{{ regionNotice }}</text>
-        <text class="boundary-notice">{{ boundaryNotice }}</text>
-
+        <!-- 字数：正文右下（#2689 决策 5）。上限仍由 maxlength 决定（发帖 10000 / 回复 10000）。 -->
         <text v-if="!isReply" class="counter-text">{{ counterText }}</text>
 
-        <!-- 图片区：**单一入口**（一个 `＋` 方块 → 系统选择器）。缩略图 key 用图片 URL 本身
-             （上传 URL 是服务端毫秒时间戳命名、逐张串行上传 ⇒ 不会重复）。 -->
-        <view v-if="showImages" class="image-row">
-            <view v-for="(img, idx) in previewImages" :key="img" class="image-cell">
-                <image class="image-thumb" :src="img" mode="aspectFill" @click="onPreviewImage(idx)" :webp="true" />
-                <view class="image-remove" @click.stop="onRemoveImage(idx)">
-                    <text class="image-remove-text">×</text>
-                </view>
-            </view>
-            <view v-if="imageCount < maxImages" class="image-add" @click="onAddImage">
-                <text class="image-add-icon">{{ uploading ? '…' : '＋' }}</text>
-                <text v-if="variant != 'reply'" class="image-add-text">{{ uploading ? '上传中' : imageCounter }}</text>
-            </view>
+        <!-- 图片区两态（#2689 决策 3）拆成独立展示件：本组件只把列表与计数递下去，动作原样 emit 回宿主。 -->
+        <ForumWysiwygImageArea v-if="showImages" :preview-images="previewImages" :image-count="imageCount"
+            :max-images="maxImages" :variant="variant" :uploading="uploading"
+            @add-image="onAddImage" @remove-image="onRemoveImage" @preview-image="onPreviewImage" />
+
+        <!-- 提示带（#2689 决策 4）：保真 / 粘贴 / 属地 / 边界合并成**一行**，多条用「；」连接；
+             无提示时整行不渲染（不占位）。粘贴提示存在时整条可点，走「粘贴」按钮同一条路径。 -->
+        <view v-if="noticeBand.length > 0" class="notice-band"
+            :class="{ 'notice-band-tap': pasteHint.length > 0 }" @click="onNoticeBandTap">
+            <text class="notice-band-text"
+                :class="{ 'notice-band-text-tap': pasteHint.length > 0 }">{{ noticeBand }}</text>
         </view>
     </view>
 </template>
@@ -62,6 +45,7 @@
     import { buildMarker, serializeDelta, settleMarkerInsert } from '../utils/forumDeltaMarkdown'
     import { FORUM_MARKDOWN_BOUNDARY_NOTICE, FORUM_REGION_NOTICE } from '../utils/forumDisplay'
     import ForumWysiwygToolbar from './forum-wysiwyg-toolbar.uvue'
+    import ForumWysiwygImageArea from './forum-wysiwyg-image-area.uvue'
     import {
         PASTE_HINT_AFTER_DROP,
         PASTE_HINT_MIN_FOCUS_MS,
@@ -171,7 +155,21 @@
     const isReply = computed<boolean>(() : boolean => props.variant == 'reply')
     const fidelityNotice = computed<string>(() : string => richFidelityNotice(issues.value))
     const counterText = computed<string>(() : string => markdownLength.value.toString() + '/' + props.maxlength.toString())
-    const imageCounter = computed<string>(() : string => props.imageCount.toString() + '/' + props.maxImages.toString())
+
+    /**
+     * 提示带（#2689 决策 4）：保真 / 粘贴结果 / 粘贴提示 / 属地 / 边界合并成**一行**，多条用「；」连接。
+     * 顺序固定：先「这次操作丢了什么」（保真、粘贴），再「这个面的固定说明」（属地、边界）。
+     * 空串 ⇒ 整行不渲染（不占位）；同一时刻最多一行。
+     */
+    const noticeBand = computed<string>(() : string => {
+        const parts : string[] = []
+        if (props.showFidelityNotice && fidelityNotice.value.length > 0) parts.push(fidelityNotice.value)
+        if (pasteNotice.value.length > 0) parts.push(pasteNotice.value)
+        if (pasteHint.value.length > 0) parts.push(pasteHint.value)
+        if (props.showRegionNotice && regionNotice.length > 0) parts.push(regionNotice)
+        if (boundaryNotice.length > 0) parts.push(boundaryNotice)
+        return parts.join('；')
+    })
 
     /**
      * 唯一的事实刷新点：getContents → 序列化 → 点亮集合。
@@ -285,6 +283,12 @@
                 showPasteNotice(PASTE_NOTICE_UNREADABLE)
             }
         })
+    }
+
+    /** 提示带整条可点：只有「粘贴提示」在时有动作（走「粘贴」按钮同一条路径），其余情况点了不动 */
+    function onNoticeBandTap() : void {
+        if (pasteHint.value.length == 0) return
+        onPasteTap()
     }
 
     function onEditorReady() : void {
@@ -439,7 +443,36 @@
         })
     }
 
-    defineExpose({ insertMention })
+    /**
+     * 清空编辑器正文（#2691：宿主在「发送成功」后调用）。
+     *
+     * 为什么必须由组件自己清：正文的**事实源**是 editor 的 delta，宿主只持有序列化产物；
+     * 只把 `replyContent` 置空不会动编辑器 —— 浮层改成常驻挂载后，下次展开会看到已发送的旧正文。
+     * 未 ready 时把待写串一并清掉，避免 ready 后把旧内容补写回来。
+     */
+    function clear() : void {
+        pendingMention = ''
+        pendingPasteText = ''
+        const ctx = editorCtx
+        if (ctx == null) return
+        ctx.clear({
+            success: () => {
+                lastDeltaJson = ''
+                markdownLength.value = 0
+                const noIssues : string[] = []
+                const noActive : string[] = []
+                issues.value = noIssues
+                activeIds.value = noActive
+                pasteNotice.value = ''
+                pasteNoticeAt.value = 0
+                pasteHint.value = ''
+                emit('update:markdown', '')
+                emit('update:issues', noIssues)
+            }
+        })
+    }
+
+    defineExpose({ insertMention, clear })
 
     /**
      * 键盘弹起：只**上报**高度，不在组件内加偏移 —— 回复浮层的面板 bottom 由宿主按同一个值驱动
@@ -484,45 +517,29 @@
         padding: 16rpx;
     }
 
-    /* ===== 保真检查提示（持续可见，R3）===== */
-    .fidelity-notice {
-        font-size: 22rpx;
-        color: #e6a23c;
-        margin-top: 12rpx;
-    }
-
-    /* ===== 粘贴结果提示（#2658：降级 / 空剪贴板 / 读不到，三种都不静默）===== */
-    .paste-notice {
-        font-size: 22rpx;
-        color: #e6a23c;
-        margin-top: 12rpx;
-    }
-
-    /* 原生粘贴被丢弃后的提示行：整行可点，走「粘贴」按钮同一条路径 */
-    .paste-hint-row {
+    /* ===== 提示带（#2689 决策 4）：保真 / 粘贴 / 属地 / 边界合并成一行 ===== */
+    .notice-band {
         margin-top: 12rpx;
         padding: 12rpx 16rpx;
         border-radius: 12rpx;
+        background-color: #fafbfc;
+        border: 1rpx solid #e4e7ed;
+    }
+
+    /* 粘贴提示在时整条可点：换成可点的暖色底 */
+    .notice-band-tap {
         background-color: #fdf6ec;
         border: 1rpx solid #f5dab1;
     }
 
-    .paste-hint-text {
+    .notice-band-text {
         font-size: 22rpx;
+        color: #999999;
+        line-height: 1.5;
+    }
+
+    .notice-band-text-tap {
         color: #e6a23c;
-    }
-
-    /* ===== 功能提示（两条都是 ui-conventions 的明确例外，别当装饰删）===== */
-    .region-notice {
-        font-size: 22rpx;
-        color: #999999;
-        margin-top: 12rpx;
-    }
-
-    .boundary-notice {
-        font-size: 22rpx;
-        color: #999999;
-        margin-top: 8rpx;
     }
 
     .counter-text {
@@ -532,67 +549,4 @@
         margin-top: 8rpx;
     }
 
-    /* ===== 图片区 ===== */
-    .image-row {
-        flex-direction: row;
-        flex-wrap: wrap;
-        align-items: center;
-        margin-top: 16rpx;
-    }
-
-    .image-cell {
-        width: 160rpx;
-        height: 160rpx;
-        margin-right: 16rpx;
-        margin-bottom: 16rpx;
-        position: relative;
-    }
-
-    .image-thumb {
-        width: 160rpx;
-        height: 160rpx;
-        border-radius: 12rpx;
-        background-color: #f0f0f0;
-    }
-
-    .image-remove {
-        position: absolute;
-        top: 0;
-        right: 0;
-        width: 40rpx;
-        height: 40rpx;
-        border-radius: 0 0 0 12rpx;
-        background-color: rgba(0, 0, 0, 0.55);
-        align-items: center;
-        justify-content: center;
-    }
-
-    .image-remove-text {
-        font-size: 28rpx;
-        color: #ffffff;
-        line-height: 1;
-    }
-
-    .image-add {
-        width: 160rpx;
-        height: 160rpx;
-        margin-right: 16rpx;
-        margin-bottom: 16rpx;
-        border: 2rpx dashed #c0c4cc;
-        border-radius: 12rpx;
-        background-color: #fafbfc;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .image-add-icon {
-        font-size: 44rpx;
-        color: #909399;
-    }
-
-    .image-add-text {
-        font-size: 22rpx;
-        color: #909399;
-        margin-top: 8rpx;
-    }
 </style>

@@ -39,8 +39,12 @@ export function panelBottomPx(
 }
 
 /**
- * 面板高度上限（px）：约半屏（向下取整），超出走面板内滚动（⑪-2）。
+ * 面板高度上限（px）：视口 60%（向下取整），超出走面板内滚动（⑪-2）。
+ *
+ * #2691：原为 `windowHeight / 2`（半屏）。回复浮层加了头部与图片带后，半屏装不下
+ * 「编辑器 + 工具栏 + 图片带 + 提示带 + 底部操作区」，故放到 60%；键盘避让链路
+ * （`createKeyboardHeightTracker` / `panelBottomPx`）不动 —— 只改这一个系数。
  */
 export function panelMaxHeightPx(windowHeightPx : number) : number {
-	return Math.floor(windowHeightPx / 2)
+	return Math.floor(windowHeightPx * 0.6)
 }

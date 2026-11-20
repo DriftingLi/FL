@@ -38,12 +38,12 @@ function loadMutated(replacements) {
     return loadUts(file, {});
 }
 
-// ===== ① 常驻三键：恰好三枚，且不含永久退出的格式 =====
+// ===== ① 常驻四键：粗体 / 斜体 / 删除线 / 列表（加「更多」开关 = 5 个触摸目标）=====
 
-describe('常驻三键：粗体 / 斜体 / 删除线（恰好三枚）', () => {
-    it('恰好三枚，顺序固定', () => {
+describe('常驻四键：粗体 / 斜体 / 删除线 / 列表（恰好四枚）', () => {
+    it('恰好四枚，顺序固定', () => {
         const m = mod();
-        expect(m.richPrimaryActions().map((a) => a.id)).toEqual(['bold', 'italic', 'strike']);
+        expect(m.richPrimaryActions().map((a) => a.id)).toEqual(['bold', 'italic', 'strike', 'list']);
     });
 
     it('下划线永久退出、行内代码不作常驻', () => {
@@ -54,13 +54,28 @@ describe('常驻三键：粗体 / 斜体 / 删除线（恰好三枚）', () => {
         expect(ids).not.toContain('code');
     });
 
-    it('三枚都是 format 动作、formatValue 为 null（切换语义）', () => {
+    it('四枚都是 format 动作、formatValue 为 null（切换语义）', () => {
         const m = mod();
         for (const act of m.richPrimaryActions()) {
             expect(act.kind).toBe(m.RICH_KIND_FORMAT);
             expect(act.formatName).toBe(act.id);
             expect(act.formatValue).toBeNull();
             expect(act.label.length).toBeGreaterThan(0);
+        }
+    });
+
+    it('四枚都带字形与真样式（B 加粗 / I 斜体 / S 删除线 / ≡ 纯字形）', () => {
+        const m = mod();
+        const acts = m.richPrimaryActions();
+        expect(acts.map((a) => a.glyph)).toEqual(['B', 'I', 'S', '≡']);
+        expect(acts.map((a) => a.glyphStyle)).toEqual([
+            m.RICH_GLYPH_STYLE_BOLD,
+            m.RICH_GLYPH_STYLE_ITALIC,
+            m.RICH_GLYPH_STYLE_STRIKE,
+            m.RICH_GLYPH_STYLE_PLAIN,
+        ]);
+        for (const act of acts) {
+            expect(act.icon).toBe('');
         }
     });
 
@@ -99,12 +114,26 @@ describe('二级面板：格式组 + 记号组', () => {
         }
     });
 
+    it('面板每项都带中文名与图标字形（#2689 决策 2：不能只有符号）', () => {
+        const m = mod();
+        for (const group of m.richPanelGroups()) {
+            for (const act of group.actions) {
+                expect(act.label.length).toBeGreaterThan(0);
+                expect(act.icon.length).toBeGreaterThan(0);
+                expect(act.glyph).toBe('');
+            }
+        }
+    });
+
     it('按钮集 ⊆ 论坛档可表达格式：不出现下划线 / 颜色 / 对齐 / 字号 / 上下标 / 缩进', () => {
         const m = mod();
         const all = m.richPrimaryActions().concat(
             m.richPanelGroups().reduce((acc, g) => acc.concat(g.actions), [])
         );
-        const formatNames = all.filter((a) => a.kind === m.RICH_KIND_FORMAT).map((a) => a.formatName);
+        // 列表同时是常驻键与面板项（常驻是快捷入口、面板是全菜单），去重后再比
+        const formatNames = Array.from(new Set(
+            all.filter((a) => a.kind === m.RICH_KIND_FORMAT).map((a) => a.formatName)
+        ));
         expect(formatNames.sort()).toEqual(['bold', 'header', 'italic', 'list', 'strike']);
         for (const banned of ['underline', 'color', 'backgroundColor', 'align', 'script', 'indent', 'size']) {
             expect(formatNames).not.toContain(banned);
@@ -238,9 +267,12 @@ describe('richFidelityNotice：降级项翻成作者看得懂的话', () => {
 // ===== ⑥ 成对取证：坏实现必红 =====
 
 describe('成对取证：判据有牙', () => {
-    it('常驻三键被换成下划线 → 「不含 underline」判据必红', () => {
+    it('常驻四键被换成下划线 → 「不含 underline」判据必红', () => {
         const bad = loadMutated([
-            ["formatAction(RICH_ACTION_STRIKE, '删除线')", "formatAction('underline', '下划线')"],
+            [
+                "formatAction(RICH_ACTION_STRIKE, '删除线', 'S', RICH_GLYPH_STYLE_STRIKE, '')",
+                "formatAction('underline', '下划线', 'U', RICH_GLYPH_STYLE_PLAIN, '')",
+            ],
         ]);
         expect(bad.richPrimaryActions().map((a) => a.id)).toContain('underline');
     });

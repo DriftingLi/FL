@@ -1,24 +1,26 @@
 <template>
-    <!-- 论坛正文输入区的**格式工具条**（#2658 拆分，ADR-0073 R1/R2）：常驻三键 + 粘贴 + 二级面板。
+    <!-- 论坛正文输入区的**格式工具条**（#2658 拆分，ADR-0073 R1/R2；#2689 五键重排）：
+         常驻四枚字形键（B / I / S / ≡）+「更多」开关 = 恰好 5 个触摸目标，其余动作收进二级面板。
          它只渲染、不碰编辑器 —— 按钮集是 utils/forumWysiwygInput 的数据，动作一律 emit 回输入区，
          由输入区那侧持有 editorCtx 决定怎么落地。这样「有哪些按钮」与「按钮怎么生效」各自只有一处。 -->
     <view class="wysiwyg-toolbar">
-        <!-- 常驻三键（粗体 / 斜体 / 删除线）+ 粘贴 + 二级面板开关。触摸目标 88rpx（R2）。 -->
+        <!-- 常驻四键（粗体 / 斜体 / 删除线 / 列表）+ 二级面板开关。触摸目标 88rpx（R2）。
+             字形是**文字**不是图片：B 真加粗、I 真斜体、S 真删除线（细线模拟）、≡ 列表。 -->
         <view class="primary-row">
             <view v-for="(act, idx) in primaryActions" :key="act.id" class="tool-btn"
                 :class="{ active: isActive(act.id), 'ml-16': idx > 0 }" @click="onAction(act.id)">
-                <text class="tool-btn-text" :class="{ active: isActive(act.id) }">{{ act.label }}</text>
-            </view>
-            <!-- 粘贴：原生长按粘贴会整段丢弃 text/html（#2658），这条按钮把剪贴板内容取回来走 insertText -->
-            <view class="tool-btn tool-btn-paste ml-16" @click="onPaste">
-                <text class="tool-btn-text">{{ pasteLabel }}</text>
+                <text class="tool-glyph"
+                    :class="{ 'tool-glyph-bold': act.glyphStyle == 'bold', 'tool-glyph-italic': act.glyphStyle == 'italic', 'tool-glyph-strike': act.glyphStyle == 'strike', active: isActive(act.id) }">{{ act.glyph }}</text>
+                <!-- 删除线：uvue 不支持 text-decoration，用一条绝对定位细线模拟真删除线（#2689 决策 2） -->
+                <view v-if="act.glyphStyle == 'strike'" class="strike-line"
+                    :class="{ active: isActive(act.id) }"></view>
             </view>
             <view class="tool-btn tool-btn-more ml-16" :class="{ active: panelOpen }" @click="onTogglePanel">
-                <text class="tool-btn-text" :class="{ active: panelOpen }">{{ panelOpen ? '收起' : '更多' }}</text>
+                <text class="tool-glyph" :class="{ active: panelOpen }">⋯</text>
             </view>
         </view>
 
-        <!-- 二级面板：格式组（标题 / 列表 / 分割线）+ 记号组（引用 / 代码块 / 行内代码 / 链接）。
+        <!-- 二级面板：格式组（标题 / 列表 / 分割线）+ 记号组（引用 / 代码块 / 行内代码 / 链接）+ 操作组（粘贴）。
              记号四件走 insertText 逃生舱（editor 的 link 属性丢 URL、code 属性 no-op）。 -->
         <view v-if="panelOpen" class="panel">
             <view v-for="(group, gi) in panelGroups" :key="group.id" class="panel-group"
@@ -27,7 +29,18 @@
                 <view class="panel-row">
                     <view v-for="act in group.actions" :key="act.id" class="panel-btn"
                         :class="{ active: isActive(act.id) }" @click="onAction(act.id)">
+                        <text class="panel-btn-icon">{{ act.icon }}</text>
                         <text class="panel-btn-text" :class="{ active: isActive(act.id) }">{{ act.label }}</text>
+                    </view>
+                </view>
+            </view>
+            <!-- 操作组：粘贴。原生长按粘贴会整段丢弃 text/html（#2658），这条按钮把剪贴板内容取回来走 insertText -->
+            <view class="panel-group mt-16">
+                <text class="panel-group-title">操作</text>
+                <view class="panel-row">
+                    <view class="panel-btn" @click="onPaste">
+                        <text class="panel-btn-icon">📋</text>
+                        <text class="panel-btn-text">{{ pasteLabel }}</text>
                     </view>
                 </view>
             </view>
@@ -60,7 +73,7 @@
         (e: 'paste'): void
     }>()
 
-    /** 按钮集是数据、不是模板硬编码：常驻三键与面板两组都取自 utils/forumWysiwygInput 的唯一实现。 */
+    /** 按钮集是数据、不是模板硬编码：常驻四键与面板两组都取自 utils/forumWysiwygInput 的唯一实现。 */
     const primaryActions : RichAction[] = richPrimaryActions()
     const panelGroups : RichPanelGroup[] = richPanelGroups()
     const panelOpen = ref<boolean>(false)
@@ -87,7 +100,7 @@
         flex-direction: column;
     }
 
-    /* ===== 常驻三键（触摸目标 88rpx，R2）===== */
+    /* ===== 常驻四键 + 更多（触摸目标 88rpx，R2）===== */
     .primary-row {
         flex-direction: row;
         align-items: center;
@@ -102,6 +115,7 @@
         border: 1rpx solid #e4e7ed;
         align-items: center;
         justify-content: center;
+        position: relative;
     }
 
     .tool-btn.active {
@@ -113,14 +127,39 @@
         width: 120rpx;
     }
 
-    .tool-btn-text {
-        font-size: 26rpx;
+    .tool-glyph {
+        font-size: 32rpx;
         color: #333333;
     }
 
-    .tool-btn-text.active {
+    .tool-glyph.active {
         color: $primary-color;
+    }
+
+    .tool-glyph-bold {
         font-weight: bold;
+    }
+
+    .tool-glyph-italic {
+        font-style: italic;
+    }
+
+    .tool-glyph-strike {
+        font-weight: bold;
+    }
+
+    /* 删除线字形：uvue 不支持 text-decoration，用绝对定位细线模拟（#2689） */
+    .strike-line {
+        position: absolute;
+        left: 26rpx;
+        right: 26rpx;
+        top: 42rpx;
+        height: 2rpx;
+        background-color: #333333;
+    }
+
+    .strike-line.active {
+        background-color: $primary-color;
     }
 
     .ml-16 {
@@ -166,11 +205,18 @@
         border: 1rpx solid #e4e7ed;
         align-items: center;
         justify-content: center;
+        flex-direction: row;
     }
 
     .panel-btn.active {
         background-color: #e8f0fe;
         border: 1rpx solid $primary-color;
+    }
+
+    .panel-btn-icon {
+        font-size: 26rpx;
+        color: #606266;
+        margin-right: 8rpx;
     }
 
     .panel-btn-text {

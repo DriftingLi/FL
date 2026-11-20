@@ -330,6 +330,10 @@ const MODULES = {
       // 撞上 600 预算，本票按 ADR-0023 ③「拆而不覆盖」处理）。只被上面那个输入组件消费，
       // 同属跨页共享件的那条家；未落 pages/forum/components/ 的理由同上（A6 零孤儿）。
       'components/forum-wysiwyg-toolbar.uvue',
+      // 'components/forum-wysiwyg-image-area.uvue' —— #2689：图片区两态从输入区拆出（输入区 634 行
+      // 撞上 600 预算，同 #2658 按 ADR-0023 ③「拆而不覆盖」处理）。纯展示件：列表与计数由宿主给，
+      // 动作一律 emit 回去；只被上面那个输入组件消费，家与理由同上。
+      'components/forum-wysiwyg-image-area.uvue',
       'composables/useForumImagePicker.uts',
       'composables/useReplyComposer.uts',
       'composables/useReport.uts',
@@ -346,10 +350,15 @@ const MODULES = {
       'pages/forum/components/forum-markdown-input.uvue',
       'pages/forum/components/forum-qa-header.uvue',
       'pages/forum/components/forum-reply-list.uvue',
+      // 'pages/forum/components/forum-reply-panel.uvue' —— #2691：回复浮层（遮罩 + 头部 + 输入区 +
+      // 底部操作区）从详情页拆出（详情页 653 行撞上 600 预算，按 ADR-0023 ③「拆而不覆盖」处理）。
+      // 只被 forum-detail 消费；草稿 / 图片 / 提交态仍由页面 composable 持有，本件只接线与转发。
+      'pages/forum/components/forum-reply-panel.uvue',
       'pages/forum/components/forum-report-dialog.uvue',
       'pages/forum/components/forum-resource-panel.uvue',
       'pages/forum/components/forum-square-sort-bar.uvue',
       'pages/forum/components/forum-tab-bar.uvue',
+      'pages/forum/components/forum-topic-actions.uvue',
       'pages/forum/components/forum-topic-body.uvue',
       'pages/forum/components/forum-topic-card.uvue',
       'pages/forum/components/forum-topic-header.uvue',

@@ -395,6 +395,8 @@ describe('招聘 tab 退场契约（#705 退场部分先行；简历入口重挂
 describe('行为保持契约（源码接线侧：跳转/时序/乐观更新的真判据在行为腿与 ①a，不在本组）', () => {
   const page = read('pages/forum/forum.uvue');
   const detailPage = read('pages/forum/forum-detail.uvue');
+  /** #2691：回复浮层（遮罩 / 头部 / 输入区 / 底部操作区）已从详情页拆出（ADR-0023 ③ 拆而不覆盖） */
+  const replyPanel = read('pages/forum/components/forum-reply-panel.uvue');
   const detail = read('composables/useTopicDetail.uts');
   const composer = read('composables/useReplyComposer.uts');
   /** P3：图片流水线已收进共享 picker（限额闸门与文案都在那里） */
@@ -428,15 +430,19 @@ describe('行为保持契约（源码接线侧：跳转/时序/乐观更新的�
   it('回复栏留壳层、草稿仍由页面持有（跨组件 v-model 属 uvue 编译风险区 ⇒ 走显式 prop + emit）', () => {
     // 壳层（含发送按钮）仍在本页；草稿经显式 `:content` + `@update:content` 回流 ——
     // **不用**跨组件 `v-model`，那正是本条要防的编译风险区（#1240 P3 收进共享组件后口径不变）
-    expect(detailPage).toContain('variant="reply"');
+    // #2691：输入区与底部操作区随浮层搬进 forum-reply-panel，草稿仍由页面 composable 持有、
+    // 经显式 prop + emit 穿过浮层（浮层只转发，不持有状态）。
+    expect(replyPanel).toContain('variant="reply"');
     expect(detailPage).toContain(':content="replyContent"');
     expect(detailPage).toContain('@update:content="onReplyContentChange"');
     expect(detailPage).not.toContain('v-model="replyContent"');
-    expect(detailPage).toContain(':image-count="replyImages.length"');
+    expect(replyPanel).toContain(':image-count="images.length"');
     expect(detailPage).toContain(':max-images="replyImageLimit"');
-    expect(detailPage).toContain("{{ submitting ? '发送中' : '发送' }}");
+    // #2691：主按钮文案由「发送」改「回复」（底部左「＋ 添加图片」右「回复」）
+    expect(replyPanel).toContain("{{ submitting ? '发送中' : '回复' }}");
     // 发送闸门与 `onSubmitReply` 的 trim 口径一致（纯空白不许亮着按钮却静默 return）
-    expect(detailPage).toContain(':class="{ disabled: !canSubmitReply }"');
+    expect(replyPanel).toContain(':class="{ disabled: !canSubmit }"');
+    expect(detailPage).toContain(':can-submit="canSubmitReply"');
   });
 
   it('onToggleReplyLike / onToggleLike 的调用点仍在（行为判据见 utils/forumReplyLikeBehavior.test.js）', () => {
@@ -464,15 +470,36 @@ describe('行为保持契约（源码接线侧：跳转/时序/乐观更新的�
     // 触发条常驻（不再 v-if 切换内联展开态）
     expect(detailPage).toMatch(/class="reply-trigger" @click="onOpenReply"/);
     // 遮罩 + 面板：面板 bottom/maxHeight 由键盘高度驱动；遮罩点击收起、面板 @click.stop 防误收
-    expect(detailPage).toMatch(/class="reply-panel-mask" @click="onCollapseReply"/);
-    expect(detailPage).toMatch(/:style="\{ marginBottom: panelBottom \+ 'px', maxHeight: panelMaxHeight \+ 'px' \}"/);
-    expect(detailPage).toMatch(/@click\.stop/);
+    // #2691：遮罩与面板搬进 forum-reply-panel，本页只接 `@collapse` 与尺寸 prop
+    expect(replyPanel).toMatch(/class="reply-panel-mask"/);
+    expect(replyPanel).toMatch(/@click="onCollapse"/);
+    expect(detailPage).toMatch(/@collapse="onCollapseReply"/);
+    expect(replyPanel).toMatch(/:style="\{ marginBottom: panelBottom \+ 'px', maxHeight: panelMaxHeight \+ 'px' \}"/);
+    expect(replyPanel).toMatch(/@click\.stop/);
     // ⑪-3：#1300 的下滑收起整条删除（onContentScroll 函数与 @scroll 绑定都不再存在；注释里提及不算）
     expect(detailPage).not.toMatch(/function onContentScroll/);
     expect(detailPage).not.toMatch(/@scroll="onContentScroll"/);
     // ⑪-4：adjust-position 按 reply 档关掉（发帖档维持系统默认）
     const inputComp = read('pages/forum/components/forum-markdown-input.uvue');
     expect(inputComp).toMatch(/:adjust-position="!isReply"/);
+  });
+
+  it('#2691 回复浮层重排：@ 头 + 关闭 X + 底部左加图右回复 + 收起不卸载（接线守护，像素判据归 ①a）', () => {
+    // 头部：有 @ 时左上「回复 @昵称」，右上 X 关闭（标题文案由 composable 的 replyHeaderText 给）
+    expect(replyPanel).toContain('class="reply-panel-header"');
+    expect(replyPanel).toContain('{{ headerText }}');
+    expect(detailPage).toContain(':header-text="replyHeaderText"');
+    expect(replyPanel).toContain('class="reply-panel-close"');
+    // 底部：左「＋ 添加图片」、右「回复」主按钮（原「收起」按钮已删）
+    expect(replyPanel).toContain('class="reply-add-image"');
+    expect(replyPanel).toContain("'＋ 添加图片'");
+    expect(replyPanel).not.toContain('class="reply-collapse"');
+    // 收起不卸载：首次打开后常驻挂载，收起只切 display:none（不挡点击、不响应事件）
+    expect(detailPage).toContain('v-if="replyMounted"');
+    expect(replyPanel).toContain('reply-panel-mask-hidden');
+    expect(replyPanel).toMatch(/\.reply-panel-mask-hidden\s*\{[^}]*display:\s*none/);
+    // 发送成功清编辑器正文（图片与 @ 态由 composable 清）
+    expect(detailPage).toContain('.clear()');
   });
 });
 
@@ -537,6 +564,8 @@ describe('IP 属地契约（ADR-0045：发布那一刻的快照，市优先退�
   const display = read('utils/forumDisplay.uts');
   const detailDisplay = read('utils/forumDetailDisplay.uts');
   const detailPage = read('pages/forum/forum-detail.uvue');
+  /** #2691：回复浮层已从详情页拆出，回复档输入区实例在浮层里 */
+  const replyPanel = read('pages/forum/components/forum-reply-panel.uvue');
   const replyList = read('pages/forum/components/forum-reply-list.uvue');
   const header = read('pages/forum/components/forum-topic-header.uvue');
   const createPage = read('pages/forum/forum-create.uvue');
@@ -602,9 +631,10 @@ describe('IP 属地契约（ADR-0045：发布那一刻的快照，市优先退�
     expect(inputComponent).toContain('<text v-if="showRegionNotice" class="region-notice">{{ regionNotice }}</text>');
     // 缺省 true ⇒ 回复栏不传该 prop 也照常显示（回复必落属地）
     expect(inputComponent).toContain('showRegionNotice: true');
-    // 发帖表单在**资源态**不显示（资源走投稿接口、不落属地）
-    expect(createPage).toContain(':show-region-notice="!isResourceMode"');
-    expect(detailPage).toContain('variant="reply"');
+    // 发帖表单在**资源态**不显示（资源走投稿接口、不落属地）：资源分支的弱端输入区显式关掉；
+    // 能力端 WYSIWYG 只出现在非资源态那张卡里，不传该 prop（缺省 true）即显示（#2689 单卡）。
+    expect(createPage).toContain(':show-region-notice="false"');
+    expect(replyPanel).toContain('variant="reply"');
   });
 
   it('列表卡片不加属地（ADR-0045：卡片信息密度已高）', () => {
@@ -793,9 +823,9 @@ describe('断言分类登记（#2332：接线 / 自称行为 两分法与 1:1 �
     }
   });
 
-  it('读数锁：声明单元 80 条（76 条 it + 4 条 it.each，后者运行时展开成 12 个用例 ⇒ 88 个运行时用例）', () => {
-    expect(cases.length).toBe(80);
+  it('读数锁：声明单元 81 条（77 条 it + 4 条 it.each，后者运行时展开成 12 个用例 ⇒ 89 个运行时用例）', () => {
+    expect(cases.length).toBe(81);
     expect(cases.filter((c) => c.kind === 'each').length).toBe(4);
-    expect(AUDIT.filter((r) => r.kind === 'behavior-claim').length).toBe(12);
+    expect(AUDIT.filter((r) => r.kind === 'behavior-claim').length).toBe(13);
   });
 });

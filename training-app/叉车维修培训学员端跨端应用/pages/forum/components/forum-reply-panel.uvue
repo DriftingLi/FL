@@ -1,0 +1,264 @@
+<template>
+    <!-- 回复半屏浮层（⑪-1/⑪-4；#2691 重排）：全屏遮罩阻断阅读（列表滚不动）+ 从底部升起、
+         贴键盘上沿的面板。视口不随键盘移动的平台用 uni.onKeyboardHeightChange 去抖后驱动 bottom；
+         微信端不重复偏移（bottom 由宿主算好传进来，本件只贴样式）。
+
+         输入区按端分流（ADR-0073 ⑤）：能力端（App/H5/微信）用 WYSIWYG；支付宝/百度/头条保留
+         记号工具栏 ForumMarkdownInput。两态共用同一个草稿（宿主 composable 持有）与同一组图片/事件。
+
+         #2691 草稿保留：宿主首次打开才挂载（editor 在 display:none 里 ready 可能失败），之后收起
+         只切 `.reply-panel-mask-hidden`（display:none）—— 同时满足「不响应编辑器事件」与
+         「不挡页面点击」，文字 / 图片 / @ 态都留在本件内。 -->
+    <view v-if="mounted" class="reply-panel-mask"
+        :class="{ 'reply-panel-mask-hidden': !expanded }" @click="onCollapse">
+        <view class="reply-panel" :style="{ marginBottom: panelBottom + 'px', maxHeight: panelMaxHeight + 'px' }"
+            @click.stop>
+            <!-- 头部（#2691）：有 @ 时「回复 @昵称」，右上 X 关闭 -->
+            <view class="reply-panel-header">
+                <text class="reply-panel-title">{{ headerText }}</text>
+                <view class="reply-panel-close" @click="onCollapse">
+                    <text class="reply-panel-close-text">×</text>
+                </view>
+            </view>
+            <!-- #ifndef MP-ALIPAY || MP-BAIDU || MP-TOUTIAO -->
+            <ForumWysiwygInput v-if="useWysiwyg" ref="wysiwygRef" :preview-images="previewImages"
+                :image-count="images.length" variant="reply" :max-images="maxImages"
+                :maxlength="10000" placeholder="写下你的回复..." :uploading="uploading"
+                @update:markdown="onContentChange"
+                @add-image="onAddImage" @remove-image="onRemoveImage"
+                @preview-image="onPreviewImage" @keyboard-height="onKeyboardHeight" />
+            <!-- #endif -->
+            <ForumMarkdownInput v-if="!useWysiwyg" :content="content" :preview-images="previewImages"
+                :image-count="images.length" variant="reply" :max-images="maxImages"
+                :maxlength="10000" placeholder="写下你的回复..." :uploading="uploading"
+                @update:content="onContentChange"
+                @add-image="onAddImage" @remove-image="onRemoveImage"
+                @preview-image="onPreviewImage" />
+            <!-- 底部操作区（#2691）：左「＋ 添加图片」、右「回复」主按钮（替代原「收起 / 发送」）。
+                 弱端输入区自带添加入口，故左侧按钮只在能力端出现，避免两个入口。 -->
+            <view class="reply-actions">
+                <view class="reply-actions-left">
+                    <view v-if="showAddImage" class="reply-add-image" @click="onAddImage">
+                        <text class="reply-add-image-text">{{ uploading ? '上传中' : '＋ 添加图片' }}</text>
+                    </view>
+                </view>
+                <view class="reply-btn" :class="{ disabled: !canSubmit }" @click="onSubmit">
+                    <text class="reply-btn-text">{{ submitting ? '发送中' : '回复' }}</text>
+                </view>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { ref } from 'vue'
+    import ForumMarkdownInput from './forum-markdown-input.uvue'
+    // #ifndef MP-ALIPAY || MP-BAIDU || MP-TOUTIAO
+    import ForumWysiwygInput from '../../../components/forum-wysiwyg-input.uvue'
+    // #endif
+
+    /** 输入组件实例：@某人 经 expose 的 insertMention 写入；发送成功后经 clear 清正文 */
+    type ReplyInputInstance = {
+        insertMention : (name : string) => void,
+        clear : () => void,
+    }
+
+    const props = withDefaults(defineProps<{
+        /** 是否已挂载过（首次打开才置 true；之后收起只隐藏，不卸载） */
+        mounted?: boolean,
+        /** 展开态：false 时整块 display:none（不响应事件、不挡点击） */
+        expanded?: boolean,
+        /** 面板 bottom（px）：贴键盘上沿，由宿主按平台算好 */
+        panelBottom?: number,
+        /** 面板高度上限（px）：视口 60%，超出走面板内滚动 */
+        panelMaxHeight?: number,
+        /** 头部标题：有 @ 时「回复 @昵称」，否则「回复」 */
+        headerText?: string,
+        /** 输入区形态：能力端 WYSIWYG，平台例外恒 false */
+        useWysiwyg?: boolean,
+        /** 草稿正文（弱端受控 :content；能力端只作回流镜像） */
+        content?: string,
+        /** 已选图片（只取 length 给输入区计数） */
+        images?: string[],
+        /** 已上传图片的预览 URL */
+        previewImages?: string[],
+        /** 图片上传中 */
+        uploading?: boolean,
+        /** 提交中 */
+        submitting?: boolean,
+        /** 发送闸门（trim 后非空且不在提交中） */
+        canSubmit?: boolean,
+        /** 本载体图片上限（回复 3，由宿主从 constants 取） */
+        maxImages: number,
+        /** 底部「＋ 添加图片」是否出现（能力端且未选满） */
+        showAddImage?: boolean,
+    }>(), {
+        mounted: false,
+        expanded: false,
+        panelBottom: 0,
+        panelMaxHeight: 0,
+        headerText: '回复',
+        useWysiwyg: false,
+        content: '',
+        images: () => [] as string[],
+        previewImages: () => [] as string[],
+        uploading: false,
+        submitting: false,
+        canSubmit: false,
+        showAddImage: false,
+    })
+
+    const emit = defineEmits<{
+        (e: 'collapse'): void
+        (e: 'update:content', value: string): void
+        (e: 'add-image'): void
+        (e: 'remove-image', index: number): void
+        (e: 'preview-image', index: number): void
+        (e: 'keyboard-height', height: number): void
+        (e: 'submit'): void
+    }>()
+
+    const wysiwygRef = ref<ReplyInputInstance | null>(null)
+
+    function onCollapse() : void {
+        emit('collapse')
+    }
+
+    function onContentChange(value : string) : void {
+        emit('update:content', value)
+    }
+
+    function onAddImage() : void {
+        emit('add-image')
+    }
+
+    function onRemoveImage(index : number) : void {
+        emit('remove-image', index)
+    }
+
+    function onPreviewImage(index : number) : void {
+        emit('preview-image', index)
+    }
+
+    function onKeyboardHeight(height : number) : void {
+        emit('keyboard-height', height)
+    }
+
+    function onSubmit() : void {
+        emit('submit')
+    }
+
+    /** 宿主写入通道（#2642 @某人）：转给能力端输入区，弱端由宿主直接改草稿 */
+    function insertMention(name : string) : void {
+        const w = wysiwygRef.value
+        if (w != null) w.insertMention(name)
+    }
+
+    /** 发送成功后清编辑器正文（图片与 @ 态由宿主 composable 清） */
+    function clear() : void {
+        const w = wysiwygRef.value
+        if (w != null) w.clear()
+    }
+
+    defineExpose({ insertMention, clear })
+</script>
+
+<style lang="scss">
+    /* 半屏浮层（⑪-1）：全屏遮罩阻断阅读（列表滚不动）；面板贴键盘上沿（bottom 由 :style 动态给）。
+       形状照仓内先例 pages/practice/practice-do.uvue 的 .answer-card-mask / .answer-card-sheet。 */
+    .reply-panel-mask {
+        position: fixed;
+        left: 0;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.5);
+        justify-content: flex-end;
+    }
+
+    /* 面板是遮罩的普通 flex 子（**不做 fixed**），靠 mask 的 flex-end 落到底、用 margin-bottom 抬到
+       键盘上沿 —— 照 practice-do .answer-card-sheet 的可用形态。旧写法把面板也做成 fixed，会被
+       fixed 遮罩在 z 序上盖住 ⇒ 点输入先命中遮罩而收起（①a 真机抓获）。 */
+    .reply-panel {
+        background-color: #ffffff;
+        border-radius: 24rpx 24rpx 0 0;
+        padding: 24rpx;
+        flex-direction: column;
+    }
+
+    /* 收起态（#2691）：常驻挂载但整块 display:none —— 同时满足「不响应编辑器事件」与
+       「不挡页面点击」。不要用 opacity:0 / translate 之类留出命中区（那会挡住帖子里的点赞/举报）。 */
+    .reply-panel-mask-hidden {
+        display: none;
+    }
+
+    /* 浮层头部（#2691）：左标题（有 @ 时「回复 @昵称」）、右关闭 X */
+    .reply-panel-header {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8rpx;
+    }
+
+    .reply-panel-title {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #333333;
+    }
+
+    /* 关闭 X：88rpx 方形命中区（触摸目标 ≥44×44） */
+    .reply-panel-close {
+        width: 88rpx;
+        height: 88rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .reply-panel-close-text {
+        font-size: 40rpx;
+        color: #666666;
+        line-height: 1;
+    }
+
+    .reply-actions {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 8rpx;
+    }
+
+    /* 左侧占满剩余宽度：添加入口选满消失后，「回复」仍贴右（不靠 auto margin） */
+    .reply-actions-left {
+        flex: 1;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .reply-add-image {
+        padding: 16rpx 8rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .reply-add-image-text {
+        font-size: 28rpx;
+        color: #666666;
+    }
+
+    .reply-btn {
+        background-color: $primary-color;
+        padding: 16rpx 32rpx;
+        border-radius: 36rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .reply-btn.disabled {
+        background-color: #cccccc;
+    }
+
+    .reply-btn-text {
+        font-size: 28rpx;
+        color: #ffffff;
+    }
+</style>

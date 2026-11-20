@@ -40,6 +40,8 @@ const FORM_REL = 'pages/forum/composables/useForumCreateForm.uts';
 const input = read(INPUT_REL);
 const createPage = read(CREATE_REL);
 const detailPage = read(DETAIL_REL);
+/** #2691：回复浮层（含输入区实例与平台分叉）已从详情页拆出（ADR-0023 ③ 拆而不覆盖） */
+const replyPanel = read('pages/forum/components/forum-reply-panel.uvue');
 const composer = read(COMPOSER_REL);
 const form = read(FORM_REL);
 
@@ -51,13 +53,14 @@ describe('形态只有一份：发帖表单与回复栏共用同一个输入区�
     expect(createPage).toContain("from './components/forum-markdown-input.uvue'");
     expect(createPage).toContain('variant="topic"');
     // 回复面（本票 #2642）：能力端走 WYSIWYG，平台例外仍用同一份记号输入区
-    expect(detailPage).toContain("from '../../components/forum-wysiwyg-input.uvue'");
-    expect(detailPage).toContain('variant="reply"');
+    // #2691：输入区实例随浮层搬进 forum-reply-panel（详情页只挂浮层）
+    expect(replyPanel).toContain("from '../../../components/forum-wysiwyg-input.uvue'");
+    expect(replyPanel).toContain('variant="reply"');
   });
 
   it('平台例外在**编译期**摘掉 WYSIWYG（与发帖面同一口径），页面不自己探测端别', () => {
     // 无 editor 的小程序上，组件连 import 都不该进包 —— 运行期 if 挡不住「模块不存在」的编译错误
-    expect(detailPage).toContain('#ifndef MP-ALIPAY || MP-BAIDU || MP-TOUTIAO');
+    expect(replyPanel).toContain('#ifndef MP-ALIPAY || MP-BAIDU || MP-TOUTIAO');
     // ADR-0032：平台判据全仓唯一（composables/useLoginProviders.uts），页面不得再探测
     expect(detailPage).not.toContain('uniPlatform');
     expect(detailPage).not.toContain('getProviderSync');
