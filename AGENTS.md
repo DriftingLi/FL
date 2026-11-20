@@ -72,6 +72,7 @@ AI 安全审计用 DeepSec（Shield）。See `docs/agents/security-scan.md`.
   - 按名：`npx vitest run -t "用例名片段"`（vitest 5 起匹配的是 `describe > test` 全名，跨分段时用 ` > ` 或 `.*`，别用空格，详见 checks.md）
 - **移动端**（`training-app/叉车维修培训学员端跨端应用/`；全量 `npm test` = `npm run test:unit && npm run test:behavior` —— ③ 门自 #1702 起**两腿**：`test:unit` 接线腿（`jest.config.unit.js`）+ `test:behavior` 行为腿（`jest.config.behavior.js`），两腿各自 `-i` 串行）
   - 单文件：`npx jest --config <该套件所在腿的 config> <相对路径>`；按名加 `-t "片段"`。**选错腿的 config 会让 jest 当那个套件不存在**（0 套件，长得像绿）—— 套件归哪一腿问 `node scripts/classify-guards.mjs`
+  - 审计 / 影响面（#2713 起的两个具名入口，均非门）：`npm run audit:spacing -- --all`（页面边距 / 卡内距 / 箭槽三件套机检，报 WARN / INFO / SKIP 三档，`--strict` 让 WARN 判红）；`npm run test:impact -- --changed`（改动面 → 受影响 jest 套件，区分 unit / behavior 腿）
   - 运行时面（① 真机 / ② 微信开发者工具——已于 #2320 退役 / ③ 契约门）另走别处、需真机环境，不在本命令射程——见下方「验收门」与移动端 `training-app/…/AGENTS.md`。
 
 ## 验收门（合并前置）
