@@ -26,17 +26,27 @@
                 <view v-if="detail!.cover_image.length > 0" class="cover-wrap">
                     <image class="cover-img" :src="detail!.cover_image" mode="widthFix" :webp="true"></image>
                 </view>
-                <!-- 正文 Markdown 渲染（#2355：块怎么排一律交给四面共用的
-                     `components/markdown/markdown-blocks.uvue`。本页此前自带一份 8 条分支的模板
-                     与一整套 .md-* / .md-run* 样式 —— 那是「一套刻度」在精选面的第二份事实，
-                     换件后同一段正文换个入口不再换一种疏密。
-                     行内 runs 由 `inline-axis="plain"` 声明：精选档声明了 `MEMBER_INLINE`，
-                     分词在公共件内做（本页不再直引分词器）。
-                     图片不接 `@image-click`（#2355 决议 D5：保持本页「正文图不可点」的现状，
-                     那是早于本票存在的差异，接上就是能力面变化）。 -->
-                <view class="article-body">
+                <!-- 正文按形态分叉（2026-11，对接后端 content_type / docx_url）：
+                     · markdown ⇒ 走四面共用的公共块渲染件（既有路径，逐字不动）；
+                     · docx ⇒ 正文由写侧置空、原文件在 docx_url，移动端没有 docx-preview，
+                       出路是「下载原文件 → 交系统打开」（下载动作收在 api 层）；
+                     · 异常形态（docx 缺地址 / 正文为空）⇒ 给可见提示，**不许退回空白**
+                       （根 CONTEXT.md「会让内容读不出来的降级必须补齐」）。
+                     判定收在 `utils/featuredBody.uts`，本页只消费结论，不自己比字符串。 -->
+                <view v-if="bodyKind == 'markdown'" class="article-body">
                     <MarkdownBlocks :blocks="contentBlocks" :caps="FEATURED_CAPS" inline-axis="plain"
                         @link-click="onRunLink" />
+                </view>
+                <view v-else-if="bodyKind == 'docx'" class="docx-card">
+                    <text class="docx-badge">Word 文档</text>
+                    <text class="docx-file">{{ docxFileName }}</text>
+                    <view class="docx-btn" @click="onOpenDocx">
+                        <text class="docx-btn-text">{{ docxOpening ? '正在打开...' : '打开文档' }}</text>
+                    </view>
+                    <text class="docx-tip">该文章为导入的原始 Word 文档，将下载后由系统应用打开</text>
+                </view>
+                <view v-else class="body-hint">
+                    <text class="body-hint-text">{{ bodyHint }}</text>
                 </view>
                 <!-- 正文外链（#2097）：链接由正文 Markdown 承载，`source` 列只作来源名称、不参与判断 -->
                 <view v-if="sourceLinks.length > 0" class="link-section">
@@ -70,9 +80,10 @@
     import { onLoad, onShow } from '@dcloudio/uni-app'
     import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { goBack } from '../../utils/navigation'
-    import { getFeaturedContentDetailApi, viewFeaturedContentApi } from '../../api/featured'
+    import { getFeaturedContentDetailApi, viewFeaturedContentApi, openFeaturedDocxApi } from '../../api/featured'
     import { checkFavoriteApi, addFavoriteApi, removeFavoriteApi } from '../../api/favorite'
     import { parseMarkdown, SUBSET_FEATURED } from '../../utils/markdown'
+    import { featuredBodyKind, featuredBodyIssue, featuredBodyHint, featuredDocxFileName } from '../../utils/featuredBody'
     import type { FeaturedContentDetail, FeaturedContentItem, MarkdownBlock } from '../../types/index'
     import { formatDateStr } from '../../utils/format'
     import { collectFeaturedLinks } from '../../utils/featuredLinks'
@@ -115,6 +126,45 @@
         return parseMarkdown(detail.value!.content, SUBSET_FEATURED)
     })
 
+    /**
+     * 正文形态（2026-11）：`markdown` / `docx` / `docx-missing` / `empty`。
+     * 判定收在 `utils/featuredBody.uts`（纯函数、行为腿真执行）—— 本页不自己做字符串比较，
+     * 否则「什么算 docx」会在模板里长成第二处事实。
+     */
+    const bodyKind = computed<string>(() : string => {
+        const d = detail.value
+        if (d == null) return ''
+        return featuredBodyKind(d!.content_type, d!.content, d!.docx_url)
+    })
+
+    /** docx 卡片的文件名（只做展示；空地址由 `bodyKind` 先拦成 docx-missing） */
+    const docxFileName = computed<string>(() : string => {
+        const d = detail.value
+        if (d == null) return ''
+        return featuredDocxFileName(d!.docx_url)
+    })
+
+    /** 异常形态的可见提示（不许空白；文案的唯一处在 `utils/featuredBody.uts` 的 HINT_*） */
+    const bodyHint = computed<string>(() : string => {
+        return featuredBodyHint(bodyKind.value)
+    })
+
+    const docxOpening = ref<boolean>(false)
+
+    /** docx 正文的出路：「下载原文件 → 交系统打开」。下载动作收在 api 层（页面禁 uni.downloadFile 裸调） */
+    async function onOpenDocx() : Promise<void> {
+        if (docxOpening.value) return
+        const d = detail.value
+        if (d == null) return
+        docxOpening.value = true
+        try {
+            const err = await openFeaturedDocxApi(d!.docx_url)
+            if (err.length > 0) uni.showToast({ title: err, icon: 'none' })
+        } finally {
+            docxOpening.value = false
+        }
+    }
+
     /** 正文 Markdown 里的外链：按出现顺序、同 URL 去重；协议闸在分词器单点，本页不判协议 */
     const sourceLinks = computed<FeaturedLink[]>(() : FeaturedLink[] => {
         if (detail.value == null) return []
@@ -147,6 +197,12 @@
         try {
             const result = await getFeaturedContentDetailApi(contentId.value)
             detail.value = result
+            // 正文完整性预警（本票需求 5）：异常只记录 + 已在正文区给可见提示，不阻断阅读
+            // （标题 / 元信息 / 收藏仍可用）。文案的唯一处在 `utils/featuredBody.uts` 的 ISSUE_*。
+            const issue = featuredBodyIssue(result.content_type, result.content, result.docx_url)
+            if (issue.length > 0) {
+                console.warn('[featured-detail] 正文完整性异常:', issue, 'content_id=', contentId.value)
+            }
             // 增加阅读量（静默）
             viewFeaturedContentApi(contentId.value).catch(() : void => {})
             // 检查收藏状态（静默）
@@ -296,6 +352,69 @@
 
     .article-body {
         margin-top: 16rpx;
+    }
+
+    /* docx 正文卡片（2026-11）：移动端不做 OOXML 渲染，给出「打开原文档」的唯一下载入口。
+       文字类样式一律落 <text>（C1）；<view> 只放布局 / 底色 / 边框。 */
+    .docx-card {
+        margin-top: 16rpx;
+        padding: 32rpx;
+        background-color: #f7f8fa;
+        border-radius: 12rpx;
+        border-width: 1rpx;
+        border-color: $border-color;
+        align-items: center;
+    }
+
+    .docx-badge {
+        font-size: 22rpx;
+        color: $primary-color;
+        background-color: #e8f0fe;
+        padding: 4rpx 14rpx;
+        border-radius: 8rpx;
+        margin-bottom: 16rpx;
+    }
+
+    .docx-file {
+        font-size: 28rpx;
+        color: #333333;
+        lines: 2;
+        text-overflow: ellipsis;
+        text-align: center;
+        margin-bottom: 24rpx;
+    }
+
+    .docx-btn {
+        padding: 18rpx 48rpx;
+        background-color: $primary-color;
+        border-radius: 44rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .docx-btn-text {
+        font-size: 28rpx;
+        color: #ffffff;
+    }
+
+    .docx-tip {
+        font-size: 22rpx;
+        color: #999999;
+        margin-top: 20rpx;
+        text-align: center;
+        lines: 2;
+    }
+
+    /* 异常正文的可见提示（不许空白）：与空态同色阶，但不占满屏 */
+    .body-hint {
+        margin-top: 16rpx;
+        padding: 48rpx 0;
+        align-items: center;
+    }
+
+    .body-hint-text {
+        font-size: 26rpx;
+        color: #999999;
     }
 
     /* 正文外链段（#2097）：无链接整段不渲染；样式落在 text 上（C1：App 端子节点不继承父样式） */

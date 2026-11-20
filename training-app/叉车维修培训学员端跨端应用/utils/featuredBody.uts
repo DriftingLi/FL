@@ -1,0 +1,111 @@
+/**
+ * 精选文章「正文形态」的唯一判定件（2026-11，对接后端 000062 迁移的 content_type / docx_url）
+ *
+ * 背景（本模块存在的原因）：`featured_content` 自 000062 起有两种正文形态 ——
+ *   · `markdown`：正文在 `content` 列，走 `parseMarkdown` 渲染；
+ *   · `docx`：正文是导入的原始 Word，**写侧把 `content` 置空**（`service.featuredContentBody`），
+ *     正文地址在 `docx_url`，浏览器端用 docx-preview 按 OOXML 渲染。
+ *
+ * 移动端此前只读 `content`：于是 docx 文章拿到空串 ⇒ 解析出 0 个块 ⇒ 正文区整片空白，
+ * 而标题、封面、上下篇都正常。这正是「部分文章内容无法正常显示」的形态（不是解析器丢字）。
+ *
+ * 这里把判定收成一个纯函数，让**页面只消费结论**：
+ *   · 页面不自己比字符串（`content_type == 'docx'` 散进模板就是第二处事实）；
+ *   · 判定矩阵可被 ③ 门行为腿真执行（`utils/featuredBodyBehavior.test.js`）。
+ *
+ * ⚠️ 形状纪律（#905 血账）：只返回**标量字符串**，不返回自定义类型的数组 / 嵌套对象。
+ *
+ * @note 纯函数、零运行期依赖（不碰 uni API、不读样式），App / 小程序 / H5 与 Node 测试同源
+ */
+
+/** 正文形态：Markdown 正文可渲染 */
+export const BODY_KIND_MARKDOWN : string = 'markdown'
+/** 正文形态：docx 文章且文件地址可用 —— 走「下载后交系统打开」 */
+export const BODY_KIND_DOCX : string = 'docx'
+/** 正文形态：docx 文章但文件地址缺失 —— 数据不完整，给可见提示而不是空白 */
+export const BODY_KIND_DOCX_MISSING : string = 'docx-missing'
+/** 正文形态：既非 docx 也没有 Markdown 正文 —— 给可见提示而不是空白 */
+export const BODY_KIND_EMPTY : string = 'empty'
+
+/** 完整性异常的三种文案（唯一处；页面只直出，不再各写一份） */
+export const ISSUE_DOCX_URL_MISSING : string = '正文类型为 docx，但缺少文档地址'
+export const ISSUE_DOCX_HAS_CONTENT : string = 'docx 文章仍带 Markdown 正文（写侧不变量被破坏）'
+export const ISSUE_CONTENT_EMPTY : string = '正文为空：既不是 docx，也没有 Markdown 内容'
+
+/** 读者可见的兜底提示文案（两种「读不出来」的形态各一句；唯一处） */
+export const HINT_DOCX_MISSING : string = '本文档的附件暂不可用，请联系管理员'
+export const HINT_EMPTY : string = '正文暂不可用'
+
+/**
+ * 异常形态的可见提示：空串 = 不需要提示（markdown / docx 各自有正文出路）。
+ *
+ * 与 {@link featuredBodyIssue} 分工：那个给日志 / 运维看「哪里坏了」，这个给读者看
+ * 「现在能做什么」。两者都以形态判定的结论为输入，页面不各写一份。
+ */
+export function featuredBodyHint(kind : string) : string {
+	if (kind == BODY_KIND_DOCX_MISSING) return HINT_DOCX_MISSING
+	if (kind == BODY_KIND_EMPTY) return HINT_EMPTY
+	return ''
+}
+
+/** 正文类型归一：空串 = markdown（与库层 DEFAULT 同义；未知值按 markdown 处理，与后端归一方向一致） */
+export function isFeaturedDocx(contentType : string) : boolean {
+	return contentType == 'docx'
+}
+
+/**
+ * 该文章正文该走哪条渲染路径。
+ *
+ * 判据只看**类型 + 两个字段的非空性**，不看内容长度是否「像正文」——
+ * 一篇文章的正文可以是单字符，长度不是判据，类型才是。
+ *
+ * @param contentType 后端 `content_type`（缺省已由 api 层归一为 `markdown`）
+ * @param content     Markdown 正文（docx 文章恒为空串）
+ * @param docxUrl     原始 Word 地址（markdown 文章恒为空串）
+ */
+export function featuredBodyKind(contentType : string, content : string, docxUrl : string) : string {
+	if (isFeaturedDocx(contentType)) {
+		if (docxUrl.length > 0) return BODY_KIND_DOCX
+		return BODY_KIND_DOCX_MISSING
+	}
+	if (content.length > 0) return BODY_KIND_MARKDOWN
+	return BODY_KIND_EMPTY
+}
+
+/**
+ * 正文完整性检查（#要求 5：提前发现并预警）。
+ *
+ * 返回空串 = 无异常；非空 = 该给运维 / 用户看的异常文案。
+ * 三种异常都对应「正文根本读不出来」的形态，因此页面在出现异常时**必须给可见提示**，
+ * 不允许退回空白（与根 CONTEXT.md「会让内容读不出来的降级必须补齐」同一条地板）。
+ *
+ * `docx 文章仍带 Markdown 正文` 是写侧不变量（service.featuredContentBody）被绕过的信号：
+ * 阅读端仍按 docx 渲染（类型优先），但这条要能被日志抓到。
+ */
+export function featuredBodyIssue(contentType : string, content : string, docxUrl : string) : string {
+	if (isFeaturedDocx(contentType)) {
+		if (docxUrl.length == 0) return ISSUE_DOCX_URL_MISSING
+		if (content.length > 0) return ISSUE_DOCX_HAS_CONTENT
+		return ''
+	}
+	if (content.length == 0) return ISSUE_CONTENT_EMPTY
+	return ''
+}
+
+/**
+ * 从 docx 地址投影出展示用文件名（去 query / hash，取最后一段路径）。
+ *
+ * 只做字符串切分，不调 `decodeURIComponent`：畸形 `%` 序列会抛异常，
+ * 而这里的目标只是「让读者知道要点开的是什么文件」，宁可显示编码串也不炸。
+ */
+export function featuredDocxFileName(url : string) : string {
+	let s = url
+	const q = s.indexOf('?')
+	if (q >= 0) s = s.substring(0, q)
+	const h = s.indexOf('#')
+	if (h >= 0) s = s.substring(0, h)
+	const slash = s.lastIndexOf('/')
+	if (slash >= 0) s = s.substring(slash + 1)
+	if (s.length == 0) return 'Word 文档'
+	return s
+}
