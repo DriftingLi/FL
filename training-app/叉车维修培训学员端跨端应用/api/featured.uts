@@ -65,6 +65,10 @@ function buildFeaturedDetailResult(data : UTSJSONObject) : FeaturedContentDetail
 		view_count: base.view_count,
 		published_at: base.published_at,
 		created_at: base.created_at,
+		// 正文形态（后端 000062）：`docx` 文章的 `content` 由写侧置空，正文改看 `docx_url`。
+		// 缺省 `markdown` 与库层 DEFAULT 同义 —— 存量行没有这两个键时行为不变。
+		content_type: toStr(data['content_type'], 'markdown'),
+		docx_url: toStr(data['docx_url']),
 		content: toStr(data['content']),
 		related: related,
 		prev: prev,
@@ -110,5 +114,48 @@ export function getFeaturedContentDetailApi(contentId : number) : Promise<Featur
 export function viewFeaturedContentApi(contentId : number) : Promise<void> {
 	return post('/featured-content/' + contentId.toString() + '/view').then(() : void => {
 		// 无返回数据
+	})
+}
+
+/**
+ * 打开导入了原始 Word 的精选文章（2026-11，对应后端 `content_type = 'docx'`）。
+ *
+ * 移动端没有 docx-preview（那是浏览器端能力），正文**不能**按 Markdown 渲染 ——
+ * 它本来就是空的。这里的出路是「下载原文件 → 交系统打开」（与 `api/material.uts` 同一形态：
+ * 下载动作收在 api 层，页面层禁 `uni.downloadFile` 裸调）。
+ *
+ * @param docxUrl 详情返回的 `docx_url`（站点附件直链）
+ * @returns 空串 = 已交给系统打开；非空 = 给用户看的失败原因
+ */
+export function openFeaturedDocxApi(docxUrl : string) : Promise<string> {
+	if (docxUrl.length == 0) {
+		return Promise.resolve('文档地址无效')
+	}
+	// 静态直链含中文/空格，需编码；展开符会触发守护规则 I（UTS 展开会被误判为未定义标识符）
+	const encodedURL = encodeURI(docxUrl) ?? ''
+	return new Promise<string>((resolve) => {
+		uni.downloadFile({
+			url: encodedURL,
+			success: (res) => {
+				if (res.statusCode != 200) {
+					resolve('文档下载失败（' + res.statusCode.toString() + '）')
+					return
+				}
+				// 下载成功即打开：端侧不支持该文件类型时给明确提示，不静默
+				uni.openDocument({
+					filePath: res.tempFilePath,
+					success: () : void => { resolve('') },
+					fail: () : void => { resolve('无法打开此文档') }
+				})
+			},
+			fail: (err) => {
+				const errMsg = err.errMsg
+				if (errMsg != null && errMsg.indexOf('timeout') >= 0) {
+					resolve('文档下载超时，请稍后重试')
+				} else {
+					resolve('文档下载失败，请检查网络后重试')
+				}
+			}
+		})
 	})
 }

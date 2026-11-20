@@ -38,6 +38,15 @@ export type FeaturedContentDetail = {
     view_count : number
     published_at : string
     created_at : string
+    /**
+     * 正文形态（后端 000062 迁移起）：`markdown` = 走 `content` 渲染；
+     * `docx` = 正文不在 `content`（写侧置空），改看 `docx_url`。
+     * 缺省映射为 `markdown`（与库层 DEFAULT 同义，存量行全是 Markdown）。
+     */
+    content_type : string
+    /** 原始 .docx 地址：`content_type == 'docx'` 时非空；markdown 文章恒为空串 */
+    docx_url : string
+    /** Markdown 正文：docx 文章恒为空串（不拿它当「文档是否存在」的判据） */
     content : string
     related : FeaturedContentItem[]
     prev : FeaturedContentItem | null

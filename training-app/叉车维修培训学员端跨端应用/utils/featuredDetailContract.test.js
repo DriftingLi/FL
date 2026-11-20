@@ -75,4 +75,25 @@ describe('内容精选详情页：缺 id 落态 + source 单用途 + 外链只�
     expect(code).not.toContain('inlineLinkSafe');
     expect(code).not.toMatch(/javascript:|ftp:/);
   });
+
+  it('正文按形态分叉（2026-11）：docx 文章不走 Markdown 块渲染，下载动作留在 api 层', () => {
+    const code = stripComments(PAGE);
+    // 判定只认纯函数那一处结论，页面不自己比字符串
+    expect(code).toContain("from '../../utils/featuredBody'");
+    expect(code).toContain('featuredBodyKind');
+    expect(code).toContain('featuredBodyIssue');
+    // 三条正文分支：markdown 渲染件 / docx 卡片 / 兜底提示
+    expect(code).toContain("bodyKind == 'markdown'");
+    expect(code).toContain("bodyKind == 'docx'");
+    expect(code).toContain('bodyHint');
+    // 页面层禁 uni.downloadFile / uni.openDocument 裸调（先例：资料下载收在 api 层）
+    expect(code).not.toContain('uni.downloadFile');
+    expect(code).not.toContain('uni.openDocument');
+    // 出路与映射都在 api 层：两字段必须被带出，下载/打开必须真接线
+    const API = readText(path.join(ROOT, 'api', 'featured.uts'));
+    expect(API).toContain("data['content_type']");
+    expect(API).toContain("data['docx_url']");
+    expect(API).toContain('uni.downloadFile(');
+    expect(API).toContain('uni.openDocument(');
+  });
 });
