@@ -22,11 +22,11 @@ from collector.sources import all_sources, resolve_source, source_for_channel
 
 
 class RegistryTest(unittest.TestCase):
-    def test_all_three_phase_one_sources_are_registered(self):
+    def test_all_phase_one_sources_are_registered(self):
         channels = {spec.channel for spec in all_sources()}
         self.assertEqual(
-            channels, {"rmfysszc", "jd", "gpai"},
-            "一期采集面 = rmfysszc（既有）+ 京东 + 公拍网；产权交易所由 #2680 另加",
+            channels, {"rmfysszc", "jd", "gpai", "hbcpre"},
+            "一期采集面 = rmfysszc（既有）+ 京东 + 公拍网 + 湖北产权交易所省镜像",
         )
 
     def test_every_source_has_origins_and_markers(self):
@@ -40,7 +40,7 @@ class RegistryTest(unittest.TestCase):
     def test_only_rmfysszc_is_unstructured(self):
         """结构化直取是例外路径：谁走它必须是有意的、可列举的。"""
         structured = {s.channel for s in all_sources() if s.structured}
-        self.assertEqual(structured, {"jd", "gpai"})
+        self.assertEqual(structured, {"jd", "gpai", "hbcpre"})
 
     def test_structured_sources_keep_undated(self):
         """结构化平台没有发布日期字段；若不放行无日期条目，回补会静默落 0 行。"""

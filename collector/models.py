@@ -31,6 +31,12 @@ class RawSample:
     # 原始价格：挂牌价 / 成交价（raw 阶段尚未抽取，留空）。
     raw_price: float | None = None
     raw_price_kind: str | None = None
+    # #2680：挂牌价格（产权交易所省镜像的「挂牌→成交」配对）。
+    #
+    # 成交样本上 raw_price = 成交金额、listing_price = 挂牌价格，两价齐备；
+    # 挂牌样本上两者相等（列语义恒定：「listing_price 就是挂牌价」）。
+    # 其它采集面留 None——它们没有配对语义，不该被下游误当成「挂牌价缺失」。
+    listing_price: float | None = None
     # 评估价 / 起拍价、成交日期、结构化规格：后续抽取票填。
     appraisal_price: float | None = None
     auction_date: datetime | None = None
