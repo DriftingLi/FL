@@ -581,25 +581,75 @@ class CollectorBatchE2EContractTest(unittest.TestCase):
         self.assertEqual(float(group["price_min"]), 33000.0)
         self.assertEqual(float(group["price_max"]), 33000.0)
 
-    def test_unmatched_view_excludes_matched_and_rejected(self):
-        """视图口径 == 表口径：只收未匹配且未被剔除的行（聚合不丢不增）。"""
+    def test_unmatched_view_excludes_matched_rejected_and_price_failed(self):
+        """视图口径 == 表口径：已匹配、被剔除、价格抽取失败的都不进待审队列。"""
         from collector.cli import run_unmatched
 
-        groups = run_unmatched(DATABASE_URL, search_path=self.schema)
-        self.assertIsInstance(groups, list)
-        matched_rows = self._read(
-            "SELECT count(*) FROM market_transactions "
-            "WHERE residual_rate_label IS NOT NULL"
-        )[0][0]
-        self.assertGreater(matched_rows, 0)
-        pending_rows = self._read(
-            "SELECT count(*) FROM market_transactions "
-            "WHERE residual_rate_label IS NULL AND clean_status <> 'rejected'"
-        )[0][0]
-        total_in_view = self._read(
-            "SELECT coalesce(sum(sample_count), 0) FROM market_unmatched_queue"
-        )[0][0]
-        self.assertEqual(total_in_view, pending_rows)
+        rejected_url = "https://www.rmfysszc.com/auction/notice/2026/12901.html"
+        failed_url = "https://www.rmfysszc.com/auction/notice/2026/12902.html"
+        self.conn.execute(
+            "INSERT INTO market_transactions "
+            "(channel, source_url, raw_description, structured_specs, clean_status, "
+            " rejection_reason, label_eligible) VALUES "
+            "(%s, %s, %s, %s, 'rejected', 'bulk_lot_no_per_unit', true),"
+            "(%s, %s, %s, %s, 'raw', NULL, false)",
+            (
+                "rmfysszc", rejected_url, '{"title": "被剔除"}',
+                '{"brand": "待剔除", "model": "R1", "tonnage": "1.0"}',
+                "rmfysszc", failed_url, '{"title": "价格抽取失败"}',
+                '{"brand": "待失败", "model": "F1", "tonnage": "1.0"}',
+            ),
+        )
+        self.conn.commit()
+        try:
+            groups = run_unmatched(DATABASE_URL, search_path=self.schema)
+            brands = {g["brand"] for g in groups}
+            self.assertNotIn("待剔除", brands, "被剔除样本不得进待审队列")
+            self.assertNotIn("待失败", brands, "价格抽取失败样本不得进待审队列")
+            # 视图口径 == 表口径：逐项对齐（含 label_eligible）。
+            pending_rows = self._read(
+                "SELECT count(*) FROM market_transactions "
+                "WHERE residual_rate_label IS NULL AND clean_status <> 'rejected' "
+                "AND label_eligible"
+            )[0][0]
+            total_in_view = self._read(
+                "SELECT coalesce(sum(sample_count), 0) FROM market_unmatched_queue"
+            )[0][0]
+            self.assertEqual(total_in_view, pending_rows)
+        finally:
+            self.conn.execute(
+                "DELETE FROM market_transactions WHERE source_url IN (%s, %s)",
+                (rejected_url, failed_url),
+            )
+            self.conn.commit()
+
+    def test_unmatched_view_orders_by_sample_count(self):
+        """样本多的组排在前面（人工补原价的优先级）。"""
+        from collector.cli import run_unmatched
+
+        url = "https://www.rmfysszc.com/auction/notice/2026/12903.html"
+        self.conn.execute(
+            "INSERT INTO market_transactions "
+            "(channel, source_url, raw_description, structured_specs, raw_price, "
+            " label_eligible) VALUES "
+            "(%s, %s, %s, %s, 10000, true), (%s, %s, %s, %s, 12000, true)",
+            (
+                "rmfysszc", url + "?1", '{"title": "排序"}',
+                '{"brand": "多组", "model": "M1", "tonnage": "2.0"}',
+                "rmfysszc", url + "?2", '{"title": "排序"}',
+                '{"brand": "多组", "model": "M1", "tonnage": "2.0"}',
+            ),
+        )
+        self.conn.commit()
+        try:
+            groups = run_unmatched(DATABASE_URL, search_path=self.schema)
+            counts = [g["sample_count"] for g in groups]
+            self.assertEqual(counts, sorted(counts, reverse=True), counts)
+        finally:
+            self.conn.execute(
+                "DELETE FROM market_transactions WHERE source_url LIKE %s", (url + "%",)
+            )
+            self.conn.commit()
 
     def test_price_feedback_chain_unmatched_to_labeled(self):
         """fixture 链路：未匹配 → 补原价条目 → rematch → 有标签，且与首次匹配同口径。"""
@@ -674,6 +724,35 @@ class CollectorBatchE2EContractTest(unittest.TestCase):
             "SELECT count(*), coalesce(sum(original_price), 0) FROM original_prices"
         )[0]
         self.assertEqual(after, before, "rematch 不得写回原价表")
+
+    def test_unmatched_view_tolerates_non_numeric_tonnage(self):
+        """非数值吨位（抽取可能是 "约3吨"）不得让整个视图查询失败：落 NULL 组、样本不丢。"""
+        from collector.cli import run_unmatched
+
+        url = "https://www.rmfysszc.com/auction/notice/2026/12999.html"
+        self.conn.execute(
+            "INSERT INTO market_transactions "
+            "(channel, source_url, raw_description, structured_specs, label_eligible) "
+            "VALUES (%s, %s, %s, %s, true)",
+            (
+                "rmfysszc",
+                url,
+                '{"title": "非数值吨位回归"}',
+                '{"brand": "雷沃", "model": "FL936", "tonnage": "约3吨"}',
+            ),
+        )
+        self.conn.commit()
+        try:
+            groups = run_unmatched(DATABASE_URL, search_path=self.schema)
+            target = [g for g in groups if g["brand"] == "雷沃" and g["model"] == "FL936"]
+            self.assertEqual(len(target), 1, groups)
+            self.assertIsNone(target[0]["tonnage"], "非数值吨位应落 NULL 组而非炸查询")
+            self.assertEqual(target[0]["sample_count"], 1)
+        finally:
+            self.conn.execute(
+                "DELETE FROM market_transactions WHERE source_url = %s", (url,)
+            )
+            self.conn.commit()
 
 
 def _stub_from_payload(payload):

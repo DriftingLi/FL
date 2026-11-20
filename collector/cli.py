@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import unicodedata
 from pathlib import Path
 from typing import Callable
 
@@ -195,7 +196,11 @@ def run_unmatched(dsn: str | None = None, search_path: str = "") -> list[dict]:
 
 
 def _print_unmatched(groups: list[dict]) -> None:
-    """把待审队列聚合组打印成对齐表格（品牌/型号/吨位/样本数/价格区间）。"""
+    """把待审队列聚合组打印成对齐表格（品牌/型号/吨位/样本数/价格区间）。
+
+    表头与 `UNMATCHED_GROUP_COLUMNS` 同序（品牌/型号/吨位/样本数/价格区间），
+    避免列名契约与展示顺序两处手抄漂移。宽度按显示宽度算（CJK 占 2 列）。
+    """
     if not groups:
         print("未匹配待审队列：空（无待审样本）")
         return
@@ -210,11 +215,23 @@ def _print_unmatched(groups: list[dict]) -> None:
         )
         for g in groups
     ]
-    widths = [max(len(header[i]), *(len(r[i]) for r in rows)) for i in range(len(header))]
-    print("  ".join(h.ljust(widths[i]) for i, h in enumerate(header)))
+    widths = [
+        max(_display_width(header[i]), *(_display_width(r[i]) for r in rows))
+        for i in range(len(header))
+    ]
+    print("  ".join(_pad(h, widths[i]) for i, h in enumerate(header)))
     for row in rows:
-        print("  ".join(c.ljust(widths[i]) for i, c in enumerate(row)))
+        print("  ".join(_pad(c, widths[i]) for i, c in enumerate(row)))
     print(f"\n共 {len(groups)} 组、{sum(g['sample_count'] for g in groups)} 条待审样本")
+
+
+def _display_width(text: str) -> int:
+    """终端显示宽度：CJK 全角字符占 2 列，其余占 1 列。"""
+    return sum(2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1 for ch in text)
+
+
+def _pad(text: str, width: int) -> str:
+    return text + " " * max(0, width - _display_width(text))
 
 
 def _price_range_text(low, high) -> str:
