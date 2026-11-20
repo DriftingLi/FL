@@ -362,7 +362,7 @@
         background-color: #f7f8fa;
         border-radius: 12rpx;
         border-width: 1rpx;
-        border-color: #e6e8eb;
+        border-color: $border-color;
         align-items: center;
     }
 
