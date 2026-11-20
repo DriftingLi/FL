@@ -125,7 +125,7 @@ describe('首页格式契约（对照设计稿截图）', () => {
     const entries = menuEntries();
     // 只看宫格件本身（整页模板含其他组件的 emoji，如课程区兜底）
     const gridTpl = readText(path.join(COMPONENT_DIR, 'dashboard-menu-grid.uvue'));
-    // 原型 4 格 3D 插画 + 第 5 格（#1846 搜索）用原型页头线性放大镜
+    // 原型四格 3D 插画 + 全局搜索入口使用同系列立体放大镜
     expect(gridTpl).toContain('class="menu-icon-img"');
     expect(gridTpl).toMatch(/<image[^>]*:src="'\/static\/icons\/dashboard\/' \+ item\.icon \+ '\.png'"/);
     // 包内图一律 PNG（ADR-0066 ①）；不再有 emoji 圆角块兜底
