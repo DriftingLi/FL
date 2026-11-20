@@ -327,6 +327,18 @@ describe('#2619 T3 积分商品分区 + 兑换三态 + 单筛选控件 + 排序�
     expect(tpl).toMatch(/<view class="filter-slot">[\s\S]*?<MallRangeFilter/);
     const slotStyle = page.slice(page.indexOf('.filter-slot {'));
     expect(slotStyle.slice(0, slotStyle.indexOf('}'))).toMatch(/height:\s*88rpx/);
+    // #2723：槽位常驻但热门 / 课程两分区没有筛选控件 ⇒ 槽内改填分区条（同高 / 白底 / 下边框）。
+    // 空着会露出 88rpx 的 $bg-color 灰带，与图书系列 / 积分兑换的白条对不上
+    expect(tpl).toMatch(/<view v-else class="slot-bar">/);
+    expect(tpl).toContain('{{ slotTitle(activeCategory) }}');
+    expect(tpl).toContain('{{ slotHint(activeCategory) }}');
+    expect(state).toContain('slotTitle : (idx : number) => string');
+    expect(state).toContain('slotHint : (idx : number) => string');
+    const barStyle = page.slice(page.indexOf('.slot-bar {'));
+    const barBlock = barStyle.slice(0, barStyle.indexOf('}'));
+    expect(barBlock).toMatch(/height:\s*88rpx/);
+    expect(barBlock).toContain('background-color: $card-bg');
+    expect(barBlock).toContain('border-bottom: 1rpx solid $bg-color');
   });
 
   it('④ 退役清零：商品分类 / 可换商品 / 课程兑换导流卡 / 四档排序栏 标签与实现不存；搜索仍在悬浮钮', () => {
