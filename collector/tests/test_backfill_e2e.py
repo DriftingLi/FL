@@ -12,7 +12,6 @@ robots/限速/退避由 test_crawl_* 的纯判定单测覆盖。本文件不测�
 
 import json
 import os
-import secrets
 import unittest
 from pathlib import Path
 
@@ -20,10 +19,8 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = REPO_ROOT / "collector" / "fixtures"
-MIGRATION_DIR = REPO_ROOT / "backend" / "migrations"
 
-FEATURE_KEY = "market_sample_extract"
-ENCRYPTED_KEY = "enc:v1:ULpTLw09HcsKToqJbwY8777i33KFU0T7i1Rh1r3O82ub5SKMjvT9ODrltwB5YIs="
+# 与 pg_fixture 保持同一组常量（那里才是唯一真相，这里只为少写一次 import 前缀）。
 MASTER_KEY = "unit-test-master-key"
 
 LIST_PAGE = "https://www1.rmfysszc.gov.cn/Agency/pmgg.aspx?fid=100"
@@ -68,78 +65,17 @@ class FakeCrawler:
 class BackfillE2EContractTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        import psycopg
-        from psycopg import sql
+        from collector.tests import pg_fixture
 
-        cls.psycopg = psycopg
-        cls.sql = sql
-        cls.schema = "bf_" + secrets.token_hex(4)
-
-        cls.conn = psycopg.connect(DATABASE_URL)
-        cls.conn.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(cls.schema)))
-        cls.conn.commit()
-        cls.conn.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(cls.schema)))
-        for pattern in (
-            "000063_*.up.sql", "000064_*.up.sql", "000065_*.up.sql",
-            "000066_*.up.sql", "000067_*.up.sql",
-        ):
-            cls.conn.execute(next(MIGRATION_DIR.glob(pattern)).read_text(encoding="utf-8"))
-        cls.conn.commit()
-
-        cls.conn.execute(
-            """
-            CREATE TABLE original_prices (
-                id BIGSERIAL PRIMARY KEY,
-                brand VARCHAR(50) NOT NULL,
-                vehicle_type VARCHAR(50) NOT NULL,
-                series VARCHAR(50) NOT NULL,
-                tonnage NUMERIC(5,2) NOT NULL,
-                config_type VARCHAR(50) NOT NULL,
-                mast_type VARCHAR(50) NOT NULL,
-                mast_height_mm INTEGER NOT NULL,
-                original_price NUMERIC(12,2) NOT NULL
-            )
-            """
-        )
-        cls.conn.execute(
-            """
-            CREATE TABLE ai_configs (
-                id BIGSERIAL PRIMARY KEY,
-                name TEXT UNIQUE NOT NULL,
-                api_key TEXT NOT NULL,
-                base_url TEXT NOT NULL DEFAULT '',
-                model TEXT NOT NULL DEFAULT '',
-                is_active BOOLEAN NOT NULL DEFAULT TRUE
-            )
-            """
-        )
-        cls.conn.execute(
-            """
-            CREATE TABLE ai_feature_bindings (
-                id BIGSERIAL PRIMARY KEY,
-                feature_key VARCHAR(50) NOT NULL,
-                config_id BIGINT NOT NULL REFERENCES ai_configs(id) ON DELETE CASCADE
-            )
-            """
-        )
-        cls.conn.execute(
-            "INSERT INTO ai_configs (name, api_key, base_url, model) VALUES (%s, %s, %s, %s)",
-            ("collector-stub", ENCRYPTED_KEY, "http://stub.invalid/v1", "stub-model"),
-        )
-        cls.conn.execute(
-            "INSERT INTO ai_feature_bindings (feature_key, config_id) "
-            "SELECT %s, id FROM ai_configs WHERE name = %s",
-            (FEATURE_KEY, "collector-stub"),
-        )
-        cls.conn.commit()
+        cls._pg = pg_fixture
+        cls.conn, cls.schema, cls.sql = pg_fixture.create_schema(prefix="bf")
+        pg_fixture.apply_market_migrations(cls.conn)
+        pg_fixture.create_stub_tables(cls.conn)
+        cls.psycopg = __import__("psycopg")
 
     @classmethod
     def tearDownClass(cls):
-        cls.conn.execute(
-            cls.sql.SQL("DROP SCHEMA {} CASCADE").format(cls.sql.Identifier(cls.schema))
-        )
-        cls.conn.commit()
-        cls.conn.close()
+        cls._pg.drop_schema(cls.conn, cls.schema, cls.sql)
 
     def _read(self, query, params=None):
         with self.psycopg.connect(
@@ -307,7 +243,8 @@ class BackfillE2EContractTest(unittest.TestCase):
         self.assertGreaterEqual(report.by_reason.get("bulk_lot_no_per_unit", 0), 1)
 
     def test_one_item_failure_does_not_rollback_prior_items(self):
-        """审阅修复：每条一个独立事务——第 N 条抓取失败不回滚前面已落的行。"""
+        """每条一个独立事务 + 毒丸隔离——第 N 条抓取失败既不回滚前面已落的行，
+        也不再让整轮抛错（常驻 daemon 靠这个才不会永久卡在队头）。"""
         from collector.cli import run_backfill
 
         self._clean_table()
@@ -317,16 +254,19 @@ class BackfillE2EContractTest(unittest.TestCase):
             DETAIL_A: _detail_html("杭叉 CPCD30 拍卖公告", "起拍价 42000 元"),
             # DETAIL_B 故意不录制。
         })
-        with self.assertRaises(KeyError):
-            run_backfill(
-                [LIST_PAGE], DATABASE_URL, search_path=self.schema,
-                crawler=crawler,
-                extractor=self._stub("rmfysszc_extraction_stub.json"),
-                secret_key=MASTER_KEY, price_candidates=[],
-            )
+        stored, report = run_backfill(
+            [LIST_PAGE], DATABASE_URL, search_path=self.schema,
+            crawler=crawler,
+            extractor=self._stub("rmfysszc_extraction_stub.json"),
+            secret_key=MASTER_KEY, price_candidates=[],
+        )
         # 第 1 条已落库，不因第 2 条失败而被回滚。
         total = self._read("SELECT count(*) FROM market_transactions")[0][0]
         self.assertEqual(total, 1, "单条失败不应回滚同轮已落库的行")
+        self.assertEqual(stored, 1, "应如实返回落库行数")
+        # 失败的那条如实进报告，且不阻塞整轮（不再抛 KeyError）。
+        self.assertEqual(report.failed_items, 1, "失败的 URL 应记入得率报告")
+        self.assertIn(DETAIL_B, report.failed_urls)
 
     def test_cross_url_dedup_sees_prior_url_samples(self):
         """审阅修复：清洗规则⑥的车商去重能看见同轮其它 URL 的样本（image hash）。"""

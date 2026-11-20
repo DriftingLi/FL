@@ -4,8 +4,14 @@
 阶段，入库只做写。清洗与匹配不依赖抓取，故可重跑：
 
     python3 -m collector.cli batch <fixture.html> [--dsn URL] [--search-path SCHEMA]
-    python3 -m collector.cli reclean [--dsn URL] [--search-path SCHEMA]
-    python3 -m collector.cli rematch [--dsn URL] [--search-path SCHEMA]
+    python3 -m collector.cli reclean   [--dsn URL] [--search-path SCHEMA]
+    python3 -m collector.cli rematch   [--dsn URL] [--search-path SCHEMA]
+    python3 -m collector.cli unmatched [--dsn URL] [--search-path SCHEMA]
+    python3 -m collector.cli backfill  --list-url <列表页> [...]      # #2677 历史回补
+    python3 -m collector.cli daemon    --list-url <列表页> [...]      # #2678 周更增量
+
+`backfill`（一次性）与 `daemon`（常驻周更）是**同一组件的两种模式**：daemon 每一轮
+直接复用 backfill，清洗/匹配只有一份实现（spec user story 20）。
 
 `--dsn` 缺省取环境变量 DATABASE_URL，`SECRET_KEY` 用于解密 ai_configs.api_key
 （均与后端同源）。`--search-path` 用于契约测试把整条链路收窄在随机 schema。
@@ -17,6 +23,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import time
 import unicodedata
 from pathlib import Path
 from typing import Callable
@@ -26,12 +33,14 @@ from .backfill import (
     BACKFILL_START_YEAR,
     DiscoveredAnnouncement,
     build_yield_report,
+    daemon_end_year,
     filter_by_year,
     parse_announcement_list,
     select_new_announcements,
 )
 from .backfill import BASE as BASE_URL
 from .clean import CLEAN_REVIEW_REASONS, clean
+from .daemon import WEEK_SECONDS, run_daemon, validate_startup
 from .extract.config import FEATURE_KEY, resolve_config
 from .extract.llm import extract
 from .extract.service import apply_extraction
@@ -308,31 +317,41 @@ def run_backfill(
         # ③ 逐条回补。网络抓取在事务外；每条一个独立小事务——千条回补按 ≤1 req/2s
         # 要跑约 1 小时，不能全程开着同一个事务（idle-in-transaction / 锁）；且单条
         # 失败不该把前面已落的行全回滚。
+        #
+        # **毒丸隔离**：单条 URL 抓取/落库失败只记进 failed_urls 并继续下一条。
+        # 常驻 daemon 尤其需要——一条永久 404 若能让整轮抛错，它就会永远卡在队头，
+        # 后面所有新公告每周都抓不到（实测过：8 周后只落 1 行）。
         stored = 0
         stored_samples: list = []
         yield_rows: list[dict] = []
+        failed_urls: list[str] = []
         for item in new_items:
-            html = crawler.fetch(item.url)  # 网络 I/O，不在事务内
-            with conn.transaction():
-                count, added = _process_html(
-                    conn,
-                    html,
-                    source_url=item.url,
-                    config=config,
-                    candidates=candidates,
-                    extractor=extractor,
-                    clean_fn=clean_fn,
-                    match_fn=match_fn,
-                    # 跨 URL 去重信号：同轮前面所有 URL 的落库样本（车商批量帖去重⑥）。
-                    existing_samples=stored_samples,
-                )
+            try:
+                html = crawler.fetch(item.url)  # 网络 I/O，不在事务内
+                with conn.transaction():
+                    count, added = _process_html(
+                        conn,
+                        html,
+                        source_url=item.url,
+                        config=config,
+                        candidates=candidates,
+                        extractor=extractor,
+                        clean_fn=clean_fn,
+                        match_fn=match_fn,
+                        # 跨 URL 去重信号：同轮前面所有 URL 的落库样本（车商批量帖去重⑥）。
+                        existing_samples=stored_samples,
+                    )
+            except Exception as exc:  # 单条隔离：坏一条不影响其余
+                print(f"[backfill] 跳过抓取失败的公告 {item.url}: {exc}", file=sys.stderr)
+                failed_urls.append(item.url)
+                continue
             stored += count
             stored_samples.extend(added)
             yield_rows.extend(
                 {"clean_status": s.clean_status, "rejection_reason": s.rejection_reason}
                 for s in added
             )
-        report = build_yield_report(yield_rows)
+        report = build_yield_report(yield_rows, failed_urls=failed_urls)
     return stored, report
 
 
@@ -340,6 +359,66 @@ def _existing_source_urls(conn) -> set[str]:
     """已入库的 source_url 集合（幂等判据的数据来源）。"""
     rows = conn.execute("SELECT DISTINCT source_url FROM market_transactions").fetchall()
     return {row[0] for row in rows}
+
+
+def run_daemon_command(
+    list_urls: list[str],
+    dsn: str | None = None,
+    search_path: str = "",
+    *,
+    interval_seconds: float = WEEK_SECONDS,
+    max_cycles: int | None = None,
+    start_year: int = BACKFILL_START_YEAR,
+    end_year: int | None = None,
+    crawler=None,
+    extractor: Callable | None = None,
+    secret_key: str | None = None,
+    cleaner: Callable | None = None,
+    matcher: Callable | None = None,
+    price_candidates: list[dict] | None = None,
+    clock=None,
+    sleep=None,
+    on_result: Callable | None = None,
+) -> list:
+    """增量 daemon：按固定节奏重复跑「一轮增量采集」，单轮逻辑就是 run_backfill。
+
+    spec #2671 要求同一组件两种模式、清洗/匹配共用一份——所以 daemon 的每一轮
+    **直接复用 run_backfill**（发现→年份过滤→幂等跳过→全管线→得率报告），
+    本函数只加节奏与失败隔离，不复制任何采集/抽取/清洗/匹配逻辑。
+
+    周更场景下年份窗口的**上界默认跟随当前年**（`daemon_end_year()`）——写死 2026 会让
+    daemon 从 2027-01-01 起每轮「成功但发现 0 条」，日志全绿、库不再增长、无任何报错。
+    """
+
+    # end_year 缺省 = 当前年（不是写死的 BACKFILL_END_YEAR，见 daemon_end_year 的说明）。
+    resolved_end_year = daemon_end_year() if end_year is None else end_year
+
+    def one_cycle() -> tuple[int, object]:
+        return run_backfill(
+            list_urls,
+            dsn,
+            search_path,
+            start_year=start_year,
+            end_year=resolved_end_year,
+            crawler=crawler,
+            extractor=extractor,
+            secret_key=secret_key,
+            cleaner=cleaner,
+            matcher=matcher,
+            price_candidates=price_candidates,
+        )
+
+    return run_daemon(
+        cycle=one_cycle,
+        interval_seconds=interval_seconds,
+        max_cycles=max_cycles,
+        # 启动前校验发现入口：空 COLLECTOR_LIST_URL 不许起一个「每周期空转失败」的服务。
+        list_urls=list_urls,
+        # clock/sleep 缺省用真时钟真睡眠（这里显式取真值，避免传 None 冲掉默认参数）。
+        clock=clock if clock is not None else time.monotonic,
+        sleep=sleep if sleep is not None else time.sleep,
+        on_result=on_result,
+    )
 
 
 def _print_unmatched(groups: list[dict]) -> None:
@@ -447,6 +526,42 @@ def main(argv: list[str] | None = None) -> int:
     )
     _add_common_args(backfill)
 
+    daemon = sub.add_parser(
+        "daemon", help="增量 daemon：按周节奏重复跑一轮采集（复用 backfill）"
+    )
+    daemon.add_argument(
+        "--list-url",
+        action="append",
+        required=True,
+        dest="list_urls",
+        help="公告列表页 URL（可重复；如 .../Agency/pmgg.aspx?fid=100）",
+    )
+    daemon.add_argument(
+        "--interval-seconds",
+        type=float,
+        default=WEEK_SECONDS,
+        help=f"两轮之间补足到该周期（默认一周 {WEEK_SECONDS}s）",
+    )
+    daemon.add_argument(
+        "--max-cycles",
+        type=int,
+        default=None,
+        help="只跑 N 轮后退出（缺省常驻；运维手动跑一轮用 1）",
+    )
+    daemon.add_argument("--start-year", type=int, default=BACKFILL_START_YEAR)
+    daemon.add_argument(
+        "--end-year",
+        type=int,
+        default=None,
+        help="窗口上界（缺省 = 当前年；常驻服务不应写死年份）",
+    )
+    daemon.add_argument(
+        "--allow-robots-override",
+        action="store_true",
+        help="robots 禁止时仍抓取（会记审计日志；默认遵从 robots）",
+    )
+    _add_common_args(daemon)
+
     args = parser.parse_args(argv)
 
     try:
@@ -474,11 +589,63 @@ def main(argv: list[str] | None = None) -> int:
             print(report.render())
             print(crawler.log.summary())
             return 0
+        elif args.command == "daemon":
+            crawler = _build_crawler(
+                allow_robots_override=args.allow_robots_override,
+                base_url=BASE_URL,
+            )
+
+            def _probe() -> None:
+                """连一次 PG 并解析一次 AI 配置：把「每轮必失败」的配置错挡在第一轮之前。"""
+                import psycopg
+                from psycopg import sql as _sql
+
+                dsn = args.dsn or os.environ.get("DATABASE_URL") or ""
+                with psycopg.connect(dsn) as conn:
+                    if args.search_path:
+                        conn.execute(
+                            _sql.SQL("SET search_path TO {}").format(
+                                _sql.Identifier(args.search_path)
+                            )
+                        )
+                    resolve_config(
+                        conn, FEATURE_KEY, os.environ.get("SECRET_KEY", "")
+                    )
+
+            validate_startup(
+                list_urls=args.list_urls,
+                dsn_fn=lambda: args.dsn or os.environ.get("DATABASE_URL") or "",
+                probe=_probe,
+            )
+
+            def _log(result):
+                print(f"[daemon] {result.render()}", flush=True)
+
+            results = run_daemon_command(
+                args.list_urls,
+                args.dsn,
+                args.search_path,
+                interval_seconds=args.interval_seconds,
+                max_cycles=args.max_cycles,
+                start_year=args.start_year,
+                end_year=args.end_year,
+                crawler=crawler,
+                on_result=_log,
+            )
+            failed = sum(1 for r in results if r.failed)
+            print(f"collector daemon: 跑完 {len(results)} 轮，失败 {failed} 轮")
+            print(crawler.log.summary())
+            return 0 if failed == 0 else 1
         else:
             count = run_rematch(args.dsn, args.search_path)
-    except (OSError, RuntimeError) as exc:
+    except (OSError, RuntimeError, ValueError) as exc:
         print(f"collector {args.command} 失败: {exc}", file=sys.stderr)
         return 1
+    except Exception as exc:  # psycopg.Error 等驱动异常：干净报错，不打 traceback
+        if type(exc).__module__.startswith(("psycopg", "psycopg2")):
+            print(f"collector {args.command} 失败: {exc}", file=sys.stderr)
+            return 1
+        raise
     print(f"collector {args.command}: 处理 {count} 行")
     return 0
 
