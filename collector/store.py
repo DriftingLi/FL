@@ -163,6 +163,21 @@ def update_match_result(
     )
 
 
+def load_unmatched_queue(conn: "psycopg.Connection") -> list[dict[str, Any]]:
+    """读未匹配待审队列聚合视图（迁移 000067），供 CLI 打印 / 运维核查（#2676）。
+
+    样本多的组优先（人工补原价按此优先级）；外层再写一次 ORDER BY——视图内的
+    ORDER BY 不保证穿透到外层查询，不重写就会变成任意顺序。
+    """
+    from .review import UNMATCHED_GROUP_COLUMNS
+
+    rows = conn.execute(
+        "SELECT " + ", ".join(UNMATCHED_GROUP_COLUMNS) + " FROM market_unmatched_queue "
+        "ORDER BY sample_count DESC, brand ASC, model ASC, tonnage ASC NULLS LAST"
+    ).fetchall()
+    return [dict(zip(UNMATCHED_GROUP_COLUMNS, row)) for row in rows]
+
+
 def update_clean_result(
     conn: "psycopg.Connection", sample_id: int, cleaned: Any
 ) -> None:

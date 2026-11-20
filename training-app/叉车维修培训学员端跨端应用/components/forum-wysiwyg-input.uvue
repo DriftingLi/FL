@@ -519,11 +519,12 @@
 
     /* ===== 提示带（#2689 决策 4）：保真 / 粘贴 / 属地 / 边界合并成一行 ===== */
     .notice-band {
-        margin-top: 12rpx;
-        padding: 12rpx 16rpx;
+        margin-top: 8rpx;
+        padding: 8rpx 16rpx;
         border-radius: 12rpx;
         background-color: #fafbfc;
         border: 1rpx solid #e4e7ed;
+        min-height: 88rpx;
     }
 
     /* 粘贴提示在时整条可点：换成可点的暖色底 */

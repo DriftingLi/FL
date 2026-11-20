@@ -18,7 +18,6 @@ psycopg / cryptography 在 skip 判定之后才 import：本机既无 DATABASE_U
 
 import json
 import os
-import secrets
 import unittest
 from pathlib import Path
 
@@ -26,14 +25,11 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = REPO_ROOT / "collector" / "fixtures"
-MIGRATION_DIR = REPO_ROOT / "backend" / "migrations"
 
 EXPECTED_SOURCE_URL = "https://www.rmfysszc.com/auction/notice/2026/11001.html"
 EXPECTED_TITLE = "杭叉 CPCD30 叉车公开拍卖公告"
 
 FEATURE_KEY = "market_sample_extract"
-# 与 test_crypto_interop.py 同一向量：Go security.EncryptSecret 真实产出。
-ENCRYPTED_KEY = "enc:v1:ULpTLw09HcsKToqJbwY8777i33KFU0T7i1Rh1r3O82ub5SKMjvT9ODrltwB5YIs="
 MASTER_KEY = "unit-test-master-key"
 
 
@@ -54,87 +50,22 @@ def _stub_from_file(name):
 class CollectorBatchE2EContractTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        import psycopg
-        from psycopg import sql
+        from collector.tests import pg_fixture
 
-        cls.psycopg = psycopg
-        cls.sql = sql
-        cls.schema = "ct_" + secrets.token_hex(4)
-
-        cls.conn = psycopg.connect(DATABASE_URL)
-        cls.conn.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(cls.schema)))
-        cls.conn.commit()
-
-        cls.conn.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(cls.schema)))
+        cls._pg = pg_fixture
+        cls.conn, cls.schema, cls.sql = pg_fixture.create_schema(prefix="ct")
         # 执行真实迁移文件（不是复制 DDL）：000063 建样本表，000064 加标记列 + 队列，
-        # 000065 加清洗版本列（#2674），000066 加匹配版本列（#2675 收口）。
-        for pattern in (
-            "000063_*.up.sql", "000064_*.up.sql", "000065_*.up.sql", "000066_*.up.sql",
-        ):
-            migration = next(MIGRATION_DIR.glob(pattern))
-            cls.conn.execute(migration.read_text(encoding="utf-8"))
-        cls.conn.commit()
-
-        # 最小 original_prices 形状（镜像 000001 baseline 被读取的 7 字段 + 原价），
-        # 让「从 PG 直读候选原价 + 分层匹配」在本 schema 内可断言。
-        cls.conn.execute(
-            """
-            CREATE TABLE original_prices (
-                id BIGSERIAL PRIMARY KEY,
-                brand VARCHAR(50) NOT NULL,
-                vehicle_type VARCHAR(50) NOT NULL,
-                series VARCHAR(50) NOT NULL,
-                tonnage NUMERIC(5,2) NOT NULL,
-                config_type VARCHAR(50) NOT NULL,
-                mast_type VARCHAR(50) NOT NULL,
-                mast_height_mm INTEGER NOT NULL,
-                original_price NUMERIC(12,2) NOT NULL
-            )
-            """
-        )
-        cls.conn.commit()
-
-        # 最小 ai_configs / ai_feature_bindings 形状（镜像 000001 baseline 被读取的列），
-        # 让「直读配置」在本 schema 内可断言，不必把整条 baseline 迁移灌进来。
-        cls.conn.execute(
-            """
-            CREATE TABLE ai_configs (
-                id BIGSERIAL PRIMARY KEY,
-                name TEXT UNIQUE NOT NULL,
-                api_key TEXT NOT NULL,
-                base_url TEXT NOT NULL DEFAULT '',
-                model TEXT NOT NULL DEFAULT '',
-                is_active BOOLEAN NOT NULL DEFAULT TRUE
-            )
-            """
-        )
-        cls.conn.execute(
-            """
-            CREATE TABLE ai_feature_bindings (
-                id BIGSERIAL PRIMARY KEY,
-                feature_key VARCHAR(50) NOT NULL,
-                config_id BIGINT NOT NULL REFERENCES ai_configs(id) ON DELETE CASCADE
-            )
-            """
-        )
-        cls.conn.execute(
-            "INSERT INTO ai_configs (name, api_key, base_url, model) VALUES (%s, %s, %s, %s)",
-            ("collector-stub", ENCRYPTED_KEY, "http://stub.invalid/v1", "stub-model"),
-        )
-        cls.conn.execute(
-            "INSERT INTO ai_feature_bindings (feature_key, config_id) "
-            "SELECT %s, id FROM ai_configs WHERE name = %s",
-            (FEATURE_KEY, "collector-stub"),
-        )
-        cls.conn.commit()
+        # 000065 加清洗版本列（#2674），000066 加匹配版本列（#2675），
+        # 000067 建未匹配待审队列视图（#2676）。
+        pg_fixture.apply_market_migrations(cls.conn)
+        # 最小 original_prices / ai_configs / ai_feature_bindings 形状（镜像 000001
+        # baseline 被读取的列），让「PG 直读候选原价」与「直读 AI 配置」在本 schema 内可断言。
+        pg_fixture.create_stub_tables(cls.conn)
+        cls.psycopg = __import__("psycopg")
 
     @classmethod
     def tearDownClass(cls):
-        cls.conn.execute(
-            cls.sql.SQL("DROP SCHEMA {} CASCADE").format(cls.sql.Identifier(cls.schema))
-        )
-        cls.conn.commit()
-        cls.conn.close()
+        cls._pg.drop_schema(cls.conn, cls.schema, cls.sql)
 
     def _read(self, query, params=None):
         with self.psycopg.connect(
@@ -515,12 +446,12 @@ class CollectorBatchE2EContractTest(unittest.TestCase):
         from collector.cli import run_batch, run_rematch
 
         url = "https://www.rmfysszc.com/auction/notice/2026/12002.html"
-        # 先用空候选落一行未匹配样本（独立 URL，避免跨用例干扰）。
+        # 独立 URL + 独立规格（龙工 LG30DT），避免与其它用例共享 schema 时互相匹配。
         run_batch(
             str(FIXTURES / "match_rematch.html"),
             DATABASE_URL,
             search_path=self.schema,
-            extractor=_stub_from_file("rmfysszc_extraction_stub.json"),
+            extractor=_stub_from_file("extract_rematch.json"),
             secret_key=MASTER_KEY,
             price_candidates=[],
         )
@@ -531,11 +462,11 @@ class CollectorBatchE2EContractTest(unittest.TestCase):
         )[0]
         self.assertIsNone(before[3])  # 当前未匹配
 
-        # 只对该样本补入原价；rematch 读回全表但对其它行无害（候选只匹配本规格）。
+        # 只对该规格补入原价；rematch 会重算全表，但候选只命中本规格。
         candidates = [{
-            "brand": "杭叉", "vehicle_type": "CPCD30", "series": "CPCD", "tonnage": 3.0,
+            "brand": "龙工", "vehicle_type": "LG30DT", "series": "LG", "tonnage": 3.0,
             "config_type": "标准", "mast_type": "二节", "mast_height_mm": 3000,
-            "original_price": 50000.0,
+            "original_price": 45000.0,
         }]
         count = run_rematch(
             DATABASE_URL, search_path=self.schema, price_candidates=candidates
@@ -549,7 +480,208 @@ class CollectorBatchE2EContractTest(unittest.TestCase):
         self.assertEqual(after[0], before[1])  # 抽取版本不动
         self.assertEqual(after[1], before[2])  # 清洗版本不动
         self.assertEqual(after[2], "brand_vehicle_series_tonnage")
-        self.assertAlmostEqual(float(after[3]), 42000 / 50000, places=6)
+        self.assertAlmostEqual(float(after[3]), 39000 / 45000, places=6)
+
+    # ---- #2676 未匹配待审队列 + 补原价重跑回收标签 ----
+
+    def test_unmatched_view_aggregates_by_brand_model_tonnage(self):
+        """未匹配样本按品牌×型号×吨位聚合可查，含样本数与成交价区间（迁移 000067 视图）。"""
+        from collector.cli import run_batch, run_unmatched
+
+        run_batch(
+            str(FIXTURES / "review_queue.html"),
+            DATABASE_URL,
+            search_path=self.schema,
+            extractor=_stub_from_file("extract_review_queue.json"),
+            secret_key=MASTER_KEY,
+            price_candidates=[],  # 无候选 → 未匹配
+        )
+        groups = run_unmatched(DATABASE_URL, search_path=self.schema)
+        self.assertGreaterEqual(len(groups), 1)
+        # 该 fixture 的抽取规格：林德 / H25 / 2.5t / 33000
+        target = [
+            g for g in groups
+            if g["brand"] == "林德" and g["model"] == "H25"
+            and float(g["tonnage"]) == 2.5
+        ]
+        self.assertEqual(len(target), 1, groups)
+        group = target[0]
+        self.assertEqual(group["sample_count"], 1)
+        self.assertEqual(float(group["price_min"]), 33000.0)
+        self.assertEqual(float(group["price_max"]), 33000.0)
+
+    def test_unmatched_view_excludes_matched_rejected_and_price_failed(self):
+        """视图口径 == 表口径：已匹配、被剔除、价格抽取失败的都不进待审队列。"""
+        from collector.cli import run_unmatched
+
+        rejected_url = "https://www.rmfysszc.com/auction/notice/2026/12901.html"
+        failed_url = "https://www.rmfysszc.com/auction/notice/2026/12902.html"
+        self.conn.execute(
+            "INSERT INTO market_transactions "
+            "(channel, source_url, raw_description, structured_specs, clean_status, "
+            " rejection_reason, label_eligible) VALUES "
+            "(%s, %s, %s, %s, 'rejected', 'bulk_lot_no_per_unit', true),"
+            "(%s, %s, %s, %s, 'raw', NULL, false)",
+            (
+                "rmfysszc", rejected_url, '{"title": "被剔除"}',
+                '{"brand": "待剔除", "model": "R1", "tonnage": "1.0"}',
+                "rmfysszc", failed_url, '{"title": "价格抽取失败"}',
+                '{"brand": "待失败", "model": "F1", "tonnage": "1.0"}',
+            ),
+        )
+        self.conn.commit()
+        try:
+            groups = run_unmatched(DATABASE_URL, search_path=self.schema)
+            brands = {g["brand"] for g in groups}
+            self.assertNotIn("待剔除", brands, "被剔除样本不得进待审队列")
+            self.assertNotIn("待失败", brands, "价格抽取失败样本不得进待审队列")
+            # 视图口径 == 表口径：逐项对齐（含 label_eligible）。
+            pending_rows = self._read(
+                "SELECT count(*) FROM market_transactions "
+                "WHERE residual_rate_label IS NULL AND clean_status <> 'rejected' "
+                "AND label_eligible"
+            )[0][0]
+            total_in_view = self._read(
+                "SELECT coalesce(sum(sample_count), 0) FROM market_unmatched_queue"
+            )[0][0]
+            self.assertEqual(total_in_view, pending_rows)
+        finally:
+            self.conn.execute(
+                "DELETE FROM market_transactions WHERE source_url IN (%s, %s)",
+                (rejected_url, failed_url),
+            )
+            self.conn.commit()
+
+    def test_unmatched_view_orders_by_sample_count(self):
+        """样本多的组排在前面（人工补原价的优先级）。"""
+        from collector.cli import run_unmatched
+
+        url = "https://www.rmfysszc.com/auction/notice/2026/12903.html"
+        self.conn.execute(
+            "INSERT INTO market_transactions "
+            "(channel, source_url, raw_description, structured_specs, raw_price, "
+            " label_eligible) VALUES "
+            "(%s, %s, %s, %s, 10000, true), (%s, %s, %s, %s, 12000, true)",
+            (
+                "rmfysszc", url + "?1", '{"title": "排序"}',
+                '{"brand": "多组", "model": "M1", "tonnage": "2.0"}',
+                "rmfysszc", url + "?2", '{"title": "排序"}',
+                '{"brand": "多组", "model": "M1", "tonnage": "2.0"}',
+            ),
+        )
+        self.conn.commit()
+        try:
+            groups = run_unmatched(DATABASE_URL, search_path=self.schema)
+            counts = [g["sample_count"] for g in groups]
+            self.assertEqual(counts, sorted(counts, reverse=True), counts)
+        finally:
+            self.conn.execute(
+                "DELETE FROM market_transactions WHERE source_url LIKE %s", (url + "%",)
+            )
+            self.conn.commit()
+
+    def test_price_feedback_chain_unmatched_to_labeled(self):
+        """fixture 链路：未匹配 → 补原价条目 → rematch → 有标签，且与首次匹配同口径。"""
+        from collector.cli import run_batch, run_rematch, run_unmatched
+
+        url = "https://www.rmfysszc.com/auction/notice/2026/12004.html"
+        # ① 未匹配：无候选原价（独立规格：比亚迪 CB70 7.0t 61000）。
+        run_batch(
+            str(FIXTURES / "feedback_chain.html"),
+            DATABASE_URL,
+            search_path=self.schema,
+            extractor=_stub_from_file("extract_feedback_chain.json"),
+            secret_key=MASTER_KEY,
+            price_candidates=[],
+        )
+        before = self._read(
+            "SELECT id, match_level, matched_original_price, matched_original_range, "
+            "residual_rate_label FROM market_transactions WHERE source_url = %s",
+            (url,),
+        )[0]
+        self.assertIsNone(before[1])
+        self.assertIsNone(before[2])
+        self.assertIsNone(before[4])
+        # 该样本此刻在待审视图里。
+        groups = run_unmatched(DATABASE_URL, search_path=self.schema)
+        self.assertTrue(
+            any(g["brand"] == "比亚迪" and g["model"] == "CB70" for g in groups),
+            "未匹配样本应出现在待审队列",
+        )
+
+        # ② 人工补原价条目（写入 original_prices，不写 market_transactions）。
+        with self.psycopg.connect(
+            DATABASE_URL, options=f"-c search_path={self.schema}"
+        ) as conn:
+            conn.execute(
+                "INSERT INTO original_prices "
+                "(brand, vehicle_type, series, tonnage, config_type, mast_type, mast_height_mm, original_price) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                ("比亚迪", "CB70", "CB", 7.0, "标准", "二节", 3000, 70000),
+            )
+            conn.commit()
+
+        # ③ 重跑匹配：从 PG 直读原价表（不注入候选），回收标签。
+        count = run_rematch(DATABASE_URL, search_path=self.schema)
+        self.assertGreaterEqual(count, 1)
+        after = self._read(
+            "SELECT match_level, matched_original_price, matched_original_range, "
+            "residual_rate_label, match_version FROM market_transactions WHERE id = %s",
+            (before[0],),
+        )[0]
+        self.assertEqual(after[0], "brand_vehicle_series_tonnage")
+        self.assertEqual(float(after[1]), 70000.0)
+        self.assertEqual(after[2]["count"], 1)
+        self.assertAlmostEqual(float(after[3]), 61000 / 70000, places=6)
+        self.assertEqual(after[4], "v1")
+        # ④ 回收后不再出现在待审队列。
+        groups_after = run_unmatched(DATABASE_URL, search_path=self.schema)
+        self.assertFalse(
+            any(g["brand"] == "比亚迪" and g["model"] == "CB70" for g in groups_after),
+            "已回收标签的样本不应再留在待审队列",
+        )
+
+    def test_price_table_has_no_auto_writeback_path(self):
+        """原价表无自动写回路径：rematch 只读 original_prices，不插/改它。"""
+        from collector.cli import run_rematch
+
+        before = self._read(
+            "SELECT count(*), coalesce(sum(original_price), 0) FROM original_prices"
+        )[0]
+        run_rematch(DATABASE_URL, search_path=self.schema)
+        after = self._read(
+            "SELECT count(*), coalesce(sum(original_price), 0) FROM original_prices"
+        )[0]
+        self.assertEqual(after, before, "rematch 不得写回原价表")
+
+    def test_unmatched_view_tolerates_non_numeric_tonnage(self):
+        """非数值吨位（抽取可能是 "约3吨"）不得让整个视图查询失败：落 NULL 组、样本不丢。"""
+        from collector.cli import run_unmatched
+
+        url = "https://www.rmfysszc.com/auction/notice/2026/12999.html"
+        self.conn.execute(
+            "INSERT INTO market_transactions "
+            "(channel, source_url, raw_description, structured_specs, label_eligible) "
+            "VALUES (%s, %s, %s, %s, true)",
+            (
+                "rmfysszc",
+                url,
+                '{"title": "非数值吨位回归"}',
+                '{"brand": "雷沃", "model": "FL936", "tonnage": "约3吨"}',
+            ),
+        )
+        self.conn.commit()
+        try:
+            groups = run_unmatched(DATABASE_URL, search_path=self.schema)
+            target = [g for g in groups if g["brand"] == "雷沃" and g["model"] == "FL936"]
+            self.assertEqual(len(target), 1, groups)
+            self.assertIsNone(target[0]["tonnage"], "非数值吨位应落 NULL 组而非炸查询")
+            self.assertEqual(target[0]["sample_count"], 1)
+        finally:
+            self.conn.execute(
+                "DELETE FROM market_transactions WHERE source_url = %s", (url,)
+            )
+            self.conn.commit()
 
 
 def _stub_from_payload(payload):

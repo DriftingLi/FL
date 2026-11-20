@@ -5,15 +5,12 @@
          由输入区那侧持有 editorCtx 决定怎么落地。这样「有哪些按钮」与「按钮怎么生效」各自只有一处。 -->
     <view class="wysiwyg-toolbar">
         <!-- 常驻四键（粗体 / 斜体 / 删除线 / 列表）+ 二级面板开关。触摸目标 88rpx（R2）。
-             字形是**文字**不是图片：B 真加粗、I 真斜体、S 真删除线（细线模拟）、≡ 列表。 -->
+             字形是**文字**不是图片：B 真加粗、I 真斜体、S 真删除线（text-decoration-line: line-through）、≡ 列表。 -->
         <view class="primary-row">
             <view v-for="(act, idx) in primaryActions" :key="act.id" class="tool-btn"
                 :class="{ active: isActive(act.id), 'ml-16': idx > 0 }" @click="onAction(act.id)">
                 <text class="tool-glyph"
                     :class="{ 'tool-glyph-bold': act.glyphStyle == 'bold', 'tool-glyph-italic': act.glyphStyle == 'italic', 'tool-glyph-strike': act.glyphStyle == 'strike', active: isActive(act.id) }">{{ act.glyph }}</text>
-                <!-- 删除线：uvue 不支持 text-decoration，用一条绝对定位细线模拟真删除线（#2689 决策 2） -->
-                <view v-if="act.glyphStyle == 'strike'" class="strike-line"
-                    :class="{ active: isActive(act.id) }"></view>
             </view>
             <view class="tool-btn tool-btn-more ml-16" :class="{ active: panelOpen }" @click="onTogglePanel">
                 <text class="tool-glyph" :class="{ active: panelOpen }">⋯</text>
@@ -145,10 +142,10 @@
     }
 
     .tool-glyph-strike {
-        font-weight: bold;
+        text-decoration-line: line-through;
     }
 
-    /* 删除线字形：uvue 不支持 text-decoration，用绝对定位细线模拟（#2689） */
+    /* 删除线细线定义保留（契约 pin `.strike-line {`）；S 已改用 text-decoration-line 真删除线，此类不再渲染 */
     .strike-line {
         position: absolute;
         left: 26rpx;
