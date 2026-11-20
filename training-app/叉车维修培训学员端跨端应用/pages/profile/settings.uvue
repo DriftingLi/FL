@@ -221,10 +221,14 @@
         padding: 0 24rpx;
     }
 
+    /* App.uvue 全局 .card 带 padding/margin 各 24rpx（#2722）：本页卡面外边距由 .section
+       控、内边距由 .cell 控，不显式清零会与两者叠加成左内缩 96rpx / 卡间距 72rpx */
     .card {
         background-color: $card-bg;
         border-radius: $radius-card;
         flex-direction: column;
+        margin: 0;
+        padding: 0;
     }
 
     /* 原型 307:6175：分组卡内行间无分割线，靠行高与留白分组 */
