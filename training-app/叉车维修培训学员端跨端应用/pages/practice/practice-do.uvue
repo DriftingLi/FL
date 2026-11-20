@@ -256,7 +256,7 @@
         flex-direction: row;
         align-items: center;
         justify-content: space-between;
-        padding: 16rpx 32rpx;
+        padding: 16rpx 24rpx;
         background-color: $bg-header;
     }
     .status-left { flex-direction: row; align-items: center; }
@@ -302,7 +302,7 @@
     .stats-value-wrong { color: $answer-wrong; }
     .stats-divider { width: 1rpx; height: 48rpx; background-color: $border-color-light; }
 
-    .section-block { background-color: $card-bg; border-radius: $radius-card; padding: 28rpx; margin-bottom: 20rpx; flex-direction: column; }
+    .section-block { background-color: $card-bg; border-radius: $radius-card; padding: 24rpx; margin-bottom: 20rpx; flex-direction: column; }
     .section-header { flex-direction: row; align-items: center; justify-content: space-between; margin-bottom: 16rpx; }
     .section-title { font-size: 30rpx; color: $text-color; font-weight: 600; }
     /* 药丸动作（原型 452:2391「分享解析 / 添加笔记」）：浅蓝底 + 主色字 */

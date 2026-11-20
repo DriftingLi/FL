@@ -267,7 +267,7 @@ import { goBack } from '../../utils/navigation'
     }
 
     .summary {
-        padding: 20rpx 32rpx;
+        padding: 20rpx 24rpx;
         flex-direction: row;
         align-items: center;
     }

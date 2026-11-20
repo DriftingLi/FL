@@ -219,7 +219,7 @@
 
     .hint-bar {
         background-color: $bg-tint;
-        padding: 16rpx 32rpx;
+        padding: 16rpx 24rpx;
     }
 
     .hint-text {
@@ -280,7 +280,7 @@
     .news-card {
         background-color: $card-bg;
         border-radius: $radius-card;
-        padding: 28rpx 32rpx;
+        padding: 24rpx;
         margin-bottom: $spacing-sm;
         flex-direction: column;
     }

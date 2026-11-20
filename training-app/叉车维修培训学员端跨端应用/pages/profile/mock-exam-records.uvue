@@ -241,7 +241,7 @@ import { goBack } from '../../utils/navigation'
 
     /* 汇总 */
     .summary {
-        padding: 20rpx 32rpx;
+        padding: 20rpx 24rpx;
         flex-direction: row;
         align-items: center;
     }
@@ -434,7 +434,11 @@ import { goBack } from '../../utils/navigation'
     }
 
     .record-action-arrow {
+        width: 32rpx;
+        flex-shrink: 0;
         font-size: 32rpx;
+        line-height: 36rpx;
+        text-align: center;
         color: $primary-color;
         margin-left: 4rpx;
     }

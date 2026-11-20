@@ -85,5 +85,5 @@ import { goBack } from '../../utils/navigation'
     .progress-bar-bg { flex: 1; height: 12rpx; background-color: #f0f0f0; border-radius: 6rpx; overflow: hidden; }
     .progress-bar-fill { height: 12rpx; background-color: $primary-color; border-radius: 6rpx; }
     .course-item-pct { font-size: 22rpx; color: $primary-color; font-weight: bold; margin-left: 16rpx; }
-    .course-item-arrow { font-size: 40rpx; color: #cccccc; margin-left: 16rpx; }
+    .course-item-arrow { width: 32rpx; flex-shrink: 0; font-size: 40rpx; line-height: 44rpx; text-align: center; color: #cccccc; margin-left: 16rpx; }
 </style>

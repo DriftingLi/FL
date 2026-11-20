@@ -11,7 +11,7 @@
 | 步 | 命令 | 判据（读数行） | 失败先查 |
 | --- | --- | --- | --- |
 | 1 开工 | `pwsh training-app/叉车维修培训学员端跨端应用/scripts/new-worktree.ps1 -Task <票号>`；建树后立刻建分支、尽早推 origin | `git status --porcelain` 无 `training-app/` | 宿主树里改 = ③ 门静默假绿（#1144）。判据看**意图**（含未 add 的新文件），不看 `git diff` |
-| 2 改完自检 | `npm run hx:compile-only` | 无 `ERROR` | 四条红线见下；这一步**不碰设备**，别拿真机验编译期的事 |
+| 2 改完自检 | **默认不开 HBuilderX**；仅用户明确要编译/预览/排查编译问题时才跑 `npm run hx:compile-only` | `HX_RUN mode=` 无 `ERROR` | 别因改完代码或提 PR 就开；不碰设备 |
 | 3 ③ 两腿 | `npm run test:unit:changed`（接线全量 + 行为**受影响子集**；全量两腿走 `npm run test:unit:gate`） | `TEST_UNIT_CHANGED_RESULT` / `TEST_BEHAVIOR_CHANGED_RESULT … mode=changed planned=N` | 子集红而 CI 绿 → 先自查，**不当 flake**；选错腿的 config = 0 套件假绿 |
 | 4 ④c（+④a） | `npm run build:kotlin-all`；命中三份 json / 新增页 / 模块手术再加 `npm run build:compile` | 退出码 0 | ④a 命中**必须清缓存**：`pages.json` 改一行不清 = 产物没更新还报编译成功 |
 | 5 可选构建面检查（② 已退役） | 需要时手动跑 `npm run build:mp-weixin-buildonly`（**不是门**，#2320 起不要求、不判红；不启微信开发者工具、不产截图）；**发行上传目录固定 `unpackage/dist/build/mp-weixin`**（[ADR-0064](docs/adr/0064-小程序端发布范围仅学员端与唯一发行路径.md)，不是 dev 产物） | 无门禁判据；结果行 `MP_WEIXIN_BUILDONLY_RESULT` 只作人工诊断读数 | 日常**不要**为凑证据跑 ② 或启动微信开发者工具；只有真要诊断时才手动启，截图仅作手边诊断参考、不进验收证据 |
@@ -19,7 +19,7 @@
 | 7 开 PR 与合并 | `pwsh scripts/preflight-pr.ps1`（**仓库根**跑）预检绿 → `pwsh scripts/submit-pr.ps1` 建 PR | 证据齐 → agent 直接合并 | 例外通道只认「已接受未验证风险」一句，**且由人合并** |
 | 8 收尾 | `pwsh scripts/dev-close.ps1 -Task <票号>`（仓库根；默认 dry-run，`-Yes` 执行）；**认树看目录 `wt-<票号>`、身份看登记分支**（`fix/…` 也认，别按 `feat/<票号>` 猜；裁定见根 `docs/adr/ADR-0092-树身份-目录为入口与登记分支为身份.md`） | `DEV_CLOSE_RESULT … verdict=ok`（dry-run 只 `verdict=planned`、无动作是 `verdict=noop`，**都别当已收尾**） | `verdict=blocked reason=pr-not-merged` = 还没合并，本就不该拆；`tree-branch-mismatch` = 目录在但判据没匹配上（必红，别当无树）；树被占用 ⇒ 关掉占用的工具再跑，别 kill |
 
-**第 5 步的纪律面（#2320，2026-11-05 退役）**：② 微信开发者工具门**已整体退役**——不再有 `needs2` 触发面、不再要求 `MP_WEIXIN_RESULT` 读数行、不再要求截图，也不再有「自选跳过 reason」。日常 PR **不跑 ②**；需要看小程序运行时（console error / exception / 白屏）时，才手动跑一次作为诊断，结果只进日志、不判红。风险已接受：PR 粒度不再有 IDE 自动检查，该风险由发版前真机冒烟（ADR-0043）兜底。口径全文见 ADR-0008 顶部 2026-11-05 条。
+**第 5 步的纪律面（#2320，2026-11-05 退役）**：② 微信开发者工具门**已整体退役**——不再有 `needs2` 触发面、不再要求 `MP_WEIXIN_RESULT` 读数行、不再要求截图，也不再有「自选跳过 reason」。日常 PR **不跑 ②**；需要看小程序运行时（console error / exception / 白屏）时，才手动跑一次作为诊断，结果只进日志、不判红。风险已接受：PR 粒度不再有 IDE 自动检查，该风险由发版前真机冒烟（ADR-0043）兜底。口径全文见 ADR-0008 顶部 2026-11-05 条。Automator 与 `dev:finish` 不自动跑。
 
 **成本尺**：常态 ≈12 min（同树）/ 17 min（新树）。超 2× 先查是不是在排队（HBuilderX 单实例，不是脚本慢）。
 
@@ -40,7 +40,7 @@
 
 ### 三层节奏
 
-内循环（`hx:compile-only` 拿编译期诊断：热缓存 257 s、冷启动 826–901 s）/ 中循环（每个视觉满意点一次：`npm run test:unit:changed` + `npm run build:kotlin-all` + 一次提交）/ 外循环（主题收口一次）的分层与耗时见 `dev-loop.md`。这三个循环**都不是门**，不进 `## 验收证据`。
+内循环（`hx:compile-only` 拿编译期诊断：热缓存 257 s、冷启动 826–901 s）/ 中循环（每个视觉满意点一次：`npm run test:unit:changed` + `npm run build:kotlin-all` + 一次提交）/ 外循环（主题收口一次）见 `dev-loop.md`；**都不是门**，不进 `## 验收证据`。
 
 **提交粒度：一个视觉主题一个 commit**——色值微调与结构删除别压在同一个提交里（反例 `56d0fe3`，+21 / −71：回滚无从下手）。
 

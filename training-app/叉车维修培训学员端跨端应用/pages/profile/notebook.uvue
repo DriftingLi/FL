@@ -448,7 +448,7 @@
     .group-icon-text { font-size: 30rpx; color: $primary-color; font-weight: bold; }
     .group-name { flex: 1; font-size: 30rpx; color: $text-color; font-weight: 500; overflow: hidden; text-overflow: ellipsis; lines: 1; }
     .group-count { font-size: 26rpx; color: $text-color-secondary; margin-right: 12rpx; }
-    .group-chevron { font-size: 32rpx; color: $text-disabled; }
+    .group-chevron { width: 32rpx; flex-shrink: 0; font-size: 32rpx; line-height: 36rpx; text-align: center; color: $text-disabled; }
     .foot-tip { align-items: center; padding: 24rpx 0; }
     .foot-text { font-size: 24rpx; color: $text-color-placeholder; }
     .editor-card { margin: 24rpx; background-color: $card-bg; border-radius: $radius-card; padding: 24rpx; flex-direction: column; }
