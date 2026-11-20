@@ -156,3 +156,51 @@ def parse_robots(
     """解析 robots.txt 文本，产出对本 UA 生效、绑定 host 的策略。"""
     sections = _parse_sections(text or "")
     return RobotsPolicy(rules=tuple(_select_rules(sections, user_agent)), host=host)
+
+
+class RobotsBook:
+    """按 host 分派的 robots 策略集（#2679：多 origin 采集面）。
+
+    为什么需要它：robots.txt 按 host 生效（RFC 9309 §2.2.1），而京东这类采集面的
+    列表页、标的页、JSONP 接口分处三个 host（paimai.jd.com / api.m.jd.com /
+    www.jd.com）。单个 `RobotsPolicy` 遇到别的 host 一律 fail-closed（见其 decide），
+    拿它去抓 api.m.jd.com 会把整个采集面判死——不是「合规」而是「配置错」。
+
+    所以每个 origin 各读一份 robots、各自 fail-closed，按 URL 的 host 精确分派。
+    **未核验的 host 仍然 fail-closed**：本类不认识某个 host 时按禁止处理，
+    与「读了但禁止」在判定上等价，不存在「没读过 ⇒ 放行」的缝。
+    """
+
+    def __init__(self, policies: tuple[RobotsPolicy, ...]) -> None:
+        by_host: dict[str, RobotsPolicy] = {}
+        for policy in policies:
+            if not policy.host:
+                raise ValueError("RobotsBook 的策略必须绑定 host（load_robots 会给）")
+            by_host[policy.host.lower()] = policy
+        self._by_host = by_host
+
+    @property
+    def hosts(self) -> tuple[str, ...]:
+        """已核验的 host（按字母序，供日志与测试断言）。"""
+        return tuple(sorted(self._by_host))
+
+    def decide(self, url: str, *, allow_override: bool = False) -> RobotsDecision:
+        host = urlparse(url).netloc.lower()
+        policy = self._by_host.get(host)
+        if policy is None:
+            # 未核验 host ⇒ fail-closed；人工放行时记为 overridden（审计要能看见）。
+            return RobotsDecision(
+                allowed=allow_override,
+                robots_disallowed=True,
+                overridden=allow_override,
+            )
+        return policy.decide(url, allow_override=allow_override)
+
+    def allowed(self, url: str) -> bool:
+        return self.decide(url).allowed
+
+    def ensure_allowed(self, url: str, *, allow_override: bool = False) -> RobotsDecision:
+        decision = self.decide(url, allow_override=allow_override)
+        if not decision.allowed:
+            raise RobotsDisallowed(robots_denied_message(url))
+        return decision

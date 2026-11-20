@@ -16,7 +16,11 @@ from datetime import datetime
 from typing import Any
 
 # 采集渠道稳定标识（与 CONTEXT.md 新词「市场真值」同源）。
+# 每个渠道对应一个 `collector/sources/<channel>.py` 适配器（#2679 / #2680 起）。
 CHANNEL_RMFYSSZC = "rmfysszc"
+CHANNEL_JD = "jd"
+CHANNEL_GPAI = "gpai"
+CHANNEL_HBCPRE = "hbcpre"
 
 
 @dataclass(frozen=True)

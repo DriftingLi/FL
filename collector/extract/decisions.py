@@ -67,6 +67,31 @@ def low_confidence_reason(
     return json.dumps({"low_confidence_fields": fields}, ensure_ascii=False)
 
 
+def claimed_low_confidence_reason(
+    field_confidence: Mapping[str, Any],
+) -> str | None:
+    """结构化直取样本的抽检明细：只审「适配器声称取到了」的字段。
+
+    与 `low_confidence_reason` 的差别只在**缺失字段算不算低置信**：
+    LLM 抽取面对的是整篇公告正文，某个关键字段没抽出来属于抽取失败，必须进抽检；
+    结构化直取（JSONP / 服务端表格）面对的是字段固定的数据源，字段缺席是
+    **源站不提供**（如公开渠道普遍没有「使用小时」），不是我们的抽取失败。
+    若照 LLM 口径把缺席一律算低置信，结构化样本会 100% 涌入抽检队列、
+    把真正需要人看的价格问题淹掉。
+
+    价格仍是硬判据（`decide` 里 label_eligible 只在 raw_price 非空且置信达标时为真），
+    所以这里放宽的只是「规格字段缺席」这一项，不影响标签资格。
+    """
+    low = [
+        key
+        for key, value in field_confidence.items()
+        if _confidence_of(field_confidence, key) < LOW_CONFIDENCE_THRESHOLD
+    ]
+    if not low:
+        return None
+    return json.dumps({"low_confidence_fields": sorted(low)}, ensure_ascii=False)
+
+
 def _confidence_of(field_confidence: Mapping[str, Any], key: str) -> float:
     value = field_confidence.get(key)
     if value is None:
