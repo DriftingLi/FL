@@ -67,6 +67,9 @@ export type UseMallResult = {
     /** 图书系列一路的失败标记（与积分商品路分开：两路各自失败，错误态不能互相冒充） */
     bookLoadFailed : Ref<boolean>
     shopCoverUrl : (item : ShopItem) => string
+    /** 筛选槽在热门 / 课程两分区的替代内容（#2723：槽位常驻，这两分区没有筛选控件） */
+    slotTitle : (idx : number) => string
+    slotHint : (idx : number) => string
     /** 单筛选控件：「积分范围」三档 + 「不限」复位（只作用于积分商品） */
     rangeOptions : MallFilterOption[]
     activeRangeIdx : Ref<number>
@@ -189,6 +192,19 @@ export function useMall() : UseMallResult {
         const u = item.image_url
         if (u == null) return ''
         return u
+    }
+
+    /**
+     * 筛选槽在热门 / 课程两分区的替代内容（#2723）：槽位常驻定高（#2619 验收 ③ 切分区不跳），
+     * 但这两分区没有筛选控件 —— 空着就露出 88rpx 的 $bg-color 灰带，与图书系列 / 积分兑换的
+     * 白条对不上。分区名 + 一句说明由这里给（页面壳层零自持状态，模板只读）。
+     */
+    function slotTitle(idx : number) : string {
+        return idx == 0 ? '热门' : '课程'
+    }
+
+    function slotHint(idx : number) : string {
+        return idx == 0 ? '课程与积分商品精选' : '全部课程'
     }
 
     // ===== 课程路装载 =====
@@ -416,6 +432,8 @@ export function useMall() : UseMallResult {
         bookLoading: bookLoading,
         bookLoadFailed: bookLoadFailed,
         shopCoverUrl: (item : ShopItem) : string => shopCoverUrl(item),
+        slotTitle: (idx : number) : string => slotTitle(idx),
+        slotHint: (idx : number) : string => slotHint(idx),
         rangeOptions: rangeOptions,
         activeRangeIdx: activeRangeIdx,
         stockText: (item : ShopItem) : string => stockText(item),

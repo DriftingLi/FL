@@ -20,6 +20,12 @@
         <view class="filter-slot">
             <MallRangeFilter v-if="activeCategory === 2 || activeCategory === 3" :range-options="rangeOptions"
                 :active-range-idx="activeRangeIdx" @pick-range="onPickRange" />
+            <!-- 热门 / 课程没有筛选控件，槽内改填分区条（#2723）：同高、同底、同下边框。
+                 空着会露出 88rpx 的 $bg-color 灰带，与另两分区的白条对不上（余额卡下边距再叠 24rpx） -->
+            <view v-else class="slot-bar">
+                <text class="slot-title">{{ slotTitle(activeCategory) }}</text>
+                <text class="slot-hint">{{ slotHint(activeCategory) }}</text>
+            </view>
         </view>
 
         <!-- 双栏主体 -->
@@ -142,7 +148,7 @@
         courses, hotCourses, hotItems, redeemableCourses, bookItems, bookLoading, bookLoadFailed, loadFailed,
         activeCategory, coursesLoading, coursesNoMore, coursesLoadError,
         pointsBalance, items, loading, loadCourses, loadMoreCourses, loadItems, loadBookItems, setCategory,
-        startMall, shopCoverUrl, stockText, onEarnPoints,
+        startMall, shopCoverUrl, stockText, onEarnPoints, slotTitle, slotHint,
         rangeOptions, activeRangeIdx, onPickRange, onRedeem, btnText, btnClass, btnTextClass,
     } = useMall()
 
@@ -224,6 +230,30 @@
     /* 筛选槽：常驻定高（与已退役排序栏同档 88rpx），切分区不增减 */
     .filter-slot {
         height: 88rpx;
+    }
+
+    /* 热门 / 课程两分区的槽内替代内容（#2723）：与 mall-range-filter 的 .range-bar 同款
+       （88rpx / 白底 / 下边框），槽位高度不变 ⇒ 切分区内容起点 y 不变 */
+    .slot-bar {
+        height: 88rpx;
+        padding-left: 20rpx;
+        padding-right: 20rpx;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        background-color: $card-bg;
+        border-bottom: 1rpx solid $bg-color;
+    }
+
+    .slot-title {
+        font-size: 28rpx;
+        font-weight: bold;
+        color: $text-color;
+    }
+
+    .slot-hint {
+        font-size: 24rpx;
+        color: $text-color-secondary;
     }
 
     /* ===== 右侧内容区（原型：灰底通栏 + 白卡、卡距 20rpx）=====
