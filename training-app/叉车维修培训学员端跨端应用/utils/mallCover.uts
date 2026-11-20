@@ -1,0 +1,34 @@
+/**
+ * 商城封面兜底 —— 「商品无图 → 用哪张包内图」的**唯一**派生实现（缺图收口）
+ *
+ * 现状是数据现实，不是前端缺陷：课程 `course.cover_image` 与积分商品 `points_shop_item.image_url`
+ * 的种子数据全为 NULL（backend/migrations/000001_baseline.up.sql:1334-1339；000057 只加列不填值，
+ * 000049 插入 ai_pro 时也没给图）⇒ 三个消费面都必须自己能兜底，否则整屏灰块。
+ *
+ * 为什么必须单点：2026-11-20 排查发现三处消费面口径不一致 —— 课程卡有兜底，热门段与积分商品卡
+ * 直接落 `#e8e8e8` 灰块 ⇒ 同一件商品在「热门」与「课程」两个分区长得不一样。名称 → 书封的映射
+ * 从此只在本文件写一份，消费面只管拼路径。
+ *
+ * 路径拼接刻意留在模板里（`'/static/icons/mall/cover-' + courseCoverName(title) + '.png'`），
+ * 不在这里返回整条路径：`utils/imageWebpAttrContract.test.js` 的豁免判据是「动态 :src 的表达式里
+ * 含 /static/」，把路径搬进本文件会让那几处变成违规。包内素材是 PNG（ADR-0066 ①：包内 webp
+ * 一律不解析），故模板也不挂 `:webp`。
+ *
+ * 纯函数、零 import；接线面由 `utils/mallPilotContract.test.js` 的「默认书封」组守。
+ */
+
+/**
+ * 商品名 → 包内书封文件名（不含目录与后缀）。
+ *
+ * 列表 DTO 没有商品类型字段（types/index.uts 的 CourseItem 只有标题），只能用名称关键词对号，
+ * 落不中一律「教材」。五种书封 = 设计稿 824:6971 那一套
+ * （cover-{textbook,ebook,material-pro,material-skill,material-aux}.png，142×200，容器 135×192rpx）。
+ */
+export function courseCoverName(title : string) : string {
+	const t = title
+	if (t.indexOf('电子图书') >= 0) return 'ebook'
+	if (t.indexOf('专业技术') >= 0) return 'material-pro'
+	if (t.indexOf('技能') >= 0) return 'material-skill'
+	if (t.indexOf('辅助') >= 0) return 'material-aux'
+	return 'textbook'
+}

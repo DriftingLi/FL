@@ -95,13 +95,35 @@ describe('#2518 第 4 刀（商城逐像素收口 824:6971）：默认书封 · 
   const card = read('pages/mall/components/mall-course-card.uvue');
 
   it('默认书封：cover_url 兜底走包内路径拼接（表达式含 /static/ 才过 imageWebpAttrContract 豁免），五种书封文件在位', () => {
-    expect(card).toMatch(/:src="'\/static\/icons\/mall\/cover-' \+ defaultCoverName\(title\) \+ '\.png'"/);
+    expect(card).toMatch(/:src="'\/static\/icons\/mall\/cover-' \+ coverNameOf\(title\) \+ '\.png'"/);
     for (const f of ['cover-ebook', 'cover-material-pro', 'cover-material-aux', 'cover-material-skill', 'cover-textbook']) {
       expect(h.exists(`static/icons/mall/${f}.png`)).toBe(true);
     }
-    // 商品卡纯 CSS 灰块兜底退役（热门区/积分商品卡的占位不在本锁射程，其类名不叫 product-img-placeholder）
+    // 2026-11-20 缺图收口：名称 → 书封的映射单点进 utils/mallCover.uts，热门段同吃这一份
+    // （此前热门段与积分商品卡各落一份 #e8e8e8 灰块，同一件商品在两个分区长得不一样）
+    expect(h.exists('utils/mallCover.uts')).toBe(true);
+    expect(card).toContain('return courseCoverName(title)');
+    const hot = read('pages/mall/components/mall-hot-section.uvue');
+    const shopCard = read('pages/mall/components/mall-shop-card.uvue');
+    expect(hot).toContain("from '../../../utils/mallCover'");
+    expect(hot).toContain('return courseCoverName(title)');
+    expect(hot).toContain("/static/icons/mall/cover-' + coverNameOf(course.title) + '.png'");
+    // 三处消费面的纯 CSS 灰块兜底一并退役
     expect(page).not.toContain('product-img-placeholder');
     expect(card).not.toContain('product-img-placeholder');
+    expect(hot).not.toContain('hot-img-placeholder');
+    expect(shopCard).not.toContain('shop-cover-placeholder');
+    // 积分商品无图兜底 = 详情页同一张吉祥物（静态 src，不吃 :webp）
+    expect(hot).toContain('/static/icons/points-goods/goods-default.png');
+    expect(shopCard).toContain('/static/icons/points-goods/goods-default.png');
+  });
+
+  it('课程卡间距收口（2026-11-20）：信息列 flex-start 不再 space-between、封面 120×160rpx、卡距 16rpx', () => {
+    // 实测病根：6 门课标题全是单行，space-between 把价格顶到卡底 ⇒ 标题与价格间空 58px
+    expect(card).toMatch(/\.product-info \{[^}]*justify-content:\s*flex-start/);
+    expect(card).not.toMatch(/\.product-info \{[^}]*space-between/);
+    expect(card).toMatch(/\.product-img-wrap \{[^}]*width:\s*120rpx[^}]*height:\s*160rpx/);
+    expect(card).toMatch(/\.product-item \{[^}]*margin-bottom:\s*16rpx/);
   });
 
   it('搜索位吃切图（搜索钮共用一个 32×32 资产），🔍 emoji 兜底退场；排序栏已随 T3 退役', () => {
