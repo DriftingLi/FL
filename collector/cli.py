@@ -35,7 +35,6 @@ from .backfill import (
     build_yield_report,
     daemon_end_year,
     filter_by_year,
-    parse_announcement_list,
     select_new_announcements,
 )
 from .backfill import BASE as BASE_URL
@@ -43,9 +42,9 @@ from .clean import CLEAN_REVIEW_REASONS, clean
 from .daemon import WEEK_SECONDS, run_daemon, validate_startup
 from .extract.config import FEATURE_KEY, resolve_config
 from .extract.llm import extract
-from .extract.service import apply_extraction
+from .extract.service import apply_extraction, apply_structured
 from .match import match
-from .parsers.rmfysszc import parse_announcement
+from .sources import Fetch, SourceSpec, resolve_source
 from .store import (
     enqueue_review,
     fetch_samples,
@@ -57,10 +56,11 @@ from .store import (
 )
 
 
-def _process_html(
+def _process_samples(
     conn,
-    html: str,
+    samples: list,
     *,
+    spec: SourceSpec,
     source_url: str = "",
     config,
     candidates: list[dict],
@@ -69,23 +69,27 @@ def _process_html(
     match_fn: Callable,
     existing_samples: list,
 ) -> tuple[int, list]:
-    """把一份公告 HTML 走完 抽取 → 清洗 → 匹配 → 落库（调用方负责连接与事务）。
+    """把已解析出的 raw 样本走完 抽取/直取 → 清洗 → 匹配 → 落库。
 
-    batch（单份 fixture）与 backfill（逐个回补 URL）共用这一段——回补不另写一份
-    管线，否则清洗/匹配逻辑必然漂移（spec #2671 的硬约束）。
-
-    返回 (落库行数, 本轮落库的样本列表)。后者是给回补的跨 URL 去重信号：清洗规则⑥
-    （车商批量帖去重）要能看见同轮其它 URL 的样本，否则「同一车多城重发」不会被去重。
+    这是 batch 与 backfill 共用的**唯一**管线（ADR-0101 决策四：回补不另写一份）。
+    抽取阶段按采集面的 `structured` 分流：
+      - `structured=False`（rmfysszc 公告正文）⇒ LLM 抽取 + `apply_extraction`；
+      - `structured=True`（京东 JSONP / 公拍网与产权交易所表格）⇒ 字段已是来源事实，
+        跳过 LLM，只做判定与盖版本（`apply_structured`）。
+    分流点只有这一个，清洗与匹配对两类采集面**完全同一份代码**——否则「结构化源
+    不走清洗」这种漂移迟早发生。
     """
-    samples = parse_announcement(html, source_url)
     if not samples:
         return 0, []
     # 去重信号 = 已入库样本 + 本批已落样本；两者都由调用方跨 URL 累积传入。
     existing = list(existing_samples)
     added: list = []
     for sample in samples:
-        extraction = extract(sample.raw_description["body"], config, extractor)
-        updated, review = apply_extraction(sample, extraction)
+        if spec.structured:
+            updated, review = apply_structured(sample)
+        else:
+            extraction = extract(sample.raw_description["body"], config, extractor)
+            updated, review = apply_extraction(sample, extraction)
         # 清洗是独立纯函数阶段：只吃已抽取样本 + 既有样本（去重信号）。
         cleaned, clean_review = clean_fn(updated, existing=existing)
         # 匹配是独立纯函数阶段：从 PG 直读候选原价，取中位数、不取最高价。
@@ -96,6 +100,85 @@ def _process_html(
         existing.append(matched)
         added.append(matched)
     return len(samples), added
+
+
+def _process_url(
+    conn,
+    url: str,
+    *,
+    spec: SourceSpec,
+    fetch: Fetch,
+    config,
+    candidates: list[dict],
+    extractor: Callable | None,
+    clean_fn: Callable,
+    match_fn: Callable,
+    existing_samples: list,
+) -> tuple[int, list]:
+    """抓一个详情 URL（或其 JSONP 接口）→ 走完整条管线（调用方负责连接与事务）。
+
+    `spec.fetch_detail` 是采集面唯一的「取样本」入口：HTML 详情页的适配器用
+    `html_detail` 包一层（抓一次页面），京东这种需要打多个 JSONP 接口的自定义实现。
+    所以这里不关心是 HTML 还是 JSON——那是适配器的事。
+
+    `fetch` 必须是过了 robots + 限速 + 退避的抓取函数（生产是 `CrawlClient.fetch`）。
+    适配器内部的所有请求都走它，采集面无法绕过合规三道闸。
+    """
+    samples = spec.fetch_detail(url, fetch)
+    return _process_samples(
+        conn,
+        samples,
+        spec=spec,
+        config=config,
+        candidates=candidates,
+        extractor=extractor,
+        clean_fn=clean_fn,
+        match_fn=match_fn,
+        existing_samples=existing_samples,
+    )
+
+
+def _process_html(
+    conn,
+    html: str,
+    *,
+    source_url: str = "",
+    spec: SourceSpec | None = None,
+    config,
+    candidates: list[dict],
+    extractor: Callable | None,
+    clean_fn: Callable,
+    match_fn: Callable,
+    existing_samples: list,
+) -> tuple[int, list]:
+    """把一份**已在内存里的**详情页 HTML 走完整条管线（batch / fixture 路径）。
+
+    `spec` 缺省按 `source_url` 识别；识别不出则按 rmfysszc 处理（batch 的 fixture
+    就是 rmfysszc 公告，且 source_url 常为空）。生产回补不走这里——它走
+    `_process_url`，让适配器自己决定抓什么。
+    """
+    if spec is None:
+        spec = resolve_source(source_url) if source_url else _default_spec()
+    samples = spec.fetch_detail(source_url, lambda _url: html)
+    return _process_samples(
+        conn,
+        samples,
+        spec=spec,
+        config=config,
+        candidates=candidates,
+        extractor=extractor,
+        clean_fn=clean_fn,
+        match_fn=match_fn,
+        existing_samples=existing_samples,
+    )
+
+
+def _default_spec() -> SourceSpec:
+    """batch 无 URL 时的缺省采集面：rmfysszc（tracer bullet 的 fixture 就是它）。"""
+    from .models import CHANNEL_RMFYSSZC
+    from .sources import source_for_channel
+
+    return source_for_channel(CHANNEL_RMFYSSZC)
 
 
 def run_batch(
@@ -123,7 +206,11 @@ def run_batch(
         raise RuntimeError("缺少 DATABASE_URL（或 --dsn）")
 
     html = Path(fixture_path).read_text(encoding="utf-8")
-    if not parse_announcement(html):
+    # batch 子命令只服务 rmfysszc 公告正文 fixture（结构化采集面走 backfill/daemon，
+    # 它们的样本来自接口或表格，没有「一份公告 HTML」这种 fixture 形态）。
+    spec = _default_spec()
+    samples = spec.fetch_detail("", lambda _url: html)
+    if not samples:
         return 0
 
     secret_key = secret_key if secret_key is not None else os.environ.get("SECRET_KEY", "")
@@ -145,6 +232,7 @@ def run_batch(
             count, _ = _process_html(
                 conn,
                 html,
+                spec=spec,
                 config=config,
                 candidates=candidates,
                 extractor=extractor,
@@ -290,11 +378,23 @@ def run_backfill(
     clean_fn = cleaner or clean
     match_fn = matcher or match
 
-    # ① 发现：抓列表页 → 解析 → 年份过滤。
+    # ① 发现：抓列表页 → 解析 → 年份过滤。采集面按 list_url 识别（多源可混在同一轮），
+    # 识别不出即报错——不能把别的平台列表页当 rmfysszc 解析（会静默产出 0 条）。
     discovered: list[DiscoveredAnnouncement] = []
+    kept_undated: list[DiscoveredAnnouncement] = []
     for list_url in list_urls:
-        discovered.extend(parse_announcement_list(crawler.fetch(list_url)))
+        spec = resolve_source(list_url)
+        page = crawler.fetch(list_url)
+        items = spec.parse_listing(page, list_url)
+        if spec.keep_undated:
+            # 结构化采集面（京东/公拍网/产权交易所）没有发布日期字段：年份窗口对它们
+            # 不适用，全部放行。否则「按年份过滤」会把它们的样本 100% 丢光，
+            # 表现为「回补成功但 0 条」——静默失败，最难查。
+            kept_undated.extend(items)
+        else:
+            discovered.extend(items)
     in_window = filter_by_year(discovered, start_year=start_year, end_year=end_year)
+    in_window.extend(kept_undated)
 
     with psycopg.connect(dsn) as conn:
         if search_path:
@@ -327,12 +427,14 @@ def run_backfill(
         failed_urls: list[str] = []
         for item in new_items:
             try:
-                html = crawler.fetch(item.url)  # 网络 I/O，不在事务内
+                # 网络 I/O 全部在事务外；适配器自己决定抓一次 HTML 还是多次 JSONP。
+                spec = resolve_source(item.url)
                 with conn.transaction():
-                    count, added = _process_html(
+                    count, added = _process_url(
                         conn,
-                        html,
-                        source_url=item.url,
+                        item.url,
+                        spec=spec,
+                        fetch=crawler.fetch,
                         config=config,
                         candidates=candidates,
                         extractor=extractor,
@@ -475,12 +577,46 @@ def _add_common_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def _build_crawler(*, allow_robots_override: bool, base_url: str):
-    """构造生产抓取客户端：读站点 robots → 遵从判定 + 限速 + 退避。"""
-    from .crawl.client import CrawlClient, load_robots, urllib_fetcher
+def _crawl_origins(list_urls: list[str] | None = None) -> tuple[str, ...]:
+    """本轮要核验 robots 的 origin 集合：缺省采集面 + 每个 list_url 所属采集面的 origins。
+
+    为什么要按 list_url 收集而不是写死一份：robots 按 host 生效，多 host 采集面
+    （京东三 host、公拍网三 host）如果只读一个 origin，其余 host 会被 RobotsPolicy
+    判成「未核验 ⇒ 禁止」，采集面直接全废。反过来把所有已知 origin 都读一遍又
+    会在无关站点上多发请求。按「本轮真正要抓的采集面」收集最准。
+    """
+    origins: list[str] = list(_default_spec().origins)
+    for list_url in list_urls or ():
+        try:
+            spec = resolve_source(list_url)
+        except ValueError:
+            # 识别不出就不猜它的 origins：抓取时 resolve_source 会再报一次（带 URL）。
+            continue
+        for origin in spec.origins:
+            if origin not in origins:
+                origins.append(origin)
+    return tuple(origins)
+
+
+def _build_crawler(*, allow_robots_override: bool, list_urls: list[str] | None = None):
+    """构造生产抓取客户端：按 origin 各读 robots → 遵从判定 + 限速 + 退避。
+
+    多 origin 用 `load_robots_book`（每 host 一份策略、各自 fail-closed），
+    单 origin 退化成原来的单策略路径——两种形态都走同一个 CrawlClient。
+    """
+    from .crawl.client import (
+        CrawlClient,
+        load_robots,
+        load_robots_book,
+        urllib_fetcher,
+    )
 
     fetcher = urllib_fetcher()
-    robots = load_robots(base_url=base_url, fetcher=fetcher)
+    origins = _crawl_origins(list_urls)
+    if len(origins) == 1:
+        robots = load_robots(base_url=origins[0], fetcher=fetcher)
+    else:
+        robots = load_robots_book(origins=origins, fetcher=fetcher)
     return CrawlClient(
         robots=robots,
         fetcher=fetcher,
@@ -515,7 +651,11 @@ def main(argv: list[str] | None = None) -> int:
         action="append",
         required=True,
         dest="list_urls",
-        help="公告列表页 URL（可重复；如 .../Agency/pmgg.aspx?fid=100）",
+        help=(
+            "发现入口 URL（可重复；按 URL 自动识别采集面）"
+            "。rmfysszc 如 .../Agency/pmgg.aspx?fid=100；"
+            "京东如 https://paimai.jd.com/notice/11810994；公拍网如 https://www.gpai.net/sf/"
+        ),
     )
     backfill.add_argument("--start-year", type=int, default=BACKFILL_START_YEAR)
     backfill.add_argument("--end-year", type=int, default=BACKFILL_END_YEAR)
@@ -534,7 +674,11 @@ def main(argv: list[str] | None = None) -> int:
         action="append",
         required=True,
         dest="list_urls",
-        help="公告列表页 URL（可重复；如 .../Agency/pmgg.aspx?fid=100）",
+        help=(
+            "发现入口 URL（可重复；按 URL 自动识别采集面）"
+            "。rmfysszc 如 .../Agency/pmgg.aspx?fid=100；"
+            "京东如 https://paimai.jd.com/notice/11810994；公拍网如 https://www.gpai.net/sf/"
+        ),
     )
     daemon.add_argument(
         "--interval-seconds",
@@ -576,7 +720,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "backfill":
             crawler = _build_crawler(
                 allow_robots_override=args.allow_robots_override,
-                base_url=BASE_URL,
+                list_urls=args.list_urls,
             )
             count, report = run_backfill(
                 args.list_urls,
@@ -592,7 +736,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "daemon":
             crawler = _build_crawler(
                 allow_robots_override=args.allow_robots_override,
-                base_url=BASE_URL,
+                list_urls=args.list_urls,
             )
 
             def _probe() -> None:
