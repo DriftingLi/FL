@@ -18,7 +18,6 @@ psycopg / cryptography 在 skip 判定之后才 import：本机既无 DATABASE_U
 
 import json
 import os
-import secrets
 import unittest
 from pathlib import Path
 
@@ -26,14 +25,11 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = REPO_ROOT / "collector" / "fixtures"
-MIGRATION_DIR = REPO_ROOT / "backend" / "migrations"
 
 EXPECTED_SOURCE_URL = "https://www.rmfysszc.com/auction/notice/2026/11001.html"
 EXPECTED_TITLE = "杭叉 CPCD30 叉车公开拍卖公告"
 
 FEATURE_KEY = "market_sample_extract"
-# 与 test_crypto_interop.py 同一向量：Go security.EncryptSecret 真实产出。
-ENCRYPTED_KEY = "enc:v1:ULpTLw09HcsKToqJbwY8777i33KFU0T7i1Rh1r3O82ub5SKMjvT9ODrltwB5YIs="
 MASTER_KEY = "unit-test-master-key"
 
 
@@ -54,89 +50,22 @@ def _stub_from_file(name):
 class CollectorBatchE2EContractTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        import psycopg
-        from psycopg import sql
+        from collector.tests import pg_fixture
 
-        cls.psycopg = psycopg
-        cls.sql = sql
-        cls.schema = "ct_" + secrets.token_hex(4)
-
-        cls.conn = psycopg.connect(DATABASE_URL)
-        cls.conn.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(cls.schema)))
-        cls.conn.commit()
-
-        cls.conn.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(cls.schema)))
+        cls._pg = pg_fixture
+        cls.conn, cls.schema, cls.sql = pg_fixture.create_schema(prefix="ct")
         # 执行真实迁移文件（不是复制 DDL）：000063 建样本表，000064 加标记列 + 队列，
         # 000065 加清洗版本列（#2674），000066 加匹配版本列（#2675），
         # 000067 建未匹配待审队列视图（#2676）。
-        for pattern in (
-            "000063_*.up.sql", "000064_*.up.sql", "000065_*.up.sql",
-            "000066_*.up.sql", "000067_*.up.sql",
-        ):
-            migration = next(MIGRATION_DIR.glob(pattern))
-            cls.conn.execute(migration.read_text(encoding="utf-8"))
-        cls.conn.commit()
-
-        # 最小 original_prices 形状（镜像 000001 baseline 被读取的 7 字段 + 原价），
-        # 让「从 PG 直读候选原价 + 分层匹配」在本 schema 内可断言。
-        cls.conn.execute(
-            """
-            CREATE TABLE original_prices (
-                id BIGSERIAL PRIMARY KEY,
-                brand VARCHAR(50) NOT NULL,
-                vehicle_type VARCHAR(50) NOT NULL,
-                series VARCHAR(50) NOT NULL,
-                tonnage NUMERIC(5,2) NOT NULL,
-                config_type VARCHAR(50) NOT NULL,
-                mast_type VARCHAR(50) NOT NULL,
-                mast_height_mm INTEGER NOT NULL,
-                original_price NUMERIC(12,2) NOT NULL
-            )
-            """
-        )
-        cls.conn.commit()
-
-        # 最小 ai_configs / ai_feature_bindings 形状（镜像 000001 baseline 被读取的列），
-        # 让「直读配置」在本 schema 内可断言，不必把整条 baseline 迁移灌进来。
-        cls.conn.execute(
-            """
-            CREATE TABLE ai_configs (
-                id BIGSERIAL PRIMARY KEY,
-                name TEXT UNIQUE NOT NULL,
-                api_key TEXT NOT NULL,
-                base_url TEXT NOT NULL DEFAULT '',
-                model TEXT NOT NULL DEFAULT '',
-                is_active BOOLEAN NOT NULL DEFAULT TRUE
-            )
-            """
-        )
-        cls.conn.execute(
-            """
-            CREATE TABLE ai_feature_bindings (
-                id BIGSERIAL PRIMARY KEY,
-                feature_key VARCHAR(50) NOT NULL,
-                config_id BIGINT NOT NULL REFERENCES ai_configs(id) ON DELETE CASCADE
-            )
-            """
-        )
-        cls.conn.execute(
-            "INSERT INTO ai_configs (name, api_key, base_url, model) VALUES (%s, %s, %s, %s)",
-            ("collector-stub", ENCRYPTED_KEY, "http://stub.invalid/v1", "stub-model"),
-        )
-        cls.conn.execute(
-            "INSERT INTO ai_feature_bindings (feature_key, config_id) "
-            "SELECT %s, id FROM ai_configs WHERE name = %s",
-            (FEATURE_KEY, "collector-stub"),
-        )
-        cls.conn.commit()
+        pg_fixture.apply_market_migrations(cls.conn)
+        # 最小 original_prices / ai_configs / ai_feature_bindings 形状（镜像 000001
+        # baseline 被读取的列），让「PG 直读候选原价」与「直读 AI 配置」在本 schema 内可断言。
+        pg_fixture.create_stub_tables(cls.conn)
+        cls.psycopg = __import__("psycopg")
 
     @classmethod
     def tearDownClass(cls):
-        cls.conn.execute(
-            cls.sql.SQL("DROP SCHEMA {} CASCADE").format(cls.sql.Identifier(cls.schema))
-        )
-        cls.conn.commit()
-        cls.conn.close()
+        cls._pg.drop_schema(cls.conn, cls.schema, cls.sql)
 
     def _read(self, query, params=None):
         with self.psycopg.connect(

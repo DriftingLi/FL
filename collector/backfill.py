@@ -15,7 +15,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from html.parser import HTMLParser
 from typing import Any, Iterable
 from urllib.parse import urljoin
@@ -25,6 +25,21 @@ BASE = "https://www.rmfysszc.gov.cn"
 # 回补年份窗口（spec #2671：2015–2026）。
 BACKFILL_START_YEAR = 2015
 BACKFILL_END_YEAR = 2026
+
+
+def daemon_end_year(now_year: int | None = None) -> int:
+    """增量 daemon 的窗口上界 = 当前年（不是写死的 2026）。
+
+    回补是一次性作业，窗口固定合理；daemon 是常驻服务，若上界写死 2026，
+    2027-01-01 起每一轮都会「成功但发现 0 条」——日志全绿、库里不再增长，
+    没有任何报错。窗口必须跟着当下走。
+    """
+    if now_year is None:
+        from datetime import datetime, timezone
+
+        now_year = datetime.now(timezone.utc).year
+    return max(BACKFILL_END_YEAR, int(now_year))
+
 
 _DETAIL_MARKERS = ("rm_xmdetail", "rm_gzgsdetail")
 
@@ -163,6 +178,12 @@ class YieldReport:
     total: int
     by_status: dict[str, int]
     by_reason: dict[str, int]
+    # 本轮抓取失败的公告 URL（毒丸隔离的产物）：一条坏的不能挡住后面的。
+    failed_urls: tuple[str, ...] = ()
+
+    @property
+    def failed_items(self) -> int:
+        return len(self.failed_urls)
 
     @property
     def yield_rate(self) -> float | None:
@@ -173,7 +194,10 @@ class YieldReport:
 
     def render(self) -> str:
         if self.total == 0:
-            return "回补得率报告：本轮无样本"
+            head = "回补得率报告：本轮无样本"
+            if self.failed_urls:
+                head += f"（{self.failed_items} 条公告抓取失败）"
+            return head
         lines = [
             f"回补得率报告：{self.total} 条样本",
             f"  清洗得率：{self.yield_rate:.1%}（cleaned {self.by_status.get('cleaned', 0)} / {self.total}）",
@@ -188,12 +212,22 @@ class YieldReport:
                 lines.append(f"    {reason}: {count}（{share:.1%}）")
         else:
             lines.append("  按剔除原因：无剔除")
+        if self.failed_urls:
+            lines.append(f"  抓取失败：{self.failed_items} 条（不阻塞其它公告，下次再试）")
+            for url in self.failed_urls[:5]:
+                lines.append(f"    {url}")
+            if self.failed_items > 5:
+                lines.append(f"    …另有 {self.failed_items - 5} 条")
         lines.append("  （得率记录为事实，不设硬门槛）")
         return "\n".join(lines)
 
 
-def build_yield_report(rows: Iterable[dict[str, Any]]) -> YieldReport:
-    """从落库行（含 clean_status / rejection_reason）统计得率。"""
+def build_yield_report(
+    rows: Iterable[dict[str, Any]],
+    *,
+    failed_urls: Iterable[str] = (),
+) -> YieldReport:
+    """从落库行（含 clean_status / rejection_reason）统计得率，附本轮抓取失败清单。"""
     by_status: dict[str, int] = {}
     by_reason: dict[str, int] = {}
     total = 0
@@ -204,4 +238,9 @@ def build_yield_report(rows: Iterable[dict[str, Any]]) -> YieldReport:
         reason = row.get("rejection_reason")
         if reason:
             by_reason[reason] = by_reason.get(reason, 0) + 1
-    return YieldReport(total=total, by_status=by_status, by_reason=by_reason)
+    return YieldReport(
+        total=total,
+        by_status=by_status,
+        by_reason=by_reason,
+        failed_urls=tuple(failed_urls),
+    )
