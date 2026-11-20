@@ -196,7 +196,7 @@
     .card {
         background-color: $card-bg;
         border-radius: 20rpx;
-        padding: 28rpx;
+        padding: 24rpx;
         margin-top: 24rpx;
     }
 

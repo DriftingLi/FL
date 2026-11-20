@@ -348,7 +348,7 @@
     /* 学习数据：三张独立卡片 */
     .stats-row {
         flex-direction: row;
-        padding: 0 48rpx;
+        padding: 0 24rpx;
         margin-top: 40rpx;
     }
 
@@ -397,7 +397,11 @@
     }
 
     .stats-arrow {
+        width: 32rpx;
+        flex-shrink: 0;
         font-size: 26rpx;
+        line-height: 30rpx;
+        text-align: center;
         color: $text-color-placeholder;
     }
 
@@ -415,7 +419,7 @@
         background-color: $card-bg;
         border-radius: $radius-card;
         margin: 40rpx 24rpx 0 24rpx;
-        padding: 0 32rpx;
+        padding: 0 24rpx;
     }
 
     .course-icon {
@@ -442,7 +446,11 @@
     }
 
     .course-arrow {
+        width: 32rpx;
+        flex-shrink: 0;
         font-size: 32rpx;
+        line-height: 36rpx;
+        text-align: center;
         color: $text-disabled;
         margin-left: 8rpx;
     }

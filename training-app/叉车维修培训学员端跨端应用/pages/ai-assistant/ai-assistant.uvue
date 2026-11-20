@@ -1113,7 +1113,11 @@
 	}
 
 	.prompt-arrow {
+		width: 32rpx;
+		flex-shrink: 0;
 		font-size: 36rpx;
+		line-height: 40rpx;
+		text-align: center;
 		color: #999999;
 		margin-left: 16rpx;
 	}
@@ -1228,7 +1232,11 @@
 	}
 
 	.func-head-arrow {
+		width: 32rpx;
+		flex-shrink: 0;
 		font-size: 24rpx;
+		line-height: 28rpx;
+		text-align: center;
 		color: #8aa9c0;
 	}
 
@@ -1255,7 +1263,11 @@
 	}
 
 	.scope-chip-arrow {
+		width: 32rpx;
+		flex-shrink: 0;
 		font-size: 22rpx;
+		line-height: 26rpx;
+		text-align: center;
 		color: $text-color-placeholder;
 		margin-left: 10rpx;
 	}

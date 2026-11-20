@@ -86,7 +86,7 @@
     .module-card {
         background-color: $card-bg;
         border-radius: $radius-card;
-        padding: 28rpx;
+        padding: 24rpx;
         margin-bottom: 20rpx;
         flex-direction: row;
         align-items: center;
@@ -127,7 +127,11 @@
     }
 
     .module-arrow {
+        width: 32rpx;
+        flex-shrink: 0;
         font-size: 36rpx;
+        line-height: 40rpx;
+        text-align: center;
         color: $text-disabled;
         margin-left: 12rpx;
     }
@@ -140,7 +144,7 @@
     }
 
     .skeleton-item {
-        padding: 24rpx 28rpx;
+        padding: 24rpx;
         flex-direction: row;
         align-items: center;
         border-bottom: 1rpx solid $border-color-light;

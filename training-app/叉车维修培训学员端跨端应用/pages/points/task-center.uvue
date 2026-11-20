@@ -399,7 +399,7 @@
     }
 
     .section-header {
-        padding: 24rpx 32rpx 8rpx;
+        padding: 24rpx 24rpx 8rpx;
         flex-direction: column;
         align-items: flex-start;
     }
@@ -428,7 +428,7 @@
     }
 
     .task-item {
-        padding: 28rpx 0;
+        padding: 24rpx 0;
         border-bottom: 1rpx solid $border-color-light;
         flex-direction: row;
         align-items: center;

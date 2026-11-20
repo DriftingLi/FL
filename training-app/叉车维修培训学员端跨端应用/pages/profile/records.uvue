@@ -270,7 +270,7 @@ import { goBack } from '../../utils/navigation'
     }
 
     .summary {
-        padding: 20rpx 32rpx;
+        padding: 20rpx 24rpx;
         flex-direction: row;
         align-items: center;
     }
@@ -337,7 +337,7 @@ import { goBack } from '../../utils/navigation'
     .record-card {
         background-color: #ffffff;
         border-radius: 16rpx;
-        padding: 28rpx 24rpx;
+        padding: 24rpx;
         margin-bottom: 16rpx;
         border: 1px solid #eeeeee;
         flex-direction: column;

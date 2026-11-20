@@ -297,7 +297,7 @@ import { goBack } from '../../utils/navigation'
     .welcome {
         flex-direction: row;
         align-items: center;
-        padding: 8rpx 32rpx 24rpx 32rpx;
+        padding: 8rpx 24rpx 24rpx 24rpx;
     }
 
     .welcome-mascot {
@@ -326,7 +326,7 @@ import { goBack } from '../../utils/navigation'
 
     /* 搜索栏 */
     .search-bar {
-        padding: 0 32rpx 24rpx 32rpx;
+        padding: 0 24rpx 24rpx 24rpx;
         flex-direction: row;
         align-items: center;
     }
@@ -437,7 +437,7 @@ import { goBack } from '../../utils/navigation'
     .group-card {
         background-color: $card-bg;
         border-radius: $radius-card;
-        padding: 8rpx 28rpx;
+        padding: 8rpx 24rpx;
         margin-bottom: 24rpx;
     }
 
@@ -465,11 +465,7 @@ import { goBack } from '../../utils/navigation'
         color: $text-color;
     }
 
-    .entry-arrow {
-        font-size: 28rpx;
-        color: $text-color-placeholder;
-        margin-left: 16rpx;
-    }
+    .entry-arrow { width: 32rpx; flex-shrink: 0; font-size: 28rpx; line-height: 32rpx; text-align: center; color: $text-color-placeholder; margin-left: 16rpx; }
 
     .entry-answer-box {
         flex-direction: column;
@@ -490,7 +486,7 @@ import { goBack } from '../../utils/navigation'
     .service-card {
         background-color: $card-bg;
         border-radius: $radius-card;
-        padding: 8rpx 28rpx 16rpx 28rpx;
+        padding: 8rpx 24rpx 16rpx 24rpx;
         margin: 0 24rpx 40rpx 24rpx;
         flex-direction: column;
     }
@@ -529,11 +525,7 @@ import { goBack } from '../../utils/navigation'
         color: #999999;
     }
 
-    .service-arrow {
-        font-size: 28rpx;
-        color: #999999;
-        margin-left: 16rpx;
-    }
+    .service-arrow { width: 32rpx; flex-shrink: 0; font-size: 28rpx; line-height: 32rpx; text-align: center; color: #999999; margin-left: 16rpx; }
 
     .history-box {
         flex-direction: column;

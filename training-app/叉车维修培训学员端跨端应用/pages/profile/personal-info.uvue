@@ -47,7 +47,7 @@
         <!-- 密码（未设置时显示"去设置"） -->
         <view class="cell" @click="onChangePassword">
           <text class="cell-label">{{ passwordTitle }}</text>
-          <text v-if="passwordText.length > 0" class="cell-value">{{ passwordText }}</text>
+          <text class="cell-value">{{ passwordText }}</text>
           <text class="cell-arrow">›</text>
         </view>
       </view>
@@ -56,6 +56,7 @@
       <view class="section">
         <view class="cell" @click="onDeleteAccount">
           <text class="cell-label cell-label-danger">注销账号</text>
+          <view class="cell-spacer"></view>
           <text class="cell-arrow">›</text>
         </view>
       </view>
@@ -380,14 +381,14 @@
 
   .section {
     margin-top: 24rpx;
-    padding: 0 32rpx;
+    padding: 0 24rpx;
   }
 
   /* 原型 307:6234：每行一张独立白卡（16rpx 圆角 + 16rpx 行距，无分割线） */
   .cell {
     flex-direction: row;
     align-items: center;
-    padding: 32rpx 28rpx;
+    padding: 24rpx;
     background-color: $card-bg;
     border-radius: $radius-md;
     margin-bottom: 16rpx;
@@ -423,8 +424,17 @@
     text-overflow: ellipsis;
   }
 
+  .cell-spacer {
+    flex: 1;
+  }
+
+  /* 固定箭槽：宽度 + 行高统一，保证每行 › 的水平右缘与垂直中线都一致 */
   .cell-arrow {
+    width: 32rpx;
+    flex-shrink: 0;
     font-size: 40rpx;
+    line-height: 44rpx;
+    text-align: center;
     color: $text-disabled;
   }
 

@@ -31,7 +31,7 @@
     .progress-card {
         background-color: $card-bg;
         border-radius: $radius-card;
-        padding: 28rpx;
+        padding: 24rpx;
         margin-top: 24rpx;
     }
 

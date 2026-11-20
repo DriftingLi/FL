@@ -94,7 +94,11 @@
     }
 
     .stat-report-arrow {
+        width: 32rpx;
+        flex-shrink: 0;
         font-size: 26rpx;
+        line-height: 30rpx;
+        text-align: center;
         color: $text-color-secondary;
         margin-left: 4rpx;
     }

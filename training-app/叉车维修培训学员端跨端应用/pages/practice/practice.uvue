@@ -71,7 +71,7 @@
     }
     .region-left { flex-direction: row; align-items: center; padding: 8rpx 0; }
     .region-text { font-size: 32rpx; font-weight: 600; color: $text-color; }
-    .region-arrow { font-size: 24rpx; color: $text-color-secondary; margin-left: 8rpx; }
+    .region-arrow { width: 32rpx; flex-shrink: 0; font-size: 24rpx; line-height: 28rpx; text-align: center; color: $text-color-secondary; margin-left: 8rpx; }
     .region-right { flex-direction: row; align-items: center; }
     .safe-bottom { height: 34rpx; }
     /* 页头右槽搜索入口（#2442）：此前全仓无样式定义 ⇒ 命中区只有字形高。

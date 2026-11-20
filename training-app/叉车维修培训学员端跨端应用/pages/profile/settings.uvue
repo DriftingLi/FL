@@ -218,7 +218,7 @@
 
     .section {
         margin-top: 24rpx;
-        padding: 0 32rpx;
+        padding: 0 24rpx;
     }
 
     .card {
@@ -231,7 +231,7 @@
     .cell {
         flex-direction: row;
         align-items: center;
-        padding: 32rpx 28rpx;
+        padding: 24rpx;
     }
 
     .cell-label {
@@ -246,13 +246,18 @@
         margin-right: 8rpx;
     }
 
+    /* 固定箭槽：宽度 + 行高统一，保证每行 › 的水平右缘与垂直中线都一致 */
     .cell-arrow {
+        width: 32rpx;
+        flex-shrink: 0;
         font-size: 40rpx;
+        line-height: 44rpx;
+        text-align: center;
         color: $text-disabled;
     }
 
     .logout-wrap {
-        padding: 40rpx 32rpx;
+        padding: 40rpx 24rpx;
     }
 
     .logout-btn {

@@ -247,7 +247,7 @@
     .card {
         background-color: $card-bg;
         border-radius: $radius-card;
-        padding: 28rpx;
+        padding: 24rpx;
         margin-top: 24rpx;
     }
 
@@ -306,7 +306,11 @@
     }
 
     .field-arrow {
+        width: 32rpx;
+        flex-shrink: 0;
         font-size: 32rpx;
+        line-height: 36rpx;
+        text-align: center;
         color: $text-disabled;
         margin-left: 8rpx;
     }

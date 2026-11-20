@@ -95,7 +95,7 @@
     }
 
     .notice-bar {
-        padding: 20rpx 32rpx;
+        padding: 20rpx 24rpx;
         background-color: $card-bg;
         border-bottom: 1rpx solid $border-color-light;
     }
@@ -116,7 +116,7 @@
     .record-item {
         background-color: $card-bg;
         border-radius: 16rpx;
-        padding: 32rpx;
+        padding: 24rpx;
         margin-bottom: 16rpx;
         flex-direction: column;
     }

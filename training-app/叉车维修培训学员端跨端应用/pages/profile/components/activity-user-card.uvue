@@ -36,7 +36,7 @@
     background-color: #e8f4fd;
     margin: 20rpx 24rpx;
     border-radius: 16rpx;
-    padding: 28rpx 32rpx;
+    padding: 24rpx;
     flex-direction: row;
     align-items: center;
   }

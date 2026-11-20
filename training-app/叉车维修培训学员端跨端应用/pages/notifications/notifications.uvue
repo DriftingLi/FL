@@ -312,15 +312,21 @@ import { goBack } from '../../utils/navigation'
     }
 
     /* 右箭头 */
+    /* 固定箭槽：卡片按 flex-start 排内容，箭头单独居中，避免多行卡片里 › 贴顶 */
     .notify-arrow {
         width: 40rpx;
+        align-self: center;
         align-items: center;
         justify-content: center;
         margin-left: 8rpx;
     }
 
     .notify-arrow-text {
+        width: 32rpx;
+        flex-shrink: 0;
         font-size: 36rpx;
+        line-height: 40rpx;
+        text-align: center;
         color: #cccccc;
     }
 

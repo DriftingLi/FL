@@ -458,7 +458,11 @@
     }
 
     .group-chevron {
+        width: 32rpx;
+        flex-shrink: 0;
         font-size: 32rpx;
+        line-height: 36rpx;
+        text-align: center;
         color: $text-disabled;
     }
 

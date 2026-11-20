@@ -421,7 +421,6 @@
 		font-size: 26rpx;
 		color: $text-color-placeholder;
 		margin-bottom: 16rpx;
-		margin-left: 8rpx;
 	}
 
 	.section-head {
@@ -440,7 +439,6 @@
 		color: $primary-color;
 		font-weight: 600;
 		padding: 6rpx 12rpx;
-		margin-right: 8rpx;
 	}
 
 	.add-model-card {
@@ -466,7 +464,7 @@
 		flex-direction: row;
 		align-items: center;
 		justify-content: space-between;
-		padding: 28rpx 28rpx;
+		padding: 24rpx;
 	}
 
 	.source-left,
@@ -491,7 +489,7 @@
 	.divider {
 		height: 1rpx;
 		background-color: $border-color-light;
-		margin-left: 28rpx;
+		margin-left: 24rpx;
 	}
 
 	.radio {
@@ -519,7 +517,7 @@
 	}
 
 	.form-item {
-		padding: 20rpx 28rpx;
+		padding: 20rpx 24rpx;
 	}
 
 	.form-label {

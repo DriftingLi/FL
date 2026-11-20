@@ -1,0 +1,27 @@
+{
+  "$comment": "间距审计白名单（scripts/audit-spacing.mjs 读取）。每条必须带 reason；新增条目 = 接受该偏离，请在 PR 里说明来路。",
+  "files": [
+    { "prefix": "pages/courses/", "reason": "原型锁 38rpx（#2518 刀3 原型实测），整页不按 24 口径" },
+    { "prefix": "pages/dashboard/", "reason": "40rpx 锁定（utils/dashboardPage.test.js:178 断言 margin: 24rpx 40rpx）" },
+    { "prefix": "pages/mall/", "reason": "双列 20rpx 自成一套（mall 商品卡栅格）" },
+    { "prefix": "pages/guide/choose-cert.uvue", "reason": "页内 32rpx 一套（含 cert-selector 组件）" },
+    { "prefix": "pages/forum/forum.uvue", "reason": "顶部搜索 / 排序 / 筛选栏 32rpx，页内一致" },
+    { "prefix": "pages/forum/components/", "reason": "forum 组件随 32rpx 体系" },
+    { "prefix": "pages/points/points-goods-detail.uvue", "reason": "原型 810:3399 实测值（20/32/36/44/48/60/72rpx）" },
+    { "prefix": "pages/login/login.uvue", "reason": "登录页 48rpx 版心自成一套（输入行与 .login-input 同为 28rpx 内距）" }
+  ],
+  "selectors": [
+    { "file": "pages/ai-assistant/ai-settings.uvue", "selector": ".add-model-card", "reason": "新增模型空态大卡，40rpx 承载图标 + 文案" },
+    { "file": "pages/exam/components/exam-question-card.uvue", "selector": ".question-card", "reason": "题卡内容大卡，32rpx 层级" },
+    { "file": "pages/exam/components/exam-result-summary.uvue", "selector": ".summary-card", "reason": "成绩首屏大卡，32rpx 层级" },
+    { "file": "pages/featured/featured-detail.uvue", "selector": ".docx-card", "reason": "正文内嵌文档卡，32rpx 层级" },
+    { "file": "pages/forum/forum-create.uvue", "selector": ".post-card", "reason": "发帖单卡（#2689 决策 1），32rpx 层级" },
+    { "file": "pages/points/points-detail.uvue", "selector": ".balance-card", "reason": "头部余额渐变卡，32rpx 层级" },
+    { "file": "pages/points/points-rules.uvue", "selector": ".section-card", "reason": "规则内容大卡，32rpx 层级" },
+    { "file": "pages/points/task-center.uvue", "selector": ".balance-card", "reason": "头部余额渐变卡，32rpx 层级" },
+    { "file": "pages/profile/profile.uvue", "selector": ".section-card", "reason": "工具宫格卡：左右 16rpx 供 25% 列内边距，格子自身居中" },
+    { "file": "pages/search/search.uvue", "selector": ".category-card", "reason": "双列宫格瓦片，16rpx 内衬" },
+    { "file": "pages/points/points-detail.uvue", "selector": ".detail-item", "reason": "前轮定版 24rpx 28rpx（明细行内距）" },
+    { "file": "pages/profile/components/activity-tab-bar.uvue", "selector": ".sub-tab-item", "reason": "子 Tab 项点击面内距 32rpx（非卡片内边距）" }
+  ]
+}

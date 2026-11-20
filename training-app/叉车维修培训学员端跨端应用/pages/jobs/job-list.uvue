@@ -415,7 +415,7 @@
     .job-card {
         background-color: $bg-header;
         border-radius: $radius-card;
-        padding: 28rpx 24rpx;
+        padding: 24rpx;
         margin: 0 24rpx 20rpx 24rpx;
         flex-direction: column;
     }

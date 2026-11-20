@@ -365,11 +365,11 @@ import { goBack } from '../../utils/navigation'
     .switch-knob { width: 40rpx; height: 40rpx; border-radius: 20rpx; background-color: #ffffff; }
     .month-bar { flex-direction: row; align-items: center; justify-content: center; padding: 20rpx 0; }
     .month-arrow { width: 64rpx; height: 64rpx; align-items: center; justify-content: center; }
-    .arrow-text { font-size: 40rpx; color: #333333; font-weight: bold; }
+    .arrow-text { width: 32rpx; flex-shrink: 0; font-size: 40rpx; line-height: 44rpx; text-align: center; color: #333333; font-weight: bold; }
     .month-text { font-size: 32rpx; font-weight: bold; color: #333333; margin-left: 24rpx; margin-right: 24rpx; }
     .week-header { flex-direction: row; padding: 12rpx 24rpx; }
     .week-item { flex: 1; text-align: center; font-size: 24rpx; color: #999999; }
-    .calendar-grid { flex-direction: row; flex-wrap: wrap; padding: 0 16rpx; }
+    .calendar-grid { flex-direction: row; flex-wrap: wrap; padding: 0 24rpx; }
     .calendar-cell { width: 14.28%; align-items: center; padding: 6rpx 2rpx; }
     /* 圆角方形瓦片：数字在上、状态徽章在下（贴片 580:6795 全状态） */
     .cell-day { width: 84rpx; height: 96rpx; border-radius: 16rpx; background-color: #ffffff; align-items: center; flex-direction: column; }

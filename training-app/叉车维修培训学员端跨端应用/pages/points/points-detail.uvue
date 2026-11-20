@@ -276,7 +276,11 @@
     }
 
     .notice-arrow {
+        width: 32rpx;
+        flex-shrink: 0;
         font-size: 34rpx;
+        line-height: 38rpx;
+        text-align: center;
         color: $text-color-secondary;
     }
 
@@ -328,7 +332,7 @@
     .detail-item {
         background-color: $card-bg;
         border-radius: 16rpx;
-        padding: 28rpx 32rpx;
+        padding: 24rpx 28rpx;
         margin-bottom: 16rpx;
         flex-direction: row;
         align-items: center;
@@ -410,7 +414,7 @@
     }
 
     .bottom-button {
-        padding: 24rpx 32rpx;
+        padding: 24rpx;
         background-color: $card-bg;
         border-top: 1rpx solid $border-color-light;
     }
