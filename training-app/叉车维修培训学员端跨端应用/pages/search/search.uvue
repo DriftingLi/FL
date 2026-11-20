@@ -1,11 +1,8 @@
 <template>
 	<view class="search-page">
 		<view class="status-bar" :style="{ height: safeArea.statusBarHeight + 'px' }"></view>
-
-		<!-- 搜索栏：主色区 + 白色胶囊输入（对齐 course-detail / featured-list 等非 tabBar 页的既有写法） -->
 		<view class="search-header" :style="searchHeaderStyle">
 			<view class="search-input-wrap">
-				<text class="search-icon">🔍</text>
 				<input class="search-input" type="text" v-model="keyword" placeholder="搜索课程、章节、题目、精选、帖子"
 					confirm-type="search" @confirm="onSearch" />
 				<view v-if="keyword.length > 0" class="search-clear" @click="onClear">
@@ -14,6 +11,36 @@
 			</view>
 			<text class="search-cancel" @click="onCancel">取消</text>
 		</view>
+
+		<scroll-view v-if="!hasSearched" class="initial-scroll" scroll-y="true">
+			<view v-if="searchHistory.length > 0" class="history-section">
+				<view class="history-header">
+					<text class="history-title">最近搜索</text>
+					<text class="history-clear" @click="onClearHistory">清空</text>
+				</view>
+				<view class="history-tags">
+					<view v-for="kw in searchHistory" :key="kw" class="history-tag mr-16-mb-16">
+						<text class="history-tag-text" @click="onHistoryClick(kw)">{{ kw }}</text>
+						<text class="history-tag-delete" @click="onRemoveHistory(kw)">×</text>
+					</view>
+				</view>
+			</view>
+
+			<view class="category-section">
+				<text class="category-title">搜索内容</text>
+				<view class="category-grid">
+					<view v-for="(category, idx) in searchCategories" :key="category.value" class="category-card"
+						:class="{ 'category-card--right': idx % 2 == 1, 'category-card--bottom': idx >= 2 }"
+						@click="onCategoryClick(category.value)">
+						<image class="category-icon" :src="category.icon" mode="aspectFit" :webp="true" />
+						<view class="category-copy">
+							<text class="category-name">{{ category.label }}</text>
+							<text class="category-summary">{{ category.summary }}</text>
+						</view>
+					</view>
+				</view>
+			</view>
+		</scroll-view>
 
 		<!-- 类型筛选：全部 + 五分区（章节分区见 ADR-0049 决策 3） -->
 		<scroll-view v-if="hasSearched" class="type-tabs-scroll" scroll-x="true">
@@ -31,7 +58,6 @@
 			<view v-if="activeTypeIdx == 0">
 				<view v-for="(section, sIdx) in sections" :key="section.key" class="result-section">
 					<view class="section-header">
-						<view class="section-accent"></view>
 						<text class="section-title">{{ section.label }}</text>
 						<text class="section-total">{{ section.total }} 条</text>
 						<text v-if="section.total > section.items.length" class="section-more"
@@ -52,14 +78,13 @@
 								</text>
 								<text v-if="itemHitLabel(item).length > 0" class="item-hit">{{ itemHitLabel(item) }}</text>
 							</view>
-							<text class="item-arrow">›</text>
 						</view>
 					</view>
 					<text v-else class="section-empty">无匹配结果</text>
 				</view>
 
 				<view v-if="isAllEmpty" class="empty-wrap">
-					<AppEmptyState icon="🔍" text="未找到相关内容" />
+					<AppEmptyState icon="" text="未找到相关内容" />
 				</view>
 			</view>
 
@@ -80,12 +105,11 @@
 							</text>
 							<text v-if="itemHitLabel(item).length > 0" class="item-hit">{{ itemHitLabel(item) }}</text>
 						</view>
-						<text class="item-arrow">›</text>
 					</view>
 				</view>
 
 				<view v-if="typedResult.items.length == 0 && !loading" class="empty-wrap">
-					<AppEmptyState icon="🔍" text="未找到相关内容" />
+					<AppEmptyState icon="" text="未找到相关内容" />
 				</view>
 
 				<view v-if="loading" class="loading-wrap">
@@ -98,20 +122,6 @@
 			</view>
 		</scroll-view>
 
-		<!-- 初始态：搜索历史（只留端上，ADR-0049 决策 7；与 Web searchHistory 同口径） -->
-		<view v-if="!hasSearched && searchHistory.length > 0" class="history-section">
-			<view class="history-header">
-				<view class="section-accent"></view>
-				<text class="history-title">搜索历史</text>
-				<text class="history-clear" @click="onClearHistory">清空</text>
-			</view>
-			<view class="history-tags">
-				<view v-for="(kw, idx) in searchHistory" :key="idx" class="history-tag mr-16-mb-16">
-					<text class="history-tag-text" @click="onHistoryClick(kw)">{{ kw }}</text>
-					<text class="history-tag-delete" @click="onRemoveHistory(kw)">✕</text>
-				</view>
-			</view>
-		</view>
 	</view>
 </template>
 
@@ -127,18 +137,9 @@
 	import type { SearchItem, SearchCategoryResult, SearchResult, SearchPagedResult, HighlightSegment } from '../../types/index'
 
 	const safeArea = useSafeArea()
-
-	// 胶囊让位（#1845 / #2442）：N06 自绘页不受页头件避让保护，搜索头行右端「取消」按钮
-	// 的右缘自行钉在胶囊左边线 − CAPSULE_CLEARANCE_RPX（与页头件共用 utils/system 的同一常量）。
-	// uvue 不支持 var()/calc()，动态值走内联 style 分项覆盖（先例：app-nav-bar 的
-	// rightSlotStyle 内联 margin-right 覆盖 class 值）；非小程序端 capsuleLeft = 0
-	// ⇒ 返回空串不设约束，维持样式表里 .search-header 的 24rpx 右 padding 基线。
 	const searchHeaderStyle = computed((): string => {
 		const capsuleLeft = safeArea.value.capsuleLeft
-		if (capsuleLeft <= 0) {
-			return ''
-		}
-		// 右 padding = 750 − capsuleLeft + 间隙 ⇒ 行内内容右缘 = 胶囊左边线 − 间隙
+		if (capsuleLeft <= 0) return ''
 		const paddingRight = Math.max(24, 750 - capsuleLeft + CAPSULE_CLEARANCE_RPX)
 		return 'padding-right: ' + paddingRight + 'rpx;'
 	})
@@ -151,6 +152,13 @@
 		{ label: '题目', value: 'question' },
 		{ label: '精选', value: 'content' },
 		{ label: '帖子', value: 'topic' },
+	]
+	type SearchCategory = { label: string; summary: string; value: string; icon: string }
+	const searchCategories: SearchCategory[] = [
+		{ label: '课程', summary: '培训课程与章节', value: 'course', icon: '/static/tabbar/course.png' },
+		{ label: '题目', summary: '练习与练习题', value: 'question', icon: '/static/icons/answer-card.png' },
+		{ label: '精选', summary: '优质学习内容', value: 'content', icon: '/static/icons/star.png' },
+		{ label: '帖子', summary: '交流与讨论', value: 'topic', icon: '/static/tabbar/forum.png' },
 	]
 	const activeTypeIdx = ref<number>(0)
 
@@ -179,14 +187,18 @@
 		} as SearchPagedResult
 	}
 
-	const allResult = ref<SearchResult>({
-		keyword: '',
-		courses: { ...emptySection },
-		chapters: { ...emptySection },
-		questions: { ...emptySection },
-		contents: { ...emptySection },
-		topics: { ...emptySection },
-	} as SearchResult)
+	function emptySearchResult() : SearchResult {
+		return {
+			keyword: '',
+			courses: { ...emptySection },
+			chapters: { ...emptySection },
+			questions: { ...emptySection },
+			contents: { ...emptySection },
+			topics: { ...emptySection },
+		} as SearchResult
+	}
+
+	const allResult = ref<SearchResult>(emptySearchResult())
 
 	const typedResult = ref<SearchPagedResult>(emptyPagedResult())
 
@@ -348,6 +360,7 @@
 		saveHistory(kw)
 		page.value = 1
 		activeTypeIdx.value = 0
+		allResult.value = emptySearchResult()
 		typedResult.value = emptyPagedResult()
 		hasSearched.value = true
 		await runSearch(1, false)
@@ -394,6 +407,24 @@
 		}
 	}
 
+	function onCategoryClick(value : string) : void {
+		if (value == 'course') {
+			uni.switchTab({ url: '/pages/courses/courses' })
+			return
+		}
+		if (value == 'question') {
+			uni.navigateTo({ url: '/pages/practice/practice' })
+			return
+		}
+		if (value == 'content') {
+			uni.navigateTo({ url: '/pages/featured/featured-list' })
+			return
+		}
+		if (value == 'topic') {
+			uni.switchTab({ url: '/pages/forum/forum' })
+		}
+	}
+
 	/** 落点由 utils/searchDisplay.searchItemPath 单点给出（ADR-0049 决策 2：搜到必须能打开） */
 	function onItemClick(item : SearchItem) : void {
 		const url = searchItemPath(item)
@@ -427,12 +458,10 @@
 		flex-direction: column;
 	}
 
-	/* 主色区（对齐 course-detail / featured-list / chapter-view 等非 tabBar 页的既有写法） */
 	.status-bar {
 		background-color: $primary-color;
 	}
 
-	/* 右 padding 24rpx 是基线；小程序端被内联 searchHeaderStyle 按 capsuleLeft 让位覆盖（票 1845；样式块禁 # 票号引用） */
 	.search-header {
 		flex-direction: row;
 		align-items: center;
@@ -450,18 +479,12 @@
 		padding: 0 8rpx 0 24rpx;
 	}
 
-	.search-icon {
-		font-size: 28rpx;
-		margin-right: 12rpx;
-	}
-
 	.search-input {
 		flex: 1;
 		font-size: $font-size-md;
 		color: $text-color;
 	}
 
-	/* 清空：无底色裸 ✕，命中区 88rpx（44px，满足 AGENTS 的触摸区下限） */
 	.search-clear {
 		width: 88rpx;
 		height: 88rpx;
@@ -479,6 +502,78 @@
 		color: $text-color-inverse;
 		padding: 24rpx 8rpx 24rpx 24rpx;
 		margin-left: 8rpx;
+	}
+
+	.initial-scroll {
+		flex: 1;
+	}
+
+	.history-section,
+	.category-section {
+		background-color: $card-bg;
+		margin: 16rpx 24rpx 0;
+		border-radius: $radius-md;
+		padding: 20rpx 24rpx 24rpx;
+	}
+
+	.category-section {
+		margin-top: 16rpx;
+	}
+
+	.category-title {
+		font-size: $font-size-md;
+		font-weight: bold;
+		color: $text-color;
+		margin-bottom: 16rpx;
+	}
+
+	.category-grid {
+		flex-direction: row;
+		flex-wrap: wrap;
+	}
+
+	.category-card {
+		width: 48%;
+		min-height: 136rpx;
+		flex-direction: row;
+		align-items: center;
+		padding: 18rpx 16rpx;
+		background-color: $bg-color;
+		border-radius: $radius-md;
+		margin-right: 4%;
+	}
+
+	.category-card--right {
+		margin-right: 0;
+	}
+
+	.category-card--bottom {
+		margin-top: 16rpx;
+	}
+
+	.category-icon {
+		width: 64rpx;
+		height: 64rpx;
+		margin-right: 12rpx;
+		flex-shrink: 0;
+	}
+
+	.category-copy {
+		flex: 1;
+		flex-direction: column;
+		justify-content: center;
+	}
+
+	.category-name {
+		font-size: $font-size-md;
+		font-weight: bold;
+		color: $text-color;
+	}
+
+	.category-summary {
+		font-size: $font-size-sm;
+		color: $text-color-secondary;
+		margin-top: 8rpx;
 	}
 
 	/* 筛选条：白底 + 细分隔线；选中档位由 AppChip 的主色实底承担 */
@@ -506,7 +601,7 @@
 		flex: 1;
 	}
 
-	/* 分区卡片（全部态）：白卡 + 主色浅底标题带 + 主色小竖条 */
+	/* 分区卡片（全部态）：白卡 + 普通标题行 */
 	.result-section {
 		background-color: $card-bg;
 		margin: 16rpx 24rpx;
@@ -524,24 +619,14 @@
 	.section-header {
 		flex-direction: row;
 		align-items: center;
-		background-color: $primary-tint;
-		border-radius: $radius-sm;
-		padding: 12rpx 16rpx;
-		margin-bottom: 8rpx;
-	}
-
-	.section-accent {
-		width: 6rpx;
-		height: 28rpx;
-		border-radius: 3rpx;
-		background-color: $primary-color;
+		padding: 8rpx 0;
+		margin-bottom: 4rpx;
 	}
 
 	.section-title {
 		font-size: 30rpx;
 		font-weight: bold;
 		color: $text-color;
-		margin-left: 14rpx;
 	}
 
 	.section-total {
@@ -622,12 +707,6 @@
 		color: $text-color-secondary;
 	}
 
-	.item-arrow {
-		font-size: $font-size-lg;
-		color: $text-disabled;
-		margin-left: 12rpx;
-	}
-
 	.empty-wrap {
 		padding: 40rpx 0;
 	}
@@ -652,35 +731,36 @@
 		color: $text-color-placeholder;
 	}
 
-	/* 搜索历史：白卡 + 主色浅底胶囊（每条带单删） */
+	/* 搜索历史：白卡 + 每条带单删 */
 	.history-section {
 		background-color: $card-bg;
-		margin: 16rpx 24rpx;
+		margin: 16rpx 24rpx 0;
 		border-radius: $radius-md;
-		padding: 16rpx 24rpx 24rpx;
+		padding: 20rpx 24rpx 20rpx;
 	}
 
 	.history-header {
 		flex-direction: row;
 		align-items: center;
-		background-color: $primary-tint;
-		border-radius: $radius-sm;
-		padding: 12rpx 16rpx;
-		margin-bottom: 20rpx;
+		padding: 0;
+		margin-bottom: 12rpx;
 	}
 
 	.history-title {
 		font-size: $font-size-md;
 		font-weight: bold;
 		color: $text-color;
-		margin-left: 14rpx;
 		flex: 1;
 	}
 
 	.history-clear {
+		min-width: 88rpx;
+		height: 88rpx;
 		font-size: $font-size-sm;
 		color: $primary-color;
-		padding: 12rpx 8rpx;
+		padding-left: 16rpx;
+		line-height: 88rpx;
+		text-align: right;
 	}
 
 	.history-tags {
@@ -692,14 +772,18 @@
 		flex-direction: row;
 		align-items: center;
 		height: 88rpx;
-		padding-left: 28rpx;
+		padding-left: 24rpx;
 		background-color: $primary-tint;
 		border-radius: $radius-pill;
 	}
 
 	.history-tag-text {
+		min-width: 88rpx;
+		height: 88rpx;
 		font-size: 26rpx;
 		color: $primary-color;
+		padding-right: 4rpx;
+		line-height: 88rpx;
 	}
 
 	.history-tag-delete {
