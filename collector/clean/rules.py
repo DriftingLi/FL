@@ -37,12 +37,22 @@ REASON_DUP_DESC = "duplicate_description_similarity"
 REASON_DUP_SELLER = "duplicate_same_company_cross_city"
 REASON_PREMIUM = "premium_anomaly"
 REASON_IDENTITY_STRIPPED = "identity_stripped"
+# #2680：租赁权/承租权样本——「成交金额」是多年租金总额、「评估价格」是年租金评估价，
+# 量纲与设备残值完全不同（实测 ratio 3.86~7.33，不是溢价）。当设备样本落库会把
+# 租金比当成残值率，直接污染校准。
+REASON_LEASE_RIGHT = "lease_right_not_equipment"
+# #2680：领域不相关样本——既没有设备身份字段（brand / model / tonnage），也没有
+# 任何设备线索的样本。它们永远匹配不上原价、也永远算不出残值率，只会以
+# (NULL,NULL,NULL) 组的形式堆在未匹配待审队列顶部（按 sample_count DESC 排序），
+# 把人工补原价的注意力引到房产/物资包上。
+REASON_NOT_EQUIPMENT = "not_equipment_sample"
 
 # 清洗阶段产生的全部 review reason；重跑清洗时据此清掉旧行再重入，保证幂等。
 CLEAN_REVIEW_REASONS = (
     REASON_BULK_LOT, REASON_SCRAPPED, REASON_PLACEHOLDER, REASON_NEGOTIABLE,
     REASON_RANGE, REASON_DUP_IMAGE, REASON_DUP_DESC, REASON_DUP_SELLER,
-    REASON_PREMIUM, REASON_IDENTITY_STRIPPED,
+    REASON_PREMIUM, REASON_IDENTITY_STRIPPED, REASON_LEASE_RIGHT,
+    REASON_NOT_EQUIPMENT,
 )
 
 PREMIUM_MULTIPLIER = 1.5
@@ -61,6 +71,10 @@ _IDENTITY_TEXT_PATTERNS = (
     ),
 )
 _REDACTED = "[已脱敏]"
+
+# #2680：租赁权/承租权标题线索（与 sources/hbcpre.py 的 _LEASE_MARKERS 同源；
+# 清洗侧兜底一份，避免适配器漏标时租金比被当成残值率）。
+_LEASE_MARKERS = ("承租权", "租赁权", "房屋出租", "招租", "年租金")
 
 
 def _specs(sample) -> dict[str, Any]:
@@ -160,6 +174,84 @@ def _rule_range(sample):
     return None
 
 
+def _rule_lease_right(sample):
+    """租赁权/承租权样本剔除（#2680）。
+
+    为什么必须剔除而不是留着：产权交易所省镜像大量发布房屋/铺位的「三年承租权」，
+    其「成交金额」是**三年租金总额**、「评估价格」是**年租金评估价**——两个数都在，
+    但量纲与设备残值毫无关系。实测当期 9 条成交公告全是这类，成交/评估比 3.86~7.33；
+    当设备样本落库会把租金比当成残值率，直接污染校准。
+
+    判据优先看结构化标记（适配器按标题线索写 `lease_right=True`），再兜底看标题正文。
+    """
+    specs = _specs(sample)
+    if _truthy(specs.get("lease_right")):
+        return _reject(sample, REASON_LEASE_RIGHT)
+    title = str(specs.get("title", "") or "")
+    if any(marker in title for marker in _LEASE_MARKERS):
+        return _reject(sample, REASON_LEASE_RIGHT)
+    return None
+
+
+# #2680：设备线索（与 sources/hbcpre.py 的 _EQUIPMENT_MARKERS 同源；清洗侧兜底一份，
+# 且**对所有采集面生效**——不依赖某个适配器记得写 `equipment_relevant` 标记）。
+_EQUIPMENT_MARKERS = (
+    "叉车", "托盘车", "堆高车", "搬运车", "前移式", "牵引车", "电动叉车",
+    "电动托盘", "内燃叉车", "平衡重", "JUNGHEINRICH", "林德", "合力", "杭叉", "永恒力",
+)
+
+
+def _text_of(sample) -> str:
+    """样本的可读文本（标题 + 正文），用于领域相关性判断。
+
+    优先 `structured_specs.title`（结构化采集面都写它），兜底 `raw_description`
+    的 title/body（LLM 路径与 rmfysszc 走这两个键）。
+    """
+    specs = _specs(sample)
+    parts = [str(specs.get("title", "") or "")]
+    description = sample.raw_description or {}
+    parts.append(str(description.get("title", "") or ""))
+    parts.append(str(description.get("body", "") or ""))
+    return " ".join(part for part in parts if part)
+
+
+def _rule_not_equipment(sample):
+    """领域不相关样本剔除（#2680）：既无设备身份字段、也无任何设备线索。
+
+    为什么需要这条：产权交易所省镜像**是通用产权平台**，不是设备拍卖平台。实测
+    一条真实回补落进 18 行，其中「北京市海淀区…房产处置」以 22,860,830 元落成
+    `cleaned` + `label_eligible=true`——它永远匹配不上叉车原价、永远算不出残值率，
+    只会以 `(NULL,NULL,NULL)` 组堆进 `market_unmatched_queue` 的顶部（该视图按
+    `sample_count DESC` 排序），把人工补原价的注意力引到房产上。
+
+    判据（**宁可漏判也不误杀**）：同时满足两条才剔除——
+      ① 没有任何设备身份字段（`brand` / `model` / `tonnage` 全缺）；
+      ② 文本里没有任何设备线索（见 `_EQUIPMENT_MARKERS`）。
+    缺一不可：只缺 brand 但有吨位的样本可能是抽漏了品牌，仍有匹配价值；文本里
+    提到「叉车」的样本即使没抽到规格，也属于本领域。
+
+    **不依赖适配器写 `equipment_relevant` 标记**——那样每个新适配器都得记得写，
+    漏写就静默放行非设备样本。这里直接看文本，对所有采集面一致生效；适配器写的
+    标记只作额外快路径。
+
+    与规则⑧（租赁权）的分工：租赁权是**量纲不同**（必须单独剔、单独记原因），
+    这条是**领域不相关**（房产/物资包/办公设备）。两条都剔除但原因不同——
+    得率报告要能看出「这个源里设备样本占多少」。
+    """
+    specs = _specs(sample)
+    if _truthy(specs.get("equipment_relevant")):
+        return None
+    has_identity = any(
+        specs.get(key) not in (None, "") for key in ("brand", "model", "tonnage")
+    )
+    if has_identity:
+        return None
+    text = _text_of(sample)
+    if any(marker in text for marker in _EQUIPMENT_MARKERS):
+        return None
+    return _reject(sample, REASON_NOT_EQUIPMENT)
+
+
 def _dedup_hit(sample, existing: Iterable) -> str | None:
     """车商批量帖去重三形态：图哈希 / 描述相似度 / 同公司跨城。"""
     specs = _specs(sample)
@@ -203,7 +295,19 @@ def _apply_rules(sample, existing: Iterable = ()) -> tuple:
     work, stripped = _strip_identity(sample)
     review: list[tuple[str, str | None]] = [(REASON_IDENTITY_STRIPPED, None)] if stripped else []
 
-    for rule in (_rule_bulk_lot, _rule_scrapped, _rule_placeholder, _rule_negotiable, _rule_range):
+    for rule in (
+        _rule_bulk_lot,
+        _rule_scrapped,
+        # #2680：租赁权在占位价之前判——租赁样本的价格与吨位无关，先按量纲剔除，
+        # 否则「三年租金 / 吨位」会被占位价规则误判成 placeholder_price（原因错位）。
+        _rule_lease_right,
+        # #2680：领域不相关样本（房产/物资包）在占位价之后判——它们可能带吨位以外的
+        # 价格异常，占位价规则先给更具体的剔除原因；都命中不了再归到「不是设备」。
+        _rule_placeholder,
+        _rule_negotiable,
+        _rule_range,
+        _rule_not_equipment,
+    ):
         outcome = rule(work)
         if outcome is not None:
             # 规则返回的样本已从 work（含身份剥离结果）派生，无需再补字段。

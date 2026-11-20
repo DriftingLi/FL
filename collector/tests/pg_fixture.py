@@ -33,6 +33,7 @@ MARKET_MIGRATIONS = (
     "000065_*.up.sql",
     "000066_*.up.sql",
     "000067_*.up.sql",
+    "000068_*.up.sql",
 )
 
 
