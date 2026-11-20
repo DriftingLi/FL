@@ -197,6 +197,24 @@
   _Avoid_: 把 robots 的 `Disallow: /` 当成「技术上抓得到就抓」；为赶进度把限速间隔调小；fail-open（读不到 robots 就当没限制）。
 - **增量 daemon（weekly daemon）**：`collector daemon --list-url <列表页>` 按周节奏重复跑「一轮增量采集」（ADR-0102）。每一轮**就是 `run_backfill` 那一轮**——daemon 只加节奏与失败隔离，采集/抽取/清洗/匹配没有第二份实现（spec user story 20「同一组件两种模式」）。周期从**本轮开始**算（抓取耗时不会把周节奏推长）；单轮失败记进 `CycleResult.error` 并照常等下一周期，不终止 daemon、不熔断。`--max-cycles N` 供测试与「手动跑一轮」共用同一条命令。
   _Avoid_: 为增量另写一条管线（两份实现必然漂移，同一公告在回补与增量下会得出不同标签）；从「本轮结束」算周期（逐轮累积漂移）；失败即退出或连续失败熔断（把「站点挂了 3 周」变成「服务悄悄消失」）。
+- **采集面（source / channel）**：一个平台的一种采集口径，对应 `collector/sources/<channel>.py` 的一个 `SourceSpec` 与 `market_transactions.channel` 的一个取值（ADR-0103）。采集面之间**唯一的差异**是两个纯函数——列表页 → 发现条目、详情 → raw 样本；编排层（年份过滤 → 幂等 → 抽取 → 清洗 → 匹配 → 落库 → 得率）对平台完全无感知。加一个采集面 = 加一个模块文件（模块自注册 + 包内自动发现），不改编排层、不改 CLI、不改注册表。
+  _Avoid_: 在编排层按 channel 写 if/elif 分派（每加一个源都要改编排层）；让适配器自己 import urllib（会绕过 robots/限速/退避三道闸，适配器只能拿注入的 `fetch`）；把「一个平台」与「一个采集面」等同（公拍网的司法频道与资产频道是同一 channel 的两种口径，但能力差很大）。
+- **结构化直取（structured extraction）**：采集面的字段直接来自 JSONP 响应或服务端渲染表格、**是来源事实而非模型猜测**时，跳过 LLM 抽取（`SourceSpec.structured=True` → `apply_structured`），字段置信度按取值机制给（直取 1.0、标题正则 0.9），`extraction_version` 盖 `structured-v1` 与 LLM 的 `PROMPT_VERSION` 可分辨。**跳过的是抽取，不是管线**：清洗与匹配对结构化采集面同一份实现（`_process_samples` 里只有一个分流点）。标签资格仍走同一套 `decide()`——价格是硬判据，没有价格就没有标签。抽检口径不同：只审「声称取到但置信不足」的字段，不把「源站不提供的字段」当抽取失败（否则结构化样本会 100% 涌入抽检队列）。
+  _Avoid_: 让结构化字段也过一遍 LLM（引入失真与成本，价格被模型改写尤其不可接受）；把「跳过抽取」理解成「跳过清洗/匹配」（那会让废铁价直接落成有效标签）；照 LLM 口径把字段缺席算低置信（源站不提供 ≠ 我们抽失败）。
+- **多 origin robots（robots book）**：一个采集面可能跨多个 host（京东：公告页 `paimai.jd.com` + JSONP `api.m.jd.com`；公拍网：`www` / `zc` / `s`）。robots 按 host 生效（RFC 9309），所以每个 origin 各读一份 robots、各自 fail-closed，按 URL 的 host 精确分派（`RobotsBook`，ADR-0103）。**未核验的 host 仍 fail-closed**——「没读过」不等于「没有限制」；人工放行时记 `overridden` 审计。
+  _Avoid_: 拿一个 host 的 robots 去判另一个 host（会把整个采集面判死，或被误当成「已核验」而放行）；把 `robots.txt` 的 200 响应当成有效 robots（实测三个平台都存在「软 200」错误页/JSON/SPA 首页，必须按读不到处理）；读所有已知 origin 的 robots（会在无关站点多发请求，按本轮真正要抓的采集面收集 origins）。
+- **无日期采集面（undated source）**：京东/公拍网的标的**没有发布日期字段**（京东接口只给 startTime/endTime 的 ms 时间戳，公告页不给），因此不适用回补的 2015–2026 年份窗口。`SourceSpec.keep_undated=True` 显式声明放行——否则它们的样本会被 100% 丢光，表现为「回补成功但 0 条」：无报错、无 failed_urls、得率报告「本轮无样本」，是最难查的静默失败。
+  _Avoid_: 把无日期条目当「窗口外的旧公告」丢弃；用「有没有日期」反推采集面质量。
+- **平台能力边界（platform capability boundary）**：各采集面实测能拿到什么，写进 ADR-0103 以免后人反复试错——京东可用 JSONP 只有 `getProductBasicInfo` / `getPaimaiRealTimeData` 两个（其余返回 `the current API does not exist`），标的页是 SPA 空壳必须走 JSONP；破产/资产处置通道 `assessmentPrice` 实测全为 0.0（归一成 `None` = 源站不提供，不是零元），`auctionStatus=2` 与 `confirmationUrl=""` 是**常态**不能当判据；公拍网司法频道在拍页可采但**已成交样本只在 `s.gpai.net/sf/search.do` 上、该路径被 robots 明示禁止**（合规默认下不可采），资产频道详情接口全废只能拿列表里的起拍价。
+  _Avoid_: 猜京东接口名（猜了就是 `the current API does not exist`）；拿 `auctionStatus` / `confirmationUrl` 判成交或破产通道；以为「资产频道能拿到成交价」。
+- **双价配对（listing / deal price pair）**：同一样本上「挂牌价」与「成交金额」齐备——`market_transactions.listing_price`（挂牌价，列语义恒定）与 `raw_price`（成交样本上是成交金额）同时有值（ADR-0104，迁移 000068）。它是**观测「挂牌→成交」折扣比**的唯一数据形态（`raw_price / listing_price`），下游校准据此检验清算折扣 δ 基线 0.85 是否站得住。只有产权交易所省镜像的成交公告页一页之内同时给出两价；挂牌样本上两列同值，其它采集面 `listing_price` 留 NULL（无配对语义，不是「挂牌价缺失」）。
+  _Avoid_: 把 `listing_price` 塞进 `structured_specs`（SQL 里算不了折扣比、建不了索引）；让 `raw_price` 按 `raw_price_kind` 承载两个价（下游每次读价都要先判 kind，且「两价齐备」在库里表达不出来）；把其它采集面的 NULL 当 0 处理。
+- **租赁权样本（lease right sample）**：产权交易所省镜像大量发布的「承租权 / 租赁权 / 房屋出租」类标的——其「成交金额」是**多年租金总额**、「评估价格」是**年租金评估价**，量纲与设备残值无关（实测成交/评估比 3.86~7.33，不是溢价；实测 9 条租赁权成交的成交/挂牌比全为 1.0000，无竞价）。当设备样本落库会把租金比当成残值率，直接污染校准，所以清洗规则⑧（`REASON_LEASE_RIGHT = "lease_right_not_equipment"`，ADR-0104）把它剔成 `rejected`；**行照常落库**（剔除 ≠ 丢弃），得率报告里能看到这个原因——「这个源当期 100% 是租赁权」正是判断该源值不值得继续采的关键读数。规则排在占位价之前：租赁样本的价与吨位无关，排在后面会把原因归成 `placeholder_price`。
+  _Avoid_: 在适配器里直接跳过租赁样本（没有剔除审计、得率报告看不见）；把租赁权的成交/评估比当溢价或残值率；把租赁权规则排在占位价之后（原因归错）。
+- **非设备样本（not-equipment sample）**：通用产权平台上与叉车无关的标的（房产 / 无规格物资包 / 办公设备）——清洗规则⑨（`REASON_NOT_EQUIPMENT = "not_equipment_sample"`，ADR-0104）。它们永远匹配不上叉车原价、永远算不出残值率，只会以 `(NULL,NULL,NULL)` 组堆进 `market_unmatched_queue` 顶部（该视图按 `sample_count DESC` 排序），把人工补原价的注意力引到房产上。判据是**两条同时满足**才剔除：① `brand`/`model`/`tonnage` 全缺；② 文本（`structured_specs.title` + `raw_description` 的 title/body）里没有任何设备线索（叉车/托盘车/堆高车/搬运车/前移式/牵引车/电动叉车/平衡重 + 林德/合力/杭叉/永恒力/JUNGHEINRICH）。**规则自己看文本、不依赖适配器写标记**——第一版依赖标记的设计被真实抓取否掉（房产以 `label_eligible` 落库）且误伤了没写标记的既有采集面。宁可漏判不误杀：缺 brand 但有吨位、或标题提到叉车但没抽到规格的样本都放行。
+  _Avoid_: 只标记不剔除（污染待审队列）；把判据挂在适配器的 `equipment_relevant` 标记上（漏写就静默放行、且误伤别的采集面）；与租赁权合并成一条规则（两个原因要分开记，报告才能看出「设备样本占多少」）。
+- **单位按标签取（unit by label）**：价格解析的单位判定顺序是「显式标签单位（`挂牌价格（万元）`）> 值文本自带的单位 > 默认按元」，**不靠数值大小反推**（ADR-0104）。实测同一平台两种详情页单位不同：挂牌详情是万元（`2.43` ⇒ 24300 元）、成交详情是元（`199300` ⇒ 199300 元）；按大小猜必然在某类样本上错 10000 倍，残值率标签会全错。
+  _Avoid_: 按数值大小猜万元/元；把两种详情页的解析共用一套硬编码单位；忘了千分位（`299,818`）与全角逗号。
 
 ## 门户与内容
 

@@ -22,6 +22,9 @@ _COLUMNS = (
     "structured_specs",
     "raw_price",
     "raw_price_kind",
+    # #2680：挂牌价格（与成交金额配对）。列顺序与迁移 000068 的语义一致，
+    # 且必须与 _FETCH_COLUMNS / fetch_samples 解包顺序同步。
+    "listing_price",
     "appraisal_price",
     "auction_date",
     "clean_status",
@@ -86,7 +89,7 @@ def enqueue_review(
 # 重跑清洗读回的列：原文留底 + 抽取结果 + 当前清洗状态。不含匹配/标签列（下游 #2675）。
 _FETCH_COLUMNS = (
     "id", "channel", "source_url", "raw_description", "structured_specs",
-    "raw_price", "raw_price_kind", "appraisal_price", "field_confidence",
+    "raw_price", "raw_price_kind", "listing_price", "appraisal_price", "field_confidence",
     "clean_status", "clean_version", "rejection_reason", "premium_anomaly", "label_eligible",
 )
 
@@ -102,7 +105,7 @@ def fetch_samples(conn: "psycopg.Connection") -> list[tuple[int, Any]]:
     for row in rows:
         (
             sid, channel, source_url, raw_description, structured_specs,
-            raw_price, raw_price_kind, appraisal_price, field_confidence,
+            raw_price, raw_price_kind, listing_price, appraisal_price, field_confidence,
             clean_status, clean_version, rejection_reason, premium_anomaly, label_eligible,
         ) = row
         sample = RawSample(
@@ -112,6 +115,7 @@ def fetch_samples(conn: "psycopg.Connection") -> list[tuple[int, Any]]:
             structured_specs=structured_specs or {},
             raw_price=raw_price,
             raw_price_kind=raw_price_kind,
+            listing_price=listing_price,
             appraisal_price=appraisal_price,
             field_confidence=field_confidence or {},
             clean_status=clean_status,
