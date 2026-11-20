@@ -113,12 +113,21 @@ services:
         max-file: "3"
 
   # ==========================================
-  # 拍卖数据 collector（spec #2671 / 票 #2672）：独立 Python 服务，不进 Go 后端。
-  # profile "collector"：tracer bullet 阶段只有 batch 模式（一次性命令），没有常驻 daemon，
-  # 故默认不随主编排拉起；由运维显式 `docker compose --profile collector run --rm collector batch ...`
-  # 或后续票接入 daemon 模式后改常驻。镜像默认值登记在 backend/internal/deploy/topology.go
-  # 的 EnvVars 声明表（COLLECTOR_IMAGE，漂移锁钉住），但本票无常驻 daemon，不参与 deploy.py
-  # 的镜像更新/回滚生命周期。
+  # 拍卖数据 collector（spec #2671 / 票 #2672、#2678）：独立 Python 服务，不进 Go 后端。
+  # profile "collector"：同一镜像承载全部模式（batch / backfill / daemon / reclean /
+  # rematch / unmatched），默认不随主编排拉起；周更增量由运维显式
+  # `docker compose --profile collector up -d collector` 常驻，或单跑一轮
+  # `docker compose --profile collector run --rm collector backfill --list-url ...`。
+  # 镜像默认值登记在 backend/internal/deploy/topology.go 的 EnvVars 声明表
+  # （COLLECTOR_IMAGE，漂移锁钉住），但 collector 不在 deploy.py 的 APP_SERVICES 里，
+  # 不参与镜像更新/回滚生命周期（与后端发布解耦是本组件的设计意图）。
+  #
+  # COLLECTOR_LIST_URL 无默认值（bare 替换 ⇒ 空默认，漂移锁跳过）：不设就起不来——
+  # 由 `collector.daemon._validate_list_urls` 在**开始第一轮之前**校验并 exit 1
+  # （注意：argparse 拦不住空串，空串是合法参数值；真正的守卫是那个启动前校验）。
+  # 逼运维显式给出发现入口，不留「每周期空转失败」的假健康服务。
+  # robots 遵从仍是默认——真跑 rmfysszc（robots Disallow:/）需人工在 command 里追加
+  # --allow-robots-override 并留审计（ADR-0101）。
   # ==========================================
   collector:
     build:
@@ -126,8 +135,15 @@ services:
       dockerfile: collector/Dockerfile
     image: ${COLLECTOR_IMAGE:-forklift-collector:latest}
     container_name: forklift-collector-prod
-    restart: "no"
+    # 周更 daemon 是常驻进程：意外退出要拉回来；人为 stop 后不自动起（unless-stopped）。
+    restart: unless-stopped
     profiles: ["collector"]
+    # 缺省按周常驻跑增量；不设 COLLECTOR_LIST_URL 时 compose 会传空值，argparse 报错
+    # 退出（fail-loud，不留一个「静默空转」的常驻服务）。
+    command:
+      - "daemon"
+      - "--list-url"
+      - "${COLLECTOR_LIST_URL}"
     environment:
       DATABASE_URL: postgres://${DB_USER:-forklift}:${DB_PASSWORD}@postgres:5432/forklift_training?sslmode=disable
       # #2673：解密 ai_configs.api_key（与后端同一个 SECRET_KEY；与 ai_feature_bindings 共享 PG）。

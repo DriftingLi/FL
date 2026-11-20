@@ -102,6 +102,36 @@ class FilterByYearTest(unittest.TestCase):
         self.assertEqual(filter_by_year(items, start_year=2015, end_year=2026), [])
 
 
+class DaemonYearWindowTest(unittest.TestCase):
+    """常驻 daemon 的年份窗口不能写死 2026——否则 2027-01-01 起每周「成功」但零发现。
+
+    回补是一次性作业（窗口固定合理）；daemon 是常驻服务，窗口必须跟着当前年走，
+    否则会变成「每周都绿、永远不落库」的静默空转（实测过这个坑）。
+    """
+
+    def test_default_end_year_follows_current_year(self):
+        from collector.backfill import daemon_end_year
+
+        self.assertEqual(daemon_end_year(now_year=2027), 2027)
+        self.assertEqual(daemon_end_year(now_year=2030), 2030)
+
+    def test_daemon_window_keeps_spec_start_year(self):
+        from collector.backfill import BACKFILL_START_YEAR, daemon_end_year
+
+        self.assertEqual(BACKFILL_START_YEAR, 2015)
+        self.assertEqual(daemon_end_year(now_year=2026), 2026)
+
+    def test_daemon_window_admits_current_year_announcements(self):
+        from collector.backfill import daemon_end_year, filter_by_year
+
+        items = [DiscoveredAnnouncement("https://x.test/1", "2027 公告", "2027-01-05")]
+        self.assertEqual(
+            filter_by_year(items, end_year=daemon_end_year(now_year=2027)),
+            items,
+            "当前年的公告必须进窗口",
+        )
+
+
 class IdempotencyTest(unittest.TestCase):
     def test_already_stored_urls_are_skipped(self):
         discovered = [
