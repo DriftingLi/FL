@@ -69,7 +69,9 @@ describe('常驻四键由数据驱动（按钮集是单点，不是模板硬编�
         // 拆分的接缝：工具条只 emit，输入区持有 editorCtx 才决定怎么落地
         expect(toolbar).toContain("(e: 'action', id: string): void");
         expect(toolbar).toContain("emit('action', id)");
-        expect(input).toContain('<ForumWysiwygToolbar :active-ids="activeIds" @action="onActionTap" @paste="onPasteTap" />');
+        expect(input).toContain('<ForumWysiwygToolbar :active-ids="activeIds" @action="onActionTap" @paste="onPasteTap"');
+        // #2709：工具条按下要单独上报（touchstart 早于 blur），失焦检测才分得清「点键」与「粘贴被丢弃」
+        expect(input).toContain('@press="onToolbarPress"');
     });
 
     it('常驻行恰好 5 个触摸目标：4 枚数据动作 + 「更多」开关（#2689 决策 2）', () => {
@@ -347,6 +349,36 @@ describe('粘贴走 insertText 同一条 content-change 路径（原生粘贴会
         const handler = bodyOf(input, 'function onEditorInput(');
         expect(handler).toContain('shouldClearPasteNotice(pasteNoticeAt.value, Date.now())');
         expect(handler).toContain("pasteNotice.value = ''");
+    });
+});
+
+// ===== ⑥c 小程序端取 ctx 的作用域与「点键不误弹提示」（#2709）=====
+
+describe('mp-weixin 取 EditorContext 必须限定组件作用域（#2709 根因）', () => {
+    it('createEditorContextAsync 带上本组件实例：选择器初始只覆盖页面范围，取不到组件内 editor', () => {
+        // 实例必须在 setup 顶层取（事件回调里 getCurrentInstance() 拿不到当前实例）
+        expect(input).toContain('const selfInstance = getCurrentInstance()');
+        expect(input).toContain('options.component = proxy');
+        // 传实例与调用 ctx 在同一处：先补作用域，再 createEditorContextAsync
+        const ready = bodyOf(input, 'function onEditorReady()');
+        expect(ready).toContain('options.component = proxy');
+        expect(ready).toContain('uni.createEditorContextAsync(options)');
+    });
+
+    it('fail 不再空吞：取不到 ctx 时留一条可定位日志（否则所有键静默失效）', () => {
+        const ready = bodyOf(input, 'function onEditorReady()');
+        expect(ready).not.toContain('fail: (_error : UniError) => {}');
+        expect(ready).toContain('createEditorContextAsync 失败');
+    });
+
+    it('点工具条引起的失焦不算「粘贴被丢弃」：touchstart 先上报，失焦检测按窗口早退', () => {
+        expect(toolbar).toContain('@touchstart="onPress"');
+        expect(toolbar).toContain("emit('press')");
+        const detect = bodyOf(input, 'function detectDroppedPaste()');
+        expect(detect).toContain('toolbarPressAt');
+        expect(detect).toContain('TOOLBAR_PRESS_WINDOW_MS');
+        // 失焦后等一拍再判：touchstart 可能晚于 blur
+        expect(bodyOf(input, 'function onEditorBlur()')).toContain('BLUR_SETTLE_MS');
     });
 });
 

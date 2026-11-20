@@ -20,7 +20,8 @@
 
         <!-- 格式工具条（常驻四键 + 更多面板）拆成独立件：它只渲染并 emit 动作，
              怎么落地由本组件按 editorCtx 决定（#2658 拆分，行数预算 ADR-0023）。 -->
-        <ForumWysiwygToolbar :active-ids="activeIds" @action="onActionTap" @paste="onPasteTap" />
+        <ForumWysiwygToolbar :active-ids="activeIds" @action="onActionTap" @paste="onPasteTap"
+            @press="onToolbarPress" />
 
         <!-- 字数：正文右下（#2689 决策 5）。上限仍由 maxlength 决定（发帖 10000 / 回复 10000）。 -->
         <text v-if="!isReply" class="counter-text">{{ counterText }}</text>
@@ -41,7 +42,7 @@
 </template>
 
 <script setup lang="uts">
-    import { ref, computed, onUnmounted } from 'vue'
+    import { ref, computed, getCurrentInstance, onUnmounted } from 'vue'
     import { buildMarker, serializeDelta, settleMarkerInsert } from '../utils/forumDeltaMarkdown'
     import { FORUM_MARKDOWN_BOUNDARY_NOTICE, FORUM_REGION_NOTICE } from '../utils/forumDisplay'
     import ForumWysiwygToolbar from './forum-wysiwyg-toolbar.uvue'
@@ -78,6 +79,25 @@
      * 一次被原生层丢弃的粘贴会让编辑器失焦，只读若一直挂着，作者就再也点不进去（#2658）。
      */
     const READONLY_HOLD_MS : number = 800
+    /**
+     * 失焦后等多久再判「这次失焦是不是一次被丢弃的粘贴」（ms）。
+     * 点工具条也会让 editor 失焦，而 touchstart 可能晚于 blur 一拍（#2709）——
+     * 立刻判会把「点键」误当成「粘贴被丢弃」，弹出一条与操作无关的提示行。
+     */
+    const BLUR_SETTLE_MS : number = 120
+    /**
+     * 工具条按下的判定窗口（ms）：窗口内发生的失焦一律不算「粘贴被丢弃」。
+     * 两个数（120 / 600）是 2026-11-20 在微信开发者工具（iPhone 12/13 Pro 模拟）上按「按下 → 失焦」实测取的余量，
+     * 不是随手写的魔法数字——真机若仍偶发误报，先调大本窗口，而不是把失焦检测整个关掉（那会退回 #2709 的误报）。
+     */
+    const TOOLBAR_PRESS_WINDOW_MS : number = 600
+
+    /**
+     * 本组件实例（#2709）：mp-weixin 的 createEditorContextAsync 内部走 wx.createSelectorQuery()，
+     * 而选择器**初始只覆盖页面范围**，取不到自定义组件里的 <editor> ⇒ 必须把组件实例传进去限定作用域。
+     * 必须在 setup 顶层取：事件回调里 getCurrentInstance() 拿不到当前实例。
+     */
+    const selfInstance = getCurrentInstance()
 
     const props = withDefaults(defineProps<{
         /** 已选图片的**预览 URL**（父层预解析；原始路径留在父层用于提交） */
@@ -149,6 +169,8 @@
     let pendingPasteText : string = ''
     /** 本次聚焦的起点时刻（判「这次失焦是不是一次粘贴尝试」） */
     let focusAt : number = 0
+    /** 工具条最近一次按下的时刻（#2709：点键引起的失焦不是粘贴被丢弃） */
+    let toolbarPressAt : number = 0
     /** 重建编辑器只试一次，避免 insertText 持续失败时来回重建 */
     let pasteRebuildTried : boolean = false
 
@@ -255,6 +277,9 @@
     function detectDroppedPaste() : void {
         const focusedMs = focusAt > 0 ? Date.now() - focusAt : 0
         focusAt = 0
+        // 点工具条（格式键 / 更多 / 面板键 / 粘贴）同样会让 editor 失焦（#2709）：
+        // 那是「作者在操作」，不是「粘贴被原生层丢弃」，不能弹提示行。
+        if (toolbarPressAt > 0 && Date.now() - toolbarPressAt <= TOOLBAR_PRESS_WINDOW_MS) return
         if (markdownLength.value > 0) return
         if (focusedMs < PASTE_HINT_MIN_FOCUS_MS) return
         uni.getClipboardData({
@@ -314,7 +339,20 @@
                 }
                 refreshFromEditor()
             },
-            fail: (_error : UniError) => {}
+            fail: (error : UniError) => {
+                // 不再空吞（#2709）：取不到 ctx 时所有按钮都会静默失效，至少留一条可定位的日志
+                console.log('[forum-wysiwyg] createEditorContextAsync 失败：' + error.errMsg)
+            }
+        }
+        // 组件作用域（#2709 根因）：mp-weixin 侧 createEditorContextAsync 用 wx.createSelectorQuery()，
+        // 选择器初始只覆盖**页面范围**，取不到自定义组件里的 <editor> ⇒ ctx 恒为 null、所有键点了没反应。
+        // 传本组件实例后选择器收窄到组件内，才能按 id 找到 editor。
+        const instance = selfInstance
+        if (instance != null) {
+            const proxy = instance.proxy
+            if (proxy != null) {
+                options.component = proxy
+            }
         }
         uni.createEditorContextAsync(options)
     }
@@ -332,7 +370,13 @@
     function onEditorBlur() : void {
         readOnly.value = true
         setTimeout(() => { readOnly.value = false }, READONLY_HOLD_MS)
-        detectDroppedPaste()
+        // 等一拍再判：点工具条时 touchstart 可能晚于 blur（#2709），立刻判会把「点键」误当「粘贴被丢弃」
+        setTimeout(() => { detectDroppedPaste() }, BLUR_SETTLE_MS)
+    }
+
+    /** 工具条按下（touchstart 早于 blur）：记下时刻，供失焦检测区分「点键」与「粘贴被丢弃」（#2709） */
+    function onToolbarPress() : void {
+        toolbarPressAt = Date.now()
     }
 
     function onEditorInput(_event : UniEditorInputEvent) : void {

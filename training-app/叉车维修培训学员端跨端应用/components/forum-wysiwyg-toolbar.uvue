@@ -3,7 +3,9 @@
          常驻四枚字形键（B / I / S / ≡）+「更多」开关 = 恰好 5 个触摸目标，其余动作收进二级面板。
          它只渲染、不碰编辑器 —— 按钮集是 utils/forumWysiwygInput 的数据，动作一律 emit 回输入区，
          由输入区那侧持有 editorCtx 决定怎么落地。这样「有哪些按钮」与「按钮怎么生效」各自只有一处。 -->
-    <view class="wysiwyg-toolbar">
+    <!-- touchstart 早于 editor 的 blur：把「作者按下了工具条」这件事先告诉输入区，
+         否则失焦检测会把「点键」误当成「粘贴被原生层丢弃」并弹提示行（#2709）。 -->
+    <view class="wysiwyg-toolbar" @touchstart="onPress">
         <!-- 常驻四键（粗体 / 斜体 / 删除线 / 列表）+ 二级面板开关。触摸目标 88rpx（R2）。
              字形是**文字**不是图片：B 真加粗、I 真斜体、S 真删除线（text-decoration-line: line-through）、≡ 列表。 -->
         <view class="primary-row">
@@ -68,6 +70,8 @@
     const emit = defineEmits<{
         (e: 'action', id: string): void
         (e: 'paste'): void
+        /** 工具条被按下（touchstart）：输入区据此区分「点键」与「粘贴被丢弃」（#2709） */
+        (e: 'press'): void
     }>()
 
     /** 按钮集是数据、不是模板硬编码：常驻四键与面板两组都取自 utils/forumWysiwygInput 的唯一实现。 */
@@ -77,6 +81,10 @@
 
     function isActive(id : string) : boolean {
         return props.activeIds.indexOf(id) >= 0
+    }
+
+    function onPress() : void {
+        emit('press')
     }
 
     function onAction(id : string) : void {
