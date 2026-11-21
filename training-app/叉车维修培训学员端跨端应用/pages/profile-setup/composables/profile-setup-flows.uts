@@ -1,0 +1,79 @@
+/**
+ * profile-setup 纯逻辑（#2712 微信资料一键填充）
+ *
+ * 形态约束（同 pages/profile/composables/personal-info-flows.uts 先例）：
+ * - 本模块只放纯函数：值入参、布尔/对象出参，零模块级可变状态。
+ * - 零 store 依赖、零 api 依赖 —— 接口调用与页面状态（ref）留在页面壳层。
+ * - 空值判据 / 待填集合在 utils/wechatProfileFill.uts（与个人信息页同源）；重试记忆 / 返回栈 /
+ *   昵称截断在此唯一定义，页面只做薄封装。
+ */
+import type { UserInfo } from '../../../types/index'
+import { fillTargetsOf } from '../../../utils/wechatProfileFill.uts'
+
+/** 昵称上限（与页面 input maxlength 同源） */
+const NICKNAME_MAX = 30
+
+/** 提交草稿：页面持有的输入与重试记忆（值入参，不在本模块存） */
+export type FillDraft = {
+	avatarPicked : string
+	nicknameInput : string
+	avatarDone : boolean
+	nicknameDone : boolean
+}
+
+/** 本次提交要跑哪几步 */
+export type SubmitSteps = {
+	uploadAvatar : boolean
+	submitNickname : boolean
+}
+
+/** 昵称是否超上限（提交前判，用于截断提示） */
+export function isNicknameTooLong(raw : string) : boolean {
+	return raw.trim().length > NICKNAME_MAX
+}
+
+/** 昵称截断到上限（提交前调用；是否提示由 isNicknameTooLong 判） */
+export function truncateNickname(raw : string) : string {
+	const t = raw.trim()
+	if (t.length <= NICKNAME_MAX) return t
+	return t.substring(0, NICKNAME_MAX)
+}
+
+/**
+ * 本次提交要跑哪几步（重试记忆：已成功的字段不再重做）。
+ * 头像上传成功 ⇒ 页面清 avatarPicked 并置 avatarDone；昵称成功 ⇒ 置 nicknameDone。
+ */
+export function submitStepsOf(u : UserInfo | null, draft : FillDraft) : SubmitSteps {
+	const targets = fillTargetsOf(u)
+	const avatarReady = draft.avatarPicked.trim().length > 0 && !draft.avatarDone
+	const nicknameReady = truncateNickname(draft.nicknameInput).length > 0 && !draft.nicknameDone
+	return {
+		uploadAvatar: targets.avatar && avatarReady,
+		submitNickname: targets.nickname && nicknameReady,
+	} as SubmitSteps
+}
+
+/**
+ * 出口落点：`from=login`（登录后新用户）回 choose-cert；其余返回空串，
+ * 由页面按页面栈决定「回上一页 / 回不去则首页」。
+ */
+export function exitTargetOf(from : string) : string {
+	if (from == 'login') return '/pages/guide/choose-cert'
+	return ''
+}
+
+/** 回不去时的兜底首页 */
+export function homeFallbackUrl() : string {
+	return '/pages/dashboard/dashboard'
+}
+
+/** 昵称超上限的截断提示（文案唯一定义点） */
+export function truncateToastOf() : string {
+	return '昵称最多 30 个字，已截断'
+}
+
+/** 提交成功提示：仅登录后新用户弹（老用户由个人信息页的待审徽标承载） */
+export function submitToastOf(from : string) : string {
+	if (from == 'login') return '资料已提交，审核通过后生效'
+	return ''
+}

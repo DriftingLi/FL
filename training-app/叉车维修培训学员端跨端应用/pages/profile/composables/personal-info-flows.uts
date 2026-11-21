@@ -13,6 +13,10 @@ import type { Ref } from 'vue'
 import { updateProfileApi, uploadAvatarApi, changePasswordSendCodeApi, changePasswordApi, profileSendCodeApi, profileBindPhoneApi, profileBindEmailApi, accountSendCodeApi, updateAccountApi, deleteAccountApi } from '../../../api/auth'
 import { errMsg } from '../../../api/helpers'
 import type { LoginResult, UserInfo } from '../../../types/index'
+import {
+	hasPendingFieldOf, wechatFillEntryVisibleOf,
+	PROFILE_FIELD_NICKNAME, PROFILE_FIELD_AVATAR
+} from '../../../utils/wechatProfileFill.uts'
 
 // ===== 展示文案纯函数（页面 computed 消费） =====
 
@@ -31,9 +35,17 @@ export function avatarUrlOf(u : UserInfo | null) : string {
 	return ''
 }
 
-/** 昵称/头像审核中徽标（/auth/me 的 pending_profile_change） */
-export function hasPendingOf(u : UserInfo | null) : boolean {
-	return u != null && u.has_pending_change == true
+/**
+ * 逐字段审核中徽标（#2712：/auth/me 的 pending_fields，值域 nickname / avatar）。
+ * 原单布尔 hasPendingOf 退役 —— 头像与昵称各自挂徽标，不再共用一个开关。
+ * 判据本体在 utils/wechatProfileFill.uts（与填写页同源）。
+ */
+export function hasPendingNicknameOf(u : UserInfo | null) : boolean {
+	return hasPendingFieldOf(u, PROFILE_FIELD_NICKNAME)
+}
+
+export function hasPendingAvatarOf(u : UserInfo | null) : boolean {
+	return hasPendingFieldOf(u, PROFILE_FIELD_AVATAR)
 }
 
 /** 登录账号：优先 account 字段，回退 username */

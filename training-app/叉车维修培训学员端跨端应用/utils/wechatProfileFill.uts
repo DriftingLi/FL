@@ -1,0 +1,83 @@
+/**
+ * 微信资料一键填充的共享判据（#2712）。
+ *
+ * 两个消费方：`pages/profile-setup`（填写页）与 `pages/profile`（个人信息页入口与徽标）。
+ * 判据必须同源 —— 否则「填写页认为空、个人信息页认为不空」会让入口与页面互相打脸。
+ *
+ * 占位昵称形态由后端生成（`backend/internal/auth/wechat_service.go`）：
+ * `微信学员` + openid 后 6 位；冲突时追加 `_<prefix4>` 或 `_<i>`（i=1..3）。
+ * 前端拼不出 openid，只能按**完整模式**匹配 —— 用前缀 `startsWith('微信学员')`
+ * 会误伤真叫「微信学员…」的用户。
+ */
+
+import type { UserInfo } from '../types/index'
+
+/** 待审字段值域（与后端 `model.ProfileFieldNickname` / `ProfileFieldAvatar` 同值） */
+export const PROFILE_FIELD_NICKNAME : string = 'nickname'
+export const PROFILE_FIELD_AVATAR : string = 'avatar'
+
+const PLACEHOLDER_NICKNAME = /^微信学员[A-Za-z0-9_-]{6}(_[A-Za-z0-9_-]{4}|_\d{1})?$/
+
+/** 后端自动生成的占位昵称 */
+export function isPlaceholderNickname(name : string) : boolean {
+	return PLACEHOLDER_NICKNAME.test(name.trim())
+}
+
+/** 昵称为空：空串或后端占位形态 */
+export function isNicknameEmpty(name : string) : boolean {
+	const trimmed = name.trim()
+	return trimmed.length == 0 || isPlaceholderNickname(trimmed)
+}
+
+/** 头像为空：空串（后端占位头像是空串，不是默认图 URL） */
+export function isAvatarEmpty(url : string) : boolean {
+	return url.trim().length == 0
+}
+
+/** 逐字段待审集合（老后端不返回 pending_fields ⇒ 空数组） */
+export function pendingFieldsOf(u : UserInfo | null) : string[] {
+	if (u == null) return []
+	const fields = u.pending_fields
+	if (fields == null) return []
+	return fields
+}
+
+/** 某字段是否在待审中 */
+export function hasPendingFieldOf(u : UserInfo | null, field : string) : boolean {
+	const fields = pendingFieldsOf(u)
+	for (let i = 0; i < fields.length; i++) {
+		if (fields[i] == field) return true
+	}
+	return false
+}
+
+/** 待填集合：哪一半还空着（只补空值，且**待审字段视为不可填**） */
+export type FillTargets = {
+	nickname : boolean
+	avatar : boolean
+}
+
+/**
+ * 待填集合：只补空值，且待审字段视为不可填（后端对同字段已有待审会硬拒）。
+ * 有值字段一律不可编辑、不提交。
+ */
+export function fillTargetsOf(u : UserInfo | null) : FillTargets {
+	const nicknameEmpty = u == null ? true : isNicknameEmpty(u.name)
+	const avatarEmpty = u == null ? true : isAvatarEmpty(u.avatar_url)
+	return {
+		nickname: nicknameEmpty && !hasPendingFieldOf(u, PROFILE_FIELD_NICKNAME),
+		avatar: avatarEmpty && !hasPendingFieldOf(u, PROFILE_FIELD_AVATAR),
+	} as FillTargets
+}
+
+/** 还有可填的一半（入口可见性判据：两半都满则隐藏） */
+export function hasFillTargetOf(u : UserInfo | null) : boolean {
+	const t = fillTargetsOf(u)
+	return t.nickname || t.avatar
+}
+
+/** 个人信息页「用微信资料完善」入口：仅微信登录可见，且仍有可填的一半 */
+export function wechatFillEntryVisibleOf(u : UserInfo | null, loginProvider : string) : boolean {
+	return loginProvider == 'wechat' && hasFillTargetOf(u)
+}
+

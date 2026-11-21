@@ -7,6 +7,7 @@
         <!-- 修改头像 -->
         <view class="cell" @click="onEditAvatar">
           <text class="cell-label">修改头像</text>
+          <text v-if="hasPendingAvatar" class="cell-badge">审核中</text>
           <view class="cell-avatar-wrap">
             <image class="cell-avatar" :src="avatarUrl.length > 0 ? avatarUrl : '/static/icons/avatar/avatar-default-worker.png'"
               mode="aspectFill" :webp="true" />
@@ -16,7 +17,7 @@
         <!-- 昵称（审核流） -->
         <view class="cell" @click="onEditNickname">
           <text class="cell-label">昵称</text>
-          <text v-if="hasPending" class="cell-badge">审核中</text>
+          <text v-if="hasPendingNickname" class="cell-badge">审核中</text>
           <text class="cell-value">{{ userName }}</text>
           <text class="cell-arrow">›</text>
         </view>
@@ -48,6 +49,15 @@
         <view class="cell" @click="onChangePassword">
           <text class="cell-label">{{ passwordTitle }}</text>
           <text class="cell-value">{{ passwordText }}</text>
+          <text class="cell-arrow">›</text>
+        </view>
+      </view>
+
+      <!-- 微信资料一键填充（#2712）：仅微信登录、且仍有可填的一半时出现 -->
+      <view v-if="showWechatFill" class="section">
+        <view class="cell" @click="onWechatFill">
+          <text class="cell-label">用微信资料完善</text>
+          <view class="cell-spacer"></view>
           <text class="cell-arrow">›</text>
         </view>
       </view>
@@ -130,8 +140,10 @@
   import { useAuthStore } from '../../stores/auth'
   import type { LoginResult } from '../../types/index'
   import InfoDialog from './components/info-dialog.uvue'
+  import { wechatFillEntryVisibleOf } from '../../utils/wechatProfileFill.uts'
   import {
-    displayNameOf, avatarUrlOf, hasPendingOf, accountTextOf, phoneTextOf,
+    displayNameOf, avatarUrlOf, hasPendingNicknameOf, hasPendingAvatarOf,
+    accountTextOf, phoneTextOf,
     emailTextOf, companyTextOf, passwordTitleOf, passwordHintOf, Countdown,
     uploadAvatarFlow, submitNicknameFlow, sendPasswordCodeFlow, submitPasswordFlow,
     sendPhoneCodeFlow, submitPhoneFlow, sendEmailCodeFlow, submitEmailFlow,
@@ -180,7 +192,10 @@
   // ===== 展示文案（纯函数在 flows，此处薄封装） =====
   const userName = computed<string>(() : string => displayNameOf(authStore.user.value))
   const avatarUrl = computed<string>(() : string => avatarUrlOf(authStore.user.value))
-  const hasPending = computed<boolean>(() : boolean => hasPendingOf(authStore.user.value))
+  const hasPendingNickname = computed<boolean>(() : boolean => hasPendingNicknameOf(authStore.user.value))
+  const hasPendingAvatar = computed<boolean>(() : boolean => hasPendingAvatarOf(authStore.user.value))
+  /** 微信资料一键填充入口（#2712）：仅微信登录、且仍有可填的一半 */
+  const showWechatFill = computed<boolean>(() : boolean => wechatFillEntryVisibleOf(authStore.user.value, authStore.loginProvider.value))
   const accountText = computed<string>(() : string => accountTextOf(authStore.user.value))
   const phoneText = computed<string>(() : string => phoneTextOf(authStore.user.value))
   const emailText = computed<string>(() : string => emailTextOf(authStore.user.value))
@@ -195,6 +210,11 @@
 
   function onBack() : void {
     goBack()
+  }
+
+  /** 微信资料一键填充（#2712）：进填写页；该页出口按页面栈回本页 */
+  function onWechatFill() : void {
+    uni.navigateTo({ url: '/pages/profile-setup/profile-setup' })
   }
 
   /** 进入页面拉最新资料 */

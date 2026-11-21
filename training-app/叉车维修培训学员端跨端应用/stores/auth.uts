@@ -236,6 +236,10 @@ function restoreFromStorage() : boolean {
     if (has_pending_change != null) {
         u.has_pending_change = has_pending_change as boolean
     }
+    const pending_fields = uObj['pending_fields']
+    if (pending_fields != null) {
+        u.pending_fields = pending_fields as Array<string>
+    }
     token.value = t
     user.value = u
     loginProvider.value = getStorage(STORAGE_KEY_LOGIN_PROVIDER)
@@ -387,6 +391,10 @@ function updateUser(patch : UpdateProfileParams) : void {
     const curPending = current.has_pending_change
     if (curPending != null) {
         updated.has_pending_change = curPending
+    }
+    const curPendingFields = current.pending_fields
+    if (curPendingFields != null) {
+        updated.pending_fields = curPendingFields
     }
     const nickname = patch.nickname
     if (nickname != null && nickname.length > 0) {

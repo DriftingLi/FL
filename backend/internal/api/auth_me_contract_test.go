@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/model"
 	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
 )
@@ -36,15 +37,15 @@ func TestAuthMeContract_ShapeUnchanged(t *testing.T) {
 	}{
 		{
 			name: "hrwai_user", role: "hrwai_user", username: "alice",
-			want: `{"code":200,"message":"success","data":{"account":"acct_alice","avatar_url":"","company":"","email":"","has_password":true,"pending_profile_change":null,"phone":"test_alice","role":"hrwai_user","uid":"{{UID}}","user_id":1,"username":"alice"}}`,
+			want: `{"code":200,"message":"success","data":{"account":"acct_alice","avatar_url":"","company":"","email":"","has_password":true,"pending_fields":[],"pending_profile_change":null,"phone":"test_alice","role":"hrwai_user","uid":"{{UID}}","user_id":1,"username":"alice"}}`,
 		},
 		{
 			name: "tutor", role: "tutor", username: "tutor1",
-			want: `{"code":200,"message":"success","data":{"account":"tutor1","name":"tutor1","role":"tutor","user_id":1,"username":"tutor1"}}`,
+			want: `{"code":200,"message":"success","data":{"account":"tutor1","name":"tutor1","pending_fields":[],"role":"tutor","user_id":1,"username":"tutor1"}}`,
 		},
 		{
 			name: "admin", role: "admin", username: "admin1",
-			want: `{"code":200,"message":"success","data":{"account":"admin1","name":"admin1","role":"admin","user_id":1,"username":"admin1"}}`,
+			want: `{"code":200,"message":"success","data":{"account":"admin1","name":"admin1","pending_fields":[],"role":"admin","user_id":1,"username":"admin1"}}`,
 		},
 	}
 
@@ -88,6 +89,70 @@ func TestAuthMeContract_ShapeUnchanged(t *testing.T) {
 				t.Errorf("响应体与契约不符\n got: %s\nwant: %s", got, want)
 			}
 		})
+	}
+}
+
+// TestAuthMeContract_PendingFields 加法字段契约（#2712）：同一用户昵称与头像各有一条待审时，
+// pending_fields 按提交顺序列出两个字段，且排在 pending_profile_change 之前；无待审时该键省略
+// （TestAuthMeContract_ShapeUnchanged 的整串断言因此保持不变）。
+func TestAuthMeContract_PendingFields(t *testing.T) {
+	t.Parallel()
+	testutil.SetTestGinMode()
+	const secret = "contract-test-secret"
+
+	db := testutil.NewMemoryDB(t)
+	u := seedStudent(t, db, "carol", "hash123")
+	now := time.Now()
+	for _, ft := range []string{model.ProfileFieldNickname, model.ProfileFieldAvatar} {
+		req := model.ProfileChangeRequest{
+			UserID:    u.ID,
+			FieldType: ft,
+			OldValue:  "old-" + ft,
+			NewValue:  "new-" + ft,
+			Status:    model.ProfileStatusPending,
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+		if err := db.Create(&req).Error; err != nil {
+			t.Fatalf("播种待审请求失败: %v", err)
+		}
+	}
+
+	cfg := &config.Config{
+		JWTSecretKey: secret,
+		AuthCookie:   config.AuthCookieConfig{Name: "hrwai_token"},
+	}
+	r := NewRouter(newContractDeps(t, db, cfg))
+
+	token, err := security.NewSession(secret, time.Hour, security.CookieConfig{}).
+		Issue(u.ID, u.Account, "hrwai_user")
+	if err != nil {
+		t.Fatalf("签发 token 失败: %v", err)
+	}
+
+	req, _ := http.NewRequest("GET", "/api/auth/me", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("期望 200, got %d: %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	// 键序：pending_fields 在 pending_profile_change 之前（结构体声明顺序即输出顺序）。
+	if !strings.Contains(body, `"pending_fields":["nickname","avatar"],"pending_profile_change":`) {
+		t.Fatalf("pending_fields 缺失或键序不符: %s", body)
+	}
+	var env struct {
+		Data struct {
+			PendingFields []string `json:"pending_fields"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
+		t.Fatalf("解析响应失败: %v", err)
+	}
+	if len(env.Data.PendingFields) != 2 || env.Data.PendingFields[0] != "nickname" || env.Data.PendingFields[1] != "avatar" {
+		t.Fatalf("pending_fields 期望 [nickname avatar], got %v", env.Data.PendingFields)
 	}
 }
 

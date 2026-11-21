@@ -16,6 +16,7 @@ export type UserInfo = {
     company ?: string            // 单位（PUT /auth/profile 直接生效）
     has_password ?: boolean      // 是否已设密码（微信注册用户可能未设）
     has_pending_change ?: boolean // 是否有待审核的资料修改（昵称/头像）
+    pending_fields ?: string[]   // 逐字段待审（#2712：值域 nickname / avatar；老后端不返回即缺省）
 }
 
 /** 登录参数 */
