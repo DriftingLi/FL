@@ -5,7 +5,8 @@
             <text class="title">完善个人资料</text>
             <text class="subtitle">选择头像和昵称，让同学们认识你</text>
         </view>
-        <view class="section">
+        <!-- 头像：仅当头像为空且无待审记录时出现（有值字段不可编辑、不提交） -->
+        <view v-if="showAvatar" class="section">
             <text class="section-label">头像</text>
             <!-- 微信登录：用 chooseAvatar 选微信头像 -->
             <button v-if="isWechat" class="avatar-btn-wechat" open-type="chooseAvatar" @chooseavatar="onChooseAvatar">
@@ -24,59 +25,76 @@
                 </view>
             </view>
         </view>
-        <view class="section">
+        <!-- 昵称：仅当昵称为空（或仍是后端占位昵称）且无待审记录时出现 -->
+        <view v-if="showNickname" class="section">
             <text class="section-label">昵称</text>
             <view class="input-wrap">
                 <input class="nickname-input" type="nickname" :value="nickName" @input="onNicknameInput" placeholder="请输入昵称" maxlength="30" />
             </view>
             <text class="input-hint">点击后键盘上方可一键填充微信昵称</text>
         </view>
+        <!-- 两半都满 / 都已有待审记录：不再提供填写位 -->
+        <view v-if="nothingToFill" class="section">
+            <text class="input-hint">资料已完善，无需再次填写</text>
+        </view>
         <view class="submit-area">
-            <view class="btn-submit" @click="onSubmit">
+            <view v-if="!nothingToFill" class="btn-submit" @click="onSubmit">
                 <text class="btn-submit-text">{{ submitting ? '提交中...' : '完成' }}</text>
             </view>
-            <text class="skip-hint" @click="onSkip">稍后完善</text>
+            <text class="skip-hint" @click="onSkip">{{ nothingToFill ? '返回' : '稍后完善' }}</text>
         </view>
     </scroll-view>
 </template>
 
 <script setup lang="uts">
     import { ref, computed } from 'vue'
+    import { onLoad } from '@dcloudio/uni-app'
     import { useSafeArea } from '../../utils/system'
     import { useAuthStore } from '../../stores/auth'
     import { uploadAvatarApi, updateProfileApi } from '../../api/auth'
+    import { fillTargetsOf, hasFillTargetOf } from '../../utils/wechatProfileFill.uts'
+    import {
+        submitStepsOf, truncateNickname, isNicknameTooLong,
+        exitTargetOf, homeFallbackUrl, submitToastOf, truncateToastOf
+    } from './composables/profile-setup-flows.uts'
+    import type { FillDraft } from './composables/profile-setup-flows.uts'
 
     const auth = useAuthStore()
     const safeArea = useSafeArea()
+    /** 来源：login = 登录后新用户（出口回 choose-cert）；其余按页面栈回退 */
+    const from = ref<string>('')
     const avatarUrl = ref<string>('')
     const avatarFilePath = ref<string>('')
     const nickName = ref<string>('')
     const submitting = ref<boolean>(false)
+    /** 重试记忆：已成功的字段不再重做（头像上传成功清临时路径，昵称成功不重提） */
+    const avatarDone = ref<boolean>(false)
+    const nicknameDone = ref<boolean>(false)
 
-    const canSubmit = computed<boolean>(() : boolean => {
-        return avatarUrl.value.length > 0 && nickName.value.trim().length > 0
-    })
+    /** 待填集合（空值判据 + 待审字段不可填，全在 flows） */
+    const showAvatar = computed<boolean>(() : boolean => fillTargetsOf(auth.user.value).avatar)
+    const showNickname = computed<boolean>(() : boolean => fillTargetsOf(auth.user.value).nickname)
+    const nothingToFill = computed<boolean>(() : boolean => !hasFillTargetOf(auth.user.value))
 
     /** 是否微信登录（决定用 chooseAvatar 还是 chooseImage） */
-    const isWechat = computed<boolean>(() : boolean => {
-        return auth.loginProvider.value == 'wechat'
+    const isWechat = computed<boolean>(() : boolean => auth.loginProvider.value == 'wechat')
+
+    onLoad((options : UTSJSONObject) => {
+        const f = options['from']
+        if (f != null) {
+            from.value = `${f}`
+        }
     })
 
     /** 微信头像选择回调（button open-type="chooseAvatar"） */
     function onChooseAvatar(e : any) : void {
-        console.log('[profile-setup] onChooseAvatar e:', JSON.stringify(e))
         const evt = e as UTSJSONObject
         const detail = evt['detail'] as UTSJSONObject
-        if (detail == null) {
-            console.log('[profile-setup] detail is null')
-            return
-        }
+        if (detail == null) return
         const url = detail['avatarUrl']
-        console.log('[profile-setup] url:', url)
         if (url != null && (url as string).length > 0) {
             avatarUrl.value = url as string
             avatarFilePath.value = url as string
-            console.log('[profile-setup] avatar set:', avatarUrl.value)
         }
     }
 
@@ -107,64 +125,87 @@
         nickName.value = val != null ? (val as string) : ''
     }
 
-    async function onSubmit() : Promise<void> {
-        console.log('[profile-setup] onSubmit clicked, avatar=', avatarUrl.value, 'nick=', nickName.value)
-        if (submitting.value) return
-        if (avatarUrl.value.length == 0) {
-            uni.showToast({ title: '请选择头像', icon: 'none' })
+    /** 失败文案：优先用接口错误 message，回退到本步默认文案 */
+    function errText(e : any, fallback : string) : string {
+        if (e instanceof Error) {
+            const m = (e as Error).message
+            if (m != null && m.length > 0) return m
+        }
+        return fallback
+    }
+
+    /** 出口：from=login 回 choose-cert；其余回上一页，回不去则首页 */
+    function leavePage() : void {
+        const target = exitTargetOf(from.value)
+        if (target.length > 0) {
+            uni.reLaunch({ url: target })
             return
         }
-        if (nickName.value.trim().length == 0) {
-            uni.showToast({ title: '请输入昵称', icon: 'none' })
+        const pages = getCurrentPages()
+        if (pages != null && pages.length > 1) {
+            uni.navigateBack()
+            return
+        }
+        uni.reLaunch({ url: homeFallbackUrl() })
+    }
+
+    async function onSubmit() : Promise<void> {
+        if (submitting.value) return
+        const draft = {
+            avatarPicked: avatarFilePath.value,
+            nicknameInput: nickName.value,
+            avatarDone: avatarDone.value,
+            nicknameDone: nicknameDone.value,
+        } as FillDraft
+        const steps = submitStepsOf(auth.user.value, draft)
+        if (!steps.uploadAvatar && !steps.submitNickname) {
+            uni.showToast({ title: '请先选择头像或填写昵称', icon: 'none' })
             return
         }
         submitting.value = true
         uni.showLoading({ title: '保存中...', mask: true })
-        try {
-            if (avatarFilePath.value.length > 0) {
-                await uploadAvatarApi(avatarFilePath.value)
-            }
-        } catch (e) {
-            console.error('[profile-setup] upload avatar failed:', e)
-            let msg = '头像上传失败'
-            if (e instanceof Error) {
-                const errObj = e as Error
-                const m = errObj.message
-                if (m != null && m.length > 0) { msg = m }
-            }
-            uni.hideLoading()
-            uni.showToast({ title: msg, icon: 'none' })
-            submitting.value = false
-            return
+        // 昵称超上限：截断后提交并提示（不阻断）
+        if (steps.submitNickname && isNicknameTooLong(nickName.value)) {
+            nickName.value = truncateNickname(nickName.value)
+            uni.showToast({ title: truncateToastOf(), icon: 'none' })
         }
-        try {
-            const trimmed = nickName.value.trim()
-            if (trimmed.length > 0) {
-                await updateProfileApi({ nickname: trimmed })
+        if (steps.uploadAvatar) {
+            try {
+                await uploadAvatarApi(avatarFilePath.value)
+                avatarDone.value = true
+                avatarFilePath.value = ''
+            } catch (e) {
+                uni.hideLoading()
+                uni.showToast({ title: errText(e, '头像上传失败'), icon: 'none' })
+                submitting.value = false
+                return
             }
-        } catch (e) {
-            console.error('[profile-setup] update nickname failed:', e)
-            let msg = '昵称保存失败'
-            if (e instanceof Error) {
-                const errObj = e as Error
-                const m = errObj.message
-                if (m != null && m.length > 0) { msg = m }
+        }
+        if (steps.submitNickname) {
+            const finalNickname = truncateNickname(nickName.value)
+            try {
+                await updateProfileApi({ nickname: finalNickname })
+                nicknameDone.value = true
+            } catch (e) {
+                uni.hideLoading()
+                uni.showToast({ title: errText(e, '昵称保存失败'), icon: 'none' })
+                submitting.value = false
+                return
             }
-            uni.hideLoading()
-            uni.showToast({ title: msg, icon: 'none' })
-            submitting.value = false
-            return
         }
         uni.hideLoading()
-        uni.showToast({ title: '资料已提交，审核通过后生效', icon: 'none', duration: 2000 })
-        auth.updateUser({ nickname: nickName.value.trim() })
-        setTimeout(() => {
-            uni.reLaunch({ url: '/pages/guide/choose-cert' })
-        }, 1500)
+        submitting.value = false
+        const toast = submitToastOf(from.value)
+        if (toast.length > 0) {
+            uni.showToast({ title: toast, icon: 'none', duration: 2000 })
+            setTimeout(() => { leavePage() }, 1500)
+            return
+        }
+        leavePage()
     }
 
     function onSkip() : void {
-        uni.reLaunch({ url: '/pages/guide/choose-cert' })
+        leavePage()
     }
 </script>
 

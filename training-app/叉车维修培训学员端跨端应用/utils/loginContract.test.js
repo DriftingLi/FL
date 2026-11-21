@@ -583,7 +583,7 @@ describe('行为保持点（票面 ②：UI 像素级不变 / 表单行为逐字
     expect(body).toContain("let msg = '登录失败，请重试'");
   });
 
-  it('成功跳转两分支：新用户选证件、老用户进首页（含延时逐字）——#1478 起出口在 utils/loginOutlet.uts', () => {
+  it('成功跳转两分支：新用户先到完善资料页、老用户进首页（含延时逐字）——#1478 起出口在 utils/loginOutlet.uts', () => {
     // 断言面从「表单 composable 内的局部函数」平移到「共享出口文件」，六处字面量逐字仍在。
     // ⚠️ 这里**刻意不用** `fnBodyOf()`：它是为「4 空格收尾的局部函数」写的，对顶层函数会在
     // `    } else {` 那行提前截断（老用户分支整块拿不到）⇒ 断言会退化成恒真的一半。共享出口是
@@ -593,15 +593,16 @@ describe('行为保持点（票面 ②：UI 像素级不变 / 表单行为逐字
     expect(form).not.toContain('function afterLoginSuccess');
     expect(outlet).toContain('export function afterLoginSuccess(isNew : boolean) : void {');
     expect(outlet).toContain("uni.showToast({ title: '已为您自动注册账号', icon: 'none', duration: 1500 })");
-    expect(outlet).toContain("uni.reLaunch({ url: '/pages/guide/choose-cert' })");
+    // #2712：新用户先到完善资料页（带 from=login），该页出口再回 choose-cert
+    expect(outlet).toContain("uni.reLaunch({ url: '/pages/profile-setup/profile-setup?from=login' })");
     expect(outlet).toContain("uni.showToast({ title: '登录成功', icon: 'success', duration: 1000 })");
     expect(outlet).toContain("uni.reLaunch({ url: '/pages/dashboard/dashboard' })");
     expect(outlet).toContain('}, 800)');
     expect(outlet).toContain('}, 500)');
     // 判别力：新出口在出口文件里**恰好一处**（多一处 = 分叉被人复制，少一处 = 票面判据 4 被破）
-    const chooseCertAt = (src) => [...src.matchAll(/\/pages\/guide\/choose-cert/g)].length;
-    expect(chooseCertAt(outlet)).toBe(1);
-    expect(chooseCertAt(outlet.replace('uni.reLaunch({ url: \'/pages/guide/choose-cert\' })', 'uni.reLaunch({ url: \'/pages/dashboard/dashboard\' })'))).toBe(0);
+    const profileSetupAt = (src) => [...src.matchAll(/\/pages\/profile-setup\/profile-setup/g)].length;
+    expect(profileSetupAt(outlet)).toBe(1);
+    expect(profileSetupAt(outlet.replace("uni.reLaunch({ url: '/pages/profile-setup/profile-setup?from=login' })", "uni.reLaunch({ url: '/pages/dashboard/dashboard' })"))).toBe(0);
   });
 
   it('主按钮文案两态与验证码提示三档逐字仍在（#1879 起微信态随模式退役）', () => {

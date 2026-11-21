@@ -92,6 +92,10 @@ func (s *Service) GetProfile(userID int, role, account string) *ProfileDTO {
 		if pending, err := s.reviewSvc.GetPendingForUser(userID); err == nil {
 			dto.PendingProfileChange = &pending
 		}
+		// 逐字段待审集合（加法字段）：同一用户昵称与头像可各有一条待审。
+		if fields, err := s.reviewSvc.GetPendingFieldsForUser(userID); err == nil && len(fields) > 0 {
+			dto.PendingFields = fields
+		}
 	case core.TutorRole:
 		var t model.Tutor
 		if err := s.db.First(&t, userID).Error; err == nil {
@@ -121,6 +125,7 @@ func (s *Service) GetProfile(userID int, role, account string) *ProfileDTO {
 // ProfileDTO /auth/me 响应体（形状由契约测试 auth_me_contract_test.go 字节级锁定，
 // 勿改 json tag 与字段声明顺序）。指针字段 + omitempty 表达「键存在/键缺失」两态；
 // PendingProfileChange 用双指针表达三态：nil=键缺失、&nil=输出 null、&对象=输出对象。
+// PendingFields（加法字段，无待审时省略该键）给移动端逐字段判「审核中」，值域 nickname / avatar。
 type ProfileDTO struct {
 	Account              string                    `json:"account"`
 	Name                 *string                   `json:"name,omitempty" extensions:"x-optional"`
@@ -128,6 +133,7 @@ type ProfileDTO struct {
 	Company              *string                   `json:"company,omitempty" extensions:"x-optional"`
 	Email                *string                   `json:"email,omitempty" extensions:"x-optional"`
 	HasPassword          *bool                     `json:"has_password,omitempty" extensions:"x-optional"`
+	PendingFields        []string                  `json:"pending_fields,omitempty" extensions:"x-optional"`
 	PendingProfileChange **ProfileChangeRequestDTO `json:"pending_profile_change,omitempty" extensions:"x-optional,x-nullable"`
 	Phone                *string                   `json:"phone,omitempty" extensions:"x-optional"`
 	Role                 string                    `json:"role"`

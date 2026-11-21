@@ -9,7 +9,8 @@
  *   I1 **未勾选协议 ⇒ 请求层零调用**（AC 3）。`uni.showToast` 出现不等于拦住：只有
  *      `loginByWechat` 计数为 0、`showLoading` 计数为 0 才算拦住。
  *   I2 **两入口一条成功出口**（AC 4）。着陆页成功后把 `isNew` 原样交给**真的**
- *      `utils/loginOutlet.afterLoginSuccess`；新用户必须排程 `choose-cert`、老用户 `dashboard`，
+ *      `utils/loginOutlet.afterLoginSuccess`；新用户必须排程 `profile-setup?from=login`（#2712 起，
+ *      该页出口再回 `choose-cert`）、老用户 `dashboard`，
  *      且**延后**（执行当场不得出现 reLaunch）。
  *   I3 **失败不得静默**（AC 5）。`errorHint` 必须被写成人类可读原因（含 Error.message 透传、
  *      空 message 走兜底文案两条路径），`hideLoading` 必须发生，成功链路不得被触发。
@@ -59,6 +60,8 @@ const MSG_NEW_USER = '已为您自动注册账号';
 const MSG_OK = '登录成功';
 const MSG_FALLBACK = '登录失败，请重试';
 const CHOOSE_CERT = '/pages/guide/choose-cert';
+/** #2712：新用户先到完善资料页（带 from=login），该页出口再回 choose-cert */
+const PROFILE_SETUP = '/pages/profile-setup/profile-setup?from=login';
 const DASHBOARD = '/pages/dashboard/dashboard';
 const NO_SUPPORT = '当前客户端不支持微信登录';
 /** 入口展示但链路未接通时的单点文案（真源 = `composables/useLoginProviders.WECHAT_NOT_WIRED_NOTICE`） */
@@ -431,14 +434,14 @@ describe('D. 成功出口端到端：着陆页 → 真 loginOutlet → 分叉落
     expect(app.log.toast).toEqual([{ title: MSG_OK, icon: 'success', duration: 1000 }]);
   });
 
-  test('D2 新用户：出口排程 800ms 后 reLaunch 到 choose-cert（票面判据 4 硬约束）', async () => {
+  test('D2 新用户：出口排程 800ms 后 reLaunch 到完善资料页（#2712；最终仍落 choose-cert）', async () => {
     const app = landingApp({ outlet: true, wechatImpl: () => Promise.resolve({ isNew: true }) });
     app.face.agreed.value = true;
     await app.face.onWechatLogin();
     expect(app.log.toast).toEqual([{ title: MSG_NEW_USER, icon: 'none', duration: 1500 }]);
     expect(app.timer.pending.map((t) => t.ms)).toEqual([800]);
     app.timer.flush();
-    expect(app.log.reLaunch).toEqual([CHOOSE_CERT]);
+    expect(app.log.reLaunch).toEqual([PROFILE_SETUP]);
   });
 
   test('D3 着陆页不持有第二套落地逻辑：一次成功只产出**恰一条**排程 + **恰一条** reLaunch', async () => {
@@ -449,7 +452,7 @@ describe('D. 成功出口端到端：着陆页 → 真 loginOutlet → 分叉落
       expect(app.timer.pending.length).toBe(1);
       app.timer.flush();
       expect(app.log.reLaunch.length).toBe(1);
-      expect([isNew, app.log.reLaunch]).toEqual([isNew, [isNew ? CHOOSE_CERT : DASHBOARD]]);
+      expect([isNew, app.log.reLaunch]).toEqual([isNew, [isNew ? PROFILE_SETUP : DASHBOARD]]);
     }
   });
 
@@ -550,7 +553,7 @@ describe('F. 注入变异：每一种改坏形态都必须被上面同一条判�
     expect(landingSrc().split(REQUEST_LINE).length - 1).toBe(1);
     expect(landingSrc().split('        showAgreementNotice(name)').length - 1).toBe(1);
     expect(noticeSrc().split(`const AGREEMENT_NOTICE_SUFFIX = '${NOTICE_SUFFIX}'`).length - 1).toBe(1);
-    expect(outletSrc().split(`uni.reLaunch({ url: '${CHOOSE_CERT}' })`).length - 1).toBe(1);
+    expect(outletSrc().split(`uni.reLaunch({ url: '${PROFILE_SETUP}' })`).length - 1).toBe(1);
     expect(probeSrc().split('const onMpWeixin = platform == PLATFORM_MP_WEIXIN').length - 1).toBe(1);
     expect(probeSrc().split(SHOW_LINE).length - 1).toBe(1);
     expect(probeSrc().split(READY_LINE).length - 1).toBe(1);
@@ -595,12 +598,12 @@ describe('F. 注入变异：每一种改坏形态都必须被上面同一条判�
 
   test('F4 出口把新用户分支改成直进 dashboard ⇒ 新用户丢认证引导（D2 的成因）', async () => {
     const broken = mutate(OUTLET_REL,
-      `uni.reLaunch({ url: '${CHOOSE_CERT}' })`,
+      `uni.reLaunch({ url: '${PROFILE_SETUP}' })`,
       `uni.reLaunch({ url: '${DASHBOARD}' })`);
     const app = outletApp({ source: broken });
     app.afterLoginSuccess(true);
     app.timer.flush();
-    expect(app.log.reLaunch).toEqual([DASHBOARD]); // 与 D2 断言的 CHOOSE_CERT 相反 ⇒ D2 必红
+    expect(app.log.reLaunch).toEqual([DASHBOARD]); // 与 D2 断言的 PROFILE_SETUP 相反 ⇒ D2 必红
   });
 
   test('F5 出口去掉延时（当场跳转）⇒ 成功 toast 被 reLaunch 打断（D1「当场不得跳转」的成因）', () => {

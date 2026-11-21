@@ -574,8 +574,12 @@ const MODULES = {
 
   'profile-setup': {
     extraDirs: [],
-    files: ['pages/profile-setup/profile-setup.uvue'],
-    extractDirs: [],
+    files: [
+      // #2712：纯逻辑 composable（空值判据 / 待填集合 / 重试记忆 / 返回栈 / 昵称截断）
+      'pages/profile-setup/composables/profile-setup-flows.uts',
+      'pages/profile-setup/profile-setup.uvue',
+    ],
+    extractDirs: ['pages/profile-setup/composables'],
     crossModuleConsumers: [],
     budget: BUDGET,
     budgetOverrides: {},

@@ -103,11 +103,15 @@ describe('flows 纯函数契约（状态所有权留在页面）', () => {
   });
 
   it('展示文案纯函数唯一定义点在 flows，页面 computed 全部委托（无第二实现）', () => {
-    for (const fn of ['displayNameOf', 'avatarUrlOf', 'hasPendingOf', 'accountTextOf', 'phoneTextOf',
-      'emailTextOf', 'companyTextOf', 'passwordTitleOf', 'passwordHintOf']) {
+    for (const fn of ['displayNameOf', 'avatarUrlOf', 'hasPendingNicknameOf', 'hasPendingAvatarOf',
+      'accountTextOf', 'phoneTextOf', 'emailTextOf', 'companyTextOf', 'passwordTitleOf', 'passwordHintOf']) {
       expect(flows()).toContain(`export function ${fn}(`);
       expect(read(PAGE)).toContain(`${fn}(authStore.user.value)`);
     }
+    // #2712：入口可见性判据唯一定义在跨切面共享件（填写页与个人信息页同源，页面只传 loginProvider）
+    expect(read('utils/wechatProfileFill.uts')).toContain('export function wechatFillEntryVisibleOf(');
+    expect(flows()).not.toContain('export function wechatFillEntryVisibleOf(');
+    expect(read(PAGE)).toContain('wechatFillEntryVisibleOf(authStore.user.value, authStore.loginProvider.value)');
   });
 
   it('页面对已搬走符号零悬空使用（编译盲区锁：定义删了调用必须同步）', () => {
@@ -132,7 +136,10 @@ describe('UI 像素结构锁定（重构不动 UI：cells 与弹窗内控件逐�
       expect(p).toContain(`>${t}<`);
     }
     expect(p).toContain('cell-label-danger">注销账号<');
-    expect(p).toContain('<text v-if="hasPending" class="cell-badge">审核中</text>');
+    // #2712：徽标按字段挂（头像 / 昵称各一处），不再共用一个 hasPending
+    expect(p).toContain('<text v-if="hasPendingNickname" class="cell-badge">审核中</text>');
+    expect(p).toContain('<text v-if="hasPendingAvatar" class="cell-badge">审核中</text>');
+    expect(p).not.toContain('v-if="hasPending"');
   });
 
   it('弹窗内控件形态不变：验证码按钮 ×4、提示行 ×3、确认文案（提交审核/确认/保存）', () => {

@@ -376,9 +376,10 @@ describe('AC 4 成功出口唯一（着陆页不持有第二套跳转；两页�
     expect(read(LANDING)).not.toMatch(/^\s*function afterLoginSuccess/m);
   });
 
-  it('出口两条分支的文本面仍在（新用户 choose-cert / 老用户 dashboard；行为面在 landingLoginBehavior）', () => {
+  it('出口两条分支的文本面仍在（新用户 profile-setup?from=login / 老用户 dashboard；行为面在 landingLoginBehavior）', () => {
     const outlet = stripJs(read(OUTLET));
-    expect(outlet).toContain("uni.reLaunch({ url: '/pages/guide/choose-cert' })");
+    // #2712：新用户先到完善资料页（带 from=login），该页出口再回 choose-cert
+    expect(outlet).toContain("uni.reLaunch({ url: '/pages/profile-setup/profile-setup?from=login' })");
     expect(outlet).toContain(`uni.reLaunch({ url: '${DASHBOARD}' })`);
     expect(count(outlet, 'uni.reLaunch(')).toBe(2);
   });
@@ -390,7 +391,7 @@ describe('AC 4 成功出口唯一（着陆页不持有第二套跳转；两页�
     expect(outletFacts(redefined).define).toEqual([OUTLET, LANDING]);
     const jumped = [[OUTLET, read(OUTLET)], [LANDING, `${read(LANDING)}\n    uni.reLaunch({ url: '${DASHBOARD}' })\n`]];
     expect(outletFacts(jumped).landingJump).toEqual([LANDING]);
-    const gutted = read(OUTLET).replace("uni.reLaunch({ url: '/pages/guide/choose-cert' })", 'void 0');
+    const gutted = read(OUTLET).replace("uni.reLaunch({ url: '/pages/profile-setup/profile-setup?from=login' })", 'void 0');
     expect(count(stripJs(gutted), 'uni.reLaunch(')).toBe(1);
     expect(outletFacts(sources)).toEqual(facts);
   });

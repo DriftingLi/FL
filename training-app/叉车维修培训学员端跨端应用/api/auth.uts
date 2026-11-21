@@ -100,6 +100,11 @@ function buildUserInfo(obj : UTSJSONObject) : UserInfo {
 		}
 		// pending_profile_change 非空即存在待审核的资料修改（昵称/头像）
 		user.has_pending_change = obj['pending_profile_change'] != null
+		// pending_fields：逐字段待审（#2712 加法字段，值域 nickname / avatar）；老后端不返回该键 ⇒ 不设置
+		const pendingFieldsRaw = obj['pending_fields']
+		if (pendingFieldsRaw != null) {
+			user.pending_fields = pendingFieldsRaw as Array<string>
+		}
 		return user
 	} catch (e) {
 		// 打印完整异常对象，便于定位是哪个字段转换失败
