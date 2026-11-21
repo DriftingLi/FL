@@ -83,7 +83,7 @@ export interface ProfileDTO {
   email?: string
   has_password?: boolean
   name?: string
-  pending_fields?: string[]
+  pending_fields: string[]
   pending_profile_change?: ProfileChangeRequestDTO | null
   phone?: string
   role: string
