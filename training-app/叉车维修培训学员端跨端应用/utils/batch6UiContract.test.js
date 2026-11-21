@@ -166,9 +166,9 @@ describe('批6 N06 专项（#1592：页面自绘、自垫状态栏走唯一真�
     }
   });
 
-  it('index 着陆页「已登录冷启动落 dashboard」不变量未被本批动到（#1478，判据 1）', () => {
+  it('index 着陆页「已登录冷启动按身份落地」不变量未被本批动到（#1478 判据 1，落点收口到共享出口）', () => {
     const s = read('pages/index/index.uvue');
-    expect(s).toMatch(/if \(auth\.isLoggedIn\.value\)[\s\S]*?uni\.reLaunch\(\{[\s\S]*?\/pages\/dashboard\/dashboard/);
+    expect(s).toMatch(/if \(auth\.isLoggedIn\.value\)[\s\S]*?uni\.reLaunch\(\{[\s\S]*?landingPathForActiveRole\(\)/);
   });
 
   it('search 顶部行右端「取消」受 capsuleLeft 约束：右 padding = 750 − capsuleLeft + 24（#1845）', () => {

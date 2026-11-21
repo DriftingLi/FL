@@ -155,6 +155,7 @@
     import { useLoginForm } from './composables/useLoginForm'
     import { useBiometricGate } from './composables/useBiometricGate'
     import { useSafeArea } from '../../utils/system'
+    import { landingPathForActiveRole } from '../../utils/loginOutlet'
     import LoginAgreement from '../../components/login-agreement/login-agreement.uvue'
 
     const auth = useAuthStore()
@@ -212,7 +213,8 @@
     onLoad((options : OnLoadOptions) => {
         auth.restoreFromStorage()
         if (auth.isLoggedIn.value) {
-            uni.reLaunch({ url: '/pages/dashboard/dashboard' })
+            // 与会话身份一致（ADR-0022 ②）：招聘者会话回招聘工作区，学员回学员首页
+            uni.reLaunch({ url: landingPathForActiveRole() })
             return
         }
         // 图形验证码改为延迟加载：点「获取验证码」展开人机验证行时才拉图（#2517）

@@ -160,7 +160,7 @@ function landingApp(opts) {
   const { uni, log } = makeUni();
   const timer = captureTimer();
   const calls = { loginByWechat: 0, afterLoginSuccess: [] };
-  const outletBindings = { uni, setTimeout: timer.setTimeout };
+  const outletBindings = { uni, setTimeout: timer.setTimeout, isRecruiterActive: () => false };
   const outlet = loadUts(OUTLET_UTS, outletBindings);
   const notice = o.notice
     ? o.notice
@@ -196,7 +196,7 @@ function outletApp(opts) {
   const o = opts || {};
   const { uni, log } = makeUni();
   const timer = captureTimer();
-  const bindings = { uni, setTimeout: timer.setTimeout };
+  const bindings = { uni, setTimeout: timer.setTimeout, isRecruiterActive: () => false };
   const mod = o.source == null
     ? loadUts(OUTLET_UTS, bindings)
     : loadFromSource(o.source, 'loginOutlet.uts', bindings);

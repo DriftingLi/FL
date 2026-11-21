@@ -68,6 +68,7 @@
     import { useLandingLogin } from './composables/useLandingLogin'
     import { useLandingSplash } from './composables/useLandingSplash'
     import { useSafeArea } from '../../utils/system'
+    import { landingPathForActiveRole } from '../../utils/loginOutlet'
     import LoginAgreement from '../../components/login-agreement/login-agreement.uvue'
 
     const auth = useAuthStore()
@@ -97,11 +98,11 @@
         const restored = auth.restoreFromStorage()
         console.log('[welcome] restored=', restored, 'isLoggedIn=', auth.isLoggedIn.value)
         if (auth.isLoggedIn.value) {
-            console.log('[welcome] redirect to dashboard')
+            // 按身份落地（ADR-0022 ②）：招聘者会话不得被送进学员首页，否则学员能力端点全部 403
             uni.reLaunch({
-                url: '/pages/dashboard/dashboard',
+                url: landingPathForActiveRole(),
                 fail: (err) => {
-                    console.error('[welcome] reLaunch to dashboard failed:', err)
+                    console.error('[welcome] reLaunch failed:', err)
                 }
             })
         } else {
