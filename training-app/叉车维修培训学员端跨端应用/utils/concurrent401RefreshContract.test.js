@@ -120,8 +120,12 @@ describe('C2 登出只由真实失败触发', () => {
     // 1 次定义（`function handleUnauthorized()` 也匹配到这里）+ 1 次 expireSession 里的调用
     expect(callers).toBe(2);
     expect(fnBody(requestSrc, 'expireSession')).toContain('handleUnauthorized()');
-    // 三条出口的终态都汇到 expireSession：logoutAndReject 只是「终态 + reject」的薄壳
-    expect(fnBody(requestSrc, 'logoutAndReject')).toContain('expireSession(silent)');
+    // 三条出口的终态都汇到 expireFor → expireSession：logoutAndReject 只是「终态 + reject」的薄壳
+    expect(fnBody(requestSrc, 'logoutAndReject')).toContain('expireFor(forToken, silent)');
+    expect(fnBody(requestSrc, 'expireFor')).toContain('expireSession(silent)');
+    // 只有「当前会话」的 401 才允许走到过期终态（退出/重登后的迟到 401 只静默失败）
+    expect(fnBody(requestSrc, 'expireFor')).toContain('if (!isCurrentSession(forToken)) {');
+    expect(fnBody(requestSrc, 'isCurrentSession')).toContain('getStorage(STORAGE_KEY_TOKEN) == forToken');
     // 全文件只许有一次 reLaunch（跳转出口的机械判据，避免「语义上算同一处」的口头约定）
     expect((requestSrc.match(/uni\.reLaunch\(/g) || []).length).toBe(1);
   });
@@ -131,7 +135,7 @@ describe('C7 三条 401 出口共用同一份续期决策（#1704）', () => {
   test('renewOrExpire 是唯一决策点：allowRetry=false 直接终态，成功判据只有一条', () => {
     const body = fnBody(requestSrc, 'renewOrExpire');
     expect(body).toContain('if (!allowRetry) {');
-    expect(body).toContain('expireSession(silent)');
+    expect(body).toContain('expireFor(forToken, silent)');
     expect(body).toContain('if (refreshed && getStorage(STORAGE_KEY_TOKEN).length > 0) return true');
     // 对外可复用（SSE 侧也在用），因此必须是 export
     expect(requestSrc).toMatch(/export\s+function\s+renewOrExpire\s*\(/);

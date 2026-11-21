@@ -10,7 +10,7 @@
  *
  * | AC | 这里锁什么 | 锁不住什么（归谁） |
  * |---|---|---|
- * | 1 已登录冷启动直达 dashboard | `onLoad` 里那条 `if (auth.isLoggedIn.value)` 守卫 + 块内**唯一**一条 `uni.reLaunch` 指向 dashboard，且守卫块内**零**嵌套条件 | — |
+ * | 1 已登录冷启动按身份落地 | `onLoad` 里那条 `if (auth.isLoggedIn.value)` 守卫 + 块内**唯一**一条 `uni.reLaunch` 走共享落点 `landingPathForActiveRole()`（招聘者→工作区 / 学员→首页），且守卫块内**零**嵌套条件 | 分流结论 = behavior 套件 `sessionRoleExpiryBehavior` E2b |
  * | 2 分端出主 CTA | **结构事实**：主 CTA 带 `v-if="wechatAvailable"`（**展示面**：App 与小程序一律展示 —— 2026-10-03 维护者口径「移动端也展示，有个样式即可」）、次级入口**不受探测门禁**（探测不可用仍在）；**接通面** `wechatLoginReady` 单独门禁点击链（App 端 = 友好提示、零请求） | 「App 端**不露出**『一键』二字」**已作废**（2026-10-03 ①a 真机判红后维护者改口径：App 端**允许**展示该入口，只要求点击不空转）⇒ 该断言及其反向断言都不在此写，运行期渲染事实归真机门 |
  * | 3 未勾选协议拦在请求之前 | 拦截文案与登录页**同一字面量** + 源码顺序（拦截 return 早于 `loginByWechat()`） | 「真的零请求」由 behavior 套件按桩计数断言 |
  * | 4 两入口一条成功出口 | 着陆页 composable **零** `reLaunch`、`afterLoginSuccess` 定义全仓**唯一**、新用户 toast 全仓**唯一** | 出口两条分支的行为 = behavior 套件真跑 |
@@ -122,9 +122,11 @@ function navUrls(code) {
 }
 
 const COLDSTART_GUARD = 'if (auth.isLoggedIn.value) {';
+/** 落地路由的**唯一真源**：共享出口按身份分流（招聘者 → 工作区，学员 → 首页），页面不得写死落点 */
+const LANDING_EDGE = 'landingPathForActiveRole()';
 const DASHBOARD = '/pages/dashboard/dashboard';
 
-/** 判据本体：守卫在位、块内只有一条 reLaunch 且指向 dashboard、块内零嵌套条件/短路 */
+/** 判据本体：守卫在位、块内只有一条 reLaunch 且走共享落点、块内零嵌套条件/短路 */
 function coldStartFacts(src) {
   const code = stripAll(src);
   const body = braceBlock(code, COLDSTART_GUARD);
@@ -133,7 +135,8 @@ function coldStartFacts(src) {
   return {
     guardCount: count(code, COLDSTART_GUARD),
     blockFound: body !== null,
-    relaunchTargets: body === null ? [] : [...body.matchAll(/uni\.reLaunch\(\{[\s\S]*?url: '([^']+)'/g)].map((m) => m[1]),
+    relaunchTargets: body === null ? [] : [...body.matchAll(/url: (?:'([^']+)'|(landingPathForActiveRole\(\)))/g)]
+      .map((m) => (m[2] ? m[2] : m[1])),
     // 「不得条件化」= 守卫块内部不得再出现 if / else / && / || / 三元
     nestedConditions: body === null ? -1 : (body.match(/\bif\s*\(|\belse\b|&&|\|\||\?/g) || []).length,
     pageReLaunchTotal: (code.match(/uni\.reLaunch\(/g) || []).length,
@@ -142,14 +145,23 @@ function coldStartFacts(src) {
   };
 }
 
-describe('AC 1 已登录冷启动仍直达 dashboard（全应用唯一落地路由，不得删改/条件化）', () => {
+describe('AC 1 已登录冷启动按身份落地（全应用唯一落点，不得写死/条件化）', () => {
   const facts = coldStartFacts(read(PAGE));
 
-  it('守卫在位且唯一，块内恰一条 reLaunch 指向 dashboard', () => {
+  it('守卫在位且唯一，块内恰一条 reLaunch 走共享落点', () => {
     expect(facts.guardCount).toBe(1);
     expect(facts.blockFound).toBe(true);
-    expect(facts.relaunchTargets).toEqual([DASHBOARD]);
+    expect(facts.relaunchTargets).toEqual([LANDING_EDGE]);
     expect(facts.pageReLaunchTotal).toBe(1);
+  });
+
+  it('落点真源：共享出口按身份二分（招聘者→工作区 / 其余→学员首页）', () => {
+    const outlet = stripAll(read(OUTLET));
+    expect(outlet).toContain('export function landingPathForActiveRole() : string {');
+    expect(outlet).toContain("if (isRecruiterActive()) return '/pages/recruiter/home'");
+    expect(outlet).toContain("return '/pages/dashboard/dashboard'");
+    // 登录页的「已登录即跳转」必须共用同一条判据（否则招聘者会话会从登录页二次进入学员端）
+    expect(stripAll(read(LOGIN_PAGE))).toContain('url: landingPathForActiveRole()');
   });
 
   it('未被条件化：守卫块内零嵌套条件/短路；守卫在 onLoad 内、且排在 restoreFromStorage 之后', () => {
@@ -158,14 +170,17 @@ describe('AC 1 已登录冷启动仍直达 dashboard（全应用唯一落地路�
     expect(facts.restoreBeforeGuard).toBe(true);
   });
 
-  it('判别力：删守卫 / 包一层条件 / 换落点 / 加第二条 reLaunch，四种改坏都被同一条判据抓到', () => {
+  it('判别力：删守卫 / 包一层条件 / 写死落点 / 加第二条 reLaunch，四种改坏都被同一条判据抓到', () => {
     const src = read(PAGE);
     const deleted = src.replace(`        ${COLDSTART_GUARD}`, '        if (false) {');
     expect(coldStartFacts(deleted).guardCount).toBe(0);
     const conditioned = src.replace(COLDSTART_GUARD, 'if (auth.isLoggedIn.value && isFirstRun) {');
     expect(coldStartFacts(conditioned).guardCount).toBe(0);
-    const retargeted = src.replace(`url: '${DASHBOARD}'`, "url: '/pages/login/login'");
+    const retargeted = src.replace(`url: ${LANDING_EDGE}`, "url: '/pages/login/login'");
     expect(coldStartFacts(retargeted).relaunchTargets).toEqual(['/pages/login/login']);
+    // 绕过共享出口、写死学员首页：正是「招聘者会话被送进学员端 ⇒ 权限不足」的复发形态
+    const hardcoded = src.replace(`url: ${LANDING_EDGE}`, `url: '${DASHBOARD}'`);
+    expect(coldStartFacts(hardcoded).relaunchTargets).toEqual([DASHBOARD]);
     const doubled = src.replace(COLDSTART_GUARD, `${COLDSTART_GUARD}\n            uni.reLaunch({ url: '/pages/login/login' })`);
     expect(coldStartFacts(doubled).pageReLaunchTotal).toBe(2);
     // 对照组：真源跑同一条判据必须全绿（防判据恒真）

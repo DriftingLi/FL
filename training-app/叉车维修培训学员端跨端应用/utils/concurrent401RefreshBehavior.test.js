@@ -155,6 +155,7 @@ function buildApp(opts) {
     STORAGE_KEY_USER: KEY_USER,
     STORAGE_KEY_LOGIN_PROVIDER: KEY_PROVIDER,
     STORAGE_KEY_CREDENTIALS: KEY_CREDENTIALS,
+    ACTIVE_ROLE_STUDENT: ROLE_STUDENT,
     ACTIVE_ROLE_RECRUITER: ROLE_RECRUITER,
     uni,
   });
@@ -572,7 +573,7 @@ describe('#1194 收口：招聘者登录页的离开路径', () => {
     expect(src).not.toContain('function goBack');
   });
 
-  test('R5: 出口清槽之后，后续 401 落回学员登录页（不再弹回招聘者登录页）', async () => {
+  test('R5: 出口清槽之后，旧会话的 401 既不弹回招聘者登录页，也不再误报「登录已过期」', async () => {
     const app = buildApp({ refreshOk: true });
     await app.store.loginAsRecruiter({ username: 'hr001', password: 'pass1234' });
     expect(app.authRole.isRecruiterActive()).toBe(true);
@@ -587,14 +588,16 @@ describe('#1194 收口：招聘者登录页的离开路径', () => {
     // 出口顺手清掉招聘者凭据（这正是清槽函数而非「只跳转」的理由）
     expect(app.storage.getStorage(KEY_TOKEN)).toBe('');
 
-    // 学员登录页之后的第一次 401：必须落回**学员**登录页
+    // 旧会话的第一次 401（用户已在学员登录页，会话是被**主动结束**的）：
+    // 不得弹回招聘者登录页；也不得再弹「登录已过期」——那是给「登录态过期」的提示，
+    // 而这里压根没有登录态（与 sessionRoleExpiryBehavior 的 E1a/E1b 同一条判据）。
     const p = app.request.get('/auth/me');
     app.stormAll();
     await expect(p).rejects.toThrow('登录已过期');
     await sleep(30);
 
-    expect(app.uni.relaunches.length).toBe(1);
-    expect(app.uni.relaunches[0].url).toBe('/pages/login/login');
+    expect(app.uni.relaunches.length).toBe(0);
+    expect(app.uni.toasts.filter((t) => String(t.title).indexOf('登录已过期') >= 0).length).toBe(0);
   });
 
   test('R7（判别力对照）: 出口**只跳转不清槽**时，下一次 401 会把人弹回招聘者登录页', async () => {

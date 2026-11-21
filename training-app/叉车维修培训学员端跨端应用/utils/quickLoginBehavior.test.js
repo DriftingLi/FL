@@ -54,6 +54,7 @@ function buildStore(loginApiImpl) {
     STORAGE_KEY_USER: KEY_USER,
     STORAGE_KEY_LOGIN_PROVIDER: KEY_PROVIDER,
     STORAGE_KEY_CREDENTIALS: 'auth_secure_credentials',
+    ACTIVE_ROLE_STUDENT: 'student',
     ACTIVE_ROLE_RECRUITER: 'recruiter',
   });
   return { store: mod.useAuthStore(), writes, updateSecureTokenCalls };

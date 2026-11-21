@@ -631,7 +631,8 @@ describe('行为保持点（票面 ②：UI 像素级不变 / 表单行为逐字
     const script = pageScript();
     expect(script).toContain('auth.restoreFromStorage()');
     expect(script).toContain('if (auth.isLoggedIn.value)');
-    expect(script).toContain("uni.reLaunch({ url: '/pages/dashboard/dashboard' })");
+    // 已登录门控的落地必须走身份分流（招聘者会话不得从登录页被二次送进学员端）
+    expect(script).toContain('uni.reLaunch({ url: landingPathForActiveRole() })');
     expect(script).toContain('const safeArea = useSafeArea()');
     expect(script).not.toContain('getSystemInfoSync');
     expect(script).toContain('initBiometricGate()');

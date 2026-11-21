@@ -152,9 +152,25 @@ function expireSession(silent : boolean) : Error {
     return new Error(AUTH_EXPIRED_MESSAGE)
 }
 
+/** 发出去的 token 是否仍属当前会话（空 = 发请求时无凭据；不一致 = 已退出/已重登，均非过期） */
+function isCurrentSession(forToken : string) : boolean {
+    if (forToken.length == 0) return false
+    return getStorage(STORAGE_KEY_TOKEN) == forToken
+}
+
+/** 401 终态前置判定：只对当前会话执行 expireSession；旧会话的迟到 401 静默失败并留痕 */
+function expireFor(forToken : string, silent : boolean) : Error {
+    if (!isCurrentSession(forToken)) {
+        console.warn('[auth] 忽略非当前会话的 401 forTokenLen=', forToken.length, 'currentTokenLen=', getStorage(STORAGE_KEY_TOKEN).length)
+        return new Error(AUTH_EXPIRED_MESSAGE)
+    }
+    console.warn('[auth] 当前会话续期失败，清理登录态并跳转登录页')
+    return expireSession(silent)
+}
+
 /** 401 终态：清空登录态并 reject（无法恢复或重试仍 401 时走这里） */
-function logoutAndReject(silent : boolean, reject : (e : Error) => void) {
-    reject(expireSession(silent))
+function logoutAndReject(forToken : string, silent : boolean, reject : (e : Error) => void) {
+    reject(expireFor(forToken, silent))
 }
 
 /** 全局 token 刷新回调（由 auth store 注册，避免循环依赖） */
@@ -206,14 +222,14 @@ function tryAutoRefresh(forToken : string) : Promise<boolean> {
  */
 export function renewOrExpire(forToken : string, allowRetry : boolean, silent : boolean) : Promise<boolean> {
     if (!allowRetry) {
-        expireSession(silent)
+        expireFor(forToken, silent)
         return Promise.resolve(false)
     }
     // 注意：`false` 只代表刷新**真的**失败（并发者共享同一次在飞刷新，见 tryAutoRefresh）
     return tryAutoRefresh(forToken).then((refreshed : boolean) : boolean => {
         // 刷新成功了但 token 槽是空的 ⇒ 视为失败（曾出现「刷成功却没人把 token 写回去」）
         if (refreshed && getStorage(STORAGE_KEY_TOKEN).length > 0) return true
-        expireSession(silent)
+        expireFor(forToken, silent)
         return false
     })
 }
@@ -341,7 +357,7 @@ function doSingleRequest(
 
             // HTTP 401：刷新接口自身 401、重试后仍 401、或无刷新回调 → 直接登出（不再尝试续期）
             if (isRetry || options.url.includes('/auth/refresh') || _refreshTokenHandler == null) {
-                logoutAndReject(silent, reject)
+                logoutAndReject(sentTokenOf(reqHeader), silent, reject)
                 return
             }
             // 401 自动刷新：刷新成功后带新 token 重试一次（规则单点在 renewOrExpire）
@@ -531,7 +547,7 @@ function doUpload(
                 // 401 不「见就登出」：先续期，成功则带新 token 重发一次（#1704，规则单点在 renewOrExpire）
                 if (isRetry) {
                     done()
-                    logoutAndReject(silent, reject)
+                    logoutAndReject(sentTokenOf(header), silent, reject)
                     return
                 }
                 renewOrExpire(sentTokenOf(header), true, silent).then((retried : boolean) => {
