@@ -1,0 +1,351 @@
+/**
+ * 验收结果提交页的状态层（#2743）
+ *
+ * 承担票面要求 2 / 3 / 5：
+ * - 逐项确认（`setResult`）
+ * - 凭证上传（图片 / 文件，`onAddProof` 弹系统动作表分流）
+ * - 备注（`setRemark`，不通过 / 待整改必填）
+ * - 提交前校验（口径单点在 `utils/acceptanceForm.acceptanceValidate`）
+ * - 防重复提交（`submitting` 闸门 + mock 侧对已提交单据再拒一次）
+ *
+ * 数组更新一律「造新数组再赋值」：uvue 原生端对深改嵌套对象的响应式不可靠，
+ * 先例见 useForumImagePicker.onRemoveImage。
+ */
+import { ref, computed } from 'vue'
+import type { Ref, ComputedRef } from 'vue'
+import { getAcceptanceDetailApi, submitAcceptanceApi, uploadAcceptanceProofApi } from '../../../api/acceptance'
+import {
+	ACCEPTANCE_PROOFS_MAX,
+	ACCEPTANCE_REMARK_MAX,
+	ACCEPTANCE_RESULT_OPTIONS,
+	acceptanceProgressText,
+	acceptanceValidate,
+} from '../../../utils/acceptanceForm'
+import type { AcceptanceResultOption } from '../../../utils/acceptanceForm'
+import type { AcceptanceItem, AcceptanceProof, AcceptanceSubmitItem, AcceptanceTask } from '../../../types/index'
+
+export type UseAcceptanceSubmitResult = {
+	task : Ref<AcceptanceTask | null>
+	items : Ref<AcceptanceItem[]>
+	options : AcceptanceResultOption[]
+	remarkMax : number
+	proofsMax : number
+	loading : Ref<boolean>
+	failed : Ref<boolean>
+	submitting : Ref<boolean>
+	uploadingItemId : Ref<number>
+	hasTask : ComputedRef<boolean>
+	headerTitle : ComputedRef<string>
+	headerCode : ComputedRef<string>
+	progressLabel : ComputedRef<string>
+	load : (id : number) => Promise<void>
+	reload : () => void
+	setResult : (itemId : number, result : string) => void
+	setRemark : (itemId : number, remark : string) => void
+	onAddProof : (itemId : number) => void
+	onRemoveProof : (itemId : number, index : number) => void
+	onPreviewProof : (itemId : number, index : number) => void
+	onSubmit : () => Promise<boolean>
+}
+
+export function useAcceptanceSubmit() : UseAcceptanceSubmitResult {
+	const task = ref<AcceptanceTask | null>(null)
+	const items = ref<AcceptanceItem[]>([])
+	const loading = ref<boolean>(false)
+	const failed = ref<boolean>(false)
+	const submitting = ref<boolean>(false)
+	const uploadingItemId = ref<number>(0)
+	const taskId = ref<number>(0)
+
+	const hasTask = computed<boolean>(() : boolean => {
+		const t = task.value
+		return t != null
+	})
+
+	const headerTitle = computed<string>(() : string => {
+		const t = task.value
+		if (t == null) return ''
+		return t.title
+	})
+
+	const headerCode = computed<string>(() : string => {
+		const t = task.value
+		if (t == null) return ''
+		return '单号 ' + t.code + ' · 截止 ' + t.deadline
+	})
+
+	const progressLabel = computed<string>(() : string => {
+		return acceptanceProgressText(items.value)
+	})
+
+	function findItem(itemId : number) : AcceptanceItem | null {
+		for (let i = 0; i < items.value.length; i++) {
+			if (items.value[i].id == itemId) return items.value[i]
+		}
+		return null
+	}
+
+	/** 用新数组替换一项（保持其余项原样） */
+	function replaceItem(itemId : number, result : string, remark : string, proofs : AcceptanceProof[]) : void {
+		const next : AcceptanceItem[] = []
+		for (let i = 0; i < items.value.length; i++) {
+			const it = items.value[i]
+			if (it.id == itemId) {
+				next.push({
+					id: it.id,
+					name: it.name,
+					requirement: it.requirement,
+					result: result,
+					remark: remark,
+					proofs: proofs,
+				} as AcceptanceItem)
+			} else {
+				next.push(it)
+			}
+		}
+		items.value = next
+	}
+
+	function setResult(itemId : number, result : string) : void {
+		const it = findItem(itemId)
+		if (it == null) return
+		replaceItem(itemId, result, it.remark, it.proofs)
+	}
+
+	function setRemark(itemId : number, remark : string) : void {
+		const it = findItem(itemId)
+		if (it == null) return
+		replaceItem(itemId, it.result, remark, it.proofs)
+	}
+
+	function appendProof(itemId : number, proof : AcceptanceProof) : void {
+		const it = findItem(itemId)
+		if (it == null) return
+		const nextProofs : AcceptanceProof[] = []
+		for (let i = 0; i < it.proofs.length; i++) nextProofs.push(it.proofs[i])
+		nextProofs.push(proof)
+		replaceItem(itemId, it.result, it.remark, nextProofs)
+	}
+
+	/** 逐张 / 逐个上传（失败计数，最后一次性提示，不打断其余文件） */
+	async function uploadPaths(itemId : number, paths : string[], names : string[], kind : string) : Promise<void> {
+		if (uploadingItemId.value > 0) return
+		uploadingItemId.value = itemId
+		uni.showLoading({ title: '上传凭证中...' })
+		let failedCount = 0
+		for (let i = 0; i < paths.length; i++) {
+			const cur = findItem(itemId)
+			if (cur == null) break
+			if (cur.proofs.length >= ACCEPTANCE_PROOFS_MAX) break
+			try {
+				const proof = await uploadAcceptanceProofApi(paths[i], names[i], kind)
+				appendProof(itemId, proof)
+			} catch (e) {
+				console.error('[acceptance] proof upload failed:', e)
+				failedCount = failedCount + 1
+			}
+		}
+		uni.hideLoading()
+		uploadingItemId.value = 0
+		if (failedCount > 0) {
+			uni.showToast({ title: failedCount.toString() + ' 份凭证上传失败，请重试', icon: 'none' })
+		}
+	}
+
+	function onPickImages(itemId : number) : void {
+		const it = findItem(itemId)
+		if (it == null) return
+		const remaining = ACCEPTANCE_PROOFS_MAX - it.proofs.length
+		if (remaining <= 0) {
+			uni.showToast({ title: '每项最多 ' + ACCEPTANCE_PROOFS_MAX.toString() + ' 份凭证', icon: 'none' })
+			return
+		}
+		uni.chooseImage({
+			count: remaining,
+			sizeType: ['compressed'],
+			sourceType: ['album', 'camera'],
+			success: (res) => {
+				const paths = res.tempFilePaths as string[]
+				if (paths.length == 0) return
+				const names : string[] = []
+				for (let i = 0; i < paths.length; i++) names.push('凭证图片')
+				uploadPaths(itemId, paths, names, 'image')
+			},
+			fail: (err) => {
+				console.log('[acceptance] chooseImage canceled/failed:', err)
+			},
+		})
+	}
+
+	function onPickFile(itemId : number) : void {
+		const it = findItem(itemId)
+		if (it == null) return
+		if (it.proofs.length >= ACCEPTANCE_PROOFS_MAX) {
+			uni.showToast({ title: '每项最多 ' + ACCEPTANCE_PROOFS_MAX.toString() + ' 份凭证', icon: 'none' })
+			return
+		}
+		// #ifdef MP-WEIXIN
+		uni.chooseMessageFile({
+			count: 1,
+			type: 'file',
+			success: (res) => {
+				const files = res.tempFiles
+				if (files.length == 0) return
+				const f = files[0]
+				const paths : string[] = [f.path]
+				const names : string[] = [f.name]
+				uploadPaths(itemId, paths, names, 'file')
+			},
+			fail: (err) => {
+				console.log('[acceptance] chooseMessageFile canceled/failed:', err)
+			},
+		})
+		// #endif
+		// #ifndef MP-WEIXIN
+		uni.chooseFile({
+			count: 1,
+			extension: ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png'],
+			success: (res) => {
+				const files = res.tempFiles
+				if (files.length == 0) return
+				const f = files[0]
+				const paths : string[] = [f.path]
+				const names : string[] = [f.name]
+				uploadPaths(itemId, paths, names, 'file')
+			},
+			fail: (err) => {
+				console.log('[acceptance] chooseFile canceled/failed:', err)
+			},
+		})
+		// #endif
+	}
+
+	function onAddProof(itemId : number) : void {
+		if (uploadingItemId.value > 0) return
+		uni.showActionSheet({
+			itemList: ['拍照 / 选择图片', '选择文件'],
+			success: (res) => {
+				if (res.tapIndex == 0) onPickImages(itemId)
+				if (res.tapIndex == 1) onPickFile(itemId)
+			},
+		})
+	}
+
+	function onRemoveProof(itemId : number, index : number) : void {
+		if (uploadingItemId.value == itemId) return
+		const it = findItem(itemId)
+		if (it == null) return
+		const nextProofs : AcceptanceProof[] = []
+		for (let i = 0; i < it.proofs.length; i++) {
+			if (i != index) nextProofs.push(it.proofs[i])
+		}
+		replaceItem(itemId, it.result, it.remark, nextProofs)
+	}
+
+	function onPreviewProof(itemId : number, index : number) : void {
+		const it = findItem(itemId)
+		if (it == null) return
+		if (index < 0 || index >= it.proofs.length) return
+		const proof = it.proofs[index]
+		if (proof.kind == 'image') {
+			const urls : string[] = []
+			for (let i = 0; i < it.proofs.length; i++) {
+				if (it.proofs[i].kind == 'image') urls.push(it.proofs[i].url)
+			}
+			uni.previewImage({ urls: urls, current: proof.url })
+		} else {
+			uni.showToast({ title: '文件凭证：' + proof.name, icon: 'none' })
+		}
+	}
+
+	async function load(id : number) : Promise<void> {
+		taskId.value = id
+		if (loading.value) return
+		loading.value = true
+		failed.value = false
+		try {
+			const detail = await getAcceptanceDetailApi(id)
+			task.value = detail.task
+			items.value = detail.items
+		} catch (e) {
+			console.error('[acceptance] submit load failed:', e)
+			failed.value = true
+		} finally {
+			loading.value = false
+		}
+	}
+
+	/** 失败重试：用上一次的 id 重拉 */
+	function reload() : void {
+		if (taskId.value <= 0) return
+		failed.value = false
+		load(taskId.value)
+	}
+
+	async function onSubmit() : Promise<boolean> {
+		const t = task.value
+		if (t == null) return false
+		if (submitting.value) return false
+		const validation = acceptanceValidate(items.value)
+		if (!validation.ok) {
+			uni.showToast({ title: validation.message, icon: 'none' })
+			return false
+		}
+		submitting.value = true
+		uni.showLoading({ title: '提交中...' })
+		try {
+			const payload : AcceptanceSubmitItem[] = []
+			for (let i = 0; i < items.value.length; i++) {
+				const it = items.value[i]
+				const proofs : AcceptanceProof[] = []
+				for (let j = 0; j < it.proofs.length; j++) proofs.push(it.proofs[j])
+				payload.push({
+					item_id: it.id,
+					result: it.result,
+					remark: it.remark,
+					proofs: proofs,
+				} as AcceptanceSubmitItem)
+			}
+			await submitAcceptanceApi(t.id, payload)
+			uni.showToast({ title: '验收结果已提交', icon: 'success' })
+			return true
+		} catch (e) {
+			console.error('[acceptance] submit failed:', e)
+			let msg = '提交失败，请重试'
+			if (e instanceof Error) {
+				const errObj = e as Error
+				const m = errObj.message
+				if (m != null && m.length > 0) msg = m
+			}
+			uni.showToast({ title: msg, icon: 'none' })
+			return false
+		} finally {
+			uni.hideLoading()
+			submitting.value = false
+		}
+	}
+
+	return {
+		task: task,
+		items: items,
+		options: ACCEPTANCE_RESULT_OPTIONS,
+		remarkMax: ACCEPTANCE_REMARK_MAX,
+		proofsMax: ACCEPTANCE_PROOFS_MAX,
+		loading: loading,
+		failed: failed,
+		submitting: submitting,
+		uploadingItemId: uploadingItemId,
+		hasTask: hasTask,
+		headerTitle: headerTitle,
+		headerCode: headerCode,
+		progressLabel: progressLabel,
+		load: (id : number) => load(id),
+		reload: () => reload(),
+		setResult: (itemId : number, result : string) => setResult(itemId, result),
+		setRemark: (itemId : number, remark : string) => setRemark(itemId, remark),
+		onAddProof: (itemId : number) => onAddProof(itemId),
+		onRemoveProof: (itemId : number, index : number) => onRemoveProof(itemId, index),
+		onPreviewProof: (itemId : number, index : number) => onPreviewProof(itemId, index),
+		onSubmit: () => onSubmit(),
+	} as UseAcceptanceSubmitResult
+}

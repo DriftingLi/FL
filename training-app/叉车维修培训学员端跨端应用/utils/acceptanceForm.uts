@@ -1,0 +1,150 @@
+/**
+ * 设备验收表单的**唯一口径**（#2743）
+ *
+ * 这里只放纯函数：状态词 → 中文、逐项结论汇总、提交前校验、进度文案。
+ * 页面与 composable 都从这里取，不在模板里另写一份 if/else ——
+ * 两份判断一旦漂移，就会出现「页面提示必填、接口却按另一套拒绝」。
+ *
+ * 校验口径（票面要求 5「必填项完整」+ 要求 2「逐项确认」）：
+ * 1) 每一项都必须给出结论（`pass` / `fail` / `rectify`）
+ * 2) `fail` / `rectify` 的项必须填写备注（空白不算填）
+ * 3) 备注不超过 `ACCEPTANCE_REMARK_MAX` 字
+ * 4) 整单至少上传 1 份验收凭证（图片或文件）
+ *
+ * 上限与后端同源：后端接口落地时 `remark` 上限与 `proofs` 上限必须与此一致
+ * （上限只有这一处，别在页面里再写字面量）。
+ */
+import type { AcceptanceItem } from '../types/index'
+
+/** 备注长度上限（字） */
+export const ACCEPTANCE_REMARK_MAX = 200
+
+/** 单个验收项的凭证上限（张 / 份） */
+export const ACCEPTANCE_PROOFS_MAX = 6
+
+/** 单项结论选项（页面按顺序渲染，不在模板里手写三份） */
+export type AcceptanceResultOption = {
+	value : string
+	label : string
+}
+
+export const ACCEPTANCE_RESULT_OPTIONS : AcceptanceResultOption[] = [
+	{ value: 'pass', label: '通过' },
+	{ value: 'fail', label: '不通过' },
+	{ value: 'rectify', label: '待整改' },
+]
+
+/** 校验结果：`missingItemId` 指向第一个未完成的项（0 = 不是单项问题） */
+export type AcceptanceValidation = {
+	ok : boolean
+	message : string
+	missingItemId : number
+}
+
+/** 单项结论 → 中文 */
+export function acceptanceResultText(result : string) : string {
+	if (result == 'pass') return '通过'
+	if (result == 'fail') return '不通过'
+	if (result == 'rectify') return '待整改'
+	return '未确认'
+}
+
+/** 验收单状态 → 中文（学员视角：提交后是「待教练验收」） */
+export function acceptanceStatusText(status : string) : string {
+	if (status == 'pending') return '待验收'
+	if (status == 'submitted') return '待教练验收'
+	if (status == 'accepted') return '已通过'
+	// 不用「已驳回」：投稿域把该词列入零内联清单（contributionStatusContract），
+	// 验收域用「验收未通过」既避开跨域同名，也把「谁驳回的」说清楚（教练验收未通过）。
+	if (status == 'rejected') return '验收未通过'
+	return '未知状态'
+}
+
+/** 整体结论（取最严重的一项）：任一不通过 ⇒ fail；任一待整改 ⇒ rectify；否则 pass */
+export function acceptanceRollupResult(items : AcceptanceItem[]) : string {
+	let hasRectify = false
+	for (let i = 0; i < items.length; i++) {
+		if (items[i].result == 'fail') return 'fail'
+		if (items[i].result == 'rectify') hasRectify = true
+	}
+	if (hasRectify) return 'rectify'
+	return 'pass'
+}
+
+/** 已给出结论的项数 */
+export function acceptanceDecidedCount(items : AcceptanceItem[]) : number {
+	let count = 0
+	for (let i = 0; i < items.length; i++) {
+		if (items[i].result.length > 0) count = count + 1
+	}
+	return count
+}
+
+/** 不通过 / 待整改项数 */
+export function acceptanceFailedCount(items : AcceptanceItem[]) : number {
+	let count = 0
+	for (let i = 0; i < items.length; i++) {
+		if (items[i].result == 'fail' || items[i].result == 'rectify') count = count + 1
+	}
+	return count
+}
+
+/** 整单凭证总数 */
+export function acceptanceProofTotal(items : AcceptanceItem[]) : number {
+	let count = 0
+	for (let i = 0; i < items.length; i++) {
+		count = count + items[i].proofs.length
+	}
+	return count
+}
+
+/** 进度文案：`已确认 2/4 项`（页面直接绑定，不自己拼） */
+export function acceptanceProgressText(items : AcceptanceItem[]) : string {
+	return '已确认 ' + acceptanceDecidedCount(items).toString() + '/' + items.length.toString() + ' 项'
+}
+
+/**
+ * 提交前校验。按「先逐项结论、再备注、最后凭证」的顺序返回第一条不满足的规则，
+ * 用户每次只看到一条可行动提示，不用读一整串错误。
+ */
+export function acceptanceValidate(items : AcceptanceItem[]) : AcceptanceValidation {
+	if (items.length == 0) {
+		return { ok: false, message: '验收项为空，无法提交', missingItemId: 0 } as AcceptanceValidation
+	}
+	for (let i = 0; i < items.length; i++) {
+		const item = items[i]
+		if (item.result.length == 0) {
+			return {
+				ok: false,
+				message: '请完成第 ' + (i + 1).toString() + ' 项「' + item.name + '」的验收结论',
+				missingItemId: item.id,
+			} as AcceptanceValidation
+		}
+	}
+	for (let i = 0; i < items.length; i++) {
+		const item = items[i]
+		if (item.result == 'fail' || item.result == 'rectify') {
+			if (item.remark.trim().length == 0) {
+				return {
+					ok: false,
+					message: '第 ' + (i + 1).toString() + ' 项选择了「' + acceptanceResultText(item.result) + '」，请填写备注',
+					missingItemId: item.id,
+				} as AcceptanceValidation
+			}
+		}
+	}
+	for (let i = 0; i < items.length; i++) {
+		const item = items[i]
+		if (item.remark.length > ACCEPTANCE_REMARK_MAX) {
+			return {
+				ok: false,
+				message: '第 ' + (i + 1).toString() + ' 项的备注超过 ' + ACCEPTANCE_REMARK_MAX.toString() + ' 字',
+				missingItemId: item.id,
+			} as AcceptanceValidation
+		}
+	}
+	if (acceptanceProofTotal(items) == 0) {
+		return { ok: false, message: '请至少上传 1 份验收凭证', missingItemId: 0 } as AcceptanceValidation
+	}
+	return { ok: true, message: '', missingItemId: 0 } as AcceptanceValidation
+}
