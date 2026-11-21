@@ -186,12 +186,13 @@ describe('check-in §8③ 去 mock（#1607 随批收口）', () => {
 describe('导航栏返回箭头命中区', () => {
   const navBar = read('components/app-nav-bar/app-nav-bar.uvue');
 
-  it('返回槽自身承接 88×88rpx 点击区，箭头 56rpx 且左对齐贴 24rpx', () => {
+  it('返回槽自身承接 88×88rpx 点击区，箭头 88rpx 且左对齐贴 24rpx', () => {
     expect(navBar).toMatch(/<view class="nav-bar-side nav-bar-left"\s*:class="\[leftSlotFloatClass, \{ 'nav-bar-left--back': leftIcon == '‹' \}\]" @click="onLeftClick">/);
     expect(navBar).toMatch(/<text v-if="leftIcon.length > 0" class="nav-bar-icon"\s*:class="\[titleColorClass, \{ 'nav-bar-icon--back': leftIcon == '‹' \}\]">/);
     // 票 2730 第 2 项：字形由居中改左对齐并脱流贴左，标题左缘随之收到 80rpx（紧贴箭头右缘）。
     expect(navBar).toMatch(/\.nav-bar-left--back\s*\{[^}]*position:\s*absolute;[^}]*left:\s*24rpx;[^}]*width:\s*88rpx;[^}]*height:\s*88rpx;[^}]*justify-content:\s*flex-start;[^}]*align-items:\s*center;/);
-    expect(navBar).toMatch(/\.nav-bar-icon--back\s*\{\s*font-size:\s*56rpx;/);
+    // #2757：56rpx → 88rpx（`‹` 细笔画，88rpx 时 ink 高 ≈ 标题汉字 ink 的 93%，视觉等高）。
+    expect(navBar).toMatch(/\.nav-bar-icon--back\s*\{\s*font-size:\s*88rpx;/);
     expect(navBar).toMatch(/\.nav-bar-title-block\s*\{[^}]*margin-left:\s*56rpx;/);
     expect(navBar).not.toContain('nav-bar-back-hit');
   });
@@ -238,10 +239,10 @@ describe('§1.6 白名单文件自检（批4 扫描面）', () => {
       'pages/courses/courses.uvue', 'pages/profile/profile.uvue', 'pages/recruiter/login.uvue',
       'pages/resume/resume.uvue',
     ];
-    // #1609 批6（N06 无页头白名单 6 页 + mall N03 补漏）白名单条目落在批6页面，纳入并集扫描面；清单与 learnerUiContract/recruiterUiContract 保持一致
+    // #1609 批6（N06 无页头白名单 5 页 + mall N03 补漏；#2757 下线 profile-setup 后由 6 页收窄）白名单条目落在批6页面，纳入并集扫描面；清单与 learnerUiContract/recruiterUiContract 保持一致
     const batch6 = [
       'pages/index/index.uvue', 'pages/login/login.uvue', 'pages/register/register.uvue',
-      'pages/forgot-password/forgot-password.uvue', 'pages/profile-setup/profile-setup.uvue',
+      'pages/forgot-password/forgot-password.uvue',
       'pages/search/search.uvue', 'pages/mall/mall.uvue',
     ];
     // #2262 摘除 ai-feature 诊断面板后，#6DB8E8 唯一承载移至 components/ai-chat/ai-chat-input.uvue —— 扫描面随之补入组件文件

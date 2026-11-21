@@ -202,10 +202,10 @@ describe('§1.6 白名单文件自检（批2 扫描面）', () => {
       'pages/courses/courses.uvue', 'pages/profile/profile.uvue', 'pages/recruiter/login.uvue',
       'pages/resume/resume.uvue',
     ];
-    // #1609 批6（N06 无页头白名单 6 页 + mall N03 补漏）白名单条目落在批6页面，纳入并集扫描面；清单与 recruiterUiContract/batch4UiContract 保持一致
+    // #1609 批6（N06 无页头白名单 5 页 + mall N03 补漏；#2757 下线 profile-setup 后由 6 页收窄）白名单条目落在批6页面，纳入并集扫描面；清单与 recruiterUiContract/batch4UiContract 保持一致
     const batch6 = [
       'pages/index/index.uvue', 'pages/login/login.uvue', 'pages/register/register.uvue',
-      'pages/forgot-password/forgot-password.uvue', 'pages/profile-setup/profile-setup.uvue',
+      'pages/forgot-password/forgot-password.uvue',
       'pages/search/search.uvue', 'pages/mall/mall.uvue',
     ];
     // #2262 摘除 ai-feature 诊断面板后，#6DB8E8 唯一承载移至 components/ai-chat/ai-chat-input.uvue —— 扫描面随之补入组件文件

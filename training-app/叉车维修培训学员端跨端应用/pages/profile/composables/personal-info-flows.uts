@@ -14,7 +14,7 @@ import { updateProfileApi, uploadAvatarApi, changePasswordSendCodeApi, changePas
 import { errMsg } from '../../../api/helpers'
 import type { LoginResult, UserInfo } from '../../../types/index'
 import {
-	hasPendingFieldOf, wechatFillEntryVisibleOf,
+	hasPendingFieldOf, isNicknameEmpty,
 	PROFILE_FIELD_NICKNAME, PROFILE_FIELD_AVATAR
 } from '../../../utils/wechatProfileFill.uts'
 
@@ -38,7 +38,7 @@ export function avatarUrlOf(u : UserInfo | null) : string {
 /**
  * 逐字段审核中徽标（#2712：/auth/me 的 pending_fields，值域 nickname / avatar）。
  * 原单布尔 hasPendingOf 退役 —— 头像与昵称各自挂徽标，不再共用一个开关。
- * 判据本体在 utils/wechatProfileFill.uts（与填写页同源）。
+ * 判据本体在 utils/wechatProfileFill.uts。
  */
 export function hasPendingNicknameOf(u : UserInfo | null) : boolean {
 	return hasPendingFieldOf(u, PROFILE_FIELD_NICKNAME)
@@ -46,6 +46,15 @@ export function hasPendingNicknameOf(u : UserInfo | null) : boolean {
 
 export function hasPendingAvatarOf(u : UserInfo | null) : boolean {
 	return hasPendingFieldOf(u, PROFILE_FIELD_AVATAR)
+}
+
+/**
+ * 昵称弹窗预填（#2757）：空名与后端占位昵称（`微信学员xxxxxx`）一律留空 ——
+ * 让用户直接输入，而不是先删一串占位符；真名才预填。
+ */
+export function nicknamePrefillOf(u : UserInfo | null) : string {
+	if (u == null) return ''
+	return isNicknameEmpty(u.name) ? '' : u.name
 }
 
 /** 登录账号：优先 account 字段，回退 username */
