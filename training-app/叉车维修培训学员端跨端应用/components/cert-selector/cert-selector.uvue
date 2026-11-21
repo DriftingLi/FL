@@ -275,9 +275,10 @@
         align-self: flex-start;
     }
 
+    /* 票 2730 docx ①：Figma 里定位针 10x10（image 48）⇒ 20rpx */
     .cert-dropdown-province-pin {
-        width: 26rpx;
-        height: 26rpx;
+        width: 20rpx;
+        height: 20rpx;
         margin-right: 8rpx;
     }
 
@@ -336,9 +337,10 @@
         margin-right: 12rpx;
     }
 
+    /* 票 2730 docx ①：分组图标按 Figma 元数据取（机械臂 20x24 / 叉车 23x24），盒取 48rpx 高 */
     .cert-dropdown-section-icon {
-        width: 40rpx;
-        height: 40rpx;
+        width: 48rpx;
+        height: 48rpx;
     }
 
     .cert-dropdown-section-title {
@@ -426,8 +428,9 @@
         color: #222222;
     }
 
+    /* 票 2730 docx ①：Figma 里线宽 20px、在 64px 标题下居中（Rectangle 38 x=22 w=20）⇒ 40rpx */
     .cert-dropdown-hot-line {
-        width: 56rpx;
+        width: 40rpx;
         height: 6rpx;
         border-radius: 3rpx;
         background-color: $primary-color;
@@ -450,12 +453,13 @@
         border-radius: 20rpx;
     }
 
+    /* 票 2730 docx ①：Figma 里星 20x20（Frame 337 x=4 y=0）⇒ 40rpx */
     .cert-dropdown-hot-card-star {
         position: absolute;
         top: 10rpx;
         left: 10rpx;
-        width: 32rpx;
-        height: 32rpx;
+        width: 40rpx;
+        height: 40rpx;
     }
 
     .cert-dropdown-hot-card-title {
