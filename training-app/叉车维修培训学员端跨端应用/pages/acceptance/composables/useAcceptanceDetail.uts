@@ -1,0 +1,160 @@
+/**
+ * 验收详情页的状态层（#2743）
+ *
+ * 页面只读展示：单据头 + 逐项清单（结论 / 备注 / 凭证）。
+ * 「开始验收」只在 `status == pending` 时出现；历史单据进来就是只读态。
+ *
+ * 可空值统一在这里摊平成基础类型（先例 forum-detail 的 tTitle / tAuthorName 一族）：
+ * 模板不直接读 `detail!.task.title`，避免 Kotlin 侧 nullable 接收者报错；
+ * script 侧取值也统一走「局部 const + 判空」，不用非空断言。
+ */
+import { ref, computed } from 'vue'
+import type { Ref, ComputedRef } from 'vue'
+import { getAcceptanceDetailApi } from '../../../api/acceptance'
+import { acceptanceProgressText, acceptanceResultText, acceptanceStatusText } from '../../../utils/acceptanceForm'
+import type { AcceptanceItem, AcceptanceTaskDetail } from '../../../types/index'
+
+export type UseAcceptanceDetailResult = {
+	loading : Ref<boolean>
+	failed : Ref<boolean>
+	hasDetail : ComputedRef<boolean>
+	title : ComputedRef<string>
+	code : ComputedRef<string>
+	courseLine : ComputedRef<string>
+	deadlineText : ComputedRef<string>
+	statusLabel : ComputedRef<string>
+	resultLabel : ComputedRef<string>
+	progressLabel : ComputedRef<string>
+	submittedLabel : ComputedRef<string>
+	isPending : ComputedRef<boolean>
+	items : ComputedRef<AcceptanceItem[]>
+	load : (id : number) => Promise<void>
+	reload : () => void
+	onStartSubmit : () => void
+	itemResultLabel : (result : string) => string
+}
+
+export function useAcceptanceDetail() : UseAcceptanceDetailResult {
+	const detail = ref<AcceptanceTaskDetail | null>(null)
+	const loading = ref<boolean>(false)
+	const failed = ref<boolean>(false)
+	const taskId = ref<number>(0)
+
+	const hasDetail = computed<boolean>(() : boolean => {
+		const d = detail.value
+		if (d == null) return false
+		return d.task.id > 0
+	})
+
+	const title = computed<string>(() : string => {
+		const d = detail.value
+		if (d == null) return ''
+		return d.task.title
+	})
+
+	const code = computed<string>(() : string => {
+		const d = detail.value
+		if (d == null) return ''
+		return '单号 ' + d.task.code
+	})
+
+	const courseLine = computed<string>(() : string => {
+		const d = detail.value
+		if (d == null) return ''
+		return d.task.course_name + ' · 验收教练 ' + d.task.instructor
+	})
+
+	const deadlineText = computed<string>(() : string => {
+		const d = detail.value
+		if (d == null) return ''
+		return '截止 ' + d.task.deadline
+	})
+
+	const statusLabel = computed<string>(() : string => {
+		const d = detail.value
+		if (d == null) return ''
+		return acceptanceStatusText(d.task.status)
+	})
+
+	const resultLabel = computed<string>(() : string => {
+		const d = detail.value
+		if (d == null) return ''
+		if (d.task.result.length == 0) return ''
+		return '自检结论 ' + acceptanceResultText(d.task.result)
+	})
+
+	const progressLabel = computed<string>(() : string => {
+		const d = detail.value
+		if (d == null) return ''
+		return acceptanceProgressText(d.items)
+	})
+
+	const submittedLabel = computed<string>(() : string => {
+		const d = detail.value
+		if (d == null) return ''
+		const at = d.task.submitted_at
+		if (at == null) return ''
+		return '提交于 ' + at
+	})
+
+	const isPending = computed<boolean>(() : boolean => {
+		const d = detail.value
+		if (d == null) return false
+		return d.task.status == 'pending'
+	})
+
+	const items = computed<AcceptanceItem[]>(() : AcceptanceItem[] => {
+		const d = detail.value
+		if (d == null) return [] as AcceptanceItem[]
+		return d.items
+	})
+
+	async function load(id : number) : Promise<void> {
+		taskId.value = id
+		if (loading.value) return
+		loading.value = true
+		failed.value = false
+		try {
+			detail.value = await getAcceptanceDetailApi(id)
+		} catch (e) {
+			console.error('[acceptance] detail failed:', e)
+			failed.value = true
+		} finally {
+			loading.value = false
+		}
+	}
+
+	/** 失败重试：用上一次的 id 重拉，不依赖页面持有状态 */
+	function reload() : void {
+		if (taskId.value <= 0) return
+		failed.value = false
+		load(taskId.value)
+	}
+
+	function onStartSubmit() : void {
+		const d = detail.value
+		if (d == null) return
+		if (d.task.status != 'pending') return
+		uni.navigateTo({ url: '/pages/acceptance/acceptance-submit?id=' + taskId.value.toString() })
+	}
+
+	return {
+		loading: loading,
+		failed: failed,
+		hasDetail: hasDetail,
+		title: title,
+		code: code,
+		courseLine: courseLine,
+		deadlineText: deadlineText,
+		statusLabel: statusLabel,
+		resultLabel: resultLabel,
+		progressLabel: progressLabel,
+		submittedLabel: submittedLabel,
+		isPending: isPending,
+		items: items,
+		load: (id : number) => load(id),
+		reload: () => reload(),
+		onStartSubmit: () => onStartSubmit(),
+		itemResultLabel: (result : string) => acceptanceResultText(result),
+	} as UseAcceptanceDetailResult
+}

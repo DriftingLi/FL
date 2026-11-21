@@ -1,0 +1,102 @@
+/**
+ * 学员端设备验收域类型（#2743）
+ *
+ * 后端验收接口尚未交付（本仓 `inspection` 域只服务管理端巡检：`/admin/inspection/*`），
+ * 端上先按本文件的形状定义契约，数据源在 `api/acceptance.uts` 的 `ACCEPTANCE_USE_MOCK`
+ * 一处切换：切到 false 即改走真实 HTTP，函数签名与载荷形状不变。
+ *
+ * 状态词只有四种（本域不新增状态，避免「待验收 / 待确认 / 进行中」三处漂移）：
+ * - `pending`   待学员提交
+ * - `submitted` 学员已提交，待教练验收
+ * - `accepted`  教练已验收通过
+ * - `rejected`  教练验收驳回
+ *
+ * 单项结果只有三种（`pass` / `fail` / `rectify`）；空串 = 尚未确认。
+ */
+export type AcceptanceProof = {
+	/** 凭证地址：真实接口是站内相对路径，mock 模式是本地临时文件路径 */
+	url : string
+	/** 展示名（图片可为空，文件用原文件名） */
+	name : string
+	/** 凭证类型：`image` / `file` */
+	kind : string
+}
+
+/** 单个验收项（逐项确认的载体） */
+export type AcceptanceItem = {
+	/** 验收项 ID */
+	id : number
+	/** 验收项名称 */
+	name : string
+	/** 验收要求（教练下发的判定口径） */
+	requirement : string
+	/** 学员结论：`pass` / `fail` / `rectify`；空串 = 未确认 */
+	result : string
+	/** 学员备注（`fail` / `rectify` 必填，校验在 utils/acceptanceForm） */
+	remark : string
+	/** 验收凭证（图片 / 文件，可空数组） */
+	proofs : AcceptanceProof[]
+}
+
+/** 验收单（列表卡片与详情页头共用的扁平形状） */
+export type AcceptanceTask = {
+	/** 验收单 ID */
+	id : number
+	/** 验收单号（展示用） */
+	code : string
+	/** 验收单标题 */
+	title : string
+	/** 关联课程名 */
+	course_name : string
+	/** 验收教练 */
+	instructor : string
+	/** 截止日期（`YYYY-MM-DD`） */
+	deadline : string
+	/** 状态：`pending` / `submitted` / `accepted` / `rejected` */
+	status : string
+	/** 学员自检整体结论：`pass` / `fail` / `rectify`；未提交为空串 */
+	result : string
+	/** 提交时间；未提交为 null（键在） */
+	submitted_at : string | null
+	/** 验收项总数 */
+	item_count : number
+	/** 已给出结论的项数 */
+	decided_count : number
+	/** 不通过 / 待整改项数 */
+	failed_count : number
+}
+
+/** 验收单详情：单据 + 验收项 */
+export type AcceptanceTaskDetail = {
+	task : AcceptanceTask
+	items : AcceptanceItem[]
+}
+
+/** 提交时的单项载荷 */
+export type AcceptanceSubmitItem = {
+	item_id : number
+	result : string
+	remark : string
+	proofs : AcceptanceProof[]
+}
+
+/** 提交回包 */
+export type AcceptanceSubmitResult = {
+	task_id : number
+	status : string
+	result : string
+	submitted_at : string
+}
+
+/** 验收历史条目（已提交的单据） */
+export type AcceptanceHistoryItem = {
+	id : number
+	code : string
+	title : string
+	course_name : string
+	status : string
+	result : string
+	submitted_at : string
+	item_count : number
+	failed_count : number
+}

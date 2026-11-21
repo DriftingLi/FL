@@ -1,0 +1,59 @@
+/**
+ * 待验收列表页的状态层（#2743）
+ *
+ * 页面壳层零自持状态：`ref` 全在这里，页面只解构消费。
+ * 三态（加载 / 失败 / 空）由 `loading` / `failed` / `tasks.length` 表达，失败不伪装成空列表。
+ */
+import { ref } from 'vue'
+import type { Ref } from 'vue'
+import { listPendingAcceptanceApi } from '../../../api/acceptance'
+import { acceptanceStatusText } from '../../../utils/acceptanceForm'
+import type { AcceptanceTask } from '../../../types/index'
+
+export type UseAcceptanceListResult = {
+	tasks : Ref<AcceptanceTask[]>
+	loading : Ref<boolean>
+	failed : Ref<boolean>
+	load : () => Promise<void>
+	onOpenTask : (id : number) => void
+	onOpenHistory : () => void
+	statusText : (status : string) => string
+}
+
+export function useAcceptanceList() : UseAcceptanceListResult {
+	const tasks = ref<AcceptanceTask[]>([])
+	const loading = ref<boolean>(false)
+	const failed = ref<boolean>(false)
+
+	async function load() : Promise<void> {
+		if (loading.value) return
+		loading.value = true
+		failed.value = false
+		try {
+			tasks.value = await listPendingAcceptanceApi()
+		} catch (e) {
+			console.error('[acceptance] list failed:', e)
+			failed.value = true
+		} finally {
+			loading.value = false
+		}
+	}
+
+	function onOpenTask(id : number) : void {
+		uni.navigateTo({ url: '/pages/acceptance/acceptance-detail?id=' + id.toString() })
+	}
+
+	function onOpenHistory() : void {
+		uni.navigateTo({ url: '/pages/acceptance/acceptance-history' })
+	}
+
+	return {
+		tasks: tasks,
+		loading: loading,
+		failed: failed,
+		load: () => load(),
+		onOpenTask: (id : number) => onOpenTask(id),
+		onOpenHistory: () => onOpenHistory(),
+		statusText: (status : string) => acceptanceStatusText(status),
+	} as UseAcceptanceListResult
+}

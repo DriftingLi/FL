@@ -1,0 +1,268 @@
+/**
+ * 设备验收域的**端内 mock 数据源**（#2743）
+ *
+ * 为什么有它：后端还没有验收接口（`inspection` 域只服务管理端巡检），
+ * 端上要先把「列表 → 逐项确认 → 提交 → 历史」这条闭环跑通。
+ * 唯一开关在 `api/acceptance.uts` 的 `ACCEPTANCE_USE_MOCK`；本文件不被页面直接 import。
+ *
+ * 内存态（模块级变量）：
+ * - 提交会把对应单据从 `pending` 改成 `submitted`，并立刻出现在历史列表里（闭环可验）；
+ * - `loadUts` 每次装载都是新实例 ⇒ 行为测试之间互不串数据，不需要 reset 接口。
+ */
+import { acceptanceRollupResult } from '../utils/acceptanceForm'
+import type { AcceptanceTask, AcceptanceTaskDetail, AcceptanceItem, AcceptanceProof, AcceptanceSubmitItem, AcceptanceSubmitResult, AcceptanceHistoryItem } from '../types/index'
+
+/** mock 存储的一条：单据 + 验收项（同一次提交里两者一起变） */
+type MockEntry = {
+	task : AcceptanceTask
+	items : AcceptanceItem[]
+}
+
+let seeded : boolean = false
+let store : MockEntry[] = [] as MockEntry[]
+
+function padZero(n : number) : string {
+	if (n < 10) return '0' + n.toString()
+	return n.toString()
+}
+
+/** 提交时间戳：`YYYY-MM-DD HH:mm`（mock 只要求可读、可排序） */
+function nowText() : string {
+	const d = new Date()
+	return d.getFullYear().toString() + '-' + padZero(d.getMonth() + 1) + '-' + padZero(d.getDate())
+		+ ' ' + padZero(d.getHours()) + ':' + padZero(d.getMinutes())
+}
+
+function copyProof(src : AcceptanceProof) : AcceptanceProof {
+	return { url: src.url, name: src.name, kind: src.kind } as AcceptanceProof
+}
+
+function copyProofs(src : AcceptanceProof[]) : AcceptanceProof[] {
+	const out : AcceptanceProof[] = []
+	for (let i = 0; i < src.length; i++) out.push(copyProof(src[i]))
+	return out
+}
+
+function copyItem(src : AcceptanceItem) : AcceptanceItem {
+	return {
+		id: src.id,
+		name: src.name,
+		requirement: src.requirement,
+		result: src.result,
+		remark: src.remark,
+		proofs: copyProofs(src.proofs),
+	} as AcceptanceItem
+}
+
+function copyTask(src : AcceptanceTask) : AcceptanceTask {
+	const submitted : string | null = src.submitted_at != null ? src.submitted_at : null
+	return {
+		id: src.id,
+		code: src.code,
+		title: src.title,
+		course_name: src.course_name,
+		instructor: src.instructor,
+		deadline: src.deadline,
+		status: src.status,
+		result: src.result,
+		submitted_at: submitted,
+		item_count: src.item_count,
+		decided_count: src.decided_count,
+		failed_count: src.failed_count,
+	} as AcceptanceTask
+}
+
+function makeItem(id : number, name : string, requirement : string) : AcceptanceItem {
+	return {
+		id: id,
+		name: name,
+		requirement: requirement,
+		result: '',
+		remark: '',
+		proofs: [] as AcceptanceProof[],
+	} as AcceptanceItem
+}
+
+function makeTask(id : number, code : string, title : string, course : string, instructor : string, deadline : string) : AcceptanceTask {
+	return {
+		id: id,
+		code: code,
+		title: title,
+		course_name: course,
+		instructor: instructor,
+		deadline: deadline,
+		status: 'pending',
+		result: '',
+		submitted_at: null,
+		item_count: 0,
+		decided_count: 0,
+		failed_count: 0,
+	} as AcceptanceTask
+}
+
+/** 把 items 的现状回写到单据的统计字段（提交与种子数据都走这一处） */
+function refreshCounts(task : AcceptanceTask, items : AcceptanceItem[]) : void {
+	let decided = 0
+	let failed = 0
+	for (let i = 0; i < items.length; i++) {
+		if (items[i].result.length > 0) decided = decided + 1
+		if (items[i].result == 'fail' || items[i].result == 'rectify') failed = failed + 1
+	}
+	task.item_count = items.length
+	task.decided_count = decided
+	task.failed_count = failed
+}
+
+function makeEntry(task : AcceptanceTask, items : AcceptanceItem[]) : MockEntry {
+	refreshCounts(task, items)
+	return { task: task, items: items } as MockEntry
+}
+
+/** 种子只铺一次（lazy，避免模块级顶层副作用） */
+function ensureSeed() : void {
+	if (seeded) return
+	seeded = true
+
+	const t1 = makeTask(101, 'YS-2026-1101', '电动叉车日常保养验收', '叉车日常维护与保养', '王教练', '2026-11-25')
+	const i1 : AcceptanceItem[] = [
+		makeItem(1001, '检查蓄电池电解液液位', '液位应处于上下刻度线之间，缺液补充蒸馏水'),
+		makeItem(1002, '清洁蓄电池表面与接线柱', '表面无油污灰尘，接线柱无白色氧化物'),
+		makeItem(1003, '检查轮胎气压与磨损', '气压符合车型标定，胎面花纹深度不低于 1.6mm'),
+		makeItem(1004, '填写日常保养记录表', '保养项目逐项签字，日期与车辆编号完整'),
+	]
+	store.push(makeEntry(t1, i1))
+
+	const t2 = makeTask(102, 'YS-2026-1102', '液压系统泄漏排查验收', '叉车液压系统检修', '李教练', '2026-11-28')
+	const i2 : AcceptanceItem[] = [
+		makeItem(2001, '检查油管接头渗漏', '接头处无油渍，擦拭后 10 分钟无新渗漏'),
+		makeItem(2002, '检查起升油缸密封', '活塞杆无划伤，密封圈无破损'),
+		makeItem(2003, '完成压力测试并记录', '记录系统压力值，偏差不超过标定值 10%'),
+	]
+	store.push(makeEntry(t2, i2))
+
+	// 历史单据：一条被驳回（含待整改项），一条已通过
+	const h1 = makeTask(201, 'YS-2026-1018', '制动系统检查验收', '叉车安全操作规范', '张教练', '2026-11-08')
+	const hi1 : AcceptanceItem[] = [
+		makeItem(3001, '检查制动踏板自由行程', '自由行程符合车型标定范围'),
+		makeItem(3002, '检查制动液液位', '液位处于 MIN 与 MAX 之间'),
+		makeItem(3003, '制动测试并记录距离', '满载状态下制动距离不超过标定值'),
+	]
+	hi1[0].result = 'pass'
+	hi1[1].result = 'pass'
+	hi1[2].result = 'fail'
+	hi1[2].remark = '制动踏板自由行程超标，需调整后复检'
+	const e1 = makeEntry(h1, hi1)
+	e1.task.status = 'rejected'
+	e1.task.result = 'fail'
+	e1.task.submitted_at = '2026-11-08 14:20'
+	store.push(e1)
+
+	const h2 = makeTask(202, 'YS-2026-1010', '货叉与门架检查验收', '叉车结构认知', '王教练', '2026-10-30')
+	const hi2 : AcceptanceItem[] = [
+		makeItem(4001, '检查货叉裂纹与变形', '货叉表面无裂纹，弯曲变形不超过允许值'),
+		makeItem(4002, '检查货叉定位销', '定位销齐全，卡簧无缺失'),
+		makeItem(4003, '检查门架滚轮间隙', '滚轮转动灵活，间隙不超标'),
+		makeItem(4004, '检查链条张紧度', '左右链条张紧度一致'),
+	]
+	for (let i = 0; i < hi2.length; i++) hi2[i].result = 'pass'
+	const e2 = makeEntry(h2, hi2)
+	e2.task.status = 'accepted'
+	e2.task.result = 'pass'
+	e2.task.submitted_at = '2026-10-30 09:05'
+	store.push(e2)
+}
+
+function findEntry(id : number) : MockEntry | null {
+	for (let i = 0; i < store.length; i++) {
+		if (store[i].task.id == id) return store[i]
+	}
+	return null
+}
+
+/** 待验收列表（只回 `pending`；排序按种子顺序，真实接口由后端排序） */
+export function mockAcceptanceTasks() : AcceptanceTask[] {
+	ensureSeed()
+	const out : AcceptanceTask[] = []
+	for (let i = 0; i < store.length; i++) {
+		if (store[i].task.status == 'pending') out.push(copyTask(store[i].task))
+	}
+	return out
+}
+
+/** 验收单详情（不存在返回 null，由调用方决定报错文案） */
+export function mockAcceptanceDetail(id : number) : AcceptanceTaskDetail | null {
+	ensureSeed()
+	const entry = findEntry(id)
+	if (entry == null) return null
+	const items : AcceptanceItem[] = []
+	for (let i = 0; i < entry.items.length; i++) items.push(copyItem(entry.items[i]))
+	return { task: copyTask(entry.task), items: items } as AcceptanceTaskDetail
+}
+
+/** 验收历史（已提交的单据，按提交时间倒序） */
+export function mockAcceptanceHistory() : AcceptanceHistoryItem[] {
+	ensureSeed()
+	const out : AcceptanceHistoryItem[] = []
+	for (let i = 0; i < store.length; i++) {
+		const t = store[i].task
+		if (t.status == 'pending') continue
+		out.push({
+			id: t.id,
+			code: t.code,
+			title: t.title,
+			course_name: t.course_name,
+			status: t.status,
+			result: t.result,
+			submitted_at: t.submitted_at != null ? t.submitted_at : '',
+			item_count: t.item_count,
+			failed_count: t.failed_count,
+		} as AcceptanceHistoryItem)
+	}
+	for (let i = 0; i < out.length; i++) {
+		for (let j = i + 1; j < out.length; j++) {
+			if (out[j].submitted_at > out[i].submitted_at) {
+				const tmp = out[i]
+				out[i] = out[j]
+				out[j] = tmp
+			}
+		}
+	}
+	return out
+}
+
+/** 提交验收结果（幂等闸门：已提交的单据拒绝二次提交） */
+export function mockAcceptanceSubmit(taskId : number, inputs : AcceptanceSubmitItem[]) : AcceptanceSubmitResult {
+	ensureSeed()
+	const entry = findEntry(taskId)
+	if (entry == null) throw new Error('验收单不存在')
+	if (entry.task.status != 'pending') throw new Error('该验收单已提交，请勿重复提交')
+
+	for (let i = 0; i < inputs.length; i++) {
+		const input = inputs[i]
+		for (let j = 0; j < entry.items.length; j++) {
+			if (entry.items[j].id == input.item_id) {
+				entry.items[j].result = input.result
+				entry.items[j].remark = input.remark
+				entry.items[j].proofs = copyProofs(input.proofs)
+			}
+		}
+	}
+
+	refreshCounts(entry.task, entry.items)
+	entry.task.status = 'submitted'
+	entry.task.submitted_at = nowText()
+	// 整体结论与页面用同一口径（utils/acceptanceForm.acceptanceRollupResult），不在 mock 里另写一份
+	entry.task.result = acceptanceRollupResult(entry.items)
+
+	return {
+		task_id: entry.task.id,
+		status: entry.task.status,
+		result: entry.task.result,
+		submitted_at: entry.task.submitted_at != null ? entry.task.submitted_at : '',
+	} as AcceptanceSubmitResult
+}
+
+/** 凭证上传（mock：原样回本地路径，真实接口落地后由 api/acceptance.uts 切到 uploadFile） */
+export function mockAcceptanceUpload(filePath : string, name : string, kind : string) : AcceptanceProof {
+	return { url: filePath, name: name, kind: kind } as AcceptanceProof
+}

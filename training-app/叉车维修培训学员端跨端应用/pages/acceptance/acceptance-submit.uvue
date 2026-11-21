@@ -1,0 +1,384 @@
+<template>
+    <view class="container" :style="{ height: windowHeight + 'px' }">
+        <app-nav-bar title="提交验收" @left-click="onBack" />
+
+        <view v-if="hasTask" class="head-card">
+            <text class="head-title">{{ headerTitle }}</text>
+            <text class="head-code">{{ headerCode }}</text>
+            <text class="head-progress">{{ progressLabel }}</text>
+        </view>
+
+        <scroll-view class="content-scroll" scroll-y="true">
+            <view v-if="loading" class="state-tip">
+                <text class="state-text">加载中...</text>
+            </view>
+
+            <view v-if="!loading && failed" class="state-tip" @click="onRetry">
+                <text class="state-icon">📡</text>
+                <text class="state-text">验收单加载失败，点此重试</text>
+            </view>
+
+            <view v-if="!loading && !failed && !hasTask" class="state-tip">
+                <text class="state-text">验收单不存在</text>
+            </view>
+
+            <view v-if="!loading && !failed && hasTask" class="list-body">
+                <view v-for="(item, idx) in items" :key="item.id" class="item-card">
+                    <view class="item-head">
+                        <view class="item-index">
+                            <text class="item-index-text">{{ idx + 1 }}</text>
+                        </view>
+                        <text class="item-name">{{ item.name }}</text>
+                    </view>
+                    <text class="item-requirement">要求：{{ item.requirement }}</text>
+
+                    <view class="option-row">
+                        <view v-for="opt in options" :key="opt.value" class="option"
+                            :class="{ 'option-active': item.result == opt.value, 'option-warn-active': item.result == opt.value && (opt.value == 'fail' || opt.value == 'rectify') }"
+                            @click="onSelectResult(item.id, opt.value)">
+                            <text class="option-text"
+                                :class="{ 'option-text-active': item.result == opt.value, 'option-text-warn': item.result == opt.value && (opt.value == 'fail' || opt.value == 'rectify') }">{{ opt.label }}</text>
+                        </view>
+                    </view>
+
+                    <textarea class="item-remark" :value="item.remark" :maxlength="remarkMax"
+                        placeholder="补充说明（选择「不通过 / 待整改」时必填）"
+                        @input="onRemarkInput(item.id, $event)" />
+
+                    <view class="proof-head">
+                        <text class="proof-title">验收凭证（{{ item.proofs.length }}/{{ proofsMax }}）</text>
+                        <view class="proof-add" @click="onAddProof(item.id)">
+                            <text class="proof-add-text">{{ uploadingItemId == item.id ? '上传中...' : '+ 添加凭证' }}</text>
+                        </view>
+                    </view>
+
+                    <view v-if="item.proofs.length > 0" class="proof-row">
+                        <view v-for="(p, pIdx) in item.proofs" :key="p.url" class="proof-item">
+                            <image v-if="p.kind == 'image'" class="proof-thumb" :src="p.url" mode="aspectFill"
+                                :webp="true" @click="onPreviewProof(item.id, pIdx)" />
+                            <view v-else class="proof-file" @click="onPreviewProof(item.id, pIdx)">
+                                <text class="proof-file-icon">📄</text>
+                            </view>
+                            <text class="proof-name">{{ p.kind == 'image' ? '图片凭证' : p.name }}</text>
+                            <view class="proof-remove" @click="onRemoveProof(item.id, pIdx)">
+                                <text class="proof-remove-text">删除</text>
+                            </view>
+                        </view>
+                    </view>
+                </view>
+
+                <view class="bottom-gap"></view>
+            </view>
+        </scroll-view>
+
+        <view v-if="hasTask" class="action-bar">
+            <view class="action-btn" :class="{ 'action-btn-disabled': submitting }" @click="onSubmitTap">
+                <text class="action-btn-text">{{ submitting ? '提交中...' : '提交验收结果' }}</text>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { onLoad } from '@dcloudio/uni-app'
+    import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
+    import { goBack } from '../../utils/navigation'
+    import { useAcceptanceSubmit } from './composables/useAcceptanceSubmit'
+
+    const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    const {
+        items, options, remarkMax, proofsMax, loading, failed, submitting, uploadingItemId,
+        hasTask, headerTitle, headerCode, progressLabel,
+        load, reload, setResult, setRemark, onAddProof, onRemoveProof, onPreviewProof, onSubmit,
+    } = useAcceptanceSubmit()
+
+    function onBack() : void {
+        goBack()
+    }
+
+    function onRetry() : void {
+        reload()
+    }
+
+    function onSelectResult(itemId : number, result : string) : void {
+        setResult(itemId, result)
+    }
+
+    function onRemarkInput(itemId : number, e : InputEvent) : void {
+        setRemark(itemId, e.detail.value)
+    }
+
+    async function onSubmitTap() : Promise<void> {
+        if (submitting) return
+        const ok = await onSubmit()
+        if (ok) {
+            uni.navigateBack()
+        }
+    }
+
+    onLoad((_options : any) : void => {
+        const opts = _options as UTSJSONObject | null
+        const raw = opts != null ? opts['id'] : null
+        if (raw == null) return
+        load(parseInt(raw as string))
+    })
+</script>
+
+<style lang="scss">
+    .container {
+        flex: 1;
+        flex-direction: column;
+        background-color: $bg-color;
+    }
+
+    .head-card {
+        background-color: $card-bg;
+        border-radius: $radius-card;
+        margin: 20rpx 24rpx 0 24rpx;
+        padding: 24rpx;
+        flex-shrink: 0;
+    }
+
+    .head-title {
+        font-size: 32rpx;
+        font-weight: bold;
+        color: $text-color;
+    }
+
+    .head-code {
+        font-size: 24rpx;
+        color: $text-color-placeholder;
+        margin-top: 8rpx;
+    }
+
+    .head-progress {
+        font-size: 26rpx;
+        color: $primary-color;
+        margin-top: 12rpx;
+    }
+
+    .content-scroll {
+        flex: 1;
+    }
+
+    .list-body {
+        padding-bottom: 24rpx;
+    }
+
+    .state-tip {
+        align-items: center;
+        padding: 80rpx 24rpx;
+    }
+
+    .state-icon {
+        font-size: 64rpx;
+        margin-bottom: 16rpx;
+    }
+
+    .state-text {
+        font-size: 28rpx;
+        color: $text-color-secondary;
+        text-align: center;
+    }
+
+    .item-card {
+        background-color: $card-bg;
+        border-radius: $radius-card;
+        margin: 20rpx 24rpx 0 24rpx;
+        padding: 24rpx;
+    }
+
+    .item-head {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .item-index {
+        width: 40rpx;
+        height: 40rpx;
+        border-radius: 20rpx;
+        background-color: $primary-color;
+        align-items: center;
+        justify-content: center;
+        margin-right: 12rpx;
+    }
+
+    .item-index-text {
+        font-size: 22rpx;
+        color: #FFFFFF;
+        text-align: center;
+    }
+
+    .item-name {
+        flex: 1;
+        font-size: 28rpx;
+        font-weight: bold;
+        color: $text-color;
+    }
+
+    .item-requirement {
+        font-size: 24rpx;
+        color: $text-color-secondary;
+        margin-top: 12rpx;
+    }
+
+    .option-row {
+        flex-direction: row;
+        margin-top: 16rpx;
+    }
+
+    .option {
+        height: 72rpx;
+        padding: 0 24rpx;
+        border-radius: $radius-pill;
+        border-width: 2rpx;
+        border-style: solid;
+        border-color: $border-color-light;
+        align-items: center;
+        justify-content: center;
+        margin-right: 16rpx;
+    }
+
+    .option-active {
+        border-color: $primary-color;
+        background-color: $primary-color;
+    }
+
+    .option-warn-active {
+        border-color: $danger-color;
+        background-color: $danger-color;
+    }
+
+    .option-text {
+        font-size: 26rpx;
+        color: $text-color-secondary;
+    }
+
+    .option-text-active {
+        color: #FFFFFF;
+    }
+
+    .option-text-warn {
+        color: #FFFFFF;
+    }
+
+    .item-remark {
+        height: 128rpx;
+        background-color: $bg-color;
+        border-radius: 12rpx;
+        padding: 16rpx;
+        font-size: 26rpx;
+        color: $text-color;
+        margin-top: 16rpx;
+        width: 100%;
+    }
+
+    .proof-head {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 16rpx;
+    }
+
+    .proof-title {
+        font-size: 24rpx;
+        color: $text-color-secondary;
+    }
+
+    .proof-add {
+        height: 88rpx;
+        padding: 0 24rpx;
+        border-radius: $radius-pill;
+        border-width: 2rpx;
+        border-style: solid;
+        border-color: $primary-color;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .proof-add-text {
+        font-size: 24rpx;
+        color: $primary-color;
+    }
+
+    .proof-row {
+        flex-direction: row;
+        flex-wrap: wrap;
+        margin-top: 12rpx;
+    }
+
+    .proof-item {
+        width: 150rpx;
+        flex-direction: column;
+        align-items: center;
+        margin-right: 16rpx;
+        margin-top: 12rpx;
+    }
+
+    .proof-thumb {
+        width: 120rpx;
+        height: 120rpx;
+        border-radius: 12rpx;
+        background-color: $bg-color;
+    }
+
+    .proof-file {
+        width: 120rpx;
+        height: 120rpx;
+        border-radius: 12rpx;
+        background-color: $bg-color;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .proof-file-icon {
+        font-size: 48rpx;
+    }
+
+    .proof-name {
+        font-size: 20rpx;
+        color: $text-color-secondary;
+        margin-top: 6rpx;
+        text-align: center;
+    }
+
+    .proof-remove {
+        height: 48rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .proof-remove-text {
+        font-size: 20rpx;
+        color: $danger-color;
+    }
+
+    .bottom-gap {
+        height: 24rpx;
+    }
+
+    .action-bar {
+        padding: 16rpx 24rpx;
+        background-color: $card-bg;
+        flex-shrink: 0;
+    }
+
+    .action-btn {
+        height: 88rpx;
+        border-radius: $radius-pill;
+        background-color: $primary-color;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .action-btn-disabled {
+        background-color: $text-disabled;
+    }
+
+    .action-btn-text {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #FFFFFF;
+    }
+</style>

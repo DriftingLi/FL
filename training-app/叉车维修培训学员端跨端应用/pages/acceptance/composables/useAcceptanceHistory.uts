@@ -1,0 +1,56 @@
+/**
+ * 验收历史页的状态层（#2743）
+ *
+ * 历史 = 已提交的单据（`submitted` / `accepted` / `rejected`）。点卡片进同一张详情页，
+ * 详情页按单据状态决定是否出现「开始验收」按钮 —— 不为历史另做一套只读页。
+ */
+import { ref } from 'vue'
+import type { Ref } from 'vue'
+import { listAcceptanceHistoryApi } from '../../../api/acceptance'
+import { acceptanceResultText, acceptanceStatusText } from '../../../utils/acceptanceForm'
+import type { AcceptanceHistoryItem } from '../../../types/index'
+
+export type UseAcceptanceHistoryResult = {
+	items : Ref<AcceptanceHistoryItem[]>
+	loading : Ref<boolean>
+	failed : Ref<boolean>
+	load : () => Promise<void>
+	onOpenTask : (id : number) => void
+	statusText : (status : string) => string
+	resultText : (result : string) => string
+}
+
+export function useAcceptanceHistory() : UseAcceptanceHistoryResult {
+	const items = ref<AcceptanceHistoryItem[]>([])
+	const loading = ref<boolean>(false)
+	const failed = ref<boolean>(false)
+
+	async function load() : Promise<void> {
+		if (loading.value) return
+		loading.value = true
+		failed.value = false
+		try {
+			const page = await listAcceptanceHistoryApi(1, 50)
+			items.value = page.items
+		} catch (e) {
+			console.error('[acceptance] history failed:', e)
+			failed.value = true
+		} finally {
+			loading.value = false
+		}
+	}
+
+	function onOpenTask(id : number) : void {
+		uni.navigateTo({ url: '/pages/acceptance/acceptance-detail?id=' + id.toString() })
+	}
+
+	return {
+		items: items,
+		loading: loading,
+		failed: failed,
+		load: () => load(),
+		onOpenTask: (id : number) => onOpenTask(id),
+		statusText: (status : string) => acceptanceStatusText(status),
+		resultText: (result : string) => acceptanceResultText(result),
+	} as UseAcceptanceHistoryResult
+}
