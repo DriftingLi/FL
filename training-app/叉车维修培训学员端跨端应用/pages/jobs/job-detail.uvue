@@ -91,12 +91,11 @@
 
                 <!-- 操作按钮 -->
                 <view class="report-actions">
-                    <view class="report-cancel" @click="onCloseReport">
-                        <text class="report-cancel-text">取消</text>
+                    <view class="report-btn-hit report-btn-hit--left" @click="onCloseReport">
+                        <view class="report-cancel"><text class="report-cancel-text">取消</text></view>
                     </view>
-                    <view class="report-confirm"
-                        :class="{ disabled: !canSubmitReport || submittingReport }" @click="onSubmitReport">
-                        <text class="report-confirm-text">{{ submittingReport ? '提交中...' : '提交' }}</text>
+                    <view class="report-btn-hit" @click="onSubmitReport">
+                        <view class="report-confirm" :class="{ disabled: !canSubmitReport || submittingReport }"><text class="report-confirm-text">{{ submittingReport ? '提交中...' : '提交' }}</text></view>
                     </view>
                 </view>
             </view>
@@ -563,14 +562,17 @@
         justify-content: space-between;
     }
 
+    /* 票 2730 第 1 项：按钮本体仍是 80rpx 高，命中区由外层 88rpx 盒撑开（§5.11）。 */
+    .report-btn-hit { flex: 1; height: 88rpx; align-items: center; justify-content: center; }
+    .report-btn-hit--left { margin-right: 16rpx; }
+
     .report-cancel {
-        flex: 1;
+        width: 100%;
         height: 80rpx;
         border-radius: 40rpx;
         background-color: $bg-color;
         align-items: center;
         justify-content: center;
-        margin-right: 16rpx;
     }
 
     .report-cancel-text {
@@ -578,14 +580,7 @@
         color: $text-color-secondary;
     }
 
-    .report-confirm {
-        flex: 1;
-        height: 80rpx;
-        border-radius: 40rpx;
-        background-color: $primary-color;
-        align-items: center;
-        justify-content: center;
-    }
+    .report-confirm { width: 100%; height: 80rpx; border-radius: 40rpx; background-color: $primary-color; align-items: center; justify-content: center; }
 
     .report-confirm.disabled {
         background-color: $text-disabled;

@@ -487,9 +487,10 @@
         padding: 20rpx 0;
     }
 
+    /* 票 2730 docx ⑫：设计稿宫格图标 40pt@390 ≈ 77rpx，原 68rpx 偏小 ⇒ 取 76rpx */
     .grid-icon {
-        width: 68rpx;
-        height: 68rpx;
+        width: 76rpx;
+        height: 76rpx;
     }
 
     .grid-text {

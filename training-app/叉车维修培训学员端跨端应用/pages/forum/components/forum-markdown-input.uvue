@@ -74,8 +74,10 @@
         <view v-if="showImages" class="image-row">
             <view v-for="(img, idx) in previewImages" :key="img" class="image-cell">
                 <image class="image-thumb" :src="img" mode="aspectFill" @click="onPreviewImage(idx)" :webp="true" />
-                <view class="image-remove" @click.stop="onRemoveImage(idx)">
-                    <text class="image-remove-text">×</text>
+                <view class="image-remove-hit" @click.stop="onRemoveImage(idx)">
+                    <view class="image-remove">
+                        <text class="image-remove-text">×</text>
+                    </view>
                 </view>
             </view>
             <view v-if="imageCount < maxImages" class="image-add" @click="onAddImage">
@@ -435,10 +437,19 @@
         background-color: #f0f0f0;
     }
 
-    .image-remove {
+    /* 票 2730 第 1 项：× 徽标本体仍是 40rpx，命中区由外层 88rpx 盒撑开（§5.11）；
+       徽标贴住缩略图右上角，故命中盒同锚点、内容靠右上对齐。 */
+    .image-remove-hit {
         position: absolute;
         top: 0;
         right: 0;
+        width: 88rpx;
+        height: 88rpx;
+        align-items: flex-start;
+        justify-content: flex-end;
+    }
+
+    .image-remove {
         width: 40rpx;
         height: 40rpx;
         border-radius: 0 0 0 12rpx;

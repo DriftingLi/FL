@@ -37,10 +37,11 @@
             <!-- 题号导航条 -->
             <scroll-view class="palette-scroll" scroll-x="true">
                 <view v-for="(q, idx) in session.questions.value" :key="idx"
-                    class="palette-chip"
-                    :class="session.getPaletteClass(idx)"
+                    class="palette-chip-hit"
                     @click="onJumpTo(idx)">
-                    <text class="palette-chip-text" :class="session.getPaletteTextClass(idx)">{{ idx + 1 }}</text>
+                    <view class="palette-chip" :class="session.getPaletteClass(idx)">
+                        <text class="palette-chip-text" :class="session.getPaletteTextClass(idx)">{{ idx + 1 }}</text>
+                    </view>
                 </view>
             </scroll-view>
 
@@ -179,6 +180,15 @@ import { goBack } from '../../utils/navigation'
         padding: 16rpx 24rpx;
     }
 
+    /* 票 2730 第 1 项：题号 chip 视觉仍是 56rpx 圆，命中区由外层 88rpx 盒撑开（§5.11）。 */
+    .palette-chip-hit {
+        width: 88rpx;
+        height: 88rpx;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
     .palette-chip {
         width: 56rpx;
         height: 56rpx;
@@ -187,7 +197,6 @@ import { goBack } from '../../utils/navigation'
         border: 2rpx solid #e0e0e0;
         align-items: center;
         justify-content: center;
-        margin-right: 12rpx;
         flex-shrink: 0;
     }
 

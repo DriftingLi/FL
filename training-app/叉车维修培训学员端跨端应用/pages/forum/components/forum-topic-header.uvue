@@ -13,7 +13,10 @@
                 <text v-if="regionText.length > 0" class="post-region">· {{ regionText }}</text>
             </view>
         </view>
-        <text class="stat-text">👁 {{ viewsCount }}</text>
+        <view class="stat-view">
+            <image class="stat-view-icon" src="/static/icons/forum/view.png" mode="aspectFit"></image>
+            <text class="stat-text">{{ viewsCount }}</text>
+        </view>
         <view v-if="canDelete" class="topic-delete" @click="onDelete">
             <text class="topic-delete-text">删除</text>
         </view>
@@ -100,6 +103,18 @@
         font-size: 22rpx;
         color: #999999;
         margin-left: 8rpx;
+    }
+
+    .stat-view {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    /* 票 2730 docx ⑥：浏览数图标换切图（原 👁 emoji 与数字同处一个 text，字形高度不可控） */
+    .stat-view-icon {
+        width: 24rpx;
+        height: 24rpx;
+        margin-right: 6rpx;
     }
 
     .stat-text {

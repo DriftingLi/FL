@@ -12,14 +12,14 @@
             <!-- 标题栏（仅浮层形态；内嵌形态由宿主页面的导航栏承担标题） -->
             <view v-if="!embedded" class="cert-dropdown-header">
                 <text class="cert-dropdown-title">选择学习阶段</text>
-                <view class="cert-dropdown-close" @click="onClose">
+                <app-icon-button @click="onClose">
                     <text class="cert-dropdown-close-icon">✕</text>
-                </view>
+                </app-icon-button>
             </view>
             <!-- 报考省份胶囊（仅浮层形态 + 宿主开启）：与 choose-cert 主态同源，
                  浮层即「整页选证态」——省份 + 分组 + 热门考证 + 完成（#2535 设计稿 324_9793） -->
             <view v-if="!embedded && showProvince" class="cert-dropdown-province" @click="onProvinceTap">
-                <text class="cert-dropdown-province-pin">📍</text>
+                <image class="cert-dropdown-province-pin" src="/static/icons/home/location.png"></image>
                 <text class="cert-dropdown-province-label">报考省份：</text>
                 <text class="cert-dropdown-province-value">{{ province }}</text>
             </view>
@@ -31,7 +31,9 @@
                     <view class="cert-dropdown-section-header">
                         <view class="cert-dropdown-section-icon-wrap"
                             :style="{ backgroundColor: group.category === 'skill_level' ? '#E8F5E9' : '#FFF3E0' }">
-                            <text class="cert-dropdown-section-icon">{{ group.icon }}</text>
+                            <!-- 票 2730 docx ①：emoji 换成设计稿 3D 图标（技能等级证=叉车，特种作业=扳手） -->
+                            <image class="cert-dropdown-section-icon"
+                                :src="group.category === 'skill_level' ? '/static/icons/home/cert-vehicle.png' : '/static/icons/home/cert-tool.png'"></image>
                         </view>
                         <text class="cert-dropdown-section-title">{{ group.group_name }}</text>
                     </view>
@@ -65,10 +67,9 @@
                     <view class="cert-dropdown-hot-grid">
                         <view v-for="(item, idx) in hotCertList" :key="idx" class="cert-dropdown-hot-card"
                             :class="idx > 0 ? 'ml-16' : ''">
-                            <view class="cert-dropdown-hot-card-header">
-                                <text class="cert-dropdown-hot-card-star">⭐</text>
-                                <text class="cert-dropdown-hot-card-title">{{ item.title }}</text>
-                            </view>
+                            <!-- 票 2730 docx ①：⭐ emoji 换成设计稿左上角黄色四角星 -->
+                            <image class="cert-dropdown-hot-card-star" src="/static/icons/home/star-hot.png"></image>
+                            <text class="cert-dropdown-hot-card-title">{{ item.title }}</text>
                             <text class="cert-dropdown-hot-card-desc">{{ item.desc }}</text>
                         </view>
                     </view>
@@ -274,8 +275,10 @@
         align-self: flex-start;
     }
 
+    /* 票 2730 docx ①：Figma 里定位针 10x10（image 48）⇒ 20rpx */
     .cert-dropdown-province-pin {
-        font-size: 26rpx;
+        width: 20rpx;
+        height: 20rpx;
         margin-right: 8rpx;
     }
 
@@ -296,13 +299,7 @@
         color: #222222;
     }
 
-    .cert-dropdown-close {
-        width: 48rpx;
-        height: 48rpx;
-        align-items: center;
-        justify-content: center;
-    }
-
+    /* 票 2730 第 1 项：88rpx 命中盒 / 64rpx 承载面由 components/app-icon-button 承担；✕ 字形 32rpx 不变。 */
     .cert-dropdown-close-icon {
         font-size: 32rpx;
         color: #999999;
@@ -340,8 +337,10 @@
         margin-right: 12rpx;
     }
 
+    /* 票 2730 docx ①：分组图标按 Figma 元数据取（机械臂 20x24 / 叉车 23x24），盒取 48rpx 高 */
     .cert-dropdown-section-icon {
-        font-size: 28rpx;
+        width: 48rpx;
+        height: 48rpx;
     }
 
     .cert-dropdown-section-title {
@@ -416,9 +415,10 @@
     }
 
     /* ---- 热门考证标题 ---- */
+    /* 票 2730 docx ①：蓝线与标题文字居中对齐（原 flex-start 让线贴在「热」字下方） */
     .cert-dropdown-hot-header {
         flex-direction: column;
-        align-items: flex-start;
+        align-items: center;
         margin-bottom: 20rpx;
     }
 
@@ -428,8 +428,9 @@
         color: #222222;
     }
 
+    /* 票 2730 docx ①：Figma 里线宽 20px、在 64px 标题下居中（Rectangle 38 x=22 w=20）⇒ 40rpx */
     .cert-dropdown-hot-line {
-        width: 56rpx;
+        width: 40rpx;
         height: 6rpx;
         border-radius: 3rpx;
         background-color: $primary-color;
@@ -441,35 +442,37 @@
         flex-direction: row;
     }
 
+    /* 票 2730 docx ①：参考图一 —— 浅蓝→中蓝渐变、大圆角、文字居中、左上角四角星 */
     .cert-dropdown-hot-card {
         flex: 1;
-        padding: 20rpx 16rpx;
-        background: linear-gradient(to bottom right, $primary-color, #1565C0);
-        background-color: #1565C0;
-        border-radius: 12rpx;
-    }
-
-    .cert-dropdown-hot-card-header {
-        flex-direction: row;
+        position: relative;
         align-items: center;
-        margin-bottom: 8rpx;
+        padding: 32rpx 16rpx 24rpx;
+        background: linear-gradient(to bottom right, #6ECCFC, #0FA5F1);
+        background-color: #0FA5F1;
+        border-radius: 20rpx;
     }
 
+    /* 票 2730 docx ①：Figma 里星 20x20（Frame 337 x=4 y=0）⇒ 40rpx */
     .cert-dropdown-hot-card-star {
-        font-size: 24rpx;
-        margin-right: 6rpx;
+        position: absolute;
+        top: 10rpx;
+        left: 10rpx;
+        width: 40rpx;
+        height: 40rpx;
     }
 
     .cert-dropdown-hot-card-title {
-        flex: 1;
         font-size: 26rpx;
         font-weight: 600;
         color: #FFFFFF;
+        text-align: center;
     }
 
     .cert-dropdown-hot-card-desc {
         font-size: 20rpx;
         color: rgba(255, 255, 255, 0.85);
+        text-align: center;
         lines: 2;
         text-overflow: ellipsis;
     }

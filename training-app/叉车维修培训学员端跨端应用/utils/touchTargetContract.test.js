@@ -79,7 +79,18 @@ describe('触摸目标（#2445）', () => {
     expect(spec).toContain('lines: 1');
   });
 
-  it('D: 判别力 —— 修之前的旧值必须被判红', () => {
+  it('D: 独立图标按钮保留原图形，提供 64rpx 可见承载面与 88rpx 点击区', () => {
+    const componentPath = 'components/app-icon-button/app-icon-button.uvue';
+    expect(h.exists(componentPath)).toBe(true);
+
+    const component = h.read(componentPath);
+    expect(component).toContain('<slot></slot>');
+    expect(component).toMatch(/\.app-icon-button\s*\{[^}]*width:\s*88rpx;[^}]*height:\s*88rpx;/);
+    expect(component).toMatch(/\.app-icon-button-surface\s*\{[^}]*width:\s*64rpx;[^}]*height:\s*64rpx;/);
+    expect(component).toMatch(/\.app-icon-button-surface\s*\{[^}]*border-radius:\s*50%;/);
+  });
+
+  it('E: 判别力 —— 修之前的旧值必须被判红', () => {
     const oldForum = [
       '<view class="create-pill" @click="onCreate">',
       '<style lang="scss">',

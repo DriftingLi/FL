@@ -341,8 +341,8 @@ describe('#1944 browse_course：图标 / 「去完成」落点 / 流水事由（
   const displaySrc = stripComments(read('utils/pointsDisplay.uts'));
 
   it('任务中心有独立图标，且不与论坛的 daily_browse 共用一条分支', () => {
-    expect(taskSrc).toContain("if (code == 'browse_course') return '🎓'");
-    expect(taskSrc).toContain("if (code == 'daily_browse') return '📖'");
+    expect(taskSrc).toContain("if (code == 'browse_course') return 'task-browse-course.png'");
+    expect(taskSrc).toContain("if (code == 'daily_browse') return 'task-browse-post.png'");
   });
 
   it('「去完成」落课程列表 tab，不落论坛（两个码语义不同，#2065 评论点名别串台）', () => {

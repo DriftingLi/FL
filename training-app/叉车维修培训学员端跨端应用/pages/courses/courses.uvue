@@ -90,8 +90,10 @@
 
                 <!-- 更多课程按钮 -->
                 <view v-if="courses.length > 0" class="more-btn-wrap">
-                    <view class="more-btn" @click="onLoadMore">
-                        <text class="more-btn-text">更多课程</text>
+                    <view class="more-btn-hit" @click="onLoadMore">
+                        <view class="more-btn">
+                            <text class="more-btn-text">更多课程</text>
+                        </view>
                     </view>
                 </view>
             </scroll-view>
@@ -524,6 +526,13 @@
     .more-btn-wrap {
         align-items: center;
         padding: 24rpx 38rpx 48rpx;
+    }
+
+    /* 票 2730 第 1 项：按钮本体仍是 66rpx 高，命中区由外层 88rpx 盒撑开（§5.11）。 */
+    .more-btn-hit {
+        height: 88rpx;
+        align-items: center;
+        justify-content: center;
     }
 
     .more-btn {

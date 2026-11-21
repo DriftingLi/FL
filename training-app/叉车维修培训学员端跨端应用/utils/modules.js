@@ -73,6 +73,10 @@ const INFRA = {
     'components/app-card',
     'components/app-chip',
     'components/app-empty-state',
+    // 'components/app-icon-button' —— 票 2730：88rpx 命中盒 / 64rpx 可见承载面 / 50% 圆角的
+    // 共享图标按钮，被 courses / forum / profile / ai-chat 等多面消费，无单一主消费方 ⇒ 同
+    // `components/app-*` 整族口径登记为 INFRA。
+    'components/app-icon-button',
     'components/app-level-badge',
     'components/app-list-item',
     'components/app-nav-bar',

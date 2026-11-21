@@ -196,9 +196,10 @@ import { goBack } from '../../utils/navigation'
         flex-direction: column;
     }
 
+    /* 票 2730 第 1 项：命中区 ≥88rpx；文字动作按 min-width 撑开，字号不变。 */
     .nav-action {
-        width: 64rpx;
-        height: 64rpx;
+        min-width: 88rpx;
+        height: 88rpx;
         align-items: center;
         justify-content: center;
     }

@@ -125,8 +125,10 @@
                         </view>
                     </view>
                 </view>
-                <view class="add-btn" @click="edit.addEdu()">
-                    <text class="add-btn-text">+ 添加教育经历</text>
+                <view class="add-btn-hit" @click="edit.addEdu()">
+                    <view class="add-btn">
+                        <text class="add-btn-text">+ 添加教育经历</text>
+                    </view>
                 </view>
             </view>
 
@@ -387,8 +389,16 @@
         color: #fa3534;
     }
 
-    .add-btn {
+    /* 票 2730 第 1 项：按钮本体仍是 80rpx 高，命中区由外层 88rpx 盒撑开（§5.11）。 */
+    .add-btn-hit {
         margin-top: 24rpx;
+        height: 88rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .add-btn {
+        width: 100%;
         height: 80rpx;
         border-radius: 40rpx;
         border: 2rpx dashed $primary-color;

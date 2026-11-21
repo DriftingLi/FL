@@ -8,7 +8,7 @@
                 <view class="balance-card">
                     <view class="balance-top">
                         <view class="balance-coin">
-                            <text class="coin-icon">🪙</text>
+                            <image class="coin-icon" src="/static/icons/forum/coin.png" mode="aspectFit"></image>
                         </view>
                         <view class="balance-info">
                             <text class="balance-label">可用积分</text>
@@ -40,14 +40,16 @@
             <!-- 任务分组：daily / newbie 由后端 group 直分（ADR-0054 起 growth 已并入 daily） -->
             <view v-for="g in grouped" :key="g.key" class="section">
                 <view class="section-header">
-                    <text class="section-title">{{ g.label }}</text>
-                    <view class="section-underline"></view>
+                    <view class="section-heading">
+                        <text class="section-title">{{ g.label }}</text>
+                        <view class="section-underline"></view>
+                    </view>
                 </view>
                 <view class="task-card">
                     <view v-for="(task, ti) in g.tasks" :key="task.code"
                         :class="['task-item', { 'task-item-last': ti == g.tasks.length - 1 }]">
                         <view class="task-icon-wrap">
-                            <text class="task-icon">{{ taskIconText(task.code, task.group) }}</text>
+                            <image class="task-icon" :src="'/static/icons/points/' + taskIconFile(task.code, task.group)" mode="aspectFit"></image>
                         </view>
                         <view class="task-content">
                             <view class="task-title-row">
@@ -119,26 +121,28 @@
     }
 
     /**
-     * 任务图标字形：原型 569:4532 是 3D 插画，切图目录「积分规则」13 张当前判 UNUSED
-     * （主包余量见 PR 体积账）⇒ 先用 emoji 兜底，插槽按 code 预留、换图不改结构。
+     * 任务图标切图文件名：原型 569:4532 是 3D 插画，切图目录「积分规则」15 张按 code 一一对应
+     * （票 2730 docx ⑬ 图标替换：原 emoji 兜底退场）。插槽按 code 预留，换图不改结构。
+     * 只回文件名、目录前缀留在模板里 —— 包内图必须让 `:src` 表达式自带 `/static/`，
+     * 否则会被 imageWebpAttrContract 当成网络图要求 `:webp="true"`（包内 PNG 不该吃 webp）。
      */
-    function taskIconText(code : string, group : string) : string {
-        if (code == 'daily_login') return '👆'
-        if (code == 'daily_quiz') return '📝'
-        if (code == 'daily_browse') return '📖'
-        if (code == 'browse_course') return '🎓'
-        if (code == 'browse_mall') return '🛒'
-        if (code == 'exchange_gift') return '🎁'
-        if (code == 'growth_post') return '📋'
-        if (code == 'growth_reply') return '💬'
-        if (code == 'growth_mock') return '📊'
-        if (code == 'growth_first_experience') return '✍️'
-        if (code == 'newbie_profile_basic') return '👤'
-        if (code == 'newbie_profile_contact') return '📱'
-        if (code == 'newbie_credential') return '🎯'
-        if (code == 'newbie_first_course') return '🎬'
-        if (group == 'newbie') return '🎁'
-        return '⭐'
+    function taskIconFile(code : string, group : string) : string {
+        if (code == 'daily_login') return 'task-daily-login.png'
+        if (code == 'daily_quiz') return 'task-daily-quiz.png'
+        if (code == 'daily_browse') return 'task-browse-post.png'
+        if (code == 'browse_course') return 'task-browse-course.png'
+        if (code == 'browse_mall') return 'task-browse-mall.png'
+        if (code == 'exchange_gift') return 'task-exchange-gift.png'
+        if (code == 'growth_post') return 'task-post.png'
+        if (code == 'growth_reply') return 'task-reply.png'
+        if (code == 'growth_mock') return 'task-mock-exam.png'
+        if (code == 'growth_first_experience') return 'task-quiz-practice.png'
+        if (code == 'newbie_profile_basic') return 'task-profile-basic.png'
+        if (code == 'newbie_profile_contact') return 'task-profile-contact.png'
+        if (code == 'newbie_credential') return 'task-credential.png'
+        if (code == 'newbie_first_course') return 'task-first-course.png'
+        if (group == 'newbie') return 'task-invite.png'
+        return 'task-share.png'
     }
 
     /** 「去完成」落点：任务 code → 页面路由（无前置动作的任务返回空 url） */
@@ -348,7 +352,8 @@
     }
 
     .coin-icon {
-        font-size: 52rpx;
+        width: 56rpx;
+        height: 56rpx;
     }
 
     .balance-info {
@@ -404,6 +409,12 @@
         align-items: flex-start;
     }
 
+    /* 票 2730 docx ⑬：蓝线在标题文字下方居中（原左对齐贴在「每」字下方，看着偏左） */
+    .section-heading {
+        flex-direction: column;
+        align-items: center;
+    }
+
     .section-title {
         font-size: 32rpx;
         font-weight: bold;
@@ -447,7 +458,8 @@
     }
 
     .task-icon {
-        font-size: 48rpx;
+        width: 56rpx;
+        height: 56rpx;
     }
 
     .task-content {

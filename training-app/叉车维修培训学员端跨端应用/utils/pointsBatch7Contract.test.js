@@ -66,8 +66,8 @@ describe('#2523 激励批：三页路由与页内态', () => {
 
 describe('#2523 task-center：N3 #2550 两项新任务的形状骨架', () => {
   it('两个新任务码各有独立图标分支，不与既有码共用（后端落地即可显示）', () => {
-    expect(TASK).toContain("if (code == 'browse_mall') return '🛒'");
-    expect(TASK).toContain("if (code == 'exchange_gift') return '🎁'");
+    expect(TASK).toContain("if (code == 'browse_mall') return 'task-browse-mall.png'");
+    expect(TASK).toContain("if (code == 'exchange_gift') return 'task-exchange-gift.png'");
   });
 
   it('「去完成」落商城的积分兑换分区（两项奖励都发生在货架页），不落论坛/课程', () => {

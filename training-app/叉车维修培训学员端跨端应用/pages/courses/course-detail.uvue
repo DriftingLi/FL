@@ -2,9 +2,9 @@
     <view class="container" :style="{ height: windowHeight + 'px' }">
         <app-nav-bar title="课程详情" variant="inverse" @left-click="onBack">
             <template #right>
-                <view class="nav-action" @click="toggleFavorite">
+                <app-icon-button @click="toggleFavorite">
                     <text class="favorite-icon">{{ isFavorited ? '♥' : '♡' }}</text>
-                </view>
+                </app-icon-button>
             </template>
         </app-nav-bar>
 
@@ -540,13 +540,7 @@ import { goBack } from '../../utils/navigation'
     /* 两态都渲染字形（♥ 已收藏 / ♡ 未收藏），靠**实心与空心**区分选中态 ——
        与论坛 stat-like-icon（♥/♡ 同色）同一套先例。此前未收藏态渲染空串，
        点击区虽在、却没有任何可点的视觉提示，观感等同「没有收藏功能」。 */
-    .nav-action {
-        width: 64rpx;
-        height: 64rpx;
-        align-items: center;
-        justify-content: center;
-    }
-
+    /* 票 2730 第 1 项：88rpx 命中盒 / 64rpx 承载面由 components/app-icon-button 承担，本处只留字形。 */
     .favorite-icon {
         font-size: 40rpx;
         color: #ffffff;

@@ -3,8 +3,10 @@
 		<view class="tray-row">
 			<view v-for="(u, idx) in images" :key="u" class="tray-item" @click="onPreview(idx)">
 				<image class="tray-thumb" :src="resolveUrl(u)" mode="aspectFill" :webp="true" />
-				<view class="tray-del" @click.stop="onRemove(idx)">
-					<text class="tray-del-text">×</text>
+				<view class="tray-del-hit" @click.stop="onRemove(idx)">
+					<view class="tray-del">
+						<text class="tray-del-text">×</text>
+					</view>
 				</view>
 			</view>
 			<view v-for="p in placeholders" :key="p" class="tray-item tray-item-uploading">
@@ -98,10 +100,19 @@
 		color: #8a8a8a;
 	}
 
-	.tray-del {
+	/* 票 2730 第 1 项：× 徽标本体仍是 36rpx，命中区由外层 88rpx 盒撑开（§5.11）；
+	   徽标贴住缩略图右上角，故命中盒同锚点、内容靠右上对齐。 */
+	.tray-del-hit {
 		position: absolute;
 		right: 0;
 		top: 0;
+		width: 88rpx;
+		height: 88rpx;
+		align-items: flex-start;
+		justify-content: flex-end;
+	}
+
+	.tray-del {
 		width: 36rpx;
 		height: 36rpx;
 		border-radius: 18rpx;
