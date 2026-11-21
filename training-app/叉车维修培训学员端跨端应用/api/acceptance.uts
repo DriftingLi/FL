@@ -15,8 +15,8 @@
  * 后端未交付的来路：本仓 `inspection` 域只服务管理端巡检（`/admin/inspection/*`），
  * 学员侧没有任何验收端点 —— 不把巡检接口当验收接口用（两套语义，复用会把权限口径带歪）。
  */
-import { getMapped, getPaged, postMapped, uploadFile } from './request'
-import { decodeList } from './envelope'
+import { getMapped, postMapped, uploadFile } from './request'
+import { decodeList, getPaged } from './envelope'
 import { toNumber, toStr } from './helpers'
 import {
 	mockAcceptanceTasks,
@@ -132,7 +132,12 @@ export function listPendingAcceptanceApi() : Promise<AcceptanceTask[]> {
 export function getAcceptanceDetailApi(id : number) : Promise<AcceptanceTaskDetail> {
 	if (ACCEPTANCE_USE_MOCK) {
 		const detail = mockAcceptanceDetail(id)
-		if (detail == null) return Promise.reject(new Error('验收单不存在'))
+		if (detail == null) {
+			// 不用裸 Promise.reject：Kotlin 侧会推成 UTSPromise<Unit>，与返回类型不符
+			return new Promise<AcceptanceTaskDetail>((resolve, reject) => {
+				reject(new Error('验收单不存在'))
+			})
+		}
 		return Promise.resolve(detail)
 	}
 	const url = ACCEPTANCE_BASE + '/tasks/' + id.toString()

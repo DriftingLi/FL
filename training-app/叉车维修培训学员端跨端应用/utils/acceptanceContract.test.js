@@ -154,7 +154,7 @@ describe('三态与关键交互', () => {
     expect(src).toContain('@click="onSelectResult(item.id, opt.value)"');
     expect(src).toContain('<textarea');
     expect(src).toContain(':maxlength="remarkMax"');
-    expect(src).toContain('@input="onRemarkInput(item.id, $event)"');
+    expect(src).toContain('@input="onRemarkInput(item.id, $event as InputEvent)"');
     expect(src).toContain('@click="onAddProof(item.id)"');
     expect(src).toContain("'上传中...' : '+ 添加凭证'");
     expect(src).toContain("p.kind == 'image'");

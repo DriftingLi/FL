@@ -43,7 +43,7 @@
 
                     <textarea class="item-remark" :value="item.remark" :maxlength="remarkMax"
                         placeholder="补充说明（选择「不通过 / 待整改」时必填）"
-                        @input="onRemarkInput(item.id, $event)" />
+                        @input="onRemarkInput(item.id, $event as InputEvent)" />
 
                     <view class="proof-head">
                         <text class="proof-title">验收凭证（{{ item.proofs.length }}/{{ proofsMax }}）</text>
