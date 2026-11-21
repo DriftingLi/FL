@@ -21,14 +21,14 @@
         />
         <UiSelect
           v-model="filters.type"
-          :options="QUESTION_TYPE_OPTIONS"
+          :options="questionTypeOptions"
           placeholder="题型"
           clearable
           class="!w-[130px]"
         />
         <UiSelect
           v-model="filters.status"
-          :options="QUESTION_STATUS_OPTIONS"
+          :options="questionStatusOptions"
           placeholder="状态"
           clearable
           class="!w-[120px]"
@@ -92,7 +92,7 @@
             >
               <UiTag tone="danger">已驳回</UiTag>
             </UiTooltip>
-            <UiTag v-else :tone="statusTone[row.status]">{{ statusMap[row.status] }}</UiTag>
+            <UiTag v-else :tone="questionStatusTone[row.status]">{{ questionStatusMap[row.status] }}</UiTag>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="90" fixed="right" align="center">
@@ -161,7 +161,7 @@ import { ElMessage } from 'element-plus'
 import { questionBankApi } from '@/api/questionBank'
 import { credentialApi, type CredentialDict } from '@/api/credential'
 import type { Question } from '@/types/question'
-import { typeMap } from '@/constants/question'
+import { typeMap, questionTypeOptions, questionStatusOptions, questionStatusMap, questionStatusTone } from '@/constants/question'
 import UiPageHeader from '@/components/ui/UiPageHeader.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiButton from '@/components/ui/UiButton.vue'
@@ -182,33 +182,12 @@ import UiSwitch from '@/components/ui/UiSwitch.vue'
 import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
-const statusMap: Record<string, string> = { draft: '草稿', pending: '待审核', published: '已发布' }
-/** 状态徽标色调：draft 中性 / pending 警示 / published 成功 */
-const statusTone: Record<string, 'neutral' | 'warning' | 'success'> = {
-  draft: 'neutral',
-  pending: 'warning',
-  published: 'success'
-}
 
 const credentials = ref<CredentialDict[]>([])
 /** 所属证件 → {label,value} */
 const credentialOptions = computed<UiSelectOption[]>(() =>
   credentials.value.map((c) => ({ label: c.name, value: c.id }))
 )
-/** 题型筛选（静态枚举，原先是五个内联 el-option） */
-const QUESTION_TYPE_OPTIONS: UiSelectOption[] = [
-  { label: '单选题', value: 'single_choice' },
-  { label: '多选题', value: 'multi_choice' },
-  { label: '判断题', value: 'true_false' },
-  { label: '故障识图', value: 'fault_image' },
-  { label: '简答题', value: 'short_answer' }
-]
-/** 状态筛选 */
-const QUESTION_STATUS_OPTIONS: UiSelectOption[] = [
-  { label: '草稿', value: 'draft' },
-  { label: '待审核', value: 'pending' },
-  { label: '已发布', value: 'published' }
-]
 /** 「浏览指定证件」：导师端筛选栏选择的证件（非「当前证件」——导师没有 current_credential_id）。 */
 const browseCredentialId = ref<number | null>(null)
 const questions = ref<Question[]>([])

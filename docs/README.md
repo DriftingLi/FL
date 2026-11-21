@@ -8,10 +8,10 @@
 
 | 目录 | 入库 | 用途 |
 | --- | --- | --- |
-| `docs/adr/` | ✅ | 架构决策记录（`ADR-0001-…` ~ `ADR-0102`，104 篇；移动端另有独立 ADR 体系见 `training-app/…/docs/adr/`） |
+| `docs/adr/` | ✅ | 架构决策记录（`ADR-0001-…` ~ `ADR-0104`，106 篇；移动端另有独立 ADR 体系见 `training-app/…/docs/adr/`） |
 | `docs/agents/` | ✅ | AI/agent 工作约定，由根 `AGENTS.md` 导航（issue-tracker / triage-labels / domain / security-scan / ui-conventions / checks / release / multi-agent-git / handoff-验收门） |
 | `docs/README.md` | ✅ | 本索引 |
-| `docs/verification/` | ✅ | 验收产物（真机截图等），按 `<模块>/<票号>/` 分目录存放（#1770 起目录键 = 票号；旧 PR 号目录同为数字段、仍被接受）——`pr-evidence` 认的可核验产物路径之一，不按「方案文档」归档 |
+| `docs/verification/` | ✅ | 历史验收产物（真机截图 / 日志），按 `<模块>/<票号>/` 分目录存放（#1770 起目录键 = 票号）。**截图自 A1 形态（2026-10-29 #2100）起不再是验收证据**，② 门亦于 2026-11-05 整体退役（#2320）；本目录只作历史留档，新 PR 不再往里加图 |
 | `docs/design/` | ✅ | 调研与实测账本（如 `1445-api-contract-test-audit.md`、`1445-p4-comment-audit.md`）——**可被引用的判据来源**，不是草稿 |
 | `docs/plans/` | ❌ | 产品 / 技术方案、实施计划（当前为空；命名建议 `主题-方案.md`） |
 | `docs/reference/` | ❌ | 参考资料：业务数据表、评估填报界面、代码 Wiki 等 |
@@ -42,12 +42,12 @@
 | `release.md` | 发布流程（分支 + PR + ruleset 门禁 + squash 直发 production） |
 | `multi-agent-git.md` | 多 Agent 并发与 git 隔离（worktree / 游离提交 / add 纪律） |
 | `CODING_STANDARDS.md` | 编码规范（judgement 类）：新增守护 / 机检前先查「不立守护」裁定；只收判据、不接门禁（#2346） |
-| `handoff-验收门-2026-09-11.md` | 验收门改造的**交接记录**（2026-09-11）；被 `multi-agent-git.md` 与 `.github/scripts/pr-evidence-check.test.mjs` 引用，属在用的判据来源，不是可归档的草稿 |
+| `handoff-验收门-2026-09-11.md` | **历史交接记录**（2026-09-11）。文中门 ②（2026-11-05 退役，#2320）与 ①b（2026-10-29 退役，#2103）均已作废；保留是因为 `multi-agent-git.md`、移动端 ADR-0024 等仍按历史事实引用它，**不再作为现行判据来源** |
 
 ### docs/adr/（入库）
 
-104 篇，文件名一律 `ADR-NNNN-主题.md`（如 `ADR-0001-验证码通道适配器seam`、`ADR-0028-打卡积分直记化与每日登录事实源迁移`）。清单与最新决策见仓库 `docs/adr/` 目录本身，不在此重复维护。
-<!-- 计数基线 2026-11-20（ADR-0102 入库后）；新增 ADR 时同步这里、根 README 的两处计数，或按 `ls docs/adr/ADR-*.md | wc -l` 重算。 -->
+106 篇，文件名一律 `ADR-NNNN-主题.md`（如 `ADR-0001-验证码通道适配器seam`、`ADR-0028-打卡积分直记化与每日登录事实源迁移`）。清单与最新决策见仓库 `docs/adr/` 目录本身，不在此重复维护。
+<!-- 计数基线 2026-11-21（ADR-0104 入库后）；新增 ADR 时同步这里、根 README 的两处计数，或按 `ls docs/adr/ADR-*.md | wc -l` 重算。 -->
 
 ### docs/plans/（本地，当前为空）
 

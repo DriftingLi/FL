@@ -1,0 +1,57 @@
+#!/bin/sh
+# 提交前文件大小闸：别让巨型文件再长出来。
+#   新增文件（A）> 20000 字节（≈5000 token）拒绝 —— 新东西一开始就拆好。
+#   改动文件（M）> 100000 字节拒绝 —— 存量巨物允许继续改，但别在它们身上再堆。
+# 跳过 lockfile / 生成物 / 二进制 —— agent 不会去读它们。
+# 安装：pwsh scripts/install-hooks.ps1（把 core.hooksPath 指向 .githooks/）
+# 临时绕过：git commit --no-verify
+
+NEW_LIMIT=20000
+MOD_LIMIT=100000
+
+newf=$(mktemp) || exit 1
+modf=$(mktemp) || exit 1
+git diff --cached --name-only --diff-filter=A > "$newf" || { rm -f "$newf" "$modf"; exit 1; }
+git diff --cached --name-only --diff-filter=M > "$modf" || { rm -f "$newf" "$modf"; exit 1; }
+
+fail=0
+
+skip() {
+  case "$1" in
+    *package-lock.json|*pnpm-lock.yaml|*yarn.lock|*.lock|*go.sum) return 0 ;;
+    */dist/*|*/node_modules/*|*/build/*|*.min.js|*.min.css) return 0 ;;
+    *.png|*.jpg|*.jpeg|*.gif|*.webp|*.svg|*.ico|*.bmp|*.woff|*.woff2|*.ttf|*.otf) return 0 ;;
+    *.pdf|*.xlsx|*.xls|*.docx|*.doc|*.pptx|*.zip|*.gz|*.tar|*.apk|*.aab|*.xdb|*.db) return 0 ;;
+    backend/docs/docs.go|backend/docs/swagger.json|backend/docs/swagger.yaml) return 0 ;;
+    backend/migrations/*.sql) return 0 ;;
+  esac
+  return 1
+}
+
+check() {
+  list=$1
+  limit=$2
+  label=$3
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    skip "$f" && continue
+    [ -f "$f" ] || continue
+    size=$(wc -c < "$f" | tr -d ' ')
+    if [ "$size" -gt "$limit" ]; then
+      echo "✗ 提交被拒：$f 有 $size 字节（$label 上限 $limit，约 $((limit / 4)) token）" >&2
+      fail=1
+    fi
+  done < "$list"
+}
+
+check "$newf" "$NEW_LIMIT" "新增文件"
+check "$modf" "$MOD_LIMIT" "改动文件"
+
+rm -f "$newf" "$modf"
+
+if [ "$fail" -ne 0 ]; then
+  echo "  新增文件请按功能拆开；存量巨物请先拆再改。" >&2
+  echo "  生成物/二进制请加进 .githooks/pre-commit 的跳过名单。" >&2
+fi
+
+exit $fail
