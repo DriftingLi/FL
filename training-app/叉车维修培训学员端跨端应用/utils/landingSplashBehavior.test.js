@@ -151,8 +151,8 @@ describe('接线（#2535：闪屏层叠在着陆页内，不建路由）', () =>
   const src = readText(PAGE);
 
   it('只起在未登录分支：已登录那条 reLaunch 仍是无条件落地、且不触发闪屏', () => {
-    // 守卫块内仍是「restore → reLaunch」原样；闪屏只在 else 分支起（已登录页面不会被绘制）
-    expect(src).toMatch(/if \(auth\.isLoggedIn\.value\) \{[\s\S]*?reLaunch\(\{[\s\S]*?\/pages\/dashboard\/dashboard/);
+    // 守卫块内仍是「restore → reLaunch」原样；落点走身份分流（招聘者会话不得被送进学员首页）
+    expect(src).toMatch(/if \(auth\.isLoggedIn\.value\) \{[\s\S]*?reLaunch\(\{[\s\S]*?landingPathForActiveRole\(\)/);
     expect(src).toMatch(/\} else \{[\s\S]*?startSplash\(\)/);
   });
 
