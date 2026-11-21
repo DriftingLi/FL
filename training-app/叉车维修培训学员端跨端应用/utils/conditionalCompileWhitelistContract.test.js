@@ -18,7 +18,7 @@
  * 6 行 ⇒ 11 文件 / 72 行；#2642 回复面同一口径再加白 2 文件 / 6 行 ⇒ 13 文件 / 78 行；
  * 2026-11-19 微信回复面新增模板分支 4 行 ⇒ 13 文件 / 82 行；#2691 回复浮层拆件把 WYSIWYG 的
  * 4 行分叉从详情页搬到新件 ⇒ 14 文件 / 82 行，总数不变；#2743 验收凭证选择新增 1 文件 / 4 行
- * ⇒ 15 文件 / 86 行）
+ * ⇒ 15 文件 / 86 行；#2757 个人信息页内联微信头像/昵称新增 1 文件 / 6 行 ⇒ 16 文件 / 92 行）
  * 基线是**策略**不是**现值**：降到 0 的文件也留在表里（留在表里才挡得住它再长回来）。
  * 只减不增 ⇒ 删分叉的票可以顺手把对应数字下调，**不要**为了「测试绿」而整体重算基线。
  *
@@ -63,7 +63,10 @@ const BASE = {
   // #2743：验收凭证「文件」只能走微信的 chooseMessageFile（App/H5 是 chooseFile），
   // 两个 API 在对方平台**不存在** ⇒ 必须编译期分流（运行期 if 躲不开 unresolved reference）。
   // 与 #2641 的 WYSIWYG 同一口径：新文件显式加白 4 行，不是放宽扫描器。
-  'pages/acceptance/composables/useAcceptanceSubmit.uts': 4
+  'pages/acceptance/composables/useAcceptanceSubmit.uts': 4,
+  // #2757：微信 chooseAvatar 按钮与 nickname 键盘只在微信端存在（App/H5 无此 open-type，
+  // 运行期 if 躲不开 unresolved reference）⇒ 模板 2 行 + 昵称输入类型 2 行 + 头像点击让位 2 行 = 6 行。
+  'pages/profile/personal-info.uvue': 6
 };
 
 /** vendor 面：不属本仓策略边界（见文件头口径） */
@@ -115,9 +118,9 @@ describe('条件编译白名单：#ifdef / #ifndef / #endif 只减不增（#2331
     expect(violations(sources())).toEqual([]);
   });
 
-  it('基线与现值同量级（86 行基线不许悄悄翻倍）', () => {
+  it('基线与现值同量级（92 行基线不许悄悄翻倍）', () => {
     const base = Object.values(BASE).reduce((a, b) => a + b, 0);
-    expect(base).toBe(86);
+    expect(base).toBe(92);
   });
 });
 

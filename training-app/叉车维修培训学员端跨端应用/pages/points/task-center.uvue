@@ -151,7 +151,8 @@
         if (code == 'daily_browse' || code == 'growth_reply') return { url: '/pages/forum/forum', tab: true } as TaskRoute
         if (code == 'growth_post' || code == 'growth_first_experience') return { url: '/pages/forum/forum-create', tab: false } as TaskRoute
         if (code == 'newbie_profile_basic' || code == 'newbie_profile_contact') return { url: '/pages/profile/personal-info', tab: false } as TaskRoute
-        if (code == 'newbie_credential') return { url: '/pages/profile-setup/profile-setup', tab: false } as TaskRoute
+        // #2757：newbie_credential 的后端语义是「选定目标证件」，落证件选择页（原先错配到已下线的完善资料页）
+        if (code == 'newbie_credential') return { url: '/pages/guide/choose-cert', tab: false } as TaskRoute
         if (code == 'newbie_first_course') return { url: '/pages/courses/courses', tab: true } as TaskRoute
         // #1944「浏览 3 门课程」落课程列表；daily_browse 是论坛帖子浏览，两者不得同落点
         if (code == 'browse_course') return { url: '/pages/courses/courses', tab: true } as TaskRoute
