@@ -10,8 +10,8 @@
     <UiFilterBar>
         <template #filters>
 
-      <UiSelect v-model="filters.type" placeholder="题型" clearable style="width: 130px" :options="[{ label: '单选题', value: 'single_choice' }, { label: '多选题', value: 'multi_choice' }, { label: '判断题', value: 'true_false' }, { label: '故障识图', value: 'fault_image' }, { label: '简答题', value: 'short_answer' }]" />
-      <UiSelect v-model="filters.status" placeholder="状态" clearable style="width: 120px" :options="[{ label: '待审核', value: 'pending' }, { label: '已发布', value: 'published' }, { label: '草稿', value: 'draft' }]" />
+      <UiSelect v-model="filters.type" placeholder="题型" clearable style="width: 130px" :options="questionTypeOptions" />
+      <UiSelect v-model="filters.status" placeholder="状态" clearable style="width: 120px" :options="questionStatusOptions" />
       <UiInput v-model="filters.keyword" placeholder="搜索题目" clearable style="width: 200px" @keyup.enter="loadData"  />
       <UiButton variant="primary" @click="loadData">查询</UiButton>
       <UiButton variant="success" v-if="selectedIds.length > 0" @click="batchPublish">
@@ -39,7 +39,7 @@
       <el-table-column prop="content" label="题干" show-overflow-tooltip />
       <el-table-column label="状态" width="100">
         <template #default="{ row }">
-          <UiTag :tone="statusType[row.status]" size="small">{{ statusMap[row.status] }}</UiTag>
+          <UiTag :tone="questionStatusTone[row.status]" size="small">{{ questionStatusMap[row.status] }}</UiTag>
         </template>
       </el-table-column>
       <el-table-column label="操作" width="90" fixed="right" align="center">
@@ -115,9 +115,8 @@ defineOptions({ name: 'QuestionReview' })
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { questionBankApi } from '@/api/questionBank'
-import type { UiTagTone } from '@/components/ui/UiTag.vue'
 import type { Question } from '@/types/question'
-import { typeMap } from '@/constants/question'
+import { typeMap, questionTypeOptions, questionStatusOptions, questionStatusMap, questionStatusTone } from '@/constants/question'
 import { useAdminTable } from '@/composables/useAdminTable'
 import { useRejectReasonDialog } from '@/composables/useRejectReasonDialog'
 import UiButton from '@/components/ui/UiButton.vue'
@@ -131,9 +130,6 @@ import UiAlert from '@/components/ui/UiAlert.vue'
 import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 import UiSelect from '@/components/ui/UiSelect.vue'
-
-const statusMap: Record<string, string> = { draft: '草稿', pending: '待审核', published: '已发布' }
-const statusType: Record<string, UiTagTone> = { draft: 'info', pending: 'warning', published: 'success' }
 
 // 列表：admin 列表状态机 useAdminTable（#792，ADR-0039）——三态 + 分页 + 列表托管。
 // 解构改名保持模板零改动；filters 为页面自管筛选轴（由 fetch adapter 读取）。
