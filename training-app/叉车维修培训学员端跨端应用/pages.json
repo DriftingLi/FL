@@ -484,38 +484,6 @@
                 }
             }
         ]
-    },
-    {
-        "root": "pages/acceptance",
-        "pages": [{
-                "path": "acceptance-list",
-                "style": {
-                    "navigationStyle": "custom",
-                    "navigationBarTitleText": "验收中心"
-                }
-            },
-            {
-                "path": "acceptance-detail",
-                "style": {
-                    "navigationStyle": "custom",
-                    "navigationBarTitleText": "验收详情"
-                }
-            },
-            {
-                "path": "acceptance-submit",
-                "style": {
-                    "navigationStyle": "custom",
-                    "navigationBarTitleText": "提交验收"
-                }
-            },
-            {
-                "path": "acceptance-history",
-                "style": {
-                    "navigationStyle": "custom",
-                    "navigationBarTitleText": "验收历史"
-                }
-            }
-        ]
     }
 ],
     "globalStyle": {
