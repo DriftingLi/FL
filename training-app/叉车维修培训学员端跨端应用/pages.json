@@ -29,13 +29,6 @@
             }
         },
         {
-            "path": "pages/profile-setup/profile-setup",
-            "style": {
-                "navigationStyle": "custom",
-                "navigationBarTitleText": "完善资料"
-            }
-        },
-        {
             "path": "pages/guide/choose-cert",
             "style": {
                 "navigationStyle": "custom",

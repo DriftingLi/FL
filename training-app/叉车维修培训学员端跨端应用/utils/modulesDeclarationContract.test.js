@@ -96,9 +96,9 @@ const SCAN_CODE = new Map(SCAN.map((f) => [f, codeOnly(h.read(f))]));
 const REAL = h.reconcile();
 
 describe('A. 真源声明与磁盘一致（双向对账 / 跨模块唯一 / 接线 / 消费者 / 预算）', () => {
-  it('A1: 扫描面非空（防空集合假绿：声明 23 个、目录 23 个、枚举到的文件成规模）', () => {
-    expect(h.moduleKeys()).toHaveLength(23);
-    expect(h.pagesModuleDirs()).toHaveLength(23);
+  it('A1: 扫描面非空（防空集合假绿：声明 22 个、目录 22 个、枚举到的文件成规模；#2758 下线验收中心、#2757 下线 profile-setup ⇒ 24→22）', () => {
+    expect(h.moduleKeys()).toHaveLength(22);
+    expect(h.pagesModuleDirs()).toHaveLength(22);
     const onDisk = h.moduleKeys().reduce((n, k) => n + h.moduleOnDisk(k).length, 0);
     const declared = h.moduleKeys().reduce((n, k) => n + h.declaredFiles(k).length, 0);
     expect(onDisk).toBeGreaterThan(100);

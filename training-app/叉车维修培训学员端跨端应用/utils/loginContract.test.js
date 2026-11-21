@@ -599,16 +599,18 @@ describe('行为保持点（票面 ②：UI 像素级不变 / 表单行为逐字
     expect(form).not.toContain('function afterLoginSuccess');
     expect(outlet).toContain('export function afterLoginSuccess(isNew : boolean) : void {');
     expect(outlet).toContain("uni.showToast({ title: '已为您自动注册账号', icon: 'none', duration: 1500 })");
-    // #2712：新用户先到完善资料页（带 from=login），该页出口再回 choose-cert
-    expect(outlet).toContain("uni.reLaunch({ url: '/pages/profile-setup/profile-setup?from=login' })");
+    // #2757：新用户直接到证件选择页（#1478 判据 4 不变；完善资料中转页已下线）
+    expect(outlet).toContain("uni.reLaunch({ url: '/pages/guide/choose-cert' })");
     expect(outlet).toContain("uni.showToast({ title: '登录成功', icon: 'success', duration: 1000 })");
     expect(outlet).toContain("uni.reLaunch({ url: '/pages/dashboard/dashboard' })");
     expect(outlet).toContain('}, 800)');
     expect(outlet).toContain('}, 500)');
     // 判别力：新出口在出口文件里**恰好一处**（多一处 = 分叉被人复制，少一处 = 票面判据 4 被破）
-    const profileSetupAt = (src) => [...src.matchAll(/\/pages\/profile-setup\/profile-setup/g)].length;
-    expect(profileSetupAt(outlet)).toBe(1);
-    expect(profileSetupAt(outlet.replace("uni.reLaunch({ url: '/pages/profile-setup/profile-setup?from=login' })", "uni.reLaunch({ url: '/pages/dashboard/dashboard' })"))).toBe(0);
+    const chooseCertAt = (src) => [...src.matchAll(/\/pages\/guide\/choose-cert/g)].length;
+    expect(chooseCertAt(outlet)).toBe(1);
+    expect(chooseCertAt(outlet.replace("uni.reLaunch({ url: '/pages/guide/choose-cert' })", "uni.reLaunch({ url: '/pages/dashboard/dashboard' })"))).toBe(0);
+    // 完善资料页已下线：出口不得再引用它
+    expect(outlet).not.toContain('profile-setup');
   });
 
   it('主按钮文案两态与验证码提示三档逐字仍在（#1879 起微信态随模式退役）', () => {

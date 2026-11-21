@@ -37,15 +37,16 @@ export function landingPathForActiveRole() : string {
 
 /**
  * 登录成功后的落地分叉。
- * @param isNew 后端 `/auth/wx-login` 回的 `is_new`：新用户先到完善资料页（#2712 微信资料一键填充，
- *              带 `from=login` 让该页出口回 choose-cert），老用户才直接进 dashboard。
- *              新用户最终仍落到 choose-cert（#1478 票面判据 4 不变，只是中间多一站）。
+ * @param isNew 后端 `/auth/wx-login` 回的 `is_new`：新用户先到证件选择页（#1478 票面判据 4），
+ *              老用户直接进 dashboard。
+ *              #2757 起不再经「完善资料」中转页 —— 微信昵称/头像的一键填充已内联到个人信息页
+ *              的头像行与昵称行，新用户不必在登录后被拦一道。
  */
 export function afterLoginSuccess(isNew : boolean) : void {
     if (isNew) {
         uni.showToast({ title: '已为您自动注册账号', icon: 'none', duration: 1500 })
         setTimeout(() => {
-            uni.reLaunch({ url: '/pages/profile-setup/profile-setup?from=login' })
+            uni.reLaunch({ url: '/pages/guide/choose-cert' })
         }, 800)
     } else {
         uni.showToast({ title: '登录成功', icon: 'success', duration: 1000 })

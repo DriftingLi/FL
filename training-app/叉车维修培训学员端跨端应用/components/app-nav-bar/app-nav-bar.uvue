@@ -398,8 +398,12 @@
         color: $text-color;
     }
 
+    /* #2757：56rpx → 88rpx。`‹` 是细笔画标点，ink 高只有字号的 ~0.36 倍
+       （56rpx 时 ink ≈ 20rpx，而 36rpx 标题的汉字 ink ≈ 34rpx ⇒ 视觉上箭头明显偏小）。
+       88rpx 时 ink ≈ 32rpx ≈ 标题 ink 的 93%，视觉等高；行盒约 105rpx 溢出 88rpx bar，
+       但 align-items:center 下 ink 仍居中，且 bar 定高不随行盒撑开。 */
     .nav-bar-icon--back {
-        font-size: 56rpx;
+        font-size: 88rpx;
     }
 
     .nav-bar-inverse-text {

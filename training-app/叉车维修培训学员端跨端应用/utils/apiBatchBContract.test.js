@@ -4,9 +4,12 @@
  * 批 B 点名的四张面（index / exam-info / resources / profile-setup）里真缺口有两处：resources 域的
  * `api/material.uts`（整文件裸 `get().then()`；收紧面与幻影路由锁写在 `utils/resourcesContract.test.js`，
  * 因为那两个文件按 ADR-0023 归属 resources 模块），与 profile-setup 寄在共享文件里的
- * `api/auth.uts` 的 `updateProfileApi`（本文件锁它）。index / exam-info / profile-setup 三张面**没有域
+ * `api/auth.uts` 的 `updateProfileApi`（本文件锁它）。index / exam-info 两张面**没有域
  * api 文件**（`utils/modules.js` 声明面：各只有一个页面文件）⇒ 对它们交付**不回潮锁**（ADR-0007：票面写
  * 「清零」而实测已零时，锁住现状而不是删东西凑数）。
+ *
+ * #2757 下线 profile-setup 页后，该面从「四张面」里退场：消费方由三文件七处收窄为两文件五处，
+ * 直发请求不回潮锁的扫描面由四模块收窄为三模块。
  *
  * 钉住的契约：
  * 1) `updateProfileApi` 走 `requestMapped` + `opts.method = 'PUT'`（与 `put()` 逐字同通路，
@@ -16,7 +19,7 @@
  * 4) `api/auth.uts` 文件头那句「其余资料类出口本轮不动」已被本票推翻，必须与实现同批更新
  * 5) api/ 层豁免面棘轮（#654 回记：机制已删除 ⇒ 名单为空时「只减不增」恒真，该锁随机制退场，
  *    防回潮改由 `modulesDeclarationContract.test.js` C 组在全仓面上执法）
- * 6) 批 B 四模块零直发请求不回潮：`pages/<模块>/**` 无 `uni.request` 裸调、无 `api/request` import
+ * 6) 批 B 三模块零直发请求不回潮：`pages/<模块>/**` 无 `uni.request` 裸调、无 `api/request` import
  *
  * 本套件是**接线守护**（源码文本判据，不构成 ③ 门的行为证据）；每条判据带注入自检。
  */
@@ -24,7 +27,6 @@ const h = require('./contractHarness');
 const read = h.read;
 
 const AUTH_API = 'api/auth.uts';
-const PROFILE_SETUP = 'pages/profile-setup/profile-setup.uvue';
 const FLOWS = 'pages/profile/composables/personal-info-flows.uts';
 const PROFILE_PAGE = 'pages/profile/profile.uvue';
 
@@ -120,9 +122,9 @@ describe('api/auth.uts 资料出口收紧（#653 兑现文件头遗留的 `updat
   });
 });
 
-describe('消费面零改动（票面「调用方仅机械适配」的实测：七处调用点全部 void 用法）', () => {
-  /** 三个消费文件（实测七个调用点，`api/auth.uts` 文件头逐条列了行号） */
-  const CONSUMERS = [PROFILE_SETUP, FLOWS, PROFILE_PAGE];
+describe('消费面零改动（票面「调用方仅机械适配」的实测：五处调用点全部 void 用法）', () => {
+  /** 两个消费文件（实测五处调用点，`api/auth.uts` 文件头逐条列了行号；#2757 下线 profile-setup 后由七处收窄） */
+  const CONSUMERS = [FLOWS, PROFILE_PAGE];
 
   /** 调用点行：出现 `updateProfileApi(` / `uploadAvatarApi(` 的行（import 行不带左括号，天然排除） */
   function callLines(src) {
@@ -140,13 +142,9 @@ describe('消费面零改动（票面「调用方仅机械适配」的实测：�
     expect(nonVoidCallLines(src)).toEqual([]);
   });
 
-  it('全仓调用点总数 = 7（新增消费方要走 DTO，别在这里悄悄加计数）', () => {
+  it('全仓调用点总数 = 5（新增消费方要走 DTO，别在这里悄悄加计数）', () => {
     const total = CONSUMERS.reduce((n, rel) => n + callLines(stripComments(read(rel))).length, 0);
-    expect(total).toBe(7);
-  });
-
-  it('profile-setup 的 import 面逐字保持（类型名零改动 ⇒ 页面零 diff）', () => {
-    expect(read(PROFILE_SETUP)).toMatch(/import \{ uploadAvatarApi, updateProfileApi \} from '\.\.\/\.\.\/api\/auth'/);
+    expect(total).toBe(5);
   });
 
   it('判据具备判别力（把一处 await 改成接返回值，同一条判据必须抓到它）', () => {
@@ -158,8 +156,8 @@ describe('消费面零改动（票面「调用方仅机械适配」的实测：�
   });
 });
 
-describe('批 B 四模块零直发请求不回潮（页面层不碰请求层）', () => {
-  const MODULES = ['pages/index', 'pages/exam-info', 'pages/profile-setup', 'pages/resources'];
+describe('批 B 三模块零直发请求不回潮（页面层不碰请求层）', () => {
+  const MODULES = ['pages/index', 'pages/exam-info', 'pages/resources'];
 
   /** 判据本体：一个源文件的直发请求面（真源扫描与注入自检共用同一条） */
   function directRequestHits(src) {
@@ -176,14 +174,14 @@ describe('批 B 四模块零直发请求不回潮（页面层不碰请求层）'
     return out;
   };
 
-  it('四个模块目录下每个源文件都无 uni.request 裸调、无 api/request import', () => {
+  it('三个模块目录下每个源文件都无 uni.request 裸调、无 api/request import', () => {
     const files = moduleSources();
     expect(files.length).toBeGreaterThan(0);
     expect(files.filter(([, src]) => directRequestHits(src).length > 0)).toEqual([]);
   });
 
   it('判据具备判别力（同一判据跑注入源必须两条违例都抓到，跑真源必须零）', () => {
-    const clean = read(PROFILE_SETUP);
+    const clean = read(PROFILE_PAGE);
     expect(directRequestHits(clean)).toEqual([]);
     const injected = clean + "\n    uni.request({ url: 'x' })\n    import { get } from '../../api/request'\n";
     expect(directRequestHits(injected)).toEqual(['uni.request 裸调', 'import api/request']);
