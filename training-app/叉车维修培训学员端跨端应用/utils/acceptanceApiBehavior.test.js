@@ -67,6 +67,14 @@ describe('mock 开关与数据源', () => {
     expect(tasks.map((t) => t.id)).toEqual([101, 102]);
   });
 
+  it('按状态筛选：submitted / done 各自只回对应单据', async () => {
+    const { api } = loadApi();
+    const submitted = await api.listAcceptanceTasksApi('submitted');
+    expect(submitted.length).toBe(0);
+    const done = await api.listAcceptanceTasksApi('done');
+    expect(done.map((t) => t.id).sort()).toEqual([201, 202]);
+  });
+
   it('详情带回完整验收项，初始全部未确认', async () => {
     const { api } = loadApi();
     const detail = await api.getAcceptanceDetailApi(101);
@@ -128,6 +136,17 @@ describe('提交闭环', () => {
     expect(res.result).toBe('rectify');
     const after = await api.getAcceptanceDetailApi(102);
     expect(after.items[2].remark).toBe('压力值偏离，需复检');
+  });
+
+  it('提交时带整单备注，详情里能读回', async () => {
+    const { api } = loadApi();
+    const detail = await api.getAcceptanceDetailApi(101);
+    const payload = payloadOf(detail, {}, null, {
+      1001: [{ url: 'wxfile://tmp/a.jpg', name: '凭证图片', kind: 'image' }],
+    });
+    await api.submitAcceptanceApi(101, payload, '复检安排在周五');
+    const after = await api.getAcceptanceDetailApi(101);
+    expect(after.task.remark).toBe('复检安排在周五');
   });
 
   it('同一张单不能提交两次（防重复提交）', async () => {

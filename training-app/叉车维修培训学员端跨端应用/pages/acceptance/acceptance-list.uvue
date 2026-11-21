@@ -3,9 +3,16 @@
         <app-nav-bar title="验收中心" @left-click="onBack" />
 
         <view class="top-bar">
-            <text class="top-count">待验收 {{ tasks.length }} 项</text>
+            <text class="top-count">{{ countLabel }}</text>
             <view class="history-entry" @click="onOpenHistory">
                 <text class="history-entry-text">验收历史</text>
+            </view>
+        </view>
+
+        <view class="filter-bar">
+            <view v-for="f in filterOptions" :key="f.value" class="filter-item"
+                :class="{ 'filter-item-active': filter == f.value }" @click="onChangeFilter(f.value)">
+                <text class="filter-text" :class="{ 'filter-text-active': filter == f.value }">{{ f.label }}</text>
             </view>
         </view>
 
@@ -21,7 +28,7 @@
 
             <view v-if="!loading && !failed && tasks.length == 0" class="state-tip">
                 <text class="state-icon">✅</text>
-                <text class="state-text">暂无待验收任务</text>
+                <text class="state-text">{{ emptyText }}</text>
             </view>
 
             <view v-for="t in tasks" :key="t.id" class="task-card" @click="onOpenTask(t.id)">
@@ -50,7 +57,10 @@
 
     const windowHeight = uni.getSystemInfoSync().windowHeight
 
-    const { tasks, loading, failed, load, onOpenTask, onOpenHistory, statusText } = useAcceptanceList()
+    const {
+        tasks, loading, failed, filter, filterOptions, countLabel, emptyText,
+        load, onChangeFilter, onOpenTask, onOpenHistory, statusText,
+    } = useAcceptanceList()
 
     function onBack() : void {
         goBack()
@@ -98,6 +108,35 @@
     .history-entry-text {
         font-size: 26rpx;
         color: $primary-color;
+    }
+
+    .filter-bar {
+        flex-direction: row;
+        padding: 0 24rpx 8rpx 24rpx;
+        flex-shrink: 0;
+    }
+
+    .filter-item {
+        height: 88rpx;
+        padding: 0 24rpx;
+        border-radius: $radius-pill;
+        background-color: $card-bg;
+        align-items: center;
+        justify-content: center;
+        margin-right: 16rpx;
+    }
+
+    .filter-item-active {
+        background-color: $primary-color;
+    }
+
+    .filter-text {
+        font-size: 26rpx;
+        color: $text-color-secondary;
+    }
+
+    .filter-text-active {
+        color: #FFFFFF;
     }
 
     .content-scroll {

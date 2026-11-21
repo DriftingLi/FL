@@ -133,7 +133,7 @@ describe('三态与关键交互', () => {
     const list = read(pageRel('acceptance-list'));
     expect(list).toContain('v-if="loading"');
     expect(list).toContain('failed');
-    expect(list).toContain('暂无待验收任务');
+    expect(list).toContain('{{ emptyText }}');
     expect(list).toContain('验收历史');
 
     const detail = read(pageRel('acceptance-detail'));
@@ -166,6 +166,43 @@ describe('三态与关键交互', () => {
     expect(composable).toContain('chooseMessageFile');
     expect(composable).toContain('itemList: [\'拍照 / 选择图片\', \'选择文件\']');
     expect(composable).toContain('if (submitting.value) return false');
+  });
+
+  it('列表有状态筛选（待提交 / 已提交待验收 / 已完成）', () => {
+    const list = read(pageRel('acceptance-list'));
+    expect(list).toContain('v-for="f in filterOptions"');
+    expect(list).toContain('@click="onChangeFilter(f.value)"');
+    const form = read('utils/acceptanceForm.uts');
+    expect(form).toContain("label: '待提交'");
+    expect(form).toContain("label: '已提交待验收'");
+    expect(form).toContain("label: '已完成'");
+  });
+
+  it('提交页有整单备注，且提交前二次确认', () => {
+    const src = read(pageRel('acceptance-submit'));
+    expect(src).toContain('overallRemark');
+    expect(src).toContain('整体备注');
+    const composable = read('pages/acceptance/composables/useAcceptanceSubmit.uts');
+    expect(composable).toContain('uni.showModal');
+    expect(composable).toContain('确认提交');
+  });
+
+  it('提交成功后回列表（delta 2，失败兜底 redirectTo 列表）', () => {
+    const src = read(pageRel('acceptance-submit'));
+    expect(src).toContain('delta: 2');
+    expect(src).toContain("'/pages/acceptance/acceptance-list'");
+  });
+
+  it('触摸目标 ≥88rpx（.option / .proof-remove）', () => {
+    const body = styleBlock(read(pageRel('acceptance-submit'))).body;
+    const heightOf = (cls) => {
+      const m = body.match(new RegExp('\\.' + cls + '\\s*\\{([^}]*)\\}'));
+      if (!m) return 0;
+      const h = m[1].match(/height:\s*(\d+)rpx/);
+      return h ? parseInt(h[1], 10) : 0;
+    };
+    expect(heightOf('option')).toBeGreaterThanOrEqual(88);
+    expect(heightOf('proof-remove')).toBeGreaterThanOrEqual(88);
   });
 
   it('mock 侧对已提交单据再拒一次（双保险）', () => {

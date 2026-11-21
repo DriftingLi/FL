@@ -3,18 +3,29 @@
  *
  * 页面壳层零自持状态：`ref` 全在这里，页面只解构消费。
  * 三态（加载 / 失败 / 空）由 `loading` / `failed` / `tasks.length` 表达，失败不伪装成空列表。
+ * 状态筛选（票面要求 1）：`filter` 取 `pending` / `submitted` / `done`，切换即重拉。
  */
-import { ref } from 'vue'
-import type { Ref } from 'vue'
-import { listPendingAcceptanceApi } from '../../../api/acceptance'
-import { acceptanceStatusText } from '../../../utils/acceptanceForm'
+import { ref, computed } from 'vue'
+import type { Ref, ComputedRef } from 'vue'
+import { listAcceptanceTasksApi } from '../../../api/acceptance'
+import {
+	ACCEPTANCE_FILTER_OPTIONS,
+	acceptanceFilterEmptyText,
+	acceptanceStatusText,
+} from '../../../utils/acceptanceForm'
+import type { AcceptanceFilterOption } from '../../../utils/acceptanceForm'
 import type { AcceptanceTask } from '../../../types/index'
 
 export type UseAcceptanceListResult = {
 	tasks : Ref<AcceptanceTask[]>
 	loading : Ref<boolean>
 	failed : Ref<boolean>
+	filter : Ref<string>
+	filterOptions : AcceptanceFilterOption[]
+	countLabel : ComputedRef<string>
+	emptyText : ComputedRef<string>
 	load : () => Promise<void>
+	onChangeFilter : (value : string) => void
 	onOpenTask : (id : number) => void
 	onOpenHistory : () => void
 	statusText : (status : string) => string
@@ -24,19 +35,38 @@ export function useAcceptanceList() : UseAcceptanceListResult {
 	const tasks = ref<AcceptanceTask[]>([])
 	const loading = ref<boolean>(false)
 	const failed = ref<boolean>(false)
+	const filter = ref<string>('pending')
+
+	const countLabel = computed<string>(() : string => {
+		let label = '待提交'
+		for (let i = 0; i < ACCEPTANCE_FILTER_OPTIONS.length; i++) {
+			if (ACCEPTANCE_FILTER_OPTIONS[i].value == filter.value) label = ACCEPTANCE_FILTER_OPTIONS[i].label
+		}
+		return label + ' ' + tasks.value.length.toString() + ' 项'
+	})
+
+	const emptyText = computed<string>(() : string => {
+		return acceptanceFilterEmptyText(filter.value)
+	})
 
 	async function load() : Promise<void> {
 		if (loading.value) return
 		loading.value = true
 		failed.value = false
 		try {
-			tasks.value = await listPendingAcceptanceApi()
+			tasks.value = await listAcceptanceTasksApi(filter.value)
 		} catch (e) {
 			console.error('[acceptance] list failed:', e)
 			failed.value = true
 		} finally {
 			loading.value = false
 		}
+	}
+
+	function onChangeFilter(value : string) : void {
+		if (filter.value == value) return
+		filter.value = value
+		load()
 	}
 
 	function onOpenTask(id : number) : void {
@@ -51,7 +81,12 @@ export function useAcceptanceList() : UseAcceptanceListResult {
 		tasks: tasks,
 		loading: loading,
 		failed: failed,
+		filter: filter,
+		filterOptions: ACCEPTANCE_FILTER_OPTIONS,
+		countLabel: countLabel,
+		emptyText: emptyText,
 		load: () => load(),
+		onChangeFilter: (value : string) => onChangeFilter(value),
 		onOpenTask: (id : number) => onOpenTask(id),
 		onOpenHistory: () => onOpenHistory(),
 		statusText: (status : string) => acceptanceStatusText(status),
