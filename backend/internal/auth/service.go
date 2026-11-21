@@ -72,6 +72,8 @@ func (s *Service) GetProfile(userID int, role, account string) *ProfileDTO {
 		UserID:  userID,
 		Account: account,
 		Role:    role,
+		// 所有角色都发 []（不是 null）：nonnil 表态对整条响应成立，不只学员分支。
+		PendingFields: []string{},
 	}
 	switch role {
 	case core.HrwaiRole:
@@ -93,9 +95,13 @@ func (s *Service) GetProfile(userID int, role, account string) *ProfileDTO {
 			dto.PendingProfileChange = &pending
 		}
 		// 逐字段待审集合（加法字段）：同一用户昵称与头像可各有一条待审。
-		if fields, err := s.reviewSvc.GetPendingFieldsForUser(userID); err == nil && len(fields) > 0 {
-			dto.PendingFields = fields
+		// 恒发数组（无待审即 []）：nonnil 表态要举得出真发 [] 的出口（表态锁判据 5），
+		// 而 omitempty 会让键缺席 ⇒ 那条表态就不成立。查询失败按「无待审」降级，不阻断 /auth/me。
+		fields, err := s.reviewSvc.GetPendingFieldsForUser(userID)
+		if err != nil || fields == nil {
+			fields = []string{}
 		}
+		dto.PendingFields = fields
 	case core.TutorRole:
 		var t model.Tutor
 		if err := s.db.First(&t, userID).Error; err == nil {
@@ -125,7 +131,7 @@ func (s *Service) GetProfile(userID int, role, account string) *ProfileDTO {
 // ProfileDTO /auth/me 响应体（形状由契约测试 auth_me_contract_test.go 字节级锁定，
 // 勿改 json tag 与字段声明顺序）。指针字段 + omitempty 表达「键存在/键缺失」两态；
 // PendingProfileChange 用双指针表达三态：nil=键缺失、&nil=输出 null、&对象=输出对象。
-// PendingFields（加法字段，无待审时省略该键）给移动端逐字段判「审核中」，值域 nickname / avatar。
+// PendingFields（加法字段，恒为数组、无待审即 []）给移动端逐字段判「审核中」，值域 nickname / avatar。
 type ProfileDTO struct {
 	Account              string                    `json:"account"`
 	Name                 *string                   `json:"name,omitempty" extensions:"x-optional"`
@@ -133,7 +139,7 @@ type ProfileDTO struct {
 	Company              *string                   `json:"company,omitempty" extensions:"x-optional"`
 	Email                *string                   `json:"email,omitempty" extensions:"x-optional"`
 	HasPassword          *bool                     `json:"has_password,omitempty" extensions:"x-optional"`
-	PendingFields        []string                  `json:"pending_fields,omitempty" extensions:"x-optional"`
+	PendingFields        []string                  `json:"pending_fields" nullability:"nonnil"`
 	PendingProfileChange **ProfileChangeRequestDTO `json:"pending_profile_change,omitempty" extensions:"x-optional,x-nullable"`
 	Phone                *string                   `json:"phone,omitempty" extensions:"x-optional"`
 	Role                 string                    `json:"role"`

@@ -10,6 +10,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"forklift-training/internal/core"
 	"forklift-training/internal/testutil"
 )
 
@@ -19,6 +20,7 @@ import (
 var nonnilOutletsAuth = map[string]func(t *testing.T) any{
 	"auth.RecruiterListResult.items":               outletRecruiterListEmpty,
 	"auth.ProfileChangeRequestPageResult.requests": outletProfileChangeRequestPageEmpty,
+	"auth.ProfileDTO.pending_fields":               outletProfileDTOPendingFieldsEmpty,
 }
 
 // TestNonNilDeclaredOutletsNeverEmitNull 本域的举证入口（判据本体在 testutil）。
@@ -36,6 +38,15 @@ func outletRecruiterListEmpty(t *testing.T) any {
 		t.Fatalf("招聘者列表失败: %v", err)
 	}
 	return res
+}
+
+// outletProfileDTOPendingFieldsEmpty /auth/me（#2712）：无待审时 pending_fields 是空数组，不是 null。
+// 走真实出口而不是零值 DTO —— 零值切片必然是 nil，那不构成反例。
+func outletProfileDTOPendingFieldsEmpty(t *testing.T) any {
+	t.Helper()
+	svc, tdb := newGetProfileSvc(t)
+	u := testutil.SeedStudent(t, tdb, "nopending", "")
+	return svc.GetProfile(u.ID, core.HrwaiRole, u.Account)
 }
 
 // outletProfileChangeRequestPageEmpty 资料审核列表：零申请时 requests 是空集。

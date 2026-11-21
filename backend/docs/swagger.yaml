@@ -586,6 +586,11 @@ definitions:
       name:
         type: string
         x-optional: true
+      pending_fields:
+        items:
+          type: string
+        type: array
+        x-optional: true
       pending_profile_change:
         allOf:
         - $ref: '#/definitions/auth.ProfileChangeRequestDTO'
