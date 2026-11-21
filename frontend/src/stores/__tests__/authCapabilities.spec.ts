@@ -32,7 +32,7 @@ beforeEach(() => {
 
 describe('管理端能力集拉取', () => {
   it('登录为管理角色：拉取能力集并落 store', async () => {
-    getUserInfo.mockResolvedValue({ account: 'admin1', role: 'admin', user_id: 1, username: 'admin1' })
+    getUserInfo.mockResolvedValue({ pending_fields: [], account: 'admin1', role: 'admin', user_id: 1, username: 'admin1' })
     fetchMyCapabilities.mockResolvedValue({ capabilities: ['admin.access', 'audit.read'], granted: true })
 
     const store = useAuthStore()
@@ -44,7 +44,7 @@ describe('管理端能力集拉取', () => {
   })
 
   it('非管理角色：不发请求，能力集保持为空（可达面由静态表回答）', async () => {
-    getUserInfo.mockResolvedValue({ account: 'u1', role: 'hrwai_user', user_id: 1, username: 'u1' })
+    getUserInfo.mockResolvedValue({ pending_fields: [], account: 'u1', role: 'hrwai_user', user_id: 1, username: 'u1' })
 
     const store = useAuthStore()
     store.setAuthData({ token: 't-stu', role: 'hrwai_user', account: 'u1', user_id: 1 } as never)
@@ -58,7 +58,7 @@ describe('管理端能力集拉取', () => {
   })
 
   it('拉取失败 → 空集且**不保留旧值**（刚被收回权限的人不得继续看到菜单）', async () => {
-    getUserInfo.mockResolvedValue({ account: 'admin1', role: 'admin', user_id: 1, username: 'admin1' })
+    getUserInfo.mockResolvedValue({ pending_fields: [], account: 'admin1', role: 'admin', user_id: 1, username: 'admin1' })
     fetchMyCapabilities.mockResolvedValueOnce({ capabilities: ['admin.access', 'audit.read'], granted: true })
     fetchMyCapabilities.mockRejectedValueOnce(new Error('boom'))
 
@@ -72,7 +72,7 @@ describe('管理端能力集拉取', () => {
   })
 
   it('清除登录态同时清空能力集', async () => {
-    getUserInfo.mockResolvedValue({ account: 'admin1', role: 'admin', user_id: 1, username: 'admin1' })
+    getUserInfo.mockResolvedValue({ pending_fields: [], account: 'admin1', role: 'admin', user_id: 1, username: 'admin1' })
     fetchMyCapabilities.mockResolvedValue({ capabilities: ['admin.access'], granted: true })
 
     const store = useAuthStore()
@@ -87,7 +87,7 @@ describe('管理端能力集拉取', () => {
 
 describe('能力集装载状态机（#1645）', () => {
   it('成功 → ready，失败 → failed：两条路都落定，不停在 loading', async () => {
-    getUserInfo.mockResolvedValue({ account: 'admin1', role: 'admin', user_id: 1, username: 'admin1' })
+    getUserInfo.mockResolvedValue({ pending_fields: [], account: 'admin1', role: 'admin', user_id: 1, username: 'admin1' })
     fetchMyCapabilities.mockResolvedValue({ capabilities: ['admin.access'], granted: true })
 
     const store = useAuthStore()
@@ -101,7 +101,7 @@ describe('能力集装载状态机（#1645）', () => {
   })
 
   it('装载失败也落定（failed）：集合按空处理，但状态与「真的没有能力」可分辨', async () => {
-    getUserInfo.mockResolvedValue({ account: 'admin1', role: 'admin', user_id: 1, username: 'admin1' })
+    getUserInfo.mockResolvedValue({ pending_fields: [], account: 'admin1', role: 'admin', user_id: 1, username: 'admin1' })
     fetchMyCapabilities.mockRejectedValue(new Error('boom'))
 
     const store = useAuthStore()
@@ -114,7 +114,7 @@ describe('能力集装载状态机（#1645）', () => {
   })
 
   it('并发调用复用同一次在途请求（守卫补拉与登录预热不会发两次）', async () => {
-    getUserInfo.mockResolvedValue({ account: 'admin1', role: 'admin', user_id: 1, username: 'admin1' })
+    getUserInfo.mockResolvedValue({ pending_fields: [], account: 'admin1', role: 'admin', user_id: 1, username: 'admin1' })
     fetchMyCapabilities.mockResolvedValue({ capabilities: ['audit.read'], granted: true })
 
     const store = useAuthStore()
@@ -128,7 +128,7 @@ describe('能力集装载状态机（#1645）', () => {
   })
 
   it('登出作废在途装载：旧账号的能力集不落到新的登录态上', async () => {
-    getUserInfo.mockResolvedValue({ account: 'admin1', role: 'admin', user_id: 1, username: 'admin1' })
+    getUserInfo.mockResolvedValue({ pending_fields: [], account: 'admin1', role: 'admin', user_id: 1, username: 'admin1' })
     let resolveCaps: (v: unknown) => void = () => {}
     fetchMyCapabilities.mockImplementationOnce(
       () => new Promise(resolve => { resolveCaps = resolve }) as never
@@ -147,7 +147,7 @@ describe('能力集装载状态机（#1645）', () => {
   })
 
   it('重新装载会再发一次请求（重试入口依赖它）', async () => {
-    getUserInfo.mockResolvedValue({ account: 'admin1', role: 'admin', user_id: 1, username: 'admin1' })
+    getUserInfo.mockResolvedValue({ pending_fields: [], account: 'admin1', role: 'admin', user_id: 1, username: 'admin1' })
     fetchMyCapabilities.mockRejectedValueOnce(new Error('boom'))
     fetchMyCapabilities.mockResolvedValueOnce({ capabilities: ['audit.read'], granted: true })
 
@@ -165,7 +165,7 @@ describe('能力集装载状态机（#1645）', () => {
 
 describe('讲师端能力集拉取（#2600 / 规格 F2）', () => {
   it('登录为讲师：走讲师端点，不走管理端端点', async () => {
-    getUserInfo.mockResolvedValue({ account: 'tutor1', role: 'tutor', user_id: 9, username: 'tutor1' })
+    getUserInfo.mockResolvedValue({ pending_fields: [], account: 'tutor1', role: 'tutor', user_id: 9, username: 'tutor1' })
     fetchTutorCapabilities.mockResolvedValue({ capabilities: ['tutor.access', 'question.author'], granted: true })
 
     const store = useAuthStore()
@@ -180,7 +180,7 @@ describe('讲师端能力集拉取（#2600 / 规格 F2）', () => {
   })
 
   it('未挂角色的讲师：落空集但仍是 ready（「真的没有权限」，不是装载失败）', async () => {
-    getUserInfo.mockResolvedValue({ account: 'tutor2', role: 'tutor', user_id: 10, username: 'tutor2' })
+    getUserInfo.mockResolvedValue({ pending_fields: [], account: 'tutor2', role: 'tutor', user_id: 10, username: 'tutor2' })
     fetchTutorCapabilities.mockResolvedValue({ capabilities: [], granted: false })
 
     const store = useAuthStore()
@@ -192,7 +192,7 @@ describe('讲师端能力集拉取（#2600 / 规格 F2）', () => {
   })
 
   it('讲师能力集拉取失败 → 空集 + failed（不保留旧份，前端据此画「加载失败」而非「没有权限」）', async () => {
-    getUserInfo.mockResolvedValue({ account: 'tutor3', role: 'tutor', user_id: 11, username: 'tutor3' })
+    getUserInfo.mockResolvedValue({ pending_fields: [], account: 'tutor3', role: 'tutor', user_id: 11, username: 'tutor3' })
     fetchTutorCapabilities.mockRejectedValue(new Error('boom'))
 
     const store = useAuthStore()

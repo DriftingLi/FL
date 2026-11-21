@@ -96,7 +96,8 @@ func (s *Service) GetProfile(userID int, role, account string) *ProfileDTO {
 		}
 		// 逐字段待审集合（加法字段）：同一用户昵称与头像可各有一条待审。
 		// 恒发数组（无待审即 []）：nonnil 表态要举得出真发 [] 的出口（表态锁判据 5），
-		// 而 omitempty 会让键缺席 ⇒ 那条表态就不成立。查询失败按「无待审」降级，不阻断 /auth/me。
+		// 而 omitempty 会让键缺席 ⇒ 那条表态就不成立（空切片照样被 omitempty 吃掉）。
+		// 查询失败按「无待审」降级，不阻断 /auth/me。
 		fields, err := s.reviewSvc.GetPendingFieldsForUser(userID)
 		if err != nil || fields == nil {
 			fields = []string{}
