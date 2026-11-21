@@ -1,17 +1,30 @@
 <template>
     <!-- 顶部Tab栏 -->
+    <!-- 票 2730 docx ⑤⑨：下划线宽度跟 tab 文字走（原画在等宽 tab 容器上 ⇒「广场」与「知识问答」下划线一样宽） -->
     <view class="tab-bar">
         <view class="tab-item" :class="{ active: currentTab === 'square' }" @click="onSwitch('square')">
-            <text class="tab-text">广场</text>
+            <view class="tab-inner">
+                <text class="tab-text">广场</text>
+                <view class="tab-underline"></view>
+            </view>
         </view>
         <view class="tab-item" :class="{ active: currentTab === 'resource' }" @click="onSwitch('resource')">
-            <text class="tab-text">资源</text>
+            <view class="tab-inner">
+                <text class="tab-text">资源</text>
+                <view class="tab-underline"></view>
+            </view>
         </view>
         <view class="tab-item" :class="{ active: currentTab === 'hot' }" @click="onSwitch('hot')">
-            <text class="tab-text">知识问答</text>
+            <view class="tab-inner">
+                <text class="tab-text">知识问答</text>
+                <view class="tab-underline"></view>
+            </view>
         </view>
         <view class="tab-item" :class="{ active: currentTab === 'experience' }" @click="onSwitch('experience')">
-            <text class="tab-text">备考经验</text>
+            <view class="tab-inner">
+                <text class="tab-text">备考经验</text>
+                <view class="tab-underline"></view>
+            </view>
         </view>
         <view class="tab-icon-btn" @click="onAvatarClick">
             <image v-if="avatarUrl.length > 0" class="tab-avatar" :src="avatarUrl" mode="aspectFill" :webp="true" />
@@ -54,11 +67,24 @@
         height: 88rpx;
         align-items: center;
         justify-content: center;
-        border-bottom: 4rpx solid transparent;
     }
 
-    .tab-item.active {
-        border-bottom-color: $primary-color;
+    /* 由文字撑开的列容器：下划线 width:100% 即「该 tab 文字宽」 */
+    .tab-inner {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .tab-underline {
+        width: 100%;
+        height: 4rpx;
+        border-radius: 2rpx;
+        margin-top: 6rpx;
+        background-color: transparent;
+    }
+
+    .tab-item.active .tab-underline {
+        background-color: $primary-color;
     }
 
     .tab-text {
@@ -72,8 +98,9 @@
     }
 
     /* Tab栏右侧图标按钮 */
+    /* 票 2730 第 1 项：命中区宽 80→88rpx；头像 56rpx 不变。 */
     .tab-icon-btn {
-        width: 80rpx;
+        width: 88rpx;
         height: 88rpx;
         align-items: center;
         justify-content: center;

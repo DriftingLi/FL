@@ -14,6 +14,11 @@
  *
  * 手写分步淡出而不是 CSS transition 的原因写在真源文件头；本文件顺带把那条决定钉成事实：
  * `splashOpacity` 在淡出期**单调下降**且中间点确实落在开区间内（写了 transition 的话这里恒为 1）。
+ *
+ * 票 2730 第 6 项追加「一个进程只放一次」：微信一键登录 `reLaunch` 回着陆页时 `onLoad`
+ * 会再调 `startSplash()`，原实现每次重放 1.5s 品牌图 + 300ms 淡出。现由模块级 `splashShown`
+ * 拦住第二次起的 `start()`（纯 no-op，不动状态），新实例初值直接取「已摘层」。
+ * 旧断言「重复 start() 幂等复位」随之退役——那是重放 bug 的另一面。
  */
 const path = require('path');
 const { loadUts, readText } = require('./utsHarness');
@@ -123,20 +128,42 @@ describe('useLandingSplash 时序（#2535 Q1：1.5s 保持 + 淡出）', () => {
     expect(splash.splashVisible.value).toBe(true);
   });
 
-  it('重复 start() 幂等：复位到满不透明，并从新的 1.5s 重新计时', () => {
+  it('第二次 start() 直接返回：本进程只放一次（票 2730 第 6 项，微信一键登录 reLaunch 回来不重放）', () => {
+    const mod = loadSplash();
+    const splash = mod.useLandingSplash();
+    splash.start();
+    jest.advanceTimersByTime(mod.SPLASH_HOLD_MS + mod.SPLASH_FADE_MS + 100);
+    expect(splash.splashVisible.value).toBe(false);
+
+    // 第二次起：不重新上屏、不重新计时
+    splash.start();
+    expect(splash.splashVisible.value).toBe(false);
+    expect(splash.splashOpacity.value).toBe(0);
+    jest.advanceTimersByTime(mod.SPLASH_HOLD_MS + mod.SPLASH_FADE_MS + 100);
+    expect(splash.splashVisible.value).toBe(false);
+  });
+
+  it('第二次 start() 在淡出中途调用也不打断本轮：状态不被复位', () => {
     const mod = loadSplash();
     const splash = mod.useLandingSplash();
     splash.start();
     jest.advanceTimersByTime(mod.SPLASH_HOLD_MS + mod.SPLASH_FADE_STEP_MS * 2);
-    expect(splash.splashOpacity.value).toBeLessThan(1);
+    const mid = splash.splashOpacity.value;
+    expect(mid).toBeLessThan(1);
 
     splash.start();
-    expect(splash.splashOpacity.value).toBe(1);
-    expect(splash.splashVisible.value).toBe(true);
+    // 直接返回 ⇒ 不回到满不透明（旧语义「幂等复位」已随票 2730 第 6 项退役）
+    expect(splash.splashOpacity.value).toBe(mid);
+  });
 
-    // 若上一轮计时器没被掐断，此刻会继续往下掉；这里必须仍是满的
-    jest.advanceTimersByTime(mod.SPLASH_HOLD_MS - 1);
-    expect(splash.splashOpacity.value).toBe(1);
+  it('新实例（reLaunch 重建页面）拿到的是「已摘层」初值，不会留一层不透明遮罩', () => {
+    const mod = loadSplash();
+    mod.useLandingSplash().start();
+    jest.advanceTimersByTime(mod.SPLASH_HOLD_MS + mod.SPLASH_FADE_MS + 100);
+
+    const second = mod.useLandingSplash();
+    expect(second.splashVisible.value).toBe(false);
+    expect(second.splashOpacity.value).toBe(0);
   });
 
   it('常量就是票面拍板的 1.5s（改时长必须同时改票面与本断言）', () => {

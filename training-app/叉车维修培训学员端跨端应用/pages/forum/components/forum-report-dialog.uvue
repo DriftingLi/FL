@@ -6,12 +6,15 @@
                 v-model="reason" />
             <text class="report-counter">{{ reason.length }}/500</text>
             <view class="report-actions">
-                <view class="report-cancel" @click="onClose">
-                    <text class="report-cancel-text">取消</text>
+                <view class="report-btn-hit report-btn-hit--left" @click="onClose">
+                    <view class="report-cancel">
+                        <text class="report-cancel-text">取消</text>
+                    </view>
                 </view>
-                <view class="report-confirm" :class="{ disabled: reason.length < 1 || submitting }"
-                    @click="onSubmit">
-                    <text class="report-confirm-text">{{ submitting ? '提交中...' : '提交' }}</text>
+                <view class="report-btn-hit" @click="onSubmit">
+                    <view class="report-confirm" :class="{ disabled: reason.length < 1 || submitting }">
+                        <text class="report-confirm-text">{{ submitting ? '提交中...' : '提交' }}</text>
+                    </view>
                 </view>
             </view>
         </view>
@@ -96,14 +99,25 @@
         justify-content: space-between;
     }
 
-    .report-cancel {
+    /* 票 2730 第 1 项：按钮本体仍是 80rpx 高，命中区由外层 88rpx 盒撑开（§5.11）。 */
+    .report-btn-hit {
         flex: 1;
+        height: 88rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .report-btn-hit--left {
+        margin-right: 16rpx;
+    }
+
+    .report-cancel {
+        width: 100%;
         height: 80rpx;
         border-radius: 40rpx;
         background-color: #f5f5f5;
         align-items: center;
         justify-content: center;
-        margin-right: 16rpx;
     }
 
     .report-cancel-text {
@@ -112,7 +126,7 @@
     }
 
     .report-confirm {
-        flex: 1;
+        width: 100%;
         height: 80rpx;
         border-radius: 40rpx;
         background-color: $primary-color;

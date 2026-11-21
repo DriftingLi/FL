@@ -3,7 +3,9 @@
 		<!-- 上排：占位符 + 发送（#2520：发送键改原型切图，展开态用深一档的蓝箭头） -->
 		<view class="input-top">
 			<input :value="inputText" class="chat-input" :placeholder="placeholder" confirm-type="send" @input="onInputChange" @confirm="onSend" />
-			<image class="send-img" :class="{ disabled: !sendEnabled || disabled }" :src="modelPickerOpen ? '/static/icons/ai-chat/send-active.png' : '/static/icons/ai-chat/send.png'" mode="aspectFit" @click="onSend" />
+			<view class="send-hit" @click="onSend">
+				<image class="send-img" :class="{ disabled: !sendEnabled || disabled }" :src="modelPickerOpen ? '/static/icons/ai-chat/send-active.png' : '/static/icons/ai-chat/send.png'" mode="aspectFit" />
+			</view>
 		</view>
 		<!-- 下排：模型芯片 + 动作按钮（#2520：附件 / 麦克风改原型切图，展开态转蓝） -->
 		<view class="input-bottom">
@@ -15,12 +17,16 @@
 				<text v-if="!modelReadonly && modelPickerOpen" class="model-arrow-up">&#8963;</text>
 			</view>
 			<view class="action-group">
-				<view v-if="showImageButton" class="action-btn" :class="{ active: modelPickerOpen }" @click="onImageClick">
-					<image class="action-img" :src="modelPickerOpen ? '/static/icons/ai-chat/paperclip-active.png' : '/static/icons/ai-chat/paperclip.png'" mode="aspectFit" />
-					<text v-if="imageCount > 0" class="action-badge">{{ imageCount }}</text>
+				<view v-if="showImageButton" class="action-btn-hit" @click="onImageClick">
+					<view class="action-btn" :class="{ active: modelPickerOpen }">
+						<image class="action-img" :src="modelPickerOpen ? '/static/icons/ai-chat/paperclip-active.png' : '/static/icons/ai-chat/paperclip.png'" mode="aspectFit" />
+						<text v-if="imageCount > 0" class="action-badge">{{ imageCount }}</text>
+					</view>
 				</view>
-				<view class="action-btn" :class="{ active: modelPickerOpen }" @click="onVoiceClick">
-					<image class="action-img" :src="modelPickerOpen ? '/static/icons/ai-chat/mic-active.png' : '/static/icons/ai-chat/mic.png'" mode="aspectFit" />
+				<view class="action-btn-hit" @click="onVoiceClick">
+					<view class="action-btn" :class="{ active: modelPickerOpen }">
+						<image class="action-img" :src="modelPickerOpen ? '/static/icons/ai-chat/mic-active.png' : '/static/icons/ai-chat/mic.png'" mode="aspectFit" />
+					</view>
 				</view>
 			</view>
 		</view>
@@ -136,10 +142,11 @@
 
 <style lang="scss">
 	/* #2520：输入卡按原型 307:6954 / 793:1197 收口 —— 20rpx 圆角、浅描边；下拉展开时描边转主色 */
+	/* 票 2730 docx ④（L2 拍板）：上下留白 12rpx → 28rpx，输入框整体轻微上移、离底栏更松 */
 	.input-card {
 		background-color: #ffffff;
 		border-radius: 20rpx;
-		margin: 12rpx 20rpx;
+		margin: 28rpx 20rpx;
 		padding: 20rpx 24rpx 16rpx 24rpx;
 		border: 1rpx solid #e6eef5;
 	}
@@ -161,10 +168,18 @@
 	}
 
 	/* 发送键切图（原型 image 33 / 33-0：常态浅蓝、展开态深蓝，40×36rpx = 20×18 CSS ×2） */
+	/* 票 2730 第 1 项：切图仍是 40×36rpx，命中区由外层 88rpx 盒撑开（§5.11）。 */
+	.send-hit {
+		width: 88rpx;
+		height: 88rpx;
+		align-items: center;
+		justify-content: center;
+		margin-left: 8rpx;
+	}
+
 	.send-img {
 		width: 40rpx;
 		height: 36rpx;
-		margin-left: 16rpx;
 	}
 
 	.send-img.disabled {
@@ -224,6 +239,15 @@
 		align-items: center;
 	}
 
+	/* 票 2730 第 1 项：圆钮本体仍是 64rpx，命中区由外层 88rpx 盒撑开（§5.11）。 */
+	.action-btn-hit {
+		width: 88rpx;
+		height: 88rpx;
+		align-items: center;
+		justify-content: center;
+		margin-left: 12rpx;
+	}
+
 	.action-btn {
 		width: 64rpx;
 		height: 64rpx;
@@ -231,7 +255,6 @@
 		background-color: #f5f6f8;
 		align-items: center;
 		justify-content: center;
-		margin-left: 12rpx;
 	}
 
 	/* 下拉展开态：原型里两个圆钮同转浅蓝底 + 蓝图标 */

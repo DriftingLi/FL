@@ -35,10 +35,12 @@
                 <view class="cap-row" v-if="captchaOpen">
                     <input class="cap-input" type="text" placeholder="输入图形码" :maxlength="4" :value="captchaValue"
                         @input="onCaptchaInput" @confirm="onConfirm" />
-                    <view class="cap-img-box cap-fail-box" v-if="captchaFailed" @click="refreshCaptcha">
-                        <text class="cap-fail-text">点击重试</text>
+                    <view class="cap-hit" @click="refreshCaptcha">
+                        <view class="cap-img-box cap-fail-box" v-if="captchaFailed">
+                            <text class="cap-fail-text">点击重试</text>
+                        </view>
+                        <image class="cap-img-box" v-else :src="captchaImage" mode="aspectFit" :webp="true" />
                     </view>
-                    <image class="cap-img-box" v-else :src="captchaImage" mode="aspectFit" @click="refreshCaptcha" :webp="true" />
                 </view>
                 <view class="hint" v-if="codeHint.length > 0">
                     <text class="hint-text">{{ codeHint }}</text>
@@ -115,16 +117,16 @@
 
             <!-- 底部三图标：手机 / 微信 / 邮箱（学员侧通道入口，替代原顶部通道 tab）
                  图标用设计稿导出的六个状态位图（灰=未选中 / 绿=选中），落盘 static/icons/login/；
-                 微信是导航入口（切回一键登录页），按设计稿在未选中态保持品牌绿高亮 -->
+                 微信是导航入口（切回一键登录页），不参与选中态——常灰图标 + 默认 #F5F7FA 圆底 -->
             <view class="icon-row" v-if="role == 'learner'">
                 <view class="icon-cell" @click="switchMode('phone')">
-                    <view class="icon-circle" :class="{ 'icon-circle-on': mode == 'phone' }">
-                        <image class="icon-img" :src="mode == 'phone' ? '/static/icons/login/phone-active.png' : '/static/icons/login/phone.png'" mode="aspectFit"></image>
+                    <view class="icon-circle" :class="{ 'icon-circle-on': phoneHighlighted }">
+                        <image class="icon-img" :src="phoneHighlighted ? '/static/icons/login/phone-active.png' : '/static/icons/login/phone.png'" mode="aspectFit"></image>
                     </view>
                 </view>
                 <view class="icon-cell" @click="goWechatLanding">
-                    <view class="icon-circle" :class="{ 'icon-circle-on': wechatHighlighted }">
-                        <image class="icon-img" :src="wechatHighlighted ? '/static/icons/login/wechat-active.png' : '/static/icons/login/wechat.png'" mode="aspectFit"></image>
+                    <view class="icon-circle">
+                        <image class="icon-img" src="/static/icons/login/wechat.png" mode="aspectFit"></image>
                     </view>
                 </view>
                 <view class="icon-cell" @click="switchMode('email')">
@@ -190,7 +192,7 @@
         countdown,
         codeHint,
         btnText,
-        wechatHighlighted,
+        phoneHighlighted,
         clearCountdownTimer,
         switchMode,
         switchRole,
@@ -368,11 +370,18 @@
         color: $text-strong;
     }
 
+    /* 票 2730 第 1 项：图形码图仍是 176×72rpx，命中区由外层 88rpx 盒撑开（§5.11）。 */
+    .cap-hit {
+        height: 88rpx;
+        align-items: center;
+        justify-content: center;
+        margin-left: 20rpx;
+    }
+
     .cap-img-box {
         width: 176rpx;
         height: 72rpx;
         border-radius: 16rpx;
-        margin-left: 20rpx;
         background-color: #ffffff;
     }
 

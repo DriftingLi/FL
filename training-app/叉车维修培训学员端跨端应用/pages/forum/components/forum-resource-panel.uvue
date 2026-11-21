@@ -4,7 +4,7 @@
         <view class="res-coin-banner">
             <view class="res-coin-left">
                 <view class="res-coin-icon-box">
-                    <text class="res-coin-icon-text">$</text>
+                    <image class="res-coin-icon" src="/static/icons/forum/coin.png" mode="aspectFit"></image>
                 </view>
                 <view class="res-coin-info">
                     <text class="res-coin-label">我的积分</text>
@@ -19,26 +19,26 @@
         <view class="res-feature-grid">
             <view class="res-feature-card" @click="onResourceClick('course-mall')">
                 <view class="res-feature-card-icon-wrap res-card-bg-red">
-                    <text class="res-feature-card-icon">🎓</text>
+                    <image class="res-feature-card-icon" src="/static/icons/forum/resource-course.png" mode="aspectFit"></image>
                 </view>
                 <!-- #2620：「课程商城」收为旧名（词表），这格落点是课程列表 ⇒ 文案改「课程」、图标同步换课程字形 -->
                 <text class="res-feature-card-title res-title-red">课程</text>
             </view>
             <view class="res-feature-card" @click="onResourceClick('my-purchases')">
                 <view class="res-feature-card-icon-wrap res-card-bg-blue">
-                    <text class="res-feature-card-icon">🛍️</text>
+                    <image class="res-feature-card-icon" src="/static/icons/forum/resource-purchased.png" mode="aspectFit"></image>
                 </view>
                 <text class="res-feature-card-title res-title-blue">我的已购</text>
             </view>
             <view class="res-feature-card" @click="onResourceClick('my-uploads')">
                 <view class="res-feature-card-icon-wrap res-card-bg-green">
-                    <text class="res-feature-card-icon">📤</text>
+                    <image class="res-feature-card-icon" src="/static/icons/forum/resource-uploaded.png" mode="aspectFit"></image>
                 </view>
                 <text class="res-feature-card-title res-title-green">我的上传</text>
             </view>
             <view class="res-feature-card" @click="onResourceClick('upload-resource')">
                 <view class="res-feature-card-icon-wrap res-card-bg-sky">
-                    <text class="res-feature-card-icon">☁️</text>
+                    <image class="res-feature-card-icon" src="/static/icons/forum/resource-upload.png" mode="aspectFit"></image>
                 </view>
                 <text class="res-feature-card-title res-title-sky">上传资源</text>
             </view>
@@ -105,21 +105,18 @@
         align-items: center;
     }
 
+    /* 票 2730 docx ⑤：金币切图直接落在蓝渐变 banner 上（原金色圆底 + `$` 文字退场） */
     .res-coin-icon-box {
         width: 80rpx;
         height: 80rpx;
-        border-radius: 40rpx;
-        background-color: #FFD048;
         align-items: center;
         justify-content: center;
         margin-right: 20rpx;
     }
 
-    .res-coin-icon-text {
-        color: #B27B16;
-        font-size: 40rpx;
-        font-weight: bold;
-        font-size: 44rpx;
+    .res-coin-icon {
+        width: 80rpx;
+        height: 80rpx;
     }
 
     .res-coin-info {
@@ -187,7 +184,8 @@
     }
 
     .res-feature-card-icon {
-        font-size: 72rpx;
+        width: 100rpx;
+        height: 100rpx;
     }
 
     .res-feature-card-title {

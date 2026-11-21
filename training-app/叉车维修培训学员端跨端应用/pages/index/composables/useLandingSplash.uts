@@ -18,6 +18,11 @@
  * ## 计时器挂在生命周期上
  * `dispose()` 取消两个计时器，由页面 `onUnload` 调用（本仓反模式：裸 `setTimeout` 不管生命周期）。
  * 页面在闪屏期间被 reLaunch 走（例如已登录）时，`dispose()` 保证不会留下孤儿计时器。
+ *
+ * ## 一个进程只放一次（票 2730 第 6 项）
+ * 微信一键登录走 `uni.reLaunch('/pages/index/index')` 回着陆页，`onLoad` 未登录分支又会
+ * `startSplash()` ⇒ 每次回来都重放 1.5s 品牌图 + 300ms 淡出。闪屏是冷启动的品牌露出，
+ * 不是每次进着陆页的过场，所以用模块级 `splashShown` 拦住第二次起的 `start()`。
  */
 import { ref } from 'vue'
 import type { Ref } from 'vue'
@@ -37,10 +42,21 @@ export type UseLandingSplashResult = {
 	dispose : () => void
 }
 
+/**
+ * 模块级「本进程已放过闪屏」标记（票 2730 第 6 项）。
+ *
+ * 闪屏是**冷启动的品牌露出**，一个进程只该出现一次。但着陆页会被 `reLaunch` 回来：
+ * 登录页点微信图标走 `uni.reLaunch('/pages/index/index')`，着陆页 `onLoad` 未登录分支
+ * 又会 `startSplash()` ⇒ 每次回来都重放 1.5s 品牌图 + 300ms 淡出，像卡了一下。
+ * 放在模块级（而不是 composable 实例内）才能跨页面实例生效——`reLaunch` 会重建页面。
+ */
+let splashShown : boolean = false
+
 export function useLandingSplash() : UseLandingSplashResult {
-	// 初值 true：未登录冷启动的第一帧就该是品牌图，不能先闪一下着陆页再盖上
-	const splashVisible = ref<boolean>(true)
-	const splashOpacity = ref<number>(1)
+	// 初值：首次冷启动 true（第一帧就该是品牌图，不能先闪一下着陆页再盖上）；
+	// 本进程已放过则直接 false，连一层透明遮罩都不留。
+	const splashVisible = ref<boolean>(!splashShown)
+	const splashOpacity = ref<number>(splashShown ? 0 : 1)
 	let holdTimer : number = 0
 	let fadeTimer : number = 0
 
@@ -55,8 +71,18 @@ export function useLandingSplash() : UseLandingSplashResult {
 		}
 	}
 
-	/** 起一次闪屏：保持 → 分步淡出 → 摘层。重复调用会先复位（幂等） */
+	/**
+	 * 起一次闪屏：保持 → 分步淡出 → 摘层。
+	 *
+	 * 本进程已放过则**直接返回**（票 2730 第 6 项）：微信一键登录 `reLaunch` 回本页时
+	 * `onLoad` 会再调一次，不拦就会重放整段品牌图。返回时**不动任何状态**——新实例的
+	 * 初值已按 `splashShown` 取「已摘层」，中途再调也不该把正在淡出的那轮掐断。
+	 */
 	function start() : void {
+		if (splashShown) {
+			return
+		}
+		splashShown = true
 		cancelTimers()
 		splashVisible.value = true
 		splashOpacity.value = 1

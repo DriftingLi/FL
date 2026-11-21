@@ -57,9 +57,9 @@
                 <!-- 标题栏 -->
                 <view class="filter-header">
                     <text class="filter-title">筛选</text>
-                    <view class="filter-close" @click="showFilter = false">
+                    <app-icon-button @click="showFilter = false">
                         <text class="filter-close-icon">✕</text>
-                    </view>
+                    </app-icon-button>
                 </view>
 
                 <!-- 口径（#1608 §8⑤ 裁定：双轴改单轴，值域映射后端既有 filter；直播/录播、免费/付费两轴删除）
@@ -295,13 +295,7 @@
         color: #222222;
     }
 
-    .filter-close {
-        width: 48rpx;
-        height: 48rpx;
-        align-items: center;
-        justify-content: center;
-    }
-
+    /* 票 2730 第 1 项：88rpx 命中盒 / 64rpx 承载面由 components/app-icon-button 承担；✕ 字形 32rpx 不变。 */
     .filter-close-icon {
         font-size: 32rpx;
         color: #999999;

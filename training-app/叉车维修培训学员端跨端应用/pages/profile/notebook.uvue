@@ -408,7 +408,8 @@
 
 <style lang="scss">
     .container { flex: 1; background-color: $bg-color; flex-direction: column; }
-    .nav-action { width: 64rpx; height: 64rpx; align-items: center; justify-content: center; }
+    /* 票 2730 第 1 项：命中区 ≥88rpx；文字动作按 min-width 撑开，字号不变。 */
+    .nav-action { min-width: 88rpx; height: 88rpx; align-items: center; justify-content: center; }
     .header-action { font-size: 28rpx; color: $text-color; }
     .chip-bar { flex-direction: row; padding: 16rpx 24rpx 8rpx; }
     .chip { padding: 12rpx 32rpx; border-radius: $radius-pill; background-color: $tag-bg-neutral; margin-right: 16rpx; }

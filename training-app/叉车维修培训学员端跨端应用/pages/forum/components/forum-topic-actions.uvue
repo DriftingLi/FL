@@ -9,7 +9,7 @@
             <text :class="favorited ? 'stat-like-count stat-like-count-favorited' : 'stat-like-count'">收藏</text>
         </view>
         <view class="stat-like stat-plain">
-            <text class="stat-like-icon">💬</text>
+            <image class="stat-like-icon-img" src="/static/icons/forum/comment.png" mode="aspectFit"></image>
             <text class="stat-like-count">{{ repliesCount }}</text>
         </view>
     </view>
@@ -74,6 +74,13 @@ function onFavorite() : void {
     .stat-like-icon {
         font-size: 28rpx;
         color: #999999;
+        margin-right: 8rpx;
+    }
+
+    /* 票 2730 docx ⑩：评论图标换成切图后与 ♡/☆ 字形同高（emoji 字形高度不可控） */
+    .stat-like-icon-img {
+        width: 28rpx;
+        height: 28rpx;
         margin-right: 8rpx;
     }
 

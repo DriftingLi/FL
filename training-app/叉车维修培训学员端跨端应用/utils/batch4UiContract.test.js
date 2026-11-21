@@ -186,11 +186,13 @@ describe('check-in §8③ 去 mock（#1607 随批收口）', () => {
 describe('导航栏返回箭头命中区', () => {
   const navBar = read('components/app-nav-bar/app-nav-bar.uvue');
 
-  it('返回槽自身承接 88×88rpx 点击区，箭头为 56rpx 并居中', () => {
+  it('返回槽自身承接 88×88rpx 点击区，箭头 56rpx 且左对齐贴 24rpx', () => {
     expect(navBar).toMatch(/<view class="nav-bar-side nav-bar-left"\s*:class="\[leftSlotFloatClass, \{ 'nav-bar-left--back': leftIcon == '‹' \}\]" @click="onLeftClick">/);
     expect(navBar).toMatch(/<text v-if="leftIcon.length > 0" class="nav-bar-icon"\s*:class="\[titleColorClass, \{ 'nav-bar-icon--back': leftIcon == '‹' \}\]">/);
-    expect(navBar).toMatch(/\.nav-bar-left--back\s*\{[^}]*width:\s*88rpx;[^}]*height:\s*88rpx;[^}]*justify-content:\s*center;[^}]*align-items:\s*center;/);
+    // 票 2730 第 2 项：字形由居中改左对齐并脱流贴左，标题左缘随之收到 80rpx（紧贴箭头右缘）。
+    expect(navBar).toMatch(/\.nav-bar-left--back\s*\{[^}]*position:\s*absolute;[^}]*left:\s*24rpx;[^}]*width:\s*88rpx;[^}]*height:\s*88rpx;[^}]*justify-content:\s*flex-start;[^}]*align-items:\s*center;/);
     expect(navBar).toMatch(/\.nav-bar-icon--back\s*\{\s*font-size:\s*56rpx;/);
+    expect(navBar).toMatch(/\.nav-bar-title-block\s*\{[^}]*margin-left:\s*56rpx;/);
     expect(navBar).not.toContain('nav-bar-back-hit');
   });
 });

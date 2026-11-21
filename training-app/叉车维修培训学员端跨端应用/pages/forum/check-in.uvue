@@ -7,8 +7,10 @@
                 <text class="reminder-label">每日签到</text>
                 <view class="reminder-right">
                     <text class="reminder-text">签到提醒</text>
-                    <view class="switch" :class="reminderOn ? 'switch-on' : ''" @click="onToggleReminder">
-                        <view class="switch-knob"></view>
+                    <view class="switch-hit" @click="onToggleReminder">
+                        <view class="switch" :class="reminderOn ? 'switch-on' : ''">
+                            <view class="switch-knob"></view>
+                        </view>
                     </view>
                 </view>
             </view>
@@ -38,13 +40,13 @@
             </view>
 
             <view v-if="!loadError" class="month-bar">
-                <view class="month-arrow" @click="onPrevMonth">
+                <app-icon-button @click="onPrevMonth">
                     <text class="arrow-text">‹</text>
-                </view>
+                </app-icon-button>
                 <text class="month-text">{{ displayYear }}年{{ displayMonth }}月</text>
-                <view class="month-arrow" @click="onNextMonth">
+                <app-icon-button @click="onNextMonth">
                     <text class="arrow-text">›</text>
-                </view>
+                </app-icon-button>
             </view>
 
             <view v-if="!loadError" class="week-header">
@@ -360,11 +362,14 @@ import { goBack } from '../../utils/navigation'
     .reminder-label { font-size: 30rpx; font-weight: bold; color: #333333; }
     .reminder-right { flex-direction: row; align-items: center; }
     .reminder-text { font-size: 24rpx; color: #999999; margin-right: 12rpx; }
+    /* 票 2730 第 1 项：开关本体仍是 84×48rpx，命中区由外层 88rpx 盒撑开（§5.11）。 */
+    .switch-hit { width: 88rpx; height: 88rpx; align-items: center; justify-content: center; }
     .switch { width: 84rpx; height: 48rpx; border-radius: 24rpx; background-color: $checkin-cell-miss; justify-content: center; padding: 0 4rpx; }
     .switch-on { background-color: $primary-color; justify-content: flex-end; }
     .switch-knob { width: 40rpx; height: 40rpx; border-radius: 20rpx; background-color: #ffffff; }
     .month-bar { flex-direction: row; align-items: center; justify-content: center; padding: 20rpx 0; }
-    .month-arrow { width: 64rpx; height: 64rpx; align-items: center; justify-content: center; }
+    /* 票 2730 第 1 项：月历箭头命中区 64→88rpx；‹ › 字形 40rpx 不变。 */
+    /* 票 2730 第 1 项：88rpx 命中盒 / 64rpx 承载面由 components/app-icon-button 承担。 */
     .arrow-text { width: 32rpx; flex-shrink: 0; font-size: 40rpx; line-height: 44rpx; text-align: center; color: #333333; font-weight: bold; }
     .month-text { font-size: 32rpx; font-weight: bold; color: #333333; margin-left: 24rpx; margin-right: 24rpx; }
     .week-header { flex-direction: row; padding: 12rpx 24rpx; }
