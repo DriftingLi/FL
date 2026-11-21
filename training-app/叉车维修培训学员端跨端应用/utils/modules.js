@@ -10,7 +10,7 @@
  *
  * ## 键与归属面
  *
- * - **键 = `pages/` 下的目录名**（23 个，一对一是默认规则）。
+ * - **键 = `pages/` 下的目录名**（24 个，一对一是默认规则）。
  * - `extraDirs` / `files` 里的目录外路径 = 「目录外的家」：**域 api** 与**模块私有拆出物**
  *   （`components/**`、`composables/**`）。
  * - **归属规则（共享件归主消费方，ADR-0023 ③）**，按优先级：
@@ -144,10 +144,32 @@ const INFRA = {
 };
 
 /**
- * 23 个 `pages/` 模块的声明。
+ * 24 个 `pages/` 模块的声明（#2743 新增 acceptance）。
  * 字段顺序统一为：extraDirs → files → extractDirs → crossModuleConsumers → budget → budgetOverrides → maxDepth。
  */
 const MODULES = {
+  acceptance: {
+    extraDirs: [],
+    files: [
+      'api/acceptance.uts',
+      'api/acceptanceMock.uts',
+      'pages/acceptance/acceptance-detail.uvue',
+      'pages/acceptance/acceptance-history.uvue',
+      'pages/acceptance/acceptance-list.uvue',
+      'pages/acceptance/acceptance-submit.uvue',
+      'pages/acceptance/composables/useAcceptanceDetail.uts',
+      'pages/acceptance/composables/useAcceptanceHistory.uts',
+      'pages/acceptance/composables/useAcceptanceList.uts',
+      'pages/acceptance/composables/useAcceptanceSubmit.uts',
+    ],
+    extractDirs: ['pages/acceptance/composables'],
+    /** 消费面：无（域 api 唯一消费方是本模块；表单口径在 utils/acceptanceForm，属跨切面基础设施） */
+    crossModuleConsumers: [],
+    budget: BUDGET,
+    budgetOverrides: {},
+    maxDepth: MAX_DEPTH,
+  },
+
   'ai-assistant': {
     /** `components/ai-chat/**` 是 AI 助手的私有拆出物，但它住在 `components/` 而非 `pages/ai-assistant/` */
     extraDirs: ['components/ai-chat'],

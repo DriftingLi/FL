@@ -23,4 +23,5 @@ export { type RecruitJob, type RecruitJobListResult, type RecruitJobInput, type 
 export { type StudyStats, type CourseProgressItem, type StudentProfile, type StudyRecord, type StudentCourse, type StudentCourseListResult, type StudentCourseChapterProgress, type StudentCourseDetail } from './student'
 export { type NoteItem, type NoteListResult } from './note'
 export { type FeedbackItem, type FeedbackListResult } from './feedback'
+export { type AcceptanceProof, type AcceptanceItem, type AcceptanceTask, type AcceptanceTaskDetail, type AcceptanceSubmitItem, type AcceptanceSubmitResult, type AcceptanceHistoryItem } from './acceptance'
 export { type FaqEntry, type FaqCategory, type FaqNavItem, type FaqGroup } from './faq'

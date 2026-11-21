@@ -120,8 +120,9 @@ describe('「我的」页面原型图契约', () => {
     // #1950（Q20/Q21）：点不开的「学练计划」死占位已摘，工具宫格回到 8 项。
     // #2522：视觉基准改 979:1540，原型第 5 格「学练计划」按 #2512 裁定落「练习记录」
     // （学练计划无页面无 API），故练习记录从末位前移到第 5 位。
+    // #2743：工具宫格末位追加「验收中心」（设备验收模块入口，路径 /pages/acceptance/acceptance-list）。
     expect(toolItems.map((i) => i.title)).toEqual([
-      '学习记录', '收藏夹', '错题本', '笔记本', '练习记录', '学习资料', '就业在线', '任务中心',
+      '学习记录', '收藏夹', '错题本', '笔记本', '练习记录', '学习资料', '就业在线', '任务中心', '验收中心',
     ]);
   });
 
@@ -154,8 +155,9 @@ describe('「我的」页面原型图契约', () => {
     // #1950 起 8 项工具 + 3 项服务（学练计划 / 我的订单 / 地址管理 三处死占位已摘）；
     // #2522 服务宫格补「我的已购」⇒ 8 + 4 = 12。icon 自 #2522 起是切图文件名
     // （/static/icons/profile/<icon>.png），不再是 emoji 字面。
-    expect(toolItems.length).toBe(8);
-    expect(allEntries.length).toBe(12);
+    // #2743：工具 8 → 9（验收中心）
+    expect(toolItems.length).toBe(9);
+    expect(allEntries.length).toBe(13);
     for (const item of allEntries) {
       expect(item.icon.length).toBeGreaterThan(0);
       expect(item.title.length).toBeGreaterThan(0);
