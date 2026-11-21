@@ -66,7 +66,8 @@
       ③ **处置**：判据改成**基线相对**的设备侧事实 —— 运行前先记基线（资源目录 mtime / 目标包进程 pid），
          运行后比对，只有**发生变化**才算部署；并且**主判据是「资源真落盘」**（推送会发生），
          `topResumedActivity` 一律只作**辅助说明**、不作判据。机检行同时报基线与现值：
-        HX_RUN_DEPLOY deployed=true|false www_before=<epoch> www_after=<epoch> pid_before=<pid> pid_after=<pid> reason=<说明>
+        HX_RUN_DEPLOY deployed=true|false www_before=<epoch> www_after=<epoch> pid_before=<pid> pid_after=<pid> baseline=<ok|unreadable> after=<ok|unreadable> reason=<说明>
+        （baseline/after 为读不到时的自证：unreadable 只说明「没测到」，不说明「没前进」，#2729）
     `deployed=false` ⇒ 判**未部署**：`exit=env` + 退出码 2（既不是成功，也不是「代码写错了」）。
     候选包名 = `manifest.json` 的 appid（`__UNI__XXXX` → `uni.app.XXXX`）+ HBuilderX 标准基座 `io.dcloud.uniappx`
     （dev 运行的常见承载）；资源目录候选由这些包名派生，取**实际存在**的那些。
@@ -575,29 +576,44 @@ function Get-DeviceDeployFacts {
     #>
     param([string]$AdbExe, [string]$Serial, [string[]]$WwwPaths, [string[]]$Packages)
     $www = @{}
+    $failures = @()
     foreach ($w in @($WwwPaths)) {
-        try {
-            # **真实文件契约锁：必须用 stat -c %Y 取资源目录 mtime（C11 守护）**
-            $out = (Get-AdbOutput -AdbArgs @('-s', $Serial, 'shell', 'stat', '-c', '%Y', $w)).Trim()
-            if ($out -match '^\d+$') { $www["$w"] = [long]$out }
-        } catch { }
+        $val = $null
+        $last = ''
+        for ($attempt = 1; $attempt -le 2; $attempt++) {
+            # 真实文件契约锁：必须用 stat -c %Y 取资源目录 mtime（C11 守护）。
+            # 重试一次：推送/装机期间 adb 会被占满，单次超时不等于「资源没前进」。
+            $last = (Get-AdbOutput -AdbArgs @('-s', $Serial, 'shell', 'stat', '-c', '%Y', $w) -BudgetSeconds 20).Trim()
+            if ($last -match '^\d+$') { $val = [long]$last; break }
+            if ($last) { break }
+        }
+        if ($null -ne $val) { $www["$w"] = $val }
+        elseif ($last) { $failures += "www:$w:missing" }
+        else { $failures += "www:$w:unreadable" }
     }
     $pids = @{}
-    try {
-        $psOut = Get-AdbOutput -AdbArgs @('-s', $Serial, 'shell', 'ps', '-A', '-o', 'PID,NAME')
+    $psOut = ''
+    for ($attempt = 1; $attempt -le 2; $attempt++) {
+        $psOut = Get-AdbOutput -AdbArgs @('-s', $Serial, 'shell', 'ps', '-A', '-o', 'PID,NAME') -BudgetSeconds 20
+        if ($psOut) { break }
+    }
+    if (-not $psOut) {
+        # 空输出 = 没取到（超时/多设备未指定 serial）；与「进程确实没在跑」是两件事。
+        $failures += 'pid:ps:unreadable'
+    } else {
         foreach ($pkg in @($Packages)) {
             if (-not $pkg) { continue }
             $m = [regex]::Match($psOut, '(?m)^\s*(\d+)\s+' + [regex]::Escape($pkg) + '\s*$')
             if ($m.Success) { $pids["$pkg"] = "$($m.Groups[1].Value)" }
         }
-    } catch { }
+    }
     $fg = ''
     try {
         $dump = Get-AdbOutput -AdbArgs @('-s', $Serial, 'shell', 'dumpsys', 'activity', 'activities')
         $m = [regex]::Match($dump, 'topResumedActivity=[^\r\n]*?\s([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+)/')
         if ($m.Success) { $fg = $m.Groups[1].Value }
     } catch { }
-    return [pscustomobject]@{ Www = $www; Pid = $pids; Foreground = $fg }
+    return [pscustomobject]@{ Www = $www; Pid = $pids; Foreground = $fg; Failures = $failures }
 }
 
 function Get-DeployVerdict {
@@ -608,7 +624,7 @@ function Get-DeployVerdict {
       旁证（**不判真**，只写进 reason）：目标包进程 pid 变化、`已停止运行` 一类停止标记。
       **失败方向刻意偏向「判未部署」**：误判未部署的代价是 exit 2（人再看一眼），误判已部署的代价是假绿
       —— 后者才是本仓最忌讳的。所以旁证一律不参与判真。
-      返回 @{ Deployed=<bool>; Reason=<说明>; WwwAdvanced=@(); Restarted=@(); StopMarkers=@() }
+      返回 @{ Deployed=<bool>; Reason=<说明>; WwwAdvanced=@(); Restarted=@(); StopMarkers=@(); Baseline=<ok|unreadable>; AfterState=<ok|unreadable> }
     #>
     param($Before, $After, [string]$Stdout)
     $wwwAdvanced = @()
@@ -624,7 +640,16 @@ function Get-DeployVerdict {
     $stopMarkers = @('已停止运行', '运行失败', '安装失败', '同步失败')
     $hitStop = @($stopMarkers | Where-Object { $Stdout -match [regex]::Escape($_) })
     $deployed = ($wwwAdvanced.Count -gt 0)
+    # 可读性单独判：基线/现值一个都没取到时，不能写成「与基线完全一致」——那是在陈述一个没测过的事实。
+    $beforeKnown = ((@($Before.Www.Keys).Count + @($Before.Pid.Keys).Count) -gt 0)
+    $afterKnown = ((@($After.Www.Keys).Count + @($After.Pid.Keys).Count) -gt 0)
+    $baselineState = if ($beforeKnown) { 'ok' } else { 'unreadable' }
+    $afterState = if ($afterKnown) { 'ok' } else { 'unreadable' }
+    $beforeFail = @($Before.Failures) -join '、'
+    $afterFail = @($After.Failures) -join '、'
     $reason = if ($deployed) { "资源已落到设备：$($wwwAdvanced -join '、') 的 mtime 相对基线前进" }
+              elseif (-not $beforeKnown) { "基线未取到（$beforeFail）⇒ 无从判断是否部署；这不是「未前进」" }
+              elseif (-not $afterKnown) { "现值未取到（$afterFail）⇒ 无从判断是否部署；基线可读" }
               elseif ($restarted.Count -gt 0) { "只见进程重启（$($restarted -join '、')）、未见资源 mtime 前进 ⇒ 不判部署（旁证不判真）" }
               elseif ($hitStop.Count -gt 0) { "会话打出停止标记（$($hitStop -join '、')），且设备侧事实与基线完全一致（前台=$($After.Foreground)）" }
               else { "设备侧事实与基线完全一致（资源 mtime 未前进、进程 pid 未变；前台=$($After.Foreground)）" }
@@ -634,6 +659,8 @@ function Get-DeployVerdict {
         WwwAdvanced = $wwwAdvanced
         Restarted = $restarted
         StopMarkers = $hitStop
+        Baseline = $baselineState
+        AfterState = $afterState
     }
 }
 
@@ -866,6 +893,12 @@ if ($CompileOnly) {
     exit 0
 }
 
+# 初始化：$script:TargetSerial 与 $script:AdbTextCalls（D13：本文件的契约锚必须是 $script:*）
+# 必须早于下面首次设备侧取数：本脚本此前把这两行留在文件尾（try/finally 之后、不可达），
+# 基线取数只能靠显式 -s；一旦某条取数忘了带 serial 就会静默读空（#2729）。
+$script:TargetSerial = $target.Serial
+$script:AdbTextCalls = 0
+
 # ---------- 部署基线（判据是「相对基线是否前进」，见脚本头「假绿教训 v2」）----------
 # 候选包名：manifest 的 appid（__UNI__XXXX → uni.app.XXXX）+ HBuilderX 标准基座（dev 运行的常见承载）；
 # 资源目录候选由包名 + appid 派生。**取不到就是空** —— 空表示「无从判断」，绝不表示「已部署」。
@@ -962,13 +995,14 @@ $pidBeforeText = (@($factsBefore.Pid.Keys) | ForEach-Object { "$_=$($factsBefore
 $pidAfterText = (@($factsAfter.Pid.Keys) | ForEach-Object { "$_=$($factsAfter.Pid[$_])" }) -join ','
 if (-not $pidBeforeText) { $pidBeforeText = 'none' }
 if (-not $pidAfterText) { $pidAfterText = 'none' }
-$deployLine = "HX_RUN_DEPLOY deployed=$deployedText www=$(Format-WwwPair -Before $factsBefore -After $factsAfter) pid_before=$pidBeforeText pid_after=$pidAfterText foreground=$($factsAfter.Foreground) reason=$($deployed.Reason)"
+$deployLine = "HX_RUN_DEPLOY deployed=$deployedText www=$(Format-WwwPair -Before $factsBefore -After $factsAfter) pid_before=$pidBeforeText pid_after=$pidAfterText baseline=$($deployed.Baseline) after=$($deployed.AfterState) foreground=$($factsAfter.Foreground) reason=$($deployed.Reason)"
 Write-Host $deployLine
 Add-Content -LiteralPath $LogPath -Value $deployLine -Encoding utf8
 
 if (-not $deployed.Deployed) {
     Write-Host ''
-    Write-Host '❌ 判定为**未部署**：设备侧事实与基线完全一致 —— 这次运行不算成功。' -ForegroundColor Red
+    $head = if ($deployed.Baseline -eq 'unreadable' -or $deployed.AfterState -eq 'unreadable') { '❌ 无法判定：设备侧基线/现值没取到（不是「未前进」）' } else { '❌ 判定为**未部署**：设备侧事实与基线完全一致 —— 这次运行不算成功。' }
+    Write-Host $head -ForegroundColor Red
     Write-Host "   依据：$($deployed.Reason)" -ForegroundColor Red
     if ($launchExitedEarly) {
         Write-Host '   注意：那个会话**自己提前退出了**（真运行会话不会自己收口）—— 与「仅编译」调用同形，' -ForegroundColor Red
@@ -1005,15 +1039,3 @@ exit 0
     # 释放 agent 互斥锁（必须，否则下一个会话会一直等）
     Release-HxLock
 }
-
-# ---------- 接线层：一次文本 / 管理类 adb 调用的统一委托（AC2 第 3 条）----------
-# ⚠️ 定义必须在首次调用（Get-OnlineDeviceList → Get-AdbOutput，:696 设备解析）之前：
-#    PowerShell 函数要「执行到定义行」才生效，#1584 把这两块挪到文件尾 ⇒ 首步直接
-#    「术语 'Get-AdbOutput' 不会被识别」（#1602 补上，#1584 空提交 b5de6022 的同族错位）。
-# 初始化：$script:TargetSerial 与 $script:AdbTextCalls（D13：本文件的契约锚必须是 $script:*）
-$script:TargetSerial = $target.Serial
-$script:AdbTextCalls = 0
-
-# 初始化：$script:TargetSerial 与 $script:AdbTextCalls（D13：本文件的契约锚必须是 $script:*）
-$script:TargetSerial = $target.Serial
-$script:AdbTextCalls = 0
