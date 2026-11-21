@@ -65,6 +65,7 @@ function copyTask(src : AcceptanceTask) : AcceptanceTask {
 		deadline: src.deadline,
 		status: src.status,
 		result: src.result,
+		remark: src.remark,
 		submitted_at: submitted,
 		item_count: src.item_count,
 		decided_count: src.decided_count,
@@ -93,6 +94,7 @@ function makeTask(id : number, code : string, title : string, course : string, i
 		deadline: deadline,
 		status: 'pending',
 		result: '',
+		remark: '',
 		submitted_at: null,
 		item_count: 0,
 		decided_count: 0,
@@ -179,12 +181,21 @@ function findEntry(id : number) : MockEntry | null {
 	return null
 }
 
-/** 待验收列表（只回 `pending`；排序按种子顺序，真实接口由后端排序） */
-export function mockAcceptanceTasks() : AcceptanceTask[] {
+/**
+ * 验收任务列表（按状态筛选；排序按种子顺序，真实接口由后端排序）
+ *
+ * @param status `pending` / `submitted` / `done`（`done` = accepted + rejected）
+ */
+export function mockAcceptanceTasks(status : string = 'pending') : AcceptanceTask[] {
 	ensureSeed()
 	const out : AcceptanceTask[] = []
 	for (let i = 0; i < store.length; i++) {
-		if (store[i].task.status == 'pending') out.push(copyTask(store[i].task))
+		const t = store[i].task
+		if (status == 'done') {
+			if (t.status == 'accepted' || t.status == 'rejected') out.push(copyTask(t))
+		} else if (t.status == status) {
+			out.push(copyTask(t))
+		}
 	}
 	return out
 }
@@ -231,7 +242,7 @@ export function mockAcceptanceHistory() : AcceptanceHistoryItem[] {
 }
 
 /** 提交验收结果（幂等闸门：已提交的单据拒绝二次提交） */
-export function mockAcceptanceSubmit(taskId : number, inputs : AcceptanceSubmitItem[]) : AcceptanceSubmitResult {
+export function mockAcceptanceSubmit(taskId : number, inputs : AcceptanceSubmitItem[], remark : string = '') : AcceptanceSubmitResult {
 	ensureSeed()
 	const entry = findEntry(taskId)
 	if (entry == null) throw new Error('验收单不存在')
@@ -250,6 +261,7 @@ export function mockAcceptanceSubmit(taskId : number, inputs : AcceptanceSubmitI
 
 	refreshCounts(entry.task, entry.items)
 	entry.task.status = 'submitted'
+	entry.task.remark = remark
 	entry.task.submitted_at = nowText()
 	// 整体结论与页面用同一口径（utils/acceptanceForm.acceptanceRollupResult），不在 mock 里另写一份
 	entry.task.result = acceptanceRollupResult(entry.items)

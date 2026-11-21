@@ -29,6 +29,7 @@
                         <text class="head-meta">{{ progressLabel }}</text>
                     </view>
                     <text v-if="resultLabel.length > 0" class="head-result">{{ resultLabel }}</text>
+                    <text v-if="overallRemark.length > 0" class="head-remark">整体备注：{{ overallRemark }}</text>
                     <text v-if="submittedLabel.length > 0" class="head-submitted">{{ submittedLabel }}</text>
                 </view>
 
@@ -68,7 +69,7 @@
 
     const {
         loading, failed, hasDetail, title, code, courseLine, deadlineText,
-        statusLabel, resultLabel, progressLabel, submittedLabel, isPending,
+        statusLabel, resultLabel, overallRemark, progressLabel, submittedLabel, isPending,
         items, load, reload, onStartSubmit, itemResultLabel,
     } = useAcceptanceDetail()
 
@@ -171,6 +172,12 @@
         font-size: 26rpx;
         color: $primary-color;
         margin-top: 16rpx;
+    }
+
+    .head-remark {
+        font-size: 24rpx;
+        color: $text-color;
+        margin-top: 8rpx;
     }
 
     .head-submitted {

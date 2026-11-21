@@ -56,6 +56,8 @@ export type AcceptanceTask = {
 	status : string
 	/** 学员自检整体结论：`pass` / `fail` / `rectify`；未提交为空串 */
 	result : string
+	/** 学员提交的整单备注（选填）；未提交为空串 */
+	remark : string
 	/** 提交时间；未提交为 null（键在） */
 	submitted_at : string | null
 	/** 验收项总数 */

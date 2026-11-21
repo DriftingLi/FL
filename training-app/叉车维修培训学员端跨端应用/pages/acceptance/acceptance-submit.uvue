@@ -67,6 +67,13 @@
                     </view>
                 </view>
 
+                <view class="overall-card">
+                    <text class="overall-title">整体备注（选填）</text>
+                    <textarea class="overall-remark" :value="overallRemark" :maxlength="remarkMax"
+                        placeholder="补充整单说明，例如复检安排、遗留问题"
+                        @input="onOverallRemarkInput($event as InputEvent)" />
+                </view>
+
                 <view class="bottom-gap"></view>
             </view>
         </scroll-view>
@@ -89,8 +96,8 @@
 
     const {
         items, options, remarkMax, proofsMax, loading, failed, submitting, uploadingItemId,
-        hasTask, headerTitle, headerCode, progressLabel,
-        load, reload, setResult, setRemark, onAddProof, onRemoveProof, onPreviewProof, onSubmit,
+        overallRemark, hasTask, headerTitle, headerCode, progressLabel,
+        load, reload, setResult, setRemark, setOverallRemark, onAddProof, onRemoveProof, onPreviewProof, onSubmit,
     } = useAcceptanceSubmit()
 
     function onBack() : void {
@@ -109,11 +116,21 @@
         setRemark(itemId, e.detail.value)
     }
 
+    function onOverallRemarkInput(e : InputEvent) : void {
+        setOverallRemark(e.detail.value)
+    }
+
     async function onSubmitTap() : Promise<void> {
         if (submitting) return
         const ok = await onSubmit()
         if (ok) {
-            uni.navigateBack()
+            // 提交页由详情页进入（列表 → 详情 → 提交），回退两层到列表；直接进入时兜底重定向
+            uni.navigateBack({
+                delta: 2,
+                fail: () => {
+                    uni.redirectTo({ url: '/pages/acceptance/acceptance-list' })
+                },
+            })
         }
     }
 
@@ -229,7 +246,7 @@
     }
 
     .option {
-        height: 72rpx;
+        height: 88rpx;
         padding: 0 24rpx;
         border-radius: $radius-pill;
         border-width: 2rpx;
@@ -344,7 +361,7 @@
     }
 
     .proof-remove {
-        height: 48rpx;
+        height: 88rpx;
         align-items: center;
         justify-content: center;
     }
@@ -352,6 +369,30 @@
     .proof-remove-text {
         font-size: 20rpx;
         color: $danger-color;
+    }
+
+    .overall-card {
+        background-color: $card-bg;
+        border-radius: $radius-card;
+        margin: 20rpx 24rpx 0 24rpx;
+        padding: 24rpx;
+    }
+
+    .overall-title {
+        font-size: 26rpx;
+        font-weight: bold;
+        color: $text-color;
+    }
+
+    .overall-remark {
+        height: 128rpx;
+        background-color: $bg-color;
+        border-radius: 12rpx;
+        padding: 16rpx;
+        font-size: 26rpx;
+        color: $text-color;
+        margin-top: 12rpx;
+        width: 100%;
     }
 
     .bottom-gap {

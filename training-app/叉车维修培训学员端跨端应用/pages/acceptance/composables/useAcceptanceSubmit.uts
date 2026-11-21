@@ -34,6 +34,7 @@ export type UseAcceptanceSubmitResult = {
 	failed : Ref<boolean>
 	submitting : Ref<boolean>
 	uploadingItemId : Ref<number>
+	overallRemark : Ref<string>
 	hasTask : ComputedRef<boolean>
 	headerTitle : ComputedRef<string>
 	headerCode : ComputedRef<string>
@@ -42,6 +43,7 @@ export type UseAcceptanceSubmitResult = {
 	reload : () => void
 	setResult : (itemId : number, result : string) => void
 	setRemark : (itemId : number, remark : string) => void
+	setOverallRemark : (remark : string) => void
 	onAddProof : (itemId : number) => void
 	onRemoveProof : (itemId : number, index : number) => void
 	onPreviewProof : (itemId : number, index : number) => void
@@ -55,6 +57,7 @@ export function useAcceptanceSubmit() : UseAcceptanceSubmitResult {
 	const failed = ref<boolean>(false)
 	const submitting = ref<boolean>(false)
 	const uploadingItemId = ref<number>(0)
+	const overallRemark = ref<string>('')
 	const taskId = ref<number>(0)
 
 	const hasTask = computed<boolean>(() : boolean => {
@@ -116,6 +119,11 @@ export function useAcceptanceSubmit() : UseAcceptanceSubmitResult {
 		const it = findItem(itemId)
 		if (it == null) return
 		replaceItem(itemId, it.result, remark, it.proofs)
+	}
+
+	/** 整单备注（选填；票面要求 3「汇总页 + 整体备注」） */
+	function setOverallRemark(remark : string) : void {
+		overallRemark.value = remark
 	}
 
 	function appendProof(itemId : number, proof : AcceptanceProof) : void {
@@ -282,6 +290,24 @@ export function useAcceptanceSubmit() : UseAcceptanceSubmitResult {
 		load(taskId.value)
 	}
 
+	/** 提交前二次确认（票面要求 5「提交前二次确认」） */
+	function confirmSubmit() : Promise<boolean> {
+		return new Promise<boolean>((resolve) => {
+			uni.showModal({
+				title: '确认提交',
+				content: '提交后验收结果将进入教练验收，不能再修改。确认提交吗？',
+				confirmText: '确认提交',
+				cancelText: '再检查一下',
+				success: (res) => {
+					resolve(res.confirm)
+				},
+				fail: () => {
+					resolve(false)
+				},
+			})
+		})
+	}
+
 	async function onSubmit() : Promise<boolean> {
 		const t = task.value
 		if (t == null) return false
@@ -291,6 +317,8 @@ export function useAcceptanceSubmit() : UseAcceptanceSubmitResult {
 			uni.showToast({ title: validation.message, icon: 'none' })
 			return false
 		}
+		const confirmed = await confirmSubmit()
+		if (!confirmed) return false
 		submitting.value = true
 		uni.showLoading({ title: '提交中...' })
 		try {
@@ -306,7 +334,7 @@ export function useAcceptanceSubmit() : UseAcceptanceSubmitResult {
 					proofs: proofs,
 				} as AcceptanceSubmitItem)
 			}
-			await submitAcceptanceApi(t.id, payload)
+			await submitAcceptanceApi(t.id, payload, overallRemark.value)
 			uni.showToast({ title: '验收结果已提交', icon: 'success' })
 			return true
 		} catch (e) {
@@ -335,6 +363,7 @@ export function useAcceptanceSubmit() : UseAcceptanceSubmitResult {
 		failed: failed,
 		submitting: submitting,
 		uploadingItemId: uploadingItemId,
+		overallRemark: overallRemark,
 		hasTask: hasTask,
 		headerTitle: headerTitle,
 		headerCode: headerCode,
@@ -343,6 +372,7 @@ export function useAcceptanceSubmit() : UseAcceptanceSubmitResult {
 		reload: () => reload(),
 		setResult: (itemId : number, result : string) => setResult(itemId, result),
 		setRemark: (itemId : number, remark : string) => setRemark(itemId, remark),
+		setOverallRemark: (remark : string) => setOverallRemark(remark),
 		onAddProof: (itemId : number) => onAddProof(itemId),
 		onRemoveProof: (itemId : number, index : number) => onRemoveProof(itemId, index),
 		onPreviewProof: (itemId : number, index : number) => onPreviewProof(itemId, index),

@@ -24,6 +24,7 @@ export type UseAcceptanceDetailResult = {
 	deadlineText : ComputedRef<string>
 	statusLabel : ComputedRef<string>
 	resultLabel : ComputedRef<string>
+	overallRemark : ComputedRef<string>
 	progressLabel : ComputedRef<string>
 	submittedLabel : ComputedRef<string>
 	isPending : ComputedRef<boolean>
@@ -81,6 +82,12 @@ export function useAcceptanceDetail() : UseAcceptanceDetailResult {
 		if (d == null) return ''
 		if (d.task.result.length == 0) return ''
 		return '自检结论 ' + acceptanceResultText(d.task.result)
+	})
+
+	const overallRemark = computed<string>(() : string => {
+		const d = detail.value
+		if (d == null) return ''
+		return d.task.remark
 	})
 
 	const progressLabel = computed<string>(() : string => {
@@ -148,6 +155,7 @@ export function useAcceptanceDetail() : UseAcceptanceDetailResult {
 		deadlineText: deadlineText,
 		statusLabel: statusLabel,
 		resultLabel: resultLabel,
+		overallRemark: overallRemark,
 		progressLabel: progressLabel,
 		submittedLabel: submittedLabel,
 		isPending: isPending,

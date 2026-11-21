@@ -81,6 +81,7 @@ function buildTask(obj : UTSJSONObject) : AcceptanceTask {
 		deadline: toStr(obj['deadline']),
 		status: toStr(obj['status'], 'pending'),
 		result: toStr(obj['result']),
+		remark: toStr(obj['remark']),
 		submitted_at: submittedRaw != null ? toStr(submittedRaw) : null,
 		item_count: toNumber(obj['item_count']),
 		decided_count: toNumber(obj['decided_count']),
@@ -116,16 +117,25 @@ function buildHistory(obj : UTSJSONObject) : AcceptanceHistoryItem {
 	} as AcceptanceHistoryItem
 }
 
-/** 待验收列表 */
-export function listPendingAcceptanceApi() : Promise<AcceptanceTask[]> {
+/**
+ * 验收任务列表（按状态筛选）
+ *
+ * @param status `pending` 待提交 / `submitted` 已提交待验收 / `done` 已完成（accepted + rejected）
+ */
+export function listAcceptanceTasksApi(status : string) : Promise<AcceptanceTask[]> {
 	if (ACCEPTANCE_USE_MOCK) {
-		return Promise.resolve(mockAcceptanceTasks())
+		return Promise.resolve(mockAcceptanceTasks(status))
 	}
-	const params : UTSJSONObject = { status: 'pending' } as UTSJSONObject
+	const params : UTSJSONObject = { status: status } as UTSJSONObject
 	const url = ACCEPTANCE_BASE + '/tasks'
 	return getMapped<AcceptanceTask[]>(url, params, (data : UTSJSONObject) : AcceptanceTask[] => {
 		return decodeList<AcceptanceTask>(data, url, (obj : UTSJSONObject) : AcceptanceTask => buildTask(obj))
 	})
+}
+
+/** 待验收列表（`pending` 的便捷入口，保留给只关心待提交的调用方） */
+export function listPendingAcceptanceApi() : Promise<AcceptanceTask[]> {
+	return listAcceptanceTasksApi('pending')
 }
 
 /** 验收单详情 */
@@ -151,12 +161,13 @@ export function getAcceptanceDetailApi(id : number) : Promise<AcceptanceTaskDeta
  *
  * @param items 逐项结论载荷（`item_id` / `result` / `remark` / `proofs`），必须与详情里的项一一对应。
  *        端上只提交**已确认**的项，未确认项由 `utils/acceptanceForm.acceptanceValidate` 在提交前拦下。
+ * @param remark 整单备注（选填，票面要求 3「汇总页 + 整体备注」）。
  */
-export function submitAcceptanceApi(taskId : number, items : AcceptanceSubmitItem[]) : Promise<AcceptanceSubmitResult> {
+export function submitAcceptanceApi(taskId : number, items : AcceptanceSubmitItem[], remark : string = '') : Promise<AcceptanceSubmitResult> {
 	if (ACCEPTANCE_USE_MOCK) {
 		return new Promise<AcceptanceSubmitResult>((resolve, reject) => {
 			try {
-				resolve(mockAcceptanceSubmit(taskId, items))
+				resolve(mockAcceptanceSubmit(taskId, items, remark))
 			} catch (e) {
 				reject(e)
 			}
@@ -177,7 +188,7 @@ export function submitAcceptanceApi(taskId : number, items : AcceptanceSubmitIte
 			proofs: proofs,
 		} as UTSJSONObject)
 	}
-	const payload : UTSJSONObject = { items: payloadItems } as UTSJSONObject
+	const payload : UTSJSONObject = { items: payloadItems, remark: remark } as UTSJSONObject
 	const url = ACCEPTANCE_BASE + '/tasks/' + taskId.toString() + '/submit'
 	return postMapped<AcceptanceSubmitResult>(url, payload, (data : UTSJSONObject) : AcceptanceSubmitResult => {
 		const submittedRaw : any | null = data['submitted_at']

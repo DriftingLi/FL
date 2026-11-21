@@ -40,6 +40,18 @@ describe('验收结论与状态文案', () => {
   });
 });
 
+describe('列表状态筛选口径', () => {
+  it('三个筛选项与票面一致', () => {
+    expect(form.ACCEPTANCE_FILTER_OPTIONS.map((f) => f.label)).toEqual(['待提交', '已提交待验收', '已完成']);
+  });
+
+  it('空态文案按筛选值区分', () => {
+    expect(form.acceptanceFilterEmptyText('pending')).toBe('暂无待提交任务');
+    expect(form.acceptanceFilterEmptyText('submitted')).toBe('暂无已提交待验收任务');
+    expect(form.acceptanceFilterEmptyText('done')).toBe('暂无已完成任务');
+  });
+});
+
 describe('整体结论按最严重项汇总', () => {
   it('任一不通过 ⇒ fail（哪怕同时有待整改）', () => {
     const items = [item(1, 'pass'), item(2, 'rectify'), item(3, 'fail')];

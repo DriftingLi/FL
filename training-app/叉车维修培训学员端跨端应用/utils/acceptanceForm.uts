@@ -34,6 +34,25 @@ export const ACCEPTANCE_RESULT_OPTIONS : AcceptanceResultOption[] = [
 	{ value: 'rectify', label: '待整改' },
 ]
 
+/** 列表状态筛选选项（票面要求 1：待提交 / 已提交待验收 / 已完成） */
+export type AcceptanceFilterOption = {
+	value : string
+	label : string
+}
+
+export const ACCEPTANCE_FILTER_OPTIONS : AcceptanceFilterOption[] = [
+	{ value: 'pending', label: '待提交' },
+	{ value: 'submitted', label: '已提交待验收' },
+	{ value: 'done', label: '已完成' },
+]
+
+/** 筛选值 → 空态文案（页面直接绑定，不自己拼） */
+export function acceptanceFilterEmptyText(filter : string) : string {
+	if (filter == 'submitted') return '暂无已提交待验收任务'
+	if (filter == 'done') return '暂无已完成任务'
+	return '暂无待提交任务'
+}
+
 /** 校验结果：`missingItemId` 指向第一个未完成的项（0 = 不是单项问题） */
 export type AcceptanceValidation = {
 	ok : boolean
