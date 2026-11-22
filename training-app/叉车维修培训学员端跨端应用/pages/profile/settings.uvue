@@ -7,7 +7,7 @@
                 <view class="card">
                     <view class="cell" @click="onNavigate('personal-info')">
                         <text class="cell-label">账号与安全</text>
-                        <text class="cell-arrow">›</text>
+                        <image class="cell-arrow" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
                     </view>
                 </view>
             </view>
@@ -19,7 +19,7 @@
                     <view class="cell" @click="onToggleCareMode">
                         <text class="cell-label">关怀模式</text>
                         <text class="cell-value">{{ careModeEnabled ? '已开启' : '未开启' }}</text>
-                        <text class="cell-arrow">›</text>
+                        <image class="cell-arrow" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
                     </view>
                 </view>
             </view>
@@ -29,20 +29,20 @@
                 <view class="card">
                     <view class="cell" @click="onFeature('notification')">
                         <text class="cell-label">通知设置</text>
-                        <text class="cell-arrow">›</text>
+                        <image class="cell-arrow" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
                     </view>
                     <view class="cell" @click="onClearCache">
                         <text class="cell-label">清理缓存</text>
                         <text class="cell-value">{{ cacheSize }}</text>
-                        <text class="cell-arrow">›</text>
+                        <image class="cell-arrow" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
                     </view>
                     <view class="cell" @click="onFeature('general')">
                         <text class="cell-label">通用</text>
-                        <text class="cell-arrow">›</text>
+                        <image class="cell-arrow" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
                     </view>
                     <view class="cell" @click="onFeature('device')">
                         <text class="cell-label">登录设备管理</text>
-                        <text class="cell-arrow">›</text>
+                        <image class="cell-arrow" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
                     </view>
                 </view>
             </view>
@@ -52,19 +52,19 @@
                 <view class="card">
                     <view class="cell" @click="onFeature('privacy')">
                         <text class="cell-label">隐私</text>
-                        <text class="cell-arrow">›</text>
+                        <image class="cell-arrow" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
                     </view>
                     <view class="cell" @click="onFeature('info-collection')">
                         <text class="cell-label">个人信息收集清单</text>
-                        <text class="cell-arrow">›</text>
+                        <image class="cell-arrow" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
                     </view>
                     <view class="cell" @click="onFeature('third-party')">
                         <text class="cell-label">第三方收集清单</text>
-                        <text class="cell-arrow">›</text>
+                        <image class="cell-arrow" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
                     </view>
                     <view class="cell" @click="onAbout">
                         <text class="cell-label">关于我们</text>
-                        <text class="cell-arrow">›</text>
+                        <image class="cell-arrow" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
                     </view>
                 </view>
             </view>
@@ -250,14 +250,12 @@
         margin-right: 8rpx;
     }
 
-    /* 固定箭槽：宽度 + 行高统一，保证每行 › 的水平右缘与垂直中线都一致 */
+    /* 固定箭槽：切图 22rpx 见方（源 design-slices 我的/image 8，CSS 11×11 ⇒ 22rpx），
+       宽度与行高统一，保证每行箭头的水平右缘与垂直中线都一致 */
     .cell-arrow {
-        width: 32rpx;
+        width: 22rpx;
+        height: 22rpx;
         flex-shrink: 0;
-        font-size: 40rpx;
-        line-height: 44rpx;
-        text-align: center;
-        color: $text-disabled;
     }
 
     .logout-wrap {

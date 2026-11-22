@@ -20,7 +20,7 @@
                     <view class="stats-value-row">
                         <text class="stats-num stats-num-blue">{{ pointsText }}</text>
                         <view class="stats-arrow-wrap">
-                            <text class="stats-arrow">›</text>
+                            <image class="stats-arrow" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
                         </view>
                     </view>
                     <text class="stats-label">可用积分</text>
@@ -33,7 +33,7 @@
                 <text class="course-title">我的课程</text>
                 <view class="course-right">
                     <text class="course-count">{{ courseCount }}个</text>
-                    <text class="course-arrow">›</text>
+                    <image class="course-arrow" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
                 </view>
             </view>
 
@@ -396,13 +396,12 @@
         margin-left: 8rpx;
     }
 
+    /* 切图 22rpx 见方：源 design-slices 我的/image 8（CSS 11×11 ⇒ 22rpx），
+       墨迹占 30/33 ⇒ 实际笔画约 20rpx 高，落在 36rpx 灰底圆内留 7rpx 边 */
     .stats-arrow {
-        width: 32rpx;
+        width: 22rpx;
+        height: 22rpx;
         flex-shrink: 0;
-        font-size: 26rpx;
-        line-height: 30rpx;
-        text-align: center;
-        color: $text-color-placeholder;
     }
 
     .stats-label {
@@ -445,13 +444,11 @@
         color: $text-color;
     }
 
+    /* 切图 22rpx 见方：与 .stats-arrow 同一张切图、同一设计尺寸（CSS 11×11 ⇒ 22rpx） */
     .course-arrow {
-        width: 32rpx;
+        width: 22rpx;
+        height: 22rpx;
         flex-shrink: 0;
-        font-size: 32rpx;
-        line-height: 36rpx;
-        text-align: center;
-        color: $text-disabled;
         margin-left: 8rpx;
     }
 
