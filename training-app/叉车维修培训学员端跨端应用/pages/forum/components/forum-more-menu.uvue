@@ -1,0 +1,98 @@
+<template>
+    <!-- 「···」菜单（票 2767）：收藏 / 取消收藏。
+         触发按钮在详情页标题行右侧（导航栏右槽是小程序胶囊区，不放内容）；
+         本件只渲染遮罩与浮层，展开态与浮层顶边自持，宿主经 expose 的 open() 唤起。 -->
+    <view class="more-root">
+        <view v-if="visible" class="more-mask" @click="onClose"></view>
+        <view v-if="visible" class="more-menu" :style="{ top: menuTop + 'px' }">
+            <view class="more-item" @click="onToggleFavorite">
+                <text :class="favorited ? 'more-item-text more-item-text-favorited' : 'more-item-text'">{{ favorited ? '取消收藏' : '收藏' }}</text>
+            </view>
+        </view>
+    </view>
+</template>
+
+<script setup lang="uts">
+    import { computed, ref } from 'vue'
+    import { useSafeArea } from '../../../utils/system'
+
+    withDefaults(defineProps<{
+        /** 当前帖子是否已收藏（决定菜单项文案与强调色） */
+        favorited? : boolean
+    }>(), {
+        favorited: false
+    })
+
+    const emit = defineEmits(['toggleFavorite'])
+
+    const visible = ref<boolean>(false)
+    const safeArea = useSafeArea()
+    const windowWidth = uni.getSystemInfoSync().windowWidth
+    /**
+     * 浮层顶边 = 状态栏 + 页头两行（标题行 / 工具行各 88rpx）+ 内容区上内距 32rpx
+     * + 标题行触发按钮高度 56rpx，与 app-nav-bar 同源换算。
+     */
+    const menuTop = computed<number>(() : number => {
+        return safeArea.value.statusBarHeight + Math.round(264 * windowWidth / 750)
+    })
+
+    function open() : void {
+        visible.value = true
+    }
+
+    function onClose() : void {
+        visible.value = false
+    }
+
+    function onToggleFavorite() : void {
+        visible.value = false
+        emit('toggleFavorite')
+    }
+
+    defineExpose({ open })
+</script>
+
+<style lang="scss">
+    /* 零尺寸锚点：两个子节点都是 fixed，不参与页面布局 */
+    .more-root {
+        width: 0;
+        height: 0;
+    }
+
+    /* 全屏透明遮罩：点空白处收起 */
+    .more-mask {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 90;
+    }
+
+    .more-menu {
+        position: fixed;
+        right: 32rpx;
+        z-index: 91;
+        min-width: 220rpx;
+        background-color: #ffffff;
+        border-radius: 16rpx;
+        padding: 8rpx 0;
+        box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.12);
+    }
+
+    .more-item {
+        padding: 20rpx 32rpx;
+        align-items: center;
+    }
+
+    .more-item-text {
+        font-size: 28rpx;
+        color: #333333;
+    }
+
+    /* 已收藏：沿用收藏橙（§1.6 白名单 #FF8F00 的承载点，自 forum-topic-actions 迁来） */
+    .more-item-text-favorited {
+        color: #ff8f00;
+        font-weight: bold;
+    }
+</style>

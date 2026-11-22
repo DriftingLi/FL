@@ -352,6 +352,9 @@ const MODULES = {
       'pages/forum/components/forum-featured-filter.uvue',
       'pages/forum/components/forum-markdown-blocks.uvue',
       'pages/forum/components/forum-markdown-input.uvue',
+      // 票 2767：导航栏「···」菜单（触发按钮 + 遮罩 + 浮层）从详情页拆出（详情页 633 行撞上
+      // 600 预算，按 ADR-0023 ③「拆而不覆盖」处理）。只被 forum-detail 消费。
+      'pages/forum/components/forum-more-menu.uvue',
       'pages/forum/components/forum-qa-header.uvue',
       'pages/forum/components/forum-reply-list.uvue',
       // 'pages/forum/components/forum-reply-panel.uvue' —— #2691：回复浮层（遮罩 + 头部 + 输入区 +

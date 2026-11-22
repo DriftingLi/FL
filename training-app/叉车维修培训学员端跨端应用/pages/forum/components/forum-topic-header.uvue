@@ -1,4 +1,6 @@
 <template>
+    <!-- 作者行（票 2767）：头像 + 昵称/属地，右侧发帖时间。
+         浏览数已随统计行下沉到 forum-topic-actions；删除入口在导航栏工具行，本组件不再持有。 -->
     <view class="topic-info">
         <view class="author-avatar" :style="{ backgroundColor: avatarColor }">
             <image v-if="authorAvatar.length > 0" class="author-avatar-img"
@@ -7,25 +9,18 @@
         </view>
         <view class="author-info">
             <text class="author-name">{{ authorName }}</text>
+            <!-- 属地（ADR-0045）：作者名下方一行；为空即整段不渲染 -->
             <view class="author-meta">
-                <text class="post-time">{{ createdAtText }}</text>
-                <!-- 属地（ADR-0045）：与作者名 / 时间同一行；为空即整段不渲染 -->
                 <text v-if="regionText.length > 0" class="post-region">· {{ regionText }}</text>
             </view>
         </view>
-        <view class="stat-view">
-            <image class="stat-view-icon" src="/static/icons/forum/view.png" mode="aspectFit"></image>
-            <text class="stat-text">{{ viewsCount }}</text>
-        </view>
-        <view v-if="canDelete" class="topic-delete" @click="onDelete">
-            <text class="topic-delete-text">删除</text>
-        </view>
+        <text class="post-time">{{ createdAtText }}</text>
     </view>
 </template>
 
 <script setup lang="uts">
     // 扁平原始类型 props（全仓先例）；展示文案与权限位由壳层预解析下发
-    // 2026-11-19（#2690）：点赞 / 收藏 / 回复数已移到正文下方互动行，作者行只留身份与浏览数
+    // 2026-11-22（票 2767）：浏览数移出作者行，与评论/点赞合并成正文下方统计行
     withDefaults(defineProps<{
         authorName? : string
         authorAvatar? : string
@@ -33,23 +28,13 @@
         createdAtText? : string
         /** 属地文案（ADR-0045，市优先退省）；空串 = 无属地，不渲染 */
         regionText? : string
-        viewsCount? : number
-        canDelete? : boolean
     }>(), {
         authorName: '匿名学员',
         authorAvatar: '',
         avatarColor: '#239EDD',
         createdAtText: '',
-        regionText: '',
-        viewsCount: 0,
-        canDelete: false
+        regionText: ''
     })
-
-    const emit = defineEmits(['delete'])
-
-    function onDelete() : void {
-        emit('delete')
-    }
 </script>
 
 <style lang="scss">
@@ -57,8 +42,6 @@
         flex-direction: row;
         align-items: center;
         margin-bottom: 24rpx;
-        padding-bottom: 24rpx;
-        border-bottom: 1rpx solid #f0f0f0;
     }
 
     .author-avatar {
@@ -86,48 +69,21 @@
         font-size: 28rpx;
         color: #333333;
         font-weight: bold;
-        margin-bottom: 4rpx;
-    }
-
-    .post-time {
-        font-size: 22rpx;
-        color: #999999;
     }
 
     .author-meta {
         flex-direction: row;
         align-items: center;
+        margin-top: 4rpx;
     }
 
     .post-region {
         font-size: 22rpx;
         color: #999999;
-        margin-left: 8rpx;
     }
 
-    .stat-view {
-        flex-direction: row;
-        align-items: center;
-    }
-
-    /* 票 2730 docx ⑥：浏览数图标换切图（原 👁 emoji 与数字同处一个 text，字形高度不可控） */
-    .stat-view-icon {
-        width: 24rpx;
-        height: 24rpx;
-        margin-right: 6rpx;
-    }
-
-    .stat-text {
-        font-size: 24rpx;
+    .post-time {
+        font-size: 22rpx;
         color: #999999;
-    }
-
-    .topic-delete {
-        padding: 8rpx 0 8rpx 20rpx;
-    }
-
-    .topic-delete-text {
-        font-size: 24rpx;
-        color: #f44336;
     }
 </style>
