@@ -242,7 +242,7 @@ describe('备考经验 tab 接线契约（#706：第四 tab 进场，复用 Topi
   });
 
   it('壳层接线排序条：仅备考经验 tab 显示，帖子流复用广场 TopicCard（variant 表达式不变）', () => {
-    expect(page).toContain("<ForumExperienceSortBar v-if=\"currentTab === 'experience'\" :exp-sort=\"expSort\" @sort-change=\"onExpSortChange\" />");
+    expect(page).toContain("<ForumExperienceSortBar v-if=\"currentTab === 'experience'\" :featured=\"featuredFilter\" :exp-sort=\"expSort\" @featured-change=\"onFeaturedChange\" @sort-change=\"onExpSortChange\" />");
     expect(page).toMatch(/currentTab == 'square' \|\| currentTab == 'hot' \|\| currentTab == 'experience'/);
     expect(page).toMatch(/:variant="currentTab === 'hot' \? 'qa' : 'square'"/);
   });
@@ -312,7 +312,7 @@ describe('精选筛选契约（#742 批次三：三 Tab 通用精选筛选 + 列
   });
 
   it('壳层接线：三 Tab 显示精选筛选条（资源 Tab 不显示）；切 Tab 精选筛选回全部帖（跨 Tab 不延续，对齐 Web）', () => {
-    expect(page).toContain("<ForumFeaturedFilter v-if=\"currentTab === 'square' || currentTab === 'hot' || currentTab === 'experience'\" :featured=\"featuredFilter\" @featured-change=\"onFeaturedChange\" />");
+    expect(page).toContain("<ForumFeaturedFilter v-if=\"currentTab === 'square' || currentTab === 'hot'\" :featured=\"featuredFilter\" @featured-change=\"onFeaturedChange\" />");
     expect(page).toMatch(/featuredFilter\.value = ''/);
   });
 
