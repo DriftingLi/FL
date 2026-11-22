@@ -2,8 +2,9 @@
     <view class="container" :style="{ height: windowHeight + 'px' }">
         <!-- 页头归位 N03（#1609 补漏：#1595 台账行 25 判 N03 白底带分隔线，批3 清单未含 mall）：
              左返回走页头件 leftClick，右槽承载跨小程序 navigator（胶囊让位由页头件负责，#1602） -->
-        <AppNavBar title="商城" :divider="true" @left-click="toback">
-            <template #right>
+        <AppNavBar title="商城" :divider="true" @left-click="toback" :show-toolbar="true">
+            <template #toolbar>
+                <!-- #2761：右槽恒空（侧槽脱流后右槽内容会盖在居中标题上），跨小程序入口下沉第二行。 -->
                 <navigator class="header-avatar" target="miniProgram" app-id="wx56ce2775c2b3aea8" version="release">
                     <image class="avatar-icon" src="/static/icons/易拉宝-006 1-1.png"></image>
                 </navigator>

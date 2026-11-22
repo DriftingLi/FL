@@ -147,72 +147,62 @@ describe('检测器判别力（注入违规样本必红）', () => {
 });
 
 /* ══════════════════════════════════════════════════════════════════════════════
- * 标题居中形态（`titleCentered`，2026-10-27 起；#2402 收口；#2442 改几何）
+ * 页头标题恒居中（#2761 改判 #2480 / ADR-0067 决定 5 / ADR-0069 决定 1）
  *
- * 起因一（2026-10-27）：AI 助手页左槽补上 ☰ 之后，§5.1 的「左槽有字 ⇒ 标题左对齐」把它变成
- * 「☰ AI 助手 ⋯」挤在左上角；聊天页要的是三段式居中 ⇒ 加了 `centerTitle` prop。
+ * 沿革：
+ * - 2026-10-27：AI 助手左槽补 ☰ 后加 `centerTitle` prop 做三段式居中；
+ * - #2402：`--center` 流内居中实为「剩余空间居中」，右槽胶囊让位把标题推左；
+ * - #2442：标题块回流入内、`flex:1`，居中在「左槽右缘 → 右槽左缘」的可用空间里；
+ * - #2479：一级页（无返回箭头）改**真屏幕中心**，二级页整枝不动；
+ * - #2480：二级页收口为「返回箭头后左对齐」；
+ * - **#2761（本契约）**：取消一级/二级二分 —— 用户裁定「形态不统一、不符合行业习惯」，
+ *   全站页头统一为「返回箭头最左 + 标题屏幕居中 + 右侧胶囊」。
  *
- * 起因二（#2402）：`--center`（流内居中）不是居中 —— 右槽为让开小程序胶囊带 width + 大段
- * margin-right，流内标题只能在「左槽 → 右槽」的剩余宽度里居中，视线上必然偏左。
- * 当时的解法是脱流定宽（left 88 / width 574）。
- *
- * 起因三（#2442 用户补充规则）：**一级导航即使存在右侧操作，也允许标题居中**，但标题必须以
- * 导航栏整体可用空间为约束，不得与右侧操作、微信胶囊重叠。脱流定宽 574rpx 违反这条 ——
- * 它的右缘 662rpx 越过胶囊左边线（典型 556rpx），长标题直接钻到胶囊下面。
- *
- * 现形态：标题块留在流内、`flex: 1` 吃掉「左槽右缘 → 右槽左缘」这段可用空间，居中在**这段
- * 空间**里。右槽被 margin-right 钉在胶囊左边线 − 间隙 ⇒ 标题块右缘天然止于右槽左缘，
- * 几何上不可能进胶囊、也不可能盖住左槽。因此不再需要 position:absolute / 定宽 / z-index 兜底。
+ * 三条几何（缺一条就不是屏幕中心）：
+ * 1. 标题块流内 `flex:1` + 两端**等宽**留白 ⇒ 文字中心恒 375rpx；
+ * 2. 两侧槽 `position:absolute` 出流 ⇒ 侧槽内容与胶囊让位都不参与标题块可用宽度；
+ * 3. 留白由 `capsuleLeft` 现算（右缘 = 胶囊左缘 − CAPSULE_CLEARANCE_RPX），不写死数值。
  * ══════════════════════════════════════════════════════════════════════════════ */
 
-/** 标题居中形态违规清单：真实文件与注入样本共用同一检测路径。 */
-function centerTitleViolations(srcRaw) {
+/** 标题恒居中违规清单：真实文件与注入样本共用同一检测路径。 */
+function titleCenterViolations(srcRaw) {
   const src = stripComments(srcRaw);
   const v = [];
-  if (!/centerTitle\s*\?:\s*boolean/.test(src)) {
-    v.push('缺 centerTitle prop 声明');
-  }
-  if (!/centerTitle\s*:\s*false/.test(src)) {
-    v.push('centerTitle 默认值不是 false（现有调用方会被动变形，违反零 diff）');
-  }
-  if (!/if\s*\(\s*props\.centerTitle\s*\)/.test(src)) {
-    v.push('titleCentered 缺 centerTitle 直通分支（prop 形同虚设）');
-  }
-  if (!/nav-bar-title-block--centered/.test(src)) {
-    v.push('缺 centered 形态类');
-  }
-  // 居中判定只允许一处 —— 左槽空置且有标题 ⇒ 自动居中，不再逐页加 prop
-  const trigger = (src.match(/const titleCentered\s*=\s*computed[\s\S]*?\}\)\n/) || [''])[0];
+  // 判据只剩「有标题」—— 左槽有无字形不再影响标题位置
+  const trigger = (src.match(/const titleCentered\s*=\s*computed\([^\n]*\n/) || [''])[0];
   if (!trigger) {
-    v.push('缺 titleCentered 判定（页头居中的唯一开关，见 #2402 / #2442）');
+    v.push('缺 titleCentered 判定（页头居中的唯一开关）');
   } else {
-    if (!/props\.centerTitle/.test(trigger)) {
-      v.push('titleCentered 丢 centerTitle 直通（AI 助手「☰ 标题 ⋯」三段式会翻车）');
-    }
-    if (!/!leftOverlap\.value/.test(trigger)) {
-      v.push('titleCentered 丢「左槽空置」分支（!leftOverlap）—— tabBar 页会退回逐页偏左');
-    }
     if (!/props\.title\.length\s*>\s*0/.test(trigger)) {
       v.push('titleCentered 丢非空标题守卫（空标题也居中 ⇒ 标题块白占可用空间）');
     }
+    if (/leftOverlap/.test(trigger)) {
+      v.push('titleCentered 仍按 leftOverlap 二分（#2761 已取消一级/二级形态差异）');
+    }
+    if (/props\.centerTitle/.test(trigger)) {
+      v.push('titleCentered 仍读 centerTitle（#2761 起恒居中，该 prop 已删）');
+    }
   }
-  // 死件防复活：脱流定宽居中（--floating-center）与流内旧类（--center）都已随 #2442 删除
+  // 死件防复活
+  if (/centerTitle\s*\?:\s*boolean/.test(src)) {
+    v.push('centerTitle prop 复活（#2761 起标题恒居中，prop 已删）');
+  }
+  if (/leftOverlap/.test(src)) {
+    v.push('leftOverlap 复活（#2761 起标题位置与左槽内容无关）');
+  }
   if (/nav-bar-title-block--floating-center/.test(src)) {
     v.push('floating-center 复活（脱流定宽 574rpx 会越过胶囊左边线，见 #2442）');
-  }
-  if (/nav-bar-title-block--center\b/.test(src)) {
-    v.push('nav-bar-title-block--center 复活（居中只允许 centered 一种实现，见 #2442）');
   }
   if (/nav-bar-side--front/.test(src)) {
     v.push('side--front 复活（标题块已回流入流，不再需要 z-index 抬层）');
   }
-  // 标题块必须在流内、flex:1 —— 这是「以可用空间为约束」的几何本体
+  // 标题块必须在流内、flex:1 —— 这是「居中于屏幕中心」的几何本体
   const block = (src.match(/\.nav-bar-title-block\s*\{[^}]*\}/) || [''])[0];
   if (!/flex\s*:\s*1/.test(block)) {
-    v.push('.nav-bar-title-block 缺 flex:1（不吃可用空间 ⇒ 居中点退回屏幕中心、会压胶囊）');
+    v.push('.nav-bar-title-block 缺 flex:1（不吃整行 ⇒ 居中点退回剩余空间中心）');
   }
   if (/position\s*:\s*absolute/.test(block)) {
-    v.push('.nav-bar-title-block 出现 position:absolute（脱流即失去可用空间约束，见 #2442）');
+    v.push('.nav-bar-title-block 出现 position:absolute（脱流即失去整行约束，见 #2442）');
   }
   const centered = (src.match(/\.nav-bar-title-block--centered\s*\{[^}]*\}/) || [''])[0];
   if (!/align-items\s*:\s*center/.test(centered)) {
@@ -225,17 +215,33 @@ function centerTitleViolations(srcRaw) {
   if (!/width\s*:\s*100%/.test(centeredText)) {
     v.push('nav-bar-title--centered 缺 width:100%（不铺满则 ellipsis 不生效）');
   }
-  // 空标题守卫：标题块必须 v-if，否则 flex:1 会凭空长出一块「点了会发 leftClick」的透明区
-  // 注意：不能用 `<view[^>]*class="nav-bar-title-block"` —— v-if 值里含 `>`（`title.length > 0`），
-  // `[^>]*` 会在那里截断，永远匹配不到 class。改用字面前缀匹配。
+  // 标题带：右缘 = 胶囊左缘 − 间隙，由 capsuleLeft 现算，禁写死数值
+  const band = (src.match(/const titleBlockStyle\s*=\s*computed[\s\S]*?\}\)\n/) || [''])[0];
+  if (!band) {
+    v.push('缺 titleBlockStyle（标题带留白没有计算面）');
+  } else {
+    if (!/safeArea\.value\.capsuleLeft/.test(band)) {
+      v.push('titleBlockStyle 未读 capsuleLeft（写死留白会在胶囊更靠左的机型上让标题钻进胶囊）');
+    }
+    if (!/CAPSULE_CLEARANCE_RPX/.test(band)) {
+      v.push('titleBlockStyle 未用 CAPSULE_CLEARANCE_RPX（右缘与胶囊间隙脱钩）');
+    }
+    if (!/margin-left/.test(band) || !/margin-right/.test(band)) {
+      v.push('titleBlockStyle 缺两端留白（单边留白 ⇒ 文字中心偏离 375rpx）');
+    }
+  }
+  if (/\b532\b/.test(src)) {
+    v.push('出现写死 532（胶囊左边线是机型相关值，必须由 capsuleLeft 现算）');
+  }
+  // 空标题守卫：标题块必须 v-if，否则 flex:1 会长出透明点击区
   const blockTag = (src.match(/<view\s+v-if="title\.length > 0 \|\| subtitle\.length > 0"\s+class="nav-bar-title-block"/) || [''])[0];
   if (blockTag.length === 0) {
     v.push('标题块缺 v-if 非空守卫（空标题下 flex:1 会长出透明点击区）');
   }
-  // 居中形态的两条配套几何（#2479）：侧槽脱流 + 两端 48rpx 对称留白，缺一条中心就不是 375rpx
+  // 两条配套几何：侧槽脱流 + 包含块
   const body = (src.match(/\.nav-bar-body\s*\{[^}]*\}/) || [''])[0];
   if (!/position\s*:\s*relative/.test(body)) {
-    v.push('.nav-bar-body 缺 position:relative（居中形态侧槽绝对定位的包含块）');
+    v.push('.nav-bar-body 缺 position:relative（侧槽绝对定位的包含块）');
   }
   const floatSides = [
     ['nav-bar-side--floating-left', 'left'],
@@ -244,7 +250,7 @@ function centerTitleViolations(srcRaw) {
   for (const pair of floatSides) {
     const blk = (src.match(new RegExp('\\.' + pair[0] + '\\s*\\{[^}]*\\}')) || [''])[0];
     if (blk.length === 0) {
-      v.push('缺 .' + pair[0] + '（居中形态侧槽未脱流 ⇒ 空右槽的胶囊让位仍把标题中心挤左）');
+      v.push('缺 .' + pair[0] + '（侧槽未脱流 ⇒ 侧槽内容仍把标题中心挤偏）');
       continue;
     }
     if (!/position\s*:\s*absolute/.test(blk)) {
@@ -265,74 +271,41 @@ function centerTitleViolations(srcRaw) {
       continue;
     }
     if (!/titleCentered\.value/.test(c)) {
-      v.push(pair[0] + ' 未以 titleCentered 为门（非居中形态的二级页也会被脱流）');
+      v.push(pair[0] + ' 未以 titleCentered 为门');
     }
     if (!new RegExp(pair[1]).test(c)) {
       v.push(pair[0] + ' 未返回 ' + pair[1]);
     }
   }
-  if (!/margin-left\s*:\s*48rpx/.test(centered)) {
-    v.push('居中形态缺左 48rpx 对称留白（标题文字带左界不再是 72rpx）');
-  }
-  if (!/margin-right\s*:\s*48rpx/.test(centered)) {
-    v.push('居中形态缺右 48rpx 对称留白（两端不对称 ⇒ 文字中心偏离 375rpx）');
-  }
   return v;
 }
 
-/**
- * 二级页标题形态违规清单（#2480）：返回箭头后左对齐 + 定宽省略，不压右槽动作。
- *
- * 二级页（有返回箭头）标题**不居中**（ADR-0067 决定 5）：标题块 align-items:flex-start，
- * 标题文字无 text-align:center。标题必须铺满标题块内容盒（width:100%），否则 lines:1 +
- * text-overflow:ellipsis 不生效，长标题按 max-content 撑出块、压到右槽动作。
- */
-function secondaryTitleViolations(srcRaw) {
-  const src = stripComments(srcRaw);
-  const v = [];
-  const block = (src.match(/\.nav-bar-title-block\s*\{[^}]*\}/) || [''])[0];
-  if (block === '') {
-    v.push('.nav-bar-title-block 规则缺失');
-  } else if (!/align-items\s*:\s*flex-start/.test(block)) {
-    v.push('非居中标题块缺 align-items:flex-start（二级页标题须在返回箭头后左对齐）');
-  }
-  const title = (src.match(/\.nav-bar-title\s*\{[^}]*\}/) || [''])[0];
-  if (title === '') {
-    v.push('.nav-bar-title 规则缺失');
-  } else {
-    if (/text-align\s*:\s*center/.test(title)) {
-      v.push('.nav-bar-title 出现 text-align:center（二级页标题不得居中）');
-    }
-    if (!/width\s*:\s*100%/.test(title)) {
-      v.push('.nav-bar-title 缺 width:100%（不铺满则 lines:1 + ellipsis 不生效，长标题压右槽动作）');
-    }
-  }
-  return v;
-}
-
-describe('标题居中形态（titleCentered，2026-10-27 / #2402 / #2442）', () => {
+describe('页头标题恒居中（#2761）', () => {
   const src = h.read(SRC_REL);
 
-  it('守约：prop 默认关 + 流内 flex:1 居中 + 非空守卫，零违规', () => {
-    expect(centerTitleViolations(src)).toEqual([]);
+  it('守约：有标题即居中 + 两端等宽留白由胶囊现算，零违规', () => {
+    expect(titleCenterViolations(src)).toEqual([]);
   });
 
-  it('默认值必须是 false（现有调用方零 diff —— 本仓多处页头靠 leftOverlap 走左对齐）', () => {
-    const defaults = (src.match(/divider:\s*false[^\n]*\n?\s*centerTitle:\s*false/) || []).length;
-    expect(defaults).toBe(1);
+  it('标题块把留白绑到 titleBlockStyle（内联样式优先于类，类里不再写死留白）', () => {
+    expect(src).toMatch(/class="nav-bar-title-block"[^>]*:style="titleCentered \? titleBlockStyle : ''"/);
+  });
+
+  it('返回箭头有 ink 中线补偿（字号等高 ≠ 中线对齐，#2757 只做了前者）', () => {
+    const back = (src.match(/\.nav-bar-icon--back\s*\{[^}]*\}/) || [''])[0];
+    expect(back).toMatch(/font-size\s*:\s*88rpx/);
+    expect(back).toMatch(/margin-bottom\s*:\s*\d+rpx/);
   });
 });
 
-describe('居中形态检测器判别力（注入违规样本必红）', () => {
+describe('标题恒居中检测器判别力（注入违规样本必红）', () => {
   const BASE = [
-    '<view v-if="title.length > 0 || subtitle.length > 0" class="nav-bar-title-block" :class="titleBlockClass"></view>',
-    'centerTitle ?: boolean',
-    'centerTitle: false',
-    'const titleCentered = computed((): boolean => {',
-    '    if (props.centerTitle) {',
-    '        return true',
-    '    }',
-    '    return props.title.length > 0 && !leftOverlap.value',
+    '<view v-if="title.length > 0 || subtitle.length > 0" class="nav-bar-title-block" :class="titleBlockClass" :style="titleCentered ? titleBlockStyle : \'\'"></view>',
+    'const titleCentered = computed((): boolean => props.title.length > 0)',
+    'const titleBlockStyle = computed((): string => {',
+    '    const capsuleLeft = safeArea.value.capsuleLeft',
+    '    const bandMargin = (750 - NAV_BODY_PADDING_X) - (capsuleLeft - CAPSULE_CLEARANCE_RPX)',
+    "    return 'margin-left: ' + bandMargin + 'rpx; margin-right: ' + bandMargin + 'rpx;'",
     '})',
     'const titleBlockClass = computed((): string => {',
     "    return titleCentered.value ? 'nav-bar-title-block--centered' : ''",
@@ -348,107 +321,104 @@ describe('居中形态检测器判别力（注入违规样本必红）', () => {
     '.nav-bar-side--floating-left { position: absolute; left: 24rpx; }',
     '.nav-bar-side--floating-right { position: absolute; right: 24rpx; }',
     '.nav-bar-title-block { flex: 1; min-width: 0; }',
-    '.nav-bar-title-block--centered { align-items: center; margin-left: 48rpx; margin-right: 48rpx; }',
+    '.nav-bar-title-block--centered { align-items: center; }',
     '.nav-bar-title--centered { width: 100%; text-align: center; margin-left: 0; }',
     '</style>',
   ].join('\n');
 
   it('基准样本零违规（检测器自身不空跑）', () => {
-    expect(centerTitleViolations(BASE)).toEqual([]);
-  });
-
-  it('默认值改成 true → 报「默认值不是 false」', () => {
-    const v = centerTitleViolations(BASE.replace('centerTitle: false', 'centerTitle: true'));
-    expect(v.some((x) => x.includes('默认值不是 false'))).toBe(true);
-  });
-
-  it('自动居中分支被摘掉（退回逐页加 prop）→ 报「左槽空置」', () => {
-    const v = centerTitleViolations(
-      BASE.replace('return props.title.length > 0 && !leftOverlap.value', 'return false')
-    );
-    expect(v.some((x) => x.includes('左槽空置'))).toBe(true);
+    expect(titleCenterViolations(BASE)).toEqual([]);
   });
 
   it('去掉非空标题守卫（空标题也居中）→ 报「非空标题守卫」', () => {
-    const v = centerTitleViolations(
-      BASE.replace('return props.title.length > 0 && !leftOverlap.value', 'return !leftOverlap.value')
-    );
+    const v = titleCenterViolations(BASE.replace('props.title.length > 0', 'true'));
     expect(v.some((x) => x.includes('非空标题守卫'))).toBe(true);
   });
 
-  it('复活脱流定宽 --floating-center → 报「floating-center 复活」', () => {
-    const v = centerTitleViolations(
-      BASE.replace('</style>', '.nav-bar-title-block--floating-center { position: absolute; }</style>')
+  it('titleCentered 加回 leftOverlap 二分 → 报「仍按 leftOverlap 二分」', () => {
+    const v = titleCenterViolations(
+      BASE.replace('props.title.length > 0', 'props.title.length > 0 && !leftOverlap.value')
     );
-    expect(v.some((x) => x.includes('floating-center 复活'))).toBe(true);
+    expect(v.some((x) => x.includes('leftOverlap 二分'))).toBe(true);
   });
 
-  it('复活两侧槽抬层 --front → 报「side--front 复活」', () => {
-    const v = centerTitleViolations(
-      BASE.replace('</style>', '.nav-bar-side--front { position: relative; z-index: 2; }</style>')
-    );
-    expect(v.some((x) => x.includes('side--front 复活'))).toBe(true);
+  it('centerTitle prop 复活 → 报「centerTitle prop 复活」', () => {
+    const v = titleCenterViolations(BASE.replace('const titleCentered', 'centerTitle ?: boolean\nconst titleCentered'));
+    expect(v.some((x) => x.includes('centerTitle prop 复活'))).toBe(true);
   });
 
-  it('标题块去掉 flex:1（居中点退回屏幕中心）→ 报「缺 flex:1」', () => {
-    const v = centerTitleViolations(BASE.replace('.nav-bar-title-block { flex: 1; min-width: 0; }', '.nav-bar-title-block { min-width: 0; }'));
-    expect(v.some((x) => x.includes('缺 flex:1'))).toBe(true);
+  it('标题带不读 capsuleLeft（写死留白）→ 报「未读 capsuleLeft」', () => {
+    const v = titleCenterViolations(BASE.replace('const capsuleLeft = safeArea.value.capsuleLeft', 'const capsuleLeft = 556'));
+    expect(v.some((x) => x.includes('未读 capsuleLeft'))).toBe(true);
   });
 
-  it('标题块改回 position:absolute → 报「position:absolute」', () => {
-    const v = centerTitleViolations(
-      BASE.replace('.nav-bar-title-block { flex: 1; min-width: 0; }', '.nav-bar-title-block { flex: 1; position: absolute; }')
-    );
-    expect(v.some((x) => x.includes('position:absolute'))).toBe(true);
+  it('标题带不用 CAPSULE_CLEARANCE_RPX → 报「未用 CAPSULE_CLEARANCE_RPX」', () => {
+    const v = titleCenterViolations(BASE.replace('(capsuleLeft - CAPSULE_CLEARANCE_RPX)', '(capsuleLeft - 24)'));
+    expect(v.some((x) => x.includes('未用 CAPSULE_CLEARANCE_RPX'))).toBe(true);
+  });
+
+  it('写死 532 → 报「写死 532」', () => {
+    const v = titleCenterViolations(BASE.replace('const capsuleLeft = safeArea.value.capsuleLeft', 'const capsuleLeft = 532'));
+    expect(v.some((x) => x.includes('写死 532'))).toBe(true);
+  });
+
+  it('居中块去掉 align-items:center → 报「缺 align-items:center」', () => {
+    const v = titleCenterViolations(BASE.replace('.nav-bar-title-block--centered { align-items: center; }', '.nav-bar-title-block--centered { }'));
+    expect(v.some((x) => x.includes('缺 align-items:center'))).toBe(true);
   });
 
   it('居中文字去掉 text-align:center → 报「缺 text-align:center」', () => {
-    const v = centerTitleViolations(
+    const v = titleCenterViolations(
       BASE.replace('.nav-bar-title--centered { width: 100%; text-align: center; margin-left: 0; }', '.nav-bar-title--centered { width: 100%; margin-left: 0; }')
     );
     expect(v.some((x) => x.includes('缺 text-align:center'))).toBe(true);
   });
 
+  it('标题块去掉 flex:1 → 报「缺 flex:1」', () => {
+    const v = titleCenterViolations(BASE.replace('.nav-bar-title-block { flex: 1; min-width: 0; }', '.nav-bar-title-block { min-width: 0; }'));
+    expect(v.some((x) => x.includes('缺 flex:1'))).toBe(true);
+  });
+
+  it('标题块改回 position:absolute → 报「position:absolute」', () => {
+    const v = titleCenterViolations(
+      BASE.replace('.nav-bar-title-block { flex: 1; min-width: 0; }', '.nav-bar-title-block { flex: 1; position: absolute; }')
+    );
+    expect(v.some((x) => x.includes('position:absolute'))).toBe(true);
+  });
+
   it('标题块去掉 v-if 非空守卫 → 报「缺 v-if 非空守卫」', () => {
-    const v = centerTitleViolations(
+    const v = titleCenterViolations(
       BASE.replace('<view v-if="title.length > 0 || subtitle.length > 0" class="nav-bar-title-block"', '<view class="nav-bar-title-block"')
     );
     expect(v.some((x) => x.includes('缺 v-if 非空守卫'))).toBe(true);
   });
 
-  it('居中形态侧槽不脱流（摘掉 --floating-left）→ 报「缺 .nav-bar-side--floating-left」', () => {
-    const v = centerTitleViolations(BASE.replace('.nav-bar-side--floating-left { position: absolute; left: 24rpx; }', ''));
+  it('侧槽不脱流（摘掉 --floating-left）→ 报「缺 .nav-bar-side--floating-left」', () => {
+    const v = titleCenterViolations(BASE.replace('.nav-bar-side--floating-left { position: absolute; left: 24rpx; }', ''));
     expect(v.some((x) => x.includes('缺 .nav-bar-side--floating-left'))).toBe(true);
   });
 
-  it('侧槽脱流类丢 titleCentered 门（二级页也被脱流）→ 报「未以 titleCentered 为门」', () => {
-    const v = centerTitleViolations(
+  it('侧槽脱流类丢 titleCentered 门 → 报「未以 titleCentered 为门」', () => {
+    const v = titleCenterViolations(
       BASE.replace("    return titleCentered.value ? 'nav-bar-side--floating-right' : ''", "    return 'nav-bar-side--floating-right'")
     );
     expect(v.some((x) => x.includes('未以 titleCentered 为门'))).toBe(true);
   });
 
-  it('对称留白只留一边（中心偏离 375rpx）→ 报「缺右 48rpx」', () => {
-    const v = centerTitleViolations(
-      BASE.replace('align-items: center; margin-left: 48rpx; margin-right: 48rpx;', 'align-items: center; margin-left: 48rpx;')
-    );
-    expect(v.some((x) => x.includes('缺右 48rpx'))).toBe(true);
-  });
-
   it('.nav-bar-body 丢 position:relative（侧槽失去包含块）→ 报「缺 position:relative」', () => {
-    const v = centerTitleViolations(BASE.replace('.nav-bar-body { position: relative; }', '.nav-bar-body { }'));
+    const v = titleCenterViolations(BASE.replace('.nav-bar-body { position: relative; }', '.nav-bar-body { }'));
     expect(v.some((x) => x.includes('缺 position:relative'))).toBe(true);
   });
 });
 
 /**
- * 一级/二级页面页头形态（#2442 裁定，见 docs/adr/0067；#2479 收窄为「一级页真居中」）
+ * 页头形态（#2442 建立；#2761 收窄）
  *
- * 一级页面（无返回按钮）：标题居中于**屏幕中心**（#2479，几何见上），页级动作只能放左槽，
- * 右槽必须空 —— 右槽留内容时标题长文本会钻到它下面（侧槽已脱流）。
- * 二级页面（有返回按钮）：返回 + 标题左对齐，必要操作放右侧；返回必须真能返回。
+ * 一级/二级的**标题形态**差异已取消（见上）。仍保留的两条：
+ * - 页级动作只能放左槽（`#left`），右槽必须空 —— 侧槽脱流后右槽内容会盖在标题上；
+ * - 二级页（默认返回箭头）必须接 `@left-click`，不留死按钮。
  */
-describe('一级/二级页面页头形态（#2442）', () => {
+describe('页头形态（#2442 / #2761）', () => {
   const navBar = h.read(SRC_REL);
 
   it('页头件开放 #left 插槽，且左槽点击按 leftIcon 收口（插槽内容自带 @click 时不重复上抛）', () => {
@@ -469,13 +439,12 @@ describe('一级/二级页面页头形态（#2442）', () => {
     expect(dash).not.toMatch(/:right-icons=/);
   });
 
-  it('一级页面（left-icon=""）右槽必须空（#2479 D5/D6：侧槽脱流后标题块吃满整行）', () => {
+  it('全页右槽必须空（#2761：侧槽脱流后右槽内容会盖在居中标题上）', () => {
     const bad = [];
     for (const rel of h.sourceFilesIn('pages')) {
       const src = h.read(rel);
       for (const m of src.matchAll(/<(?:app-nav-bar|AppNavBar)\b[^>]*>/g)) {
         const tag = m[0];
-        if (!/left-icon="''"|left-icon=""/.test(tag)) continue;
         const icons = tag.match(/:right-icons="([^"]*)"/);
         if (icons && !/^\s*\[\s*\]\s*$/.test(icons[1])) {
           bad.push(rel + ' :: :right-icons=' + icons[1]);
@@ -501,43 +470,5 @@ describe('一级/二级页面页头形态（#2442）', () => {
       }
     }
     expect(dead).toEqual([]);
-  });
-});
-
-/**
- * 二级页标题形态（#2480，ADR-0067 决定 5）
- *
- * 二级页标题在返回箭头后左对齐，不居中；标题铺满标题块内容盒，长标题省略而不是撑出块
- * 压到右槽动作。右槽与胶囊让位只影响标题可用宽度，不改变标题起始位置。
- */
-describe('二级页标题形态（#2480）', () => {
-  const navBar = h.read(SRC_REL);
-
-  it('守约：非居中标题块左对齐 + 标题定宽省略，零违规', () => {
-    expect(secondaryTitleViolations(navBar)).toEqual([]);
-  });
-
-  const BASE = [
-    '.nav-bar-title-block { flex: 1; min-width: 0; flex-direction: column; align-items: flex-start; margin-left: 32rpx; height: 88rpx; justify-content: center; }',
-    '.nav-bar-title { width: 100%; margin-left: 0; lines: 1; text-overflow: ellipsis; }',
-  ].join('\n');
-
-  it('基准样本零违规（检测器自身不空跑）', () => {
-    expect(secondaryTitleViolations(BASE)).toEqual([]);
-  });
-
-  it('标题块改回居中（align-items:center）→ 报「缺 align-items:flex-start」', () => {
-    const v = secondaryTitleViolations(BASE.replace('align-items: flex-start', 'align-items: center'));
-    expect(v.some((x) => x.includes('缺 align-items:flex-start'))).toBe(true);
-  });
-
-  it('标题文字加 text-align:center → 报「不得居中」', () => {
-    const v = secondaryTitleViolations(BASE.replace('width: 100%;', 'width: 100%; text-align: center;'));
-    expect(v.some((x) => x.includes('不得居中'))).toBe(true);
-  });
-
-  it('标题去掉 width:100%（ellipsis 失效）→ 报「缺 width:100%」', () => {
-    const v = secondaryTitleViolations(BASE.replace('width: 100%; margin-left: 0;', 'margin-left: 0;'));
-    expect(v.some((x) => x.includes('缺 width:100%'))).toBe(true);
   });
 });

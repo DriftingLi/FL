@@ -163,9 +163,12 @@ describe('批5 特殊页头形态（app-nav-bar 槽位承载）', () => {
     expect(read('pages/dashboard/components/dashboard-menu-grid.uvue')).toContain("path: '/pages/search/search'");
   });
 
-  it('resume 页头右槽 🔔 通知入口 + 左返回（title 空）', () => {
+  it('resume 页头 🔔 通知入口下沉 #toolbar + 左返回（title 空；#2761 起右槽恒空）', () => {
     const s = read('pages/resume/resume.uvue');
-    expect(s).toMatch(/<app-nav-bar[^>]*@left-click="onBack"[^>]*:right-icons="\['🔔'\]"[^>]*@right-click="onNotifications"/);
+    expect(s).toMatch(/<app-nav-bar[^>]*@left-click="onBack"[^>]*:show-toolbar="true"/);
+    expect(s).toMatch(/<template #toolbar>[\s\S]*?onNotifications[\s\S]*?<\/template>/);
+    expect(s).not.toMatch(/:right-icons="/);
+    expect(s).not.toMatch(/<template #right>/);
   });
 
   it('recruiter/login 页头返回走 leftClick（#1604 自绘头豁免已于本批清零）', () => {

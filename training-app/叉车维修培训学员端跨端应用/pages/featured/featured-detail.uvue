@@ -1,7 +1,8 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <app-nav-bar title="文章详情" variant="inverse" @left-click="onBack">
-            <template #right>
+        <app-nav-bar title="文章详情" variant="inverse" @left-click="onBack" :show-toolbar="true">
+            <template #toolbar>
+                <!-- #2761：右槽恒空（侧槽脱流后右槽内容会盖在居中标题上），收藏下沉第二行。 -->
                 <view class="fav-btn" @click="onToggleFavorite">
                     <text class="fav-icon">{{ isFavorited ? '⭐' : '☆' }}</text>
                 </view>

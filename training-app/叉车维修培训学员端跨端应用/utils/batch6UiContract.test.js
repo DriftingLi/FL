@@ -233,9 +233,9 @@ describe('批6 mall 补漏（裁定 A：#1595 台账行 25 判 N03，批3 清单
     expect(s).not.toContain('useStatusBarHeight');
   });
 
-  it('右槽跨小程序 navigator 功能不丢（app-id 与素材路径原样迁入手 #right 槽）', () => {
+  it('跨小程序 navigator 功能不丢（app-id 与素材路径原样迁入 #toolbar 槽，#2761 起右槽恒空）', () => {
     const s = read(MALL);
-    expect(s).toMatch(/<template #right>[\s\S]*?target="miniProgram"[\s\S]*?app-id="wx56ce2775c2b3aea8"[\s\S]*?<\/template>/);
+    expect(s).toMatch(/<template #toolbar>[\s\S]*?target="miniProgram"[\s\S]*?app-id="wx56ce2775c2b3aea8"[\s\S]*?<\/template>/);
     expect(s).toContain('/static/icons/易拉宝-006 1-1.png');
   });
 

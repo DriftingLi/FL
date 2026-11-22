@@ -1,7 +1,8 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <app-nav-bar title="个人动态" @left-click="onBack">
-            <template #right>
+        <app-nav-bar title="个人动态" @left-click="onBack" :show-toolbar="true">
+            <template #toolbar>
+                <!-- #2761：右槽恒空（侧槽脱流后右槽内容会盖在居中标题上），设置下沉第二行。 -->
                 <app-icon-button @click="onSettings">
                     <text class="settings-icon">⚙</text>
                 </app-icon-button>

@@ -1,7 +1,14 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
         <!-- #1608 批5 N05：手写 .status-bar + .header（‹ 返回 + 🔔）收口进 app-nav-bar（transparent，页面自垫 #F5F6FA 灰底） -->
-        <app-nav-bar transparent @left-click="onBack" :right-icons="['🔔']" @right-click="onNotifications" />
+        <app-nav-bar transparent @left-click="onBack" :show-toolbar="true">
+            <template #toolbar>
+                <!-- #2761：右槽恒空（侧槽脱流后右槽内容会盖在居中标题上），通知入口下沉第二行。 -->
+                <view class="nav-bell-hit" @click="onNotifications">
+                    <text class="nav-bell">🔔</text>
+                </view>
+            </template>
+        </app-nav-bar>
         <scroll-view class="content" scroll-y="true">
             <!-- 用户信息卡 -->
             <view class="user-card">
@@ -221,6 +228,18 @@
 </script>
 
 <style lang="scss">
+    /* #2761：通知入口从右槽下沉到工具栏第二行（右槽恒空，见 app-nav-bar 契约）。 */
+    .nav-bell-hit {
+        width: 88rpx;
+        height: 88rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .nav-bell {
+        font-size: 40rpx;
+    }
+
     .container {
         flex: 1;
         /* 批5 N05（票1608）：灰底自垫 F5F6FA 走 uiHexWhitelist 留痕——G7 入口宫格非渐变页，映射值待 token 票统一收编 */
