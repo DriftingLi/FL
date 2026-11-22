@@ -71,16 +71,17 @@ function onFavorite() : void {
         border: 1px solid #ff8f00;
     }
 
+    /* 票 2765 docx P16：图标高度与下方回复行统一（forum-reply-list 的 .reply-like-icon 是 26rpx） */
     .stat-like-icon {
-        font-size: 28rpx;
+        font-size: 26rpx;
         color: #999999;
         margin-right: 8rpx;
     }
 
     /* 票 2730 docx ⑩：评论图标换成切图后与 ♡/☆ 字形同高（emoji 字形高度不可控） */
     .stat-like-icon-img {
-        width: 28rpx;
-        height: 28rpx;
+        width: 26rpx;
+        height: 26rpx;
         margin-right: 8rpx;
     }
 

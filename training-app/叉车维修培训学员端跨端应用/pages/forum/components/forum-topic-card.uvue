@@ -320,19 +320,18 @@
         color: #cccccc;
     }
 
-    /* 操作栏：三项各占三等分、在各自分位内居中（设计稿 👍/💬/👁 分别落在左/中/右三分位）。
-       旧写法 space-around + 每项 margin-right 8rpx 会让末项多带一段外边距，左右留白不对称 */
+    /* 操作栏：三项按 space-around 均分（票 2765 用户裁定）。
+       每项不再带 margin-right，左右留白对称 */
     .topic-action-bar {
         flex-direction: row;
         align-items: center;
+        justify-content: space-around;
         padding: 16rpx 0 0;
     }
 
     .action-item {
-        flex: 1;
         flex-direction: row;
         align-items: center;
-        justify-content: center;
         padding: 8rpx 0;
     }
 

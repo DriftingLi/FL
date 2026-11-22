@@ -29,15 +29,15 @@
                 </view>
             </view>
         </view>
-        <!-- 精选筛选（#742 批次三）：三 Tab 通用轴，资源 Tab 不显示 -->
-        <ForumFeaturedFilter v-if="currentTab === 'square' || currentTab === 'hot' || currentTab === 'experience'" :featured="featuredFilter" @featured-change="onFeaturedChange" />
+        <!-- 精选筛选（#742 批次三）：广场/问答两 Tab 独立成行；备考经验并入下方筛选行（票 2765 P14） -->
+        <ForumFeaturedFilter v-if="currentTab === 'square' || currentTab === 'hot'" :featured="featuredFilter" @featured-change="onFeaturedChange" />
         <!-- 排序栏（广场 Tab 显示） -->
         <ForumSquareSortBar v-if="currentTab === 'square'" :sort-field="sortField" :sort-order="sortOrder"
             @field-change="onSortFieldChange" @order-change="onSortOrderChange" />
         <!-- 知识问答：发一个问题 + 筛选（问答 Tab 显示） -->
         <ForumQaHeader v-if="currentTab === 'hot'" :qa-sort="qaSort" :qa-status="qaStatus" @ask="onCreate" @sort-change="onQaSortChange" @status-change="onQaStatusChange" />
-        <!-- 备考经验：默认/最多赞/最新 chips（#706） -->
-        <ForumExperienceSortBar v-if="currentTab === 'experience'" :exp-sort="expSort" @sort-change="onExpSortChange" />
+        <!-- 备考经验：左「全部帖/★精选」+ 右「默认/最多赞/最新」一行（#706，票 2765 P14 合并） -->
+        <ForumExperienceSortBar v-if="currentTab === 'experience'" :featured="featuredFilter" :exp-sort="expSort" @featured-change="onFeaturedChange" @sort-change="onExpSortChange" />
 
         <!-- 广场/知识问答/备考经验 Tab 内容 -->
         <scroll-view v-if="currentTab == 'square' || currentTab == 'hot' || currentTab == 'experience'" class="content-scroll" scroll-y="true" @scrolltolower="onLoadMore">
