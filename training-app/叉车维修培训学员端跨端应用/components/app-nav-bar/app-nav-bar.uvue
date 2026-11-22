@@ -10,7 +10,7 @@
                 </slot>
             </view>
             <view v-if="title.length > 0 || subtitle.length > 0" class="nav-bar-title-block" :class="titleBlockClass"
-                @click="onTitleBlockClick">
+                :style="titleCentered ? titleBlockStyle : ''" @click="onTitleBlockClick">
                 <text v-if="title.length > 0" class="nav-bar-title"
                     :class="[titleColorClass, titleTextClass]">{{ title }}</text>
                 <text v-if="subtitle.length > 0" class="nav-bar-subtitle" :class="[titleColorClass, subtitleAccent ? 'nav-bar-subtitle--accent' : '']">{{ subtitle }}</text>
@@ -52,14 +52,6 @@
         /** N03 分隔线：border-bottom 1rpx $border-color-light（#1592 白底带分隔线套） */
         divider ?: boolean
         /**
-         * 强制居中（2026-10-27 AI 助手页头；#2402 起降级为「覆盖默认」）。
-         *
-         * 默认 false ⇒ 全仓现有调用方零 diff。但**默认 false 不再意味着偏左**：
-         * 左槽空置且有标题时已自动走居中（见 `titleCentered`）。本 prop 只剩一个用途 ——
-         * 「左槽有字形（☰）也要居中」的三段式页头，那是左对齐形态（§5.1）唯一要覆盖的场景。
-         */
-        centerTitle ?: boolean
-        /**
          * 标题栏下方工具栏（2026-11-10）：多个业务动作的第二行落点，配合 `#toolbar` 插槽使用。
          *
          * 为什么不继续挤右槽：右槽的定宽是胶囊让位的代价（典型可用约 194rpx，见 `rightSlotStyle`），
@@ -85,7 +77,6 @@
         variant: 'plain',
         subtitle: '',
         divider: false,
-        centerTitle: false,
         showToolbar: false,
         subtitleAccent: false
     })
@@ -96,32 +87,39 @@
 
     const isInverse = computed((): boolean => props.variant == 'inverse')
 
-    // 标题是否被左槽内容顶开（左槽有 icon 且有标题时走左对齐形态；否则居中，§5.1）
-    const leftOverlap = computed((): boolean => props.leftIcon.length > 0 && props.title.length > 0)
-
     /**
-     * 标题居中（#2402 收口；#2442 改「可用空间中心」；#2479 一级页改**真屏幕中心**）。
+     * 标题恒居中于屏幕中心（#2761 改判 #2480 / ADR-0067 决定 5 / ADR-0069 决定 1）。
      *
-     * 规则（#2479 用户裁定）：**一级页（无返回箭头）标题全局默认居中于屏幕中心**，与左右槽
-     * 有无内容无关 —— 用户判据「右侧没有动作 = 标题直接居中」。二级页（左槽返回箭头）整枝
-     * 不动，仍走 #2442 的「可用空间中心」。
+     * 旧形态二分（一级页居中、二级页在返回箭头后左对齐）已取消：用户裁定「一级/二级形态
+     * 不统一，且不符合行业习惯」，全站页头统一为「返回箭头最左 + 标题屏幕居中 + 右侧胶囊」。
+     * 判据只剩「有标题」—— 左槽有没有字形（返回箭头 / ☰ / ✉️）不再影响标题位置。
      *
      * 实现（两条配套几何，缺一不可）：
-     * - 标题块留在流内 `flex: 1`，居中形态两端各让 48rpx 对称留白 ⇒ 文字中心恒 375rpx；
-     * - 居中形态两侧槽 `position: absolute` 出流（.nav-bar-side--floating-*）⇒ 空右槽的
-     *   194rpx 胶囊让位不再参与标题块可用宽度，「空右槽把标题中心挤左」的根因随之消失；
-     *   绝对定位按绘制顺序盖在静态标题块之上 ⇒ 左入口照旧可点，无需 z-index。
-     * 非居中形态（二级页）两条几何都不生效，路径与 rightSlotStyle 一律不动（#2479 D4）。
-     *
-     * 触发面两个：
-     * - 调用方显式要求（`centerTitle`：AI 助手「☰ | 标题」）；
-     * - 左槽空置且有标题（一级页 / tabBar 这一类）。
+     * - 标题块留在流内 `flex: 1`，两端等宽留白 ⇒ 文字中心恒 375rpx（见 titleBlockStyle）；
+     * - 两侧槽 `position: absolute` 出流（.nav-bar-side--floating-*）⇒ 侧槽内容与胶囊让位
+     *   都不再参与标题块可用宽度；绝对定位按绘制顺序盖在静态标题块之上 ⇒ 左入口照旧可点。
      */
-    const titleCentered = computed((): boolean => {
-        if (props.centerTitle) {
-            return true
+    const titleCentered = computed((): boolean => props.title.length > 0)
+
+    /**
+     * 标题带（#2761）：右缘钉在「胶囊左边线 − CAPSULE_CLEARANCE_RPX」，居中于屏幕中心
+     * ⇒ 两端留白等宽。典型胶囊左边线 556rpx ⇒ 留白 194rpx、文字带 [218,532]（314rpx ≈ 8.7 汉字）。
+     *
+     * 为什么由 `capsuleLeft` 现算而不是写死 532：胶囊位置随机型 / 微信版本变，写死会在
+     * 胶囊更靠左的机型上让标题钻进胶囊矩形。无胶囊（非小程序端）退回 48rpx 对称留白。
+     * 上限 300rpx 是防退化：胶囊异常靠左时文字带至少留 150rpx，不至于压成一条缝。
+     */
+    const TITLE_BAND_MARGIN_MIN = 48
+    const TITLE_BAND_MARGIN_MAX = 300
+    const NAV_BODY_PADDING_X = 24 // 与 <style lang="scss"> 里 .nav-bar-body padding 的 $spacing-md 对齐
+    const titleBlockStyle = computed((): string => {
+        const capsuleLeft = safeArea.value.capsuleLeft
+        let margin = TITLE_BAND_MARGIN_MIN
+        if (capsuleLeft > 0) {
+            const bandMargin = (750 - NAV_BODY_PADDING_X) - (capsuleLeft - CAPSULE_CLEARANCE_RPX)
+            margin = Math.min(TITLE_BAND_MARGIN_MAX, Math.max(TITLE_BAND_MARGIN_MIN, bandMargin))
         }
-        return props.title.length > 0 && !leftOverlap.value
+        return 'margin-left: ' + margin + 'rpx; margin-right: ' + margin + 'rpx;'
     })
 
     const titleBlockClass = computed((): string => {
@@ -133,9 +131,9 @@
     })
 
     /**
-     * 居中形态侧槽脱流类（#2479）：只在居中形态挂上，非居中（二级页）返回空串。
-     * 两侧槽出流后不再参与 .nav-bar-body 的 space-between 布局 ⇒ 标题块 flex:1 独占整行，
-     * 空右槽的胶囊让位（rightSlotStyle）不再挤标题中心。
+     * 侧槽脱流类（#2479 建立；#2761 起全站恒挂）：两侧槽出流后不再参与 .nav-bar-body 的
+     * space-between 布局 ⇒ 标题块 flex:1 独占整行，侧槽内容与胶囊让位（rightSlotStyle）
+     * 都不再挤标题中心。无标题时返回空串（标题块不渲染，脱流无意义）。
      */
     const leftSlotFloatClass = computed((): string => {
         return titleCentered.value ? 'nav-bar-side--floating-left' : ''
@@ -153,7 +151,6 @@
     // #2442 裁定：不再设 width —— .nav-bar-body 是 space-between，右槽本就贴右缘，
     // 定宽 194rpx 只是把标题可用区白吃掉约 130rpx（14 个带返回箭头页标题因此左移约 172rpx）。
     // 非小程序端无胶囊 ⇒ 不设约束。
-    const NAV_BODY_PADDING_X = 24 // 与 <style lang="scss"> 里 .nav-bar-body padding 的 $spacing-md 对齐
     const rightSlotStyle = computed((): string => {
         const capsuleLeft = safeArea.value.capsuleLeft
         if (capsuleLeft <= 0) {
@@ -362,15 +359,14 @@
         justify-content: center;
     }
 
-    /* 居中形态（#2479）：一级页标题居中于**屏幕中心**。两端各让 48rpx 对称留白 ⇒
-       内容盒 [24,726] 内缩至文字带 [72,678]，中心恒 375rpx（与侧槽内容无关）。
-       对称留白是标题与屏幕边缘的呼吸位，**不是**胶囊预留 —— 胶囊让位只由右槽自己的
+    /* 居中形态（#2479 建立；#2761 起全站恒用）：标题居中于**屏幕中心**。
+       两端留白由 titleBlockStyle 按胶囊实测位置现算（右缘 = 胶囊左缘 − 24rpx），
+       不写死数值 —— 写死会在胶囊更靠左的机型上让标题钻进胶囊矩形。
+       对称留白是标题与屏幕边缘的呼吸位，**不是**胶囊预留：胶囊让位只由右槽自己的
        margin-right（rightSlotStyle）承担，两者不可混用
        （见 utils/appNavBarCapsuleToolbarContract.test.js 的「禁写死右向 padding」）。 */
     .nav-bar-title-block--centered {
         align-items: center;
-        margin-left: 48rpx;
-        margin-right: 48rpx;
     }
 
     .nav-bar-title--centered {
@@ -401,9 +397,15 @@
     /* #2757：56rpx → 88rpx。`‹` 是细笔画标点，ink 高只有字号的 ~0.36 倍
        （56rpx 时 ink ≈ 20rpx，而 36rpx 标题的汉字 ink ≈ 34rpx ⇒ 视觉上箭头明显偏小）。
        88rpx 时 ink ≈ 32rpx ≈ 标题 ink 的 93%，视觉等高；行盒约 105rpx 溢出 88rpx bar，
-       但 align-items:center 下 ink 仍居中，且 bar 定高不随行盒撑开。 */
+       但 bar 定高不随行盒撑开。
+
+       #2761：字号等高 ≠ 中线对齐。文字 ink 锚在基线上、不随行盒居中 —— align-items:center
+       下基线恒在 bar 顶下 0.88em（88rpx 字号 ⇒ 77.4rpx），`‹` ink 中心约 55.4rpx，而标题
+       汉字 ink 中心恰在 44.0rpx（bar 正中）⇒ 箭头比标题低约 8rpx（浏览器 2× 实测 8.25）。
+       margin-bottom 让居中算法吃掉一半：16rpx ⇒ 上移 8rpx。**真机需复验**（① 门是发版前一次）。 */
     .nav-bar-icon--back {
         font-size: 88rpx;
+        margin-bottom: 16rpx;
     }
 
     .nav-bar-inverse-text {

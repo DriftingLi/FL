@@ -1,12 +1,11 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <app-nav-bar title="职位详情" @left-click="onBack" divider :show-toolbar="!hasReported">
-            <template #right>
+        <app-nav-bar title="职位详情" @left-click="onBack" divider :show-toolbar="true">
+            <template #toolbar>
+                <!-- #2761：右槽恒空（侧槽脱流后右槽内容会盖在居中标题上），收藏与举报同处第二行。 -->
                 <view class="nav-action" @click="toggleFavorite">
                     <text class="favorite-icon">{{ isFavorited ? '♥' : '♡' }}</text>
                 </view>
-            </template>
-            <template #toolbar>
                 <view class="nav-action" @click="onOpenReport">
                     <text v-if="!hasReported" class="report-btn">举报</text>
                 </view>

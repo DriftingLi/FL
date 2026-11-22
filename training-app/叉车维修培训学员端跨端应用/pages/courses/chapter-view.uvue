@@ -1,8 +1,10 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <app-nav-bar :title="detail != null ? detail!.title : '章节学习'" variant="inverse" @left-click="onBack">
-            <template #right>
-                <!-- 收藏 / 取消（#1140）：与课程详情同形；两态都必须有可见字形（空串观感上等于没有收藏功能） -->
+        <app-nav-bar :title="detail != null ? detail!.title : '章节学习'" variant="inverse" @left-click="onBack"
+            :show-toolbar="true">
+            <template #toolbar>
+                <!-- 收藏 / 取消（#1140）：与课程详情同形；两态都必须有可见字形（空串观感上等于没有收藏功能）。
+                     #2761：右槽恒空（侧槽脱流后右槽内容会盖在居中标题上），动作下沉第二行。 -->
                 <app-icon-button @click="toggleFavorite">
                     <text class="favorite-icon">{{ isFavorited ? '♥' : '♡' }}</text>
                 </app-icon-button>

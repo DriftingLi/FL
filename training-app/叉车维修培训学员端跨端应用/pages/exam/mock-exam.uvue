@@ -1,7 +1,8 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <app-nav-bar title="模拟考试" variant="inverse" @left-click="onBack">
-            <template #right>
+        <app-nav-bar title="模拟考试" variant="inverse" @left-click="onBack" :show-toolbar="true">
+            <template #toolbar>
+                <!-- #2761：右槽恒空（侧槽脱流后右槽内容会盖在居中标题上），计时器下沉第二行。 -->
                 <text class="timer-text" :class="{ warning: session.isTimeWarning.value, danger: session.isTimeDanger.value }">{{ session.timerDisplay.value }}</text>
             </template>
         </app-nav-bar>

@@ -10,7 +10,6 @@
 			:subtitle-accent="true"
 			:transparent="transparent"
 			:left-icon="leftIcon"
-			:center-title="centerTitle"
 			:show-toolbar="true"
 			@left-click="onLeftClick"
 		>
@@ -40,11 +39,6 @@
 		subtitle?: string
 		transparent?: boolean
 		leftIcon?: string
-		/**
-		 * 标题恒居中（默认开）。左槽有了 ☰ 之后，§5.1 的「左槽有字 ⇒ 标题左对齐」会把页头
-		 * 变成「☰ AI 助手 ⋯」挤在左边；聊天页要的是三段式居中（2026-10-27 裁定）。
-		 */
-		centerTitle?: boolean
 		/** #2520：左槽面板图标的两态 —— 抽屉打开时用蓝色版（原型 307:7035） */
 		drawerOpen?: boolean
 	}>(), {
@@ -58,7 +52,6 @@
 		// 字形用 BMP 符号 ☰（U+2630），与本仓先例 recruiter-tab-bar 同源（刻意避开非 BMP 代理对 emoji）。
 		// #2520：渲染面改切图插槽，但 prop 仍须非空 —— 页头件按它决定是否上抛 leftClick。
 		leftIcon: '☰',
-		centerTitle: true,
 		drawerOpen: false
 	})
 

@@ -116,21 +116,21 @@ describe('B3 页头随原型迁移（#2519：favorites/notebook 自 N01 蓝底�
   }
 });
 
-describe('批4 特殊页右槽形态（app-nav-bar 槽位承载）', () => {
-  it('course-detail/chapter-view 右槽保留 toggleFavorite 收藏入口', () => {
+describe('批4 特殊页动作落点（#2761 起统一在 #toolbar 第二行）', () => {
+  it('course-detail/chapter-view 保留 toggleFavorite 收藏入口', () => {
     for (const p of ['pages/courses/course-detail.uvue', 'pages/courses/chapter-view.uvue']) {
-      expect(read(p)).toMatch(/<template #right>[\s\S]*?toggleFavorite[\s\S]*?<\/template>/);
+      expect(read(p)).toMatch(/<template #toolbar>[\s\S]*?toggleFavorite[\s\S]*?<\/template>/);
     }
     // ♡ 字形不能空串（#1140 教训，承重注释随行保留）
     expect(read('pages/courses/chapter-view.uvue')).toContain('#1140');
   });
 
-  it('mock-exam 右槽保留倒计时（warning/danger 分级样式不动）', () => {
+  it('mock-exam 保留倒计时（warning/danger 分级样式不动）', () => {
     const src = read('pages/exam/mock-exam.uvue');
-    expect(src).toMatch(/<template #right>[\s\S]*?timerDisplay[\s\S]*?<\/template>/);
+    expect(src).toMatch(/<template #toolbar>[\s\S]*?timerDisplay[\s\S]*?<\/template>/);
     expect(src).toContain('timer-text');
-    // 右槽宽度预算（票 1847）：单段倒计时最长 5 字符（MM:SS），估算法 = 字号 × 5 × 0.94em/字符
-    //（顶部布局调研 §4.2 对 32rpx 记约 150rpx 的口径），预算 ≤150rpx、典型可用槽宽约 164rpx 留余量
+    // 倒计时字号预算（票 1847）：单段最长 5 字符（MM:SS），估算法 = 字号 × 5 × 0.94em/字符
+    //（顶部布局调研 §4.2 对 32rpx 记约 150rpx 的口径），预算 ≤150rpx
     const m = src.match(/\.timer-text\s*\{[^}]*?font-size:\s*(\d+)rpx/);
     expect(m).not.toBeNull();
     const size = Number(m[1]);
@@ -138,18 +138,18 @@ describe('批4 特殊页右槽形态（app-nav-bar 槽位承载）', () => {
     expect(size * 5 * 0.94).toBeLessThanOrEqual(150);
   });
 
-  it('notebook 右槽保留新建入口；notifications 右槽保留全部已读', () => {
-    expect(read('pages/profile/notebook.uvue')).toMatch(/<template #right>[\s\S]*?onCreate[\s\S]*?<\/template>/);
-    expect(read('pages/notifications/notifications.uvue')).toMatch(/<template #right>[\s\S]*?onMarkAllRead[\s\S]*?<\/template>/);
+  it('notebook 保留新建入口；notifications 保留全部已读', () => {
+    expect(read('pages/profile/notebook.uvue')).toMatch(/<template #toolbar>[\s\S]*?onCreate[\s\S]*?<\/template>/);
+    expect(read('pages/notifications/notifications.uvue')).toMatch(/<template #toolbar>[\s\S]*?onMarkAllRead[\s\S]*?<\/template>/);
   });
 
-  it('forum-detail 右槽三态保留（删除/编辑/举报互斥 v-if 全搬入槽）', () => {
+  it('forum-detail 三态保留（删除/编辑/举报互斥 v-if 全搬入槽）', () => {
     const src = read('pages/forum/forum-detail.uvue');
-    expect(src).toMatch(/<template #right>[\s\S]*?canDelete[\s\S]*?onEditTopic[\s\S]*?onReportTopicClick[\s\S]*?<\/template>/);
+    expect(src).toMatch(/<template #toolbar>[\s\S]*?canDelete[\s\S]*?onEditTopic[\s\S]*?onReportTopicClick[\s\S]*?<\/template>/);
   });
 
-  it('featured-detail 右槽保留收藏 ⭐/☆ 切换', () => {
-    expect(read('pages/featured/featured-detail.uvue')).toMatch(/<template #right>[\s\S]*?onToggleFavorite[\s\S]*?<\/template>/);
+  it('featured-detail 保留收藏 ⭐/☆ 切换', () => {
+    expect(read('pages/featured/featured-detail.uvue')).toMatch(/<template #toolbar>[\s\S]*?onToggleFavorite[\s\S]*?<\/template>/);
   });
 });
 

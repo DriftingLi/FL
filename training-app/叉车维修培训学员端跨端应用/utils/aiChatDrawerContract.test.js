@@ -159,7 +159,8 @@ describe('AI 助手抽屉契约（类型单一来源 / view 不承载文字样�
     expect(navBar).toMatch(/v-if="showToolbar"[\s\S]*?slot name="toolbar"/);
     // c) 页头第一行右槽不再承载该入口（清空正是标题能居中的前提）
     expect(nav).not.toMatch(/:right-icons=/);
-    // 组件侧右槽仍可点（其他页面 —— resume 等 —— 仍在用 rightIcons / #right 两条路径）
+    // 组件侧右槽仍可点（#2761 起全站右槽恒空，但插槽与 rightIcons 两条路径保留在组件里，
+    // 由 appNavBarLeftEntryContract 的「全页右槽必须空」守调用方不越界）
     expect(navBar).toMatch(/class="nav-bar-side nav-bar-right"[\s\S]*?@click="onRightClick"/);
     expect(navBar).toMatch(/capsuleLeft/);
     // 右抽屉 left 锚定继续保留（#947 实测组合）
@@ -199,17 +200,15 @@ describe('左入口可见性（最近对话 / 会话列表，2026-10-27）', () 
   });
 
   /**
-   * ⑤ 标题恒居中（2026-10-27）：左槽一旦有字形，AppNavBar 的 §5.1 就把标题切左对齐 ——
-   * 「☰ AI 助手 ⋯」全挤在左上角。聊天页要三段式居中，故透传 centerTitle，默认开。
-   * 这条锁两件事：prop 真的透传到 AppNavBar（不是写在 props 里没人用）、且默认值是 true
-   * （默认 false ⇒ 页头又退回左对齐，而这不会报任何错）。
+   * ⑤ 标题恒居中（2026-10-27 建立；#2761 改判）：左槽一旦有字形，旧页头件就把标题切左对齐 ——
+   * 「☰ AI 助手 ⋯」全挤在左上角，聊天页靠透传 centerTitle 做三段式居中。
+   * **#2761 起全站页头恒居中**，centerTitle 已从页头件与包装件一并删除 ——
+   * 这条锁的是「透传与 prop 都不许复活」，否则又会退回「某些页居中、某些页左对齐」的分裂。
    */
-  it('⑤ 标题恒居中：center-title 透传到页头且默认开', () => {
-    expect(nav).toMatch(/:center-title="centerTitle"/);
-    expect(nav).toMatch(/centerTitle:\s*true/);
-    // 判别力：默认值翻成 false 或拆掉透传 ⇒ 两条断言各自失配
-    expect(nav.replace(/centerTitle:\s*true/, 'centerTitle: false')).not.toMatch(/centerTitle:\s*true/);
-    expect(nav.replace(':center-title="centerTitle"', '')).not.toMatch(/:center-title="centerTitle"/);
+  it('⑤ 标题恒居中：centerTitle 透传与 prop 均已删除（#2761 起全站恒居中）', () => {
+    expect(nav).not.toMatch(/:center-title=/);
+    expect(nav).not.toMatch(/centerTitle/);
+    expect(read(NAVBAR)).not.toMatch(/centerTitle/);
   });
 });
 

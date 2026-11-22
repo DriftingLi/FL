@@ -1,7 +1,7 @@
 <template>
     <view class="page" :style="{ height: windowHeight + 'px' }">
-        <app-nav-bar title="在线简历" @left-click="onBack" divider>
-            <template #right><text class="nav-save" @click="onSave">保存</text></template>
+        <app-nav-bar title="在线简历" @left-click="onBack" divider :show-toolbar="true">
+            <template #toolbar><text class="nav-save" @click="onSave">保存</text></template>
         </app-nav-bar>
 
         <scroll-view class="body" scroll-y="true">
