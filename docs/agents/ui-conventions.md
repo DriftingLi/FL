@@ -7,7 +7,7 @@
 > 本节回答「我们看起来像什么、为什么」，**不是规则** —— 规则在下面各节，禁令在文末「不得触碰的边界」。加这一节的原因：2026-10-26 实测全库 `grep -r "设计语言\|视觉方向" docs/` **零命中**，而本文件此前全是「必须 / 不得」。只有禁令没有主张的后果是：界面**合规，但没人判断它该不该存在** —— 守卫拦得住「用错了色」，拦不住「这块卡片本来就是多余的」。
 
 - **一色一意**：培训域唯一品牌色是石墨青（`--color-primary-500 #0D9488`）；晴空蓝 `--color-accent-*` 是强调档，不与主色抢主按钮；残值域的 `--color-brand-*` 是另一套，只在 `.valuation-root` 内活着（禁止提升为全局，见文末）。
-- **渐变是品牌动作，不是待优化的瑕疵**：主按钮 `--gradient-brand`（`#0F766E → #0369A1`，135°），两端白字实测 5.47 / 5.93（#1892），判据锁在 `contrast.spec.ts`，改色标会红。培训域里它出现的面只有两类：主 CTA（`element-overrides.css`）与头像/首字母块（`AppTopBar` / `Profile` / `ProfileEditDialog`）。外部工具会把青蓝渐变判成「AI 味」—— 那是工具的口径，**不改实底、不扩散到第三类面**（不用于正文、边框、大面积背景）。残值域另有独立用法（含 64px 指标数字的渐变文字，`valuation-tokens.css:225`），属该域既有形态，不在本条射程。
+- **渐变是品牌动作，不是待优化的瑕疵**：主按钮 `--gradient-brand`（`#0F766E → #0369A1`，135°），两端白字实测 5.47 / 5.93（#1892），判据锁在 `contrast.spec.ts`，改色标会红。培训域里它出现的面只有两类：主 CTA（`element-overrides.css`）与头像/首字母块（`AppTopBar` / `Profile`）。外部工具会把青蓝渐变判成「AI 味」—— 那是工具的口径，**不改实底、不扩散到第三类面**（不用于正文、边框、大面积背景）。残值域另有独立用法（含 64px 指标数字的渐变文字，`valuation-tokens.css:225`），属该域既有形态，不在本条射程。
 - **表面靠同色消融，边界靠一条缝**：外壳三面同用 `--color-bg-page`，层次由卡片承担；边界只有十字细线 `--color-border-seam`（ADR-0072 / #1629）。不叠第二档底色、不加外壳阴影。
 - **字体三分工**：正文 Noto Sans SC、西文与数字 DM Sans、等宽 JetBrains Mono 只给代码与需要对齐的数字。字号只有七档（ADR-0080），展示级 28 / 40 / 44 / 64 是单独登记的例外。
 - **动效只报状态，不做编排**：`--duration-tap 120ms` 给点击反馈，过渡走 150 / 200 / 250ms；弹簧与 `reducedMotion` 在 `config/motion.ts`。不加入场编排、不做装饰性循环动画。**主题切换**走 View Transitions 的圆形揭示（`utils/themeReveal.ts`，圈心 = 触发图标中心，时长/缓动单点在 `config/motion.ts`）；浏览器不支持或 `prefers-reduced-motion: reduce` 时保持瞬时切换。
@@ -98,7 +98,7 @@
 | 计数动画 | `UiCountTo`（只经 `UiStatCard` 使用，不当独立件落点） | 1（在 `UiStatCard` 内） |
 | 分割线 | `UiDivider` | 0（+ `el-divider` 4 待迁） |
 | 头像 | `el-avatar`（原生，登记） | 15 |
-| 图片 | `el-image` / `el-image-viewer`（EP 自带全屏查看器，`el-image` 配套）+ 域内查看器（`ImageViewer` / `PptViewer` / `SpreadsheetViewer` / `DocumentViewer` / `VideoPlayer`） | 4 + viewer 1 |
+| 图片 | `el-image` / `el-image-viewer`（EP 自带全屏查看器，`el-image` 配套）+ 域内查看器（`ImageViewer` / `PptViewer` / `DocumentViewer` / `VideoPlayer`） | 4 + viewer 1 |
 | 折叠面板 | `el-collapse`（原生，登记） | 2 / 6 |
 | 高度折叠 | `UiCollapse`（grid 0fr→1fr + inert；内容常驻，不瞬时 display:none） | 3（侧栏分组 / AI 来源 / 诊断筛选） |
 | 描述列表 | `el-descriptions`（原生，登记） | 1 / 6 |

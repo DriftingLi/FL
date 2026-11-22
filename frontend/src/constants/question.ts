@@ -11,6 +11,23 @@ export const typeMap: Record<QuestionType, string> = {
 
 export const questionTypeOptions = Object.entries(typeMap).map(([value, label]) => ({ value, label }))
 
+// 题目状态（草稿 → 待审核 → 已发布）：词表、筛选项与徽标色调的唯一出处
+export const questionStatusMap: Record<string, string> = {
+  draft: '草稿',
+  pending: '待审核',
+  published: '已发布'
+}
+
+export const questionStatusOptions = Object.entries(questionStatusMap).map(([value, label]) => ({ value, label }))
+
+export type QuestionStatusTone = 'neutral' | 'warning' | 'success'
+
+export const questionStatusTone: Record<string, QuestionStatusTone> = {
+  draft: 'neutral',
+  pending: 'warning',
+  published: 'success'
+}
+
 // 考试场次状态
 export const sessionStatusMap: Record<string, string> = {
   upcoming: '未开始',
