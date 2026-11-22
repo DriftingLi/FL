@@ -1,7 +1,8 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <app-nav-bar title="消息通知" variant="inverse" @left-click="onBack">
-            <template #right>
+        <app-nav-bar title="消息通知" variant="inverse" @left-click="onBack" :show-toolbar="true">
+            <template #toolbar>
+                <!-- #2761：右槽恒空（侧槽脱流后右槽内容会盖在居中标题上），全部已读下沉第二行。 -->
                 <view class="nav-action" @click="onMarkAllRead">
                     <text class="header-action">全部已读</text>
                 </view>
@@ -196,9 +197,10 @@ import { goBack } from '../../utils/navigation'
         flex-direction: column;
     }
 
+    /* 票 2730 第 1 项：命中区 ≥88rpx；文字动作按 min-width 撑开，字号不变。 */
     .nav-action {
-        width: 64rpx;
-        height: 64rpx;
+        min-width: 88rpx;
+        height: 88rpx;
         align-items: center;
         justify-content: center;
     }

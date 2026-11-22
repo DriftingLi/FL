@@ -13,11 +13,13 @@
 
         <!-- 端上搜索：问题或答案命中即算（口径同 Web 帮助中心，不新增搜索接口） -->
         <view class="search-bar">
-            <text class="search-icon">🔍</text>
-            <input class="search-input" type="text" v-model="keyword" placeholder="搜索问题关键词"
-                confirm-type="search" />
-            <view v-if="keyword.length > 0" class="search-clear" @click="onClearKeyword">
-                <text class="search-clear-text">✕</text>
+            <view class="search-box">
+                <text class="search-icon">🔍</text>
+                <input class="search-input" type="text" v-model="keyword" placeholder="搜索问题关键词"
+                    confirm-type="search" />
+                <view v-if="keyword.length > 0" class="search-clear" @click="onClearKeyword">
+                    <text class="search-clear-text">✕</text>
+                </view>
             </view>
         </view>
 
@@ -298,6 +300,7 @@ import { goBack } from '../../utils/navigation'
         flex-direction: row;
         align-items: center;
         padding: 8rpx 24rpx 24rpx 24rpx;
+        flex-shrink: 0;
     }
 
     .welcome-mascot {
@@ -324,11 +327,23 @@ import { goBack } from '../../utils/navigation'
         margin-top: 8rpx;
     }
 
-    /* 搜索栏 */
+    /* 搜索栏：白胶囊承载「图标 + 输入 + 清空」三件（先例 pages/search/search.uvue 的 .search-input-wrap）。
+       胶囊整块落在 24rpx 页面网格上，图标不再浮在页底、胶囊左缘也不再缩进 76rpx。 */
     .search-bar {
         padding: 0 24rpx 24rpx 24rpx;
         flex-direction: row;
         align-items: center;
+        flex-shrink: 0;
+    }
+
+    .search-box {
+        flex: 1;
+        flex-direction: row;
+        align-items: center;
+        height: 72rpx;
+        background-color: $card-bg;
+        border-radius: $radius-pill;
+        padding: 0 8rpx 0 24rpx;
     }
 
     .search-icon {
@@ -339,9 +354,6 @@ import { goBack } from '../../utils/navigation'
     .search-input {
         flex: 1;
         height: 72rpx;
-        background-color: $card-bg;
-        border-radius: $radius-pill;
-        padding: 0 28rpx;
         font-size: 26rpx;
         color: $text-color;
     }
@@ -351,7 +363,6 @@ import { goBack } from '../../utils/navigation'
         height: 56rpx;
         align-items: center;
         justify-content: center;
-        margin-left: 12rpx;
     }
 
     .search-clear-text {
@@ -369,6 +380,7 @@ import { goBack } from '../../utils/navigation'
         flex-direction: row;
         align-items: center;
         padding: 8rpx 24rpx 20rpx 24rpx;
+        flex-shrink: 0;
     }
 
     .category-chip {

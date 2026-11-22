@@ -21,7 +21,7 @@
         <view v-if="currentTab !== 'experience'" class="res-search-bar">
             <view class="res-search-input-wrap" @click="onCreate">
                 <text class="res-search-placeholder">写下你此刻的想法</text>
-                <text class="res-search-icon">🔍</text>
+                <image class="res-search-icon" src="/static/icons/forum/search.png" mode="aspectFit"></image>
             </view>
             <view class="create-pill-hit" @click="onCreate">
                 <view class="create-pill">
@@ -218,10 +218,11 @@
        是 #right 槽内容（✉️ 徽标）的自有样式。 */
 
     /* 消息图标 */
+    /* 票 2730 第 1 项：命中区 ≥88rpx；✉️ 字形 40rpx 不变。 */
     .msg-icon-wrap {
         position: relative;
-        width: 64rpx;
-        height: 64rpx;
+        width: 88rpx;
+        height: 88rpx;
         align-items: center;
         justify-content: center;
     }
@@ -270,8 +271,8 @@
     }
 
     .res-search-icon {
-        font-size: 28rpx;
-        color: #999999;
+        width: 32rpx;
+        height: 32rpx;
     }
 
     .res-search-placeholder {
@@ -280,8 +281,8 @@
         flex: 1;
     }
 
-    /* 发帖 pill 的触摸盒：视觉胶囊仍 56rpx，命中区撑到 88rpx（44px 下限）。
-       别把胶囊本身拉高来凑——那会改掉 #1846 定下的形态。
+    /* 发帖 pill 的触摸盒：视觉胶囊 72rpx（票 2730 第 3 项与搜索框对齐），命中区撑到 88rpx（44px 下限）。
+       别把胶囊本身拉高到 88rpx 来凑——那会改掉与搜索框对齐的形态。
        注意：样式块注释里别写「#数字」——§9 机检会把 4 位票号当成 hex 色值判红。 */
     .create-pill-hit {
         height: 88rpx;
@@ -289,11 +290,12 @@
         justify-content: center;
     }
 
-    /* 发帖 pill（#1846 自页头右槽下沉，宽高与色值沿用原形态） */
+    /* 发帖 pill（#1846 自页头右槽下沉；票 2730 第 3 项：高 56→72rpx、圆角 28→36rpx，
+       与左侧搜索框视觉高/圆角对齐，宽度与色值沿用原形态） */
     .create-pill {
         width: 120rpx;
-        height: 56rpx;
-        border-radius: 28rpx;
+        height: 72rpx;
+        border-radius: 36rpx;
         background-color: rgba(41, 121, 255, 0.12);
         align-items: center;
         justify-content: center;

@@ -38,15 +38,15 @@
             </view>
             <view class="qa-stats">
                 <view class="qa-stat">
-                    <text class="qa-stat-icon">👁</text>
+                    <image class="qa-stat-icon" src="/static/icons/forum/view.png" mode="aspectFit"></image>
                     <text class="qa-stat-text">{{ viewsText }}</text>
                 </view>
                 <view class="qa-stat" @click.stop="onReplyClick">
-                    <text class="qa-stat-icon">💬</text>
+                    <image class="qa-stat-icon" src="/static/icons/forum/comment.png" mode="aspectFit"></image>
                     <text class="qa-stat-text">{{ repliesText }}</text>
                 </view>
                 <view class="qa-stat">
-                    <text class="qa-stat-icon">👍</text>
+                    <image class="qa-stat-icon" src="/static/icons/forum/like.png" mode="aspectFit"></image>
                     <text class="qa-stat-text">{{ likesText }}</text>
                 </view>
             </view>
@@ -64,15 +64,15 @@
         <!-- 操作栏：点赞数（只读） + 评论 + 浏览；点赞/收藏仅详情页支持 -->
         <view class="topic-action-bar">
             <view class="action-item">
-                <text class="action-icon">👍</text>
+                <image class="action-icon" src="/static/icons/forum/like.png" mode="aspectFit"></image>
                 <text class="action-text">{{ likesText }}</text>
             </view>
             <view class="action-item" @click.stop="onReplyClick">
-                <text class="action-icon">💬</text>
+                <image class="action-icon" src="/static/icons/forum/comment.png" mode="aspectFit"></image>
                 <text class="action-text">{{ repliesText }}</text>
             </view>
             <view class="action-item">
-                <text class="action-icon">👁</text>
+                <image class="action-icon" src="/static/icons/forum/view.png" mode="aspectFit"></image>
                 <text class="action-text">{{ viewsText }}</text>
             </view>
         </view>
@@ -218,8 +218,8 @@
     /* 状态徽章（#736 #739）：open=蓝，resolved=绿 */
     .status-badge {
         margin-left: 12rpx;
-        padding: 4rpx 16rpx;
-        border-radius: 16rpx;
+        padding: 6rpx 20rpx;
+        border-radius: 18rpx;
         background-color: #e3f2fd;
         flex-shrink: 0;
     }
@@ -229,7 +229,7 @@
     }
 
     .status-badge-text {
-        font-size: 20rpx;
+        font-size: 24rpx;
         color: #2196f3;
         font-weight: 500;
     }
@@ -320,26 +320,26 @@
         color: #cccccc;
     }
 
-    /* 操作栏 */
+    /* 操作栏：三项各占三等分、在各自分位内居中（设计稿 👍/💬/👁 分别落在左/中/右三分位）。
+       旧写法 space-around + 每项 margin-right 8rpx 会让末项多带一段外边距，左右留白不对称 */
     .topic-action-bar {
         flex-direction: row;
         align-items: center;
-        justify-content: space-around;
         padding: 16rpx 0 0;
     }
 
     .action-item {
+        flex: 1;
         flex-direction: row;
         align-items: center;
-        padding: 8rpx 16rpx;
-        border-radius: 24rpx;
-        margin-right: 8rpx;
+        justify-content: center;
+        padding: 8rpx 0;
     }
 
     .action-icon {
-        font-size: 28rpx;
+        width: 28rpx;
+        height: 28rpx;
         margin-right: 6rpx;
-        color: #999999;
     }
 
     .action-text {
@@ -384,7 +384,8 @@
     }
 
     .qa-stat-icon {
-        font-size: 26rpx;
+        width: 26rpx;
+        height: 26rpx;
         margin-right: 6rpx;
     }
 

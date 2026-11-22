@@ -348,7 +348,8 @@
     .answer-card-header { flex-direction: row; align-items: center; justify-content: space-between; margin-bottom: 40rpx; }
     .answer-card-header-spacer { width: 64rpx; height: 44rpx; }
     .answer-card-title { font-size: 34rpx; font-weight: 600; color: $text-color; }
-    .answer-card-close { width: 64rpx; height: 44rpx; font-size: 32rpx; color: $text-color; text-align: right; }
+    /* 票 2730 第 1 项：答题卡关闭键命中区 ≥88rpx；字号 32rpx 不变。 */
+    .answer-card-close { min-width: 88rpx; height: 88rpx; font-size: 32rpx; color: $text-color; text-align: right; }
     .answer-card-grid { flex-direction: row; flex-wrap: wrap; justify-content: flex-start; }
     .answer-card-item { width: 100rpx; height: 100rpx; border-radius: 50rpx; align-items: center; justify-content: center; background-color: $bg-color; }
     .card-item-current { background-color: $primary-color; }

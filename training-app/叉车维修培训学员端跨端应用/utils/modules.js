@@ -73,6 +73,10 @@ const INFRA = {
     'components/app-card',
     'components/app-chip',
     'components/app-empty-state',
+    // 'components/app-icon-button' —— 票 2730：88rpx 命中盒 / 64rpx 可见承载面 / 50% 圆角的
+    // 共享图标按钮，被 courses / forum / profile / ai-chat 等多面消费，无单一主消费方 ⇒ 同
+    // `components/app-*` 整族口径登记为 INFRA。
+    'components/app-icon-button',
     'components/app-level-badge',
     'components/app-list-item',
     'components/app-nav-bar',
@@ -98,7 +102,7 @@ const INFRA = {
    * 或模块私有 composable 归该模块，见 `MODULES`）。
    * 逐条理由：
    * - `App.uvue` / `main.uts` —— 应用入口，没有模块「拥有」它
-   * - `api/auth.uts` —— 鉴权域，5 个模块（forgot-password / login / profile / profile-setup / register）共用
+   * - `api/auth.uts` —— 鉴权域，4 个模块（forgot-password / login / profile / register）共用
    * - `api/helpers.uts` —— api 层公共小工具（`toNumber` / `toStr` / `toBool` / `errMsg`），5 个模块共用
    * - `api/refreshGate.uts` —— 401 刷新闸门，被 request 层调用，无模块级消费者
    * - `api/request.uts` —— 请求层本体，被全仓 api 层调用，无模块级消费者（#1734 两轴拆分后 583 行，已在 `BUDGET` 内 ⇒ 不再进 `oversized`）
@@ -567,16 +571,6 @@ const MODULES = {
     /** forum 于 #2521 加入：forum-create 的 scope=feedback 模式消费本模块的 api/feedback.uts（G-09 普通反馈提交） */
     crossModuleConsumers: ['courses', 'dashboard', 'featured', 'forum', 'jobs', 'practice', 'resources', 'resume'],
     /** 达标但贴近上限：`pages/profile/wrong-questions.uvue` 恰 600 行（先例 profileContract 的落袋锁） */
-    budget: BUDGET,
-    budgetOverrides: {},
-    maxDepth: MAX_DEPTH,
-  },
-
-  'profile-setup': {
-    extraDirs: [],
-    files: ['pages/profile-setup/profile-setup.uvue'],
-    extractDirs: [],
-    crossModuleConsumers: [],
     budget: BUDGET,
     budgetOverrides: {},
     maxDepth: MAX_DEPTH,

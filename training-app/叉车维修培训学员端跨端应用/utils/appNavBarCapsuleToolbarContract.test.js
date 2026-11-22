@@ -70,7 +70,10 @@ function capsuleToolbarViolations(srcRaw) {
   if (!/margin-right/.test(src)) {
     v.push('右槽缺 margin-right 补偿（内容盒偏移未抵消 ⇒ 图标落进胶囊矩形）');
   }
-  if (!/\(750\s*-\s*NAV_BODY_PADDING_X\)\s*-\s*\(capsuleLeft\s*-\s*CAPSULE_CLEARANCE_RPX\)/.test(src)) {
+  // 只在 rightSlotStyle 块内查：标题带（titleBlockStyle，#2761）用的是同一算式，
+  // 全文件搜会让两处互相顶替 —— 右槽几何被改坏时仍能命中标题带那一份，判别力归零。
+  const rightSlot = (src.match(/const rightSlotStyle\s*=\s*computed[\s\S]*?\}\)\n/) || [''])[0];
+  if (!/\(750\s*-\s*NAV_BODY_PADDING_X\)\s*-\s*\(capsuleLeft\s*-\s*CAPSULE_CLEARANCE_RPX\)/.test(rightSlot)) {
     v.push('右槽右缘几何不是 (750 − paddingX) − (capsuleLeft − clearance)');
   }
 

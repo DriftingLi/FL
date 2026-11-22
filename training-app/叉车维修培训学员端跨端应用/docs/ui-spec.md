@@ -246,8 +246,8 @@
 - 高度：`88rpx`（**不含状态栏**；开启 `showToolbar` 时再加一行 `88rpx`，见「多动作落点」）
 - 状态栏占位：由本件内部按 `useSafeArea()` 取值渲染，**页面不再自带 `<view class="status-bar">`**
 - 右侧按钮区：右边界**不得越过微信胶囊左边界**（`getMenuButtonBoundingClientRect().left` − 安全间距），也不得写死魔数
-- 标题：`$font-size-xl`（36rpx），font-weight **600**（#2509 R2 冲突 12：原型 51 条大标题 **0 处 700**，w500/w600 收敛为 600；阅读刻度 `$md-weight-heading` 仍 700，不随动）；**一级页（无返回箭头）居中于屏幕中心**（#2479 / ADR-0069），**二级页**（有返回箭头）在返回箭头后**左对齐**（ADR-0067 决定 5）；标题铺满标题块内容盒，过长省略，不覆盖右槽动作（#2480）
-- 左侧返回按钮：`‹` 字符，`56rpx`；左槽自身承接 `88rpx × 88rpx` 点击区
+- 标题：`$font-size-xl`（36rpx），font-weight **600**（#2509 R2 冲突 12：原型 51 条大标题 **0 处 700**，w500/w600 收敛为 600；阅读刻度 `$md-weight-heading` 仍 700，不随动）；**一律居中于屏幕中心**（#2761 取消一级/二级二分：返回箭头最左、标题居中、右侧胶囊，与主流 App 一致）；标题铺满标题块内容盒，过长省略，不覆盖胶囊（#2761）
+- 左侧返回按钮：`‹` 字符，`88rpx`（#2757：原 56rpx 时 ink 高仅约标题汉字的 59%，视觉偏小；88rpx 时 ink 高 ≈ 标题的 93%，视觉等高）；左槽自身承接 `88rpx × 88rpx` 点击区
 - 右侧图标：`44rpx`
 - 背景：随页头套走（§7：N01 `$primary-color` / N02–N03 `$bg-header` / N05 `transparent` 页面自垫 / N06 白名单无页头）
 
@@ -262,26 +262,27 @@
 ⇒ row / `flex-end` 没生效。
 页头 `paddingTop = statusBarHeight + 88rpx`（开启 `showToolbar` 时 + `88rpx`）。
 
-**居中形态几何**（#2479 / ADR-0069）：一级页两侧槽 `position: absolute` 脱流（左 `left: 24rpx` / 右 `right: 24rpx`，
-包含块 `.nav-bar-body` 需 `position: relative`）⇒ 空右槽不再吃那段让位宽度；标题块流内 `flex: 1`，
-两端各 48rpx **对称留白**（用 `margin` 实现，**不是** `padding` —— `appNavBarCapsuleToolbarContract` 禁数值右向 padding），
-内容盒 [24,726] 内缩到文字带 [72,678] ⇒ 文字中心恒 375rpx（屏宽 750），与侧槽有无内容无关。
-一级页**右槽必须为空**（ADR-0069 决定 4）：右槽有内容会被长标题钻到下面，且 `appNavBarLeftEntryContract` 判红 —— 要加动作先移出页头。
+**居中几何**（#2479 建立；**#2761 起全站恒用**）：两侧槽 `position: absolute` 脱流（左 `left: 24rpx` / 右 `right: 24rpx`，
+包含块 `.nav-bar-body` 需 `position: relative`）⇒ 侧槽内容与胶囊让位都不参与标题块可用宽度；标题块流内 `flex: 1`，
+两端**等宽**留白（用 `margin` 实现，**不是** `padding` —— `appNavBarCapsuleToolbarContract` 禁数值右向 padding），
+文字中心恒 375rpx（屏宽 750），与左槽有无字形无关。
+留白由 `capsuleLeft` **现算**：右缘 = 胶囊左边线 − `CAPSULE_CLEARANCE_RPX`（典型 532rpx），左缘对称 ⇒ 标题带宽约 314rpx
+（≈8.7 汉字），超出走 `lines: 1` + `text-overflow: ellipsis`。**禁写死 532**：胶囊位置随机型/微信版本变，
+写死会在胶囊更靠左的机型上让标题钻进胶囊矩形。
+**右槽一律为空**（#2761 把 ADR-0069 决定 4 从一级页扩到全站）：侧槽脱流后右槽内容会盖在居中标题上，
+`appNavBarLeftEntryContract` 扫全页判红 —— 页级动作一律下沉 `#toolbar`（见「多动作落点」）。
 标题点击一律发 **`titleClick`**（工作台证件切换照此接线）；`#1677` 的「左槽空置时标题代发 `leftClick`」已删除。
+返回箭头与标题 **ink 中线对齐**（#2761）：`‹` 字号 88rpx 只解决视觉等高（#2757），文字 ink 锚在基线上、不随行盒居中
+⇒ 箭头 ink 中心比标题低约 8rpx，用 `margin-bottom: 16rpx` 让居中算法吃掉一半补偿；**真机需复验**（① 门是发版前一次）。
 
-二级页**不适用**上述居中几何（ADR-0067 决定 5）：侧槽不脱流、标题块 `align-items: flex-start`、标题无 `text-align: center`；
-标题 `width: 100%` 铺满标题块内容盒，`lines: 1` + `text-overflow: ellipsis` 才生效（#2480）。右槽与胶囊让位只收窄标题可用宽度，
-不改变标题起始位置；长标题省略，不得覆盖右槽动作。
-
-**多动作落点**（2026-11-10；触发条件 2026-11-11 由 #2421 扩一档）：右槽放不下、**或**次要动作需与主操作分级的，
-走本件 `showToolbar` + `#toolbar` 的第二行 —— 该行在标题栏**之下**，
-胶囊矩形不进入，可吃满内容盒宽度；默认关闭 ⇒ 不传的页面零 diff。第二行只放**次要动作**，主操作仍留右槽；
-**「分级」也成立**：两个动作在窄槽里挤得下（如 job-detail 的 ♥ + 举报 = 128rpx < 典型槽宽 194rpx），
-但一个是主操作、一个是低频破坏性动作时，仍按本机制下沉 —— 判据是语义层级，不是宽度。
-触发器绑业务状态（job-detail 用 `:show-toolbar="!hasReported"`），别写死 `true`：动作消失后会留下一条空行；
-**常驻**入口不受此限——AI 助手页的 ⋯（右抽屉唯一可见入口）不随状态出现/消失，写死 `true`（#2479 起它自右槽下沉到本行）。
-行高 88rpx 但 `<text>` 自身只有文字高，可点容器需自己撑到 ≥88rpx（先例 job-detail：右槽与第二行共用 `.nav-action` 方块）；
-右槽剩单图标时，盒宽按触摸目标取 88rpx（=44px），别再沿用 64rpx。
+**多动作落点**（2026-11-10 建立；**#2761 起为唯一落点**）：页级动作一律走本件 `showToolbar` + `#toolbar` 的第二行 ——
+该行在标题栏**之下**，胶囊矩形不进入，可吃满内容盒宽度；默认关闭 ⇒ 不传的页面零 diff。
+右槽自 #2761 起**恒空**（居中标题占满整行，右槽内容会盖在标题上），因此不再有「主操作留右槽」这一档：
+收藏 / 设置 / 通知 / 保存 / 新建 / 计时器 / 跨小程序入口全部在本行。
+触发器绑业务状态（job-detail 曾用 `:show-toolbar="!hasReported"`），别写死 `true`：动作消失后会留下一条空行；
+**常驻**入口不受此限——AI 助手页的 ⋯（右抽屉唯一可见入口）不随状态出现/消失，写死 `true`。
+行高 88rpx 但 `<text>` 自身只有文字高，可点容器需自己撑到 ≥88rpx（先例 job-detail：`.nav-action` 方块）；
+单图标盒宽按触摸目标取 88rpx（=44px），别再沿用 64rpx。
 仍禁止页面自建第二份页头（ADR-0035）。工具栏不重复做胶囊让宽，否则可用宽度又退回右槽那一档。
 
 ### 5.2 卡片（appCard）
@@ -437,7 +438,7 @@
 | N03 | 白底带分隔线 | `$bg-header` + border-bottom 1rpx `$border-color-light` | 17 |
 | N04 | —— | **已并入 N03**（编号留洞不重排） | — |
 | N05 | 透明页头 | `transparent`，页面自垫背景 | 7 |
-| N06 | 无页头白名单 | 页面自绘（含自垫状态栏、走 token） | 6：`index` / `login` / `register` / `forgot-password` / `profile-setup` / `search` |
+| N06 | 无页头白名单 | 页面自绘（含自垫状态栏、走 token） | 5：`index` / `login` / `register` / `forgot-password` / `search`（#2757 下线 `profile-setup` 后由 6 页收窄） |
 
 `.status-bar` 底色三派随套走：N01=`$primary-color`，N02/N03=`$bg-header`，N05=`transparent`，N06 页面自垫走 token。
 `register` / `forgot-password` 维持系统导航不动作（页面内自设 `navigationStyle` 无 API 支撑，`pages.json` 禁改——ADR-0035 问 9）。
@@ -457,7 +458,7 @@
 | G9 | 1 | 组合壳 `practice`（§6.9 形态：多区组合壳，成员唯一） |
 
 **共同格**（所有 N×G 组合）：页头件 88rpx + padding 统一 `0 $spacing-md`；标题 `$font-size-xl` bold；
-左返回箭头 `‹` 56rpx / 点击区 88rpx × 88rpx；其他左图标与右图标 44rpx；内容区卡片 `$radius-md` + `$spacing-md`、无阴影；分隔线 `$border-color`。
+左返回箭头 `‹` 88rpx（#2757，与标题视觉等高）/ 点击区 88rpx × 88rpx；其他左图标与右图标 44rpx；内容区卡片 `$radius-md` + `$spacing-md`、无阴影；分隔线 `$border-color`。
 
 ### 7.3 N×G 全表真源与逐页验收
 
@@ -490,7 +491,7 @@ hex 匹配口径：`<style>` 块**声明位** hex（3 位归一 6 位）；不�
 |---|---|---|
 | 1 | **裸 hex = 0** | 声明位 hex 全部走 token 或白名单；无豁免 |
 | 2 | **`lang="scss"` 100%** | 全部 `<style>` 声明；无豁免 |
-| 3 | **手写 `.status-bar` = 0 且页头件引用 100%** | 页头唯一件 `app-nav-bar`；豁免名单 = N06 六页 |
+| 3 | **手写 `.status-bar` = 0 且页头件引用 100%** | 页头唯一件 `app-nav-bar`；豁免名单 = N06 五页 |
 | 4 | **`app-*` 引用 100%** | 对应交互一律走八件共享件（§10）；渐进转绿（先断言页头件自身，新页必须走共享件，旧页逐票转绿） |
 | 5 | **主色背景走 token** | 背景=主色处禁字面值 |
 

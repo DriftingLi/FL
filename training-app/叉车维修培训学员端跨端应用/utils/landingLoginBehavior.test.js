@@ -9,7 +9,8 @@
  *   I1 **未勾选协议 ⇒ 请求层零调用**（AC 3）。`uni.showToast` 出现不等于拦住：只有
  *      `loginByWechat` 计数为 0、`showLoading` 计数为 0 才算拦住。
  *   I2 **两入口一条成功出口**（AC 4）。着陆页成功后把 `isNew` 原样交给**真的**
- *      `utils/loginOutlet.afterLoginSuccess`；新用户必须排程 `choose-cert`、老用户 `dashboard`，
+ *      `utils/loginOutlet.afterLoginSuccess`；新用户必须排程 `choose-cert`（#2757 起直落，
+ *      完善资料中转页已下线）、老用户 `dashboard`，
  *      且**延后**（执行当场不得出现 reLaunch）。
  *   I3 **失败不得静默**（AC 5）。`errorHint` 必须被写成人类可读原因（含 Error.message 透传、
  *      空 message 走兜底文案两条路径），`hideLoading` 必须发生，成功链路不得被触发。
@@ -157,7 +158,7 @@ function landingApp(opts) {
   const { uni, log } = makeUni();
   const timer = captureTimer();
   const calls = { loginByWechat: 0, afterLoginSuccess: [] };
-  const outletBindings = { uni, setTimeout: timer.setTimeout };
+  const outletBindings = { uni, setTimeout: timer.setTimeout, isRecruiterActive: () => false };
   const outlet = loadUts(OUTLET_UTS, outletBindings);
   const notice = o.notice
     ? o.notice
@@ -193,7 +194,7 @@ function outletApp(opts) {
   const o = opts || {};
   const { uni, log } = makeUni();
   const timer = captureTimer();
-  const bindings = { uni, setTimeout: timer.setTimeout };
+  const bindings = { uni, setTimeout: timer.setTimeout, isRecruiterActive: () => false };
   const mod = o.source == null
     ? loadUts(OUTLET_UTS, bindings)
     : loadFromSource(o.source, 'loginOutlet.uts', bindings);
@@ -431,7 +432,7 @@ describe('D. 成功出口端到端：着陆页 → 真 loginOutlet → 分叉落
     expect(app.log.toast).toEqual([{ title: MSG_OK, icon: 'success', duration: 1000 }]);
   });
 
-  test('D2 新用户：出口排程 800ms 后 reLaunch 到 choose-cert（票面判据 4 硬约束）', async () => {
+  test('D2 新用户：出口排程 800ms 后 reLaunch 到完善资料页（#2712；最终仍落 choose-cert）', async () => {
     const app = landingApp({ outlet: true, wechatImpl: () => Promise.resolve({ isNew: true }) });
     app.face.agreed.value = true;
     await app.face.onWechatLogin();

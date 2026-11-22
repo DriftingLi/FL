@@ -143,17 +143,16 @@ describe('批2 特殊页头形态（app-nav-bar 槽位承载）', () => {
     expect(src).toContain(':status-bar-height="statusBarHeight"');
   });
 
-  it('job-detail 右槽只留收藏、举报在 #toolbar（#2421）；resume-edit 右槽保留保存；custom-models 右槽保留添加', () => {
-    // #2421：右槽收敛为主操作（收藏），次要动作「举报」下沉第二行 ⇒ 两条断言反向对调，
-    // 用「取出插槽块再判包含」而不是跨插槽的惰性正则（后者会越过 </template> 命中 #toolbar）。
+  it('job-detail 收藏与举报同在 #toolbar（#2761 起右槽恒空）；resume-edit 保存、custom-models 添加同样下沉', () => {
+    // #2761：右槽恒空（侧槽脱流后右槽内容会盖在居中标题上）⇒ 全部动作下沉第二行。
+    // 用「取出插槽块再判包含」而不是跨插槽的惰性正则（后者会越过 </template> 命中别的槽）。
     const jobDetail = read('pages/jobs/job-detail.uvue');
-    const rightSlot = (jobDetail.match(/<template #right>[\s\S]*?<\/template>/) || [''])[0];
     const toolbarSlot = (jobDetail.match(/<template #toolbar>[\s\S]*?<\/template>/) || [''])[0];
-    expect(rightSlot).toContain('toggleFavorite');
-    expect(rightSlot).not.toContain('onOpenReport');
+    expect(toolbarSlot).toContain('toggleFavorite');
     expect(toolbarSlot).toContain('onOpenReport');
-    expect(read('pages/resume/resume-edit.uvue')).toMatch(/<template #right>[\s\S]*?onSave[\s\S]*?<\/template>/);
-    expect(read('pages/ai-assistant/custom-models.uvue')).toMatch(/<template #right>[\s\S]*?startCreate[\s\S]*?<\/template>/);
+    expect(jobDetail).not.toMatch(/<template #right>/);
+    expect(read('pages/resume/resume-edit.uvue')).toMatch(/<template #toolbar>[\s\S]*?onSave[\s\S]*?<\/template>/);
+    expect(read('pages/ai-assistant/custom-models.uvue')).toMatch(/<template #toolbar>[\s\S]*?startCreate[\s\S]*?<\/template>/);
   });
 });
 
@@ -202,10 +201,10 @@ describe('§1.6 白名单文件自检（批2 扫描面）', () => {
       'pages/courses/courses.uvue', 'pages/profile/profile.uvue', 'pages/recruiter/login.uvue',
       'pages/resume/resume.uvue',
     ];
-    // #1609 批6（N06 无页头白名单 6 页 + mall N03 补漏）白名单条目落在批6页面，纳入并集扫描面；清单与 recruiterUiContract/batch4UiContract 保持一致
+    // #1609 批6（N06 无页头白名单 5 页 + mall N03 补漏；#2757 下线 profile-setup 后由 6 页收窄）白名单条目落在批6页面，纳入并集扫描面；清单与 recruiterUiContract/batch4UiContract 保持一致
     const batch6 = [
       'pages/index/index.uvue', 'pages/login/login.uvue', 'pages/register/register.uvue',
-      'pages/forgot-password/forgot-password.uvue', 'pages/profile-setup/profile-setup.uvue',
+      'pages/forgot-password/forgot-password.uvue',
       'pages/search/search.uvue', 'pages/mall/mall.uvue',
     ];
     // #2262 摘除 ai-feature 诊断面板后，#6DB8E8 唯一承载移至 components/ai-chat/ai-chat-input.uvue —— 扫描面随之补入组件文件

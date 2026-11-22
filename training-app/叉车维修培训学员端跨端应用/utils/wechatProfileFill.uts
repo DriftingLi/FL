@@ -1,0 +1,49 @@
+/**
+ * 微信资料相关的共享判据（#2712 引入，#2757 收窄）。
+ *
+ * 消费方只剩 `pages/profile`（个人信息页）：昵称行的「审核中」徽标与昵称弹窗的预填。
+ * #2757 把「用微信资料完善」入口与独立的完善资料页一起下线 —— 微信昵称/头像的一键填充
+ * 改为在个人信息页的头像行（`button open-type="chooseAvatar"`）与昵称行
+ * （`input type="nickname"` 的键盘候选）就地完成，因此「待填集合 / 入口可见性」那套判据退役。
+ *
+ * 占位昵称形态由后端生成（`backend/internal/auth/wechat_service.go`）：
+ * `微信学员` + openid 后 6 位；冲突时追加 `_<prefix4>` 或 `_<i>`（i=1..3）。
+ * 前端拼不出 openid，只能按**完整模式**匹配 —— 用前缀 `startsWith('微信学员')`
+ * 会误伤真叫「微信学员…」的用户。
+ */
+
+import type { UserInfo } from '../types/index'
+
+/** 待审字段值域（与后端 `model.ProfileFieldNickname` / `ProfileFieldAvatar` 同值） */
+export const PROFILE_FIELD_NICKNAME : string = 'nickname'
+export const PROFILE_FIELD_AVATAR : string = 'avatar'
+
+const PLACEHOLDER_NICKNAME = /^微信学员[A-Za-z0-9_-]{6}(_[A-Za-z0-9_-]{4}|_\d{1})?$/
+
+/** 后端自动生成的占位昵称 */
+export function isPlaceholderNickname(name : string) : boolean {
+	return PLACEHOLDER_NICKNAME.test(name.trim())
+}
+
+/** 昵称为空：空串或后端占位形态（昵称弹窗据此决定预填真名还是留空） */
+export function isNicknameEmpty(name : string) : boolean {
+	const trimmed = name.trim()
+	return trimmed.length == 0 || isPlaceholderNickname(trimmed)
+}
+
+/** 逐字段待审集合（老后端不返回 pending_fields ⇒ 空数组） */
+export function pendingFieldsOf(u : UserInfo | null) : string[] {
+	if (u == null) return []
+	const fields = u.pending_fields
+	if (fields == null) return []
+	return fields
+}
+
+/** 某字段是否在待审中 */
+export function hasPendingFieldOf(u : UserInfo | null, field : string) : boolean {
+	const fields = pendingFieldsOf(u)
+	for (let i = 0; i < fields.length; i++) {
+		if (fields[i] == field) return true
+	}
+	return false
+}

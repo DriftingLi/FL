@@ -90,8 +90,10 @@
 
                 <!-- 更多课程按钮 -->
                 <view v-if="courses.length > 0" class="more-btn-wrap">
-                    <view class="more-btn" @click="onLoadMore">
-                        <text class="more-btn-text">更多课程</text>
+                    <view class="more-btn-hit" @click="onLoadMore">
+                        <view class="more-btn">
+                            <text class="more-btn-text">更多课程</text>
+                        </view>
                     </view>
                 </view>
             </scroll-view>
@@ -327,6 +329,7 @@
         padding: 12rpx 38rpx 16rpx;
     }
 
+    /* 票 2730 docx ③：背景同上参考图一（cert-selector 热门考证卡同款渐变）；选中态改白色描边 */
     .category-card {
         flex: 1;
         height: 116rpx;
@@ -334,13 +337,13 @@
         flex-direction: row;
         align-items: center;
         justify-content: center;
-        background: linear-gradient(to bottom, #6ECCFC, #0FA5F1);
+        background: linear-gradient(to bottom right, #6ECCFC, #0FA5F1);
         background-color: #0FA5F1;
-        opacity: 0.7;
+        border: 4rpx solid transparent;
     }
 
     .category-card--active {
-        opacity: 1;
+        border-color: #FFFFFF;
     }
 
     .category-card-icon {
@@ -524,6 +527,13 @@
     .more-btn-wrap {
         align-items: center;
         padding: 24rpx 38rpx 48rpx;
+    }
+
+    /* 票 2730 第 1 项：按钮本体仍是 66rpx 高，命中区由外层 88rpx 盒撑开（§5.11）。 */
+    .more-btn-hit {
+        height: 88rpx;
+        align-items: center;
+        justify-content: center;
     }
 
     .more-btn {

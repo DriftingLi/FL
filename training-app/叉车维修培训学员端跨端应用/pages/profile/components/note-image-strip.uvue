@@ -3,8 +3,10 @@
         <view class="strip-row">
             <view v-for="(url, idx) in shownUrls" :key="url" class="cell">
                 <image class="thumb" :src="srcOf(url)" mode="aspectFill" @click="onPreview(idx)" :webp="true" />
-                <view v-if="editable" class="remove" @click.stop="onRemove(idx)">
-                    <text class="remove-x">×</text>
+                <view v-if="editable" class="remove-hit" @click.stop="onRemove(idx)">
+                    <view class="remove">
+                        <text class="remove-x">×</text>
+                    </view>
                 </view>
             </view>
             <view v-if="editable && shownUrls.length < max" class="add" @click="onAdd">
@@ -113,10 +115,19 @@
         background-color: #f0f0f0;
     }
 
-    .remove {
+    /* 票 2730 第 1 项：× 徽标本体仍是 40rpx，命中区由外层 88rpx 盒撑开（§5.11）；
+       徽标贴住缩略图右上角，故命中盒同锚点、内容靠右上对齐。 */
+    .remove-hit {
         position: absolute;
         top: -8rpx;
         right: -8rpx;
+        width: 88rpx;
+        height: 88rpx;
+        align-items: flex-start;
+        justify-content: flex-end;
+    }
+
+    .remove {
         width: 40rpx;
         height: 40rpx;
         border-radius: 20rpx;

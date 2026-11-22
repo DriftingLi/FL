@@ -1,0 +1,35 @@
+<template>
+	<view class="app-icon-button" @click="onClick">
+		<view class="app-icon-button-surface">
+			<slot></slot>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+	// 共享图标按钮（票 2730 第 1 项）：88rpx 命中盒 / 64rpx 可见承载面 / 50% 圆角。
+	// 规范 docs/ui-spec.md §5.11：视觉件可以更小，用外层 hit 盒撑到 88rpx，
+	// 别把视觉件本身拉大来凑（§5.1 页头右槽单图标盒宽同样取 88rpx，别再沿用 64rpx）。
+	const emit = defineEmits(['click'])
+
+	function onClick() : void {
+		emit('click')
+	}
+</script>
+
+<style lang="scss">
+	.app-icon-button {
+		width: 88rpx;
+		height: 88rpx;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.app-icon-button-surface {
+		width: 64rpx;
+		height: 64rpx;
+		border-radius: 50%;
+		align-items: center;
+		justify-content: center;
+	}
+</style>

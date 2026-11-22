@@ -15,8 +15,10 @@
                 <app-level-badge :level="userLevel" />
             </view>
         </view>
-        <view class="checkin-pill" @click="onCheckinTap">
-            <text class="checkin-pill-text">{{ todayChecked ? '已签到' : '签到' }}</text>
+        <view class="checkin-pill-hit" @click="onCheckinTap">
+            <view class="checkin-pill">
+                <text class="checkin-pill-text">{{ todayChecked ? '已签到' : '签到' }}</text>
+            </view>
         </view>
     </view>
 </template>
@@ -141,6 +143,15 @@
     }
 
     /* 原型 979:1540：白底 + 主色描边 + 主色字的胶囊 */
+    /* 票 2730 第 1 项：胶囊本体仍是 52rpx 高，命中区由外层 88rpx 盒撑开（§5.11）。 */
+    .checkin-pill-hit {
+        height: 88rpx;
+        align-items: center;
+        justify-content: center;
+        margin-left: 16rpx;
+        flex-shrink: 0;
+    }
+
     .checkin-pill {
         height: 52rpx;
         padding: 0 24rpx;
@@ -149,7 +160,6 @@
         border: 1rpx solid $primary-color;
         align-items: center;
         justify-content: center;
-        margin-left: 16rpx;
         flex-shrink: 0;
     }
 

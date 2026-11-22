@@ -154,9 +154,15 @@ const LINE_BUDGET = 600;
  * （包内图不吃 webp 属性，`utils/imageWebpAttrContract` 按「:src 里出现 /static/」判豁免）。
  * ⇒ 两把 sha 同步前进；其余每一条行为断言逐字节不变。
  * ⚠️ **登录页页脚文案收敛**：移除「· 学员端」，模板锁随之更新；样式未变。
+ * ⚠️ **票 2730 显式变更（经批准的改，不是绕过）**：图形码图（`.cap-img-box`，176×72rpx）外包一层
+ * `.cap-hit`（88rpx 高）把命中区抬到 §5.11 的 44px 下限，图本身尺寸不变 ⇒ 模板与样式两把 sha 同步前进。
+ * ⚠️ **票 2730 第 5 项（同批，第二次前进）**：底部三图标里手机图标改绑 `phoneHighlighted`
+ * （`mode == 'phone' || mode == 'password'`，密码登录也是手机号通道，原实现切到 password 就变灰）；
+ * 微信是导航入口不是通道，**不参与选中态**——去掉 `icon-circle-on` 绑定与 `wechat-active.png`
+ * 三元，常灰图标 + 默认 `#F5F7FA` 圆底（该图已删，无引用）。样式块逐字节未动 ⇒ 只有模板 sha 前进。
  */
-const TEMPLATE_SHA256 = 'cbfacd4c20687bd317a53998b26758b5962cdf0e2ee3b5a197c5ecc4b47312c1';
-const STYLE_SHA256 = '8e5082666242eb21090df12234bb781ac8c2af0de6c4e1f7761c7355ef9ab8d5';
+const TEMPLATE_SHA256 = '9913162d4c46905fb25745fdad5b0acb54c3cb3dc5e437ea354e8e29c8f351f8';
+const STYLE_SHA256 = '94fd57863fda09ed676dc346ec831340754e009ba690a0016464ec2b12a1177c';
 
 /** 页面块（template / script / style）。模板**有嵌套** `<template v-if>` ⇒ 闭合取最后一个 */
 function block(src, tag) {
@@ -583,7 +589,7 @@ describe('行为保持点（票面 ②：UI 像素级不变 / 表单行为逐字
     expect(body).toContain("let msg = '登录失败，请重试'");
   });
 
-  it('成功跳转两分支：新用户选证件、老用户进首页（含延时逐字）——#1478 起出口在 utils/loginOutlet.uts', () => {
+  it('成功跳转两分支：新用户先到完善资料页、老用户进首页（含延时逐字）——#1478 起出口在 utils/loginOutlet.uts', () => {
     // 断言面从「表单 composable 内的局部函数」平移到「共享出口文件」，六处字面量逐字仍在。
     // ⚠️ 这里**刻意不用** `fnBodyOf()`：它是为「4 空格收尾的局部函数」写的，对顶层函数会在
     // `    } else {` 那行提前截断（老用户分支整块拿不到）⇒ 断言会退化成恒真的一半。共享出口是
@@ -593,6 +599,7 @@ describe('行为保持点（票面 ②：UI 像素级不变 / 表单行为逐字
     expect(form).not.toContain('function afterLoginSuccess');
     expect(outlet).toContain('export function afterLoginSuccess(isNew : boolean) : void {');
     expect(outlet).toContain("uni.showToast({ title: '已为您自动注册账号', icon: 'none', duration: 1500 })");
+    // #2757：新用户直接到证件选择页（#1478 判据 4 不变；完善资料中转页已下线）
     expect(outlet).toContain("uni.reLaunch({ url: '/pages/guide/choose-cert' })");
     expect(outlet).toContain("uni.showToast({ title: '登录成功', icon: 'success', duration: 1000 })");
     expect(outlet).toContain("uni.reLaunch({ url: '/pages/dashboard/dashboard' })");
@@ -601,7 +608,9 @@ describe('行为保持点（票面 ②：UI 像素级不变 / 表单行为逐字
     // 判别力：新出口在出口文件里**恰好一处**（多一处 = 分叉被人复制，少一处 = 票面判据 4 被破）
     const chooseCertAt = (src) => [...src.matchAll(/\/pages\/guide\/choose-cert/g)].length;
     expect(chooseCertAt(outlet)).toBe(1);
-    expect(chooseCertAt(outlet.replace('uni.reLaunch({ url: \'/pages/guide/choose-cert\' })', 'uni.reLaunch({ url: \'/pages/dashboard/dashboard\' })'))).toBe(0);
+    expect(chooseCertAt(outlet.replace("uni.reLaunch({ url: '/pages/guide/choose-cert' })", "uni.reLaunch({ url: '/pages/dashboard/dashboard' })"))).toBe(0);
+    // 完善资料页已下线：出口不得再引用它
+    expect(outlet).not.toContain('profile-setup');
   });
 
   it('主按钮文案两态与验证码提示三档逐字仍在（#1879 起微信态随模式退役）', () => {
@@ -630,7 +639,8 @@ describe('行为保持点（票面 ②：UI 像素级不变 / 表单行为逐字
     const script = pageScript();
     expect(script).toContain('auth.restoreFromStorage()');
     expect(script).toContain('if (auth.isLoggedIn.value)');
-    expect(script).toContain("uni.reLaunch({ url: '/pages/dashboard/dashboard' })");
+    // 已登录门控的落地必须走身份分流（招聘者会话不得从登录页被二次送进学员端）
+    expect(script).toContain('uni.reLaunch({ url: landingPathForActiveRole() })');
     expect(script).toContain('const safeArea = useSafeArea()');
     expect(script).not.toContain('getSystemInfoSync');
     expect(script).toContain('initBiometricGate()');

@@ -1225,8 +1225,9 @@
 		padding-right: 24rpx;
 	}
 
+	/* 票 2730 第 1 项：拖拽把手命中区 44→88rpx；箭头 32rpx 不变。 */
 	.func-head-handle {
-		height: 44rpx;
+		height: 88rpx;
 		align-items: center;
 		justify-content: center;
 	}
@@ -1297,9 +1298,9 @@
 		margin-bottom: 24rpx;
 	}
 
+	/* 票 2730 docx ④：品牌卡与下方「大家常问」行同宽（原 min-width 300rpx 并排 ⇒ 比下面的框窄一截） */
 	.welcome-brand-row {
-		flex-direction: row;
-		flex-wrap: wrap;
+		flex-direction: column;
 	}
 
 	.welcome-brand {
@@ -1309,10 +1310,9 @@
 		border-color: $border-color;
 		border-radius: $radius-lg;
 		padding: 20rpx;
-		margin-right: 16rpx;
 		margin-bottom: 16rpx;
 		background-color: $card-bg;
-		min-width: 300rpx;
+		width: 100%;
 	}
 
 	.welcome-brand-icon {

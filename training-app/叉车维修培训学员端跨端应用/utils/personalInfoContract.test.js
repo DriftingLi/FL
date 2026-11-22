@@ -103,11 +103,18 @@ describe('flows 纯函数契约（状态所有权留在页面）', () => {
   });
 
   it('展示文案纯函数唯一定义点在 flows，页面 computed 全部委托（无第二实现）', () => {
-    for (const fn of ['displayNameOf', 'avatarUrlOf', 'hasPendingOf', 'accountTextOf', 'phoneTextOf',
-      'emailTextOf', 'companyTextOf', 'passwordTitleOf', 'passwordHintOf']) {
+    for (const fn of ['displayNameOf', 'avatarUrlOf', 'hasPendingNicknameOf', 'hasPendingAvatarOf',
+      'accountTextOf', 'phoneTextOf', 'emailTextOf', 'companyTextOf', 'passwordTitleOf', 'passwordHintOf']) {
       expect(flows()).toContain(`export function ${fn}(`);
       expect(read(PAGE)).toContain(`${fn}(authStore.user.value)`);
     }
+    // #2757：微信资料一键填充内联到头像/昵称行后，「用微信资料完善」入口与它的可见性判据一并退役
+    expect(read(PAGE)).not.toContain('wechatFillEntryVisibleOf');
+    expect(read(PAGE)).not.toContain('用微信资料完善');
+    expect(read('utils/wechatProfileFill.uts')).not.toContain('export function wechatFillEntryVisibleOf(');
+    // 昵称弹窗预填走 flows 的纯函数（占位昵称留空），页面不自己判空
+    expect(flows()).toContain('export function nicknamePrefillOf(');
+    expect(read(PAGE)).toContain('nicknamePrefillOf(authStore.user.value)');
   });
 
   it('页面对已搬走符号零悬空使用（编译盲区锁：定义删了调用必须同步）', () => {
@@ -132,12 +139,15 @@ describe('UI 像素结构锁定（重构不动 UI：cells 与弹窗内控件逐�
       expect(p).toContain(`>${t}<`);
     }
     expect(p).toContain('cell-label-danger">注销账号<');
-    expect(p).toContain('<text v-if="hasPending" class="cell-badge">审核中</text>');
+    // #2712：徽标按字段挂（头像 / 昵称各一处），不再共用一个 hasPending
+    expect(p).toContain('<text v-if="hasPendingNickname" class="cell-badge">审核中</text>');
+    expect(p).toContain('<text v-if="hasPendingAvatar" class="cell-badge">审核中</text>');
+    expect(p).not.toContain('v-if="hasPending"');
   });
 
-  it('弹窗内控件形态不变：验证码按钮 ×4、提示行 ×3、确认文案（提交审核/确认/保存）', () => {
+  it('弹窗内控件形态不变：验证码按钮 ×4、提示行 ×4、确认文案（提交审核/确认/保存）', () => {
     expect(p.match(/class="code-btn"/g)).toHaveLength(4);
-    expect(p.match(/class="dialog-tip"/g)).toHaveLength(3);
+    expect(p.match(/class="dialog-tip"/g)).toHaveLength(4);
     expect(p.match(/获取验证码/g)).toHaveLength(4);
     expect(p).toContain('confirm-text="提交审核"');
     expect(p.match(/confirm-text="确认"/g)).toHaveLength(4);

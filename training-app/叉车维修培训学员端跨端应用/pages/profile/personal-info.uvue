@@ -4,19 +4,23 @@
     <scroll-view class="content-scroll" scroll-y="true">
       <!-- 账号信息：原型 307:6234 每行一张独立白卡（行间无分割线，靠 16rpx 间距分组） -->
       <view class="section">
-        <!-- 修改头像 -->
+        <!-- 修改头像：微信登录时整行由透明 chooseAvatar 按钮接管（#2757，微信原生面板含「用微信头像 / 从相册选择」） -->
         <view class="cell" @click="onEditAvatar">
           <text class="cell-label">修改头像</text>
+          <text v-if="hasPendingAvatar" class="cell-badge">审核中</text>
           <view class="cell-avatar-wrap">
             <image class="cell-avatar" :src="avatarUrl.length > 0 ? avatarUrl : '/static/icons/avatar/avatar-default-worker.png'"
               mode="aspectFill" :webp="true" />
           </view>
           <text class="cell-arrow">›</text>
+          <!-- #ifdef MP-WEIXIN -->
+          <button v-if="isWechat" class="cell-wechat-hit" open-type="chooseAvatar" @chooseavatar="onChooseAvatar"></button>
+          <!-- #endif -->
         </view>
         <!-- 昵称（审核流） -->
         <view class="cell" @click="onEditNickname">
           <text class="cell-label">昵称</text>
-          <text v-if="hasPending" class="cell-badge">审核中</text>
+          <text v-if="hasPendingNickname" class="cell-badge">审核中</text>
           <text class="cell-value">{{ userName }}</text>
           <text class="cell-arrow">›</text>
         </view>
@@ -64,7 +68,8 @@
 
     <!-- 修改昵称弹窗 -->
     <InfoDialog :show="showNicknameDialog" title="修改昵称" confirm-text="提交审核" @close="showNicknameDialog = false" @confirm="onSubmitNickname">
-      <input class="input" type="text" placeholder="请输入新昵称（20 字以内）" :maxlength="20" v-model="nicknameInput" />
+      <input class="input" :type="nicknameInputType" placeholder="请输入新昵称（20 字以内）" :maxlength="20" v-model="nicknameInput" />
+      <text v-if="nicknameInputType == 'nickname'" class="dialog-tip">点击输入框后，键盘上方可一键填充微信昵称</text>
       <text class="dialog-tip">昵称提交后需管理员审核，审核通过后生效</text>
     </InfoDialog>
 
@@ -131,7 +136,8 @@
   import type { LoginResult } from '../../types/index'
   import InfoDialog from './components/info-dialog.uvue'
   import {
-    displayNameOf, avatarUrlOf, hasPendingOf, accountTextOf, phoneTextOf,
+    displayNameOf, avatarUrlOf, hasPendingNicknameOf, hasPendingAvatarOf, nicknamePrefillOf,
+    accountTextOf, phoneTextOf,
     emailTextOf, companyTextOf, passwordTitleOf, passwordHintOf, Countdown,
     uploadAvatarFlow, submitNicknameFlow, sendPasswordCodeFlow, submitPasswordFlow,
     sendPhoneCodeFlow, submitPhoneFlow, sendEmailCodeFlow, submitEmailFlow,
@@ -180,7 +186,20 @@
   // ===== 展示文案（纯函数在 flows，此处薄封装） =====
   const userName = computed<string>(() : string => displayNameOf(authStore.user.value))
   const avatarUrl = computed<string>(() : string => avatarUrlOf(authStore.user.value))
-  const hasPending = computed<boolean>(() : boolean => hasPendingOf(authStore.user.value))
+  const hasPendingNickname = computed<boolean>(() : boolean => hasPendingNicknameOf(authStore.user.value))
+  const hasPendingAvatar = computed<boolean>(() : boolean => hasPendingAvatarOf(authStore.user.value))
+  /** 是否微信登录（#2757：决定头像行走 chooseAvatar 还是 chooseImage、昵称输入框是否开微信候选） */
+  const isWechat = computed<boolean>(() : boolean => authStore.loginProvider.value == 'wechat')
+  /**
+   * 昵称输入框 type：微信登录用 `nickname` 让键盘上方出现微信昵称候选（唯一官方一键路径）。
+   * 仅小程序端支持该 type，App 端恒为 text。
+   */
+  const nicknameInputType = computed<string>(() : string => {
+    // #ifdef MP-WEIXIN
+    if (isWechat.value) return 'nickname'
+    // #endif
+    return 'text'
+  })
   const accountText = computed<string>(() : string => accountTextOf(authStore.user.value))
   const phoneText = computed<string>(() : string => phoneTextOf(authStore.user.value))
   const emailText = computed<string>(() : string => emailTextOf(authStore.user.value))
@@ -209,8 +228,24 @@
     uploadingAvatar.value = false
   }
 
+  /** 微信头像选择回调（#2757：button open-type="chooseAvatar" 回传临时路径，直接走既有上传流） */
+  function onChooseAvatar(e : any) : void {
+    if (uploadingAvatar.value) return
+    const evt = e as UTSJSONObject
+    const detail = evt['detail'] as UTSJSONObject
+    if (detail == null) return
+    const url = detail['avatarUrl']
+    if (url != null && (url as string).length > 0) {
+      uploadAvatar(url as string)
+    }
+  }
+
   function onEditAvatar() : void {
     if (uploadingAvatar.value) return
+    // #ifdef MP-WEIXIN
+    // 微信登录：整行由透明 chooseAvatar 按钮接管，这里不再开相册（否则会双开两个面板）
+    if (isWechat.value) return
+    // #endif
     uni.chooseImage({
       count: 1,
       sizeType: ['compressed'],
@@ -228,7 +263,7 @@
 
   // ===== 昵称 =====
   function onEditNickname() : void {
-    nicknameInput.value = userName.value == '同学' ? '' : userName.value
+    nicknameInput.value = nicknamePrefillOf(authStore.user.value)
     showNicknameDialog.value = true
   }
 
@@ -386,12 +421,31 @@
 
   /* 原型 307:6234：每行一张独立白卡（16rpx 圆角 + 16rpx 行距，无分割线） */
   .cell {
+    position: relative;
     flex-direction: row;
     align-items: center;
     padding: 24rpx;
     background-color: $card-bg;
     border-radius: $radius-md;
     margin-bottom: 16rpx;
+  }
+
+  /*
+   * 微信登录时覆盖整行的透明 chooseAvatar 按钮（#2757）。
+   * opacity: 0 同时隐去微信 button 默认的 ::after 边框与底色 —— uvue 不支持伪元素，
+   * 无法用 ::after { border: none } 重置，只能整块透明；点击命中不受影响。
+   */
+  .cell-wechat-hit {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    padding: 0;
+    margin: 0;
+    border-width: 0;
+    background-color: transparent;
+    opacity: 0;
   }
 
   .cell-label {

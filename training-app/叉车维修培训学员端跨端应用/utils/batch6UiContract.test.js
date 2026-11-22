@@ -27,13 +27,12 @@ const read = h.read;
 
 const WHITELIST = require('./uiHexWhitelist');
 
-/** N06 无页头白名单六页（#1592 终审表 + ui-spec §7.1 :307） */
+/** N06 无页头白名单五页（#1592 终审表 + ui-spec §7.1 :307；#2757 下线 profile-setup 后由六页收窄） */
 const N06 = [
   'pages/index/index.uvue',
   'pages/login/login.uvue',
   'pages/register/register.uvue',
   'pages/forgot-password/forgot-password.uvue',
-  'pages/profile-setup/profile-setup.uvue',
   'pages/search/search.uvue',
 ];
 
@@ -78,8 +77,8 @@ function hexViolations(src) {
 }
 
 describe('批6 页面级扫描面完整性（§9 扫描对象 pages/** 的入口件层）', () => {
-  it('入口件枚举为 62 页（页面增删须同步本套件与 #1595 台账，不得静默漂移；#1942 新增积分商城页；#2461 新增历年真题卷列表页；#2518 新增积分兑换记录页与商品详情页；#2593 退役 ai-feature 专项页 ⇒ 64→63；#2621 T5 退役积分商城页 ⇒ 63→62）', () => {
-    expect(PAGES.length).toBe(62);
+  it('入口件枚举为 61 页（页面增删须同步本套件与 #1595 台账，不得静默漂移；#1942 新增积分商城页；#2461 新增历年真题卷列表页；#2518 新增积分兑换记录页与商品详情页；#2593 退役 ai-feature 专项页 ⇒ 64→63；#2621 T5 退役积分商城页 ⇒ 63→62；#2743 新增验收模块 4 页 ⇒ 62→66；#2756 验收模块整模块下线 ⇒ 66→62；#2757 下线 profile-setup 页 ⇒ 62→61）', () => {
+    expect(PAGES.length).toBe(61);
   });
 
   it('N06 六页都在扫描面内（漏一页 = 豁免名单失去真源）', () => {
@@ -127,12 +126,11 @@ describe('批6 全站页面级五硬指标终态（§9，AC②）', () => {
 });
 
 describe('批6 N06 专项（#1592：页面自绘、自垫状态栏走唯一真源）', () => {
-  it('带状态栏占位的 N06 页 = index / login / profile-setup / search 四页（另两页维持系统导航）', () => {
+  it('带状态栏占位的 N06 页 = index / login / search 三页（另两页维持系统导航）', () => {
     const withBar = N06.filter((p) => read(p).includes('class="status-bar"'));
     expect(withBar.sort()).toEqual([
       'pages/index/index.uvue',
       'pages/login/login.uvue',
-      'pages/profile-setup/profile-setup.uvue',
       'pages/search/search.uvue',
     ].sort());
   });
@@ -166,9 +164,9 @@ describe('批6 N06 专项（#1592：页面自绘、自垫状态栏走唯一真�
     }
   });
 
-  it('index 着陆页「已登录冷启动落 dashboard」不变量未被本批动到（#1478，判据 1）', () => {
+  it('index 着陆页「已登录冷启动按身份落地」不变量未被本批动到（#1478 判据 1，落点收口到共享出口）', () => {
     const s = read('pages/index/index.uvue');
-    expect(s).toMatch(/if \(auth\.isLoggedIn\.value\)[\s\S]*?uni\.reLaunch\(\{[\s\S]*?\/pages\/dashboard\/dashboard/);
+    expect(s).toMatch(/if \(auth\.isLoggedIn\.value\)[\s\S]*?uni\.reLaunch\(\{[\s\S]*?landingPathForActiveRole\(\)/);
   });
 
   it('search 顶部行右端「取消」受 capsuleLeft 约束：右 padding = 750 − capsuleLeft + 24（#1845）', () => {
@@ -192,21 +190,20 @@ describe('批6 N06 专项（#1592：页面自绘、自垫状态栏走唯一真�
     expect(s).toMatch(/:style="searchHeaderStyle"/);
   });
 
-  it('N06 负面机检：其余自绘三页头部区不得长出可点元素形态（#1845 复审）', () => {
-    // 头部段口径（按 2026-10-24 三页现状锚定）：自 class="status-bar" 占位起、至各自
-    // 内容区起点类止（index=.hero、login=.form、profile-setup=.section）——三页该段现状
-    // 为居中 logo/标题（login/profile-setup=.header；index 的「欢迎页」胶囊已于 2026-11-14
+  it('N06 负面机检：其余自绘两页头部区不得长出可点元素形态（#1845 复审）', () => {
+    // 头部段口径（按 2026-10-24 现状锚定，2026-11-21 #2757 下线 profile-setup 后由三页收窄为两页）：
+    // 自 class="status-bar" 占位起、至各自内容区起点类止（index=.hero、login=.form）——两页该段现状
+    // 为居中 logo/标题（login=.header；index 的「欢迎页」胶囊已于 2026-11-14
     // 按设计稿 781_75.png 删除，该段现只剩状态栏占位），零可点元素。
-    // 段内出现 @click/@tap 即红：三页是自绘头部、无页头件的胶囊让位保护，头部右端长出
+    // 段内出现 @click/@tap 即红：两页是自绘头部、无页头件的胶囊让位保护，头部右端长出
     // 可点元素就会顶进胶囊矩形；将来真要长，正路是 search 先例的 capsuleLeft 内联让位
     //（见上两条 #1845 断言），届时须先改本断言补让位判据、不得静默长出。
     // 宽口径说明：不分左右端（@tap 仓内确有使用，如 personal-activity 的列表项），
-    // 现三页头部段 0 命中、无误差代价；锚点缺失或错位同样判红（fail-closed，
+    // 现两页头部段 0 命中、无误差代价；锚点缺失或错位同样判红（fail-closed，
     // 模板重构必须带着本断言一起改）。
     const zones = [
       ['pages/index/index.uvue', 'class="hero"'],
       ['pages/login/login.uvue', 'class="form"'],
-      ['pages/profile-setup/profile-setup.uvue', 'class="section"'],
     ];
     const bad = [];
     for (const [p, contentMarker] of zones) {
@@ -236,9 +233,9 @@ describe('批6 mall 补漏（裁定 A：#1595 台账行 25 判 N03，批3 清单
     expect(s).not.toContain('useStatusBarHeight');
   });
 
-  it('右槽跨小程序 navigator 功能不丢（app-id 与素材路径原样迁入手 #right 槽）', () => {
+  it('跨小程序 navigator 功能不丢（app-id 与素材路径原样迁入 #toolbar 槽，#2761 起右槽恒空）', () => {
     const s = read(MALL);
-    expect(s).toMatch(/<template #right>[\s\S]*?target="miniProgram"[\s\S]*?app-id="wx56ce2775c2b3aea8"[\s\S]*?<\/template>/);
+    expect(s).toMatch(/<template #toolbar>[\s\S]*?target="miniProgram"[\s\S]*?app-id="wx56ce2775c2b3aea8"[\s\S]*?<\/template>/);
     expect(s).toContain('/static/icons/易拉宝-006 1-1.png');
   });
 

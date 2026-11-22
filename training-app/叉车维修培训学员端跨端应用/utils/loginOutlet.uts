@@ -18,10 +18,29 @@
  * 「全仓不存在第二套登录成功跳转」由 `utils/landingLoginContract.test.js` 锁。
  */
 
+import { isRecruiterActive } from './authRole'
+
+/**
+ * 已登录启动时的落地路径 —— **按当前身份分流**（ADR-0022 ②/⑤）
+ *
+ * 为什么必须分流：招聘者与学员共用 `auth_token` 槽，而冷启动首屏是学员着陆页
+ * （`pages.json` 第一项 `pages/index/index`）。只判「有没有 token」会把一个合法的招聘者
+ * 会话送进学员首页，那里每个学员能力端点（`CapStudentAccess` / `favorite.manage` …）
+ * 都回 403「权限不足」—— 用户看到的是「登录后进学员端就没权限」。
+ *
+ * 角色判定读 `utils/authRole.uts`（`auth_active_role`，缺省 = 学员），与 401 出口同一真源。
+ */
+export function landingPathForActiveRole() : string {
+    if (isRecruiterActive()) return '/pages/recruiter/home'
+    return '/pages/dashboard/dashboard'
+}
+
 /**
  * 登录成功后的落地分叉。
- * @param isNew 后端 `/auth/wx-login` 回的 `is_new`：新用户**必须**仍走 choose-cert（票面判据 4），
- *              老用户才直接进 dashboard。
+ * @param isNew 后端 `/auth/wx-login` 回的 `is_new`：新用户先到证件选择页（#1478 票面判据 4），
+ *              老用户直接进 dashboard。
+ *              #2757 起不再经「完善资料」中转页 —— 微信昵称/头像的一键填充已内联到个人信息页
+ *              的头像行与昵称行，新用户不必在登录后被拦一道。
  */
 export function afterLoginSuccess(isNew : boolean) : void {
     if (isNew) {

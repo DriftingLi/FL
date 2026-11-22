@@ -127,6 +127,18 @@ func (s *ProfileReviewService) GetPendingForUser(userID int) (*ProfileChangeRequ
 	return s.toDTO(&req, &user), nil
 }
 
+// GetPendingFieldsForUser 查询用户所有待审请求涉及的字段类型（按提交顺序，去重）。
+// 与 GetPendingForUser 的单条语义互补：后者给「最新一条」的展示对象，本方法给逐字段判据。
+func (s *ProfileReviewService) GetPendingFieldsForUser(userID int) ([]string, error) {
+	var fields []string
+	if err := s.db.Model(&model.ProfileChangeRequest{}).
+		Where("user_id = ? AND status = ?", userID, model.ProfileStatusPending).
+		Order("id ASC").Pluck("field_type", &fields).Error; err != nil {
+		return nil, err
+	}
+	return fields, nil
+}
+
 // reviewRequestRow 列表查询的扫描结构（JOIN hrwai_users 后 Scan 到自定义行）。
 type reviewRequestRow struct {
 	ID           int64

@@ -1,11 +1,13 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <app-nav-bar :title="detail != null ? detail!.title : '章节学习'" variant="inverse" @left-click="onBack">
-            <template #right>
-                <!-- 收藏 / 取消（#1140）：与课程详情同形；两态都必须有可见字形（空串观感上等于没有收藏功能） -->
-                <view class="nav-action" @click="toggleFavorite">
+        <app-nav-bar :title="detail != null ? detail!.title : '章节学习'" variant="inverse" @left-click="onBack"
+            :show-toolbar="true">
+            <template #toolbar>
+                <!-- 收藏 / 取消（#1140）：与课程详情同形；两态都必须有可见字形（空串观感上等于没有收藏功能）。
+                     #2761：右槽恒空（侧槽脱流后右槽内容会盖在居中标题上），动作下沉第二行。 -->
+                <app-icon-button @click="toggleFavorite">
                     <text class="favorite-icon">{{ isFavorited ? '♥' : '♡' }}</text>
-                </view>
+                </app-icon-button>
             </template>
         </app-nav-bar>
 
@@ -374,13 +376,7 @@ import { goBack } from '../../utils/navigation'
         flex-direction: column;
     }
 
-    .nav-action {
-        width: 64rpx;
-        height: 64rpx;
-        align-items: center;
-        justify-content: center;
-    }
-
+    /* 票 2730 第 1 项：88rpx 命中盒 / 64rpx 承载面由 components/app-icon-button 承担，本处只留字形。 */
     /* 收藏位字形（#1140）：与 course-detail.uvue 的 .favorite-icon 同值（40rpx / 白），
        未收藏态渲染 '♡' 而不是空串 —— 空串观感上等于「这页没有收藏功能」（#1087 的教训） */
     .favorite-icon {

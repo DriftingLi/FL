@@ -18,8 +18,8 @@
  *   原先是「出口家族没有 `putMapped` ⇒ 手写 `opts.url` + `opts.method = 'PUT'` + `opts.data` 三步」的
  *   长径，#1734 让 `putMapped(url, data, map)` 承担同一通路，调用点只剩方法/路径/载荷/mapper。
  *   显式 DTO `ProfileChangeRequest` 与 `buildReviewRequest` 术前已在位，
- *   本票只收紧管道、签名一字未动 ⇒ **七个调用点、三个文件**（`profile-setup.uvue:125/143`、
- *   `personal-info-flows.uts:92/141/316`、`profile.uvue:231/274`）全部 `await` 后丢弃返回值，零页面适配。
+ *   本票只收紧管道、签名一字未动 ⇒ **五个调用点、两个文件**（`personal-info-flows.uts:92/141/316`、
+ *   `profile.uvue:231/274`；#2757 下线 profile-setup 页后由七处三文件收窄）全部 `await` 后丢弃返回值，零页面适配。
  * - **裸出口白名单（T15 批 B #653 登记）**：`uploadAvatarApi` 留裸 `uploadFile` —— multipart 上传在
  *   T01 #639 的出口家族里没有 mapped 便捷面（mapped 家族只覆盖 JSON 体的
  *   requestMapped / getMapped / postMapped / putMapped / patchMapped），硬套需在
@@ -100,6 +100,11 @@ function buildUserInfo(obj : UTSJSONObject) : UserInfo {
 		}
 		// pending_profile_change 非空即存在待审核的资料修改（昵称/头像）
 		user.has_pending_change = obj['pending_profile_change'] != null
+		// pending_fields：逐字段待审（#2712 加法字段，值域 nickname / avatar）；老后端不返回该键 ⇒ 不设置
+		const pendingFieldsRaw = obj['pending_fields']
+		if (pendingFieldsRaw != null) {
+			user.pending_fields = pendingFieldsRaw as Array<string>
+		}
 		return user
 	} catch (e) {
 		// 打印完整异常对象，便于定位是哪个字段转换失败

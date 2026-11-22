@@ -27620,6 +27620,12 @@ const docTemplate = `{
                     "type": "string",
                     "x-optional": true
                 },
+                "pending_fields": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "pending_profile_change": {
                     "allOf": [
                         {
