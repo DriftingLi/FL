@@ -41,7 +41,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
-from urllib.parse import quote
+from urllib.parse import parse_qs, quote, unquote, urlsplit
 
 # deploy/ 目录加入 sys.path 以支持 importlib 加载场景（测试用 spec_from_file_location）
 _deploy_dir = str(Path(__file__).resolve().parent)
@@ -449,6 +449,48 @@ class Deployer:
         self.db_user = getenv("DB_USER", "forklift")
         self.db_password = getenv("DB_PASSWORD")
         self.db_name = "forklift_training"
+        saved = {}
+        if self.env_file.is_file() and mode != "local":
+            saved = parse_env_text("\n".join(
+                f"export {line}" for line in self.env_file.read_text(encoding="utf-8").splitlines()
+                if line.startswith(("DB_MODE=", "DATABASE_URL=", "POSTGRES_IMAGE=", "PG_VOLUME="))
+            ))
+        self.postgres_image = getenv("POSTGRES_IMAGE") or saved.get("POSTGRES_IMAGE") or "postgres:18-alpine"
+        self.pg_volume = os.environ.get("PG_VOLUME") or saved.get("PG_VOLUME") or getenv("PG_VOLUME", "pgdata-prod")
+        self.db_mode = getenv("DB_MODE") or saved.get("DB_MODE") or "docker"
+        if self.db_mode not in ("docker", "external"):
+            raise DeployError("DB_MODE 必须为 docker 或 external")
+        self.external_db_url = ""
+        if self.db_mode == "external":
+            self.external_db_url = os.environ.get("DATABASE_URL", saved.get("DATABASE_URL", ""))
+            try:
+                uri = urlsplit(self.external_db_url)
+                options = parse_qs(uri.query)
+                port = uri.port or 5432
+                valid = (uri.scheme in ("postgresql", "postgres") and uri.hostname
+                         and "," not in uri.hostname and uri.username and uri.password
+                         and uri.path == "/forklift_training"
+                         and set(options) == {"sslmode", "sslrootcert"}
+                         and options.get("sslmode") == ["verify-full"]
+                         and options.get("sslrootcert") == ["/etc/forklift/postgres-ca.crt"])
+            except ValueError:
+                valid = False
+            if not valid:
+                raise DeployError("外部数据库要求 forklift_training、verify-full 和 /etc/forklift/postgres-ca.crt")
+            self.external_pg_settings = {
+                "PGHOST": uri.hostname,
+                "PGPORT": str(port),
+                "PGDATABASE": self.db_name,
+                "PGUSER": unquote(uri.username),
+                "PGPASSWORD": unquote(uri.password),
+                "PGSSLMODE": "verify-full",
+                "PGSSLROOTCERT": "/etc/forklift/postgres-ca.crt",
+                "PGCONNECT_TIMEOUT": "5",
+            }
+            if opts.remove_orphans or opts.force_data_services:
+                raise DeployError("外部数据库模式禁止移除孤儿容器或重建数据服务")
+            if {"*", "retained-postgres"}.intersection(self.profiles):
+                raise DeployError("外部数据库模式不能启用保留的 PostgreSQL 容器")
 
     # ---------------------------------------------------------------- 基础
     def _to_proxy(self, image: str) -> str:
@@ -476,6 +518,8 @@ class Deployer:
         if self.env_file.exists():
             cmd += ["--env-file", str(self.env_file)]
         cmd += ["-f", str(self.compose_file)]
+        if self.db_mode == "external":
+            cmd += ["-f", str(self.compose_file.with_name("docker-compose.external-db.yml"))]
         cmd += self.compose_project_args
         for profile in self.profiles:
             cmd += ["--profile", profile]
@@ -602,6 +646,8 @@ class Deployer:
             return
         managed = {line.strip() for line in (ps.stdout or "").splitlines() if line.strip()}
         for name in names & set(KNOWN_CONTAINERS):
+            if name == "forklift-pg-prod" and getattr(self, "db_mode", "docker") == "external":
+                continue
             # docker ps -aq 默认给 12 位短 ID，compose ps -q 给 64 位完整 ID；
             # 直接比较字符串会把本项目容器误判成「另一个 compose 项目」（2026-10-27 实测）。
             cid = self.run(["docker", "ps", "-aq", "--filter", f"name=^/{name}$"],
@@ -641,7 +687,9 @@ class Deployer:
         def add(name: str, value: str) -> None:
             lines.append(f"{name}={value}")
 
-        add("DATABASE_URL", env_val(gv("DATABASE_URL")))
+        add("DB_MODE", getattr(self, "db_mode", "docker"))
+        add("POSTGRES_IMAGE", getattr(self, "postgres_image", "postgres:18-alpine"))
+        add("DATABASE_URL", env_val(getattr(self, "external_db_url", "") or gv("DATABASE_URL")))
         add("DB_USER", env_val(gv("DB_USER", "forklift")))
         add("DB_PASSWORD", env_val(self.db_password))
 
@@ -701,7 +749,7 @@ class Deployer:
         add("R2_PUBLIC_DOMAIN", env_val(gv("R2_PUBLIC_DOMAIN")))
         add("EDGE_ORIGIN_TOKEN", env_val(gv("EDGE_ORIGIN_TOKEN")))
         add("BACKEND_HOST_PORT", gv("BACKEND_HOST_PORT", "8080"))
-        add("PG_VOLUME", gv("PG_VOLUME", "pgdata-prod"))
+        add("PG_VOLUME", getattr(self, "pg_volume", "") or gv("PG_VOLUME", "pgdata-prod"))
         add("UPLOADS_VOLUME", gv("UPLOADS_VOLUME", "uploads-data"))
         add("REPORTS_VOLUME", gv("REPORTS_VOLUME", "reports-data"))
         add("LOGS_VOLUME", gv("LOGS_VOLUME", "logs-data"))
@@ -980,7 +1028,7 @@ class Deployer:
                 continue
             if not self._pull_one(name, image):
                 raise DeployError(f"{name}镜像拉取失败: {image}")
-        for base in ("postgres:18-alpine",):
+        for base in (() if self.db_mode == "external" else (self.postgres_image,)):
             if self.image_exists(base):
                 log_ok(f"基础镜像已缓存: {base}")
                 continue
@@ -992,6 +1040,8 @@ class Deployer:
 
     # ---------------------------------------------------------------- 数据服务
     def plan_data(self) -> List[Decision]:
+        if self.db_mode == "external":
+            return []
         hashes = self.compose_config_hashes(list(DATA_SERVICES))
         states = {name: self.service_state(name) for name in DATA_SERVICES}
         return plan_decisions(
@@ -1003,6 +1053,8 @@ class Deployer:
         )
 
     def apply_data(self, decisions: List[Decision]) -> None:
+        if self.db_mode == "external":
+            return
         blocked = [d for d in decisions if d.action == "blocked"]
         if blocked:
             detail = "；".join(f"{d.service}: {d.reason}" for d in blocked)
@@ -1021,6 +1073,10 @@ class Deployer:
 
     def wait_postgres(self) -> bool:
         log_info(">>> 等待数据库就绪...")
+        if self.db_mode == "external":
+            self._db_version()
+            log_ok("外部数据库就绪")
+            return True
         for _ in range(15):
             cid = self.compose_ps_id("postgres")
             if cid:
@@ -1065,8 +1121,10 @@ class Deployer:
         db_file = self.backup_dir / f"db_backup_{stamp}.sql.gz"
         self.backup_dir.mkdir(parents=True, exist_ok=True)
 
-        pg_id = self.compose_ps_id("postgres")
-        if pg_id:
+        pg_id = "" if self.db_mode == "external" else self.compose_ps_id("postgres")
+        if self.db_mode == "external":
+            self._backup_external_db(db_file)
+        elif pg_id:
             log_info("备份数据库（pg_dump + gzip）...")
             proc = subprocess.Popen(
                 ["docker", "exec", pg_id, "pg_dump", "-U", self.db_user, "-d", self.db_name],
@@ -1153,12 +1211,47 @@ class Deployer:
         value = (cp.stdout or "").strip()
         return int(value) if value.isdigit() else 0
 
+    def _external_pg(self, program: str, args: List[str], timeout: int) -> str:
+        env = {key: value for key, value in os.environ.items() if not key.startswith("PG")}
+        env.update(self.external_pg_settings)
+        try:
+            result = subprocess.run(
+                [f"/usr/lib/postgresql/19/bin/{program}", "-w", *args],
+                env=env, capture_output=True, text=True, timeout=timeout,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            raise DeployError(f"外部数据库 {program} 失败，请检查 PostgreSQL 19 客户端及网络") from None
+        if result.returncode:
+            raise DeployError(f"外部数据库 {program} 失败，请检查连接、认证及权限")
+        return result.stdout
+
+    def _backup_external_db(self, db_file: Path) -> None:
+        with tempfile.TemporaryDirectory(dir=self.backup_dir) as temp:
+            raw = Path(temp) / "database.sql"
+            self._external_pg("pg_dump", ["-f", str(raw)], self.backup_wait_timeout)
+            archive = Path(temp) / db_file.name
+            with raw.open("rb") as source, gzip.open(archive, "wb", compresslevel=9) as dest:
+                shutil.copyfileobj(source, dest)
+            archive.chmod(0o600)
+            archive.replace(db_file)
+        log_ok(f"外部数据库备份完成: {db_file}")
+
     def _db_url(self) -> str:
         user = quote(self.db_user, safe="")
         password = quote(self.db_password or "", safe="")
         return f"postgres://{user}:{password}@localhost:5432/{self.db_name}?sslmode=disable"
 
     def _db_version(self) -> int:
+        if self.db_mode == "external":
+            state = self._external_pg("psql", ["-XAt", "-c",
+                "SELECT version, dirty FROM schema_migrations LIMIT 2"], 10)
+            match = re.fullmatch(r"(\d+)\|([tf])", state.strip())
+            if not match:
+                raise DeployError("外部数据库 schema_migrations 状态不可用")
+            version = int(match[1])
+            if match[2] == "t":
+                raise DeployError(f"外部数据库迁移处于 dirty 状态（版本 {version}）")
+            return version
         pg_id = self.compose_ps_id("postgres")
         if not pg_id:
             return 0
@@ -1177,6 +1270,9 @@ class Deployer:
         log_info(f">>> 迁移兼容性预检: {image}")
         img_max = self._image_max_migration(image)
         if img_max is None:
+            if self.db_mode == "external":
+                log_error("无法读取镜像迁移版本，拒绝对外部数据库部署")
+                return False
             log_warn(f"本地无镜像 {image}，无法读取迁移版本，跳过预检")
             return True
         db_ver = self._db_version()
@@ -1198,6 +1294,9 @@ class Deployer:
 
     def fix_dirty_state(self) -> None:
         log_info(">>> 检查数据库迁移状态...")
+        if self.db_mode == "external":
+            self._db_version()
+            return
         pg_id = self.compose_ps_id("postgres")
         if not pg_id:
             log_warn("PostgreSQL 容器未运行，跳过 dirty 检查")
@@ -1234,16 +1333,23 @@ class Deployer:
             log_info(">>> 跳过数据库迁移（SKIP_MIGRATION / --skip-migrate）")
             return True
         log_info(">>> 执行数据库迁移...")
-        pg_id = self.compose_ps_id("postgres")
-        if not pg_id:
-            raise DeployError("PostgreSQL 容器未运行，无法迁移")
-        url = self._db_url()
-        log_info(f"运行迁移: {self.backend_ref} /app/bin/migrate up")
-        cp = self.run(
-            ["docker", "run", "--rm", "--network", f"container:{pg_id}",
-             "-e", f"DATABASE_URL={url}", self.backend_ref, "/app/bin/migrate", "up"],
-            check=False,
-        )
+        if self.db_mode == "external":
+            self._db_version()
+            cp = self.run(self._compose() + [
+                "run", "-T", "--rm", "--no-deps", "--entrypoint", "/app/bin/migrate",
+                "backend", "up",
+            ], check=False)
+        else:
+            pg_id = self.compose_ps_id("postgres")
+            if not pg_id:
+                raise DeployError("PostgreSQL 容器未运行，无法迁移")
+            url = self._db_url()
+            log_info(f"运行迁移: {self.backend_ref} /app/bin/migrate up")
+            cp = self.run(
+                ["docker", "run", "--rm", "--network", f"container:{pg_id}",
+                 "-e", f"DATABASE_URL={url}", self.backend_ref, "/app/bin/migrate", "up"],
+                check=False,
+            )
         if cp.returncode == 0:
             log_ok("数据库迁移完成")
             return True
@@ -1454,7 +1560,7 @@ class Deployer:
         self.capture_previous_images()
 
         backup_thread: Optional[threading.Thread] = None
-        if self.mode != "local" and not self.skip_backup:
+        if self.mode != "local" and not self.skip_backup and self.db_mode != "external":
             backup_thread = threading.Thread(target=self._backup_once, name="deploy-backup", daemon=True)
             backup_thread.start()
 
@@ -1465,6 +1571,8 @@ class Deployer:
             data_decisions = self.plan_data()
             self.apply_data(data_decisions)
             self.wait_postgres()
+            if self.db_mode == "external" and not self.skip_backup:
+                self._create_backup()
 
             if not self.preflight_migration_check(self.backend_ref):
                 raise DeployError("迁移预检失败，终止部署（避免后端因缺少迁移文件崩溃循环）")
@@ -1596,12 +1704,17 @@ class Deployer:
 
         self.health_check()
         log_ok("回滚成功")
+        if self.db_mode == "external":
+            log_info("如需恢复外部数据库，请按 PostgreSQL 19 恢复流程操作")
+            return
         log_info("如需恢复数据库，可执行：")
         log_info(f"  gunzip -c {self.backup_dir}/db_backup_*.sql.gz | docker exec -i $(docker compose -f {self.compose_file} ps -q postgres) "
                  f"psql -U {self.db_user} -d {self.db_name}")
 
     # ---------------------------------------------------------------- down
     def compose_down(self) -> None:
+        if self.db_mode == "external":
+            raise DeployError("外部数据库模式不支持整栈 down，请显式停止需要维护的应用服务")
         self.run(self._compose() + ["down"])
         log_ok("容器已停止（命名卷保留）")
 

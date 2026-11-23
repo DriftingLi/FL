@@ -8,11 +8,12 @@
             <view class="more-item" @click="onToggleFavorite">
                 <text :class="favorited ? 'more-item-text more-item-text-favorited' : 'more-item-text'">{{ favorited ? '取消收藏' : '收藏' }}</text>
             </view>
-            <!-- 三态互斥与页头旧工具栏逐字同源（#2771）：作者见删除，其余见举报 -->
+            <!-- 删除/编辑各自按权限出项（#2771 收编页头动作）：作者同时见两者 ——
+                 旧页头工具栏的 `canEdit && !canDelete` 互斥会把编辑吃成死分支；举报只给非作者 -->
             <view v-if="canDelete" class="more-item" @click="onDelete">
                 <text class="more-item-text more-item-text-danger">删除</text>
             </view>
-            <view v-if="canEdit && !canDelete" class="more-item" @click="onEdit">
+            <view v-if="canEdit" class="more-item" @click="onEdit">
                 <text class="more-item-text">编辑</text>
             </view>
             <view v-if="!canDelete && !canEdit" class="more-item" @click="onReport">

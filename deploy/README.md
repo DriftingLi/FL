@@ -8,7 +8,7 @@
 | 文件 | 作用 |
 | --- | --- |
 | `deploy.py` | 部署 CLI：按变更重启、迁移、回滚、健康检查、测试环境 down |
-| `docker-compose.prod.yml` | 生产编排（postgres / libreoffice / backend / frontend） |
+| `docker-compose.prod.yml` / `docker-compose.external-db.yml` | 基础编排及外部 PostgreSQL 覆盖配置 |
 | `env.defaults` | 部署默认值生成物（唯一事实源 `backend/internal/deploy/topology.go`；`cd backend && go run ./cmd/gen-deploy`） |
 | `setup-server.sh` | 服务器首次初始化（Docker / 部署用户 / 目录 / 防火墙 / cron） |
 | `lxc-install-docker.sh` / `lxc-setup-ssh.sh` | LXC 容器内 Docker / SSH 初始化 |
@@ -96,6 +96,14 @@ name: ${COMPOSE_PROJECT_NAME:-forklift-training}
 
 命名卷仍是 `forklift-training_pgdata-prod` 等（`redisdata-prod` 随 #2109 退役）。生产实际用的是 environment secret `PG_VOLUME=/srv/ceph/pgdata18`（RBD 挂载），见下一节升级 runbook。
 换宿主机想换项目名时，显式设置 `COMPOSE_PROJECT_NAME`（并在迁移数据卷前确认）。
+
+## 生产迁库：PostgreSQL 18 → pve-01 LXC PostgreSQL 19.0
+
+1. 登记固定地址和 DNS 后，在 pve-01 创建 Debian 13 非特权 LXC，配置 2 vCPU、2 GiB RAM、20 GiB `local-lvm` 根卷与 `vmbr0`。用 PGDG 安装 PostgreSQL 19.0。建库显式指定 `--encoding=UTF8`，核对源库的 locale 设置，配置 `pg_stat_statements`、SCRAM、TLS 和网络访问控制。pve-02 安装 PostgreSQL 19 客户端，将签发数据库服务证书的 CA 写入 `/etc/forklift/postgres-ca.crt`，确保应用容器用户可读。
+2. 先用 PostgreSQL 19 客户端演练 `pg_dump -Fc` 和 `pg_restore --exit-on-error`。显式建角色，核对所有权、授权和库级设置。对比迁移状态、关键表行数、序列、文本排序和唯一约束。用生产镜像、隔离的应用环境和实际发行链路验证后端启动、读写、迁移与发布前备份。testing Docker 使用独立 `pgdata-testing-19` 卷。
+3. 将基础备份与持续 WAL 归档存入独立 NFS `backup-nfs`。pve-01 故障时，先确认原库无法继续写入，在 pve-02 本地盘仅用 NFS 副本恢复，再将数据库服务入口切到恢复节点。切流前计时验证定点恢复、TLS 连通和应用探活。每日逻辑备份在 `/etc/forklift-backup.env` 设置 `DB_MODE=external` 和 `PGSERVICEFILE`。服务文件权限为 0600，默认服务名 `forklift-backup`，包含连接参数和证书校验配置。核对 RGW 与远端副本。旧库的备份和快照先保留。
+4. 维护窗口内暂停 CD，暂停所有写入方，包括启用时的采集器。确认停写后重做最终导出和恢复。production 环境变量设 `DB_MODE=external`，同环境 secret `DATABASE_URL` 指向新库，形式为 `postgresql://用户:编码后的密码@数据库域名/forklift_training?sslmode=verify-full&sslrootcert=/etc/forklift/postgres-ca.crt`。执行已验证的生产部署，并在放开写入前通过只读探活。采集器启用时使用同一覆盖配置重新创建。确认生产连接和备份均指向新库后停止旧 PostgreSQL 容器，保留原卷。
+5. 开放写入前失败时，显式将 production 的 `DB_MODE` 改回 `docker`，确认 `PG_VOLUME` 指向原 RBD 挂载路径后重新部署。开放写入后优先恢复 PostgreSQL 19。回切 18 前须先对账和转移新库写入。外部模式的应用回滚仍使用该外部库，终止发布时保留底层数据库。
 
 ## 大版本升级：PostgreSQL 15 → 18（一次性 runbook，#2109）
 
