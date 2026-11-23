@@ -1,22 +1,14 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <app-nav-bar title="帖子详情" variant="inverse" @left-click="onBack" :show-toolbar="true">
-            <template #toolbar>
-                <!-- #2761：右槽恒空（侧槽脱流后右槽内容会盖在居中标题上），三态动作下沉第二行。 -->
-                <view class="nav-action" v-if="canDelete" @click="onDelete">
-                    <text class="header-action-danger">删除</text>
-                </view>
-                <view class="nav-action" v-if="canEdit && !canDelete" @click="onEditTopic">
-                    <text class="header-action">编辑</text>
-                </view>
-                <view class="nav-action" v-if="!canDelete && !canEdit" @click="onReportTopicClick">
-                    <text class="header-action">举报</text>
-                </view>
-            </template>
-        </app-nav-bar>
+        <!-- #2771：页头只留标题行 —— 原第二行工具栏（删除/编辑/举报）整行删除，
+             三态动作与收藏一起收进标题行右侧的「···」菜单，页头不再留空行。 -->
+        <app-nav-bar title="帖子详情" variant="inverse" @left-click="onBack" />
 
-        <!-- 「···」菜单（票 2767）：收藏 / 取消收藏；触发按钮在标题行右侧，浮层与遮罩在组件内 -->
-        <ForumMoreMenu ref="moreMenuRef" :favorited="tFavorited" @toggle-favorite="onToggleFavorite" />
+        <!-- 「···」菜单（票 2767；#2771 收编页头动作）：收藏 / 删除 / 编辑 / 举报；
+             触发按钮在标题行右侧，浮层与遮罩在组件内 -->
+        <ForumMoreMenu ref="moreMenuRef" :favorited="tFavorited" :can-delete="canDelete"
+            :can-edit="canEdit" @toggle-favorite="onToggleFavorite" @delete-topic="onDelete"
+            @edit-topic="onEditTopic" @report-topic="onReportTopicClick" />
 
         <scroll-view class="content-scroll" scroll-y="true">
             <!-- 加载中 -->
@@ -26,7 +18,7 @@
 
             <!-- 帖子内容（票 2767 顺序）：标题 → 正文 → 标签 → 作者行 → 统计行 -->
             <view v-if="topic != null" class="topic-section">
-                <!-- 标题行：标题两行截断 + 右侧「···」（收藏入口；导航栏右槽是小程序胶囊区） -->
+                <!-- 标题行：标题两行截断 + 右侧「···」（收藏/删除/编辑/举报入口；导航栏右槽是小程序胶囊区） -->
                 <view class="topic-title-row">
                     <text v-if="tTitle.length > 0" class="topic-title" lines="2">{{ tTitle }}</text>
                     <text class="title-more" @click="onOpenMoreMenu">···</text>
@@ -468,23 +460,6 @@ import { goBack } from '../../utils/navigation'
         background: linear-gradient(to bottom, $gradient-start, $gradient-mid);
         background-color: $gradient-mid;
         flex-direction: column;
-    }
-
-    .nav-action {
-        width: 88rpx;
-        height: 88rpx;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .header-action-danger {
-        font-size: 28rpx;
-        color: #ffcdd2;
-    }
-
-    .header-action {
-        font-size: 26rpx;
-        color: #ffffff;
     }
 
     .content-scroll {
