@@ -430,13 +430,14 @@ describe('页头形态（#2442 / #2761）', () => {
     const forum = h.read('pages/forum/forum.uvue');
     expect(forum).toMatch(/<template #left>[\s\S]*?msg-icon-wrap/);
     expect(forum).not.toMatch(/<template #right>/);
-    // #2479 D5：dashboard 的 🔔 下沉（通知入口另有 forum / profile / resume 三处），
-    // 证件切换改挂显式 @title-click —— 左右槽都清空，标题才居中在屏幕中心。
+    // dashboard 的证件、搜索、商城统一下移到独立业务栏；
+    // AppNavBar 左右槽保持为空，不把证件或动作塞回页头。
     const dash = h.read('pages/dashboard/dashboard.uvue');
     expect(dash).not.toMatch(/<template #left>/);
     expect(dash).not.toMatch(/nav-bell/);
-    expect(dash).toMatch(/@title-click="onCertTap"/);
     expect(dash).not.toMatch(/:right-icons=/);
+    expect(dash).toMatch(/class="credential-bar"/);
+    expect(dash).toMatch(/class="credential-picker"[^>]*@click="onCertTap"/);
   });
 
   it('全页右槽必须空（#2761：侧槽脱流后右槽内容会盖在居中标题上）', () => {

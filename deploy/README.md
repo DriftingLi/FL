@@ -232,6 +232,11 @@ $COMPOSE up -d postgres
 
 ## 巡检脚本与 systemd 单元（forklift-watchdog）
 
+生产使用外部 PostgreSQL 时，巡检从部署 `.env` 读取 `DB_MODE`，使用
+`/etc/forklift/postgres-backup.service.conf` 的 TLS 服务配置执行只读探针。
+在生产巡检配置中设置 `WATCH_REMOTE_HOST=root@pve-01` 和 `WATCH_REMOTE_LXC=103`，
+同时检查数据库 LXC 的磁盘、WAL 归档计时器和最近一次归档巡检结果。
+
 `forklift-watchdog.sh` 与 `systemd/` 下的三个单元随 CD **上传**到 `$DEPLOY_PATH/deploy/`，
 但**不会**自动装进系统 —— 写入 `/usr/local/bin` 与 `/etc/systemd/system/` 是系统级动作，
 仍由人工执行（脚本头注释里有完整命令）。

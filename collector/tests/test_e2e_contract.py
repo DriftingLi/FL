@@ -57,10 +57,10 @@ class CollectorBatchE2EContractTest(unittest.TestCase):
         # 执行真实迁移文件（不是复制 DDL）：000063 建样本表，000064 加标记列 + 队列，
         # 000065 加清洗版本列（#2674），000066 加匹配版本列（#2675），
         # 000067 建未匹配待审队列视图（#2676）。
-        pg_fixture.apply_market_migrations(cls.conn)
+        pg_fixture.apply_migrations(cls.conn)
         # 最小 original_prices / ai_configs / ai_feature_bindings 形状（镜像 000001
         # baseline 被读取的列），让「PG 直读候选原价」与「直读 AI 配置」在本 schema 内可断言。
-        pg_fixture.create_stub_tables(cls.conn)
+        pg_fixture.seed_test_data(cls.conn)
         cls.psycopg = __import__("psycopg")
 
     @classmethod

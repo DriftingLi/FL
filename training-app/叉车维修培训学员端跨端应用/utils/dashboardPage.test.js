@@ -89,14 +89,23 @@ function menuEntries() {
 }
 
 describe('首页格式契约（对照设计稿截图）', () => {
-  it('顶部导航只留证件标题（#2479：🔔 移出页头 —— 一级页左右槽都不承载页级动作，标题才能居中于屏幕中心）', () => {
-    // 历史 bug（#1602 前）是「挂着的图标字形为空 ⇒ 图标消失」；#2479 后页头不再挂第二个入口，
-    // 判据随之从「字形非空」改成「页头不含页级动作」——入口另有论坛 / 个人中心 / 简历三处。
+  it('证件、搜索、商城下移到独立业务栏，页头不承载证件或动作', () => {
     expect(template).not.toMatch(/<template #left>/);
     expect(template).not.toMatch(/nav-bell/);
     expect(template).not.toMatch(/onNotificationClick/);
     expect(template).not.toMatch(/:right-icons="/);
-    expect(template).toMatch(/<AppNavBar[^>]*@title-click="onCertTap"/);
+    expect(template).toContain('class="credential-bar"');
+    expect(template).toContain('class="credential-picker"');
+    expect(template).toContain('@click="onHeaderSearch"');
+    expect(template).toContain('@click="onHeaderMall"');
+  });
+
+  it('证件胶囊尺寸与文字箭头保持统一，浅蓝胶囊可容纳动态证件名', () => {
+    expect(styleBlock).toMatch(/\.credential-picker\s*\{[^}]*height:\s*72rpx/);
+    expect(styleBlock).toMatch(/\.credential-picker\s*\{[^}]*background-color:\s*\$primary-tint/);
+    expect(styleBlock).toMatch(/\.credential-picker\s*\{[^}]*border-radius:\s*\$radius-pill/);
+    expect(styleBlock).toMatch(/\.credential-name\s*\{[^}]*font-size:\s*32rpx/);
+    expect(styleBlock).toMatch(/\.credential-arrow\s*\{[^}]*font-size:\s*32rpx/);
   });
 
   it('导航下方有公告栏（icon + 文案 + 箭头）', () => {
@@ -106,14 +115,13 @@ describe('首页格式契约（对照设计稿截图）', () => {
     expect(template).toContain('class="notice-arrow"');
   });
 
-  it('功能宫格为四列（25% 宽），且没有占位死入口；#1846 搜索入口自页头移入宫格（第 5 格同宽换行）', () => {
+  it('功能宫格为四列（25% 宽），不包含首页全局搜索入口', () => {
     expect(template).toContain('menu-item--col4');
     expect(styleBlock).toContain('.menu-item--col4');
     expect(styleBlock).toMatch(/\.menu-item--col4\s*\{[^}]*width:\s*25%/);
     const entries = menuEntries();
-    expect(entries.length).toBe(5);
-    // 移出页头的入口页内可达（#1846）：全局搜索必须作为宫格条目在册
-    expect(entries.map((e) => e.path)).toContain('/pages/search/search');
+    expect(entries.length).toBe(4);
+    expect(entries.map((e) => e.path)).not.toContain('/pages/search/search');
     for (const item of entries) {
       expect(item.available).toBe(true);
       expect(item.path.length).toBeGreaterThan(0);
@@ -175,12 +183,19 @@ describe('首页格式契约（对照设计稿截图）', () => {
     expect(styleBlock).toMatch(/\.page-footer-space\s*\{[^}]*height:\s*120rpx/);
   });
 
-  it('banner 两侧留白为 40rpx', () => {
-    expect(styleBlock).toMatch(/\.banner\s*\{[^}]*margin:\s*24rpx 40rpx/);
+  it('banner 两侧留白为 37rpx', () => {
+    expect(styleBlock).toMatch(/\.banner\s*\{[^}]*margin:\s*24rpx 37rpx/);
   });
 });
 
 describe('首页跳转契约', () => {
+  it('页头证件栏保留搜索与商城入口路由', () => {
+    expect(script).toContain("function onHeaderSearch()");
+    expect(script).toContain("url: '/pages/search/search'");
+    expect(script).toContain("function onHeaderMall()");
+    expect(script).toContain("url: '/pages/mall/mall'");
+  });
+
   it('写死的跳转 url 均已注册，且区分 switchTab 与 navigateTo', () => {
     const re = /uni\.(navigateTo|switchTab|reLaunch|redirectTo)\(\{\s*url:\s*'([^']+)'/g;
     const found = [];

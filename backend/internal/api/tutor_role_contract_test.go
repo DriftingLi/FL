@@ -142,7 +142,7 @@ ON CONFLICT (name) DO NOTHING`
 func TestTutorRoleChainMigrationFileDeclaresEveryTemplate(t *testing.T) {
 	t.Parallel()
 	root := testutil.ModuleRoot(t)
-	path := root + "/migrations/000061_tutor_role_chain.up.sql"
+	path := root + "/migrations/000074_baseline.up.sql"
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("读迁移文件失败（编号被占用或文件改名？）: %v", err)
@@ -150,21 +150,16 @@ func TestTutorRoleChainMigrationFileDeclaresEveryTemplate(t *testing.T) {
 	sql := string(raw)
 	for _, tpl := range authz.TutorTemplateRoles() {
 		if !strings.Contains(sql, "'"+tpl.Name+"'") {
-			t.Fatalf("迁移 000061 未包含预置角色 %q —— SQL 与 authz.TutorTemplateRoles() 漂移", tpl.Name)
+			t.Fatalf("迁移基线未包含预置角色 %q —— SQL 与 authz.TutorTemplateRoles() 漂移", tpl.Name)
 		}
 	}
-	// 建表与回填三段都必须在同一个文件里（规格 E1：一条迁移内完成，避免全员 fail-closed 中间态）。
-	// 回填句按「UPDATE tutor」+「SET role_id」两段断言：SQL 里它有换行缩进，
-	// 拼成单行片段会让本锁对合法排版误报。
 	for _, frag := range []string{
-		"CREATE TABLE IF NOT EXISTS tutor_role",
-		"CREATE TABLE IF NOT EXISTS tutor_role_capability",
-		"ALTER TABLE tutor ADD COLUMN IF NOT EXISTS role_id",
-		"UPDATE tutor",
-		"SET role_id = (SELECT role_id FROM tutor_role WHERE protected)",
+		"CREATE TABLE tutor_role (",
+		"CREATE TABLE tutor_role_capability (",
+		"FOREIGN KEY (role_id) REFERENCES tutor_role(role_id)",
 	} {
 		if !strings.Contains(sql, frag) {
-			t.Fatalf("迁移 000061 缺少片段 %q（规格 E1 要求建表 + 挂列 + 回填同一条迁移）", frag)
+			t.Fatalf("迁移基线缺少片段 %q", frag)
 		}
 	}
 }

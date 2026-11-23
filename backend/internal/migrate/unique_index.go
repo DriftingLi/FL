@@ -49,46 +49,43 @@ type UniqueIndexSpec struct {
 // DDL 逐字抄自出处迁移文件；新增偏唯一索引时必须在这里加一行，
 // 否则 TestCriticalUniqueIndexesMatchMigrations 会以「迁移有、登记表没有」判红。
 var criticalUniqueIndexes = []UniqueIndexSpec{
-	// ===== 000001_baseline.up.sql =====
-	{Name: "idx_hrwai_users_email_unique", Table: "hrwai_users", Migration: "000001_baseline.up.sql",
+
+	// ===== 000074_baseline.up.sql =====
+	{Name: "idx_hrwai_users_email_unique", Table: "hrwai_users", Migration: "000074_baseline.up.sql",
 		DDL: "CREATE UNIQUE INDEX idx_hrwai_users_email_unique ON hrwai_users (email) WHERE email <> ''"},
-	{Name: "idx_hrwai_users_wechat_openid_unique", Table: "hrwai_users", Migration: "000001_baseline.up.sql",
+	{Name: "idx_hrwai_users_wechat_openid_unique", Table: "hrwai_users", Migration: "000074_baseline.up.sql",
 		DDL: "CREATE UNIQUE INDEX idx_hrwai_users_wechat_openid_unique ON hrwai_users (wechat_openid) WHERE wechat_openid <> ''"},
-	{Name: "idx_hrwai_users_phone_unique", Table: "hrwai_users", Migration: "000001_baseline.up.sql",
+	{Name: "idx_hrwai_users_phone_unique", Table: "hrwai_users", Migration: "000074_baseline.up.sql",
 		DDL: "CREATE UNIQUE INDEX idx_hrwai_users_phone_unique ON hrwai_users (phone) WHERE phone <> ''"},
-	{Name: "idx_wrong_question_student_question", Table: "wrong_question", Migration: "000001_baseline.up.sql",
+	{Name: "idx_wrong_question_student_question", Table: "wrong_question", Migration: "000074_baseline.up.sql",
 		DDL: "CREATE UNIQUE INDEX idx_wrong_question_student_question ON wrong_question (student_id, question_id)"},
-	// ===== 000002_points_system.up.sql（积分领取幂等占坑的两臂）=====
-	{Name: "uq_points_task_claim_daily", Table: "points_task_claim", Migration: "000002_points_system.up.sql",
+	// 积分领取幂等占坑的两臂（原 000002）。
+	{Name: "uq_points_task_claim_daily", Table: "points_task_claim", Migration: "000074_baseline.up.sql",
 		DDL: "CREATE UNIQUE INDEX IF NOT EXISTS uq_points_task_claim_daily ON points_task_claim(user_id, task_code, claim_date) WHERE claim_date IS NOT NULL"},
-	{Name: "uq_points_task_claim_ref", Table: "points_task_claim", Migration: "000002_points_system.up.sql",
+	{Name: "uq_points_task_claim_ref", Table: "points_task_claim", Migration: "000074_baseline.up.sql",
 		DDL: "CREATE UNIQUE INDEX IF NOT EXISTS uq_points_task_claim_ref ON points_task_claim(user_id, task_code, ref_id) WHERE ref_id IS NOT NULL"},
-	// ===== 000010_contact_requests.up.sql =====
-	{Name: "idx_contact_requests_pending_unique", Table: "contact_requests", Migration: "000010_contact_requests.up.sql",
+	{Name: "idx_contact_requests_pending_unique", Table: "contact_requests", Migration: "000074_baseline.up.sql",
 		DDL: "CREATE UNIQUE INDEX idx_contact_requests_pending_unique ON contact_requests (recruiter_id, student_user_id) WHERE status = 'pending'"},
-	// ===== 000013_practice_progress_credential.up.sql =====
-	{Name: "uq_practice_progress_cred", Table: "practice_progress", Migration: "000013_practice_progress_credential.up.sql",
+	{Name: "uq_practice_progress_cred", Table: "practice_progress", Migration: "000074_baseline.up.sql",
 		DDL: "CREATE UNIQUE INDEX uq_practice_progress_cred ON practice_progress (student_id, practice_mode, credential_id) WHERE credential_id IS NOT NULL"},
-	// ===== 000014_recruiter_credit_code_unique.up.sql =====
-	{Name: "idx_recruiter_users_credit_code", Table: "recruiter_users", Migration: "000014_recruiter_credit_code_unique.up.sql",
+	{Name: "idx_recruiter_users_credit_code", Table: "recruiter_users", Migration: "000074_baseline.up.sql",
 		DDL: "CREATE UNIQUE INDEX idx_recruiter_users_credit_code ON recruiter_users (credit_code)"},
-	// ===== 000015_job_postings.up.sql =====
-	{Name: "idx_job_applications_applied_unique", Table: "job_applications", Migration: "000015_job_postings.up.sql",
+	{Name: "idx_job_applications_applied_unique", Table: "job_applications", Migration: "000074_baseline.up.sql",
 		DDL: "CREATE UNIQUE INDEX idx_job_applications_applied_unique ON job_applications (job_posting_id, student_user_id) WHERE status = 'applied'"},
-	{Name: "idx_job_reports_student_job_unique", Table: "job_reports", Migration: "000015_job_postings.up.sql",
+	{Name: "idx_job_reports_student_job_unique", Table: "job_reports", Migration: "000074_baseline.up.sql",
 		DDL: "CREATE UNIQUE INDEX idx_job_reports_student_job_unique ON job_reports (job_posting_id, student_user_id)"},
-	// ===== 000059_tutor_course_claim.up.sql（#2596 课程认领：并发重复认领的唯一键兜底）=====
-	{Name: "idx_tutor_course_claim_unique", Table: "tutor_course_claim", Migration: "000059_tutor_course_claim.up.sql",
+	// #2596 课程认领的并发唯一约束（原 000059）。
+	{Name: "idx_tutor_course_claim_unique", Table: "tutor_course_claim", Migration: "000074_baseline.up.sql",
 		DDL: "CREATE UNIQUE INDEX IF NOT EXISTS idx_tutor_course_claim_unique ON tutor_course_claim (tutor_id, course_id)"},
-	{Name: "uq_practice_progress_category", Table: "practice_progress", Migration: "000069_training_category.up.sql",
+	{Name: "uq_practice_progress_category", Table: "practice_progress", Migration: "000074_baseline.up.sql",
 		DDL: "CREATE UNIQUE INDEX IF NOT EXISTS uq_practice_progress_category ON practice_progress (student_id, practice_mode, category_id) WHERE category_id IS NOT NULL"},
-	{Name: "uq_practice_progress_nocred", Table: "practice_progress", Migration: "000069_training_category.up.sql",
+	{Name: "uq_practice_progress_nocred", Table: "practice_progress", Migration: "000074_baseline.up.sql",
 		DDL: "CREATE UNIQUE INDEX uq_practice_progress_nocred ON practice_progress (student_id, practice_mode) WHERE credential_id IS NULL AND category_id IS NULL"},
-	{Name: "uq_real_exam_paper_category_source", Table: "real_exam_paper", Migration: "000069_training_category.up.sql",
+	{Name: "uq_real_exam_paper_category_source", Table: "real_exam_paper", Migration: "000074_baseline.up.sql",
 		DDL: "CREATE UNIQUE INDEX IF NOT EXISTS uq_real_exam_paper_category_source ON real_exam_paper (category_id, source_ref) WHERE category_id IS NOT NULL"},
-	{Name: "uq_wrong_question_category", Table: "wrong_question_category", Migration: "000073_wrong_question_categories.up.sql",
+	{Name: "uq_wrong_question_category", Table: "wrong_question_category", Migration: "000074_baseline.up.sql",
 		DDL: "CREATE UNIQUE INDEX uq_wrong_question_category ON wrong_question_category (wrong_question_id, category_id) WHERE category_id IS NOT NULL"},
-	{Name: "uq_wrong_question_unclassified", Table: "wrong_question_category", Migration: "000073_wrong_question_categories.up.sql",
+	{Name: "uq_wrong_question_unclassified", Table: "wrong_question_category", Migration: "000074_baseline.up.sql",
 		DDL: "CREATE UNIQUE INDEX uq_wrong_question_unclassified ON wrong_question_category (wrong_question_id) WHERE category_id IS NULL"},
 }
 
