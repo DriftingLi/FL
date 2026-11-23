@@ -21,7 +21,10 @@
                 <!-- 标题行：标题两行截断 + 右侧「···」（收藏/删除/编辑/举报入口；导航栏右槽是小程序胶囊区） -->
                 <view class="topic-title-row">
                     <text v-if="tTitle.length > 0" class="topic-title" lines="2">{{ tTitle }}</text>
-                    <text class="title-more" @click="onOpenMoreMenu">···</text>
+                    <text class="title-more">···</text>
+                    <!-- 票 2782：视觉「···」盒只有 48rpx（32rpx × 1.5），命中区由这层 88×88rpx 透明盒撑开；
+                         绝对定位不进布局 ⇒ 标题行高度与按钮视觉底边（statusBar + 168rpx）都不变 -->
+                    <view class="title-more-hit" @click="onOpenMoreMenu"></view>
                 </view>
                 <!-- 正文格式由壳层扁平下发（ADR-0025 P2）：组件不读 topic，档位决策在 utils/forumBody -->
                 <ForumTopicBody :content="topicContent" :format="topicFormat" :image-urls="topicImages" />
@@ -486,8 +489,10 @@ import { goBack } from '../../utils/navigation'
         flex-direction: column;
     }
 
-    /* 标题行（票 2767）：标题占满剩余宽度，「···」贴右；空标题时只剩「···」 */
+    /* 标题行（票 2767）：标题占满剩余宽度，「···」贴右；空标题时只剩「···」。
+       票 2782：本行同时是 .title-more-hit 的定位基准（不设相对定位，绝对命中盒会锚到页面）。 */
     .topic-title-row {
+        position: relative;
         flex-direction: row;
         align-items: flex-start;
         margin-bottom: 24rpx;
@@ -501,12 +506,24 @@ import { goBack } from '../../utils/navigation'
         line-height: 1.5;
     }
 
-    /* 「···」触发按钮：56rpx 命中区，避开导航栏右槽（小程序胶囊区） */
+    /* 「···」触发按钮的视觉盒：32rpx × line-height 1.5 = 48rpx，仅左内距 16rpx（避开导航栏右槽/小程序胶囊区）。
+       旧注释写的「56rpx 命中区」是估值，实测 48rpx 且无垂直内距 —— 命中区不在这里，见 .title-more-hit（票 2782）。 */
     .title-more {
         font-size: 32rpx;
         color: #999999;
         line-height: 1.5;
         padding: 0 0 0 16rpx;
+    }
+
+    /* 票 2782：88×88rpx（44px）透明命中盒，规范落点 ui-spec §5.11 —— 视觉件保持 48rpx，别把字形拉大来凑。
+       绝对定位不进布局：上移 20rpx 让 48rpx 视觉盒在 88rpx 盒内垂直居中，故标题行高度、
+       按钮视觉底边（statusBar + 168rpx）与 forum-more-menu 的 menuTop 都不用跟改。 */
+    .title-more-hit {
+        position: absolute;
+        top: -20rpx;
+        right: 0;
+        width: 88rpx;
+        height: 88rpx;
     }
 
     /* 类别标签（票 2767）：正文下方、作者行上方 */

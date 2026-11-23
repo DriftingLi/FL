@@ -4,8 +4,10 @@
  * 背景（#2436 取证 → #2438 裁定 Q5）：全仓只有两处可点元素命中区小于 44×44px——
  * `pages/forum/forum.uvue` 的 `.create-pill`（120×56rpx，高 28px）、
  * `pages/jobs/job-list.uvue` 的 `.tab-avatar-btn`（72×88rpx，宽 36px）。
- * 裁定是「修这两处」，不是「全仓扫一遍」——所以本文件只钉这两处 + 规范落点，
+ * 裁定是「修这两处」，不是「全仓扫一遍」——所以本文件只钉已修好的这几处 + 规范落点，
  * 不做全仓静态扫描（那会把存量页一次性判红，属治理票的事）。
+ * 票 2782 追加第三处：`pages/forum/forum-detail.uvue` 的 `.title-more`（视觉盒 32rpx × 1.5 = 48rpx，
+ * 命中区靠绝对定位的 `.title-more-hit` 撑到 88×88rpx）。
  *
  * 修法口径（docs/ui-spec.md §5.11）：视觉件可以更小，用外层 hit 盒撑到 88rpx；
  * 别把视觉件本身拉大来凑。
@@ -63,7 +65,34 @@ function avatarBtnViolations(src) {
   return out;
 }
 
-describe('触摸目标（#2445）', () => {
+/**
+ * 帖子详情标题行「···」的违规清单（票 2782）。
+ * 判据：命中区（`.title-more-hit`）宽高都 ≥ 88rpx，`@click` 挂在命中区上而不是视觉件上；
+ * 视觉件只做字形，不许自己撑高来凑（命中盒绝对定位，不进布局）。
+ */
+function titleMoreViolations(src) {
+  const out = [];
+  const hit = classBody(src, 'title-more-hit');
+  if (hit.length === 0) {
+    out.push('缺 .title-more-hit 命中盒（视觉「···」盒 48rpx 不能直接当命中区）');
+  } else {
+    for (const prop of ['width', 'height']) {
+      const v = rpxOf(hit, prop);
+      if (!(v >= MIN_RPX)) {
+        out.push(`.title-more-hit ${prop} ${v}rpx < ${MIN_RPX}rpx`);
+      }
+    }
+  }
+  if (!/<view class="title-more-hit"[^>]*@click=/.test(src)) {
+    out.push('@click 没挂在 .title-more-hit 上');
+  }
+  if (/<text class="title-more"[^>]*@click=/.test(src)) {
+    out.push('@click 仍挂在 .title-more 视觉件上（命中区没生效）');
+  }
+  return out;
+}
+
+describe('触摸目标（#2445 / 票 2782）', () => {
   it('A: 论坛发帖 pill 的命中区撑到 88rpx，@click 挂在命中区上', () => {
     expect(forumPillViolations(h.read('pages/forum/forum.uvue'))).toEqual([]);
   });
@@ -90,6 +119,10 @@ describe('触摸目标（#2445）', () => {
     expect(component).toMatch(/\.app-icon-button-surface\s*\{[^}]*border-radius:\s*50%;/);
   });
 
+  it('F: 帖子详情「···」命中区撑到 88×88rpx，@click 挂在命中区上（票 2782）', () => {
+    expect(titleMoreViolations(h.read('pages/forum/forum-detail.uvue'))).toEqual([]);
+  });
+
   it('E: 判别力 —— 修之前的旧值必须被判红', () => {
     const oldForum = [
       '<view class="create-pill" @click="onCreate">',
@@ -104,5 +137,13 @@ describe('触摸目标（#2445）', () => {
 
     const goodAvatar = '<style lang="scss">\n.tab-avatar-btn { width: 88rpx; height: 88rpx; }\n</style>';
     expect(avatarBtnViolations(goodAvatar)).toEqual([]);
+
+    const oldTitleMore = [
+      '<text class="title-more" @click="onOpenMoreMenu">···</text>',
+      '<style lang="scss">',
+      '.title-more { font-size: 32rpx; line-height: 1.5; padding: 0 0 0 16rpx; }',
+      '</style>',
+    ].join('\n');
+    expect(titleMoreViolations(oldTitleMore).length).toBeGreaterThan(0);
   });
 });
