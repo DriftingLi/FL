@@ -363,6 +363,10 @@
 `pages/forum/forum.uvue` 的 `.create-pill-hit`（88rpx 盒 / 56rpx 胶囊）、`pages/jobs/job-list.uvue` 的
 `.tab-avatar-btn`（88rpx 盒 / 56rpx 头像）。**别把视觉件本身拉大来凑**，那会改掉既有形态。
 
+命中盒也可以是不参与布局的绝对定位兄弟节点（视觉件与行高都不变）——票 2782 的
+`pages/forum/forum-detail.uvue` `.title-more-hit`（88rpx 盒 / 48rpx 视觉盒）即此形态：视觉盒只有
+`32rpx × line-height 1.5 = 48rpx`，靠命中盒上移居中撑到 88rpx，故触发按钮底边仍是 `statusBar + 168rpx`。
+
 **长文本截断**：固定高度容器里的文本必须显式截断，不许靠「内容一般不会太长」兜底。
 单行用 `lines: 1` + `text-overflow: ellipsis`；多行用 `lines: N`（N 按容器高度算，别写 `lines: 0`）。
 新改页面执行本条；存量页逐票转绿，不单独开治理票。

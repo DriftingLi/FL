@@ -46,7 +46,9 @@
     const safeArea = useSafeArea()
     const windowWidth = uni.getSystemInfoSync().windowWidth
     /**
-     * 浮层顶边 = 状态栏 + 页头标题行 88rpx + 内容区上内距 32rpx + 标题行触发按钮高度 56rpx，
+     * 浮层顶边 = 状态栏 + 导航 88rpx + 内容区上内距 32rpx + 触发按钮视觉盒 48rpx + 8rpx 视觉间隙 = 176rpx。
+     * 旧注释写的「标题行 56rpx」是估值：触发按钮视觉盒实测 32rpx × line-height 1.5 = 48rpx（票 2782），
+     * 命中区由绝对定位的 .title-more-hit 撑到 88×88rpx、不进布局，故本常量不随该次修改变动。
      * 与 app-nav-bar 同源换算（#2771 起页头只剩标题行，工具栏整行删除）。
      */
     const menuTop = computed<number>(() : number => {
