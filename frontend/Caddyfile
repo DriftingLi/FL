@@ -206,8 +206,30 @@ dify.{$DOMAIN} {
 	}
 }
 
-# ===== 根域与 www：一跳 301 到培训入口 =====
+# Go 网校撤回时，课程分享与目录跳到已有学员入口。
+(open_school_training_fallback) {
+	route {
+		@courseShare path_regexp courseShare ^/courses/([1-9][0-9]*)$
+		redir @courseShare https://training.{$DOMAIN}/training/course/{re.courseShare.1} 302
+		@courseDirectory path /courses /video /illustrated
+		redir @courseDirectory https://training.{$DOMAIN}/training/courses 302
+		@questionBanks path /question-banks
+		redir @questionBanks https://training.{$DOMAIN}/training/question-bank 302
+		redir https://training.{$DOMAIN}{http.request.uri} 302
+	}
+}
+
+# ===== 根域保留培训入口，www 提供公开网校 =====
 gdyidao.cn, www.gdyidao.cn {
 	{$CADDY_TLS}
-	redir https://training.{$DOMAIN}{http.request.uri} permanent
+	@publicSchool host www.gdyidao.cn
+	handle @publicSchool {
+		reverse_proxy 127.0.0.1:18090
+	}
+	handle {
+		redir https://training.{$DOMAIN}{http.request.uri} permanent
+	}
+	handle_errors 502 503 504 {
+		import open_school_training_fallback
+	}
 }

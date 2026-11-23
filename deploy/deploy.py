@@ -1347,12 +1347,13 @@ class Deployer:
 
         for attempt in range(1, self.health_retries + 1):
             cp = self.run(
-                ["curl", "-fsS", "--noproxy", "*", "--max-time", "5",
-                 "http://127.0.0.1:18090/question-banks"],
+                ["curl", "-fskS", "--noproxy", "*", "--max-time", "5",
+                 "--resolve", "www.gdyidao.cn:443:127.0.0.1",
+                 "https://www.gdyidao.cn/question-banks"],
                 check=False, capture=True, timeout=10,
             )
-            if cp.returncode == 0:
-                log_ok("公开网校与题库接口健康检查通过")
+            if cp.returncode == 0 and "<h1>证件题库</h1>" in (cp.stdout or ""):
+                log_ok("公开网校网关与题库接口健康检查通过")
                 break
             if attempt == self.health_retries:
                 self._tail_logs("open_school")

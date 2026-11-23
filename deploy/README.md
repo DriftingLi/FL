@@ -292,7 +292,10 @@ CI 在 `.github/workflows/ci.yml` 的 `el-controls-selftest` job 里跑这些判
 | `cdn.<domain>` | 对象存储直出（公开 URL 基址 `R2_PUBLIC_DOMAIN`）+ `/reports/`；仅 GET/HEAD，未知前缀 404（不吐 SPA） |
 | `dify.<domain>` | 内网 Dify 与知识库图片反代（SSE 不缓冲） |
 | `valuation.<domain>` | 一跳 301 到 `https://valuation.hrwai.cn/valuation`（北迁已完成，本仓不再有该工作区的 SPA） |
-| 裸域 / `www.<domain>` | 一跳 301 到培训入口 |
+| `gdyidao.cn` | 一跳 301 到培训入口 |
+| `www.gdyidao.cn` | 公开网校，由 Caddy 反代到宿主机回环 `127.0.0.1:18090` |
+
+公开网校进程不可达时，Caddy 将课程分享转到学员站的对应课程，目录转到课程中心，题库转到学员题库。需要主动撤回公开入口时，可将 `handle @publicSchool` 中的代理替换为 `import open_school_training_fallback`，校验后重新加载网关。该操作只切换公网入口，学员课程详情和数据库继续运行。
 
 **EdgeOne 回源口径**：新站的 `https://www.hrwai.cn/api/**` 由 EdgeOne 回源到 `https://api.<domain>`，回源鉴权见下节。
 
