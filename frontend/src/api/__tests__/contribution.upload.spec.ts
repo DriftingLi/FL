@@ -56,7 +56,7 @@ describe('uploadFile 真实头行为（#517 回归）', () => {
 
   it('create JSON 请求仍走 application/json 默认头', async () => {
     await contributionApi.create({
-      credential_id: 7,
+      category_id: 7,
       title: 'T',
       intro: 'I',
       files: [{ file_url: '/u/a.pdf', file_name: 'a.pdf', file_size: 1, content_type: 'document' }]

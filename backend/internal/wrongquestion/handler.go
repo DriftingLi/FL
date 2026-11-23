@@ -12,6 +12,7 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/practicemode"
+	"forklift-training/internal/scope"
 	"forklift-training/internal/security"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
@@ -31,12 +32,13 @@ func newHandler(svc *Service) *handler {
 func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, credRes middleware.CredentialResolver, svc *Service) {
 	h := newHandler(svc)
 
-	g := rg.Group("/wrong-questions", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapQuestionPractice), middleware.CredentialScoped(credRes))
+	g := rg.Group("/wrong-questions", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapQuestionPractice))
+	readScope := middleware.CredentialScopedUnlessCategory(credRes)
 
 	// GET /api/wrong-questions  错题列表（分页+过滤）
-	g.GET("", h.List)
+	g.GET("", readScope, h.List)
 	// POST /api/wrong-questions/:question_id/redo  重做错题
-	g.POST("/:question_id/redo", h.Redo)
+	g.POST("/:question_id/redo", readScope, h.Redo)
 	// POST /api/wrong-questions/batch-remove  批量移出
 	g.POST("/batch-remove", h.BatchRemove)
 	// POST /api/wrong-questions/:question_id/remove  移出错题本
@@ -57,6 +59,16 @@ type listWrongQuestionsReq struct {
 	Favorited     bool
 	Sort          string
 	CredentialID  *int
+	Category      scope.CategoryFilter
+}
+
+func wrongQuestionCategoryFilter(c *gin.Context) (scope.CategoryFilter, error) {
+	raw, provided := c.GetQuery("category_id")
+	category, err := scope.ParseCategoryFilter(raw, provided)
+	if err != nil {
+		return category, httpx.BadRequest(err.Error())
+	}
+	return category, nil
 }
 
 // List 错题列表
@@ -73,12 +85,17 @@ type listWrongQuestionsReq struct {
 // @Param favorited query bool false "仅看收藏"
 // @Param sort query string false "排序 time_desc/time_asc" default(time_desc)
 // @Param credential_id query int false "目标证件ID（按题目所属证件分区）"
+// @Param category_id query string false "做错时的培训分类 ID、all 或 unclassified"
 // @Success 200 {object} response.R{data=WrongQuestionPageDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /wrong-questions [get]
 func (h *handler) List(c *gin.Context) {
 	httpx.Endpoint[listWrongQuestionsReq, WrongQuestionPageDTO]{
 		Parse: func(c *gin.Context) (*listWrongQuestionsReq, error) {
+			category, err := wrongQuestionCategoryFilter(c)
+			if err != nil {
+				return nil, err
+			}
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
 			return &listWrongQuestionsReq{
@@ -90,10 +107,11 @@ func (h *handler) List(c *gin.Context) {
 				Favorited:     c.Query("favorited") == "true",
 				Sort:          c.Query("sort"),
 				CredentialID:  middleware.CredentialIDPtr(c),
+				Category:      category,
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *listWrongQuestionsReq) (*WrongQuestionPageDTO, error) {
-			return h.svc.GetWrongQuestions(req.StudentID, req.Page, req.PageSize, req.QType, req.MinWrongCount, req.Favorited, req.Sort, req.CredentialID)
+			return h.svc.getWrongQuestions(req.StudentID, req.Page, req.PageSize, req.QType, req.MinWrongCount, req.Favorited, req.Sort, req.CredentialID, req.Category)
 		},
 	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
 }
@@ -104,6 +122,7 @@ type redoWrongQuestionReq struct {
 	QuestionID   int
 	UserAnswer   interface{}
 	CredentialID *int
+	Category     scope.CategoryFilter
 }
 
 // Redo 重做错题
@@ -114,6 +133,7 @@ type redoWrongQuestionReq struct {
 // @Produce json
 // @Security BearerAuth
 // @Param question_id path int true "题目ID"
+// @Param category_id query string false "做错时的培训分类 ID、all 或 unclassified"
 // @Param body body object true "答案" example({"user_answer":"A"})
 // @Success 200 {object} response.R{data=practicemode.SubmitResultDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
@@ -134,10 +154,14 @@ func (h *handler) Redo(c *gin.Context) {
 			if err := c.ShouldBindJSON(&req); err != nil {
 				return nil, httpx.BadRequest("请求数据无效")
 			}
-			return &redoWrongQuestionReq{StudentID: studentID, QuestionID: questionID, UserAnswer: req.UserAnswer, CredentialID: middleware.CredentialIDPtr(c)}, nil
+			category, err := wrongQuestionCategoryFilter(c)
+			if err != nil {
+				return nil, err
+			}
+			return &redoWrongQuestionReq{StudentID: studentID, QuestionID: questionID, UserAnswer: req.UserAnswer, CredentialID: middleware.CredentialIDPtr(c), Category: category}, nil
 		},
 		Invoke: func(ctx context.Context, req *redoWrongQuestionReq) (*practicemode.SubmitResultDTO, error) {
-			return h.svc.RedoWrongQuestion(req.StudentID, req.QuestionID, req.UserAnswer, req.CredentialID)
+			return h.svc.redoWrongQuestion(req.StudentID, req.QuestionID, req.UserAnswer, req.CredentialID, req.Category)
 		},
 		ErrStatus: httpx.ErrStatusAll(http.StatusBadRequest),
 		Render: func(c *gin.Context, _ *redoWrongQuestionReq, resp *practicemode.SubmitResultDTO) {
@@ -222,6 +246,7 @@ type batchRemoveReq struct {
 // getWrongStatsReq 错题统计请求。
 type getWrongStatsReq struct {
 	StudentID int
+	Category  scope.CategoryFilter
 }
 
 // GetStats 错题统计
@@ -231,18 +256,21 @@ type getWrongStatsReq struct {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
+// @Param category_id query string false "做错时的培训分类 ID、all 或 unclassified"
 // @Success 200 {object} response.R{data=WrongQuestionStatsDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /wrong-questions/stats [get]
 func (h *handler) GetStats(c *gin.Context) {
 	httpx.Endpoint[getWrongStatsReq, WrongQuestionStatsDTO]{
 		Parse: func(c *gin.Context) (*getWrongStatsReq, error) {
-			uid, _ := c.Get(string(middleware.CtxUserID))
-			studentID, _ := uid.(int)
-			return &getWrongStatsReq{StudentID: studentID}, nil
+			category, err := wrongQuestionCategoryFilter(c)
+			if err != nil {
+				return nil, err
+			}
+			return &getWrongStatsReq{StudentID: c.GetInt(string(middleware.CtxUserID)), Category: category}, nil
 		},
 		Invoke: func(ctx context.Context, req *getWrongStatsReq) (*WrongQuestionStatsDTO, error) {
-			return h.svc.GetStats(req.StudentID), nil
+			return h.svc.getStats(req.StudentID, req.Category), nil
 		},
 	}.Handle(c)
 }
@@ -250,6 +278,7 @@ func (h *handler) GetStats(c *gin.Context) {
 // exportWrongQuestionsReq 导出错题本请求。
 type exportWrongQuestionsReq struct {
 	StudentID int
+	Category  scope.CategoryFilter
 }
 
 // Export 导出错题本
@@ -258,18 +287,21 @@ type exportWrongQuestionsReq struct {
 // @Tags 学员端-错题本
 // @Produce plain
 // @Security BearerAuth
+// @Param category_id query string false "做错时的培训分类 ID、all 或 unclassified"
 // @Success 200 {string} string "错题文本"
 // @Failure 401 {object} response.R "未认证"
 // @Router /wrong-questions/export [get]
 func (h *handler) Export(c *gin.Context) {
 	httpx.Endpoint[exportWrongQuestionsReq, struct{}]{
 		Parse: func(c *gin.Context) (*exportWrongQuestionsReq, error) {
-			uid, _ := c.Get(string(middleware.CtxUserID))
-			studentID, _ := uid.(int)
-			return &exportWrongQuestionsReq{StudentID: studentID}, nil
+			category, err := wrongQuestionCategoryFilter(c)
+			if err != nil {
+				return nil, err
+			}
+			return &exportWrongQuestionsReq{StudentID: c.GetInt(string(middleware.CtxUserID)), Category: category}, nil
 		},
 		Invoke: func(ctx context.Context, req *exportWrongQuestionsReq) (*struct{}, error) {
-			data := h.svc.ExportWrongQuestions(req.StudentID)
+			data := h.svc.exportWrongQuestions(req.StudentID, req.Category)
 			text := FormatWrongQuestionsText(data)
 			c.Header("Content-Disposition", "attachment; filename=wrong_questions.txt")
 			c.Data(200, "text/plain; charset=utf-8", []byte(text))

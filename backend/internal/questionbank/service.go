@@ -16,11 +16,13 @@ import (
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/coerce"
 	"forklift-training/internal/filestore"
 	"forklift-training/internal/model"
+	"forklift-training/internal/scope"
 	"forklift-training/internal/training"
 	"forklift-training/pkg/paging"
 )
@@ -54,6 +56,7 @@ type QuestionCreateInput struct {
 	ScoringCriteria string          `json:"scoring_criteria"`
 	Score           int             `json:"score"`
 	CredentialID    int             `json:"credential_id"`
+	CategoryID      *int            `json:"category_id"`
 	TagIDs          []int           `json:"tag_ids"`
 }
 
@@ -69,6 +72,7 @@ type QuestionUpdateInput struct {
 	ReferenceAnswer *string          `json:"reference_answer"`
 	ScoringCriteria *string          `json:"scoring_criteria"`
 	Score           *int             `json:"score"`
+	CategoryID      *int             `json:"category_id"`
 	TagIDs          *[]int           `json:"tag_ids"`
 }
 
@@ -118,11 +122,12 @@ func SampleQuestions(db *gorm.DB, qType string, count int, credentialID *int) ([
 // SampleQuestionsOpts 抽题参数面（#385）：题库池口径（published + 排真题 + 证件分区）
 // 之上叠加 全量/抽样、洗牌/排序 两个正交开关。
 type SampleQuestionsOpts struct {
-	QType   string // 题型过滤（空 = 不限）
-	TagID   int    // >0：限定标签（专项练习）
-	Count   int    // >0 且 Shuffle：抽样截断数
-	Shuffle bool   // true：洗牌后按 Count 截断（随机抽样）；false：按 id 升序全量
-	Cred    *int   // 非 nil：按当前证件分区
+	QType      string // 题型过滤（空 = 不限）
+	TagID      int    // >0：限定标签（专项练习）
+	Count      int    // >0 且 Shuffle：抽样截断数
+	Shuffle    bool   // true：洗牌后按 Count 截断（随机抽样）；false：按 id 升序全量
+	Cred       *int   // 旧客户端证件分区
+	CategoryID *int
 }
 
 // SampleQuestionsByOpts 抽题池统一实现（#385 单点）：收编随机练习、标签专项、
@@ -134,6 +139,9 @@ type SampleQuestionsOpts struct {
 // 的一致性断言成立（#413 池计数单点，口径定义见 CONTEXT.md「题库池」）。
 func PoolFilter(q *gorm.DB, o SampleQuestionsOpts) *gorm.DB {
 	q = QuestionPoolScope(q, o.Cred)
+	if o.CategoryID != nil {
+		q = q.Where("question.category_id = ?", *o.CategoryID)
+	}
 	if o.TagID > 0 {
 		q = q.Where("id IN (SELECT question_id FROM question_tag_relation WHERE tag_id = ?)", o.TagID)
 	}
@@ -221,28 +229,37 @@ func GradeQuestion(q *model.Question, userAnswer interface{}, maxScore float64) 
 	return &b, 0
 }
 
-// AddToWrongQuestions 错题入库（去重、计数）。
-// 使用 Limit(1).Find() 替代 First()，避免首次错题入库时 GORM logger 误报 record not found
 func AddToWrongQuestions(db *gorm.DB, studentID, questionID int) error {
-	var wq model.WrongQuestion
-	err := db.Where("student_id = ? AND question_id = ?", studentID, questionID).Limit(1).Find(&wq).Error
-	if err != nil {
-		return err
-	}
-	if wq.ID != 0 {
-		wq.WrongCount++
-		wq.LastWrongAt = clock.Now()
-		wq.IsRemoved = false
-		return db.Save(&wq).Error
-	}
-	wq = model.WrongQuestion{
-		StudentID:   studentID,
-		QuestionID:  questionID,
-		WrongCount:  1,
-		LastWrongAt: clock.Now(),
-		CreatedAt:   clock.Now(),
-	}
-	return db.Create(&wq).Error
+	return AddClassifiedWrongQuestion(db, studentID, questionID, nil)
+}
+
+func AddClassifiedWrongQuestion(db *gorm.DB, studentID, questionID int, categoryID *int) error {
+	return db.Transaction(func(tx *gorm.DB) error {
+		now := clock.Now()
+		card := model.WrongQuestion{StudentID: studentID, QuestionID: questionID, WrongCount: 1, LastWrongAt: now, CreatedAt: now}
+		conflict := clause.OnConflict{
+			Columns: []clause.Column{{Name: "student_id"}, {Name: "question_id"}},
+			DoUpdates: clause.Assignments(map[string]any{
+				"wrong_count":   gorm.Expr("wrong_question.wrong_count + 1"),
+				"last_wrong_at": now, "is_removed": false,
+			}),
+		}
+		if err := tx.Clauses(conflict).Create(&card).Error; err != nil {
+			return err
+		}
+		columns := []clause.Column{{Name: "wrong_question_id"}}
+		predicate := "category_id IS NULL"
+		if categoryID != nil {
+			columns = append(columns, clause.Column{Name: "category_id"})
+			predicate = "category_id IS NOT NULL"
+		}
+		edge := model.WrongQuestionCategory{WrongQuestionID: card.ID, CategoryID: categoryID, LastWrongAt: now}
+		return tx.Clauses(clause.OnConflict{
+			Columns:     columns,
+			TargetWhere: clause.Where{Exprs: []clause.Expression{clause.Expr{SQL: predicate}}},
+			DoUpdates:   clause.AssignmentColumns([]string{"last_wrong_at"}),
+		}).Create(&edge).Error
+	})
 }
 
 // StringifyAnswer 将用户答案（字符串/列表）转为字符串。
@@ -378,6 +395,11 @@ func (s *Service) CreateQuestion(in QuestionCreateInput, createdBy *int, created
 		return QuestionDTO{}, ErrQuestionOptionsRequired
 	}
 	var credentialID *int
+	if in.CategoryID != nil {
+		if err := scope.RequireActiveCategory(s.db, *in.CategoryID); err != nil {
+			return QuestionDTO{}, err
+		}
+	}
 	if in.CredentialID > 0 {
 		var cnt int64
 		if err := s.db.Model(&model.Credential{}).Where("id = ?", in.CredentialID).Count(&cnt).Error; err != nil {
@@ -404,6 +426,7 @@ func (s *Service) CreateQuestion(in QuestionCreateInput, createdBy *int, created
 		ScoringCriteria: in.ScoringCriteria,
 		Score:           in.Score,
 		CredentialID:    credentialID,
+		CategoryID:      in.CategoryID,
 		Status:          "pending",
 		CreatedBy:       createdBy,
 		CreatedByType:   OrDefault(createdByType, "tutor"),
@@ -464,6 +487,12 @@ func (s *Service) UpdateQuestion(id int, in QuestionUpdateInput, actorID int, ac
 	}
 	if err := RequireQuestionOwnership(&q, actorID, actorType); err != nil {
 		return QuestionDTO{}, err
+	}
+	if in.CategoryID != nil && (q.CategoryID == nil || *q.CategoryID != *in.CategoryID) {
+		if err := scope.RequireActiveCategory(s.db, *in.CategoryID); err != nil {
+			return QuestionDTO{}, err
+		}
+		q.CategoryID = in.CategoryID
 	}
 	if in.Type != nil && !slices.Contains(ValidQuestionTypes, *in.Type) {
 		return QuestionDTO{}, ErrQuestionTypeInvalid

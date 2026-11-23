@@ -31,7 +31,7 @@ func TestGetCourseDetailBlanksLockedChapterContent(t *testing.T) {
 		t.Fatalf("创建等级失败: %v", err)
 	}
 	price := 100
-	priced := model.Course{Name: "付费课", Status: 1, PointsPrice: &price,
+	priced := model.Course{Name: "付费课", CategoryID: &testutil.SeedTrainingCategory(t, db, "课程分类").ID, Status: 1, PointsPrice: &price,
 		SpecialtyID: &spec.SpecialtyID, LevelID: &lv.LevelID, CreatedAt: testutil.Now()}
 	if err := db.Create(&priced).Error; err != nil {
 		t.Fatalf("播种付费课程失败: %v", err)
@@ -109,7 +109,7 @@ func TestGetCourseDetailFreeCourseContentUnchanged(t *testing.T) {
 	if err := db.Create(&lv).Error; err != nil {
 		t.Fatalf("创建等级失败: %v", err)
 	}
-	free := model.Course{Name: "免费课", Status: 1,
+	free := model.Course{Name: "免费课", CategoryID: &testutil.SeedTrainingCategory(t, db, "课程分类").ID, Status: 1,
 		SpecialtyID: &spec.SpecialtyID, LevelID: &lv.LevelID, CreatedAt: testutil.Now()}
 	if err := db.Create(&free).Error; err != nil {
 		t.Fatalf("播种免费课程失败: %v", err)

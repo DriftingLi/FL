@@ -26,6 +26,7 @@ import (
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/model"
+	"forklift-training/internal/scope"
 	"forklift-training/internal/textx"
 	"forklift-training/internal/timefmt"
 	"forklift-training/pkg/paging"
@@ -248,11 +249,19 @@ type searchParams struct {
 	page     int
 	pageSize int
 	cred     *int
+	category scope.CategoryFilter
 }
 
 // newSearchParams 构造 LIKE 模式串 + 原始分页参数（钳制见 searchPartitionPage）。
-func newSearchParams(keyword string, page, pageSize int, cred *int) searchParams {
-	return searchParams{keyword: keyword, like: likePattern(keyword), page: page, pageSize: pageSize, cred: cred}
+func newSearchParams(keyword string, page, pageSize int, cred *int, category scope.CategoryFilter) searchParams {
+	return searchParams{keyword: keyword, like: likePattern(keyword), page: page, pageSize: pageSize, cred: cred, category: category}
+}
+
+func (p searchParams) contentCategory(query *gorm.DB, categoryColumn, credentialColumn string) *gorm.DB {
+	if p.category.Explicit() {
+		return p.category.Apply(query, categoryColumn)
+	}
+	return scope.EntityOwnedBy(query, credentialColumn, p.cred)
 }
 
 // searchPartitionRunner 分区声明的类型擦除形态：行类型 R 由 bind 实例化时固定，
@@ -305,12 +314,12 @@ func searchPartitionPage[R any](s *Service, spec partitionSpec[R], p searchParam
 }
 
 // searchItems 单类型分页搜索：分发 = 分区表查表（无 switch——加分区不会漏改分发分支）。
-func (s *Service) searchItems(searchType, keyword string, page, pageSize int, credentialID *int) ([]SearchItemDTO, int64, error) {
+func (s *Service) searchItems(searchType string, params searchParams) ([]SearchItemDTO, int64, error) {
 	part, ok := searchPartitionByKey(searchType)
 	if !ok {
 		return nil, 0, fmt.Errorf("搜索类型仅支持 %s", strings.Join(searchPartitionKeys(), "/"))
 	}
-	return part.search(s, newSearchParams(keyword, page, pageSize, credentialID))
+	return part.search(s, params)
 }
 
 // containsFold 大小写不敏感的包含判定（按字符，不做 Unicode 折叠的长度假设）。
@@ -320,6 +329,10 @@ func containsFold(haystack, needle string) bool {
 
 // Search 全局搜索。searchType 为空时返回各分区 top 5；否则该类型分页结果。
 func (s *Service) Search(keyword, searchType string, page, pageSize int, credentialID *int) (any, error) {
+	return s.search(keyword, searchType, page, pageSize, credentialID, scope.CategoryFilter{})
+}
+
+func (s *Service) search(keyword, searchType string, page, pageSize int, credentialID *int, category scope.CategoryFilter) (any, error) {
 	keyword = strings.TrimSpace(keyword)
 	if keyword == "" {
 		return nil, errors.New("关键词不能为空")
@@ -327,13 +340,12 @@ func (s *Service) Search(keyword, searchType string, page, pageSize int, credent
 	if utf8.RuneCountInString(keyword) > maxSearchKeywordLen {
 		return nil, fmt.Errorf("关键词过长（最多 %d 个字符）", maxSearchKeywordLen)
 	}
-	cred := credentialID
 	if searchType == "" {
 		// 聚合 = 遍历分区声明表逐区装配（top N + 总数）：响应形状零漂移，加分区只改声明表。
 		sections := make(map[string]SearchSectionDTO, len(searchPartitions))
 		counts := searchFactCounts{}
 		for _, part := range searchPartitions {
-			items, total, err := part.search(s, newSearchParams(keyword, 1, searchAllSectionLimit, cred))
+			items, total, err := part.search(s, newSearchParams(keyword, 1, searchAllSectionLimit, credentialID, category))
 			if err != nil {
 				return nil, err
 			}
@@ -348,7 +360,7 @@ func (s *Service) Search(keyword, searchType string, page, pageSize int, credent
 			Topics: sections[SearchTypeTopic],
 		}, nil
 	}
-	items, total, err := s.searchItems(searchType, keyword, page, pageSize, cred)
+	items, total, err := s.searchItems(searchType, newSearchParams(keyword, page, pageSize, credentialID, category))
 	if err != nil {
 		return nil, err
 	}

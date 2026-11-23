@@ -9,6 +9,7 @@ import (
 
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
+	"forklift-training/internal/scope"
 	"forklift-training/internal/security"
 	"forklift-training/pkg/httpx"
 )
@@ -27,10 +28,11 @@ func newHandler(svc *Service) *handler {
 func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, credRes middleware.CredentialResolver, svc *Service) {
 	h := newHandler(svc)
 
-	g := rg.Group("/mock-exam", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapMockExamTake), middleware.CredentialScoped(credRes))
+	g := rg.Group("/mock-exam", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapMockExamTake))
 
 	// POST /api/mock-exam/start  开始模拟考试（count 题量 + duration 时长）
-	g.POST("/start", h.Start)
+	g.POST("/start", middleware.CredentialScoped(credRes), h.Start)
+	g.POST("/category-start", h.StartCategoryExam)
 	// POST /api/mock-exam/:mock_exam_id/save  保存进度
 	g.POST("/:mock_exam_id/save", h.SaveProgress)
 	// GET /api/mock-exam/:mock_exam_id/resume  恢复考试
@@ -40,7 +42,44 @@ func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, credRes midd
 	// GET /api/mock-exam/:mock_exam_id/result  获取结果
 	g.GET("/:mock_exam_id/result", h.GetResult)
 	// GET /api/mock-exam/history  历史记录
-	g.GET("/history", h.GetHistory)
+	g.GET("/history", middleware.CredentialScopedUnlessCategory(credRes), h.GetHistory)
+	g.GET("/in-progress", h.GetInProgress)
+}
+
+type categoryExamInput struct {
+	CategoryID      int `json:"category_id"`
+	Count           int `json:"question_count"`
+	DurationMinutes int `json:"duration_minutes"`
+}
+
+type categoryExamRequest struct {
+	StudentID int
+	Input     categoryExamInput
+}
+
+// @Summary 按培训分类开始模拟考试
+// @Tags 学员端-模拟考试
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body categoryExamInput true "一级分类、题量与时长"
+// @Success 200 {object} response.R{data=MockExamStartDTO} "success"
+// @Failure 400 {object} response.R "分类或题池不可用"
+// @Router /mock-exam/category-start [post]
+func (h *handler) StartCategoryExam(c *gin.Context) {
+	httpx.Endpoint[categoryExamRequest, MockExamStartDTO]{
+		Parse: func(c *gin.Context) (*categoryExamRequest, error) {
+			input, err := httpx.BindJSONMsg[categoryExamInput](c, "请求数据无效")
+			if err != nil {
+				return nil, err
+			}
+			return &categoryExamRequest{StudentID: c.GetInt(string(middleware.CtxUserID)), Input: *input}, nil
+		},
+		Invoke: func(ctx context.Context, req *categoryExamRequest) (*MockExamStartDTO, error) {
+			return h.svc.StartCategoryExam(req.StudentID, req.Input.Count, req.Input.DurationMinutes, req.Input.CategoryID)
+		},
+	}.WithSuccess(httpx.OkMsg("模拟考试开始"), http.StatusInternalServerError).
+		WithSentinels(http.StatusBadRequest, scope.ErrCategoryUnavailable, ErrMockExamEmptyPool).Handle(c)
 }
 
 // startReq 开始模拟考试请求（学员 ID + body count/duration + query credential_id）。
@@ -226,6 +265,7 @@ func (h *handler) GetResult(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param credential_id query int false "目标证件ID"
+// @Param category_id query string false "培训分类 ID、all 或 unclassified"
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(10)
 // @Success 200 {object} response.R{data=MockExamHistoryDTO} "success"
@@ -236,15 +276,44 @@ func (h *handler) GetHistory(c *gin.Context) {
 		Parse: func(c *gin.Context) (*mockExamHistoryReq, error) {
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
+			raw, provided := c.GetQuery("category_id")
+			category, err := scope.ParseCategoryFilter(raw, provided)
+			if err != nil {
+				return nil, httpx.BadRequest(err.Error())
+			}
 			return &mockExamHistoryReq{
 				StudentID:    studentID,
 				CredentialID: middleware.CredentialIDPtr(c),
+				Category:     category,
 				Page:         httpx.QueryIntDefault(c, "page", 1),
 				PageSize:     httpx.QueryIntDefault(c, "page_size", 10),
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *mockExamHistoryReq) (*MockExamHistoryDTO, error) {
-			return h.svc.GetHistory(req.StudentID, req.CredentialID, req.Page, req.PageSize)
+			return h.svc.getHistory(req.StudentID, req.CredentialID, req.Category, req.Page, req.PageSize)
+		},
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
+}
+
+// @Summary 我的在途模拟考试
+// @Tags 学员端-模拟考试
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页条数" default(10)
+// @Success 200 {object} response.R{data=MockExamHistoryDTO} "success"
+// @Router /mock-exam/in-progress [get]
+func (h *handler) GetInProgress(c *gin.Context) {
+	httpx.Endpoint[mockExamHistoryReq, MockExamHistoryDTO]{
+		Parse: func(c *gin.Context) (*mockExamHistoryReq, error) {
+			return &mockExamHistoryReq{
+				StudentID: c.GetInt(string(middleware.CtxUserID)),
+				Page:      httpx.QueryIntDefault(c, "page", 1),
+				PageSize:  httpx.QueryIntDefault(c, "page_size", 10),
+			}, nil
+		},
+		Invoke: func(ctx context.Context, req *mockExamHistoryReq) (*MockExamHistoryDTO, error) {
+			return h.svc.listExams(req.StudentID, StatusInProgress, nil, scope.CategoryFilter{}, req.Page, req.PageSize)
 		},
 	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
 }
@@ -255,6 +324,7 @@ func (h *handler) GetHistory(c *gin.Context) {
 type mockExamHistoryReq struct {
 	StudentID    int
 	CredentialID *int
+	Category     scope.CategoryFilter
 	Page         int
 	PageSize     int
 }

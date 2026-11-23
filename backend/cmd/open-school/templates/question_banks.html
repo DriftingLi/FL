@@ -1,0 +1,40 @@
+{{/*
+question_banks.html：证件题库目录整页（#2760）。
+
+布局与课程目录保持同一套骨架（page_start/page_end + wrap），但**没有筛选表单**：
+证件是有限集（当前 8 个），给它做筛选器只会多一层空态。每一行是一张卡，
+卡内是题量 + 题型分布 + 「去练习」。
+*/}}
+{{define "question_banks"}}{{template "page_start" .}}
+<h1>证件题库</h1>
+
+{{if .Error}}
+<div class="state state-error" role="alert">
+  <h2>题库目录暂时加载不出来</h2>
+  <a class="btn btn-primary" href="/question-banks">重试</a>
+</div>
+{{else if .Banks}}
+<ul class="bank-list">
+  {{range .Banks}}
+  <li class="bank-card">
+    <div class="bank-head">
+      <h2 class="bank-name">{{.CategoryName}}</h2>
+      <span class="bank-total">{{.Total}} 道题</span>
+    </div>
+    {{if .Types}}
+    <p class="bank-types">
+      {{range $i, $t := .Types}}{{if $i}} · {{end}}{{$t.Label}} {{$t.Count}}{{end}}
+    </p>
+    {{end}}
+    <a class="btn btn-primary" href="{{.PracticeURL}}">去练习 →</a>
+  </li>
+  {{end}}
+</ul>
+{{else}}
+<div class="state state-empty">
+  <h2>题库还在补充中</h2>
+  <a class="btn" href="/courses">去看课程</a>
+</div>
+{{end}}
+
+{{template "page_end" .}}{{end}}

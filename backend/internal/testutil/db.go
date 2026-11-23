@@ -204,13 +204,24 @@ func SeedQuestion(t *testing.T, db *gorm.DB, qType, content, answer string) *mod
 	return q
 }
 
-// SeedCourse 插入一门测试课程。
+func SeedTrainingCategory(t *testing.T, db *gorm.DB, name string) *model.TrainingCategory {
+	t.Helper()
+	category := &model.TrainingCategory{Name: name, Status: 1}
+	if err := db.Create(category).Error; err != nil {
+		t.Fatalf("插入测试培训分类失败: %v", err)
+	}
+	return category
+}
+
+// SeedCourse 插入一门已发布、已分类的测试课程。
 func SeedCourse(t *testing.T, db *gorm.DB, name string) *model.Course {
 	t.Helper()
+	category := SeedTrainingCategory(t, db, name)
 	c := &model.Course{
-		Name:      name,
-		Status:    1,
-		CreatedAt: Now(),
+		CategoryID: &category.ID,
+		Name:       name,
+		Status:     1,
+		CreatedAt:  Now(),
 	}
 	if err := db.Create(c).Error; err != nil {
 		t.Fatalf("插入测试课程失败: %v", err)

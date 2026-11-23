@@ -26,11 +26,11 @@ var importScore = map[string]int{
 
 // ExistingQ 存量题的比对所需字段。
 type ExistingQ struct {
-	ID           int
-	Type         string
-	CredentialID int // NULL 记 0
-	Content      string
-	Explanation  string
+	ID          int
+	Type        string
+	CategoryID  int
+	Content     string
+	Explanation string
 }
 
 // EnrichAction 对存量题的就地更新（解析补全，id 不变保引用）。
@@ -75,16 +75,15 @@ type PaperQuestionRef struct {
 	InsertIdx  int // >=0：plan.Inserts 下标
 }
 
-// credKey 去重键：证件内按归一化题干哈希。
-type credKey struct {
-	credID int
-	hash   string
+type categoryKey struct {
+	categoryID int
+	hash       string
 }
 
 // LoadExistingQuestions 读取存量题（比对所需字段）。
 func LoadExistingQuestions(ctx context.Context, pool *pgxpool.Pool) ([]ExistingQ, error) {
 	rows, err := pool.Query(ctx, `
-		SELECT id, type, COALESCE(credential_id, 0), content, COALESCE(explanation, '')
+		SELECT id, type, COALESCE(category_id, 0), content, COALESCE(explanation, '')
 		FROM question`)
 	if err != nil {
 		return nil, fmt.Errorf("读取存量题失败: %w", err)
@@ -93,7 +92,7 @@ func LoadExistingQuestions(ctx context.Context, pool *pgxpool.Pool) ([]ExistingQ
 	var out []ExistingQ
 	for rows.Next() {
 		var q ExistingQ
-		if err := rows.Scan(&q.ID, &q.Type, &q.CredentialID, &q.Content, &q.Explanation); err != nil {
+		if err := rows.Scan(&q.ID, &q.Type, &q.CategoryID, &q.Content, &q.Explanation); err != nil {
 			return nil, fmt.Errorf("扫描存量题失败: %w", err)
 		}
 		out = append(out, q)
@@ -105,7 +104,7 @@ func LoadExistingQuestions(ctx context.Context, pool *pgxpool.Pool) ([]ExistingQ
 //  1. 同证件内去重（保留解析更优版本，处理顺序稳定）；
 //  2. 与存量比对：命中 → 跳过插入，可补解析时生成 EnrichAction（存量 id 不变）；
 //  3. 存量内部重复分组：保留解析最优，其余视引用情况删除/保留（写入阶段处置）。
-func BuildQuestionPlan(parsed []ParsedQuestion, skips []SkipNote, existing []ExistingQ, credIDs map[string]int) *QuestionPlan {
+func BuildQuestionPlan(parsed []ParsedQuestion, skips []SkipNote, existing []ExistingQ, categories map[string]SourceCategory) *QuestionPlan {
 	plan := &QuestionPlan{Skips: skips, Stats: map[string]*CategoryStat{}}
 	for _, s := range skips {
 		if plan.Stats[s.Source.Category] == nil {
@@ -117,15 +116,18 @@ func BuildQuestionPlan(parsed []ParsedQuestion, skips []SkipNote, existing []Exi
 	// 存量索引：证件 id → 归一化题干哈希 → 行列表。
 	existingIdx := map[int]map[string][]ExistingQ{}
 	for _, e := range existing {
-		h := stemHash(e.Content)
-		if existingIdx[e.CredentialID] == nil {
-			existingIdx[e.CredentialID] = map[string][]ExistingQ{}
+		if e.CategoryID == 0 {
+			continue
 		}
-		existingIdx[e.CredentialID][h] = append(existingIdx[e.CredentialID][h], e)
+		h := stemHash(e.Content)
+		if existingIdx[e.CategoryID] == nil {
+			existingIdx[e.CategoryID] = map[string][]ExistingQ{}
+		}
+		existingIdx[e.CategoryID][h] = append(existingIdx[e.CategoryID][h], e)
 	}
 
 	// 导入侧：同证件去重 + 与存量比对。
-	importedIdx := map[credKey]int{} // key → plan.Inserts 下标
+	importedIdx := map[categoryKey]int{}
 	for i := range parsed {
 		q := &parsed[i]
 		if plan.Stats[q.Source.Category] == nil {
@@ -133,14 +135,14 @@ func BuildQuestionPlan(parsed []ParsedQuestion, skips []SkipNote, existing []Exi
 		}
 		plan.Stats[q.Source.Category].Parsed++
 
-		credID, ok := credIDs[credentialFor(q.Source)]
+		category, ok := categories[credentialFor(q.Source)]
 		if !ok {
-			plan.Stats[q.Source.Category].Skips["证件缺失"]++
+			plan.Stats[q.Source.Category].Skips["分类映射缺失"]++
 			continue
 		}
-		kk := credKey{credID, stemHash(q.Content)}
+		kk := categoryKey{category.ID, stemHash(q.Content)}
 
-		if rows := existingIdx[credID][kk.hash]; len(rows) > 0 {
+		if rows := existingIdx[category.ID][kk.hash]; len(rows) > 0 {
 			plan.Stats[q.Source.Category].Skips["与存量题重复"]++
 			best := rows[0]
 			for _, e := range rows[1:] {
@@ -261,7 +263,7 @@ type dbtx interface {
 
 // ApplyQuestionPlan 写入阶段（单事务，all-or-nothing）：插入新题、就地更新存量解析、
 // 处置存量内部重复、挂真题标签。
-func ApplyQuestionPlan(ctx context.Context, pool *pgxpool.Pool, plan *QuestionPlan, credIDs map[string]int) (QuestionApplyResult, error) {
+func ApplyQuestionPlan(ctx context.Context, pool *pgxpool.Pool, plan *QuestionPlan, categories map[string]SourceCategory) (QuestionApplyResult, error) {
 	var res QuestionApplyResult
 	tx, err := pool.Begin(ctx)
 	if err != nil {
@@ -276,9 +278,9 @@ func ApplyQuestionPlan(ctx context.Context, pool *pgxpool.Pool, plan *QuestionPl
 	insertIDs := make([]int, len(plan.Inserts))
 	for i := range plan.Inserts {
 		q := &plan.Inserts[i]
-		credID, ok := credIDs[credentialFor(q.Source)]
+		category, ok := categories[credentialFor(q.Source)]
 		if !ok {
-			return res, fmt.Errorf("证件 code %s 不存在", credentialFor(q.Source))
+			return res, fmt.Errorf("找不到资料来源 %s 对应的培训分类", credentialFor(q.Source))
 		}
 		var options any
 		if q.Options != nil {
@@ -290,10 +292,10 @@ func ApplyQuestionPlan(ctx context.Context, pool *pgxpool.Pool, plan *QuestionPl
 		}
 		var newID int
 		err := tx.QueryRow(ctx, `
-			INSERT INTO question (type, content, options, answer, explanation, score, status, credential_id, created_by, created_by_type)
-			VALUES ($1, $2, $3, $4, NULLIF($5, ''), $6, 'published', $7, NULL, 'admin')
+			INSERT INTO question (type, content, options, answer, explanation, score, status, credential_id, category_id, created_by, created_by_type)
+			VALUES ($1, $2, $3, $4, NULLIF($5, ''), $6, 'published', $7, $8, NULL, 'admin')
 			RETURNING id`,
-			q.Type, q.Content, options, q.Answer, strings.TrimSpace(q.Explanation), importScore[q.Type], credID).Scan(&newID)
+			q.Type, q.Content, options, q.Answer, strings.TrimSpace(q.Explanation), importScore[q.Type], category.LegacyCredentialID, category.ID).Scan(&newID)
 		if err != nil {
 			return res, fmt.Errorf("插入题目失败（%s#%d）: %w", q.Source.Name, q.Line, err)
 		}
@@ -368,21 +370,28 @@ func ensureRealExamTag(ctx context.Context, tx dbtx) (int, error) {
 	return id, nil
 }
 
-// ResolveCredentialIDs 读取全部证件 code → id 映射。
-func ResolveCredentialIDs(ctx context.Context, pool *pgxpool.Pool) (map[string]int, error) {
-	rows, err := pool.Query(ctx, `SELECT code, id FROM credential`)
+type SourceCategory struct {
+	ID                 int
+	LegacyCredentialID int
+}
+
+func ResolveTrainingCategories(ctx context.Context, pool *pgxpool.Pool) (map[string]SourceCategory, error) {
+	rows, err := pool.Query(ctx, `
+		SELECT credential.code, training_category.id, credential.id
+		FROM training_category JOIN credential ON credential.id = training_category.legacy_credential_id
+		WHERE training_category.status = 1`)
 	if err != nil {
-		return nil, fmt.Errorf("读取证件失败: %w", err)
+		return nil, fmt.Errorf("读取资料来源对应的培训分类失败: %w", err)
 	}
 	defer rows.Close()
-	out := map[string]int{}
+	out := map[string]SourceCategory{}
 	for rows.Next() {
 		var code string
-		var id int
-		if err := rows.Scan(&code, &id); err != nil {
+		var category SourceCategory
+		if err := rows.Scan(&code, &category.ID, &category.LegacyCredentialID); err != nil {
 			return nil, err
 		}
-		out[code] = id
+		out[code] = category
 	}
 	return out, rows.Err()
 }

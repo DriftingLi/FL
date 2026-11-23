@@ -1,6 +1,5 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { useCredentialStore } from '@/stores/credential'
 import {
   getSubdomain,
   buildCrossDomainAuthUrl,
@@ -88,10 +87,11 @@ const legacyRedirects: RouteRecordRaw[] = [
       if (sub !== 'main') return getDefaultWorkspaceBySubdomain()
       const authStore = useAuthStore()
       const workspace = resolveWorkspaceForRole(authStore.userInfo?.role)
-      // 未知角色 resolveWorkspaceForRole 返回 '/'，根路径按原逻辑回登录页
-      return workspace === '/' ? '/login' : workspace
+      return workspace === '/' ? href('CourseList') : workspace
     }
   },
+
+  { path: '/training/onboarding/credential', redirect: href('StudentDashboard') },
 
   // ========== 兼容旧路由 /dashboard/* ==========
   {
@@ -140,10 +140,9 @@ const router = createRouter({
 /**
  * 全局守卫 orchestrator（#618）：决策逻辑全部在 guard.ts 的纯函数决策管线
  * （(目标路由， 认证/环境状态) ⇒ 决策，全分支单测覆盖），这里只做三件事——
- * 1. 注入环境事实：等待认证初始化、投影 to 为 GuardInput、读取 auth/credential/子域名状态；
+ * 1. 注入环境事实：等待认证初始化、投影 to 为 GuardInput、读取认证与子域名状态；
  * 2. 执行决策：next / 清登录态重定向 / 跨子域名整页跳转 / 当前子域名默认工作区；
- * 3. load-credential 决策时补拉一次证件数据后重跑管线（管线纯函数，重跑无副作用；
- *    loadCurrent 内部吞错，失败记为无证件，与既有行为一致）。
+ * 3. 权限尚未加载时补拉后重新执行守卫。
  */
 router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore()
@@ -151,8 +150,15 @@ router.beforeEach(async (to, _from, next) => {
   // 等待认证初始化完成（main.ts 显式启动，幂等；同一 Promise 等待不重复执行）
   await authStore.initialize()
 
-  const credStore = useCredentialStore()
-  let credentialLoadAttempted = false
+  const legacyCourseId = to.name === 'CourseList' ? to.query.course_id : undefined
+  if (typeof legacyCourseId === 'string' && /^[1-9][0-9]*$/.test(legacyCourseId)) {
+    next({ ...href('PublicCourseDetail', { courseId: legacyCourseId }), replace: true })
+    return
+  }
+  if (to.name === 'StudentDashboard' && (!authStore.isLoggedIn || authStore.userInfo?.role !== 'hrwai_user')) {
+    next({ ...href('CourseList'), replace: true })
+    return
+  }
 
   const input = (): GuardInput => ({
     path: to.path,
@@ -169,7 +175,6 @@ router.beforeEach(async (to, _from, next) => {
     hasValidToken: !!(authStore.token && authStore.isLoggedIn && authStore.userInfo && authStore.userInfo.role),
     subdomain: getSubdomain(),
     ipDirect: isIpDirectMode(),
-    credential: !credStore.initialized ? 'unloaded' : credStore.current === null ? 'none' : 'present',
     // 运行时能力集（#1618 段1）：管理端的能力由数据层回答，守卫据此判定页面可达性。
     // 落定标志与集合**同时**注入（#1645）：集合为空可能只是「还没拉到」，那种情况下不许判可见性
     capabilities: authStore.capabilities,
@@ -200,15 +205,6 @@ router.beforeEach(async (to, _from, next) => {
         // （成功 → ready、失败 → failed，见 stores/auth.loadCapabilities），
         // 故重跑时本步不再触发，不会自我循环；失败仍按空集走 fail closed。
         await authStore.loadCapabilities()
-        break
-      case 'load-credential':
-        // 证件数据未加载：补拉一次后重跑管线；credentialLoadAttempted 防御性兜底死循环
-        if (credentialLoadAttempted) {
-          next()
-          return
-        }
-        credentialLoadAttempted = true
-        await credStore.loadCurrent()
         break
     }
   }

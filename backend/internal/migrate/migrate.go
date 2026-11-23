@@ -38,8 +38,26 @@ func RunMigrations(dsn, direction string, logger *zap.Logger, args ...string) er
 
 	switch direction {
 	case "up":
-		if err := m.Up(); err != nil && err != migrate.ErrNoChange {
-			return fmt.Errorf("migrate up 失败: %w", err)
+		var upErr error
+		switch len(args) {
+		case 0:
+			upErr = m.Up()
+		case 1:
+			target, parseErr := strconv.ParseUint(args[0], 10, strconv.IntSize)
+			if parseErr != nil || target == 0 {
+				return fmt.Errorf("无效的目标版本号: %s", args[0])
+			}
+			if current, _, versionErr := m.Version(); versionErr == nil && uint(target) < current {
+				return fmt.Errorf("目标版本 %d 早于当前版本 %d", target, current)
+			} else if versionErr != nil && versionErr != migrate.ErrNilVersion {
+				return fmt.Errorf("查询迁移版本失败: %w", versionErr)
+			}
+			upErr = m.Migrate(uint(target))
+		default:
+			return fmt.Errorf("用法: migrate up [目标版本]")
+		}
+		if upErr != nil && upErr != migrate.ErrNoChange {
+			return fmt.Errorf("migrate up 失败: %w", upErr)
 		}
 	case "down":
 		if err := m.Down(); err != nil && err != migrate.ErrNoChange {

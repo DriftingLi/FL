@@ -44,6 +44,9 @@ func RegisterAdminRoutes(rg *gin.RouterGroup, session *security.Session, svc *Se
 
 	// ---- 专业方向 / 课程等级 / 证书模板：都是课程管理的挂载字典 ----
 	catalog := g.Group("", middleware.CapabilityRequired(authz.CapCourseManage))
+	catalog.GET("/catalog/categories", h.ListAdminCategories)
+	catalog.POST("/catalog/categories", h.CreateCategory)
+	catalog.PUT("/catalog/categories/:category_id", h.UpdateCategory)
 	catalog.GET("/specialties", h.ListSpecialties)
 	catalog.POST("/specialty", h.CreateSpecialty)
 	catalog.PUT("/specialty/:specialty_id", h.UpdateSpecialty)
@@ -85,6 +88,76 @@ func (h *handler) GetAdminCatalogTree(c *gin.Context) {
 			return h.svc.GetAdminCatalogTree(), nil
 		},
 	}.Handle(c)
+}
+
+// @Summary 管理端培训分类列表（含停用项）
+// @Tags 管理端-培训目录
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.R{data=training.TrainingCategoryListDTO} "success"
+// @Failure 401 {object} response.R "未认证"
+// @Router /admin/catalog/categories [get]
+func (h *handler) ListAdminCategories(c *gin.Context) {
+	httpx.Endpoint[struct{}, TrainingCategoryListDTO]{
+		Invoke: func(ctx context.Context, _ *struct{}) (*TrainingCategoryListDTO, error) {
+			return h.svc.listAdminCategories(ctx)
+		},
+	}.Handle(c)
+}
+
+// @Summary 创建一级培训分类
+// @Tags 管理端-培训目录
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body TrainingCategoryInput true "分类名称、排序、启用状态"
+// @Success 201 {object} response.R{data=training.TrainingCategoryDTO} "success"
+// @Router /admin/catalog/categories [post]
+func (h *handler) CreateCategory(c *gin.Context) {
+	httpx.Endpoint[TrainingCategoryInput, TrainingCategoryDTO]{
+		Parse: func(c *gin.Context) (*TrainingCategoryInput, error) {
+			return httpx.BindJSONMsg[TrainingCategoryInput](c, "请求数据无效")
+		},
+		Invoke: func(ctx context.Context, input *TrainingCategoryInput) (*TrainingCategoryDTO, error) {
+			return h.svc.saveCategory(ctx, 0, *input)
+		},
+	}.WithSuccess(httpx.Created("分类已创建"), http.StatusInternalServerError).
+		WithSentinel(errCategoryInput, http.StatusBadRequest).Handle(c)
+}
+
+type categoryUpdateRequest struct {
+	ID    int
+	Input TrainingCategoryInput
+}
+
+// @Summary 编辑一级培训分类
+// @Tags 管理端-培训目录
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param category_id path int true "分类 ID"
+// @Param body body TrainingCategoryInput true "分类名称、排序、启用状态"
+// @Success 200 {object} response.R{data=training.TrainingCategoryDTO} "success"
+// @Router /admin/catalog/categories/{category_id} [put]
+func (h *handler) UpdateCategory(c *gin.Context) {
+	httpx.Endpoint[categoryUpdateRequest, TrainingCategoryDTO]{
+		Parse: func(c *gin.Context) (*categoryUpdateRequest, error) {
+			id, err := httpx.PathInt(c, "category_id", "培训分类 ID 无效")
+			if err != nil {
+				return nil, err
+			}
+			input, err := httpx.BindJSONMsg[TrainingCategoryInput](c, "请求数据无效")
+			if err != nil {
+				return nil, err
+			}
+			return &categoryUpdateRequest{ID: id, Input: *input}, nil
+		},
+		Invoke: func(ctx context.Context, input *categoryUpdateRequest) (*TrainingCategoryDTO, error) {
+			return h.svc.saveCategory(ctx, input.ID, input.Input)
+		},
+	}.WithSuccess(httpx.OkMsg("分类已更新"), http.StatusInternalServerError).
+		WithSentinel(errCategoryInput, http.StatusBadRequest).
+		WithSentinel(errCategoryNotFound, http.StatusNotFound).Handle(c)
 }
 
 // ListSpecialties 专业方向列表（含停用项）

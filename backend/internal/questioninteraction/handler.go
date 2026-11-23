@@ -31,7 +31,7 @@ func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, credRes midd
 	h := newHandler(commentSvc, noteSvc, knowledgeSvc)
 	// CredentialScoped 在此蓝图的目的不是给评论/笔记本身分区，而是装配题目读 scope
 	// （ADR-0062 决策 4）：评论与笔记都挂在题上，判据 = 「这道题对该学员可读吗」。
-	g := rg.Group("/questions", middleware.JWTAuth(session), middleware.CredentialScoped(credRes))
+	g := rg.Group("/questions", middleware.JWTAuth(session), middleware.CredentialScopedUnlessCategory(credRes))
 
 	// 评论
 	g.GET("/:question_id/comments", h.ListComments)

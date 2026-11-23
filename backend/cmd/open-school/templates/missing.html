@@ -1,0 +1,8 @@
+{{/* missing.html：课程不存在（上游 404 / 非法 ID）。
+     与 error.html 分开：不存在是稳定事实（404），加载失败是暂时状态（可重试）。 */}}
+{{define "missing_page"}}{{template "page_start" .}}
+<div class="state state-empty">
+  <h1>课程不存在</h1>
+  <a class="btn btn-primary" href="{{.Back}}">返回课程目录</a>
+</div>
+{{template "page_end" .}}{{end}}

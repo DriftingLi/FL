@@ -12,6 +12,7 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/questionbank"
+	"forklift-training/internal/scope"
 	"forklift-training/internal/security"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
@@ -31,12 +32,12 @@ func newHandler(svc *Service) *handler {
 func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, credRes middleware.CredentialResolver, svc *Service) {
 	h := newHandler(svc)
 
-	g := rg.Group("/favorites", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapFavoriteManage), middleware.CredentialScoped(credRes))
+	g := rg.Group("/favorites", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapFavoriteManage))
 
 	// GET /api/favorites?target_type=&page=&page_size= 我的收藏列表（快照回填）
-	g.GET("", h.List)
+	g.GET("", middleware.CredentialScopedUnlessCategory(credRes), h.List)
 	// POST /api/favorites {target_type, target_id} 收藏（幂等）
-	g.POST("", h.Add)
+	g.POST("", middleware.CredentialScopedUnlessCategory(credRes), h.Add)
 	// DELETE /api/favorites/:id 取消收藏（仅本人）
 	g.DELETE("/:id", h.Remove)
 	// GET /api/favorites/check?target_type=&target_id= 是否已收藏
@@ -65,6 +66,7 @@ func parseTagID(raw string) (*int, bool) {
 // @Produce json
 // @Security BearerAuth
 // @Param target_type query string false "目标类型 course/chapter/question/featured/topic/job"
+// @Param category_id query string false "培训分类 ID 或 all"
 // @Param tag_id query int false "题库标签ID：仅在 target_type=question 时生效（按标签下钻题目收藏；传其它类型 400）"
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(20)
@@ -74,13 +76,19 @@ func parseTagID(raw string) (*int, bool) {
 func (h *handler) List(c *gin.Context) {
 	userID := middleware.CurrentUserID(c)
 	credID := middleware.CredentialIDPtr(c)
+	rawCategory, present := c.GetQuery("category_id")
+	category, err := scope.ParseCategoryFilter(rawCategory, present)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
 	tagID, badTag := parseTagID(c.Query("tag_id"))
 	if badTag {
 		response.BadRequest(c, "题库标签ID无效")
 		return
 	}
-	resp, err := h.svc.List(userID, c.Query("target_type"),
-		httpx.QueryIntDefault(c, "page", 1), httpx.QueryIntDefault(c, "page_size", 20), credID, tagID)
+	resp, err := h.svc.list(userID, c.Query("target_type"),
+		httpx.QueryIntDefault(c, "page", 1), httpx.QueryIntDefault(c, "page_size", 20), credID, tagID, category)
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return

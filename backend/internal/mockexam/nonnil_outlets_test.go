@@ -24,6 +24,7 @@ var nonnilOutletsExam = map[string]func(t *testing.T) any{
 	"mockexam.MockExamHistoryDTO.exams":    outletMockExamHistoryEmpty,
 	"mockexam.MockExamStartDTO.questions":  outletMockExamStart,
 	"mockexam.MockExamResumeDTO.questions": outletMockExamResume,
+	"mockexam.MockExamResumeDTO.answers":   outletMockExamResume,
 }
 
 // TestNonNilDeclaredOutletsNeverEmitNull 本域的举证入口（判据本体在 testutil）。

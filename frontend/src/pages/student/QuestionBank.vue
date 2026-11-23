@@ -3,6 +3,24 @@
     <!-- ===== 入口 ===== -->
     <div v-if="!mode" class="flex flex-col gap-6">
       <UiSectionHeader title="题库练习" subtitle="选择练习方式，开始刷题" />
+      <div class="self-start">
+        <UiButton variant="ghost" :aria-expanded="showHistory" @click="showHistory = !showHistory">
+          {{ showHistory ? '收起练习记录' : '练习记录与统计' }}
+        </UiButton>
+      </div>
+      <PracticeHistoryPanel v-if="showHistory" />
+
+      <div class="flex items-center gap-3">
+        <label for="practice-category" class="text-sm text-ink">本次练习分类</label>
+        <UiSelect
+          id="practice-category"
+          v-model="categoryId"
+          placeholder="选择培训分类"
+          class="w-[200px]"
+          :disabled="launching"
+          :options="categories.map(category => ({ label: category.name, value: category.id }))"
+        />
+      </div>
 
       <!-- 练习统计 -->
       <div class="grid gap-4 sm:grid-cols-3">
@@ -37,19 +55,15 @@
             </span>
             <h3 class="font-heading text-base font-semibold text-ink">顺序练习</h3>
           </div>
-          <!-- #414：占位证件（池内无题）呈「内容建设中」空态而不是 0/0 -->
-          <p v-if="seqPoolEmpty" class="mt-3 text-sm text-ink-3">内容建设中</p>
-          <p v-else class="mt-3 text-sm text-ink-3">
-            {{ seqProgress.completed }}/{{ seqDenominator }} 已练习
-          </p>
           <UiButton
             variant="primary"
             block
             class="mt-4"
-            :disabled="seqPoolEmpty"
-            @click="startSequential"
+            :disabled="!categoryId"
+            :loading="launching"
+            @click="beginPractice('sequential', 'sequential')"
           >
-            {{ seqProgress.completed > 0 ? '继续练习' : '开始练习' }}
+            开始或继续练习
           </UiButton>
         </UiCard>
 
@@ -65,7 +79,7 @@
             <span class="text-sm text-ink-3">每次题量</span>
             <UiSelect v-model="randomCount" size="small" class="w-[110px]" :options="(randomCountOptions).map((o) => ({ label: o.label, value: o.value }))" />
           </div>
-          <UiButton variant="success" block class="mt-4" :loading="loading" @click="startFree()">
+          <UiButton variant="success" block class="mt-4" :loading="launching" :disabled="!categoryId" @click="beginPractice('free', 'random', randomCount)">
             开始练习
           </UiButton>
         </UiCard>
@@ -86,9 +100,9 @@
             variant="warning"
             block
             class="mt-4"
-            :loading="loading"
-            :disabled="!specialType"
-            @click="startFree()"
+            :loading="launching"
+            :disabled="!categoryId || !specialType"
+            @click="beginPractice('free', 'special:' + specialType)"
           >
             开始练习
           </UiButton>
@@ -104,20 +118,17 @@
           </div>
           <div class="mt-3 flex items-center justify-between gap-2">
             <span class="text-sm text-ink-3">考点标签</span>
-            <UiSelect v-model="tagPracticeId" size="small" filterable placeholder="选择标签" class="w-[130px]" :loading="tagsLoading" :options="(tags).map((t) => ({ label: `${t.name}（${t.question_count ?? 0}题）`, value: t.id }))" />
+            <UiSelect v-model="tagPracticeId" size="small" filterable placeholder="选择标签" class="w-[130px]" :loading="tagsLoading" :options="tags.map(tag => ({ label: tag.name, value: tag.id }))" />
           </div>
-          <p v-if="tagPracticeId && tagProgress.total > 0" class="mt-2 text-xs text-ink-3">
-            {{ tagProgress.completed }}/{{ tagProgress.total }} 已练习
-          </p>
           <UiButton
             variant="primary"
             block
             class="mt-4"
-            :loading="loading"
-            :disabled="!tagPracticeId"
-            @click="startTagPractice"
+            :loading="launching"
+            :disabled="!categoryId || !tagPracticeId"
+            @click="beginPractice('tag', 'tag:' + tagPracticeId)"
           >
-            {{ tagProgress.completed > 0 ? '继续练习' : '开始练习' }}
+            开始或继续练习
           </UiButton>
         </UiCard>
       </div>
@@ -129,11 +140,12 @@
         <div class="text-base text-ink">
           第 {{ currentIdx + 1 }}/{{ questions.length }} 题
           <span class="ml-3 text-sm text-ink-3">已答对 {{ correctCount }} · 已答错 {{ wrongCount }}</span>
+          <UiTag size="small" class="ml-2">{{ activeCategoryName }}</UiTag>
           <UiTag v-if="mode === 'sequential'" size="small" tone="primary" style="margin-left: 10px">顺序练习</UiTag>
           <UiTag v-else-if="mode === 'tag'" size="small" style="margin-left: 10px">
             标签：{{ currentTagName }}
           </UiTag>
-          <UiTag v-else-if="specialType && mode === 'free'" size="small" tone="warning" style="margin-left: 10px">
+          <UiTag v-else-if="specialType && selectedMode?.startsWith('special:')" size="small" tone="warning" style="margin-left: 10px">
             {{ typeMap[specialType] }}
           </UiTag>
         </div>
@@ -209,12 +221,13 @@
 
 <script setup lang="ts">
 import UiIcon from '@/components/ui/UiIcon.vue'
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
+import { isAxiosError } from 'axios'
 import { ElMessage } from 'element-plus'
-import { questionBankApi } from '@/api/questionBank'
-import { practiceModeApi, type PracticeModeKey } from '@/api/practiceMode'
+import { practiceModeApi } from '@/api/practiceMode'
 import { trainingApi } from '@/api/training'
-import type { QuestionTag } from '@/api/training'
+import type { QuestionTag, TrainingCategoryDTO } from '@/api/training'
 import { useStagger } from '@/composables/useStagger'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiActionChip from '@/components/ui/UiActionChip.vue'
@@ -222,11 +235,9 @@ import UiCard from '@/components/ui/UiCard.vue'
 import UiSectionHeader from '@/components/ui/UiSectionHeader.vue'
 import UiStatCard from '@/components/ui/UiStatCard.vue'
 
-const credentialStore = useCredentialStore()
-
 const stagger = useStagger()
 import { typeMap, questionTypeOptions, randomCountOptions } from '@/constants/question'
-import type { PracticeProgress, QuestionType } from '@/types/question'
+import type { QuestionType } from '@/types/question'
 import {
   usePracticeSession,
   type PracticeMode,
@@ -234,43 +245,39 @@ import {
 } from '@/composables/usePracticeSession'
 import { useQuestionPeripherals, questionPeripheralAdapters } from '@/composables/useQuestionPeripherals'
 import QuestionOptionPicker from '@/components/student/QuestionOptionPicker.vue'
+import PracticeHistoryPanel from '@/components/student/PracticeHistoryPanel.vue'
 import AnswerResultCard from '@/components/practice/AnswerResultCard.vue'
 import AIExplanationCard from '@/components/practice/AIExplanationCard.vue'
 import KnowledgeCard from '@/components/practice/KnowledgeCard.vue'
 import CommentCard from '@/components/practice/CommentCard.vue'
 import NoteCard from '@/components/practice/NoteCard.vue'
 import { useAsyncPage } from '@/composables/useAsyncPage'
-import { useCredentialStore } from '@/stores/credential'
 import { useConfirm } from '@/composables/useConfirm'
 import UiTag from '@/components/ui/UiTag.vue'
 import UiAlert from '@/components/ui/UiAlert.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 import UiSelect from '@/components/ui/UiSelect.vue'
 
-// null = 入口；'sequential' | 'free' | 'tag' = 刷题中
-
-// 卡片选择器状态
+const categoryId = ref<number | null>(null)
+// route 用于读取公开网校带过来的 ?category_id=（#2760）。
+const route = useRoute()
+const showHistory = ref(false)
+const categories = ref<TrainingCategoryDTO[]>([])
+const activeCategoryName = computed(() => categories.value.find(category => category.id === categoryId.value)?.name)
 const randomCount = ref(20)
 const specialType = ref<QuestionType | ''>('')
 const tagPracticeId = ref<number | null>(null)
 const tags = ref<QuestionTag[]>([])
 const tagsLoading = ref(false)
+const selectedMode = ref<string>()
+const launching = ref(false)
+let startInput: Parameters<typeof practiceModeApi.startCategoryPractice>[0]
+let attemptKey = ''
 
 const currentTagName = computed(() => {
   const t = tags.value.find(item => item.id === tagPracticeId.value)
   return t?.name || ''
 })
-
-// 卡片展示数据
-const seqProgress = ref<PracticeProgress>({ completed: 0, total: 0, current_index: 0 })
-const tagProgress = ref<PracticeProgress>({ completed: 0, total: 0, current_index: 0 })
-const totalQuestions = ref(0)
-
-// #413 卡片分母口径：实时池总数（pool_total）优先；无进度时退回题库统计的池总数。
-const seqDenominator = computed(() => (seqProgress.value.pool_total ?? seqProgress.value.total) || totalQuestions.value)
-
-// #414 占位证件空态：池内无题（pool_total 为 0 且无历史进度）→ 「内容建设中」
-const seqPoolEmpty = computed(() => seqDenominator.value === 0)
 
 const practiceStats = ref({ today_count: 0, total_count: 0, total_days: 0 })
 const practiceStatsLoading = ref(true)
@@ -291,98 +298,25 @@ async function loadPracticeStats() {
   }
 }
 
-// 选择标签时查询该标签的练习进度（断点续练展示）
-watch(tagPracticeId, async (id) => {
-  tagProgress.value = { completed: 0, total: 0, current_index: 0 }
-  if (!id) return
-  try {
-    const prog = await practiceModeApi.getProgress(`tag:${id}`)
-    tagProgress.value = prog || tagProgress.value
-  } catch {
-    // 查询失败降级为无进度
-  }
-})
-
-// 进度 key 语义（#390 与后端封闭校验对齐）：顺序练习 'sequential'；标签练习 'tag:<tagID>'；
-// 专项（free:<type>）与随机不在后端封闭集（sequential/tag:<id>/paper:<id>，未知 400）——一律不落进度
-function getPracticeModeKey(currentMode: PracticeMode): PracticeModeKey | '' {
-  if (currentMode === 'sequential') return 'sequential'
-  if (currentMode === 'tag' && tagPracticeId.value) return `tag:${tagPracticeId.value}`
-  return ''
-}
-
-// 查询断点续练起始位置和持久化答题状态（answers_state 三态这里归一为 null）
-async function resolveProgress(modeKey: PracticeModeKey | '', total: number): Promise<{ startIndex: number; answersState: Record<string, unknown> | null }> {
-  if (!modeKey) return { startIndex: 0, answersState: null }
-  try {
-    const progRes = await practiceModeApi.getProgress(modeKey)
-    const data = progRes || {}
-    const idx = data.current_index || 0
-    const startIndex = idx > 0 && idx < total ? idx : 0
-    return { startIndex, answersState: data.answers_state || null }
-  } catch (e) {}
-  return { startIndex: 0, answersState: null }
-}
-
-// 练习会话状态机：三个 start 模式 + 进度保存作为 adapter 注入，页面不触碰 API 层
 const session = usePracticeSession({
-  start: async (startMode: PracticeMode): Promise<PracticeStartData | null> => {
-    if (startMode === 'sequential') {
-      const res = await practiceModeApi.startSequential()
-      const data = res || {}
-      const qs = data.questions || []
-      if (!qs.length) return null
-      return { questions: qs, ...(await resolveProgress('sequential', qs.length)) }
-    }
-    if (startMode === 'tag') {
-      if (!tagPracticeId.value) return null
-      const res = await practiceModeApi.startTagPractice({ tag_id: tagPracticeId.value, count: 0 })
-      const data = res || {}
-      const qs = data.questions || []
-      if (!qs.length) return null
-      return { questions: qs, ...(await resolveProgress(`tag:${tagPracticeId.value}`, qs.length)) }
-    }
-    // free：专项（选了题型）或随机 —— 两者均不在后端进度封闭集（#390），不查询/不落续练进度
-    const params: Record<string, unknown> = {}
-    if (specialType.value) {
-      params.type = specialType.value
-      params.count = 0
-    } else {
-      params.count = randomCount.value
-    }
-    const qs = (await practiceModeApi.getFreeQuestions(params)) || []
-    if (!qs.length) return null
-    return { questions: qs, ...(await resolveProgress('', qs.length)) }
+  start: async (): Promise<PracticeStartData> => {
+    const attempt = await practiceModeApi.startCategoryPractice(startInput)
+    attemptKey = attempt.attempt_key
+    return { questions: attempt.questions, startIndex: attempt.current_index, answersState: attempt.answers_state }
   },
-  submit: async (payload) => {
-    try {
-      return await practiceModeApi.submitAnswer({
-        question_id: payload.question_id,
-        user_answer: payload.user_answer as string,
-        practice_type: payload.practice_type || 'free'
-      })
-    } catch (e) {
-      return null
-    }
-  },
-  saveProgress: async (payload) => {
-    // 随机练习 modeKey 为空：不保存进度
-    const modeKey = getPracticeModeKey(payload.mode)
-    if (!modeKey) return
-    try {
-      await practiceModeApi.saveProgress(payload.index, modeKey, payload.total, payload.answersState)
-      if (payload.mode === 'sequential') seqProgress.value.completed = payload.index
-    } catch (e) {
-      // 保存失败不阻断练习
-    }
-  }
+  submit: (payload) => practiceModeApi.submitCategoryAnswer({
+    attempt_key: attemptKey,
+    question_id: payload.question_id,
+    user_answer: payload.user_answer
+  }),
+  saveProgress: async () => {}
 })
 
 const {
   mode, questions, currentIdx, answers, toggleOption,
   correctCount, wrongCount,
   currentQuestion, textAnswer, submitted, lastResult, currentOptions,
-  selectedOptionKeys, canSubmit, loading,
+  selectedOptionKeys, canSubmit,
   start, submitAnswer, nextQuestion, prevQuestion, quit
 } = session
 
@@ -392,94 +326,85 @@ const { favorited, toggleFavorite, knowledgeTags, lastDuration, recordDuration }
   questionPeripheralAdapters({ knowledgeTrigger: 'result' })
 )
 
-// ===== 开始各模式（薄 wrapper：启动会话 + 空题数提示）=====
-async function startSequential() {
-  const ok = await start('sequential')
-  if (!ok) ElMessage.warning('题库暂无题目')
-}
-
-async function startFree() {
-  const ok = await start('free')
-  if (!ok) ElMessage.warning('暂无符合条件的题目')
+async function beginPractice(displayMode: PracticeMode, practiceMode: string, count?: number) {
+  if (!categoryId.value || launching.value) return
+  launching.value = true
+  selectedMode.value = practiceMode
+  startInput = { category_id: categoryId.value, mode: practiceMode, count }
+  try {
+    try {
+      await start(displayMode)
+    } catch (error) {
+      if (!isAxiosError(error) || error.response?.status !== 409) throw error
+      try {
+        await useConfirm().confirm('本轮已无可继续的题目。确定重新开始？', '重新练习')
+      } catch {
+        return
+      }
+      startInput = { ...startInput, restart: true }
+      await start(displayMode)
+    }
+  } catch (error) {
+    ElMessage.warning(isAxiosError(error) ? error.response?.data?.message || '无法开始本次练习，请重试' : '无法开始本次练习，请重试')
+  } finally {
+    launching.value = false
+  }
 }
 
 async function handleSubmit() {
   recordDuration()
   await submitAnswer()
-  loadPracticeStats()
-}
-
-async function startTagPractice() {
-  if (!tagPracticeId.value) return
-  const ok = await start('tag')
-  if (!ok) ElMessage.warning('该标签下暂无已发布题目')
+  void loadPracticeStats()
 }
 
 async function confirmQuit() {
   try {
     await useConfirm().confirm('确定要退出本次练习吗？', '提示', { type: 'warning' })
-    // 退出时保存当前游标和答题状态并返回入口，随后刷新卡片进度展示
     await quit()
-    loadCardData()
-    loadPracticeStats()
+    attemptKey = ''
+    void loadPracticeStats()
   } catch (e) {}
 }
 
-// 标签选项是「随筛选轴 / 切证件一起重装」的旁路装载面：票 10（ADR-0062 决策 10）
-// 把它声明进 useAsyncPage 的 facets，于是「何时重装」全仓只有一处判据。
-// 此前它只挂在 onMounted 上 ⇒ 切证件后下拉里仍是上一个证件的标签，
-// 拿旧证件的 tag_id 去抽新证件的题 = 空列表。
-// 错误不再静默咽下：抛给 facet 运行时记一条 error（装载中态由 finally 结清）。
 async function loadTags() {
   tagsLoading.value = true
   try {
-    // 证件作用域（ADR-0047 §4）：公开标签接口无登录上下文，显式传当前证件
-    const data = await trainingApi.getTags(credentialStore.current?.id)
-    tags.value = data.tags || []
+    tags.value = (await trainingApi.getTags()).tags
   } finally {
     tagsLoading.value = false
   }
 }
 
-// 入口卡片聚合装载收编进 useAsyncPage（#605）：loader 纯装配（各并发请求自带降级 catch，
-// 不外抛）；证件切换即重拉由 module 内聚 watch 承担——loadCardData 已含 getPracticeStats，
-// 覆盖原事件通知里的 loadPracticeStats
-const { run: loadCardData } = useAsyncPage(
-  async () => {
-    const [statsRes, progRes, practiceRes] = await Promise.all([
-      questionBankApi.getStats().catch(() => null as any),
-      practiceModeApi.getSequentialProgress().catch(() => null as any),
-      practiceModeApi.getPracticeStats().catch(() => null as any)
-    ])
-    // 若第 3 并发失败时 fallback 仍走独立 loader（避免悬在 skeleton）：这条兜底自带写回，
-    // 判据只能是「第 3 并发没结果」——practiceStatsLoading 的归零搬进 apply 后，读它已晚一步。
-    if (!practiceRes) {
-      try { await loadPracticeStats() } catch {}
-    }
-    return { statsRes, progRes, practiceRes }
-  },
-  {
-    // 票 10：标签 facet 与卡片聚合装载共享同一批失效时机（首装 / 筛选变化 / 切证件 / reset）
-    facets: [{ load: () => loadTags() }],
-    // 写回槽（ADR-0069 决策 1）：三个聚合面按各自是否有结果落地
-    apply: ({ statsRes, progRes, practiceRes }) => {
-      if (statsRes) totalQuestions.value = (statsRes.total as number) || 0
-      if (progRes) seqProgress.value = progRes
-      if (practiceRes) {
-        practiceStats.value = {
-          today_count: Number((practiceRes as any)?.today_count ?? 0),
-          total_count: Number((practiceRes as any)?.total_count ?? 0),
-          total_days: Number((practiceRes as any)?.total_days ?? 0)
-        }
-        practiceStatsLoading.value = false
-      }
-    }
+const { run: loadEntry } = useAsyncPage(trainingApi.getCategories, {
+  facets: [{ load: loadTags }],
+  apply: (data) => {
+    categories.value = data.categories
+    preselectCategoryFromQuery()
   }
-)
+})
 
-// 入口只需拉起列表这一条流；标签 facet 由上面那条槽随首装一起装载（票 10）。
-// 位置在 useAsyncPage 之后是刻意的：`loadCardData` 是 const 解构，早于声明行取用会踩 TDZ。
-onMounted(loadCardData)
+// preselectCategoryFromQuery 按 URL 的 category_id 预选分类（#2760 US-13/US-14）。
+//
+// 来源：公开网校的题库目录点「去练习」会带 ?category_id=<id> 过来（可能中间过一次登录，
+// 由登录后的 redirect 把参数带回来）。这里在**分类列表加载完之后**才判：
+// 判据是「该 id 在当前可选分类里」，而不是「URL 里有这个 id」——后者会让一个失效/越权
+// 的分类 id 直接落进 categoryId，接着 beginPractice 打到后端 400。
+//
+// 缺失、无效、不在可选集内一律**不动** categoryId（保持 null，让学员手选）：
+// 这正是 US-14「分类失效时仍能手动选择」的落点。不报错、不提示——
+// 一个残留的查询参数不该在页面上弹一次失败。
+function preselectCategoryFromQuery() {
+  const raw = route.query.category_id
+  if (typeof raw !== 'string' || !/^[1-9][0-9]*$/.test(raw)) return
+  const id = Number(raw)
+  if (!Number.isSafeInteger(id)) return
+  if (!categories.value.some(category => category.id === id)) return
+  categoryId.value = id
+}
 
+onMounted(() => {
+  void loadEntry()
+  void loadPracticeStats()
+})
 </script>
 

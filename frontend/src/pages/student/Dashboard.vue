@@ -166,7 +166,7 @@ const continueLearningPath = computed<RouteLocationRaw>(() => {
   const cl = continueLearning.value
   if (!cl) return href('CourseList')
   if (cl.last_chapter_id) return href('ChapterView', { courseId: cl.course_id, chapterId: cl.last_chapter_id })
-  return { ...href('CourseList'), query: { course_id: String(cl.course_id) } }
+  return href('PublicCourseDetail', { courseId: cl.course_id })
 })
 
 // 最近学习
@@ -237,7 +237,7 @@ async function fetchCourses(): Promise<CoursesBundle> {
         badge: `${Math.round(c.progress ?? 0)}%`,
         to: c.last_chapter_id
           ? href('ChapterView', { courseId: c.course_id, chapterId: c.last_chapter_id })
-          : { ...href('CourseList'), query: { course_id: String(c.course_id) } }
+          : href('PublicCourseDetail', { courseId: c.course_id })
       }))
     return { continueLearning: res?.continue_learning || null, activeCourses }
   } catch (error) {
@@ -265,7 +265,9 @@ async function fetchRecentLearning(): Promise<QuickCardItem[]> {
       title: r.course_name || '未知课程',
       subtitle: r.chapter_title || `${r.study_duration || 0} 分钟`,
       badge: r.study_duration ? `${r.study_duration}分钟` : '',
-      to: href('CourseList')
+      to: r.chapter_id
+        ? href('ChapterView', { courseId: r.course_id, chapterId: r.chapter_id })
+        : href('PublicCourseDetail', { courseId: r.course_id })
     }))
   } catch (error) {
     console.error('加载最近学习失败:', error)

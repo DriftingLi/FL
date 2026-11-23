@@ -116,7 +116,7 @@ func main() {
 
 	// 4. DB 阶段：干跑出比对计划，-write 落库。
 	if pool != nil && (*mode == "questions" || *mode == "all") {
-		credIDs, err := ResolveCredentialIDs(ctx, pool)
+		categories, err := ResolveTrainingCategories(ctx, pool)
 		if err != nil {
 			logger.Error(err.Error())
 			os.Exit(1)
@@ -126,17 +126,23 @@ func main() {
 			logger.Error(err.Error())
 			os.Exit(1)
 		}
-		plan := BuildQuestionPlan(parsed, skips, existing, credIDs)
-		rep.merge(plan, len(existing), credIDs)
+		plan := BuildQuestionPlan(parsed, skips, existing, categories)
+		rep.merge(plan, len(existing))
 		rep.papersPlan(plan, *minPaperQ)
 		if *write {
-			res, err := ApplyQuestionPlan(ctx, pool, plan, credIDs)
+			for _, question := range parsed {
+				if _, exists := categories[credentialFor(question.Source)]; !exists {
+					logger.Error("找不到资料来源对应的培训分类", zap.String("file", question.Source.Name))
+					os.Exit(1)
+				}
+			}
+			res, err := ApplyQuestionPlan(ctx, pool, plan, categories)
 			if err != nil {
 				logger.Error("题库写入失败", zap.Error(err))
 				os.Exit(1)
 			}
 			rep.questionApply(res)
-			paperRes, err := ApplyPapers(ctx, pool, res.FileQuestions, credIDs, *minPaperQ)
+			paperRes, err := ApplyPapers(ctx, pool, res.FileQuestions, categories, *minPaperQ)
 			if err != nil {
 				logger.Error("真题卷写入失败", zap.Error(err))
 				os.Exit(1)

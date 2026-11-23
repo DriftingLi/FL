@@ -89,7 +89,7 @@ func TestStudentCanReadCoursePicksTheRightFact(t *testing.T) {
 
 	// 3) 已挂载 + 已发布 + 定价，但这个人没兑换 = 无权益（第三件独立事实）。
 	price := 300
-	priced := model.Course{Name: "付费课", Status: 1, PointsPrice: &price,
+	priced := model.Course{Name: "付费课", CategoryID: &testutil.SeedTrainingCategory(t, db, "课程分类").ID, Status: 1, PointsPrice: &price,
 		SpecialtyID: &spec.SpecialtyID, LevelID: &lv.LevelID, CreatedAt: testutil.Now()}
 	if err := db.Create(&priced).Error; err != nil {
 		t.Fatalf("播种付费课程失败: %v", err)

@@ -241,6 +241,7 @@ class RenderEnvFileTest(unittest.TestCase):
             d = deploy.Deployer.__new__(deploy.Deployer)
             d.db_password = "p@ss word"
             d.backend_ref = "ghcr.io/o/backend:c1"
+            d.open_school_ref = "ghcr.io/o/backend:previous"
             d.frontend_ref = "ghcr.io/o/frontend:c2"
             d.libreoffice_ref = "ghcr.io/o/lo:c3"
             out = d.render_env_file()
@@ -248,6 +249,7 @@ class RenderEnvFileTest(unittest.TestCase):
             deploy.set_defaults({})
         self.assertIn("TLS_MODE=auto", out)
         self.assertIn("BACKEND_IMAGE=ghcr.io/o/backend:c1", out)
+        self.assertIn("OPEN_SCHOOL_IMAGE=ghcr.io/o/backend:previous", out)
         self.assertIn("DB_PASSWORD=\"p@ss word\"", out)
         self.assertIn("COMPOSE_PROJECT_NAME=forklift-training", out)
 

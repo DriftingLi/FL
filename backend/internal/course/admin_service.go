@@ -76,27 +76,35 @@ func applyCoursePointsPrice(course *model.Course, in *CourseInput) error {
 	return nil
 }
 
-// CreateCourse 创建课程。专业方向与课程等级必填（挂载不变式，旧 category 已退役）。
-// 目标证件为可选（V1 兼容存量，未来收紧为必填），若携带则校验存在性。
+// CreateCourse 创建课程并校验一级分类。
 func (s *AdminService) CreateCourse(in *CourseInput) (*CourseDTO, error) {
 	if in == nil || in.Name == nil || *in.Name == "" {
 		return nil, ErrCourseNameRequired
 	}
-	// 挂载不变式：创建必填方向与等级
-	if in.SpecialtyID == nil || *in.SpecialtyID <= 0 {
-		return nil, ErrSpecialtyRequired
-	}
-	if in.LevelID == nil || *in.LevelID <= 0 {
-		return nil, ErrCourseLevelRequired
+	if in.CategoryID == nil {
+		return nil, ErrCourseCategoryRequired
 	}
 	status := int16(1)
 	if in.Status != nil {
 		status = *in.Status
 	}
+	// 课程类型必填（#2760）：未携带即拒，不落默认值——「没选过」与「选了 illustrated」
+	// 若在库里同形，之后就无从复核，而公开目录的分流全靠这一格。
+	//
+	// 顺序：类型校验排在 applyCourseTrainingFields（分类/方向/等级校验）**之后**——
+	// 「分类不存在」比「没选类型」更根本（分类错了整门课都建不成），既有用例也按那个顺序
+	// 断言错误。故这里只做**值域**的早校验，必填判定放到分类校验之后。
+	courseType, provided := courseTypeFromInput(in)
+	if provided && !IsValidCourseType(courseType) {
+		return nil, ErrCourseTypeInvalid
+	}
 	course := model.Course{
 		Name:      *in.Name,
 		Status:    status,
 		CreatedAt: clock.Now(),
+	}
+	if provided {
+		course.CourseType = courseType
 	}
 	if in.Description != nil {
 		course.Description = *in.Description
@@ -110,18 +118,30 @@ func (s *AdminService) CreateCourse(in *CourseInput) (*CourseDTO, error) {
 	if err := applyCourseTrainingFields(s.db, &course, in); err != nil {
 		return nil, err
 	}
+	// 类型必填（#2760）：放在分类/方向/等级校验之后 —— 分类错了整门课都建不成，
+	// 那个错误更根本，先答它。
+	if !provided {
+		return nil, ErrCourseTypeRequired
+	}
 	if err := applyCoursePointsPrice(&course, in); err != nil {
 		return nil, err
 	}
-	// 未显式传 sort_order 时，自动排到所属方向+等级组的末尾（max+1）
-	if in.SortOrder == nil && course.SpecialtyID != nil && course.LevelID != nil {
+	if in.SortOrder == nil {
 		course.SortOrder = sortorder.NextValue(s.db, "course",
-			map[string]any{"specialty_id": *course.SpecialtyID, "level_id": *course.LevelID})
+			map[string]any{"category_id": *course.CategoryID})
 	}
-	if err := s.db.Create(&course).Error; err != nil {
-		return nil, err
-	}
-	if err := replaceCoursePrerequisites(s.db, course.CourseID, in.PrerequisiteCourseIDs); err != nil {
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&course).Error; err != nil {
+			return err
+		}
+		if course.Status != status {
+			if err := tx.Model(&course).Update("status", status).Error; err != nil {
+				return err
+			}
+			course.Status = status
+		}
+		return replaceCoursePrerequisites(tx, course.CourseID, in.PrerequisiteCourseIDs)
+	}); err != nil {
 		return nil, err
 	}
 	result := CourseToDTO(&course)
@@ -142,6 +162,9 @@ func (s *AdminService) UpdateCourse(courseID int, in *CourseInput) (*CourseDTO, 
 	if in == nil {
 		in = &CourseInput{}
 	}
+	// 原类型要在任何赋值之前留底：下面的护栏只在「类型真变化」时触发（见下方注释），
+	// 拿它和这里的值比才知道变没变。
+	originalCourseType := course.CourseType
 	if in.Name != nil && *in.Name != "" {
 		course.Name = *in.Name
 	}
@@ -157,12 +180,32 @@ func (s *AdminService) UpdateCourse(courseID int, in *CourseInput) (*CourseDTO, 
 	if in.Status != nil {
 		course.Status = *in.Status
 	}
-	// 编辑时若携带方向/等级字段则不允许清空（挂载不变式；DB 列保持可空以兼容存量）
-	if err := validateMountedCourseInputUpdate(in); err != nil {
-		return nil, err
+	// 课程类型（#2760）：携带则校验后落值；未携带保留原值——老调用方（只改 is_hot 的开关、
+	// 只切上下架）不该因为没带这个字段就 400。
+	if courseType, provided := courseTypeFromInput(in); provided {
+		if !IsValidCourseType(courseType) {
+			return nil, ErrCourseTypeInvalid
+		}
+		course.CourseType = courseType
 	}
 	if err := applyCourseTrainingFields(s.db, &course, in); err != nil {
 		return nil, err
+	}
+	if in.Status != nil && *in.Status == 1 && course.CategoryID == nil {
+		return nil, ErrCourseCategoryRequired
+	}
+	// 改类型必须有内容级证据（#2760 内容级互斥）：类型与章节内容同质是**不变式**，不是
+	// 只在建课时成立的一次性校验。否则管理员在图文课里挂了 3 个视频章节，再把类型改成
+	// video 就悄悄合规了——那正是「一门课既有图文又有视频」要防的形态。
+	//
+	// 只在类型**真的变化**时判：规格要求「课程内容更新后仍由我决定主类型」，存量混合课
+	// （迁移预填时留下、等待复核）在管理员改个名字或切一下上下架时不该被这道护栏挡住——
+	// 那会把「复核前维持归类稳定」变成「什么都改不了」。没带 course_type 时 course.CourseType
+	// 保留原值，与 originalCourseType 必然相等，自然跳过。
+	if course.CourseType != originalCourseType {
+		if err := requireCourseTypeMatchesChapters(s.db, courseID, course.CourseType); err != nil {
+			return nil, err
+		}
 	}
 	if err := applyCoursePointsPrice(&course, in); err != nil {
 		return nil, err
@@ -184,15 +227,15 @@ func (s *AdminService) UpdateCourse(courseID int, in *CourseInput) (*CourseDTO, 
 // 交换排序的三件课程侧输入事实（ADR-0065 决策 3）。此前它们是裸 errors.New ⇒ 落在
 // 端点默认面 400，与「查不动」「待交换的项不存在」挤成同一格；现在各自有名，两面共用一张表。
 var (
-	ErrCourseNotMountedForSort = errors.New("未挂载方向/等级的课程不能参与排序")
-	ErrCourseSortGroupMismatch = errors.New("只能交换同一方向+等级组内的课程")
+	ErrCourseNotMountedForSort = errors.New("未分类的课程不能参与排序")
+	ErrCourseSortGroupMismatch = errors.New("只能交换同一分类内的课程")
 	// ErrCourseSwapTargetNotFound 指 body 里 `swap_with` 指向的那门课不存在 —— 与「路径里那门课
 	// 不存在」（model.ErrCourseNotFound ⇒ 404）是两件事实。改之前两次 First 都回同一个哨兵，于是
 	// 「你要换的东西没有」对外答 404「课程不存在」，与前置课程那一支的 400 也不一致（ADR-0065 决策 3）。
 	ErrCourseSwapTargetNotFound = errors.New("待交换的课程不存在")
 )
 
-// SwapCourseSort 交换两门课程的排序位置（限制在同一方向+等级组内，真实生效含同值默认）。
+// SwapCourseSort 交换同一分类内两门课程的位置。
 func (s *AdminService) SwapCourseSort(a, b int) error {
 	var ca, cb model.Course
 	if err := s.db.First(&ca, a).Error; err != nil {
@@ -207,14 +250,14 @@ func (s *AdminService) SwapCourseSort(a, b int) error {
 		}
 		return err // 查不动不得被读成「不存在」（ADR-0062 票6 / ADR-0064 决策 1）
 	}
-	if !CourseMounted(ca.SpecialtyID, ca.LevelID) || !CourseMounted(cb.SpecialtyID, cb.LevelID) {
+	if ca.CategoryID == nil || cb.CategoryID == nil {
 		return ErrCourseNotMountedForSort
 	}
-	if *ca.SpecialtyID != *cb.SpecialtyID || *ca.LevelID != *cb.LevelID {
+	if *ca.CategoryID != *cb.CategoryID {
 		return ErrCourseSortGroupMismatch
 	}
 	return sortorder.SwapPositions(s.db, &model.Course{}, "course_id", a, b,
-		map[string]any{"specialty_id": *ca.SpecialtyID, "level_id": *ca.LevelID})
+		map[string]any{"category_id": *ca.CategoryID})
 }
 
 // DeleteCourse 删除课程。
@@ -244,16 +287,27 @@ func (s *AdminService) CreateChapter(courseID int, in *ChapterInput) (*ChapterDT
 	if in == nil || in.Title == nil || *in.Title == "" {
 		return nil, errors.New("章节标题不能为空")
 	}
+	// 内容级互斥（#2760）：新建章节的默认形态是 text（= 图文侧），若这门课是视频课，
+	// 现在建章就已经埋下混合课。第 ③ 步写内容形态时还会再判一次，但这里必须**先**拒：
+	// 「建一个注定不合规的空章节」本身就不该发生。
+	if err := requireChapterContentMatchesCourse(s.db, courseID, chapterContentTypeOrDefault(in.ContentType)); err != nil {
+		return nil, err
+	}
 
 	var maxOrder int
 	s.db.Model(&model.Chapter{}).Where("course_id = ?", courseID).
 		Select("COALESCE(MAX(order_num), 0)").Scan(&maxOrder)
 
 	chapter := model.Chapter{
-		CourseID:  courseID,
-		Title:     *in.Title,
-		OrderNum:  maxOrder + 1,
-		CreatedAt: clock.Now(),
+		CourseID: courseID,
+		Title:    *in.Title,
+		// 内容形态必须与校验时用的是**同一个值**（#2760 内容级互斥）：
+		// 上面按 chapterContentTypeOrDefault(in.ContentType) 判同质，这里就必须原样落库。
+		// 若只判不落，传 content_type=video 会「按视频通过、按 text 落库」——
+		// 不变式在写入那一刻就破了，而公开归类仍然说这是视频课。
+		ContentType: chapterContentTypeOrDefault(in.ContentType),
+		OrderNum:    maxOrder + 1,
+		CreatedAt:   clock.Now(),
 	}
 	if in.Content != nil {
 		chapter.Content = *in.Content
@@ -291,6 +345,14 @@ func (s *AdminService) UpdateChapter(ctx context.Context, chapterID int, in *Cha
 	}
 	if in.OrderNum != nil {
 		chapter.OrderNum = *in.OrderNum
+	}
+	// 内容形态要与本课类型同质（#2760 内容级互斥）：显式传了 content_type 就按传入值判，
+	// 没传则本章形态不变、无需再判（它当初写入时已过同一道护栏）。
+	if in.ContentType != nil {
+		if err := requireChapterContentMatchesCourse(s.db, chapter.CourseID, *in.ContentType); err != nil {
+			return nil, err
+		}
+		chapter.ContentType = *in.ContentType
 	}
 	// C7 管理员写面直接生效：编辑即发布——同步已发布槽（正文+文件挂接清单）、状态 published、
 	// 清驳回理由、弃可能存在的在审快照（管理员写即终审，自审空转）。

@@ -8,11 +8,13 @@
 package training
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"forklift-training/internal/clock"
 	"forklift-training/internal/course"
@@ -33,6 +35,23 @@ type Service struct {
 // NewService 创建培训目录服务实例。
 func NewService(db *gorm.DB, logger *zap.Logger) *Service {
 	return &Service{db: db, logger: logger}
+}
+
+func (s *Service) ListPublicCategories(ctx context.Context) (*TrainingCategoryListDTO, error) {
+	return s.listCategories(ctx, true)
+}
+
+func (s *Service) listCategories(ctx context.Context, activeOnly bool) (*TrainingCategoryListDTO, error) {
+	items := make([]TrainingCategoryDTO, 0)
+	query := s.db.WithContext(ctx).Model(&model.TrainingCategory{}).Select("id", "name").Order("sort_order, id")
+	if activeOnly {
+		query = query.Where("status = ?", 1)
+	}
+	err := query.Find(&items).Error
+	if err != nil {
+		return nil, err
+	}
+	return &TrainingCategoryListDTO{Categories: items}, nil
 }
 
 // ===== 专业方向 =====
@@ -298,10 +317,26 @@ func (s *Service) UpdateCredential(id int, in CredentialInput) (CredentialDict, 
 // 预检与删除之间存在插入投稿的窗口（配额与状态机在投稿侧另有守卫），真撞上了由 FK 兜底，
 // 那是「并发写入撞上删除」的窄窗，不是口径缺口。
 func (s *Service) DeleteCredential(id int) error {
-	if err := s.checkCredentialDeleteBlockers(id); err != nil {
-		return err
-	}
-	return catalogDelete(s.db, credentialCatalogSpec(), id)
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		var credential model.Credential
+		err := tx.Select("id").Clauses(clause.Locking{Strength: "UPDATE"}).First(&credential, id).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrCredentialNotFound
+		}
+		if err != nil {
+			return err
+		}
+		if err := checkCredentialDeleteBlockers(tx, id); err != nil {
+			return err
+		}
+		for _, item := range []any{&model.PracticeProgress{}, &model.RealExamPaper{}} {
+			if err := scope.EntityOwnedBy(tx.Model(item), "credential_id", &id).
+				Where("category_id IS NOT NULL").UpdateColumn("credential_id", nil).Error; err != nil {
+				return err
+			}
+		}
+		return catalogDelete(tx, credentialCatalogSpec(), id)
+	})
 }
 
 // checkCredentialDeleteBlockers 证件删除的投稿预检（#1360）。
@@ -309,9 +344,9 @@ func (s *Service) DeleteCredential(id int) error {
 //
 // 分区谓词走 internal/scope 的具名谓词 EntityOwnedBy（归属分区：读被检索对象自身的证件列），
 // 不在调用点手写 credential_id 谓词——那条静态扫描锁（credential_scope_guard_test.go）正是为此立的。
-func (s *Service) checkCredentialDeleteBlockers(id int) error {
+func checkCredentialDeleteBlockers(db *gorm.DB, id int) error {
 	var contributions int64
-	if err := scope.EntityOwnedBy(s.db.Model(&model.UserContribution{}), "credential_id", &id).
+	if err := scope.EntityOwnedBy(db.Model(&model.UserContribution{}), "credential_id", &id).
 		Count(&contributions).Error; err != nil {
 		return err
 	}

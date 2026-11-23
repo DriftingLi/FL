@@ -6,6 +6,8 @@
 //
 // 覆盖端点：
 //   GET  /practice-mode/free
+//   POST /practice-mode/attempts
+//   POST /practice-mode/attempts/answer
 //   GET  /practice-mode/tag
 //   GET  /practice-mode/sequential
 //   GET  /practice-mode/sequential-progress
@@ -16,7 +18,7 @@
 //   GET  /practice-mode/stats
 //   GET  /practice-mode/history
 //
-// 覆盖的 Go 类型：HistoryItemDTO / HistoryResultDTO / PracticePracticeStatsDTO / PracticeStartResultDTO / PracticeStatsDTO / PracticeTagStat / PracticeTypeStat / ProgressResultDTO / ProgressSaveResultDTO / SubmitResultDTO / QuestionDTO
+// 覆盖的 Go 类型：CategoryPracticeStartDTO / HistoryItemDTO / HistoryResultDTO / PracticePracticeStatsDTO / PracticeStartResultDTO / PracticeStatsDTO / PracticeTagStat / PracticeTypeStat / ProgressResultDTO / ProgressSaveResultDTO / SubmitResultDTO / QuestionDTO
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -28,7 +30,16 @@
 //   - 不生成 query / body 的入参类型（只生成响应形状）。
 // 需要更精确的形状时先在注解层补齐（先例见 spec #940 片五②的差集清单）。
 
+export interface CategoryPracticeStartDTO {
+  answers_state: Record<string, unknown>
+  attempt_key: string
+  completed: number
+  current_index: number
+  questions: QuestionDTO[]
+}
+
 export interface HistoryItemDTO {
+  category_id?: number
   created_at: string
   id: number
   is_correct: boolean
@@ -115,6 +126,7 @@ export interface SubmitResultDTO {
 
 export interface QuestionDTO {
   answer?: string
+  category_id?: number
   content: string
   created_at: string
   created_by: number | null

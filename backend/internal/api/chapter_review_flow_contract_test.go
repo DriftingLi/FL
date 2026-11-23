@@ -31,7 +31,7 @@ func TestChapterReviewFlowContract(t *testing.T) {
 	if err := db.Create(&lv).Error; err != nil {
 		t.Fatalf("创建等级失败: %v", err)
 	}
-	c := model.Course{Name: "审核流课程", Status: 1,
+	c := model.Course{Name: "审核流课程", CategoryID: &testutil.SeedTrainingCategory(t, db, "课程分类").ID, Status: 1,
 		SpecialtyID: ptr(spec.SpecialtyID), LevelID: ptr(lv.LevelID), CreatedAt: testutil.Now()}
 	if err := db.Create(&c).Error; err != nil {
 		t.Fatalf("创建课程失败: %v", err)

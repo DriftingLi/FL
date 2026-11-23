@@ -75,13 +75,15 @@ type GradeResult struct {
 	Earned     float64
 	MaxScore   float64
 	// ShortAnswer 短答 AI 分支（含降级语义）；非短答或 AI 不可用时为 nil。
-	ShortAnswer *ShortAnswerGrade
+	ShortAnswer     *ShortAnswerGrade
+	WrongWriteError error
 }
 
 // GradingFlow 单流判分配置：分值表 resolver + AI adapter。分值表为 product 设定勿动。
 type GradingFlow struct {
-	AI       ShortAnswerGrader
-	MaxScore func(q *model.Question) float64 // 满分解析（各流分值差异在此单点注入）
+	CategoryID *int
+	AI         ShortAnswerGrader
+	MaxScore   func(q *model.Question) float64 // 满分解析（各流分值差异在此单点注入）
 }
 
 // GradingEngine 判分 module。
@@ -111,16 +113,18 @@ func (e *GradingEngine) GradeOne(f GradingFlow, q *model.Question, userAnswer an
 			earned = sa.Score
 		}
 	}
+	var wrongWriteError error
 	if isCorrect != nil && !*isCorrect {
-		_ = questionbank.AddToWrongQuestions(e.db, studentID, q.ID)
+		wrongWriteError = questionbank.AddClassifiedWrongQuestion(e.db, studentID, q.ID, f.CategoryID)
 	}
 	return GradeResult{
-		Question:    q,
-		UserAnswer:  userAnswer,
-		IsCorrect:   isCorrect,
-		Earned:      earned,
-		MaxScore:    maxScore,
-		ShortAnswer: sa,
+		Question:        q,
+		UserAnswer:      userAnswer,
+		IsCorrect:       isCorrect,
+		Earned:          earned,
+		MaxScore:        maxScore,
+		ShortAnswer:     sa,
+		WrongWriteError: wrongWriteError,
 	}
 }
 

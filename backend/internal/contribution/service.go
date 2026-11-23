@@ -419,7 +419,11 @@ func (s *Service) Create(in CreateContributionInput) (*ContributionItemDTO, erro
 	if utf8.RuneCountInString(intro) > ContributionIntroMaxLen {
 		return nil, errors.New("简介不能超过 2000 字")
 	}
-	if err := s.checkCredential(in.UserID, in.CredentialID); err != nil {
+	if in.CategoryID != nil {
+		if err := scope.RequireActiveCategory(s.db, *in.CategoryID); err != nil {
+			return nil, err
+		}
+	} else if err := s.checkCredential(in.UserID, in.CredentialID); err != nil {
 		return nil, err
 	}
 	if err := s.checkQuota(in.UserID); err != nil {
@@ -471,6 +475,7 @@ func (s *Service) Create(in CreateContributionInput) (*ContributionItemDTO, erro
 		created = model.UserContribution{
 			UserID:       in.UserID,
 			CredentialID: in.CredentialID,
+			CategoryID:   in.CategoryID,
 			Title:        title,
 			Intro:        intro,
 			Status:       ContributionStatusPending,
@@ -478,7 +483,11 @@ func (s *Service) Create(in CreateContributionInput) (*ContributionItemDTO, erro
 			CreatedAt:    now,
 			UpdatedAt:    now,
 		}
-		if err := tx.Create(&created).Error; err != nil {
+		write := tx
+		if in.CategoryID != nil {
+			write = tx.Omit("credential_id")
+		}
+		if err := write.Create(&created).Error; err != nil {
 			return err
 		}
 		for _, f := range in.Files {
@@ -529,8 +538,11 @@ func (s *Service) ListPublic(in ListPublicInput) (*ContributionPageResult, error
 		func(q *gorm.DB) *gorm.DB {
 			// 投稿浏览按目标证件分区（归属分区，ADR-0056 §2）：CredentialID 是必填位，
 			// 不存在「未选证件」的 nil 分支。
-			return scope.EntityOwnedBy(q, "credential_id", &in.CredentialID).
-				Where("status = ?", ContributionStatusApproved)
+			q = q.Where("status = ?", ContributionStatusApproved)
+			if in.Category.Explicit() {
+				return in.Category.Apply(q, "category_id")
+			}
+			return scope.EntityOwnedBy(q, "credential_id", &in.CredentialID)
 		},
 	)
 	if err != nil {
@@ -545,10 +557,14 @@ func (s *Service) ListPublic(in ListPublicInput) (*ContributionPageResult, error
 
 // ListMine 我的投稿：全部状态，按创建时间倒序。
 func (s *Service) ListMine(userID, page, pageSize int) (*ContributionPageResult, error) {
+	return s.listMine(userID, page, pageSize, scope.CategoryFilter{})
+}
+
+func (s *Service) listMine(userID, page, pageSize int, category scope.CategoryFilter) (*ContributionPageResult, error) {
 	items, total, page, pageSize, err := paging.QueryWithMax[model.UserContribution](
 		s.db, page, pageSize, 20, 50, "created_at DESC",
 		func(q *gorm.DB) *gorm.DB {
-			return q.Where("user_id = ?", userID)
+			return category.Apply(q.Where("user_id = ?", userID), "category_id")
 		},
 	)
 	if err != nil {
@@ -582,6 +598,7 @@ func (s *Service) toDTO(c *model.UserContribution, includeAuthorFiles bool) *Con
 	dto := &ContributionItemDTO{
 		ID:             c.ID,
 		CredentialID:   c.CredentialID,
+		CategoryID:     c.CategoryID,
 		Title:          c.Title,
 		Intro:          c.Intro,
 		Status:         c.Status,

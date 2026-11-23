@@ -1,4 +1,4 @@
-// 管理端课程管理（左树右表）组件测试：未挂载课程标红、上架被拦。
+// 管理端课程管理（左树右表）组件测试：待补分类标红、上架被拦。
 // seam：组件层，mock API 层。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
@@ -21,8 +21,7 @@ vi.mock('@/api/admin', () => ({
 
 vi.mock('@/api/training', () => ({
   trainingApi: {
-    getAdminCatalogTree: vi.fn(),
-    getLevels: vi.fn(),
+    getAdminCategories: vi.fn(),
     getCertificateTemplates: vi.fn(),
     createDirection: vi.fn(),
     updateDirection: vi.fn(),
@@ -41,7 +40,6 @@ vi.mock('@/api/training', () => ({
 
 import { adminApi, type AdminCourseItem, type AdminCourseDetail } from '@/api/admin'
 import { trainingApi } from '@/api/training'
-import type { CatalogDirectionNode, CatalogLevelNode, LevelDict } from '@/api/training'
 import CourseCatalog from '../CourseCatalog.vue'
 
 
@@ -54,6 +52,7 @@ function courseDTO(over: Partial<AdminCourseItem> = {}): AdminCourseItem {
   return {
     certificate_template_id: null,
     course_id: 0,
+    course_type: 'illustrated',
     cover_image: '',
     created_at: '2026-09-01T10:00:00+08:00',
     credential_id: null,
@@ -76,14 +75,6 @@ function courseDetailDTO(over: Partial<AdminCourseDetail> = {}): AdminCourseDeta
   return { ...courseDTO(), chapters: [], ...over }
 }
 
-function levelDictOf(levelId: number, name: string, over: Partial<LevelDict> = {}): LevelDict {
-  return { code: '', created_at: '', description: '', level_id: levelId, name, sort_order: 0, status: 1, ...over }
-}
-
-function specialtyOf(specialtyId: number, name: string, levels: CatalogLevelNode[]): CatalogDirectionNode {
-  return { code: '', created_at: '', description: '', levels, name, sort_order: 0, specialty_id: specialtyId, status: 1 }
-}
-
 function mountPage() {
   return mount(CourseCatalog, {
     global: { plugins: [epLite()] }
@@ -97,23 +88,19 @@ beforeEach(() => {
     pages: 1,
     total: 3,
     courses: [
-      courseDTO({ course_id: 1, name: '液压系统', specialty_id: 2, level_id: 2, status: 1, chapter_count: 7, theory_hours: 24, practice_hours: 16 }),
+      courseDTO({ course_id: 1, name: '液压系统', category_id: 9, status: 1, chapter_count: 7, theory_hours: 24, practice_hours: 16 }),
       courseDTO({ course_id: 2, name: '未挂载遗留课程', specialty_id: null, level_id: null, status: 0, chapter_count: 2 }),
-      courseDTO({ course_id: 3, name: '草稿课程', specialty_id: 2, level_id: 1, status: 0, chapter_count: 0 })
+      courseDTO({ course_id: 3, name: '草稿课程', category_id: 9, status: 0, chapter_count: 0 })
     ]
   })
   vi.mocked(adminApi.getCourseDetail).mockResolvedValue(courseDetailDTO({
     course_id: 1,
     name: '液压系统',
-    specialty_id: 2,
-    level_id: 2
+    category_id: 9
   }))
   vi.mocked(adminApi.updateCourse).mockResolvedValue(courseDTO())
-  vi.mocked(trainingApi.getAdminCatalogTree).mockResolvedValue({
-    specialties: [specialtyOf(2, '维修', [])]
-  })
-  vi.mocked(trainingApi.getLevels).mockResolvedValue({
-    levels: [levelDictOf(1, '入门'), levelDictOf(2, '进阶')]
+  vi.mocked(trainingApi.getAdminCategories).mockResolvedValue({
+    categories: [{ id: 9, name: '维修' }]
   })
   vi.mocked(trainingApi.getCertificateTemplates).mockResolvedValue({
     certificate_templates: []
@@ -121,17 +108,17 @@ beforeEach(() => {
 })
 
 describe('CourseCatalog 左树右表', () => {
-  it('未挂载课程出现在左侧导航并标红待补全', async () => {
+  it('待补分类出现在左侧导航并标红待补分类', async () => {
     const wrapper = mountPage()
     await flushPromises()
 
     const navNames = wrapper.findAll('.cc-nav-item').map(n => n.text())
-    expect(navNames.some(t => t.includes('未挂载课程'))).toBe(true)
+    expect(navNames.some(t => t.includes('待补分类'))).toBe(true)
 
-    expect(wrapper.text()).toContain('待补全')
+    expect(wrapper.text()).toContain('待补分类')
   })
 
-  it('未挂载课程点「上架」被拦截且不调用更新接口', async () => {
+  it('待补分类点「上架」被拦截且不调用更新接口', async () => {
     const wrapper = mountPage()
     await flushPromises()
 
@@ -141,7 +128,7 @@ describe('CourseCatalog 左树右表', () => {
     await unmountedRow!.findComponent({ name: 'ElDropdown' }).vm.$emit('command', 'toggle')
     await flushPromises()
 
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('未挂载'))
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('请先补全课程分类'))
     expect(adminApi.updateCourse).not.toHaveBeenCalled()
   })
 
@@ -162,12 +149,12 @@ describe('CourseCatalog 左树右表', () => {
     await flushPromises()
 
     const navItems = wrapper.findAll('.cc-nav-item')
-    // 「全部课程」= 3 门全量；「维修」方向 = 2；「未挂载课程」= 1
+    // 「全部课程」= 3 门全量；「维修」方向 = 2；「待补分类」= 1
     expect(navItems[0].text()).toContain('全部课程')
     expect(navItems[0].find('.cc-nav-count').text()).toBe('3')
     expect(navItems[1].text()).toContain('维修')
     expect(navItems[1].find('.cc-nav-count').text()).toBe('2')
-    const unmountedItem = navItems.find(n => n.text().includes('未挂载课程'))
+    const unmountedItem = navItems.find(n => n.text().includes('待补分类'))
     expect(unmountedItem).toBeTruthy()
     expect(unmountedItem!.find('.cc-nav-count').text()).toBe('1')
   })

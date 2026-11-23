@@ -10,7 +10,7 @@ export type NoteItem = NoteDTO
 export const noteApi = {
   /** 我的笔记（分页，按更新时间倒序） */
   list(params: { scope?: NoteScope; page?: number; page_size?: number }) {
-    return unwrappedRequest.get<NotePageDTO>('/notes', { params })
+    return unwrappedRequest.get<NotePageDTO>('/notes', { params: { category_id: 'all', ...params } })
   },
 
   /** 新建独立笔记（与题目无关） */

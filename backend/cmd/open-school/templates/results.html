@@ -1,0 +1,50 @@
+{{/*
+results.html：目录的**局部片段**。
+被 htmx 用 outerHTML 替换进 #results，因此这里绝不能出现 <html>/<head>/<body>，
+也不能出现任何页面级 id（除 #results 自己）。
+*/}}
+{{define "results"}}<section id="results" class="results" tabindex="-1" aria-live="polite" aria-busy="false">
+  {{if .Error}}
+  <div class="state state-error" role="alert">
+    <h2>课程列表暂时加载不出来</h2>
+    <a class="btn btn-primary" href="{{.RetryURL}}" hx-get="{{.RetryURL}}" hx-target="#results" hx-swap="outerHTML show:#results:top" hx-push-url="true">重试</a>
+  </div>
+  {{else if .Courses}}
+  <ul class="cards">
+    {{$back := .Back}}
+    {{range .Courses}}
+    <li class="card">
+      <a class="card-link" href="/courses/{{.CourseID}}?back={{urlquery $back}}">
+        {{with .CoverImage}}<img class="card-cover" src="{{.}}" alt="" loading="lazy">{{end}}
+        <span class="card-tags">
+          {{/* 类型徽标（#2760）：在「全部课程」里也要看得出这门课是视频还是图文，
+               否则「分流入口」之外就没有任何分类线索。 */}}
+          <span class="tag tag-type tag-type-{{.CourseType}}">{{courseTypeLabel .CourseType}}</span>
+          <span class="tag">{{.Category.Name}}</span>
+          {{if pointsOf .PointsPrice}}<span class="tag tag-points">{{pointsOf .PointsPrice}} 积分解锁</span>{{else}}<span class="tag tag-free">免费</span>{{end}}
+        </span>
+        <span class="card-title">{{.Name}}</span>
+        {{with .Description}}<span class="card-desc">{{.}}</span>{{end}}
+        <span class="card-more">查看课程 →</span>
+      </a>
+    </li>
+    {{end}}
+  </ul>
+  {{if gt .Pages 1}}
+  <nav class="pager" aria-label="分页">
+    {{if .PrevURL}}<a class="btn" rel="prev" href="{{.PrevURL}}" hx-get="{{.PrevURL}}" hx-target="#results" hx-swap="outerHTML show:#results:top" hx-push-url="true">上一页</a>{{else}}<span class="btn btn-disabled" aria-disabled="true">上一页</span>{{end}}
+    <span class="pager-status">第 {{.Page}} / {{.Pages}} 页</span>
+    {{if .NextURL}}<a class="btn" rel="next" href="{{.NextURL}}" hx-get="{{.NextURL}}" hx-target="#results" hx-swap="outerHTML show:#results:top" hx-push-url="true">下一页</a>{{else}}<span class="btn btn-disabled" aria-disabled="true">下一页</span>{{end}}
+  </nav>
+  {{end}}
+  {{else}}
+  <div class="state state-empty">
+    <h2>没有符合条件的课程</h2>
+    {{if .FiltersActive}}
+    <a class="btn btn-primary" href="{{.Base}}" hx-get="{{.Base}}" hx-target="#results" hx-swap="outerHTML show:#results:top" hx-push-url="true">清除筛选</a>
+    {{else}}
+    <a class="btn" href="{{.Base}}">刷新目录</a>
+    {{end}}
+  </div>
+  {{end}}
+</section>{{end}}

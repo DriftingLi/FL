@@ -34,7 +34,7 @@ func seedChapterWithMeta(t *testing.T, db *gorm.DB) (*model.Course, []model.Chap
 	if err := db.Create(&lv).Error; err != nil {
 		t.Fatalf("创建等级失败: %v", err)
 	}
-	course := model.Course{Name: "章节详情课程", Status: 1,
+	course := model.Course{Name: "章节详情课程", CategoryID: &testutil.SeedTrainingCategory(t, db, "课程分类").ID, Status: 1,
 		SpecialtyID: &spec.SpecialtyID, LevelID: &lv.LevelID, CreatedAt: testutil.Now()}
 	if err := db.Create(&course).Error; err != nil {
 		t.Fatalf("创建课程失败: %v", err)

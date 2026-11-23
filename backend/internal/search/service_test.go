@@ -13,9 +13,10 @@ import (
 func TestSearchKeywordWildcardsAreLiteral(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 	svc := NewService(db, nil)
+	category := testutil.SeedTrainingCategory(t, db, "维修")
 	spID, lvID := 1, 1
 	mk := func(name string) {
-		c := model.Course{Name: name, Status: 1, SpecialtyID: &spID, LevelID: &lvID, CreatedAt: testutil.Now()}
+		c := model.Course{Name: name, Status: 1, CategoryID: &category.ID, SpecialtyID: &spID, LevelID: &lvID, CreatedAt: testutil.Now()}
 		if err := db.Create(&c).Error; err != nil {
 			t.Fatalf("插入课程失败: %v", err)
 		}

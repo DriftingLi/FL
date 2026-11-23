@@ -9,12 +9,14 @@ import type {
 /** 题目笔记的返回形状（#2069：后端从 model.Note 换成显式 DTO，键一个不少、多一格 images）。 */
 export type QuestionNote = QuestionNoteDTO
 
+const allCategories = { params: { category_id: 'all' } }
+
 export const questionInteractionApi = {
   listComments(questionId: number, params?: { page?: number; page_size?: number }) {
-    return unwrappedRequest.get<QuestionCommentPageResult>(`/questions/${questionId}/comments`, { params })
+    return unwrappedRequest.get<QuestionCommentPageResult>(`/questions/${questionId}/comments`, { params: { category_id: 'all', ...params } })
   },
   createComment(questionId: number, data: { content: string }) {
-    return unwrappedRequest.post<QuestionCommentDTO>(`/questions/${questionId}/comments`, data)
+    return unwrappedRequest.post<QuestionCommentDTO>(`/questions/${questionId}/comments`, data, allCategories)
   },
   deleteComment(commentId: number) {
     return unwrappedRequest.delete(`/questions/comments/${commentId}`)
@@ -24,16 +26,16 @@ export const questionInteractionApi = {
    * 故这里显式加 `| null`，调用方必须判空。
    */
   getNote(questionId: number) {
-    return unwrappedRequest.get<QuestionNoteDTO | null>(`/questions/${questionId}/note`)
+    return unwrappedRequest.get<QuestionNoteDTO | null>(`/questions/${questionId}/note`, allCategories)
   },
   /** 保存笔记：images 为整组替换（#2069），省略即清空。 */
   upsertNote(questionId: number, data: { content: string; images?: string[] }) {
-    return unwrappedRequest.put<QuestionNoteDTO>(`/questions/${questionId}/note`, data)
+    return unwrappedRequest.put<QuestionNoteDTO>(`/questions/${questionId}/note`, data, allCategories)
   },
   deleteNote(questionId: number) {
-    return unwrappedRequest.delete(`/questions/${questionId}/note`)
+    return unwrappedRequest.delete(`/questions/${questionId}/note`, allCategories)
   },
   listKnowledge(questionId: number) {
-    return unwrappedRequest.get<QuestionTag[]>(`/questions/${questionId}/knowledge`)
+    return unwrappedRequest.get<QuestionTag[]>(`/questions/${questionId}/knowledge`, allCategories)
   }
 }

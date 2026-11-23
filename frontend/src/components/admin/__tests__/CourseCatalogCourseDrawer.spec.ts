@@ -27,6 +27,8 @@ function courseDTO(over: Partial<AdminCourseItem> = {}): AdminCourseItem {
   return {
     certificate_template_id: null,
     course_id: 1,
+    course_type: 'illustrated',
+    category_id: 9,
     cover_image: '',
     created_at: '2026-09-01T10:00:00+08:00',
     credential_id: 1,
@@ -52,12 +54,10 @@ function courseDetailDTO(over: Partial<AdminCourseDetail> = {}): AdminCourseDeta
 function mountDrawer() {
   return mount(CourseCatalogCourseDrawer, {
     props: {
-      directions: [],
-      levels: [],
       certificateTemplates: [],
       courseOptions: [],
-      credentials: [],
-      defaultSpecialtyId: null,
+      categories: [{ id: 9, name: '维修' }],
+      defaultCategoryId: null,
       submitting: false
     },
     global: { plugins: [epLite()] }
@@ -87,7 +87,7 @@ describe('CourseCatalogCourseDrawer 积分价写入契约', () => {
     await openAndSubmit(wrapper, courseDTO({ course_id: 1, points_price: 100 }))
     expect(adminApi.updateCourse).toHaveBeenCalledWith(
       1,
-      expect.objectContaining({ points_price: 100 })
+      expect.objectContaining({ category_id: 9, points_price: 100 })
     )
   })
 

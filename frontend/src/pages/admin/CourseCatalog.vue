@@ -7,65 +7,30 @@
   <div class="cc-layout">
     <!-- 左侧目录导航 -->
     <aside class="cc-sidebar">
-      <!-- 卡片 1：管理动作 -->
       <div class="cc-card cc-actions-card">
-        <UiButton variant="primary" plain size="small" @click="openDirectionDialog()">新增方向</UiButton>
-        <UiButton variant="ghost" size="small" @click="openLevelDialog()">新增等级</UiButton>
+        <UiButton variant="primary" plain size="small" @click="openCategoryDialog()">新增分类</UiButton>
         <UiButton variant="ghost" size="small" @click="openCertificateDialog()">证书模板</UiButton>
       </div>
-      <!-- 卡片 2：专业方向 -->
-      <FacetCard title="专业方向">
-        <FacetItem
-          :active="specialtyId === null"
-          name="全部课程"
-          :count="totalAll"
-          @select="selectDirection(null)"
-        />
-
-        <div v-for="d in directions" :key="d.specialty_id" class="cc-nav-row">
+      <FacetCard title="课程分类">
+        <FacetItem :active="categoryId === null" name="全部课程" :count="allCourses.length" @select="selectCategory(null)" />
+        <div v-for="category in categories" :key="category.id" class="flex items-center gap-1">
           <FacetItem
-            :active="specialtyId === d.specialty_id"
-            :name="d.name"
-            :count="countOfDirection(d.specialty_id)"
-            @select="selectDirection(d.specialty_id)"
+            class="min-w-0 flex-1"
+            :active="categoryId === category.id"
+            :name="category.status === 0 ? category.name + '（停用）' : category.name"
+            :count="categoryCounts.get(category.id) ?? 0"
+            @select="selectCategory(category.id)"
           />
-          <span class="cc-nav-move">
-            <UiIcon name="chevron-up" class="cc-move-icon" @click.stop="moveDirection(d, -1)" />
-            <UiIcon name="chevron-down" class="cc-move-icon" @click.stop="moveDirection(d, 1)" />
-          </span>
+          <UiButton variant="text" size="small" :aria-label="'编辑分类 ' + category.name" @click="openCategoryDialog(category)">编辑</UiButton>
         </div>
-
         <FacetItem
-          v-if="unmountedCount > 0"
+          v-if="unclassifiedCount > 0"
           warn
-          :active="specialtyId === UNMOUNTED_SPECIALTY_ID"
-          name="未挂载课程"
-          :count="unmountedCount"
-          @select="selectDirection(UNMOUNTED_SPECIALTY_ID)"
+          :active="categoryId === UNCLASSIFIED"
+          name="待补分类"
+          :count="unclassifiedCount"
+          @select="selectCategory(UNCLASSIFIED)"
         />
-      </FacetCard>
-
-      <!-- 卡片 3：课程等级 -->
-      <FacetCard title="课程等级">
-        <FacetItem
-          :active="levelId === null"
-          name="全部等级"
-          :count="scopedTotal"
-          @select="selectLevel(null)"
-        />
-
-        <div v-for="l in levels" :key="l.level_id" class="cc-level-row">
-          <FacetItem
-            :active="levelId === l.level_id"
-            :name="l.name"
-            :count="countOfLevel(l.level_id)"
-            @select="selectLevel(l.level_id)"
-          />
-          <span class="cc-nav-move">
-            <UiIcon name="chevron-up" class="cc-move-icon" @click.stop="moveLevel(l, -1)" />
-            <UiIcon name="chevron-down" class="cc-move-icon" @click.stop="moveLevel(l, 1)" />
-          </span>
-        </div>
       </FacetCard>
     </aside>
 
@@ -79,7 +44,6 @@
             <UiIcon name="search" />
           </template>
         </UiInput>
-        <UiSelect v-model="credentialId" placeholder="全部证件" clearable style="width: 160px" @change="currentPage = 1" :options="(credentials).map((c) => ({ label: c.name, value: c.id }))" />
         <UiSelect v-model="filterStatus" placeholder="状态" clearable style="width: 120px" @change="currentPage = 1" :options="[{ label: '已上架', value: 1 }, { label: '未上架', value: 0 }]" />
         <UiSelect v-model="filterHotFeatured" placeholder="热门/精品" clearable style="width: 140px" @change="currentPage = 1" :options="[{ label: '热门', value: 'hot' }, { label: '精品', value: 'featured' }, { label: '全部', value: 'all' }]" />
         <UiButton variant="primary" @click="openDrawer()">新增课程</UiButton>
@@ -87,25 +51,16 @@
       </UiFilterBar>
 
       <el-table :data="pagedCourses" v-loading="loading" style="width: 100%">
-        <el-table-column label="证件" width="140">
+        <el-table-column label="分类" width="140">
           <template #default="{ row }">
-            <UiTag size="small" effect="plain">{{ credentialNameOf((row as any).credential_id) || '—' }}</UiTag>
+            <UiTag v-if="row.category_id" size="small" effect="plain">{{ categoryNameOf(row.category_id) }}</UiTag>
+            <UiTag v-else tone="danger" size="small">待补分类</UiTag>
           </template>
         </el-table-column>
         <el-table-column label="课程名称" min-width="220" show-overflow-tooltip>
           <template #default="{ row }">
             <UiTag v-if="row.status === 0" tone="info" size="small">草稿</UiTag>
-            <UiTag v-if="isUnmounted(row)" tone="danger" size="small" style="margin-left: 4px">待补全</UiTag>
             <span class="cc-cell-name">{{ row.name }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="方向 / 等级" width="150">
-          <template #default="{ row }">
-            <template v-if="!isUnmounted(row)">
-              <UiTag :tone="levelTagType(levelNameOf(row.level_id))" size="small">{{ levelNameOf(row.level_id) }}</UiTag>
-              <span class="cc-cell-dim">{{ specialtyNameOf(row.specialty_id) }}</span>
-            </template>
-            <span v-else class="cc-cell-warn">缺少方向/等级</span>
           </template>
         </el-table-column>
         <el-table-column prop="chapter_count" label="章节" width="70" align="center" />
@@ -160,12 +115,10 @@
     <!-- 课程编辑抽屉（全字段 + 章节管理）与弹窗表单已拆分为子组件 -->
     <CourseCatalogCourseDrawer
       ref="courseDrawerRef"
-      :directions="directions"
-      :levels="levels"
+      :categories="categories"
       :certificate-templates="certificateTemplates"
-      :credentials="credentials"
       :course-options="courseOptions"
-      :default-specialty-id="specialtyId"
+      :default-category-id="canSortCourses ? categoryId : null"
       :submitting="submitting"
       @saved="refreshCatalog"
     />
@@ -173,9 +126,25 @@
       ref="catalogDialogsRef"
       :certificate-templates="certificateTemplates"
       :submitting="submitting"
-      @catalog-changed="refreshCatalog"
       @certificates-changed="loadCertificateTemplates"
     />
+    <UiDialog
+      v-model="categoryDialog"
+      :title="editingCategoryId ? '编辑分类' : '新增分类'"
+      width="420px"
+      confirm-text="保存"
+      :confirm-disabled="!categoryForm.name.trim()"
+      :confirm-loading="savingCategory"
+      @confirm="saveCategory"
+    >
+      <el-form :model="categoryForm" label-width="80px">
+        <el-form-item label="分类名称" required><UiInput v-model="categoryForm.name" :maxlength="100" /></el-form-item>
+        <el-form-item label="排序"><el-input-number v-model="categoryForm.sort_order" :min="0" :precision="0" /></el-form-item>
+        <el-form-item label="状态">
+          <UiSelect v-model="categoryForm.status" :options="[{ label: '启用', value: 1 }, { label: '停用', value: 0 }]" />
+        </el-form-item>
+      </el-form>
+    </UiDialog>
   </div>
 </template>
 
@@ -187,17 +156,15 @@ defineOptions({ name: 'CourseCatalog' })
 
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { trainingApi, type CatalogDirectionNode, type CatalogLevel, type CertificateTemplate } from '@/api/training'
-import { credentialApi, type CredentialDict } from '@/api/credential'
+import { trainingApi, type TrainingCategoryDTO, type CertificateTemplate } from '@/api/training'
 import { adminApi, type AdminCourseItem } from '@/api/admin'
-import { levelTagType } from '@/constants/level'
-import { useCourseCatalog, UNMOUNTED_SPECIALTY_ID, type CatalogAdapterResult } from '@/composables/useCourseCatalog'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import FacetCard from '@/components/catalog/FacetCard.vue'
 import FacetItem from '@/components/catalog/FacetItem.vue'
 import CourseCatalogCourseDrawer from '@/components/admin/CourseCatalogCourseDrawer.vue'
 import CourseCatalogDialogs from '@/components/admin/CourseCatalogDialogs.vue'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiDialog from '@/components/ui/UiDialog.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import UiFilterBar from '@/components/ui/UiFilterBar.vue'
@@ -210,94 +177,81 @@ import UiSelect from '@/components/ui/UiSelect.vue'
 
 const submitting = ref(false)
 
-// ===== 数据源：管理端课程列表（客户端过滤/分页，课程规模小） =====
-/**
- * 管理端 adapter 的回传载荷（#1355）：目录三元组（`useCourseCatalog` 的状态）+ 课程行（本页表格用的）。
- * adapter 只**回传**、不写页面 ref —— 写回全在下面 `useAsyncPage` 的 `apply` 槽里，
- * 于是「上一轮的响应后到」不会把新目录配旧课程表（ADR-0069 决策 1 那条判据）。
- */
-interface AdminCatalogBundle extends CatalogAdapterResult {
-  courses: AdminCourseItem[]
-}
-
+const UNCLASSIFIED = -1
+const categoryId = ref<number | null>(null)
+const categories = ref<TrainingCategoryDTO[]>([])
 const allCourses = ref<AdminCourseItem[]>([])
 const certificateTemplates = ref<CertificateTemplate[]>([])
-const credentials = ref<CredentialDict[]>([])
+const categoryDialog = ref(false)
+const editingCategoryId = ref<number>()
+const savingCategory = ref(false)
+const categoryForm = ref<{ name: string; status: number; sort_order?: number }>({ name: '', status: 1 })
 
-function isUnmounted(c: AdminCourseItem): boolean {
-  return c.specialty_id === null || c.specialty_id === undefined || c.level_id === null || c.level_id === undefined
+function openCategoryDialog(category?: TrainingCategoryDTO) {
+  editingCategoryId.value = category?.id
+  categoryForm.value = { name: category?.name || '', status: category?.status ?? 1, sort_order: category?.sort_order }
+  categoryDialog.value = true
 }
 
-const {
-  directions,
-  levels,
-  specialtyId,
-  levelId,
-  totalAll,
-  scopedTotal,
-  countOfDirection,
-  countOfLevel,
-  unmountedCount,
-  selectDirection,
-  selectLevel,
-  loadCatalog,
-  applyCatalog,
-  levelNameOf,
-  specialtyNameOf
-} = useCourseCatalog<AdminCatalogBundle>({
-  adapter: {
-    async load(): Promise<AdminCatalogBundle> {
-      const [treeData, levelsData, coursesData] = await Promise.all([
-        trainingApi.getAdminCatalogTree(),
-        trainingApi.getLevels(),
-        adminApi.getCourses({ page: 1, page_size: 500 })
-      ])
-      const courses = coursesData.courses || []
-      return {
-        directions: treeData.specialties || [],
-        levels: levelsData.levels || [],
-        items: courses.map(c => ({
-          specialty_id: isUnmounted(c) ? null : (c.specialty_id ?? null),
-          level_id: isUnmounted(c) ? null : (c.level_id ?? null),
-          count: 1
-        })),
-        courses
-      }
-    }
-  },
-  bidirectional: false,
-  onSelect: () => {
-    currentPage.value = 1
+async function saveCategory() {
+  if (!categoryForm.value.name.trim() || savingCategory.value) return
+  savingCategory.value = true
+  try {
+    const id = editingCategoryId.value
+    if (id) await trainingApi.updateTrainingCategory(id, categoryForm.value)
+    else await trainingApi.createTrainingCategory(categoryForm.value)
+    categoryDialog.value = false
+    await refreshCatalog()
+  } catch {
+    /* 错误已由拦截器提示 */
+  } finally {
+    savingCategory.value = false
   }
-})
+}
 
-// 三态收编 useAsyncPage（#439）：loading 由 composable 驱动；#1355 起 loader 只取数
-// （`loadCatalog()` 回传 bundle），两份状态都在 `apply` 槽里落地 —— 代数校验通过之后才执行，
-// 旧一轮的目录/课程不会盖掉新一轮（R4/R4c 机检，本页因此从 R4c 登记表销账）。
-// （页面无错误态 UI，行为冻结：错误仍由拦截器 toast，v-loading 复用 composable loading）
-const {
-  loading,
-  run: refreshCatalog
-} = useAsyncPage(loadCatalog, {
+const { loading, run: refreshCatalog } = useAsyncPage(async () => {
+  const pageSize = 500
+  const [categoryData, firstPage] = await Promise.all([
+    trainingApi.getAdminCategories(),
+    adminApi.getCourses({ page: 1, page_size: pageSize })
+  ])
+  const courses = [...firstPage.courses]
+  for (let page = 2; page <= firstPage.pages; page++) {
+    const nextPage = await adminApi.getCourses({ page, page_size: pageSize })
+    courses.push(...nextPage.courses)
+  }
+  return { categories: categoryData.categories, courses }
+}, {
   apply: (bundle) => {
-    applyCatalog(bundle)
+    categories.value = bundle.categories
     allCourses.value = bundle.courses
   }
 })
 
-const mountedCourses = computed(() => allCourses.value.filter(c => !isUnmounted(c)))
+const categoryCounts = computed(() => {
+  const counts = new Map<number, number>()
+  for (const course of allCourses.value) {
+    const key = course.category_id ?? UNCLASSIFIED
+    counts.set(key, (counts.get(key) ?? 0) + 1)
+  }
+  return counts
+})
+const unclassifiedCount = computed(() => categoryCounts.value.get(UNCLASSIFIED) ?? 0)
+
+function categoryNameOf(id?: number) {
+  return categories.value.find(category => category.id === id)?.name ?? '—'
+}
+
+function selectCategory(id: number | null) {
+  categoryId.value = id
+  currentPage.value = 1
+}
 
 const filterStatus = ref<number | null>(null)
 const filterHotFeatured = ref<string | null>(null)
 const keyword = ref('')
-const credentialId = ref<number | null>(null)
 const currentPage = ref(1)
 const pageSize = ref(10)
-
-function credentialNameOf(id?: number | null) {
-  if (!id) return ''
-  return credentials.value.find(c => c.id === id)?.name || ''
-}
 
 // el-select clearable 清除后值为 undefined（valueOnClear 默认）/'' 而非 null，
 // 须归一化判断，否则「先筛选再清除」会把全表过滤为空
@@ -307,18 +261,9 @@ function filterActive(v: unknown): boolean {
 
 const filteredCourses = computed(() => {
   const k = keyword.value.trim().toLowerCase()
-  const cred = credentialId.value
   const status = filterStatus.value
   return allCourses.value.filter(c => {
-    if (filterActive(cred) && (c as any).credential_id !== cred) return false
-    if (specialtyId.value === UNMOUNTED_SPECIALTY_ID) {
-      if (!isUnmounted(c)) return false
-    } else if (specialtyId.value !== null && c.specialty_id !== specialtyId.value) {
-      return false
-    }
-    if (specialtyId.value !== UNMOUNTED_SPECIALTY_ID && levelId.value !== null && c.level_id !== levelId.value) {
-      return false
-    }
+    if (categoryId.value !== null && (c.category_id ?? UNCLASSIFIED) !== categoryId.value) return false
     if (filterActive(status) && c.status !== status) return false
     if (filterHotFeatured.value === 'hot' && !c.is_hot) return false
     if (filterHotFeatured.value === 'featured' && !c.is_featured) return false
@@ -337,13 +282,7 @@ function certificateNameOf(id?: number | null) {
   return certificateTemplates.value.find(t => t.id === id)?.name || ''
 }
 
-// 课程排序仅在同时选中具体方向 + 具体等级时可用（全部/未挂载不提供）
-const canSortCourses = computed(
-  () =>
-    specialtyId.value !== null &&
-    specialtyId.value !== UNMOUNTED_SPECIALTY_ID &&
-    levelId.value !== null
-)
+const canSortCourses = computed(() => categoryId.value !== null && categoryId.value !== UNCLASSIFIED)
 
 // ===== 子组件（抽屉/弹窗）入口 =====
 const courseDrawerRef = ref<InstanceType<typeof CourseCatalogCourseDrawer> | null>(null)
@@ -353,62 +292,14 @@ function openDrawer(course?: AdminCourseItem | null) {
   courseDrawerRef.value?.open(course ?? null)
 }
 
-function openDirectionDialog(d?: CatalogDirectionNode | null) {
-  catalogDialogsRef.value?.openDirectionDialog(d ?? null)
-}
-
-function openLevelDialog(l?: CatalogLevel | null) {
-  catalogDialogsRef.value?.openLevelDialog(l ?? null)
-}
-
 function openCertificateDialog() {
   catalogDialogsRef.value?.openCertificateDialog()
 }
 
 // ===== 排序（后端 swap 端点，同值默认也生效） =====
-async function moveDirection(d: CatalogDirectionNode, delta: -1 | 1) {
-  const sibs = directions.value
-  const idx = sibs.findIndex(s => s.specialty_id === d.specialty_id)
-  const target = sibs[idx + delta]
-  if (!target) return
-  submitting.value = true
-  try {
-    // trainingApi 已解包信封：成功即业务成功
-    await trainingApi.swapDirection(d.specialty_id, target.specialty_id)
-    ElMessage.success('排序已更新')
-    await refreshCatalog()
-  } catch (error) {
-    console.error('排序失败:', error)
-    /* 错误已由拦截器提示 */
-  } finally {
-    submitting.value = false
-  }
-}
-
-async function moveLevel(l: CatalogLevel, delta: -1 | 1) {
-  const sibs = levels.value
-  const idx = sibs.findIndex(s => s.level_id === l.level_id)
-  const target = sibs[idx + delta]
-  if (!target) return
-  submitting.value = true
-  try {
-    // trainingApi 已解包信封：成功即业务成功
-    await trainingApi.swapLevel(l.level_id, target.level_id)
-    ElMessage.success('排序已更新')
-    await refreshCatalog()
-  } catch (error) {
-    console.error('排序失败:', error)
-    /* 错误已由拦截器提示 */
-  } finally {
-    submitting.value = false
-  }
-}
-
 async function moveCourse(row: AdminCourseItem, delta: -1 | 1) {
-  if (isUnmounted(row)) return
-  const sibs = filteredCourses.value.filter(
-    c => !isUnmounted(c) && c.specialty_id === row.specialty_id && c.level_id === row.level_id
-  )
+  if (row.category_id == null) return
+  const sibs = filteredCourses.value.filter(c => c.category_id === row.category_id)
   const idx = sibs.findIndex(c => c.course_id === row.course_id)
   const target = sibs[idx + delta]
   if (!target) return
@@ -426,7 +317,6 @@ async function moveCourse(row: AdminCourseItem, delta: -1 | 1) {
 }
 
 // ===== 加载 =====
-// adapter 回填页面级 allCourses（表格/抽屉共用），计数组 items 由同一数据派生
 async function loadCertificateTemplates() {
   try {
     // trainingApi 已解包信封：成功直接返回业务负载
@@ -437,19 +327,10 @@ async function loadCertificateTemplates() {
   }
 }
 
-async function loadCredentials() {
-  try {
-    const data = await credentialApi.listAdminCredentials()
-    credentials.value = data.credentials || []
-  } catch (error) {
-    console.error('加载证件失败:', error)
-  }
-}
-
 const courseOptions = computed(() =>
-  mountedCourses.value.map(c => ({
+  allCourses.value.filter(c => c.category_id != null).map(c => ({
     course_id: c.course_id,
-    name: `${specialtyNameOf(c.specialty_id) || '?'}/${levelNameOf(c.level_id) || '?'} · ${c.name}`
+    name: categoryNameOf(c.category_id) + ' · ' + c.name
   }))
 )
 
@@ -474,8 +355,8 @@ async function toggleFeatured(row: AdminCourseItem, val: boolean) {
 }
 
 async function toggleStatus(row: AdminCourseItem) {
-  if (isUnmounted(row)) {
-    ElMessage.warning('未挂载方向/等级，需先补全才能上架')
+  if (row.status !== 1 && row.category_id == null) {
+    ElMessage.warning('请先补全课程分类再上架')
     return
   }
   submitting.value = true
@@ -529,7 +410,6 @@ async function handleDeleteCourse(row: AdminCourseItem) {
 onMounted(() => {
   refreshCatalog()
   loadCertificateTemplates()
-  loadCredentials()
 })
 
 /** 行内「操作」菜单：编辑 / 上下架 / 排序 / 删除走菜单收纳（登记表「菜单收纳」行） */

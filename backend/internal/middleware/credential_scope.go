@@ -50,6 +50,17 @@ func CredentialScoped(r CredentialResolver) gin.HandlerFunc {
 	}
 }
 
+func CredentialScopedUnlessCategory(r CredentialResolver) gin.HandlerFunc {
+	legacy := CredentialScoped(r)
+	return func(c *gin.Context) {
+		if _, present := c.GetQuery("category_id"); present {
+			c.Next()
+			return
+		}
+		legacy(c)
+	}
+}
+
 // explicitCredentialID 读显式 query 参数（>0 才算声明）。
 func explicitCredentialID(c *gin.Context) (int, bool) {
 	raw := c.Query("credential_id")

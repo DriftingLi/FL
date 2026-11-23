@@ -9,6 +9,7 @@ import (
 	"errors"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"forklift-training/internal/model"
 )
@@ -38,15 +39,17 @@ type SessionProgressSpec[T any] struct {
 // 深模块形态：单一入口 + spec 三回调，把守卫裁定、JSONB 归一、回写实现集中于此，
 // 两个流（练习/模拟）只注入表/字段 + 在途校验策略，语义只实现一次。
 func saveSessionProgress[T any](db *gorm.DB, spec SessionProgressSpec[T], answers map[string]any, remainingTime int) error {
-	rec, err := spec.load(db)
-	if err != nil {
-		return errors.New(spec.notFoundErr)
-	}
-	if err := spec.guard(rec); err != nil {
-		return err
-	}
-	spec.write(&rec, marshalAnswersSnapshot(answers), remainingTime)
-	return db.Save(&rec).Error
+	return db.Transaction(func(tx *gorm.DB) error {
+		rec, err := spec.load(tx.Clauses(clause.Locking{Strength: "UPDATE"}))
+		if err != nil {
+			return errors.New(spec.notFoundErr)
+		}
+		if err := spec.guard(rec); err != nil {
+			return err
+		}
+		spec.write(&rec, marshalAnswersSnapshot(answers), remainingTime)
+		return tx.Save(&rec).Error
+	})
 }
 
 // marshalAnswersSnapshot 答案快照归一落库：#142 修复——nil / 空 / 显式 null 一律落库

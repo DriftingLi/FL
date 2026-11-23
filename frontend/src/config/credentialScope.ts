@@ -24,15 +24,17 @@ export interface CredentialScopeOptOut {
 /** 例外登记表（按路径排序，生成序稳定）。 */
 export const CREDENTIAL_SCOPE_OPT_OUTS: readonly CredentialScopeOptOut[] = [
   { file: 'components/student/ChapterDiscussion.vue', count: 2, reason: '章节讨论属论坛域，帖子不按证件分区（#604 opt-out）；两处=帖子列表 + 票4 场景4 新增的回复 append 档' },
-  { file: 'pages/onboarding/CredentialOnboarding.vue', count: 1, reason: '本页装载的就是证件目录，不随当前证件变化（且页面只存在于未选证件时）' },
   { file: 'pages/student/ChapterView.vue', count: 1, reason: '章节页内嵌论坛域讨论区，随章节而非随证件装载（#604 opt-out）' },
   { file: 'pages/student/CheckInPage.vue', count: 1, reason: '打卡不按当前证件分区（ADR-0028 独立蓝图）' },
   { file: 'pages/student/ForumDetail.vue', count: 1, reason: '论坛域不受证件过滤（#604 opt-out）' },
   { file: 'pages/student/ForumPage.vue', count: 1, reason: '论坛域不受证件过滤（#604 opt-out）' },
   { file: 'pages/student/JobDetail.vue', count: 1, reason: '招聘域不受证件过滤（#604 opt-out）' },
   { file: 'pages/student/JobPlaza.vue', count: 1, reason: '招聘域职位广场不受证件过滤（#604 opt-out）' },
+  { file: 'pages/student/Materials.vue', count: 1, reason: '学习资料使用页内筛选（#2741）' },
   { file: 'pages/student/MyApplications.vue', count: 1, reason: '招聘域投递记录不受证件过滤（#604 opt-out）' },
   { file: 'pages/student/PointsLedger.vue', count: 1, reason: '积分流水不按当前证件分区，切换后不重置页码（#604 opt-out）' },
+  { file: 'pages/student/PublicCourseCatalog.vue', count: 1, reason: '公开课程目录只使用当前页面的一级分类筛选（#2741）' },
+  { file: 'pages/student/PublicCourseDetail.vue', count: 1, reason: '公开课程详情按课程 ID 读取（#2741）' },
   { file: 'pages/student/QuestionDetail.vue', count: 1, reason: '单题详情按 route id 装载，页内没有按当前证件分区的数据；切证件重装既无意义、也会打断正在阅读的题（#1101 收编三态时显式声明）' },
   { file: 'pages/student/TaskCenter.vue', count: 1, reason: '积分任务中心不按当前证件分区（#604 opt-out）' },
 ]

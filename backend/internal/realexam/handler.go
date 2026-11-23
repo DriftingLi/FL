@@ -13,41 +13,95 @@ import (
 	"forklift-training/internal/mockexam"
 	"forklift-training/internal/points"
 	"forklift-training/internal/practicemode"
+	"forklift-training/internal/questionbank"
+	"forklift-training/internal/scope"
 	"forklift-training/internal/security"
 	"forklift-training/pkg/httpx"
 )
 
 // handler 真题套卷 handler。
 type handler struct {
-	svc    *Service
-	points *points.Service
+	svc      *Service
+	points   *points.Service
+	practice *practicemode.Service
 }
 
 // newHandler 创建真题套卷 handler。
-func newHandler(svc *Service, points *points.Service) *handler {
-	return &handler{svc: svc, points: points}
+func newHandler(svc *Service, points *points.Service, practice *practicemode.Service) *handler {
+	return &handler{svc: svc, points: points, practice: practice}
 }
 
 // RegisterRoutes 注册 /api/real-exam 蓝图。
-func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, credRes middleware.CredentialResolver, svc *Service, points *points.Service) {
-	h := newHandler(svc, points)
+func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, credRes middleware.CredentialResolver, svc *Service, points *points.Service, practice *practicemode.Service) {
+	h := newHandler(svc, points, practice)
 
-	g := rg.Group("/real-exam", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapRealExamTake), middleware.CredentialScoped(credRes))
+	g := rg.Group("/real-exam", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapRealExamTake))
 
 	// GET /api/real-exam/papers  当前证件的套卷列表（含兑换状态与单价）
-	g.GET("/papers", h.ListPapers)
+	g.GET("/papers", middleware.CredentialScopedUnlessCategory(credRes), h.ListPapers)
 	// POST /api/real-exam/papers/:paper_id/redeem  积分兑换单套卷
 	g.POST("/papers/:paper_id/redeem", h.Redeem)
 	// GET /api/real-exam/papers/:paper_id/practice  按卷练习开始/续练
 	g.GET("/papers/:paper_id/practice", h.StartPractice)
+	g.POST("/papers/:paper_id/practice/answer", h.SubmitPaperPracticeAnswer)
 	// POST /api/real-exam/papers/:paper_id/exam  按卷开考（复用模拟考链路）
 	g.POST("/papers/:paper_id/exam", h.StartExam)
+}
+
+type paperPracticeAnswerInput struct {
+	QuestionID int `json:"question_id"`
+	UserAnswer any `json:"user_answer"`
+}
+
+type paperPracticeAnswerRequest struct {
+	paperActionReq
+	Input paperPracticeAnswerInput
+}
+
+// @Summary 提交真题卷练习答案
+// @Tags 学员端-真题
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param paper_id path int true "真题卷 ID"
+// @Param body body paperPracticeAnswerInput true "卷内题目和答案"
+// @Success 200 {object} response.R{data=practicemode.SubmitResultDTO} "success"
+// @Failure 400 {object} response.R "参数错误或未兑换"
+// @Failure 404 {object} response.R "真题卷或题目不可用"
+// @Router /real-exam/papers/{paper_id}/practice/answer [post]
+func (h *handler) SubmitPaperPracticeAnswer(c *gin.Context) {
+	httpx.Endpoint[paperPracticeAnswerRequest, practicemode.SubmitResultDTO]{
+		Parse: func(c *gin.Context) (*paperPracticeAnswerRequest, error) {
+			owner, err := parsePaperAction(c)
+			if err != nil {
+				return nil, err
+			}
+			input, err := httpx.BindJSONMsg[paperPracticeAnswerInput](c, "请求数据无效")
+			if err != nil {
+				return nil, err
+			}
+			if input.QuestionID <= 0 || input.UserAnswer == nil {
+				return nil, httpx.BadRequest("请提供题目和答案")
+			}
+			return &paperPracticeAnswerRequest{paperActionReq: *owner, Input: *input}, nil
+		},
+		Invoke: func(ctx context.Context, req *paperPracticeAnswerRequest) (*practicemode.SubmitResultDTO, error) {
+			paper, question, err := h.svc.paperPracticeQuestion(req.UserID, req.PaperID, req.Input.QuestionID)
+			if err != nil {
+				return nil, err
+			}
+			return h.practice.RecordAuthorizedAnswer(req.UserID, question, req.Input.UserAnswer, "paper", paperLegacyCredential(paper), paper.CategoryID)
+		},
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).
+		WithSentinel(ErrRealPaperNotRedeemed, http.StatusBadRequest).
+		WithSentinels(http.StatusNotFound, points.ErrRealPaperUnavailable, questionbank.ErrQuestionNotFound).Handle(c)
 }
 
 // listPapersReq 套卷列表请求（credential_id 由前端按当前证件注入）。
 type listPapersReq struct {
 	UserID       int
 	CredentialID int
+	Category     scope.CategoryFilter
 }
 
 // ListPapers 套卷列表
@@ -56,21 +110,30 @@ type listPapersReq struct {
 // @Tags 学员端-真题
 // @Produce json
 // @Security BearerAuth
-// @Param credential_id query int true "目标证件ID"
+// @Param credential_id query int false "旧目标证件 ID"
+// @Param category_id query string false "培训分类 ID 或 all"
 // @Success 200 {object} response.R{data=[]RealExamPaperDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /real-exam/papers [get]
 func (h *handler) ListPapers(c *gin.Context) {
 	httpx.Endpoint[listPapersReq, []RealExamPaperDTO]{
 		Parse: func(c *gin.Context) (*listPapersReq, error) {
-			uid, _ := c.Get(string(middleware.CtxUserID))
-			userID, _ := uid.(int)
+			raw, provided := c.GetQuery("category_id")
+			category, err := scope.ParseCategoryFilter(raw, provided)
+			if err != nil {
+				return nil, httpx.BadRequest(err.Error())
+			}
 			return &listPapersReq{
-				UserID:       userID,
+				UserID:       c.GetInt(string(middleware.CtxUserID)),
 				CredentialID: middleware.CredentialIDValue(c),
+				Category:     category,
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *listPapersReq) (*[]RealExamPaperDTO, error) {
+			if req.Category.Explicit() {
+				result, err := h.svc.listPapersByCategory(req.UserID, req.Category)
+				return &result, err
+			}
 			result := h.svc.ListPapers(req.UserID, req.CredentialID)
 			return &result, nil
 		},

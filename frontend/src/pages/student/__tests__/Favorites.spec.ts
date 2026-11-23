@@ -9,6 +9,9 @@ const h = vi.hoisted(() => ({ push: vi.fn() }))
 
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: h.push }) }))
 vi.mock('@/api/favorite', () => ({ favoriteApi: { list: vi.fn(), remove: vi.fn() } }))
+vi.mock('@/api/training', () => ({
+  trainingApi: { getCategories: vi.fn().mockResolvedValue({ categories: [{ id: 9, name: '维修' }] }) }
+}))
 
 import { favoriteApi } from '@/api/favorite'
 import Favorites from '../Favorites.vue'
@@ -47,7 +50,7 @@ beforeEach(() => {
 
 describe('我的收藏落点表（#1089；票 2 起断言「路由名+参数」形态）', () => {
   it.each([
-    { type: 'course', id: 7, courseId: 0, target: { name: 'CourseList', query: { course_id: '7' } } },
+    { type: 'course', id: 7, courseId: 0, target: { name: 'PublicCourseDetail', params: { courseId: '7' } } },
     { type: 'topic', id: 8, courseId: 0, target: { name: 'ForumDetail', params: { topicId: '8' } } },
     { type: 'featured', id: 9, courseId: 0, target: { name: 'StudentFeaturedDetail', params: { id: '9' } } },
     { type: 'question', id: 10, courseId: 0, target: { name: 'StudentQuestionDetail', params: { id: '10' } } },

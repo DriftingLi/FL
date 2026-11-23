@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"forklift-training/internal/config"
+	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
 )
 
@@ -23,20 +24,31 @@ import (
 // /api/question-bank/questions 是本轮抓到的真实漏口，按 #981 式能力分流收编（见该条理由）。
 var studentReadableSurface = map[string]string{
 	// ===== 无主体的公开面（访客即可读，学员 token 自然也能读）=====
-	"/api":                     "服务索引（router.go 的根路由）",
-	"/api/health":              "健康检查（无主体，容器编排与部署侧在用）",
-	"/api/health/live":         "存活探针，部署侧在用",
-	"/api/captcha":             "图形验证码生成（无主体，登录/注册前即可取）",
-	"/api/courses":             "课程列表：发现面，公开（内容受门禁）",
-	"/api/featured-contents":   "内容精选公开列表（门户同源）",
-	"/api/faq":                 "帮助中心学员面，一次返回分类与已发布条目",
-	"/api/catalog/tree":        "课程目录树（学员端导航）",
-	"/api/levels":              "课程等级字典（学员端筛选器）",
-	"/api/tags":                "题库标签字典（学员端标签练习入口；计数走池口径）",
-	"/api/positions":           "岗位字典（学员简历「期望岗位」与招聘域共用同一字典）",
-	"/api/credentials":         "目标证件字典（学员端选择器）",
-	"/api/credentials/grouped": "目标证件分组字典（同上）",
-	"/api/materials":           "学习资料（课程附件聚合视图，公开浏览面）",
+	"/api":                    "服务索引（router.go 的根路由）",
+	"/api/health":             "健康检查（无主体，容器编排与部署侧在用）",
+	"/api/health/live":        "存活探针，部署侧在用",
+	"/api/captcha":            "图形验证码生成（无主体，登录/注册前即可取）",
+	"/api/courses":            "课程列表：发现面，公开（内容受门禁）",
+	"/api/courses/:course_id": "公开课程简介和已发布章节目录",
+	"/api/featured-contents":  "内容精选公开列表（门户同源）",
+	"/api/faq":                "帮助中心学员面，一次返回分类与已发布条目",
+	"/api/catalog/tree":       "课程目录树（学员端导航）",
+	"/api/catalog/categories": "培训一级分类字典（公开目录与按次题池选项）",
+	"/api/catalog/courses":    "一级分类下的公开课程目录",
+	// #2753 独立公开网校读面：匿名可读的公开面，学员 token 自然也能读。
+	// 判据比上面那条 /api/catalog/courses 更严（分类必须已启用且映射到有效启用证件，空项隐藏）。
+	"/api/public-school/categories":         "公开网校分类选项（证件口径，空项已在服务端隐藏）",
+	"/api/public-school/courses":            "公开网校课程目录（分类筛选 + 关键词，先筛后分页）",
+	"/api/public-school/courses/:course_id": "公开网校课程详情（公开字段 + 已发布章节目录）",
+	// #2760：证件题库目录——匿名可读的公开汇总面（按证件聚合题量与题型分布，
+	// 只统计题库池并排除来源标记真题，不含任何题干/选项/答案/解析）。
+	"/api/public-school/question-banks": "公开网校证件题库目录（按证件汇总题量与题型分布）",
+	"/api/levels":                       "课程等级字典（学员端筛选器）",
+	"/api/tags":                         "题库标签字典（学员端标签练习入口；计数走池口径）",
+	"/api/positions":                    "岗位字典（学员简历「期望岗位」与招聘域共用同一字典）",
+	"/api/credentials":                  "目标证件字典（学员端选择器）",
+	"/api/credentials/grouped":          "目标证件分组字典（同上）",
+	"/api/materials":                    "学习资料（课程附件聚合视图，公开浏览面）",
 
 	// ===== 学员本人数据面（按 user_id 收口，越权按不存在）=====
 	"/api/auth/me":                          "本人账号信息",
@@ -47,6 +59,8 @@ var studentReadableSurface = map[string]string{
 	"/api/student/records":                  "我的学习记录",
 	"/api/student/study-stats":              "我的学习统计",
 	"/api/student/courses":                  "我的课程",
+	"/api/student/courses/:course_id":       "本人在该课程的学习进度",
+	"/api/course/:course_id":                "学员学习课程详情，课程与章节内容分别校验可见性及权益",
 	"/api/notes":                            "我的笔记（私有）",
 	"/api/favorites":                        "我的收藏",
 	"/api/wrong-questions":                  "我的错题本",
@@ -61,6 +75,8 @@ var studentReadableSurface = map[string]string{
 	"/api/points/shop/items":                "我的商城在售列表（含已拥有态；需登录，按 user_id 判 owned）",
 	"/api/check-in/rank":                    "打卡排行榜（含我的名次）",
 	"/api/mock-exam/history":                "我的模考历史",
+	"/api/mock-exam/in-progress":            "我的在途模拟考试",
+	"/api/catalog/history-categories":       "历史筛选使用的培训分类，含停用项",
 	"/api/real-exam/papers":                 "我的套卷列表（带 entitled）",
 	"/api/resume/applications":              "我的投递",
 	"/api/resume/contact-requests":          "我收到的交换申请",
@@ -102,6 +118,20 @@ func TestStudentReadableSurfaceLedger(t *testing.T) {
 	t.Parallel()
 	testutil.SetTestGinMode()
 	db := testutil.NewMemoryDB(t)
+	// #2753：公开网校读面的判据是「分类已启用 + 映射到有效启用证件」，故夹具必须
+	// 建一条证件并把分类映射过去 —— 否则 /api/public-school/courses/:course_id 恒 404，
+	// 台账的「登记了就必须能打出 2xx」会误报成路由改名。
+	credential := model.Credential{Code: "LEDGER", Name: "台账证件", Category: "special_operation", Status: 1, SortOrder: 1}
+	if err := db.Create(&credential).Error; err != nil {
+		t.Fatal(err)
+	}
+	category := model.TrainingCategory{Name: "课程可读面", Status: 1, LegacyCredentialID: &credential.ID}
+	if err := db.Create(&category).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.Course{CourseID: 1, Name: "公开课程", CategoryID: &category.ID, Status: 1}).Error; err != nil {
+		t.Fatal(err)
+	}
 	cfg := &config.Config{
 		JWTSecretKey:    "student-readable-ledger-secret",
 		JWTExpiresHours: 2,

@@ -85,8 +85,8 @@ describe('Materials 学习资料页（#517 双 tab）', () => {
   })
 })
 
-describe('Materials 课程选项 facet 随证件重装（ADR-0062 票 10）', () => {
-  it('facet 首装随列表一次；切证件后与列表一起重装，读的是新证件', async () => {
+describe('Materials 课程选项', () => {
+  it('课程选项和资料列表都独立于旧目标证件', async () => {
     setActivePinia(createPinia())
     const store = useCredentialStore()
     store.current = credentialOf(1)
@@ -96,14 +96,12 @@ describe('Materials 课程选项 facet 随证件重装（ADR-0062 票 10）', ()
     mount(Materials, { global: { plugins: [epLite()] } })
     await flushPromises()
     expect(courseApi.getCourses).toHaveBeenCalledTimes(1)
-    expect(courseApi.getCourses).toHaveBeenLastCalledWith(expect.objectContaining({ credential_id: 1 }))
+    expect(courseApi.getCourses).toHaveBeenLastCalledWith({ page: 1, page_size: 100 })
 
     store.current = credentialOf(2)
     await flushPromises()
-    // 「选项 facet」与「资料列表」同批重装：不留下「旧证件的 course_id + 新证件的列表」那种错配
-    expect(courseApi.getCourses).toHaveBeenCalledTimes(2)
-    expect(courseApi.getCourses).toHaveBeenLastCalledWith(expect.objectContaining({ credential_id: 2 }))
-    expect(materialApi.list).toHaveBeenCalledTimes(2)
+    expect(courseApi.getCourses).toHaveBeenCalledTimes(1)
+    expect(materialApi.list).toHaveBeenCalledTimes(1)
   })
 
   it('翻页不重复拉课程选项（facet 不并入列表 loader，判据仍只有一处）', async () => {

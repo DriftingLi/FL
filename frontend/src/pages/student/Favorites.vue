@@ -3,6 +3,7 @@
     <div class="mb-3">
       <h2 class="text-2xl text-ink">我的收藏</h2>
     </div>
+    <UiSelect v-model="categoryId" aria-label="收藏分类" class="mb-3 w-[190px]" :options="categoryOptions" @change="handleTabChange" />
 
     <!-- #511：分类 tab 统一分段控件 -->
     <UiSegmentTabs
@@ -86,10 +87,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { favoriteApi, type FavoriteItem, type FavoriteTargetType } from '@/api/favorite'
+import { trainingApi, type TrainingCategoryDTO } from '@/api/training'
 import { contentObjectByKey, favoriteTabContentObjects, type ContentObjectTarget } from '@/config/contentObjects'
 import { resolveFileUrl } from '@/utils/fileUrl'
 import { formatLocaleDateTime } from '@/utils/format'
@@ -103,11 +105,18 @@ import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import UiTag from '@/components/ui/UiTag.vue'
+import UiSelect from '@/components/ui/UiSelect.vue'
 
 const router = useRouter()
 
 const favorites = ref<FavoriteItem[]>([])
 const activeType = ref<'all' | FavoriteTargetType>('all')
+const categoryId = ref<number | 'all'>('all')
+const categories = ref<TrainingCategoryDTO[]>([])
+const categoryOptions = computed(() => [
+  { label: '全部分类', value: 'all' },
+  ...categories.value.map(category => ({ label: category.name, value: category.id }))
+])
 
 // 三态 + 分页三件套收编（#388）
 const {
@@ -125,7 +134,8 @@ const {
   const res = await favoriteApi.list({
     target_type: activeType.value === 'all' ? undefined : activeType.value,
     page: currentPage.value,
-    page_size: pageSize.value
+    page_size: pageSize.value,
+    category_id: categoryId.value
   })
   return res
 }, {
@@ -191,5 +201,12 @@ async function removeFavorite(item: FavoriteItem) {
   }
 }
 
-onMounted(loadFavorites)
+const { run: loadCategories } = useAsyncPage(trainingApi.getCategories, {
+  apply: (data) => { categories.value = data.categories }
+})
+
+onMounted(() => {
+  void loadCategories()
+  void loadFavorites()
+})
 </script>

@@ -32,8 +32,8 @@
           />
         </el-form-item>
 
-        <el-form-item label="所属证件" required>
-          <UiSelect v-model="form.credential_id" :groups="credentialGroups" placeholder="必选" class="w-full" />
+        <el-form-item label="所属分类" :required="!isEdit">
+          <UiSelect v-model="form.category_id" :options="categoryOptions" placeholder="选择培训分类" class="w-full" />
         </el-form-item>
 
         <el-form-item label="考点标签">
@@ -141,13 +141,12 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { questionBankApi, type QuestionPayload } from '@/api/questionBank'
-import { credentialApi, type CredentialDict } from '@/api/credential'
-import { trainingApi } from '@/api/training'
+import { trainingApi, type TrainingCategoryDTO } from '@/api/training'
 import UiPageHeader from '@/components/ui/UiPageHeader.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiInput from '@/components/ui/UiInput.vue'
-import UiSelect, { type UiSelectOption, type UiSelectGroup } from '@/components/ui/UiSelect.vue'
+import UiSelect, { type UiSelectOption } from '@/components/ui/UiSelect.vue'
 import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import { useAsyncPage } from '@/composables/useAsyncPage'
@@ -176,22 +175,8 @@ const TYPE_OPTIONS: UiSelectOption[] = [
 
 const submitting = ref(false)
 const tags = ref<{ id: number; name: string }[]>([])
-const credentials = ref<CredentialDict[]>([])
-/** 所属证件：按类别分两组（原 el-option-group 的形态） */
-const credentialGroups = computed<UiSelectGroup[]>(() => [
-  {
-    label: '特种作业',
-    options: credentials.value
-      .filter((c) => c.category === 'special_operation')
-      .map((c) => ({ label: c.name, value: c.id }))
-  },
-  {
-    label: '技能等级',
-    options: credentials.value
-      .filter((c) => c.category === 'skill_level')
-      .map((c) => ({ label: c.name, value: c.id }))
-  }
-])
+const categories = ref<TrainingCategoryDTO[]>([])
+const categoryOptions = computed(() => categories.value.map(category => ({ label: category.name, value: category.id })))
 /** 考点标签 → {label,value} */
 const tagOptions = computed<UiSelectOption[]>(() => tags.value.map((t) => ({ label: t.name, value: t.id })))
 const multiAnswer = ref<string[]>([])
@@ -217,7 +202,7 @@ const {
     apply: ({ dicts, question }) => {
       if (dicts) {
         tags.value = dicts.tags
-        credentials.value = dicts.credentials
+        categories.value = dicts.categories
       }
       if (question) writeQuestionToForm(question)
     }
@@ -235,7 +220,7 @@ const form = ref<{
   scoring_criteria: string
   score: number
   tag_ids: number[]
-  credential_id: number | null
+  category_id: number | null
 }>({
   type: 'single_choice',
   content: '',
@@ -247,17 +232,17 @@ const form = ref<{
   scoring_criteria: '',
   score: 3,
   tag_ids: [],
-  credential_id: null
+  category_id: null
 })
 
-/** 字典取数（只取数不写回；失败不阻断：证件/标签缺失只影响可选项，表单仍可用）。 */
+/** 字典取数，结果由页面加载器写回。 */
 async function loadDicts() {
   try {
-    const [tagData, credData] = await Promise.all([
+    const [tagData, categoryData] = await Promise.all([
       trainingApi.getTags(),
-      credentialApi.listCredentials()
+      trainingApi.getCategories()
     ])
-    return { tags: tagData.tags || [], credentials: credData.credentials || [] }
+    return { tags: tagData.tags || [], categories: categoryData.categories || [] }
   } catch (e) {
     console.error('Failed to load dicts:', e)
     return null
@@ -272,7 +257,7 @@ async function fetchQuestion() {
 /** 题目写回表单（apply 槽专用：status 剥离与整份并入 form 的判据仍只有这一处）。 */
 function writeQuestionToForm(res: Awaited<ReturnType<typeof fetchQuestion>>) {
   // status 在装载处剥离（票 6：写面不携带 status 通道，编辑装载整份 res 并入 form 是唯一带回路径）
-  const { status: _status, ...rest } = res as unknown as Record<string, unknown>
+  const { status: _status, credential_id: _legacy, ...rest } = res as unknown as Record<string, unknown>
   form.value = {
     ...form.value,
     ...rest,
@@ -336,6 +321,10 @@ function removeImage() {
 }
 
 async function submitForm() {
+  if (!isEdit.value && !form.value.category_id) {
+    ElMessage.warning('请选择培训分类')
+    return
+  }
   submitting.value = true
   try {
     const data: QuestionPayload = {

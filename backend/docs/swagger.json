@@ -812,6 +812,153 @@
                 }
             }
         },
+        "/admin/catalog/categories": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-培训目录"
+                ],
+                "summary": "管理端培训分类列表（含停用项）",
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/training.TrainingCategoryListDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-培训目录"
+                ],
+                "summary": "创建一级培训分类",
+                "parameters": [
+                    {
+                        "description": "分类名称、排序、启用状态",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/training.TrainingCategoryInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/training.TrainingCategoryDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/catalog/categories/{category_id}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-培训目录"
+                ],
+                "summary": "编辑一级培训分类",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "分类 ID",
+                        "name": "category_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "分类名称、排序、启用状态",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/training.TrainingCategoryInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/training.TrainingCategoryDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
         "/admin/catalog/tree": {
             "get": {
                 "security": [
@@ -1934,7 +2081,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "管理员创建课程（含培训目录扩展字段）",
+                "description": "管理员按一级培训分类创建课程",
                 "consumes": [
                     "application/json"
                 ],
@@ -1947,7 +2094,7 @@
                 "summary": "创建课程",
                 "parameters": [
                     {
-                        "description": "课程输入 {name,description,cover_image,duration,status,...}",
+                        "description": "课程输入 {name,category_id,description,cover_image,duration,status,...}",
                         "name": "body",
                         "in": "body",
                         "schema": {
@@ -1975,7 +2122,7 @@
                         }
                     },
                     "400": {
-                        "description": "输入不合法（挂载必填 / 引用ID无效或不存在 / 数值为负 / 积分价非正 / 前置课程冲突）",
+                        "description": "输入不合法（分类必填 / 引用ID无效或不存在 / 数值为负 / 积分价非正 / 前置课程冲突）",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -2396,7 +2543,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "同一方向+等级组内交换 sort_order，响应 data 为 null",
+                "description": "同一分类内交换 sort_order，响应 data 为 null",
                 "consumes": [
                     "application/json"
                 ],
@@ -10937,6 +11084,136 @@
                 }
             }
         },
+        "/catalog/categories": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-培训目录"
+                ],
+                "summary": "培训一级分类（公开）",
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/training.TrainingCategoryListDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/catalog/courses": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-课程"
+                ],
+                "summary": "公开一级分类课程目录",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "一级分类ID",
+                        "name": "category_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "热门或精品分类 hot|featured|all",
+                        "name": "filter",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页条数",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/course.PublicCoursePageDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "分类ID无效",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/catalog/history-categories": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-培训目录"
+                ],
+                "summary": "培训历史筛选分类（含停用项）",
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/training.TrainingCategoryListDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
         "/catalog/tree": {
             "get": {
                 "description": "学员端课程目录树（credential_id 可选：传了按目标证件分区，与课程列表同口径；不传不分区）",
@@ -11303,10 +11580,15 @@
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "目标证件ID",
+                        "description": "旧目标证件 ID",
                         "name": "credential_id",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "培训分类 ID 或 all",
+                        "name": "category_id",
+                        "in": "query"
                     },
                     {
                         "type": "string",
@@ -11369,7 +11651,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "学员提交资料投稿（1–5 个文件，合计 ≤50MB，目标证件可选、默认当前证件；投给非当前证件的稿需切过去可见）。资格：仅学员且已选证件；配额：日 ≤3 份、pending 积压 ≤5 份。提交的每个 file_url 过四校验：前缀属本人 contributions/\u003cid\u003e/、扩展名在白名单内、未被任何投稿登记过、文件真实存在（ADR-0066 决策 5 / #1361）。未过审不产生积分",
+                "description": "学员选择一个已启用的培训分类并提交资料投稿（1–5 个文件，合计 ≤50MB）。继续校验文件归属、类型、存储存在性与投稿配额。",
                 "consumes": [
                     "application/json"
                 ],
@@ -11381,6 +11663,12 @@
                 ],
                 "summary": "创建投稿（pending）",
                 "parameters": [
+                    {
+                        "type": "string",
+                        "description": "使用培训分类时传 all，归属由表单的 category_id 指定",
+                        "name": "category_id",
+                        "in": "query"
+                    },
                     {
                         "description": "投稿表单",
                         "name": "body",
@@ -11453,6 +11741,12 @@
                 ],
                 "summary": "我的投稿列表（全部状态）",
                 "parameters": [
+                    {
+                        "type": "string",
+                        "description": "培训分类 ID 或 all",
+                        "name": "category_id",
+                        "in": "query"
+                    },
                     {
                         "type": "integer",
                         "default": 1,
@@ -12132,6 +12426,58 @@
                 }
             }
         },
+        "/courses/{course_id}": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-课程"
+                ],
+                "summary": "公开课程详情与已发布章节目录",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "课程ID",
+                        "name": "course_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/course.PublicCourseDetailDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "课程ID无效",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "课程不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/credentials": {
             "get": {
                 "security": [
@@ -12272,6 +12618,12 @@
                         "type": "string",
                         "description": "目标类型 course/chapter/question/featured/topic/job",
                         "name": "target_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "培训分类 ID 或 all",
+                        "name": "category_id",
                         "in": "query"
                     },
                     {
@@ -14878,6 +15230,62 @@
                 }
             }
         },
+        "/mock-exam/category-start": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-模拟考试"
+                ],
+                "summary": "按培训分类开始模拟考试",
+                "parameters": [
+                    {
+                        "description": "一级分类、题量与时长",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/mockexam.categoryExamInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/mockexam.MockExamStartDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "分类或题池不可用",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/mock-exam/history": {
             "get": {
                 "security": [
@@ -14901,6 +15309,12 @@
                         "type": "integer",
                         "description": "目标证件ID",
                         "name": "credential_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "培训分类 ID、all 或 unclassified",
+                        "name": "category_id",
                         "in": "query"
                     },
                     {
@@ -14941,6 +15355,58 @@
                         "description": "未认证",
                         "schema": {
                             "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/mock-exam/in-progress": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-模拟考试"
+                ],
+                "summary": "我的在途模拟考试",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 10,
+                        "description": "每页条数",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/mockexam.MockExamHistoryDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     }
                 }
@@ -16243,6 +16709,130 @@
                 }
             }
         },
+        "/practice-mode/attempts": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-练习"
+                ],
+                "summary": "开始或继续分类练习",
+                "parameters": [
+                    {
+                        "description": "一级分类与本次练习模式",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/practicemode.CategoryPracticeStartInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/practicemode.CategoryPracticeStartDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "分类、模式或题池不可用",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "409": {
+                        "description": "本轮已结束，需显式重开",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/practice-mode/attempts/answer": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-练习"
+                ],
+                "summary": "提交分类练习答案",
+                "parameters": [
+                    {
+                        "description": "会话标识、题目 ID 和答案",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/practicemode.CategoryPracticeAnswerInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/practicemode.SubmitResultDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误或分类已停用",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "会话或题目不可用",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/practice-mode/free": {
             "get": {
                 "security": [
@@ -16333,6 +16923,12 @@
                         "in": "query"
                     },
                     {
+                        "type": "string",
+                        "description": "培训分类 ID、all 或 unclassified",
+                        "name": "category_id",
+                        "in": "query"
+                    },
+                    {
                         "type": "integer",
                         "default": 1,
                         "description": "页码",
@@ -16417,6 +17013,12 @@
                         "type": "integer",
                         "description": "目标证件ID",
                         "name": "credential_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "培训分类 ID、all 或 unclassified",
+                        "name": "category_id",
                         "in": "query"
                     }
                 ],
@@ -16686,6 +17288,12 @@
                         "description": "目标证件ID",
                         "name": "credential_id",
                         "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "培训分类 ID、all 或 unclassified",
+                        "name": "category_id",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -16735,6 +17343,12 @@
                 ],
                 "summary": "提交练习答案",
                 "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Web 单题入口传 all，由服务端按题目当前分类归档",
+                        "name": "category_id",
+                        "in": "query"
+                    },
                     {
                         "description": "答题",
                         "name": "body",
@@ -16842,6 +17456,207 @@
                         "description": "未认证",
                         "schema": {
                             "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/public-school/categories": {
+            "get": {
+                "description": "只返回已启用、映射到有效启用证件的培训一级分类，且只含已发布公开课数 \u003e 0 的分类（空项隐藏）。可选 `course_type` 收口：只列该类型有公开课的分类。公开读面，匿名可读，不受账号当前证件影响。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-课程"
+                ],
+                "summary": "公开网校分类选项（按证件口径，空项隐藏）",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "课程类型（video / illustrated；省略=全部课程）",
+                        "name": "course_type",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/course.PublicSchoolCategoryListDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "课程类型无效",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/public-school/courses": {
+            "get": {
+                "description": "只返回已发布且分类满足证件口径的课程。`course_type` 按课程主类型分流（video / illustrated，省略=全部）。关键词 `q` 匹配公开名称与简介（先筛后分页）。`category_id` 指向不合格分类时返回空集。公开读面，匿名可读。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-课程"
+                ],
+                "summary": "公开网校课程目录（类型 + 分类 + 关键词，先筛后分页）",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "课程类型（video / illustrated；省略=全部课程）",
+                        "name": "course_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "一级分类ID",
+                        "name": "category_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "关键词（匹配公开名称与简介）",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页条数",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/course.PublicSchoolCoursePageDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "课程类型或分类ID无效",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/public-school/courses/{course_id}": {
+            "get": {
+                "description": "公开字段仅承诺课程 ID、名称、简介、封面、一级分类、积分价格，以及已发布章节的 ID/标题/序号/类型/时长。未发布、分类不合格或不存在统一 404「课程不存在」。公开读面，匿名可读。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-课程"
+                ],
+                "summary": "公开网校课程详情（公开字段 + 已发布章节目录）",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "课程ID",
+                        "name": "course_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/course.PublicSchoolCourseDetailDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "课程ID无效",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "课程不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/public-school/question-banks": {
+            "get": {
+                "description": "按题目的一级培训分类聚合题库池题目：只统计已发布且排除来源标记（真题）的题目，分类须已启用且映射到已启用证件。**与是否有公开课无关**——只有题库的证件也会出现。只返回汇总（分类 ID/显示名/总题数/各题型数量），不含任何题干、选项、答案或解析。公开读面，匿名可读。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-课程"
+                ],
+                "summary": "公开网校证件题库目录（按证件汇总题量与题型分布）",
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/course.PublicQuestionBankListDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     }
                 }
@@ -18092,10 +18907,15 @@
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "目标证件ID",
+                        "description": "旧目标证件 ID",
                         "name": "credential_id",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "培训分类 ID 或 all",
+                        "name": "category_id",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -18238,6 +19058,75 @@
                     },
                     "401": {
                         "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/real-exam/papers/{paper_id}/practice/answer": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "学员端-真题"
+                ],
+                "summary": "提交真题卷练习答案",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "真题卷 ID",
+                        "name": "paper_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "卷内题目和答案",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/realexam.paperPracticeAnswerInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/practicemode.SubmitResultDTO"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误或未兑换",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "真题卷或题目不可用",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -20054,6 +20943,12 @@
                         "type": "string",
                         "description": "类型 course|chapter|question|content|topic",
                         "name": "type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "培训分类 ID 或 all",
+                        "name": "category_id",
                         "in": "query"
                     },
                     {
@@ -26439,6 +27334,12 @@
                         "description": "目标证件ID（按题目所属证件分区）",
                         "name": "credential_id",
                         "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "做错时的培训分类 ID、all 或 unclassified",
+                        "name": "category_id",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -26535,6 +27436,14 @@
                     "学员端-错题本"
                 ],
                 "summary": "导出错题本",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "做错时的培训分类 ID、all 或 unclassified",
+                        "name": "category_id",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "错题文本",
@@ -26569,6 +27478,14 @@
                     "学员端-错题本"
                 ],
                 "summary": "错题统计",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "做错时的培训分类 ID、all 或 unclassified",
+                        "name": "category_id",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "success",
@@ -26622,6 +27539,12 @@
                         "name": "question_id",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "做错时的培训分类 ID、all 或 unclassified",
+                        "name": "category_id",
+                        "in": "query"
                     },
                     {
                         "description": "答案",
@@ -27995,6 +28918,10 @@
                         }
                     ]
                 },
+                "category_id": {
+                    "type": "integer",
+                    "x-optional": true
+                },
                 "created_at": {
                     "type": "string"
                 },
@@ -28123,6 +29050,9 @@
         "contribution.createContributionReq": {
             "type": "object",
             "properties": {
+                "category_id": {
+                    "type": "integer"
+                },
                 "credential_id": {
                     "type": "integer"
                 },
@@ -28351,6 +29281,10 @@
         "course.AdminCourseDetailDTO": {
             "type": "object",
             "properties": {
+                "category_id": {
+                    "type": "integer",
+                    "x-optional": true
+                },
                 "certificate_name": {
                     "type": "string",
                     "x-optional": true
@@ -28389,6 +29323,10 @@
                 },
                 "course_id": {
                     "type": "integer"
+                },
+                "course_type": {
+                    "description": "CourseType 课程主类型（#2760）：video / illustrated。库侧 NOT NULL，故非可选。",
+                    "type": "string"
                 },
                 "cover_image": {
                     "type": "string"
@@ -28704,6 +29642,10 @@
                 "content": {
                     "type": "string"
                 },
+                "content_type": {
+                    "description": "ContentType 章节内容形态（#2760）：video / text / ppt / document。\n创建时不携带 ⇒ text；编辑时不携带 ⇒ 保留原值。",
+                    "type": "string"
+                },
                 "description": {
                     "type": "string"
                 },
@@ -28877,6 +29819,10 @@
         "course.CourseDTO": {
             "type": "object",
             "properties": {
+                "category_id": {
+                    "type": "integer",
+                    "x-optional": true
+                },
                 "certificate_name": {
                     "type": "string",
                     "x-optional": true
@@ -28916,6 +29862,10 @@
                 },
                 "course_id": {
                     "type": "integer"
+                },
+                "course_type": {
+                    "description": "CourseType 课程主类型（#2760）：video / illustrated。库侧 NOT NULL，故非可选。",
+                    "type": "string"
                 },
                 "cover_image": {
                     "type": "string"
@@ -29116,6 +30066,255 @@
                 },
                 "name": {
                     "type": "string"
+                }
+            }
+        },
+        "course.PublicCourseCategoryDTO": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "course.PublicCourseChapterDTO": {
+            "type": "object",
+            "properties": {
+                "chapter_id": {
+                    "type": "integer"
+                },
+                "content_type": {
+                    "type": "string"
+                },
+                "duration": {
+                    "type": "integer"
+                },
+                "order_num": {
+                    "type": "integer"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "course.PublicCourseDetailDTO": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "$ref": "#/definitions/course.PublicCourseCategoryDTO"
+                },
+                "chapter_count": {
+                    "type": "integer"
+                },
+                "chapters": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/course.PublicCourseChapterDTO"
+                    }
+                },
+                "course_id": {
+                    "type": "integer"
+                },
+                "cover_image": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "points_price": {
+                    "type": "integer",
+                    "x-optional": true
+                }
+            }
+        },
+        "course.PublicCoursePageDTO": {
+            "type": "object",
+            "properties": {
+                "courses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/course.PublicCourseSummaryDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "course.PublicCourseSummaryDTO": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "$ref": "#/definitions/course.PublicCourseCategoryDTO"
+                },
+                "course_id": {
+                    "type": "integer"
+                },
+                "cover_image": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "points_price": {
+                    "type": "integer",
+                    "x-optional": true
+                }
+            }
+        },
+        "course.PublicQuestionBankCategoryDTO": {
+            "type": "object",
+            "properties": {
+                "by_type": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                },
+                "category_id": {
+                    "type": "integer"
+                },
+                "category_name": {
+                    "type": "string"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "course.PublicQuestionBankListDTO": {
+            "type": "object",
+            "properties": {
+                "question_banks": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/course.PublicQuestionBankCategoryDTO"
+                    }
+                }
+            }
+        },
+        "course.PublicSchoolCategoryDTO": {
+            "type": "object",
+            "properties": {
+                "course_count": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "course.PublicSchoolCategoryListDTO": {
+            "type": "object",
+            "properties": {
+                "categories": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/course.PublicSchoolCategoryDTO"
+                    }
+                }
+            }
+        },
+        "course.PublicSchoolCourseDetailDTO": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "$ref": "#/definitions/course.PublicCourseCategoryDTO"
+                },
+                "chapter_count": {
+                    "type": "integer"
+                },
+                "chapters": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/course.PublicCourseChapterDTO"
+                    }
+                },
+                "course_id": {
+                    "type": "integer"
+                },
+                "course_type": {
+                    "description": "CourseType 课程主类型（#2760）：详情页要能显示「这是一门视频课」。",
+                    "type": "string"
+                },
+                "cover_image": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "points_price": {
+                    "type": "integer",
+                    "x-optional": true
+                }
+            }
+        },
+        "course.PublicSchoolCoursePageDTO": {
+            "type": "object",
+            "properties": {
+                "courses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/course.PublicSchoolCourseSummaryDTO"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "course.PublicSchoolCourseSummaryDTO": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "$ref": "#/definitions/course.PublicCourseCategoryDTO"
+                },
+                "course_id": {
+                    "type": "integer"
+                },
+                "course_type": {
+                    "description": "CourseType 课程主类型（#2760）：video / illustrated。目录行必须出这一格——\n访客在「全部课程」里也要看得出这门课是视频还是图文，否则分流入口之外就没有分类线索。",
+                    "type": "string"
+                },
+                "cover_image": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "points_price": {
+                    "type": "integer",
+                    "x-optional": true
                 }
             }
         },
@@ -30607,6 +31806,10 @@
             "type": "object",
             "properties": {
                 "answers": {},
+                "category_id": {
+                    "type": "integer",
+                    "x-optional": true
+                },
                 "created_at": {
                     "type": "string"
                 },
@@ -30681,7 +31884,10 @@
         "mockexam.MockExamResumeDTO": {
             "type": "object",
             "properties": {
-                "answers": {},
+                "answers": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
                 "duration": {
                     "type": "integer"
                 },
@@ -30752,6 +31958,20 @@
                 },
                 "total_score": {
                     "type": "number"
+                }
+            }
+        },
+        "mockexam.categoryExamInput": {
+            "type": "object",
+            "properties": {
+                "category_id": {
+                    "type": "integer"
+                },
+                "duration_minutes": {
+                    "type": "integer"
+                },
+                "question_count": {
+                    "type": "integer"
                 }
             }
         },
@@ -31220,9 +32440,66 @@
                 }
             }
         },
+        "practicemode.CategoryPracticeAnswerInput": {
+            "type": "object",
+            "properties": {
+                "attempt_key": {
+                    "type": "string"
+                },
+                "question_id": {
+                    "type": "integer"
+                },
+                "user_answer": {}
+            }
+        },
+        "practicemode.CategoryPracticeStartDTO": {
+            "type": "object",
+            "properties": {
+                "answers_state": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "attempt_key": {
+                    "type": "string"
+                },
+                "completed": {
+                    "type": "integer"
+                },
+                "current_index": {
+                    "type": "integer"
+                },
+                "questions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/questionbank.QuestionDTO"
+                    }
+                }
+            }
+        },
+        "practicemode.CategoryPracticeStartInput": {
+            "type": "object",
+            "properties": {
+                "category_id": {
+                    "type": "integer"
+                },
+                "count": {
+                    "type": "integer"
+                },
+                "mode": {
+                    "type": "string"
+                },
+                "restart": {
+                    "type": "boolean"
+                }
+            }
+        },
         "practicemode.HistoryItemDTO": {
             "type": "object",
             "properties": {
+                "category_id": {
+                    "type": "integer",
+                    "x-optional": true
+                },
                 "created_at": {
                     "type": "string"
                 },
@@ -31508,6 +32785,10 @@
                     "type": "string",
                     "x-optional": true
                 },
+                "category_id": {
+                    "type": "integer",
+                    "x-optional": true
+                },
                 "content": {
                     "type": "string"
                 },
@@ -31690,6 +32971,10 @@
         "realexam.RealExamPaperDTO": {
             "type": "object",
             "properties": {
+                "category_id": {
+                    "type": "integer",
+                    "x-optional": true
+                },
                 "duration_minutes": {
                     "type": "integer"
                 },
@@ -31716,6 +33001,15 @@
                     "type": "integer",
                     "x-optional": true
                 }
+            }
+        },
+        "realexam.paperPracticeAnswerInput": {
+            "type": "object",
+            "properties": {
+                "question_id": {
+                    "type": "integer"
+                },
+                "user_answer": {}
             }
         },
         "recruit.RecruitListResult": {
@@ -32840,6 +34134,50 @@
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/training.SpecialtyDict"
+                    }
+                }
+            }
+        },
+        "training.TrainingCategoryDTO": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "status": {
+                    "type": "integer",
+                    "x-optional": true
+                }
+            }
+        },
+        "training.TrainingCategoryInput": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "integer"
+                }
+            }
+        },
+        "training.TrainingCategoryListDTO": {
+            "type": "object",
+            "properties": {
+                "categories": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/training.TrainingCategoryDTO"
                     }
                 }
             }

@@ -40,6 +40,32 @@ export function isSafeRedirect(role: string | undefined, target: string): boolea
   return PATH_AUTH_ENTRIES.some(entry => entry.role === role && target.startsWith(entry.prefix))
 }
 
+export function courseLearningReturn(target: unknown): string | undefined {
+  if (typeof target !== 'string') return undefined
+  const match = /^\/training\/course\/[1-9][0-9]*(?:\/chapter\/[1-9][0-9]*)?$/.exec(target)
+  return match?.[0] === target ? target : undefined
+}
+
+/**
+ * questionBankReturn 校验「登录后回学员题库并预选分类」的回跳目标（#2760 US-13）。
+ *
+ * 白名单是**形状**而不是前缀：只认 `/training/question-bank` 且查询串里只有
+ * 一个合法的 `category_id`（正整数）。这样：
+ *  - 少一档就不匹配（`/training/question-bank/../admin` 之类过不去）；
+ *  - 夹带其它参数（`?category_id=1&next=https://evil`）一律整条拒，
+ *    不做「留下合法的那几个」的裁剪——裁剪会让人以为参数生效了。
+ *
+ * 与 courseLearningReturn 并列而不是塞进 isSafeRedirect：后者是「同身份工作台内
+ * 前缀白名单」，回答的是「这个人能不能去这个区域」；本函数回答的是
+ * 「这条**带查询串**的地址是不是题库页的合法形态」——两个问题不同，判据也不该合并。
+ */
+export function questionBankReturn(target: unknown): string | undefined {
+  if (typeof target !== 'string') return undefined
+  const match = /^\/training\/question-bank(?:\?category_id=([1-9][0-9]*))?$/.exec(target)
+  if (!match) return undefined
+  return target
+}
+
 // 角色 → 默认工作区路径单点：admin→/admin/dashboard、tutor→/training/tutor、
 // hrwai_user→/training；未知角色返回 '/'。
 export function resolveWorkspaceForRole(role: string | undefined): string {

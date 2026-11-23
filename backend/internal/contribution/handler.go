@@ -11,6 +11,7 @@ import (
 
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
+	"forklift-training/internal/scope"
 	"forklift-training/internal/security"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
@@ -34,13 +35,13 @@ func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, credRes midd
 	h := newHandler(svc)
 
 	// ===== 学员端（hrwai_user）=====
-	g := rg.Group("/contributions", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapContributionSubmit), middleware.CredentialScoped(credRes))
+	g := rg.Group("/contributions", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapContributionSubmit))
 	// POST /api/contributions/upload-file 先传文件（暂存位）拿 URL
 	g.POST("/upload-file", h.UploadFile)
 	// POST /api/contributions 创建投稿
 	g.POST("", h.Create)
 	// GET /api/contributions?credential_id=&sort=latest|hot&page=&page_size= 公开广场（仅 approved）
-	g.GET("", h.ListPublic)
+	g.GET("", middleware.CredentialScopedUnlessCategory(credRes), h.ListPublic)
 	// GET /api/contributions/mine 我的投稿（全部状态）
 	g.GET("/mine", h.ListMine)
 	// GET /api/contributions/:id 详情（公开 approved 或作者本人）
@@ -83,6 +84,7 @@ var ErrStatus = &httpx.ErrStatusTable{
 		{Sentinel: ErrContributionQuotaDaily, Status: http.StatusBadRequest},
 		{Sentinel: ErrContributionQuotaPending, Status: http.StatusBadRequest},
 		{Sentinel: ErrContributionNoCredential, Status: http.StatusBadRequest},
+		{Sentinel: scope.ErrCategoryUnavailable, Status: http.StatusBadRequest},
 		{Sentinel: ErrContributionTitleRequired, Status: http.StatusBadRequest},
 		{Sentinel: ErrContributionIntroRequired, Status: http.StatusBadRequest},
 		{Sentinel: ErrContributionFilesRequired, Status: http.StatusBadRequest},
@@ -132,6 +134,7 @@ func (h *handler) UploadFile(c *gin.Context) {
 // createContributionReq 创建投稿请求体。
 type createContributionReq struct {
 	CredentialID int    `json:"credential_id"`
+	CategoryID   *int   `json:"category_id"`
 	Title        string `json:"title"`
 	Intro        string `json:"intro"`
 	IsAnonymous  bool   `json:"is_anonymous"`
@@ -145,11 +148,12 @@ type createContributionReq struct {
 
 // Create 创建投稿 POST /api/contributions
 // @Summary 创建投稿（pending）
-// @Description 学员提交资料投稿（1–5 个文件，合计 ≤50MB，目标证件可选、默认当前证件；投给非当前证件的稿需切过去可见）。资格：仅学员且已选证件；配额：日 ≤3 份、pending 积压 ≤5 份。提交的每个 file_url 过四校验：前缀属本人 contributions/<id>/、扩展名在白名单内、未被任何投稿登记过、文件真实存在（ADR-0066 决策 5 / #1361）。未过审不产生积分
+// @Description 学员选择一个已启用的培训分类并提交资料投稿（1–5 个文件，合计 ≤50MB）。继续校验文件归属、类型、存储存在性与投稿配额。
 // @Tags 学员端-投稿
 // @Accept json
 // @Produce json
 // @Security BearerAuth
+// @Param category_id query string false "使用培训分类时传 all，归属由表单的 category_id 指定"
 // @Param body body createContributionReq true "投稿表单"
 // @Success 200 {object} response.R{data=contribution.ContributionItemDTO} "success"
 // @Failure 400 {object} response.R "校验失败/配额已满/未选证件/类型不在白名单/文件已被登记"
@@ -160,7 +164,17 @@ type createContributionReq struct {
 func (h *handler) Create(c *gin.Context) {
 	httpx.Endpoint[createContributionReq, ContributionItemDTO]{
 		Parse: func(c *gin.Context) (*createContributionReq, error) {
-			return httpx.BindJSON[createContributionReq](c)
+			req, err := httpx.BindJSON[createContributionReq](c)
+			if err != nil {
+				return nil, err
+			}
+			if _, provided := c.GetQuery("category_id"); provided && req.CategoryID == nil {
+				return nil, httpx.BadRequest(scope.ErrCategoryUnavailable.Error())
+			}
+			if req.CategoryID != nil {
+				req.CredentialID = 0
+			}
+			return req, nil
 		},
 		Invoke: func(ctx context.Context, req *createContributionReq) (*ContributionItemDTO, error) {
 			userID, err := currentUserID(c)
@@ -174,7 +188,7 @@ func (h *handler) Create(c *gin.Context) {
 				})
 			}
 			return h.svc.Create(CreateContributionInput{
-				UserID: userID, CredentialID: req.CredentialID, Title: req.Title, Intro: req.Intro,
+				UserID: userID, CredentialID: req.CredentialID, CategoryID: req.CategoryID, Title: req.Title, Intro: req.Intro,
 				IsAnonymous: req.IsAnonymous, Files: files,
 			})
 		},
@@ -185,7 +199,8 @@ func (h *handler) Create(c *gin.Context) {
 
 // listPublicReq 公开广场列表查询。
 type listPublicReq struct {
-	CredentialID int    `json:"credential_id"`
+	CredentialID int
+	Category     scope.CategoryFilter
 	Sort         string `json:"sort"`
 	Page         int    `json:"page"`
 	PageSize     int    `json:"page_size"`
@@ -197,7 +212,8 @@ type listPublicReq struct {
 // @Tags 学员端-投稿
 // @Produce json
 // @Security BearerAuth
-// @Param credential_id query int true "目标证件ID"
+// @Param credential_id query int false "旧目标证件 ID"
+// @Param category_id query string false "培训分类 ID 或 all"
 // @Param sort query string false "排序 latest|hot" default(latest)
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(20)
@@ -208,13 +224,18 @@ type listPublicReq struct {
 func (h *handler) ListPublic(c *gin.Context) {
 	httpx.Endpoint[listPublicReq, ContributionPageResult]{
 		Parse: func(c *gin.Context) (*listPublicReq, error) {
-			cred := middleware.CredentialIDPtr(c)
-			if cred == nil {
+			raw, provided := c.GetQuery("category_id")
+			category, err := scope.ParseCategoryFilter(raw, provided)
+			if err != nil {
+				return nil, httpx.BadRequest(err.Error())
+			}
+			credID := middleware.CredentialIDValue(c)
+			if !category.Explicit() && credID == 0 {
 				return nil, httpx.BadRequest("credential_id 必填（未选择当前证件）")
 			}
-			credID := *cred
 			return &listPublicReq{
 				CredentialID: credID,
+				Category:     category,
 				Sort:         c.Query("sort"),
 				Page:         httpx.QueryIntDefault(c, "page", 1),
 				PageSize:     httpx.QueryIntDefault(c, "page_size", 20),
@@ -223,6 +244,7 @@ func (h *handler) ListPublic(c *gin.Context) {
 		Invoke: func(ctx context.Context, req *listPublicReq) (*ContributionPageResult, error) {
 			return h.svc.ListPublic(ListPublicInput{
 				CredentialID: req.CredentialID, Sort: req.Sort, Page: req.Page, PageSize: req.PageSize,
+				Category: req.Category,
 			})
 		},
 	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
@@ -234,6 +256,7 @@ func (h *handler) ListPublic(c *gin.Context) {
 // @Tags 学员端-投稿
 // @Produce json
 // @Security BearerAuth
+// @Param category_id query string false "培训分类 ID 或 all"
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(20)
 // @Success 200 {object} response.R{data=contribution.ContributionPageResult} "success"
@@ -247,7 +270,12 @@ func (h *handler) ListMine(c *gin.Context) {
 			if err != nil {
 				return nil, err
 			}
-			return h.svc.ListMine(userID, httpx.QueryIntDefault(c, "page", 1), httpx.QueryIntDefault(c, "page_size", 20))
+			raw, provided := c.GetQuery("category_id")
+			category, err := scope.ParseCategoryFilter(raw, provided)
+			if err != nil {
+				return nil, httpx.BadRequest(err.Error())
+			}
+			return h.svc.listMine(userID, httpx.QueryIntDefault(c, "page", 1), httpx.QueryIntDefault(c, "page_size", 20), category)
 		},
 	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
 }

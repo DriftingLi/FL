@@ -61,10 +61,11 @@ LOG_STREAM = sys.stdout
 
 # 数据服务：只确保在跑，绝不因为应用镜像变更而重建（#2109 起 Redis 已退役，只剩 postgres）。
 DATA_SERVICES = ("postgres",)
-APP_SERVICES = ("libreoffice", "backend", "frontend")
+APP_SERVICES = ("libreoffice", "backend", "frontend", "open_school")
 # compose 中显式指定的容器名：用于清理同名但非本项目管理的残留容器（沿用旧脚本行为）。
 KNOWN_CONTAINERS = (
     "forklift-backend-prod",
+    "forklift-open-school-prod",
     "forklift-frontend-prod",
     "forklift-pg-prod",
     "forklift-libreoffice-prod",
@@ -424,6 +425,7 @@ class Deployer:
         self.registry_mirror = getenv("REGISTRY_MIRROR", "ghcr.nju.edu.cn")
         self.github_token = getenv("GITHUB_TOKEN")
         self.backend_ref = resolve_image("IMAGE_BACKEND", "BACKEND_IMAGE", self.tag_backend)
+        self.open_school_ref = ""
         self.frontend_ref = resolve_image("IMAGE_FRONTEND", "FRONTEND_IMAGE", self.tag_frontend)
         self.libreoffice_ref = resolve_image("IMAGE_LIBREOFFICE", "LIBREOFFICE_IMAGE", self.tag_libreoffice)
         # 未改写前的引用：代理回退 / 镜像源回退 / 旧镜像清理都以它为基准。
@@ -556,6 +558,7 @@ class Deployer:
         images = {
             "backend": self.backend_ref,
             "frontend": self.frontend_ref,
+            "open_school": self.open_school_ref or self.backend_ref,
         }
         if self.libreoffice_enabled:
             images["libreoffice"] = self.libreoffice_ref
@@ -679,6 +682,7 @@ class Deployer:
         add("CORS_ORIGINS", env_val(gv("CORS_ORIGINS")))
 
         add("BACKEND_IMAGE", self.backend_ref or gv("BACKEND_IMAGE", "forklift-backend:latest"))
+        add("OPEN_SCHOOL_IMAGE", self.open_school_ref)
         add("FRONTEND_IMAGE", self.frontend_ref or gv("FRONTEND_IMAGE", "forklift-frontend:latest"))
         add("LIBREOFFICE_IMAGE", self.libreoffice_ref or gv("LIBREOFFICE_IMAGE", "forklift-libreoffice:latest"))
         add("DOMAIN", env_val(gv("DOMAIN", "localhost")))
@@ -1341,6 +1345,20 @@ class Deployer:
             raise DeployError("前端健康检查失败")
         log_ok(f"前端健康检查通过 ({code})")
 
+        for attempt in range(1, self.health_retries + 1):
+            cp = self.run(
+                ["curl", "-fsS", "--noproxy", "*", "--max-time", "5",
+                 "http://127.0.0.1:18090/question-banks"],
+                check=False, capture=True, timeout=10,
+            )
+            if cp.returncode == 0:
+                log_ok("公开网校与题库接口健康检查通过")
+                break
+            if attempt == self.health_retries:
+                self._tail_logs("open_school")
+                raise DeployError("公开网校健康检查失败")
+            time.sleep(self.health_interval)
+
     # ---------------------------------------------------------------- 清理
     def cleanup(self) -> None:
         log_info(">>> 清理旧资源...")
@@ -1396,6 +1414,7 @@ class Deployer:
                 "images": {
                     "backend": self.backend_ref,
                     "frontend": self.frontend_ref,
+                    "open_school": self.desired_app_images()["open_school"],
                     "libreoffice": self.libreoffice_ref if self.libreoffice_enabled else "",
                 },
                 "migration_needed": migration,

@@ -71,4 +71,7 @@ func TestRouteRegistryCoverage(t *testing.T) {
 // 2026-11-16 #2596 课程认领 3 条（POST/DELETE /api/tutor/course/{course_id}/claim、
 // GET /api/tutor/course/{course_id}/claims）→ 371。
 // 2026-11-17 内容精选 docx 导入 1 条（POST /api/admin/featured-content/upload-docx）→ 381。
-const expectedRouteCount = 381
+// 2026-11-21 #2753 独立公开网校读面 3 条（GET /api/public-school/categories、
+// GET /api/public-school/courses、GET /api/public-school/courses/{course_id}）→ 396。
+// 2026-11-22 #2760 公开题库目录 1 条（GET /api/public-school/question-banks）→ 397。
+const expectedRouteCount = 397

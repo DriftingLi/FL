@@ -2,6 +2,7 @@
   <div class="mx-auto max-w-[900px]">
     <h2>错题本</h2>
     <div class="mb-3 flex flex-wrap items-center gap-2.5">
+      <UiSelect v-model="categoryId" aria-label="错题历史分类" class="w-[170px]" :options="categoryOptions" />
       <UiSelect v-model="filterType" placeholder="题型筛选" clearable style="width: 150px" :options="[{ label: '单选题', value: 'single_choice' }, { label: '多选题', value: 'multi_choice' }, { label: '判断题', value: 'true_false' }, { label: '故障识图', value: 'fault_image' }, { label: '简答题', value: 'short_answer' }]" />
       <UiButton @click="toggleSort">
         <UiIcon :name="sortOrder === 'desc' ? 'arrow-down' : 'arrow-up'" class="mr-1" />
@@ -137,7 +138,8 @@
 import UiIcon from '@/components/ui/UiIcon.vue'
 import { ref, watch, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { wrongQuestionApi, type WrongQuestionItem } from '@/api/wrongQuestion'
+import { wrongQuestionApi, type WrongQuestionItem, type WrongQuestionCategory } from '@/api/wrongQuestion'
+import { trainingApi, type TrainingCategoryDTO } from '@/api/training'
 import { typeMap } from '@/constants/question'
 import { downloadBlob } from '@/composables/useReportDownload'
 import { formatDateTime } from '@/utils/format'
@@ -169,6 +171,13 @@ import UiSelect from '@/components/ui/UiSelect.vue'
 
 
 const wrongList = ref<WrongQuestionItem[]>([])
+const categoryId = ref<WrongQuestionCategory>('all')
+const categories = ref<TrainingCategoryDTO[]>([])
+const categoryOptions = computed(() => [
+  { label: '全部分类', value: 'all' },
+  ...categories.value.map(category => ({ label: category.name, value: category.id })),
+  { label: '历史未分类', value: 'unclassified' }
+])
 
 // 三态 + 分页三件套收编（#388）
 const {
@@ -186,6 +195,7 @@ const {
   const res = await wrongQuestionApi.getWrongQuestions({
     page: page.value,
     page_size: pageSize.value,
+    category_id: categoryId.value,
     type: filterType.value || undefined,
     sort: sortOrder.value,
     favorited: filterFavorited.value || undefined,
@@ -243,7 +253,7 @@ const session = usePracticeSession({
   // 失败向上抛出 → 会话保持作答态（错误已由拦截器提示）
   submit: async (payload) => {
     const answer = Array.isArray(payload.user_answer) ? payload.user_answer.join(', ') : String(payload.user_answer ?? '')
-    const res = await wrongQuestionApi.redoWrongQuestion(payload.question_id, answer)
+    const res = await wrongQuestionApi.redoWrongQuestion(payload.question_id, answer, categoryId.value)
     return {
       ...res,
       is_correct: res?.is_correct ?? null,
@@ -342,17 +352,21 @@ function toggleSelectAll(val: boolean){
   }
 }
 
-onMounted(() => loadData())
-watch([filterType, sortOrder, filterFavorited, filterMultiWrong], () => { page.value = 1; loadData() })
-
-// 证件切换即重拉（#605：错题本按当前证件分区，失效刷新已内聚进 useAsyncPage，
-// 回第一页、筛选条件原样保留）
+const { run: loadCategories } = useAsyncPage(trainingApi.getHistoricalCategories, {
+  apply: (data) => { categories.value = data.categories }
+})
+onMounted(() => {
+  void loadCategories()
+  void loadData()
+})
+watch([categoryId, filterType, sortOrder, filterFavorited, filterMultiWrong], () => { page.value = 1; void loadData() })
 
 function toggleSort() {
   sortOrder.value = sortOrder.value === 'desc' ? 'asc' : 'desc'
 }
 
 function resetFilters() {
+  categoryId.value = 'all'
   filterType.value = ''
   sortOrder.value = 'desc'
   filterFavorited.value = false
@@ -443,7 +457,7 @@ async function handleExport(){
     return
   }
   try {
-    const blob = await wrongQuestionApi.exportWrongQuestions()
+    const blob = await wrongQuestionApi.exportWrongQuestions(categoryId.value)
     downloadBlob(blob as any, 'wrong_questions.txt')
   } catch {
     /* 错误已由拦截器提示 */

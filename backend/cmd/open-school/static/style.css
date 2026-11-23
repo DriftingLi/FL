@@ -1,0 +1,612 @@
+/*
+ * 公开网校的唯一样式表。
+ *
+ * 为什么不用前端构建产物（Tailwind / 设计令牌）：本应用是被 goto 的单二进制前台，
+ * 部署物里没有 Node 构建这一步（#2747）。把 SPA 的令牌系统搬过来会要求一套构建链，
+ * 而这里只有 6 个页面，手写 CSS 的可维护成本更低。
+ * 因此 frontend/src/assets/styles 的令牌约束（R1–R4、brand 色域）**不**适用于本文件；
+ * 色值只在这里定义一次，改主题只改 :root。
+ *
+ * 响应式硬约束：1440×900 与 375×667 都不能横向溢出（scrollWidth <= innerWidth）。
+ * 达成手段只有三条，别绕开它们：
+ *   1) 一切宽度用 max-width + 百分比/rem，不写固定 px 宽度；
+ *   2) 长文本（课程名、简介、URL）允许任意断行：overflow-wrap: anywhere；
+ *   3) 网格最小列宽写 min(100%, …)，窄屏时列不会撑破容器。
+ */
+
+:root {
+  --ink: #0f172a;
+  --ink-2: #475569;
+  --ink-3: #64748b;
+  --line: #e2e8f0;
+  --seam: #cbd5e1;
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --brand: #0f766e;
+  --brand-hover: #115e59;
+  --brand-ink: #ffffff;
+  --brand-soft: #f0fdfa;
+  --accent: #0369a1;
+  --accent-soft: #f0f9ff;
+  --gradient-brand: linear-gradient(135deg, var(--brand), var(--accent));
+  --warn: #92400e;
+  --warn-soft: #fef3c7;
+  --danger: #b91c1c;
+  --danger-soft: #fef2f2;
+  --radius: 0.75rem;
+  --control-radius: 0.5rem;
+  --font-body: "Noto Sans SC", system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-display: "DM Sans", var(--font-body);
+  --wrap: 72rem;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.5 var(--font-body);
+  /* 长串（课程名里夹 URL、英文单词）不换行会把整页撑出横向滚动条。 */
+  overflow-wrap: anywhere;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+a {
+  color: var(--brand);
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0 0 0.6rem;
+}
+
+h1 {
+  font-size: 1.5rem;
+  line-height: 1.3;
+}
+
+h2 {
+  font-size: 1.125rem;
+  line-height: 1.4;
+}
+
+.muted {
+  color: var(--ink-3);
+  font-size: 0.875rem;
+}
+
+/* 布局容器：padding 在 border-box 内侧，宽度永远是 100%，不会溢出。 */
+.wrap {
+  width: 100%;
+  max-width: var(--wrap);
+  margin-inline: auto;
+  padding-inline: 1rem;
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  background: var(--surface);
+  padding: 0.5rem 0.75rem;
+  z-index: 10;
+}
+
+.skip-link:focus {
+  left: 0.5rem;
+}
+
+/* ---------- 页头 / 页脚 ---------- */
+
+.site-header {
+  background: var(--bg);
+  border-bottom: 1px solid var(--seam);
+}
+
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.brand {
+  padding-block: 0.875rem;
+  color: var(--ink);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+/* ---------- 目录页 ---------- */
+
+main.wrap {
+  padding-block: 1.5rem 2rem;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  align-items: flex-end;
+  margin: 1rem 0;
+  padding: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  /* flex 子项的默认 min-width 是 auto：不放宽就会让长 option 文本撑破容器。 */
+  min-width: 0;
+  flex: 1 1 12rem;
+}
+
+.field-actions {
+  flex: 0 1 auto;
+  flex-direction: row;
+  gap: 0.5rem;
+}
+
+label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--ink-2);
+}
+
+input,
+select,
+button {
+  font: inherit;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--seam);
+  border-radius: var(--control-radius);
+  background: var(--surface);
+  color: inherit;
+  max-width: 100%;
+  min-width: 0;
+}
+
+input:focus-visible,
+select:focus-visible,
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.btn {
+  display: inline-block;
+  padding: 0.5rem 0.95rem;
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+  background: var(--surface);
+  color: var(--brand);
+  text-decoration: none;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+}
+
+.btn-primary {
+  background: var(--brand) var(--gradient-brand);
+  border-color: transparent;
+  color: var(--brand-ink);
+}
+
+.btn-primary:hover {
+  background: var(--brand-hover);
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--ink-2);
+  text-decoration: underline;
+}
+
+.btn-large {
+  padding: 0.65rem 1.4rem;
+  font-size: 1rem;
+}
+
+.btn-disabled {
+  color: var(--ink-3);
+  background: var(--bg);
+  cursor: default;
+}
+
+.results:focus {
+  outline: none;
+}
+
+/* auto-fill + minmax(min(100%, …))：窄屏一列、宽屏多列，列永不撑破容器。 */
+.cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
+  gap: 1rem;
+}
+
+.card {
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: border-color 150ms ease;
+}
+
+.card:hover {
+  border-color: var(--brand);
+}
+
+.card:focus-within {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.card-link {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.9rem;
+  min-width: 0;
+  height: 100%;
+  color: inherit;
+  text-decoration: none;
+}
+
+.card-cover {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: var(--control-radius);
+}
+
+.card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.tag {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 0.375rem;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-size: 0.75rem;
+  line-height: 1.6;
+}
+
+.tag-free {
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.tag-points {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.tag-plain {
+  background: var(--bg);
+  color: var(--ink-2);
+}
+
+.card-title {
+  font-weight: 600;
+  font-size: 1.125rem;
+  line-height: 1.4;
+}
+
+.card-desc {
+  color: var(--ink-2);
+  font-size: 0.875rem;
+  /* 卡片高度由内容决定，但简介最多 3 行：长简介不让一列比别的高出一截。 */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.card-more {
+  margin-top: auto;
+  color: var(--brand);
+  font-size: 0.875rem;
+}
+
+.pager {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1.25rem;
+}
+
+.pager-status {
+  color: var(--ink-3);
+  font-size: 0.875rem;
+}
+
+/* ---------- 空态 / 错误态 ---------- */
+
+.state {
+  padding: 1.5rem 1.1rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  margin-block: 1rem;
+}
+
+.state-empty {
+  border-style: dashed;
+}
+
+.state-error {
+  background: var(--danger-soft);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.state-error h1,
+.state-error h2 {
+  color: var(--danger);
+}
+
+.state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+/* ---------- 详情页 ---------- */
+
+.crumbs {
+  margin-block: 0.25rem 1rem;
+  font-size: 0.9rem;
+}
+
+.crumbs a {
+  text-decoration: none;
+}
+
+.course {
+  display: grid;
+  gap: 1.25rem;
+  padding: 1.1rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+@media (min-width: 48rem) {
+  .course:has(.course-cover) {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    align-items: start;
+  }
+}
+
+.course-cover {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 0.5rem;
+}
+
+.course-body {
+  min-width: 0;
+}
+
+.course-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.5rem;
+}
+
+.course-desc {
+  color: var(--ink-2);
+  white-space: pre-wrap;
+}
+
+.course-action {
+  margin-top: 0.75rem;
+}
+
+.chapters {
+  margin-top: 1.5rem;
+}
+
+.chapter-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.chapter-list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  align-items: baseline;
+  padding: 0.7rem 0.9rem;
+  min-width: 0;
+}
+
+.chapter-list li + li {
+  border-top: 1px solid var(--line);
+}
+
+.chapter-order {
+  flex: 0 0 auto;
+  min-width: 1.6rem;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.chapter-title {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.chapter-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: baseline;
+  flex: 0 1 auto;
+}
+
+/* 尊重「减少动效」偏好：卡片 hover 过渡与焦点动画都不该是必须的。 */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* ===== 课程类型分流与题库目录（#2760）===== */
+
+.typenav {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 0.25rem;
+  align-self: stretch;
+}
+
+.typenav-item {
+  display: flex;
+  align-items: center;
+  padding: 0.625rem 0.75rem;
+  border-bottom: 2px solid transparent;
+  color: var(--ink-2);
+  font-size: 0.875rem;
+  text-decoration: none;
+}
+
+.typenav-item:hover {
+  color: var(--brand);
+}
+
+.typenav-current {
+  border-color: var(--brand);
+  color: var(--brand);
+  font-weight: 600;
+}
+
+@media (max-width: 40rem) {
+  .bar {
+    gap: 0;
+  }
+
+  .typenav {
+    width: 100%;
+  }
+
+  .typenav-item {
+    padding-inline: 0.625rem;
+  }
+}
+
+/* 类型徽标：视频与图文必须一眼分得开（色相 + 深浅两轴都不同，
+   不靠颜色区分时可读文字「视频课程 / 图文课程」也仍在）。 */
+.tag-type {
+  font-weight: 600;
+}
+
+.tag-type-video {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.tag-type-illustrated {
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+/* 题库目录：一列卡片，每张一个证件。
+   网格最小列宽写 min(100%, …) —— 窄屏时列不撑破容器（响应式硬约束）。 */
+.bank-list {
+  list-style: none;
+  margin: 1.2rem 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
+  gap: 1rem;
+}
+
+.bank-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.bank-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.bank-name {
+  margin: 0;
+  font-weight: 600;
+  color: var(--ink);
+  /* 长证件名允许任意断行，不撑破卡片 */
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.bank-total {
+  color: var(--brand);
+  font-weight: 600;
+  font: 600 1rem/1.5 var(--font-display);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.bank-types {
+  flex: 1;
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+
+.bank-card .btn {
+  align-self: flex-start;
+}

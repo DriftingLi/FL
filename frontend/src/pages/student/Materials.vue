@@ -72,7 +72,7 @@
     </template>
 
     <template v-else>
-      <ContributionTab :credential-id="credentialIdForContribution" />
+      <ContributionTab />
     </template>
   </div>
 </template>
@@ -87,8 +87,6 @@ import { resolveFileUrl } from '@/utils/fileUrl'
 import { formatLocaleDateTime } from '@/utils/format'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useStagger } from '@/composables/useStagger'
-import { computed } from 'vue'
-import { useCredentialStore } from '@/stores/credential'
 import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
@@ -99,18 +97,11 @@ import ContributionTab from './ContributionTab.vue'
 
 const activeTab = ref<'material' | 'contribution'>('material')
 
-// 投稿区跟随当前证件过滤（#517 与练习分桶同构）；course filter 仍只用于课程资料 tab
-const credentialStore = useCredentialStore()
-const credentialIdForContribution = computed(() => credentialStore.current?.id ?? null)
-
 const materials = ref<MaterialItem[]>([])
 const courseFilter = ref<number | undefined>(undefined)
 const courses = ref<CourseSummary[]>([])
 
 // 三态 + 分页三件套收编（#388）。
-// 票 10（ADR-0062 决策 10）：课程筛选选项声明进 facets —— 「随切证件/筛选/reset 一起重装」
-// 只有一处判据。此前 loadCourses 只挂在 onMounted 上，切证件后选项仍是上一个证件的课程，
-// 拿旧证件的 course_id 去过滤新证件 = 空列表。翻页不重复拉它（facet 不并入列表 loader）。
 const {
   loading,
   loadError,
@@ -135,6 +126,7 @@ const {
     total.value = res.total || 0
   },
   itemsRef: materials,
+  credentialScoped: false,
   facets: [{ load: () => loadCourses() }]
 })
 
@@ -162,12 +154,9 @@ function formatSize(bytes?: number): string {
 async function loadCourses() {
   try {
     // 课程筛选选项（页大小取大值覆盖全部课程）
-    // 「浏览指定证件」语义：/courses 是公开端点，服务端兜底不覆盖匿名/非学员，要按证件分区只能显式下发
-    const browseCredentialId = credentialStore.current?.id ?? undefined
     const res = await courseApi.getCourses({
       page: 1,
-      page_size: 100,
-      credential_id: browseCredentialId
+      page_size: 100
     })
     courses.value = res.courses || []
   } catch (e) {

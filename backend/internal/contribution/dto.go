@@ -1,6 +1,8 @@
 // Package contribution 资料投稿域的对外 DTO（ADR-0070 域包形态：DTO 与实现分层，形状锁见 dto_shape_test.go）。
 package contribution
 
+import "forklift-training/internal/scope"
+
 // ContributionAuthor 投稿作者信息（展示名 = 昵称；匿名投稿不展示）。
 type ContributionAuthor struct {
 	UserID    int    `json:"user_id"`
@@ -22,6 +24,7 @@ type ContributionFileDTO struct {
 type ContributionItemDTO struct {
 	ID             int64                 `json:"id"`
 	CredentialID   int                   `json:"credential_id"`
+	CategoryID     *int                  `json:"category_id,omitempty" extensions:"x-optional"`
 	Title          string                `json:"title"`
 	Intro          string                `json:"intro"`
 	Status         string                `json:"status"`
@@ -47,6 +50,7 @@ type ContributionPageResult struct {
 type CreateContributionInput struct {
 	UserID       int
 	CredentialID int
+	CategoryID   *int
 	Title        string
 	Intro        string
 	IsAnonymous  bool
@@ -58,6 +62,7 @@ type CreateContributionInput struct {
 // ListPublicInput 公开广场列表入参。
 type ListPublicInput struct {
 	CredentialID int
+	Category     scope.CategoryFilter
 	Sort         string // latest / hot
 	Page         int
 	PageSize     int

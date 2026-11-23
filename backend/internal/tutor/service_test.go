@@ -53,12 +53,13 @@ func seedCatalogCourse(t *testing.T, db *gorm.DB) (*model.Course, *model.Course)
 	if err := db.Create(&lv).Error; err != nil {
 		t.Fatalf("创建等级失败: %v", err)
 	}
-	prereq := model.Course{Name: "前置课程", Status: 1,
+	category := testutil.SeedTrainingCategory(t, db, "维修")
+	prereq := model.Course{Name: "前置课程", Status: 1, CategoryID: &category.ID,
 		SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID), CreatedAt: testutil.Now()}
 	if err := db.Create(&prereq).Error; err != nil {
 		t.Fatalf("创建前置课程失败: %v", err)
 	}
-	crs := model.Course{Name: "主课程", Status: 1,
+	crs := model.Course{Name: "主课程", Status: 1, CategoryID: &category.ID,
 		SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID), CreatedAt: testutil.Now()}
 	if err := db.Create(&crs).Error; err != nil {
 		t.Fatalf("创建课程失败: %v", err)

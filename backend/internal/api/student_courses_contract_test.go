@@ -38,7 +38,7 @@ func TestLearningPositionContract(t *testing.T) {
 	if err := db.Create(&lv).Error; err != nil {
 		t.Fatalf("创建等级失败: %v", err)
 	}
-	c := model.Course{Name: "契约课程", CoverImage: "/static/covers/c1.png", Status: 1,
+	c := model.Course{Name: "契约课程", CategoryID: &testutil.SeedTrainingCategory(t, db, "课程分类").ID, CoverImage: "/static/covers/c1.png", Status: 1,
 		SpecialtyID: ptr(spec.SpecialtyID), LevelID: ptr(lv.LevelID), CreatedAt: testutil.Now()}
 	if err := db.Create(&c).Error; err != nil {
 		t.Fatalf("创建课程失败: %v", err)
@@ -238,7 +238,7 @@ func TestLearningPositionEmptyContract(t *testing.T) {
 	db.Create(&spec)
 	lv := model.CourseLevel{Code: "b", Name: "入门", SortOrder: 1, Status: 1}
 	db.Create(&lv)
-	c := model.Course{Name: "空契约课程", Status: 1,
+	c := model.Course{Name: "空契约课程", CategoryID: &testutil.SeedTrainingCategory(t, db, "课程分类").ID, Status: 1,
 		SpecialtyID: ptr(spec.SpecialtyID), LevelID: ptr(lv.LevelID), CreatedAt: testutil.Now()}
 	db.Create(&c)
 

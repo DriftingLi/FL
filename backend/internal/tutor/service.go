@@ -196,6 +196,12 @@ func (s *Service) UploadChapterFile(chapterID, tutorID int, filename string, fil
 	}
 
 	contentType := filestore.FileContentType(filename)
+	// 内容级互斥（#2760）：上传的这份文件会成为本章的生效内容形态，必须与本课类型同质。
+	// 放在认领校验之后、落盘之前——先答「你有没有资格动这门课」，再答「这份内容合不合规」，
+	// 最后才写存储（写盘失败要清理，拒得越早越干净）。
+	if err := course.RequireChapterContentNature(s.db, chapterID, contentType); err != nil {
+		return nil, err
+	}
 	fileURL, err := s.fileStore.Save(fileContent, filename, filestore.ChapterFileDirPrefix)
 	if err != nil {
 		return nil, fmt.Errorf("保存文件失败: %w", err)
@@ -341,16 +347,11 @@ func (s *Service) DeleteChapterFileByID(fileID, tutorID int) (*DeleteFileResult,
 	var remaining []model.ChapterFile
 	s.db.Where("chapter_id = ?", chapterID).Find(&remaining)
 	if chapterID != nil {
-		var chapter model.Chapter
-		if err := s.db.First(&chapter, *chapterID).Error; err == nil {
-			if len(remaining) == 0 {
-				chapter.FileURL = ""
-				chapter.ContentType = "text"
-			} else {
-				chapter.FileURL = remaining[0].FileURL
-				chapter.ContentType = remaining[0].ContentType
-			}
-			s.db.Save(&chapter)
+		// #2760：删附件后重算形态，但**不跨侧**——视频课删掉最后一_video_文件不该把章节
+		// 变成 text，否则「视频课程」目录里就混进了图文章节。形态归类只在 course 包一处。
+		if err := course.RecomputeChapterContentTypeAfterFileChange(s.db, *chapterID); err != nil {
+			s.logger.Warn("[tutor] 删除章节文件后重算内容形态失败",
+				zap.Int("chapter_id", *chapterID), zap.Error(err))
 		}
 	}
 	return &DeleteFileResult{FileID: fileID, Deleted: true}, nil
@@ -398,14 +399,12 @@ func (s *Service) BatchDeleteChapterFiles(fileIDs []int, tutorID int) (*BatchDel
 					zap.Int("chapter_id", *chapterID), zap.Error(err))
 			}
 		}
-		var remaining []model.ChapterFile
-		s.db.Where("chapter_id = ?", chapterID).Find(&remaining)
-		if len(remaining) == 0 && chapterID != nil {
-			var chapter model.Chapter
-			if err := s.db.First(&chapter, *chapterID).Error; err == nil {
-				chapter.FileURL = ""
-				chapter.ContentType = "text"
-				s.db.Save(&chapter)
+		// #2760：与单条删除同一口径——重算形态但不跨课程类型那一侧。
+		// 原来只有「删到空」时才把 ContentType 写死成 text，视频课删空附件后即破互斥。
+		if chapterID != nil {
+			if err := course.RecomputeChapterContentTypeAfterFileChange(s.db, *chapterID); err != nil {
+				s.logger.Warn("[tutor] 批量删除后重算内容形态失败",
+					zap.Int("chapter_id", *chapterID), zap.Error(err))
 			}
 		}
 		successCount++

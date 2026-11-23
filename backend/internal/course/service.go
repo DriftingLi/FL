@@ -36,6 +36,7 @@ type CoursePageResult struct {
 // CourseDTO 课程。可选字段（chapter_count 等）在未填充路径省略，与旧 map 行为一致。
 // 字段声明按 key 字母序，保持与旧 map 序列化的字节序一致。
 type CourseDTO struct {
+	CategoryID            *int                    `json:"category_id,omitempty" extensions:"x-optional"`
 	CertificateName       string                  `json:"certificate_name,omitempty" extensions:"x-optional"`
 	CertificateTemplate   *CertificateTemplateDTO `json:"certificate_template,omitempty" extensions:"x-optional"`
 	CertificateTemplateID *int                    `json:"certificate_template_id" extensions:"x-nullable"`
@@ -44,9 +45,11 @@ type CourseDTO struct {
 	// 学员端/管理端列表不长这一列，故省略而非 0——「没人认领」与「这个面不报这列」是两件事。
 	ClaimCount *int `json:"claim_count,omitempty" extensions:"x-optional"`
 	// ClaimedByMe 当前登录讲师是否已认领本课程（同上，只讲师面填）。
-	ClaimedByMe  *bool               `json:"claimed_by_me,omitempty" extensions:"x-optional"`
-	CoverImage   string              `json:"cover_image"`
-	CourseID     int                 `json:"course_id"`
+	ClaimedByMe *bool  `json:"claimed_by_me,omitempty" extensions:"x-optional"`
+	CoverImage  string `json:"cover_image"`
+	CourseID    int    `json:"course_id"`
+	// CourseType 课程主类型（#2760）：video / illustrated。库侧 NOT NULL，故非可选。
+	CourseType   string              `json:"course_type"`
 	CreatedAt    string              `json:"created_at"`
 	Credential   *CredentialBriefDTO `json:"credential,omitempty" extensions:"x-optional"`
 	CredentialID *int                `json:"credential_id" extensions:"x-nullable"`
@@ -222,28 +225,7 @@ type StudyProgressInput struct {
 	Completed     bool
 }
 
-// ===== 课程挂载不变式（唯一事实源）见 course_mount_scope.go（ADR-0050 决策 1）=====
-
-// 挂载不变式的三个「必填」事实（ADR-0064 决策 2/3）：此前创建面与编辑面各写一遍同文案裸
-// errors.New（同一事实两份实现），且编辑面那两条落端点默认面 500（客户端以为服务端坏了）。
-// 「必填」（字段没给 / 给了非正数）与「给了但那个 id 不存在」是两件事，后者不在这三个里。
-var (
-	ErrCourseNameRequired  = errors.New("课程名称不能为空")
-	ErrSpecialtyRequired   = errors.New("专业方向不能为空")
-	ErrCourseLevelRequired = errors.New("课程等级不能为空")
-)
-
-// validateMountedCourseInputUpdate 挂载不变式的写入校验（typed）：创建必填；编辑携带时不允许清空。
-// 语义与旧 map 版一致：Create 由 CreateCourse 显式校验，此处收编「编辑携带 0/负数」分支。
-func validateMountedCourseInputUpdate(in *CourseInput) error {
-	if in.SpecialtyID != nil && *in.SpecialtyID <= 0 {
-		return ErrSpecialtyRequired
-	}
-	if in.LevelID != nil && *in.LevelID <= 0 {
-		return ErrCourseLevelRequired
-	}
-	return nil
-}
+var ErrCourseNameRequired = errors.New("课程名称不能为空")
 
 // ===== 课程详情共享实现（学员端/管理端同源）=====
 
@@ -769,6 +751,7 @@ func LoadLearningPosition(db *gorm.DB, studentID, courseID int) LearningPosition
 func CourseToDTO(c *model.Course) CourseDTO {
 	return CourseDTO{
 		CourseID:              c.CourseID,
+		CategoryID:            c.CategoryID,
 		Name:                  c.Name,
 		Description:           c.Description,
 		CoverImage:            c.CoverImage,
@@ -784,6 +767,7 @@ func CourseToDTO(c *model.Course) CourseDTO {
 		IsHot:                 c.IsHot,
 		IsFeatured:            c.IsFeatured,
 		PointsPrice:           c.PointsPrice,
+		CourseType:            c.CourseType,
 		CreatedAt:             timefmt.FormatISO(c.CreatedAt),
 	}
 }
@@ -1067,8 +1051,10 @@ func chapterResumePosition(db *gorm.DB, studentID, chapterID int) (int, error) {
 // ===== 培训目录扩展辅助（课程等级/学时/前置课程/证书模板） =====
 
 // applyCourseTrainingFields 应用课程培训扩展字段（目标证件/专业方向/等级/学时/证书模板，typed）。
-// credential_id / specialty_id / level_id / certificate_template_id 传 0 表示清空（置 NULL）。
+// credential_id 与 certificate_template_id 传 0 表示清空（置 NULL）。
 var (
+	ErrCourseCategoryRequired = errors.New("请选择课程分类")
+	ErrCourseCategoryNotFound = errors.New("课程分类不存在")
 	// 第 3 族（ADR-0065 决策 3）：applyCourseTrainingFields 里 11 条裸 errors.New 的具名载体。
 	// 「ID 无效」与「不能为负」是本写面独有的输入形状；三条「引用对象不存在」**不自建**，
 	// 复用目录域同一载体（catalog_specs.go:15-17）—— 它们说的是同一行记录，两名即二实现。
@@ -1091,6 +1077,15 @@ var (
 )
 
 func applyCourseTrainingFields(db *gorm.DB, course *model.Course, in *CourseInput) error {
+	if in.CategoryID != nil {
+		if *in.CategoryID <= 0 {
+			return ErrCourseCategoryRequired
+		}
+		if err := fetchRow(db.Select("id").Where("id = ?", *in.CategoryID), &model.TrainingCategory{}, ErrCourseCategoryNotFound); err != nil {
+			return err
+		}
+		course.CategoryID = in.CategoryID
+	}
 	if in.CredentialID != nil {
 		id := *in.CredentialID
 		if id < 0 {
@@ -1111,39 +1106,23 @@ func applyCourseTrainingFields(db *gorm.DB, course *model.Course, in *CourseInpu
 	}
 	if in.SpecialtyID != nil {
 		id := *in.SpecialtyID
-		if id < 0 {
+		if id <= 0 {
 			return ErrCourseSpecialtyIDInvalid
 		}
-		if id == 0 {
-			course.SpecialtyID = nil
-		} else {
-			var count int64
-			if err := db.Model(&model.Specialty{}).Where("specialty_id = ?", id).Count(&count).Error; err != nil {
-				return err
-			}
-			if count == 0 {
-				return model.ErrSpecialtyNotFound
-			}
-			course.SpecialtyID = coerce.IntPtr(id)
+		if err := fetchRow(db.Select("specialty_id").Where("specialty_id = ?", id), &model.Specialty{}, model.ErrSpecialtyNotFound); err != nil {
+			return err
 		}
+		course.SpecialtyID = in.SpecialtyID
 	}
 	if in.LevelID != nil {
 		id := *in.LevelID
-		if id < 0 {
+		if id <= 0 {
 			return ErrCourseLevelIDInvalid
 		}
-		if id == 0 {
-			course.LevelID = nil
-		} else {
-			var count int64
-			if err := db.Model(&model.CourseLevel{}).Where("level_id = ?", id).Count(&count).Error; err != nil {
-				return err
-			}
-			if count == 0 {
-				return model.ErrCourseLevelNotFound
-			}
-			course.LevelID = coerce.IntPtr(id)
+		if err := fetchRow(db.Select("level_id").Where("level_id = ?", id), &model.CourseLevel{}, model.ErrCourseLevelNotFound); err != nil {
+			return err
 		}
+		course.LevelID = in.LevelID
 	}
 	if in.CertificateTemplateID != nil {
 		id := *in.CertificateTemplateID

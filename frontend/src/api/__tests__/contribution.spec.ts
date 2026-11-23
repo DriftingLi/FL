@@ -36,24 +36,24 @@ describe('contributionApi 学员端（#517）', () => {
     expect((config as any).timeout).toBe(120000)
   })
 
-  it('create：POST /contributions，body 透传证件/匿名位/文件数组', async () => {
+  it('create：POST /contributions，body 透传培训分类、匿名位和文件数组', async () => {
     mockPost.mockResolvedValue({ id: 1, status: 'pending' })
     const payload = {
-      credential_id: 3,
+      category_id: 3,
       title: 'T',
       intro: 'I',
       is_anonymous: true,
       files: [{ file_url: '/u/a.pdf', file_name: 'a.pdf', file_size: 1, content_type: 'document' }]
     }
     await contributionApi.create(payload)
-    expect(mockPost).toHaveBeenCalledWith('/contributions', payload)
+    expect(mockPost).toHaveBeenCalledWith('/contributions', payload, { params: { category_id: 'all' } })
   })
 
   it('listPublic / listMine / download / withdraw / report 端点形状', async () => {
     mockGet.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20 })
-    await contributionApi.listPublic({ credential_id: 3, sort: 'hot', page: 2, page_size: 20 })
+    await contributionApi.listPublic({ category_id: 3, sort: 'hot', page: 2, page_size: 20 })
     expect(mockGet).toHaveBeenCalledWith('/contributions', {
-      params: { credential_id: 3, sort: 'hot', page: 2, page_size: 20 }
+      params: { category_id: 3, sort: 'hot', page: 2, page_size: 20 }
     })
 
     await contributionApi.listMine({ page: 1, page_size: 20 })

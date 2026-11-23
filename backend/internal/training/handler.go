@@ -7,6 +7,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/internal/authz"
+	"forklift-training/internal/middleware"
 	"forklift-training/internal/security"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
@@ -27,15 +29,46 @@ func newHandler(svc *Service) *handler {
 //   - /api/positions：岗位字典公开读（学员端/招聘端共用，仅启用项）
 //
 // 证件面（/api/credentials、/api/me/credential）与 /api/admin/* 见另外两个注册函数。
-func RegisterRoutes(rg *gin.RouterGroup, _ *security.Session, svc *Service) {
+func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, svc *Service) {
 	h := newHandler(svc)
 
 	// ===== 学员端查询（公开） =====
 	rg.GET("/catalog/tree", h.GetCatalogTree)
+	rg.GET("/catalog/categories", h.ListPublicCategories)
+	rg.GET("/catalog/history-categories", middleware.JWTAuth(session),
+		middleware.CapabilityRequired(authz.CapQuestionPractice, authz.CapMockExamTake), h.ListHistoricalCategories)
 	rg.GET("/levels", h.ListPublicLevels)
 	rg.GET("/tags", h.ListPublicTags)
 	// 岗位字典公开读（学员端/招聘端共用，仅启用项）
 	rg.GET("/positions", h.ListPublicPositions)
+}
+
+// @Summary 培训历史筛选分类（含停用项）
+// @Tags 学员端-培训目录
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.R{data=training.TrainingCategoryListDTO} "success"
+// @Router /catalog/history-categories [get]
+func (h *handler) ListHistoricalCategories(c *gin.Context) {
+	httpx.Endpoint[struct{}, TrainingCategoryListDTO]{
+		Invoke: func(ctx context.Context, _ *struct{}) (*TrainingCategoryListDTO, error) {
+			return h.svc.listCategories(ctx, false)
+		},
+	}.Handle(c)
+}
+
+// ListPublicCategories 培训一级分类列表。
+// @Summary 培训一级分类（公开）
+// @Tags 学员端-培训目录
+// @Produce json
+// @Success 200 {object} response.R{data=training.TrainingCategoryListDTO} "success"
+// @Router /catalog/categories [get]
+func (h *handler) ListPublicCategories(c *gin.Context) {
+	httpx.Endpoint[struct{}, TrainingCategoryListDTO]{
+		Invoke: func(ctx context.Context, _ *struct{}) (*TrainingCategoryListDTO, error) {
+			return h.svc.ListPublicCategories(ctx)
+		},
+	}.Handle(c)
 }
 
 // GetCatalogTree 培训目录树

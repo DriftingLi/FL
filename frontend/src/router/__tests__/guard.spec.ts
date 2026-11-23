@@ -35,7 +35,6 @@ function state(overrides: Partial<GuardState> = {}): GuardState {
     hasValidToken: true,
     subdomain: 'training',
     ipDirect: false,
-    credential: 'present',
     // 运行时能力集（#1618 段1）：静态角色的用例留空 —— 它们的可达面由生成的能力表回答。
     // 落定标志的缺省是**生产形状**（#1645）：动态角色的第一次导航时它还是 false，
     // 要判「装载后能看到什么」的用例显式用 settled(...) 声明这一点。
@@ -189,6 +188,21 @@ describe('authPageStep', () => {
   it('已登录访问业务页（非认证页）→ 不干预', () => {
     expect(resolveGuardDecision(input(), state())).toEqual({ action: 'allow' })
   })
+
+  it.each(['Login', 'Register'])('师管仅能通过带合法课程回跳的 %s 切换学员身份', name => {
+    const authTarget = {
+      name,
+      path: name === 'Login' ? '/login' : '/register',
+      meta: { workspace: 'auth' },
+      matched: [{ workspace: 'auth', requiresAuth: false }]
+    }
+    const staff = state({ role: 'admin' })
+    const confirmed = input({ ...authTarget, fullPath: authTarget.path + '?course_auth=1&redirect=%2Ftraining%2Fcourse%2F12' })
+    expect(resolveGuardDecision(confirmed, staff)).toEqual({ action: 'allow' })
+    expect(resolveGuardDecision(confirmed, state({ role: 'admin', subdomain: 'admin' }))).toEqual({ action: 'workspace-home' })
+    const invalid = input({ ...authTarget, fullPath: authTarget.path + '?course_auth=1&redirect=%2F%2Fother.test' })
+    expect(resolveGuardDecision(invalid, staff)).toEqual({ action: 'workspace-home' })
+  })
 })
 
 // ===== 步骤 3：需登录而未登录 =====
@@ -198,7 +212,7 @@ describe('authRequiredStep', () => {
     expect(
       resolveGuardDecision(
         input({ meta: { requiresAuth: false, workspace: 'training' }, matched: [{ requiresAuth: false }] }),
-        state({ isLoggedIn: false, hasValidToken: false, role: '', credential: 'none' })
+        state({ isLoggedIn: false, hasValidToken: false, role: '' })
       )
     ).toEqual({ action: 'allow' })
   })
@@ -448,61 +462,6 @@ describe('roleStep', () => {
 
 // ===== 步骤 6：无证件 onboarding 预筛 =====
 
-describe('credentialStep', () => {
-  it('非 hrwai_user / IP 直连 / 非 training 工作区 → 不预筛', () => {
-    // 非学员角色（路由不声明角色时角色步放行，预筛也不介入）
-    expect(
-      resolveGuardDecision(
-        input({ meta: { requiresAuth: true, workspace: 'training' } }),
-        state({ role: 'tutor', credential: 'none', ...settled(['tutor.access']) })
-      )
-    ).toEqual({ action: 'allow' })
-    expect(resolveGuardDecision(input(), state({ ipDirect: true, credential: 'none' }))).toEqual({ action: 'allow' })
-    expect(
-      resolveGuardDecision(
-        input({ meta: { requiresAuth: true, workspace: 'recruit' }, path: '/recruit' }),
-        state({ credential: 'none', ipDirect: true })
-      )
-    ).toEqual({ action: 'allow' })
-  })
-
-  it('证件未加载 → load-credential（orchestrator 补数据后重跑）', () => {
-    expect(
-      resolveGuardDecision(input(), state({ credential: 'unloaded' }))
-    ).toEqual({ action: 'load-credential' })
-  })
-
-  it('无证件访问 training 业务页 → 强制进 onboarding', () => {
-    expect(
-      resolveGuardDecision(input(), state({ credential: 'none' }))
-    ).toEqual({ action: 'redirect', to: { name: 'CredentialOnboarding' } })
-  })
-
-  it('无证件访问 onboarding 本身 → 放行', () => {
-    expect(
-      resolveGuardDecision(
-        input({ name: 'CredentialOnboarding', path: '/training/onboarding/credential' }),
-        state({ credential: 'none' })
-      )
-    ).toEqual({ action: 'allow' })
-  })
-
-  it('已有证件访问 onboarding → 回 /training', () => {
-    expect(
-      resolveGuardDecision(
-        input({ name: 'CredentialOnboarding', path: '/training/onboarding/credential' }),
-        state({ credential: 'present' })
-      )
-    ).toEqual({ action: 'redirect', to: '/training' })
-  })
-
-  it('证件加载失败 → orchestrator 映射为 none → 跳 onboarding（与既有行为一致）', () => {
-    expect(resolveGuardDecision(input(), state({ credential: 'none' }))).toEqual({
-      action: 'redirect',
-      to: { name: 'CredentialOnboarding' }
-    })
-  })
-})
 
 // ===== 管线编排：步骤顺序即既有守卫求值序 =====
 
@@ -538,7 +497,7 @@ describe('resolveGuardDecision（顺序与优先级）', () => {
   it('角色校验先于预筛：无证件学员闯 tutor 工作区（IP 直连，无子域身份匹配）→ 先按角色回落', () => {
     const d = resolveGuardDecision(
       input({ meta: { requiresAuth: true, role: 'tutor', workspace: 'tutor' } }),
-      state({ credential: 'none', ipDirect: true })
+      state({ ipDirect: true })
     )
     expect(d).toEqual({ action: 'redirect', to: '/training' })
   })

@@ -19,6 +19,7 @@ type Question struct {
 	Score           int    `gorm:"column:score;default:0" json:"score"`
 	// CredentialID 所属目标证件（顶层分区，单归属）。
 	CredentialID  *int      `gorm:"column:credential_id" json:"credential_id,omitempty"`
+	CategoryID    *int      `gorm:"column:category_id" json:"-"`
 	Status        string    `gorm:"column:status;default:draft" json:"status"`
 	RejectReason  string    `gorm:"column:reject_reason" json:"reject_reason"`
 	CreatedBy     *int      `gorm:"column:created_by" json:"created_by,omitempty"`
@@ -63,6 +64,7 @@ type QuestionPracticeRecord struct {
 	// CredentialID 该次作答所属的目标证件分区（顶层分区，单归属）：
 	// 作答那一刻的当前证件在写入时冻结，读面（历史 / 刷题统计 / 练习统计）按它过滤（ADR-0051）。
 	CredentialID *int      `gorm:"column:credential_id" json:"credential_id,omitempty"`
+	CategoryID   *int      `gorm:"column:category_id" json:"-"`
 	QuestionID   int       `gorm:"column:question_id" json:"question_id"`
 	IsCorrect    bool      `gorm:"column:is_correct;default:false" json:"is_correct"`
 	PracticeType string    `gorm:"column:practice_type;default:free" json:"practice_type"`
@@ -87,6 +89,15 @@ type WrongQuestion struct {
 
 func (WrongQuestion) TableName() string { return "wrong_question" }
 
+type WrongQuestionCategory struct {
+	ID              int64     `gorm:"column:id;primaryKey" json:"-"`
+	WrongQuestionID int       `gorm:"column:wrong_question_id" json:"-"`
+	CategoryID      *int      `gorm:"column:category_id" json:"-"`
+	LastWrongAt     time.Time `gorm:"column:last_wrong_at" json:"-"`
+}
+
+func (WrongQuestionCategory) TableName() string { return "wrong_question_category" }
+
 // ===== 18. 模拟考试 =====
 
 type MockExam struct {
@@ -95,6 +106,7 @@ type MockExam struct {
 	// CredentialID 本次考试所属的目标证件分区（顶层分区，单归属）：
 	// 开考时按当前证件抽题并落库，历史读面按它过滤（ADR-0034「模考按证件分区」的落库面）。
 	CredentialID  *int       `gorm:"column:credential_id" json:"credential_id,omitempty"`
+	CategoryID    *int       `gorm:"column:category_id" json:"-"`
 	QuestionIDs   JSONB      `gorm:"column:question_ids;type:jsonb" json:"question_ids,omitempty"`
 	Answers       JSONB      `gorm:"column:answers;type:jsonb" json:"answers,omitempty"`
 	StartTime     *time.Time `gorm:"column:start_time" json:"start_time,omitempty"`
@@ -114,6 +126,7 @@ func (MockExam) TableName() string { return "mock_exam" }
 type RealExamPaper struct {
 	PaperID         int       `gorm:"column:paper_id;primaryKey" json:"paper_id"`
 	CredentialID    int       `gorm:"column:credential_id" json:"credential_id"`
+	CategoryID      *int      `gorm:"column:category_id" json:"-"`
 	Title           string    `gorm:"column:title" json:"title"`
 	Year            *int      `gorm:"column:year" json:"year,omitempty"`
 	Source          *string   `gorm:"column:source" json:"source,omitempty"`
@@ -146,6 +159,8 @@ type PracticeProgress struct {
 	// CredentialID 进度归属的证件分区（#414）：仅顺序练习携带（唯一键 (student, mode, credential)），
 	// 标签/按卷练习保持 NULL（partial 唯一索引兜底，NULL 不判重），未预筛选学员亦为 NULL。
 	CredentialID *int      `gorm:"column:credential_id" json:"credential_id,omitempty"`
+	CategoryID   *int      `gorm:"column:category_id" json:"-"`
+	AttemptKey   *string   `gorm:"column:attempt_key" json:"-"`
 	QuestionIDs  JSONB     `gorm:"column:question_ids;type:jsonb" json:"question_ids,omitempty"`
 	CurrentIndex int       `gorm:"column:current_index;default:0" json:"current_index"`
 	Total        int       `gorm:"column:total;default:0" json:"total"`

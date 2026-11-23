@@ -11,6 +11,7 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/questionbank"
+	"forklift-training/internal/scope"
 	"forklift-training/internal/security"
 	"forklift-training/pkg/httpx"
 )
@@ -29,18 +30,25 @@ func newHandler(svc *Service) *handler {
 func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, credRes middleware.CredentialResolver, svc *Service) {
 	h := newHandler(svc)
 
-	g := rg.Group("/practice-mode", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapQuestionPractice), middleware.CredentialScoped(credRes))
+	attempts := rg.Group("/practice-mode/attempts", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapQuestionPractice))
+	attempts.POST("", h.StartCategoryPractice)
+	attempts.POST("/answer", h.SubmitCategoryPracticeAnswer)
 
-	g.GET("/free", h.GetFreeQuestions)
-	g.GET("/tag", h.StartTagPractice)
-	g.GET("/sequential", h.StartSequential)
-	g.GET("/sequential-progress", h.GetSequentialProgress)
-	g.POST("/progress", h.SaveProgress)
-	g.GET("/progress", h.GetProgress)
-	g.POST("/submit", h.SubmitAnswer)
-	g.GET("/stats", h.GetStats)
-	g.GET("/practice-stats", h.GetPracticeStats)
-	g.GET("/history", h.GetHistory)
+	g := rg.Group("/practice-mode", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapQuestionPractice))
+	credentialScoped := middleware.CredentialScoped(credRes)
+	classifiedRead := middleware.CredentialScopedUnlessCategory(credRes)
+	g.GET("/stats", classifiedRead, h.GetStats)
+	g.GET("/practice-stats", classifiedRead, h.GetPracticeStats)
+	g.GET("/history", classifiedRead, h.GetHistory)
+
+	legacy := g.Group("", credentialScoped)
+	legacy.GET("/free", h.GetFreeQuestions)
+	legacy.GET("/tag", h.StartTagPractice)
+	legacy.GET("/sequential", h.StartSequential)
+	legacy.GET("/sequential-progress", h.GetSequentialProgress)
+	legacy.POST("/progress", h.SaveProgress)
+	g.GET("/progress", classifiedRead, h.GetProgress)
+	g.POST("/submit", classifiedRead, h.SubmitAnswer)
 }
 
 // freeQuestionsReq 随机练习抽题请求（type + count）。
@@ -303,6 +311,7 @@ type submitAnswerReq struct {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
+// @Param category_id query string false "Web 单题入口传 all，由服务端按题目当前分类归档"
 // @Param body body object true "答题" example({"question_id":1,"user_answer":"A","practice_type":"free"})
 // @Success 200 {object} response.R{data=SubmitResultDTO} "success"
 // @Failure 400 {object} response.R "参数错误"
@@ -311,6 +320,9 @@ type submitAnswerReq struct {
 func (h *handler) SubmitAnswer(c *gin.Context) {
 	httpx.Endpoint[submitAnswerReq, SubmitResultDTO]{
 		Parse: func(c *gin.Context) (*submitAnswerReq, error) {
+			if category, provided := c.GetQuery("category_id"); provided && category != "all" {
+				return nil, httpx.BadRequest(scope.ErrCategoryFilter.Error())
+			}
 			uid, _ := c.Get(string(middleware.CtxUserID))
 			studentID, _ := uid.(int)
 			var req struct {
@@ -335,6 +347,9 @@ func (h *handler) SubmitAnswer(c *gin.Context) {
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *submitAnswerReq) (*SubmitResultDTO, error) {
+			if c.Query("category_id") == "all" {
+				return h.svc.submitQuestionDetailAnswer(req.StudentID, req.QuestionID, req.UserAnswer)
+			}
 			return h.svc.SubmitAnswer(req.StudentID, req.QuestionID, req.UserAnswer, req.PracticeType, middleware.CredentialIDPtr(c))
 		},
 	}.WithSuccess(httpx.OkMsg("success"), http.StatusBadRequest).Handle(c)
@@ -348,18 +363,15 @@ func (h *handler) SubmitAnswer(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param credential_id query int false "目标证件ID" minimum(1)
+// @Param category_id query string false "培训分类 ID、all 或 unclassified"
 // @Success 200 {object} response.R{data=PracticePracticeStatsDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /practice-mode/practice-stats [get]
 func (h *handler) GetPracticeStats(c *gin.Context) {
 	httpx.Endpoint[practiceStatsReq, PracticePracticeStatsDTO]{
-		Parse: func(c *gin.Context) (*practiceStatsReq, error) {
-			uid, _ := c.Get(string(middleware.CtxUserID))
-			studentID, _ := uid.(int)
-			return &practiceStatsReq{StudentID: studentID, CredentialID: middleware.CredentialIDPtr(c)}, nil
-		},
+		Parse: parsePracticeStatsRequest,
 		Invoke: func(ctx context.Context, req *practiceStatsReq) (*PracticePracticeStatsDTO, error) {
-			return h.svc.GetPracticeStats(req.StudentID, req.CredentialID)
+			return h.svc.getPracticeStats(req.StudentID, req.CredentialID, req.Category)
 		},
 		ErrStatus: httpx.ErrStatusAllMsg(http.StatusInternalServerError, "查询失败"),
 	}.Handle(c)
@@ -370,6 +382,16 @@ func (h *handler) GetPracticeStats(c *gin.Context) {
 type practiceStatsReq struct {
 	StudentID    int
 	CredentialID *int
+	Category     scope.CategoryFilter
+}
+
+func parsePracticeStatsRequest(c *gin.Context) (*practiceStatsReq, error) {
+	raw, present := c.GetQuery("category_id")
+	category, err := scope.ParseCategoryFilter(raw, present)
+	if err != nil {
+		return nil, httpx.BadRequest(err.Error())
+	}
+	return &practiceStatsReq{StudentID: c.GetInt(string(middleware.CtxUserID)), CredentialID: middleware.CredentialIDPtr(c), Category: category}, nil
 }
 
 // GetStats 练习统计
@@ -380,31 +402,27 @@ type practiceStatsReq struct {
 // @Produce json
 // @Security BearerAuth
 // @Param credential_id query int false "目标证件ID"
+// @Param category_id query string false "培训分类 ID、all 或 unclassified"
 // @Success 200 {object} response.R{data=PracticeStatsDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /practice-mode/stats [get]
 func (h *handler) GetStats(c *gin.Context) {
 	httpx.Endpoint[practiceStatsReq, PracticeStatsDTO]{
-		Parse: func(c *gin.Context) (*practiceStatsReq, error) {
-			uid, _ := c.Get(string(middleware.CtxUserID))
-			studentID, _ := uid.(int)
-			return &practiceStatsReq{StudentID: studentID, CredentialID: middleware.CredentialIDPtr(c)}, nil
-		},
+		Parse: parsePracticeStatsRequest,
 		Invoke: func(ctx context.Context, req *practiceStatsReq) (*PracticeStatsDTO, error) {
-			return h.svc.GetStats(req.StudentID, req.CredentialID)
+			return h.svc.getStats(req.StudentID, req.CredentialID, req.Category)
 		},
 	}.Handle(c)
 }
 
 // practiceHistoryReq 练习历史请求（学员 ID + 当前证件 + 分页 + 过滤）。
 type practiceHistoryReq struct {
-	StudentID    int
-	CredentialID *int
-	Page         int
-	PageSize     int
-	QType        string
-	StartDate    string
-	EndDate      string
+	practiceStatsReq
+	Page      int
+	PageSize  int
+	QType     string
+	StartDate string
+	EndDate   string
 }
 
 // GetHistory 练习历史
@@ -415,6 +433,7 @@ type practiceHistoryReq struct {
 // @Produce json
 // @Security BearerAuth
 // @Param credential_id query int false "目标证件ID"
+// @Param category_id query string false "培训分类 ID、all 或 unclassified"
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(20)
 // @Param type query string false "题型"
@@ -426,20 +445,21 @@ type practiceHistoryReq struct {
 func (h *handler) GetHistory(c *gin.Context) {
 	httpx.Endpoint[practiceHistoryReq, HistoryResultDTO]{
 		Parse: func(c *gin.Context) (*practiceHistoryReq, error) {
-			uid, _ := c.Get(string(middleware.CtxUserID))
-			studentID, _ := uid.(int)
+			filters, err := parsePracticeStatsRequest(c)
+			if err != nil {
+				return nil, err
+			}
 			return &practiceHistoryReq{
-				StudentID:    studentID,
-				CredentialID: middleware.CredentialIDPtr(c),
-				Page:         httpx.QueryIntDefault(c, "page", 1),
-				PageSize:     httpx.QueryIntDefault(c, "page_size", 20),
-				QType:        c.Query("type"),
-				StartDate:    c.Query("start_date"),
-				EndDate:      c.Query("end_date"),
+				practiceStatsReq: *filters,
+				Page:             httpx.QueryIntDefault(c, "page", 1),
+				PageSize:         httpx.QueryIntDefault(c, "page_size", 20),
+				QType:            c.Query("type"),
+				StartDate:        c.Query("start_date"),
+				EndDate:          c.Query("end_date"),
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *practiceHistoryReq) (*HistoryResultDTO, error) {
-			return h.svc.GetHistory(req.StudentID, req.CredentialID, req.Page, req.PageSize, req.QType, req.StartDate, req.EndDate)
+			return h.svc.getHistory(req.StudentID, req.CredentialID, req.Category, req.Page, req.PageSize, req.QType, req.StartDate, req.EndDate)
 		},
 	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).Handle(c)
 }

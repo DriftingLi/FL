@@ -40,7 +40,7 @@ func TestPaidCourseEntitlementGate(t *testing.T) {
 	if err := db.Create(&lv).Error; err != nil {
 		t.Fatalf("建课程等级失败: %v", err)
 	}
-	course := model.Course{Name: "叉车电气诊断", Status: 1, PointsPrice: &price,
+	course := model.Course{Name: "叉车电气诊断", CategoryID: &testutil.SeedTrainingCategory(t, db, "课程分类").ID, Status: 1, PointsPrice: &price,
 		SpecialtyID: &spec.SpecialtyID, LevelID: &lv.LevelID, CreatedAt: testutil.Now()}
 	if err := db.Create(&course).Error; err != nil {
 		t.Fatalf("建付费课程失败: %v", err)
@@ -132,7 +132,7 @@ func TestCourseDetailProjectsEntitlement(t *testing.T) {
 	if err := db.Create(&lv).Error; err != nil {
 		t.Fatalf("建课程等级失败: %v", err)
 	}
-	course := model.Course{Name: "叉车日常保养", Status: 1, PointsPrice: &price,
+	course := model.Course{Name: "叉车日常保养", CategoryID: &testutil.SeedTrainingCategory(t, db, "课程分类").ID, Status: 1, PointsPrice: &price,
 		SpecialtyID: &spec.SpecialtyID, LevelID: &lv.LevelID, CreatedAt: testutil.Now()}
 	if err := db.Create(&course).Error; err != nil {
 		t.Fatalf("建付费课程失败: %v", err)
@@ -198,7 +198,7 @@ func TestCourseDetailChapterContentEntitlement(t *testing.T) {
 	if err := db.Create(&lv).Error; err != nil {
 		t.Fatalf("建课程等级失败: %v", err)
 	}
-	course := model.Course{Name: "叉车液压系统", Status: 1, PointsPrice: &price,
+	course := model.Course{Name: "叉车液压系统", CategoryID: &testutil.SeedTrainingCategory(t, db, "课程分类").ID, Status: 1, PointsPrice: &price,
 		SpecialtyID: &spec.SpecialtyID, LevelID: &lv.LevelID, CreatedAt: testutil.Now()}
 	if err := db.Create(&course).Error; err != nil {
 		t.Fatalf("建付费课程失败: %v", err)

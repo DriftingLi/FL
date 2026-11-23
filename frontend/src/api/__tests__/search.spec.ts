@@ -15,17 +15,17 @@ beforeEach(() => {
 })
 
 describe('searchApi.search', () => {
-  it('type 缺省：只传 keyword（后端返回各分区聚合）', async () => {
+  it('默认全分类，返回各分区聚合', async () => {
     mockGet.mockResolvedValue({ keyword: '液压', courses: { items: [], total: 0 } })
     await searchApi.search({ keyword: '液压' })
-    expect(mockGet).toHaveBeenCalledWith('/search', { params: { keyword: '液压' } })
+    expect(mockGet).toHaveBeenCalledWith('/search', { params: { keyword: '液压', category_id: 'all' } })
   })
 
   it('指定 type：type/page/page_size 透传（后端返回分页结果）', async () => {
     mockGet.mockResolvedValue({ keyword: '液压', type: 'course', items: [], total: 0, page: 1, pages: 0 })
-    await searchApi.search({ keyword: '液压', type: 'course', page: 2, page_size: 10 })
+    await searchApi.search({ keyword: '液压', type: 'course', page: 2, page_size: 10, category_id: 4 })
     expect(mockGet).toHaveBeenCalledWith('/search', {
-      params: { keyword: '液压', type: 'course', page: 2, page_size: 10 }
+      params: { keyword: '液压', type: 'course', page: 2, page_size: 10, category_id: 4 }
     })
   })
 })

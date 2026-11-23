@@ -1,0 +1,12 @@
+{{/* error.html：上游 5xx / 网络错误。
+     关键：**不是**空态、**不是** 404——页面上必须给出「可重试」的路径，
+     状态码 502 让监控能区分「上游坏了」与「没有这门课」。 */}}
+{{define "error_page"}}{{template "page_start" .}}
+<div class="state state-error" role="alert">
+  <h1>课程暂时加载不出来</h1>
+  <p class="state-actions">
+    <a class="btn btn-primary" href="{{.RetryURL}}">重试</a>
+    <a class="btn btn-ghost" href="{{.Back}}">返回课程目录</a>
+  </p>
+</div>
+{{template "page_end" .}}{{end}}

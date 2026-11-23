@@ -30,8 +30,7 @@ export type {
 // （该判据针对手写**响应**类型，入参不在其列），且 type 别名在阅读时与「响应形状来自生成物」
 // 一眼可分。它们不参与任何响应形状，删掉会丢失模块既有的入参词汇。
 export type StartMockExamPayload = {
-  course_id?: number
-  category?: string
+  category_id: number
   question_count?: number
   duration_minutes?: number
 }
@@ -47,11 +46,12 @@ export type MockExamProgressPayload = {
 export type MockExamHistoryQuery = {
   page?: number
   page_size?: number
+  category_id?: number | 'all' | 'unclassified'
 }
 
 export const mockExamApi = {
   startMockExam(data: StartMockExamPayload) {
-    return unwrappedRequest.post<WithUIQuestions<MockExamStartDTO>>('/mock-exam/start', data, { params: {} })
+    return unwrappedRequest.post<WithUIQuestions<MockExamStartDTO>>('/mock-exam/category-start', data)
   },
 
   saveProgress(mockExamId: number, data: MockExamProgressPayload) {
@@ -71,6 +71,10 @@ export const mockExamApi = {
   },
 
   getMockExamHistory(params: MockExamHistoryQuery) {
-    return unwrappedRequest.get<MockExamHistoryDTO>('/mock-exam/history', { params })
+    return unwrappedRequest.get<MockExamHistoryDTO>('/mock-exam/history', { params: { category_id: 'all', ...params } })
+  },
+
+  getInProgress(params: Pick<MockExamHistoryQuery, 'page' | 'page_size'>) {
+    return unwrappedRequest.get<MockExamHistoryDTO>('/mock-exam/in-progress', { params })
   }
 }

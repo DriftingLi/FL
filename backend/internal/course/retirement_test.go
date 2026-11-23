@@ -1,6 +1,6 @@
 // Ticket 1a（issue #51）：旧分类（course.category）退役 + 课程元数据修正。
 // seam：service 层（sqlite 内存库）。期望行为即验收标准：
-//   - 创建课程必须携带专业方向/课程等级（旧 category 不再需要）
+//   - 创建课程必须携带一级培训分类
 //   - 学生端列表/详情返回 chapter_count 与 prerequisite_course_ids，不含 category
 //   - 管理端列表返回 chapter_count 与 prerequisite_course_ids，不含 category
 //   - 编辑课程未携带 prerequisite_course_ids 时前置课程不被清空
@@ -10,8 +10,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"forklift-training/internal/notification"
-	"strings"
 	"testing"
 
 	"go.uber.org/zap"
@@ -22,43 +22,35 @@ import (
 	"forklift-training/internal/testutil"
 )
 
-// TestCreateCourseRequiresSpecialtyAndLevel 创建课程必须填专业方向与课程等级。
-func TestCreateCourseRequiresSpecialtyAndLevel(t *testing.T) {
+func TestCreateCourseRequiresCategory(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 	svc := NewAdminService(db, nil, notification.NewService(db, zap.NewNop()), zap.NewNop())
-
-	spec := model.Specialty{Code: "maintenance", Name: "维修", SortOrder: 1, Status: 1}
-	if err := db.Create(&spec).Error; err != nil {
-		t.Fatalf("创建方向失败: %v", err)
+	category := testutil.SeedTrainingCategory(t, db, "维修")
+	name := coerce.StrPtr("课程A")
+	if _, err := svc.CreateCourse(&CourseInput{Name: name}); !errors.Is(err, ErrCourseCategoryRequired) {
+		t.Fatalf("缺少分类应报错: %v", err)
 	}
-	lv := model.CourseLevel{Code: "beginner", Name: "入门", SortOrder: 1, Status: 1}
-	if err := db.Create(&lv).Error; err != nil {
-		t.Fatalf("创建等级失败: %v", err)
+	if _, err := svc.CreateCourse(&CourseInput{Name: name, CategoryID: coerce.IntPtr(category.ID + 100)}); !errors.Is(err, ErrCourseCategoryNotFound) {
+		t.Fatalf("未知分类应报错: %v", err)
 	}
-
-	// 只给名称（旧体系曾要求 category，新体系改为方向/等级必填）
-	if _, err := svc.CreateCourse(&CourseInput{Name: coerce.StrPtr("课程A")}); err == nil || !strings.Contains(err.Error(), "专业方向不能为空") {
-		t.Fatalf("缺少专业方向应报错, got: %v", err)
-	}
-	if _, err := svc.CreateCourse(&CourseInput{Name: coerce.StrPtr("课程A"), SpecialtyID: coerce.IntPtr(spec.SpecialtyID)}); err == nil || !strings.Contains(err.Error(), "课程等级不能为空") {
-		t.Fatalf("缺少课程等级应报错, got: %v", err)
-	}
-
-	created, err := svc.CreateCourse(&CourseInput{
-		Name: coerce.StrPtr("课程A"), SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID),
-	})
+	draft := int16(0)
+	created, err := svc.CreateCourse(&CourseInput{Name: name, CategoryID: &category.ID, Status: &draft, CourseType: coerce.StrPtr(model.CourseTypeVideo)})
 	if err != nil {
-		t.Fatalf("创建失败: %v", err)
+		t.Fatal(err)
 	}
-	b, _ := json.Marshal(created)
-	if bytes.Contains(b, []byte(`"category"`)) {
-		t.Fatal("课程 dict 不应包含 category")
+	if created.CategoryID == nil || *created.CategoryID != category.ID || created.Status != 0 {
+		t.Fatalf("创建草稿未保留指定分类与状态: %+v", created)
+	}
+	var stored model.Course
+	if err := db.First(&stored, created.CourseID).Error; err != nil || stored.Status != 0 {
+		t.Fatalf("草稿状态未保存: %+v, %v", stored, err)
 	}
 }
 
 // seedCatalogCourse 建一门已挂载课程（含章节与前置课程），返回课程与其前置课程。
 func seedCatalogCourse(t *testing.T, db *gorm.DB) (*model.Course, *model.Course) {
 	t.Helper()
+	category := testutil.SeedTrainingCategory(t, db, "维修")
 	spec := model.Specialty{Code: "maintenance", Name: "维修", SortOrder: 1, Status: 1}
 	if err := db.Create(&spec).Error; err != nil {
 		t.Fatalf("创建方向失败: %v", err)
@@ -67,12 +59,12 @@ func seedCatalogCourse(t *testing.T, db *gorm.DB) (*model.Course, *model.Course)
 	if err := db.Create(&lv).Error; err != nil {
 		t.Fatalf("创建等级失败: %v", err)
 	}
-	prereq := model.Course{Name: "前置课程", Status: 1,
+	prereq := model.Course{Name: "前置课程", Status: 1, CategoryID: &category.ID,
 		SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID), CreatedAt: testutil.Now()}
 	if err := db.Create(&prereq).Error; err != nil {
 		t.Fatalf("创建前置课程失败: %v", err)
 	}
-	course := model.Course{Name: "主课程", Status: 1,
+	course := model.Course{Name: "主课程", Status: 1, CategoryID: &category.ID,
 		SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID), CreatedAt: testutil.Now()}
 	if err := db.Create(&course).Error; err != nil {
 		t.Fatalf("创建课程失败: %v", err)
@@ -144,7 +136,7 @@ func TestStudentCourseListHasChapterCountAndPrereqIDs(t *testing.T) {
 	}
 }
 
-// TestStudentCourseListOmitsUnmountedCourses 未挂方向/等级的课程不出现在学生端列表（与目录树口径统一）。
+// TestStudentCourseListOmitsUnmountedCourses 未分类课程不出现在学生端列表（与目录树口径统一）。
 func TestStudentCourseListOmitsUnmountedCourses(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 	svc := NewService(db, nil, zap.NewNop())
@@ -162,7 +154,7 @@ func TestStudentCourseListOmitsUnmountedCourses(t *testing.T) {
 	items := page.Courses
 	for _, c := range items {
 		if c.CourseID == unmounted.CourseID {
-			t.Fatal("未挂方向/等级的课程不应出现在学生端列表")
+			t.Fatal("未分类课程不应出现在学生端列表")
 		}
 	}
 }

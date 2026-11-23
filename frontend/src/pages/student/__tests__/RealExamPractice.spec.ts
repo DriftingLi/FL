@@ -29,7 +29,7 @@ vi.mock('@/composables/useConfirm', () => ({
 }))
 
 vi.mock('@/api/realExam', () => ({
-  realExamApi: { startPractice: vi.fn() }
+  realExamApi: { startPractice: vi.fn(), submitPracticeAnswer: vi.fn() }
 }))
 
 vi.mock('@/api/practiceMode', () => ({

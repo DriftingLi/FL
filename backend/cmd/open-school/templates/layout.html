@@ -1,0 +1,48 @@
+{{/*
+layout.html 定义整页骨架（head + 页头 + 页脚）与可复用的 head 片段。
+片段模板（results.html）**不**引用这里的任何 define：片段会被塞进已有页面，
+一旦带上 <html>/<head> 语义就脏了。
+*/}}
+
+{{define "head"}}<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}}</title>
+<meta name="description" content="{{.Description}}">
+{{with .Robots}}<meta name="robots" content="{{.}}">
+{{end}}<meta property="og:site_name" content="{{.SiteName}}">
+<meta property="og:type" content="website">
+<meta property="og:title" content="{{.OGTitle}}">
+<meta property="og:description" content="{{.Description}}">
+<meta property="og:url" content="{{.OGURL}}">
+{{with .OGImage}}<meta property="og:image" content="{{.}}">
+{{end}}<meta name="twitter:card" content="{{if .OGImage}}summary_large_image{{else}}summary{{end}}">
+<link rel="stylesheet" href="/assets/style.css?v=3">
+{{/* historyRestoreAsHxRequest=false：浏览器前进/后退时 htmx 不带 HX-Request，
+     我们靠「有 HX-Request 才回片段」这一条判据即可，同时 Server 侧还显式看
+     HX-History-Restore-Request 兜底。historyCacheSize=0 关掉客户端快照缓存，
+     让回退一定走服务端整页渲染——筛选态由 URL 决定，缓存反而会显示旧结果。 */}}
+<meta name="htmx-config" content='{"historyRestoreAsHxRequest":false,"historyCacheSize":0}'>
+<script src="/assets/htmx.min.js" defer></script>{{end}}
+
+{{define "page_start"}}<!doctype html>
+<html lang="zh-CN">
+<head>{{template "head" .Head}}</head>
+<body>
+<a class="skip-link" href="#main">跳到主要内容</a>
+<header class="site-header">
+  <div class="wrap bar">
+    <a class="brand" href="/">{{.Head.SiteName}}</a>
+    {{/* 主导航是**整页**链接（#2760）：三个目录各有独立的 title/og:*，
+         换目录必须换整页的分享元数据，htmx 局部刷新做不到这件事。 */}}
+    <nav class="site-nav typenav" aria-label="主导航">
+      {{range schoolNavigation .Head.OGURL}}
+        {{if .Selected}}<span class="typenav-item typenav-current" aria-current="page">{{.Label}}</span>{{else}}<a class="typenav-item" href="{{.Href}}">{{.Label}}</a>{{end}}
+      {{end}}
+    </nav>
+  </div>
+</header>
+<main id="main" class="wrap">{{end}}
+
+{{define "page_end"}}</main>
+</body>
+</html>{{end}}

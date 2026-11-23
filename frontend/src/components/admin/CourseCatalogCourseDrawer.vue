@@ -5,9 +5,7 @@ import { ElMessage } from 'element-plus'
 import type { FormInstance } from 'element-plus'
 import { adminApi, type AdminCourseItem, type ChapterPayload } from '@/api/admin'
 import { useConfirm } from '@/composables/useConfirm'
-import type { CatalogDirectionNode, CatalogLevel, CertificateTemplate } from '@/api/training'
-
-import type { CredentialDict } from '@/api/credential'
+import type { CertificateTemplate, TrainingCategoryDTO } from '@/api/training'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiRadioGroup from '@/components/ui/UiRadioGroup.vue'
@@ -16,13 +14,10 @@ import UiInput from '@/components/ui/UiInput.vue'
 import UiSelect from '@/components/ui/UiSelect.vue'
 
 const props = defineProps<{
-  directions: CatalogDirectionNode[]
-  levels: CatalogLevel[]
   certificateTemplates: CertificateTemplate[]
   courseOptions: { course_id: number; name: string }[]
-  credentials: CredentialDict[]
-  /** 新增课程时默认选中的方向（当前方向筛选，<=0 视为未选中） */
-  defaultSpecialtyId: number | null
+  categories: TrainingCategoryDTO[]
+  defaultCategoryId: number | null
   submitting: boolean
 }>()
 
@@ -34,9 +29,10 @@ const drawerChapters = ref<{ chapter_id: number; title: string; duration?: numbe
 const drawerForm = reactive<Record<string, any>>({
   course_id: null,
   name: '',
-  credential_id: null,
-  specialty_id: null,
-  level_id: null,
+  category_id: null,
+  // 课程主类型（#2760）：video | illustrated。创建必选、编辑默认回填原值。
+  // 默认值不预设（null）：让管理员真的选一次，而不是悄悄落一个「没选过」的类型。
+  course_type: null,
   status: 1,
   theory_hours: 0,
   practice_hours: 0,
@@ -51,9 +47,9 @@ const drawerForm = reactive<Record<string, any>>({
 
 const courseRules = {
   name: [{ required: true, message: '请输入课程名称', trigger: 'blur' }],
-  credential_id: [{ required: true, message: '请选择所属证件', trigger: 'change' }],
-  specialty_id: [{ required: true, message: '请选择专业方向', trigger: 'change' }],
-  level_id: [{ required: true, message: '请选择课程等级', trigger: 'change' }],
+  category_id: [{ required: true, message: '请选择课程分类', trigger: 'change' }],
+  // 类型必填（#2760）：公开目录的分流全靠这一格，缺了访客就找不到这门课。
+  course_type: [{ required: true, message: '请选择课程类型', trigger: 'change' }],
   // 积分校验口径与后端一致（#2447）：≥1 的整数为定价，留空 = 免费（落 NULL）。
   points_price: [{
     validator: (_rule: unknown, value: unknown, callback: (e?: Error) => void) => {
@@ -72,9 +68,8 @@ function open(course: AdminCourseItem | null) {
     Object.assign(drawerForm, {
       course_id: null,
       name: '',
-      credential_id: null,
-      specialty_id: props.defaultSpecialtyId !== null && props.defaultSpecialtyId > 0 ? props.defaultSpecialtyId : null,
-      level_id: null,
+      category_id: props.defaultCategoryId,
+      course_type: null,
       status: 1,
       theory_hours: 0,
       practice_hours: 0,
@@ -91,9 +86,8 @@ function open(course: AdminCourseItem | null) {
   Object.assign(drawerForm, {
     course_id: course.course_id,
     name: course.name,
-    credential_id: (course as any).credential_id ?? null,
-    specialty_id: course.specialty_id,
-    level_id: course.level_id,
+    category_id: course.category_id ?? null,
+    course_type: (course as any).course_type ?? null,
     status: course.status,
     theory_hours: course.theory_hours || 0,
     practice_hours: course.practice_hours || 0,
@@ -110,13 +104,13 @@ function open(course: AdminCourseItem | null) {
 
 async function loadDrawerDetail() {
   try {
-    const detail = await adminApi.getCourseDetail(drawerForm.course_id)
-    if (detail) {
+    const id = drawerForm.course_id
+    const detail = await adminApi.getCourseDetail(id)
+    if (detail && drawerForm.course_id === id) {
       Object.assign(drawerForm, {
         name: detail.name ?? drawerForm.name,
-        credential_id: (detail as any).credential_id ?? drawerForm.credential_id,
-        specialty_id: detail.specialty_id ?? null,
-        level_id: detail.level_id ?? null,
+        category_id: detail.category_id ?? null,
+        course_type: (detail as any).course_type ?? drawerForm.course_type,
         status: detail.status ?? drawerForm.status,
         theory_hours: detail.theory_hours ?? 0,
         practice_hours: detail.practice_hours ?? 0,
@@ -141,9 +135,8 @@ async function submitCourse() {
   try {
     const payload = {
       name: drawerForm.name,
-      credential_id: drawerForm.credential_id,
-      specialty_id: drawerForm.specialty_id,
-      level_id: drawerForm.level_id,
+      category_id: drawerForm.category_id,
+      course_type: drawerForm.course_type,
       status: drawerForm.status,
       theory_hours: drawerForm.theory_hours,
       practice_hours: drawerForm.practice_hours,
@@ -254,17 +247,18 @@ defineExpose({ open })
   <!-- 课程编辑抽屉（全字段 + 章节管理） -->
   <el-drawer v-model="drawerVisible" :title="drawerForm.course_id ? '编辑课程' : '新增课程'" size="560px">
     <el-form ref="courseFormRef" :model="drawerForm" :rules="courseRules" label-width="96px">
-      <el-form-item label="所属证件" prop="credential_id">
-        <UiSelect v-model="drawerForm.credential_id" placeholder="必选" style="width: 100%" :groups="[{ label: '特种作业', options: credentials.filter((x) => x.category === 'special_operation').map((c) => ({ label: c.name, value: c.id })) }, { label: '技能等级', options: credentials.filter((x) => x.category === 'skill_level').map((c) => ({ label: c.name, value: c.id })) }]" />
+      <el-form-item label="课程分类" prop="category_id">
+        <UiSelect v-model="drawerForm.category_id" placeholder="请选择课程分类" class="w-full" :options="categories.map(c => ({ label: c.name, value: c.id }))" />
       </el-form-item>
       <el-form-item label="课程名称" prop="name">
         <UiInput v-model="drawerForm.name" placeholder="课程名称" :maxlength="50" />
       </el-form-item>
-      <el-form-item label="专业方向" prop="specialty_id">
-        <UiSelect v-model="drawerForm.specialty_id" placeholder="必选" style="width: 100%" :options="(directions).map((d) => ({ label: d.name, value: d.specialty_id }))" />
-      </el-form-item>
-      <el-form-item label="课程等级" prop="level_id">
-        <UiSelect v-model="drawerForm.level_id" placeholder="必选" style="width: 100%" :options="(levels).map((l) => ({ label: l.name, value: l.level_id }))" />
+      <el-form-item label="课程类型" prop="course_type">
+        <UiRadioGroup v-model="drawerForm.course_type">
+          <el-radio value="video">视频课程</el-radio>
+          <el-radio value="illustrated">图文课程（含 PPT）</el-radio>
+        </UiRadioGroup>
+        <div class="cc-hint">公开目录按类型分流。一门课的章节内容必须同质：视频课不能放图文章节，反之亦然。</div>
       </el-form-item>
       <el-form-item label="学时">
         <div class="cc-hours">
@@ -354,6 +348,13 @@ defineExpose({ open })
 .cc-hours-unit {
   font-size: var(--text-xs);
   color: var(--color-text-tertiary);
+}
+
+.cc-hint {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  line-height: 1.5;
+  margin-top: 4px;
 }
 
 .cc-chapters {

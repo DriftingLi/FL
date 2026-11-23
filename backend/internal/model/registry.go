@@ -43,6 +43,7 @@ var ModelBlocks = []ModelBlock{
 	{
 		Name: "培训目录与学习",
 		Models: []any{
+			&TrainingCategory{},
 			&Course{},
 			&Specialty{},
 			&Position{},
@@ -77,6 +78,7 @@ var ModelBlocks = []ModelBlock{
 			&QuestionPracticeRecord{},
 			&PracticeProgress{},
 			&WrongQuestion{},
+			&WrongQuestionCategory{},
 		},
 	},
 	{

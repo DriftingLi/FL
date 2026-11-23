@@ -312,6 +312,40 @@ services:
         max-file: "5"
 
   # ==========================================
+  # 公开网校（切流前仅在宿主机回环预览）
+  # ==========================================
+  open_school:
+    image: ${OPEN_SCHOOL_IMAGE:-${BACKEND_IMAGE:-forklift-backend:latest}}
+    container_name: forklift-open-school-prod
+    restart: unless-stopped
+    entrypoint: ["/app/bin/open-school"]
+    command: []
+    environment:
+      OPEN_SCHOOL_LISTEN: 0.0.0.0:8080
+      OPEN_SCHOOL_ALLOW_NON_LOOPBACK: "1"
+      OPEN_SCHOOL_API: http://backend:8080
+      OPEN_SCHOOL_LEARN_BASE: https://training.${DOMAIN:-localhost}
+    ports:
+      - "127.0.0.1:18090:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - forklift-net
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.5"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ==========================================
   # Caddy 前端服务（证书自动申请/续期 + API 反代 + 静态文件托管）
   # ==========================================
   frontend:

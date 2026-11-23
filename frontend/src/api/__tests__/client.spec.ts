@@ -109,6 +109,18 @@ describe('createHttpClient 信封解包', () => {
     expect(ElMessage.error).toHaveBeenCalledWith('登录已过期，请重新登录')
   })
 
+  it('学员登录失败显示认证错误，不清除正在使用的身份', async () => {
+    const onUnauthorized = vi.fn()
+    const credentialsRejected = vi.fn(() => ({ status: 401, body: { code: 401, message: '账号或密码错误' } }))
+    respond = credentialsRejected
+    const client = createHttpClient({ baseURL: '/api', onUnauthorized })
+
+    await expect(client.post('/auth/login', {})).rejects.toBeTruthy()
+    expect(credentialsRejected).toHaveBeenCalledTimes(1)
+    expect(onUnauthorized).not.toHaveBeenCalled()
+    expect(ElMessage.error).toHaveBeenCalledWith('账号或密码错误')
+  })
+
   it('blob 响应直接放行返回二进制数据', async () => {
     const blob = new Blob(['pdf'])
     respond = () => ({ status: 200, body: blob })

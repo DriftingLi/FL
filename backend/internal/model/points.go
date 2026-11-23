@@ -33,7 +33,8 @@ type PointsTaskConfig struct {
 	// growth_first_experience 的存量 cutoff，该任务已随 ADR-0040 退役（配置行由迁移 000027 删除）。
 	// 保留为通用「任务上线时间」列，供将来需要存量口径的新任务使用；
 	// 若长期无消费方，可考虑在后续迁移中移除。测试库 AutoMigrate 建列；种子行取迁移应用时间。
-	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+	CreatedAt time.Time  `gorm:"column:created_at" json:"created_at"`
+	RetiredAt *time.Time `gorm:"column:retired_at" json:"-"`
 }
 
 func (PointsTaskConfig) TableName() string { return "points_task_config" }

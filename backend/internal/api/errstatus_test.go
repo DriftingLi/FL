@@ -22,6 +22,7 @@ import (
 	"forklift-training/internal/model"
 	"forklift-training/internal/points"
 	"forklift-training/internal/questionbank"
+	"forklift-training/internal/scope"
 	"forklift-training/pkg/httpx"
 )
 
@@ -293,6 +294,7 @@ func TestErrStatusTable_Snapshot_Contribution(t *testing.T) {
 		{Sentinel: contribution.ErrContributionQuotaDaily, Status: http.StatusBadRequest},
 		{Sentinel: contribution.ErrContributionQuotaPending, Status: http.StatusBadRequest},
 		{Sentinel: contribution.ErrContributionNoCredential, Status: http.StatusBadRequest},
+		{Sentinel: scope.ErrCategoryUnavailable, Status: http.StatusBadRequest},
 		{Sentinel: contribution.ErrContributionTitleRequired, Status: http.StatusBadRequest},
 		{Sentinel: contribution.ErrContributionIntroRequired, Status: http.StatusBadRequest},
 		{Sentinel: contribution.ErrContributionFilesRequired, Status: http.StatusBadRequest},
@@ -352,6 +354,7 @@ func TestErrStatusTable_Snapshot_QuestionBank(t *testing.T) {
 	assertTableSnapshot(t, "questionbank.ErrStatus", questionbank.ErrStatus, []httpx.ErrStatusEntry{
 		{Sentinel: questionbank.ErrQuestionNotFound, Status: http.StatusNotFound},
 		{Sentinel: questionbank.ErrQuestionCredentialNotFound, Status: http.StatusNotFound},
+		{Sentinel: scope.ErrCategoryUnavailable, Status: http.StatusBadRequest},
 		{Sentinel: questionbank.ErrQuestionTypeInvalid, Status: http.StatusBadRequest},
 		{Sentinel: questionbank.ErrQuestionContentRequired, Status: http.StatusBadRequest},
 		{Sentinel: questionbank.ErrQuestionAnswerRequired, Status: http.StatusBadRequest},

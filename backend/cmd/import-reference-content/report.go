@@ -153,7 +153,7 @@ func (r *reportBuilder) questions(parsed []ParsedQuestion, skips []SkipNote, qFi
 }
 
 // merge 存量比对（干跑即可产出，需 DB）。
-func (r *reportBuilder) merge(plan *QuestionPlan, existingCount int, credIDs map[string]int) {
+func (r *reportBuilder) merge(plan *QuestionPlan, existingCount int) {
 	r.mergeDone = true
 	r.h2("与存量题库比对")
 	fmt.Fprintf(&r.b, "存量题总数 %d；导入侧计划新增 %d 道，与存量重复 %d 道，导入内部重复与校验跳过见第三节；存量解析补全 %d 处；存量内部重复组 %d 条。\n",

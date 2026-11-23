@@ -144,7 +144,7 @@
     <template #footer>
       <div class="form-footer" v-if="isStudentSubdomain">
         <span class="footer-text">还没有账号？</span>
-        <router-link :to="href('Register')" class="footer-link">立即注册</router-link>
+        <router-link :to="{ ...href('Register'), query: courseAuthQuery }" class="footer-link">立即注册</router-link>
         <span class="footer-sep mx-2.5 text-[var(--color-text-disabled)]">·</span>
         <router-link :to="href('ForgotPassword')" class="footer-link">忘记密码？</router-link>
       </div>
@@ -159,7 +159,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { href } from '@/config/pages'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
-import { isSafeRedirect } from '@/utils/authRedirect'
+import { courseLearningReturn, isSafeRedirect, questionBankReturn } from '@/utils/authRedirect'
 import type { UserProfile } from '@/types/user'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { usernameRules, passwordRules, requiredEmailRules, emailCodeRules, phoneRules } from '@/utils/validate'
@@ -179,6 +179,10 @@ import UiInput from '@/components/ui/UiInput.vue'
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
+const courseAuthQuery = computed(() => {
+  const redirect = courseLearningReturn(route.query.redirect)
+  return redirect ? { redirect, course_auth: route.query.course_auth === '1' ? '1' : undefined } : undefined
+})
 
 type LoginMode = 'password' | 'email' | 'phone' | 'wechat'
 
@@ -221,7 +225,18 @@ const flow = useAuthFlow<LoginMode>({
     // redirect 回跳：复用 authRedirect.isSafeRedirect 单点白名单（仅同身份工作台内放行）
     const role = authStore.userInfo?.role
     const redirect = route.query.redirect as string | undefined
-    if (redirect && isSafeRedirect(role, redirect)) {
+    const courseTarget = role === 'hrwai_user' ? courseLearningReturn(redirect) : undefined
+    // 题库页带回选分类（#2760 US-13）：公开网校的题库目录 → 登录 → 落在
+    // /training/question-bank?category_id=<id>，由题库页读该参数预选分类。
+    // 与 courseTarget 并列（都是 hrwai_user 的具名回跳形态），不并进 isSafeRedirect：
+    // 那条白名单回答「能否进这个区域」，本条回答「这条带查询串的地址是不是题库页」。
+    const bankTarget = role === 'hrwai_user' ? questionBankReturn(redirect) : undefined
+    if (courseTarget) {
+      router.replace(courseTarget)
+    } else if (bankTarget) {
+      router.replace(bankTarget)
+    } else if (route.query.course_auth !== '1' && typeof redirect === 'string' &&
+      !redirect.startsWith('/training/course/') && isSafeRedirect(role, redirect)) {
       router.push(redirect)
     } else {
       router.push(getDefaultWorkspaceBySubdomain())

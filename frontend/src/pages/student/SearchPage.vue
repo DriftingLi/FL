@@ -21,6 +21,13 @@
       </UiInput>
       <UiButton variant="primary" size="large" :loading="loading" @click="submitSearch">搜索</UiButton>
     </div>
+    <UiSelect
+      :model-value="categoryId"
+      aria-label="搜索分类"
+      class="mb-4 w-[190px]"
+      :options="categoryOptions"
+      @update:model-value="onCategoryChange"
+    />
 
     <!-- 未搜索态（空态两级之一）：本地历史 + 输入提示；历史只在端上（ADR-0049 决策 7） -->
     <div v-if="!searched" class="rounded-card bg-panel p-5 shadow-card">
@@ -145,7 +152,7 @@ import { searchApi, type SearchAllResult, type SearchItem, type SearchPageResult
 import { contentObjectBySearchType, searchableContentObjects, type ContentObjectTarget } from '@/config/contentObjects'
 import { isEmptyValue } from '@/utils/listState'
 import { useAsyncPage } from '@/composables/useAsyncPage'
-import { useCredentialStore } from '@/stores/credential'
+import { trainingApi, type TrainingCategoryDTO } from '@/api/training'
 import { clearSearchHistory, loadSearchHistory, pushSearchHistory, removeSearchHistory } from '@/utils/searchHistory'
 import SearchResultRow from '@/components/student/SearchResultRow.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
@@ -155,15 +162,21 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import UiInput from '@/components/ui/UiInput.vue'
+import UiSelect from '@/components/ui/UiSelect.vue'
 
 const route = useRoute()
 const router = useRouter()
-const credentialStore = useCredentialStore()
 
 type TypeKey = 'all' | SearchType
 const VALID_TYPES: SearchType[] = ['course', 'chapter', 'question', 'content', 'topic']
 
 const keyword = ref('')
+const categoryId = ref<number | 'all'>('all')
+const categories = ref<TrainingCategoryDTO[]>([])
+const categoryOptions = computed(() => [
+  { label: '全部分类', value: 'all' },
+  ...categories.value.map(category => ({ label: category.name, value: category.id }))
+])
 const searched = ref(false)
 /** 输入框 ref：供 ⌘/Ctrl+K 跳到本页后聚焦（#984） */
 const inputRef = ref<{ focus?: () => void } | null>(null)
@@ -186,11 +199,8 @@ const { loading, loadError, retrying, retry, page: currentPage, pageSize, total,
   async (): Promise<SearchLoadResult | null> => {
     const kw = keyword.value.trim()
     if (!kw) return null
-    // 「浏览指定证件」语义：/search 是无 JWT 的公开端点，匿名/非学员角色服务端不兜底（按不分区处理），
-    // 要按证件分区只能显式下发；未选证件时本值本就是 undefined（不传 = 不分区，与兜底无关）。
-    const browseCredentialId = credentialStore.current?.id ?? undefined
     if (activeType.value === 'all') {
-      const res = (await searchApi.search({ keyword: kw, credential_id: browseCredentialId })) as SearchAllResult
+      const res = (await searchApi.search({ keyword: kw, category_id: categoryId.value })) as SearchAllResult
       return { mode: 'all', res }
     }
     const res = (await searchApi.search({
@@ -198,7 +208,7 @@ const { loading, loadError, retrying, retry, page: currentPage, pageSize, total,
       type: activeType.value,
       page: currentPage.value,
       page_size: pageSize.value,
-      credential_id: browseCredentialId
+      category_id: categoryId.value
     })) as SearchPageResult
     return { mode: 'page', res }
   },
@@ -276,6 +286,7 @@ function syncUrl() {
   if (kw) query.keyword = kw
   if (activeType.value !== 'all') query.type = activeType.value
   if (currentPage.value > 1) query.page = String(currentPage.value)
+  if (categoryId.value !== 'all') query.category_id = String(categoryId.value)
   void router.replace({ query })
 }
 
@@ -285,6 +296,7 @@ async function submitSearch() {
     resetSearch()
     return
   }
+  keyword.value = kw
   history.value = pushSearchHistory(kw)
   searched.value = true
   activeType.value = 'all'
@@ -305,6 +317,17 @@ function onTypeChange(value: string) {
   currentPage.value = 1
   syncUrl()
   void run()
+}
+
+function onCategoryChange(value: unknown) {
+  if (value !== 'all' && typeof value !== 'number') return
+  if (value === categoryId.value) return
+  categoryId.value = value
+  activeType.value = 'all'
+  currentPage.value = 1
+  sectionTotals.value = {}
+  syncUrl()
+  if (searched.value) void run()
 }
 
 function onPageChange(page: number) {
@@ -341,18 +364,39 @@ function focusInput() {
   void nextTick(() => inputRef.value?.focus?.())
 }
 
-onMounted(async () => {
+const { run: loadCategories } = useAsyncPage(trainingApi.getCategories, {
+  apply: (data) => { categories.value = data.categories }
+})
+
+function restoreUrl() {
+  const raw = route.query.category_id
+  const parsedCategory = typeof raw === 'string' ? Number(raw) : 0
+  const nextCategory = Number.isSafeInteger(parsedCategory) && parsedCategory > 0 ? parsedCategory : 'all'
+  const nextKeyword = typeof route.query.keyword === 'string' ? route.query.keyword : ''
+  const nextType = normalizeType(route.query.type)
+  const nextPage = Math.max(1, Number(route.query.page) || 1)
+  if (nextKeyword === keyword.value && nextCategory === categoryId.value &&
+      nextType === activeType.value && nextPage === currentPage.value) return
+  keyword.value = nextKeyword
+  categoryId.value = nextCategory
+  activeType.value = nextType
+  currentPage.value = nextPage
+  searched.value = !!nextKeyword
+  sectionTotals.value = {}
+  if (nextKeyword) void run()
+  else {
+    allResult.value = null
+    pageResult.value = null
+  }
+}
+
+onMounted(() => {
   window.addEventListener('focus-global-search', focusInput)
   if (route.query.focus === '1') {
     focusInput()
   }
-  const kw = typeof route.query.keyword === 'string' ? route.query.keyword : ''
-  if (!kw) return
-  keyword.value = kw
-  activeType.value = normalizeType(route.query.type)
-  currentPage.value = Number(route.query.page ?? 1) || 1
-  searched.value = true
-  await run()
+  void loadCategories()
+  restoreUrl()
 })
 
 onBeforeUnmount(() => {
@@ -361,19 +405,7 @@ onBeforeUnmount(() => {
 
 // 浏览器前进/后退：只在与当前输入不一致时重装，避免与 replace 形成回环
 watch(
-  () => route.query.keyword,
-  (raw) => {
-    const kw = typeof raw === 'string' ? raw : ''
-    if (kw === keyword.value) return
-    keyword.value = kw
-    if (!kw) {
-      resetSearch()
-      return
-    }
-    activeType.value = normalizeType(route.query.type)
-    currentPage.value = Number(route.query.page ?? 1) || 1
-    searched.value = true
-    void run()
-  }
+  () => [route.query.keyword, route.query.category_id, route.query.type, route.query.page],
+  restoreUrl
 )
 </script>

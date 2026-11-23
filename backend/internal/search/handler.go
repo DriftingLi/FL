@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forklift-training/internal/middleware"
+	"forklift-training/internal/scope"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
 )
@@ -26,7 +27,7 @@ func newHandler(svc *Service) *handler {
 // RegisterRoutes 注册 /api/search 公开蓝图（无 JWT，只挂证件域）。
 func RegisterRoutes(rg *gin.RouterGroup, credRes middleware.CredentialResolver, svc *Service) {
 	h := newHandler(svc)
-	rg.GET("/search", middleware.CredentialScoped(credRes), h.Search)
+	rg.GET("/search", middleware.CredentialScopedUnlessCategory(credRes), h.Search)
 }
 
 // Search 全局搜索
@@ -40,6 +41,7 @@ func RegisterRoutes(rg *gin.RouterGroup, credRes middleware.CredentialResolver, 
 // @Produce json
 // @Param keyword query string true "关键词"
 // @Param type query string false "类型 course|chapter|question|content|topic"
+// @Param category_id query string false "培训分类 ID 或 all"
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页条数" default(20)
 // @Success 200 {object} response.R{data=SearchPageDTO} "指定 type：分页结果"
@@ -48,8 +50,14 @@ func RegisterRoutes(rg *gin.RouterGroup, credRes middleware.CredentialResolver, 
 // @Router /search [get]
 func (h *handler) Search(c *gin.Context) {
 	credID := middleware.CredentialIDPtr(c)
-	resp, err := h.svc.Search(c.Query("keyword"), c.Query("type"),
-		httpx.QueryIntDefault(c, "page", 1), httpx.QueryIntDefault(c, "page_size", 20), credID)
+	raw, provided := c.GetQuery("category_id")
+	category, err := scope.ParseCategoryFilter(raw, provided)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	resp, err := h.svc.search(c.Query("keyword"), c.Query("type"),
+		httpx.QueryIntDefault(c, "page", 1), httpx.QueryIntDefault(c, "page_size", 20), credID, category)
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return

@@ -106,6 +106,7 @@ export interface CourseClaimantsResult {
 }
 
 export interface CourseDTO {
+  category_id?: number
   certificate_name?: string
   certificate_template?: CertificateTemplateDTO
   certificate_template_id: number | null
@@ -114,6 +115,7 @@ export interface CourseDTO {
   claim_count?: number
   claimed_by_me?: boolean
   course_id: number
+  course_type: string
   cover_image: string
   created_at: string
   credential?: CredentialBriefDTO

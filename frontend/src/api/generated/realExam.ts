@@ -7,10 +7,11 @@
 // 覆盖端点：
 //   GET  /real-exam/papers
 //   GET  /real-exam/papers/{paper_id}/practice
+//   POST /real-exam/papers/{paper_id}/practice/answer
 //   POST /real-exam/papers/{paper_id}/exam
 //   POST /real-exam/papers/{paper_id}/redeem
 //
-// 覆盖的 Go 类型：MockExamStartDTO / RedeemResult / PracticeStartResultDTO / QuestionDTO / RealExamPaperDTO
+// 覆盖的 Go 类型：MockExamStartDTO / RedeemResult / PracticeStartResultDTO / SubmitResultDTO / QuestionDTO / RealExamPaperDTO
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -45,8 +46,27 @@ export interface PracticeStartResultDTO {
   total: number
 }
 
+export interface SubmitResultDTO {
+  accuracy_rate?: number
+  ai_comment?: string
+  ai_explanation?: string
+  ai_fallback?: boolean
+  ai_score?: number
+  common_wrong?: string
+  correct_answer: string
+  explanation: string
+  is_correct: boolean | null
+  max_score?: number
+  question_id: number
+  reference_answer?: string
+  scoring_criteria?: string
+  total_attempts?: number
+  user_answer: unknown
+}
+
 export interface QuestionDTO {
   answer?: string
+  category_id?: number
   content: string
   created_at: string
   created_by: number | null
@@ -67,6 +87,7 @@ export interface QuestionDTO {
 }
 
 export interface RealExamPaperDTO {
+  category_id?: number
   duration_minutes: number
   entitled: boolean
   paper_id: number

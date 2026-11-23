@@ -1,0 +1,44 @@
+{{/* detail.html：课程详情。
+     权益区按 #2749 结论参考 B 稿：分类/价格/主操作集中在首屏，章节元数据在下方。
+     首批**无匿名试看**：章节只给标题/序号/类型/时长，不给正文与文件地址。 */}}
+{{define "detail"}}{{template "page_start" .}}
+<nav class="crumbs" aria-label="面包屑">
+  <a href="{{.Back}}">← 返回课程目录</a>
+</nav>
+
+<article class="course">
+  {{with .Course.CoverImage}}<img class="course-cover" src="{{.}}" alt="">{{end}}
+  <div class="course-body">
+    <p class="course-tags">
+      <span class="tag tag-type tag-type-{{.Course.CourseType}}">{{courseTypeLabel .Course.CourseType}}</span>
+      <span class="tag">{{.Course.Category.Name}}</span>
+      {{if .Free}}<span class="tag tag-free">免费</span>{{else}}<span class="tag tag-points">{{.Points}} 积分解锁</span>{{end}}
+      <span class="tag tag-plain">{{.ChapterCnt}} 个已发布章节</span>
+    </p>
+    <h1>{{.Course.Name}}</h1>
+    {{with .Course.Description}}<p class="course-desc">{{.}}</p>{{end}}
+
+    <a class="btn btn-primary btn-large course-action" id="start-learning" href="{{.Learn}}" rel="external">进入学习</a>
+  </div>
+</article>
+
+<section class="chapters" aria-labelledby="chapters-title">
+  <h2 id="chapters-title">章节目录</h2>
+  {{if .Course.Chapters}}
+  <ol class="chapter-list">
+    {{range .Course.Chapters}}
+    <li>
+      <span class="chapter-order">{{.OrderNum}}</span>
+      <span class="chapter-title">{{.Title}}</span>
+      <span class="chapter-meta">
+        {{with chapterType .ContentType}}<span class="tag tag-plain">{{.}}</span>{{end}}
+        {{if gt .Duration 0}}<span class="muted">{{.Duration}} 分钟</span>{{end}}
+      </span>
+    </li>
+    {{end}}
+  </ol>
+  {{else}}
+  <p class="muted">暂无已发布章节。</p>
+  {{end}}
+</section>
+{{template "page_end" .}}{{end}}

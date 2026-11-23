@@ -1,11 +1,16 @@
 // 生成文件，勿手改（ADR-0019 契约 codegen 专项 / ADR-0048 按域解冻；spec #940 片五③、#952 片一）。
-// 域：课程与章节学习（/api/courses、/api/course/*、/api/chapter/*）
+// 域：课程与章节学习（/api/courses、/api/course/*、/api/chapter/*、/api/public-school/*）
 // 唯一事实源：后端注解 → backend/docs/swagger.json（CI 有新鲜度锁：backend-lint 的 swagger 步骤）。
 // 再生成：cd backend && go run ./cmd/gen-apitypes
 // 同步契约：backend/internal/apitypes/codegen_test.go 把本文件与注解渲染结果全等比对。
 //
 // 覆盖端点：
 //   GET  /courses
+//   GET  /courses/{course_id}
+//   GET  /catalog/courses
+//   GET  /public-school/categories
+//   GET  /public-school/courses
+//   GET  /public-school/courses/{course_id}
 //   GET  /course/{course_id}
 //   POST /course/{course_id}/browse
 //   POST /course/{course_id}/progress
@@ -13,7 +18,7 @@
 //   GET  /chapter/{chapter_id}/slides
 //   POST /chapter/{chapter_id}/slides/regenerate
 //
-// 覆盖的 Go 类型：CertificateTemplateDTO / ChapterDTO / ChapterDetailDTO / ChapterFileDTO / ChapterSlidesDTO / CourseBriefDTO / CourseBrowseResult / CourseDTO / CourseDetailDTO / CoursePageResult / CredentialBriefDTO / LevelBriefDTO / SpecialtyBriefDTO / StudyProgressDTO
+// 覆盖的 Go 类型：CertificateTemplateDTO / ChapterDTO / ChapterDetailDTO / ChapterFileDTO / ChapterSlidesDTO / CourseBriefDTO / CourseBrowseResult / CourseDTO / CourseDetailDTO / CoursePageResult / CredentialBriefDTO / LevelBriefDTO / PublicCourseCategoryDTO / PublicCourseChapterDTO / PublicCourseDetailDTO / PublicCoursePageDTO / PublicCourseSummaryDTO / PublicSchoolCategoryDTO / PublicSchoolCategoryListDTO / PublicSchoolCourseDetailDTO / PublicSchoolCoursePageDTO / PublicSchoolCourseSummaryDTO / SpecialtyBriefDTO / StudyProgressDTO
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -96,6 +101,7 @@ export interface CourseBrowseResult {
 }
 
 export interface CourseDTO {
+  category_id?: number
   certificate_name?: string
   certificate_template?: CertificateTemplateDTO
   certificate_template_id: number | null
@@ -104,6 +110,7 @@ export interface CourseDTO {
   claim_count?: number
   claimed_by_me?: boolean
   course_id: number
+  course_type: string
   cover_image: string
   created_at: string
   credential?: CredentialBriefDTO
@@ -158,6 +165,85 @@ export interface LevelBriefDTO {
   code: string
   level_id: number
   name: string
+}
+
+export interface PublicCourseCategoryDTO {
+  id: number
+  name: string
+}
+
+export interface PublicCourseChapterDTO {
+  chapter_id: number
+  content_type: string
+  duration: number
+  order_num: number
+  title: string
+}
+
+export interface PublicCourseDetailDTO {
+  category: PublicCourseCategoryDTO
+  chapter_count: number
+  chapters: PublicCourseChapterDTO[]
+  course_id: number
+  cover_image: string
+  description: string
+  name: string
+  points_price?: number
+}
+
+export interface PublicCoursePageDTO {
+  courses: PublicCourseSummaryDTO[]
+  page: number
+  pages: number
+  total: number
+}
+
+export interface PublicCourseSummaryDTO {
+  category: PublicCourseCategoryDTO
+  course_id: number
+  cover_image: string
+  description: string
+  name: string
+  points_price?: number
+}
+
+export interface PublicSchoolCategoryDTO {
+  course_count: number
+  id: number
+  name: string
+}
+
+export interface PublicSchoolCategoryListDTO {
+  categories: PublicSchoolCategoryDTO[]
+}
+
+export interface PublicSchoolCourseDetailDTO {
+  category: PublicCourseCategoryDTO
+  chapter_count: number
+  chapters: PublicCourseChapterDTO[]
+  course_id: number
+  course_type: string
+  cover_image: string
+  description: string
+  name: string
+  points_price?: number
+}
+
+export interface PublicSchoolCoursePageDTO {
+  courses: PublicSchoolCourseSummaryDTO[]
+  page: number
+  pages: number
+  total: number
+}
+
+export interface PublicSchoolCourseSummaryDTO {
+  category: PublicCourseCategoryDTO
+  course_id: number
+  course_type: string
+  cover_image: string
+  description: string
+  name: string
+  points_price?: number
 }
 
 export interface SpecialtyBriefDTO {

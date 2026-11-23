@@ -69,8 +69,6 @@ var criticalUniqueIndexes = []UniqueIndexSpec{
 	// ===== 000013_practice_progress_credential.up.sql =====
 	{Name: "uq_practice_progress_cred", Table: "practice_progress", Migration: "000013_practice_progress_credential.up.sql",
 		DDL: "CREATE UNIQUE INDEX uq_practice_progress_cred ON practice_progress (student_id, practice_mode, credential_id) WHERE credential_id IS NOT NULL"},
-	{Name: "uq_practice_progress_nocred", Table: "practice_progress", Migration: "000013_practice_progress_credential.up.sql",
-		DDL: "CREATE UNIQUE INDEX uq_practice_progress_nocred ON practice_progress (student_id, practice_mode) WHERE credential_id IS NULL"},
 	// ===== 000014_recruiter_credit_code_unique.up.sql =====
 	{Name: "idx_recruiter_users_credit_code", Table: "recruiter_users", Migration: "000014_recruiter_credit_code_unique.up.sql",
 		DDL: "CREATE UNIQUE INDEX idx_recruiter_users_credit_code ON recruiter_users (credit_code)"},
@@ -82,6 +80,16 @@ var criticalUniqueIndexes = []UniqueIndexSpec{
 	// ===== 000059_tutor_course_claim.up.sql（#2596 课程认领：并发重复认领的唯一键兜底）=====
 	{Name: "idx_tutor_course_claim_unique", Table: "tutor_course_claim", Migration: "000059_tutor_course_claim.up.sql",
 		DDL: "CREATE UNIQUE INDEX IF NOT EXISTS idx_tutor_course_claim_unique ON tutor_course_claim (tutor_id, course_id)"},
+	{Name: "uq_practice_progress_category", Table: "practice_progress", Migration: "000069_training_category.up.sql",
+		DDL: "CREATE UNIQUE INDEX IF NOT EXISTS uq_practice_progress_category ON practice_progress (student_id, practice_mode, category_id) WHERE category_id IS NOT NULL"},
+	{Name: "uq_practice_progress_nocred", Table: "practice_progress", Migration: "000069_training_category.up.sql",
+		DDL: "CREATE UNIQUE INDEX uq_practice_progress_nocred ON practice_progress (student_id, practice_mode) WHERE credential_id IS NULL AND category_id IS NULL"},
+	{Name: "uq_real_exam_paper_category_source", Table: "real_exam_paper", Migration: "000069_training_category.up.sql",
+		DDL: "CREATE UNIQUE INDEX IF NOT EXISTS uq_real_exam_paper_category_source ON real_exam_paper (category_id, source_ref) WHERE category_id IS NOT NULL"},
+	{Name: "uq_wrong_question_category", Table: "wrong_question_category", Migration: "000073_wrong_question_categories.up.sql",
+		DDL: "CREATE UNIQUE INDEX uq_wrong_question_category ON wrong_question_category (wrong_question_id, category_id) WHERE category_id IS NOT NULL"},
+	{Name: "uq_wrong_question_unclassified", Table: "wrong_question_category", Migration: "000073_wrong_question_categories.up.sql",
+		DDL: "CREATE UNIQUE INDEX uq_wrong_question_unclassified ON wrong_question_category (wrong_question_id) WHERE category_id IS NULL"},
 }
 
 // CriticalUniqueIndexes 返回登记表副本（testutil 建库后补跑、check-columns 对账共用同一宿主）。
@@ -182,6 +190,7 @@ func UniqueIndexesFromMigrationsDir(dir string) ([]UniqueIndexSpec, error) {
 	sort.Strings(names)
 
 	var out []UniqueIndexSpec
+	positions := make(map[string]int)
 	for _, name := range names {
 		data, err := os.ReadFile(filepath.Join(dir, name))
 		if err != nil {
@@ -189,6 +198,11 @@ func UniqueIndexesFromMigrationsDir(dir string) ([]UniqueIndexSpec, error) {
 		}
 		for _, spec := range UniqueIndexesFromSQL(string(data)) {
 			spec.Migration = name
+			if pos, exists := positions[spec.Name]; exists {
+				out[pos] = spec
+				continue
+			}
+			positions[spec.Name] = len(out)
 			out = append(out, spec)
 		}
 	}

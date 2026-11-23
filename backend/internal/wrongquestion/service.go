@@ -100,12 +100,31 @@ type WrongQuestionBatchRemoveResultDTO struct {
 // favorited: 仅返回已收藏的错题（JOIN favorite，user_id 与 student_id 同源）；
 // credentialID: 按题目所属证件分区（与课程/题库同口径，#387；nil 表示不过滤）。
 func (s *Service) GetWrongQuestions(studentID, page, pageSize int, qType string, minWrongCount *int, favorited bool, sort string, credentialID *int) (*WrongQuestionPageDTO, error) {
+	return s.getWrongQuestions(studentID, page, pageSize, qType, minWrongCount, favorited, sort, credentialID, scope.CategoryFilter{})
+}
+
+func (s *Service) filterCategory(q *gorm.DB, category scope.CategoryFilter) *gorm.DB {
+	if !category.Narrowed() {
+		return q
+	}
+	base := func() *gorm.DB {
+		return s.db.Model(&model.WrongQuestionCategory{}).Select("1").
+			Where("wrong_question_id = wrong_question.id")
+	}
+	match := category.Apply(base(), "category_id")
+	if category.Unclassified() {
+		return q.Where("(EXISTS (?) OR NOT EXISTS (?))", match, base())
+	}
+	return q.Where("EXISTS (?)", match)
+}
+
+func (s *Service) getWrongQuestions(studentID, page, pageSize int, qType string, minWrongCount *int, favorited bool, sort string, credentialID *int, category scope.CategoryFilter) (*WrongQuestionPageDTO, error) {
 	orderBy := "wrong_question.last_wrong_at DESC"
 	if sort == "time_asc" {
 		orderBy = "wrong_question.last_wrong_at ASC"
 	}
 	items, total, page, pageSize, err := paging.Query[model.WrongQuestion](s.db, page, pageSize, 20, orderBy, func(q *gorm.DB) *gorm.DB {
-		q = q.Where("student_id = ? AND is_removed = ?", studentID, false)
+		q = s.filterCategory(q.Where("wrong_question.student_id = ? AND is_removed = ?", studentID, false), category)
 		if qType != "" || credentialID != nil {
 			q = q.Joins("JOIN question ON question.id = wrong_question.question_id")
 		}
@@ -237,9 +256,24 @@ func (s *Service) loadFavoriteIDs(studentID int, questionIDs []int) map[int]int6
 // 有意**不**施加完整池 scope（published / 排真题）：错题本是「我曾经做错的题」的历史面，题目下架或改标后若
 // 在这里被拦，列表会出现点不动的死链 —— 那是错题本读面 scope 的独立议题，不在本票范围。
 func (s *Service) RedoWrongQuestion(studentID, questionID int, userAnswer interface{}, credentialID *int) (*practicemode.SubmitResultDTO, error) {
+	return s.redoWrongQuestion(studentID, questionID, userAnswer, credentialID, scope.CategoryFilter{})
+}
+
+func (s *Service) redoWrongQuestion(studentID, questionID int, userAnswer any, credentialID *int, category scope.CategoryFilter) (*practicemode.SubmitResultDTO, error) {
 	var wq model.WrongQuestion
-	if err := s.db.Where("student_id = ? AND question_id = ? AND is_removed = ?", studentID, questionID, false).First(&wq).Error; err != nil {
+	card := s.db.Where("student_id = ? AND question_id = ? AND is_removed = ?", studentID, questionID, false)
+	if err := s.filterCategory(card, category).First(&wq).Error; err != nil {
 		return nil, errors.New("错题记录不存在")
+	}
+	var categoryID *int
+	if category.Explicit() && !category.Unclassified() {
+		history := s.db.Where("wrong_question_id = ? AND category_id IS NOT NULL", wq.ID).
+			Order("last_wrong_at DESC, id DESC")
+		var edge model.WrongQuestionCategory
+		if err := category.Apply(history, "category_id").Limit(1).Find(&edge).Error; err != nil {
+			return nil, err
+		}
+		categoryID = edge.CategoryID
 	}
 	q := scope.EntityOwnedBy(s.db.Model(&model.Question{}), "credential_id", credentialID).Where("id = ?", questionID)
 	var question model.Question
@@ -248,13 +282,17 @@ func (s *Service) RedoWrongQuestion(studentID, questionID int, userAnswer interf
 	}
 
 	engine := practicemode.NewGradingEngine(s.db)
-	flow := practicemode.GradingFlow{AI: s.grader, MaxScore: practicemode.PracticeMaxScore}
+	flow := practicemode.GradingFlow{AI: s.grader, MaxScore: practicemode.PracticeMaxScore, CategoryID: categoryID}
 	gr := engine.GradeOne(flow, &question, userAnswer, studentID)
+	if gr.WrongWriteError != nil {
+		return nil, gr.WrongWriteError
+	}
 
 	// 重做结果与练习同口径落练习记录（统计事实源单一）。
 	rec := model.QuestionPracticeRecord{
 		StudentID:    studentID,
 		CredentialID: credentialID, // 写入时冻结（ADR-0051）：与练习记录同口径
+		CategoryID:   categoryID,
 		QuestionID:   questionID,
 		IsCorrect:    gr.IsCorrect != nil && *gr.IsCorrect,
 		PracticeType: "redo",
@@ -298,12 +336,18 @@ func (s *Service) RemoveWrongQuestion(studentID, questionID int) (*WrongQuestion
 // GetStats 错题统计（经统计聚合 module，一次 GROUP BY）。
 // 保留旧语义：仅统计未移除错题；by_type 只含实际存在题型的维度（不零填充）。
 func (s *Service) GetStats(studentID int) *WrongQuestionStatsDTO {
+	return s.getStats(studentID, scope.CategoryFilter{})
+}
+
+func (s *Service) getStats(studentID int, category scope.CategoryFilter) *WrongQuestionStatsDTO {
+	base := func() *gorm.DB {
+		query := s.db.Model(&model.WrongQuestion{}).Where("wrong_question.student_id = ? AND wrong_question.is_removed = ?", studentID, false)
+		return s.filterCategory(query, category)
+	}
 	var total int64
-	s.db.Model(&model.WrongQuestion{}).Where("student_id = ? AND is_removed = ?", studentID, false).Count(&total)
+	base().Count(&total)
 	byType := questionbank.GroupByCount(
-		s.db.Model(&model.WrongQuestion{}).
-			Joins("JOIN question ON question.id = wrong_question.question_id").
-			Where("wrong_question.student_id = ? AND wrong_question.is_removed = ?", studentID, false),
+		base().Joins("JOIN question ON question.id = wrong_question.question_id"),
 		"question.type",
 	)
 	return &WrongQuestionStatsDTO{Total: total, ByType: byType}
@@ -311,8 +355,13 @@ func (s *Service) GetStats(studentID int) *WrongQuestionStatsDTO {
 
 // ExportWrongQuestions 导出错题。
 func (s *Service) ExportWrongQuestions(studentID int) []map[string]any {
+	return s.exportWrongQuestions(studentID, scope.CategoryFilter{})
+}
+
+func (s *Service) exportWrongQuestions(studentID int, category scope.CategoryFilter) []map[string]any {
 	var items []model.WrongQuestion
-	s.db.Where("student_id = ? AND is_removed = ?", studentID, false).Find(&items)
+	query := s.db.Model(&model.WrongQuestion{}).Where("student_id = ? AND is_removed = ?", studentID, false)
+	s.filterCategory(query, category).Find(&items)
 
 	qIDs := make([]int, 0, len(items))
 	for i := range items {

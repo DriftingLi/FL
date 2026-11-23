@@ -38,7 +38,8 @@ func seedClaimCourse(t *testing.T, db *gorm.DB) (int, int) {
 	if err := db.Create(&lv).Error; err != nil {
 		t.Fatalf("建等级失败: %v", err)
 	}
-	c := model.Course{Name: "认领课程", Status: 1,
+	category := testutil.SeedTrainingCategory(t, db, "维修")
+	c := model.Course{Name: "认领课程", Status: 1, CategoryID: &category.ID,
 		SpecialtyID: &spec.SpecialtyID, LevelID: &lv.LevelID, CreatedAt: testutil.Now()}
 	if err := db.Create(&c).Error; err != nil {
 		t.Fatalf("建课程失败: %v", err)

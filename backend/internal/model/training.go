@@ -24,6 +24,18 @@ var (
 	ErrCertificateTemplateNotFound = errors.New("证书模板不存在")
 )
 
+// 课程主类型（#2760）：每门课一个**持久化单选**学习形式。
+//
+// 为什么是两值而不是三值：图文课程含 PPT —— ppt / text / document 三种章节内容形态
+// 都属于「非视频」这一侧，公开目录只需要回答「这门课要不要用视频看」。分成三值会让
+// 「找图文课的人要不要看 PPT 课」变成第二个未决问题，而票的面没有这一问。
+const (
+	// CourseTypeVideo 视频课程：章节以视频为主。
+	CourseTypeVideo = "video"
+	// CourseTypeIllustrated 图文课程（含 PPT）。
+	CourseTypeIllustrated = "illustrated"
+)
+
 type Course struct {
 	CourseID    int    `gorm:"column:course_id;primaryKey" json:"course_id"`
 	Name        string `gorm:"column:name" json:"name"`
@@ -32,6 +44,7 @@ type Course struct {
 	Duration    int    `gorm:"column:duration;default:0" json:"duration"`
 	// CredentialID 所属目标证件（顶层分区，单归属）。
 	CredentialID *int `gorm:"column:credential_id" json:"credential_id,omitempty"`
+	CategoryID   *int `gorm:"column:category_id" json:"-"`
 	// SpecialtyID 专业方向（目录一级节点）。
 	SpecialtyID *int `gorm:"column:specialty_id" json:"specialty_id,omitempty"`
 	// LevelID 课程等级（入门/进阶/专项/认证）。
@@ -43,12 +56,16 @@ type Course struct {
 	// CertificateTemplateID 关联证书模板（有效期取模板 validity_days）。
 	CertificateTemplateID *int `gorm:"column:certificate_template_id" json:"certificate_template_id,omitempty"`
 	// SortOrder 课程排序值（所属专业方向+课程等级层级内生效，越小越靠前）。
-	SortOrder   int       `gorm:"column:sort_order;default:0" json:"sort_order"`
-	Status      int16     `gorm:"column:status;default:1" json:"status"`
-	IsHot       bool      `gorm:"column:is_hot;default:false" json:"is_hot"`
-	IsFeatured  bool      `gorm:"column:is_featured;default:false" json:"is_featured"`
-	PointsPrice *int      `gorm:"column:points_price" json:"points_price,omitempty"`
-	CreatedAt   time.Time `gorm:"column:created_at" json:"created_at"`
+	SortOrder   int   `gorm:"column:sort_order;default:0" json:"sort_order"`
+	Status      int16 `gorm:"column:status;default:1" json:"status"`
+	IsHot       bool  `gorm:"column:is_hot;default:false" json:"is_hot"`
+	IsFeatured  bool  `gorm:"column:is_featured;default:false" json:"is_featured"`
+	PointsPrice *int  `gorm:"column:points_price" json:"points_price,omitempty"`
+	// CourseType 课程主类型（#2760）：CourseTypeVideo / CourseTypeIllustrated，二选一、必填。
+	// 由管理员指定，**不从章节现算**——章节会变，而公开归类要保持稳定（票 2760 US-10）。
+	// 库侧 NOT NULL + CHECK 兜底，见迁移 000074。
+	CourseType string    `gorm:"column:course_type;default:illustrated" json:"course_type"`
+	CreatedAt  time.Time `gorm:"column:created_at" json:"created_at"`
 }
 
 func (Course) TableName() string { return "course" }
@@ -100,6 +117,18 @@ type Credential struct {
 }
 
 func (Credential) TableName() string { return "credential" }
+
+type TrainingCategory struct {
+	ID                 int       `gorm:"column:id;primaryKey" json:"id"`
+	LegacyCredentialID *int      `gorm:"column:legacy_credential_id;uniqueIndex" json:"-"`
+	Name               string    `gorm:"column:name" json:"name"`
+	SortOrder          int       `gorm:"column:sort_order;default:0" json:"sort_order"`
+	Status             int16     `gorm:"column:status" json:"status"`
+	CreatedAt          time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt          time.Time `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (TrainingCategory) TableName() string { return "training_category" }
 
 // ===== 4.7 证书模板 =====
 

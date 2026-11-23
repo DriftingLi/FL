@@ -12,6 +12,7 @@ type UserContribution struct {
 	ID           int64  `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
 	UserID       int    `gorm:"column:user_id;index" json:"user_id"`
 	CredentialID int    `gorm:"column:credential_id;index" json:"credential_id"`
+	CategoryID   *int   `gorm:"column:category_id" json:"-"`
 	Title        string `gorm:"column:title" json:"title"`
 	Intro        string `gorm:"column:intro" json:"intro"`
 	Status       string `gorm:"column:status;default:pending" json:"status"` // pending/approved/rejected/withdrawn/archived

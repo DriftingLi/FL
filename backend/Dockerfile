@@ -25,6 +25,7 @@ COPY . .
 #   镜像层 digest 复用，部署侧跳过拉取（配合 CD 内容哈希标签）
 ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64
 RUN go build -trimpath -buildvcs=false -ldflags="-s -w" -o /bin/server ./cmd/server
+RUN go build -trimpath -buildvcs=false -ldflags="-s -w" -o /bin/open-school ./cmd/open-school
 RUN go build -trimpath -ldflags="-s -w" -o /bin/migrate ./cmd/migrate
 # 一次性运维命令（票 #1742 的资源 URL 回填）：编译进镜像，部署后可在容器里跑
 #   docker compose -f deploy/docker-compose.prod.yml run --rm backend /app/bin/backfill-asset-domain
@@ -59,6 +60,7 @@ WORKDIR /app
 
 # 从 builder 复制编译产物
 COPY --from=builder /bin/server /app/bin/server
+COPY --from=builder /bin/open-school /app/bin/open-school
 COPY --from=builder /bin/migrate /app/bin/migrate
 COPY --from=builder /bin/backfill-asset-domain /app/bin/backfill-asset-domain
 

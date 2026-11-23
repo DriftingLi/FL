@@ -1,82 +1,36 @@
-// practiceMode.ts 契约测试：练习进度保存的证件分桶（#505）。
-// 背景：顺序练习进度按「当前证件」分桶（#414）。读路径 GET sequential/progress 不带 credential_id
-// 时由服务端 CredentialScoped 兜底（登录学员 = 当前证件；客户端拦截器不注入任何证件参数），
-// 但 POST /progress 的凭证只从 JSON body 解析——服务端对 body 没有兜底路径，因此保存方必须显式携带。
-// 若保存漏带，游标落进 credential_id IS NULL 孤儿行，证件桶游标冻结（断点回跳 bug 根因）。
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { unwrappedRequest } from '@/api/request'
+import { practiceModeApi } from '../practiceMode'
 
 vi.mock('@/api/request', () => ({
   unwrappedRequest: { get: vi.fn(), post: vi.fn() }
 }))
 
-vi.mock('@/stores/credential', () => ({
-  useCredentialStore: vi.fn()
-}))
+beforeEach(() => { vi.clearAllMocks() })
 
-import { unwrappedRequest } from '@/api/request'
-import { practiceModeApi } from '../practiceMode'
-import { useCredentialStore } from '@/stores/credential'
+describe('practiceModeApi', () => {
+  it('开始练习时发送本次分类，提交时只使用服务端会话标识', async () => {
+    const input = { category_id: 7, mode: 'tag:2' }
+    await practiceModeApi.startCategoryPractice(input)
+    expect(unwrappedRequest.post).toHaveBeenCalledWith('/practice-mode/attempts', input, { headers: { 'X-Silent': 'true' } })
+    const answer = { attempt_key: 'attempt', question_id: 10, user_answer: ['A', 'B'] }
+    await practiceModeApi.submitCategoryAnswer(answer)
+    expect(unwrappedRequest.post).toHaveBeenLastCalledWith('/practice-mode/attempts/answer', answer)
+  })
 
-const mockPost = vi.mocked(unwrappedRequest.post)
-const mockGet = vi.mocked(unwrappedRequest.get)
-const mockUseCredentialStore = vi.mocked(useCredentialStore)
-
-beforeEach(() => {
-  mockPost.mockClear()
-  mockGet.mockClear()
-  mockUseCredentialStore.mockClear()
-  mockUseCredentialStore.mockReturnValue({ current: { id: 7, name: '叉车司机N1证' } } as never)
-})
-
-describe('practiceModeApi.saveProgress（#505 读写同桶）', () => {
-  it('顺序练习（sequential）：保存 body 携带当前证件 credential_id', async () => {
-    mockPost.mockResolvedValue(null)
-    await practiceModeApi.saveProgress(4, 'sequential', 20, {})
-    expect(mockPost).toHaveBeenCalledWith('/practice-mode/progress', {
-      index: 4,
-      practice_mode: 'sequential',
-      total: 20,
-      answers_state: {},
-      credential_id: 7
+  it('按卷进度继续用试卷号定位', async () => {
+    await practiceModeApi.saveProgress(1, 'paper:7', 5, {})
+    expect(unwrappedRequest.post).toHaveBeenCalledWith('/practice-mode/progress', {
+      index: 1, practice_mode: 'paper:7', total: 5, answers_state: {}
     })
+    await practiceModeApi.getProgress('paper:7')
+    expect(unwrappedRequest.get).toHaveBeenCalledWith('/practice-mode/progress', { params: { mode: 'paper:7', category_id: 'all' } })
   })
 
-  it('无当前证件（未预筛选学员）：不携带 credential_id（NULL 桶兼容）', async () => {
-    mockUseCredentialStore.mockReturnValue({ current: null } as never)
-    mockPost.mockResolvedValue(null)
-    await practiceModeApi.saveProgress(2, 'sequential', 10, {})
-    expect(mockPost).toHaveBeenCalledWith('/practice-mode/progress', {
-      index: 2,
-      practice_mode: 'sequential',
-      total: 10,
-      answers_state: {},
-      credential_id: undefined
-    })
-  })
-
-  it('标签/按卷练习（非 sequential）：不携带 credential_id（分桶仅顺序练习）', async () => {
-    mockPost.mockResolvedValue(null)
-    await practiceModeApi.saveProgress(1, 'tag:7', 5, {})
-    expect(mockPost).toHaveBeenCalledWith('/practice-mode/progress', {
-      index: 1,
-      practice_mode: 'tag:7',
-      total: 5,
-      answers_state: {},
-      credential_id: undefined
-    })
-  })
-})
-
-describe('practiceModeApi 既有端点回归', () => {
-  it('startSequential：传空 params（不带 credential_id，留给服务端兜底）', async () => {
-    mockGet.mockResolvedValue({ questions: [], progress: {} })
-    await practiceModeApi.startSequential()
-    expect(mockGet).toHaveBeenCalledWith('/practice-mode/sequential', { params: {} })
-  })
-
-  it('getProgress：mode 透传 query', async () => {
-    mockGet.mockResolvedValue({ current_index: 0, total: 0, completed: 0 })
-    await practiceModeApi.getProgress('sequential')
-    expect(mockGet).toHaveBeenCalledWith('/practice-mode/progress', { params: { mode: 'sequential' } })
+  it('练习历史默认全部，也支持按历史未分类查找', async () => {
+    await practiceModeApi.getHistory({ page: 2 })
+    expect(unwrappedRequest.get).toHaveBeenCalledWith('/practice-mode/history', { params: { page: 2, category_id: 'all' } })
+    await practiceModeApi.getHistory({ category_id: 'unclassified' })
+    expect(unwrappedRequest.get).toHaveBeenLastCalledWith('/practice-mode/history', { params: { category_id: 'unclassified' } })
   })
 })

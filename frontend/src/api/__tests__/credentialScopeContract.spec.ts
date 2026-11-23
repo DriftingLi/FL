@@ -31,52 +31,33 @@ const SELF = 'api/credentialScopeScan.ts'
  * | 文件 | 意图 | 依据 |
  * | --- | --- | --- |
  * | api/course.ts prop1 | 入参声明，可选 | /courses 公开端点：服务端兜底不覆盖匿名/非学员，要分区只能显式传 |
- * | api/search.ts prop1 | 入参声明，可选 | /search 公开端点：同上 |
- * | api/favorite.ts prop1 | 入参声明，可选 | /favorites JWT 面：不传 = 服务端兜底，显式 = 浏览指定 |
- * | api/practiceMode.ts prop4 | 入参声明 ×3 + 保存 body ×1 | 练习域 JWT 面（兜底可用）；saveProgress 的 body 是游标分桶必带 |
  * | api/questionBank.ts prop2 | 入参声明，可选 | /question-bank JWT 面：导师端筛选即浏览指定 |
  * | api/training.ts prop2 | 显式传参 | /catalog/tree、/tags 不在 CredentialScoped 里，handler 自读；不传 = 不分区 |
- * | api/contribution.ts prop2 | 入参声明 + 归属声明 body | listPublic 不传即服务端兜底；create 的 body 字段是投稿归属（必填） |
  * | api/credential.ts prop1 + assign1 | 「当前证件」自身写入 | PATCH /me/credential —— 这是切证件本身，与分区语义无关 |
  * | api/admin.ts prop2 / api/recruit.ts prop1 | 管理/招聘筛选入参 | 各自管理面筛选轴，与学员证件分区无关 |
- * | pages/student/SearchPage.vue prop2 | **浏览指定** | 公开端点必须显式传；未选证件时值为 undefined |
- * | pages/student/CourseList.vue assign1 | **浏览指定** | 公开端点必须显式传；未选证件时不传（不分区） |
- * | pages/student/Materials.vue prop1 | **浏览指定** | 公开端点必须显式传（课程筛选选项） |
  * | pages/tutor/QuestionManage.vue assign1 | **浏览指定** | 导师端筛选栏显式挑选证件 |
+ * | pages/tutor/QuestionCreate.vue prop1 | 保留历史归属 | 编辑已有题时带回原证件字段 |
  * | pages/tutor/TutorCourses.vue assign1 | **浏览指定** | 导师端「我的课程」按证件筛选 |
- * | pages/student/ContributionTab.vue prop2 | **跟随当前** + 归属声明 | prop 是 store.current.id 投影；上传 body 的 credential_id 是投稿归属 |
  * | pages/student/QuestionDetail.vue prop1 | 归属声明 body | 建题时把读到的题目证件带回去 |
- * | pages/tutor/QuestionCreate.vue prop1 | 归属声明 body | 建题选择题目所属证件（表单字段，非分区参数） |
  */
 const EXPECTED_SITES: Record<string, { prop: number; assign: number }> = {
   'api/admin.ts': { prop: 2, assign: 0 },
-  'api/contribution.ts': { prop: 2, assign: 0 },
   'api/course.ts': { prop: 1, assign: 0 },
   'api/credential.ts': { prop: 1, assign: 1 },
-  'api/favorite.ts': { prop: 1, assign: 0 },
-  'api/practiceMode.ts': { prop: 4, assign: 0 },
   'api/questionBank.ts': { prop: 2, assign: 0 },
   'api/recruit.ts': { prop: 1, assign: 0 },
-  'api/search.ts': { prop: 1, assign: 0 },
   'api/training.ts': { prop: 2, assign: 0 },
-  'pages/student/ContributionTab.vue': { prop: 2, assign: 0 },
-  'pages/student/CourseList.vue': { prop: 0, assign: 1 },
-  'pages/student/Materials.vue': { prop: 1, assign: 0 },
   'pages/student/QuestionDetail.vue': { prop: 1, assign: 0 },
-  'pages/student/SearchPage.vue': { prop: 2, assign: 0 },
   'pages/tutor/QuestionCreate.vue': { prop: 1, assign: 0 },
   'pages/tutor/QuestionManage.vue': { prop: 0, assign: 1 },
   'pages/tutor/TutorCourses.vue': { prop: 0, assign: 1 }
 }
 
 /** 「跟随当前」显式传参的白名单（值为 store.current.id 的纯投影 + 已有注释说明）。 */
-const FOLLOW_CURRENT_ALLOWLIST = ['pages/student/ContributionTab.vue']
+const FOLLOW_CURRENT_ALLOWLIST: string[] = []
 
 /** 浏览指定语义的页面传参点必须用自解释名。 */
 const BROWSE_MARKERS: Record<string, string[]> = {
-  'pages/student/SearchPage.vue': ['const browseCredentialId'],
-  'pages/student/CourseList.vue': ['const browseCredentialId'],
-  'pages/student/Materials.vue': ['const browseCredentialId'],
   'pages/tutor/QuestionManage.vue': ['const browseCredentialId'],
 }
 
@@ -128,8 +109,6 @@ describe('#1106 证件作用域：客户端不再假装拦截器注入', () => {
     for (const [rel, markers] of Object.entries(BROWSE_MARKERS)) {
       for (const marker of markers) expect(read(rel), rel).toContain(marker)
     }
-    // 跟随当前的那一处（投稿广场）保留「跟随当前」注释，不得被改写成浏览语义
-    expect(read('pages/student/ContributionTab.vue')).toContain('「跟随当前证件」语义')
   })
 
   it('客户端不得把 credential_id 静默塞进公共请求面（headers / 拦截器 / 全局默认）', () => {

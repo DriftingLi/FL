@@ -13,6 +13,7 @@
 package training
 
 import (
+	"context"
 	"testing"
 
 	"go.uber.org/zap"
@@ -28,6 +29,7 @@ import (
 // internal/apitypes/nullability_lock_test.go 的 nonNilEvidenceSources）。
 var nonnilOutletsTraining = map[string]func(t *testing.T) any{
 	"training.CatalogTreeDTO.specialties":                       outletCatalogTreeEmpty,
+	"training.TrainingCategoryListDTO.categories":               outletTrainingCategoryListEmpty,
 	"training.CatalogSpecialtyNode.levels":                      outletCatalogSpecialtyNoLevels,
 	"training.LevelListDTO.levels":                              outletLevelListEmpty,
 	"training.SpecialtyListDTO.specialties":                     outletSpecialtyListEmpty,
@@ -39,6 +41,14 @@ var nonnilOutletsTraining = map[string]func(t *testing.T) any{
 	"training.GroupedCredentialsDTO.special_operation":          outletGroupedCredentialsNone,
 	"training.CatalogLevelNode.courses":                         outletCatalogLevelNodeNoCourses,
 	"course.CourseDTO.chapters":                                 outletAdminCatalogCourseNode,
+}
+
+func outletTrainingCategoryListEmpty(t *testing.T) any {
+	result, err := NewService(testutil.NewMemoryDB(t), zap.NewNop()).ListPublicCategories(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return result
 }
 
 // TestNonNilDeclaredOutletsNeverEmitNull 本域的举证入口（判据本体在 testutil）。

@@ -20,14 +20,12 @@ export type FavoriteCheckData = FavoriteCheckDTO
 
 export const favoriteApi = {
   // 入参（query）类型保留手写：ADR-0048 决策 3 不生成入参类型。
-  list(params: { target_type?: FavoriteTargetType; page?: number; page_size?: number; credential_id?: number }) {
-    // 证件分区走服务端 CredentialScoped 兜底（本组 JWT + 学员角色 ⇒ 不传即按登录学员当前证件；
-    // 非学员/匿名不兜底，按不分区处理）；显式 credential_id 优先，用于按指定证件浏览。
-    return unwrappedRequest.get<FavoriteListData>('/favorites', { params })
+  list(params: { target_type?: FavoriteTargetType; page?: number; page_size?: number; category_id?: number | 'all' }) {
+    return unwrappedRequest.get<FavoriteListData>('/favorites', { params: { category_id: 'all', ...params } })
   },
 
   add(data: { target_type: FavoriteTargetType; target_id: number }) {
-    return unwrappedRequest.post<FavoriteItem>('/favorites', data)
+    return unwrappedRequest.post<FavoriteItem>('/favorites', data, { params: { category_id: 'all' } })
   },
 
   remove(favoriteId: number) {

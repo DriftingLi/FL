@@ -118,6 +118,18 @@ func TestCredentialDeleteCascadesPracticeProgressOnPostgres(t *testing.T) {
 	if err := db.Create(&nullBucket).Error; err != nil {
 		t.Fatalf("建未分区兜底行失败: %v", err)
 	}
+	category := testutil.SeedTrainingCategory(t, db, "独立培训分类")
+	progress := model.PracticeProgress{
+		StudentID: student.ID, PracticeMode: "tag:18", CredentialID: &doomed.ID, CategoryID: &category.ID,
+		QuestionIDs: model.JSONB("[]"), AnswersState: model.JSONB("{}"), UpdatedAt: time.Now(),
+	}
+	paper := model.RealExamPaper{CredentialID: doomed.ID, CategoryID: &category.ID, Title: "已归类真题", SourceRef: "mapped-paper"}
+	if err := db.Create(&progress).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&paper).Error; err != nil {
+		t.Fatal(err)
+	}
 
 	if err := svc.DeleteCredential(doomed.ID); err != nil {
 		t.Fatalf("只有练习进度时删证件应成功（原缺陷：FK 无删除动作 ⇒ 撞外键回 500），实得 %v", err)
@@ -130,11 +142,26 @@ func TestCredentialDeleteCascadesPracticeProgressOnPostgres(t *testing.T) {
 	}
 	var nullLeft int64
 	if err := db.Model(&model.PracticeProgress{}).
-		Where("student_id = ? AND credential_id IS NULL", student.ID).Count(&nullLeft).Error; err != nil {
+		Where("student_id = ? AND credential_id IS NULL AND category_id IS NULL", student.ID).Count(&nullLeft).Error; err != nil {
 		t.Fatalf("数未分区兜底行失败: %v", err)
 	}
 	if nullLeft != 1 {
 		t.Fatalf("credential_id IS NULL 的兜底桶行不该被级联卷走，实得 %d 行", nullLeft)
+	}
+	for _, record := range []struct {
+		item any
+		key  string
+		id   int
+	}{
+		{&model.PracticeProgress{}, "id", progress.ID},
+		{&model.RealExamPaper{}, "paper_id", paper.PaperID},
+	} {
+		var preserved int64
+		err := db.Model(record.item).Where(record.key+" = ? AND category_id = ? AND credential_id IS NULL", record.id, category.ID).
+			Count(&preserved).Error
+		if err != nil || preserved != 1 {
+			t.Fatalf("classified training record was lost: %T, rows=%d, err=%v", record.item, preserved, err)
+		}
 	}
 	// 证件本身已删除（级联删的是子行，父行由 catalogDelete 自己删）
 	var gone int64

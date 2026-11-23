@@ -119,17 +119,10 @@ const session = usePracticeSession({
     }
     return { questions: qs, startIndex, answersState }
   },
-  submit: async (payload) => {
-    try {
-      return await practiceModeApi.submitAnswer({
-        question_id: payload.question_id,
-        user_answer: payload.user_answer as string,
-        practice_type: payload.practice_type || 'paper'
-      })
-    } catch {
-      return null
-    }
-  },
+  submit: (payload) => realExamApi.submitPracticeAnswer(paperId.value, {
+    question_id: payload.question_id,
+    user_answer: payload.user_answer
+  }),
   saveProgress: async (payload) => {
     try {
       await practiceModeApi.saveProgress(payload.index, `paper:${paperId.value}`, payload.total, payload.answersState)

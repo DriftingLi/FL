@@ -17,7 +17,9 @@ import type {
   QuestionTagDict,
   QuestionTagListDTO,
   QuestionTagsResultDTO,
-  SpecialtyDict
+  SpecialtyDict,
+  TrainingCategoryDTO,
+  TrainingCategoryListDTO
 } from './generated/training'
 
 export type {
@@ -32,7 +34,8 @@ export type {
   QuestionTagDict,
   QuestionTagListDTO,
   QuestionTagsResultDTO,
-  SpecialtyDict
+  SpecialtyDict,
+  TrainingCategoryDTO
 }
 
 // ===== 培训目录体系：专业方向(specialty) → 等级(level) → 课程 → 章节 =====
@@ -77,6 +80,9 @@ export interface CertificateTemplatePayload {
 }
 
 export const trainingApi = {
+  getCategories() {
+    return unwrappedRequest.get<TrainingCategoryListDTO>('/catalog/categories')
+  },
   // ===== 目录树 =====
   /**
    * 公开目录树（学员端筛选用）：GET /api/catalog/tree → {specialties}。
@@ -92,6 +98,20 @@ export const trainingApi = {
   getLevels() {
     return unwrappedRequest.get<LevelListDTO>('/levels')
   },
+  getAdminCategories() {
+    return unwrappedRequest.get<TrainingCategoryListDTO>('/admin/catalog/categories')
+  },
+  createTrainingCategory(data: { name: string; status: number; sort_order?: number }) {
+    return unwrappedRequest.post<TrainingCategoryDTO>('/admin/catalog/categories', data)
+  },
+  updateTrainingCategory(id: number, data: { name: string; status: number; sort_order?: number }) {
+    return unwrappedRequest.put<TrainingCategoryDTO>(`/admin/catalog/categories/${id}`, data)
+  },
+
+  getHistoricalCategories() {
+    return unwrappedRequest.get<TrainingCategoryListDTO>('/catalog/history-categories')
+  },
+
   /** 管理端目录树（含停用项/章节）：GET /api/admin/catalog/tree → {specialties} */
   getAdminCatalogTree() {
     return unwrappedRequest.get<CatalogTreeDTO>('/admin/catalog/tree')
