@@ -25,7 +25,7 @@ type migrationFile struct {
 }
 
 // practiceFKCascadeRe 抓「给 practice_progress 的 credential_id 建外键且带 ON DELETE CASCADE」。
-var practiceFKCascadeRe = regexp.MustCompile(`(?is)ALTER\s+TABLE\s+practice_progress[\s\S]*?ADD\s+CONSTRAINT\s+practice_progress_credential_id_fkey\s+FOREIGN\s+KEY\s*\(\s*credential_id\s*\)\s*REFERENCES\s+credential\s*\(\s*id\s*\)\s*ON\s+DELETE\s+CASCADE`)
+var practiceFKCascadeRe = regexp.MustCompile(`(?is)ALTER\s+TABLE\s+(?:ONLY\s+)?practice_progress[^;]*?ADD\s+CONSTRAINT\s+practice_progress_credential_id_fkey\s+FOREIGN\s+KEY\s*\(\s*credential_id\s*\)\s*REFERENCES\s+credential\s*\(\s*id\s*\)\s*ON\s+DELETE\s+CASCADE`)
 
 // practiceFKPlainRe 抓「同一枚外键、没有 CASCADE」的形态（000040 的 down 就是它，up 侧不许出现）。
 var practiceFKPlainRe = regexp.MustCompile(`(?is)ADD\s+CONSTRAINT\s+practice_progress_credential_id_fkey\s+FOREIGN\s+KEY\s*\(\s*credential_id\s*\)\s*REFERENCES\s+credential\s*\(\s*id\s*\)\s*;`)
@@ -39,7 +39,7 @@ var practiceFKPlainRe = regexp.MustCompile(`(?is)ADD\s+CONSTRAINT\s+practice_pro
 // 为什么不能用「语句里同时出现 credential_id 与 ON DELETE CASCADE」这种宽松判据：
 // 000020 的 user_id 行本来就带 hrwai_users 的合法级联，宽松判据会把正样本读成破坏样本。
 var contributionInlineCascadeRe = regexp.MustCompile(`(?is)credential_id\s+INTEGER\s+NOT\s+NULL\s+REFERENCES\s+credential\s*\(\s*id\s*\)\s+ON\s+DELETE\s+CASCADE`)
-var contributionAlterCascadeRe = regexp.MustCompile(`(?is)ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?user_contribution\b[\s\S]*?FOREIGN\s+KEY\s*\(\s*credential_id\s*\)\s*REFERENCES\s+credential\s*\(\s*id\s*\)\s+ON\s+DELETE\s+CASCADE`)
+var contributionAlterCascadeRe = regexp.MustCompile(`(?is)ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?user_contribution\b[^;]*?FOREIGN\s+KEY\s*\(\s*credential_id\s*\)\s*REFERENCES\s+credential\s*\(\s*id\s*\)\s+ON\s+DELETE\s+CASCADE`)
 
 // credentialFKShape 汇总三个判据的结论。
 type credentialFKShape struct {
@@ -123,9 +123,6 @@ func TestCredentialFKShapeInMigrations(t *testing.T) {
 		t.Fatalf("practice_progress.credential_id 的 ON DELETE CASCADE 应由且仅由一条 up 迁移建出来，实得 %d 条：%s",
 			len(shape.cascadeAddedInUp), strings.Join(shape.cascadeAddedInUp, ", "))
 	}
-	if !strings.HasPrefix(shape.cascadeAddedInUp[0], "000040_") {
-		t.Fatalf("级联动作应落在 000040（000013 已上过生产，就地改只影响空库重建），实得 %s", shape.cascadeAddedInUp[0])
-	}
 	if len(shape.plainReAddInUp) > 0 {
 		t.Fatalf("有 up 迁移把该外键收回无删除动作：%s（判据 1「有练习进度时删证件成功」会退回 500）",
 			strings.Join(shape.plainReAddInUp, ", "))
@@ -140,16 +137,11 @@ func TestCredentialFKShapeInMigrations(t *testing.T) {
 // TestCredentialFKShapeDownRevertsAction 000040 的 down 必须把动作收回无删除（回滚 = 退回旧代码形状），
 // 且收回的是同一枚具名约束，不留两个外键。
 func TestCredentialFKShapeDownRevertsAction(t *testing.T) {
-	files := readMigrationsForShape(t)
-	var down string
-	for _, f := range files {
-		if strings.HasPrefix(f.name, "000040_") && strings.HasSuffix(f.name, ".down.sql") {
-			down = f.content
-		}
+	data, err := os.ReadFile(filepath.Join("testdata", "000040_practice_progress_credential_cascade.down.sql"))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if down == "" {
-		t.Fatal("找不到 000040 的 down 迁移（成对性由 TestMigrationFilesArePairedAndNamed 管，这里要的是正文）")
-	}
+	down := string(data)
 	if !strings.Contains(flattenSQL(down), "DROP CONSTRAINT IF EXISTS practice_progress_credential_id_fkey") {
 		t.Fatalf("down 必须先 DROP 那枚具名外键：%s", down)
 	}

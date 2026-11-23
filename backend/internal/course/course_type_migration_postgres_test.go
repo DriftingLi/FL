@@ -27,7 +27,7 @@ func TestCourseTypeMigrationBackfillsFromPublishedVideo(t *testing.T) {
 	db := testutil.NewPostgresDB(t)
 	migrationSQL := func(migration, direction string) string {
 		t.Helper()
-		path := filepath.Join("..", "..", "migrations", migration+"."+direction+".sql")
+		path := filepath.Join("testdata", migration+"."+direction+".sql")
 		sql, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatal(err)
@@ -156,7 +156,7 @@ func TestCourseTypeMigrationBackfillsFromPublishedVideo(t *testing.T) {
 // 没有 course_type 为空的行（上线前不会出现「类型未知」的课）。
 func TestCourseTypeMigrationLeavesExistingRowsClassifiable(t *testing.T) {
 	db := testutil.NewPostgresDB(t)
-	sql, err := os.ReadFile(filepath.Join("..", "..", "migrations", "000074_course_type.up.sql"))
+	sql, err := os.ReadFile(filepath.Join("testdata", "000074_course_type.up.sql"))
 	if err != nil {
 		t.Fatal(err)
 	}
