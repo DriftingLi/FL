@@ -5,14 +5,12 @@
 
 	<!-- 功能入口头部（#998 → #2593 页内 scope）：**移出滚动容器** ⇒ 滑动时天然不丢失（**结构性保证**，不依赖
 	     `position: sticky` —— 该属性在本项目 0 处先例、uvue 支持亦无文档）。
-	     通用 scope：宫格 + `^ / v` 收起展开（默认展开、不跨会话记忆，维护者 2026-09-15 口径）。
+	     通用 scope：宫格**恒展开**（#2785 删去 `^ / v` 收起把手与折叠态 —— 四格收口后头部只有一行，
+	     折叠唯一效果是把入口藏起来，「收起不记忆」的旧口径随之无对象）。
 	     专项 scope：宫格收起为「当前区 ⌄」chip（原型 791:750），chip 下拉可换区或回通用对话。
 	     代价如实记：头部位于档位横幅**之上**，横幅不再是首屏第一个元素（专项 scope 下无横幅，代价只在通用区）。 -->
 		<view class="func-head">
-			<view v-if="!isScoped" class="func-head-handle" @click="toggleFunctionHeader">
-				<text class="func-head-arrow">{{ functionHeaderCollapsed ? 'v' : '^' }}</text>
-			</view>
-			<view v-if="!isScoped && !functionHeaderCollapsed" class="function-grid">
+			<view v-if="!isScoped" class="function-grid">
 				<view v-for="(item, idx) in functionItems" :key="idx" class="function-item" @click="onFunctionClick(item)">
 					<view class="function-icon-box">
 						<image v-if="item.iconPath && item.iconPath.length > 0" class="function-icon-img" :src="item.iconPath" mode="aspectFit" :webp="true" />
@@ -367,14 +365,6 @@
 	// 功能入口（从常量导入）
 	const functionItems = FUNCTION_ITEMS
 	const quickPrompts = QUICK_PROMPTS
-
-	// 功能入口头部的收起态（#998）：默认展开、**不跨会话记忆**（维护者 2026-09-15 口径）。
-	// 宫格已移出滚动容器 ⇒ 收起/展开只改头部自身高度，与滚动位置无关。
-	const functionHeaderCollapsed = ref<boolean>(false)
-
-	function toggleFunctionHeader() : void {
-		functionHeaderCollapsed.value = !functionHeaderCollapsed.value
-	}
 
 	// 根容器高度（#998）：与 ai-settings.uvue 同款，给根节点一个确定高度；onLoad 里赋值。
 	const pageHeight = ref<number>(0)
@@ -1022,13 +1012,15 @@
 	.function-grid {
 		flex-direction: row;
 		justify-content: space-between;
-		margin-bottom: 24rpx;
+		margin-bottom: 16rpx;
 	}
 
-	/* #2520：原型为 4 格收口（第 5 格已下线）；格宽随格数放大，图标与标题间距按原型收紧 */
+	/* #2520：原型为 4 格收口（第 5 格已下线）；格宽随格数放大，图标与标题间距按原型收紧。
+	   #2785：4 格等宽 = 每格 1/4（25%）。四格等分后格间距名义为 0，可见间隙来自格内图标居中
+	   （175.5rpx 格宽 / 84rpx 图标），故**不新增** gap 或内距 —— 那会把 6 汉字标题挤出格。 */
 	.function-item {
 		align-items: center;
-		width: 23%;
+		width: 25%;
 	}
 
 	.function-icon-box {
@@ -1095,12 +1087,13 @@
 		margin-bottom: 24rpx;
 	}
 
-	/* #2520：推荐问题卡按原型放宽（卡高 ≈ 100rpx、圆角 20rpx、行距 20rpx） */
+	/* #2520：推荐问题卡按原型放宽（卡高 ≈ 100rpx、圆角 20rpx、行距 20rpx）。
+	   #2785：内距与卡间距收敛到 24/16 两档（原 32/28 内距、20 卡间距）。 */
 	.prompt-card {
 		background-color: #ffffff;
 		border-radius: $radius-card;
-		padding: 32rpx 28rpx;
-		margin-bottom: 20rpx;
+		padding: 24rpx;
+		margin-bottom: 16rpx;
 		flex-direction: row;
 		align-items: center;
 		justify-content: space-between;
@@ -1115,7 +1108,7 @@
 	.prompt-arrow {
 		width: 32rpx;
 		flex-shrink: 0;
-		font-size: 36rpx;
+		font-size: 32rpx;
 		line-height: 40rpx;
 		text-align: center;
 		color: #999999;
@@ -1214,7 +1207,7 @@
 		background-color: #2e9e5b;
 	}
 
-	/* 功能入口头部（#998）：宫格**移出滚动容器**后的容器，故本块只需处理外观与收起态，
+	/* 功能入口头部（#998）：宫格**移出滚动容器**后的容器，故本块只需处理外观（#2785 起不再有收起态），
 	   不含任何 `position` 定位 —— 「滑动不丢失」由**结构**保证（它在 scroll-view 之外），
 	   这正是刻意不选 `position: sticky` 的原因（本项目 0 处先例、uvue 支持无文档）。
 	   水平 padding 与 `.pro-scroll` 的 24rpx 对齐，使宫格左右位置与改动前一致。 */
@@ -1223,22 +1216,6 @@
 		background-color: transparent;
 		padding-left: 24rpx;
 		padding-right: 24rpx;
-	}
-
-	/* 票 2730 第 1 项：拖拽把手命中区 44→88rpx；箭头 32rpx 不变。 */
-	.func-head-handle {
-		height: 88rpx;
-		align-items: center;
-		justify-content: center;
-	}
-
-	.func-head-arrow {
-		width: 32rpx;
-		flex-shrink: 0;
-		font-size: 24rpx;
-		line-height: 28rpx;
-		text-align: center;
-		color: #8aa9c0;
 	}
 
 	/* ===== scope chip（#2593）：专项 scope 下宫格收起为「当前区 ⌄」 ===== */
