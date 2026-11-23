@@ -423,13 +423,16 @@ describe('行为保持契约（源码接线侧：跳转/时序/乐观更新的�
     expect(page).toMatch(/if \(currentTab\.value !== 'resource'\) \{\s*loadTopics\(true\)/);
   });
 
-  it('详情页删除/编辑/举报三态 v-if 组合逐字保留（#2771 起承载位在「···」菜单）', () => {
-    // 判据不变，只换承载位：页头工具栏整行删除，三态搬进 forum-more-menu
+  it('详情页删除/编辑/举报按权限各自出项（#2771 起承载位在「···」菜单；作者同时见删除+编辑）', () => {
+    // 判据：页头工具栏整行删除，动作搬进 forum-more-menu
     expect(detailPage).not.toMatch(/<template #toolbar>/);
     expect(detailPage).not.toContain(':show-toolbar');
     expect(detailPage).toMatch(/<ForumMoreMenu[\s\S]*?:can-delete="canDelete"[\s\S]*?:can-edit="canEdit"/);
+    // 删除/编辑各自独立出项：作者 canDelete 恒真，旧 `canEdit && !canDelete` 会把编辑吃成死分支
     expect(moreMenu).toContain('v-if="canDelete"');
-    expect(moreMenu).toContain('v-if="canEdit && !canDelete"');
+    expect(moreMenu).toContain('v-if="canEdit"');
+    expect(moreMenu).not.toMatch(/v-if="canEdit && !canDelete"/);
+    // 举报仍只给既非作者、也无后端删除权的读者
     expect(moreMenu).toContain('v-if="!canDelete && !canEdit"');
   });
 
