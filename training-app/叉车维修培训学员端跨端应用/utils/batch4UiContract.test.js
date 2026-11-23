@@ -143,18 +143,19 @@ describe('批4 特殊页动作落点（#2761 起统一在 #toolbar 第二行；f
     expect(read('pages/notifications/notifications.uvue')).toMatch(/<template #toolbar>[\s\S]*?onMarkAllRead[\s\S]*?<\/template>/);
   });
 
-  it('forum-detail 三态收进「···」菜单（#2771：页头工具栏整行删除）', () => {
+  it('forum-detail 删除/编辑/举报收进「···」菜单（#2771：页头工具栏整行删除，作者同见删除+编辑）', () => {
     const src = read('pages/forum/forum-detail.uvue');
     // 页头只剩标题行：不再有第二行工具栏，也不再留空行
     expect(src).not.toMatch(/<template #toolbar>/);
     expect(src).not.toContain(':show-toolbar');
-    // 三态判据与三个动作仍由页面持有，经 props / 事件交给菜单
+    // 权限与三个动作仍由页面持有，经 props / 事件交给菜单
     expect(src).toMatch(/<ForumMoreMenu[\s\S]*?:can-delete="canDelete"[\s\S]*?:can-edit="canEdit"/);
     expect(src).toMatch(/@delete-topic="onDelete"[\s\S]*?@edit-topic="onEditTopic"[\s\S]*?@report-topic="onReportTopicClick"/);
-    // 互斥 v-if 逐字搬进菜单组件（判据不变，只换承载位）
+    // 删除/编辑各自按权限出项（作者 canDelete 恒真 ⇒ 不能再让编辑挂在 !canDelete 上）；举报只给非作者
     const menu = read('pages/forum/components/forum-more-menu.uvue');
     expect(menu).toContain('v-if="canDelete"');
-    expect(menu).toContain('v-if="canEdit && !canDelete"');
+    expect(menu).toContain('v-if="canEdit"');
+    expect(menu).not.toMatch(/v-if="canEdit && !canDelete"/);
     expect(menu).toContain('v-if="!canDelete && !canEdit"');
   });
 

@@ -1,7 +1,7 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
         <!-- #2771：页头只留标题行 —— 原第二行工具栏（删除/编辑/举报）整行删除，
-             三态动作与收藏一起收进标题行右侧的「···」菜单，页头不再留空行。 -->
+             删除/编辑/举报与收藏一起收进标题行右侧的「···」菜单，页头不再留空行。 -->
         <app-nav-bar title="帖子详情" variant="inverse" @left-click="onBack" />
 
         <!-- 「···」菜单（票 2767；#2771 收编页头动作）：收藏 / 删除 / 编辑 / 举报；
