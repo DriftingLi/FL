@@ -95,7 +95,6 @@ module.exports = {
     '#A97142': 'pages/ai-assistant/ai-assistant.uvue pro-banner-desc 未解锁字色——中棕橙文字（#920 设计），token 表无对应',
     '#4A8F68': 'pages/ai-assistant/ai-assistant.uvue pro-banner-desc 已解锁字色——中绿文字（#920 设计），token 表无对应',
     '#2E9E5B': 'pages/ai-assistant/ai-assistant.uvue pro-banner-btn 已解锁按钮底——绿系按钮实底（#920 设计），$success-color 偏荧光语义不符',
-    '#8AA9C0': 'pages/ai-assistant/ai-assistant.uvue func-head-arrow 收起箭头灰蓝——功能入口头部装饰灰，token 表无对应，待灰阶 token 票裁',
 
     // ── 批6（#1609 N06 无页头白名单 6 页 + mall N03 补漏）新增 ──
     // '#0066FF'/'#00CC99' 已随 #2558 收敛为 $brand-grad-start/$brand-grad-end（#2516 B0 落 token）：

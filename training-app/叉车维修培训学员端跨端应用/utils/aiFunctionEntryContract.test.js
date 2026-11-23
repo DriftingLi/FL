@@ -7,7 +7,8 @@
  *    —— 该属性在整个移动端项目里 **0 处先例**，uvue 是否支持亦无文档，写错会静默失效（不报错、
  *    只是滑动时入口消失）。把宫格放进 scroll-view 里就等于回到 #998 的原缺陷形态。
  * ② **不得残留悬浮入口 / 半屏 sheet**：改形态前的 FAB + sheet 已删除；残留会变成「同一功能两个入口」。
- * ③ **^ 收起/展开**：默认展开、不跨会话记忆；收起态只影响头部自身，不碰滚动。
+ * ③ **宫格恒展开**（#2785）：`^ / v` 收起把手与 `functionHeaderCollapsed` 已删除 —— 四格收口后头部只有
+ *    一行，折叠唯一效果是把入口藏起来；通用 scope 上宫格恒显示，专项 scope 上仍让位给「当前区 ⌄」chip。
  * ④ **专项通道不吃「自定义模型」**：带 feature_key 的一轮由后端按管理端单绑定解析模型
  *    （config.go:498 明确「忽略选择子中的模型来源字段（防绕过）」）⇒ 客户端既不该被
  *    「请先配置自定义模型」的前置校验拦住，也不该把 custom_* 字段送上去。（维护者 2026-09-15 口径）
@@ -63,16 +64,18 @@ function gridOutsideScroll(src) {
 
 const GRID_TAG_RE = /[ \t]*<view v-if="[^"]*" class="function-grid">[\s\S]*?<\/view>/;
 
-/** 宫格的 v-if：非专项 scope 且未收起（#2593 起专项 scope 收起宫格、改显 chip） */
-const HEAD_VIF = ' v-if="!isScoped && !functionHeaderCollapsed"';
+/** 宫格的 v-if：只剩 scope 判据（#2593 起专项 scope 收起宫格、改显 chip；#2785 删去折叠态） */
+const HEAD_VIF = ' v-if="!isScoped"';
 
-/** 头部收起态相关的四要素（默认值 / 切换 / 绑定 / 宫格的 v-if）是否齐备 */
-function headerToggleWired(src) {
+/** 宫格恒展开：无折叠字段、无切换函数、无收起把手，且宫格的 v-if 与 HEAD_VIF 逐字一致 */
+function gridNeverCollapses(src) {
+  const code = stripCodeComments(src);
   return (
-    /const functionHeaderCollapsed = ref<boolean>\(false\)/.test(src) &&
-    /function toggleFunctionHeader\(\) : void \{\s*functionHeaderCollapsed\.value = !functionHeaderCollapsed\.value/.test(src) &&
-    /class="func-head-handle" @click="toggleFunctionHeader"/.test(src) &&
-    src.includes(HEAD_VIF)
+    !/functionHeaderCollapsed/.test(code) &&
+    !/functionHeaderExpanded/.test(code) &&
+    !/toggleFunctionHeader/.test(code) &&
+    !/class="func-head-handle"/.test(code) &&
+    code.includes(HEAD_VIF)
   );
 }
 
@@ -144,28 +147,21 @@ describe('AI 助手「功能入口常驻」契约（#998）', () => {
     });
   });
 
-  describe('③ ^ 收起 / 展开（默认展开、不记忆）', () => {
-    it('默认展开：functionHeaderCollapsed 初值为 false', () => {
-      expect(PAGE).toMatch(/const functionHeaderCollapsed = ref<boolean>\(false\)/);
+  describe('③ 宫格恒展开（#2785：收起把手与折叠态已删除）', () => {
+    it('无折叠字段 / 无切换函数 / 无收起把手，宫格的 v-if 只剩 scope 判据', () => {
+      expect(gridNeverCollapses(PAGE)).toBe(true);
     });
 
-    it('切换函数、点击绑定、宫格的 v-if 三处齐备（宫格额外要求非专项 scope）', () => {
-      expect(headerToggleWired(PAGE)).toBe(true);
-    });
-
-    it('默认收起 / 未绑定 v-if 的变形样本会被检出（防检测器空跑假绿）', () => {
-      // 必须锚定**完整声明**：页面里还有别的 ref<boolean>(false)（侧栏、thinking 等），
-      // 用裸 ref<boolean>(false) 做 replace 会改到别处、样本失真（本文件自测踩过）。
-      const defaultCollapsed = PAGE.replace(
-        'const functionHeaderCollapsed = ref<boolean>(false)',
-        'const functionHeaderCollapsed = ref<boolean>(true)'
-      );
-      expect(headerToggleWired(defaultCollapsed)).toBe(false);
-      expect(headerToggleWired(PAGE.replace(HEAD_VIF, ''))).toBe(false);
-    });
-
-    it('箭头随收起态切换（收起显示 v）', () => {
-      expect(PAGE).toMatch(/\{\{ functionHeaderCollapsed \? 'v' : '\^' \}\}/);
+    it('残留折叠字段、把手或折叠条件的变形样本会被检出（防检测器空跑假绿）', () => {
+      // 折叠条件加回宫格的 v-if（#2785 删掉的正是这一句）
+      expect(gridNeverCollapses(PAGE.replace(HEAD_VIF, ' v-if="!isScoped && !functionHeaderCollapsed"'))).toBe(false);
+      // 把手加回头部（点它就该能折叠，而页面已无对应状态机）
+      expect(gridNeverCollapses(PAGE.replace('class="func-head"', 'class="func-head" @click="toggleFunctionHeader"'))).toBe(false);
+      expect(gridNeverCollapses(PAGE.replace('class="function-grid"', 'class="func-head-handle"'))).toBe(false);
+      // 折叠字段重新声明（宫格虽仍恒展开，字段复活即等于把旧状态机请回来）
+      expect(
+        gridNeverCollapses(PAGE.replace('\tconst quickPrompts = QUICK_PROMPTS', '\tconst quickPrompts = QUICK_PROMPTS\n\tconst functionHeaderCollapsed = ref<boolean>(false)'))
+      ).toBe(false);
     });
   });
 
