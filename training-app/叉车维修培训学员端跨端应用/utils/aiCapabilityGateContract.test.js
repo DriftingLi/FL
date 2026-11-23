@@ -66,26 +66,27 @@ describe('AI 助手专业版能力门（proUnlocked）契约', () => {
     expect(fn).toMatch(/showModelPicker\.value\s*=\s*true/);
   });
 
-  it('④ 抽屉菜单：未解锁时不显示「自定义模型」（#926 修的漏网路径）', () => {
+  it('④ 抽屉菜单：未解锁时不显示「自定义模型」（#926 修的漏网路径；#2786 起落在左抽屉）', () => {
     // 菜单必须是 computed（受能力门影响），不能是常量直赋
-    expect(page).not.toMatch(/const\s+rightMenuItems\s*=\s*RIGHT_MENU_ITEMS\s*$/m);
-    expect(page).toMatch(/const\s+rightMenuItems\s*=\s*computed<MenuItem\[\]>/);
+    expect(page).not.toMatch(/const\s+drawerMenuItems\s*=\s*DRAWER_MENU_ITEMS\s*$/m);
+    expect(page).toMatch(/const\s+drawerMenuItems\s*=\s*computed<MenuItem\[\]>/);
     // 且过滤条件必须是 custom-models 这个 key
-    const fn = page.slice(page.indexOf('const rightMenuItems = computed'));
+    const fn = page.slice(page.indexOf('const drawerMenuItems = computed'));
     expect(fn).toMatch(/filter\(/);
     expect(fn).toMatch(/m\.key\s*!=\s*'custom-models'/);
     // 常量表仍保留全量（解锁后可见），可见性由门决定 —— 两者不能同时被改掉
     expect(consts).toMatch(/'custom-models'/);
+    // 「解锁专业版」**不许**被同一段过滤掉：它是基础版唯一入口（#2786）
+    expect(fn).not.toMatch(/m\.key\s*!=\s*'pro'/);
   });
 
-  it('⑤ 「解锁专业版」横幅用实色（设计选择：两态用实色；非能力限制）', () => {
-    expect(page).toMatch(/class="pro-banner"/);
-    // 只断言横幅自己的样式块 —— 不能全局断言（页面别处的注释里就写着 linear-gradient 这个词，
-    // 全局匹配会把注释当实现，属假阳性）
-    const from = page.indexOf('.pro-banner {');
-    const style = page.slice(from, page.indexOf('.pro-banner-go {', from));
-    expect(style).toMatch(/background-color:\s*#/);
-    expect(style).not.toMatch(/gradient/);
+  it('⑤ 「解锁专业版」入口只剩左抽屉那一项，档位横幅已删（#2786）', () => {
+    // 横幅删了 ⇒ 入口必须接到原来那个 sheet 动作（不另立提示文案）
+    const fn = page.slice(page.indexOf('function onMenuAction'));
+    expect(fn).toMatch(/key == 'pro'/);
+    expect(fn).toMatch(/openProSheet\(\)/);
+    // 页面不得再挂横幅（class 与样式都不许复活）
+    expect(page).not.toMatch(/pro-banner/);
   });
 
   it('⑥ 对话设置页与 AI 助手页**同门同源**（#1024：改读 useAiPro 单点，不再自持常量）', () => {

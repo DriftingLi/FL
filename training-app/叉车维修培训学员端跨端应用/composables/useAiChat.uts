@@ -45,14 +45,12 @@ export type UseAiChatResult = {
 	statusText : Ref<string>
 	scrollIntoViewId : Ref<string>
 	sidebarLeft : Ref<boolean>
-	sidebarRight : Ref<boolean>
 	scrollToBottom : () => void
 	loadSessions : () => Promise<void>
 	loadSession : (session : AiSession) => Promise<void>
 	startNewChat : () => Promise<void>
 	onDeleteSession : (id : number) => Promise<void>
 	toggleSidebarLeft : () => void
-	toggleSidebarRight : () => void
 	sendInput : (sessionTag : string, buildBody : ChatBodyBuilder, images : string[], featureKey : string) => void
 }
 
@@ -71,7 +69,6 @@ export function useAiChat(featureScope : Ref<string>) {
 	const statusText = ref<string>('')
 	const scrollIntoViewId = ref<string>('')
 	const sidebarLeft = ref<boolean>(false)
-	const sidebarRight = ref<boolean>(false)
 
 	// ===== 方法 =====
 
@@ -97,7 +94,6 @@ export function useAiChat(featureScope : Ref<string>) {
 	async function loadSession(session : AiSession) : Promise<void> {
 		currentSession.value = session
 		sidebarLeft.value = false
-		sidebarRight.value = false
 		try {
 			messages.value = await getAiSessionMessagesApi(session.id)
 		} catch (e) {
@@ -112,7 +108,6 @@ export function useAiChat(featureScope : Ref<string>) {
 		messages.value = []
 		inputText.value = ''
 		sidebarLeft.value = false
-		sidebarRight.value = false
 	}
 
 	/** 执行删除会话（供 showModal 同步 success 回调调用，fire-and-forget）。声明在 onDeleteSession 之前，
@@ -148,11 +143,6 @@ export function useAiChat(featureScope : Ref<string>) {
 	/** 切换左侧会话抽屉 */
 	function toggleSidebarLeft() : void {
 		sidebarLeft.value = !sidebarLeft.value
-	}
-
-	/** 切换右侧功能菜单抽屉 */
-	function toggleSidebarRight() : void {
-		sidebarRight.value = !sidebarRight.value
 	}
 
 	/**
@@ -309,14 +299,12 @@ export function useAiChat(featureScope : Ref<string>) {
 		statusText: statusText,
 		scrollIntoViewId: scrollIntoViewId,
 		sidebarLeft: sidebarLeft,
-		sidebarRight: sidebarRight,
 		scrollToBottom: () => scrollToBottom(),
 		loadSessions: () => loadSessions(),
 		loadSession: (session : AiSession) => loadSession(session),
 		startNewChat: () => startNewChat(),
 		onDeleteSession: (id : number) => onDeleteSession(id),
 		toggleSidebarLeft: () => toggleSidebarLeft(),
-		toggleSidebarRight: () => toggleSidebarRight(),
 		sendInput: (sessionTag : string, buildBody : ChatBodyBuilder, images : string[], featureKey : string) => sendInput(sessionTag, buildBody, images, featureKey),
 	} as UseAiChatResult
 }

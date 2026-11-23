@@ -178,8 +178,9 @@ describe('§1.6 白名单文件自检', () => {
       'pages/search/search.uvue', 'pages/mall/mall.uvue',
     ];
     // #2262 摘除 ai-feature 诊断面板后，#6DB8E8 唯一承载移至 components/ai-chat/ai-chat-input.uvue —— 扫描面随之补入组件文件
+    // #2786 删掉 ai-assistant 解锁专业版横幅后，#2E9E5B 唯一承载移至 ai-chat-pro-sheet 的已解锁按钮底 —— 组件补入扫描面
     // #2523 起 #FF8F00 的承载是 forum-topic-header 状态标签（task-center 改走 $warning-color token）—— 组件补入扫描面
-    const all = PAGES.concat(BATCH2_PAGES, BATCH4_PAGES, BATCH5_PAGES, BATCH6_PAGES, ['components/ai-chat/ai-chat-input.uvue', 'pages/forum/components/forum-topic-header.uvue', 'pages/forum/components/forum-topic-actions.uvue', 'pages/forum/components/forum-more-menu.uvue'])
+    const all = PAGES.concat(BATCH2_PAGES, BATCH4_PAGES, BATCH5_PAGES, BATCH6_PAGES, ['components/ai-chat/ai-chat-input.uvue', 'components/ai-chat/ai-chat-pro-sheet.uvue', 'pages/forum/components/forum-topic-header.uvue', 'pages/forum/components/forum-topic-actions.uvue', 'pages/forum/components/forum-more-menu.uvue'])
       .map((p) => styleBlock(read(p)).toUpperCase())
       .join('\n');
     for (const value of Object.keys(WHITELIST)) {

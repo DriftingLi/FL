@@ -162,7 +162,6 @@ const MODULES = {
       'components/ai-chat/ai-chat-diagnosis-guide.uvue',
       'components/ai-chat/ai-chat-custom-form.uvue',
       'components/ai-chat/ai-chat-drawer-left.uvue',
-      'components/ai-chat/ai-chat-drawer-right.uvue',
       'components/ai-chat/ai-chat-image-tray.uvue',
       'components/ai-chat/ai-chat-input.uvue',
       'components/ai-chat/ai-chat-model-picker.uvue',

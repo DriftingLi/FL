@@ -87,14 +87,11 @@ module.exports = {
     '#E3F0FF': 'pages/resume/resume.uvue user-card 渐变首色——用户卡浅蓝渐变对，$primary-tint(#ebf5ff) 近似但值不等，待真机裁',
     '#CFE4FF': 'pages/resume/resume.uvue user-card 渐变尾色/实底兜底——与 #E3F0FF 成对，同上',
     '#EEF1F5': 'pages/resume/resume.uvue 完善度进度条轨灰——中性轨道灰，与 #EEF1F6（批2 卡片底）用途不同且值不等，各守各点不并条',
-    '#FFD9A8': 'pages/ai-assistant/ai-assistant.uvue pro-banner 未解锁边框——#920 专业版横幅两态实色设计（非能力限制，#937 已证伪渐变说），token 表无橙系浅边框',
-    '#E8F8EE': 'pages/ai-assistant/ai-assistant.uvue pro-banner 已解锁底——同上，绿系浅底，$success-tint(#e8f5e9) 近似但值不等',
-    '#B6E3C7': 'pages/ai-assistant/ai-assistant.uvue pro-banner 已解锁边框——同上，绿系边框',
-    '#8A4B00': 'pages/ai-assistant/ai-assistant.uvue pro-banner-title 未解锁字色——深橙文字（#920 设计），token 表无对应',
-    '#1C6B3C': 'pages/ai-assistant/ai-assistant.uvue pro-banner-title 已解锁字色——深绿文字（#920 设计），token 表无对应',
-    '#A97142': 'pages/ai-assistant/ai-assistant.uvue pro-banner-desc 未解锁字色——中棕橙文字（#920 设计），token 表无对应',
-    '#4A8F68': 'pages/ai-assistant/ai-assistant.uvue pro-banner-desc 已解锁字色——中绿文字（#920 设计），token 表无对应',
-    '#2E9E5B': 'pages/ai-assistant/ai-assistant.uvue pro-banner-btn 已解锁按钮底——绿系按钮实底（#920 设计），$success-color 偏荧光语义不符',
+    // #2786 起：pro-banner 随横幅删除而失去承载，其绿系三值（含已解锁底/边框/字色）
+    // 与两处棕橙字色一并退役；下面三条仍由各自承载体守着。
+    '#FFD9A8': 'pages/ai-assistant/ai-assistant.uvue function-free-badge 边框（限免小签）——暖色轴细边，token 表无橙系浅边框（原与 pro-banner 共用，横幅已随 #2786 删除）',
+    '#8A4B00': 'pages/ai-assistant/ai-assistant.uvue function-free-badge-text 字色（限免小签）——深橙文字，token 表无对应（原与 pro-banner 共用，横幅已随 #2786 删除）',
+    '#2E9E5B': 'components/ai-chat/ai-chat-pro-sheet.uvue 已解锁按钮底——绿系按钮实底（#920 设计），$success-color 偏荧光语义不符（横幅侧承载已随 #2786 退役，本值由 sheet 继续承载）',
 
     // ── 批6（#1609 N06 无页头白名单 6 页 + mall N03 补漏）新增 ──
     // '#0066FF'/'#00CC99' 已随 #2558 收敛为 $brand-grad-start/$brand-grad-end（#2516 B0 落 token）：

@@ -1,6 +1,8 @@
 <template>
 	<!-- #2520：原型 307:7035 —— 抽屉从**页头之下**展开（页头保持可见、面板图标转蓝），
-	     面板用页底同一条渐变，内部是「新对话」「最近对话」两张白卡。 -->
+	     面板用页底同一条渐变，内部是「新对话」「最近对话」两张白卡。
+	     #2786：右抽屉退役 ⇒ 本抽屉是**唯一**菜单入口面（ADR-0009 2026-11-23 修订），
+	     菜单收在第三张白卡「设置」里。 -->
 	<view v-if="visible" class="drawer-mask" :style="{ top: topPx + 'px' }" @click="onMaskClick"></view>
 	<view v-if="visible" class="drawer drawer-left" :style="{ top: topPx + 'px' }">
 		<scroll-view scroll-y class="drawer-body">
@@ -24,12 +26,26 @@
 					</view>
 				</view>
 			</view>
+			<!-- 「设置」分组（#2786）：四项与改前右抽屉同一批动作，另把「解锁专业版」从横幅搬进来。
+			     分组标题不能省 —— 否则四项会被读成「最近对话里混进来的行」（讨论纪要 §D3）。 -->
+			<text class="drawer-group-title">设置</text>
+			<view class="settings-card">
+				<view v-for="item in menuItems" :key="item.key" class="settings-item" @click="onMenu(item.key)">
+					<text class="settings-item-text">{{ item.label }}</text>
+				</view>
+			</view>
 		</scroll-view>
 	</view>
 </template>
 
 <script setup lang="uts">
 	import type { AiSession } from '../../types/index'
+	/**
+	 * ⚠️ 菜单项类型必须与页面**同一名义来源**（本票新增，刻意跟右抽屉同一写法）。
+	 * 2026-09-13 实测（#947）：自带的同名结构类型与页面传入的类型在 Kotlin 里是两个类 ⇒
+	 * 一渲染就 ClassCastException，表现为「点了没反应」。守护见 utils/aiChatDrawerContract.test.js ①。
+	 */
+	import type { MenuItem } from '../../pages/ai-assistant/ai-assistant-constants'
 	import { computed, ref } from 'vue'
 
 	const props = withDefaults(defineProps<{
@@ -38,23 +54,25 @@
 		currentSessionId?: number
 		statusBarHeight?: number
 		/**
-		 * #2520：抽屉起点要跳过页头。两个调用方的页头行数不同：
-		 * 通用页经 ai-chat-nav 带工具栏（标题栏 + 工具栏 = 176rpx），专项页只有标题栏（88rpx）。
-		 * 默认按 176rpx（通用页）。
+		 * #2520：抽屉起点要跳过页头。页面页头行数不同：带工具栏的 176rpx，只有标题栏的 88rpx。
+		 * #2786：本页页头不再有工具栏行（⋯ 已删）⇒ 默认改回 88rpx（只有标题栏）。
 		 */
 		navHeightRpx?: number
+		/** #2786：「设置」分组四行；可见性（自定义模型的能力门）由页面决定，本组件不判 */
+		menuItems?: MenuItem[]
 	}>(), {
 		visible: false,
 		sessions: () => [] as AiSession[],
 		currentSessionId: 0,
 		statusBarHeight: 20,
-		navHeightRpx: 176
+		navHeightRpx: 88,
+		menuItems: () => [] as MenuItem[]
 	})
 
-	const emit = defineEmits(['close', 'newChat', 'select', 'delete'])
+	const emit = defineEmits(['close', 'newChat', 'select', 'delete', 'action'])
 
 	/**
-	 * 抽屉起点 = 状态栏 + 页头（行数由 navHeightRpx 传进来，默认 176rpx = 标题栏 + 工具栏）。
+	 * 抽屉起点 = 状态栏 + 页头（行数由 navHeightRpx 传进来，默认 88rpx = 只有标题栏；#2786 起本页无工具栏行）。
 	 * 不用 `uni.upx2px`（本仓零先例、UTS 类型面未验证）：按 windowWidth 直接换算 rpx→px。
 	 */
 	const windowWidthPx = uni.getSystemInfoSync().windowWidth
@@ -84,6 +102,11 @@
 
 	function onDelete(id : number) : void {
 		emit('delete', id)
+	}
+
+	/** 菜单行点击：只上抛 key，动作分派仍由页面的 onMenuAction 单点（不在此另写导航） */
+	function onMenu(key : string) : void {
+		emit('action', key)
 	}
 </script>
 
@@ -139,6 +162,34 @@
 		width: 40rpx;
 		height: 40rpx;
 		margin-right: 12rpx;
+	}
+
+	/* 「设置」分组标题（#2786）：靠分组标题把设置项与「最近对话」分开 —— 抽屉没有它，
+	   四项菜单在视觉上会变成会话列表的尾巴。 */
+	.drawer-group-title {
+		margin: 24rpx 0 12rpx 8rpx;
+		font-size: 24rpx;
+		color: $text-color-secondary;
+	}
+
+	/* 「设置」卡：与上面两张白卡同一形态（白底 + 16rpx 圆角） */
+	.settings-card {
+		background-color: #ffffff;
+		border-radius: 16rpx;
+		padding: 4rpx 0;
+	}
+
+	.settings-item {
+		flex-direction: row;
+		align-items: center;
+		min-height: 88rpx;
+		padding: 0 24rpx;
+		border-bottom: 1rpx solid #f5f5f5;
+	}
+
+	.settings-item-text {
+		font-size: 28rpx;
+		color: #333333;
 	}
 
 	/* 「最近对话」卡：标题行（气泡图标 + 标题 + 折叠箭头）+ 内容区 */
