@@ -68,7 +68,7 @@ func TestCredentialTaskRetirementPreservesPointsOnPostgres(t *testing.T) {
 	if before.Code != http.StatusOK {
 		t.Fatalf("legacy claim failed to seed: %d %s", before.Code, before.Body.String())
 	}
-	migration, err := os.ReadFile(filepath.Join("..", "..", "migrations", "000071_retire_credential_task.up.sql"))
+	migration, err := os.ReadFile(filepath.Join("testdata", "000071_retire_credential_task.up.sql"))
 	if err != nil {
 		t.Fatal(err)
 	}

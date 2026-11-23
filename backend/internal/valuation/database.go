@@ -1,5 +1,5 @@
 // 估值子系统自己的 PostgreSQL 连接池工厂：主管线走 GORM（internal/db），估值域与三处消费点
-// —— cmd/server 的 setupValuation、backfill-evaluation-suggestions、import-reference-content —— 走这里。
+// —— cmd/server 的 setupValuation、import-reference-content —— 走这里。
 package valuation
 
 import (

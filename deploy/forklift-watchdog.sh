@@ -83,7 +83,14 @@ FE_HOST=${WATCH_FE_HOST:-api.gdyidao.cn}
 # 不必改脚本。
 REMOTE_HOST=${WATCH_REMOTE_HOST:-}
 REMOTE_LXC=${WATCH_REMOTE_LXC:-}
-EXPECT_CONTAINERS=(forklift-frontend-prod forklift-backend-prod forklift-pg-prod forklift-libreoffice-prod)
+DEPLOY_ENV=${WATCH_DEPLOY_ENV:-${DEPLOY_PATH:-/opt/forklift-training}/.env}
+DB_MODE=$(awk -F= '$1=="DB_MODE"{print $2}' "$DEPLOY_ENV" 2>/dev/null || true)
+DB_MODE=${DB_MODE:-docker}
+POSTGRES_SERVICE_FILE=${WATCH_POSTGRES_SERVICE_FILE:-/etc/forklift/postgres-backup.service.conf}
+EXPECT_CONTAINERS=(forklift-frontend-prod forklift-backend-prod forklift-libreoffice-prod)
+if [ "$DB_MODE" = docker ]; then
+  EXPECT_CONTAINERS+=(forklift-pg-prod)
+fi
 # install_drift：跑着的这份脚本 vs CD 上传到部署目录的参考副本。
 # SELF_PATH 用 $0 的真实路径（systemd 跑的是 /usr/local/bin/forklift-watchdog.sh）。
 SELF_PATH=${WATCH_SELF_PATH:-$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || printf '%s' "$0")}
@@ -161,6 +168,31 @@ probe_containers() {
     fi
   done
   [ ${#bad[@]} -eq 0 ] || { REASON="容器异常：${bad[*]}"; return 1; }
+}
+
+probe_postgres() {
+  case "$DB_MODE" in
+    docker) REASON="Docker PostgreSQL 由容器巡检覆盖"; return 2 ;;
+    external) ;;
+    *) REASON="部署文件的 DB_MODE 不受支持"; return 1 ;;
+  esac
+  local result
+  result=$(PGSERVICEFILE="$POSTGRES_SERVICE_FILE" PGSERVICE=forklift-backup PGCONNECT_TIMEOUT=5 \
+    timeout 8s /usr/lib/postgresql/19/bin/psql -XwAt -v ON_ERROR_STOP=1 -c 'SELECT 1' 2>/dev/null) &&
+    [ "$result" = 1 ] || { REASON="外部 PostgreSQL TLS 查询失败"; return 1; }
+}
+
+probe_postgres_archive() {
+  if [ "$DB_MODE" != external ] || [ -z "$REMOTE_HOST" ] || [ -z "$REMOTE_LXC" ]; then
+    REASON="未配置外部 PostgreSQL LXC"; return 2
+  fi
+  [[ "$REMOTE_LXC" =~ ^[0-9]+$ ]] || { REASON="WATCH_REMOTE_LXC 不是数字"; return 1; }
+  local result
+  result=$(timeout 10s ssh -n -o BatchMode=yes -o ConnectTimeout=8 -- "$REMOTE_HOST" \
+    "pct exec $REMOTE_LXC -- systemctl is-active --quiet forklift-postgres-archive-health.timer && pct exec $REMOTE_LXC -- systemctl show -p ExecMainStartTimestampMonotonic -p Result --value forklift-postgres-archive-health.service" 2>/dev/null) ||
+    { REASON="无法读取 PostgreSQL WAL 巡检结果"; return 1; }
+  grep -qx 'success' <<<"$result" && grep -qxE '[1-9][0-9]*' <<<"$result" ||
+    { REASON="PostgreSQL WAL 巡检未运行或失败"; return 1; }
 }
 
 # 公网 «后端活着» 判据。原 /diagnosis/brands 随 PR #2265 删除（#2242 之后同形的引导面是
@@ -257,13 +289,15 @@ run_check() {
   local -A probe_fn=(
     [assistant_health]=probe_assistant_health
     [containers]=probe_containers
+    [postgres]=probe_postgres
+    [postgres_archive]=probe_postgres_archive
     [public_api]=probe_public_api
     [frontend_health]=probe_frontend_health
     [disk_host]=probe_disk_host
     [disk_lxc]=probe_disk_lxc
     [install_drift]=probe_install_drift
   )
-  local order=(assistant_health containers public_api frontend_health disk_host disk_lxc install_drift)
+  local order=(assistant_health containers postgres postgres_archive public_api frontend_health disk_host disk_lxc install_drift)
   local now=$(date +%s) down=() skipped=() name fails alerted last rc
   for name in "${order[@]}"; do
     REASON=""
@@ -306,7 +340,7 @@ run_check() {
 判据来源：/usr/local/bin/forklift-watchdog.sh --dry-run
 状态文件：$STATE_FILE
 journald：journalctl -u forklift-watchdog.service --since '-30 min'
-探测面：诊断服务 health（未配置则跳过）/ pve-02 生产容器 / 公网后端 $PUBLIC_API_URL /
+探测面：诊断服务 health（未配置则跳过）/ pve-02 生产容器 / 外部 PostgreSQL 与 WAL 归档 / 公网后端 $PUBLIC_API_URL /
        前端反代 $FE_HOST/health / 本机磁盘水位 / LXC 磁盘水位（未配置则跳过）/
        巡检脚本与仓库副本是否一致"
           then

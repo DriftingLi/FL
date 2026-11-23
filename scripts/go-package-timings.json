@@ -69,8 +69,6 @@
     "forklift-training/internal/textx": 1,
     "forklift-training/internal/timefmt": 1,
     "forklift-training/pkg/response": 1,
-    "forklift-training/cmd/backfill-evaluation-suggestions": 0.2,
-    "forklift-training/cmd/backfill-mock-exam-scores": 0.2,
     "forklift-training/cmd/gen-aifeatures": 0.2,
     "forklift-training/cmd/gen-apitypes": 0.2,
     "forklift-training/cmd/gen-authz": 0.2,

@@ -69,8 +69,8 @@ class StructuredSourceE2EContractTest(unittest.TestCase):
 
         self._pg = pg_fixture
         self.conn, self.schema, self.sql = pg_fixture.create_schema(prefix="src")
-        pg_fixture.apply_market_migrations(self.conn)
-        pg_fixture.create_stub_tables(self.conn)
+        pg_fixture.apply_migrations(self.conn)
+        pg_fixture.seed_test_data(self.conn)
         self.psycopg = __import__("psycopg")
 
     def tearDown(self):
@@ -232,8 +232,8 @@ class UndatedSampleSurvivalTest(unittest.TestCase):
 
         cls._pg = pg_fixture
         cls.conn, cls.schema, cls.sql = pg_fixture.create_schema(prefix="und")
-        pg_fixture.apply_market_migrations(cls.conn)
-        pg_fixture.create_stub_tables(cls.conn)
+        pg_fixture.apply_migrations(cls.conn)
+        pg_fixture.seed_test_data(cls.conn)
         cls.psycopg = __import__("psycopg")
 
     @classmethod

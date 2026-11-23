@@ -14,7 +14,7 @@ func TestTrainingCategoryMigrationOnPostgres(t *testing.T) {
 	db := testutil.NewPostgresDB(t)
 	migrationSQL := func(migration, direction string) string {
 		t.Helper()
-		path := filepath.Join("..", "..", "migrations", migration+"."+direction+".sql")
+		path := filepath.Join("testdata", migration+"."+direction+".sql")
 		sql, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatal(err)
