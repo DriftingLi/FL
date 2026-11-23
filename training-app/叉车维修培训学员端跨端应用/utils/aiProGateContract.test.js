@@ -72,8 +72,10 @@ describe('AI 专业版 = 积分兑换权益（#920）契约', () => {
       expect(fn).toMatch(/msg\.indexOf\('已兑换'\) >= 0/);
     });
 
-    it('横幅点开 sheet；sheet 的兑换/赚积分两条出口都接在页面上', () => {
-      expect(PAGE).toMatch(/@click="openProSheet"/);
+    it('左抽屉「解锁专业版」点开 sheet；sheet 的兑换/赚积分两条出口都接在页面上', () => {
+      // #2786：横幅退役，入口收成左抽屉那一项 —— 判据从「横幅 @click」改为「菜单分派里 pro 分支接 openProSheet」
+      const menuFn = PAGE.slice(PAGE.indexOf('function onMenuAction'));
+      expect(menuFn).toMatch(/key == 'pro'[\s\S]{0,40}openProSheet\(\)/);
       expect(PAGE).toMatch(/<AiChatProSheet :visible="showProSheet"/);
       expect(PAGE).toMatch(/@redeem="onRedeemAiPro"/);
       expect(PAGE).toMatch(/@earn="onGoEarnPoints"/);
@@ -122,23 +124,21 @@ describe('AI 专业版 = 积分兑换权益（#920）契约', () => {
     });
   });
 
-  describe('④ 两态横幅与能力清单（横幅按设计用实色；#937 口径）', () => {
-    it('未解锁 = 橙 / 已解锁 = 绿，均为实色 background-color', () => {
-      expect(PAGE).toMatch(/\.pro-banner\.pro-banner-unlocked \{/);
-      expect(PAGE).toMatch(/background-color: #fff3e0/);
-      expect(PAGE).toMatch(/background-color: #e8f8ee/);
-      // 横幅**按设计**不用渐变（两态用实色更干净），不是「渐变画不出来」——
-      // 2026-09-13 真机实测已证伪后者：合规语法（角度/关键字 + 2 颜色值、无百分比）
-      // 是画得出来的，见 utils/gradientSyntaxContract.test.js（#937）。
-      const from = PAGE.indexOf('.pro-banner {');
-      const style = PAGE.slice(from, PAGE.indexOf('.pro-banner-go {', from));
-      expect(style).not.toMatch(/gradient/);
+  describe('④ 入口面与能力清单（#2786：横幅退役，入口 = 左抽屉「解锁专业版」）', () => {
+    it('档位横幅不再渲染，也不再留样式（两态橙/绿的实色设计随横幅一起退役）', () => {
+      // #2786：横幅是基础版唯一可见的专业版入口，它必须与抽屉迁移**同批**消失；
+      // 这里只锁「不许复活」，入口存在性由 utils/aiChatDrawerContract.test.js 的
+      // 「左抽屉承载菜单」一组兜（删了那一项会报红）。
+      expect(PAGE).not.toMatch(/pro-banner/);
+      expect(PAGE).not.toMatch(/proBanner/);
     });
 
-    it('两态文案与 CTA 由 proUnlocked 派生（不是两个写死的分支模板）', () => {
-      expect(PAGE).toMatch(/const proBannerTitle = computed<string>/);
-      expect(PAGE).toMatch(/'专业版 · 已解锁' : '解锁专业版'/);
-      expect(PAGE).toMatch(/'已解锁' : '查看权益'/);
+    it('「解锁专业版」沿用原来的 sheet 入口（不另立第二套提示文案）', () => {
+      const from = PAGE.indexOf('function onMenuAction');
+      expect(from).toBeGreaterThan(-1);
+      const fn = PAGE.slice(from, PAGE.indexOf('function onFunctionClick'));
+      expect(fn).toMatch(/key == 'pro'/);
+      expect(fn).toMatch(/openProSheet\(\)/);
     });
 
     it('能力清单 = 门集合三项（选择模型 / 自定义模型 / 发送图片）+ 所需积分', () => {

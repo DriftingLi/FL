@@ -1,7 +1,7 @@
 <template>
 	<view class="ai-page" :style="{ height: pageHeight + 'px' }">
 		<!-- 自定义导航栏 -->
-		<AiChatNav :drawer-open="sidebarLeft" @left-click="toggleSidebarLeft" @menu-click="toggleSidebarRight" />
+		<AiChatNav :drawer-open="sidebarLeft" @left-click="toggleSidebarLeft" />
 
 	<!-- 功能入口头部（#998 → #2593 页内 scope）：**移出滚动容器** ⇒ 滑动时天然不丢失（**结构性保证**，不依赖
 	     `position: sticky` —— 该属性在本项目 0 处先例、uvue 支持亦无文档）。
@@ -48,14 +48,6 @@
 		<!-- 主内容区 -->
 		<view class="main">
 			<scroll-view class="pro-scroll" scroll-y="true" :scroll-into-view="scrollIntoViewId" scroll-with-animation>
-				<!-- 专业版档位横幅（#920）：未解锁=橙 +「查看权益」；已解锁=绿 + 只读状态。
-				     配色按设计用**实色**（两态实色更干净；不是能力限制 —— #937 真机实测已证伪「本机型不绘制渐变」） -->
-				<view v-if="!isScoped" class="pro-banner" :class="proUnlocked ? 'pro-banner-unlocked' : ''" @click="openProSheet">
-					<text class="pro-banner-title" :class="proUnlocked ? 'pro-title-unlocked' : ''">{{ proBannerTitle }}</text>
-					<text class="pro-banner-sub" :class="proUnlocked ? 'pro-sub-unlocked' : ''">{{ proBannerSub }}</text>
-					<text class="pro-banner-go" :class="proUnlocked ? 'pro-go-unlocked' : ''">{{ proBannerCta }}</text>
-				</view>
-
 				<!-- 诊断空态欢迎区（#2296，随专项 scope 并入 #2593）：品牌快选 + 常见问题。
 				     取数失败 / health.ok=false 时 guideVisible 为 false ⇒ **整块不渲染**（不留「点了必失败」的按钮）。 -->
 				<view v-if="isDiagnosis && guideVisible && messages.length == 0" class="welcome-area">
@@ -124,11 +116,8 @@
 		<!-- 诊断引导面板（#2296）：四步状态机与组句在 useDiagnosisGuide，本页只转动作 -->
 		<AiChatDiagnosisGuide :visible="guideOpen" :brands="brands" :state="guideState" :second-items="secondItems" :fault-items="faultItems" :second-loading="secondLoading" :fault-loading="faultLoading" :sentence="sentence" @close="closeGuide" @pick-brand="pickBrand" @pick-second="pickSecond" @pick-fault="pickFault" @update-extra="updateExtra" @jump="jumpStep" @confirm="onConfirmSentence" />
 
-		<!-- 左侧会话抽屉 -->
-		<AiChatDrawerLeft :visible="sidebarLeft" :sessions="sessions" :current-session-id="currentSessionId" :status-bar-height="statusBarHeight" @close="sidebarLeft = false" @new-chat="onNewChat" @select="onSelectSession" @delete="onDeleteSession" />
-
-		<!-- 右侧菜单抽屉 -->
-		<AiChatDrawerRight :visible="sidebarRight" :menu-items="rightMenuItems" :status-bar-height="statusBarHeight" @close="sidebarRight = false" @action="onMenuAction" />
+		<!-- 左侧会话抽屉（#2786：菜单也收在这里 —— 右抽屉已退役，本抽屉是唯一入口面） -->
+		<AiChatDrawerLeft :visible="sidebarLeft" :sessions="sessions" :current-session-id="currentSessionId" :status-bar-height="statusBarHeight" :menu-items="drawerMenuItems" @close="sidebarLeft = false" @new-chat="onNewChat" @select="onSelectSession" @delete="onDeleteSession" @action="onMenuAction" />
 
 		<!-- 自定义 API Key 弹窗 -->
 		<AiChatCustomForm :visible="showCustomForm" :custom-model="customModel" :custom-base-url="customBaseUrl" :custom-api-key="customApiKey" @close="closeCustomForm" @update:custom-model="onCustomModelUpdate" @update:custom-base-url="onCustomBaseUrlUpdate" @update:custom-api-key="onCustomApiKeyUpdate" @confirm="confirmCustomModel" />
@@ -165,12 +154,11 @@
 	import type { AiModel, AiUserModel, AIModelOption, AiChatMessage, AiSession, AIFunctionItem, DiagnosisCodeHint } from '../../types/index'
 
 	import { STORAGE_KEY_AI_SELECTED_USER_MODEL } from '../../constants/app'
-	import { FUNCTION_ITEMS, QUICK_PROMPTS, RIGHT_MENU_ITEMS, isDiagnosisFeature } from './ai-assistant-constants'
+	import { FUNCTION_ITEMS, QUICK_PROMPTS, DRAWER_MENU_ITEMS, isDiagnosisFeature } from './ai-assistant-constants'
 	import type { MenuItem } from './ai-assistant-constants'
 	import AiChatNav from '../../components/ai-chat/ai-chat-nav.uvue'
 	import AiChatBubble from '../../components/ai-chat/ai-chat-bubble.uvue'
 	import AiChatDrawerLeft from '../../components/ai-chat/ai-chat-drawer-left.uvue'
-	import AiChatDrawerRight from '../../components/ai-chat/ai-chat-drawer-right.uvue'
 	import AiChatInput from '../../components/ai-chat/ai-chat-input.uvue'
 	import AiChatModelPicker from '../../components/ai-chat/ai-chat-model-picker.uvue'
 	import AiChatCustomForm from '../../components/ai-chat/ai-chat-custom-form.uvue'
@@ -184,7 +172,8 @@
 	// 专业版能力门（#920）：事实源 = 积分商城 SKU「ai_pro」的**已拥有**，由 useAiPro 单点
 	// 适配器读出（后端尚未暴露权益读面，适配器用支出流水推导 —— 见 composables/useAiPro.uts
 	// 文件头的三条代价声明）。页面只消费 proUnlocked，以下四处共用它，**不得各自另立判据**：
-	// ① 输入区模型芯片 / 附件按钮；② 抽屉「自定义模型」菜单项；③ 模型芯片点击；④ 本页档位横幅。
+	// ① 输入区模型芯片 / 附件按钮；② 左抽屉「自定义模型」菜单项；③ 模型芯片点击；
+	// ④ 左抽屉「解锁专业版」菜单项（#2786 起取代被删的档位横幅，是门状态的唯一常显入口）。
 	const {
 		proUnlocked,
 		proPrice,
@@ -233,13 +222,11 @@
 		statusText,
 		scrollIntoViewId,
 		sidebarLeft,
-		sidebarRight,
 		loadSessions,
 		loadSession,
 		startNewChat,
 		onDeleteSession,
 		toggleSidebarLeft,
-		toggleSidebarRight,
 		sendInput,
 	} = useAiChat(activeScope)
 
@@ -351,15 +338,17 @@
 		return '选择模型'
 	})
 
-	// 右侧菜单：未解锁专业版时**不显示**「自定义模型」。
-	// 该页属专业版能力（门集合见 ADR 0009），必须与输入区的能力门同一口径 ——
-	// 否则未解锁用户仍能从抽屉进入该页（本改动修的正是这条漏网路径）。
+	// 左抽屉「设置」分组（#2786）：未解锁专业版时**不显示**「自定义模型」。
+	// 该页属专业版能力（门集合见移动端 ADR-0009），必须与输入区的能力门同一口径 ——
+	// 否则未解锁用户仍能从抽屉进入该页（#1024 修的正是这条漏网路径）。
 	// 用 computed 过滤而非改常量：常量仍描述「专业版全量菜单」，可见性由能力门决定。
-	const rightMenuItems = computed<MenuItem[]>(() : MenuItem[] => {
+	// ⚠️「解锁专业版」**不在过滤范围** —— 横幅删掉后它是基础版唯一的兑换入口（ADR-0009 2026-09-13
+	// 修订否决过「基础版零入口」的中间态，本票正是按那条裁定把入口搬到唯一可见面）。
+	const drawerMenuItems = computed<MenuItem[]>(() : MenuItem[] => {
 		if (proUnlocked.value) {
-			return RIGHT_MENU_ITEMS
+			return DRAWER_MENU_ITEMS
 		}
-		return RIGHT_MENU_ITEMS.filter((m : MenuItem) => m.key != 'custom-models')
+		return DRAWER_MENU_ITEMS.filter((m : MenuItem) => m.key != 'custom-models')
 	})
 
 	// 功能入口（从常量导入）
@@ -368,20 +357,6 @@
 
 	// 根容器高度（#998）：与 ai-settings.uvue 同款，给根节点一个确定高度；onLoad 里赋值。
 	const pageHeight = ref<number>(0)
-
-	// 档位横幅文案（两态单点；未解锁 = 兑换主曝光位，已解锁 = 只读状态）
-	const proBannerTitle = computed<string>(() : string => {
-		return proUnlocked.value ? '专业版 · 已解锁' : '解锁专业版'
-	})
-	const proBannerSub = computed<string>(() : string => {
-		if (proUnlocked.value) {
-			return '选模型 / 自定义模型 / 发图片 已全部可用'
-		}
-		return '选模型 / 自定义模型 / 发图片 · 积分兑换解锁'
-	})
-	const proBannerCta = computed<string>(() : string => {
-		return proUnlocked.value ? '已解锁' : '查看权益'
-	})
 
 	// ===== 专项 scope 的诊断面（#2593：ai-feature 页并入本页）=====
 	//
@@ -537,7 +512,7 @@
 			if (models.value.length == 0 && userModels.value.length == 0 && currentModelSource.value != 'custom') {
 				// 平台模型为空是**长期状态**（#1044 裁定「通用对话接受不可用」）⇒ 这句是学员长期看到的文案，
 				// 必须指向可执行动作（#1062）。先给对**所有**学员都可走的路径：自定义模型的入口与配置面
-				// 都在专业版门内（未解锁时右侧菜单过滤掉 `custom-models`、设置页 user/custom 来源整行不渲染，#1024）
+				// 都在专业版门内（未解锁时抽屉菜单过滤掉 `custom-models`、设置页 user/custom 来源整行不渲染，#1024）
 				// ⇒ 只写「去配置自定义模型」对未解锁学员是死路一条，那正是本句要防的回归。
 				// 字数上限（①a 真机实测，2026-09-16，Redmi 23049RAD8C / b32d8398）：uni.showToast 的文本区是
 				// **两行 × 18 字** —— 首版文案 37 字，末字「型」不渲染（OCR 三帧一致）⇒ 定稿压到 34 字。
@@ -616,7 +591,8 @@
 
 
 
-	// 专业版横幅：未解锁 → 能力清单 + 所需积分 + 去兑换；已解锁 → 只读状态（同一个 sheet）
+	// 专业版 sheet（#2786 起入口在左抽屉「解锁专业版」；未解锁 → 能力清单 + 积分 + 去兑换，
+	// 已解锁 → 只读状态）
 	function openProSheet() : void {
 		showProSheet.value = true
 	}
@@ -660,17 +636,18 @@
 		loadSession(s)
 	}
 
-	// 右侧菜单操作
+	// 左抽屉「设置」分组的动作分派（#2786：原右侧菜单抽屉的分派原样迁入，只多一个 pro ——
+	// 「解锁专业版」接原来的 openProSheet，不另立第二套提示文案）
 	function onMenuAction(key : string) : void {
-		sidebarRight.value = false
-		if (key == 'new-chat') {
-			startNewChat()
-		} else if (key == 'settings') {
+		sidebarLeft.value = false
+		if (key == 'settings') {
 			uni.navigateTo({ url: '/pages/ai-assistant/ai-settings' })
 		} else if (key == 'custom-models') {
 			uni.navigateTo({ url: '/pages/ai-assistant/custom-models' })
 		} else if (key == 'profile') {
 			uni.switchTab({ url: '/pages/profile/profile' })
+		} else if (key == 'pro') {
+			openProSheet()
 		}
 	}
 
@@ -1040,9 +1017,9 @@
 		font-size: 68rpx;
 	}
 
-	/* 限免小签（`freePreview` 的可见面）：暖色轴与本页「解锁专业版」横幅同一色意（权益/优惠），
-	   绿轴在本页已被「已解锁」占用 —— 两态也不该撞色。底/边/字三色直接沿用横幅那三个值
-	   （$warning-tint #fff3e0 / #ffd9a8 / #8a4b00），学员不必学第二套橙色语义。
+	/* 限免小签（`freePreview` 的可见面）：暖色轴（权益/优惠）。底/边/字三色沿用
+	   （$warning-tint #fff3e0 / #ffd9a8 / #8a4b00）—— 原与档位横幅共用一套橙意；横幅已随
+	   #2786 删除，小签是本页现存的唯一暖色标注，三色值保持不动（不回改、不新增第二套橙）。
 	   形态取「浅底 + 细边 + 小字」而非实色反白：它挂在标题旁属于**标注**，
 	   实色胶囊在宫格里视觉重量等同按钮，会把图标压下去。 */
 	/*
@@ -1157,56 +1134,6 @@
 		color: #333333;
 		line-height: 1.6;
 	}
-	/* 专业版档位横幅（#920）：**实色**配色（按设计；#937 已证伪「本机型不绘制渐变」）；未解锁=橙、已解锁=绿 */
-	.pro-banner {
-		flex-direction: row;
-		align-items: center;
-		background-color: #fff3e0;
-		border: 1rpx solid #ffd9a8;
-		border-radius: 16rpx;
-		padding: 20rpx 24rpx;
-		margin-bottom: 24rpx;
-	}
-
-	/* 已解锁：末尾追加覆盖（特异性天然更高，无需 !important，遵守 R4「变体一律追加覆盖」） */
-	.pro-banner.pro-banner-unlocked {
-		background-color: #e8f8ee;
-		border-color: #b6e3c7;
-	}
-
-	.pro-banner-title {
-		font-size: 28rpx;
-		font-weight: bold;
-		color: #8a4b00;
-	}
-
-	.pro-title-unlocked {
-		color: #1c6b3c;
-	}
-
-	.pro-banner-sub {
-		flex: 1;
-		font-size: 22rpx;
-		color: #a97142;
-		margin-left: 16rpx;
-	}
-
-	.pro-sub-unlocked {
-		color: #4a8f68;
-	}
-
-	.pro-banner-go {
-		font-size: 24rpx;
-		color: #ffffff;
-		background-color: #ff9800;
-		border-radius: 24rpx;
-		padding: 8rpx 20rpx;
-	}
-
-	.pro-go-unlocked {
-		background-color: #2e9e5b;
-	}
-
 	/* 功能入口头部（#998）：宫格**移出滚动容器**后的容器，故本块只需处理外观（#2785 起不再有收起态），
 	   不含任何 `position` 定位 —— 「滑动不丢失」由**结构**保证（它在 scroll-view 之外），
 	   这正是刻意不选 `position: sticky` 的原因（本项目 0 处先例、uvue 支持无文档）。

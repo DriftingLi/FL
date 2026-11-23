@@ -13,7 +13,8 @@
  *
  * 为什么门槛是「联系管理员 + 真实入口名」两条、而不是钉死整句原文（#1062 票面「建议（推荐做）」
  * 那段的要求：别让守护退化成文案快照）：自定义模型的入口与配置面**都在专业版门内** —— 未解锁时
- * `RIGHT_MENU_ITEMS` 过滤掉 `custom-models`（`ai-assistant.uvue` 的 `rightMenuItems`）、设置页的
+ * `DRAWER_MENU_ITEMS` 过滤掉 `custom-models`（`ai-assistant.uvue` 的 `drawerMenuItems`；#2786 起
+ * 菜单在左抽屉「设置」分组，原右抽屉已退役）、设置页的
  * user / custom 来源整行不渲染（#1024）⇒ 只写「去配置自定义模型」对未解锁学员是死路一条。
  * 文案因此必须**先**给出对谁都可执行的路径；这与 ADR-0008「守护从断言源码文本改为断言行为」同向。
  * 措辞（措辞可改）与这两条语义（语义不可撤）分开对待。
@@ -62,7 +63,7 @@ function platformModelGuardMessage(src) {
   return m ? m[1] : null;
 }
 
-/** 右侧菜单里「对话设置」那一项的 label（真源：常量表 `RIGHT_MENU_ITEMS`）。 */
+/** 抽屉菜单里「对话设置」那一项的 label（真源：常量表 `DRAWER_MENU_ITEMS`）。 */
 function settingsMenuLabel(src) {
   const m = /key: 'settings',\s*label: '([^']+)'/.exec(src);
   return m ? m[1] : null;
@@ -82,7 +83,7 @@ function pointsToAction(msg, label) {
 describe('平台模型为空的空态可执行性契约（#1062）', () => {
   const label = settingsMenuLabel(CONSTANTS);
 
-  it('① 前置：文案点名的入口在右侧菜单里真实存在（「对话设置」= settings 项的 label）', () => {
+  it('① 前置：文案点名的入口在抽屉菜单里真实存在（「对话设置」= settings 项的 label）', () => {
     expect(label).toBe('对话设置');
   });
 

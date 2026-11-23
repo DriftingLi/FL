@@ -1,6 +1,6 @@
 /**
  * AI 助手页面常量定义
- * 功能入口、快捷提示语、右侧菜单项
+ * 功能入口、快捷提示语、抽屉菜单项
  */
 import type { AIFunctionItem } from '../../types/index'
 
@@ -61,13 +61,21 @@ export const QUICK_PROMPTS : string[] = [
     '总结这个章节的主要内容',
 ]
 
-/** 右侧菜单项类型 */
+/** 抽屉菜单项类型（左抽屉「设置」分组的一行） */
 export type MenuItem = { key : string; label : string }
 
-/** 右侧菜单项列表 */
-export const RIGHT_MENU_ITEMS : MenuItem[] = [
-    { key: 'new-chat', label: '新对话' },
+/**
+ * 抽屉菜单项全量列表（#2786：由右抽屉迁入左抽屉「设置」分组，右抽屉退役）。
+ *
+ * 三条口径：
+ * - 「新对话」**不在此列**：它由左抽屉顶部的白卡承载，两处都放会被读成两个不同动作。
+ * - 「解锁专业版」= 本组唯一专业版入口（#2786 删横幅后）。基础版也渲染它，
+ *   **不参与**页面 drawerMenuItems 的 custom-models 过滤 —— 删掉它 = 基础版彻底没有兑换入口。
+ * - 「自定义模型」是否可见由页面能力门（proUnlocked）决定；常量保留专业版全量。
+ */
+export const DRAWER_MENU_ITEMS : MenuItem[] = [
     { key: 'settings', label: '对话设置' },
     { key: 'custom-models', label: '自定义模型' },
     { key: 'profile', label: '个人中心' },
+    { key: 'pro', label: '解锁专业版' },
 ]

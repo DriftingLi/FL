@@ -1,16 +1,16 @@
 <template>
 	<view>
 		<!-- #1602 归一：页头形态收口到 app-nav-bar（唯一页头件，ADR-0035 禁 fork）。
-		     旧的独立形态消失；对页的 API（leftClick / menuClick）原样保留。
-		     #2479：一级页标题居中于**屏幕中心** ⇒ 页头第一行右槽必须为空，⋯（右抽屉的唯一
-		     可见入口，移动端 ADR-0063 决定 4）下沉到标题栏下方工具栏行（:show-toolbar）。 -->
+		     旧的对页 API（leftClick / menuClick）原样保留。
+		     #2479：一级页标题居中于**屏幕中心** ⇒ 页头第一行右槽必须为空。
+		     #2786：⋯ 与页头工具栏行一并删除 —— 本页入口面收成「左抽屉单面」（ADR-0009
+		     2026-11-23 修订），页头不再承载任何菜单入口，:show-toolbar 也不再传。 -->
 		<AppNavBar
 			title="基础版 ✨"
 			:subtitle="subtitle"
 			:subtitle-accent="true"
 			:transparent="transparent"
 			:left-icon="leftIcon"
-			:show-toolbar="true"
 			@left-click="onLeftClick"
 		>
 			<!-- #2520：左槽字形改原型切图（image 36 / 35，灰 / 蓝两态随抽屉开合）。
@@ -19,11 +19,6 @@
 			<template #left>
 				<view class="nav-panel-box">
 					<image class="nav-panel-img" :src="drawerOpen ? '/static/icons/ai-chat/panel-active.png' : '/static/icons/ai-chat/panel.png'" mode="aspectFit" />
-				</view>
-			</template>
-			<template #toolbar>
-				<view class="chat-menu-action" @click="onMenuClick">
-					<text class="chat-menu-glyph">⋯</text>
 				</view>
 			</template>
 		</AppNavBar>
@@ -55,21 +50,14 @@
 		drawerOpen: false
 	})
 
-	const emit = defineEmits(['leftClick', 'menuClick'])
+	const emit = defineEmits(['leftClick'])
 
 	function onLeftClick() : void {
 		emit('leftClick')
 	}
-
-	function onMenuClick() : void {
-		emit('menuClick')
-	}
 </script>
 
 <style lang="scss">
-	/* #2479：⋯ 落在标题栏下方工具栏行（.nav-bar-toolbar 自身 row + justify-content: flex-end，
-	   见 app-nav-bar.uvue）。字形用 BMP 符号 ⋯（U+22EF），同 leftIcon ☰ 的避代理对口径；
-	   88rpx 方块 = 44×44 触摸目标下限（<text> 只有文字高，命中区由外层 view 撑足）。 */
 	/* #2520：面板图标（原型 image 36 / 35，40rpx = 20px CSS ×2 出图）；外框 88rpx 保证 44×44 命中区 */
 	.nav-panel-box {
 		width: 88rpx;
@@ -81,17 +69,5 @@
 	.nav-panel-img {
 		width: 40rpx;
 		height: 40rpx;
-	}
-
-	.chat-menu-action {
-		width: 88rpx;
-		height: 88rpx;
-		align-items: center;
-		justify-content: center;
-	}
-
-	.chat-menu-glyph {
-		font-size: 40rpx;
-		color: $text-color;
 	}
 </style>
