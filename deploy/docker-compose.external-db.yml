@@ -1,0 +1,25 @@
+services:
+  postgres:
+    profiles: [retained-postgres]
+  backend:
+    depends_on: !reset {}
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?external database URL required}
+    volumes:
+      - type: bind
+        source: /etc/forklift/postgres-ca.crt
+        target: /etc/forklift/postgres-ca.crt
+        read_only: true
+        bind:
+          create_host_path: false
+  collector:
+    depends_on: !reset {}
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?external database URL required}
+    volumes:
+      - type: bind
+        source: /etc/forklift/postgres-ca.crt
+        target: /etc/forklift/postgres-ca.crt
+        read_only: true
+        bind:
+          create_host_path: false

@@ -10,9 +10,11 @@ import argparse
 import importlib.util
 import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 HERE = Path(__file__).resolve().parent
 MODULE_PATH = HERE.parent / "deploy.py"
@@ -21,6 +23,43 @@ assert spec and spec.loader
 deploy = importlib.util.module_from_spec(spec)
 sys.modules["deploy_cli"] = deploy
 spec.loader.exec_module(deploy)
+
+
+class ExternalDatabaseTest(unittest.TestCase):
+    def setUp(self):
+        self.deployer = deploy.Deployer.__new__(deploy.Deployer)
+        self.deployer.db_mode = "external"
+        self.deployer.compose_ps_id = Mock(side_effect=AssertionError("local postgres accessed"))
+        self.deployer._external_pg = Mock(return_value="74|f\n")
+
+    def test_clean_external_database_skips_local_postgres(self):
+        self.assertEqual(self.deployer.plan_data(), [])
+        self.deployer.apply_data([])
+        self.assertTrue(self.deployer.wait_postgres())
+        self.assertEqual(self.deployer._db_version(), 74)
+        self.deployer.compose_ps_id.assert_not_called()
+
+    def test_dirty_or_missing_external_state_aborts(self):
+        for state in ("74|t\n", "", "73|f\n74|f\n"):
+            with self.subTest(state=state):
+                self.deployer._external_pg.return_value = state
+                with self.assertRaises(deploy.DeployError):
+                    self.deployer.wait_postgres()
+
+    def test_manual_operations_keep_saved_database_mode_and_volume(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {"DEPLOY_PATH": tmp}, clear=True):
+            dsn = ("postgresql://forklift:local%26test@pg.internal/forklift_training"
+                   "?sslmode=verify-full&sslrootcert=/etc/forklift/postgres-ca.crt")
+            (Path(tmp) / ".env").write_text(
+                f'DB_MODE=external\nDATABASE_URL="{dsn}"\nPG_VOLUME=/srv/ceph/pgdata18\n',
+                encoding="utf-8",
+            )
+            options = deploy._parser().parse_args([])
+            instance = deploy.Deployer("rollback", options)
+            self.assertEqual(instance.external_db_url, dsn)
+            self.assertEqual(instance.external_pg_settings["PGPASSWORD"], "local&test")
+            self.assertEqual(instance.pg_volume, "/srv/ceph/pgdata18")
+            self.assertIn(str(instance.compose_file.with_name("docker-compose.external-db.yml")), instance._compose())
 
 
 class EnvDefaultsTest(unittest.TestCase):
