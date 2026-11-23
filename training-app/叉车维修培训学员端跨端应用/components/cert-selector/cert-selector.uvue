@@ -121,6 +121,8 @@
         /** 浮层是否从页头下方起（宿主页头保持可见，设计稿 324_9793）。
          *  页头高度 = 状态栏 + 88rpx 导航条；rpx→px 手算（`uni.upx2px` 在 uvue 原生端不可用）。 */
         belowNavBar? : boolean
+        /** 显式浮层顶部像素；传入后优先于 belowNavBar 的默认页头高度。用于证件栏下移的首页形态。 */
+        topInset? : number
     }>(), {
         groups: () => [] as CredentialGroup[],
         currentId: 0,
@@ -128,11 +130,13 @@
         province: '',
         showProvince: false,
         confirmable: false,
-        belowNavBar: false
+        belowNavBar: false,
+        topInset: 0
     })
 
     const maskTop = computed((): number => {
         if (!props.belowNavBar) return 0
+        if (props.topInset > 0) return props.topInset
         return statusBarHeight.value + Math.round(88 * uni.getSystemInfoSync().windowWidth / 750)
     })
 
