@@ -69,8 +69,8 @@ class BackfillE2EContractTest(unittest.TestCase):
 
         cls._pg = pg_fixture
         cls.conn, cls.schema, cls.sql = pg_fixture.create_schema(prefix="bf")
-        pg_fixture.apply_market_migrations(cls.conn)
-        pg_fixture.create_stub_tables(cls.conn)
+        pg_fixture.apply_migrations(cls.conn)
+        pg_fixture.seed_test_data(cls.conn)
         cls.psycopg = __import__("psycopg")
 
     @classmethod
