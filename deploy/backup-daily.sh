@@ -16,12 +16,22 @@ KEEP_DAYS="${KEEP_DAYS:-14}"
 TS=$(date +%Y%m%d_%H%M%S)
 DB_BK="${BKDIR}/db_${TS}.sql.gz"
 mkdir -p "$BKDIR"
+umask 077
 export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
 
 echo "[backup] $(date '+%F %T') 开始每日备份..."
 
 # 1. pg_dump + gzip（逻辑备份，可精确恢复单表）
-if ! docker exec forklift-pg-prod pg_dump -U forklift -d forklift_training 2>/dev/null | gzip -9 > "$DB_BK"; then
+dump_database() {
+    case "${DB_MODE:-docker}" in
+        docker) docker exec forklift-pg-prod pg_dump -U forklift -d forklift_training ;;
+        external) PGSERVICEFILE="${PGSERVICEFILE:?external backup service file required}" \
+            PGSERVICE="${PGSERVICE:-forklift-backup}" PGCONNECT_TIMEOUT=5 \
+            /usr/lib/postgresql/19/bin/pg_dump -w ;;
+        *) return 1 ;;
+    esac
+}
+if ! dump_database 2>/dev/null | gzip -9 > "$DB_BK"; then
     echo "[backup] pg_dump 失败" >&2
     rm -f "$DB_BK"
     exit 1

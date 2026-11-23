@@ -15,7 +15,7 @@ services:
   # PostgreSQL 数据库
   # ==========================================
   postgres:
-    image: postgres:18-alpine
+    image: ${POSTGRES_IMAGE:-postgres:18-alpine}
     container_name: forklift-pg-prod
     restart: unless-stopped
     # 参数与内存预算（#2109）：原先热点字典/评估详情由 Redis 挡在前面，收回到 PG 之后
@@ -409,6 +409,8 @@ networks:
 
 volumes:
   pgdata-prod:
+    driver: local
+  pgdata-testing-19:
     driver: local
   uploads-data:
     driver: local
