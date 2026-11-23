@@ -397,6 +397,8 @@ describe('行为保持契约（源码接线侧：跳转/时序/乐观更新的�
   const detailPage = read('pages/forum/forum-detail.uvue');
   /** #2691：回复浮层（遮罩 / 头部 / 输入区 / 底部操作区）已从详情页拆出（ADR-0023 ③ 拆而不覆盖） */
   const replyPanel = read('pages/forum/components/forum-reply-panel.uvue');
+  /** #2771：删除/编辑/举报三态从页头工具栏搬进「···」菜单 */
+  const moreMenu = read('pages/forum/components/forum-more-menu.uvue');
   const detail = read('composables/useTopicDetail.uts');
   const composer = read('composables/useReplyComposer.uts');
   /** P3：图片流水线已收进共享 picker（限额闸门与文案都在那里） */
@@ -421,10 +423,14 @@ describe('行为保持契约（源码接线侧：跳转/时序/乐观更新的�
     expect(page).toMatch(/if \(currentTab\.value !== 'resource'\) \{\s*loadTopics\(true\)/);
   });
 
-  it('详情页头部删除/编辑/举报三态 v-if 组合逐字保留', () => {
-    expect(detailPage).toContain('v-if="canDelete"');
-    expect(detailPage).toContain('v-if="canEdit && !canDelete"');
-    expect(detailPage).toContain('v-if="!canDelete && !canEdit"');
+  it('详情页删除/编辑/举报三态 v-if 组合逐字保留（#2771 起承载位在「···」菜单）', () => {
+    // 判据不变，只换承载位：页头工具栏整行删除，三态搬进 forum-more-menu
+    expect(detailPage).not.toMatch(/<template #toolbar>/);
+    expect(detailPage).not.toContain(':show-toolbar');
+    expect(detailPage).toMatch(/<ForumMoreMenu[\s\S]*?:can-delete="canDelete"[\s\S]*?:can-edit="canEdit"/);
+    expect(moreMenu).toContain('v-if="canDelete"');
+    expect(moreMenu).toContain('v-if="canEdit && !canDelete"');
+    expect(moreMenu).toContain('v-if="!canDelete && !canEdit"');
   });
 
   it('回复栏留壳层、草稿仍由页面持有（跨组件 v-model 属 uvue 编译风险区 ⇒ 走显式 prop + emit）', () => {

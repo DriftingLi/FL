@@ -116,7 +116,7 @@ describe('B3 页头随原型迁移（#2519：favorites/notebook 自 N01 蓝底�
   }
 });
 
-describe('批4 特殊页动作落点（#2761 起统一在 #toolbar 第二行）', () => {
+describe('批4 特殊页动作落点（#2761 起统一在 #toolbar 第二行；forum-detail 自 #2771 例外，收进「···」菜单）', () => {
   it('course-detail/chapter-view 保留 toggleFavorite 收藏入口', () => {
     for (const p of ['pages/courses/course-detail.uvue', 'pages/courses/chapter-view.uvue']) {
       expect(read(p)).toMatch(/<template #toolbar>[\s\S]*?toggleFavorite[\s\S]*?<\/template>/);
@@ -143,9 +143,19 @@ describe('批4 特殊页动作落点（#2761 起统一在 #toolbar 第二行）'
     expect(read('pages/notifications/notifications.uvue')).toMatch(/<template #toolbar>[\s\S]*?onMarkAllRead[\s\S]*?<\/template>/);
   });
 
-  it('forum-detail 三态保留（删除/编辑/举报互斥 v-if 全搬入槽）', () => {
+  it('forum-detail 三态收进「···」菜单（#2771：页头工具栏整行删除）', () => {
     const src = read('pages/forum/forum-detail.uvue');
-    expect(src).toMatch(/<template #toolbar>[\s\S]*?canDelete[\s\S]*?onEditTopic[\s\S]*?onReportTopicClick[\s\S]*?<\/template>/);
+    // 页头只剩标题行：不再有第二行工具栏，也不再留空行
+    expect(src).not.toMatch(/<template #toolbar>/);
+    expect(src).not.toContain(':show-toolbar');
+    // 三态判据与三个动作仍由页面持有，经 props / 事件交给菜单
+    expect(src).toMatch(/<ForumMoreMenu[\s\S]*?:can-delete="canDelete"[\s\S]*?:can-edit="canEdit"/);
+    expect(src).toMatch(/@delete-topic="onDelete"[\s\S]*?@edit-topic="onEditTopic"[\s\S]*?@report-topic="onReportTopicClick"/);
+    // 互斥 v-if 逐字搬进菜单组件（判据不变，只换承载位）
+    const menu = read('pages/forum/components/forum-more-menu.uvue');
+    expect(menu).toContain('v-if="canDelete"');
+    expect(menu).toContain('v-if="canEdit && !canDelete"');
+    expect(menu).toContain('v-if="!canDelete && !canEdit"');
   });
 
   it('featured-detail 保留收藏 ⭐/☆ 切换', () => {
