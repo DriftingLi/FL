@@ -61,17 +61,18 @@
         align-items: center;
     }
 
+    /* 票 2767：chip 视觉与精选筛选行、备考经验筛选行统一（字号 24rpx / 内距 10×24 / 圆角 32rpx） */
     .sort-chip {
-        padding: 8rpx 24rpx;
-        border-radius: 24rpx;
-        background-color: #f5f5f5;
-        border: 1rpx solid #e0e0e0;
+        padding: 10rpx 24rpx;
+        border-radius: 32rpx;
+        background-color: #f0f1f5;
+        border: 2rpx solid transparent;
         margin-right: 12rpx;
     }
 
     .sort-chip.active {
-        background-color: #e8f0fe;
-        border: 1rpx solid $primary-color;
+        background-color: #e8f3ff;
+        border: 2rpx solid $primary-color;
     }
 
     .sort-chip-text {

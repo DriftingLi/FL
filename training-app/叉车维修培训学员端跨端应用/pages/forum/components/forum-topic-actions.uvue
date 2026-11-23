@@ -1,117 +1,77 @@
 <template>
-    <view class="topic-actions">
-        <view :class="liked ? 'stat-like stat-like-liked' : 'stat-like'" @click="onLike">
-            <text :class="liked ? 'stat-like-icon stat-like-icon-liked' : 'stat-like-icon'">{{ liked ? '♥' : '♡' }}</text>
-            <text :class="liked ? 'stat-like-count stat-like-count-liked' : 'stat-like-count'">{{ likesCount }}</text>
+    <!-- 统计行（票 2767）：浏览 / 评论 / 点赞 + 文字标签，位于正文下方、作者行之后。
+         点赞仍可点（唯一可交互项）；收藏已移入标题行右侧「···」菜单，本组件不再持有。 -->
+    <view class="topic-stats">
+        <view class="stat-item">
+            <image class="stat-icon" src="/static/icons/forum/view.png" mode="aspectFit"></image>
+            <text class="stat-text">{{ viewsCount }} 浏览</text>
         </view>
-        <view :class="favorited ? 'stat-like stat-like-favorited' : 'stat-like'" @click="onFavorite">
-            <text :class="favorited ? 'stat-like-icon stat-like-icon-favorited' : 'stat-like-icon'">{{ favorited ? '★' : '☆' }}</text>
-            <text :class="favorited ? 'stat-like-count stat-like-count-favorited' : 'stat-like-count'">收藏</text>
+        <view class="stat-item">
+            <image class="stat-icon" src="/static/icons/forum/comment.png" mode="aspectFit"></image>
+            <text class="stat-text">{{ repliesCount }} 评论</text>
         </view>
-        <view class="stat-like stat-plain">
-            <image class="stat-like-icon-img" src="/static/icons/forum/comment.png" mode="aspectFit"></image>
-            <text class="stat-like-count">{{ repliesCount }}</text>
+        <view class="stat-item" @click="onLike">
+            <image class="stat-icon" src="/static/icons/forum/like.png" mode="aspectFit"></image>
+            <text :class="liked ? 'stat-text stat-text-liked' : 'stat-text'">{{ likesCount }} 点赞</text>
         </view>
     </view>
 </template>
 
 <script setup lang="uts">
 /**
- * 帖子互动行（2026-11-19 #2690）：点赞 / 收藏 / 回复数从作者行下移到正文下方。
- * 浏览数留在作者行（forum-topic-header），这里不重复计数。
+ * 帖子统计行（票 2767）：浏览 / 评论 / 点赞三项单行，顺序与列表卡底部一致。
+ * 2026-11-19（#2690）起本行在正文下方；2026-11-22（票 2767）由「点赞/收藏/回复数」三块
+ * 改为「浏览/评论/点赞 + 文字标签」，收藏移入标题行右侧「···」菜单。
  */
 withDefaults(defineProps<{
+    viewsCount?: number
+    repliesCount?: number
     likesCount?: number
     liked?: boolean
-    favorited?: boolean
-    repliesCount?: number
 }>(), {
+    viewsCount: 0,
+    repliesCount: 0,
     likesCount: 0,
     liked: false,
-    favorited: false,
-    repliesCount: 0,
 })
 
-const emit = defineEmits(['toggleLike', 'toggleFavorite'])
+const emit = defineEmits(['toggleLike'])
 
 function onLike() : void {
     emit('toggleLike')
 }
-
-function onFavorite() : void {
-    emit('toggleFavorite')
-}
 </script>
 
 <style lang="scss">
-    .topic-actions {
+    .topic-stats {
         flex-direction: row;
         align-items: center;
         margin-top: 24rpx;
+        padding-top: 20rpx;
+        border-top: 1rpx solid #f2f3f5;
     }
 
-    .stat-like {
+    .stat-item {
         flex-direction: row;
         align-items: center;
-        margin-right: 16rpx;
-        min-height: 88rpx;
-        padding: 0 16rpx;
-        border-radius: 16rpx;
-        background-color: #f5f5f5;
-        border: 1px solid #eeeeee;
+        margin-right: 40rpx;
+        min-height: 44rpx;
     }
 
-    .stat-like-liked {
-        background-color: #f44336;
-        border: 1px solid #f44336;
-    }
-
-    .stat-like-favorited {
-        background-color: #ff8f00;
-        border: 1px solid #ff8f00;
-    }
-
-    /* 票 2765 docx P16：图标高度与下方回复行统一（forum-reply-list 的 .reply-like-icon 是 26rpx） */
-    .stat-like-icon {
-        font-size: 26rpx;
-        color: #999999;
-        margin-right: 8rpx;
-    }
-
-    /* 票 2730 docx ⑩：评论图标换成切图后与 ♡/☆ 字形同高（emoji 字形高度不可控） */
-    .stat-like-icon-img {
+    .stat-icon {
         width: 26rpx;
         height: 26rpx;
         margin-right: 8rpx;
     }
 
-    .stat-like-icon-liked {
-        color: #ffffff;
-    }
-
-    .stat-like-icon-favorited {
-        color: #ffffff;
-    }
-
-    .stat-like-count {
+    .stat-text {
         font-size: 24rpx;
         color: #999999;
     }
 
-    .stat-like-count-liked {
-        color: #ffffff;
+    /* 已点赞：文字转主色加粗（图标只有一份切图，不做双态换图） */
+    .stat-text-liked {
+        color: $primary-color;
         font-weight: bold;
-    }
-
-    .stat-like-count-favorited {
-        color: #ffffff;
-        font-weight: bold;
-    }
-
-    /* uvue 只支持 class 选择器，本文件无 gap：只读项间距沿用 .stat-like 的 margin-right */
-    .stat-plain {
-        padding: 0;
-        background-color: transparent;
-        border-width: 0;
     }
 </style>

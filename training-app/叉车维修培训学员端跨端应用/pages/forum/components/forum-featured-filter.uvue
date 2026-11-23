@@ -31,12 +31,13 @@
         padding: 4rpx 24rpx 12rpx;
     }
 
+    /* 票 2767：chip 视觉与备考经验筛选行、广场排序行统一（字号 24rpx / 内距 10×24 / 圆角 32rpx） */
     .featured-chip {
-        padding: 10rpx 32rpx;
+        padding: 10rpx 24rpx;
         border-radius: 32rpx;
         background-color: #f0f1f5;
         border: 2rpx solid transparent;
-        margin-right: 20rpx;
+        margin-right: 12rpx;
     }
 
     .featured-chip.active {
@@ -45,7 +46,7 @@
     }
 
     .featured-chip-text {
-        font-size: 26rpx;
+        font-size: 24rpx;
         color: #666666;
     }
 

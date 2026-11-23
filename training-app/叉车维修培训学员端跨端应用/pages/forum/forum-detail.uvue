@@ -15,27 +15,37 @@
             </template>
         </app-nav-bar>
 
+        <!-- 「···」菜单（票 2767）：收藏 / 取消收藏；触发按钮在标题行右侧，浮层与遮罩在组件内 -->
+        <ForumMoreMenu ref="moreMenuRef" :favorited="tFavorited" @toggle-favorite="onToggleFavorite" />
+
         <scroll-view class="content-scroll" scroll-y="true">
             <!-- 加载中 -->
             <view v-if="loading && topic == null" class="loading-wrap">
                 <text class="loading-text">加载中...</text>
             </view>
 
-            <!-- 帖子内容 -->
+            <!-- 帖子内容（票 2767 顺序）：标题 → 正文 → 标签 → 作者行 → 统计行 -->
             <view v-if="topic != null" class="topic-section">
-                <ForumTopicHeader :author-name="tAuthorName"
-                    :author-avatar="tAuthorAvatar" :avatar-color="tAvatarColor" :created-at-text="tCreatedAtText"
-                    :region-text="tRegionText"
-                    :views-count="tViewsCount" :can-delete="canDelete"
-                    @delete="onDelete" />
-                <!-- 标题（#2690）：作者行下方、正文上方，两行截断；空标题整段不渲染 -->
-                <text v-if="tTitle.length > 0" class="topic-title" lines="2">{{ tTitle }}</text>
+                <!-- 标题行：标题两行截断 + 右侧「···」（收藏入口；导航栏右槽是小程序胶囊区） -->
+                <view class="topic-title-row">
+                    <text v-if="tTitle.length > 0" class="topic-title" lines="2">{{ tTitle }}</text>
+                    <text class="title-more" @click="onOpenMoreMenu">···</text>
+                </view>
                 <!-- 正文格式由壳层扁平下发（ADR-0025 P2）：组件不读 topic，档位决策在 utils/forumBody -->
                 <ForumTopicBody :content="topicContent" :format="topicFormat" :image-urls="topicImages" />
-                <!-- 互动行（#2690）：点赞 / 收藏 / 回复数移到正文下方，浏览数留在作者行 -->
-                <ForumTopicActions :likes-count="tLikesCount" :liked="tLiked" :favorited="tFavorited"
-                    :replies-count="tRepliesCount" @toggle-like="onToggleLike"
-                    @toggle-favorite="onToggleFavorite" />
+                <!-- 类别标签：正文下方、作者行上方 -->
+                <view v-if="tCategoryTag.length > 0" class="topic-tag-row">
+                    <view class="topic-tag">
+                        <text class="topic-tag-text">{{ tCategoryTag }}</text>
+                    </view>
+                </view>
+                <!-- 作者行：头像 + 昵称/属地，右侧发帖时间 -->
+                <ForumTopicHeader :author-name="tAuthorName"
+                    :author-avatar="tAuthorAvatar" :avatar-color="tAvatarColor" :created-at-text="tCreatedAtText"
+                    :region-text="tRegionText" />
+                <!-- 统计行：浏览 / 评论 / 点赞 + 文字标签（点赞可点，收藏在标题行「···」菜单） -->
+                <ForumTopicActions :views-count="tViewsCount" :likes-count="tLikesCount" :liked="tLiked"
+                    :replies-count="tRepliesCount" @toggle-like="onToggleLike" />
             </view>
 
             <!-- 回复列表 -->
@@ -52,11 +62,15 @@
         </scroll-view>
 
         <!-- 底部**常驻触发条**（⑪-1：形态不变，点它升起半屏浮层）。数据档位常驻一行是
-             「Markdown 完全 opt-in」下唯一入口；tab / 工具栏 / 边界提示行只在 Markdown 档出现（⑥-5）。 -->
+             「Markdown 完全 opt-in」下唯一入口；tab / 工具栏 / 边界提示行只在 Markdown 档出现（⑥-5）。
+             票 2767：视觉改为「内联输入框 + 蓝色发送」，两者都只是升起浮层的触发点，
+             真正的编辑与提交仍在 forum-reply-panel 里。 -->
         <view v-if="topic != null" class="reply-bar">
             <view class="reply-trigger" @click="onOpenReply">
                 <text class="reply-trigger-ph">写下你的回复...</text>
-                <text class="reply-trigger-act">回复</text>
+            </view>
+            <view class="reply-send" @click="onOpenReply">
+                <text class="reply-send-text">发送</text>
             </view>
         </view>
 
@@ -89,6 +103,7 @@
     import ForumReplyList from './components/forum-reply-list.uvue'
     import ForumReportDialog from './components/forum-report-dialog.uvue'
     import ForumReplyPanel from './components/forum-reply-panel.uvue'
+    import ForumMoreMenu from './components/forum-more-menu.uvue'
     import { useTopicDetail } from '../../composables/useTopicDetail'
     import { useReplyComposer } from '../../composables/useReplyComposer'
     import { useReport } from '../../composables/useReport'
@@ -105,6 +120,18 @@ import { goBack } from '../../utils/navigation'
     const replyImageLimit : number = FORUM_MAX_REPLY_IMAGES
 
     const windowHeight = uni.getSystemInfoSync().windowHeight
+
+    /** 「···」菜单实例（票 2767）：展开态与浮层位置都在组件内，本页只负责唤起 */
+    type MoreMenuInstance = {
+        open : () => void,
+    }
+    const moreMenuRef = ref<MoreMenuInstance | null>(null)
+
+    function onOpenMoreMenu() : void {
+        const w = moreMenuRef.value
+        if (w != null) w.open()
+    }
+
     /** 回复浮层实例：@某人 点击时经 expose 的 insertMention 写入；发送成功后经 clear 清正文 */
     type ReplyPanelInstance = {
         insertMention : (name : string) => void,
@@ -176,6 +203,14 @@ import { goBack } from '../../utils/navigation'
         const t = topic.value
         if (t == null) return ''
         return t.title
+    })
+    /** 类别标签（票 2767）：备考经验 > 知识问答 > 广场讨论，与列表卡徽标口径一致 */
+    const tCategoryTag = computed<string>(() : string => {
+        const t = topic.value
+        if (t == null) return ''
+        if (t.is_experience) return '备考经验'
+        if (t.category == 'question') return '知识问答'
+        return '广场讨论'
     })
     const tAuthorName = computed<string>(() : string => {
         const t = topic.value
@@ -476,17 +511,51 @@ import { goBack } from '../../utils/navigation'
         flex-direction: column;
     }
 
+    /* 标题行（票 2767）：标题占满剩余宽度，「···」贴右；空标题时只剩「···」 */
+    .topic-title-row {
+        flex-direction: row;
+        align-items: flex-start;
+        margin-bottom: 24rpx;
+    }
+
     .topic-title {
+        flex: 1;
         font-size: 32rpx;
         font-weight: bold;
         color: #333333;
         line-height: 1.5;
+    }
+
+    /* 「···」触发按钮：56rpx 命中区，避开导航栏右槽（小程序胶囊区） */
+    .title-more {
+        font-size: 32rpx;
+        color: #999999;
+        line-height: 1.5;
+        padding: 0 0 0 16rpx;
+    }
+
+    /* 类别标签（票 2767）：正文下方、作者行上方 */
+    .topic-tag-row {
+        flex-direction: row;
+        margin-top: 20rpx;
         margin-bottom: 24rpx;
+    }
+
+    .topic-tag {
+        padding: 6rpx 16rpx;
+        border-radius: 8rpx;
+        background-color: #f0f1f5;
+    }
+
+    .topic-tag-text {
+        font-size: 22rpx;
+        color: #666666;
     }
 
     /* 底部回复栏（形态本身在 forum-markdown-input，本页只留外壳与发送按钮） */
     .reply-bar {
-        flex-direction: column;
+        flex-direction: row;
+        align-items: center;
         padding: 16rpx 24rpx;
         background-color: #ffffff;
         border-top: 1rpx solid #eeeeee;
@@ -495,15 +564,15 @@ import { goBack } from '../../utils/navigation'
     /* 半屏浮层的遮罩 / 面板 / 头部 / 底部操作区样式随组件搬到
        `pages/forum/components/forum-reply-panel.uvue`（#2691，ADR-0023 ③ 拆而不覆盖）。 */
 
-    /* 收起态：极简触发条（复刻输入行的胶囊形态，占位远小于展开态） */
+    /* 收起态：内联输入框形态（票 2767），点击升起浮层 */
     .reply-trigger {
+        flex: 1;
         flex-direction: row;
         align-items: center;
-        justify-content: space-between;
         height: 88rpx;
         background-color: $bg-color;
-        border-radius: 16rpx;
-        padding: 0 24rpx;
+        border-radius: 44rpx;
+        padding: 0 28rpx;
     }
 
     .reply-trigger-ph {
@@ -511,9 +580,20 @@ import { goBack } from '../../utils/navigation'
         color: #999999;
     }
 
-    .reply-trigger-act {
+    /* 蓝色发送按钮（票 2767）：与输入框同高，同样只是升起浮层的触发点 */
+    .reply-send {
+        height: 88rpx;
+        padding: 0 32rpx;
+        border-radius: 44rpx;
+        background-color: $primary-color;
+        align-items: center;
+        justify-content: center;
+        margin-left: 16rpx;
+    }
+
+    .reply-send-text {
         font-size: 28rpx;
-        color: $primary-color;
+        color: #ffffff;
         font-weight: bold;
     }
 </style>

@@ -24,59 +24,35 @@
                 </view>
             </view>
         </view>
-        <!-- 知识问答底部：左作者（头像+昵称/日期） 右浏览/评论/点赞，单行布局 -->
-        <view v-if="variant === 'qa'" class="qa-footer">
-            <view class="qa-author">
+        <!-- 底部单行（票 2767）：左作者（头像 + 昵称/日期）、右浏览/评论/点赞。
+             广场与知识问答共用同一形态 —— 原「作者行 + 三等分操作栏」两行结构已删，
+             统计项顺序统一为 浏览 / 评论 / 点赞（与详情页统计行同序）。 -->
+        <view class="topic-footer">
+            <view class="footer-author">
                 <view class="author-avatar" :style="{ backgroundColor: avatarColor }">
                     <image v-if="authorAvatar.length > 0" class="author-avatar-img" :src="authorAvatarUrl" mode="aspectFill" :webp="true" />
                     <image v-else class="author-avatar-img" src="/static/icons/avatar/avatar-default-worker.png" mode="aspectFill" />
                 </view>
-                <view class="qa-author-text">
-                    <text class="author-name">{{ displayName }}</text>
-                    <text class="qa-date">{{ dateText }}</text>
+                <view class="footer-author-text">
+                    <text class="footer-author-name">{{ displayName }}</text>
+                    <text class="footer-date">{{ dateText }}</text>
                 </view>
             </view>
-            <view class="qa-stats">
-                <view class="qa-stat">
-                    <image class="qa-stat-icon" src="/static/icons/forum/view.png" mode="aspectFit"></image>
-                    <text class="qa-stat-text">{{ viewsText }}</text>
+            <view class="footer-stats">
+                <view class="footer-stat">
+                    <image class="footer-stat-icon" src="/static/icons/forum/view.png" mode="aspectFit"></image>
+                    <text class="footer-stat-text">{{ viewsText }}</text>
                 </view>
-                <view class="qa-stat" @click.stop="onReplyClick">
-                    <image class="qa-stat-icon" src="/static/icons/forum/comment.png" mode="aspectFit"></image>
-                    <text class="qa-stat-text">{{ repliesText }}</text>
+                <view class="footer-stat" @click.stop="onReplyClick">
+                    <image class="footer-stat-icon" src="/static/icons/forum/comment.png" mode="aspectFit"></image>
+                    <text class="footer-stat-text">{{ repliesText }}</text>
                 </view>
-                <view class="qa-stat">
-                    <image class="qa-stat-icon" src="/static/icons/forum/like.png" mode="aspectFit"></image>
-                    <text class="qa-stat-text">{{ likesText }}</text>
+                <view class="footer-stat">
+                    <image class="footer-stat-icon" src="/static/icons/forum/like.png" mode="aspectFit"></image>
+                    <text class="footer-stat-text">{{ likesText }}</text>
                 </view>
             </view>
         </view>
-        <template v-else>
-        <!-- 作者行：头像 + 昵称 + 时间 -->
-        <view class="topic-author-row">
-            <view class="author-avatar" :style="{ backgroundColor: avatarColor }">
-                <image v-if="authorAvatar.length > 0" class="author-avatar-img" :src="authorAvatarUrl" mode="aspectFill" :webp="true" />
-                <image v-else class="author-avatar-img" src="/static/icons/avatar/avatar-default-worker.png" mode="aspectFill" />
-            </view>
-            <text class="author-name">{{ displayName }}</text>
-            <text class="topic-time">{{ dateText }}</text>
-        </view>
-        <!-- 操作栏：点赞数（只读） + 评论 + 浏览；点赞/收藏仅详情页支持 -->
-        <view class="topic-action-bar">
-            <view class="action-item">
-                <image class="action-icon" src="/static/icons/forum/like.png" mode="aspectFit"></image>
-                <text class="action-text">{{ likesText }}</text>
-            </view>
-            <view class="action-item" @click.stop="onReplyClick">
-                <image class="action-icon" src="/static/icons/forum/comment.png" mode="aspectFit"></image>
-                <text class="action-text">{{ repliesText }}</text>
-            </view>
-            <view class="action-item">
-                <image class="action-icon" src="/static/icons/forum/view.png" mode="aspectFit"></image>
-                <text class="action-text">{{ viewsText }}</text>
-            </view>
-        </view>
-        </template>
     </view>
 </template>
 
@@ -284,13 +260,21 @@
         font-weight: bold;
     }
 
-    /* 作者行 */
-    .topic-author-row {
+    /* 底部单行（票 2767）：左作者、右统计。原「作者行 + 三等分操作栏」两行结构已删，
+       广场与知识问答共用本形态 */
+    .topic-footer {
         flex-direction: row;
         align-items: center;
+        justify-content: space-between;
         padding-top: 12rpx;
         border-top: 1rpx solid #f5f5f5;
         margin-top: 12rpx;
+    }
+
+    .footer-author {
+        flex-direction: row;
+        align-items: center;
+        flex: 1;
     }
 
     .author-avatar {
@@ -309,86 +293,39 @@
         border-radius: 22rpx;
     }
 
-    .author-name {
-        flex: 1;
+    .footer-author-text {
+        flex-direction: column;
+    }
+
+    .footer-author-name {
         font-size: 24rpx;
         color: #666666;
     }
 
-    .topic-time {
-        font-size: 22rpx;
-        color: #cccccc;
-    }
-
-    /* 操作栏：三项按 space-around 均分（票 2765 用户裁定）。
-       每项不再带 margin-right，左右留白对称 */
-    .topic-action-bar {
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-around;
-        padding: 16rpx 0 0;
-    }
-
-    .action-item {
-        flex-direction: row;
-        align-items: center;
-        padding: 8rpx 0;
-    }
-
-    .action-icon {
-        width: 28rpx;
-        height: 28rpx;
-        margin-right: 6rpx;
-    }
-
-    .action-text {
-        font-size: 24rpx;
-        color: #999999;
-    }
-
-    /* 问答变体 footer */
-    .qa-footer {
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-        margin-top: 8rpx;
-    }
-
-    .qa-author {
-        flex-direction: row;
-        align-items: center;
-        flex: 1;
-    }
-
-    .qa-author-text {
-        flex-direction: column;
-        margin-left: 12rpx;
-    }
-
-    .qa-date {
+    .footer-date {
         font-size: 22rpx;
         color: #bbbbbb;
         margin-top: 4rpx;
     }
 
-    .qa-stats {
+    .footer-stats {
         flex-direction: row;
         align-items: center;
     }
 
-    .qa-stat {
+    .footer-stat {
         flex-direction: row;
         align-items: center;
         margin-left: 28rpx;
     }
 
-    .qa-stat-icon {
+    .footer-stat-icon {
         width: 26rpx;
         height: 26rpx;
         margin-right: 6rpx;
     }
 
-    .qa-stat-text {
+    .footer-stat-text {
         font-size: 24rpx;
         color: #999999;
     }
