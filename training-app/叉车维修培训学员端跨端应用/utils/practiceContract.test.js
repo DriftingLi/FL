@@ -14,6 +14,7 @@
  */
 /** harness：读取层归一 + 模块归属面（ADR-0023 票 C 起，本文件不再自建 ROOT / read / walker） */
 const h = require('./contractHarness');
+const { scanRoutes } = require('./backendRouteHarness');
 const ROOT = h.ROOT;
 const read = h.read;
 
@@ -152,22 +153,15 @@ describe('幻影路由锁（#662 口径）：api 层路由必须落在后端已�
     return s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
   }
 
-  /** 从后端 <file>.go 的 rg.Group("<prefix>") + g.METHOD("<path>") 推出已注册路由 */
-  function registeredRoutes(rel, prefix) {
-    const src = stripComments(read(rel));
-    const out = [];
-    const re = /g\.(GET|POST|PUT|DELETE|PATCH)\("([^"]+)"[^)]*\)/g;
-    let m;
-    while ((m = re.exec(src)) !== null) out.push(prefix + m[2]);
-    return out;
-  }
-
   it('practice 域 api 的每个路由都在 practicemode/handler.go / questionbank/handler.go 已注册', () => {
+    // 前缀由 group 链自己算（#2776）：`legacy := g.Group("")` 上的 /free /tag /sequential 等
+    // 以前被 `g\.` 单接收者的正则漏掉，真路由被判幻影
     const registered = [
-      ...registeredRoutes('../../backend/internal/practicemode/handler.go', '/practice-mode'),
-      ...registeredRoutes('../../backend/internal/questionbank/handler.go', '/question-bank'),
+      ...scanRoutes(read('../../backend/internal/practicemode/handler.go')),
+      ...scanRoutes(read('../../backend/internal/questionbank/handler.go')),
     ];
-    expect(registered.length).toBeGreaterThan(10);
+    // 路径集合（同路径多方法只算一条）：practicemode 11（含 attempts 与 legacy 两个分组）+ questionbank 10
+    expect(registered.length).toBe(21);
 
     const api = stripComments(read('api/practice.uts'));
     // 拼接连形态：'/question-bank/questions/' + <id 变量> → /question-bank/questions/:question_id
@@ -182,6 +176,43 @@ describe('幻影路由锁（#662 口径）：api 层路由必须落在后端已�
 
     const phantom = used.filter((u) => !registered.includes(u));
     expect(phantom).toEqual([]);
+  });
+
+  it('扫描器按 group 链解析前缀（#2776）：子分组与自带完整前缀的分组都不能漏', () => {
+    const fixture = [
+      'func RegisterRoutes(rg *gin.RouterGroup) {',
+      '  attempts := rg.Group("/practice-mode/attempts")',
+      '  attempts.POST("", h.A)',
+      '  g := rg.Group("/practice-mode")',
+      '  g.GET("/stats", h.B)',
+      '  g.GET("/progress", h.C)',
+      '  legacy := g.Group("", credentialScoped)',
+      '  legacy.GET("/free", h.D)',
+      '  legacy.POST("/progress", h.E)',
+      '  rt := other.New()',
+      '  rt.GET("/ghost", h.F)',
+      '}',
+    ].join('\n');
+    // /progress 有 GET 与 POST 两条，路径集合里只留一条；rt 这种认不出的接收者不算进来
+    // （宁可漏判成红，也不能静默放行一个没人认领的注册点）
+    expect(scanRoutes(fixture)).toEqual([
+      '/practice-mode/attempts',
+      '/practice-mode/stats',
+      '/practice-mode/progress',
+      '/practice-mode/free',
+    ]);
+  });
+
+  it('扫描器在真 handler 上认得 legacy 分组（#2776 回归：这些路由以前被判幻影）', () => {
+    const registered = scanRoutes(read('../../backend/internal/practicemode/handler.go'));
+    const legacyRoutes = [
+      '/practice-mode/free',
+      '/practice-mode/tag',
+      '/practice-mode/sequential',
+      '/practice-mode/sequential-progress',
+      '/practice-mode/attempts',
+    ];
+    expect(legacyRoutes.filter((p) => !registered.includes(p))).toEqual([]);
   });
 });
 

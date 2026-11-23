@@ -19,6 +19,7 @@
  */
 /** harness：读取层归一 + 模块归属面（ADR-0023 票 C 起，本文件不再自建 ROOT / read / walker） */
 const h = require('./contractHarness');
+const { scanRoutes } = require('./backendRouteHarness');
 const ROOT = h.ROOT;
 const read = h.read;
 const exists = h.exists;
@@ -214,11 +215,9 @@ describe('幻影路由锁（#662 口径）：api 层路由必须落在后端已�
   it('api/mockExam.uts 的每条路由都在 backend mock_exam.go 已注册', () => {
     const backend = stripComments(read('../../backend/internal/mockexam/handler.go'));
     expect(backend).toContain('rg.Group("/mock-exam"');
-    const registered = [];
-    const re = /g\.(GET|POST|PUT|DELETE|PATCH)\("([^"]+)"/g;
-    let m;
-    while ((m = re.exec(backend)) !== null) registered.push('/mock-exam' + m[2]);
-    expect(registered.length).toBe(6);
+    // 前缀由 group 链自己算（#2776）；本清单只记「注册了几条」，加路由要同批改这个数
+    const registered = scanRoutes(backend);
+    expect(registered.length).toBe(8);
 
     const api = stripComments(read('api/mockExam.uts'));
     // 拼接连形态：'/mock-exam/' + <id 变量> + '/save'
@@ -239,11 +238,9 @@ describe('幻影路由锁（#662 口径）：api 层路由必须落在后端已�
   it('api/realExam.uts 的每条路由都在 backend realexam/handler.go 已注册（#2461）', () => {
     const backend = stripComments(read('../../backend/internal/realexam/handler.go'));
     expect(backend).toContain('rg.Group("/real-exam"');
-    const registered = [];
-    const re = /g\.(GET|POST|PUT|DELETE|PATCH)\("([^"]+)"/g;
-    let m;
-    while ((m = re.exec(backend)) !== null) registered.push('/real-exam' + m[2]);
-    expect(registered.length).toBe(4);
+    // 前缀由 group 链自己算（#2776）；本清单只记「注册了几条」，加路由要同批改这个数
+    const registered = scanRoutes(backend);
+    expect(registered.length).toBe(5);
 
     const api = stripComments(read('api/realExam.uts'));
     // 拼接连形态：'/real-exam/papers/' + <id 变量> + '/practice'
