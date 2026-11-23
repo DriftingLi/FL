@@ -1,13 +1,25 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
         <!-- #1602 迁移：页头收口到 app-nav-bar（唯一页头件，ADR-0035 禁 fork）。
-             状态栏占位由页头件内化；右槽多图标按胶囊左边线让位（透明变体，N05 页面自垫底色）。
-             #1846 收敛：右槽 3→2 图标（🔍 移出，落点进下方功能宫格），最长内容形态落回典型可用槽宽内。
-             🛒 随之移出页头（右槽 2→1）：商城入口已在下方功能宫格「商城」，页头重复占位。 -->
-        <!-- #2479：一级页标题居中于**屏幕中心**，页头左右槽都不承载页级动作；证件切换挂标题的
-             显式 @title-click（#1677「左槽空置时标题代发 leftClick」已删）。🔔 通知入口下沉：
-             它另有论坛 / 个人中心 / 简历三处，页头是重复占位。 -->
-        <AppNavBar variant="plain" transparent :left-icon="''" :title="navTitle" @title-click="onCertTap" />
+             状态栏占位由页头件内化；搜索、商城与证件放在页头下方独立业务栏。 -->
+        <!-- 一级页页头仅保留状态栏与88rpx导航行；证件、搜索、商城移至下方独立业务栏。 -->
+        <AppNavBar variant="plain" transparent :left-icon="''" />
+
+        <view class="credential-bar">
+            <view class="credential-picker" @click="onCertTap">
+                <text class="credential-name">{{ currentCert }}</text>
+                <text class="credential-arrow">⌄</text>
+            </view>
+            <view class="header-actions">
+                <view class="header-action" @click="onHeaderSearch">
+                    <image class="header-action-icon" src="/static/icons/mall/search.png" mode="aspectFit"></image>
+                </view>
+                <view class="header-action" @click="onHeaderMall">
+                    <image class="header-action-icon header-mall-icon" src="/static/icons/dashboard/grid-course-mall.png"
+                        mode="aspectFit"></image>
+                </view>
+            </view>
+        </view>
 
         <!-- 公告栏 -->
         <view class="notice-bar" @click="onNoticeClick">
@@ -22,7 +34,7 @@
              below-nav-bar 让页头保持可见（设计稿 324_9793：面板从页头下方起、上圆角）。 -->
         <CertSelector v-if="showCertDropdown" :groups="credentialGroups"
             :current-id="pendingCredentialId" :province="province" :show-province="true" :confirmable="true"
-            :below-nav-bar="true" @close="onCloseCertDropdown" @select="onPickCredential"
+            :below-nav-bar="true" :top-inset="credentialPanelTop" @close="onCloseCertDropdown" @select="onPickCredential"
             @confirm="onConfirmCredential" @province-tap="onProvinceTap" />
 
         <scroll-view class="content-scroll" scroll-y="true">
@@ -104,10 +116,16 @@
     import { useDashboardFeeds } from './composables/use-dashboard-feeds.uts'
 
     const windowHeight = uni.getSystemInfoSync().windowHeight
+    const credentialPanelTop = computed((): number => {
+        const system = uni.getSystemInfoSync()
+        let statusHeight = system.statusBarHeight
+        if (statusHeight == null || statusHeight <= 0) statusHeight = 44
+        const navHeight = Math.round(88 * system.windowWidth / 750)
+        const credentialHeight = Math.round(88 * system.windowWidth / 750)
+        return statusHeight + navHeight + credentialHeight
+    })
 
-    // #2479：🔔 通知移出页头（一级页左右槽都不承载页级动作，标题才能居中于屏幕中心）。
-    // #1846 收敛：🔍（全局搜索）移出页头——入口下沉功能宫格（dashboard-menu-grid），触发行为不变
-    // （仍 navigateTo 压栈，搜索页「取消」依赖返回栈）。🛒 同理移出页头：商城入口已在宫格「商城」。
+    // 首页证件栏保留证件切换、顶部搜索与商城入口；快捷宫格只保留原型四项。
 
     // ---- 证件切换流（composable 持有） ----
     const {
@@ -116,9 +134,6 @@
         loadCredentials, onCertTap, onPickCredential, onConfirmCredential,
         onProvinceTap, onCloseCertDropdown,
     } = useDashboardCredential()
-
-    // #1602 修复 / #2479：旧页头「证件名 ▾」入口由标题承载（点击 emit titleClick → onCertTap）。
-    const navTitle = computed((): string => currentCert.value + ' ▾')
 
     // ---- 数据流：未读轮询 / 继续学习 / 新闻资讯 / 首页课程区（composable 持有） ----
     const {
@@ -187,6 +202,14 @@
         uni.showToast({ title: '报名功能开发中', icon: 'none' })
     }
 
+    function onHeaderSearch() : void {
+        uni.navigateTo({ url: '/pages/search/search' })
+    }
+
+    function onHeaderMall() : void {
+        uni.reLaunch({ url: '/pages/mall/mall' })
+    }
+
     // ---- 新闻点击 ----
     function onNewsClick(news : FeaturedContentItem) : void {
         uni.navigateTo({
@@ -220,6 +243,63 @@
     /* #1602 迁移：状态栏占位与页头骨架（旧页头那组样式）已整体收口进 app-nav-bar，
        页内不再自持页头形态与角标样式。 */
 
+    /* Figma 页头下方证件/搜索/商城栏：整行88rpx；证件胶囊72rpx（约36px）。 */
+    .credential-bar {
+        height: 88rpx;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 40rpx;
+    }
+
+    .credential-picker {
+        height: 72rpx;
+        max-width: 520rpx;
+        flex-direction: row;
+        align-items: center;
+        background-color: $primary-tint;
+        border-radius: $radius-pill;
+        padding: 0 24rpx;
+    }
+
+    .credential-name {
+        font-size: 32rpx;
+        font-weight: 500;
+        color: #333333;
+        max-width: 420rpx;
+        lines: 1;
+        text-overflow: ellipsis;
+    }
+
+    .credential-arrow {
+        font-size: 32rpx;
+        color: #666666;
+        margin-left: 12rpx;
+        margin-bottom: 4rpx;
+    }
+
+    .header-actions {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .header-action {
+        width: 88rpx;
+        height: 88rpx;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .header-action-icon {
+        width: 32rpx;
+        height: 32rpx;
+    }
+
+    .header-mall-icon {
+        width: 44rpx;
+        height: 44rpx;
+    }
+
     /* 公告栏 */
     .notice-bar {
         flex-direction: row;
@@ -249,7 +329,7 @@
 
     /* Banner 海报 */
     .banner {
-        margin: 24rpx 40rpx;
+        margin: 24rpx 37rpx;
         border-radius: 16rpx;
         overflow: hidden;
     }

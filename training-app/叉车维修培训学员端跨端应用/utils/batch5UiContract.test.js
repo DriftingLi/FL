@@ -151,16 +151,16 @@ describe('批5 特殊页头形态（app-nav-bar 槽位承载）', () => {
     expect(s).toMatch(/class="create-pill-hit"[\s\S]{0,120}?@click="onCreate"/);
   });
 
-  it('dashboard 页头只留证件下拉标题（#1846 收敛：🔍 移出页头进功能宫格；🛒 移出页头；#2479：🔔 移出页头、证件切换改挂标题 title-click）', () => {
+  it('dashboard 页头下方有证件业务栏（证件、搜索、商城保留并下移，不塞回 AppNavBar）', () => {
     const s = read('pages/dashboard/dashboard.uvue');
-    // #2479：一级页标题居中于屏幕中心 ⇒ 页头左右槽都不承载页级动作（🔔 另有论坛 / 个人中心 / 简历三处入口）
     expect(s).not.toMatch(/:right-icons="/);
     expect(s).not.toMatch(/nav-bell/);
     expect(s).not.toMatch(/<template #left>/);
-    expect(s).not.toContain("'🛒'");
-    expect(s).toMatch(/<AppNavBar[^>]*@title-click="onCertTap"/);
-    // 移出页头的入口页内可达（#1846）：宫格补全局搜索格（静态面与跳转语义另由 dashboardContract / searchContract M2 钉住）
-    expect(read('pages/dashboard/components/dashboard-menu-grid.uvue')).toContain("path: '/pages/search/search'");
+    expect(s).toContain('class="credential-bar"');
+    expect(s).toMatch(/class="credential-picker"[^>]*@click="onCertTap"/);
+    expect(s).toContain('@click="onHeaderSearch"');
+    expect(s).toContain('@click="onHeaderMall"');
+    expect(read('pages/dashboard/components/dashboard-menu-grid.uvue')).not.toContain("title: '全局搜索'");
   });
 
   it('resume 页头 🔔 通知入口下沉 #toolbar + 左返回（title 空；#2761 起右槽恒空）', () => {
