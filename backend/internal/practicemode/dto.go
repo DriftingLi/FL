@@ -70,6 +70,7 @@ type HistoryResultDTO struct {
 // HistoryItemDTO 练习历史条目（旧 GetHistory items 内每条 map 输出；命中题目时追加 question）。
 type HistoryItemDTO struct {
 	ID           int                       `json:"id"`
+	CategoryID   *int                      `json:"category_id,omitempty" extensions:"x-optional"`
 	StudentID    int                       `json:"student_id"`
 	QuestionID   int                       `json:"question_id"`
 	IsCorrect    bool                      `json:"is_correct"`

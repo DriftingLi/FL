@@ -1,0 +1,6 @@
+BEGIN;
+
+ALTER TABLE course DROP CONSTRAINT IF EXISTS ck_course_course_type;
+ALTER TABLE course DROP COLUMN IF EXISTS course_type;
+
+COMMIT;

@@ -143,3 +143,56 @@ describe('getTargetSubdomainForPath（子域名归属，与旧行为一致）', 
     expect(getTargetSubdomainForPath(path)).toBe(expected)
   })
 })
+
+// ===== questionBankReturn：题库页带回选分类（#2760 US-13）=====
+//
+// 判据是**形状白名单**而不是前缀放行：只认 /training/question-bank 且至多带一个
+// 合法的 category_id。夹带别的参数一律整条拒（不裁剪），否则会让人以为参数生效了。
+import { questionBankReturn } from '../authRedirect'
+
+describe('questionBankReturn（登录后回题库并预选分类）', () => {
+  it('接受裸路径与带合法 category_id 的形态', () => {
+    expect(questionBankReturn('/training/question-bank')).toBe('/training/question-bank')
+    expect(questionBankReturn('/training/question-bank?category_id=1')).toBe('/training/question-bank?category_id=1')
+    expect(questionBankReturn('/training/question-bank?category_id=477')).toBe('/training/question-bank?category_id=477')
+  })
+
+  it('category_id 形态非法时整条拒（连裸路径那档也拒，因为串已脏）', () => {
+    for (const bad of [
+      '/training/question-bank?category_id=0',
+      '/training/question-bank?category_id=-1',
+      '/training/question-bank?category_id=abc',
+      '/training/question-bank?category_id=1.5',
+      '/training/question-bank?category_id='
+    ]) {
+      expect(questionBankReturn(bad), bad).toBeUndefined()
+    }
+  })
+
+  it('夹带其它参数一律拒：不做「留下合法的那几个」的裁剪', () => {
+    expect(questionBankReturn('/training/question-bank?category_id=1&next=https://evil.example.com')).toBeUndefined()
+    expect(questionBankReturn('/training/question-bank?next=/admin')).toBeUndefined()
+    expect(questionBankReturn('/training/question-bank?category_id=1&category_id=2')).toBeUndefined()
+  })
+
+  it('路径变形一律拒（防越权与开放重定向）', () => {
+    for (const bad of [
+      '/training/question-bank/',
+      '/training/question-bank/../admin',
+      '/training/question-bank#x',
+      'https://evil.example.com/training/question-bank',
+      '//evil.example.com/training/question-bank',
+      '/training/question-bankx',
+      '/training/course/1'
+    ]) {
+      expect(questionBankReturn(bad), bad).toBeUndefined()
+    }
+  })
+
+  it('非字符串入参返回 undefined（route.query 可能是数组）', () => {
+    expect(questionBankReturn(undefined)).toBeUndefined()
+    expect(questionBankReturn(null)).toBeUndefined()
+    expect(questionBankReturn(['/training/question-bank?category_id=1'])).toBeUndefined()
+    expect(questionBankReturn(42)).toBeUndefined()
+  })
+})

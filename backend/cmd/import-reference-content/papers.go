@@ -22,9 +22,9 @@ type PaperApplyResult struct {
 	TotalCount int
 }
 
-// ApplyPapers 按文件→题目映射建卷（单事务，幂等：credential_id + source_ref 定位）。
+// ApplyPapers 按培训分类与来源文件定位套卷，在同一事务内更新卷题。
 // questionIDs 为 nil 的真题文件视为该卷本轮无可用题目，跳过。
-func ApplyPapers(ctx context.Context, pool *pgxpool.Pool, fileQuestions map[*SourceFile][]int, credIDs map[string]int, minQuestions int) (PaperApplyResult, error) {
+func ApplyPapers(ctx context.Context, pool *pgxpool.Pool, fileQuestions map[*SourceFile][]int, categories map[string]SourceCategory, minQuestions int) (PaperApplyResult, error) {
 	var res PaperApplyResult
 	if minQuestions < 1 {
 		minQuestions = 1
@@ -52,7 +52,7 @@ func ApplyPapers(ctx context.Context, pool *pgxpool.Pool, fileQuestions map[*Sou
 			res.Skipped++
 			continue
 		}
-		if err := upsertPaper(ctx, tx, f, ids, credIDs, &res); err != nil {
+		if err := upsertPaper(ctx, tx, f, ids, categories, &res); err != nil {
 			return res, err
 		}
 	}
@@ -63,10 +63,10 @@ func ApplyPapers(ctx context.Context, pool *pgxpool.Pool, fileQuestions map[*Sou
 }
 
 // upsertPaper 单卷落库：定位 → 更新或创建 → 重建卷题关联 → 同步 question_count。
-func upsertPaper(ctx context.Context, tx pgx.Tx, f *SourceFile, ids []int, credIDs map[string]int, res *PaperApplyResult) error {
-	credID, ok := credIDs[credentialFor(f)]
+func upsertPaper(ctx context.Context, tx pgx.Tx, f *SourceFile, ids []int, categories map[string]SourceCategory, res *PaperApplyResult) error {
+	category, ok := categories[credentialFor(f)]
 	if !ok {
-		return fmt.Errorf("证件 code %s 不存在", credentialFor(f))
+		return fmt.Errorf("找不到资料来源 %s 对应的培训分类", credentialFor(f))
 	}
 	title := truncateRunes(paperTitle(f), 200)
 	source := truncateRunes(strings.TrimSpace(f.FM["source"]), 100)
@@ -75,8 +75,8 @@ func upsertPaper(ctx context.Context, tx pgx.Tx, f *SourceFile, ids []int, credI
 
 	var paperID int
 	err := tx.QueryRow(ctx,
-		`SELECT paper_id FROM real_exam_paper WHERE credential_id = $1 AND source_ref = $2`,
-		credID, sourceRef).Scan(&paperID)
+		`SELECT paper_id FROM real_exam_paper WHERE category_id = $1 AND source_ref = $2 FOR UPDATE`,
+		category.ID, sourceRef).Scan(&paperID)
 	switch {
 	case err == nil:
 		if _, err := tx.Exec(ctx, `
@@ -93,10 +93,10 @@ func upsertPaper(ctx context.Context, tx pgx.Tx, f *SourceFile, ids []int, credI
 		res.Updated++
 	case isNoRows(err):
 		err := tx.QueryRow(ctx, `
-			INSERT INTO real_exam_paper (credential_id, title, year, source, duration_minutes, source_ref, question_count, status)
-			VALUES ($1, $2, NULLIF($3, 0), NULLIF($4, ''), 90, $5, $6, 1)
+			INSERT INTO real_exam_paper (credential_id, category_id, title, year, source, duration_minutes, source_ref, question_count, status)
+			VALUES ($1, $2, $3, NULLIF($4, 0), NULLIF($5, ''), 90, $6, $7, 1)
 			RETURNING paper_id`,
-			credID, title, year, source, sourceRef, len(ids)).Scan(&paperID)
+			category.LegacyCredentialID, category.ID, title, year, source, sourceRef, len(ids)).Scan(&paperID)
 		if err != nil {
 			return fmt.Errorf("创建真题卷失败（%s）: %w", title, err)
 		}

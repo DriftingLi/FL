@@ -5,27 +5,21 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { epLite } from '@/test/element-lite'
-import { createPinia, setActivePinia } from 'pinia'
-
-vi.mock('@/api/questionBank', () => ({
-  questionBankApi: { getStats: vi.fn().mockResolvedValue({ total: 10 }) }
-}))
+import { createPinia } from 'pinia'
 
 vi.mock('@/api/practiceMode', () => ({
   practiceModeApi: {
-    startSequential: vi.fn(),
-    startTagPractice: vi.fn(),
-    getFreeQuestions: vi.fn(),
-    getProgress: vi.fn().mockResolvedValue(null),
-    getSequentialProgress: vi.fn().mockResolvedValue(null),
+    startCategoryPractice: vi.fn(),
     getPracticeStats: vi.fn().mockResolvedValue({ today_count: 1, total_count: 10, total_days: 2 }),
-    saveProgress: vi.fn().mockResolvedValue(undefined),
-    submitAnswer: vi.fn()
+    submitCategoryAnswer: vi.fn()
   }
 }))
 
 vi.mock('@/api/training', () => ({
-  trainingApi: { getTags: vi.fn().mockResolvedValue({ tags: [] }) }
+  trainingApi: {
+    getTags: vi.fn().mockResolvedValue({ tags: [] }),
+    getCategories: vi.fn().mockResolvedValue({ categories: [{ id: 9, name: '维修' }] })
+  }
 }))
 
 vi.mock('@/api/favorite', () => ({
@@ -44,14 +38,8 @@ import { practiceModeApi } from '@/api/practiceMode'
 import { favoriteApi } from '@/api/favorite'
 import { questionInteractionApi } from '@/api/questionInteraction'
 import { trainingApi } from '@/api/training'
-import { useCredentialStore } from '@/stores/credential'
-import type { CredentialDict } from '@/api/credential'
 import AnswerResultCard from '@/components/practice/AnswerResultCard.vue'
 import QuestionBank from '../QuestionBank.vue'
-
-function credentialOf(id: number): CredentialDict {
-  return { id, code: `C${id}`, name: `证件${id}`, description: '', category: 'special_operation', level: null, sort_order: 0, status: 1, created_at: '', updated_at: '' }
-}
 
 const QUESTIONS = [
   { id: 101, type: 'single_choice', content: '题101', options: { A: '选项A', B: '选项B' } },
@@ -59,10 +47,10 @@ const QUESTIONS = [
 ]
 
 beforeEach(() => {
-  vi.mocked(practiceModeApi.startSequential).mockResolvedValue({
-    questions: QUESTIONS, current_index: 0
+  vi.mocked(practiceModeApi.startCategoryPractice).mockResolvedValue({
+    questions: QUESTIONS, current_index: 0, attempt_key: 'practice-attempt', answers_state: {}, completed: 0
   } as never)
-  vi.mocked(practiceModeApi.submitAnswer).mockResolvedValue({
+  vi.mocked(practiceModeApi.submitCategoryAnswer).mockResolvedValue({
     is_correct: true, correct_answer: 'A', explanation: '解析',
     question_id: 101, user_answer: 'A', accuracy_rate: 90, common_wrong: null
   } as never)
@@ -75,7 +63,10 @@ async function mountAndStart() {
   // CommentCard/NoteCard（结果区）依赖 auth store，mount 需挂 Pinia
   const wrapper = mount(QuestionBank, { global: { plugins: [epLite(), createPinia()] } })
   await flushPromises()
-  const startBtn = wrapper.findAll('button').find(b => b.text().includes('开始练习'))
+  const category = wrapper.findAllComponents({ name: 'ElSelect' }).find(select => select.props('placeholder') === '选择培训分类')
+  category!.vm.$emit('update:modelValue', 9)
+  await flushPromises()
+  const startBtn = wrapper.findAll('button').find(b => b.text().includes('开始或继续练习'))
   await startBtn!.trigger('click')
   await flushPromises()
   return wrapper
@@ -133,27 +124,21 @@ describe('QuestionBank 外围交互接入（#616）', () => {
   })
 })
 
-/**
- * 第十四波 B 票 10（ADR-0062 决策 10）：`loadTags()` 此前只挂在 `onMounted` 上
- * —— 切证件后「考点标签」下拉仍是上一个证件的标签，拿旧证件的 tag_id 去抽新证件的题
- * = 空列表。旁路装载流从此只有 `facets` 一个声明处（与列表共享失效时机）。
- */
-describe('QuestionBank 标签 facet 随证件重装（票 10）', () => {
-  it('首装随列表装载一次；切证件后 facet 重装并读新证件', async () => {
-    const pinia = createPinia()
-    setActivePinia(pinia)
-    const store = useCredentialStore()
-    store.current = credentialOf(3)
+describe('QuestionBank 分类启动', () => {
+  it('未选分类时不能开始，选择分类后只发送本次分类和练习模式', async () => {
+    vi.mocked(practiceModeApi.startCategoryPractice).mockClear()
     vi.mocked(trainingApi.getTags).mockClear()
-
-    mount(QuestionBank, { global: { plugins: [epLite(), pinia] } })
+    const wrapper = mount(QuestionBank, { global: { plugins: [epLite(), createPinia()] } })
     await flushPromises()
-    expect(trainingApi.getTags).toHaveBeenCalledTimes(1)
-    expect(trainingApi.getTags).toHaveBeenLastCalledWith(3)
-
-    store.current = credentialOf(4)
+    expect(trainingApi.getTags).toHaveBeenCalledWith()
+    const button = wrapper.findAll('button').find(b => b.text().includes('开始或继续练习'))!
+    expect(button.attributes('disabled')).toBeDefined()
+    const category = wrapper.findAllComponents({ name: 'ElSelect' }).find(select => select.props('placeholder') === '选择培训分类')
+    category!.vm.$emit('update:modelValue', 9)
     await flushPromises()
-    expect(trainingApi.getTags).toHaveBeenCalledTimes(2)
-    expect(trainingApi.getTags).toHaveBeenLastCalledWith(4)
+    await button.trigger('click')
+    await flushPromises()
+    expect(practiceModeApi.startCategoryPractice).toHaveBeenCalledWith(expect.objectContaining({ category_id: 9, mode: 'sequential' }))
+    expect(wrapper.text()).toContain('维修')
   })
 })

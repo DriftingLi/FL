@@ -72,6 +72,8 @@ func TestCriticalUniqueIndexesCoverPartialIndexes(t *testing.T) {
 		"uq_points_task_claim_daily", "uq_points_task_claim_ref",
 		"idx_contact_requests_pending_unique", "idx_job_applications_applied_unique",
 		"uq_practice_progress_cred", "uq_practice_progress_nocred",
+		"uq_practice_progress_category", "uq_real_exam_paper_category_source",
+		"uq_wrong_question_category", "uq_wrong_question_unclassified",
 	}
 	for _, n := range wantPartial {
 		if !partial[n] {
@@ -260,18 +262,18 @@ func TestActualUniqueIndexesAgainstRealDatabase(t *testing.T) {
 
 	ctx := context.Background()
 	if _, err := db.ExecContext(ctx, `CREATE TABLE practice_progress (
-		id INTEGER PRIMARY KEY, student_id INT, practice_mode TEXT, credential_id INT)`); err != nil {
+		id INTEGER PRIMARY KEY, student_id INT, practice_mode TEXT, credential_id INT, category_id INT)`); err != nil {
 		t.Fatalf("建表失败: %v", err)
 	}
-	// 与 000013 逐字同句的两条偏索引（登记表里的原文）。
+	// 用登记表里的原文建练习进度索引。
 	targets := []UniqueIndexSpec{}
 	for _, s := range CriticalUniqueIndexes() {
 		if s.Table == "practice_progress" {
 			targets = append(targets, s)
 		}
 	}
-	if len(targets) != 2 {
-		t.Fatalf("登记表里 practice_progress 的偏索引 = %d 条，want 2", len(targets))
+	if len(targets) != 3 {
+		t.Fatalf("登记表里 practice_progress 的偏索引 = %d 条，want 3", len(targets))
 	}
 	for _, s := range targets {
 		if _, err := db.ExecContext(ctx, s.DDL); err != nil {
@@ -287,9 +289,8 @@ func TestActualUniqueIndexesAgainstRealDatabase(t *testing.T) {
 		t.Fatalf("补跑 DDL 后仍报缺索引：%v", missing)
 	}
 
-	// 负样本：只建其中一条时，另一条必须被报出来（存在性对账真的在看库）。
-	onlyOne := map[string]struct{}{targets[0].Table + "." + targets[0].Name: {}}
-	if missing := DiffUniqueIndexes(targets, onlyOne); len(missing) != 1 {
+	delete(actual, "practice_progress.uq_practice_progress_category")
+	if missing := DiffUniqueIndexes(targets, actual); len(missing) != 1 {
 		t.Fatalf("少建一条索引时报缺 %d 条，want 1：%v", len(missing), missing)
 	}
 }

@@ -37,13 +37,13 @@ func seedP1Env(t *testing.T) (*gin.Engine, *config.Config, int) {
 	if err := db.Create(&lv).Error; err != nil {
 		t.Fatalf("创建等级失败: %v", err)
 	}
-	course := model.Course{Name: "液压传动维修", CoverImage: "/static/covers/h.png", Description: "液压系统原理与维修",
+	course := model.Course{Name: "液压传动维修", CategoryID: &testutil.SeedTrainingCategory(t, db, "课程分类").ID, CoverImage: "/static/covers/h.png", Description: "液压系统原理与维修",
 		Status: 1, SpecialtyID: ptr(spec.SpecialtyID), LevelID: ptr(lv.LevelID), CreatedAt: testutil.Now()}
 	if err := db.Create(&course).Error; err != nil {
 		t.Fatalf("创建课程失败: %v", err)
 	}
 	// 注意：Course.Status 带 gorm default:1，零值 0 在 Create 时会被默认值覆盖，需显式置 0。
-	unpublished := model.Course{Name: "液压内部课程", Status: 0,
+	unpublished := model.Course{Name: "液压内部课程", CategoryID: &testutil.SeedTrainingCategory(t, db, "课程分类").ID, Status: 0,
 		SpecialtyID: ptr(spec.SpecialtyID), LevelID: ptr(lv.LevelID), CreatedAt: testutil.Now()}
 	if err := db.Create(&unpublished).Error; err != nil {
 		t.Fatalf("创建未发布课程失败: %v", err)

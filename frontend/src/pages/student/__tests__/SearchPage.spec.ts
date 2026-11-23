@@ -15,7 +15,9 @@ vi.mock('vue-router', () => ({
   useRouter: () => ({ replace: h.replace, push: h.push })
 }))
 vi.mock('@/api/search', () => ({ searchApi: { search: vi.fn() } }))
-vi.mock('@/stores/credential', () => ({ useCredentialStore: () => ({ current: { id: 1 } }) }))
+vi.mock('@/api/training', () => ({
+  trainingApi: { getCategories: vi.fn().mockResolvedValue({ categories: [{ id: 9, name: '维修' }] }) }
+}))
 
 import { searchApi } from '@/api/search'
 import SearchPage from '../SearchPage.vue'
@@ -71,7 +73,7 @@ describe('SearchPage 全局搜索页', () => {
     h.route.query = { keyword: '液压' }
     const w = mountPage()
     await flushPromises()
-    expect(searchApi.search).toHaveBeenCalledWith({ keyword: '液压', credential_id: 1 })
+    expect(searchApi.search).toHaveBeenCalledWith({ keyword: '液压', category_id: 'all' })
     const text = w.text()
     for (const label of ['课程', '章节', '题目', '内容精选', '帖子']) expect(text).toContain(label)
     expect(text).toContain('课程(1)')

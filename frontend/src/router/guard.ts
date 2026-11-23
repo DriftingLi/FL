@@ -13,25 +13,19 @@
 //                               回落会被子域边界整页弹去 training
 //                               （#1651 补全：共号子域上的同一不变式落在回落出口，见 ADR-0075）
 //   5. roleStep              —— 角色校验
-//   6. credentialStep        —— 无证件 onboarding 预筛（ADR-0020；前置 3 已放行需登录路由）
 // 另有一条**状态就绪**步骤：4b capabilityLoadStep —— 动态角色（管理端）的能力集尚未装载时，
 // 先交还 orchestrator 补拉一次再重跑（#1645）。它不是授权判定，而是「判定所需的事实还没到」，
 // 故排在 roleStep 之前：roleStep 的回落与 capabilityStep 都要读能力集。
-// 纯函数约束：不触 window / store / router——环境事实（当前子域名、IP 直连、证件状态）由
+// 纯函数约束：不触 window / store / router——环境事实（当前子域名、IP 直连、权限）由
 // orchestrator（router/index.ts beforeEach）注入；跨子域名整页跳转 URL 与「当前子域名默认
-// 工作区」由 orchestrator 构建/解析。证件数据未加载时经 load-credential 决策交还
-// orchestrator 补一次数据后重跑管线；动态角色的能力集未落定时同理走 load-capabilities
-// （管线纯函数，重跑无副作用）。
+// 工作区」由 orchestrator 构建/解析。动态角色的能力集未落定时由 load-capabilities 补拉。
 import type { RouteLocationRaw } from 'vue-router'
 import type { SubdomainType } from '@/utils/subdomain'
 import { getTargetSubdomainForPath } from '@/utils/subdomain'
+import { courseLearningReturn } from '@/utils/authRedirect'
 import { adminLandingPage, tutorLandingPage } from '@/config/navigation'
 import type { AuthzCapability } from '@/config/authz'
 import { holdsCapability, isDynamicRole } from '@/utils/authzRuntime'
-import type { RouteName } from '@/config/pages'
-
-/** onboarding 预筛的落点：由页面描述符表派生的 RouteName 收窄（名单已无第二处手工表，写错即编译报错）。 */
-const CREDENTIAL_ONBOARDING: RouteName = 'CredentialOnboarding'
 
 /**
  * 工作区：产品区语义（≠子域名）。
@@ -56,7 +50,7 @@ export const WORKSPACE_SUBDOMAIN: Record<Exclude<Workspace, 'auth'>, SubdomainTy
 export interface GuardInput {
   path: string
   fullPath: string
-  /** to.name（credentialStep 的 onboarding 判定用） */
+  /** to.name */
   name: unknown
   /** to.meta（vue-router 已合并父链 meta，子记录覆盖父记录） */
   meta: Record<string, unknown>
@@ -75,8 +69,6 @@ export interface GuardState {
   subdomain: SubdomainType
   /** IP 直连模式（isIpDirectMode()）：无 DNS 子域名环境，所有工作区经路径访问 */
   ipDirect: boolean
-  /** 当前证件状态（credential store；'unloaded' = 未加载） */
-  credential: 'unloaded' | 'none' | 'present'
   /**
    * 运行时能力集（#1618 段1）：动态角色（管理端）经 GET /admin/me/capabilities 下发，
    * 静态角色恒为空数组（它们的可达面由生成的能力表回答）。判定见 utils/authzRuntime。
@@ -101,8 +93,6 @@ export type GuardDecision =
   | { action: 'external'; target: SubdomainType; path: string }
   /** 留在当前子域名的默认工作区（orchestrator 经 getDefaultWorkspaceBySubdomain 解析） */
   | { action: 'workspace-home' }
-  /** 证件预筛需要数据而未加载：orchestrator 拉取一次后重跑管线 */
-  | { action: 'load-credential' }
   /** 动态角色的能力集尚未落定：orchestrator 补拉一次后重跑管线（装载必然落定，故只触发一次） */
   | { action: 'load-capabilities' }
 
@@ -152,6 +142,15 @@ export const subdomainBoundaryStep: GuardStep = (input, state) => {
 export const authPageStep: GuardStep = (input, state) => {
   if (!state.isLoggedIn || !state.role) return null
   const ws = workspaceOf(input)
+  if (ws === 'auth' && state.role !== 'hrwai_user' && (state.subdomain === 'training' || state.ipDirect) &&
+    (input.name === 'Login' || input.name === 'Register')) {
+    const query = new URLSearchParams(input.fullPath.split('#', 1)[0].split('?')[1])
+    const targets = query.getAll('redirect')
+    const courseAuth = query.getAll('course_auth')
+    if (courseAuth.length === 1 && courseAuth[0] === '1' && targets.length === 1 && courseLearningReturn(targets[0])) {
+      return null
+    }
+  }
   // 主体系认证页 → 按当前子域名回对应工作区（到不了的角色由下一步的子域身份匹配拦回登录页）
   if (ws === 'auth') return { action: 'workspace-home' }
   return null
@@ -162,7 +161,8 @@ export const authRequiredStep: GuardStep = (input, state) => {
   const requiresAuth = input.matched.some(record => record.requiresAuth === true)
   if (!requiresAuth) return { action: 'allow' }
   if (state.hasValidToken) return null
-  return { action: 'redirect', to: { path: '/login', query: { redirect: input.fullPath } }, clearAuth: true }
+  const redirect = input.name === 'ChapterView' ? courseLearningReturn(input.path) : input.fullPath
+  return { action: 'redirect', to: { path: '/login', query: { redirect } }, clearAuth: true }
 }
 
 /**
@@ -193,8 +193,7 @@ export const subdomainRoleStep: GuardStep = (input, state) => {
  * 的空集，「装载中」被当成「没有能力」，于是全权限的账号也被判无权限（#1638 的落点判定据此
  * 把超管送到「无管理权限」页：侧栏 20 项、固定签「仪表盘」，内容区却写着"你没有权限"）。
  *
- * 本步只报事实（这个角色的能力集还没落定），补拉与重跑交给 orchestrator —— 与 credentialStep
- * 的 `load-credential` 同形：管线保持纯函数，重跑无副作用（`loadCapabilities` 承诺必然落定）。
+ * 能力集尚未落定时，由 orchestrator 补拉后重新执行守卫。
  *
  * 触发面与 capabilityStep **同界**：只有「需要登录」的页面才判能力（公开页对任意角色开放，
  * 不因能力位被锁死），因此也只有那些页面值得等能力集 —— 管理员打开公开的 /ai-assistant 时
@@ -286,32 +285,11 @@ export const capabilityStep: GuardStep = (input, state) => {
 }
 
 /**
- * 步骤 6：无证件 onboarding 预筛（ADR-0020）——hrwai_user 在 training 工作区且未选证件时
- * 强制进 onboarding；已选证件访问 onboarding → 回 /training。IP 直连旁路。
- * 求值序前置：authRequiredStep 已对无需登录路由放行（预筛不适用于公开页）。
- * 证件未加载 → load-credential 决策交还 orchestrator；加载失败同样落 'none'
- * （orchestrator 的 state() 映射），走 onboarding 预筛——与既有行为一致。
- */
-export const credentialStep: GuardStep = (input, state) => {
-  if (state.role !== 'hrwai_user' || state.ipDirect) return null
-  if (workspaceOf(input) !== 'training') return null
-  if (state.credential === 'unloaded') return { action: 'load-credential' }
-  const isOnboarding = input.name === CREDENTIAL_ONBOARDING
-  if (state.credential === 'none' && !isOnboarding) {
-    return { action: 'redirect', to: { name: CREDENTIAL_ONBOARDING } }
-  }
-  if (state.credential === 'present' && isOnboarding) {
-    return { action: 'redirect', to: '/training' }
-  }
-  return null
-}
-
-/**
  * 决策管线：按既有守卫求值序执行各步骤，首个产出决策的步骤生效；全步骤放行 = allow。
  * 步骤顺序 = 行为承诺的一部分，不可随意调整（步骤 4 的插入决策见 ADR-0071）。
  */
 export function resolveGuardDecision(input: GuardInput, state: GuardState): GuardDecision {
-  const steps: GuardStep[] = [subdomainBoundaryStep, authPageStep, authRequiredStep, subdomainRoleStep, capabilityLoadStep, roleStep, capabilityStep, credentialStep]
+  const steps: GuardStep[] = [subdomainBoundaryStep, authPageStep, authRequiredStep, subdomainRoleStep, capabilityLoadStep, roleStep, capabilityStep]
   for (const step of steps) {
     const decision = step(input, state)
     if (decision) return decision

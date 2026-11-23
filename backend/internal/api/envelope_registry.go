@@ -100,6 +100,14 @@ var envelopeRegistry = []EnvelopeSpec{
 	{Result: "course.CoursePageResult", Endpoints: []string{"GET /courses", "GET /admin/courses", "GET /tutor/courses"},
 		Keys: []string{"courses", "page", "pages", "total"}, Dialect: paging.DialectPages,
 		Sample: course.CoursePageResult{}},
+	{Result: "course.PublicCoursePageDTO", Endpoints: []string{"GET /catalog/courses"},
+		Keys: []string{"courses", "page", "pages", "total"}, Dialect: paging.DialectPages,
+		Sample: course.PublicCoursePageDTO{}},
+	// #2753 独立公开网校目录：与既有公开目录同为 pages 方言（键序：courses/page/pages/total），
+	// 但行形状多了 course_count 之外的判据差异，故是独立容器而非复用。
+	{Result: "course.PublicSchoolCoursePageDTO", Endpoints: []string{"GET /public-school/courses"},
+		Keys: []string{"courses", "page", "pages", "total"}, Dialect: paging.DialectPages,
+		Sample: course.PublicSchoolCoursePageDTO{}},
 	// #2499 C9 章节审核队列：显式 page/page_size/total（沿 paging.QueryWithMax 的 DialectPageSize 口径，
 	// 与 CoursePageResult 的 pages 口径不同——队列页不需要总页数）。
 	{Result: "course.ChapterReviewQueueResult", Endpoints: []string{"GET /admin/chapter-reviews/pending"},
@@ -139,7 +147,7 @@ var envelopeRegistry = []EnvelopeSpec{
 	{Result: "material.MaterialPageResult", Endpoints: []string{"GET /materials", "GET /student/materials"},
 		Keys: []string{"page", "pages", "total", "materials"}, Dialect: paging.DialectPages,
 		Sample: material.MaterialPageResult{}},
-	{Result: "mockexam.MockExamHistoryDTO", Endpoints: []string{"GET /mock-exam/history"},
+	{Result: "mockexam.MockExamHistoryDTO", Endpoints: []string{"GET /mock-exam/history", "GET /mock-exam/in-progress"},
 		Keys: []string{"total", "page", "page_size", "exams"}, Dialect: paging.DialectPageSize,
 		Sample: mockexam.MockExamHistoryDTO{}},
 	{Result: "forum.MyReplyPageResult", Endpoints: []string{"GET /forum/my-replies"},

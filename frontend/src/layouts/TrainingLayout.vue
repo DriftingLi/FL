@@ -5,12 +5,6 @@
     :menu-items="currentMenuItems"
     content-width="narrow"
   >
-    <!-- 证件切换器（全局过滤器）：坐顶栏中区最左、与内容列对齐（ADR-0072）。
-         它是作用于内容区的上下文过滤器，故与它过滤的对象同一列；其余三端此段为空。 -->
-    <template #topbar>
-      <CredentialSwitcher v-if="!chapterCourseId" compact />
-    </template>
-
     <template #top="{ collapsed }">
       <div class="flex flex-col gap-2">
         <!-- 布局级搜索入口（#984）：侧栏顶部一处 + ⌘/Ctrl+K 全工作区可达。
@@ -47,7 +41,6 @@ import type { Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import SidebarLayout from './SidebarLayout.vue'
 import { href } from '@/config/pages'
-import CredentialSwitcher from '@/components/credential/CredentialSwitcher.vue'
 import { roleNavigation } from '@/config/navigation'
 import { useCourseStore } from '@/stores/course'
 import type { NavItem } from '@/config/navigation'
@@ -179,9 +172,10 @@ const currentMenuItems = computed<NavItem[]>(() => {
 
   return [
     {
-      key: 'back-to-courses',
-      label: '返回课程中心',
-      routeName: 'CourseList',
+      key: 'back-to-course',
+      label: '返回课程详情',
+      routeName: 'PublicCourseDetail',
+      routeParams: { courseId },
       icon: BackIcon
     },
     ...chapterItems

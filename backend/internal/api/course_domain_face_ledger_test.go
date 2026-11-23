@@ -109,7 +109,7 @@ func seedCourseDomain(t *testing.T, db *gorm.DB) courseDomainIDs {
 		t.Fatalf("播种等级失败: %v", err)
 	}
 	course := model.Course{
-		Name: "台账课程", Status: 1,
+		Name: "台账课程", Status: 1, CategoryID: &testutil.SeedTrainingCategory(t, db, "课程分类").ID,
 		SpecialtyID: &spec.SpecialtyID, LevelID: &lv.LevelID,
 		CreatedAt: testutil.Now(),
 	}

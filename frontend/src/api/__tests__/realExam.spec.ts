@@ -1,5 +1,4 @@
 // realExam.ts 契约测试：真题套卷端点路径与参数（ADR-0022）。
-// 证件分区由服务端 CredentialScoped 兜底（JWT 面、学员角色）；api 层只保证 params 占位存在。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('@/api/request', () => ({
@@ -18,10 +17,10 @@ beforeEach(() => {
 })
 
 describe('realExamApi', () => {
-  it('listPapers：GET /real-exam/papers，params 占位交给服务端兜底 credential_id', async () => {
+  it('GET /real-exam/papers 默认返回所有分类', async () => {
     mockGet.mockResolvedValue([])
     await realExamApi.listPapers()
-    expect(mockGet).toHaveBeenCalledWith('/real-exam/papers', { params: {} })
+    expect(mockGet).toHaveBeenCalledWith('/real-exam/papers', { params: { category_id: 'all' } })
   })
 
   it('startPractice：GET /real-exam/papers/:id/practice', async () => {

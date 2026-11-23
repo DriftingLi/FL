@@ -16,7 +16,6 @@ import (
 	"forklift-training/internal/course"
 	"forklift-training/internal/model"
 	"forklift-training/internal/questionbank"
-	"forklift-training/internal/scope"
 	"forklift-training/internal/textx"
 )
 
@@ -58,9 +57,8 @@ var coursePartition = partitionSpec[model.Course]{
 			Where("("+searchCourseTitleHit+" OR "+searchCourseBodyHit+")", p.like, p.like)
 	},
 	scope: func(s *Service, q *gorm.DB, p searchParams) *gorm.DB {
-		// 挂载不变式（ADR-0006 / ADR-0050 决策 1）叠加已发布；证件分区由读面给定。
-		q = course.MountedCourseScope(q.Where("status = 1"))
-		return scope.EntityOwnedBy(q, "credential_id", p.cred)
+		q = course.PublishedCategoryCourseScope(q)
+		return p.contentCategory(q, "category_id", "credential_id")
 	},
 	selects:   "course_id, name, cover_image, description",
 	titleHit:  searchCourseTitleHit,
@@ -94,9 +92,8 @@ var chapterPartition = partitionSpec[model.Chapter]{
 			Where("("+searchChapterTitleHit+" OR "+searchChapterContentHit+" OR "+searchChapterDescHit+")", p.like, p.like, p.like)
 	},
 	scope: func(s *Service, q *gorm.DB, p searchParams) *gorm.DB {
-		// 章节可见性跟随课程：同一挂载不变式 scope（不是手拼谓词）。
-		mounted := course.MountedCourseScope(s.db.Model(&model.Course{}).Select("course_id").Where("status = 1"))
-		mounted = scope.EntityOwnedBy(mounted, "credential_id", p.cred)
+		mounted := course.PublishedCategoryCourseScope(s.db.Model(&model.Course{}).Select("course_id"))
+		mounted = p.contentCategory(mounted, "category_id", "credential_id")
 		return q.Where("course_id IN (?)", mounted)
 	},
 	selects:   "chapter.chapter_id, chapter.course_id, chapter.title, s.content AS content, chapter.description",
@@ -139,7 +136,7 @@ var questionPartition = partitionSpec[model.Question]{
 	},
 	scope: func(s *Service, q *gorm.DB, p searchParams) *gorm.DB {
 		// 题库池口径单点（published + 排源标记真题题 + 当前证件），ADR-0050 决策 1。
-		return questionbank.QuestionPoolScope(q, p.cred)
+		return p.contentCategory(questionbank.QuestionPoolScope(q, nil), "question.category_id", "question.credential_id")
 	},
 	selects: "id, content",
 	// 无标题面：题目以题干为标题，命中判据就是题干本身 → 一级排序恒同，直接按 id 倒序。
@@ -172,6 +169,9 @@ var contentPartition = partitionSpec[model.FeaturedContent]{
 			Where("("+searchContentTitleHit+" OR "+searchContentSummaryHit+" OR "+searchContentBodyHit+")", p.like, p.like, p.like)
 	},
 	scope: func(s *Service, q *gorm.DB, p searchParams) *gorm.DB {
+		if p.category.Narrowed() {
+			return q.Where("1 = 0")
+		}
 		return q.Where("status = 1")
 	},
 	selects:   "content_id, title, cover_image, summary, content",
@@ -214,7 +214,12 @@ var topicPartition = partitionSpec[model.ForumTopic]{
 		return s.db.Model(&model.ForumTopic{}).
 			Where("("+searchTopicTitleHit+" OR "+searchTopicBodyHit+" OR "+searchTopicReplyHit+")", p.like, p.like, p.like)
 	},
-	// 帖子物理删除即消失：无额外 scope 谓词。
+	scope: func(s *Service, q *gorm.DB, p searchParams) *gorm.DB {
+		if p.category.Narrowed() {
+			return q.Where("1 = 0")
+		}
+		return q
+	},
 	selects:  "id, title, content",
 	titleHit: searchTopicTitleHit,
 	secondary: "is_featured DESC, CASE WHEN accepted_reply_id IS NOT NULL THEN 0 ELSE 1 END, " +

@@ -11,9 +11,14 @@
 package api
 
 import (
+	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"forklift-training/internal/config"
+	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
 )
 
@@ -29,7 +34,7 @@ type taskConfigRow struct {
 	Description string
 }
 
-// expectedTaskConfigs 任务配置的现行事实（2026-11-15 快照，13 行；#2550 加游览商城/完成积分兑礼）。
+// expectedTaskConfigs 当前可领取的任务配置快照。
 // 改这里之前先读报告 §8 Q11 与 Q12+Q19：本表同时是「5 处口径」那五条断言的载体。
 var expectedTaskConfigs = []taskConfigRow{
 	{Code: "browse_course", Title: "浏览 3 门课程", Group: "daily", Points: 5, DailyLimit: 1, EventType: "course_browse", Description: "每日浏览 3 门课程"},
@@ -41,17 +46,58 @@ var expectedTaskConfigs = []taskConfigRow{
 	{Code: "growth_mock", Title: "完成 1 次模考", Group: "daily", Points: 20, DailyLimit: 1, EventType: "mock_submit", Description: "每日完成 1 次模考"},
 	{Code: "growth_post", Title: "发布 1 篇帖子", Group: "daily", Points: 10, DailyLimit: 1, EventType: "topic_create", Description: "每日发布 1 篇帖子"},
 	{Code: "growth_reply", Title: "回复 3 次", Group: "daily", Points: 10, DailyLimit: 1, EventType: "reply_create", Description: "每日回复 3 次"},
-	{Code: "newbie_credential", Title: "选定目标证件", Group: "newbie", Points: 10, DailyLimit: 1, TotalLimit: intPtr(1), EventType: "credential_onboarding", Description: "完成 onboarding 选定当前证件"},
 	{Code: "newbie_first_course", Title: "完成首节课程", Group: "newbie", Points: 20, DailyLimit: 1, TotalLimit: intPtr(1), EventType: "course_complete", Description: "完成首节课程学习"},
 	{Code: "newbie_profile_basic", Title: "完善基础资料", Group: "newbie", Points: 10, DailyLimit: 1, TotalLimit: intPtr(1), EventType: "profile_complete", Description: "上传头像且设置昵称"},
 	{Code: "newbie_profile_contact", Title: "完善联系资料", Group: "newbie", Points: 10, DailyLimit: 1, TotalLimit: intPtr(1), EventType: "profile_complete", Description: "填写单位且绑定手机/邮箱"},
+}
+
+func TestCredentialTaskRetirementPreservesPointsOnPostgres(t *testing.T) {
+	db := testutil.NewPostgresDB(t)
+	cfg := &config.Config{JWTSecretKey: "credential-task-retirement-test", JWTExpiresHours: 2}
+	router := NewRouter(newContractDeps(t, db, cfg))
+	claimed := failureTestStudentToken(t, db, cfg, "retired-task-claimed")
+	pending := failureTestStudentToken(t, db, cfg, "retired-task-pending")
+	if err := db.Exec("UPDATE hrwai_users SET current_credential_id = (SELECT min(id) FROM credential)").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("UPDATE points_task_config SET retired_at = NULL WHERE code = 'newbie_credential'").Error; err != nil {
+		t.Fatal(err)
+	}
+	path := "/api/points/tasks/newbie_credential/claim"
+	before := doWithToken(t, router, claimed, http.MethodPost, path, nil)
+	if before.Code != http.StatusOK {
+		t.Fatalf("legacy claim failed to seed: %d %s", before.Code, before.Body.String())
+	}
+	migration, err := os.ReadFile(filepath.Join("..", "..", "migrations", "000071_retire_credential_task.up.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(string(migration)).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, token := range []string{claimed, pending} {
+		if after := doWithToken(t, router, token, http.MethodPost, path, nil); after.Code != http.StatusNotFound {
+			t.Fatalf("retired claim still available: %d %s", after.Code, after.Body.String())
+		}
+		if status, _, _ := taskStatusOf(fetchPointsTasks(t, router, token), "newbie_credential"); status != "" {
+			t.Fatalf("retired task still displayed: %s", status)
+		}
+	}
+	var claims []model.PointsTaskClaim
+	if err := db.Where("task_code = ?", "newbie_credential").Find(&claims).Error; err != nil || len(claims) != 1 {
+		t.Fatalf("historic claim not preserved: %+v, %v", claims, err)
+	}
+	var ledger []model.PointsLedger
+	if err := db.Where("reason = ?", "newbie_credential").Find(&ledger).Error; err != nil || len(ledger) != 1 || ledger[0].Delta != 10 {
+		t.Fatalf("historic points ledger changed: %+v, %v", ledger, err)
+	}
 }
 
 func TestTaskCenterConfigSnapshot_OnPostgres(t *testing.T) {
 	db := testutil.NewPostgresDB(t)
 
 	var rows []taskConfigRow
-	if err := db.Table("points_task_config").Order("code ASC").Find(&rows).Error; err != nil {
+	if err := db.Table("points_task_config").Where("retired_at IS NULL").Order("code ASC").Find(&rows).Error; err != nil {
 		t.Fatalf("读任务配置失败: %v", err)
 	}
 
@@ -70,7 +116,7 @@ func TestTaskCenterConfigSnapshot_OnPostgres(t *testing.T) {
 	}
 
 	// 2. 退役任务不再出现（Q11 第 1 条）：daily_checkin 随 ADR-0028 退役、growth_first_experience 随 ADR-0040 退役。
-	for _, code := range []string{"daily_checkin", "growth_first_experience"} {
+	for _, code := range []string{"daily_checkin", "growth_first_experience", "newbie_credential"} {
 		for _, r := range rows {
 			if r.Code == code {
 				t.Fatalf("已退役的任务 %s 又回到配置里（退役任务不该出现在可领列表）", code)

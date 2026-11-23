@@ -17,20 +17,15 @@ vi.mock('@/api/contribution', () => ({
   }
 }))
 
-vi.mock('@/stores/credential', () => ({
-  useCredentialStore: () => ({
-    current: { id: 1 },
-    flatList: [{ id: 1, name: '叉车司机N1' }, { id: 2, name: '低压电工' }],
-    loadFlat: vi.fn().mockResolvedValue([])
-  })
+vi.mock('@/api/training', () => ({
+  trainingApi: { getCategories: vi.fn().mockResolvedValue({ categories: [{ id: 9, name: '维修' }] }) }
 }))
 
 import { contributionApi } from '@/api/contribution'
 import ContributionTab from '../ContributionTab.vue'
 
-function mountTab(props = {}) {
+function mountTab() {
   return mount(ContributionTab, {
-    props: { credentialId: 1, ...props },
     global: {
       plugins: [epLite()],
       stubs: { RouterLink: { template: '<a><slot /></a>' } }
@@ -70,10 +65,14 @@ describe('ContributionTab 学员投稿（#517）', () => {
     expect(w.text()).toContain('12 次下载')
   })
 
-  it('广场按当前证件调 listPublic', async () => {
-    mountTab()
+  it('广场默认全部，选择分类后从第一页读取', async () => {
+    const view = mountTab()
     await flushPromises()
-    expect(vi.mocked(contributionApi.listPublic)).toHaveBeenCalledWith(expect.objectContaining({ credential_id: 1 }))
+    expect(vi.mocked(contributionApi.listPublic)).toHaveBeenCalledWith(expect.objectContaining({ category_id: 'all' }))
+    const select = view.findComponent({ name: 'ElSelect' })
+    select.vm.$emit('update:modelValue', 9)
+    await flushPromises()
+    expect(vi.mocked(contributionApi.listPublic)).toHaveBeenLastCalledWith(expect.objectContaining({ category_id: 9, page: 1 }))
   })
 
   it('「我的投稿」显示状态徽章与撤回按钮（pending）', async () => {
@@ -132,7 +131,7 @@ describe('ContributionTab 学员投稿（#517）', () => {
     openSpy.mockRestore()
   })
 
-  it('上传抽屉：空标题被拦（不调 create）', async () => {
+  it('上传抽屉：未选分类时不能提交', async () => {
     const w = mountTab()
     await flushPromises()
     const uploadBtn = w.findAll('button').find((b) => b.text().includes('上传资料'))
@@ -146,12 +145,12 @@ describe('ContributionTab 学员投稿（#517）', () => {
     expect(vi.mocked(contributionApi.create)).not.toHaveBeenCalled()
   })
 
-  it('上传抽屉：目标证件默认当前证件（#702）', async () => {
+  it('上传抽屉提示选择本次投稿分类', async () => {
     const w = mountTab()
     await flushPromises()
     const uploadBtn = w.findAll('button').find((b) => b.text().includes('上传资料'))
     await uploadBtn!.trigger('click')
     await flushPromises()
-    expect(document.body.textContent).toContain('目标证件')
+    expect(document.body.textContent).toContain('投稿分类')
   })
 })

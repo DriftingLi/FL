@@ -7,6 +7,7 @@ import (
 	"go.uber.org/zap"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/scope"
 	"forklift-training/internal/testutil"
 )
 
@@ -24,17 +25,18 @@ func TestSearchPartitionRegistryConsistency(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 	svc := NewService(db, zap.NewNop())
 	for _, key := range want {
-		if _, _, err := svc.searchItems(key, "液压", 1, 20, nil); err != nil {
+		if _, _, err := svc.searchItems(key, newSearchParams("液压", 1, 20, nil, scope.CategoryFilter{})); err != nil {
 			t.Fatalf("分区 %s 已声明但分发不认识: %v", key, err)
 		}
 	}
-	if _, _, err := svc.searchItems("hydraulic", "液压", 1, 20, nil); err == nil {
+	if _, _, err := svc.searchItems("hydraulic", newSearchParams("液压", 1, 20, nil, scope.CategoryFilter{})); err == nil {
 		t.Fatal("未声明的类型键必须报错（不能静默返回空结果）")
 	}
 
 	// 五个分区各埋一条命中同一关键词的记录。
+	category := testutil.SeedTrainingCategory(t, db, "维修")
 	spID, lvID, credID := 1, 1, 1
-	course := model.Course{Name: "液压课程", Status: 1, SpecialtyID: &spID, LevelID: &lvID, CredentialID: &credID, CreatedAt: testutil.Now()}
+	course := model.Course{Name: "液压课程", Status: 1, CategoryID: &category.ID, SpecialtyID: &spID, LevelID: &lvID, CredentialID: &credID, CreatedAt: testutil.Now()}
 	if err := db.Create(&course).Error; err != nil {
 		t.Fatalf("建课失败: %v", err)
 	}

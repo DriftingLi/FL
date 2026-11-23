@@ -39,13 +39,13 @@ func TestCourseReadVisibilityContract(t *testing.T) {
 	}
 
 	// 可见课程：已发布 + 已挂载。
-	visible := model.Course{Name: "可见课程", Status: 1,
+	visible := model.Course{Name: "可见课程", CategoryID: &testutil.SeedTrainingCategory(t, db, "课程分类").ID, Status: 1,
 		SpecialtyID: ptr(spec.SpecialtyID), LevelID: ptr(lv.LevelID), CreatedAt: testutil.Now()}
 	if err := db.Create(&visible).Error; err != nil {
 		t.Fatalf("创建可见课程失败: %v", err)
 	}
 	// 未发布课程：已挂载但 status = 0（Course.Status 带 gorm default:1，需显式回写）。
-	unpublished := model.Course{Name: "未发布课程", Status: 0,
+	unpublished := model.Course{Name: "未发布课程", CategoryID: &testutil.SeedTrainingCategory(t, db, "课程分类").ID, Status: 0,
 		SpecialtyID: ptr(spec.SpecialtyID), LevelID: ptr(lv.LevelID), CreatedAt: testutil.Now()}
 	if err := db.Create(&unpublished).Error; err != nil {
 		t.Fatalf("创建未发布课程失败: %v", err)

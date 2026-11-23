@@ -101,7 +101,7 @@ var routeRegistrars = []routeRegistrar{
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
 			wrongquestion.RegisterRoutes(api, rd.Session, rd.CredentialScope, deps.WrongQuestionSvc)
 			mockexam.RegisterRoutes(api, rd.Session, rd.CredentialScope, deps.MockExamSvc)
-			realexam.RegisterRoutes(api, rd.Session, rd.CredentialScope, deps.RealExamSvc, deps.PointsSvc)
+			realexam.RegisterRoutes(api, rd.Session, rd.CredentialScope, deps.RealExamSvc, deps.PointsSvc, deps.PracticeModeSvc)
 		},
 	},
 	{

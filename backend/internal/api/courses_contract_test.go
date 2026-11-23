@@ -35,7 +35,7 @@ func TestCoursesListCategoryParamRetired(t *testing.T) {
 	if err := db.Create(&lv).Error; err != nil {
 		t.Fatalf("创建等级失败: %v", err)
 	}
-	c := model.Course{Name: "契约课程", Status: 1,
+	c := model.Course{Name: "契约课程", CategoryID: &testutil.SeedTrainingCategory(t, db, "课程分类").ID, Status: 1,
 		SpecialtyID: ptr(spec.SpecialtyID), LevelID: ptr(lv.LevelID), CreatedAt: testutil.Now()}
 	if err := db.Create(&c).Error; err != nil {
 		t.Fatalf("创建课程失败: %v", err)
@@ -102,10 +102,14 @@ func TestTutorCoursesListContract(t *testing.T) {
 	if err := db.Create(&lv).Error; err != nil {
 		t.Fatalf("创建等级失败: %v", err)
 	}
-	mounted := model.Course{Name: "已挂载课程", Status: 1,
+	mounted := model.Course{Name: "已挂载课程", CategoryID: &testutil.SeedTrainingCategory(t, db, "课程分类").ID, Status: 1,
 		SpecialtyID: ptr(spec.SpecialtyID), LevelID: ptr(lv.LevelID), CreatedAt: testutil.Now()}
 	if err := db.Create(&mounted).Error; err != nil {
 		t.Fatalf("创建课程失败: %v", err)
+	}
+	categoryOnly := model.Course{Name: "仅一级分类的课程", CategoryID: mounted.CategoryID, Status: 1}
+	if err := db.Create(&categoryOnly).Error; err != nil {
+		t.Fatal(err)
 	}
 	unmounted := model.Course{Name: "未挂载课程", Status: 1, CreatedAt: testutil.Now()}
 	if err := db.Create(&unmounted).Error; err != nil {
@@ -149,10 +153,17 @@ func TestTutorCoursesListContract(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatalf("解析响应失败: %v", err)
 	}
+	foundCategoryOnly := false
 	for _, c := range body.Data.Courses {
 		if c["name"] == "未挂载课程" {
 			t.Fatal("未挂载课程不应出现在导师列表（挂载不变式）")
 		}
+		if c["name"] == categoryOnly.Name {
+			foundCategoryOnly = true
+		}
+	}
+	if !foundCategoryOnly {
+		t.Fatal("讲师默认列表应包含未设置专业方向和课程等级的一级分类课程")
 	}
 	var item map[string]any
 	for _, c := range body.Data.Courses {
@@ -191,7 +202,7 @@ func TestChapterSlidesRequireAuthContract(t *testing.T) {
 	if err := db.Create(&lv).Error; err != nil {
 		t.Fatalf("创建等级失败: %v", err)
 	}
-	c := model.Course{Name: "幻灯片课程", Status: 1,
+	c := model.Course{Name: "幻灯片课程", CategoryID: &testutil.SeedTrainingCategory(t, db, "课程分类").ID, Status: 1,
 		SpecialtyID: ptr(spec.SpecialtyID), LevelID: ptr(lv.LevelID), CreatedAt: testutil.Now()}
 	if err := db.Create(&c).Error; err != nil {
 		t.Fatalf("创建课程失败: %v", err)

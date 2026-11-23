@@ -6,6 +6,7 @@ package realexam
 import (
 	"encoding/json"
 	"errors"
+	"slices"
 	"strconv"
 
 	"go.uber.org/zap"
@@ -36,6 +37,7 @@ func NewService(db *gorm.DB, points *points.Service, logger *zap.Logger) *Servic
 // RealExamPaperDTO 套卷列表项。
 type RealExamPaperDTO struct {
 	PaperID         int    `json:"paper_id"`
+	CategoryID      *int   `json:"category_id,omitempty" extensions:"x-optional"`
 	Title           string `json:"title"`
 	Year            *int   `json:"year,omitempty" extensions:"x-optional"`
 	Source          string `json:"source,omitempty" extensions:"x-optional"`
@@ -93,19 +95,27 @@ func (s *Service) paperQuestionIDs(paperID int) ([]int, []model.Question, error)
 
 // ListPapers 当前证件的套卷列表（year desc，附兑换状态与单价）。
 func (s *Service) ListPapers(userID, credentialID int) []RealExamPaperDTO {
-	out := make([]RealExamPaperDTO, 0, 8)
 	if credentialID <= 0 {
-		return out
+		return []RealExamPaperDTO{}
 	}
-	var papers []model.RealExamPaper
-	// 套卷按自身证件列分区（归属分区，ADR-0056 §2）：上方 credentialID<=0 已早退，不存在 nil 分支。
-	if err := scope.EntityOwnedBy(s.db.Model(&model.RealExamPaper{}), "credential_id", &credentialID).
-		Where("status = 1").
-		Order("year DESC NULLS LAST, paper_id DESC").
-		Find(&papers).Error; err != nil {
+	out, err := s.listPapers(userID, scope.EntityOwnedBy(s.db.Model(&model.RealExamPaper{}), "credential_id", &credentialID))
+	if err != nil {
 		s.logger.Warn("查询真题卷列表失败", zap.Int("credential_id", credentialID), zap.Error(err))
-		return out
+		return []RealExamPaperDTO{}
 	}
+	return out
+}
+
+func (s *Service) listPapersByCategory(userID int, category scope.CategoryFilter) ([]RealExamPaperDTO, error) {
+	return s.listPapers(userID, category.Apply(s.db.Model(&model.RealExamPaper{}), "category_id"))
+}
+
+func (s *Service) listPapers(userID int, query *gorm.DB) ([]RealExamPaperDTO, error) {
+	var papers []model.RealExamPaper
+	if err := query.Where("status = 1").Order("year DESC NULLS LAST, paper_id DESC").Find(&papers).Error; err != nil {
+		return nil, err
+	}
+	out := make([]RealExamPaperDTO, 0, len(papers))
 	price := s.points.RealPaperPrice()
 	for i := range papers {
 		p := &papers[i]
@@ -118,6 +128,7 @@ func (s *Service) ListPapers(userID, credentialID int) []RealExamPaperDTO {
 		}
 		out = append(out, RealExamPaperDTO{
 			PaperID:         p.PaperID,
+			CategoryID:      p.CategoryID,
 			Title:           p.Title,
 			Year:            p.Year,
 			Source:          derefString(p.Source),
@@ -127,22 +138,14 @@ func (s *Service) ListPapers(userID, credentialID int) []RealExamPaperDTO {
 			Price:           price,
 		})
 	}
-	return out
+	return out, nil
 }
 
 // StartPaperPractice 按卷练习开始/续练：固定卷序（不随机），断点续练复用 practice_progress。
 // 装配形态（#385）：续练协商（同集沿用卷序与游标/集合变化刷新复位）走 practicemode.ResumeSet 单点。
 func (s *Service) StartPaperPractice(studentID, paperID int) (*practicemode.PracticeStartResultDTO, error) {
-	var paper model.RealExamPaper
-	if err := s.db.Where("paper_id = ? AND status = 1", paperID).First(&paper).Error; err != nil {
-		return nil, points.ErrRealPaperUnavailable
-	}
-	entitled, entErr := s.points.HasEntitlement(studentID, entitlement.RealPaperSKU(paperID), strconv.Itoa(paperID))
-	if entErr != nil {
-		return nil, entErr
-	}
-	if !entitled {
-		return nil, ErrRealPaperNotRedeemed
+	if _, err := s.authorizePaper(studentID, paperID); err != nil {
+		return nil, err
 	}
 	allIDs, all, err := s.paperQuestionIDs(paperID)
 	if err != nil {
@@ -179,19 +182,70 @@ func (s *Service) StartPaperPractice(studentID, paperID int) (*practicemode.Prac
 	}, nil
 }
 
-// StartPaperExam 按卷开考：固定题集 + 卷时长写入 mock_exam（paper_id 归卷），
-// 之后的 save/resume/submit/result 原样复用模拟考链路。
-func (s *Service) StartPaperExam(studentID, paperID int) (*mockexam.MockExamStartDTO, error) {
+func (s *Service) authorizePaper(studentID, paperID int) (*model.RealExamPaper, error) {
 	var paper model.RealExamPaper
-	if err := s.db.Where("paper_id = ? AND status = 1", paperID).First(&paper).Error; err != nil {
+	err := s.db.Where("paper_id = ? AND status = 1", paperID).Take(&paper).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, points.ErrRealPaperUnavailable
 	}
-	entitled, entErr := s.points.HasEntitlement(studentID, entitlement.RealPaperSKU(paperID), strconv.Itoa(paperID))
-	if entErr != nil {
-		return nil, entErr
+	if err != nil {
+		return nil, err
+	}
+	entitled, err := s.points.HasEntitlement(studentID, entitlement.RealPaperSKU(paperID), strconv.Itoa(paperID))
+	if err != nil {
+		return nil, err
 	}
 	if !entitled {
 		return nil, ErrRealPaperNotRedeemed
+	}
+	return &paper, nil
+}
+
+func paperLegacyCredential(paper *model.RealExamPaper) *int {
+	if paper.CredentialID <= 0 {
+		return nil
+	}
+	return &paper.CredentialID
+}
+
+func (s *Service) paperPracticeQuestion(studentID, paperID, questionID int) (*model.RealExamPaper, *model.Question, error) {
+	paper, err := s.authorizePaper(studentID, paperID)
+	if err != nil {
+		return nil, nil, err
+	}
+	var progress model.PracticeProgress
+	err = s.db.Where("student_id = ? AND practice_mode = ?", studentID, practicemode.PracticeModePaper(paperID)).Take(&progress).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil, questionbank.ErrQuestionNotFound
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	var ids []int
+	if err := json.Unmarshal(progress.QuestionIDs, &ids); err != nil {
+		return nil, nil, err
+	}
+	if !slices.Contains(ids, questionID) {
+		return nil, nil, questionbank.ErrQuestionNotFound
+	}
+	var question model.Question
+	err = s.db.Where("id = ? AND status = ? AND EXISTS (SELECT 1 FROM real_exam_paper_question WHERE paper_id = ? AND question_id = question.id)",
+		questionID, "published", paperID).Take(&question).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil, questionbank.ErrQuestionNotFound
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	return paper, &question, nil
+}
+
+// StartPaperExam 按卷开考：固定题集 + 卷时长写入 mock_exam（paper_id 归卷），
+// 之后的 save/resume/submit/result 原样复用模拟考链路。
+func (s *Service) StartPaperExam(studentID, paperID int) (*mockexam.MockExamStartDTO, error) {
+	paper, err := s.authorizePaper(studentID, paperID)
+	if err != nil {
+		return nil, err
 	}
 	questionIDs, ordered, err := s.paperQuestionIDs(paperID)
 	if err != nil {
@@ -226,7 +280,8 @@ func (s *Service) StartPaperExam(studentID, paperID int) (*mockexam.MockExamStar
 		StudentID: studentID,
 		// 分区取**卷所属证件**（不是学员当前证件）：按卷开考的分区由卷本身决定 ——
 		// 学员显式浏览别的证件的卷时，记录也该落在卷的证件下，否则切回本证件反而看不到它（#1003）。
-		CredentialID:  &paper.CredentialID,
+		CredentialID:  paperLegacyCredential(paper),
+		CategoryID:    paper.CategoryID,
 		QuestionIDs:   model.JSONB(idsJSON),
 		Answers:       model.JSONB(emptyJSON),
 		Duration:      duration,

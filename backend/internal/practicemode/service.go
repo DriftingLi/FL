@@ -265,8 +265,7 @@ func (s *Service) GetProgress(studentID int, practiceMode string, credentialID *
 	}
 	var prog model.PracticeProgress
 	// ADR-0056 §2：进度是 NULL 桶分区——nil 只取「未选定证件」那一桶（不是看全部）。
-	q := scope.PartitionBucket(s.db.Model(&model.PracticeProgress{}), "credential_id", cred).
-		Where("student_id = ? AND practice_mode = ?", studentID, practiceMode)
+	q := legacyPracticeProgress(s.db, studentID, practiceMode, cred)
 	if err := q.Limit(1).Find(&prog).Error; err != nil {
 		return &ProgressResultDTO{PoolTotal: poolTotal}
 	}
@@ -348,6 +347,14 @@ func (s *Service) GetSequentialProgress(studentID int, credentialID *int) *Progr
 
 // SubmitAnswer 提交答案并判定。判分经 grading_engine.GradeOne 单题入口（错题入库/分值表经 flow 注入）。
 func (s *Service) SubmitAnswer(studentID, questionID int, userAnswer any, practiceType string, credentialID *int) (*SubmitResultDTO, error) {
+	return s.submitAnswer(studentID, questionID, userAnswer, practiceType, credentialID, false)
+}
+
+func (s *Service) submitQuestionDetailAnswer(studentID, questionID int, userAnswer any) (*SubmitResultDTO, error) {
+	return s.submitAnswer(studentID, questionID, userAnswer, "free", nil, true)
+}
+
+func (s *Service) submitAnswer(studentID, questionID int, userAnswer any, practiceType string, credentialID *int, classify bool) (*SubmitResultDTO, error) {
 	// 池口径守卫（ADR-0049 约束：题库池覆盖每条读路径）：提交即回传答案与解析，
 	// 故按 id 直取的提交路径同样不得越过 published / 排源标记真题题 / 当前证件。
 	// credentialID 是**必填形参**（nil = 不分区）：可见性口径不许做成 fail-open 的可选变参。
@@ -360,18 +367,30 @@ func (s *Service) SubmitAnswer(studentID, questionID int, userAnswer any, practi
 		}
 		return nil, err // 查不动不得被读成「不存在」（ADR-0062 票6）
 	}
+	var categoryID *int
+	if classify {
+		categoryID = q.CategoryID
+	}
+	return s.RecordAuthorizedAnswer(studentID, &q, userAnswer, practiceType, credentialID, categoryID)
+}
 
+func (s *Service) RecordAuthorizedAnswer(studentID int, q *model.Question, userAnswer any, practiceType string, credentialID, categoryID *int) (*SubmitResultDTO, error) {
 	engine := NewGradingEngine(s.db)
 	flow := GradingFlow{
 		AI:       s.grader,
 		MaxScore: PracticeMaxScore,
 	}
-	gr := engine.GradeOne(flow, &q, userAnswer, studentID)
+	flow.CategoryID = categoryID
+	gr := engine.GradeOne(flow, q, userAnswer, studentID)
+	if gr.WrongWriteError != nil {
+		return nil, gr.WrongWriteError
+	}
 
 	rec := model.QuestionPracticeRecord{
 		StudentID:    studentID,
 		CredentialID: credentialID, // 写入时冻结（ADR-0051）：落作答那一刻的当前证件，读面按它分区
-		QuestionID:   questionID,
+		CategoryID:   categoryID,
+		QuestionID:   q.ID,
 		IsCorrect:    gr.IsCorrect != nil && *gr.IsCorrect,
 		PracticeType: questionbank.OrDefault(practiceType, "free"),
 		UserAnswer:   questionbank.StringifyAnswer(userAnswer),
@@ -385,10 +404,10 @@ func (s *Service) SubmitAnswer(studentID, questionID int, userAnswer any, practi
 		IsCorrect:     gr.IsCorrect,
 		CorrectAnswer: q.Answer,
 		Explanation:   q.Explanation,
-		QuestionID:    questionID,
+		QuestionID:    q.ID,
 		UserAnswer:    userAnswer,
 	}
-	FinalizeSubmitResult(s.db, s.explainer, result, gr, &rec, &q)
+	FinalizeSubmitResult(s.db, s.explainer, result, gr, &rec, q)
 	return result, nil
 }
 
@@ -396,12 +415,24 @@ func (s *Service) SubmitAnswer(studentID, questionID int, userAnswer any, practi
 // 全站统计回填 → AI 解析（aiassistant.QuestionExplanation module 单点）→ 简答分支
 // （AI 及格覆写 IsCorrect 并二次 Save 同步练习记录，降级时 AIFallback 同写）。
 func FinalizeSubmitResult(db *gorm.DB, explainer *aiassistant.QuestionExplanation, result *SubmitResultDTO, gr GradeResult, rec *model.QuestionPracticeRecord, q *model.Question) {
+	addSubmitFeedback(db, explainer, result, q)
+	applyShortAnswerResult(result, gr, q)
+	if gr.ShortAnswer != nil && !gr.ShortAnswer.Fallback {
+		rec.IsCorrect = gr.ShortAnswer.Passed
+		db.Save(rec)
+	}
+}
+
+func addSubmitFeedback(db *gorm.DB, explainer *aiassistant.QuestionExplanation, result *SubmitResultDTO, q *model.Question) {
 	if stats := questionStats(db, q.ID); stats != nil {
 		result.AccuracyRate = stats.accuracyRate
 		result.CommonWrong = stats.commonWrong
 		result.TotalAttempts = stats.total
 	}
 	result.AIExplanation = explainer.GetOrGenerate(q)
+}
+
+func applyShortAnswerResult(result *SubmitResultDTO, gr GradeResult, q *model.Question) {
 	if q.Type == "short_answer" {
 		result.ReferenceAnswer = q.ReferenceAnswer
 		result.ScoringCriteria = q.ScoringCriteria
@@ -414,8 +445,6 @@ func FinalizeSubmitResult(db *gorm.DB, explainer *aiassistant.QuestionExplanatio
 			} else {
 				// 练习流保留 IsCorrect 重写语义：AI 及格即覆盖并同步练习记录。
 				result.IsCorrect = boolPtr(sg.Passed)
-				rec.IsCorrect = sg.Passed
-				db.Save(rec)
 			}
 		}
 	}
@@ -442,6 +471,10 @@ func PracticeMaxScore(q *model.Question) float64 {
 // 不再 JOIN question：分区是「作答那一刻的证件」，不是题目当前的归属；题目改归属不该让历史统计搬家。
 // 索引说明：idx_qpr_student_credential (student_id, credential_id, created_at DESC) 覆盖本查询的过滤与排序（迁移 000033）。
 func (s *Service) GetPracticeStats(studentID int, credentialID *int) (*PracticePracticeStatsDTO, error) {
+	return s.getPracticeStats(studentID, credentialID, scope.CategoryFilter{})
+}
+
+func (s *Service) getPracticeStats(studentID int, credentialID *int, category scope.CategoryFilter) (*PracticePracticeStatsDTO, error) {
 	clk := s.clk
 	if clk == nil {
 		clk = clock.Real()
@@ -452,8 +485,7 @@ func (s *Service) GetPracticeStats(studentID int, credentialID *int) (*PracticeP
 	tomorrow := todayStart.AddDate(0, 0, 1)
 
 	base := func() *gorm.DB {
-		return scope.RecordPartitionOf(s.db.Model(&model.QuestionPracticeRecord{}), "question_practice_record.credential_id", credentialID).
-			Where("question_practice_record.student_id = ?", studentID)
+		return filterPracticeRecords(s.db.Model(&model.QuestionPracticeRecord{}), studentID, credentialID, category)
 	}
 
 	var totalCount int64
@@ -489,9 +521,12 @@ func (s *Service) GetPracticeStats(studentID int, credentialID *int) (*PracticeP
 // 查询失败一律上抛 error：旧签名没有 error 出口，DB 抖动时返回「0 题、正确率 0%」的 200，
 // 而同页另一侧的 /practice-stats 却 500（ADR-0062 票6「查不动 ≠ 查得空」）。
 func (s *Service) GetStats(studentID int, credentialID *int) (*PracticeStatsDTO, error) {
+	return s.getStats(studentID, credentialID, scope.CategoryFilter{})
+}
+
+func (s *Service) getStats(studentID int, credentialID *int, category scope.CategoryFilter) (*PracticeStatsDTO, error) {
 	base := func() *gorm.DB {
-		return scope.RecordPartitionOf(s.db.Model(&model.QuestionPracticeRecord{}), "question_practice_record.credential_id", credentialID).
-			Where("question_practice_record.student_id = ?", studentID)
+		return filterPracticeRecords(s.db.Model(&model.QuestionPracticeRecord{}), studentID, credentialID, category)
 	}
 	var total, correct int64
 	if err := base().Count(&total).Error; err != nil {
@@ -573,10 +608,20 @@ func questionStats(db *gorm.DB, questionID int) *questionStatResult {
 // 与 /practice-stats、/stats 同口径；nil = 不分区、看全部（与题库池 / 错题本的既有 nil 语义一致）。
 // 认下的代价：切到「没练过的证件」会看到空历史（空态而非数据丢失）。
 func (s *Service) GetHistory(studentID int, credentialID *int, page, pageSize int, qType, startDate, endDate string) (*HistoryResultDTO, error) {
+	return s.getHistory(studentID, credentialID, scope.CategoryFilter{}, page, pageSize, qType, startDate, endDate)
+}
+
+func filterPracticeRecords(q *gorm.DB, studentID int, credentialID *int, category scope.CategoryFilter) *gorm.DB {
+	q = q.Where("question_practice_record.student_id = ?", studentID)
+	if category.Explicit() {
+		return category.Apply(q, "question_practice_record.category_id")
+	}
+	return scope.RecordPartitionOf(q, "question_practice_record.credential_id", credentialID)
+}
+
+func (s *Service) getHistory(studentID int, credentialID *int, category scope.CategoryFilter, page, pageSize int, qType, startDate, endDate string) (*HistoryResultDTO, error) {
 	records, total, page, pageSize, err := paging.Query[model.QuestionPracticeRecord](s.db, page, pageSize, 20, "question_practice_record.created_at DESC", func(q *gorm.DB) *gorm.DB {
-		q = q.Where("student_id = ?", studentID)
-		// 必须带表名前缀：qType 分支会 JOIN question，而两张表都有 credential_id（否则歧义列报错）
-		q = scope.RecordPartitionOf(q, "question_practice_record.credential_id", credentialID)
+		q = filterPracticeRecords(q, studentID, credentialID, category)
 		if qType != "" {
 			q = q.Joins("JOIN question ON question.id = question_practice_record.question_id").Where("question.type = ?", qType)
 		}
@@ -603,6 +648,7 @@ func (s *Service) GetHistory(studentID int, credentialID *int, page, pageSize in
 	for _, rc := range records {
 		item := HistoryItemDTO{
 			ID:           rc.ID,
+			CategoryID:   rc.CategoryID,
 			StudentID:    rc.StudentID,
 			QuestionID:   rc.QuestionID,
 			IsCorrect:    rc.IsCorrect,

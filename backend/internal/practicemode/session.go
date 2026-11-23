@@ -91,8 +91,7 @@ type ResumeSetSpec struct {
 func ResumeSet(db *gorm.DB, studentID int, credentialID *int, spec ResumeSetSpec) (ids []int, startIdx int, err error) {
 	var prog model.PracticeProgress
 	// #414 / ADR-0056 §2：进度定位走 NULL 桶谓词——nil 只取「未选定证件」那一桶（不是看全部）。
-	q := scope.PartitionBucket(db.Model(&model.PracticeProgress{}), "credential_id", credentialID).
-		Where("student_id = ? AND practice_mode = ?", studentID, spec.Mode)
+	q := legacyPracticeProgress(db, studentID, spec.Mode, credentialID)
 	if err := q.Limit(1).Find(&prog).Error; err != nil {
 		return nil, 0, err
 	}
@@ -131,8 +130,7 @@ func ResumeSet(db *gorm.DB, studentID int, credentialID *int, spec ResumeSetSpec
 func SaveSet(db *gorm.DB, studentID int, mode string, credentialID *int, ids []int, startIdx, total int, answers json.RawMessage) error {
 	var prog model.PracticeProgress
 	// ADR-0056 §2：与 ResumeSet 同源——进度按证件分桶，nil 只取未选定证件那一桶。
-	q := scope.PartitionBucket(db.Model(&model.PracticeProgress{}), "credential_id", credentialID).
-		Where("student_id = ? AND practice_mode = ?", studentID, mode)
+	q := legacyPracticeProgress(db, studentID, mode, credentialID)
 	if err := q.Limit(1).Find(&prog).Error; err != nil {
 		return err
 	}
@@ -188,6 +186,15 @@ func SaveSet(db *gorm.DB, studentID int, mode string, credentialID *int, ids []i
 		return db.Model(&prog).Updates(aux).Error
 	}
 	return nil
+}
+
+func legacyPracticeProgress(db *gorm.DB, studentID int, mode string, credentialID *int) *gorm.DB {
+	q := scope.PartitionBucket(db.Model(&model.PracticeProgress{}), "credential_id", credentialID).
+		Where("student_id = ? AND practice_mode = ?", studentID, mode)
+	if credentialID == nil {
+		q = q.Where("category_id IS NULL")
+	}
+	return q
 }
 
 // marshalIDs 题目顺序序列化（失败落空数组——顺序仅是缓存态，空数组等价重新协商）。

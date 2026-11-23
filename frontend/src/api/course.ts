@@ -14,6 +14,8 @@ import type {
   CourseDTO,
   CourseDetailDTO,
   CoursePageResult,
+  PublicCourseDetailDTO,
+  PublicCoursePageDTO,
   StudyProgressDTO
 } from './generated/course'
 
@@ -26,6 +28,8 @@ export type {
   CourseDTO,
   CourseDetailDTO,
   CoursePageResult,
+  PublicCourseDetailDTO,
+  PublicCoursePageDTO,
   StudyProgressDTO
 }
 
@@ -71,6 +75,14 @@ export const courseApi = {
 
   getCourseDetail(id: number) {
     return unwrappedRequest.get<CourseDetailDTO>(`/course/${id}`)
+  },
+
+  getPublicCourseDetail(id: number) {
+    return unwrappedRequest.get<PublicCourseDetailDTO>(`/courses/${id}`, SILENT)
+  },
+
+  getPublicCourses(params: { category_id?: number; page?: number; filter?: 'hot' | 'featured' }) {
+    return unwrappedRequest.get<PublicCoursePageDTO>('/catalog/courses', { ...SILENT, params })
   },
 
   /**

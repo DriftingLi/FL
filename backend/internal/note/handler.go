@@ -56,7 +56,7 @@ func newHandler(svc *Service) *handler { return &handler{svc: svc} }
 // 列表回填的题干摘要属题目域，必须按当前证件过题库池。
 func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, credRes middleware.CredentialResolver, svc *Service) {
 	h := newHandler(svc)
-	g := rg.Group("/notes", middleware.JWTAuth(session), middleware.CredentialScoped(credRes))
+	g := rg.Group("/notes", middleware.JWTAuth(session), middleware.CredentialScopedUnlessCategory(credRes))
 
 	// GET    /api/notes          我的笔记（分页 + scope 筛选）
 	g.GET("", h.List)

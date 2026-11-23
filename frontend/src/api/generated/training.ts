@@ -6,10 +6,15 @@
 //
 // 覆盖端点：
 //   GET  /catalog/tree
+//   GET  /catalog/categories
+//   GET  /catalog/history-categories
 //   GET  /levels
 //   GET  /tags
 //   GET  /positions
 //   GET  /admin/catalog/tree
+//   GET  /admin/catalog/categories
+//   POST /admin/catalog/categories
+//   PUT  /admin/catalog/categories/{category_id}
 //   POST /admin/specialty
 //   GET  /admin/specialties
 //   PUT  /admin/specialty/{specialty_id}
@@ -35,7 +40,7 @@
 //   PUT  /admin/position/{position_id}/sort
 //   DELETE /admin/position/{position_id}
 //
-// 覆盖的 Go 类型：CertificateTemplateDTO / ChapterDTO / ChapterFileDTO / CourseBriefDTO / CourseDTO / CredentialBriefDTO / LevelBriefDTO / SpecialtyBriefDTO / CatalogLevelNode / CatalogSpecialtyNode / CatalogTreeDTO / CertificateTemplateDict / CertificateTemplateListDTO / LevelDict / LevelListDTO / PositionDict / PositionListDTO / QuestionTagDict / QuestionTagListDTO / QuestionTagsResultDTO / SpecialtyDict / SpecialtyListDTO
+// 覆盖的 Go 类型：CertificateTemplateDTO / ChapterDTO / ChapterFileDTO / CourseBriefDTO / CourseDTO / CredentialBriefDTO / LevelBriefDTO / SpecialtyBriefDTO / CatalogLevelNode / CatalogSpecialtyNode / CatalogTreeDTO / CertificateTemplateDict / CertificateTemplateListDTO / LevelDict / LevelListDTO / PositionDict / PositionListDTO / QuestionTagDict / QuestionTagListDTO / QuestionTagsResultDTO / SpecialtyDict / SpecialtyListDTO / TrainingCategoryDTO / TrainingCategoryListDTO
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -89,6 +94,7 @@ export interface CourseBriefDTO {
 }
 
 export interface CourseDTO {
+  category_id?: number
   certificate_name?: string
   certificate_template?: CertificateTemplateDTO
   certificate_template_id: number | null
@@ -97,6 +103,7 @@ export interface CourseDTO {
   claim_count?: number
   claimed_by_me?: boolean
   course_id: number
+  course_type: string
   cover_image: string
   created_at: string
   credential?: CredentialBriefDTO
@@ -243,4 +250,15 @@ export interface SpecialtyDict {
 
 export interface SpecialtyListDTO {
   specialties: SpecialtyDict[]
+}
+
+export interface TrainingCategoryDTO {
+  id: number
+  name: string
+  sort_order?: number
+  status?: number
+}
+
+export interface TrainingCategoryListDTO {
+  categories: TrainingCategoryDTO[]
 }

@@ -9,8 +9,10 @@
 package practicemode
 
 import (
+	"context"
 	"testing"
 
+	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
 )
 
@@ -18,10 +20,28 @@ import (
 // 前缀 nonnilOutlets 是约定的证据表名：apitypes 的表态锁按它扫目录收键（见
 // internal/apitypes/nullability_lock_test.go 的 nonNilEvidenceSources）。
 var nonnilOutletsPractice = map[string]func(t *testing.T) any{
-	"practicemode.HistoryResultDTO.records":         outletPracticeHistoryEmpty,
-	"practicemode.PracticeStartResultDTO.questions": outletPracticeStartSequential,
-	"practicemode.PracticeStatsDTO.by_type":         outletPracticeStatsEmpty,
-	"practicemode.PracticeStatsDTO.by_tag":          outletPracticeStatsEmpty,
+	"practicemode.HistoryResultDTO.records":               outletPracticeHistoryEmpty,
+	"practicemode.CategoryPracticeStartDTO.questions":     outletCategoryPracticeStart,
+	"practicemode.CategoryPracticeStartDTO.answers_state": outletCategoryPracticeStart,
+	"practicemode.PracticeStartResultDTO.questions":       outletPracticeStartSequential,
+	"practicemode.PracticeStatsDTO.by_type":               outletPracticeStatsEmpty,
+	"practicemode.PracticeStatsDTO.by_tag":                outletPracticeStatsEmpty,
+}
+
+func outletCategoryPracticeStart(t *testing.T) any {
+	t.Helper()
+	svc, db := newPracticeSvc(t)
+	student := testutil.SeedStudent(t, db, "分类练习学员", "x")
+	category := testutil.SeedTrainingCategory(t, db, "维修")
+	question := model.Question{Type: "single_choice", Content: "分类练习题", Answer: "A", Status: "published", CategoryID: &category.ID}
+	if err := db.Create(&question).Error; err != nil {
+		t.Fatal(err)
+	}
+	result, err := svc.StartCategoryPractice(context.Background(), student.ID, CategoryPracticeStartInput{Mode: "sequential", CategoryID: category.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return result
 }
 
 // TestNonNilDeclaredOutletsNeverEmitNull 本域的举证入口（判据本体在 testutil）。

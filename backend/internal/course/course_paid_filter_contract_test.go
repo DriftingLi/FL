@@ -32,7 +32,7 @@ func TestCoursePaidFilterContract(t *testing.T) {
 
 	seed := func(name string, price *int) {
 		t.Helper()
-		c := model.Course{Name: name, Status: 1, PointsPrice: price,
+		c := model.Course{Name: name, CategoryID: &testutil.SeedTrainingCategory(t, db, "课程分类").ID, Status: 1, PointsPrice: price,
 			SpecialtyID: ptr(spec.SpecialtyID), LevelID: ptr(lv.LevelID), CreatedAt: testutil.Now()}
 		if err := db.Create(&c).Error; err != nil {
 			t.Fatalf("创建课程失败: %v", err)
@@ -133,7 +133,7 @@ func TestCoursePaidFilterTreatsZeroPriceAsFree(t *testing.T) {
 		name  string
 		price *int
 	}{{"免费课", nil}, {"零价课", ptr(0)}, {"付费课", ptr(50)}} {
-		c := model.Course{Name: tc.name, Status: 1, PointsPrice: tc.price,
+		c := model.Course{Name: tc.name, CategoryID: &testutil.SeedTrainingCategory(t, db, "课程分类").ID, Status: 1, PointsPrice: tc.price,
 			SpecialtyID: ptr(spec.SpecialtyID), LevelID: ptr(lv.LevelID), CreatedAt: testutil.Now()}
 		if err := db.Create(&c).Error; err != nil {
 			t.Fatalf("创建课程失败: %v", err)

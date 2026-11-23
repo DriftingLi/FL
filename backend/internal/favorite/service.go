@@ -138,7 +138,7 @@ func validateFavoriteTarget(db *gorm.DB, targetType string, targetID int, qScope
 	case FavoriteTargetChapter:
 		var cnt int64
 		// 章节可见性跟随课程：谓词复用挂载不变式单点，不手拼（#1132）。
-		mounted := course.MountedCourseScope(db.Model(&model.Course{}).Select("course_id").Where("status = 1"))
+		mounted := course.PublishedCategoryCourseScope(db.Model(&model.Course{}).Select("course_id"))
 		if err := db.Model(&model.Chapter{}).Where("chapter_id = ? AND course_id IN (?)", targetID, mounted).Count(&cnt).Error; err != nil {
 			return err
 		}
@@ -350,6 +350,32 @@ func favoriteTargetSubquery(targetType string, credentialID *int) (string, []any
 
 // List 我的收藏列表（targetType 可选过滤；目标已删除的条目跳过）。
 func (s *Service) List(userID int, targetType string, page, pageSize int, credentialID, tagID *int) (*FavoritePageResult, error) {
+	return s.list(userID, targetType, page, pageSize, credentialID, tagID, scope.CategoryFilter{})
+}
+
+func filterFavoriteCategory(db, query *gorm.DB, category scope.CategoryFilter) *gorm.DB {
+	courses := category.Apply(course.PublishedCategoryCourseScope(db.Model(&model.Course{})), "category_id").Select("course_id")
+	chapters := db.Model(&model.Chapter{}).Select("chapter.chapter_id").
+		Where("chapter.course_id IN (?)", courses).
+		Where("EXISTS (SELECT 1 FROM chapter_content_slot s WHERE s.chapter_id = chapter.chapter_id AND s.slot = 'published')")
+	questions := category.Apply(questionbank.QuestionPoolScope(db.Model(&model.Question{}), nil), "category_id").Select("id")
+	predicate := "(favorite.target_type = ? AND favorite.target_id IN (?)) OR " +
+		"(favorite.target_type = ? AND favorite.target_id IN (?)) OR " +
+		"(favorite.target_type = ? AND favorite.target_id IN (?))"
+	args := []any{FavoriteTargetCourse, courses, FavoriteTargetChapter, chapters, FavoriteTargetQuestion, questions}
+	if !category.Narrowed() {
+		featured := db.Model(&model.FeaturedContent{}).Where("status = 1").Select("content_id")
+		topics := db.Model(&model.ForumTopic{}).Select("id")
+		jobs := job.VisibleToStudentScope(db.Model(&model.JobPosting{})).Select("id")
+		predicate += " OR (favorite.target_type = ? AND favorite.target_id IN (?)) OR " +
+			"(favorite.target_type = ? AND favorite.target_id IN (?)) OR " +
+			"(favorite.target_type = ? AND favorite.target_id IN (?))"
+		args = append(args, FavoriteTargetFeatured, featured, FavoriteTargetTopic, topics, FavoriteTargetJob, jobs)
+	}
+	return query.Where("("+predicate+")", args...)
+}
+
+func (s *Service) list(userID int, targetType string, page, pageSize int, credentialID, tagID *int, category scope.CategoryFilter) (*FavoritePageResult, error) {
 	targetType = strings.TrimSpace(targetType)
 	if tagID != nil && targetType != FavoriteTargetQuestion {
 		return nil, ErrFavTagFilterRequiresQuestion
@@ -366,7 +392,9 @@ func (s *Service) List(userID int, targetType string, page, pageSize int, creden
 			}
 			// 收藏目标的证件分区是**归属分区**（ADR-0056 §2）：读目标自身的证件列，nil = 不分区、看全部。
 			// 「混合类型」分支只过滤 course/question 两个分区，其余类型保持（既有语义）。
-			if credentialID != nil && (targetType == FavoriteTargetCourse || targetType == FavoriteTargetQuestion) {
+			if category.Explicit() {
+				q = filterFavoriteCategory(s.db, q, category)
+			} else if credentialID != nil && (targetType == FavoriteTargetCourse || targetType == FavoriteTargetQuestion) {
 				sub, args := favoriteTargetSubquery(targetType, credentialID)
 				q = q.Where("target_id IN ("+sub+")", args...)
 			} else if credentialID != nil && targetType == "" {

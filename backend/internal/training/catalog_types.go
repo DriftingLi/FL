@@ -2,6 +2,23 @@
 // Input 与 DTO 结构体（JSON 字段名与前端契约保持完全一致）。
 package training
 
+type TrainingCategoryDTO struct {
+	ID        int    `json:"id"`
+	Name      string `json:"name"`
+	Status    *int16 `json:"status,omitempty" extensions:"x-optional"`
+	SortOrder *int   `json:"sort_order,omitempty" extensions:"x-optional"`
+}
+
+type TrainingCategoryListDTO struct {
+	Categories []TrainingCategoryDTO `json:"categories" nullability:"nonnil"`
+}
+
+type TrainingCategoryInput struct {
+	Name      string `json:"name"`
+	Status    *int16 `json:"status"`
+	SortOrder *int   `json:"sort_order"`
+}
+
 // SpecialtyInput 专业方向创建/更新入参。
 // 更新语义（与旧 map 接口一致）：Code/Name 为空表示不改动；指针字段为 nil 表示不改动。
 type SpecialtyInput struct {

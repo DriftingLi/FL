@@ -18,6 +18,8 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
+
+	"forklift-training/internal/testutil"
 )
 
 // courseFactCase 一件「输入不合法」或「引用查不动」的事实，以及在两条面上要打的请求。
@@ -40,6 +42,9 @@ type courseFactCase struct {
 // 这里不写「想当然的期望码」，只写「两条面必须同码」+ 两类各自的目标码：
 // 输入不合法 ⇒ 400（含引用对象不存在：客户端给的是坏引用，不是服务端故障）；查不动 ⇒ 500。
 var courseFactCases = []courseFactCase{
+	{name: "分类ID为零", patch: map[string]any{"category_id": 0}},
+	{name: "分类不存在", patch: map[string]any{"category_id": 999999}},
+	{name: "分类查不动", patch: map[string]any{"category_id": 1}, dropTable: "training_category"},
 	{name: "证件ID为负", patch: map[string]any{"credential_id": -5}},
 	{name: "证件引用不存在", patch: map[string]any{"credential_id": 999999}},
 	{name: "证件查不动", patch: map[string]any{"credential_id": 1}, dropTable: "credential"},
@@ -73,7 +78,10 @@ func TestCourseInvalidInputSameFaceOnCreateAndUpdate(t *testing.T) {
 			r, db, token := newAdminContractEnv(t)
 			ids := seedCourseDomain(t, db)
 
-			base := map[string]any{"name": "对称锁课程", "specialty_id": ids.specialty, "level_id": ids.level}
+			category := testutil.SeedTrainingCategory(t, db, "对称锁分类")
+			// course_type 取 illustrated：seedCourseDomain 的课程与其章节都落在图文一侧
+			// （模型默认值），基础 body 必须两边都合法才能当「对称锁」的基准。
+			base := map[string]any{"name": "对称锁课程", "category_id": category.ID, "specialty_id": ids.specialty, "level_id": ids.level, "course_type": "illustrated"}
 			body := map[string]any{}
 			for k, v := range base {
 				body[k] = v

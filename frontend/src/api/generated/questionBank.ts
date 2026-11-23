@@ -39,6 +39,7 @@ export interface QuestionBankStatsDTO {
 
 export interface QuestionDTO {
   answer?: string
+  category_id?: number
   content: string
   created_at: string
   created_by: number | null

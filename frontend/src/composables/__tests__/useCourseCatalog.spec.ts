@@ -12,6 +12,7 @@ function courseOf(courseId: number, name: string, over: Partial<CourseDTO> = {})
     certificate_name: '',
     certificate_template_id: null,
     course_id: courseId,
+    course_type: 'illustrated',
     cover_image: '',
     created_at: '',
     credential_id: null,

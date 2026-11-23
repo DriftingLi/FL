@@ -838,6 +838,9 @@ definitions:
         description: |-
           Author 的 omitempty 对结构体取值**无效**（encoding/json 不省略零值结构体）：key 恒在，
           生成物按必填渲染是正确的，前端手写的 author? 属过时宽容。
+      category_id:
+        type: integer
+        x-optional: true
       created_at:
         type: string
       credential_id:
@@ -923,6 +926,8 @@ definitions:
     type: object
   contribution.createContributionReq:
     properties:
+      category_id:
+        type: integer
       credential_id:
         type: integer
       files:
@@ -1087,6 +1092,9 @@ definitions:
     type: object
   course.AdminCourseDetailDTO:
     properties:
+      category_id:
+        type: integer
+        x-optional: true
       certificate_name:
         type: string
         x-optional: true
@@ -1116,6 +1124,9 @@ definitions:
         x-optional: true
       course_id:
         type: integer
+      course_type:
+        description: CourseType 课程主类型（#2760）：video / illustrated。库侧 NOT NULL，故非可选。
+        type: string
       cover_image:
         type: string
       created_at:
@@ -1338,6 +1349,11 @@ definitions:
     properties:
       content:
         type: string
+      content_type:
+        description: |-
+          ContentType 章节内容形态（#2760）：video / text / ppt / document。
+          创建时不携带 ⇒ text；编辑时不携带 ⇒ 保留原值。
+        type: string
       description:
         type: string
       duration:
@@ -1452,6 +1468,9 @@ definitions:
     type: object
   course.CourseDTO:
     properties:
+      category_id:
+        type: integer
+        x-optional: true
       certificate_name:
         type: string
         x-optional: true
@@ -1482,6 +1501,9 @@ definitions:
         x-optional: true
       course_id:
         type: integer
+      course_type:
+        description: CourseType 课程主类型（#2760）：video / illustrated。库侧 NOT NULL，故非可选。
+        type: string
       cover_image:
         type: string
       created_at:
@@ -1617,6 +1639,172 @@ definitions:
         type: integer
       name:
         type: string
+    type: object
+  course.PublicCourseCategoryDTO:
+    properties:
+      id:
+        type: integer
+      name:
+        type: string
+    type: object
+  course.PublicCourseChapterDTO:
+    properties:
+      chapter_id:
+        type: integer
+      content_type:
+        type: string
+      duration:
+        type: integer
+      order_num:
+        type: integer
+      title:
+        type: string
+    type: object
+  course.PublicCourseDetailDTO:
+    properties:
+      category:
+        $ref: '#/definitions/course.PublicCourseCategoryDTO'
+      chapter_count:
+        type: integer
+      chapters:
+        items:
+          $ref: '#/definitions/course.PublicCourseChapterDTO'
+        type: array
+      course_id:
+        type: integer
+      cover_image:
+        type: string
+      description:
+        type: string
+      name:
+        type: string
+      points_price:
+        type: integer
+        x-optional: true
+    type: object
+  course.PublicCoursePageDTO:
+    properties:
+      courses:
+        items:
+          $ref: '#/definitions/course.PublicCourseSummaryDTO'
+        type: array
+      page:
+        type: integer
+      pages:
+        type: integer
+      total:
+        type: integer
+    type: object
+  course.PublicCourseSummaryDTO:
+    properties:
+      category:
+        $ref: '#/definitions/course.PublicCourseCategoryDTO'
+      course_id:
+        type: integer
+      cover_image:
+        type: string
+      description:
+        type: string
+      name:
+        type: string
+      points_price:
+        type: integer
+        x-optional: true
+    type: object
+  course.PublicQuestionBankCategoryDTO:
+    properties:
+      by_type:
+        additionalProperties:
+          type: integer
+        type: object
+      category_id:
+        type: integer
+      category_name:
+        type: string
+      total:
+        type: integer
+    type: object
+  course.PublicQuestionBankListDTO:
+    properties:
+      question_banks:
+        items:
+          $ref: '#/definitions/course.PublicQuestionBankCategoryDTO'
+        type: array
+    type: object
+  course.PublicSchoolCategoryDTO:
+    properties:
+      course_count:
+        type: integer
+      id:
+        type: integer
+      name:
+        type: string
+    type: object
+  course.PublicSchoolCategoryListDTO:
+    properties:
+      categories:
+        items:
+          $ref: '#/definitions/course.PublicSchoolCategoryDTO'
+        type: array
+    type: object
+  course.PublicSchoolCourseDetailDTO:
+    properties:
+      category:
+        $ref: '#/definitions/course.PublicCourseCategoryDTO'
+      chapter_count:
+        type: integer
+      chapters:
+        items:
+          $ref: '#/definitions/course.PublicCourseChapterDTO'
+        type: array
+      course_id:
+        type: integer
+      course_type:
+        description: CourseType 课程主类型（#2760）：详情页要能显示「这是一门视频课」。
+        type: string
+      cover_image:
+        type: string
+      description:
+        type: string
+      name:
+        type: string
+      points_price:
+        type: integer
+        x-optional: true
+    type: object
+  course.PublicSchoolCoursePageDTO:
+    properties:
+      courses:
+        items:
+          $ref: '#/definitions/course.PublicSchoolCourseSummaryDTO'
+        type: array
+      page:
+        type: integer
+      pages:
+        type: integer
+      total:
+        type: integer
+    type: object
+  course.PublicSchoolCourseSummaryDTO:
+    properties:
+      category:
+        $ref: '#/definitions/course.PublicCourseCategoryDTO'
+      course_id:
+        type: integer
+      course_type:
+        description: |-
+          CourseType 课程主类型（#2760）：video / illustrated。目录行必须出这一格——
+          访客在「全部课程」里也要看得出这门课是视频还是图文，否则分流入口之外就没有分类线索。
+        type: string
+      cover_image:
+        type: string
+      description:
+        type: string
+      name:
+        type: string
+      points_price:
+        type: integer
+        x-optional: true
     type: object
   course.SpecialtyBriefDTO:
     properties:
@@ -2637,6 +2825,9 @@ definitions:
   mockexam.MockExamHistoryItemDTO:
     properties:
       answers: {}
+      category_id:
+        type: integer
+        x-optional: true
       created_at:
         type: string
       duration:
@@ -2690,7 +2881,9 @@ definitions:
     type: object
   mockexam.MockExamResumeDTO:
     properties:
-      answers: {}
+      answers:
+        additionalProperties: {}
+        type: object
       duration:
         type: integer
       mock_exam_id:
@@ -2738,6 +2931,15 @@ definitions:
         type: integer
       total_score:
         type: number
+    type: object
+  mockexam.categoryExamInput:
+    properties:
+      category_id:
+        type: integer
+      duration_minutes:
+        type: integer
+      question_count:
+        type: integer
     type: object
   model.AuditLog:
     properties:
@@ -3058,8 +3260,46 @@ definitions:
           $ref: '#/definitions/points.ShopItemDTO'
         type: array
     type: object
+  practicemode.CategoryPracticeAnswerInput:
+    properties:
+      attempt_key:
+        type: string
+      question_id:
+        type: integer
+      user_answer: {}
+    type: object
+  practicemode.CategoryPracticeStartDTO:
+    properties:
+      answers_state:
+        additionalProperties: {}
+        type: object
+      attempt_key:
+        type: string
+      completed:
+        type: integer
+      current_index:
+        type: integer
+      questions:
+        items:
+          $ref: '#/definitions/questionbank.QuestionDTO'
+        type: array
+    type: object
+  practicemode.CategoryPracticeStartInput:
+    properties:
+      category_id:
+        type: integer
+      count:
+        type: integer
+      mode:
+        type: string
+      restart:
+        type: boolean
+    type: object
   practicemode.HistoryItemDTO:
     properties:
+      category_id:
+        type: integer
+        x-optional: true
       created_at:
         type: string
       id:
@@ -3253,6 +3493,9 @@ definitions:
         description: 学员侧（includeAnswer=false）省略以下四个字段。
         type: string
         x-optional: true
+      category_id:
+        type: integer
+        x-optional: true
       content:
         type: string
       created_at:
@@ -3374,6 +3617,9 @@ definitions:
     type: object
   realexam.RealExamPaperDTO:
     properties:
+      category_id:
+        type: integer
+        x-optional: true
       duration_minutes:
         type: integer
       entitled:
@@ -3392,6 +3638,12 @@ definitions:
       year:
         type: integer
         x-optional: true
+    type: object
+  realexam.paperPracticeAnswerInput:
+    properties:
+      question_id:
+        type: integer
+      user_answer: {}
     type: object
   recruit.RecruitListResult:
     properties:
@@ -4143,6 +4395,35 @@ definitions:
       specialties:
         items:
           $ref: '#/definitions/training.SpecialtyDict'
+        type: array
+    type: object
+  training.TrainingCategoryDTO:
+    properties:
+      id:
+        type: integer
+      name:
+        type: string
+      sort_order:
+        type: integer
+        x-optional: true
+      status:
+        type: integer
+        x-optional: true
+    type: object
+  training.TrainingCategoryInput:
+    properties:
+      name:
+        type: string
+      sort_order:
+        type: integer
+      status:
+        type: integer
+    type: object
+  training.TrainingCategoryListDTO:
+    properties:
+      categories:
+        items:
+          $ref: '#/definitions/training.TrainingCategoryDTO'
         type: array
     type: object
   tutor.BatchDeleteFilesResult:
@@ -5475,6 +5756,89 @@ paths:
       summary: 审计日志列表
       tags:
       - 管理端-审计
+  /admin/catalog/categories:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/training.TrainingCategoryListDTO'
+              type: object
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 管理端培训分类列表（含停用项）
+      tags:
+      - 管理端-培训目录
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 分类名称、排序、启用状态
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/training.TrainingCategoryInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/training.TrainingCategoryDTO'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: 创建一级培训分类
+      tags:
+      - 管理端-培训目录
+  /admin/catalog/categories/{category_id}:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: 分类 ID
+        in: path
+        name: category_id
+        required: true
+        type: integer
+      - description: 分类名称、排序、启用状态
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/training.TrainingCategoryInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/training.TrainingCategoryDTO'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: 编辑一级培训分类
+      tags:
+      - 管理端-培训目录
   /admin/catalog/tree:
     get:
       description: 含停用项与章节节点的完整目录树（需 CapCatalogManage）
@@ -6140,9 +6504,9 @@ paths:
     post:
       consumes:
       - application/json
-      description: 管理员创建课程（含培训目录扩展字段）
+      description: 管理员按一级培训分类创建课程
       parameters:
-      - description: 课程输入 {name,description,cover_image,duration,status,...}
+      - description: 课程输入 {name,category_id,description,cover_image,duration,status,...}
         in: body
         name: body
         schema:
@@ -6160,7 +6524,7 @@ paths:
                   $ref: '#/definitions/course.CourseDTO'
               type: object
         "400":
-          description: 输入不合法（挂载必填 / 引用ID无效或不存在 / 数值为负 / 积分价非正 / 前置课程冲突）
+          description: 输入不合法（分类必填 / 引用ID无效或不存在 / 数值为负 / 积分价非正 / 前置课程冲突）
           schema:
             $ref: '#/definitions/response.R'
         "401":
@@ -6340,7 +6704,7 @@ paths:
     put:
       consumes:
       - application/json
-      description: 同一方向+等级组内交换 sort_order，响应 data 为 null
+      description: 同一分类内交换 sort_order，响应 data 为 null
       parameters:
       - description: 课程 ID
         in: path
@@ -11585,6 +11949,80 @@ paths:
       summary: 图形验证码
       tags:
       - 学员端-认证
+  /catalog/categories:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/training.TrainingCategoryListDTO'
+              type: object
+      summary: 培训一级分类（公开）
+      tags:
+      - 学员端-培训目录
+  /catalog/courses:
+    get:
+      parameters:
+      - description: 一级分类ID
+        in: query
+        name: category_id
+        type: integer
+      - description: 热门或精品分类 hot|featured|all
+        in: query
+        name: filter
+        type: string
+      - description: 页码
+        in: query
+        name: page
+        type: integer
+      - description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/course.PublicCoursePageDTO'
+              type: object
+        "400":
+          description: 分类ID无效
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 公开一级分类课程目录
+      tags:
+      - 学员端-课程
+  /catalog/history-categories:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/training.TrainingCategoryListDTO'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: 培训历史筛选分类（含停用项）
+      tags:
+      - 学员端-培训目录
   /catalog/tree:
     get:
       description: 学员端课程目录树（credential_id 可选：传了按目标证件分区，与课程列表同口径；不传不分区）
@@ -11794,11 +12232,14 @@ paths:
     get:
       description: 仅 approved 投稿，按目标证件过滤，sort=latest|hot（hot 走下载量降序）。分页
       parameters:
-      - description: 目标证件ID
+      - description: 旧目标证件 ID
         in: query
         name: credential_id
-        required: true
         type: integer
+      - description: 培训分类 ID 或 all
+        in: query
+        name: category_id
+        type: string
       - default: latest
         description: 排序 latest|hot
         in: query
@@ -11842,10 +12283,12 @@ paths:
     post:
       consumes:
       - application/json
-      description: '学员提交资料投稿（1–5 个文件，合计 ≤50MB，目标证件可选、默认当前证件；投给非当前证件的稿需切过去可见）。资格：仅学员且已选证件；配额：日
-        ≤3 份、pending 积压 ≤5 份。提交的每个 file_url 过四校验：前缀属本人 contributions/<id>/、扩展名在白名单内、未被任何投稿登记过、文件真实存在（ADR-0066
-        决策 5 / #1361）。未过审不产生积分'
+      description: 学员选择一个已启用的培训分类并提交资料投稿（1–5 个文件，合计 ≤50MB）。继续校验文件归属、类型、存储存在性与投稿配额。
       parameters:
+      - description: 使用培训分类时传 all，归属由表单的 category_id 指定
+        in: query
+        name: category_id
+        type: string
       - description: 投稿表单
         in: body
         name: body
@@ -12006,6 +12449,10 @@ paths:
     get:
       description: 作者本人视角，含 pending/rejected/archived/withdrawn 及驳回/下架原因
       parameters:
+      - description: 培训分类 ID 或 all
+        in: query
+        name: category_id
+        type: string
       - default: 1
         description: 页码
         in: query
@@ -12310,6 +12757,37 @@ paths:
       summary: 课程列表
       tags:
       - 学员端-课程
+  /courses/{course_id}:
+    get:
+      parameters:
+      - description: 课程ID
+        in: path
+        name: course_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/course.PublicCourseDetailDTO'
+              type: object
+        "400":
+          description: 课程ID无效
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 课程不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 公开课程详情与已发布章节目录
+      tags:
+      - 学员端-课程
   /credentials:
     get:
       description: 学员端公开证件列表（目标证件，仅启用项）
@@ -12383,6 +12861,10 @@ paths:
       - description: 目标类型 course/chapter/question/featured/topic/job
         in: query
         name: target_type
+        type: string
+      - description: 培训分类 ID 或 all
+        in: query
+        name: category_id
         type: string
       - description: 题库标签ID：仅在 target_type=question 时生效（按标签下钻题目收藏；传其它类型 400）
         in: query
@@ -14127,6 +14609,38 @@ paths:
       summary: 模拟考试交卷
       tags:
       - 学员端-模拟考试
+  /mock-exam/category-start:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 一级分类、题量与时长
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/mockexam.categoryExamInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/mockexam.MockExamStartDTO'
+              type: object
+        "400":
+          description: 分类或题池不可用
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 按培训分类开始模拟考试
+      tags:
+      - 学员端-模拟考试
   /mock-exam/history:
     get:
       consumes:
@@ -14137,6 +14651,10 @@ paths:
         in: query
         name: credential_id
         type: integer
+      - description: 培训分类 ID、all 或 unclassified
+        in: query
+        name: category_id
+        type: string
       - default: 1
         description: 页码
         in: query
@@ -14166,6 +14684,36 @@ paths:
       security:
       - BearerAuth: []
       summary: 模拟考试历史
+      tags:
+      - 学员端-模拟考试
+  /mock-exam/in-progress:
+    get:
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/mockexam.MockExamHistoryDTO'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: 我的在途模拟考试
       tags:
       - 学员端-模拟考试
   /mock-exam/start:
@@ -14798,6 +15346,78 @@ paths:
       summary: 岗位字典
       tags:
       - 招聘域-岗位字典
+  /practice-mode/attempts:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 一级分类与本次练习模式
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/practicemode.CategoryPracticeStartInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/practicemode.CategoryPracticeStartDTO'
+              type: object
+        "400":
+          description: 分类、模式或题池不可用
+          schema:
+            $ref: '#/definitions/response.R'
+        "409":
+          description: 本轮已结束，需显式重开
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 开始或继续分类练习
+      tags:
+      - 学员端-练习
+  /practice-mode/attempts/answer:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 会话标识、题目 ID 和答案
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/practicemode.CategoryPracticeAnswerInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/practicemode.SubmitResultDTO'
+              type: object
+        "400":
+          description: 参数错误或分类已停用
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 会话或题目不可用
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 提交分类练习答案
+      tags:
+      - 学员端-练习
   /practice-mode/free:
     get:
       consumes:
@@ -14846,6 +15466,10 @@ paths:
         in: query
         name: credential_id
         type: integer
+      - description: 培训分类 ID、all 或 unclassified
+        in: query
+        name: category_id
+        type: string
       - default: 1
         description: 页码
         in: query
@@ -14901,6 +15525,10 @@ paths:
         minimum: 1
         name: credential_id
         type: integer
+      - description: 培训分类 ID、all 或 unclassified
+        in: query
+        name: category_id
+        type: string
       produces:
       - application/json
       responses:
@@ -15056,6 +15684,10 @@ paths:
         in: query
         name: credential_id
         type: integer
+      - description: 培训分类 ID、all 或 unclassified
+        in: query
+        name: category_id
+        type: string
       produces:
       - application/json
       responses:
@@ -15083,6 +15715,10 @@ paths:
       - application/json
       description: 提交单题答案并即时判分
       parameters:
+      - description: Web 单题入口传 all，由服务端按题目当前分类归档
+        in: query
+        name: category_id
+        type: string
       - description: 答题
         in: body
         name: body
@@ -15155,6 +15791,130 @@ paths:
       summary: 标签专项练习
       tags:
       - 学员端-练习
+  /public-school/categories:
+    get:
+      description: 只返回已启用、映射到有效启用证件的培训一级分类，且只含已发布公开课数 > 0 的分类（空项隐藏）。可选 `course_type`
+        收口：只列该类型有公开课的分类。公开读面，匿名可读，不受账号当前证件影响。
+      parameters:
+      - description: 课程类型（video / illustrated；省略=全部课程）
+        in: query
+        name: course_type
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/course.PublicSchoolCategoryListDTO'
+              type: object
+        "400":
+          description: 课程类型无效
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 公开网校分类选项（按证件口径，空项隐藏）
+      tags:
+      - 学员端-课程
+  /public-school/courses:
+    get:
+      description: 只返回已发布且分类满足证件口径的课程。`course_type` 按课程主类型分流（video / illustrated，省略=全部）。关键词
+        `q` 匹配公开名称与简介（先筛后分页）。`category_id` 指向不合格分类时返回空集。公开读面，匿名可读。
+      parameters:
+      - description: 课程类型（video / illustrated；省略=全部课程）
+        in: query
+        name: course_type
+        type: string
+      - description: 一级分类ID
+        in: query
+        name: category_id
+        type: integer
+      - description: 关键词（匹配公开名称与简介）
+        in: query
+        name: q
+        type: string
+      - description: 页码
+        in: query
+        name: page
+        type: integer
+      - description: 每页条数
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/course.PublicSchoolCoursePageDTO'
+              type: object
+        "400":
+          description: 课程类型或分类ID无效
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 公开网校课程目录（类型 + 分类 + 关键词，先筛后分页）
+      tags:
+      - 学员端-课程
+  /public-school/courses/{course_id}:
+    get:
+      description: 公开字段仅承诺课程 ID、名称、简介、封面、一级分类、积分价格，以及已发布章节的 ID/标题/序号/类型/时长。未发布、分类不合格或不存在统一
+        404「课程不存在」。公开读面，匿名可读。
+      parameters:
+      - description: 课程ID
+        in: path
+        name: course_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/course.PublicSchoolCourseDetailDTO'
+              type: object
+        "400":
+          description: 课程ID无效
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 课程不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 公开网校课程详情（公开字段 + 已发布章节目录）
+      tags:
+      - 学员端-课程
+  /public-school/question-banks:
+    get:
+      description: 按题目的一级培训分类聚合题库池题目：只统计已发布且排除来源标记（真题）的题目，分类须已启用且映射到已启用证件。**与是否有公开课无关**——只有题库的证件也会出现。只返回汇总（分类
+        ID/显示名/总题数/各题型数量），不含任何题干、选项、答案或解析。公开读面，匿名可读。
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/course.PublicQuestionBankListDTO'
+              type: object
+      summary: 公开网校证件题库目录（按证件汇总题量与题型分布）
+      tags:
+      - 学员端-课程
   /question-bank/questions:
     get:
       consumes:
@@ -15895,11 +16655,14 @@ paths:
     get:
       description: 按当前证件返回上架套卷，附兑换状态与单价
       parameters:
-      - description: 目标证件ID
+      - description: 旧目标证件 ID
         in: query
         name: credential_id
-        required: true
         type: integer
+      - description: 培训分类 ID 或 all
+        in: query
+        name: category_id
+        type: string
       produces:
       - application/json
       responses:
@@ -15989,6 +16752,47 @@ paths:
       security:
       - BearerAuth: []
       summary: 按卷练习
+      tags:
+      - 学员端-真题
+  /real-exam/papers/{paper_id}/practice/answer:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 真题卷 ID
+        in: path
+        name: paper_id
+        required: true
+        type: integer
+      - description: 卷内题目和答案
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/realexam.paperPracticeAnswerInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/practicemode.SubmitResultDTO'
+              type: object
+        "400":
+          description: 参数错误或未兑换
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 真题卷或题目不可用
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 提交真题卷练习答案
       tags:
       - 学员端-真题
   /real-exam/papers/{paper_id}/redeem:
@@ -17069,6 +17873,10 @@ paths:
       - description: 类型 course|chapter|question|content|topic
         in: query
         name: type
+        type: string
+      - description: 培训分类 ID 或 all
+        in: query
+        name: category_id
         type: string
       - default: 1
         description: 页码
@@ -20949,6 +21757,10 @@ paths:
         in: query
         name: credential_id
         type: integer
+      - description: 做错时的培训分类 ID、all 或 unclassified
+        in: query
+        name: category_id
+        type: string
       produces:
       - application/json
       responses:
@@ -20981,6 +21793,10 @@ paths:
         name: question_id
         required: true
         type: integer
+      - description: 做错时的培训分类 ID、all 或 unclassified
+        in: query
+        name: category_id
+        type: string
       - description: 答案
         in: body
         name: body
@@ -21080,6 +21896,11 @@ paths:
   /wrong-questions/export:
     get:
       description: 导出为纯文本附件（text/plain）
+      parameters:
+      - description: 做错时的培训分类 ID、all 或 unclassified
+        in: query
+        name: category_id
+        type: string
       produces:
       - text/plain
       responses:
@@ -21101,6 +21922,11 @@ paths:
       consumes:
       - application/json
       description: 汇总错题数量/题型分布等
+      parameters:
+      - description: 做错时的培训分类 ID、all 或 unclassified
+        in: query
+        name: category_id
+        type: string
       produces:
       - application/json
       responses:

@@ -138,7 +138,7 @@ describe('WrongQuestions 错题重做（会话单题变体 #617）', () => {
     await flushPromises()
 
     // 单题提交经共享提交管线 → redo 接口（判分口径后端统一落 practice record）
-    expect(wrongQuestionApi.redoWrongQuestion).toHaveBeenCalledWith(101, 'B')
+    expect(wrongQuestionApi.redoWrongQuestion).toHaveBeenCalledWith(101, 'B', 'all')
     // 结果区渲染（AnswerResultCard 拿到判定结果与计时）
     const resultCard = w.findComponent(AnswerResultCard)
     expect(resultCard.exists()).toBe(true)
@@ -166,7 +166,7 @@ describe('WrongQuestions 错题重做（会话单题变体 #617）', () => {
     await submitBtn!.trigger('click')
     await flushPromises()
 
-    expect(wrongQuestionApi.redoWrongQuestion).toHaveBeenCalledWith(101, 'A, B')
+    expect(wrongQuestionApi.redoWrongQuestion).toHaveBeenCalledWith(101, 'A, B', 'all')
   })
 
   it('redo 接口失败：会话保持作答态（不渲染结果卡），错误由拦截器提示', async () => {

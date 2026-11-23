@@ -274,15 +274,9 @@ func TestAdminContract_UsersTutorsRecruiters(t *testing.T) {
 // TestAdminContract_StatisticsCoursesChapters 统计 / 课程 / 章节端点。
 func TestAdminContract_StatisticsCoursesChapters(t *testing.T) {
 	t.Parallel()
-	r, db, token := newAdminContractEnv(t)
-
-	// 课程创建校验方向/等级存在性（applyCourseTrainingFields）：先落最小字典行
-	if err := db.Create(&model.Specialty{SpecialtyID: 1, Code: "spec1", Name: "维修", Status: 1, CreatedAt: testutil.Now()}).Error; err != nil {
-		t.Fatalf("插入专业方向失败: %v", err)
-	}
-	if err := db.Create(&model.CourseLevel{LevelID: 1, Code: "lvl1", Name: "入门", Status: 1, CreatedAt: testutil.Now()}).Error; err != nil {
-		t.Fatalf("插入课程等级失败: %v", err)
-	}
+	r, _, token := newAdminContractEnv(t)
+	category := doWithToken(t, r, token, http.MethodPost, "/api/admin/catalog/categories", map[string]any{"name": "维修", "status": 1})
+	categoryID := jsonInt(t, adminObject(t, category, http.StatusCreated)["id"])
 
 	rec := doWithToken(t, r, token, http.MethodGet, "/api/admin/statistics", nil)
 	stats := adminObject(t, rec, http.StatusOK)
@@ -293,19 +287,27 @@ func TestAdminContract_StatisticsCoursesChapters(t *testing.T) {
 	}
 	assertKeysExact(t, overview, "active_today", "total_courses", "total_students", "total_study_duration")
 
-	// 建两门同方向同等级课程（供排序交换）
+	// 建两门同分类课程（供排序交换）
 	courseBody := func(name string) map[string]any {
-		return map[string]any{"name": name, "specialty_id": 1, "level_id": 1, "theory_hours": 4, "practice_hours": 2}
+		return map[string]any{"name": name, "category_id": categoryID, "theory_hours": 4, "practice_hours": 2, "course_type": "video"}
 	}
 	rec = doWithToken(t, r, token, http.MethodPost, "/api/admin/course", courseBody("课程A"))
 	c1 := adminObject(t, rec, http.StatusCreated)
 	// CourseDTO 必填面（可选键 certificate_name / credential / specialty / level / points_price /
 	// student_count / chapters 取决于填充路径，这里只钉必填）
 	assertHasKeys(t, c1, "course_id", "name", "status", "created_at", "cover_image", "description",
-		"duration", "is_hot", "is_featured", "theory_hours", "practice_hours", "sort_order",
+		"duration", "is_hot", "is_featured", "theory_hours", "practice_hours", "sort_order", "course_type",
 		"specialty_id", "level_id", "credential_id", "certificate_template_id",
-		"chapter_count", "prerequisite_course_ids")
+		"chapter_count", "prerequisite_course_ids", "category_id")
 	courseID1 := jsonInt(t, c1["course_id"])
+	rec = doWithToken(t, r, "", http.MethodGet, fmt.Sprintf("/api/courses/%d", courseID1), nil)
+	public := adminObject(t, rec, http.StatusOK)
+	var publicCategory struct {
+		ID int `json:"id"`
+	}
+	if err := json.Unmarshal(public["category"], &publicCategory); err != nil || publicCategory.ID != categoryID {
+		t.Fatalf("公开课程分类与建档值不一致: %s", rec.Body.String())
+	}
 
 	rec = doWithToken(t, r, token, http.MethodPost, "/api/admin/course", courseBody("课程B"))
 	courseID2 := jsonInt(t, adminObject(t, rec, http.StatusCreated)["course_id"])
@@ -322,7 +324,7 @@ func TestAdminContract_StatisticsCoursesChapters(t *testing.T) {
 	}
 
 	rec = doWithToken(t, r, token, http.MethodPut, fmt.Sprintf("/api/admin/course/%d", courseID1),
-		map[string]any{"name": "课程A改", "specialty_id": 1, "level_id": 1})
+		map[string]any{"name": "课程A改"})
 	assertHasKeys(t, adminObject(t, rec, http.StatusOK), "course_id", "name", "status")
 
 	rec = doWithToken(t, r, token, http.MethodPut, fmt.Sprintf("/api/admin/course/%d/sort", courseID1),
@@ -330,8 +332,10 @@ func TestAdminContract_StatisticsCoursesChapters(t *testing.T) {
 	assertDataNull(t, rec, http.StatusOK)
 
 	// ===== 章节 =====
+	// 本课是 video 类型（courseBody 写死），章节内容形态必须同质（#2760 内容级互斥），
+	// 故显式带 content_type=video —— 不带就落默认 text，会被护栏拒。
 	rec = doWithToken(t, r, token, http.MethodPost, fmt.Sprintf("/api/admin/course/%d/chapter", courseID1),
-		map[string]any{"title": "第一章", "content": "正文", "order_num": 1})
+		map[string]any{"title": "第一章", "content": "正文", "content_type": "video", "order_num": 1})
 	chapter := adminObject(t, rec, http.StatusCreated)
 	assertHasKeys(t, chapter, "chapter_id", "course_id", "title", "content", "content_type",
 		"created_at", "description", "duration", "file_url", "order_num")

@@ -2,6 +2,7 @@
 // 用法:
 //
 //	migrate up              # 执行所有待应用的迁移
+//	migrate up <version>    # 仅运行至指定版本，便于分阶段核对
 //	migrate down            # 回滚所有迁移（危险操作）
 //	migrate force <version> # 强制设置数据库迁移版本并清除 dirty 标志
 //	                       # 用于数据库因迁移执行中断进入 dirty 状态后的修复

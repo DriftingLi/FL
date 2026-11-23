@@ -76,6 +76,10 @@ function familyClueHeaders(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
+const studentAuthSubmissions = new Set([
+  '/auth/login', '/auth/email/login', '/auth/phone/login', '/auth/email/register', '/auth/phone/register'
+])
+
 function isRefreshEndpoint(url: string): boolean {
   return url.includes('/auth/refresh')
 }
@@ -273,6 +277,11 @@ export function createHttpClient<O extends HttpClientOptions>(opts: O): Unwrappe
         const data = err.response.data
         if (status === 401) {
           const url = err.config?.url || ''
+          if (err.config?.method === 'post' && studentAuthSubmissions.has(url)) {
+            if (!isSilent(err.config)) ElMessage.error(data?.message || '学员身份验证失败')
+            attachKind(err)
+            return Promise.reject(err)
+          }
           const cfg = err.config as AxiosRequestConfig & { _retry?: boolean }
           // 双令牌（ADR-0016 + ADR-0067）：非刷新端点、未重试过、本地有登录态 → 静默刷新后重试原请求。
           // 判据从「本地有没有 refresh」换成「本地有没有会话」：refresh 已在 httpOnly Cookie 里，

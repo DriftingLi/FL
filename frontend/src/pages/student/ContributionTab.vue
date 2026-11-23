@@ -3,11 +3,12 @@ import UiIcon from '@/components/ui/UiIcon.vue'
 /**
  * 学员投稿 tab（#517）：资料广场 + 「只看我的」私有视图 + 上传投稿抽屉。
  * 挂在 /training/materials 页内作为「学员投稿」tab 内容。
- * 广场仅展示 approved 投稿（后端已过滤），跟随当前证件（页面父级传入）。
+ * 广场仅展示审核通过的投稿。
  */
 import { ref, watch, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { contributionApi, type ContributionFile, type ContributionItem, type ContributionStatus } from '@/api/contribution'
+import { trainingApi, type TrainingCategoryDTO } from '@/api/training'
 import { resolveFileUrl } from '@/utils/fileUrl'
 import { formatLocaleDateTime } from '@/utils/format'
 import UiButton from '@/components/ui/UiButton.vue'
@@ -17,7 +18,6 @@ import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import { useAsyncPage } from '@/composables/useAsyncPage'
-import { useCredentialStore } from '@/stores/credential'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import UiRadioGroup from '@/components/ui/UiRadioGroup.vue'
@@ -25,13 +25,12 @@ import UiSwitch from '@/components/ui/UiSwitch.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 import UiSelect from '@/components/ui/UiSelect.vue'
 
-const props = defineProps<{
-  credentialId?: number | null
-}>()
-
-const credentialStore = useCredentialStore()
 const activeView = ref<'plaza' | 'mine'>('plaza')
 const sort = ref<'latest' | 'hot'>('latest')
+const browseCategoryId = ref<number | 'all'>('all')
+const categories = ref<TrainingCategoryDTO[]>([])
+const categoryOptions = computed(() => categories.value.map(category => ({ label: category.name, value: category.id })))
+const browseOptions = computed(() => [{ label: '全部分类', value: 'all' }, ...categoryOptions.value])
 const contributions = ref<ContributionItem[]>([])
 
 /** 我的投稿（全部状态） */
@@ -51,9 +50,7 @@ const {
   handlePageChange
 } = useAsyncPage(async () => {
   const res = await contributionApi.listPublic({
-    // 「跟随当前证件」语义：本 prop 是父级 store.current.id 的纯投影（非用户选择的浏览对象），
-    // 显式下发只是把当前证件传实；/contributions 是 JWT 面，登录学员不传也会被服务端兜底。
-    credential_id: props.credentialId ?? undefined,
+    category_id: browseCategoryId.value,
     sort: sort.value,
     page: currentPage.value,
     page_size: pageSize.value
@@ -65,28 +62,21 @@ const {
     total.value = res.total || 0
   }, itemsRef: contributions })
 
-/** 我的投稿加载（轻量、失败静默降级） */
-async function loadMine() {
-  try {
-    const res = await contributionApi.listMine({ page: 1, page_size: 50 })
-    mine.value = res.items || []
-  } catch (e) {
-    console.error('加载我的投稿失败:', e)
-  }
-}
+const { run: loadMine } = useAsyncPage(
+  () => contributionApi.listMine({ page: 1, page_size: 50, category_id: browseCategoryId.value }),
+  { apply: (res) => { mine.value = res.items || [] } }
+)
 
-// 证件切换即重拉已内聚进 useAsyncPage（#605）：credentialId prop 是 store.current.id 的
-// 纯投影，module 内聚 watch 承担刷新，此处不得再 watch 重装（会构成双触发）
-watch(sort, () => { currentPage.value = 1; loadList() })
+watch([sort, browseCategoryId], () => {
+  currentPage.value = 1
+  if (activeView.value === 'mine') void loadMine()
+  else void loadList()
+})
 
 function onViewChange(v: string) {
   activeView.value = v as 'plaza' | 'mine'
-  if (v === 'mine' && mine.value.length === 0) loadMine()
-}
-
-/** 提交用目标证件：抽屉内选择器是唯一写入口（默认当前证件，见 openUpload） */
-function effectiveCredentialId(): number | null {
-  return uploadCredentialId.value ?? null
+  if (v === 'mine') void loadMine()
+  else void loadList()
 }
 
 // ===== 上传投稿 =====
@@ -94,12 +84,10 @@ const uploadVisible = ref(false)
 const uploadTitle = ref('')
 const uploadIntro = ref('')
 const uploadAnonymous = ref(false)
-const uploadCredentialId = ref<number | null>(null)
-const credentialOptions = computed(() => credentialStore.flatList || [])
+const uploadCategoryId = ref<number | null>(null)
 
-/** 打开投稿抽屉：目标证件默认当前证件（#702），下拉可选任意有效证件 */
 function openUpload() {
-  uploadCredentialId.value = props.credentialId ?? credentialStore.current?.id ?? null
+  uploadCategoryId.value = null
   uploadVisible.value = true
 }
 const uploadFiles = ref<{ file: File; file_name: string; file_url: string; file_size: number; content_type: string }[]>([])
@@ -166,9 +154,9 @@ function removeUploadFile(idx: number) {
 }
 
 async function submitContribution() {
-  const credId = effectiveCredentialId()
-  if (!credId) {
-    ElMessage.warning('请先在侧栏选定目标证件再投稿')
+  const selectedCategory = uploadCategoryId.value
+  if (!selectedCategory) {
+    ElMessage.warning('请选择本次投稿的分类')
     return
   }
   if (!uploadTitle.value.trim()) {
@@ -186,7 +174,7 @@ async function submitContribution() {
   submitBusy.value = true
   try {
     await contributionApi.create({
-      credential_id: credId,
+      category_id: selectedCategory,
       title: uploadTitle.value.trim(),
       intro: uploadIntro.value.trim(),
       is_anonymous: uploadAnonymous.value,
@@ -204,7 +192,8 @@ async function submitContribution() {
     uploadAnonymous.value = false
     uploadFiles.value = []
     activeView.value = 'mine'
-    await loadMine()
+    if (browseCategoryId.value === 'all') await loadMine()
+    else browseCategoryId.value = 'all'
   } catch (e: any) {
     ElMessage.error(e?.message || '投稿提交失败')
   } finally {
@@ -315,10 +304,13 @@ const STATUS_CLASS: Record<ContributionStatus, string> = {
   archived: 'bg-canvas text-ink-3'
 }
 
+const { run: loadCategories } = useAsyncPage(trainingApi.getCategories, {
+  apply: (data) => { categories.value = data.categories }
+})
+
 onMounted(() => {
-  loadList()
-  credentialStore.loadFlat().catch(() => {})
-  if (activeView.value === 'mine') loadMine()
+  void loadList()
+  void loadCategories()
 })
 
 defineExpose({ loadMine })
@@ -333,6 +325,7 @@ defineExpose({ loadMine })
         :options="[{ label: '广场', value: 'plaza' }, { label: '我的投稿', value: 'mine' }]"
         @update:model-value="onViewChange"
       />
+      <UiSelect v-model="browseCategoryId" aria-label="投稿分类" class="w-[160px]" :options="browseOptions" />
       <UiButton v-if="activeView === 'plaza'" variant="primary" size="small" @click="openUpload">
         <UiIcon name="plus" />
         上传资料
@@ -432,14 +425,11 @@ defineExpose({ loadMine })
     </template>
 
     <!-- 上传投稿抽屉 -->
-    <el-drawer v-model="uploadVisible" title="上传资料" size="420px" append-to-body>
+    <el-drawer v-model="uploadVisible" title="上传资料" size="min(420px, 100%)" append-to-body>
       <div class="flex flex-col gap-4">
         <div>
-          <label class="mb-1 block text-sm text-ink-2">目标证件 <span class="text-danger">*</span></label>
-          <UiSelect v-model="uploadCredentialId" placeholder="选择资料所属证件" class="w-full" :options="(credentialOptions).map((c) => ({ label: c.name, value: c.id }))" />
-          <p v-if="uploadCredentialId && uploadCredentialId !== (props.credentialId ?? credentialStore.current?.id)" class="mt-1 text-xs text-ink-3">
-            该稿将归属所选证件，切到该证件下可见
-          </p>
+          <label for="upload-category" class="mb-1 block text-sm text-ink-2">投稿分类 <span class="text-danger">*</span></label>
+          <UiSelect id="upload-category" v-model="uploadCategoryId" placeholder="选择资料所属分类" class="w-full" :options="categoryOptions" />
         </div>
         <div>
           <label class="mb-1 block text-sm text-ink-2">标题 <span class="text-danger">*</span></label>

@@ -1,0 +1,35 @@
+{{/* directory.html：目录整页（三个类型共用）。筛选表单与结果片段分离：
+     表单固定不动，只有 #results 会被 htmx 替换。 */}}
+{{define "directory"}}{{template "page_start" .}}
+<h1>{{if eq .Base "/video"}}视频课程{{else if eq .Base "/illustrated"}}图文课程{{else}}全部课程{{end}}</h1>
+
+{{/* action 用当前目录路径而不是写死 /courses：类型页的筛选提交必须留在本类型里
+     （#2760）。写死 /courses 会让访客在视频页搜一次就掉回全部课程。 */}}
+<form class="filters" role="search" method="get" action="{{.Base}}"
+      hx-get="{{.Base}}" hx-target="#results" hx-swap="outerHTML show:#results:top"
+      hx-push-url="true" hx-trigger="submit, change from:find select, input changed delay:400ms from:find input[name=q]">
+  <div class="field">
+    <label for="q">关键词</label>
+    <input id="q" type="search" name="q" value="{{.Query.Keyword}}" placeholder="课程名称或简介" autocomplete="off">
+  </div>
+  <div class="field">
+    <label for="category_id">培训分类</label>
+    <select id="category_id" name="category_id">
+      <option value="">全部分类</option>
+      {{$selected := .SelectedCategory}}
+      {{range .Categories}}
+      <option value="{{.ID}}"{{if eq .ID $selected}} selected{{end}}>{{.Name}}（{{.CourseCount}}）</option>
+      {{end}}
+    </select>
+  </div>
+  <div class="field field-actions">
+    <button class="btn btn-primary" type="submit">搜索</button>
+    {{if .FiltersActive}}<a class="btn btn-ghost" href="{{.Base}}">清除筛选</a>{{end}}
+  </div>
+  {{/* 分页与筛选共用一个 page 参数：换筛选必须回到第 1 页，
+       否则「第 3 页 + 新关键词」会落到一个空结果上。 */}}
+  <input type="hidden" name="page" value="1">
+</form>
+
+{{template "results" .}}
+{{template "page_end" .}}{{end}}

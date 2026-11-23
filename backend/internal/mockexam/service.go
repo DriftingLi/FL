@@ -10,6 +10,7 @@ import (
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"forklift-training/internal/aiassistant"
 	"forklift-training/internal/clock"
@@ -71,7 +72,7 @@ type MockExamResumeDTO struct {
 	Duration      int                        `json:"duration"`
 	RemainingTime int                        `json:"remaining_time"`
 	Questions     []questionbank.QuestionDTO `json:"questions" nullability:"nonnil"`
-	Answers       any                        `json:"answers"`
+	Answers       map[string]any             `json:"answers" nullability:"nonnil"`
 	StartTime     string                     `json:"start_time"`
 }
 
@@ -113,6 +114,7 @@ type MockExamResultDTO struct {
 // MockExamHistoryItemDTO 历史列表条目。
 type MockExamHistoryItemDTO struct {
 	ID            int    `json:"id"`
+	CategoryID    *int   `json:"category_id,omitempty" extensions:"x-optional"`
 	StudentID     int    `json:"student_id"`
 	QuestionIDs   any    `json:"question_ids"`
 	Answers       any    `json:"answers"`
@@ -146,6 +148,19 @@ type MockExamHistoryDTO struct {
 var ErrMockExamNotFound = errors.New("模拟考试不存在")
 
 func (s *Service) Start(studentID, count, duration int, credentialID *int) (*MockExamStartDTO, error) {
+	return s.start(studentID, count, duration, credentialID, nil)
+}
+
+func (s *Service) StartCategoryExam(studentID, count, duration, categoryID int) (*MockExamStartDTO, error) {
+	if err := scope.RequireActiveCategory(s.db, categoryID); err != nil {
+		return nil, err
+	}
+	return s.start(studentID, count, duration, nil, &categoryID)
+}
+
+var ErrMockExamEmptyPool = errors.New("题库暂无可用的题目")
+
+func (s *Service) start(studentID, count, duration int, credentialID, categoryID *int) (*MockExamStartDTO, error) {
 	if count <= 0 {
 		count = mockExamDefaultCount
 	}
@@ -153,12 +168,17 @@ func (s *Service) Start(studentID, count, duration int, credentialID *int) (*Moc
 		duration = 90
 	}
 
-	selected, err := questionbank.SampleQuestions(s.db, "", count, credentialID)
+	selected, err := questionbank.SampleQuestionsByOpts(s.db, questionbank.SampleQuestionsOpts{
+		Count: count, Shuffle: true, Cred: credentialID, CategoryID: categoryID,
+	})
 	if err != nil {
+		if categoryID != nil {
+			return nil, err
+		}
 		return nil, errors.New("查询题目失败")
 	}
 	if len(selected) == 0 {
-		return nil, errors.New("题库暂无可用的题目")
+		return nil, ErrMockExamEmptyPool
 	}
 
 	// 开新考试前先清掉该学生超过 AbandonTTL 仍未交卷的旧记录。
@@ -185,6 +205,7 @@ func (s *Service) Start(studentID, count, duration int, credentialID *int) (*Moc
 		StudentID: studentID,
 		// 抽题与落库共用同一个值（#1003）：不两处各算。
 		CredentialID:  credentialID,
+		CategoryID:    categoryID,
 		QuestionIDs:   model.JSONB(idsJSON),
 		Answers:       model.JSONB(emptyJSON),
 		Duration:      duration,
@@ -269,8 +290,18 @@ func (s *Service) Resume(mockExamID, studentID int) (*MockExamResumeDTO, error) 
 
 // Submit 交卷。
 func (s *Service) Submit(mockExamID, studentID int) (*MockExamSubmitDTO, error) {
+	var result *MockExamSubmitDTO
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		var err error
+		result, err = s.submit(tx, mockExamID, studentID)
+		return err
+	})
+	return result, err
+}
+
+func (s *Service) submit(tx *gorm.DB, mockExamID, studentID int) (*MockExamSubmitDTO, error) {
 	var mock model.MockExam
-	if err := s.db.First(&mock, mockExamID).Error; err != nil {
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&mock, mockExamID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrMockExamNotFound
 		}
@@ -285,13 +316,14 @@ func (s *Service) Submit(mockExamID, studentID int) (*MockExamSubmitDTO, error) 
 	if len(mock.QuestionIDs) > 0 {
 		_ = json.Unmarshal(mock.QuestionIDs, &ids)
 	}
-	_, qMap := practicemode.LoadOrderedQuestions(s.db, ids)
+	_, qMap := practicemode.LoadOrderedQuestions(tx, ids)
 
-	engine := practicemode.NewGradingEngine(s.db)
+	engine := practicemode.NewGradingEngine(tx)
 	flow := practicemode.GradingFlow{
 		AI:       s.grader,
 		MaxScore: MaxScore,
 	}
+	flow.CategoryID = mock.CategoryID
 	results := engine.GradeSet(flow, qMap, ids, answersMap, studentID)
 
 	totalScore := 0.0
@@ -300,6 +332,9 @@ func (s *Service) Submit(mockExamID, studentID int) (*MockExamSubmitDTO, error) 
 	details := make([]MockExamAnswerDetailDTO, 0, len(results))
 
 	for _, r := range results {
+		if r.WrongWriteError != nil {
+			return nil, r.WrongWriteError
+		}
 		question := r.Question
 		qid := question.ID
 		// ADR-0068 决策 2：correct_count 只认 IsCorrect（整题判对），总分无条件累加「本题得分」
@@ -357,7 +392,7 @@ func (s *Service) Submit(mockExamID, studentID int) (*MockExamSubmitDTO, error) 
 	}
 	resultJSON, _ := json.Marshal(result)
 	mock.Result = model.JSONB(resultJSON)
-	if err := s.db.Save(&mock).Error; err != nil {
+	if err := tx.Save(&mock).Error; err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -398,10 +433,20 @@ func (s *Service) GetResult(mockExamID, studentID int) (*MockExamResultDTO, erro
 // 故切到别的证件不会看到别的证件的模考 —— 与「当前证件 = 全局过滤器」同口径。
 // nil = 不分区、看全部：与错题本 / 题库池的既有 nil 语义一致（未选证件的学员不该看不到自己的历史）。
 func (s *Service) GetHistory(studentID int, credentialID *int, page, pageSize int) (*MockExamHistoryDTO, error) {
+	return s.getHistory(studentID, credentialID, scope.CategoryFilter{}, page, pageSize)
+}
+
+func (s *Service) getHistory(studentID int, credentialID *int, category scope.CategoryFilter, page, pageSize int) (*MockExamHistoryDTO, error) {
+	return s.listExams(studentID, StatusSubmitted, credentialID, category, page, pageSize)
+}
+
+func (s *Service) listExams(studentID int, status string, credentialID *int, category scope.CategoryFilter, page, pageSize int) (*MockExamHistoryDTO, error) {
 	exams, total, page, pageSize, err := paging.Query[model.MockExam](s.db, page, pageSize, 10, "created_at DESC", func(q *gorm.DB) *gorm.DB {
-		q = q.Where("student_id = ? AND status = ?", studentID, StatusSubmitted)
-		q = scope.RecordPartitionOf(q, "credential_id", credentialID)
-		return q
+		q = q.Where("student_id = ? AND status = ?", studentID, status)
+		if category.Explicit() {
+			return category.Apply(q, "category_id")
+		}
+		return scope.RecordPartitionOf(q, "credential_id", credentialID)
 	})
 	if err != nil {
 		return nil, err
@@ -448,6 +493,7 @@ func mockExamToDTO(m *model.MockExam) MockExamHistoryItemDTO {
 	}
 	return MockExamHistoryItemDTO{
 		ID:            m.ID,
+		CategoryID:    m.CategoryID,
 		StudentID:     m.StudentID,
 		QuestionIDs:   ids,
 		Answers:       answers,

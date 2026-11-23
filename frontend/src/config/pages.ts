@@ -148,7 +148,8 @@ const pagesData = [
 
   // ---------- 学员工作区（TrainingLayout）----------
   { name: 'StudentDashboard', path: '/training', component: () => import('@/pages/student/Dashboard.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'student.access', nav: { group: 'learning', label: '仪表盘', icon: 'house-filled', exact: true, order: 1 } },
-  { name: 'CourseList', path: '/training/courses', component: () => import('@/pages/student/CourseList.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'course.learn', nav: { group: 'learning', label: '课程中心', icon: 'notebook', activeRouteNames: ['ChapterView'], order: 2 } },
+  { name: 'CourseList', path: '/training/courses', component: () => import('@/pages/student/PublicCourseCatalog.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'course.learn', nav: { group: 'learning', label: '课程中心', icon: 'notebook', activeRouteNames: ['ChapterView', 'PublicCourseDetail'], order: 2 } },
+  { name: 'PublicCourseDetail', path: '/training/course/:courseId', component: () => import('@/pages/student/PublicCourseDetail.vue'), workspace: 'training', requiresAuth: false },
   { name: 'StudentSearch', path: '/training/search', component: () => import('@/pages/student/SearchPage.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'search.use', nav: { group: 'learning', label: '全局搜索', icon: 'search', order: 4 } },
   { name: 'StudentMaterials', path: '/training/materials', component: () => import('@/pages/student/Materials.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'material.read', nav: { group: 'learning', label: '学习资料', icon: 'files', order: 3 } },
   { name: 'StudentFavorites', path: '/training/favorites', component: () => import('@/pages/student/Favorites.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'favorite.manage', nav: { group: 'personal', label: '我的收藏', icon: 'star', order: 3 } },
@@ -180,7 +181,6 @@ const pagesData = [
   { name: 'JobPlaza', path: '/training/jobs', component: () => import('@/pages/student/JobPlaza.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'job.apply', nav: { group: 'personal', label: '职位广场', icon: 'building-2', activeRouteNames: ['JobDetail'], order: 7 } },
   { name: 'JobDetail', path: '/training/jobs/:id', component: () => import('@/pages/student/JobDetail.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'job.apply' },
   { name: 'MyApplications', path: '/training/applications', component: () => import('@/pages/student/MyApplications.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'job.apply', nav: { group: 'personal', label: '我的投递', icon: 'file-text', order: 8 } },
-  { name: 'CredentialOnboarding', path: '/training/onboarding/credential', component: () => import('@/pages/onboarding/CredentialOnboarding.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'student.access' },
 
   // ---------- 导师工作区（TutorLayout）----------
   { name: 'TutorDashboard', path: '/training/tutor', component: () => import('@/pages/tutor/Dashboard.vue'), layout: 'tutor', workspace: 'tutor', requiresAuth: true, capability: 'tutor.access', nav: { group: 'tutor', label: '仪表盘', icon: 'house-filled', exact: true, order: 1 } },

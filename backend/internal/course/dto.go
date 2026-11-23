@@ -17,6 +17,7 @@ type CourseInput struct {
 	Duration              *int    `json:"duration"`
 	Status                *int16  `json:"status"`
 	SortOrder             *int    `json:"sort_order"`
+	CategoryID            *int    `json:"category_id"`
 	CredentialID          *int    `json:"credential_id"`
 	SpecialtyID           *int    `json:"specialty_id"`
 	LevelID               *int    `json:"level_id"`
@@ -27,6 +28,10 @@ type CourseInput struct {
 	IsHot                 *bool   `json:"is_hot"`
 	IsFeatured            *bool   `json:"is_featured"`
 	PointsPrice           *int    `json:"points_price"`
+	// CourseType 课程主类型（#2760）：video / illustrated。创建必填；
+	// 编辑**未携带即保留原值**（与 points_price 的「未携带=保留」同口径）——
+	// 老调用方（如只改 is_hot 的开关）不该因为没带这个字段就被打成 400。
+	CourseType *string `json:"course_type"`
 	// pointsPriceCleared 请求体显式携带了 points_price: null（清空为免费）。标准 *int 解码
 	// 分不开「显式 null」与「缺键」（两者都落 nil），这两个语义（清空 / 保留现状）只能靠
 	// 本标志分开——见下方 UnmarshalJSON。
@@ -56,8 +61,11 @@ func (in *CourseInput) UnmarshalJSON(b []byte) error {
 
 // ChapterInput 章节创建/编辑请求体。
 type ChapterInput struct {
-	Title       *string `json:"title"`
-	Content     *string `json:"content"`
+	Title   *string `json:"title"`
+	Content *string `json:"content"`
+	// ContentType 章节内容形态（#2760）：video / text / ppt / document。
+	// 创建时不携带 ⇒ text；编辑时不携带 ⇒ 保留原值。
+	ContentType *string `json:"content_type"`
 	Duration    *int    `json:"duration"`
 	OrderNum    *int    `json:"order_num"`
 	Description *string `json:"description"`

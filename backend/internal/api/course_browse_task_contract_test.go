@@ -98,7 +98,7 @@ func assertCourseBrowseTaskContract(t *testing.T, db *gorm.DB) {
 	mkCourse := func(name string, status int16) *model.Course {
 		// Status 带 gorm default:1 ⇒ 传零值会被 GORM 当成「没给」而落成 1（草稿课就发布出去了）。
 		// 先按 1 建、再显式改回目标值，绕开这个零值陷阱。
-		c := model.Course{Name: name, Status: 1, SpecialtyID: ptr(spec.SpecialtyID), LevelID: ptr(lv.LevelID), CreatedAt: testutil.Now()}
+		c := model.Course{Name: name, CategoryID: &testutil.SeedTrainingCategory(t, db, "课程分类").ID, Status: 1, SpecialtyID: ptr(spec.SpecialtyID), LevelID: ptr(lv.LevelID), CreatedAt: testutil.Now()}
 		mustCreate(t, db, &c)
 		if status != 1 {
 			if err := db.Model(&model.Course{}).Where("course_id = ?", c.CourseID).Update("status", status).Error; err != nil {

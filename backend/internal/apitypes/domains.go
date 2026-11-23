@@ -99,6 +99,7 @@ var Domains = []Domain{
 		Title: "题库练习模式（/api/practice-mode/*：随机 / 标签 / 顺序 / 进度 / 判定 / 统计 / 历史）",
 		Roots: []string{
 			"practicemode.PracticeStartResultDTO",
+			"practicemode.CategoryPracticeStartDTO",
 			"practicemode.ProgressResultDTO",
 			"practicemode.ProgressSaveResultDTO",
 			"practicemode.SubmitResultDTO",
@@ -108,6 +109,8 @@ var Domains = []Domain{
 		},
 		Endpoints: []Endpoint{
 			{Method: "GET", Path: "/practice-mode/free"},
+			{Method: "POST", Path: "/practice-mode/attempts"},
+			{Method: "POST", Path: "/practice-mode/attempts/answer"},
 			{Method: "GET", Path: "/practice-mode/tag"},
 			{Method: "GET", Path: "/practice-mode/sequential"},
 			{Method: "GET", Path: "/practice-mode/sequential-progress"},
@@ -132,11 +135,13 @@ var Domains = []Domain{
 		},
 		Endpoints: []Endpoint{
 			{Method: "POST", Path: "/mock-exam/start"},
+			{Method: "POST", Path: "/mock-exam/category-start"},
 			{Method: "POST", Path: "/mock-exam/{mock_exam_id}/save", NoData: true},
 			{Method: "GET", Path: "/mock-exam/{mock_exam_id}/resume"},
 			{Method: "POST", Path: "/mock-exam/{mock_exam_id}/submit"},
 			{Method: "GET", Path: "/mock-exam/{mock_exam_id}/result"},
 			{Method: "GET", Path: "/mock-exam/history"},
+			{Method: "GET", Path: "/mock-exam/in-progress"},
 		},
 	},
 
@@ -498,13 +503,19 @@ var Domains = []Domain{
 			"training.QuestionTagsResultDTO",
 			"training.SpecialtyDict",
 			"training.SpecialtyListDTO",
+			"training.TrainingCategoryListDTO",
 		},
 		Endpoints: []Endpoint{
 			{Method: "GET", Path: "/catalog/tree"},
+			{Method: "GET", Path: "/catalog/categories"},
+			{Method: "GET", Path: "/catalog/history-categories"},
 			{Method: "GET", Path: "/levels"},
 			{Method: "GET", Path: "/tags"},
 			{Method: "GET", Path: "/positions"},
 			{Method: "GET", Path: "/admin/catalog/tree"},
+			{Method: "GET", Path: "/admin/catalog/categories"},
+			{Method: "POST", Path: "/admin/catalog/categories"},
+			{Method: "PUT", Path: "/admin/catalog/categories/{category_id}"},
 			{Method: "POST", Path: "/admin/specialty"},
 			{Method: "GET", Path: "/admin/specialties"},
 			{Method: "PUT", Path: "/admin/specialty/{specialty_id}"},
@@ -550,17 +561,29 @@ var Domains = []Domain{
 
 	{
 		Name:  "course",
-		Title: "课程与章节学习（/api/courses、/api/course/*、/api/chapter/*）",
+		Title: "课程与章节学习（/api/courses、/api/course/*、/api/chapter/*、/api/public-school/*）",
 		Roots: []string{
 			"course.ChapterDetailDTO",
 			"course.ChapterSlidesDTO",
 			"course.CourseBrowseResult",
 			"course.CourseDetailDTO",
+			"course.PublicCourseDetailDTO",
+			"course.PublicCoursePageDTO",
+			// #2753 独立公开网校读面：三个根类型与旧的 Public* 分家——
+			// 判据更严（分类必须已启用且映射有效证件）、行形状多 course_count。
+			"course.PublicSchoolCategoryListDTO",
+			"course.PublicSchoolCourseDetailDTO",
+			"course.PublicSchoolCoursePageDTO",
 			"course.CoursePageResult",
 			"course.StudyProgressDTO",
 		},
 		Endpoints: []Endpoint{
 			{Method: "GET", Path: "/courses"},
+			{Method: "GET", Path: "/courses/{course_id}"},
+			{Method: "GET", Path: "/catalog/courses"},
+			{Method: "GET", Path: "/public-school/categories"},
+			{Method: "GET", Path: "/public-school/courses"},
+			{Method: "GET", Path: "/public-school/courses/{course_id}"},
 			{Method: "GET", Path: "/course/{course_id}"},
 			{Method: "POST", Path: "/course/{course_id}/browse"},
 			{Method: "POST", Path: "/course/{course_id}/progress"},
@@ -587,12 +610,14 @@ var Domains = []Domain{
 		Roots: []string{
 			"mockexam.MockExamStartDTO",
 			"practicemode.PracticeStartResultDTO",
+			"practicemode.SubmitResultDTO",
 			"realexam.RealExamPaperDTO",
 			"points.RedeemResult",
 		},
 		Endpoints: []Endpoint{
 			{Method: "GET", Path: "/real-exam/papers"},
 			{Method: "GET", Path: "/real-exam/papers/{paper_id}/practice"},
+			{Method: "POST", Path: "/real-exam/papers/{paper_id}/practice/answer"},
 			{Method: "POST", Path: "/real-exam/papers/{paper_id}/exam"},
 			{Method: "POST", Path: "/real-exam/papers/{paper_id}/redeem"},
 		},

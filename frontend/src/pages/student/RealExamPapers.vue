@@ -4,11 +4,10 @@
       <div>
         <h2 class="real-exam-title m-0 mb-1.5 text-2xl leading-[1.2] text-ink">真题练习</h2>
         <p class="real-exam-sub m-0 text-sm text-ink-3">
-          当前证件：<strong>{{ currentCredentialName || '—' }}</strong>
-          <span class="real-exam-sub-sep mx-1.5 text-ink-3">·</span>
           共 {{ papers.length }} 套
         </p>
       </div>
+      <UiSelect v-model="categoryId" aria-label="真题卷分类" class="w-[190px]" :options="categoryOptions" />
     </div>
 
     <UiAsyncSection
@@ -27,7 +26,7 @@
       </template>
       <template #empty>
         <div class="empty-wrap rounded-card border border-line bg-panel py-6">
-          <UiEmptyState :description="emptyDescription" />
+          <UiEmptyState description="暂无真题卷" />
         </div>
       </template>
     <div class="variant-c-timeline flex flex-col gap-5">
@@ -70,11 +69,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { useCredentialStore } from '@/stores/credential'
 import { realExamApi, type RealExamPaper } from '@/api/realExam'
+import { trainingApi, type TrainingCategoryDTO } from '@/api/training'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useStagger } from '@/composables/useStagger'
 import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
@@ -83,14 +82,20 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
+import UiSelect from '@/components/ui/UiSelect.vue'
 
 const router = useRouter()
-const credentialStore = useCredentialStore()
 
 const staggerStyle = useStagger(12)
 
 const papers = ref<RealExamPaper[]>([])
 const redeemingId = ref<number | null>(null)
+const categoryId = ref<number | 'all'>('all')
+const categories = ref<TrainingCategoryDTO[]>([])
+const categoryOptions = computed(() => [
+  { label: '全部分类', value: 'all' },
+  ...categories.value.map(category => ({ label: category.name, value: category.id }))
+])
 
 // 三态收编 useAsyncPage（#439）：loader 纯装配，错误收敛 loadError
 const {
@@ -101,7 +106,7 @@ const {
   isEmpty,
   run: loadPapers
 } = useAsyncPage(
-  async () => await realExamApi.listPapers(),
+  () => realExamApi.listPapers(categoryId.value),
   {
     itemsRef: papers,
     // 写回槽（ADR-0069 决策 1）：空响应归一成空列表的判据在这里，不再住在 loader 里
@@ -111,14 +116,15 @@ const {
   }
 )
 
-const currentCredentialName = computed(() => credentialStore.current?.name || '')
+const { run: loadCategories } = useAsyncPage(trainingApi.getCategories, {
+  apply: (data) => { categories.value = data.categories }
+})
 
-const emptyDescription = computed(() =>
-  currentCredentialName.value ? `${currentCredentialName.value} 真题建设中，敬请期待` : '真题建设中，敬请期待'
-)
-
-// 首屏加载（#605：证件切换即重拉已内聚进 useAsyncPage——列表按 current_credential 分区）
-onMounted(loadPapers)
+watch(categoryId, () => { void loadPapers() })
+onMounted(() => {
+  void loadCategories()
+  void loadPapers()
+})
 
 const grouped = computed(() => {
   const map = new Map<string, RealExamPaper[]>()

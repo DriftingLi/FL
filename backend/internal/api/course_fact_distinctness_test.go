@@ -19,7 +19,7 @@ import (
 
 // courseWaveFacts 本批在课程写面上点名的全部事实。
 var courseWaveFacts = []error{
-	course.ErrCourseNameRequired, course.ErrSpecialtyRequired, course.ErrCourseLevelRequired,
+	course.ErrCourseNameRequired, course.ErrCourseCategoryRequired, course.ErrCourseCategoryNotFound,
 	course.ErrCourseCredentialIDInvalid, course.ErrCourseSpecialtyIDInvalid,
 	course.ErrCourseLevelIDInvalid, course.ErrCertificateTemplateIDInvalid,
 	course.ErrCourseCredentialRefNotFound, model.ErrSpecialtyNotFound,

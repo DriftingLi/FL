@@ -60,6 +60,7 @@ export interface QuestionPayload {
   score?: number
   /** 写面不携带 status 通道（第十二波票 6）：状态迁移只走 submitQuestion / publishQuestion / rejectQuestion */
   credential_id?: number | null
+  category_id?: number | null
   /** 题库标签（LH-28，创建/更新时全量替换） */
   tag_ids?: number[]
 }
@@ -84,7 +85,7 @@ export const questionBankApi = {
   },
 
   getQuestion(id: number) {
-    return unwrappedRequest.get<QuestionDTO>(`/question-bank/questions/${id}`)
+    return unwrappedRequest.get<QuestionDTO>(`/question-bank/questions/${id}`, { params: { category_id: 'all' } })
   },
 
   updateQuestion(id: number, data: Partial<QuestionPayload>) {

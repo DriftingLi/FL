@@ -157,7 +157,7 @@
     <template #footer>
       <div class="form-footer">
         <span class="footer-text">已有账号？</span>
-        <router-link :to="href('Login')" class="footer-link">返回登录</router-link>
+        <router-link :to="{ ...href('Login'), query: courseAuthQuery }" class="footer-link">返回登录</router-link>
       </div>
     </template>
   </AuthPageShell>
@@ -165,8 +165,9 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { href } from '@/config/pages'
+import { courseLearningReturn } from '@/utils/authRedirect'
 import { authApi } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
 import type { UserProfile } from '@/types/user'
@@ -189,7 +190,12 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
+const courseAuthQuery = computed(() => {
+  const redirect = courseLearningReturn(route.query.redirect)
+  return redirect ? { redirect, course_auth: route.query.course_auth === '1' ? '1' : undefined } : undefined
+})
 
 type RegisterMode = 'phone' | 'email'
 
@@ -217,7 +223,8 @@ const flow = useAuthFlow<RegisterMode>({
   afterSuccess: async (_m, info) => {
     authStore.setAuthData(info as UserProfile)
     ElMessage.success('注册成功')
-    router.push(getDefaultWorkspaceBySubdomain())
+    const courseTarget = authStore.userInfo?.role === 'hrwai_user' ? courseAuthQuery.value?.redirect : undefined
+    router.replace(courseTarget ?? getDefaultWorkspaceBySubdomain())
   }
 })
 

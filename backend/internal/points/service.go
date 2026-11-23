@@ -618,7 +618,7 @@ func (s *Service) GetLedgerFiltered(userID, page, pageSize int, reason, directio
 // GetTasks 获取任务列表（实时算 todo/claimable/claimed，基于真实行为表）
 func (s *Service) GetTasks(userID int) (*PointsTasksResult, error) {
 	var configs []model.PointsTaskConfig
-	if err := s.db.Order("code ASC").Find(&configs).Error; err != nil {
+	if err := s.db.Where("retired_at IS NULL").Order("code ASC").Find(&configs).Error; err != nil {
 		return nil, err
 	}
 	today := s.shanghaiDate()
@@ -682,7 +682,7 @@ func (s *Service) GetTasks(userID int) (*PointsTasksResult, error) {
 // Claim 领取任务
 func (s *Service) Claim(ctx context.Context, userID int, taskCode string) (*PointsClaimResult, error) {
 	var cfg model.PointsTaskConfig
-	if err := s.db.Where("code = ?", taskCode).First(&cfg).Error; err != nil {
+	if err := s.db.Where("code = ? AND retired_at IS NULL", taskCode).First(&cfg).Error; err != nil {
 		return nil, ErrTaskNotFound
 	}
 	today := s.shanghaiDate()

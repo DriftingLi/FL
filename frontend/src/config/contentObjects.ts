@@ -54,7 +54,7 @@ export const CONTENT_OBJECTS: readonly ContentObject[] = [
     favoritable: true,
     favoriteTargetType: 'course',
     inFavoriteTab: true,
-    to: ({ id }) => ({ name: 'CourseList', query: { course_id: String(id) } })
+    to: ({ id }) => ({ name: 'PublicCourseDetail', params: { courseId: String(id) } })
   },
   {
     key: 'chapter',

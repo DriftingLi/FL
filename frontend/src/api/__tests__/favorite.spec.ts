@@ -23,14 +23,14 @@ describe('favoriteApi', () => {
     mockGet.mockResolvedValue({ favorites: [], total: 0, page: 1, pages: 0 })
     await favoriteApi.list({ target_type: 'course', page: 2, page_size: 20 })
     expect(mockGet).toHaveBeenCalledWith('/favorites', {
-      params: { target_type: 'course', page: 2, page_size: 20 }
+      params: { target_type: 'course', page: 2, page_size: 20, category_id: 'all' }
     })
   })
 
   it('add：POST /favorites，body 携带 target_type/target_id', async () => {
     mockPost.mockResolvedValue({ favorite_id: 1, target_type: 'topic', target_id: 5 })
     await favoriteApi.add({ target_type: 'topic', target_id: 5 })
-    expect(mockPost).toHaveBeenCalledWith('/favorites', { target_type: 'topic', target_id: 5 })
+    expect(mockPost).toHaveBeenCalledWith('/favorites', { target_type: 'topic', target_id: 5 }, { params: { category_id: 'all' } })
   })
 
   it('remove：DELETE /favorites/:id', async () => {

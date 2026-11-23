@@ -129,7 +129,7 @@ func newRegenerateFixture(t *testing.T, db *gorm.DB, paid bool) regenerateFixtur
 	if err := db.Create(&lv).Error; err != nil {
 		t.Fatalf("建课程等级失败: %v", err)
 	}
-	course := model.Course{Name: "叉车发动机拆装", Status: 1,
+	course := model.Course{Name: "叉车发动机拆装", CategoryID: &testutil.SeedTrainingCategory(t, db, "课程分类").ID, Status: 1,
 		SpecialtyID: &spec.SpecialtyID, LevelID: &lv.LevelID, CreatedAt: testutil.Now()}
 	if paid {
 		price := 100

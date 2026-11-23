@@ -66,7 +66,8 @@ func TestAdminCourse_PointsPriceWrite(t *testing.T) {
 	db.Create(&spec)
 	lv := model.CourseLevel{Code: "beginner", Name: "入门", Status: 1, CreatedAt: testutil.Now()}
 	db.Create(&lv)
-	base := fmt.Sprintf(`"specialty_id":%d,"level_id":%d`, spec.SpecialtyID, lv.LevelID)
+	category := testutil.SeedTrainingCategory(t, db, "维修")
+	base := fmt.Sprintf(`"category_id":%d,"specialty_id":%d,"level_id":%d,"course_type":"video"`, category.ID, spec.SpecialtyID, lv.LevelID)
 
 	// 携带值：≥1 校验后落库（响应与库里都要看得到）
 	created, err := svc.CreateCourse(inputFromJSON(t, fmt.Sprintf(`{"name":"付费课",%s,"points_price":100}`, base)))

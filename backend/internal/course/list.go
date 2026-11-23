@@ -36,9 +36,7 @@ type CourseListOptions struct {
 func ListCourses(db *gorm.DB, page, pageSize int, opts CourseListOptions) (CoursePageResult, error) {
 	courses, total, page, pageSize, err := paging.Query[model.Course](db, page, pageSize, opts.DefaultPageSize, "sort_order ASC, created_at DESC, course_id DESC", func(q *gorm.DB) *gorm.DB {
 		if opts.OnlyMounted {
-			// 挂载不变式 + 上架：学员端/导师端可见性口径
-			q = q.Where("status = ?", 1)
-			q = MountedCourseScope(q)
+			q = PublishedCategoryCourseScope(q)
 		}
 		if opts.Keyword != "" {
 			q = q.Where("name LIKE ?", "%"+opts.Keyword+"%")
@@ -60,13 +58,7 @@ func ListCourses(db *gorm.DB, page, pageSize int, opts CourseListOptions) (Cours
 				q = q.Where("points_price IS NULL OR points_price <= 0")
 			}
 		}
-		switch opts.Filter {
-		case "hot":
-			q = q.Where("is_hot = ?", true)
-		case "featured":
-			q = q.Where("is_featured = ?", true)
-		}
-		return q
+		return filterCourseHighlights(q, opts.Filter)
 	})
 	if err != nil {
 		return CoursePageResult{}, err
@@ -123,6 +115,17 @@ func ListCourses(db *gorm.DB, page, pageSize int, opts CourseListOptions) (Cours
 		Pages:   response.PageCount(total, pageSize),
 		Total:   total,
 	}, nil
+}
+
+func filterCourseHighlights(q *gorm.DB, filter string) *gorm.DB {
+	switch filter {
+	case "hot":
+		return q.Where("course.is_hot = ?", true)
+	case "featured":
+		return q.Where("course.is_featured = ?", true)
+	default:
+		return q
+	}
 }
 
 // 批量回填已收敛到 batch_backfill.go（批量回填 module，课程列表/学员档案/学习记录共享）。

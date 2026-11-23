@@ -3,6 +3,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"testing"
 
@@ -16,7 +17,7 @@ func TestSearchUpgradeContract(t *testing.T) {
 	student := seedStudent(t, db, "search_upgrade_stu", "hash")
 
 	spID, lvID := 1, 1
-	course := model.Course{Name: "液压系统课程", Status: 1, SpecialtyID: &spID, LevelID: &lvID, CreatedAt: testutil.Now()}
+	course := model.Course{Name: "液压系统课程", CategoryID: &testutil.SeedTrainingCategory(t, db, "课程分类").ID, Status: 1, SpecialtyID: &spID, LevelID: &lvID, CreatedAt: testutil.Now()}
 	if err := db.Create(&course).Error; err != nil {
 		t.Fatalf("建课失败: %v", err)
 	}
@@ -55,5 +56,27 @@ func TestSearchUpgradeContract(t *testing.T) {
 	rec = catalogRequest(t, r, stuToken, http.MethodGet, "/api/admin/search-facts/zero-results", "")
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("学员读零结果词应 403, got %d %s", rec.Code, rec.Body.String())
+	}
+
+	categoryA := *course.CategoryID
+	categoryB := testutil.SeedTrainingCategory(t, db, "新分类").ID
+	if rec = doWithToken(t, r, stuToken, http.MethodPost, "/api/favorites?category_id=all",
+		map[string]any{"target_type": "chapter", "target_id": ch.ChapterID}); rec.Code != http.StatusCreated {
+		t.Fatalf("收藏章节失败: %d %s", rec.Code, rec.Body.String())
+	}
+	if err := db.Model(&course).Update("category_id", categoryB).Error; err != nil {
+		t.Fatal(err)
+	}
+	for category, want := range map[int]int{categoryA: 0, categoryB: 1} {
+		for _, path := range []string{
+			"/api/search?keyword=%E6%B6%B2%E5%8E%8B&type=chapter",
+			"/api/favorites?target_type=chapter",
+		} {
+			rec := doWithToken(t, r, stuToken, http.MethodGet, fmt.Sprintf("%s&category_id=%d", path, category), nil)
+			data := adminObject(t, rec, http.StatusOK)
+			if total := jsonInt(t, data["total"]); total != want {
+				t.Fatalf("%s category %d total = %d, want %d", path, category, total, want)
+			}
+		}
 	}
 }

@@ -379,7 +379,7 @@ function navigateToChapter(targetChapterId: string | number) {
 }
 
 function goBackToCourse() {
-  router.push({ name: 'CourseList' })
+  router.push({ name: 'PublicCourseDetail', params: { courseId: courseId.value } })
 }
 
 // 标记完成（ADR-0017 显式完成路径）：置章节 progress=100 并刷新章节详情

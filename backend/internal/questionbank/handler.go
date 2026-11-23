@@ -13,6 +13,7 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/filestore"
 	"forklift-training/internal/middleware"
+	"forklift-training/internal/scope"
 	"forklift-training/internal/security"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
@@ -24,6 +25,7 @@ var ErrStatus = &httpx.ErrStatusTable{
 	Entries: []httpx.ErrStatusEntry{
 		{Sentinel: ErrQuestionNotFound, Status: http.StatusNotFound},
 		{Sentinel: ErrQuestionCredentialNotFound, Status: http.StatusNotFound},
+		{Sentinel: scope.ErrCategoryUnavailable, Status: http.StatusBadRequest},
 		{Sentinel: ErrQuestionTypeInvalid, Status: http.StatusBadRequest},
 		{Sentinel: ErrQuestionContentRequired, Status: http.StatusBadRequest},
 		{Sentinel: ErrQuestionAnswerRequired, Status: http.StatusBadRequest},
@@ -78,7 +80,7 @@ func newHandler(svc *Service, fileSvc *filestore.FileStore) *handler {
 func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, credRes middleware.CredentialResolver, svc *Service, fileSvc *filestore.FileStore) {
 	h := newHandler(svc, fileSvc)
 
-	g := rg.Group("/question-bank", middleware.JWTAuth(session), middleware.CredentialScoped(credRes))
+	g := rg.Group("/question-bank", middleware.JWTAuth(session), middleware.CredentialScopedUnlessCategory(credRes))
 
 	// ===== 题目 CRUD =====
 	g.GET("/questions", h.ListQuestions)

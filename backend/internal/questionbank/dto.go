@@ -18,6 +18,7 @@ type QuestionDTO struct {
 	CreatedByType string  `json:"created_by_type"`
 	// CredentialID 题目归属的目标证件（#412）：讲师端题库管理用证件列区分分区，学员侧形状不变。
 	CredentialID    *int    `json:"credential_id,omitempty" extensions:"x-optional"`
+	CategoryID      *int    `json:"category_id,omitempty" extensions:"x-optional"`
 	Explanation     *string `json:"explanation,omitempty" extensions:"x-optional"`
 	ID              int     `json:"id"`
 	ImageURL        string  `json:"image_url"`
@@ -46,6 +47,7 @@ func NewQuestionDTO(q *model.Question, includeAnswer bool) QuestionDTO {
 		CreatedBy:     q.CreatedBy,
 		CreatedByType: q.CreatedByType,
 		CredentialID:  q.CredentialID,
+		CategoryID:    q.CategoryID,
 		ID:            q.ID,
 		ImageURL:      q.ImageURL,
 		Options:       options,

@@ -52,20 +52,20 @@ export const contributionApi = {
   },
   /** 创建投稿 */
   create(payload: {
-    credential_id: number
+    category_id: number
     title: string
     intro: string
     is_anonymous?: boolean
     files: { file_url: string; file_name: string; file_size: number; content_type: string }[]
   }) {
-    return unwrappedRequest.post<ContributionItemDTO>('/contributions', payload)
+    return unwrappedRequest.post<ContributionItemDTO>('/contributions', payload, { params: { category_id: 'all' } })
   },
-  /** 公开广场（仅 approved，按证件过滤） */
-  listPublic(params: { credential_id?: number; sort?: 'latest' | 'hot'; page?: number; page_size?: number }) {
-    return unwrappedRequest.get<ContributionPageResult>('/contributions', { params })
+  /** 公开广场（仅 approved） */
+  listPublic(params: { category_id?: number | 'all'; sort?: 'latest' | 'hot'; page?: number; page_size?: number }) {
+    return unwrappedRequest.get<ContributionPageResult>('/contributions', { params: { category_id: 'all', ...params } })
   },
   /** 我的投稿（全部状态） */
-  listMine(params?: { page?: number; page_size?: number }) {
+  listMine(params?: { category_id?: number | 'all'; page?: number; page_size?: number }) {
     return unwrappedRequest.get<ContributionPageResult>('/contributions/mine', { params })
   },
   /** 详情 */

@@ -23,7 +23,10 @@ func TestCourseSortOrder(t *testing.T) {
 	db.Create(&lv)
 
 	// 创建时设置 sort_order
+	category := testutil.SeedTrainingCategory(t, db, "维修")
 	created, err := svc.CreateCourse(&CourseInput{
+		CourseType:  coerce.StrPtr(model.CourseTypeVideo),
+		CategoryID:  &category.ID,
 		Name:        coerce.StrPtr("课程A"),
 		SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID), SortOrder: coerce.IntPtr(5),
 	})
@@ -45,12 +48,12 @@ func TestCourseSortOrder(t *testing.T) {
 	}
 
 	// 负值应报错
-	if _, err := svc.CreateCourse(&CourseInput{Name: coerce.StrPtr("课程B"), SortOrder: coerce.IntPtr(-1)}); err == nil {
+	if _, err := svc.CreateCourse(&CourseInput{CategoryID: &category.ID, Name: coerce.StrPtr("课程B"), SortOrder: coerce.IntPtr(-1)}); err == nil {
 		t.Fatal("负排序值应报错")
 	}
 
 	// 列表按 sort_order 升序（0 在 1 前，再按创建时间倒序）
-	c0 := model.Course{Name: "课程C", Status: 1, SortOrder: 0,
+	c0 := model.Course{Name: "课程C", Status: 1, CategoryID: &category.ID, SortOrder: 0,
 		SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID), CreatedAt: testutil.Now()}
 	db.Create(&c0)
 	page, err := svc.GetCourses(1, 10, "", nil, nil, nil, "")
@@ -83,7 +86,10 @@ func TestAdminCourse_TrainingFields(t *testing.T) {
 	prereq := model.Course{Name: "前置课程", Status: 1, CreatedAt: testutil.Now()}
 	db.Create(&prereq)
 
+	category := testutil.SeedTrainingCategory(t, db, "维修")
 	data := &CourseInput{
+		CourseType:            coerce.StrPtr(model.CourseTypeVideo),
+		CategoryID:            &category.ID,
 		Name:                  coerce.StrPtr("液压系统维护"),
 		SpecialtyID:           coerce.IntPtr(spec.SpecialtyID),
 		LevelID:               coerce.IntPtr(lv.LevelID),
@@ -120,13 +126,13 @@ func TestAdminCourse_TrainingFields(t *testing.T) {
 	}
 
 	// 不存在的引用应报错
-	if _, err := svc.CreateCourse(&CourseInput{Name: coerce.StrPtr("x"), SpecialtyID: coerce.IntPtr(9999)}); err == nil {
+	if _, err := svc.CreateCourse(&CourseInput{CategoryID: &category.ID, Name: coerce.StrPtr("x"), SpecialtyID: coerce.IntPtr(9999)}); err == nil {
 		t.Fatal("不存在的专业方向应报错")
 	}
-	if _, err := svc.CreateCourse(&CourseInput{Name: coerce.StrPtr("x"), TheoryHours: coerce.IntPtr(-1)}); err == nil {
+	if _, err := svc.CreateCourse(&CourseInput{CategoryID: &category.ID, Name: coerce.StrPtr("x"), TheoryHours: coerce.IntPtr(-1)}); err == nil {
 		t.Fatal("负学时应报错")
 	}
-	if _, err := svc.CreateCourse(&CourseInput{Name: coerce.StrPtr("x"), PrerequisiteCourseIDs: []int{9999}}); err == nil {
+	if _, err := svc.CreateCourse(&CourseInput{CategoryID: &category.ID, Name: coerce.StrPtr("x"), PrerequisiteCourseIDs: []int{9999}}); err == nil {
 		t.Fatal("不存在的前置课程应报错")
 	}
 
@@ -190,7 +196,7 @@ func TestCourseService_TrainingFields(t *testing.T) {
 	db.Create(&spec)
 	lv := model.CourseLevel{Code: "beginner", Name: "入门", Status: 1, CreatedAt: testutil.Now()}
 	db.Create(&lv)
-	course := model.Course{Name: "安全操作规范", Status: 1,
+	course := model.Course{Name: "安全操作规范", Status: 1, CategoryID: &testutil.SeedTrainingCategory(t, db, "维修").ID,
 		SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID),
 		TheoryHours: 12, PracticeHours: 8, CreatedAt: testutil.Now()}
 	if err := db.Create(&course).Error; err != nil {

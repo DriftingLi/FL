@@ -155,6 +155,7 @@ const PUBLIC_PAGES = [
   'AIAssistantFeature',
   'ForgotPassword',
   'Login',
+  'PublicCourseDetail',
   'Register'
 ]
 

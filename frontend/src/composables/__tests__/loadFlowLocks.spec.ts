@@ -138,13 +138,12 @@ onMounted(() => { loadCardData(); loadTags() })
     expect(registered.has('loadTags')).toBe(false)
   })
 
-  it('存量三处旁路装载流确实归位了（facets 声明在场，而不是靠注释宣称）', () => {
+  it('存量旁路装载流通过 facets 声明', () => {
     const facetOwners = pageFiles()
       .filter(file => /facets\s*:\s*\[/.test(stripComments(read(file))))
       .map(label)
       .sort()
     expect(facetOwners).toEqual([
-      'student/CourseList.vue',
       'student/Materials.vue',
       'student/QuestionBank.vue'
     ])

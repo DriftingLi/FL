@@ -107,7 +107,8 @@ func seedVisibleCourse(t *testing.T, db *gorm.DB) int {
 	}
 	pos := spec.SpecialtyID
 	lvl := lv.LevelID
-	course := model.Course{Name: "非空课程", Status: 1, SpecialtyID: &pos, LevelID: &lvl, CreatedAt: testutil.Now()}
+	category := testutil.SeedTrainingCategory(t, db, "维修")
+	course := model.Course{Name: "非空课程", Status: 1, CategoryID: &category.ID, SpecialtyID: &pos, LevelID: &lvl, CreatedAt: testutil.Now()}
 	if err := db.Create(&course).Error; err != nil {
 		t.Fatalf("播种课程失败: %v", err)
 	}

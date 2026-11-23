@@ -28,7 +28,7 @@ func newProgressTestEnv(t *testing.T) (*Service, *model.Course, *model.Chapter) 
 	if err := db.Create(&lv).Error; err != nil {
 		t.Fatalf("创建课程等级失败: %v", err)
 	}
-	course := model.Course{Name: "换算课程", Status: 1, SpecialtyID: &spec.SpecialtyID,
+	course := model.Course{Name: "换算课程", CategoryID: &testutil.SeedTrainingCategory(t, db, "课程分类").ID, Status: 1, SpecialtyID: &spec.SpecialtyID,
 		LevelID: &lv.LevelID, CreatedAt: testutil.Now()}
 	if err := db.Create(&course).Error; err != nil {
 		t.Fatalf("创建课程失败: %v", err)

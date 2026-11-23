@@ -48,6 +48,7 @@ export interface ContributionFileDTO {
 
 export interface ContributionItemDTO {
   author: ContributionAuthor
+  category_id?: number
   created_at: string
   credential_id: number
   downloads_count: number

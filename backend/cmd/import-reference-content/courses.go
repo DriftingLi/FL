@@ -211,6 +211,10 @@ func ApplyCoursePlans(ctx context.Context, pool *pgxpool.Pool, plans []CoursePla
 	if err != nil {
 		return res, err
 	}
+	var categoryID int
+	if err := pool.QueryRow(ctx, "SELECT id FROM training_category WHERE legacy_credential_id = $1", credentialID).Scan(&categoryID); err != nil {
+		return res, fmt.Errorf("读取课程导入分类失败: %w", err)
+	}
 	specialtyID, err := lookupID(ctx, pool, "specialty", "code", operationCode)
 	if err != nil {
 		return res, err
@@ -227,7 +231,7 @@ func ApplyCoursePlans(ctx context.Context, pool *pgxpool.Pool, plans []CoursePla
 	for _, p := range plans {
 		var courseID int
 		err := pool.QueryRow(ctx,
-			`SELECT course_id FROM course WHERE name = $1 AND credential_id = $2`, p.Name, credentialID).Scan(&courseID)
+			`SELECT course_id FROM course WHERE name = $1 AND category_id = $2`, p.Name, categoryID).Scan(&courseID)
 		switch {
 		case err == nil:
 			res.SkippedCourses++
@@ -238,10 +242,10 @@ func ApplyCoursePlans(ctx context.Context, pool *pgxpool.Pool, plans []CoursePla
 			}
 			err := pool.QueryRow(ctx, `
 				INSERT INTO course (name, description, duration, specialty_id, level_id, theory_hours, practice_hours,
-				                    certificate_template_id, credential_id, is_hot, is_featured, sort_order, status)
-				VALUES ($1, $2, $3, $4, $5, $6, 0, $7, $8, FALSE, FALSE, 0, 1)
+				                    certificate_template_id, credential_id, category_id, is_hot, is_featured, sort_order, status)
+				VALUES ($1, $2, $3, $4, $5, $6, 0, $7, $8, $9, FALSE, FALSE, 0, 1)
 				RETURNING course_id`,
-				p.Name, p.Description, total, specialtyID, levelID, (total+59)/60, templateID, credentialID).Scan(&courseID)
+				p.Name, p.Description, total, specialtyID, levelID, (total+59)/60, templateID, credentialID, categoryID).Scan(&courseID)
 			if err != nil {
 				return res, fmt.Errorf("创建课程 %s 失败: %w", p.Name, err)
 			}

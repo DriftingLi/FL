@@ -60,34 +60,24 @@ func TestCreateCatalogItemsAppendToEnd(t *testing.T) {
 	}
 }
 
-// TestCreateCourseAppendsToEndOfGroup 新建课程自动排所属方向+等级组的末尾。
+// TestCreateCourseAppendsToEndOfGroup 新建课程自动排所属分类的末尾。
 func TestCreateCourseAppendsToEndOfGroup(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 	svc := course.NewAdminService(db, nil, nil, zap.NewNop())
 
-	spec := model.Specialty{Code: "mt", Name: "维修", Status: 1, CreatedAt: testutil.Now()}
-	if err := db.Create(&spec).Error; err != nil {
-		t.Fatalf("创建方向失败: %v", err)
-	}
-	lv := model.CourseLevel{Code: "bg", Name: "入门", Status: 1, CreatedAt: testutil.Now()}
-	if err := db.Create(&lv).Error; err != nil {
-		t.Fatalf("创建等级失败: %v", err)
-	}
-	spec2 := model.Specialty{Code: "op", Name: "操作", Status: 1, CreatedAt: testutil.Now()}
-	if err := db.Create(&spec2).Error; err != nil {
-		t.Fatalf("创建方向失败: %v", err)
-	}
+	category := testutil.SeedTrainingCategory(t, db, "维修")
+	otherCategory := testutil.SeedTrainingCategory(t, db, "操作")
 
-	c1, err := svc.CreateCourse(&course.CourseInput{Name: coerce.StrPtr("课程1"), SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID)})
+	c1, err := svc.CreateCourse(&course.CourseInput{Name: coerce.StrPtr("课程1"), CategoryID: &category.ID, CourseType: coerce.StrPtr(model.CourseTypeIllustrated)})
 	if err != nil {
 		t.Fatalf("创建课程失败: %v", err)
 	}
-	c2, err := svc.CreateCourse(&course.CourseInput{Name: coerce.StrPtr("课程2"), SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID)})
+	c2, err := svc.CreateCourse(&course.CourseInput{Name: coerce.StrPtr("课程2"), CategoryID: &category.ID, CourseType: coerce.StrPtr(model.CourseTypeIllustrated)})
 	if err != nil {
 		t.Fatalf("创建课程失败: %v", err)
 	}
-	// 另一方向+等级组：从 1 重新开始
-	c3, err := svc.CreateCourse(&course.CourseInput{Name: coerce.StrPtr("课程3"), SpecialtyID: coerce.IntPtr(spec2.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID)})
+	// 另一分类：从 1 重新开始
+	c3, err := svc.CreateCourse(&course.CourseInput{Name: coerce.StrPtr("课程3"), CategoryID: &otherCategory.ID, CourseType: coerce.StrPtr(model.CourseTypeIllustrated)})
 	if err != nil {
 		t.Fatalf("创建课程失败: %v", err)
 	}
@@ -98,7 +88,7 @@ func TestCreateCourseAppendsToEndOfGroup(t *testing.T) {
 		t.Fatalf("不同组课程 sort_order 应从 1 开始, got %v", c3.SortOrder)
 	}
 	// 显式传入 sort_order 时尊重传值
-	c4, err := svc.CreateCourse(&course.CourseInput{Name: coerce.StrPtr("课程4"), SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID), SortOrder: coerce.IntPtr(9)})
+	c4, err := svc.CreateCourse(&course.CourseInput{Name: coerce.StrPtr("课程4"), CategoryID: &category.ID, SortOrder: coerce.IntPtr(9), CourseType: coerce.StrPtr(model.CourseTypeIllustrated)})
 	if err != nil {
 		t.Fatalf("创建课程失败: %v", err)
 	}
@@ -159,21 +149,14 @@ func TestSwapCatalogSortWithEqualValues(t *testing.T) {
 	}
 }
 
-// TestSwapCourseSortGroupBoundary 课程交换限制在同一个方向+等级组内。
+// TestSwapCourseSortGroupBoundary 课程交换限制在同一个分类内。
 func TestSwapCourseSortGroupBoundary(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 	svc := course.NewAdminService(db, nil, nil, zap.NewNop())
 
-	spec := model.Specialty{Code: "mt", Name: "维修", Status: 1, CreatedAt: testutil.Now()}
-	if err := db.Create(&spec).Error; err != nil {
-		t.Fatal(err)
-	}
-	lv := model.CourseLevel{Code: "bg", Name: "入门", Status: 1, CreatedAt: testutil.Now()}
-	if err := db.Create(&lv).Error; err != nil {
-		t.Fatal(err)
-	}
-	c1 := model.Course{Name: "A", Status: 1, SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID), CreatedAt: testutil.Now()}
-	c2 := model.Course{Name: "B", Status: 1, SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID), CreatedAt: testutil.Now()}
+	category := testutil.SeedTrainingCategory(t, db, "维修")
+	c1 := model.Course{Name: "A", Status: 1, CategoryID: &category.ID, CreatedAt: testutil.Now()}
+	c2 := model.Course{Name: "B", Status: 1, CategoryID: &category.ID, CreatedAt: testutil.Now()}
 	if err := db.Create(&c1).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -184,17 +167,13 @@ func TestSwapCourseSortGroupBoundary(t *testing.T) {
 		t.Fatalf("同组交换失败: %v", err)
 	}
 
-	// 不同等级组（同一方向）应报错
-	lv2 := model.CourseLevel{Code: "in", Name: "进阶", Status: 1, CreatedAt: testutil.Now()}
-	if err := db.Create(&lv2).Error; err != nil {
-		t.Fatal(err)
-	}
-	c3 := model.Course{Name: "C", Status: 1, SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv2.LevelID), CreatedAt: testutil.Now()}
+	otherCategory := testutil.SeedTrainingCategory(t, db, "操作")
+	c3 := model.Course{Name: "C", Status: 1, CategoryID: &otherCategory.ID, CreatedAt: testutil.Now()}
 	if err := db.Create(&c3).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := svc.SwapCourseSort(c1.CourseID, c3.CourseID); err == nil {
-		t.Fatal("跨等级组交换应报错")
+		t.Fatal("跨分类交换应报错")
 	}
 }
 

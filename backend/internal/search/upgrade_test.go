@@ -32,6 +32,7 @@ func TestSearchChapterPartitionFollowsCourseVisibility(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 	svc := NewService(db, nil)
 	credA, credB := 1, 2
+	category := testutil.SeedTrainingCategory(t, db, "维修")
 	spID, lvID := 1, 1
 
 	mkCourse := func(name string, cred *int, mounted bool, status ...int16) model.Course {
@@ -41,6 +42,7 @@ func TestSearchChapterPartitionFollowsCourseVisibility(t *testing.T) {
 		}
 		c := model.Course{Name: name, Status: st, CredentialID: cred, CreatedAt: testutil.Now()}
 		if mounted {
+			c.CategoryID = &category.ID
 			c.SpecialtyID = &spID
 			c.LevelID = &lvID
 		}
@@ -91,9 +93,10 @@ func TestSearchChapterPartitionFollowsCourseVisibility(t *testing.T) {
 func TestSearchHitPositionOrderingAndSnippet(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 	svc := NewService(db, nil)
+	category := testutil.SeedTrainingCategory(t, db, "维修")
 	spID, lvID := 1, 1
 	mk := func(name, desc string) model.Course {
-		c := model.Course{Name: name, Description: desc, Status: 1, SpecialtyID: &spID, LevelID: &lvID, CreatedAt: testutil.Now()}
+		c := model.Course{Name: name, Description: desc, Status: 1, CategoryID: &category.ID, SpecialtyID: &spID, LevelID: &lvID, CreatedAt: testutil.Now()}
 		if err := db.Create(&c).Error; err != nil {
 			t.Fatalf("建课失败: %v", err)
 		}
@@ -137,8 +140,9 @@ func TestSearchHitPositionOrderingAndSnippet(t *testing.T) {
 func TestSearchMatchesCourseDescriptionAndFeaturedBody(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 	svc := NewService(db, nil)
+	category := testutil.SeedTrainingCategory(t, db, "维修")
 	spID, lvID := 1, 1
-	c := model.Course{Name: "无关键词的课名", Description: "本课讲液压泵的检修", Status: 1, SpecialtyID: &spID, LevelID: &lvID, CreatedAt: testutil.Now()}
+	c := model.Course{Name: "无关键词的课名", Description: "本课讲液压泵的检修", Status: 1, CategoryID: &category.ID, SpecialtyID: &spID, LevelID: &lvID, CreatedAt: testutil.Now()}
 	if err := db.Create(&c).Error; err != nil {
 		t.Fatalf("建课失败: %v", err)
 	}
@@ -190,8 +194,9 @@ func TestSearchTopicMatchesReplyContent(t *testing.T) {
 func TestSearchAllIncludesChapterSection(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 	svc := NewService(db, nil)
+	category := testutil.SeedTrainingCategory(t, db, "维修")
 	spID, lvID := 1, 1
-	course := model.Course{Name: "课", Status: 1, SpecialtyID: &spID, LevelID: &lvID, CreatedAt: testutil.Now()}
+	course := model.Course{Name: "课", Status: 1, CategoryID: &category.ID, SpecialtyID: &spID, LevelID: &lvID, CreatedAt: testutil.Now()}
 	if err := db.Create(&course).Error; err != nil {
 		t.Fatalf("建课失败: %v", err)
 	}
@@ -257,8 +262,9 @@ func TestSearchFactsAreAnonymousAndZeroResultQueryable(t *testing.T) {
 	}
 
 	// 聚合搜索的分区命中数逐区落库（哪一类内容搜不到可回答）
+	category := testutil.SeedTrainingCategory(t, db, "维修")
 	spID, lvID := 1, 1
-	c := model.Course{Name: "液压系统", Status: 1, SpecialtyID: &spID, LevelID: &lvID, CreatedAt: testutil.Now()}
+	c := model.Course{Name: "液压系统", Status: 1, CategoryID: &category.ID, SpecialtyID: &spID, LevelID: &lvID, CreatedAt: testutil.Now()}
 	if err := db.Create(&c).Error; err != nil {
 		t.Fatalf("建课失败: %v", err)
 	}
@@ -296,9 +302,10 @@ func TestSearchFactsAreAnonymousAndZeroResultQueryable(t *testing.T) {
 func TestSearchSecondaryOrderKeys(t *testing.T) {
 	db := testutil.NewMemoryDB(t)
 	svc := NewService(db, nil)
+	category := testutil.SeedTrainingCategory(t, db, "维修")
 	spID, lvID := 1, 1
 	mk := func(name string, sortOrder int) model.Course {
-		c := model.Course{Name: name, Status: 1, SpecialtyID: &spID, LevelID: &lvID, SortOrder: sortOrder, CreatedAt: testutil.Now()}
+		c := model.Course{Name: name, Status: 1, CategoryID: &category.ID, SpecialtyID: &spID, LevelID: &lvID, SortOrder: sortOrder, CreatedAt: testutil.Now()}
 		if err := db.Create(&c).Error; err != nil {
 			t.Fatalf("建课失败: %v", err)
 		}

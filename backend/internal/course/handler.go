@@ -38,6 +38,12 @@ func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, credRes midd
 
 	// 公开访问
 	g.GET("/courses", h.ListCourses)
+	rg.GET("/courses/:course_id", h.GetPublicCourseDetail)
+	rg.GET("/catalog/courses", h.ListPublicCourses)
+	// 独立公开网校读面（#2753 节点 B）：注册在 handler_public_school.go，
+	// 判据比既有公开面更严（分类必须已启用且映射到有效证件），且挂 rg 而非 g ——
+	// 账号的当前证件不参与公开找课。
+	registerPublicSchoolRoutes(rg, h)
 
 	// 需要登录
 	auth := g.Group("", middleware.JWTAuth(session))
@@ -52,6 +58,58 @@ func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, credRes midd
 	// 挂在已登录组而不是详情 GET 里：`/courses` 与详情都是带主体的读面，但「记录一次浏览」
 	// 是一次写，写要有自己的端点与自己的幂等语义（重复进入 → recorded=false）。
 	auth.POST("/course/:course_id/browse", h.RecordCourseBrowse)
+}
+
+// @Summary 公开一级分类课程目录
+// @Tags 学员端-课程
+// @Produce json
+// @Param category_id query int false "一级分类ID"
+// @Param filter query string false "热门或精品分类 hot|featured|all"
+// @Param page query int false "页码"
+// @Param page_size query int false "每页条数"
+// @Success 200 {object} response.R{data=PublicCoursePageDTO} "success"
+// @Failure 400 {object} response.R "分类ID无效"
+// @Router /catalog/courses [get]
+func (h *handler) ListPublicCourses(c *gin.Context) {
+	httpx.Endpoint[publicCourseListRequest, PublicCoursePageDTO]{
+		Parse: func(c *gin.Context) (*publicCourseListRequest, error) {
+			categoryID := httpx.QueryIDPtr(c, "category_id")
+			if _, provided := c.GetQuery("category_id"); provided && categoryID == nil {
+				return nil, httpx.BadRequest("分类ID无效")
+			}
+			filter := c.Query("filter")
+			if filter != "" && filter != "hot" && filter != "featured" && filter != "all" {
+				return nil, httpx.BadRequest("filter 仅支持 hot|featured|all")
+			}
+			return &publicCourseListRequest{
+				page: httpx.QueryIntDefault(c, "page", 1), pageSize: httpx.QueryIntDefault(c, "page_size", 12),
+				categoryID: categoryID, filter: filter,
+			}, nil
+		},
+		Invoke: func(ctx context.Context, req *publicCourseListRequest) (*PublicCoursePageDTO, error) {
+			return h.svc.ListPublicCourses(ctx, *req)
+		},
+	}.Handle(c)
+}
+
+// @Summary 公开课程详情与已发布章节目录
+// @Tags 学员端-课程
+// @Produce json
+// @Param course_id path int true "课程ID"
+// @Success 200 {object} response.R{data=PublicCourseDetailDTO} "success"
+// @Failure 400 {object} response.R "课程ID无效"
+// @Failure 404 {object} response.R "课程不存在"
+// @Router /courses/{course_id} [get]
+func (h *handler) GetPublicCourseDetail(c *gin.Context) {
+	httpx.Endpoint[int, PublicCourseDetailDTO]{
+		Parse: func(c *gin.Context) (*int, error) {
+			id, err := httpx.PathInt(c, "course_id", "课程ID无效")
+			return &id, err
+		},
+		Invoke: func(ctx context.Context, id *int) (*PublicCourseDetailDTO, error) {
+			return h.svc.GetPublicCourseDetail(ctx, *id)
+		},
+	}.WithSentinelsMsg(http.StatusNotFound, "课程不存在", model.ErrCourseNotFound).Handle(c)
 }
 
 // unreadableFaces404 是「一份内容读不到」背后的**四件事实**在呈现层的登记面

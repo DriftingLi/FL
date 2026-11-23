@@ -175,6 +175,7 @@ export interface AdminCoursesQuery {
 }
 
 export interface CoursePayload {
+  category_id?: number
   name?: string
   description?: string
   cover_image?: string
@@ -193,7 +194,14 @@ export interface CoursePayload {
   is_featured?: boolean
   // 积分兑换价（#2447）：≥1 的整数为定价；null = 清空（免费）；未携带 = 保留现状。
   points_price?: number | null
+  // 课程主类型（#2760）：video | illustrated。创建必填；编辑未携带 = 保留原值。
+  // 内容级互斥：一门课的章节内容必须与它同质（后端两张写面都拦）。
+  course_type?: CourseType
 }
+
+// CourseType 课程主类型的两个取值（#2760）。
+// 与后端 model.CourseTypeVideo / model.CourseTypeIllustrated 逐字一致。
+export type CourseType = 'video' | 'illustrated'
 
 export interface ChapterPayload {
   title: string

@@ -117,7 +117,7 @@ func (h *adminHandler) ListCourses(c *gin.Context) {
 //
 // 三条「引用对象不存在」复用目录域的同一载体（`catalog_specs.go:15-17`），不另起名字。
 var courseWriteFacts400 = []error{
-	ErrCourseNameRequired, ErrSpecialtyRequired, ErrCourseLevelRequired,
+	ErrCourseNameRequired, ErrCourseCategoryRequired, ErrCourseCategoryNotFound,
 	ErrCourseCredentialIDInvalid, ErrCourseSpecialtyIDInvalid,
 	ErrCourseLevelIDInvalid, ErrCertificateTemplateIDInvalid,
 	ErrCourseCredentialRefNotFound, model.ErrSpecialtyNotFound,
@@ -126,17 +126,20 @@ var courseWriteFacts400 = []error{
 	ErrCourseSortOrderNegative, ErrCoursePointsPriceInvalid,
 	ErrCoursePrerequisiteSelf, ErrCoursePrerequisiteNotFound,
 	ErrCoursePrerequisiteCycle,
+	// #2760 课程主类型：值域错与「内容级互斥」冲突都是**输入**不合法（改请求能过），
+	// 该落在 400 那一格，不是 500。
+	ErrCourseTypeInvalid, ErrCourseTypeRequired, ErrCourseContentTypeConflict,
 }
 
 // @Summary 创建课程
-// @Description 管理员创建课程（含培训目录扩展字段）
+// @Description 管理员按一级培训分类创建课程
 // @Tags 管理端-课程
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param body body object false "课程输入 {name,description,cover_image,duration,status,...}"
+// @Param body body object false "课程输入 {name,category_id,description,cover_image,duration,status,...}"
 // @Success 201 {object} response.R{data=CourseDTO} "课程创建成功"
-// @Failure 400 {object} response.R "输入不合法（挂载必填 / 引用ID无效或不存在 / 数值为负 / 积分价非正 / 前置课程冲突）"
+// @Failure 400 {object} response.R "输入不合法（分类必填 / 引用ID无效或不存在 / 数值为负 / 积分价非正 / 前置课程冲突）"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 500 {object} response.R "写库或查库失败"
 // @Router /admin/course [post]
@@ -230,7 +233,7 @@ var courseSortFacts400 = append(append([]error{}, sortorder.ErrEntityNotSortable
 	ErrCourseSwapTargetNotFound)
 
 // @Summary 交换课程排序
-// @Description 同一方向+等级组内交换 sort_order，响应 data 为 null
+// @Description 同一分类内交换 sort_order，响应 data 为 null
 // @Tags 管理端-课程
 // @Accept json
 // @Produce json

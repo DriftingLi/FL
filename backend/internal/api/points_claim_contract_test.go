@@ -77,13 +77,14 @@ func taskStatusOf(resp pointsTasksResp, code string) (string, int, int) {
 
 func seedPointsTaskConfigs(t *testing.T, db *gorm.DB) {
 	t.Helper()
+	retiredAt := testutil.Now()
 	configs := []model.PointsTaskConfig{
 		{Code: "daily_login", Title: "每日登录", Group: "daily", Points: 5, DailyLimit: 1, EventType: "login", Description: "每日进入任务中心即可领取"},
 		{Code: "daily_quiz", Title: "每日答题 1 次", Group: "daily", Points: 10, DailyLimit: 1, EventType: "question_submit", Description: "每日完成任意练习/模考 1 次"},
 		{Code: "daily_browse", Title: "浏览 3 篇帖子", Group: "daily", Points: 5, DailyLimit: 1, EventType: "forum_view", Description: "每日浏览 3 篇帖子"},
 		{Code: "newbie_profile_basic", Title: "完善基础资料", Group: "newbie", Points: 10, DailyLimit: 1, TotalLimit: intPtr(1), EventType: "profile_complete", Description: "上传头像且设置昵称"},
 		{Code: "newbie_profile_contact", Title: "完善联系资料", Group: "newbie", Points: 10, DailyLimit: 1, TotalLimit: intPtr(1), EventType: "profile_complete", Description: "填写单位且绑定手机/邮箱"},
-		{Code: "newbie_credential", Title: "选定目标证件", Group: "newbie", Points: 10, DailyLimit: 1, TotalLimit: intPtr(1), EventType: "credential_onboarding", Description: "完成 onboarding 选定当前证件"},
+		{Code: "newbie_credential", Title: "选定目标证件", Group: "newbie", Points: 10, DailyLimit: 1, TotalLimit: intPtr(1), EventType: "credential_onboarding", Description: "完成 onboarding 选定当前证件", RetiredAt: &retiredAt},
 		{Code: "newbie_first_course", Title: "完成首节课程", Group: "newbie", Points: 20, DailyLimit: 1, TotalLimit: intPtr(1), EventType: "course_complete", Description: "完成首节课程学习"},
 		// 分组收敛（ADR-0054）：growth 退役，三项改判 daily——夹具与迁移 000034 后的生产种子同形。
 		{Code: "growth_post", Title: "发布 1 篇帖子", Group: "daily", Points: 10, DailyLimit: 1, EventType: "topic_create", Description: "每日发布 1 篇帖子"},
@@ -164,35 +165,40 @@ func assertPointsClaimStateMachine(t *testing.T, db *gorm.DB) {
 	if progressRows != 0 {
 		t.Fatalf("points_user_progress should have no rows, got %d", progressRows)
 	}
-	// 7. newbie_credential (total_limit=1): behavior -> claimable; claim once; lifetime exhausted
-	if err := db.Model(&model.HrwaiUser{}).Where("id = ?", student.ID).UpdateColumn("current_credential_id", 1).Error; err != nil {
-		t.Fatalf("seed credential behavior failed: %v", err)
+	// 领取有终身额度的新手任务，重复请求不能重复加分。
+	if err := db.Model(&model.HrwaiUser{}).Where("id = ?", student.ID).
+		Updates(map[string]any{"avatar_url": "/static/avatar.png", "username": "昵称"}).Error; err != nil {
+		t.Fatalf("seed profile behavior failed: %v", err)
 	}
 	resp = fetchPointsTasks(t, r, token)
-	if st, _, _ := taskStatusOf(resp, "newbie_credential"); st != "claimable" {
-		t.Fatalf("newbie_credential should be claimable after behavior, got %q", st)
+	if st, _, _ := taskStatusOf(resp, "newbie_profile_basic"); st != "claimable" {
+		t.Fatalf("complete profile task should be claimable, got %q", st)
+	}
+	if st, _, _ := taskStatusOf(resp, "newbie_credential"); st != "" {
+		t.Fatalf("retired task should be absent, got %q", st)
 	}
 	rec = doWithToken(t, r, token, http.MethodPost, "/api/points/tasks/newbie_credential/claim", nil)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("retired task should be unavailable, got %d: %s", rec.Code, rec.Body.String())
+	}
+	rec = doWithToken(t, r, token, http.MethodPost, "/api/points/tasks/newbie_profile_basic/claim", nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("newbie first claim should be 200, got %d body=%s", rec.Code, rec.Body.String())
 	}
-	rec = doWithToken(t, r, token, http.MethodPost, "/api/points/tasks/newbie_credential/claim", nil)
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("newbie duplicate claim should be 400, got %d", rec.Code)
-	}
-	if !strings.Contains(rec.Body.String(), "已领取") {
-		t.Fatalf("newbie duplicate message should contain 已领取, got %s", rec.Body.String())
+	rec = doWithToken(t, r, token, http.MethodPost, "/api/points/tasks/newbie_profile_basic/claim", nil)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "已领取") {
+		t.Fatalf("duplicate newbie claim should be rejected, got %d: %s", rec.Code, rec.Body.String())
 	}
 	var newbieRows int64
-	if err := db.Model(&model.PointsTaskClaim{}).Where("user_id = ? AND task_code = ?", student.ID, "newbie_credential").Count(&newbieRows).Error; err != nil {
+	if err := db.Model(&model.PointsTaskClaim{}).Where("user_id = ? AND task_code = ?", student.ID, "newbie_profile_basic").Count(&newbieRows).Error; err != nil {
 		t.Fatalf("count newbie claims failed: %v", err)
 	}
 	if newbieRows != 1 {
-		t.Fatalf("newbie_credential claim rows should be exactly 1, got %d", newbieRows)
+		t.Fatalf("profile claim rows should be exactly 1, got %d", newbieRows)
 	}
 	resp = fetchPointsTasks(t, r, token)
-	if st, pr, tt := taskStatusOf(resp, "newbie_credential"); st != "claimed" || pr != 1 || tt != 1 {
-		t.Fatalf("newbie_credential should stay claimed 1/1, got %q %d/%d", st, pr, tt)
+	if st, pr, tt := taskStatusOf(resp, "newbie_profile_basic"); st != "claimed" || pr != 2 || tt != 2 {
+		t.Fatalf("profile task should stay claimed 2/2, got %q %d/%d", st, pr, tt)
 	}
 }
 

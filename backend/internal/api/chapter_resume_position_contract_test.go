@@ -33,7 +33,7 @@ func TestChapterDetailProjectsResumePosition(t *testing.T) {
 
 	spec := model.Specialty{Code: "pos", Name: "位置方向", SortOrder: 1, Status: 1}
 	lv := model.CourseLevel{Code: "pos-lv", Name: "入门", SortOrder: 1, Status: 1}
-	course := model.Course{Name: "液压系统", Status: 1, SpecialtyID: &spec.SpecialtyID,
+	course := model.Course{Name: "液压系统", CategoryID: &testutil.SeedTrainingCategory(t, db, "课程分类").ID, Status: 1, SpecialtyID: &spec.SpecialtyID,
 		LevelID: &lv.LevelID, CreatedAt: testutil.Now()}
 	ch := model.Chapter{Title: "油泵拆装", OrderNum: 1, CreatedAt: testutil.Now()}
 	rec := model.StudyRecord{StudentID: studentID, VideoPosition: 823}

@@ -86,7 +86,7 @@ func outletChapterSlidesWithoutRenderer(t *testing.T) any {
 	if err := db.Create(&lv).Error; err != nil {
 		t.Fatalf("播种等级失败: %v", err)
 	}
-	crs := model.Course{Name: "台账课程", Status: 1, SpecialtyID: &spec.SpecialtyID, LevelID: &lv.LevelID}
+	crs := model.Course{Name: "台账课程", CategoryID: &testutil.SeedTrainingCategory(t, db, "课程分类").ID, Status: 1, SpecialtyID: &spec.SpecialtyID, LevelID: &lv.LevelID}
 	if err := db.Create(&crs).Error; err != nil {
 		t.Fatalf("播种课程失败: %v", err)
 	}

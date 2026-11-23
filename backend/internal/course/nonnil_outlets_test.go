@@ -32,6 +32,8 @@ var nonnilOutletsCourse = map[string]func(t *testing.T) any{
 	"course.CourseDTO.prerequisites":           outletAdminCourseDetailMeta,
 	"course.CourseDTO.prerequisite_course_ids": outletAdminCourseDetailMeta,
 	"course.CourseDetailDTO.chapters":          outletCourseDetailNoChapters,
+	"course.PublicCourseDetailDTO.chapters":    outletPublicCourseDetailNoChapters,
+	"course.PublicCoursePageDTO.courses":       outletPublicCoursePageNoCourses,
 	"course.ChapterDetailDTO.files":            outletChapterDetailNoFiles,
 	// #2499 C9 审核队列三型：空队列/无文件快照/无失败明细都必须发 `[]` 而不是 null
 	// （前端 v-for 与 failures 遍历直接消费，null 会炸）。
@@ -41,6 +43,124 @@ var nonnilOutletsCourse = map[string]func(t *testing.T) any{
 	"course.BatchRejectResult.failures":     outletBatchRejectNoFailures,
 	// #2596 D1：无人认领的课程发空名单 `[]`（章节页的共认名单直接 v-for，null 会炸）。
 	"course.CourseClaimantsResult.claimants": outletNoClaimants,
+	// #2753 独立公开网校读面三格：空库/无合格分类时也必须发 `[]` 而不是 null
+	// （htmx 模板的 range 与分类下拉直接消费，null 会让「无结果」渲染成「加载失败」）。
+	"course.PublicSchoolCategoryListDTO.categories": outletPublicSchoolNoCategories,
+	"course.PublicSchoolCoursePageDTO.courses":      outletPublicSchoolNoCourses,
+	"course.PublicSchoolCourseDetailDTO.chapters":   outletPublicSchoolDetailNoChapters,
+	// #2760 证件题库目录两格：空库时 question_banks 发 `[]`、每个分类的 by_type 也是 `[]`-等价的
+	// 空 map（JSON `{}`，不是 null）——前端模板与 open-school 的 range 都直接消费。
+	"course.PublicQuestionBankListDTO.question_banks": outletPublicQuestionBanksEmpty,
+	"course.PublicQuestionBankCategoryDTO.by_type":    outletPublicQuestionBanksAggregated,
+}
+
+// outletPublicQuestionBanksEmpty 空库拉题库目录：question_banks 发 `[]` 而不是 null。
+func outletPublicQuestionBanksEmpty(t *testing.T) any {
+	t.Helper()
+	res, err := NewService(testutil.NewMemoryDB(t), nil, zap.NewNop()).ListPublicQuestionBanks(context.Background())
+	if err != nil {
+		t.Fatalf("空库拉公开题库目录失败: %v", err)
+	}
+	return res
+}
+
+// outletPublicQuestionBanksAggregated 有题的分类：by_type 必为实际命中的题型字典（非 null）。
+func outletPublicQuestionBanksAggregated(t *testing.T) any {
+	t.Helper()
+	db := testutil.NewMemoryDB(t)
+	cred := model.Credential{Code: "QB", Name: "题库证件", Category: "special_operation", Status: 1, SortOrder: 1}
+	if err := db.Create(&cred).Error; err != nil {
+		t.Fatal(err)
+	}
+	cat := model.TrainingCategory{Name: "题库分类", Status: 1, LegacyCredentialID: &cred.ID}
+	if err := db.Create(&cat).Error; err != nil {
+		t.Fatal(err)
+	}
+	q := model.Question{Type: "single_choice", Content: "池内题", Answer: "A", Status: "published", CategoryID: &cat.ID}
+	if err := db.Create(&q).Error; err != nil {
+		t.Fatal(err)
+	}
+	res, err := NewService(db, nil, zap.NewNop()).ListPublicQuestionBanks(context.Background())
+	if err != nil {
+		t.Fatalf("公开题库目录失败: %v", err)
+	}
+	if len(res.QuestionBanks) != 1 {
+		t.Fatalf("应有 1 个合格分类，实得 %d", len(res.QuestionBanks))
+	}
+	// 举证对象是字段所属的那一行 DTO，不是整张列表信封——
+	// AssertNonNilOutlets 在返回值顶层找 jsonKey（by_type）。
+	return res.QuestionBanks[0]
+}
+
+// outletPublicSchoolNoCategories 空库拉公开网校分类选项：无合格分类时 categories 发 `[]`。
+func outletPublicSchoolNoCategories(t *testing.T) any {
+	t.Helper()
+	res, err := NewService(testutil.NewMemoryDB(t), nil, zap.NewNop()).ListPublicSchoolCategories(context.Background(), "")
+	if err != nil {
+		t.Fatalf("空库拉公开网校分类失败: %v", err)
+	}
+	return res
+}
+
+// outletPublicSchoolNoCourses 空库拉公开网校目录：无课程时 courses 发 `[]`。
+func outletPublicSchoolNoCourses(t *testing.T) any {
+	t.Helper()
+	res, err := NewService(testutil.NewMemoryDB(t), nil, zap.NewNop()).ListPublicSchoolCourses(context.Background(), publicSchoolListRequest{})
+	if err != nil {
+		t.Fatalf("空库拉公开网校目录失败: %v", err)
+	}
+	return res
+}
+
+// outletPublicSchoolDetailNoChapters 合格的公开课但无已发布章节：chapters 发 `[]`。
+//
+// 夹具必须把分类同时做成「已启用 + 映射到有效启用证件」——这是公开网校相对既有公开详情
+// 多出来的两条判据（#2753 节点 A）；沿用 seedVisibleCourse 的分类（无证件映射）会直接 404。
+func outletPublicSchoolDetailNoChapters(t *testing.T) any {
+	t.Helper()
+	db := testutil.NewMemoryDB(t)
+	credential := model.Credential{Code: "PUB", Name: "公开面证件", Category: "special_operation", Status: 1, SortOrder: 1}
+	if err := db.Create(&credential).Error; err != nil {
+		t.Fatal(err)
+	}
+	category := model.TrainingCategory{Name: "公开面分类", Status: 1, LegacyCredentialID: &credential.ID}
+	if err := db.Create(&category).Error; err != nil {
+		t.Fatal(err)
+	}
+	item := model.Course{Name: "无章节公开课", CategoryID: &category.ID, Status: 1}
+	if err := db.Create(&item).Error; err != nil {
+		t.Fatal(err)
+	}
+	res, err := NewService(db, nil, zap.NewNop()).GetPublicSchoolCourseDetail(context.Background(), item.CourseID)
+	if err != nil {
+		t.Fatalf("公开网校详情失败: %v", err)
+	}
+	return res
+}
+
+func outletPublicCourseDetailNoChapters(t *testing.T) any {
+	db := testutil.NewMemoryDB(t)
+	category := model.TrainingCategory{Name: "维修", Status: 1}
+	if err := db.Create(&category).Error; err != nil {
+		t.Fatal(err)
+	}
+	item := model.Course{Name: "目录样例", CategoryID: &category.ID}
+	if err := db.Create(&item).Error; err != nil {
+		t.Fatal(err)
+	}
+	result, err := NewService(db, nil, zap.NewNop()).GetPublicCourseDetail(context.Background(), item.CourseID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return result
+}
+
+func outletPublicCoursePageNoCourses(t *testing.T) any {
+	result, err := NewService(testutil.NewMemoryDB(t), nil, zap.NewNop()).ListPublicCourses(context.Background(), publicCourseListRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return result
 }
 
 // TestNonNilDeclaredOutletsNeverEmitNull 本域的举证入口（判据本体在 testutil）。
@@ -193,7 +313,7 @@ func seedVisibleCourse(t *testing.T, db *gorm.DB) int {
 	}
 	pos := spec.SpecialtyID
 	lvl := lv.LevelID
-	course := model.Course{Name: "非空课程", Status: 1, SpecialtyID: &pos, LevelID: &lvl, CreatedAt: testutil.Now()}
+	course := model.Course{Name: "非空课程", CategoryID: &testutil.SeedTrainingCategory(t, db, "课程分类").ID, Status: 1, SpecialtyID: &pos, LevelID: &lvl, CreatedAt: testutil.Now()}
 	if err := db.Create(&course).Error; err != nil {
 		t.Fatalf("播种课程失败: %v", err)
 	}

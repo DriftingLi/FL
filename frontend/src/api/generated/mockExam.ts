@@ -6,11 +6,13 @@
 //
 // 覆盖端点：
 //   POST /mock-exam/start
+//   POST /mock-exam/category-start
 //   POST /mock-exam/{mock_exam_id}/save
 //   GET  /mock-exam/{mock_exam_id}/resume
 //   POST /mock-exam/{mock_exam_id}/submit
 //   GET  /mock-exam/{mock_exam_id}/result
 //   GET  /mock-exam/history
+//   GET  /mock-exam/in-progress
 //
 // 覆盖的 Go 类型：MockExamAnswerDetailDTO / MockExamHistoryDTO / MockExamHistoryItemDTO / MockExamResultDTO / MockExamResumeDTO / MockExamStartDTO / MockExamSubmitDTO / QuestionDTO
 //
@@ -49,6 +51,7 @@ export interface MockExamHistoryDTO {
 
 export interface MockExamHistoryItemDTO {
   answers: unknown
+  category_id?: number
   created_at: string
   duration: number
   id: number
@@ -75,7 +78,7 @@ export interface MockExamResultDTO {
 }
 
 export interface MockExamResumeDTO {
-  answers: unknown
+  answers: Record<string, unknown>
   duration: number
   mock_exam_id: number
   questions: QuestionDTO[]
@@ -103,6 +106,7 @@ export interface MockExamSubmitDTO {
 
 export interface QuestionDTO {
   answer?: string
+  category_id?: number
   content: string
   created_at: string
   created_by: number | null
