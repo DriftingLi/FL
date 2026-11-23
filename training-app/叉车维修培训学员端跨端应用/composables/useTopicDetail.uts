@@ -170,7 +170,6 @@ export function useTopicDetail() : UseTopicDetailResult {
             replyPage.value = 1
             replyHasMore.value = data.hasMore
             replyTotal.value = data.total
-            console.log('[forum-detail] DIAG can_delete=', data.can_delete, 'author_id=', data.author_id, 'currentUserId=', currentUserId.value, 'user=', JSON.stringify(authStore.user.value), 'canDelete=', canDelete.value)
             // 刷新收藏状态（获取 favorite_id 供取消收藏使用）
             loadTopicFavorite()
         } catch (e) {
