@@ -71,7 +71,8 @@ module.exports = {
     '#FF6B6B': 'pages/exam/mock-exam.uvue timer-text.danger 倒计时告警红——$danger-color 语义相近但值不等，待红系 token 收敛裁',
     '#FFF3A0': 'pages/exam/mock-exam.uvue timer-text.warning 倒计时提醒黄——$warning-color(#ff9900) 偏深，浅黄无 token 对应',
     '#FF9800': '批4 多页（chapter-view/practice-records/mock-exam-records/notebook）进行中/学习中状态橙——$warning-color(#ff9900) 语义相同但值不等，替换会视觉回归，待橙系 token 收敛裁',
-    '#FFCDD2': 'pages/forum/forum-detail.uvue header-action-danger 删除字色——蓝底上删除入口浅红，token 表无对应',
+    // '#FFCDD2' —— #2771 起 forum-detail 页头工具栏整行删除，删除入口收进「···」菜单并改走
+    // $danger-color（白卡上不再需要蓝底浅红），该值无承载，条目退役
     '#E8E8E8': 'pages/forum/check-in.uvue cell-missed 过去未打卡灰瓦片——G8 日历套历史色，中性灰无 token 对应',
     '#8A8A8A': 'pages/forum/check-in.uvue num-missed 过去未打卡日数字——中灰文字，$text-color-secondary 偏深，待灰阶 token 票裁',
     '#F6B93E': 'pages/forum/check-in.uvue badge-coin 金币徽章底——金币金，token 表无对应',
