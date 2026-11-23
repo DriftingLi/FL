@@ -100,25 +100,28 @@
         z-index: 90;
     }
 
-    /* #2771：单条目不再撑出大块白卡 —— 最小宽 220 → 176rpx，行高仍守 88rpx（44px 触摸目标） */
+    /* #2775：再收一档 —— 220 → 176（#2771）→ 130rpx，宽度按最长文案「取消收藏」反算；
+       行高 27*2 + 文字行高 34 = 88rpx = 44px，守 ui-spec §5.11 触摸目标下限（视觉靠宽度与字号收，
+       命中高度不动 —— 收矮会让每项掉到 44px 以下） */
     .more-menu {
         position: fixed;
-        right: 32rpx;
+        right: 24rpx;
         z-index: 91;
-        min-width: 176rpx;
+        min-width: 130rpx;
         background-color: #ffffff;
-        border-radius: 16rpx;
-        padding: 8rpx 0;
+        border-radius: 12rpx;
+        padding: 6rpx 0;
         box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.12);
     }
 
     .more-item {
-        padding: 24rpx 28rpx;
+        padding: 27rpx 16rpx;
         align-items: center;
     }
 
     .more-item-text {
-        font-size: 26rpx;
+        font-size: 24rpx;
+        line-height: 34rpx;
         color: #333333;
     }
 
