@@ -278,6 +278,8 @@ make check-all           # 后端 check + 前端 check
 
 迁移脚本在 `backend/migrations/`，`序号_名称.up.sql` / `.down.sql` 成对组织。**这里不列清单**——清单看目录本身，意图看每条迁移的头部注释。
 
+版本 1–74 已合并为 `000074_baseline`。新库直接建到 74，已达 74 且状态干净的库沿用现有迁移记录，后续迁移从 75 开始。低于 74 的持久库须先用旧迁移链（Git 提交 `266d132cc523`）升级到 74。基线的 `down` 会删除整个基线，限可丢弃的数据库使用。需要恢复到 73 或更早的版本时，使用旧迁移链和对应备份。
+
 配对性与真实可执行由 CI 的 `migration-check` 保证：空库 `migrate up` → 列 / 索引对账（按 `current_schema()` 收窄）→ `migrate down` 回空库并反向断言。**部署侧迁移失败默认中止**（`ALLOW_MIGRATION_FAILURE=1` 才带已知风险继续）。
 
 ## 测试与检查

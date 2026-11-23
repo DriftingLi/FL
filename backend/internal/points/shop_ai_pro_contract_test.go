@@ -84,7 +84,7 @@ func TestShopAiProListedAndRedeemable(t *testing.T) {
 // TestShopAiProSeedRowPresent 迁移里的种子行与登记常量必须同一名称：
 // 改了行名没改常量（或反之）就是一条「列表里看得见、兑换说不可兑」的错位。
 func TestShopAiProSeedRowPresent(t *testing.T) {
-	path := filepath.Join("..", "..", "migrations", "000049_shop_ai_pro_sku.up.sql")
+	path := filepath.Join("..", "..", "migrations", "000074_baseline.up.sql")
 	src, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("读 %s 失败: %v", path, err)
