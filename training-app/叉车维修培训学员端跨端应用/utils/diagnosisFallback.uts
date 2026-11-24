@@ -1,0 +1,60 @@
+/**
+ * 诊断引导面的**静态兜底字典**（#2812）
+ *
+ * 用途只有一处：`GET /diagnosis/intents` 取不到、但 `/diagnosis/health` 仍是 200 时，
+ * 欢迎区不至于整块留白（生产形态实测：health 200 + intents 502，学员看到空屏）。
+ * 取数成功时这份字典**不参与**任何渲染 —— 它不是第二套 UI，只是一个备胎。
+ *
+ * ## 取值只许来自已落档的上游契约真值（不得造句）
+ *
+ * brands 逐字取 `docs/design/20261105-诊断接口能力盘点与联调确认.md`（联调实测响应），
+ * 常问取同文档 `faults?brand=zhongli` 根层的实测六条里的四条 —— 它们是上游真实词表里的句子，
+ * 不是我们编的问法。`a`（答案）留空：欢迎区只渲染 `q`，编一个答案就是编内容。
+ *
+ * ## 漂移风险（已知并接受）
+ *
+ * 这是**第二真值源**：上游改了品牌或常问词，这里不会跟着变。缓解有两条 ——
+ *   ① 只在 intents 不可达时使用，正常链路永远走真数据；
+ *   ② `id` 必须是 `systems?brand=` 认的值（`zhongli` / `linde`），改上游词表时同批改本文件。
+ *
+ * ## 为什么品牌卡在兜底态不打开引导面板
+ *
+ * 第二层 `systems?brand=` 与 intents 同源，此时必然也 502 ⇒ 打开面板就是一屏「没有匹配项」的死路。
+ * 兜底态点品牌卡改成往输入框填一句**待补完的话**（`fallbackBrandPrompt`），与 FAQ 卡同一条路径：
+ * 学员补上现象就能发，这条链路（chat）与词表端点不是同一条上游。
+ */
+import type { DiagnosisIntentBrand, DiagnosisFaq } from '../types/index'
+
+/** 两张品牌卡（联调实测 `intents.brands`，字段顺序与契约一致） */
+export function fallbackBrands() : DiagnosisIntentBrand[] {
+	const out : DiagnosisIntentBrand[] = [
+		{ id: 'zhongli', name: '中力', tagline: '电动仓储车', icon: '🚜', cls: 'cap-brand-zl', picker: 'system' },
+		{ id: 'linde', name: '林德', tagline: '德国进口', icon: '🏭', cls: 'cap-brand-ld', picker: 'model' },
+	]
+	return out
+}
+
+/** 四条常问（`faults?brand=zhongli` 根层实测词，取前四条；答案留空） */
+export function fallbackFaq() : DiagnosisFaq[] {
+	const out : DiagnosisFaq[] = [
+		{ q: '仪表报故障码', a: '' },
+		{ q: '整车无法启动 / 无法上电', a: '' },
+		{ q: '举升无力 / 不能起升', a: '' },
+		{ q: '不能充电 / 充电异常', a: '' },
+	]
+	return out
+}
+
+/**
+ * 兜底态点品牌卡要填进输入框的话：半句留白，学员补现象后自行发送。
+ * 认不出的 `brandId` 回空串（调用方据此回退到原路径，不填一句没有品牌的话）。
+ */
+export function fallbackBrandPrompt(brandId : string) : string {
+	const brands = fallbackBrands()
+	for (let i = 0; i < brands.length; i++) {
+		if (brands[i].id == brandId) {
+			return `我的${brands[i].name}叉车出现故障，故障现象是：`
+		}
+	}
+	return ''
+}
