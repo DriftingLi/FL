@@ -349,7 +349,8 @@ describe('#988 诊断来源资料消费契约', () => {
     });
 
     it('专项 scope 不消费模型列表：模型栏与模型选择器都按 !isScoped 收起', () => {
-      expect(PAGE).toContain(':show-model-bar="proUnlocked && !isScoped"');
+      // #2787：芯片的专业版门去净后，专项态收起仍只靠 isScoped（这条断言的作用不变）
+      expect(PAGE).toContain(':show-model-bar="!isScoped"');
       expect(PAGE).toMatch(/<AiChatModelPicker[^>]*v-if="!isScoped"/);
     });
   });

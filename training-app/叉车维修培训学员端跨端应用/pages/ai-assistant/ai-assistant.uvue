@@ -106,9 +106,9 @@
 		<!-- 待发图片托盘（#2299）：只在诊断 scope、且有内容/上传中出现；发送后由 picker.clear() 收空 -->
 		<AiChatImageTray v-if="isDiagnosis" :images="pickImages" :uploading-count="pickUploading" :max-images="aiMaxImages" @remove="onRemoveImage" @preview="onPreviewImage" />
 
-		<!-- 底部输入区（专业版带模型选择器）；专项 scope 下**无模型芯片** —— 专项通道不吃用户自选模型（#998）
+		<!-- 底部输入区（模型芯片对基础版也常显可点，#2787）；专项 scope 下**无模型芯片** —— 专项通道不吃用户自选模型（#998）
 		     ⇒ 模型下拉**内联在输入卡里**（#2520，原型 793:1197）。 -->
-		<AiChatInput :show-model-bar="proUnlocked && !isScoped" :model-name="currentModelName" :model-readonly="!proUnlocked" :show-image-button="isDiagnosis || proUnlocked" :image-count="pickImages.length" :draft="draftText" :reset-signal="scopeResetSignal" :model-picker-open="showModelPicker" @send="onInputSend" @model-click="onModelBarClick" @voice-click="onVoiceClick" @image-click="onImageClick" @text-change="onDraftInput">
+		<AiChatInput :show-model-bar="!isScoped" :model-name="currentModelName" :model-readonly="false" :show-image-button="isDiagnosis || proUnlocked" :image-count="pickImages.length" :draft="draftText" :reset-signal="scopeResetSignal" :model-picker-open="showModelPicker" @send="onInputSend" @model-click="onModelBarClick" @voice-click="onVoiceClick" @image-click="onImageClick" @text-change="onDraftInput">
 			<!-- 模型选择（三条自带 key 路径都由页面侧过门：#1024 ③④⑤）；专项 scope 下整块不渲染 -->
 			<AiChatModelPicker v-if="!isScoped" :visible="showModelPicker" :all-models="allModels" :current-model-id="currentModelId" :current-model-source="currentModelSource" @close="showModelPicker = false" @select="selectModel" @custom="onCustomClick" @manage="goManageModels" />
 		</AiChatInput>
@@ -597,13 +597,9 @@
 		showProSheet.value = true
 	}
 
-	// 模型芯片：未解锁时该芯片**不渲染**（`show-model-bar` 由 proUnlocked 决定），
-	// 本分支是状态翻转竞态下的兜底 —— 走与横幅同一入口，不在页面另立第二套提示文案
+	// 模型芯片：基础版也常显可点（#2787）—— 选择器里未解锁时只有平台模型（allModels 的门），
+	// 所以点击一律展开选择器，不在入口处另立专业版提示
 	function onModelBarClick() : void {
-		if (!proUnlocked.value) {
-			showProSheet.value = true
-			return
-		}
 		showModelPicker.value = true
 	}
 
@@ -748,8 +744,8 @@
 		persistSettings()
 	}
 
-	// 「管理自定义模型」（#1024 ③）：未解锁时**到不了** custom-models —— 与模型芯片点击
-	// （onModelBarClick）走同一入口：关掉选择器、开本页档位 sheet，不静默失败、不留第二套文案。
+	// 「管理自定义模型」（#1024 ③）：未解锁时**到不了** custom-models —— 关掉选择器、
+	// 开本页档位 sheet（#2787 起芯片点击直接展开选择器，本行是它独有的一道门）。
 	function goManageModels() : void {
 		showModelPicker.value = false
 		if (!proUnlocked.value) {

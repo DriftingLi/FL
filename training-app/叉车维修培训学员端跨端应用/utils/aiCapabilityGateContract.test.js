@@ -51,18 +51,18 @@ describe('AI 助手专业版能力门（proUnlocked）契约', () => {
     expect(adapter).toMatch(/const proUnlocked = ref<boolean>\(false\)/);
   });
 
-  it('② 输入区：模型芯片与附件按钮都按 proUnlocked 渲染，芯片在锁定时只读', () => {
-    // #2593：专项 scope 隐藏模型芯片（专项通道不吃用户自选模型）、图片按钮由诊断面常亮，
-    // 两处都保留 proUnlocked 作为通用区的门（不是另立判据）
-    expect(page).toMatch(/:show-model-bar="proUnlocked && !isScoped"/);
-    expect(page).toMatch(/:model-readonly="!proUnlocked"/);
+  it('② 输入区：模型芯片对基础版也常显可点（#2787），附件按钮仍按 proUnlocked 渲染', () => {
+    // #2787：芯片的门从「可见性」下沉到「列表内容」（未解锁只列平台模型），专项 scope 仍隐藏芯片；
+    // 附件可见性不在本票范围 —— 这条断言保持 #2593 原样，是本次唯一未动的字面串
+    expect(page).toMatch(/:show-model-bar="!isScoped"/);
+    expect(page).toMatch(/:model-readonly="false"/);
     expect(page).toMatch(/:show-image-button="isDiagnosis \|\| proUnlocked"/);
   });
 
-  it('③ 模型芯片点击走 onModelBarClick（而不是直接打开选择器）', () => {
+  it('③ 模型芯片点击一律展开选择器（#2787 起基础版也走这条）', () => {
     expect(page).toMatch(/@model-click="onModelBarClick"/);
-    const fn = page.slice(page.indexOf('function onModelBarClick'));
-    expect(fn).toMatch(/if\s*\(!proUnlocked\.value\)/);
+    const fn = page.slice(page.indexOf('function onModelBarClick'), page.indexOf('function ', page.indexOf('function onModelBarClick') + 10));
+    expect(fn).not.toMatch(/proUnlocked/);
     expect(fn).toMatch(/showModelPicker\.value\s*=\s*true/);
   });
 
