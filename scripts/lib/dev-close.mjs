@@ -322,6 +322,52 @@ export function judgeVerdict(f) {
 }
 
 /**
+ * 陈旧索引锁判定（#2802 血账）。0 字节的 `index.lock` + 没有 git 进程 = 上一次 git 被强杀留下的残锁。
+ *
+ * 它的坏处不是报错而是**静默**：`git checkout --` / `git merge --ff-only` 打一行 error 就返回，
+ * 调用方看起来像做成了（#2802 实测：回滚后工作树依旧脏、merge 打印 `Updating 3bf0186f..1f4edc97`
+ * 然后失败）。所以收尾链要先认清它，再谈「同步成没成」。
+ *
+ * 只判「能不能删」，真删在 ps1 且只在 `-Yes` 时：非零字节一律不放行（可能是别的工具正写着），
+ * 有 git 进程一律不放行（那是活锁，等它自己结束）。判据放这里而不是 ps1 —— CI 全线 ubuntu，
+ * 只有在 node 里才测得到（本文件顶部「刻意不在这里留判据」同因）。
+ */
+export function judgeIndexLock(f) {
+  const exists = f.lockExists === true
+  const bytes = Number(f.lockBytes ?? -1)
+  const procs = Number(f.gitProcs ?? 0)
+  let state = 'absent'
+  let allowRemove = false
+  let reason = 'na'
+  if (!exists) {
+    state = 'absent'
+  } else if (!Number.isFinite(bytes) || bytes < 0) {
+    state = 'unreadable'
+    reason = 'lock-unreadable'
+  } else if (procs > 0) {
+    state = 'busy'
+    reason = 'git-running'
+  } else if (bytes === 0) {
+    state = 'stale'
+    allowRemove = true
+    reason = 'zero-byte-no-git'
+  } else {
+    state = 'orphan'
+    reason = 'non-empty-lock'
+  }
+  const line = [
+    'LOCK_CHECK',
+    `state=${state}`,
+    `bytes=${bytes}`,
+    `git_procs=${procs}`,
+    `allow_remove=${allowRemove}`,
+    `reason=${reason}`,
+    `path=${f.lockPath || 'na'}`,
+  ].join(' ')
+  return { state, allowRemove, reason, line }
+}
+
+/**
  * stdin 里的 facts 解析。剥 BOM 不是洁癖：#2174 实测 PowerShell 把
  * `$OutputEncoding = [Text.Encoding]::UTF8` 设上之后，往**子进程 stdin** 写字符串会带 U+FEFF，
  * JSON.parse 当场 `Unexpected token '\uFEFF'` —— 于是整条链判红。修法两侧都做：ps1 侧改投无 BOM 的
@@ -370,11 +416,18 @@ if (invokedDirectly) {
     console.log(`DECIDE allow=${d.allow} pr=${d.prState} skip_remove=${d.skipRemove} pass_execute=${d.passExecute} reason=${d.reason} target=${d.target} tree_path=${d.treePath}`)
     process.exit(d.allow ? 0 : 1)
   }
+  if (modeArg === '--lock') {
+    // 只报事实与放行与否，退出码恒 0：残锁是提示不是门，不该把收尾判红。
+    // 删不删由 ps1 按 allow_remove + -Yes 决定（判定与动作分离，判定落在这里才测得到）。
+    const l = judgeIndexLock(facts)
+    console.log(l.line)
+    process.exit(0)
+  }
   if (modeArg === '--verdict') {
     const v = judgeVerdict(facts)
     console.log(v.line)
     process.exit(v.ok ? 0 : 1)
   }
-  console.log('用法: node dev-close.mjs --resolve|--decide|--verdict < facts.json')
+  console.log('用法: node dev-close.mjs --resolve|--decide|--lock|--verdict < facts.json>')
   process.exit(2)
 }
