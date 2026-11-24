@@ -149,13 +149,16 @@ describe('AI 专业版 = 积分兑换权益（#920）契约', () => {
       expect(SHEET).toMatch(/\{\{ price \}\}/);
     });
 
-    it('能力门四处共用同一个 proUnlocked（不是各自另立判据）', () => {
-      // #2593 后两处形态：通用区仍由 proUnlocked 控，专项 scope 收起模型芯片、图片按钮随诊断面
-      expect(PAGE).toMatch(/:show-model-bar="proUnlocked && !isScoped"/);
+    it('能力门共用同一个 proUnlocked（模型芯片是 #2787 唯一主动去门的例外）', () => {
+      // #2787：芯片对基础版常显可点 ⇒ 可见性只剩 !isScoped，门下沉到 allModels（未解锁只列平台模型），
+      // 芯片也不再只读；其余三处仍由同一个 proUnlocked 控，不是各自另立判据
+      expect(PAGE).toMatch(/:show-model-bar="!isScoped"/);
+      expect(PAGE).toMatch(/:model-readonly="false"/);
       expect(PAGE).toMatch(/:show-image-button="isDiagnosis \|\| proUnlocked"/);
-      expect(PAGE).toMatch(/:model-readonly="!proUnlocked"/);
       expect(PAGE).toMatch(/m\.key != 'custom-models'/);
       expect(PAGE).toMatch(/:unlocked="proUnlocked"/);
+      // 下沉后的门仍由 proUnlocked 守着：未解锁不并入自带 key 模型
+      expect(PAGE).toMatch(/if \(proUnlocked\.value\) \{\s*\n\s*for \(let i = 0; i < userModels\.value\.length/);
     });
   });
 });

@@ -142,12 +142,12 @@
 
 <style lang="scss">
 	/* #2520：输入卡按原型 307:6954 / 793:1197 收口 —— 20rpx 圆角、浅描边；下拉展开时描边转主色 */
-	/* 票 2730 docx ④（L2 拍板）：上下留白 12rpx → 28rpx，输入框整体轻微上移、离底栏更松 */
+	/* #2787：卡内外距与输入行高收到 24/16 档位（票面①），白底浅灰描边圆角不变 */
 	.input-card {
 		background-color: #ffffff;
 		border-radius: 20rpx;
-		margin: 28rpx 20rpx;
-		padding: 20rpx 24rpx 16rpx 24rpx;
+		margin: 16rpx 24rpx;
+		padding: 16rpx 24rpx 12rpx 24rpx;
 		border: 1rpx solid #e6eef5;
 	}
 
@@ -162,7 +162,7 @@
 
 	.chat-input {
 		flex: 1;
-		height: 72rpx;
+		height: 64rpx;
 		font-size: 28rpx;
 		color: #333333;
 	}
