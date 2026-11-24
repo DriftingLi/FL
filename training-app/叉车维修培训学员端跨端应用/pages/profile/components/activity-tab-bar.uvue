@@ -1,17 +1,17 @@
 <template>
   <view v-if="sub" class="sub-tab-bar">
-    <view v-for="(label, i) in labels" :key="i" class="sub-tab-item" :class="{ 'active': keys[i] == active }" @click="onTap(i)">
+    <view v-for="(label, i) in labels" :key="i" class="sub-tab-item" @click="onTap(i)">
       <view class="sub-tab-inner">
-        <text class="sub-tab-text" :class="{ 'active': keys[i] == active }">{{ label }}</text>
-        <view class="sub-tab-underline"></view>
+        <text class="sub-tab-text" :class="{ 'sub-tab-text--active': keys[i] == active }">{{ label }}</text>
+        <view class="sub-tab-underline" :class="{ 'sub-tab-underline--active': keys[i] == active }"></view>
       </view>
     </view>
   </view>
   <view v-else class="tab-bar">
-    <view v-for="(label, i) in labels" :key="i" class="tab-item" :class="{ 'active': keys[i] == active }" @click="onTap(i)">
+    <view v-for="(label, i) in labels" :key="i" class="tab-item" @click="onTap(i)">
       <view class="tab-inner">
-        <text class="tab-text" :class="{ 'active': keys[i] == active }">{{ label }}</text>
-        <view class="tab-underline"></view>
+        <text class="tab-text" :class="{ 'tab-text--active': keys[i] == active }">{{ label }}</text>
+        <view class="tab-underline" :class="{ 'tab-underline--active': keys[i] == active }"></view>
       </view>
     </view>
   </view>
@@ -68,7 +68,10 @@
     background-color: transparent;
   }
 
-  .tab-item.active .tab-underline {
+  /* 关系选择器（父类 + 空格 + 子类）在 UCSS 里需运行时动态计算、有额外性能损耗，
+     HarmonyOS Vapor 不支持；祖先为复合类（两个类名连写）再跟后代时，编译产物是
+     含空格的死键、永远匹配不上 ⇒ 一律落成挂在元素自身的平类 */
+  .tab-underline--active {
     background-color: $primary-color;
   }
 
@@ -77,7 +80,7 @@
     color: #666666;
   }
 
-  .tab-text.active {
+  .tab-text--active {
     color: $primary-color;
     font-weight: bold;
   }
@@ -109,7 +112,7 @@
     background-color: transparent;
   }
 
-  .sub-tab-item.active .sub-tab-underline {
+  .sub-tab-underline--active {
     background-color: $primary-color;
   }
 
@@ -118,7 +121,7 @@
     color: #999999;
   }
 
-  .sub-tab-text.active {
+  .sub-tab-text--active {
     color: $primary-color;
     font-weight: bold;
   }

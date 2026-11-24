@@ -22,7 +22,7 @@
                                 class="option-item" :class="getOptionClass(opt.key)"
                                 @click="onSelect(opt.key)">
                                 <view class="option-key" :class="getOptionKeyClass(opt.key)">
-                                    <text class="option-key-text">{{ opt.key }}</text>
+                                    <text class="option-key-text" :class="{ 'option-key-text--inverse': getOptionKeyClass(opt.key).length > 0 }">{{ opt.key }}</text>
                                 </view>
                                 <text class="option-text">{{ opt.text }}</text>
                             </view>
@@ -31,7 +31,7 @@
                         <!-- 重做结果 -->
                         <view v-if="hasRedoResult()" class="redo-result"
                             :class="redoResultClass()">
-                            <text class="redo-result-text">{{ redoResultLabel() }}</text>
+                            <text class="redo-result-text" :class="redoResultClass() == 'correct' ? 'redo-result-text--correct' : 'redo-result-text--wrong'">{{ redoResultLabel() }}</text>
                             <text class="redo-result-answer">我的答案：{{ redoResultUserAnswer() }}</text>
                             <text class="redo-result-answer">正确答案：{{ redoResultAnswer() }}</text>
                             <text v-if="redoResultLocalMatch()" class="redo-result-hint">提示：选项内容一致，可能因答案格式差异被判错</text>
@@ -48,7 +48,7 @@
                                 <text class="redo-btn-text">移出错题本</text>
                             </view>
                             <view v-else class="redo-btn redo-btn-danger" @click="onRemoveTap">
-                                <text class="redo-btn-text">移出错题本</text>
+                                <text class="redo-btn-text redo-btn-text--danger">移出错题本</text>
                             </view>
                         </view>
                     </view>
@@ -59,7 +59,7 @@
                             <text class="card-action-text">{{ answerFoldText() }}</text>
                         </view>
                         <view class="card-action-btn card-action-primary" @click="onToggle">
-                            <text class="card-action-text">重做</text>
+                            <text class="card-action-text card-action-text--primary">重做</text>
                         </view>
                         <view class="card-action-btn card-action-danger" @click="onRemoveTap">
                             <text class="card-action-text card-action-danger-text">移出</text>
@@ -430,15 +430,10 @@
         color: #333333;
     }
 
-    .option-key-selected .option-key-text {
-        color: #ffffff;
-    }
-
-    .option-key-correct .option-key-text {
-        color: #ffffff;
-    }
-
-    .option-key-wrong .option-key-text {
+    /* 关系选择器（父类 + 空格 + 子类）在 UCSS 里需运行时动态计算、有额外性能损耗，
+       HarmonyOS Vapor 不支持；祖先为复合类（两个类名连写）再跟后代时，编译产物是
+       含空格的死键、永远匹配不上 ⇒ 一律落成挂在元素自身的平类 */
+    .option-key-text--inverse {
         color: #ffffff;
     }
 
@@ -469,11 +464,11 @@
         margin-bottom: 8rpx;
     }
 
-    .redo-result.correct .redo-result-text {
+    .redo-result-text--correct {
         color: #4caf50;
     }
 
-    .redo-result.wrong .redo-result-text {
+    .redo-result-text--wrong {
         color: #f44336;
     }
 
@@ -519,7 +514,7 @@
         color: #ffffff;
     }
 
-    .redo-btn-danger .redo-btn-text {
+    .redo-btn-text--danger {
         color: #f44336;
     }
 
@@ -553,7 +548,7 @@
         color: $primary-color;
     }
 
-    .card-action-primary .card-action-text {
+    .card-action-text--primary {
         color: #ffffff;
     }
 

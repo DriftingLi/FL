@@ -5,7 +5,8 @@
     <view class="section">
         <text class="section-title">附件资料</text>
         <view class="file-list">
-            <view v-for="(file, idx) in files" :key="idx" class="file-item" @click="onFileTap(file)">
+            <view v-for="(file, idx) in files" :key="idx" class="file-item"
+                :class="{ 'file-item-last': idx === files.length - 1 }" @click="onFileTap(file)">
                 <view class="file-icon-wrap" :class="getFileIconClass(file.content_type)">
                     <text class="file-icon">{{ getFileIcon(file.content_type) }}</text>
                 </view>
@@ -86,7 +87,8 @@
         border-bottom: 1rpx solid #f5f5f5;
     }
 
-    .file-item:last-child {
+    /* uvue 原生端只认 .class 选择器，`:last-child` 会被静默忽略 ⇒ 由模板给末行加类去分隔线 */
+    .file-item-last {
         border-bottom: none;
     }
 

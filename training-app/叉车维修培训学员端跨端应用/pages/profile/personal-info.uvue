@@ -76,7 +76,7 @@
     <!-- 修改/设置密码弹窗 -->
     <InfoDialog :show="showPasswordDialog" :title="passwordTitle" confirm-text="确认" @close="showPasswordDialog = false" @confirm="onSubmitPassword">
       <view class="input-row">
-        <input class="input" type="number" placeholder="短信验证码" maxlength="6" v-model="passwordCode" />
+        <input class="input input--row" type="number" placeholder="短信验证码" maxlength="6" v-model="passwordCode" />
         <view class="code-btn" :class="{ 'code-btn-disabled': pwdCountdown > 0 }" @click="onSendPasswordCode">
           <text class="code-btn-text">{{ pwdCountdown > 0 ? pwdCountdown + 's' : '获取验证码' }}</text>
         </view>
@@ -90,7 +90,7 @@
     <InfoDialog :show="showPhoneDialog" title="更换手机号" confirm-text="确认" @close="showPhoneDialog = false" @confirm="onSubmitPhone">
       <input class="input" type="number" placeholder="新手机号" maxlength="11" v-model="newPhone" />
       <view class="input-row">
-        <input class="input" type="number" placeholder="短信验证码" maxlength="6" v-model="phoneCode" />
+        <input class="input input--row" type="number" placeholder="短信验证码" maxlength="6" v-model="phoneCode" />
         <view class="code-btn" :class="{ 'code-btn-disabled': phoneCountdown > 0 }" @click="onSendPhoneCode">
           <text class="code-btn-text">{{ phoneCountdown > 0 ? phoneCountdown + 's' : '获取验证码' }}</text>
         </view>
@@ -101,7 +101,7 @@
     <InfoDialog :show="showEmailDialog" :title="emailText == '未绑定' ? '绑定邮箱' : '修改邮箱'" confirm-text="确认" @close="showEmailDialog = false" @confirm="onSubmitEmail">
       <input class="input" type="text" placeholder="请输入邮箱" maxlength="50" v-model="emailInput" />
       <view class="input-row">
-        <input class="input" type="number" placeholder="邮箱验证码" maxlength="6" v-model="emailCode" />
+        <input class="input input--row" type="number" placeholder="邮箱验证码" maxlength="6" v-model="emailCode" />
         <view class="code-btn" :class="{ 'code-btn-disabled': emailCountdown > 0 }" @click="onSendEmailCode">
           <text class="code-btn-text">{{ emailCountdown > 0 ? emailCountdown + 's' : '获取验证码' }}</text>
         </view>
@@ -112,7 +112,7 @@
     <InfoDialog :show="showAccountDialog" title="修改登录账号" confirm-text="确认" @close="showAccountDialog = false" @confirm="onSubmitAccount">
       <input class="input" type="text" placeholder="新账号（4-20位字母数字下划线）" :maxlength="20" v-model="accountInput" />
       <view class="input-row">
-        <input class="input" type="number" placeholder="短信验证码" maxlength="6" v-model="accountCode" />
+        <input class="input input--row" type="number" placeholder="短信验证码" maxlength="6" v-model="accountCode" />
         <view class="code-btn" :class="{ 'code-btn-disabled': accountCountdown > 0 }" @click="onSendAccountCode">
           <text class="code-btn-text">{{ accountCountdown > 0 ? accountCountdown + 's' : '获取验证码' }}</text>
         </view>
@@ -527,7 +527,10 @@
     align-items: center;
   }
 
-  .input-row .input {
+  /* 关系选择器（父类 + 空格 + 子类）在 UCSS 里需运行时动态计算、有额外性能损耗，
+     HarmonyOS Vapor 不支持；祖先为复合类（两个类名连写）再跟后代时，编译产物是
+     含空格的死键、永远匹配不上 ⇒ 一律落成挂在元素自身的平类 */
+  .input--row {
     flex: 1;
     margin-right: 16rpx;
     margin-bottom: 20rpx;

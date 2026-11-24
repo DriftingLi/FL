@@ -21,8 +21,9 @@
 
             <!-- ========= 我的帖子 ========= -->
             <view v-if="currentTab === 'posts'">
-                <view v-if="topics.length === 0 && !loading" class="empty-state">
-                    <text class="empty-hint">发布一篇帖子，参与互动</text>
+                <view v-if="topics.length === 0 && !loading" class="empty-card">
+                    <text class="empty-icon">📝</text>
+                    <text class="empty-hint empty-hint-strong">发布一篇帖子，参与互动</text>
                     <view class="publish-btn" @click="onPublish">
                         <text class="publish-btn-text">发布帖子</text>
                     </view>
@@ -344,16 +345,44 @@
         padding: 120rpx 0 80rpx;
     }
 
+    /* 帖子 tab 的空态带 CTA：原型 485:5624 是白卡（圆角 20rpx、页边距 24rpx）内
+       图标 + 加粗文案 + 主按钮，与其余 tab 的纯文字空态不同，故单独一类。 */
+    .empty-card {
+        align-items: center;
+        background-color: #ffffff;
+        border-radius: $radius-card;
+        margin: $spacing-md;
+        padding: 64rpx 0 56rpx;
+    }
+
+    /* 120rpx 取自原型 485:5624 实测（约 115rpx）；ui-spec §5.8 的 80rpx 只约束共享件
+       app-empty-state，这里是带 CTA 的独立空态卡，不套用该值。 */
+    .empty-icon {
+        font-size: 120rpx;
+        margin-bottom: $spacing-md;
+    }
+
     .empty-hint {
         font-size: $font-size-md;
         color: $text-color-placeholder;
         margin-bottom: $spacing-lg;
     }
 
+    /* 关系选择器（父类 + 空格 + 子类）在 UCSS 里需运行时动态计算、有额外性能损耗，
+       HarmonyOS Vapor 不支持；祖先为复合类（两个类名连写）再跟后代时，编译产物是
+       含空格的死键、永远匹配不上 ⇒ 一律落成挂在元素自身的平类 */
+    .empty-hint-strong {
+        color: $text-color;
+        font-weight: bold;
+    }
+
     .publish-btn {
-        background-color: $primary-color;
-        padding: 16rpx 48rpx;
-        border-radius: $radius-xl;
+        height: 80rpx;
+        padding: 0 64rpx;
+        border-radius: $radius-pill;
+        background: linear-gradient(to bottom, $primary-grad-start, $primary-grad-end);
+        align-items: center;
+        justify-content: center;
     }
 
     .publish-btn-text {

@@ -67,7 +67,7 @@
                 </view>
             </scroll-view>
 
-            <view class="drawer-footer">
+            <view class="drawer-footer" :style="{ paddingBottom: (20 + safeArea.bottomInset) + 'rpx' }">
                 <view class="btn-reset" @click="onReset">
                     <text class="btn-reset-text">重置</text>
                 </view>
@@ -88,6 +88,7 @@
     //    守护：`utils/recruiterResumeContract.test.js` 的 R6（静态形态锁）。
     import { JOB_NATURE_OPTIONS, AVAILABLE_IN_OPTIONS, jobNatureLabel } from '../../../api/recruit'
     import { toNumberOrNull } from '../../../api/helpers'
+    import { useSafeArea } from '../../../utils/system'
     // emit 载荷的类型 = **api 层那个类本身**（与父页 handler 参数同一个类 ⇒ 名义兼容，反向不 CCE）。
     //    ⚠️ error18 的适用面是 **defineProps 的类型展开**（#1207 实测），不是「组件里用 import type」：
     //    组件内 `import type` 注解的生产先例 `pages/forum/components/forum-contribution-form.uvue:61`。
@@ -123,6 +124,8 @@
 
     const jobNatureOptions = JOB_NATURE_OPTIONS
     const availableInOptions = AVAILABLE_IN_OPTIONS
+    /** 底部安全区（home indicator）：抽屉贴屏底，操作栏要避让 */
+    const safeArea = useSafeArea()
 
     /**
      * number | null → 输入框文本。

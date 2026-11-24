@@ -41,8 +41,8 @@ module.exports = {
     '#EE0A24': 'batch2 points 两页危险文字/删除按钮——$danger-color(#ff3b30) 语义相同但值不等（vant 系红），替换会视觉回归，待红系 token 收敛裁',
     // '#FBE9E7' —— #2523 起 points-detail 流水图标位按原型退役（行内不再有图标底色），该浅红底无承载，条目退役
     '#FF8F00': 'pages/forum/components/forum-topic-header.uvue 限时/状态标签橙——$warning-color(#ff9900) 近似但值不等，待真机裁',
-    '#FFA000': 'pages/points/task-center.uvue 金币卡渐变尾色 + 深橙文字——渐变组合色，token 表无对应',
-    '#FFD700': 'pages/points/task-center.uvue 金币卡渐变起色——金币金，token 表无对应',
+    // '#FFA000' / '#FFD700' —— 原型 569:4532 的金币是 3D 切图本身、没有底圆，task-center 的
+    // .balance-coin 渐变圆底（起色 #FFD700 / 尾色 #FFA000）随之退役，两值无承载，条目退役
     '#222222': 'batch2 ai-assistant 两页/practice-report 重文字——$text-color(#333333) 近似但值不等，历史深灰，待文字 token 收敛裁',
     '#6DB8E8': 'components/ai-chat/ai-chat-input.uvue 发送按钮浅蓝强调——AI 模块品牌色（ai-feature 诊断面板 4 处承载随 #2262 面板摘除退役，页面本身随 #2593 并入 ai-assistant 的 scope），token 表无对应',
     '#F5F6F8': 'batch2 ai-assistant 两页页面底——$bg-color(#F8F8F8) 近似但值不等，待真机裁',

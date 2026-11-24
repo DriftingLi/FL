@@ -42,7 +42,7 @@
                 <view v-for="(item, idx) in records" :key="idx" class="record-card"
                     @click="onItemClick(item)">
                     <view class="record-status" :class="getStatusClass(item)">
-                        <text class="record-status-text">{{ getStatusLabel(item) }}</text>
+                        <text class="record-status-text" :class="getStatusTextClass(item)">{{ getStatusLabel(item) }}</text>
                     </view>
                     <view class="record-info">
                         <view class="record-score-row">
@@ -158,6 +158,14 @@ import { goBack } from '../../utils/navigation'
     function getStatusClass(item : MockExamHistoryItem) : string {
         if (item.status == 'in_progress') return 'status-progress'
         return item.passed ? 'status-passed' : 'status-failed'
+    }
+
+    /* 关系选择器（父类 + 空格 + 子类）在 UCSS 里需运行时动态计算、有额外性能损耗，
+       HarmonyOS Vapor 不支持；祖先为复合类（两个类名连写）再跟后代时，编译产物是
+       含空格的死键、永远匹配不上 ⇒ 一律落成挂在元素自身的平类 */
+    function getStatusTextClass(item : MockExamHistoryItem) : string {
+        if (item.status == 'in_progress') return 'status-text-progress'
+        return item.passed ? 'status-text-passed' : 'status-text-failed'
     }
 
     /** 状态文案 */
@@ -342,15 +350,15 @@ import { goBack } from '../../utils/navigation'
         font-weight: bold;
     }
 
-    .status-passed .record-status-text {
+    .status-text-passed {
         color: #4caf50;
     }
 
-    .status-failed .record-status-text {
+    .status-text-failed {
         color: #f44336;
     }
 
-    .status-progress .record-status-text {
+    .status-text-progress {
         color: #ff9800;
     }
 

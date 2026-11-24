@@ -3,13 +3,15 @@
 		<view class="status-bar" :style="{ height: safeArea.statusBarHeight + 'px' }"></view>
 		<view class="search-header" :style="searchHeaderStyle">
 			<view class="search-input-wrap">
-				<input class="search-input" type="text" v-model="keyword" placeholder="搜索课程、章节、题目、精选、帖子"
+				<input class="search-input" type="text" v-model="keyword" placeholder="搜索课程、章节、题目"
 					confirm-type="search" @confirm="onSearch" />
 				<view v-if="keyword.length > 0" class="search-clear" @click="onClear">
 					<text class="search-clear-text">✕</text>
 				</view>
 			</view>
-			<text class="search-cancel" @click="onCancel">取消</text>
+			<view class="search-cancel-hit" @click="onCancel">
+				<text class="search-cancel">取消</text>
+			</view>
 		</view>
 
 		<scroll-view v-if="!hasSearched" class="initial-scroll" scroll-y="true">
@@ -497,11 +499,18 @@
 		color: $text-color-placeholder;
 	}
 
+	/* 触摸目标 ≥88rpx（ui-spec §5.11）：text 自身只有文字高，可点容器要自己撑到 88rpx */
+	.search-cancel-hit {
+		height: 88rpx;
+		padding: 0 8rpx 0 24rpx;
+		margin-left: 8rpx;
+		align-items: center;
+		justify-content: center;
+	}
+
 	.search-cancel {
 		font-size: $font-size-md;
 		color: $text-color-inverse;
-		padding: 24rpx 8rpx 24rpx 24rpx;
-		margin-left: 8rpx;
 	}
 
 	.initial-scroll {

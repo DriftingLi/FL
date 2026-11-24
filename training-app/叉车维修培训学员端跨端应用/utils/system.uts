@@ -26,6 +26,10 @@ export type SafeAreaInfo = {
 	/** 页头右槽定宽（rpx）= 750 - capsuleLeft：右缘恰好落在胶囊左边线。
 	 *  放不下由页面把次要动作移出页头（不隐藏、不换行、不压缩、不写死魔数）。非小程序端为 0（不限宽）。 */
 	rightSlotWidth: number
+	/** 底部安全区（rpx）= screenHeight - safeArea.bottom，即 home indicator 高度。
+	 *  只给「非 tabBar 页的贴底固定栏 / 贴底浮层」补内距用；tabBar 页的 webview 底边已在 tabBar 之上，
+	 *  再补会多出一截空白。取不到 safeArea 的机型回退 0（不额外留白，宁可贴底也不凭空加高）。 */
+	bottomInset: number
 }
 
 /**
@@ -59,7 +63,8 @@ export function useSafeArea(): Ref<SafeAreaInfo> {
 	const info = ref<SafeAreaInfo>({
 		statusBarHeight: DEFAULT_STATUS_BAR_HEIGHT,
 		capsuleLeft: 0,
-		rightSlotWidth: 0
+		rightSlotWidth: 0,
+		bottomInset: 0
 	})
 
 	const recalc = (): void => {
@@ -70,6 +75,17 @@ export function useSafeArea(): Ref<SafeAreaInfo> {
 		}
 		let capsuleLeft = 0
 		let rightSlotWidth = 0
+		let bottomInset = 0
+		// 底部安全区：safeArea 字段部分机型不返回（微信 2.7.0+ 才有），取不到就按 0 处理。
+		// 用 screenHeight - safeArea.bottom 而不是 windowHeight：windowHeight 已扣掉 tabBar，
+		// 拿它算会把 tabBar 高度误算成安全区。
+		const sa = win.safeArea
+		if (sa != null && win.windowWidth > 0) {
+			const gap = win.screenHeight - sa.bottom
+			if (gap > 0) {
+				bottomInset = gap * 750 / win.windowWidth
+			}
+		}
 		// #ifdef MP-WEIXIN
 		const rect = uni.getMenuButtonBoundingClientRect()
 		if (rect != null && win.windowWidth > 0) {
@@ -87,7 +103,8 @@ export function useSafeArea(): Ref<SafeAreaInfo> {
 		info.value = {
 			statusBarHeight: sbh,
 			capsuleLeft: capsuleLeft,
-			rightSlotWidth: rightSlotWidth
+			rightSlotWidth: rightSlotWidth,
+			bottomInset: bottomInset
 		}
 	}
 

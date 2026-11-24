@@ -1,6 +1,6 @@
 <template>
 	<view class="message-row" :class="role">
-		<view class="message-bubble">
+		<view class="message-bubble" :class="{ 'message-bubble--user': role == 'user', 'message-bubble--assistant': role == 'assistant' }">
 			<!-- 用户消息：文字仍保持纯文本、逐字节不变（#1443）；纯图轮次没有文字，故有字才渲染这一行。
 			     附图（#2299）：缩略图一行、点开走 `uni.previewImage`；URL 是站内地址，原样当 src 用。 -->
 			<text v-if="role == 'user' && messageContent.length > 0" class="message-text">{{ displayContent(messageContent) }}</text>
@@ -208,12 +208,15 @@
 
 	/* #2520（原型 791:750）：会话态是「用户浅灰气泡靠右 + 助手正文直接落在页底」，
 	   不再是两种实色气泡。用户气泡改浅灰底深字；助手侧去底色与内边距，正文与页面同一平面。 */
-	.message-row.user .message-bubble {
+	/* 关系选择器（父类 + 空格 + 子类）在 UCSS 里需运行时动态计算、有额外性能损耗，
+	   HarmonyOS Vapor 不支持；祖先为复合类（两个类名连写）再跟后代时，编译产物是
+	   含空格的死键、永远匹配不上 ⇒ 一律落成挂在元素自身的平类 */
+	.message-bubble--user {
 		background-color: #ededed;
 		max-width: 560rpx;
 	}
 
-	.message-row.assistant .message-bubble {
+	.message-bubble--assistant {
 		background-color: transparent;
 		padding: 0;
 		max-width: 690rpx;
@@ -223,10 +226,6 @@
 		font-size: 28rpx;
 		color: #333333;
 		line-height: 1.6;
-	}
-
-	.message-row.user .message-text {
-		color: #333333;
 	}
 
 	.user-images {

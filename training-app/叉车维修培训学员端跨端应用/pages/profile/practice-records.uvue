@@ -33,7 +33,7 @@
                 <view v-for="(opt, idx) in typeOptions" :key="idx"
                     :class="['filter-chip', { active: currentType == opt.value }]"
                     @click="onTypeClick(opt.value)">
-                    <text class="filter-chip-text">{{ opt.label }}</text>
+                    <text class="filter-chip-text" :class="{ 'filter-chip-text--active': currentType == opt.value }">{{ opt.label }}</text>
                 </view>
             </scroll-view>
         </view>
@@ -51,7 +51,7 @@
             <view class="record-list">
                 <view v-for="(item, idx) in records" :key="idx" class="record-card" @click="onRecordClick(item)">
                     <view class="record-status" :class="{ correct: item.is_correct, wrong: !item.is_correct }">
-                        <text class="record-status-text">{{ item.is_correct ? '✓' : '✗' }}</text>
+                        <text class="record-status-text" :class="item.is_correct ? 'record-status-text--correct' : 'record-status-text--wrong'">{{ item.is_correct ? '✓' : '✗' }}</text>
                     </view>
                     <view class="record-info">
                         <text class="record-title">{{ item.question_title }}</text>
@@ -262,7 +262,10 @@ import { goBack } from '../../utils/navigation'
         color: #666666;
     }
 
-    .filter-chip.active .filter-chip-text {
+    /* 关系选择器（父类 + 空格 + 子类）在 UCSS 里需运行时动态计算、有额外性能损耗，
+       HarmonyOS Vapor 不支持；祖先为复合类（两个类名连写）再跟后代时，编译产物是
+       含空格的死键、永远匹配不上 ⇒ 一律落成挂在元素自身的平类 */
+    .filter-chip-text--active {
         color: #ffffff;
     }
 
@@ -363,11 +366,14 @@ import { goBack } from '../../utils/navigation'
         font-weight: bold;
     }
 
-    .record-status.correct .record-status-text {
+    /* 关系选择器（父类 + 空格 + 子类）在 UCSS 里需运行时动态计算、有额外性能损耗，
+       HarmonyOS Vapor 不支持；祖先为复合类（两个类名连写）再跟后代时，编译产物是
+       含空格的死键、永远匹配不上 ⇒ 一律落成挂在元素自身的平类 */
+    .record-status-text--correct {
         color: #4caf50;
     }
 
-    .record-status.wrong .record-status-text {
+    .record-status-text--wrong {
         color: #f44336;
     }
 

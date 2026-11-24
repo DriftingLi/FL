@@ -2,28 +2,28 @@
     <!-- 顶部Tab栏 -->
     <!-- 票 2730 docx ⑤⑨：下划线宽度跟 tab 文字走（原画在等宽 tab 容器上 ⇒「广场」与「知识问答」下划线一样宽） -->
     <view class="tab-bar">
-        <view class="tab-item" :class="{ active: currentTab === 'square' }" @click="onSwitch('square')">
+        <view class="tab-item" @click="onSwitch('square')">
             <view class="tab-inner">
-                <text class="tab-text">广场</text>
-                <view class="tab-underline"></view>
+                <text class="tab-text" :class="{ 'tab-text--active': currentTab === 'square' }">广场</text>
+                <view class="tab-underline" :class="{ 'tab-underline--active': currentTab === 'square' }"></view>
             </view>
         </view>
-        <view class="tab-item" :class="{ active: currentTab === 'resource' }" @click="onSwitch('resource')">
+        <view class="tab-item" @click="onSwitch('resource')">
             <view class="tab-inner">
-                <text class="tab-text">资源</text>
-                <view class="tab-underline"></view>
+                <text class="tab-text" :class="{ 'tab-text--active': currentTab === 'resource' }">资源</text>
+                <view class="tab-underline" :class="{ 'tab-underline--active': currentTab === 'resource' }"></view>
             </view>
         </view>
-        <view class="tab-item" :class="{ active: currentTab === 'hot' }" @click="onSwitch('hot')">
+        <view class="tab-item" @click="onSwitch('hot')">
             <view class="tab-inner">
-                <text class="tab-text">知识问答</text>
-                <view class="tab-underline"></view>
+                <text class="tab-text" :class="{ 'tab-text--active': currentTab === 'hot' }">知识问答</text>
+                <view class="tab-underline" :class="{ 'tab-underline--active': currentTab === 'hot' }"></view>
             </view>
         </view>
-        <view class="tab-item" :class="{ active: currentTab === 'experience' }" @click="onSwitch('experience')">
+        <view class="tab-item" @click="onSwitch('experience')">
             <view class="tab-inner">
-                <text class="tab-text">备考经验</text>
-                <view class="tab-underline"></view>
+                <text class="tab-text" :class="{ 'tab-text--active': currentTab === 'experience' }">备考经验</text>
+                <view class="tab-underline" :class="{ 'tab-underline--active': currentTab === 'experience' }"></view>
             </view>
         </view>
         <view class="tab-icon-btn" @click="onAvatarClick">
@@ -83,7 +83,10 @@
         background-color: transparent;
     }
 
-    .tab-item.active .tab-underline {
+    /* 关系选择器（父类 + 空格 + 子类）在 UCSS 里需运行时动态计算、有额外性能损耗，
+       HarmonyOS Vapor 不支持；祖先为复合类（两个类名连写）再跟后代时，编译产物是
+       含空格的死键、永远匹配不上 ⇒ 一律落成挂在元素自身的平类 */
+    .tab-underline--active {
         background-color: $primary-color;
     }
 
@@ -92,7 +95,7 @@
         color: #666666;
     }
 
-    .tab-item.active .tab-text {
+    .tab-text--active {
         color: $text-strong;
         font-weight: bold;
     }

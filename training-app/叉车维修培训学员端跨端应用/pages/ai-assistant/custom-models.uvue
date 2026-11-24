@@ -52,7 +52,7 @@
 				</view>
 				<view class="form-actions">
 					<view class="btn-cancel" @click="closeForm">
-						<text class="btn-text">取消</text>
+						<text class="btn-text btn-text--cancel">取消</text>
 					</view>
 					<view class="btn-save" @click="onSave">
 						<text class="btn-text">{{ saving ? '保存中...' : '保存' }}</text>
@@ -385,7 +385,10 @@
 		color: $text-color-inverse;
 	}
 
-	.btn-cancel .btn-text {
+	/* 关系选择器（父类 + 空格 + 子类）在 UCSS 里需运行时动态计算、有额外性能损耗，
+	   HarmonyOS Vapor 不支持；祖先为复合类（两个类名连写）再跟后代时，编译产物是
+	   含空格的死键、永远匹配不上 ⇒ 一律落成挂在元素自身的平类 */
+	.btn-text--cancel {
 		color: $text-color;
 	}
 </style>

@@ -2,13 +2,13 @@
             <view class="filter-bar">
                 <view class="filter-left">
                     <view class="filter-chip" :class="{ 'active': sortMode == 'time_asc' }" @click="onTimeTap">
-                        <text class="filter-chip-text">{{ sortMode == 'time_asc' ? '最早在前 ▾' : '时间 ▾' }}</text>
+                        <text class="filter-chip-text" :class="{ 'filter-chip-text--active': sortMode == 'time_asc' }">{{ sortMode == 'time_asc' ? '最早在前 ▾' : '时间 ▾' }}</text>
                     </view>
                     <view class="filter-chip" :class="{ 'active': onlyFav }" @click="onFavTap">
-                        <text class="filter-chip-text">{{ onlyFav ? '仅收藏 ▾' : '收藏 ▾' }}</text>
+                        <text class="filter-chip-text" :class="{ 'filter-chip-text--active': onlyFav }">{{ onlyFav ? '仅收藏 ▾' : '收藏 ▾' }}</text>
                     </view>
                     <view class="filter-chip" :class="{ 'active': onlyWrongMany }" @click="onWrongManyTap">
-                        <text class="filter-chip-text">错多次</text>
+                        <text class="filter-chip-text" :class="{ 'filter-chip-text--active': onlyWrongMany }">错多次</text>
                     </view>
                 </view>
                 <view class="filter-reset" @click="onResetTap">
@@ -93,7 +93,10 @@
         color: $text-color;
     }
 
-    .filter-chip.active .filter-chip-text {
+    /* 关系选择器（父类 + 空格 + 子类）在 UCSS 里需运行时动态计算、有额外性能损耗，
+       HarmonyOS Vapor 不支持；祖先为复合类（两个类名连写）再跟后代时，编译产物是
+       含空格的死键、永远匹配不上 ⇒ 一律落成挂在元素自身的平类 */
+    .filter-chip-text--active {
         color: $primary-color;
     }
 

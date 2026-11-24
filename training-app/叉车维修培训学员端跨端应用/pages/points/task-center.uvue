@@ -341,20 +341,19 @@
         align-items: center;
     }
 
+    /* 原型（569:4532）里金币是 3D 切图本身、没有底圆：coin.png 自带透明通道，
+       再叠一层渐变圆底会在真机上露出黄圆盘，故容器只做尺寸与间距。 */
     .balance-coin {
         width: 88rpx;
         height: 88rpx;
-        border-radius: 44rpx;
-        background: linear-gradient(to bottom right, #FFD700, #FFA000);
-        background-color: #FFA000;
         align-items: center;
         justify-content: center;
         margin-right: 24rpx;
     }
 
     .coin-icon {
-        width: 56rpx;
-        height: 56rpx;
+        width: 88rpx;
+        height: 88rpx;
     }
 
     .balance-info {
