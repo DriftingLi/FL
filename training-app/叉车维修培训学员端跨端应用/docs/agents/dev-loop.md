@@ -538,7 +538,7 @@ npm run style:loop -- -DryRun                                           # 只看
 
 **它不碰设备、不占 HBuilderX**，是「改完样式先自己看一眼」的那一步；与上面的 `style:loop` 分工：`style:loop` 比的是**自己前后两版**，这一节比的是**自己与设计稿**。
 
-- **原型索引**（`figma_export/login/`，均为 780×1688 渲染 = 390×844pt）：`781_75.png` 微信一键登录 / `307_6121.png` 独立登录页 / `307_6152.png` 启动页 / `307_6164.png` 选证引导。⇒ **1rpx = 0.52px**（HTML 侧按 390px 宽写，rpx 值 ×0.52 得 px；反向 px ÷0.52 得 rpx）。
+- **原型索引**（原 `figma_export/login/`，2026-11-21 已移出仓库，现存本机 `C:\Users\ZHENG\OneDrive\Desktop\01_设计稿\_旧素材归档\figma_export\login\`；均为 780×1688 渲染 = 390×844pt）：`781_75.png` 微信一键登录 / `307_6121.png` 独立登录页 / `307_6152.png` 启动页 / `307_6164.png` 选证引导。⇒ **1rpx = 0.52px**（HTML 侧按 390px 宽写，rpx 值 ×0.52 得 px；反向 px ÷0.52 得 rpx）。
 - **壳**：单文件 HTML，左 = 按现行 `.uvue` 样式**手写成 px** 的实现，右 = 原型 PNG 满帧铺；`file:///` 直接开，不用起服务。壳是**一次性对照件**（放 `.tmp-preview/`，不入仓），改完 `.uvue` 要回填进壳，两边不同步时**以 `.uvue` 为准**。
 - **量像素不靠眼**：Python + Pillow 按行/列取众数色做背景差分求 bbox（按钮宽高、白区上沿、文案左边距），再按 0.52 折回 rpx 反推设计值——「原型按钮左右各留 39px ⇒ 40rpx」这类结论都是这么来的。
 - **坑**：`ego_navigate` 对同一 URL 会返回 `reused: exact, navigated: false` **不重载** ⇒ 改完 HTML 必须 `ego_js` 跑一次 `location.reload()` 再截图，否则量到的是旧渲染。
