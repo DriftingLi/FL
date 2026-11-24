@@ -49,9 +49,12 @@ GitHub 在 issues 和 PRs 之间共享一个 number space，因此裸 `#42` 可�
 
 ## Wayfinding operations
 
-> ⛔ **本仓的 map 实验已于 2026-10-10 短暂收口后重新启用**：五个 `wayfinder:*` label 保留可用，sub-issues 与原生 `blocked_by` 边均实测可用；首张 map = #1585 当天开、当天关（not planned），五张执行票 #1586-#1590 改为直接挂 ADR-0035；但**第二张 map = #1591 已开且在用**（小程序 60 页 UI 改造，3 张 grilling + 4 张 research 子票），「唯一一张 map」的说法作废。
-> **为什么关**：① 原判断「本仓不用 wayfinder」的依据「准入三判据未命中」是**自我实现的**（最硬那条是「label 不存在、map 数为 0」，没有 map 就永远判不通过）——这部分旧判断确实作废；② 但当天实践**证伪了反向的过度启用**：60 页 UI 改造能一手握住（先 grep 出事实再 grill，十八问一个会话收敛），这正是 `/grill-with-docs` 的形状，而 `/wayfinder` 的准入判据是「**能不能一手握住**」，不是「任务大不大」；③ 更关键的是**「承载执行」这处覆盖是错的**：它让地图的 `Destination` 自指 `/to-spec` 的产物（spec 是地图自己下游的东西），地图因此失去下游出口——详见 #1585 的关闭评论。
-> **准入判据的唯一事实源**是 `training-app/叉车维修培训学员端跨端应用/docs/agents/issue-dispatch.md` 文末节「什么时候用 wayfinder」（**该文件属移动端层**）。本仓的执行票属 main flow 的 `/to-tickets`（`grill-with-docs` → ADR → `/to-spec` → `/to-tickets` → `/implement`），**不挂 `wayfinder:*` label**；若将来真出现「连第一个决定是什么都说不清」的情况，照 `/wayfinder` SKILL.md 原样用，**不要带本仓那处覆盖**。
+> ⛔ **本仓的 map 实验已于 2026-10-10 短暂收口后重新启用**：五个 `wayfinder:*` label 保留可用，sub-issues 与原生 `blocked_by` 边均实测可用；首张 map = #1585 当天开、当天关（not planned），五张执行票 #1586-#1590 改为直接挂 ADR-0035；但**第二张 map = #1591 已开且在用**（小程序 60 页 UI 改造，3 张 grilling + 4 张 research 子票），「唯一一张 map」的说法作废（该图 2026-11-24 已关，现测存量见下条「分工线」）。
+> **为什么关**：① 原判断「本仓不用 wayfinder」的依据「准入三判据未命中」是**自我实现的**（最硬那条是「label 不存在、map 数为 0」，没有 map 就永远判不通过）——这部分旧判断确实作废；② 但当天实践**证伪了反向的过度启用**：60 页 UI 改造能一手握住（先 grep 出事实再 grill，十八问一个会话收敛），这正是 `/grill-with-docs` 的形状；③ 更关键的是**那处覆盖的写法是错的**：它让地图的 `Destination` 自指 `/to-spec` 的产物（spec 是地图自己下游的东西），地图因此失去下游出口——详见 #1585 的关闭评论。**2026-11-24 复核**：「承载执行」本身不是禁令，被判错的是那处**未声明的覆盖**与自指的 `Destination`——跨栈口径已收进下条（唯一事实源）。
+> **Wayfinder 准入与用法（跨栈，唯一事实源）**：判据是「**能不能一手握住**」——连第一个该决定什么都说不出，才需要 map；任务大小不构成理由。map 装**索引 / 迷雾 / 范围边界**（Destination / Notes / Decisions so far / Not yet specified / Out of scope），ADR 装**决策的完整论证**；本仓的迷雾主要长在 ADR「③ 明确不做的事」里，冷启动读「票 + 对应 ADR + `refactor-decisions.md`」已能开跑，map 是每会话开场的低分辨率视图。
+> **分工线**：**执行切片**属 main flow 的 `/to-tickets`（`grill-with-docs` → ADR → 必要时 map 清雾 → `/to-spec` → `/to-tickets` → `/implement`），不挂 `wayfinder:*`；**map 与决策票挂**（`wayfinder:map` / `wayfinder:<type>`）。`/ask-matt` 的路由表里 wayfinder 是 **on-ramp**、不在 main flow 上，`ask-matt:46` 明写 map「hands off, it doesn't build」，清完雾要 merge 到 `/to-spec` 收拢成计划。现测（2026-11-24，`gh issue list --label wayfinder:map --state all`）：十五张 map 已建（`#1585` 起），仅 `#2798` 未关。
+> **本仓两条限制**（其余照 `/wayfinder` SKILL.md 原样）：① 图内要承载执行，必须在 **Notes 显式声明**（`#2798` 先例），默认只出决策；② `Destination` 写「做完后是什么状态」，不得写成下一道工序的产物（`#1585` 反例：`Destination` = 「一份能交接的 spec」，那本是 `/to-spec` 的产物）。
+> **移动端线另有** `training-app/叉车维修培训学员端跨端应用/docs/agents/issue-dispatch.md`（只辖那条线的派活 / 闸门 / 收尾，前后端会话不读）；其文末节是上述判据的**推理与实证**（#1585 全过程）。口径有变更，改在本条。
 
 供 `/wayfinder` 使用。**map** 是单个 issue，以 **child** issues 作为 tickets。
 
