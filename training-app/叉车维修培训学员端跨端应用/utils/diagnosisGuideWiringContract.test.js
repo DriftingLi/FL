@@ -99,7 +99,8 @@ describe('诊断引导面接线契约（#2296）', () => {
 
     it('页面里每一处诊断专有渲染都挂在 isDiagnosis 上（欢迎区与引导入口各一处）', () => {
       expect(PAGE).toMatch(/v-if="isDiagnosis && guideVisible && messages\.length == 0"/);
-      expect(PAGE).toMatch(/v-if="isDiagnosis && guideVisible"/);
+      // #2812：兜底态不开面板（第二层同源必 502）⇒ 入口球要一并让位
+      expect(PAGE).toMatch(/v-if="isDiagnosis && guideVisible && !catalogDegraded"/);
     });
 
     it('检测器有牙：塞一处字面量比较必须判红', () => {
@@ -112,14 +113,20 @@ describe('诊断引导面接线契约（#2296）', () => {
     });
   });
 
-  describe('② 留白判定只有一个判据（票面：取不到 / health 为否 ⇒ 整块不渲染）', () => {
-    it('health.ok !== true 或 intents 失败 ⇒ guideVisible=false，且把字典一起丢掉', () => {
+  describe('② 留白判定只有一处判据（health 为否 ⇒ 整块不渲染；intents 单独失败 ⇒ 静态兜底，#2812）', () => {
+    it('health 失败 ⇒ 整块留白且字典一并丢掉；intents 单独失败 ⇒ 静态兜底并标降级（#2812）', () => {
       const fn = fnBody(COMPOSABLE, 'async function loadIntents');
-      // 两条失败路径都必须落到「整块留白 + 清空字典」这一处
-      expect(fn).toMatch(/if \(!healthOk \|\| !intentsOk\) \{/);
+      // ① 上游整体不可达：仍是「整块留白 + 清空字典」，不留点得动却没反应的卡
+      expect(fn).toMatch(/if \(!healthOk\) \{/);
       expect(fn).toMatch(/brands\.value = \[\]/);
       expect(fn).toMatch(/faq\.value = \[\]/);
       expect(fn).toMatch(/guideVisible\.value = false/);
+      // ② 词表端点单独坏（生产实测形态）：用兜底字典 + 降级标记，且**不许**再落到留白分支
+      expect(fn).toMatch(/if \(!intentsOk\) \{/);
+      expect(fn).toMatch(/brands\.value = fallbackBrands\(\)/);
+      expect(fn).toMatch(/faq\.value = fallbackFaq\(\)/);
+      expect(fn).toMatch(/catalogDegraded\.value = true/);
+      expect(fn).not.toMatch(/if \(!healthOk \|\| !intentsOk\)/);
     });
 
     it('进页拉一次、不轮询（没有定时重拉引导）', () => {
@@ -148,11 +155,14 @@ describe('诊断引导面接线契约（#2296）', () => {
       expect(sw).toMatch(/loadDiagnosisIntents\(\)/);
     });
 
-    it('检测器有牙：把留白判定改成恒真必须判红', () => {
-      const mutated = COMPOSABLE.replace('if (!healthOk || !intentsOk) {', 'if (false) {');
-      expect(mutated).not.toBe(COMPOSABLE);
-      const fn = fnBody(mutated, 'async function loadIntents');
-      expect(fn).not.toMatch(/if \(!healthOk \|\| !intentsOk\) \{/);
+    it('检测器有牙：把两条判据各自改成恒真，两条断言都要判红', () => {
+      const blanked = COMPOSABLE.replace('if (!healthOk) {', 'if (false) {');
+      expect(blanked).not.toBe(COMPOSABLE);
+      expect(fnBody(blanked, 'async function loadIntents')).not.toMatch(/if \(!healthOk\) \{/);
+
+      const degraded = COMPOSABLE.replace('if (!intentsOk) {', 'if (false) {');
+      expect(degraded).not.toBe(COMPOSABLE);
+      expect(fnBody(degraded, 'async function loadIntents')).not.toMatch(/if \(!intentsOk\) \{/);
     });
   });
 

@@ -18,6 +18,7 @@ const { loadUts } = require('./utsHarness');
 const COMPOSE_UTS = path.join(__dirname, 'diagnosisCompose.uts');
 const GUIDE_UTS = path.join(__dirname, 'diagnosisGuide.uts');
 const COMPOSABLE_UTS = path.join(__dirname, '..', 'composables', 'useDiagnosisGuide.uts');
+const FALLBACK_UTS = path.join(__dirname, 'diagnosisFallback.uts');
 
 /** 最小 ref：composable 只用到 `.value` 读写 */
 function miniRef(initial) {
@@ -39,6 +40,7 @@ const FAULT_ITEMS = [{ id: 'f1', name: '举升无力', icon: '' }];
  */
 function loadCompose(scenario) {
   const compose = loadUts(COMPOSE_UTS, {});
+  const fallback = loadUts(FALLBACK_UTS, {});
   const guide = loadUts(GUIDE_UTS, {
     emptyDiagnosisSelection: compose.emptyDiagnosisSelection,
     pickerKindOf: compose.pickerKindOf,
@@ -61,6 +63,9 @@ function loadCompose(scenario) {
     GUIDE_STEP_CONFIRM: guide.GUIDE_STEP_CONFIRM,
     // 组句与判档：真源
     composeDiagnosisSentence: compose.composeDiagnosisSentence,
+    // 兜底字典：真源（#2812 的兜底值与漂移说明都在那个文件里，不在测试里抄一份）
+    fallbackBrands: fallback.fallbackBrands,
+    fallbackFaq: fallback.fallbackFaq,
     // 取数替身（按场景）
     getDiagnosisHealthApi: () => {
       calls.health += 1;
@@ -116,10 +121,43 @@ describe('诊断引导 composable（#2296）', () => {
       expect(mod.brands.value.length).toBe(0);
     });
 
-    it('intents 失败 ⇒ 整块留白（此时 health 是通的也不画）', async () => {
-      const { mod } = loadCompose({ intentsThrows: true });
+    it('intents 失败但 health 通 ⇒ 静态兜底可见并标降级（#2812，生产实测形态）', async () => {
+      const { mod, calls } = loadCompose({ intentsThrows: true });
+      await mod.loadIntents();
+      expect(calls.intents).toBe(1);
+      expect(mod.guideVisible.value).toBe(true);
+      expect(mod.catalogDegraded.value).toBe(true);
+      // 兜底值是**上游契约真值**：两张品牌卡 + 四条常问
+      expect(mod.brands.value.map((b) => b.id)).toEqual(['zhongli', 'linde']);
+      expect(mod.brands.value.map((b) => b.picker)).toEqual(['system', 'model']);
+      expect(mod.faq.value.length).toBe(4);
+    });
+
+    it('health 失败 ⇒ 兜底也不画（上游整体不可达时，静态卡也只是死入口）', async () => {
+      const { mod } = loadCompose({ healthOk: false, intentsThrows: true });
       await mod.loadIntents();
       expect(mod.guideVisible.value).toBe(false);
+      expect(mod.catalogDegraded.value).toBe(false);
+      expect(mod.brands.value.length).toBe(0);
+      expect(mod.faq.value.length).toBe(0);
+    });
+
+    it('取数成功 ⇒ 降级标记复位（上一次兜底的标记不能留到这一轮）', async () => {
+      const broken = loadCompose({ intentsThrows: true });
+      await broken.mod.loadIntents();
+      expect(broken.mod.catalogDegraded.value).toBe(true);
+      const ok = loadCompose({ brands: [ZHONGLI] });
+      await ok.mod.loadIntents();
+      expect(ok.mod.catalogDegraded.value).toBe(false);
+      expect(ok.mod.brands.value.length).toBe(1);
+    });
+
+    it('兜底态点品牌卡：引导面板不进（第二层同源必 502），改由页面填一句待补完的话', () => {
+      const fallback = loadUts(FALLBACK_UTS, {});
+      expect(fallback.fallbackBrandPrompt('zhongli')).toContain('中力');
+      expect(fallback.fallbackBrandPrompt('linde')).toContain('林德');
+      // 认不出的 id 回空串：调用方据此回退，不填一句没有品牌的话
+      expect(fallback.fallbackBrandPrompt('unknown')).toBe('');
     });
 
     it('品牌是空集 ⇒ 不渲染（一块空白面板比没有面板更糟）', async () => {

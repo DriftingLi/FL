@@ -51,8 +51,11 @@
 		<view class="main" :class="isWelcomeState ? 'main-welcome' : ''">
 			<scroll-view class="pro-scroll" :class="isWelcomeState ? 'scroll-welcome' : ''" scroll-y="true" :scroll-into-view="scrollIntoViewId" scroll-with-animation>
 				<!-- 诊断空态欢迎区（#2296，随专项 scope 并入 #2593）：品牌快选 + 常见问题。
-				     取数失败 / health.ok=false 时 guideVisible 为 false ⇒ **整块不渲染**（不留「点了必失败」的按钮）。 -->
+				     health.ok=false 时 guideVisible 为 false ⇒ **整块不渲染**（不留「点了必失败」的按钮）；
+				     intents 单独失败时是静态兜底态（#2812），卡在、点法不同（见 onPickBrandCard）。 -->
 				<view v-if="isDiagnosis && guideVisible && messages.length == 0" class="welcome-area">
+					<!-- 兜底态提示（#2812）：词表端点不可用时，品牌卡是可点的、但点法不同（填一句待补完的话） -->
+					<text v-if="catalogDegraded" class="welcome-degraded">诊断词表暂不可用，点品牌先描述故障现象</text>
 					<view class="welcome-brand-row">
 						<view v-for="b in brands" :key="b.id" class="welcome-brand" @click="onPickBrandCard(b.id)">
 							<text class="welcome-brand-icon">{{ b.icon }}</text>
@@ -94,7 +97,7 @@
 		<view v-if="showModelPicker" class="model-mask" @click="showModelPicker = false"></view>
 
 		<!-- 引导入口：只在诊断 scope 且引导数据可用时出现（guideVisible 单一判据） -->
-		<view v-if="isDiagnosis && guideVisible" class="guide-entry" @click="openGuide">
+		<view v-if="isDiagnosis && guideVisible && !catalogDegraded" class="guide-entry" @click="openGuide">
 			<text class="guide-entry-text">{{ guideEntryLabel }}</text>
 		</view>
 
@@ -167,6 +170,7 @@
 	import AiChatProSheet from '../../components/ai-chat/ai-chat-pro-sheet.uvue'
 	import AiChatDiagnosisGuide from '../../components/ai-chat/ai-chat-diagnosis-guide.uvue'
 	import AiChatImageTray from '../../components/ai-chat/ai-chat-image-tray.uvue'
+	import { fallbackBrandPrompt } from '../../utils/diagnosisFallback'
 
 
 	const auth = useAuthStore()
@@ -392,6 +396,7 @@
 		brands,
 		faq,
 		guideVisible,
+		catalogDegraded,
 		guideOpen,
 		state: guideState,
 		secondItems,
@@ -683,8 +688,20 @@
 		clearCodeHint()
 	}
 
-	/** 欢迎区点品牌卡：带品牌预选进面板，直接落到第二层 */
+	/**
+	 * 欢迎区点品牌卡：带品牌预选进面板，直接落到第二层。
+	 * 兜底态（#2812）例外：第二层 systems 与 intents 同源必 502，开面板就是一屏空列表 ⇒
+	 * 改为往输入框填一句待补完的话（与 FAQ 卡同一条路径，学员补上现象即可发送）。
+	 */
 	function onPickBrandCard(brandId : string) : void {
+		if (catalogDegraded.value) {
+			const prompt = fallbackBrandPrompt(brandId)
+			if (prompt.length > 0) {
+				draftText.value = prompt
+				clearCodeHint()
+				return
+			}
+		}
 		openGuideWithBrand(brandId)
 	}
 
@@ -1222,6 +1239,14 @@
 	.welcome-area {
 		flex-direction: column;
 		margin-bottom: 24rpx;
+	}
+
+	/* #2812：兜底态提示行（词表端点不可用）。与卡片同宽、贴着品牌卡上边 */
+	.welcome-degraded {
+		font-size: 24rpx;
+		line-height: 32rpx;
+		color: $text-color-secondary;
+		margin-bottom: 16rpx;
 	}
 
 	/* 票 2730 docx ④：品牌卡与下方「大家常问」行同宽（原 min-width 300rpx 并排 ⇒ 比下面的框窄一截） */
