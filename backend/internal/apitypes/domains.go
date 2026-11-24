@@ -491,6 +491,8 @@ var Domains = []Domain{
 		Name:  "training",
 		Title: "培训目录与字典（/api/catalog|levels|tags|positions、/api/admin 下的专业方向 / 等级 / 证书模板 / 题库标签 / 岗位字典）",
 		Roots: []string{
+			"training.AdminTrainingCategoryDTO",
+			"training.AdminTrainingCategoryListDTO",
 			"training.CatalogTreeDTO",
 			"training.CertificateTemplateDict",
 			"training.CertificateTemplateListDTO",

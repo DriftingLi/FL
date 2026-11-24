@@ -67,6 +67,10 @@ func EntityOwnedBy(q *gorm.DB, credentialColumn string, credentialID *int) *gorm
 	return q.Where(clause, args...)
 }
 
+func UnusedCredentialMapping(q *gorm.DB, credentialID, excludeCategoryID int) *gorm.DB {
+	return q.Where("training_category.legacy_credential_id = ? AND training_category.id <> ?", credentialID, excludeCategoryID)
+}
+
 // RecordPartitionClause 记录冻结分区的 SQL 片段形态：nil → 空串（调用方据此跳过整个片段，
 // 即「不分区、看全部」）。raw 装配点必须先判空串再追加，空片段不许进 SQL。
 func RecordPartitionClause(credentialColumn string, credentialID *int) (string, []any) {

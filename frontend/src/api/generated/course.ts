@@ -18,7 +18,7 @@
 //   GET  /chapter/{chapter_id}/slides
 //   POST /chapter/{chapter_id}/slides/regenerate
 //
-// 覆盖的 Go 类型：CertificateTemplateDTO / ChapterDTO / ChapterDetailDTO / ChapterFileDTO / ChapterSlidesDTO / CourseBriefDTO / CourseBrowseResult / CourseDTO / CourseDetailDTO / CoursePageResult / CredentialBriefDTO / LevelBriefDTO / PublicCourseCategoryDTO / PublicCourseChapterDTO / PublicCourseDetailDTO / PublicCoursePageDTO / PublicCourseSummaryDTO / PublicSchoolCategoryDTO / PublicSchoolCategoryListDTO / PublicSchoolCourseDetailDTO / PublicSchoolCoursePageDTO / PublicSchoolCourseSummaryDTO / SpecialtyBriefDTO / StudyProgressDTO
+// 覆盖的 Go 类型：CertificateTemplateDTO / ChapterDTO / ChapterDetailDTO / ChapterFileDTO / ChapterSlidesDTO / CourseBriefDTO / CourseBrowseResult / CourseDTO / CourseDetailDTO / CoursePageResult / CredentialBriefDTO / LevelBriefDTO / PublicCourseCategoryDTO / PublicCourseChapterDTO / PublicCourseDetailDTO / PublicCoursePageDTO / PublicCourseSummaryDTO / PublicSchoolCategoryDTO / PublicSchoolCategoryListDTO / PublicSchoolCourseDetailDTO / PublicSchoolCoursePageDTO / PublicSchoolCourseSummaryDTO / SpecialtyBriefDTO / StudyProgressDTO / CategoryRef / Eligibility / Reason
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -101,6 +101,7 @@ export interface CourseBrowseResult {
 }
 
 export interface CourseDTO {
+  category?: CategoryRef
   category_id?: number
   certificate_name?: string
   certificate_template?: CertificateTemplateDTO
@@ -127,6 +128,7 @@ export interface CourseDTO {
   practice_hours: number
   prerequisite_course_ids?: number[]
   prerequisites?: CourseBriefDTO[]
+  public_eligibility?: Eligibility
   sort_order: number
   specialty?: SpecialtyBriefDTO
   specialty_id: number | null
@@ -258,3 +260,16 @@ export interface StudyProgressDTO {
   record_id: number
   study_duration: number
 }
+
+export interface CategoryRef {
+  id: number
+  name: string
+  status: number
+}
+
+export interface Eligibility {
+  eligible: boolean
+  reasons: Reason[]
+}
+
+export type Reason = 'not_published' | 'category_missing' | 'category_disabled' | 'category_unmapped' | 'credential_missing' | 'credential_disabled' | 'source_tag_excluded'

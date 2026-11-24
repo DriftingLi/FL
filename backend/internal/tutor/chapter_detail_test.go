@@ -227,8 +227,8 @@ func TestTutorGetCourseChaptersNoNPlusOne(t *testing.T) {
 		t.Fatalf("GetCourseChapters 失败: %v", err)
 	}
 	// 1（课程 Find）+ 1（章节列表 Find）+ 1（文件批量 Find）+ 1（挂接文件批量 Find，#2497
-	// loadAttachedTutorFiles 单条 IN，与章节数无关）= 4
-	if queryCount > 4 {
-		t.Fatalf("批量章节查询数为 %d, 超过常数级上限 4（存在 N+1）", queryCount)
+	// loadAttachedTutorFiles 单条 IN，与章节数无关）+ 1（分类/证件公开资格批量 Find，#2799）= 5
+	if queryCount > 5 {
+		t.Fatalf("批量章节查询数为 %d, 超过常数级上限 5（存在 N+1）", queryCount)
 	}
 }

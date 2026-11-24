@@ -14,6 +14,7 @@ import (
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/model"
+	"forklift-training/internal/scope"
 	"forklift-training/internal/security"
 	"forklift-training/internal/sortorder"
 	"forklift-training/pkg/httpx"
@@ -74,6 +75,7 @@ func RegisterAdminRoutes(rg *gin.RouterGroup, session *security.Session, svc *Ad
 // @Param credential_id query int false "目标证件 ID"
 // @Param specialty_id query int false "专业方向 ID"
 // @Param level_id query int false "等级 ID"
+// @Param category_id query string false "一级培训分类 ID、all 或 legacy（未分类/分类失效）"
 // @Param filter query string false "热门/精品筛选 hot|featured|all" default(all)
 // @Success 200 {object} response.R{data=CoursePageResult} "success"
 // @Failure 401 {object} response.R "未认证"
@@ -82,6 +84,11 @@ func RegisterAdminRoutes(rg *gin.RouterGroup, session *security.Session, svc *Ad
 func (h *adminHandler) ListCourses(c *gin.Context) {
 	httpx.Endpoint[adminCourseListReq, CoursePageResult]{
 		Parse: func(c *gin.Context) (*adminCourseListReq, error) {
+			rawCategory, provided := c.GetQuery("category_id")
+			category, err := scope.ParseStaffCategoryFilter(rawCategory, provided)
+			if err != nil {
+				return nil, httpx.BadRequest(err.Error())
+			}
 			f := c.Query("filter")
 			if f != "" && f != "hot" && f != "featured" && f != "all" {
 				return nil, httpx.BadRequest("filter 仅支持 hot|featured|all")
@@ -96,11 +103,12 @@ func (h *adminHandler) ListCourses(c *gin.Context) {
 				CredentialID: httpx.QueryIDPtr(c, "credential_id"),
 				SpecialtyID:  httpx.QueryIDPtr(c, "specialty_id"),
 				LevelID:      httpx.QueryIDPtr(c, "level_id"),
+				Category:     category,
 				Filter:       f,
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *adminCourseListReq) (*CoursePageResult, error) {
-			result, err := h.courseSvc.GetCourses(req.Page, req.PageSize, req.Keyword, req.CredentialID, req.SpecialtyID, req.LevelID, req.Filter)
+			result, err := h.courseSvc.GetCourses(req.Page, req.PageSize, req.Keyword, req.CredentialID, req.SpecialtyID, req.LevelID, req.Category, req.Filter)
 			if err != nil {
 				return nil, err
 			}
@@ -638,5 +646,6 @@ type adminCourseListReq struct {
 	CredentialID *int
 	SpecialtyID  *int
 	LevelID      *int
+	Category     scope.CategoryFilter
 	Filter       string
 }

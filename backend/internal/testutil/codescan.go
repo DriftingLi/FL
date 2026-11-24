@@ -166,6 +166,7 @@ var responseStaticPackages = []ScanDir{
 	{"internal/api", "api"},
 	{"internal/core", "core"},
 	{"internal/model", "model"},
+	{"internal/publicscope", "publicscope"},
 	{"internal/audit", "audit"},
 	{"pkg/response", "response"},
 }

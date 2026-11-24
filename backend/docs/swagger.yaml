@@ -1092,6 +1092,10 @@ definitions:
     type: object
   course.AdminCourseDetailDTO:
     properties:
+      category:
+        allOf:
+        - $ref: '#/definitions/publicscope.CategoryRef'
+        x-optional: true
       category_id:
         type: integer
         x-optional: true
@@ -1177,6 +1181,10 @@ definitions:
         items:
           $ref: '#/definitions/course.CourseBriefDTO'
         type: array
+        x-optional: true
+      public_eligibility:
+        allOf:
+        - $ref: '#/definitions/publicscope.Eligibility'
         x-optional: true
       sort_order:
         type: integer
@@ -1468,6 +1476,10 @@ definitions:
     type: object
   course.CourseDTO:
     properties:
+      category:
+        allOf:
+        - $ref: '#/definitions/publicscope.CategoryRef'
+        x-optional: true
       category_id:
         type: integer
         x-optional: true
@@ -1554,6 +1566,10 @@ definitions:
         items:
           $ref: '#/definitions/course.CourseBriefDTO'
         type: array
+        x-optional: true
+      public_eligibility:
+        allOf:
+        - $ref: '#/definitions/publicscope.Eligibility'
         x-optional: true
       sort_order:
         type: integer
@@ -3465,6 +3481,42 @@ definitions:
         x-optional: true
       user_answer: {}
     type: object
+  publicscope.CategoryRef:
+    properties:
+      id:
+        type: integer
+      name:
+        type: string
+      status:
+        type: integer
+    type: object
+  publicscope.Eligibility:
+    properties:
+      eligible:
+        type: boolean
+      reasons:
+        items:
+          $ref: '#/definitions/publicscope.Reason'
+        type: array
+    type: object
+  publicscope.Reason:
+    enum:
+    - not_published
+    - category_missing
+    - category_disabled
+    - category_unmapped
+    - credential_missing
+    - credential_disabled
+    - source_tag_excluded
+    type: string
+    x-enum-varnames:
+    - ReasonNotPublished
+    - ReasonCategoryMissing
+    - ReasonCategoryDisabled
+    - ReasonCategoryUnmapped
+    - ReasonCredentialMissing
+    - ReasonCredentialDisabled
+    - ReasonSourceTagExcluded
   questionbank.QuestionBankStatsDTO:
     properties:
       by_status:
@@ -3493,6 +3545,10 @@ definitions:
         description: 学员侧（includeAnswer=false）省略以下四个字段。
         type: string
         x-optional: true
+      category:
+        allOf:
+        - $ref: '#/definitions/publicscope.CategoryRef'
+        x-optional: true
       category_id:
         type: integer
         x-optional: true
@@ -3517,6 +3573,10 @@ definitions:
       image_url:
         type: string
       options: {}
+      public_eligibility:
+        allOf:
+        - $ref: '#/definitions/publicscope.Eligibility'
+        x-optional: true
       reference_answer:
         type: string
         x-optional: true
@@ -4078,6 +4138,29 @@ definitions:
       total_study_duration:
         type: integer
     type: object
+  training.AdminTrainingCategoryDTO:
+    properties:
+      id:
+        type: integer
+      legacy_credential_id:
+        type: integer
+        x-nullable: true
+      name:
+        type: string
+      sort_order:
+        type: integer
+        x-optional: true
+      status:
+        type: integer
+        x-optional: true
+    type: object
+  training.AdminTrainingCategoryListDTO:
+    properties:
+      categories:
+        items:
+          $ref: '#/definitions/training.AdminTrainingCategoryDTO'
+        type: array
+    type: object
   training.CatalogLevelNode:
     properties:
       code:
@@ -4412,6 +4495,8 @@ definitions:
     type: object
   training.TrainingCategoryInput:
     properties:
+      legacy_credential_id:
+        type: integer
       name:
         type: string
       sort_order:
@@ -5768,7 +5853,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/training.TrainingCategoryListDTO'
+                  $ref: '#/definitions/training.AdminTrainingCategoryListDTO'
               type: object
         "401":
           description: 未认证
@@ -5783,7 +5868,7 @@ paths:
       consumes:
       - application/json
       parameters:
-      - description: 分类名称、排序、启用状态
+      - description: 分类名称、排序、启用状态、映射证件
         in: body
         name: body
         required: true
@@ -5799,7 +5884,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/training.TrainingCategoryDTO'
+                  $ref: '#/definitions/training.AdminTrainingCategoryDTO'
               type: object
       security:
       - BearerAuth: []
@@ -5816,7 +5901,7 @@ paths:
         name: category_id
         required: true
         type: integer
-      - description: 分类名称、排序、启用状态
+      - description: 分类名称、排序、启用状态、映射证件
         in: body
         name: body
         required: true
@@ -5832,7 +5917,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/training.TrainingCategoryDTO'
+                  $ref: '#/definitions/training.AdminTrainingCategoryDTO'
               type: object
       security:
       - BearerAuth: []
@@ -6848,6 +6933,10 @@ paths:
         in: query
         name: level_id
         type: integer
+      - description: 一级培训分类 ID、all 或 legacy（未分类/分类失效）
+        in: query
+        name: category_id
+        type: string
       - default: all
         description: 热门/精品筛选 hot|featured|all
         in: query
@@ -15947,6 +16036,10 @@ paths:
         in: query
         name: tag_id
         type: integer
+      - description: 一级培训分类 ID、all 或 legacy（未分类/分类失效）
+        in: query
+        name: category_id
+        type: string
       - description: 目标证件ID
         in: query
         name: credential_id
@@ -18508,6 +18601,10 @@ paths:
         in: query
         name: level_id
         type: integer
+      - description: 一级培训分类 ID、all 或 legacy（未分类/分类失效）
+        in: query
+        name: category_id
+        type: string
       produces:
       - application/json
       responses:

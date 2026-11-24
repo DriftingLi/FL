@@ -8,28 +8,34 @@
     <!-- 左侧目录导航 -->
     <aside class="cc-sidebar">
       <div class="cc-card cc-actions-card">
+        <UiSelect
+          v-model="managementCategoryId"
+          placeholder="维护全部分类"
+          clearable
+          :options="categoryManagementOptions"
+          @change="openManagedCategory"
+        />
         <UiButton variant="primary" plain size="small" @click="openCategoryDialog()">新增分类</UiButton>
         <UiButton variant="ghost" size="small" @click="openCertificateDialog()">证书模板</UiButton>
       </div>
       <FacetCard title="课程分类">
         <FacetItem :active="categoryId === null" name="全部课程" :count="allCourses.length" @select="selectCategory(null)" />
-        <div v-for="category in categories" :key="category.id" class="flex items-center gap-1">
+        <div v-for="category in enabledCategories" :key="category.id" class="flex items-center gap-1">
           <FacetItem
             class="min-w-0 flex-1"
             :active="categoryId === category.id"
-            :name="category.status === 0 ? category.name + '（停用）' : category.name"
+            :name="category.name"
             :count="categoryCounts.get(category.id) ?? 0"
             @select="selectCategory(category.id)"
           />
           <UiButton variant="text" size="small" :aria-label="'编辑分类 ' + category.name" @click="openCategoryDialog(category)">编辑</UiButton>
         </div>
         <FacetItem
-          v-if="unclassifiedCount > 0"
           warn
-          :active="categoryId === UNCLASSIFIED"
-          name="待补分类"
-          :count="unclassifiedCount"
-          @select="selectCategory(UNCLASSIFIED)"
+          :active="categoryId === LEGACY_CATEGORY"
+          name="未分类/分类失效"
+          :count="legacyCategoryCount"
+          @select="selectCategory(LEGACY_CATEGORY)"
         />
       </FacetCard>
     </aside>
@@ -44,23 +50,29 @@
             <UiIcon name="search" />
           </template>
         </UiInput>
-        <UiSelect v-model="filterStatus" placeholder="状态" clearable style="width: 120px" @change="currentPage = 1" :options="[{ label: '已上架', value: 1 }, { label: '未上架', value: 0 }]" />
+        <UiSelect v-model="filterStatus" placeholder="状态" clearable style="width: 120px" @change="currentPage = 1" :options="[{ label: '已发布', value: 1 }, { label: '未发布', value: 0 }]" />
         <UiSelect v-model="filterHotFeatured" placeholder="热门/精品" clearable style="width: 140px" @change="currentPage = 1" :options="[{ label: '热门', value: 'hot' }, { label: '精品', value: 'featured' }, { label: '全部', value: 'all' }]" />
         <UiButton variant="primary" @click="openDrawer()">新增课程</UiButton>
         </template>
       </UiFilterBar>
 
       <el-table :data="pagedCourses" v-loading="loading" style="width: 100%">
-        <el-table-column label="分类" width="140">
+        <el-table-column label="分类" width="150">
           <template #default="{ row }">
-            <UiTag v-if="row.category_id" size="small" effect="plain">{{ categoryNameOf(row.category_id) }}</UiTag>
-            <UiTag v-else tone="danger" size="small">待补分类</UiTag>
+            <UiTag v-if="categoryNameOfRow(row)" :tone="row.category?.status === 0 ? 'warning' : 'neutral'" size="small" effect="plain">
+              {{ categoryNameOfRow(row) }}{{ row.category?.status === 0 ? '（停用）' : '' }}
+            </UiTag>
+            <UiTag v-else tone="danger" size="small" effect="plain">未分类</UiTag>
           </template>
         </el-table-column>
         <el-table-column label="课程名称" min-width="220" show-overflow-tooltip>
           <template #default="{ row }">
-            <UiTag v-if="row.status === 0" tone="info" size="small">草稿</UiTag>
             <span class="cc-cell-name">{{ row.name }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="课程类型" width="130">
+          <template #default="{ row }">
+            <UiTag tone="neutral" size="small" effect="plain">{{ courseTypeLabel(row.course_type) }}</UiTag>
           </template>
         </el-table-column>
         <el-table-column prop="chapter_count" label="章节" width="70" align="center" />
@@ -84,11 +96,16 @@
             <UiSwitch :model-value="!!row.is_featured" @change="(v: boolean) => toggleFeatured(row, v)" />
           </template>
         </el-table-column>
-        <el-table-column label="状态" width="90">
+        <el-table-column label="发布状态" width="100">
           <template #default="{ row }">
             <UiTag :tone="row.status === 1 ? 'success' : 'info'" size="small">
-              {{ row.status === 1 ? '已上架' : '未上架' }}
+              {{ row.status === 1 ? '已发布' : '未发布' }}
             </UiTag>
+          </template>
+        </el-table-column>
+        <el-table-column label="公开资格" min-width="280">
+          <template #default="{ row }">
+            <PublicEligibility :eligibility="row.public_eligibility" />
           </template>
         </el-table-column>
         <el-table-column label="操作" width="90" fixed="right" align="center">
@@ -133,12 +150,20 @@
       :title="editingCategoryId ? '编辑分类' : '新增分类'"
       width="420px"
       confirm-text="保存"
-      :confirm-disabled="!categoryForm.name.trim()"
+      :confirm-disabled="!categoryForm.name.trim() || (!editingCategoryId && !categoryForm.legacy_credential_id)"
       :confirm-loading="savingCategory"
       @confirm="saveCategory"
     >
       <el-form :model="categoryForm" label-width="80px">
         <el-form-item label="分类名称" required><UiInput v-model="categoryForm.name" :maxlength="100" /></el-form-item>
+        <el-form-item label="映射证件" required>
+          <UiSelect
+            v-model="categoryForm.legacy_credential_id"
+            placeholder="请选择证件"
+            class="w-full"
+            :options="credentials.map(item => ({ label: item.name, value: item.id }))"
+          />
+        </el-form-item>
         <el-form-item label="排序"><el-input-number v-model="categoryForm.sort_order" :min="0" :precision="0" /></el-form-item>
         <el-form-item label="状态">
           <UiSelect v-model="categoryForm.status" :options="[{ label: '启用', value: 1 }, { label: '停用', value: 0 }]" />
@@ -156,13 +181,16 @@ defineOptions({ name: 'CourseCatalog' })
 
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { trainingApi, type TrainingCategoryDTO, type CertificateTemplate } from '@/api/training'
+import { trainingApi, type AdminTrainingCategoryDTO, type CertificateTemplate } from '@/api/training'
+import { credentialApi, type CredentialDict } from '@/api/credential'
 import { adminApi, type AdminCourseItem } from '@/api/admin'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import FacetCard from '@/components/catalog/FacetCard.vue'
 import FacetItem from '@/components/catalog/FacetItem.vue'
 import CourseCatalogCourseDrawer from '@/components/admin/CourseCatalogCourseDrawer.vue'
 import CourseCatalogDialogs from '@/components/admin/CourseCatalogDialogs.vue'
+import PublicEligibility from '@/components/catalog/PublicEligibility.vue'
+import { hasLegacyCategoryReason } from '@/utils/publicEligibility'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
@@ -177,29 +205,43 @@ import UiSelect from '@/components/ui/UiSelect.vue'
 
 const submitting = ref(false)
 
-const UNCLASSIFIED = -1
+const LEGACY_CATEGORY = -1
 const categoryId = ref<number | null>(null)
-const categories = ref<TrainingCategoryDTO[]>([])
+const managementCategoryId = ref<number | null>(null)
+const categories = ref<AdminTrainingCategoryDTO[]>([])
+const credentials = ref<CredentialDict[]>([])
 const allCourses = ref<AdminCourseItem[]>([])
 const certificateTemplates = ref<CertificateTemplate[]>([])
 const categoryDialog = ref(false)
 const editingCategoryId = ref<number>()
 const savingCategory = ref(false)
-const categoryForm = ref<{ name: string; status: number; sort_order?: number }>({ name: '', status: 1 })
+const categoryForm = ref<{ name: string; status: number; sort_order?: number; legacy_credential_id?: number }>({ name: '', status: 1 })
 
-function openCategoryDialog(category?: TrainingCategoryDTO) {
+function openCategoryDialog(category?: AdminTrainingCategoryDTO) {
   editingCategoryId.value = category?.id
-  categoryForm.value = { name: category?.name || '', status: category?.status ?? 1, sort_order: category?.sort_order }
+  categoryForm.value = {
+    name: category?.name || '',
+    status: category?.status ?? 1,
+    sort_order: category?.sort_order,
+    legacy_credential_id: category?.legacy_credential_id ?? undefined
+  }
   categoryDialog.value = true
 }
 
 async function saveCategory() {
-  if (!categoryForm.value.name.trim() || savingCategory.value) return
+  const legacyCredentialID = categoryForm.value.legacy_credential_id
+  if (!categoryForm.value.name.trim() || (!editingCategoryId.value && !legacyCredentialID) || savingCategory.value) return
+  const payload = {
+    name: categoryForm.value.name,
+    status: categoryForm.value.status,
+    sort_order: categoryForm.value.sort_order,
+    ...(legacyCredentialID ? { legacy_credential_id: legacyCredentialID } : {})
+  }
   savingCategory.value = true
   try {
     const id = editingCategoryId.value
-    if (id) await trainingApi.updateTrainingCategory(id, categoryForm.value)
-    else await trainingApi.createTrainingCategory(categoryForm.value)
+    if (id) await trainingApi.updateTrainingCategory(id, payload)
+    else if (legacyCredentialID) await trainingApi.createTrainingCategory({ ...payload, legacy_credential_id: legacyCredentialID })
     categoryDialog.value = false
     await refreshCatalog()
   } catch {
@@ -211,35 +253,60 @@ async function saveCategory() {
 
 const { loading, run: refreshCatalog } = useAsyncPage(async () => {
   const pageSize = 500
-  const [categoryData, firstPage] = await Promise.all([
+  const [categoryData, firstPage, credentialData] = await Promise.all([
     trainingApi.getAdminCategories(),
-    adminApi.getCourses({ page: 1, page_size: pageSize })
+    adminApi.getCourses({ page: 1, page_size: pageSize }),
+    credentialApi.listAdminCredentials()
   ])
   const courses = [...firstPage.courses]
   for (let page = 2; page <= firstPage.pages; page++) {
     const nextPage = await adminApi.getCourses({ page, page_size: pageSize })
     courses.push(...nextPage.courses)
   }
-  return { categories: categoryData.categories, courses }
+  return { categories: categoryData.categories, courses, credentials: credentialData.credentials }
 }, {
   apply: (bundle) => {
     categories.value = bundle.categories
     allCourses.value = bundle.courses
+    credentials.value = bundle.credentials
   }
 })
+
+function openManagedCategory(id: number | null) {
+  const category = categories.value.find(item => item.id === id)
+  if (category) openCategoryDialog(category)
+}
+
+const enabledCategories = computed(() => categories.value.filter(category => (category.status ?? 1) !== 0))
+const categoryManagementOptions = computed(() => categories.value.map(category => ({
+  label: (category.status ?? 1) === 0 ? `${category.name}（停用）` : category.name,
+  value: category.id
+})))
 
 const categoryCounts = computed(() => {
   const counts = new Map<number, number>()
   for (const course of allCourses.value) {
-    const key = course.category_id ?? UNCLASSIFIED
-    counts.set(key, (counts.get(key) ?? 0) + 1)
+    if (course.category_id == null) continue
+    counts.set(course.category_id, (counts.get(course.category_id) ?? 0) + 1)
   }
   return counts
 })
-const unclassifiedCount = computed(() => categoryCounts.value.get(UNCLASSIFIED) ?? 0)
+const legacyCategoryCount = computed(() =>
+  allCourses.value.filter(course => hasLegacyCategoryReason(course.public_eligibility?.reasons)).length
+)
 
 function categoryNameOf(id?: number) {
-  return categories.value.find(category => category.id === id)?.name ?? '—'
+  return categories.value.find(category => category.id === id)?.name ?? ''
+}
+
+function categoryNameOfRow(course: AdminCourseItem) {
+  return course.category?.name || categoryNameOf(course.category_id)
+}
+
+function courseTypeLabel(type?: string) {
+  if (type === 'video') return '视频课程'
+  if (type === 'illustrated') return '图文课程'
+  return '—'
 }
 
 function selectCategory(id: number | null) {
@@ -263,7 +330,8 @@ const filteredCourses = computed(() => {
   const k = keyword.value.trim().toLowerCase()
   const status = filterStatus.value
   return allCourses.value.filter(c => {
-    if (categoryId.value !== null && (c.category_id ?? UNCLASSIFIED) !== categoryId.value) return false
+    if (categoryId.value === LEGACY_CATEGORY && !hasLegacyCategoryReason(c.public_eligibility?.reasons)) return false
+    if (categoryId.value !== null && categoryId.value !== LEGACY_CATEGORY && c.category_id !== categoryId.value) return false
     if (filterActive(status) && c.status !== status) return false
     if (filterHotFeatured.value === 'hot' && !c.is_hot) return false
     if (filterHotFeatured.value === 'featured' && !c.is_featured) return false
@@ -282,7 +350,7 @@ function certificateNameOf(id?: number | null) {
   return certificateTemplates.value.find(t => t.id === id)?.name || ''
 }
 
-const canSortCourses = computed(() => categoryId.value !== null && categoryId.value !== UNCLASSIFIED)
+const canSortCourses = computed(() => categoryId.value !== null && categoryId.value !== LEGACY_CATEGORY)
 
 // ===== 子组件（抽屉/弹窗）入口 =====
 const courseDrawerRef = ref<InstanceType<typeof CourseCatalogCourseDrawer> | null>(null)
@@ -355,14 +423,10 @@ async function toggleFeatured(row: AdminCourseItem, val: boolean) {
 }
 
 async function toggleStatus(row: AdminCourseItem) {
-  if (row.status !== 1 && row.category_id == null) {
-    ElMessage.warning('请先补全课程分类再上架')
-    return
-  }
   submitting.value = true
   try {
     await adminApi.updateCourse(row.course_id, { status: row.status === 1 ? 0 : 1 })
-    ElMessage.success(row.status === 1 ? '已下架' : '已上架')
+    ElMessage.success(row.status === 1 ? '已下架' : '已发布')
     await refreshCatalog()
   } catch (error) {
     console.error('切换状态失败:', error)

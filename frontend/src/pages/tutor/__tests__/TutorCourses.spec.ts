@@ -12,8 +12,13 @@ vi.mock('@/api/tutor', () => ({
 
 vi.mock('@/api/training', () => ({
   trainingApi: {
-    getCatalogTree: vi.fn()
+    getCatalogTree: vi.fn(),
+    getCategories: vi.fn()
   }
+}))
+
+vi.mock('@/api/credential', () => ({
+  credentialApi: { listCredentials: vi.fn() }
 }))
 
 vi.mock('vue-router', () => ({
@@ -26,6 +31,7 @@ vi.mock('@/composables/useLazyLoad', () => ({
 
 import { tutorApi } from '@/api/tutor'
 import { trainingApi } from '@/api/training'
+import { credentialApi } from '@/api/credential'
 import type { CatalogDirectionNode, CatalogLevelNode } from '@/api/training'
 import type { CourseDTO } from '@/api/tutor'
 import TutorCourses from '../TutorCourses.vue'
@@ -86,6 +92,13 @@ beforeEach(() => {
       ])
     ]
   })
+  vi.mocked(trainingApi.getCategories).mockResolvedValue({
+    categories: [
+      { id: 11, name: '叉车安全', status: 1 },
+      { id: 12, name: '已停用分类', status: 0 }
+    ]
+  })
+  vi.mocked(credentialApi.listCredentials).mockResolvedValue({ credentials: [] })
 })
 
 describe('TutorCourses 导师端我的课程', () => {
@@ -116,6 +129,7 @@ describe('TutorCourses 导师端我的课程', () => {
     expect(tutorApi.getCourses).toHaveBeenLastCalledWith({
       page: 1,
       page_size: 12,
+      category_id: 'all',
       level_id: 1
     })
   })
@@ -130,7 +144,81 @@ describe('TutorCourses 导师端我的课程', () => {
     expect(tutorApi.getCourses).toHaveBeenLastCalledWith({
       page: 1,
       page_size: 12,
+      category_id: 'all',
       specialty_id: 2
     })
+  })
+
+  it('分类筛选只列启用分类，并把分类 ID 与遗留桶传给后端', async () => {
+    const wrapper = mountPage()
+    await flushPromises()
+
+    const select = wrapper.findAllComponents({ name: 'UiSelect' })
+      .find(item => item.props('placeholder') === '全部培训分类')!
+    const options = select.props('options') as { label: string; value: string | number }[]
+    expect(options.map(option => option.label)).toEqual(['全部培训分类', '叉车安全', '未分类/分类失效'])
+    expect(options.map(option => option.value)).not.toContain(12)
+
+    await select.vm.$emit('update:modelValue', 11)
+    await select.vm.$emit('change', 11)
+    await flushPromises()
+    expect(tutorApi.getCourses).toHaveBeenLastCalledWith({
+      page: 1,
+      page_size: 12,
+      category_id: 11
+    })
+
+    await select.vm.$emit('update:modelValue', 'legacy')
+    await select.vm.$emit('change', 'legacy')
+    await flushPromises()
+    expect(tutorApi.getCourses).toHaveBeenLastCalledWith({
+      page: 1,
+      page_size: 12,
+      category_id: 'legacy'
+    })
+  })
+
+  it('课程卡并列展示 canonical 分类、课程类型、发布状态与全部公开阻断原因', async () => {
+    vi.mocked(tutorApi.getCourses).mockResolvedValue({
+      total: 1,
+      page: 1,
+      pages: 1,
+      courses: [courseOf(1, '安全作业课程', {
+        category: { id: 11, name: '叉车安全', status: 1 },
+        course_type: 'video',
+        status: 1,
+        public_eligibility: {
+          eligible: false,
+          reasons: ['category_disabled', 'credential_disabled']
+        }
+      })]
+    })
+    const wrapper = mountPage()
+    await flushPromises()
+
+    const card = wrapper.findAll('.cc-card')[0]
+    expect(card.text()).toContain('叉车安全')
+    expect(card.text()).toContain('视频课程')
+    expect(card.text()).toContain('已发布')
+    expect(card.text()).toContain('未公开')
+    expect(card.text()).toContain('培训分类已停用')
+    expect(card.text()).toContain('映射证件已停用')
+    expect(card.text()).not.toContain('已公开')
+  })
+
+  it('无 canonical 分类的课程回显到遗留桶文案', async () => {
+    vi.mocked(tutorApi.getCourses).mockResolvedValue({
+      total: 1,
+      page: 1,
+      pages: 1,
+      courses: [courseOf(1, '历史课程', {
+        public_eligibility: { eligible: false, reasons: ['category_missing'] }
+      })]
+    })
+    const wrapper = mountPage()
+    await flushPromises()
+
+    expect(wrapper.findAll('.cc-card')[0].text()).toContain('未分类/分类失效')
+    expect(wrapper.text()).toContain('未设置培训分类')
   })
 })

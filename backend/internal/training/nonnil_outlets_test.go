@@ -29,6 +29,7 @@ import (
 // internal/apitypes/nullability_lock_test.go 的 nonNilEvidenceSources）。
 var nonnilOutletsTraining = map[string]func(t *testing.T) any{
 	"training.CatalogTreeDTO.specialties":                       outletCatalogTreeEmpty,
+	"training.AdminTrainingCategoryListDTO.categories":          outletAdminTrainingCategoryListEmpty,
 	"training.TrainingCategoryListDTO.categories":               outletTrainingCategoryListEmpty,
 	"training.CatalogSpecialtyNode.levels":                      outletCatalogSpecialtyNoLevels,
 	"training.LevelListDTO.levels":                              outletLevelListEmpty,
@@ -41,6 +42,14 @@ var nonnilOutletsTraining = map[string]func(t *testing.T) any{
 	"training.GroupedCredentialsDTO.special_operation":          outletGroupedCredentialsNone,
 	"training.CatalogLevelNode.courses":                         outletCatalogLevelNodeNoCourses,
 	"course.CourseDTO.chapters":                                 outletAdminCatalogCourseNode,
+}
+
+func outletAdminTrainingCategoryListEmpty(t *testing.T) any {
+	result, err := NewService(testutil.NewMemoryDB(t), zap.NewNop()).listAdminCategories(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return result
 }
 
 func outletTrainingCategoryListEmpty(t *testing.T) any {

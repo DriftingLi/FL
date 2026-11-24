@@ -14,7 +14,7 @@
 //   GET  /mock-exam/history
 //   GET  /mock-exam/in-progress
 //
-// 覆盖的 Go 类型：MockExamAnswerDetailDTO / MockExamHistoryDTO / MockExamHistoryItemDTO / MockExamResultDTO / MockExamResumeDTO / MockExamStartDTO / MockExamSubmitDTO / QuestionDTO
+// 覆盖的 Go 类型：MockExamAnswerDetailDTO / MockExamHistoryDTO / MockExamHistoryItemDTO / MockExamResultDTO / MockExamResumeDTO / MockExamStartDTO / MockExamSubmitDTO / CategoryRef / Eligibility / Reason / QuestionDTO
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -104,8 +104,22 @@ export interface MockExamSubmitDTO {
   total_score: number
 }
 
+export interface CategoryRef {
+  id: number
+  name: string
+  status: number
+}
+
+export interface Eligibility {
+  eligible: boolean
+  reasons: Reason[]
+}
+
+export type Reason = 'not_published' | 'category_missing' | 'category_disabled' | 'category_unmapped' | 'credential_missing' | 'credential_disabled' | 'source_tag_excluded'
+
 export interface QuestionDTO {
   answer?: string
+  category?: CategoryRef
   category_id?: number
   content: string
   created_at: string
@@ -116,6 +130,7 @@ export interface QuestionDTO {
   id: number
   image_url: string
   options: unknown
+  public_eligibility?: Eligibility
   reference_answer?: string
   reject_reason: string
   score: number

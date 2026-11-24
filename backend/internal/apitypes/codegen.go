@@ -41,6 +41,7 @@ const tsHeaderTemplate = `// 生成文件，勿手改（ADR-0019 契约 codegen 
 type Schema struct {
 	Ref       string            `json:"$ref"`
 	Type      string            `json:"type"`
+	Enum      []string          `json:"enum"`
 	Items     *Schema           `json:"items"`
 	Props     map[string]Schema `json:"properties"`
 	AddProps  json.RawMessage   `json:"additionalProperties"`
@@ -296,9 +297,20 @@ func RenderDomain(spec *Spec, d Domain) (string, error) {
 		if i > 0 {
 			body.WriteString("\n")
 		}
-		body.WriteString(renderInterface(short[i], spec.Definitions[n]))
+		body.WriteString(renderDefinition(short[i], spec.Definitions[n]))
 	}
 	return fmt.Sprintf(tsHeaderTemplate, d.Title, ep.String(), strings.Join(short, " / ")) + body.String(), nil
+}
+
+func renderDefinition(name string, s Schema) string {
+	if len(s.Enum) > 0 {
+		values := make([]string, 0, len(s.Enum))
+		for _, value := range s.Enum {
+			values = append(values, "'"+strings.ReplaceAll(value, "'", "\\'")+"'")
+		}
+		return fmt.Sprintf("export type %s = %s\n", name, strings.Join(values, " | "))
+	}
+	return renderInterface(name, s)
 }
 
 func renderInterface(name string, s Schema) string {

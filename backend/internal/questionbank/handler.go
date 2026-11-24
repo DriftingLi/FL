@@ -131,6 +131,7 @@ type listQuestionsReq struct {
 	Status   string
 	Keyword  string
 	TagID    *int
+	Category scope.CategoryFilter
 	// Sort 排序口径（#412）：缺省 = 现状（最新提交优先）；讲师端显式传 id_asc。
 	Sort string
 	// Editor 决定走哪一半读面（能力分流，见 ActsAsQuestionEditor）：
@@ -151,6 +152,7 @@ type listQuestionsReq struct {
 // @Param status query string false "状态 draft|pending|published"
 // @Param keyword query string false "关键词"
 // @Param tag_id query int false "题库标签ID"
+// @Param category_id query string false "一级培训分类 ID、all 或 legacy（未分类/分类失效）"
 // @Param credential_id query int false "目标证件ID"
 // @Param sort query string false "排序口径 id_asc"
 // @Success 200 {object} response.R{data=QuestionPageDTO} "success"
@@ -160,6 +162,11 @@ type listQuestionsReq struct {
 func (h *handler) ListQuestions(c *gin.Context) {
 	httpx.Endpoint[listQuestionsReq, QuestionPageDTO]{
 		Parse: func(c *gin.Context) (*listQuestionsReq, error) {
+			rawCategory, provided := c.GetQuery("category_id")
+			category, err := scope.ParseStaffCategoryFilter(rawCategory, provided)
+			if err != nil {
+				return nil, httpx.BadRequest(err.Error())
+			}
 			return &listQuestionsReq{
 				Page:     httpx.QueryIntDefault(c, "page", 1),
 				PageSize: httpx.QueryIntDefault(c, "page_size", 20),
@@ -167,6 +174,7 @@ func (h *handler) ListQuestions(c *gin.Context) {
 				Status:   c.Query("status"),
 				Keyword:  c.Query("keyword"),
 				TagID:    httpx.QueryIDPtr(c, "tag_id"),
+				Category: category,
 				Sort:     c.Query("sort"),
 				Editor:   ActsAsQuestionEditor(c),
 			}, nil
@@ -178,7 +186,7 @@ func (h *handler) ListQuestions(c *gin.Context) {
 			// listQuestions），「挂能力守卫」会直接打断它 —— 该端点进「学员可读面」台账的理由
 			// 由 ADR-0062 票 5 的台账逐条登记（本票只把它的读面收进池）。
 			if req.Editor {
-				return h.svc.ListQuestions(req.Page, req.PageSize, req.QType, req.Status, req.Keyword, req.TagID, EditorQuestionScope(c), req.Sort)
+				return h.svc.ListQuestions(req.Page, req.PageSize, req.QType, req.Status, req.Keyword, req.TagID, req.Category, EditorQuestionScope(c), req.Sort)
 			}
 			return h.svc.ListPoolQuestions(req.Page, req.PageSize, req.QType, req.Keyword, req.TagID, StudentQuestionScope(c), req.Sort)
 		},

@@ -4,6 +4,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/publicscope"
 	"forklift-training/internal/scope"
 	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
@@ -18,14 +19,17 @@ import (
 // 管理端全量可搜索；导师端与学员端同口径并附学习学员数（ADR-0012 §2 导师可见性口径）。
 // Filter：hot|featured|all（缺省 all），映射 is_hot / is_featured 双 bool（可叠加，见 Spec #326 Q9-Q12）。
 type CourseListOptions struct {
-	OnlyMounted      bool
-	Keyword          string
-	SpecialtyID      *int
-	LevelID          *int
-	CredentialID     *int
-	Filter           string
-	WithStudentCount bool
-	DefaultPageSize  int
+	OnlyMounted                 bool
+	Keyword                     string
+	SpecialtyID                 *int
+	LevelID                     *int
+	CredentialID                *int
+	CategoryFilter              scope.CategoryFilter
+	Filter                      string
+	WithStudentCount            bool
+	WithPublicState             bool
+	LegacyIncludesUncategorized bool
+	DefaultPageSize             int
 	// Paid 免费/付费筛选（#2071）：nil = 不过滤；true = 付费（积分价 > 0）；false = 免费（积分价为空或 0）。
 	// 判据是积分兑换价 points_price，**不是**现金价。
 	Paid *bool
@@ -36,7 +40,11 @@ type CourseListOptions struct {
 func ListCourses(db *gorm.DB, page, pageSize int, opts CourseListOptions) (CoursePageResult, error) {
 	courses, total, page, pageSize, err := paging.Query[model.Course](db, page, pageSize, opts.DefaultPageSize, "sort_order ASC, created_at DESC, course_id DESC", func(q *gorm.DB) *gorm.DB {
 		if opts.OnlyMounted {
-			q = PublishedCategoryCourseScope(q)
+			if opts.LegacyIncludesUncategorized && opts.CategoryFilter.Legacy() {
+				q = q.Where("course.status = ?", 1)
+			} else {
+				q = PublishedCategoryCourseScope(q)
+			}
 		}
 		if opts.Keyword != "" {
 			q = q.Where("name LIKE ?", "%"+opts.Keyword+"%")
@@ -48,6 +56,11 @@ func ListCourses(db *gorm.DB, page, pageSize int, opts CourseListOptions) (Cours
 			q = q.Where("level_id = ?", *opts.LevelID)
 		}
 		q = scope.EntityOwnedBy(q, "credential_id", opts.CredentialID)
+		if opts.CategoryFilter.Legacy() {
+			q = publicscope.LegacyCategoryFilter(q, publicscope.CourseCategoryColumn)
+		} else {
+			q = opts.CategoryFilter.Apply(q, "course.category_id")
+		}
 		if opts.Paid != nil {
 			// 付费 = points_price > 0，免费 = 其余。列注释写「NULL/0 = 免费直学」，而 000002 的内联 CHECK
 			// （IS NULL OR > 0）又排除 0 —— 两处不一致，且 ADD COLUMN IF NOT EXISTS 在列已存在的库上整句
@@ -108,6 +121,11 @@ func ListCourses(db *gorm.DB, page, pageSize int, opts CourseListOptions) (Cours
 			}
 		}
 		items = append(items, item)
+	}
+	if opts.WithPublicState {
+		if err := FillCoursePublicStates(db, items); err != nil {
+			return CoursePageResult{}, err
+		}
 	}
 	return CoursePageResult{
 		Courses: items,

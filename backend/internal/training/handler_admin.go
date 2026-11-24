@@ -94,12 +94,12 @@ func (h *handler) GetAdminCatalogTree(c *gin.Context) {
 // @Tags 管理端-培训目录
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} response.R{data=training.TrainingCategoryListDTO} "success"
+// @Success 200 {object} response.R{data=training.AdminTrainingCategoryListDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /admin/catalog/categories [get]
 func (h *handler) ListAdminCategories(c *gin.Context) {
-	httpx.Endpoint[struct{}, TrainingCategoryListDTO]{
-		Invoke: func(ctx context.Context, _ *struct{}) (*TrainingCategoryListDTO, error) {
+	httpx.Endpoint[struct{}, AdminTrainingCategoryListDTO]{
+		Invoke: func(ctx context.Context, _ *struct{}) (*AdminTrainingCategoryListDTO, error) {
 			return h.svc.listAdminCategories(ctx)
 		},
 	}.Handle(c)
@@ -110,19 +110,22 @@ func (h *handler) ListAdminCategories(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param body body TrainingCategoryInput true "分类名称、排序、启用状态"
-// @Success 201 {object} response.R{data=training.TrainingCategoryDTO} "success"
+// @Param body body TrainingCategoryInput true "分类名称、排序、启用状态、映射证件"
+// @Success 201 {object} response.R{data=training.AdminTrainingCategoryDTO} "success"
 // @Router /admin/catalog/categories [post]
 func (h *handler) CreateCategory(c *gin.Context) {
-	httpx.Endpoint[TrainingCategoryInput, TrainingCategoryDTO]{
+	httpx.Endpoint[TrainingCategoryInput, AdminTrainingCategoryDTO]{
 		Parse: func(c *gin.Context) (*TrainingCategoryInput, error) {
 			return httpx.BindJSONMsg[TrainingCategoryInput](c, "请求数据无效")
 		},
-		Invoke: func(ctx context.Context, input *TrainingCategoryInput) (*TrainingCategoryDTO, error) {
+		Invoke: func(ctx context.Context, input *TrainingCategoryInput) (*AdminTrainingCategoryDTO, error) {
 			return h.svc.saveCategory(ctx, 0, *input)
 		},
 	}.WithSuccess(httpx.Created("分类已创建"), http.StatusInternalServerError).
-		WithSentinel(errCategoryInput, http.StatusBadRequest).Handle(c)
+		WithSentinel(errCategoryInput, http.StatusBadRequest).
+		WithSentinel(errCategoryCredentialNeeded, http.StatusBadRequest).
+		WithSentinel(errCategoryCredentialNotFound, http.StatusBadRequest).
+		WithSentinel(errCategoryCredentialUsed, http.StatusBadRequest).Handle(c)
 }
 
 type categoryUpdateRequest struct {
@@ -136,11 +139,11 @@ type categoryUpdateRequest struct {
 // @Produce json
 // @Security BearerAuth
 // @Param category_id path int true "分类 ID"
-// @Param body body TrainingCategoryInput true "分类名称、排序、启用状态"
-// @Success 200 {object} response.R{data=training.TrainingCategoryDTO} "success"
+// @Param body body TrainingCategoryInput true "分类名称、排序、启用状态、映射证件"
+// @Success 200 {object} response.R{data=training.AdminTrainingCategoryDTO} "success"
 // @Router /admin/catalog/categories/{category_id} [put]
 func (h *handler) UpdateCategory(c *gin.Context) {
-	httpx.Endpoint[categoryUpdateRequest, TrainingCategoryDTO]{
+	httpx.Endpoint[categoryUpdateRequest, AdminTrainingCategoryDTO]{
 		Parse: func(c *gin.Context) (*categoryUpdateRequest, error) {
 			id, err := httpx.PathInt(c, "category_id", "培训分类 ID 无效")
 			if err != nil {
@@ -152,11 +155,13 @@ func (h *handler) UpdateCategory(c *gin.Context) {
 			}
 			return &categoryUpdateRequest{ID: id, Input: *input}, nil
 		},
-		Invoke: func(ctx context.Context, input *categoryUpdateRequest) (*TrainingCategoryDTO, error) {
+		Invoke: func(ctx context.Context, input *categoryUpdateRequest) (*AdminTrainingCategoryDTO, error) {
 			return h.svc.saveCategory(ctx, input.ID, input.Input)
 		},
 	}.WithSuccess(httpx.OkMsg("分类已更新"), http.StatusInternalServerError).
 		WithSentinel(errCategoryInput, http.StatusBadRequest).
+		WithSentinel(errCategoryCredentialNotFound, http.StatusBadRequest).
+		WithSentinel(errCategoryCredentialUsed, http.StatusBadRequest).
 		WithSentinel(errCategoryNotFound, http.StatusNotFound).Handle(c)
 }
 

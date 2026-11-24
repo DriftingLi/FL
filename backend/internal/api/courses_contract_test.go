@@ -174,8 +174,11 @@ func TestTutorCoursesListContract(t *testing.T) {
 	if item == nil {
 		t.Fatalf("未找到已挂载课程: %+v", body.Data.Courses)
 	}
-	if _, ok := item["category"]; ok {
-		t.Fatal("响应课程不应包含 category")
+	if _, ok := item["category"]; !ok {
+		t.Fatal("讲师列表应包含 canonical 分类")
+	}
+	if _, ok := item["public_eligibility"]; !ok {
+		t.Fatal("讲师列表应包含公开资格")
 	}
 	if item["chapter_count"] == nil {
 		t.Fatal("导师列表应含 chapter_count")

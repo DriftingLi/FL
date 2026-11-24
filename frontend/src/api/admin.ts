@@ -171,6 +171,7 @@ export interface AdminCoursesQuery {
   credential_id?: number
   specialty_id?: number
   level_id?: number
+  category_id?: number | 'all' | 'legacy'
   filter?: 'hot' | 'featured' | 'all'
 }
 

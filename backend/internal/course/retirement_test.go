@@ -19,6 +19,7 @@ import (
 
 	"forklift-training/internal/coerce"
 	"forklift-training/internal/model"
+	"forklift-training/internal/scope"
 	"forklift-training/internal/testutil"
 )
 
@@ -189,7 +190,7 @@ func TestAdminCourseListHasChapterCountAndPrereqIDs(t *testing.T) {
 	svc := NewAdminService(db, nil, notification.NewService(db, zap.NewNop()), zap.NewNop())
 	course, prereq := seedCatalogCourse(t, db)
 
-	list, err := svc.GetCourses(1, 10, "", nil, nil, nil, "")
+	list, err := svc.GetCourses(1, 10, "", nil, nil, nil, scope.CategoryFilter{}, "")
 	if err != nil {
 		t.Fatalf("GetCourses 失败: %v", err)
 	}
@@ -213,9 +214,11 @@ func TestAdminCourseListHasChapterCountAndPrereqIDs(t *testing.T) {
 	if len(ids) != 1 || ids[0] != prereq.CourseID {
 		t.Fatalf("prerequisite_course_ids 应为 [%d], got %v", prereq.CourseID, ids)
 	}
-	b, _ := json.Marshal(item)
-	if bytes.Contains(b, []byte(`"category"`)) {
-		t.Fatal("管理端列表不应包含 category")
+	if item.Category == nil || item.Category.ID != *course.CategoryID {
+		t.Fatalf("管理端列表应返回 canonical 分类, got %+v", item.Category)
+	}
+	if item.PublicEligibility == nil || item.PublicEligibility.Eligible {
+		t.Fatalf("未映射证件的分类不应公开, got %+v", item.PublicEligibility)
 	}
 }
 
@@ -260,8 +263,7 @@ func TestUpdateCourseWithoutPrereqKeyKeepsPrereqs(t *testing.T) {
 	if len(ids) != 1 || ids[0] != prereq.CourseID {
 		t.Fatalf("更新后前置课程应保留 [%d], got %v", prereq.CourseID, ids)
 	}
-	b, _ := json.Marshal(updated)
-	if bytes.Contains(b, []byte(`"category"`)) {
-		t.Fatal("更新结果不应包含 category")
+	if updated.Category == nil || updated.PublicEligibility == nil {
+		t.Fatalf("更新结果应返回 canonical 分类与公开资格, got %+v", updated)
 	}
 }

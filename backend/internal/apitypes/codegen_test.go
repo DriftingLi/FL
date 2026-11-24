@@ -119,6 +119,14 @@ func TestDomainEndpointsDeclareData(t *testing.T) {
 
 // TestRenderDomainDeterministic 渲染是纯函数：两次渲染必须逐字节一致
 // （否则「字节全等」契约会在 CI 上随机红 —— map 迭代序泄漏是这里的经典成因）。
+func TestRenderDefinitionEmitsStringEnum(t *testing.T) {
+	got := renderDefinition("Reason", Schema{Type: "string", Enum: []string{"not_published", "category_missing"}})
+	want := "export type Reason = 'not_published' | 'category_missing'\n"
+	if got != want {
+		t.Fatalf("renderDefinition() = %q, want %q", got, want)
+	}
+}
+
 func TestRenderDomainDeterministic(t *testing.T) {
 	spec, err := LoadSpec(specPath(t))
 	if err != nil {

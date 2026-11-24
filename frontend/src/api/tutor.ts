@@ -39,6 +39,7 @@ export interface TutorCoursesQuery {
   page?: number
   page_size?: number
   keyword?: string
+  category_id?: number | 'all' | 'legacy'
 }
 
 /** 更新章节入参（不生成，ADR-0048 决策 3） */

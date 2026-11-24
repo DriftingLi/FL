@@ -176,7 +176,11 @@ const TYPE_OPTIONS: UiSelectOption[] = [
 const submitting = ref(false)
 const tags = ref<{ id: number; name: string }[]>([])
 const categories = ref<TrainingCategoryDTO[]>([])
-const categoryOptions = computed(() => categories.value.map(category => ({ label: category.name, value: category.id })))
+const categoryOptions = computed<UiSelectOption[]>(() =>
+  categories.value
+    .filter((category) => category.status !== 0)
+    .map((category) => ({ label: category.name, value: category.id }))
+)
 /** 考点标签 → {label,value} */
 const tagOptions = computed<UiSelectOption[]>(() => tags.value.map((t) => ({ label: t.name, value: t.id })))
 const multiAnswer = ref<string[]>([])
@@ -256,11 +260,18 @@ async function fetchQuestion() {
 
 /** 题目写回表单（apply 槽专用：status 剥离与整份并入 form 的判据仍只有这一处）。 */
 function writeQuestionToForm(res: Awaited<ReturnType<typeof fetchQuestion>>) {
-  // status 在装载处剥离（票 6：写面不携带 status 通道，编辑装载整份 res 并入 form 是唯一带回路径）
-  const { status: _status, credential_id: _legacy, ...rest } = res as unknown as Record<string, unknown>
+  // status 与公开资格是只读响应字段，不能经整份并入 form 回流到更新写面。
+  const {
+    status: _status,
+    credential_id: _legacy,
+    category: _category,
+    public_eligibility: _publicEligibility,
+    ...rest
+  } = res as unknown as Record<string, unknown>
   form.value = {
     ...form.value,
     ...rest,
+    category_id: res.category_id ?? res.category?.id ?? null,
     options:
       (res.options as { A: string; B: string; C: string; D: string } | undefined) ??
       form.value.options,

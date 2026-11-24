@@ -261,12 +261,12 @@ func TestSlice6QuestionBankEnvelopeKeys(t *testing.T) {
 	//     （生成物 'tags?: unknown'）。
 	questionKeys := []string{
 		"answer", "content", "created_at", "created_by", "created_by_type", "explanation", "id",
-		"image_url", "options", "reference_answer", "reject_reason", "score", "scoring_criteria",
+		"image_url", "options", "public_eligibility", "reference_answer", "reject_reason", "score", "scoring_criteria",
 		"status", "tags", "type", "updated_at",
 	}
 	questionKeysWithoutTags := []string{
 		"answer", "content", "created_at", "created_by", "created_by_type", "explanation", "id",
-		"image_url", "options", "reference_answer", "reject_reason", "score", "scoring_criteria",
+		"image_url", "options", "public_eligibility", "reference_answer", "reject_reason", "score", "scoring_criteria",
 		"status", "type", "updated_at",
 	}
 

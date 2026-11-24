@@ -19,6 +19,7 @@ vi.mock('@/api/admin', () => ({
 
 import { adminApi, type AdminCourseItem, type AdminCourseDetail } from '@/api/admin'
 import CourseCatalogCourseDrawer from '../CourseCatalogCourseDrawer.vue'
+import UiSelect from '@/components/ui/UiSelect.vue'
 
 vi.spyOn(ElMessage, 'success').mockImplementation(() => undefined as never)
 
@@ -56,7 +57,7 @@ function mountDrawer() {
     props: {
       certificateTemplates: [],
       courseOptions: [],
-      categories: [{ id: 9, name: '维修' }],
+      categories: [{ id: 9, name: '维修', status: 1 }],
       defaultCategoryId: null,
       submitting: false
     },
@@ -118,5 +119,45 @@ describe('CourseCatalogCourseDrawer 积分价写入契约', () => {
       1,
       expect.objectContaining({ points_price: null })
     )
+  })
+
+  it('编辑停用分类仍回显并保留当前归属，新建时不提供停用分类', async () => {
+    vi.mocked(adminApi.getCourseDetail).mockResolvedValue(courseDetailDTO({
+      category_id: 8,
+      category: { id: 8, name: '旧分类', status: 0 }
+    }))
+    const wrapper = mount(CourseCatalogCourseDrawer, {
+      props: {
+        certificateTemplates: [],
+        courseOptions: [],
+        categories: [
+          { id: 9, name: '维修', status: 1 },
+          { id: 8, name: '旧分类', status: 0 }
+        ],
+        defaultCategoryId: null,
+        submitting: false
+      },
+      global: { plugins: [epLite()] }
+    })
+    await openAndSubmit(wrapper, courseDTO({
+      category_id: 8,
+      category: { id: 8, name: '旧分类', status: 0 }
+    }))
+
+    const categorySelect = wrapper.findAllComponents(UiSelect)
+      .find(select => select.props('placeholder') === '请选择课程分类')!
+    expect(categorySelect.props('modelValue')).toBe(8)
+    expect(categorySelect.props('options')).toEqual([
+      { label: '维修', value: 9 },
+      { label: '旧分类（已停用，保留当前归属）', value: 8 }
+    ])
+    expect(adminApi.updateCourse).toHaveBeenCalledWith(1, expect.objectContaining({
+      category_id: 8,
+      course_type: 'illustrated'
+    }))
+
+    ;(wrapper.vm as unknown as { open: (c: null) => void }).open(null)
+    await flushPromises()
+    expect(categorySelect.props('options')).toEqual([{ label: '维修', value: 9 }])
   })
 })

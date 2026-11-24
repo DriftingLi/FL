@@ -9,14 +9,27 @@ type TrainingCategoryDTO struct {
 	SortOrder *int   `json:"sort_order,omitempty" extensions:"x-optional"`
 }
 
+type AdminTrainingCategoryDTO struct {
+	ID                 int    `json:"id"`
+	Name               string `json:"name"`
+	Status             *int16 `json:"status,omitempty" extensions:"x-optional"`
+	SortOrder          *int   `json:"sort_order,omitempty" extensions:"x-optional"`
+	LegacyCredentialID *int   `json:"legacy_credential_id" extensions:"x-nullable"`
+}
+
+type AdminTrainingCategoryListDTO struct {
+	Categories []AdminTrainingCategoryDTO `json:"categories" nullability:"nonnil"`
+}
+
 type TrainingCategoryListDTO struct {
 	Categories []TrainingCategoryDTO `json:"categories" nullability:"nonnil"`
 }
 
 type TrainingCategoryInput struct {
-	Name      string `json:"name"`
-	Status    *int16 `json:"status"`
-	SortOrder *int   `json:"sort_order"`
+	Name               string `json:"name"`
+	Status             *int16 `json:"status"`
+	SortOrder          *int   `json:"sort_order"`
+	LegacyCredentialID *int   `json:"legacy_credential_id"`
 }
 
 // SpecialtyInput 专业方向创建/更新入参。

@@ -14,6 +14,7 @@ import (
 	"forklift-training/internal/course"
 	"forklift-training/internal/filestore"
 	"forklift-training/internal/model"
+	"forklift-training/internal/scope"
 	"forklift-training/internal/tutorcap"
 )
 
@@ -87,10 +88,10 @@ func (s *Service) ListCourseClaimants(tutorID, courseID int) (*course.CourseClai
 //
 // 认领两列（#2596 D1）：claimed_by_me 与 claim_count 由一次联表聚合算出（不逐课程 N+1），
 // 且**只对讲师面列表填**——学员端/管理端列表不长这两列（CourseDTO 上可空省略）。
-func (s *Service) GetCourses(page, pageSize int, credentialID, specialtyID, levelID *int, tutorID int) (course.CoursePageResult, error) {
+func (s *Service) GetCourses(page, pageSize int, credentialID, specialtyID, levelID *int, category scope.CategoryFilter, tutorID int) (course.CoursePageResult, error) {
 	result, err := course.ListCourses(s.db, page, pageSize, course.CourseListOptions{
 		OnlyMounted: true, CredentialID: credentialID, SpecialtyID: specialtyID, LevelID: levelID,
-		WithStudentCount: true, DefaultPageSize: 10,
+		CategoryFilter: category, WithPublicState: true, WithStudentCount: true, LegacyIncludesUncategorized: true, DefaultPageSize: 10,
 	})
 	if err != nil {
 		return result, err
@@ -148,6 +149,9 @@ func (s *Service) GetCourseChapters(courseID int) (*course.TutorCourseChaptersDT
 		resultChapters = append(resultChapters, chDTO)
 	}
 	cd := course.CourseToDTO(&c)
+	if err := course.FillCoursePublicState(s.db, &cd); err != nil {
+		return nil, err
+	}
 	return &course.TutorCourseChaptersDTO{
 		Course:   cd,
 		Chapters: resultChapters,

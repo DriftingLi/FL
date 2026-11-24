@@ -32,6 +32,7 @@ import (
 	"gorm.io/gorm"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/publicscope"
 	"forklift-training/pkg/paging"
 	"forklift-training/pkg/response"
 )
@@ -104,11 +105,7 @@ const publicSchoolCategoryColumns = "training_category.id AS category_id, traini
 // 表别名固定为 training_category / credential：调用点必须用这两个别名 join，
 // 不用别名（如 t / c）是为了让这几条 join 在三个调用点逐字一致。
 func publicSchoolCategoryScope(db *gorm.DB) *gorm.DB {
-	return db.
-		Joins("JOIN training_category ON training_category.id = course.category_id").
-		Joins("JOIN credential ON credential.id = training_category.legacy_credential_id").
-		Where("training_category.status = ?", 1).
-		Where("credential.status = ?", 1)
+	return publicscope.ActiveCategoryScope(db, publicscope.CourseCategoryColumn)
 }
 
 // publicSchoolCourseScope 公开网校的课程资格谓词：已发布 + 分类满足上面的口径。

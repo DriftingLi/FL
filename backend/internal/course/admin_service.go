@@ -15,6 +15,7 @@ import (
 	"forklift-training/internal/filestore"
 	"forklift-training/internal/model"
 	"forklift-training/internal/notification"
+	"forklift-training/internal/scope"
 	"forklift-training/internal/sortorder"
 )
 
@@ -36,9 +37,10 @@ func NewAdminService(db *gorm.DB, fileSvc *filestore.FileStore, notifSvc *notifi
 }
 
 // GetCourses 管理端课程列表。filter 支持 hot|featured|all（空串 = all；#1096：显式参数，不再是变参）。
-func (s *AdminService) GetCourses(page, pageSize int, keyword string, credentialID, specialtyID, levelID *int, filter string) (CoursePageResult, error) {
+func (s *AdminService) GetCourses(page, pageSize int, keyword string, credentialID, specialtyID, levelID *int, category scope.CategoryFilter, filter string) (CoursePageResult, error) {
 	return ListCourses(s.db, page, pageSize, CourseListOptions{
-		Keyword: keyword, CredentialID: credentialID, SpecialtyID: specialtyID, LevelID: levelID, Filter: filter, DefaultPageSize: 10,
+		Keyword: keyword, CredentialID: credentialID, SpecialtyID: specialtyID, LevelID: levelID,
+		CategoryFilter: category, Filter: filter, WithPublicState: true, DefaultPageSize: 10,
 	})
 }
 
@@ -50,8 +52,12 @@ func (s *AdminService) GetCourseDetail(courseID int) (*AdminCourseDetailDTO, err
 	}
 	detail := CourseToDTO(course)
 	fillCourseMeta(s.db, course, &detail)
+	items := []CourseDTO{detail}
+	if err := FillCoursePublicStates(s.db, items); err != nil {
+		return nil, err
+	}
 	return &AdminCourseDetailDTO{
-		CourseDTO: detail,
+		CourseDTO: items[0],
 		Chapters:  chapterList,
 	}, nil
 }
@@ -147,6 +153,9 @@ func (s *AdminService) CreateCourse(in *CourseInput) (*CourseDTO, error) {
 	result := CourseToDTO(&course)
 	fillChapterCount(s.db, course.CourseID, &result)
 	FillPrereqIDs(s.db, course.CourseID, &result)
+	if err := FillCoursePublicState(s.db, &result); err != nil {
+		return nil, err
+	}
 	return &result, nil
 }
 
@@ -191,9 +200,6 @@ func (s *AdminService) UpdateCourse(courseID int, in *CourseInput) (*CourseDTO, 
 	if err := applyCourseTrainingFields(s.db, &course, in); err != nil {
 		return nil, err
 	}
-	if in.Status != nil && *in.Status == 1 && course.CategoryID == nil {
-		return nil, ErrCourseCategoryRequired
-	}
 	// 改类型必须有内容级证据（#2760 内容级互斥）：类型与章节内容同质是**不变式**，不是
 	// 只在建课时成立的一次性校验。否则管理员在图文课里挂了 3 个视频章节，再把类型改成
 	// video 就悄悄合规了——那正是「一门课既有图文又有视频」要防的形态。
@@ -221,6 +227,9 @@ func (s *AdminService) UpdateCourse(courseID int, in *CourseInput) (*CourseDTO, 
 	result := CourseToDTO(&course)
 	fillChapterCount(s.db, courseID, &result)
 	FillPrereqIDs(s.db, courseID, &result)
+	if err := FillCoursePublicState(s.db, &result); err != nil {
+		return nil, err
+	}
 	return &result, nil
 }
 
