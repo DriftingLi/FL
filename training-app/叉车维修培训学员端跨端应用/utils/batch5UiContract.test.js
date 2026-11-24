@@ -151,11 +151,11 @@ describe('批5 特殊页头形态（app-nav-bar 槽位承载）', () => {
     expect(s).toMatch(/class="create-pill-hit"[\s\S]{0,120}?@click="onCreate"/);
   });
 
-  it('dashboard 页头下方有证件业务栏（证件、搜索、商城保留并下移，不塞回 AppNavBar）', () => {
+  it('dashboard 共享页头左槽承载 HRWAI 品牌，证件、搜索、商城仍下移业务栏', () => {
     const s = read('pages/dashboard/dashboard.uvue');
     expect(s).not.toMatch(/:right-icons="/);
     expect(s).not.toMatch(/nav-bell/);
-    expect(s).not.toMatch(/<template #left>/);
+    expect(s).toMatch(/<template #left>[\s\S]*?dashboard-brand[\s\S]*?<\/template>/);
     expect(s).toContain('class="credential-bar"');
     expect(s).toMatch(/class="credential-picker"[^>]*@click="onCertTap"/);
     expect(s).toContain('@click="onHeaderSearch"');
