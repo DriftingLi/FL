@@ -134,9 +134,11 @@ describe('AI 助手「功能入口常驻」契约（#998）', () => {
     });
 
     it('把 func-fab 加回来的变形样本会被检出（防检测器空跑假绿）', () => {
+      // 锚点只取主区开标签的**前缀**，不写死属性收尾（#2788 给主区加了 :class 双态绑定，
+      // 写死 '<view class="main">' 会让这条「检出器自检」自己变红 —— 它防的是检测器空跑，不是钉模板字面量）
       const broken = stripCodeComments(PAGE).replace(
-        '<view class="main">',
-        '<view class="func-fab">功能</view>\n\t\t<view class="main">'
+        '<view class="main"',
+        '<view class="func-fab">功能</view>\n\t\t<view class="main"'
       );
       expect(broken).toMatch(/func-fab/);
     });

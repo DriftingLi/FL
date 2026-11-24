@@ -45,9 +45,11 @@
 			</view>
 		</view>
 
-		<!-- 主内容区 -->
-		<view class="main">
-			<scroll-view class="pro-scroll" scroll-y="true" :scroll-into-view="scrollIntoViewId" scroll-with-animation>
+		<!-- 主内容区（#2788 双态：欢迎态主区随内容自适应 ⇒ 输入卡紧跟第三张提问卡；对话态吃满 ⇒ 输入卡贴底。
+		     两态只换样式类、不搬节点 —— 输入卡是主区的兄弟，仍在滚动容器**之外**（原生 input 一旦被搬进
+		     滚动容器，聚焦时的同层渲染与重建丢字两件事都会回来，见票面否决 ①）。 -->
+		<view class="main" :class="isWelcomeState ? 'main-welcome' : ''">
+			<scroll-view class="pro-scroll" :class="isWelcomeState ? 'scroll-welcome' : ''" scroll-y="true" :scroll-into-view="scrollIntoViewId" scroll-with-animation>
 				<!-- 诊断空态欢迎区（#2296，随专项 scope 并入 #2593）：品牌快选 + 常见问题。
 				     取数失败 / health.ok=false 时 guideVisible 为 false ⇒ **整块不渲染**（不留「点了必失败」的按钮）。 -->
 				<view v-if="isDiagnosis && guideVisible && messages.length == 0" class="welcome-area">
@@ -241,6 +243,14 @@
 		const s = currentSession.value
 		return s == null ? 0 : s.id
 	})
+
+	// 输入卡双态的**唯一判据**（#2788 / 讨论纪要 D5 D6）：还没发过任何消息、且不在专项通道里。
+	// - 欢迎态：主区高度随内容自适应 ⇒ 输入卡落在三张快捷提问之后、下方自然留白；
+	// - 对话态：发出第一条消息即切（清空重开也回欢迎态 —— 空对话就是从欢迎页重新开始）；
+	//   专项通道恒对话态（专项有自己的诊断欢迎区 .welcome-area，输入卡贴底是改前行为，逐字不动）。
+	// 两态只换样式类、不搬节点、不监听键盘：#2787 之后的输入卡已是页面兄弟节点，换 class 不重建组件，
+	// 学员手打未发出的字（draftText）不会丢；键盘高度由微信自身处理，再叠一层补偿会把输入区顶出屏幕（ADR-0073）。
+	const isWelcomeState = computed<boolean>(() : boolean => !isScoped.value && messages.value.length == 0)
 
 
 	// 等待态（#2298 / #2389）：三件事一块做 ——
@@ -973,6 +983,14 @@
 		flex: 1;
 	}
 
+	/* #2788 欢迎态：主区**不再吃满** —— flex-grow 归零 + 基准高度回到 auto，高度就只等于内容
+	   （宫格 + 三张提问卡），作为兄弟的输入卡自然紧跟其后、下方留白。shrink 保持默认 1：
+	   万一内容高过视口（极小屏 / 系统字体放大），先压滚动区，而不是把输入卡顶出屏幕。 */
+	.main-welcome {
+		flex-grow: 0;
+		flex-basis: auto;
+	}
+
 	.pro-scroll {
 		flex: 1;
 		/* #998：必须 height:0 + flex:1（同 ai-settings.uvue 的 .content-scroll）——只给 flex:1 时
@@ -980,6 +998,14 @@
 		   而 scroll-into-view 仍会视觉上跳到底部，所以看起来「能滚」。 */
 		height: 0;
 		padding: 24rpx;
+	}
+
+	/* 同上（#2788）：欢迎态把零基准高度放回 auto，滚动容器才「等于内容高度」、没有余量可滚。
+	   基础规则里的 flex:1 + height:0 是对话态的根（#998 真机血账：只写 flex:1 会滚不动），别动它。 */
+	.scroll-welcome {
+		flex-grow: 0;
+		flex-basis: auto;
+		height: auto;
 	}
 
 	.function-grid {
