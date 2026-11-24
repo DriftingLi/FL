@@ -92,6 +92,54 @@ function FactOf([string]$text, [string]$key) {
     return $m.Groups[1].Value
 }
 
+# ---------- 0) 陈旧索引锁检查（#2802 血账）----------
+# 0 字节的 index.lock + 没有 git 进程 = 上一次 git 被强杀留下的残锁。它的坏处不是报错而是**静默**：
+# `git checkout --` / `git merge --ff-only` 打一行 error 就返回，调用方看起来像做成了（#2802 实测：
+# 回滚后工作树依旧脏、merge 打印 `Updating 3bf0186f..1f4edc97` 然后失败，收尾却一路 verdict=ok）。
+# 判据在 lib/dev-close.mjs 的 judgeIndexLock（CI 全线 ubuntu，只有放 node 里才测得到）；本文件只采集
+# 路径 / 字节数 / 活 git 进程数，且**只在 -Yes 时**按 allow_remove 清 —— dry-run 只报事实，让人自己决定。
+$gitDirAbs = ('' + (& git -C $root rev-parse --absolute-git-dir 2>&1 | Out-String)).Trim()
+$lockPath = $(if ($gitDirAbs) { Join-Path $gitDirAbs 'index.lock' } else { '' })
+$lockBytes = -1
+if ($lockPath -and (Test-Path -LiteralPath $lockPath)) {
+    try { $lockBytes = [int](Get-Item -LiteralPath $lockPath -Force).Length } catch { $lockBytes = -1 }
+}
+$gitProcCount = @(Get-Process -Name git -ErrorAction SilentlyContinue).Count
+$lockJudge = Invoke-Core '--lock' ([ordered]@{
+    lockPath = $lockPath; lockExists = [bool]($lockBytes -ge 0); lockBytes = $lockBytes; gitProcs = $gitProcCount
+})
+Write-Host $lockJudge.Text
+$lockState = FactOf $lockJudge.Text 'state'
+if ($lockState -eq 'stale') {
+    $lockAllowRemove = (FactOf $lockJudge.Text 'allow_remove') -eq 'true'
+    if ($Yes -and $lockAllowRemove) {
+        # 删前重采一次（TOCTOU）：上面那次采集到现在这段时间里，别的会话完全可能起了 git。
+        # 过期的事实不许用来做删除决定 —— 复核不再是 stale 就放弃本次删除，留给下一轮。
+        $reBytes = -1
+        try { $reBytes = [int](Get-Item -LiteralPath $lockPath -Force).Length } catch { $reBytes = -1 }
+        $reProcs = @(Get-Process -Name git -ErrorAction SilentlyContinue).Count
+        $reJudge = Invoke-Core '--lock' ([ordered]@{
+            lockPath = $lockPath; lockExists = [bool]($reBytes -ge 0); lockBytes = $reBytes; gitProcs = $reProcs
+        })
+        $reState = FactOf $reJudge.Text 'state'
+        if ($reState -ne 'stale' -or (FactOf $reJudge.Text 'allow_remove') -ne 'true') {
+            Write-Host "[dev-close] 删前复核发现锁状态已变（state=$reState），本次不删：$lockPath" -ForegroundColor Yellow
+        } else {
+            try {
+                Remove-Item -LiteralPath $lockPath -Force -ErrorAction Stop
+                Write-Host "[dev-close] 陈旧索引锁已清理（删前复核仍为 0 字节且无 git 进程）：$lockPath" -ForegroundColor Yellow
+            } catch {
+                Write-Host "[dev-close] 陈旧索引锁清理失败（别硬来，人工确认后再删）：$($_.Exception.Message)" -ForegroundColor Yellow
+            }
+        }
+    } else {
+        Write-Host "[dev-close] 陈旧索引锁在 $lockPath（dry-run 不清；确认无 git 进程后加 -Yes 才清）" -ForegroundColor Yellow
+    }
+} elseif ($lockState -eq 'busy' -or $lockState -eq 'orphan' -or $lockState -eq 'unreadable') {
+    # 活锁 / 非零残锁 / 读不到 —— 三种都不许动，只提醒：动了就是对别的会话下手。
+    Write-Host "[dev-close] 索引锁存在但不可清理（state=$lockState）：$lockPath —— 等占用方自己结束，别删" -ForegroundColor Yellow
+}
+
 # ---------- 1) 采集事实（只采集，不判断）----------
 $wtList = '' + (& git -C $root worktree list --porcelain 2>&1 | Out-String)
 $unmerged = ''

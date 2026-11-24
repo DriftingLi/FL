@@ -16,7 +16,7 @@ import { readdirSync, readFileSync, existsSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { decide, judgeVerdict, parseRemoveJson, findTargetTree, resolveTree, shortRef, SCRIPT_REF_RE } from './lib/dev-close.mjs'
+import { decide, judgeVerdict, judgeIndexLock, parseRemoveJson, findTargetTree, resolveTree, shortRef, SCRIPT_REF_RE } from './lib/dev-close.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(here, '..')
@@ -564,4 +564,30 @@ test('L18 对账分支不许绕过 noop，也不许把「无动作」贴到红�
   assert.equal(unreadable.verdict, 'red', '读不到就是 fail-closed 红')
   assert.equal(unreadable.ok, false)
   assert.doesNotMatch(unreadable.line, /no-pending-action/)
+})
+
+// L3 陈旧索引锁腿（#2802 血账）：静默失败的那一格。只有「0 字节 + 没有 git 进程」才放行删除；
+// 活锁、非零残锁、读不到三种都不许动 —— 动了就是对别的会话下手。断言里不出现非 ASCII 字面量。
+test('stale index lock: only zero-byte with no git process is removable', () => {
+  const absent = judgeIndexLock({ lockExists: false, lockBytes: -1, gitProcs: 0 })
+  assert.equal(absent.state, 'absent')
+  assert.equal(absent.allowRemove, false)
+
+  const stale = judgeIndexLock({ lockPath: 'D:/FL/.git/index.lock', lockExists: true, lockBytes: 0, gitProcs: 0 })
+  assert.equal(stale.state, 'stale')
+  assert.equal(stale.allowRemove, true)
+  assert.match(stale.line, /^LOCK_CHECK state=stale bytes=0 git_procs=0 allow_remove=true reason=zero-byte-no-git/)
+
+  const busy = judgeIndexLock({ lockExists: true, lockBytes: 0, gitProcs: 2 })
+  assert.equal(busy.state, 'busy')
+  assert.equal(busy.allowRemove, false, 'live git holds the lock: never remove')
+  assert.match(busy.line, /reason=git-running/)
+
+  const orphan = judgeIndexLock({ lockExists: true, lockBytes: 12, gitProcs: 0 })
+  assert.equal(orphan.state, 'orphan')
+  assert.equal(orphan.allowRemove, false, 'non-empty lock may belong to another tool')
+
+  const unreadable = judgeIndexLock({ lockExists: true, lockBytes: -1, gitProcs: 0 })
+  assert.equal(unreadable.state, 'unreadable')
+  assert.equal(unreadable.allowRemove, false)
 })
