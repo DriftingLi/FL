@@ -71,8 +71,10 @@
 					</view>
 				</view>
 
-				<!-- 快捷提示语（通用 scope 专有：专项 scope 有自己的欢迎区） -->
-				<view v-if="!isScoped" class="prompt-list">
+				<!-- 快捷提示语（通用 scope 的**欢迎态**专有：#2814 起对话态整块不渲染，专项 scope 有自己的欢迎区）。
+				     判据直接复用 isWelcomeState（#2788 的双态唯一判据），不另写 !isScoped + 消息数 —— 两处各写一份
+				     就会出现「主区已切对话态、提问卡还挂在消息上方」的半态。 -->
+				<view v-if="isWelcomeState" class="prompt-list">
 					<view v-for="(p, idx) in quickPrompts" :key="idx" class="prompt-card" @click="sendText(p)">
 						<text class="prompt-text">{{ p }}</text>
 						<text class="prompt-arrow">&#8250;</text>
@@ -250,6 +252,7 @@
 
 	// 输入卡双态的**唯一判据**（#2788 / 讨论纪要 D5 D6）：还没发过任何消息、且不在专项通道里。
 	// - 欢迎态：主区高度随内容自适应 ⇒ 输入卡落在三张快捷提问之后、下方自然留白；
+	//   #2814 起三张提问卡本身也由本判据控制可见性（对话态连卡带区一起让位给消息列表）；
 	// - 对话态：发出第一条消息即切（清空重开也回欢迎态 —— 空对话就是从欢迎页重新开始）；
 	//   专项通道恒对话态（专项有自己的诊断欢迎区 .welcome-area，输入卡贴底是改前行为，逐字不动）。
 	// 两态只换样式类、不搬节点、不监听键盘：#2787 之后的输入卡已是页面兄弟节点，换 class 不重建组件，
