@@ -155,6 +155,10 @@ mock 只在同一 session 内有效；`reLaunch` / 重连后失效，重跑前�
 4. **`$$('view')` 只到页面级** ⇒ 别用「数节点」证明渲染正常，要读组件 `$scope.data`。
 5. **截图不是证据** ⇒ A1 之后 PR 正文只留门读数行；截图放会话或仓外临时目录，别进仓库。
 6. **仓外装依赖** ⇒ automator 不写进 `package.json`，否则会被当成生产依赖并过依赖门。
+7. **一个会话只被一个进程消费**（#2771 实测）⇒ `mp.disconnect()` 之后该自动化端口即失效，再 `connect` 报 `check if target project window is opened with automation enabled`。**探活与取证必须写在同一个脚本里**；「先跑 ping 脚本探活、再跑取证脚本」必然失败。
+8. **`√ auto` 之后 AppService 还要 ~30s 才响应**（#2771 实测）⇒ 立刻 connect 会一路 timeout。启动会话后先等 30s 以上再连；等待放在取证脚本的同一进程里，别用第二个脚本探活（见上一条）。
+9. **别抢用户前台**（#2771 用户纠正）⇒ 还原窗口用 `ShowWindow(h, SW_RESTORE)` 就够，**不要** `SetForegroundWindow`/最小化宿主窗口；要看窗口状态是否正常，用 `PrintWindow` 后台抓图（`pwsh` + `user32!PrintWindow`），不切前台也能拍。另：`cli.bat auto` 常把项目窗口留在最小化，`ShowWindow` 还原后 App.* 才恢复响应。
+10. **`--auto-port` 未必生效**（#2771 实测）⇒ 连不上时先 `netstat -ano | findstr LISTENING` 看真实监听端口（当时反复指定 9421/9422/…，实际只有 `:9420` 在听）。
 
 ## 与验收门的关系
 
