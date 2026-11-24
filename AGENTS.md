@@ -79,6 +79,8 @@ AI 安全审计用 DeepSec（Shield）。See `docs/agents/security-scan.md`.
   - 单文件：`npx jest --config <该套件所在腿的 config> <相对路径>`；按名加 `-t "片段"`。**选错腿的 config 会让 jest 当那个套件不存在**（0 套件，长得像绿）—— 套件归哪一腿问 `node scripts/classify-guards.mjs`
   - 审计 / 影响面（#2713 起的两个具名入口，均非门）：`npm run audit:spacing -- --all`（页面边距 / 卡内距 / 箭槽三件套机检，报 WARN / INFO / SKIP 三档，`--strict` 让 WARN 判红）；`npm run test:impact -- --changed`（改动面 → 受影响 jest 套件，区分 unit / behavior 腿）
   - 运行时面（① 真机 / ② 微信开发者工具——已于 #2320 退役 / ③ 契约门）另走别处、需真机环境，不在本命令射程——见下方「验收门」与移动端 `training-app/…/AGENTS.md`。
+  - **本地默认入口是 `npm run test:unit:changed`**（接线腿全量 + 行为腿**受影响子集**）；全量两腿只在门与 CI 跑（`npm run test:unit:gate`）。实测代价（#2802 本机）：unit 全量**通常约 1.3 min**（本批 7 次：中位 1.29 min、均值 1.53 min）、behavior 全量 **19–26 min**——慢是结构性的（`utils/*Behavior.test.js` 那批运行期守护会真起 `pwsh` 子进程、按 2 s / 5 s 有界预算撞 adb 超时，**不是卡住、也不会自愈**），裸跑 `npm test` 等它等于为同一份判据付两遍钱。
+  - 动手前按分支取这三份（不是每轮全读）：改 `.uvue` 选择器 / 样式语法 → 移动端 `docs/agents/uvue-css.md`（UCSS 子集；关系选择器要运行时计算、有性能损耗，祖先为复合类再跟后代时编译产物是死键）；看小程序真机/模拟器运行时或截图取证 → `docs/design/20261120-小程序端自动化取证方法（miniprogram-automator）.md`（含开发者工具真实路径与 automator 坑位）；查某套件归哪条腿、要不要给它加守护 → 移动端 `docs/agents/guards.md`。
 
 ## 验收门（合并前置）
 
