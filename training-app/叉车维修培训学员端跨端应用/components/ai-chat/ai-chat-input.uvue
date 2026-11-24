@@ -13,8 +13,7 @@
 				<text class="model-logo">&#10022;</text>
 				<text class="model-name">{{ modelName }}</text>
 				<text v-if="modelDesc.length > 0" class="model-desc">{{ modelDesc }}</text>
-				<image v-if="!modelReadonly && !modelPickerOpen" class="model-arrow-img" src="/static/icons/ai-chat/chevron-model.png" mode="aspectFit" />
-				<text v-if="!modelReadonly && modelPickerOpen" class="model-arrow-up">&#8963;</text>
+				<image v-if="!modelReadonly" class="model-arrow-img" :class="{ up: modelPickerOpen }" src="/static/icons/ai-chat/chevron-model.png" mode="aspectFit" />
 			</view>
 			<view class="action-group">
 				<view v-if="showImageButton" class="action-btn-hit" @click="onImageClick">
@@ -222,16 +221,18 @@
 		color: #9a9a9a;
 	}
 
+	/* #2809：切图本身是左向 ‹ —— rotate(-90deg) 逆时针把「左」转到「下」（收起态），
+	   rotate(90deg) 顺时针把「左」转到「上」（展开态）；两张态复用同一张图 + transform，
+	   不新增二进制资源，也不再混用文本符号（原先展开态是 ⌃ 字符）。 */
 	.model-arrow-img {
 		width: 34rpx;
 		height: 34rpx;
 		margin-left: 8rpx;
+		transform: rotate(-90deg);
 	}
 
-	.model-arrow-up {
-		font-size: 24rpx;
-		color: #999999;
-		margin-left: 8rpx;
+	.model-arrow-img.up {
+		transform: rotate(90deg);
 	}
 
 	.action-group {

@@ -1081,9 +1081,9 @@
 		lines: 1;
 	}
 
+	/* #2809：不设下边距 —— 与 .pro-scroll 的 padding-bottom 24rpx 重复，叠出 12.5px 死空。 */
 	.prompt-list {
 		flex-direction: column;
-		margin-bottom: 24rpx;
 	}
 
 	/* #2520：推荐问题卡按原型放宽（卡高 ≈ 100rpx、圆角 20rpx、行距 20rpx）。
