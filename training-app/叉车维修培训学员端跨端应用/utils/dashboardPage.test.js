@@ -2,7 +2,7 @@
  * 首页（dashboard 模块）静态契约测试——对照设计稿截图的页面格式
  *
  * .uvue 无法在 jest 中渲染，故以源码文本断言三类契约：
- * 1) 格式契约：顶部图标可见、公告栏存在、四列宫格、新闻标题下划线、填充式筛选胶囊、绿色热销标签
+ * 1) 格式契约：顶部品牌与操作区可见、无公告栏、四列宫格、新闻标题下划线、填充式筛选胶囊、绿色热销标签
  * 2) 跳转契约：写死的 url 均已在 pages.json 注册
  * 3) uvue 兼容性：样式仅使用 uni-app-x 原生渲染器支持的 CSS 子集，且无死样式
  *
@@ -89,8 +89,11 @@ function menuEntries() {
 }
 
 describe('首页格式契约（对照设计稿截图）', () => {
-  it('证件、搜索、商城下移到独立业务栏，页头不承载证件或动作', () => {
-    expect(template).not.toMatch(/<template #left>/);
+  it('HRWAI 品牌切图落在共享页头左槽，证件与动作仍留在业务栏', () => {
+    const left = /<template #left>([\s\S]*?)<\/template>/.exec(template);
+    expect(left).not.toBeNull();
+    expect(left[1]).toContain('class="dashboard-brand"');
+    expect(left[1]).toContain('src="/static/icons/dashboard/hrwai-brand.png"');
     expect(template).not.toMatch(/nav-bell/);
     expect(template).not.toMatch(/onNotificationClick/);
     expect(template).not.toMatch(/:right-icons="/);
@@ -98,21 +101,61 @@ describe('首页格式契约（对照设计稿截图）', () => {
     expect(template).toContain('class="credential-picker"');
     expect(template).toContain('@click="onHeaderSearch"');
     expect(template).toContain('@click="onHeaderMall"');
+    expect(styleBlock).toMatch(/\.dashboard-brand\s*\{[^}]*width:\s*58rpx/);
+    expect(styleBlock).toMatch(/\.dashboard-brand\s*\{[^}]*height:\s*68rpx/);
+    expect(styleBlock).toMatch(/\.dashboard-brand\s*\{[^}]*margin-left:\s*16rpx/);
+    const asset = path.join(ROOT, 'static', 'icons', 'dashboard', 'hrwai-brand.png');
+    expect(fs.existsSync(asset)).toBe(true);
+    expect(fs.statSync(asset).size).toBeGreaterThan(0);
   });
 
-  it('证件胶囊尺寸与文字箭头保持统一，浅蓝胶囊可容纳动态证件名', () => {
-    expect(styleBlock).toMatch(/\.credential-picker\s*\{[^}]*height:\s*72rpx/);
-    expect(styleBlock).toMatch(/\.credential-picker\s*\{[^}]*background-color:\s*\$primary-tint/);
-    expect(styleBlock).toMatch(/\.credential-picker\s*\{[^}]*border-radius:\s*\$radius-pill/);
+  it('证件栏为原型纯文本形态：88rpx 命中行、无胶囊底色、下拉箭头用切图', () => {
+    expect(template).toContain('class="credential-arrow"');
+    expect(template).toContain('src="/static/icons/dashboard/credential-arrow.png"');
+    expect(template).not.toContain('class="credential-arrow">⌄');
+    expect(styleBlock).toMatch(/\.credential-picker\s*\{[^}]*height:\s*88rpx/);
+    expect(styleBlock).not.toMatch(/\.credential-picker\s*\{[^}]*background-color/);
+    expect(styleBlock).not.toMatch(/\.credential-picker\s*\{[^}]*border-radius/);
+    expect(styleBlock).not.toMatch(/\.credential-picker\s*\{[^}]*padding/);
     expect(styleBlock).toMatch(/\.credential-name\s*\{[^}]*font-size:\s*32rpx/);
-    expect(styleBlock).toMatch(/\.credential-arrow\s*\{[^}]*font-size:\s*32rpx/);
+    expect(styleBlock).toMatch(/\.credential-name\s*\{[^}]*color:\s*\$text-color/);
+    expect(styleBlock).toMatch(/\.credential-arrow\s*\{[^}]*width:\s*24rpx/);
+    expect(styleBlock).toMatch(/\.credential-arrow\s*\{[^}]*height:\s*24rpx/);
+    expect(styleBlock).toMatch(/\.credential-arrow\s*\{[^}]*margin-left:\s*14rpx/);
+    const asset = path.join(ROOT, 'static', 'icons', 'dashboard', 'credential-arrow.png');
+    expect(fs.existsSync(asset)).toBe(true);
+    expect(fs.statSync(asset).size).toBeGreaterThan(0);
   });
 
-  it('导航下方有公告栏（icon + 文案 + 箭头）', () => {
-    expect(template).toContain('class="notice-bar"');
-    expect(template).toContain('class="notice-icon"');
-    expect(template).toContain('class="notice-text"');
-    expect(template).toContain('class="notice-arrow"');
+  it('搜索与商城使用原型线性切图，88rpx 命中区不重叠且图标边缘归属正确', () => {
+    expect(template).toContain('src="/static/icons/dashboard/header-search.png"');
+    expect(template).toContain('src="/static/icons/dashboard/header-mall.png"');
+    expect(template).toContain('class="header-action header-action--search"');
+    expect(template).not.toContain('/static/icons/mall/search.png');
+    expect(template).not.toContain('/static/icons/dashboard/grid-course-mall.png');
+    expect(styleBlock).toMatch(/\.header-action\s*\{[^}]*position:\s*relative/);
+    expect(styleBlock).toMatch(/\.header-action\s*\{[^}]*width:\s*88rpx/);
+    expect(styleBlock).toMatch(/\.header-action\s*\{[^}]*height:\s*88rpx/);
+    expect(styleBlock).toMatch(/\.header-action-icon\s*\{[^}]*position:\s*absolute/);
+    expect(styleBlock).toMatch(/\.header-action-icon\s*\{[^}]*top:\s*28rpx/);
+    expect(styleBlock).toMatch(/\.header-action-icon\s*\{[^}]*width:\s*32rpx/);
+    expect(styleBlock).toMatch(/\.header-action-icon\s*\{[^}]*height:\s*32rpx/);
+    expect(styleBlock).toMatch(/\.header-actions\s*\{[^}]*margin-right:\s*-13rpx/);
+    expect(styleBlock).toMatch(/\.header-action--search\s+\.header-action-icon\s*\{[^}]*right:\s*0/);
+    expect(styleBlock).toMatch(/\.header-action--mall\s+\.header-action-icon\s*\{[^}]*left:\s*18rpx/);
+    expect(styleBlock).not.toMatch(/\.header-action--mall\s*\{[^}]*margin-left/);
+    for (const name of ['header-search.png', 'header-mall.png']) {
+      const asset = path.join(ROOT, 'static', 'icons', 'dashboard', name);
+      expect(fs.existsSync(asset)).toBe(true);
+      expect(fs.statSync(asset).size).toBeGreaterThan(0);
+    }
+  });
+
+  it('原型第二行后无公告栏，Banner 是滚动内容首项', () => {
+    expect(template).not.toMatch(/notice-bar|notice-icon|notice-text|notice-arrow|onNoticeClick/);
+    expect(styleBlock).not.toMatch(/\.notice-/);
+    expect(script).not.toContain('function onNoticeClick()');
+    expect(template.indexOf('class="banner"')).toBeGreaterThan(template.indexOf('class="credential-bar"'));
   });
 
   it('功能宫格为四列（25% 宽），不包含首页全局搜索入口', () => {
@@ -183,8 +226,9 @@ describe('首页格式契约（对照设计稿截图）', () => {
     expect(styleBlock).toMatch(/\.page-footer-space\s*\{[^}]*height:\s*120rpx/);
   });
 
-  it('banner 两侧留白为 37rpx', () => {
-    expect(styleBlock).toMatch(/\.banner\s*\{[^}]*margin:\s*24rpx 37rpx/);
+  it('banner 顶部贴住第二行、两侧留白 37rpx、圆角走大号 token', () => {
+    expect(styleBlock).toMatch(/\.banner\s*\{[^}]*margin:\s*0 37rpx/);
+    expect(styleBlock).toMatch(/\.banner\s*\{[^}]*border-radius:\s*\$radius-xl/);
   });
 });
 

@@ -430,10 +430,9 @@ describe('页头形态（#2442 / #2761）', () => {
     const forum = h.read('pages/forum/forum.uvue');
     expect(forum).toMatch(/<template #left>[\s\S]*?msg-icon-wrap/);
     expect(forum).not.toMatch(/<template #right>/);
-    // dashboard 的证件、搜索、商城统一下移到独立业务栏；
-    // AppNavBar 左右槽保持为空，不把证件或动作塞回页头。
+    // dashboard 左槽只承载品牌展示；证件、搜索、商城仍统一下移到独立业务栏。
     const dash = h.read('pages/dashboard/dashboard.uvue');
-    expect(dash).not.toMatch(/<template #left>/);
+    expect(dash).toMatch(/<template #left>[\s\S]*?dashboard-brand[\s\S]*?<\/template>/);
     expect(dash).not.toMatch(/nav-bell/);
     expect(dash).not.toMatch(/:right-icons=/);
     expect(dash).toMatch(/class="credential-bar"/);

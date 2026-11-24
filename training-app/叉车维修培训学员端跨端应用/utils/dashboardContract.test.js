@@ -375,7 +375,7 @@ describe('行为保持点（手术偏离与回退风险的显式钉锁）', () =
     for (const lv of ['五级', '四级', '三级', '二级', '一级']) expect(dd).toContain(lv);
   });
 
-  it('跳转语义保持：宫格默认 reLaunch（#1846 例外：搜索格 push 走 navigateTo）、课程/新闻 navigateTo、公告与更多同路 featured-list', () => {
+  it('跳转语义保持：宫格默认 reLaunch（#1846 例外：搜索格 push 走 navigateTo）、课程/新闻 navigateTo、更多资讯走 featured-list', () => {
     const menu = read('pages/dashboard/components/dashboard-menu-grid.uvue');
     expect(menu).toContain('uni.reLaunch({ url: item.path })');
     // #1846：搜索格压栈语义在 searchContract M2 钉住（navigateTo 字面量断言），此处只锁默认档不回退
@@ -385,7 +385,7 @@ describe('行为保持点（手术偏离与回退风险的显式钉锁）', () =
     expect(course).toContain("defineEmits(['openFilter', 'courseOpen'])");
     expect(page).toContain("url: '/pages/courses/course-detail?id=' + course.course_id.toString()");
     expect(page).toContain("url: '/pages/featured/featured-detail?id=' + news.content_id.toString()");
-    expect((page.match(/\/pages\/featured\/featured-list/g) || []).length).toBe(2);
+    expect((page.match(/\/pages\/featured\/featured-list/g) || []).length).toBe(1);
   });
 });
 

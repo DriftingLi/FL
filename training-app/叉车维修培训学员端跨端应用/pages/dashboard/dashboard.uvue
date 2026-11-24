@@ -1,31 +1,25 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <!-- #1602 迁移：页头收口到 app-nav-bar（唯一页头件，ADR-0035 禁 fork）。
-             状态栏占位由页头件内化；搜索、商城与证件放在页头下方独立业务栏。 -->
-        <!-- 一级页页头仅保留状态栏与88rpx导航行；证件、搜索、商城移至下方独立业务栏。 -->
-        <AppNavBar variant="plain" transparent :left-icon="''" />
+        <!-- 页头继续复用 app-nav-bar（ADR-0035）；品牌走左槽，证件与动作留在下方业务栏。 -->
+        <AppNavBar variant="plain" transparent :left-icon="''">
+            <template #left>
+                <image class="dashboard-brand" src="/static/icons/dashboard/hrwai-brand.png" mode="aspectFit"></image>
+            </template>
+        </AppNavBar>
 
         <view class="credential-bar">
             <view class="credential-picker" @click="onCertTap">
                 <text class="credential-name">{{ currentCert }}</text>
-                <text class="credential-arrow">⌄</text>
+                <image class="credential-arrow" src="/static/icons/dashboard/credential-arrow.png" mode="aspectFit"></image>
             </view>
             <view class="header-actions">
-                <view class="header-action" @click="onHeaderSearch">
-                    <image class="header-action-icon" src="/static/icons/mall/search.png" mode="aspectFit"></image>
+                <view class="header-action header-action--search" @click="onHeaderSearch">
+                    <image class="header-action-icon" src="/static/icons/dashboard/header-search.png" mode="aspectFit"></image>
                 </view>
-                <view class="header-action" @click="onHeaderMall">
-                    <image class="header-action-icon header-mall-icon" src="/static/icons/dashboard/grid-course-mall.png"
-                        mode="aspectFit"></image>
+                <view class="header-action header-action--mall" @click="onHeaderMall">
+                    <image class="header-action-icon" src="/static/icons/dashboard/header-mall.png" mode="aspectFit"></image>
                 </view>
             </view>
-        </view>
-
-        <!-- 公告栏 -->
-        <view class="notice-bar" @click="onNoticeClick">
-            <text class="notice-icon">📢</text>
-            <text class="notice-text">叉车维修培训开课通知，欢迎报名学习</text>
-            <text class="notice-arrow">›</text>
         </view>
 
         <!-- 证件选择面板（共享领域件 cert-selector，#1395 提升搬家）
@@ -220,11 +214,6 @@
     function onMoreNews() : void {
         uni.navigateTo({ url: '/pages/featured/featured-list' })
     }
-
-    // ---- 公告栏点击 ----
-    function onNoticeClick() : void {
-        uni.navigateTo({ url: '/pages/featured/featured-list' })
-    }
 </script>
 
 <style lang="scss">
@@ -243,7 +232,14 @@
     /* #1602 迁移：状态栏占位与页头骨架（旧页头那组样式）已整体收口进 app-nav-bar，
        页内不再自持页头形态与角标样式。 */
 
-    /* Figma 页头下方证件/搜索/商城栏：整行88rpx；证件胶囊72rpx（约36px）。 */
+    /* 原型 404_2195：品牌图 29×34pt；页头左内容起点为 24rpx，补 16rpx 对齐 20px。 */
+    .dashboard-brand {
+        width: 58rpx;
+        height: 68rpx;
+        margin-left: 16rpx;
+    }
+
+    /* Figma 页头下方证件/搜索/商城栏：整行88rpx，证件保持纯文本形态。 */
     .credential-bar {
         height: 88rpx;
         flex-direction: row;
@@ -253,37 +249,35 @@
     }
 
     .credential-picker {
-        height: 72rpx;
+        height: 88rpx;
         max-width: 520rpx;
         flex-direction: row;
         align-items: center;
-        background-color: $primary-tint;
-        border-radius: $radius-pill;
-        padding: 0 24rpx;
     }
 
     .credential-name {
         font-size: 32rpx;
         font-weight: 500;
-        color: #333333;
+        color: $text-color;
         max-width: 420rpx;
         lines: 1;
         text-overflow: ellipsis;
     }
 
     .credential-arrow {
-        font-size: 32rpx;
-        color: #666666;
-        margin-left: 12rpx;
-        margin-bottom: 4rpx;
+        width: 24rpx;
+        height: 24rpx;
+        margin-left: 14rpx;
     }
 
     .header-actions {
         flex-direction: row;
         align-items: center;
+        margin-right: -13rpx;
     }
 
     .header-action {
+        position: relative;
         width: 88rpx;
         height: 88rpx;
         align-items: center;
@@ -291,46 +285,24 @@
     }
 
     .header-action-icon {
+        position: absolute;
+        top: 28rpx;
         width: 32rpx;
         height: 32rpx;
     }
 
-    .header-mall-icon {
-        width: 44rpx;
-        height: 44rpx;
+    .header-action--search .header-action-icon {
+        right: 0;
     }
 
-    /* 公告栏 */
-    .notice-bar {
-        flex-direction: row;
-        align-items: center;
-        margin: 8rpx 40rpx 0;
-        padding: 10rpx 20rpx;
-    }
-
-    .notice-icon {
-        font-size: 30rpx;
-        margin-right: 12rpx;
-    }
-
-    .notice-text {
-        flex: 1;
-        font-size: 24rpx;
-        color: #333333;
-        lines: 1;
-        text-overflow: ellipsis;
-    }
-
-    .notice-arrow {
-        font-size: 30rpx;
-        color: #333333;
-        margin-left: 12rpx;
+    .header-action--mall .header-action-icon {
+        left: 18rpx;
     }
 
     /* Banner 海报 */
     .banner {
-        margin: 24rpx 37rpx;
-        border-radius: 16rpx;
+        margin: 0 37rpx;
+        border-radius: $radius-xl;
         overflow: hidden;
     }
 
