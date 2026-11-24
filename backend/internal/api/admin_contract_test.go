@@ -275,8 +275,18 @@ func TestAdminContract_UsersTutorsRecruiters(t *testing.T) {
 func TestAdminContract_StatisticsCoursesChapters(t *testing.T) {
 	t.Parallel()
 	r, _, token := newAdminContractEnv(t)
-	category := doWithToken(t, r, token, http.MethodPost, "/api/admin/catalog/categories", map[string]any{"name": "维修", "status": 1})
-	categoryID := jsonInt(t, adminObject(t, category, http.StatusCreated)["id"])
+	credential := doWithToken(t, r, token, http.MethodPost, "/api/admin/credential", map[string]any{
+		"code": "admin-contract-course", "name": "管理契约证件", "category": "special_operation", "status": 1,
+	})
+	credentialID := jsonInt(t, adminObject(t, credential, http.StatusCreated)["id"])
+	category := doWithToken(t, r, token, http.MethodPost, "/api/admin/catalog/categories", map[string]any{
+		"name": "维修", "status": 1, "legacy_credential_id": credentialID,
+	})
+	categoryObject := adminObject(t, category, http.StatusCreated)
+	categoryID := jsonInt(t, categoryObject["id"])
+	if got := jsonInt(t, categoryObject["legacy_credential_id"]); got != credentialID {
+		t.Fatalf("分类创建应回显证件映射, got %d want %d", got, credentialID)
+	}
 
 	rec := doWithToken(t, r, token, http.MethodGet, "/api/admin/statistics", nil)
 	stats := adminObject(t, rec, http.StatusOK)
@@ -315,9 +325,26 @@ func TestAdminContract_StatisticsCoursesChapters(t *testing.T) {
 	rec = doWithToken(t, r, token, http.MethodGet, "/api/admin/courses", nil)
 	assertKeysExact(t, adminObject(t, rec, http.StatusOK), "courses", "page", "pages", "total")
 
+	rec = doWithToken(t, r, token, http.MethodGet, fmt.Sprintf("/api/admin/courses?category_id=%d", categoryID), nil)
+	filtered := adminObject(t, rec, http.StatusOK)
+	if got := jsonInt(t, filtered["total"]); got != 2 {
+		t.Fatalf("按分类筛选应返回 2 门课, got %d", got)
+	}
+	var filteredCourses []map[string]json.RawMessage
+	if err := json.Unmarshal(filtered["courses"], &filteredCourses); err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range filteredCourses {
+		assertHasKeys(t, item, "category", "public_eligibility")
+	}
+	rec = doWithToken(t, r, token, http.MethodGet, "/api/admin/courses?category_id=bad", nil)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("非法分类筛选应 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+
 	rec = doWithToken(t, r, token, http.MethodGet, fmt.Sprintf("/api/admin/course/%d", courseID1), nil)
 	detail := adminObject(t, rec, http.StatusOK)
-	assertHasKeys(t, detail, "course_id", "name", "status", "chapters")
+	assertHasKeys(t, detail, "course_id", "name", "status", "chapters", "category", "public_eligibility")
 	var chapters []json.RawMessage
 	if err := json.Unmarshal(detail["chapters"], &chapters); err != nil {
 		t.Fatalf("chapters 不是数组: %v", err)

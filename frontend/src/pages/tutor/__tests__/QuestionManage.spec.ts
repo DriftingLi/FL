@@ -17,6 +17,9 @@ vi.mock('@/composables/useConfirm', () => ({
 vi.mock('@/api/credential', () => ({
   credentialApi: { listCredentials: vi.fn() },
 }))
+vi.mock('@/api/training', () => ({
+  trainingApi: { getCategories: vi.fn() },
+}))
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
@@ -28,6 +31,7 @@ vi.mock('@/stores/auth', () => ({
 
 import { questionBankApi } from '@/api/questionBank'
 import { credentialApi } from '@/api/credential'
+import { trainingApi } from '@/api/training'
 import QuestionManage from '../QuestionManage.vue'
 
 function mountPage() {
@@ -38,26 +42,33 @@ beforeEach(() => {
   vi.mocked(credentialApi.listCredentials).mockResolvedValue({
     credentials: [{ id: 3, code: 'forklift_n1', name: '叉车司机N1证', description: '', category: 'special_operation', level: null, sort_order: 1, status: 1, created_at: '', updated_at: '' }],
   })
+  vi.mocked(trainingApi.getCategories).mockResolvedValue({
+    categories: [
+      { id: 11, name: '叉车安全', status: 1 },
+      { id: 12, name: '已停用分类', status: 0 }
+    ]
+  })
+  const question = {
+    id: 42,
+    type: 'single_choice' as const,
+    content: '题干',
+    options: null,
+    image_url: '',
+    status: 'published' as const,
+    reject_reason: '',
+    score: 3,
+    created_by: null,
+    created_by_type: 'tutor',
+    credential_id: 3,
+    category: { id: 11, name: '叉车安全', status: 1 },
+    public_eligibility: { eligible: true, reasons: [] },
+    created_at: '2026-08-31T10:00:00Z',
+    updated_at: '2026-08-31T10:00:00Z',
+  }
   // 票 6（ADR-0060 决策 6）：列表函数出口给的是中立容器 Page<T>，fixture 不再写域键
   vi.mocked(questionBankApi.getQuestions).mockResolvedValue({
     total: 1,
-    items: [
-      {
-        id: 42,
-        type: 'single_choice',
-        content: '题干',
-        options: null,
-        image_url: '',
-        status: 'published',
-        reject_reason: '',
-        score: 3,
-        created_by: null,
-        created_by_type: 'tutor',
-        credential_id: 3,
-        created_at: '2026-08-31T10:00:00Z',
-        updated_at: '2026-08-31T10:00:00Z',
-      },
-    ],
+    items: [question],
   })
 })
 
@@ -74,6 +85,7 @@ describe('QuestionManage 证件列与排序（#412）', () => {
     await flushPromises()
     const params = vi.mocked(questionBankApi.getQuestions).mock.calls[0][0]
     expect(params && params.sort).toBe('id_asc')
+    expect(params?.category_id).toBe('all')
   })
 })
 
@@ -102,7 +114,7 @@ describe('创建者列与「只看我创建的」（#2598）', () => {
     content: '题干',
     options: null,
     image_url: '',
-    status: 'published',
+    status: 'published' as const,
     reject_reason: '',
     score: 3,
     created_by: null,
@@ -160,5 +172,97 @@ describe('创建者列与「只看我创建的」（#2598）', () => {
     sw.vm.$emit('change', false)
     await flushPromises()
     expect(vi.mocked(questionBankApi.getQuestions).mock.calls.at(-1)?.[0]?.created_by).toBeUndefined()
+  })
+
+  it('分类筛选只列启用分类，并把分类 ID 与遗留桶传给后端', async () => {
+    const wrapper = mountPage()
+    await flushPromises()
+
+    const select = wrapper.findAllComponents({ name: 'UiSelect' })
+      .find(item => item.props('placeholder') === '全部培训分类')!
+    const options = select.props('options') as { label: string; value: string | number }[]
+    expect(options.map(option => option.label)).toEqual(['全部培训分类', '叉车安全', '未分类/分类失效'])
+    expect(options.map(option => option.value)).not.toContain(12)
+
+    await select.vm.$emit('update:modelValue', 11)
+    await select.vm.$emit('change', 11)
+    await flushPromises()
+    expect(vi.mocked(questionBankApi.getQuestions).mock.calls.at(-1)?.[0]?.category_id).toBe(11)
+
+    await select.vm.$emit('update:modelValue', 'legacy')
+    await select.vm.$emit('change', 'legacy')
+    await flushPromises()
+    expect(vi.mocked(questionBankApi.getQuestions).mock.calls.at(-1)?.[0]?.category_id).toBe('legacy')
+  })
+
+  it('列表并列 canonical 分类、审核状态、公开资格与全部原因，不把已发布当作已公开', async () => {
+    mockRows([questionRow({
+      category: { id: 11, name: '叉车安全', status: 1 },
+      status: 'published',
+      public_eligibility: {
+        eligible: false,
+        reasons: ['category_disabled', 'credential_disabled']
+      }
+    })])
+    const wrapper = mountPage()
+    await flushPromises()
+
+    const text = wrapper.text()
+    expect(text).toContain('叉车安全')
+    expect(text).toContain('审核状态')
+    expect(text).toContain('已发布')
+    expect(text).toContain('公开题库')
+    expect(text).toContain('未公开')
+    expect(text).toContain('培训分类已停用')
+    expect(text).toContain('映射证件已停用')
+    expect(text).not.toContain('已公开')
+  })
+
+  it('来源标签排除显示为未公开，即使题目已审核发布', async () => {
+    mockRows([questionRow({
+      status: 'published',
+      public_eligibility: { eligible: false, reasons: ['source_tag_excluded'] }
+    })])
+    const wrapper = mountPage()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('已发布')
+    expect(wrapper.text()).toContain('未公开')
+    expect(wrapper.text()).toContain('来源标签题不计入公开题库')
+  })
+
+  it('详情并列展示 canonical 分类、审核状态与全部公开原因', async () => {
+    mockRows([questionRow({
+      category: { id: 11, name: '叉车安全', status: 1 },
+      status: 'published',
+      public_eligibility: {
+        eligible: false,
+        reasons: ['category_unmapped', 'credential_missing']
+      }
+    })])
+    const wrapper = mountPage()
+    await flushPromises()
+
+    wrapper.findComponent({ name: 'ElDropdown' }).vm.$emit('command', 'view')
+    await flushPromises()
+
+    const dialog = wrapper.findComponent({ name: 'UiDialog' })
+    expect(dialog.text()).toContain('培训分类：叉车安全')
+    expect(dialog.text()).toContain('审核状态：已发布')
+    expect(dialog.text()).toContain('公开题库：未公开')
+    expect(dialog.text()).toContain('培训分类未映射证件')
+    expect(dialog.text()).toContain('映射证件不存在')
+  })
+
+  it('无 canonical 分类的题目回显到遗留桶文案', async () => {
+    mockRows([questionRow({
+      category: undefined,
+      public_eligibility: { eligible: false, reasons: ['category_missing'] }
+    })])
+    const wrapper = mountPage()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('未分类/分类失效')
+    expect(wrapper.text()).toContain('未设置培训分类')
   })
 })

@@ -12,6 +12,13 @@
     <UiCard variant="flat" padding="sm" class="mb-4">
       <div class="flex flex-wrap items-center gap-2">
         <UiSelect
+          v-model="categoryId"
+          :options="categoryOptions"
+          placeholder="全部培训分类"
+          class="!w-[200px]"
+          @change="onCategoryChange"
+        />
+        <UiSelect
           v-model="browseCredentialId"
           :options="credentialOptions"
           placeholder="所属证件"
@@ -71,6 +78,13 @@
         <el-table-column prop="type" label="题型" width="100">
           <template #default="{ row }">{{ (typeMap as Record<string, string>)[row.type] }}</template>
         </el-table-column>
+        <el-table-column label="培训分类" width="150">
+          <template #default="{ row }">
+            <UiTag :tone="row.category ? 'brand' : 'danger'" size="small" effect="plain">
+              {{ categoryNameOf(row) }}
+            </UiTag>
+          </template>
+        </el-table-column>
         <el-table-column label="证件" width="140">
           <template #default="{ row }">{{ credentials.find(c => c.id === row.credential_id)?.name || '—' }}</template>
         </el-table-column>
@@ -83,16 +97,21 @@
           </template>
         </el-table-column>
         <el-table-column prop="content" label="题干" show-overflow-tooltip />
-        <el-table-column label="状态" width="120">
+        <el-table-column label="审核状态" width="120">
           <template #default="{ row }">
             <UiTooltip
               v-if="row.status === 'draft' && row.reject_reason"
               :content="`驳回理由：${row.reject_reason}`"
               placement="top"
             >
-              <UiTag tone="danger">已驳回</UiTag>
+              <UiTag :tone="reviewStatusTone(row)">{{ reviewStatusLabel(row) }}</UiTag>
             </UiTooltip>
-            <UiTag v-else :tone="questionStatusTone[row.status]">{{ questionStatusMap[row.status] }}</UiTag>
+            <UiTag v-else :tone="reviewStatusTone(row)">{{ reviewStatusLabel(row) }}</UiTag>
+          </template>
+        </el-table-column>
+        <el-table-column label="公开题库" min-width="300">
+          <template #default="{ row }">
+            <PublicEligibility :eligibility="row.public_eligibility" show-reasons />
           </template>
         </el-table-column>
         <el-table-column label="操作" width="90" fixed="right" align="center">
@@ -124,6 +143,12 @@
     <UiDialog v-model="detailVisible" title="题目详情" width="600px">
       <div v-if="currentQuestion" class="flex flex-col gap-2 text-sm">
         <p><strong>题型：</strong>{{ typeMap[currentQuestion.type] }}</p>
+        <p><strong>培训分类：</strong>{{ categoryNameOf(currentQuestion) }}</p>
+        <p><strong>审核状态：</strong>{{ reviewStatusLabel(currentQuestion) }}</p>
+        <div class="flex items-start gap-2">
+          <strong>公开题库：</strong>
+          <PublicEligibility :eligibility="currentQuestion.public_eligibility" show-reasons />
+        </div>
         <p><strong>题干：</strong>{{ currentQuestion.content }}</p>
         <div v-if="currentQuestion.options">
           <p><strong>选项：</strong></p>
@@ -158,8 +183,10 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { questionBankApi } from '@/api/questionBank'
+import { questionBankApi, type QuestionsQuery } from '@/api/questionBank'
 import { credentialApi, type CredentialDict } from '@/api/credential'
+import { trainingApi, type TrainingCategoryDTO } from '@/api/training'
+import type { CategoryRef, Eligibility } from '@/api/generated/course'
 import type { Question } from '@/types/question'
 import { typeMap, questionTypeOptions, questionStatusOptions, questionStatusMap, questionStatusTone } from '@/constants/question'
 import UiPageHeader from '@/components/ui/UiPageHeader.vue'
@@ -179,18 +206,33 @@ import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 import UiSelect, { type UiSelectOption } from '@/components/ui/UiSelect.vue'
 import UiSwitch from '@/components/ui/UiSwitch.vue'
+import PublicEligibility from '@/components/catalog/PublicEligibility.vue'
 import { useAuthStore } from '@/stores/auth'
+
+type TutorQuestion = Question & {
+  category?: CategoryRef
+  public_eligibility?: Eligibility
+}
 
 const router = useRouter()
 
 const credentials = ref<CredentialDict[]>([])
+const categories = ref<TrainingCategoryDTO[]>([])
+const categoryId = ref<number | 'all' | 'legacy'>('all')
 /** 所属证件 → {label,value} */
 const credentialOptions = computed<UiSelectOption[]>(() =>
   credentials.value.map((c) => ({ label: c.name, value: c.id }))
 )
+const categoryOptions = computed<UiSelectOption[]>(() => [
+  { label: '全部培训分类', value: 'all' },
+  ...categories.value
+    .filter((category) => category.status !== 0)
+    .map((category) => ({ label: category.name, value: category.id })),
+  { label: '未分类/分类失效', value: 'legacy' }
+])
 /** 「浏览指定证件」：导师端筛选栏选择的证件（非「当前证件」——导师没有 current_credential_id）。 */
 const browseCredentialId = ref<number | null>(null)
-const questions = ref<Question[]>([])
+const questions = ref<TutorQuestion[]>([])
 const filters = ref({ type: '', status: '', keyword: '' })
 /**
  * 「只看我创建的」（#2598 C2）：把 created_by 传成当前讲师的 id，由服务端筛行集。
@@ -200,7 +242,7 @@ const mineOnly = ref(false)
 const authStore = useAuthStore()
 const currentUserId = computed(() => authStore.userInfo?.user_id ?? 0)
 const detailVisible = ref(false)
-const currentQuestion = ref<(Question & { reject_reason?: string }) | null>(null)
+const currentQuestion = ref<TutorQuestion | null>(null)
 
 // 三态 + 分页三件套收编 useAsyncPage（#401）：错误详情由拦截器统一 toast，loadError 降级 boolean
 const {
@@ -216,7 +258,13 @@ const {
   handlePageChange
 } = useAsyncPage(async () => {
   // #412：讲师端显式请求按 ID 升序，翻页时 ID 单调推进（默认「最新提交优先」保留给其它调用方）。
-  const params: any = { page: page.value, page_size: pageSize.value, sort: 'id_asc', ...filters.value }
+  const params: QuestionsQuery = {
+    page: page.value,
+    page_size: pageSize.value,
+    sort: 'id_asc',
+    category_id: categoryId.value,
+    ...filters.value
+  }
   if (browseCredentialId.value) params.credential_id = browseCredentialId.value
   // 「只看我创建的」：带自己的 id（0 表示身份还没落定，此时不筛也比筛出错好）
   if (mineOnly.value && currentUserId.value > 0) params.created_by = currentUserId.value
@@ -231,6 +279,7 @@ const {
 
 const hasFilters = computed(
   () =>
+    categoryId.value !== 'all' ||
     browseCredentialId.value !== null ||
     filters.value.type !== '' ||
     filters.value.status !== '' ||
@@ -241,6 +290,7 @@ const hasFilters = computed(
 onMounted(() => {
   loadData()
   loadCredentials()
+  loadCategories()
 })
 
 async function loadCredentials() {
@@ -252,6 +302,33 @@ async function loadCredentials() {
   }
 }
 
+async function loadCategories() {
+  try {
+    const data = await trainingApi.getCategories()
+    categories.value = (data.categories || []).filter((category) => category.status !== 0)
+  } catch (e) {
+    console.error('Failed to load training categories:', e)
+  }
+}
+
+function categoryNameOf(row: TutorQuestion): string {
+  if (!row.category) return '未分类/分类失效'
+  return row.category.status === 0 ? `${row.category.name}（已停用）` : row.category.name
+}
+
+function reviewStatusLabel(row: Question): string {
+  return row.status === 'draft' && row.reject_reason ? '已驳回' : questionStatusMap[row.status]
+}
+
+function reviewStatusTone(row: Question): 'danger' | 'neutral' | 'warning' | 'success' {
+  return row.status === 'draft' && row.reject_reason ? 'danger' : questionStatusTone[row.status]
+}
+
+function onCategoryChange() {
+  page.value = 1
+  loadData()
+}
+
 /** 切换「只看我创建的」：筛的是全量，必须回到第 1 页再取 */
 function applyMineFilter() {
   page.value = 1
@@ -259,6 +336,7 @@ function applyMineFilter() {
 }
 
 function resetFilters() {
+  categoryId.value = 'all'
   browseCredentialId.value = null
   filters.value = { type: '', status: '', keyword: '' }
   mineOnly.value = false

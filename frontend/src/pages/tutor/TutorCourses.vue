@@ -6,6 +6,13 @@
     >
       <template #actions>
         <UiSelect
+          v-model="categoryId"
+          :options="categoryOptions"
+          placeholder="全部培训分类"
+          class="!w-[200px]"
+          @change="onCategoryChange"
+        />
+        <UiSelect
           v-model="credentialId"
           :options="credentialOptions"
           placeholder="全部证件"
@@ -81,16 +88,22 @@
             >
               <template #tags>
                 <div class="mb-1 flex flex-wrap gap-1.5">
+                  <UiTag tone="brand">{{ categoryNameOf(course) }}</UiTag>
+                  <UiTag tone="neutral">{{ courseTypeNameOf(course.course_type) }}</UiTag>
+                  <UiTag :tone="course.status === 1 ? 'success' : 'neutral'">
+                    {{ course.status === 1 ? '已发布' : '未发布' }}
+                  </UiTag>
                   <UiTag v-if="levelNameOf(course.level_id)" :tone="LEVEL_TONE[levelTagType(levelNameOf(course.level_id))]">
                     {{ levelNameOf(course.level_id) }}
                   </UiTag>
-                  <UiTag v-if="specialtyNameOf(course.specialty_id)" tone="brand">
+                  <UiTag v-if="specialtyNameOf(course.specialty_id)" tone="neutral">
                     {{ specialtyNameOf(course.specialty_id) }}
                   </UiTag>
                   <UiTag v-if="credentialNameOf(course.credential_id)" tone="neutral">
                     {{ credentialNameOf(course.credential_id) }}
                   </UiTag>
                 </div>
+                <PublicEligibility :eligibility="course.public_eligibility" show-reasons />
               </template>
               <template #meta>
                 <div class="flex items-center justify-between gap-2 text-xs text-ink-3">
@@ -134,7 +147,7 @@
           <template #empty>
             <UiEmptyState
               title="暂无课程"
-              description="当前筛选条件下没有课程，试试切换专业方向或课程等级。"
+              description="当前筛选条件下没有课程，试试切换培训分类、专业方向或课程等级。"
               action-text="重置筛选"
               @action="resetFilters"
             />
@@ -151,7 +164,7 @@ import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { href } from '@/config/pages'
 import { tutorApi, type CourseDTO } from '@/api/tutor'
-import { trainingApi } from '@/api/training'
+import { trainingApi, type TrainingCategoryDTO } from '@/api/training'
 import { credentialApi, type CredentialDict } from '@/api/credential'
 import { levelTagType, type LevelTagType } from '@/constants/level'
 import { useCourseCatalog, treeCatalogAdapter } from '@/composables/useCourseCatalog'
@@ -159,6 +172,7 @@ import { useAsyncPage } from '@/composables/useAsyncPage'
 import FacetCard from '@/components/catalog/FacetCard.vue'
 import FacetItem from '@/components/catalog/FacetItem.vue'
 import CourseCard from '@/components/catalog/CourseCard.vue'
+import PublicEligibility from '@/components/catalog/PublicEligibility.vue'
 import UiPageHeader from '@/components/ui/UiPageHeader.vue'
 import UiSelect from '@/components/ui/UiSelect.vue'
 import UiTag from '@/components/ui/UiTag.vue'
@@ -175,6 +189,8 @@ type TutorCourseRow = CourseDTO
 const router = useRouter()
 const credentials = ref<CredentialDict[]>([])
 const credentialId = ref<number | string | undefined>(undefined)
+const categories = ref<TrainingCategoryDTO[]>([])
+const categoryId = ref<number | 'all' | 'legacy'>('all')
 const courses = ref<TutorCourseRow[]>([])
 
 // 三态 + 分页三件套收编 useAsyncPage（#401）：错误详情由拦截器统一 toast，retry 防重入由 composable 提供
@@ -191,15 +207,7 @@ const {
   handlePageChange
 } = useAsyncPage(
   async () => {
-    const params: Record<string, string | number> = {
-      page: page.value,
-      page_size: pageSize.value
-    }
-    const cid = credentialId.value
-    if (cid !== undefined && cid !== null && cid !== '') params.credential_id = Number(cid)
-    if (specialtyId.value !== null) params.specialty_id = specialtyId.value
-    if (levelId.value !== null) params.level_id = levelId.value
-    const res = await tutorApi.getCourses(params)
+    const res = await tutorApi.getCourses(courseQuery())
     return res
   },
   {
@@ -215,6 +223,28 @@ const {
 const credentialOptions = computed(() =>
   credentials.value.map((c) => ({ label: c.name, value: c.id as number | string }))
 )
+
+const categoryOptions = computed(() => [
+  { label: '全部培训分类', value: 'all' as const },
+  ...categories.value
+    .filter((category) => category.status !== 0)
+    .map((category) => ({ label: category.name, value: category.id })),
+  { label: '未分类/分类失效', value: 'legacy' as const }
+])
+
+const COURSE_TYPE_NAMES: Record<string, string> = {
+  video: '视频课程',
+  illustrated: '图文课程'
+}
+
+function categoryNameOf(course: TutorCourseRow): string {
+  if (!course.category) return '未分类/分类失效'
+  return course.category.status === 0 ? `${course.category.name}（已停用）` : course.category.name
+}
+
+function courseTypeNameOf(courseType: string): string {
+  return COURSE_TYPE_NAMES[courseType] || '其他课程'
+}
 
 /** el-tag type → UiTag tone。等级配色沿用学员端/管理端既有约定，不做改动。 */
 const LEVEL_TONE: Record<LevelTagType, 'brand' | 'success' | 'warning' | 'danger' | 'neutral'> = {
@@ -247,6 +277,19 @@ const {
   }
 })
 
+function courseQuery(): Record<string, string | number> {
+  const params: Record<string, string | number> = {
+    page: page.value,
+    page_size: pageSize.value,
+    category_id: categoryId.value
+  }
+  const cid = credentialId.value
+  if (cid !== undefined && cid !== null && cid !== '') params.credential_id = Number(cid)
+  if (specialtyId.value !== null) params.specialty_id = specialtyId.value
+  if (levelId.value !== null) params.level_id = levelId.value
+  return params
+}
+
 // credential_id 由生成契约声明为 number | null（未归属证件时后端回 null）
 function credentialNameOf(id?: number | null): string {
   if (!id) return ''
@@ -260,17 +303,32 @@ async function loadCredentials() {
   } catch {}
 }
 
+async function loadCategories() {
+  try {
+    const data = await trainingApi.getCategories()
+    categories.value = (data.categories || []).filter((category) => category.status !== 0)
+  } catch (e) {
+    console.error('Failed to load training categories:', e)
+  }
+}
+
 /** 重置筛选：直接写 ref 而非调 selectDirection/selectLevel，避免每次选择都触发一次 onSelect → loadCourses */
 function resetFilters() {
   specialtyId.value = null
   levelId.value = null
   credentialId.value = undefined
+  categoryId.value = 'all'
   page.value = 1
   loadCourses()
 }
 
 /** 证件下拉变化：UiSelect 未声明 change，监听器经 attrs 透传到内部 el-select */
 function onCredentialChange() {
+  page.value = 1
+  loadCourses()
+}
+
+function onCategoryChange() {
   page.value = 1
   loadCourses()
 }
@@ -313,7 +371,7 @@ function isConflict(e: unknown): boolean {
 /** 重取该课程的真实现状。列表是分页的，故只回填命中的那一行。 */
 async function reloadCourseRow(courseId: number) {
   try {
-    const res = await tutorApi.getCourses({ page: page.value, page_size: pageSize.value })
+    const res = await tutorApi.getCourses(courseQuery())
     const fresh = res.courses.find((c) => c.course_id === courseId)
     if (!fresh) return
     const row = courses.value.find((c) => c.course_id === courseId)
@@ -329,5 +387,6 @@ onMounted(() => {
   fetchCatalog()
   loadCourses()
   loadCredentials()
+  loadCategories()
 })
 </script>

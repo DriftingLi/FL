@@ -19,6 +19,7 @@ import (
 	"forklift-training/internal/coerce"
 	"forklift-training/internal/entitlement"
 	"forklift-training/internal/model"
+	"forklift-training/internal/publicscope"
 	"forklift-training/internal/slicesx"
 	"forklift-training/internal/timefmt"
 )
@@ -36,11 +37,12 @@ type CoursePageResult struct {
 // CourseDTO 课程。可选字段（chapter_count 等）在未填充路径省略，与旧 map 行为一致。
 // 字段声明按 key 字母序，保持与旧 map 序列化的字节序一致。
 type CourseDTO struct {
-	CategoryID            *int                    `json:"category_id,omitempty" extensions:"x-optional"`
-	CertificateName       string                  `json:"certificate_name,omitempty" extensions:"x-optional"`
-	CertificateTemplate   *CertificateTemplateDTO `json:"certificate_template,omitempty" extensions:"x-optional"`
-	CertificateTemplateID *int                    `json:"certificate_template_id" extensions:"x-nullable"`
-	ChapterCount          *int64                  `json:"chapter_count,omitempty" extensions:"x-optional"`
+	Category              *publicscope.CategoryRef `json:"category,omitempty" extensions:"x-optional"`
+	CategoryID            *int                     `json:"category_id,omitempty" extensions:"x-optional"`
+	CertificateName       string                   `json:"certificate_name,omitempty" extensions:"x-optional"`
+	CertificateTemplate   *CertificateTemplateDTO  `json:"certificate_template,omitempty" extensions:"x-optional"`
+	CertificateTemplateID *int                     `json:"certificate_template_id" extensions:"x-nullable"`
+	ChapterCount          *int64                   `json:"chapter_count,omitempty" extensions:"x-optional"`
 	// ClaimCount 该课程当前认领讲师数（#2596 D1）。只在**讲师面**列表填（GET /api/tutor/courses）；
 	// 学员端/管理端列表不长这一列，故省略而非 0——「没人认领」与「这个面不报这列」是两件事。
 	ClaimCount *int `json:"claim_count,omitempty" extensions:"x-optional"`
@@ -59,23 +61,24 @@ type CourseDTO struct {
 	// 只在**有主体**的读路径填（课程详情）——`GET /api/courses` 是公开面无主体，
 	// 列表上的这一格恒省略；非付费课程恒 true。缺省省略而非 false，避免把「没登录」
 	// 与「没解锁」压成同一个值（票12 同一课：可空性必须在 interface 上显式）。
-	Entitled              *bool              `json:"entitled,omitempty" extensions:"x-optional"`
-	IsFeatured            bool               `json:"is_featured"`
-	IsHot                 bool               `json:"is_hot"`
-	Level                 *LevelBriefDTO     `json:"level,omitempty" extensions:"x-optional"`
-	LevelID               *int               `json:"level_id" extensions:"x-nullable"`
-	Name                  string             `json:"name"`
-	PointsPrice           *int               `json:"points_price,omitempty" extensions:"x-optional"`
-	PracticeHours         int                `json:"practice_hours"`
-	PrerequisiteCourseIDs *[]int             `json:"prerequisite_course_ids,omitempty" extensions:"x-optional" nullability:"nonnil"`
-	Prerequisites         *[]CourseBriefDTO  `json:"prerequisites,omitempty" extensions:"x-optional" nullability:"nonnil"`
-	SortOrder             int                `json:"sort_order"`
-	Specialty             *SpecialtyBriefDTO `json:"specialty,omitempty" extensions:"x-optional"`
-	SpecialtyID           *int               `json:"specialty_id" extensions:"x-nullable"`
-	Status                int16              `json:"status"`
-	StudentCount          *int64             `json:"student_count,omitempty" extensions:"x-optional"`
-	TheoryHours           int                `json:"theory_hours"`
-	Chapters              *[]ChapterDTO      `json:"chapters,omitempty" extensions:"x-optional" nullability:"nonnil"`
+	Entitled              *bool                    `json:"entitled,omitempty" extensions:"x-optional"`
+	IsFeatured            bool                     `json:"is_featured"`
+	IsHot                 bool                     `json:"is_hot"`
+	Level                 *LevelBriefDTO           `json:"level,omitempty" extensions:"x-optional"`
+	LevelID               *int                     `json:"level_id" extensions:"x-nullable"`
+	Name                  string                   `json:"name"`
+	PointsPrice           *int                     `json:"points_price,omitempty" extensions:"x-optional"`
+	PracticeHours         int                      `json:"practice_hours"`
+	PrerequisiteCourseIDs *[]int                   `json:"prerequisite_course_ids,omitempty" extensions:"x-optional" nullability:"nonnil"`
+	Prerequisites         *[]CourseBriefDTO        `json:"prerequisites,omitempty" extensions:"x-optional" nullability:"nonnil"`
+	PublicEligibility     *publicscope.Eligibility `json:"public_eligibility,omitempty" extensions:"x-optional"`
+	SortOrder             int                      `json:"sort_order"`
+	Specialty             *SpecialtyBriefDTO       `json:"specialty,omitempty" extensions:"x-optional"`
+	SpecialtyID           *int                     `json:"specialty_id" extensions:"x-nullable"`
+	Status                int16                    `json:"status"`
+	StudentCount          *int64                   `json:"student_count,omitempty" extensions:"x-optional"`
+	TheoryHours           int                      `json:"theory_hours"`
+	Chapters              *[]ChapterDTO            `json:"chapters,omitempty" extensions:"x-optional" nullability:"nonnil"`
 }
 
 // CredentialBriefDTO 目标证件简述（课程详情元数据）。

@@ -9,6 +9,7 @@ import (
 
 	"forklift-training/internal/coerce"
 	"forklift-training/internal/model"
+	"forklift-training/internal/scope"
 	"forklift-training/internal/testutil"
 )
 
@@ -36,6 +37,9 @@ func TestCourseSortOrder(t *testing.T) {
 	if created.SortOrder != 5 {
 		t.Fatalf("创建返回的 sort_order 不匹配: %+v", created)
 	}
+	if created.Category == nil || created.PublicEligibility == nil {
+		t.Fatalf("创建响应应返回分类与公开资格: %+v", created)
+	}
 	courseID := created.CourseID
 
 	// 更新时修改 sort_order
@@ -45,6 +49,9 @@ func TestCourseSortOrder(t *testing.T) {
 	}
 	if updated.SortOrder != 1 {
 		t.Fatalf("更新后的 sort_order 不匹配: %+v", updated)
+	}
+	if updated.Category == nil || updated.PublicEligibility == nil {
+		t.Fatalf("更新响应应返回分类与公开资格: %+v", updated)
 	}
 
 	// 负值应报错
@@ -56,7 +63,7 @@ func TestCourseSortOrder(t *testing.T) {
 	c0 := model.Course{Name: "课程C", Status: 1, CategoryID: &category.ID, SortOrder: 0,
 		SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID), CreatedAt: testutil.Now()}
 	db.Create(&c0)
-	page, err := svc.GetCourses(1, 10, "", nil, nil, nil, "")
+	page, err := svc.GetCourses(1, 10, "", nil, nil, nil, scope.CategoryFilter{}, "")
 	if err != nil {
 		t.Fatalf("GetCourses 失败: %v", err)
 	}

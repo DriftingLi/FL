@@ -15,6 +15,7 @@ import (
 	"forklift-training/internal/filestore"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/model"
+	"forklift-training/internal/scope"
 	"forklift-training/internal/security"
 	"forklift-training/pkg/httpx"
 	"forklift-training/pkg/response"
@@ -117,22 +118,29 @@ type myCapabilitiesReq struct {
 // @Param credential_id query int false "目标证件ID"
 // @Param specialty_id query int false "专业方向ID"
 // @Param level_id query int false "等级ID"
+// @Param category_id query string false "一级培训分类 ID、all 或 legacy（未分类/分类失效）"
 // @Success 200 {object} response.R{data=course.CoursePageResult} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Router /tutor/courses [get]
 func (h *handler) ListCourses(c *gin.Context) {
 	httpx.Endpoint[tutorCourseListReq, course.CoursePageResult]{
 		Parse: func(c *gin.Context) (*tutorCourseListReq, error) {
+			rawCategory, provided := c.GetQuery("category_id")
+			category, err := scope.ParseStaffCategoryFilter(rawCategory, provided)
+			if err != nil {
+				return nil, httpx.BadRequest(err.Error())
+			}
 			return &tutorCourseListReq{
 				Page:         httpx.QueryIntDefault(c, "page", 1),
 				PageSize:     httpx.QueryIntDefault(c, "page_size", 10),
 				CredentialID: httpx.QueryIDPtr(c, "credential_id"),
 				SpecialtyID:  httpx.QueryIDPtr(c, "specialty_id"),
 				LevelID:      httpx.QueryIDPtr(c, "level_id"),
+				Category:     category,
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *tutorCourseListReq) (*course.CoursePageResult, error) {
-			result, err := h.svc.GetCourses(req.Page, req.PageSize, req.CredentialID, req.SpecialtyID, req.LevelID, middleware.CurrentUserID(c))
+			result, err := h.svc.GetCourses(req.Page, req.PageSize, req.CredentialID, req.SpecialtyID, req.LevelID, req.Category, middleware.CurrentUserID(c))
 			if err != nil {
 				return nil, err
 			}
@@ -417,6 +425,7 @@ type tutorCourseListReq struct {
 	CredentialID *int
 	SpecialtyID  *int
 	LevelID      *int
+	Category     scope.CategoryFilter
 }
 
 // ===== 课程认领（#2596 / 规格 B3、B5、B6、D1）=====

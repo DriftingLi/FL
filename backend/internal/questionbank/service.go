@@ -22,6 +22,7 @@ import (
 	"forklift-training/internal/coerce"
 	"forklift-training/internal/filestore"
 	"forklift-training/internal/model"
+	"forklift-training/internal/publicscope"
 	"forklift-training/internal/scope"
 	"forklift-training/internal/training"
 	"forklift-training/pkg/paging"
@@ -441,9 +442,7 @@ func (s *Service) CreateQuestion(in QuestionCreateInput, createdBy *int, created
 			return QuestionDTO{}, err
 		}
 	}
-	d := NewQuestionDTO(&q, true)
-	d.Tags = s.loadTagsByQuestion(q.ID)
-	return d, nil
+	return s.decorateEditorQuestion(&q, true)
 }
 
 // GetQuestionForStudent 学员侧按 id 取题（ADR-0049「题库池是可见性口径，覆盖每条读路径」）：
@@ -456,7 +455,7 @@ func (s *Service) GetQuestionForStudent(id int, scope QuestionReadScope) (Questi
 		return QuestionDTO{}, ErrQuestionNotFound
 	}
 	d := NewQuestionDTO(&q, true)
-	d.Tags = s.loadTagsByQuestion(q.ID)
+	d.Tags = s.loadTagsByQuestion(id)
 	return d, nil
 }
 
@@ -466,9 +465,7 @@ func (s *Service) GetQuestion(id int) (QuestionDTO, error) {
 	if err := s.db.First(&q, id).Error; err != nil {
 		return QuestionDTO{}, ErrQuestionNotFound
 	}
-	d := NewQuestionDTO(&q, true)
-	d.Tags = s.loadTagsByQuestion(q.ID)
-	return d, nil
+	return s.decorateEditorQuestion(&q, true)
 }
 
 // UpdateQuestion 更新题目（票 6 typed 面）：写面不携带 status 通道；「编辑未改不动」——
@@ -529,9 +526,7 @@ func (s *Service) UpdateQuestion(id int, in QuestionUpdateInput, actorID int, ac
 			return QuestionDTO{}, err
 		}
 	}
-	d := NewQuestionDTO(&q, true)
-	d.Tags = s.loadTagsByQuestion(id)
-	return d, nil
+	return s.decorateEditorQuestion(&q, true)
 }
 
 // questionContentTouched 判定「内容与计分字段是否实际变化」（票 6 不变式谓词）：
@@ -622,9 +617,7 @@ func (s *Service) SubmitQuestion(id, actorID int, actorType string) (QuestionDTO
 	if err := s.db.Save(&q).Error; err != nil {
 		return QuestionDTO{}, err
 	}
-	d := NewQuestionDTO(&q, true)
-	d.Tags = s.loadTagsByQuestion(q.ID)
-	return d, nil
+	return s.decorateEditorQuestion(&q, true)
 }
 
 // DeleteQuestion 删除题目，并清理题图存储文件。
@@ -695,8 +688,8 @@ type QuestionRejectResultDTO struct {
 //
 // 为什么不把两个公开入口也合并成一个：「池的已发布不可被入参绕开」这道锁靠的是**签名差异**
 // ——学员面不收 status、编辑面收 QuestionEditScope（ADR-0062 决策 4）。合并入口就是把那道锁拆了。
-func (s *Service) listQuestions(page, pageSize int, qType, status, keyword string, tagID *int,
-	narrow func(*gorm.DB) *gorm.DB, sortBy string) (*QuestionPageDTO, error) {
+func (s *Service) listQuestions(page, pageSize int, qType, status, keyword string, tagID *int, category scope.CategoryFilter,
+	narrow func(*gorm.DB) *gorm.DB, sortBy string, withPublicState bool) (*QuestionPageDTO, error) {
 	// 排序口径（#412）：缺省保持现状「最新提交优先」（created_at DESC, id ASC）；
 	// 讲师端显式传 id_asc 请求按 ID 升序，翻页时 ID 单调推进、不再呈锯齿跳回。
 	// #1096：排序位由变参改显式命名参数（空串 = 缺省口径）。
@@ -717,12 +710,17 @@ func (s *Service) listQuestions(page, pageSize int, qType, status, keyword strin
 		if tagID != nil {
 			q = q.Where("id IN (SELECT question_id FROM question_tag_relation WHERE tag_id = ?)", *tagID)
 		}
+		if category.Legacy() {
+			q = publicscope.LegacyCategoryFilter(q, publicscope.QuestionCategoryColumn)
+		} else {
+			q = category.Apply(q, "question.category_id")
+		}
 		return narrow(q)
 	})
 	if err != nil {
 		return nil, err
 	}
-	return s.questionPage(list, page, pageSize, total), nil
+	return s.questionPage(list, page, pageSize, total, withPublicState)
 }
 
 // ListQuestions 题目列表**编辑面**（题库作者 / 审核者）：draft / pending 都在射程内、
@@ -733,20 +731,20 @@ func (s *Service) listQuestions(page, pageSize int, qType, status, keyword strin
 // 「我创建的」筛选轴（#2598 C2）住在 QuestionEditScope 里，不是本方法的裸参数：
 // 它只影响行集、不参与写判定，而**学员面根本拿不到 QuestionEditScope**——于是
 // 「学员按作者收窄题库池」在类型上构造不出来（见 pool_scope.go 的说明）。
-func (s *Service) ListQuestions(page, pageSize int, qType string, status, keyword string, tagID *int, scope QuestionEditScope, sortBy string) (*QuestionPageDTO, error) {
-	return s.listQuestions(page, pageSize, qType, status, keyword, tagID, scope.ApplyListFilter, sortBy)
+func (s *Service) ListQuestions(page, pageSize int, qType string, status, keyword string, tagID *int, category scope.CategoryFilter, editScope QuestionEditScope, sortBy string) (*QuestionPageDTO, error) {
+	return s.listQuestions(page, pageSize, qType, status, keyword, tagID, category, editScope.ApplyListFilter, sortBy, true)
 }
 
 // ListPoolQuestions 题目列表**学员面**（ADR-0062 决策 4）：池口径由 scope 承载，
 // 因此这里既没有 status 入参（池的「已发布」不在入参里可被绕开），也不接受裸证件。
 // 出口 DTO 形态与按 id 直取的学员面一致（含答案/解析——池内的题本就可以作答并看到解析），
 // 差异只在行集：draft / pending / 源标记真题题 / 非当前证件一律不出现在结果里。
-func (s *Service) ListPoolQuestions(page, pageSize int, qType, keyword string, tagID *int, scope QuestionReadScope, sortBy string) (*QuestionPageDTO, error) {
-	return s.listQuestions(page, pageSize, qType, "", keyword, tagID, scope.Apply, sortBy)
+func (s *Service) ListPoolQuestions(page, pageSize int, qType, keyword string, tagID *int, readScope QuestionReadScope, sortBy string) (*QuestionPageDTO, error) {
+	return s.listQuestions(page, pageSize, qType, "", keyword, tagID, scope.CategoryFilter{}, readScope.Apply, sortBy, false)
 }
 
 // questionPage 题目分页信封装配（两条列表路径共用：DTO 出口与标签批量附加只有一处实现）。
-func (s *Service) questionPage(list []model.Question, page, pageSize int, total int64) *QuestionPageDTO {
+func (s *Service) questionPage(list []model.Question, page, pageSize int, total int64, withPublicState bool) (*QuestionPageDTO, error) {
 	out := make([]QuestionDTO, 0, len(list))
 	ids := make([]int, 0, len(list))
 	for i := range list {
@@ -754,12 +752,21 @@ func (s *Service) questionPage(list []model.Question, page, pageSize int, total 
 		ids = append(ids, list[i].ID)
 	}
 	s.attachTagsBatch(ids, out)
+	if withPublicState {
+		sourceTagged, err := s.sourceTaggedByQuestion(ids)
+		if err != nil {
+			return nil, err
+		}
+		if err := FillQuestionPublicStates(s.db, out, sourceTagged); err != nil {
+			return nil, err
+		}
+	}
 	return &QuestionPageDTO{
 		Page:      page,
 		PageSize:  pageSize,
 		Questions: out,
 		Total:     total,
-	}
+	}, nil
 }
 
 // loadTagsByQuestion 加载单题标签列表。
@@ -829,7 +836,7 @@ func (s *Service) PublishQuestion(id int) (QuestionDTO, error) {
 	if err := s.db.Save(&q).Error; err != nil {
 		return QuestionDTO{}, err
 	}
-	return NewQuestionDTO(&q, true), nil
+	return s.decorateEditorQuestion(&q, false)
 }
 
 // BatchPublish 批量发布（管理员审核通过）。同时清空驳回理由。
@@ -860,7 +867,7 @@ func (s *Service) RejectQuestion(id int, reason string) (QuestionDTO, error) {
 	if err := s.db.Save(&q).Error; err != nil {
 		return QuestionDTO{}, err
 	}
-	return NewQuestionDTO(&q, true), nil
+	return s.decorateEditorQuestion(&q, false)
 }
 
 // BatchReject 批量驳回（管理员审核）。状态回退为 draft，统一记录同一驳回理由。

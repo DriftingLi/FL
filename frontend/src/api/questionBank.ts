@@ -43,6 +43,7 @@ export interface QuestionsQuery {
   /** 按题库标签筛选（LH-28） */
   tag_id?: number
   credential_id?: number
+  category_id?: number | 'all' | 'legacy'
   /** 排序口径（#412）：id_asc 按 ID 升序；缺省为服务端默认（最新提交优先） */
   sort?: string
 }

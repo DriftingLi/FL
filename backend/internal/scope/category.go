@@ -31,6 +31,7 @@ func RequireActiveCategory(db *gorm.DB, id int) error {
 type CategoryFilter struct {
 	explicit     bool
 	unclassified bool
+	legacy       bool
 	id           int
 }
 
@@ -51,11 +52,20 @@ func ParseCategoryFilter(raw string, provided bool) (CategoryFilter, error) {
 	return CategoryFilter{explicit: true, id: id}, nil
 }
 
+func ParseStaffCategoryFilter(raw string, provided bool) (CategoryFilter, error) {
+	if provided && raw == "legacy" {
+		return CategoryFilter{explicit: true, legacy: true}, nil
+	}
+	return ParseCategoryFilter(raw, provided)
+}
+
 func (f CategoryFilter) Explicit() bool { return f.explicit }
 
-func (f CategoryFilter) Narrowed() bool { return f.id > 0 || f.unclassified }
+func (f CategoryFilter) Narrowed() bool { return f.id > 0 || f.unclassified || f.legacy }
 
 func (f CategoryFilter) Unclassified() bool { return f.unclassified }
+
+func (f CategoryFilter) Legacy() bool { return f.legacy }
 
 func (f CategoryFilter) Apply(q *gorm.DB, column string) *gorm.DB {
 	if f.unclassified {

@@ -12,6 +12,13 @@
 
       <UiSelect v-model="filters.type" placeholder="题型" clearable style="width: 130px" :options="questionTypeOptions" />
       <UiSelect v-model="filters.status" placeholder="状态" clearable style="width: 120px" :options="questionStatusOptions" />
+      <UiSelect
+        v-model="filters.category_id"
+        placeholder="培训分类"
+        style="width: 180px"
+        :options="categoryFilterOptions"
+        @change="reloadFirstPage"
+      />
       <UiInput v-model="filters.keyword" placeholder="搜索题目" clearable style="width: 200px" @keyup.enter="loadData"  />
       <UiButton variant="primary" @click="loadData">查询</UiButton>
       <UiButton variant="success" v-if="selectedIds.length > 0" @click="batchPublish">
@@ -22,6 +29,14 @@
       </UiButton>
         </template>
       </UiFilterBar>
+
+    <UiAlert
+      v-if="categoryLoadError"
+      title="分类加载失败"
+      description="分类筛选暂不可用，请刷新页面重试"
+      type="error"
+      :closable="false"
+    />
 
     <UiErrorState
       v-if="loadError"
@@ -37,9 +52,22 @@
         <template #default="{ row }">{{ (typeMap as Record<string, string>)[row.type] }}</template>
       </el-table-column>
       <el-table-column prop="content" label="题干" show-overflow-tooltip />
-      <el-table-column label="状态" width="100">
+      <el-table-column label="分类" width="150">
+        <template #default="{ row }">
+          <UiTag v-if="row.category" :tone="row.category.status === 0 ? 'warning' : 'neutral'" size="small" effect="plain">
+            {{ row.category.name }}{{ row.category.status === 0 ? '（停用）' : '' }}
+          </UiTag>
+          <UiTag v-else tone="danger" size="small" effect="plain">未分类</UiTag>
+        </template>
+      </el-table-column>
+      <el-table-column label="审核状态" width="100">
         <template #default="{ row }">
           <UiTag :tone="questionStatusTone[row.status]" size="small">{{ questionStatusMap[row.status] }}</UiTag>
+        </template>
+      </el-table-column>
+      <el-table-column label="公开资格" min-width="280">
+        <template #default="{ row }">
+          <PublicEligibility :eligibility="row.public_eligibility" />
         </template>
       </el-table-column>
       <el-table-column label="操作" width="90" fixed="right" align="center">
@@ -63,6 +91,10 @@
       <div v-if="currentQuestion">
         <p><strong>题型：</strong>{{ typeMap[currentQuestion.type] }}</p>
         <p><strong>题干：</strong>{{ currentQuestion.content }}</p>
+        <p><strong>分类：</strong>{{ categoryLabel(currentQuestion) }}</p>
+        <p><strong>审核状态：</strong>{{ questionStatusMap[currentQuestion.status] }}</p>
+        <p><strong>公开资格：</strong></p>
+        <PublicEligibility :eligibility="currentQuestion.public_eligibility" />
         <div v-if="currentQuestion.options">
           <p><strong>选项：</strong></p>
           <p v-for="(val, key) in currentQuestion.options" :key="key">{{ key }}. {{ val }}</p>
@@ -85,10 +117,12 @@
           style="margin-top: 15px"
         />
       </div>
-      <template #footer v-if="currentQuestion && currentQuestion.status === 'pending'">
+      <template #footer v-if="currentQuestion">
         <UiButton @click="detailVisible = false">关闭</UiButton>
-        <UiButton variant="danger" @click="rejectFromDetail">驳回</UiButton>
-        <UiButton variant="success" @click="publishFromDetail">发布</UiButton>
+        <template v-if="currentQuestion.status === 'pending'">
+          <UiButton variant="danger" @click="rejectFromDetail">驳回</UiButton>
+          <UiButton variant="success" @click="publishFromDetail">发布</UiButton>
+        </template>
       </template>
     </UiDialog>
 
@@ -112,9 +146,11 @@
 // 否则该页不会被缓存（#1620 的锁测试会拦下这种漂移）。
 defineOptions({ name: 'QuestionReview' })
 
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { questionBankApi } from '@/api/questionBank'
+import { questionBankApi, type QuestionDTO } from '@/api/questionBank'
+import { trainingApi, type AdminTrainingCategoryDTO } from '@/api/training'
+import type { CategoryRef, Eligibility } from '@/api/generated/course'
 import type { Question } from '@/types/question'
 import { typeMap, questionTypeOptions, questionStatusOptions, questionStatusMap, questionStatusTone } from '@/constants/question'
 import { useAdminTable } from '@/composables/useAdminTable'
@@ -130,6 +166,28 @@ import UiAlert from '@/components/ui/UiAlert.vue'
 import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 import UiSelect from '@/components/ui/UiSelect.vue'
+import PublicEligibility from '@/components/catalog/PublicEligibility.vue'
+
+type ReviewQuestion = Question & {
+  category?: CategoryRef
+  public_eligibility?: Eligibility
+}
+
+const filters = ref<{
+  type: string
+  status: string
+  keyword: string
+  category_id: number | 'all' | 'legacy'
+}>({ type: '', status: 'pending', keyword: '', category_id: 'all' })
+const categories = ref<AdminTrainingCategoryDTO[]>([])
+const categoryLoadError = ref(false)
+const categoryFilterOptions = computed(() => [
+  { label: '全部分类', value: 'all' as const },
+  ...categories.value
+    .filter(category => (category.status ?? 1) !== 0)
+    .map(category => ({ label: category.name, value: category.id })),
+  { label: '未分类/分类失效', value: 'legacy' as const }
+])
 
 // 列表：admin 列表状态机 useAdminTable（#792，ADR-0039）——三态 + 分页 + 列表托管。
 // 解构改名保持模板零改动；filters 为页面自管筛选轴（由 fetch adapter 读取）。
@@ -143,7 +201,7 @@ const {
   pageSize,
   load: loadData,
   retry: retryLoad
-} = useAdminTable<Question>({
+} = useAdminTable<ReviewQuestion>({
   fetch: async (paging) => {
     const result = await questionBankApi.getQuestions({ page: paging.page, page_size: paging.pageSize, ...filters.value })
     // 加载待审核总数（仅当不是 pending 筛选时单独查询）
@@ -156,12 +214,16 @@ const {
 function handlePageChange(): void {
   void loadData()
 }
-const filters = ref({ type: '', status: 'pending', keyword: '' })
+function reloadFirstPage() {
+  page.value = 1
+  void loadData()
+}
+
 const selectedIds = ref<number[]>([])
 const pendingCount = ref(0)
 
 const detailVisible = ref(false)
-const currentQuestion = ref<Question | null>(null)
+const currentQuestion = ref<ReviewQuestion | null>(null)
 
 // 驳回相关
 // 驳回理由弹窗：#795 三域共用的弹窗状态机（visible/reason/submitting + 空理由校验 + 失败保留理由）
@@ -178,22 +240,50 @@ const {
     if (rejectMode === 'batch') {
       await questionBankApi.batchReject(selectedIds.value, reason)
       ElMessage.success('批量驳回成功')
+      selectedIds.value = []
     } else {
-      await questionBankApi.rejectQuestion(rejectTargetId, reason)
+      const updated = await questionBankApi.rejectQuestion(rejectTargetId, reason)
+      applyQuestionUpdate(updated)
       ElMessage.success('已驳回')
-      if (rejectMode === 'detail') detailVisible.value = false
     }
     await loadData()
   }
 })
-// 驳回模式：single(单题) / batch(批量) / detail(从详情弹窗)
-let rejectMode = 'single'
+// 驳回目标：单题/详情共用单题接口，批量走独立接口。
+let rejectMode: 'single' | 'batch' = 'single'
 let rejectTargetId = 0
 
-onMounted(() => loadData())
+async function loadCategories() {
+  try {
+    const result = await trainingApi.getAdminCategories()
+    categories.value = result.categories
+    categoryLoadError.value = false
+  } catch {
+    categoryLoadError.value = true
+  }
+}
+
+function categoryLabel(question: ReviewQuestion) {
+  if (!question.category) return '未分类'
+  return question.category.status === 0
+    ? `${question.category.name}（停用）`
+    : question.category.name
+}
+
+function applyQuestionUpdate(updated: QuestionDTO) {
+  const next = updated as unknown as ReviewQuestion
+  const index = questions.value.findIndex(question => question.id === next.id)
+  if (index >= 0) questions.value[index] = next
+  if (currentQuestion.value?.id === next.id) currentQuestion.value = next
+}
+
+onMounted(() => {
+  void loadCategories()
+  void loadData()
+})
 
 // 操作下拉菜单统一入口
-function handleAction(cmd: string, row: any) {
+function handleAction(cmd: string, row: ReviewQuestion) {
   switch (cmd) {
     case 'view':
       viewDetail(row)
@@ -218,16 +308,17 @@ function handleSelection(rows: { id: number }[]) {
   selectedIds.value = rows.map((r: { id: number }) => r.id)
 }
 
-function viewDetail(row: any) {
+function viewDetail(row: ReviewQuestion) {
   currentQuestion.value = row
   detailVisible.value = true
 }
 
-// 单题发布
-async function publishSingle(row: { id: number }) {
+// 单题发布：接口返回的终态同时回填列表与详情，再按当前筛选重装实际列表。
+async function publishSingle(row: ReviewQuestion) {
   try {
-    await useConfirm().confirm(`确定发布题目 #${row.id}？发布后学员可见。`, '确认发布', { type: 'success' })
-    await questionBankApi.publishQuestion(row.id)
+    await useConfirm().confirm(`确定发布题目 #${row.id}？发布后将按公开资格决定是否计入公开题库。`, '确认发布', { type: 'success' })
+    const updated = await questionBankApi.publishQuestion(row.id)
+    applyQuestionUpdate(updated)
     ElMessage.success('发布成功')
     await loadData()
   } catch {
@@ -236,7 +327,7 @@ async function publishSingle(row: { id: number }) {
 }
 
 // 单题驳回
-function rejectSingle(row: { id: number }) {
+function rejectSingle(row: ReviewQuestion) {
   rejectMode = 'single'
   rejectTargetId = row.id
   openRejectDialog()
@@ -248,6 +339,7 @@ async function batchPublish() {
     await useConfirm().confirm(`确定批量发布选中的 ${selectedIds.value.length} 道题目？`, '确认批量发布', { type: 'success' })
     await questionBankApi.batchPublish(selectedIds.value)
     ElMessage.success('批量发布成功')
+    selectedIds.value = []
     await loadData()
   } catch {
     /* 错误已由拦截器提示 */
@@ -265,13 +357,12 @@ function batchReject() {
 async function publishFromDetail() {
   if (!currentQuestion.value) return
   await publishSingle(currentQuestion.value)
-  detailVisible.value = false
 }
 
-// 从详情弹窗驳回
+// 从详情弹窗驳回：驳回接口返回草稿终态，详情保留并展示实际状态。
 function rejectFromDetail() {
   if (!currentQuestion.value) return
-  rejectMode = 'detail'
+  rejectMode = 'single'
   rejectTargetId = currentQuestion.value.id
   openRejectDialog()
 }
@@ -282,7 +373,7 @@ function cancelReject() {
 }
 
 /** 行内「操作」菜单：查看 / 待审题的发布与驳回走菜单收纳（登记表「菜单收纳」行） */
-function actionItems(row: { status?: string }): UiMoreMenuItem[] {
+function actionItems(row: ReviewQuestion): UiMoreMenuItem[] {
   const items: UiMoreMenuItem[] = [{ key: 'view', label: '查看' }]
   if (row.status === 'pending') {
     items.push({ key: 'publish', label: '发布' }, { key: 'reject', label: '驳回', divided: true })

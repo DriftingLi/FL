@@ -16,6 +16,7 @@ import (
 	"forklift-training/internal/course"
 	"forklift-training/internal/filestore"
 	"forklift-training/internal/model"
+	"forklift-training/internal/scope"
 	"forklift-training/internal/storage"
 	"forklift-training/internal/testutil"
 )
@@ -223,7 +224,7 @@ func TestTutorCourseListClaimColumns(t *testing.T) {
 		t.Fatalf("讲师 22 认领失败: %v", err)
 	}
 
-	list, err := svc.GetCourses(1, 10, nil, nil, nil, 21)
+	list, err := svc.GetCourses(1, 10, nil, nil, nil, scope.CategoryFilter{}, 21)
 	if err != nil {
 		t.Fatalf("GetCourses 失败: %v", err)
 	}
@@ -245,7 +246,7 @@ func TestTutorCourseListClaimColumns(t *testing.T) {
 	}
 
 	// 换一个没认领的讲师：claimed_by_me=false，人数不变
-	list, err = svc.GetCourses(1, 10, nil, nil, nil, 23)
+	list, err = svc.GetCourses(1, 10, nil, nil, nil, scope.CategoryFilter{}, 23)
 	if err != nil {
 		t.Fatalf("GetCourses 失败: %v", err)
 	}

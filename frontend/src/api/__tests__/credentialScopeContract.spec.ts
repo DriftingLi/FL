@@ -32,7 +32,7 @@ const SELF = 'api/credentialScopeScan.ts'
  * | --- | --- | --- |
  * | api/course.ts prop1 | 入参声明，可选 | /courses 公开端点：服务端兜底不覆盖匿名/非学员，要分区只能显式传 |
  * | api/questionBank.ts prop2 | 入参声明，可选 | /question-bank JWT 面：导师端筛选即浏览指定 |
- * | api/training.ts prop2 | 显式传参 | /catalog/tree、/tags 不在 CredentialScoped 里，handler 自读；不传 = 不分区 |
+ * | api/training.ts prop4 | 显式传参 | /catalog/tree、/tags 不在 CredentialScoped 里，handler 自读；另两处 legacy_credential_id 是分类→证件映射声明，不是学员分区 |
  * | api/credential.ts prop1 + assign1 | 「当前证件」自身写入 | PATCH /me/credential —— 这是切证件本身，与分区语义无关 |
  * | api/admin.ts prop2 / api/recruit.ts prop1 | 管理/招聘筛选入参 | 各自管理面筛选轴，与学员证件分区无关 |
  * | pages/tutor/QuestionManage.vue assign1 | **浏览指定** | 导师端筛选栏显式挑选证件 |
@@ -46,7 +46,7 @@ const EXPECTED_SITES: Record<string, { prop: number; assign: number }> = {
   'api/credential.ts': { prop: 1, assign: 1 },
   'api/questionBank.ts': { prop: 2, assign: 0 },
   'api/recruit.ts': { prop: 1, assign: 0 },
-  'api/training.ts': { prop: 2, assign: 0 },
+  'api/training.ts': { prop: 4, assign: 0 },
   'pages/student/QuestionDetail.vue': { prop: 1, assign: 0 },
   'pages/tutor/QuestionCreate.vue': { prop: 1, assign: 0 },
   'pages/tutor/QuestionManage.vue': { prop: 0, assign: 1 },

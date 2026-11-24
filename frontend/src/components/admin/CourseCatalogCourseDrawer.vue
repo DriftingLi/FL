@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 课程编辑抽屉（全字段 + 章节管理 + 章节对话框）：从 CourseCatalog 拆分，逻辑原样保留。
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance } from 'element-plus'
 import { adminApi, type AdminCourseItem, type ChapterPayload } from '@/api/admin'
@@ -22,6 +22,21 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{ (e: 'saved'): void }>()
+
+const selectedCategory = ref<TrainingCategoryDTO | null>(null)
+const categoryOptions = computed(() => {
+  const options = props.categories
+    .filter(category => (category.status ?? 1) !== 0)
+    .map(category => ({ label: category.name, value: category.id }))
+  const current = selectedCategory.value
+  if (current && !options.some(option => option.value === current.id)) {
+    options.push({
+      label: `${current.name}（已停用，保留当前归属）`,
+      value: current.id
+    })
+  }
+  return options
+})
 
 const drawerVisible = ref(false)
 const courseFormRef = ref<FormInstance | null>(null)
@@ -64,6 +79,7 @@ const courseRules = {
 function open(course: AdminCourseItem | null) {
   drawerVisible.value = true
   drawerChapters.value = []
+  selectedCategory.value = null
   if (!course) {
     Object.assign(drawerForm, {
       course_id: null,
@@ -83,6 +99,9 @@ function open(course: AdminCourseItem | null) {
     })
     return
   }
+  selectedCategory.value = course.category
+    ?? props.categories.find(category => category.id === course.category_id)
+    ?? null
   Object.assign(drawerForm, {
     course_id: course.course_id,
     name: course.name,
@@ -107,6 +126,9 @@ async function loadDrawerDetail() {
     const id = drawerForm.course_id
     const detail = await adminApi.getCourseDetail(id)
     if (detail && drawerForm.course_id === id) {
+      selectedCategory.value = detail.category
+        ?? props.categories.find(category => category.id === detail.category_id)
+        ?? selectedCategory.value
       Object.assign(drawerForm, {
         name: detail.name ?? drawerForm.name,
         category_id: detail.category_id ?? null,
@@ -248,7 +270,7 @@ defineExpose({ open })
   <el-drawer v-model="drawerVisible" :title="drawerForm.course_id ? '编辑课程' : '新增课程'" size="560px">
     <el-form ref="courseFormRef" :model="drawerForm" :rules="courseRules" label-width="96px">
       <el-form-item label="课程分类" prop="category_id">
-        <UiSelect v-model="drawerForm.category_id" placeholder="请选择课程分类" class="w-full" :options="categories.map(c => ({ label: c.name, value: c.id }))" />
+        <UiSelect v-model="drawerForm.category_id" placeholder="请选择课程分类" class="w-full" :options="categoryOptions" />
       </el-form-item>
       <el-form-item label="课程名称" prop="name">
         <UiInput v-model="drawerForm.name" placeholder="课程名称" :maxlength="50" />

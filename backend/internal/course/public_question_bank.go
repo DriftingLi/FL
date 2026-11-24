@@ -17,6 +17,7 @@ package course
 import (
 	"context"
 
+	"forklift-training/internal/publicscope"
 	"forklift-training/internal/questionpool"
 )
 
@@ -60,14 +61,9 @@ func (s *Service) ListPublicQuestionBanks(ctx context.Context) (*PublicQuestionB
 		Count        int64  `gorm:"column:count"`
 	}
 	var rows []row
-	err := s.db.WithContext(ctx).Table("question").
-		// 池口径：已发布 + 排除来源标记（真题）——三枚片段是唯一出处，不就地重写。
+	err := publicscope.ActiveCategoryScope(s.db.WithContext(ctx).Table("question"), publicscope.QuestionCategoryColumn).
 		Where(questionpool.PublishedSQL).
 		Where(questionpool.ExcludeSourceTagsSQL).
-		Joins("JOIN training_category ON training_category.id = question.category_id").
-		Joins("JOIN credential ON credential.id = training_category.legacy_credential_id").
-		Where("training_category.status = ?", 1).
-		Where("credential.status = ?", 1).
 		Select("training_category.id AS category_id, training_category.name AS category_name, " +
 			"question.type AS question_type, COUNT(*) AS count").
 		Group("training_category.id, training_category.name, training_category.sort_order, question.type").

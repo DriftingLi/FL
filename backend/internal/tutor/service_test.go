@@ -9,6 +9,7 @@ import (
 
 	"forklift-training/internal/coerce"
 	"forklift-training/internal/model"
+	"forklift-training/internal/scope"
 	"forklift-training/internal/testutil"
 )
 
@@ -86,7 +87,7 @@ func TestTutorCourseListHidesUnmounted(t *testing.T) {
 	_, _ = seedCatalogCourse(t, db)
 	seedUnmountedCourse(t, db)
 
-	list, err := svc.GetCourses(1, 10, nil, nil, nil, 0)
+	list, err := svc.GetCourses(1, 10, nil, nil, nil, scope.CategoryFilter{}, 0)
 	if err != nil {
 		t.Fatalf("GetCourses 失败: %v", err)
 	}
@@ -107,7 +108,7 @@ func TestTutorCourseListBatchFills(t *testing.T) {
 	crs, _ := seedCatalogCourse(t, db)
 	seedStudyRecords(t, db, crs.CourseID, 3)
 
-	list, err := svc.GetCourses(1, 10, nil, nil, nil, 0)
+	list, err := svc.GetCourses(1, 10, nil, nil, nil, scope.CategoryFilter{}, 0)
 	if err != nil {
 		t.Fatalf("GetCourses 失败: %v", err)
 	}
@@ -161,7 +162,7 @@ func TestTutorCourseListNoNPlusOne(t *testing.T) {
 		_ = db.Callback().Query().Before("gorm:query").Remove("t4:nplus1")
 	}()
 
-	if _, err := svc.GetCourses(1, 10, nil, nil, nil, 0); err != nil {
+	if _, err := svc.GetCourses(1, 10, nil, nil, nil, scope.CategoryFilter{}, 0); err != nil {
 		t.Fatalf("GetCourses 失败: %v", err)
 	}
 	// 2（分页 count+find）+ 1（证书模板）+ 3（章节数/前置课程/学员数批量）= 6

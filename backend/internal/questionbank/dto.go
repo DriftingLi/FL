@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"forklift-training/internal/model"
+	"forklift-training/internal/publicscope"
 	"forklift-training/internal/timefmt"
 )
 
@@ -17,17 +18,19 @@ type QuestionDTO struct {
 	CreatedBy     *int    `json:"created_by" extensions:"x-nullable"`
 	CreatedByType string  `json:"created_by_type"`
 	// CredentialID 题目归属的目标证件（#412）：讲师端题库管理用证件列区分分区，学员侧形状不变。
-	CredentialID    *int    `json:"credential_id,omitempty" extensions:"x-optional"`
-	CategoryID      *int    `json:"category_id,omitempty" extensions:"x-optional"`
-	Explanation     *string `json:"explanation,omitempty" extensions:"x-optional"`
-	ID              int     `json:"id"`
-	ImageURL        string  `json:"image_url"`
-	Options         any     `json:"options"`
-	ReferenceAnswer *string `json:"reference_answer,omitempty" extensions:"x-optional"`
-	RejectReason    string  `json:"reject_reason"`
-	Score           int     `json:"score"`
-	ScoringCriteria *string `json:"scoring_criteria,omitempty" extensions:"x-optional"`
-	Status          string  `json:"status"`
+	CredentialID      *int                     `json:"credential_id,omitempty" extensions:"x-optional"`
+	Category          *publicscope.CategoryRef `json:"category,omitempty" extensions:"x-optional"`
+	CategoryID        *int                     `json:"category_id,omitempty" extensions:"x-optional"`
+	Explanation       *string                  `json:"explanation,omitempty" extensions:"x-optional"`
+	ID                int                      `json:"id"`
+	ImageURL          string                   `json:"image_url"`
+	Options           any                      `json:"options"`
+	PublicEligibility *publicscope.Eligibility `json:"public_eligibility,omitempty" extensions:"x-optional"`
+	ReferenceAnswer   *string                  `json:"reference_answer,omitempty" extensions:"x-optional"`
+	RejectReason      string                   `json:"reject_reason"`
+	Score             int                      `json:"score"`
+	ScoringCriteria   *string                  `json:"scoring_criteria,omitempty" extensions:"x-optional"`
+	Status            string                   `json:"status"`
 	// Tags 题库管理面附加（未设置时省略；设置后保留 null/[] 形态与历史一致）。
 	Tags      any    `json:"tags,omitempty" extensions:"x-optional"`
 	Type      string `json:"type"`

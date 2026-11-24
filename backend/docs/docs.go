@@ -845,7 +845,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/training.TrainingCategoryListDTO"
+                                            "$ref": "#/definitions/training.AdminTrainingCategoryListDTO"
                                         }
                                     }
                                 }
@@ -878,7 +878,7 @@ const docTemplate = `{
                 "summary": "创建一级培训分类",
                 "parameters": [
                     {
-                        "description": "分类名称、排序、启用状态",
+                        "description": "分类名称、排序、启用状态、映射证件",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -899,7 +899,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/training.TrainingCategoryDTO"
+                                            "$ref": "#/definitions/training.AdminTrainingCategoryDTO"
                                         }
                                     }
                                 }
@@ -935,7 +935,7 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "分类名称、排序、启用状态",
+                        "description": "分类名称、排序、启用状态、映射证件",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -956,7 +956,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/training.TrainingCategoryDTO"
+                                            "$ref": "#/definitions/training.AdminTrainingCategoryDTO"
                                         }
                                     }
                                 }
@@ -2664,6 +2664,12 @@ const docTemplate = `{
                         "type": "integer",
                         "description": "等级 ID",
                         "name": "level_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "一级培训分类 ID、all 或 legacy（未分类/分类失效）",
+                        "name": "category_id",
                         "in": "query"
                     },
                     {
@@ -17727,6 +17733,12 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "type": "string",
+                        "description": "一级培训分类 ID、all 或 legacy（未分类/分类失效）",
+                        "name": "category_id",
+                        "in": "query"
+                    },
+                    {
                         "type": "integer",
                         "description": "目标证件ID",
                         "name": "credential_id",
@@ -22011,6 +22023,12 @@ const docTemplate = `{
                         "type": "integer",
                         "description": "等级ID",
                         "name": "level_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "一级培训分类 ID、all 或 legacy（未分类/分类失效）",
+                        "name": "category_id",
                         "in": "query"
                     }
                 ],
@@ -29288,6 +29306,14 @@ const docTemplate = `{
         "course.AdminCourseDetailDTO": {
             "type": "object",
             "properties": {
+                "category": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/publicscope.CategoryRef"
+                        }
+                    ],
+                    "x-optional": true
+                },
                 "category_id": {
                     "type": "integer",
                     "x-optional": true
@@ -29404,6 +29430,14 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/course.CourseBriefDTO"
                     },
+                    "x-optional": true
+                },
+                "public_eligibility": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/publicscope.Eligibility"
+                        }
+                    ],
                     "x-optional": true
                 },
                 "sort_order": {
@@ -29826,6 +29860,14 @@ const docTemplate = `{
         "course.CourseDTO": {
             "type": "object",
             "properties": {
+                "category": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/publicscope.CategoryRef"
+                        }
+                    ],
+                    "x-optional": true
+                },
                 "category_id": {
                     "type": "integer",
                     "x-optional": true
@@ -29943,6 +29985,14 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/course.CourseBriefDTO"
                     },
+                    "x-optional": true
+                },
+                "public_eligibility": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/publicscope.Eligibility"
+                        }
+                    ],
                     "x-optional": true
                 },
                 "sort_order": {
@@ -32750,6 +32800,55 @@ const docTemplate = `{
                 "user_answer": {}
             }
         },
+        "publicscope.CategoryRef": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                }
+            }
+        },
+        "publicscope.Eligibility": {
+            "type": "object",
+            "properties": {
+                "eligible": {
+                    "type": "boolean"
+                },
+                "reasons": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/publicscope.Reason"
+                    }
+                }
+            }
+        },
+        "publicscope.Reason": {
+            "type": "string",
+            "enum": [
+                "not_published",
+                "category_missing",
+                "category_disabled",
+                "category_unmapped",
+                "credential_missing",
+                "credential_disabled",
+                "source_tag_excluded"
+            ],
+            "x-enum-varnames": [
+                "ReasonNotPublished",
+                "ReasonCategoryMissing",
+                "ReasonCategoryDisabled",
+                "ReasonCategoryUnmapped",
+                "ReasonCredentialMissing",
+                "ReasonCredentialDisabled",
+                "ReasonSourceTagExcluded"
+            ]
+        },
         "questionbank.QuestionBankStatsDTO": {
             "type": "object",
             "properties": {
@@ -32792,6 +32891,14 @@ const docTemplate = `{
                     "type": "string",
                     "x-optional": true
                 },
+                "category": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/publicscope.CategoryRef"
+                        }
+                    ],
+                    "x-optional": true
+                },
                 "category_id": {
                     "type": "integer",
                     "x-optional": true
@@ -32825,6 +32932,14 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "options": {},
+                "public_eligibility": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/publicscope.Eligibility"
+                        }
+                    ],
+                    "x-optional": true
+                },
                 "reference_answer": {
                     "type": "string",
                     "x-optional": true
@@ -33654,6 +33769,40 @@ const docTemplate = `{
                 }
             }
         },
+        "training.AdminTrainingCategoryDTO": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "legacy_credential_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "status": {
+                    "type": "integer",
+                    "x-optional": true
+                }
+            }
+        },
+        "training.AdminTrainingCategoryListDTO": {
+            "type": "object",
+            "properties": {
+                "categories": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/training.AdminTrainingCategoryDTO"
+                    }
+                }
+            }
+        },
         "training.CatalogLevelNode": {
             "type": "object",
             "properties": {
@@ -34167,6 +34316,9 @@ const docTemplate = `{
         "training.TrainingCategoryInput": {
             "type": "object",
             "properties": {
+                "legacy_credential_id": {
+                    "type": "integer"
+                },
                 "name": {
                     "type": "string"
                 },

@@ -17,7 +17,8 @@ vi.mock('@/api/tutor', () => ({
 
 vi.mock('@/api/training', () => ({
   trainingApi: {
-    getCatalogTree: vi.fn()
+    getCatalogTree: vi.fn(),
+    getCategories: vi.fn()
   }
 }))
 
@@ -85,6 +86,7 @@ beforeEach(() => {
       }
     ]
   })
+  vi.mocked(trainingApi.getCategories).mockResolvedValue({ categories: [] })
 })
 
 async function mountPage() {

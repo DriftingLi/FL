@@ -117,8 +117,7 @@ export interface BatteryEvaluationSummary {
   soh_percent: number
 }
 
-export interface BatteryType {
-}
+export type BatteryType = 'lfp' | 'ncm' | 'other'
 
 export interface BatteryTypeDict {
   id: number

@@ -9,6 +9,8 @@ import type {
   CatalogLevelNode,
   CatalogSpecialtyNode,
   CatalogTreeDTO,
+  AdminTrainingCategoryDTO,
+  AdminTrainingCategoryListDTO,
   CertificateTemplateDict,
   CertificateTemplateListDTO,
   CourseDTO,
@@ -26,6 +28,8 @@ export type {
   CatalogLevelNode,
   CatalogSpecialtyNode,
   CatalogTreeDTO,
+  AdminTrainingCategoryDTO,
+  AdminTrainingCategoryListDTO,
   CertificateTemplateDict,
   CertificateTemplateListDTO,
   CourseDTO,
@@ -99,13 +103,13 @@ export const trainingApi = {
     return unwrappedRequest.get<LevelListDTO>('/levels')
   },
   getAdminCategories() {
-    return unwrappedRequest.get<TrainingCategoryListDTO>('/admin/catalog/categories')
+    return unwrappedRequest.get<AdminTrainingCategoryListDTO>('/admin/catalog/categories')
   },
-  createTrainingCategory(data: { name: string; status: number; sort_order?: number }) {
-    return unwrappedRequest.post<TrainingCategoryDTO>('/admin/catalog/categories', data)
+  createTrainingCategory(data: { name: string; status: number; sort_order?: number; legacy_credential_id: number }) {
+    return unwrappedRequest.post<AdminTrainingCategoryDTO>('/admin/catalog/categories', data)
   },
-  updateTrainingCategory(id: number, data: { name: string; status: number; sort_order?: number }) {
-    return unwrappedRequest.put<TrainingCategoryDTO>(`/admin/catalog/categories/${id}`, data)
+  updateTrainingCategory(id: number, data: { name: string; status: number; sort_order?: number; legacy_credential_id?: number }) {
+    return unwrappedRequest.put<AdminTrainingCategoryDTO>(`/admin/catalog/categories/${id}`, data)
   },
 
   getHistoricalCategories() {
