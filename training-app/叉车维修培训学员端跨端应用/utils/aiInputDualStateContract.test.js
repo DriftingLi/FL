@@ -19,6 +19,7 @@ const { readText } = require('./utsHarness');
 const ROOT = path.join(__dirname, '..');
 const PAGE = readText(path.join(ROOT, 'pages/ai-assistant/ai-assistant.uvue'));
 const INPUT = readText(path.join(ROOT, 'components/ai-chat/ai-chat-input.uvue'));
+const CONSTANTS = readText(path.join(ROOT, 'pages/ai-assistant/ai-assistant-constants.uts'));
 
 /** 取某个 class 的规则体（从 `.name {` 切到大括号配平处） */
 function classRule(src, name) {
@@ -119,7 +120,50 @@ describe('AI 助手页输入卡双态契约（#2788）', () => {
     });
   });
 
-  describe('⑤ 不搬节点、不新增键盘/定位手段（票面否决 ② 与 AC 末两条）', () => {
+  describe('⑤ 三张提问卡只活在欢迎态（#2814）', () => {
+    /** 取 prompt-list 节点的 v-if 表达式（判据源） */
+    function promptGateOf(src) {
+      const m = src.match(/<view v-if="([^"]+)" class="prompt-list">/);
+      return m ? m[1] : '';
+    }
+
+    /** QUICK_PROMPTS 的条目数（常量里每条是一行带引号的字符串） */
+    function quickPromptCount(src) {
+      const m = src.match(/export const QUICK_PROMPTS : string\[\] = \[([\s\S]*?)\]/);
+      if (!m) return -1;
+      return (m[1].match(/'[^']*'/g) || []).length;
+    }
+
+    /** 把 ① 的判据本体代入 (scoped, 消息条数) 求值 —— 只替换两个输入，不掺第二套条件 */
+    function renderCardCount(scoped, messageCount) {
+      const judge = judgeOf(PAGE);
+      const expr = judge
+        .replace(/isScoped\.value/g, String(scoped))
+        .replace(/messages\.value\.length/g, String(messageCount));
+      const visible = Function('return (' + expr + ')')();
+      return visible ? quickPromptCount(CONSTANTS) : 0;
+    }
+
+    it('prompt-list 的 v-if 就是 isWelcomeState，不再另写 !isScoped', () => {
+      expect(promptGateOf(PAGE)).toBe('isWelcomeState');
+    });
+
+    it('欢迎态 3 张、对话态 0 张（同一条判据代入两态）', () => {
+      expect(quickPromptCount(CONSTANTS)).toBe(3);
+      expect(renderCardCount(false, 0)).toBe(3);
+      expect(renderCardCount(false, 1)).toBe(0);
+      // 专项 scope 本来就无提问卡（回归：别因为这次收窄把它放出来）
+      expect(renderCardCount(true, 0)).toBe(0);
+    });
+
+    it('把 v-if 写回「仅通用区」的变形样本会被检出', () => {
+      const broken = '<view v-if="!isScoped" class="prompt-list">';
+      expect(promptGateOf(broken)).not.toBe('isWelcomeState');
+      expect(promptGateOf(broken)).toBe('!isScoped');
+    });
+  });
+
+  describe('⑥ 不搬节点、不新增键盘/定位手段（票面否决 ② 与 AC 末两条）', () => {
     it('输入卡仍在滚动容器之外', () => {
       const inputAt = PAGE.indexOf('<AiChatInput ');
       expect(inputAt).toBeGreaterThan(-1);
