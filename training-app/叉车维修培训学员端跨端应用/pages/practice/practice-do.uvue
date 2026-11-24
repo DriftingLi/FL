@@ -30,7 +30,7 @@
                         <view class="option-key" :class="session.getOptionKeyClass(opt.key)">
                             <text v-if="session.showResult.value && session.isCorrectAnswer(opt.key)" class="option-key-icon">✓</text>
                             <text v-else-if="session.showResult.value && session.isSelected(opt.key) && !session.isCorrectAnswer(opt.key)" class="option-key-icon">✗</text>
-                            <text v-else class="option-key-text">{{ opt.key }}</text>
+                            <text v-else class="option-key-text" :class="{ 'option-key-text--inverse': session.getOptionKeyClass(opt.key) == 'option-key-selected' }">{{ opt.key }}</text>
                         </view>
                         <text class="option-text">{{ opt.text }}</text>
                     </view>
@@ -106,7 +106,7 @@
         </view>
         <!-- 答题卡弹窗（原型 435:903）：标题居中 + 右上 X；单题承载无答题卡 -->
         <view v-if="session.showAnswerCard.value && !isSingle" class="answer-card-mask" @click="session.onCloseAnswerCard()">
-            <view class="answer-card-sheet" @click.stop>
+            <view class="answer-card-sheet" :style="{ paddingBottom: (48 + safeArea.bottomInset) + 'rpx' }" @click.stop>
                 <view class="answer-card-header">
                     <view class="answer-card-header-spacer"></view>
                     <text class="answer-card-title">答题卡</text>
@@ -143,6 +143,7 @@
     import { ref, computed } from 'vue'
     import { onLoad, onHide, onUnload } from '@dcloudio/uni-app'
     import { goBack } from '../../utils/navigation'
+    import { useSafeArea } from '../../utils/system'
     import { useAuthStore } from '../../stores/auth'
     import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
     import { usePracticeSession } from './composables/usePracticeSession'
@@ -152,6 +153,8 @@
     import type { KnowledgeTag } from '../../types/index'
 
     const authStore = useAuthStore()
+    /** 底部安全区（home indicator）：答题卡是贴底浮层，末行要避让 */
+    const safeArea = useSafeArea()
     const currentUserId = computed<number>(() : number => { const u = authStore.user.value; if (u != null) return u.user_id; return 0 })
     const windowHeight = uni.getSystemInfoSync().windowHeight
     const mode = ref<string>('free')
@@ -280,7 +283,7 @@
     .option-key-correct { border-color: $success-color; background-color: $success-color; }
     .option-key-wrong { border-color: $answer-wrong; background-color: $answer-wrong; }
     .option-key-text { font-size: 28rpx; font-weight: 600; color: $text-color-secondary; }
-    .option-key-selected .option-key-text { color: $card-bg; }
+    .option-key-text--inverse { color: $card-bg; }
     .option-key-icon { font-size: 28rpx; font-weight: bold; color: $card-bg; }
     .option-text { flex: 1; font-size: 30rpx; color: $text-color; line-height: 44rpx; }
 

@@ -14,7 +14,7 @@
                 <view v-for="chip in tagChips" :key="chip.tag_id"
                     :class="['filter-chip', { active: tagId == chip.tag_id }]"
                     @click="onTagClick(chip.tag_id)">
-                    <text class="filter-chip-text">{{ chip.name }}</text>
+                    <text class="filter-chip-text" :class="{ 'filter-chip-text--active': tagId == chip.tag_id }">{{ chip.name }}</text>
                 </view>
             </scroll-view>
         </view>
@@ -387,7 +387,10 @@ import { goBack } from '../../utils/navigation'
         color: $text-color;
     }
 
-    .filter-chip.active .filter-chip-text {
+    /* 关系选择器（父类 + 空格 + 子类）在 UCSS 里需运行时动态计算、有额外性能损耗，
+       HarmonyOS Vapor 不支持；祖先为复合类（两个类名连写）再跟后代时，编译产物是
+       含空格的死键、永远匹配不上 ⇒ 一律落成挂在元素自身的平类 */
+    .filter-chip-text--active {
         color: $primary-color;
     }
 

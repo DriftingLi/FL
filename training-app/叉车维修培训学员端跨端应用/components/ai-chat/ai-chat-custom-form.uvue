@@ -21,10 +21,10 @@
 		</view>
 		<view class="custom-actions">
 			<view class="custom-btn cancel" @click="onCancel">
-				<text class="custom-btn-text">取消</text>
+				<text class="custom-btn-text custom-btn-text--cancel">取消</text>
 			</view>
 			<view class="custom-btn primary" @click="onConfirm">
-				<text class="custom-btn-text">确认使用</text>
+				<text class="custom-btn-text custom-btn-text--primary">确认使用</text>
 			</view>
 		</view>
 	</view>
@@ -184,11 +184,14 @@
 		font-weight: bold;
 	}
 
-	.custom-btn.cancel .custom-btn-text {
+	/* 关系选择器（父类 + 空格 + 子类）在 UCSS 里需运行时动态计算、有额外性能损耗，
+	   HarmonyOS Vapor 不支持；祖先为复合类（两个类名连写）再跟后代时，编译产物是
+	   含空格的死键、永远匹配不上 ⇒ 一律落成挂在元素自身的平类 */
+	.custom-btn-text--cancel {
 		color: #333333;
 	}
 
-	.custom-btn.primary .custom-btn-text {
+	.custom-btn-text--primary {
 		color: #ffffff;
 	}
 </style>

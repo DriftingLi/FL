@@ -13,14 +13,15 @@
         </view>
         <view class="chapter-list">
             <view v-for="(chapter, idx) in chapters" :key="idx" class="chapter-item"
-                :class="{ 'chapter-completed': isChapterCompleted(chapter.chapter_id), 'chapter-current': isCurrentChapter(chapter.chapter_id) }"
+                :class="{ 'chapter-completed': isChapterCompleted(chapter.chapter_id), 'chapter-current': isCurrentChapter(chapter.chapter_id), 'chapter-item-pressed': pressedIdx === idx, 'chapter-item-last': idx === chapters.length - 1 }"
+                @touchstart="onPressStart(idx)" @touchend="onPressEnd" @touchcancel="onPressEnd"
                 @click="onChapterTap(chapter.chapter_id)">
-                <view class="chapter-index">
+                <view class="chapter-index" :class="{ 'chapter-index--done': isChapterCompleted(chapter.chapter_id) }">
                     <text v-if="isChapterCompleted(chapter.chapter_id)" class="chapter-check">✓</text>
                     <text v-else class="chapter-index-text">{{ idx + 1 }}</text>
                 </view>
                 <view class="chapter-info">
-                    <text class="chapter-title">{{ chapter.title }}</text>
+                    <text class="chapter-title" :class="{ 'chapter-title--done': isChapterCompleted(chapter.chapter_id) }">{{ chapter.title }}</text>
                     <text v-if="chapter.duration > 0" class="chapter-duration">{{ chapter.duration }} 分钟</text>
                 </view>
                 <text class="chapter-arrow">›</text>
@@ -31,6 +32,7 @@
 
 <script setup lang="uts">
     import type { ChapterItem } from '../../../types/index'
+    import { ref } from 'vue'
 
     const props = withDefaults(defineProps<{
         chapters? : ChapterItem[]
@@ -43,6 +45,18 @@
     })
 
     const emit = defineEmits(['chapterClick'])
+
+    /** 按下态行号（-1 = 无）。uvue 原生端不支持 `:active` 伪类，按压反馈只能靠
+     *  @touchstart/@touchend 切 class（ui-spec §5.10）。 */
+    const pressedIdx = ref<number>(-1)
+
+    function onPressStart(idx : number) : void {
+        pressedIdx.value = idx
+    }
+
+    function onPressEnd() : void {
+        pressedIdx.value = -1
+    }
 
     function onChapterTap(chapterId : number) : void {
         emit('chapterClick', chapterId)
@@ -101,11 +115,13 @@
         border-bottom: 1rpx solid #f5f5f5;
     }
 
-    .chapter-item:last-child {
+    /* uvue 原生端只认 .class 选择器：`:last-child` / `:active` 都会被静默忽略，
+       末行去分隔线与按压反馈改由模板切类（ui-spec §5.10）。 */
+    .chapter-item-last {
         border-bottom: none;
     }
 
-    .chapter-item:active {
+    .chapter-item-pressed {
         background-color: #f5f7fa;
     }
 
@@ -127,7 +143,10 @@
         flex-shrink: 0;
     }
 
-    .chapter-item.chapter-completed .chapter-index {
+    /* 关系选择器（父类 + 空格 + 子类）在 UCSS 里需运行时动态计算、有额外性能损耗，
+       HarmonyOS Vapor 不支持；祖先为复合类（两个类名连写）再跟后代时，编译产物是
+       含空格的死键、永远匹配不上 ⇒ 一律落成挂在元素自身的平类 */
+    .chapter-index--done {
         background-color: $success-tint;
     }
 
@@ -156,7 +175,7 @@
         text-overflow: ellipsis;
     }
 
-    .chapter-item.chapter-completed .chapter-title {
+    .chapter-title--done {
         color: #999999;
     }
 

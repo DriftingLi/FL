@@ -89,7 +89,9 @@
                 <!-- 底部留白 -->
                 <view style="height: 48rpx;"></view>
             </scroll-view>
-            <!-- 底部完成条（仅浮层形态 + 宿主开启）：点「完成」才落库，关闭面板不改证件 -->
+            <!-- 底部完成条（仅浮层形态 + 宿主开启）：点「完成」才落库，关闭面板不改证件。
+                 不补底部安全区内距：浮层只被 tabBar 页（dashboard）以浮层形态使用，
+                 webview 底边已在 tabBar 之上，再补会多出一截空白。 -->
             <view v-if="!embedded && confirmable" class="cert-dropdown-footer">
                 <view class="cert-dropdown-confirm" @click="onConfirm">
                     <text class="cert-dropdown-confirm-text">完成</text>

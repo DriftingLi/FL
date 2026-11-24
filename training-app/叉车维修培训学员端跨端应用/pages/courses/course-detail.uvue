@@ -47,7 +47,9 @@
 
             <!-- 底部操作栏：CTA 四态由 buildCourseCta 单点派生（免费/已拥有→学习，未拥有→兑换） -->
             <view class="action-bar">
-                <view class="action-btn" @click="onCtaClick">
+                <view class="action-btn" :class="{ 'action-btn-pressed': ctaPressed }"
+                    @touchstart="onCtaPressStart" @touchend="onCtaPressEnd" @touchcancel="onCtaPressEnd"
+                    @click="onCtaClick">
                     <text class="action-btn-text">{{ ctaText }}</text>
                 </view>
                 <!-- 余额不足的装饰提示：可点直达任务中心、永不拦截 CTA（读数缺失时整行缺席） -->
@@ -380,6 +382,17 @@ import { goBack } from '../../utils/navigation'
         }
     }
 
+    /** CTA 按压态（uvue 原生端无 `:active` 伪类，靠 touch 事件切类） */
+    const ctaPressed = ref<boolean>(false)
+
+    function onCtaPressStart() : void {
+        ctaPressed.value = true
+    }
+
+    function onCtaPressEnd() : void {
+        ctaPressed.value = false
+    }
+
     /**
      * 兑换 CTA 点击：非兑换面（免费 / 已拥有）直接学习；兑换面必过确认弹窗（决策 2）。
      * 余额不足也不在此拦截 —— 由服务端管线最终裁定（决策 3：预判永不拦截 CTA）。
@@ -479,7 +492,8 @@ import { goBack } from '../../utils/navigation'
         align-items: center;
     }
 
-    .action-btn:active {
+    /* uvue 原生端不支持 `:active` 伪类（ui-spec §5.10）：按压态由 @touchstart/@touchend 切类 */
+    .action-btn-pressed {
         opacity: 0.85;
     }
 

@@ -52,7 +52,7 @@
             <view v-if="item.imageUrls.length > 0" class="img-grid">
                 <view v-for="(img, i) in item.imageUrls" :key="i" class="img-cell small"
                     @click="onPreview(item, i)">
-                    <image class="img-thumb" :src="img" mode="aspectFill" :webp="true" />
+                    <image class="img-thumb img-thumb--small" :src="img" mode="aspectFill" :webp="true" />
                 </view>
             </view>
             <!-- 采纳按钮（问答帖 + 楼主 + 非自己回复 + 未采纳）；判定已由壳层下发，模板零求值 -->
@@ -352,7 +352,10 @@
         background-color: #f0f0f0;
     }
 
-    .img-cell.small .img-thumb {
+    /* 关系选择器（父类 + 空格 + 子类）在 UCSS 里需运行时动态计算、有额外性能损耗，
+       HarmonyOS Vapor 不支持；祖先为复合类（两个类名连写）再跟后代时，编译产物是
+       含空格的死键、永远匹配不上 ⇒ 一律落成挂在元素自身的平类 */
+    .img-thumb--small {
         width: 160rpx;
         height: 160rpx;
     }

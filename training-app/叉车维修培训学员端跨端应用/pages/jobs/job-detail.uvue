@@ -52,8 +52,9 @@
             </view>
         </scroll-view>
 
-        <!-- 底部投递按钮：三态由服务端 apply_state 决定（#1199） -->
-        <view v-if="job != null && !loading" class="bottom-bar">
+        <!-- 底部投递按钮：三态由服务端 apply_state 决定（#1199）。
+             贴底栏补 home indicator 内距（非 tabBar 页 webview 底边压在安全区上，微信指南要求避让）。 -->
+        <view v-if="job != null && !loading" class="bottom-bar" :style="{ paddingBottom: (16 + safeArea.bottomInset) + 'rpx' }">
             <view v-if="applyState() == 'none'" class="apply-btn" @click="onApply">
                 <text class="apply-btn-text">立即投递</text>
             </view>
@@ -109,7 +110,10 @@
     import { getJobDetailApi, reportJobApi, applyJobApi, REPORT_REASONS } from '../../api/job'
     import { checkFavoriteApi, addFavoriteApi, removeFavoriteApi } from '../../api/favorite'
     import type { JobPosting, ReportReason } from '../../types/index'
+    import { useSafeArea } from '../../utils/system'
     const windowHeight = uni.getSystemInfoSync().windowHeight
+    /** 底部安全区（home indicator）—— 贴底投递栏的内距来源 */
+    const safeArea = useSafeArea()
 
     // ---- 职位数据 ----
     const job = ref<JobPosting | null>(null)
@@ -432,9 +436,9 @@
     }
 
     /* 底部投递按钮 */
+    /* 底部内距由模板内联给（16rpx + 安全区），这里不再重复声明 padding-bottom */
     .bottom-bar {
         padding: 16rpx 24rpx;
-        padding-bottom: 16rpx;
         background-color: $card-bg;
         border-top: 1rpx solid $border-color-light;
     }
