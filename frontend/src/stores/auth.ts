@@ -94,6 +94,14 @@ export const useAuthStore = defineStore('auth', () => {
     clearAuthData()
   }
 
+  function mergeProfileInfo(info: UserProfile) {
+    userInfo.value = {
+      ...userInfo.value,
+      ...info
+    }
+    setUserInfo(userInfo.value)
+  }
+
   async function validateToken() {
     initFromStorage()
 
@@ -112,12 +120,8 @@ export const useAuthStore = defineStore('auth', () => {
       if (info) {
         // 全量合并 /auth/me 返回的资料（昵称/头像/邮箱等），
         // 避免登录响应只有基础字段导致重新登录后昵称头像回退
-        userInfo.value = {
-          ...userInfo.value,
-          ...info
-        }
+        mergeProfileInfo(info)
         isLoggedIn.value = true
-        setUserInfo(userInfo.value)
         // 恢复登录同样要拉能力集：强刷后守卫与侧栏都靠它（否则管理端首屏会被判无权限）
         await loadCapabilities()
       } else {
@@ -249,11 +253,7 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const info = await authApi.getUserInfo({ headers: { 'X-Silent': '1' } })
       if (info) {
-        userInfo.value = {
-          ...userInfo.value,
-          ...info
-        }
-        setUserInfo(userInfo.value)
+        mergeProfileInfo(info)
       }
     } catch (e) {
       console.warn('[Auth] refreshUserInfo failed:', e)

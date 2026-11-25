@@ -15,7 +15,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
@@ -27,7 +27,6 @@ import UiInput from '@/components/ui/UiInput.vue'
 
 const authStore = useAuthStore()
 const { remaining: countdown, send } = useSendCode({ purpose: 'bind', sendCode: (ch, tgt) => authApi.sendProfileCode({ channel: ch, target: tgt }) })
-const visible = ref(false)
 
 const title = computed(() => ((authStore.userInfo as any)?.phone ? '更换手机号' : '绑定手机号'))
 const placeholder = computed(() => '请输入新手机号')
@@ -35,17 +34,17 @@ const placeholder = computed(() => '请输入新手机号')
 const dlg = useVerifyDialog({
   sendCode: (t, ch) => send(t, ch),
   submitAsync: (t, c) => authApi.updateProfilePhone({ phone: t, code: c }),
-  onSuccess: async () => { ElMessage.success('修改成功'); await authStore.refreshUserInfo(); visible.value = false }
+  onSuccess: async () => { ElMessage.success('修改成功'); await authStore.refreshUserInfo() }
 })
 
+const visible = dlg.visible
 const target = dlg.target
 const code = dlg.code
 const sending = dlg.sending
 const submitting = dlg.submitting
 const submit = dlg.submit
 
-// wrap visible to dlg
-function open() { visible.value = true; dlg.open() }
+function open() { dlg.open() }
 async function sendCode() { await dlg.send(target.value, 'phone') }
 
 defineExpose({ open })

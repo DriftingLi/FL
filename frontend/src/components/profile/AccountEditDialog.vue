@@ -15,7 +15,6 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
@@ -27,7 +26,6 @@ import UiDialog from '@/components/ui/UiDialog.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 
 const authStore = useAuthStore()
-const visible = ref(false)
 const { remaining: countdown, send } = useSendCode({ purpose: 'account_change', sendCode: ()=> authApi.sendAccountChangeCode() })
 const dlg = useVerifyDialog({
   sendCode: (_t,ch)=> send(_t,ch),
@@ -36,10 +34,11 @@ const dlg = useVerifyDialog({
     const r = await authApi.updateAccount({ account: t, code: c })
     if (r?.token) authStore.setAuthData(r)
   },
-  onSuccess: async ()=>{ ElMessage.success('账号修改成功'); await authStore.refreshUserInfo(); visible.value=false }
+  onSuccess: async ()=>{ ElMessage.success('账号修改成功'); await authStore.refreshUserInfo() }
 })
+const visible = dlg.visible
 const target=dlg.target; const code=dlg.code; const sending=dlg.sending; const submitting=dlg.submitting; const submit=dlg.submit
-function open(){ visible.value=true; dlg.open() }
+function open(){ dlg.open() }
 async function sendCode(){ await dlg.send('', 'phone')}
 defineExpose({ open })
 </script>

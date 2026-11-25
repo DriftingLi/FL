@@ -64,7 +64,7 @@ export const authApi = {
   },
 
   updateCompany(data: { company: string }) {
-    return unwrappedRequest.put<ProfileChangeRequestDTO>('/auth/profile', data)
+    return this.updateProfile({ company: data.company })
   },
 
   deleteAccount() {
