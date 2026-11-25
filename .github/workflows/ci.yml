@@ -641,6 +641,13 @@ jobs:
       - name: 分片器自测（LPT 装箱判据）
         if: matrix.shard == 1 && matrix.leg == 'unit'
         run: node scripts/jest-fanout.test.mjs
+      # audit:ui 自测（#2864）：判据表合规 / 25 件扫描面并集闭合 / 两栏判定 / reasonCode 互斥 /
+      # fail-closed / golden 双跑逐字节相同。它**不是门**（#2715：audit:ui 不进 CI 必检），
+      # 这里跑的是**工具自身的单测**——工具坏了要红，工具的输出不判红。
+      # 只在 unit 腿第 1 片跑：与分片无关的判据，每个子 job 都跑不增信息。
+      - name: audit:ui 自测（只读聚合入口判据）
+        if: matrix.shard == 1 && matrix.leg == 'unit'
+        run: node scripts/audit-ui.test.mjs
 
 
   # ============================================================
