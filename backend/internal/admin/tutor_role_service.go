@@ -64,28 +64,7 @@ type TutorRoleListDTO struct {
 // 未知键一律 ErrUnknownCapability（不是静默丢弃）：静默丢弃会让「管理员以为授了、实际没授」
 // 变成一次无声的授权失败；而管理员侧的键在这里被拒，是防止讲师侧拿到审核权的那道闸。
 func normalizeTutorCapabilities(caps []string) ([]string, error) {
-	allowed := make(map[string]struct{}, len(authz.ProtectedTutorCapabilities()))
-	for _, c := range authz.ProtectedTutorCapabilities() {
-		allowed[string(c)] = struct{}{}
-	}
-	seen := make(map[string]struct{}, len(caps))
-	out := make([]string, 0, len(caps))
-	for _, c := range caps {
-		c = strings.TrimSpace(c)
-		if c == "" {
-			continue
-		}
-		if _, ok := allowed[c]; !ok {
-			return nil, ErrUnknownCapability
-		}
-		if _, dup := seen[c]; dup {
-			continue
-		}
-		seen[c] = struct{}{}
-		out = append(out, c)
-	}
-	sort.Strings(out)
-	return out, nil
+	return normalizeCapabilityKeys(caps, authz.ProtectedTutorCapabilities())
 }
 
 // tutorRoleCapabilitiesOf 一个角色的能力集：protected 角色由代码回答、不读表。
@@ -297,13 +276,14 @@ func replaceTutorRoleCapabilities(tx *gorm.DB, roleID int, caps []string) error 
 	if err := tx.Where("role_id = ?", roleID).Delete(&model.TutorRoleCapability{}).Error; err != nil {
 		return err
 	}
-	for _, c := range caps {
-		row := model.TutorRoleCapability{RoleID: roleID, Capability: c}
-		if err := tx.Create(&row).Error; err != nil {
-			return err
-		}
+	if len(caps) == 0 {
+		return nil
 	}
-	return nil
+	rows := make([]model.TutorRoleCapability, 0, len(caps))
+	for _, c := range caps {
+		rows = append(rows, model.TutorRoleCapability{RoleID: roleID, Capability: c})
+	}
+	return tx.Create(&rows).Error
 }
 
 // tutorDTOWithRole 讲师出口形（含所挂角色）。

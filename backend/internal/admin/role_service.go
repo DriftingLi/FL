@@ -75,24 +75,32 @@ type AdminAccountListDTO struct {
 	Accounts []AdminAccountDTO `json:"accounts" nullability:"nonnil"`
 }
 
-// normalizeCapabilities 校验并归一能力键（去重 + 字典序）。
+// normalizeCapabilities 校验并归一管理角色能力键（去重 + 字典序）。
 // **写面按 authz 能力表收口**：不接受表外字符串，否则库里会攒出永远不会被任何判据认出的键。
 func normalizeCapabilities(caps []string) ([]string, error) {
-	seen := make(map[string]bool, len(caps))
-	out := make([]string, 0, len(caps))
-	known := make(map[authz.Capability]bool)
-	for _, c := range authz.AllCapabilities() {
-		known[c] = true
+	return normalizeCapabilityKeys(caps, authz.AllCapabilities())
+}
+
+// normalizeCapabilityKeys 只做能力键的机械归一：trim、按调用方允许集校验、去重、排序。
+func normalizeCapabilityKeys(caps []string, allowed []authz.Capability) ([]string, error) {
+	known := make(map[authz.Capability]struct{}, len(allowed))
+	for _, c := range allowed {
+		known[c] = struct{}{}
 	}
+	seen := make(map[string]struct{}, len(caps))
+	out := make([]string, 0, len(caps))
 	for _, raw := range caps {
 		c := strings.TrimSpace(raw)
-		if c == "" || seen[c] {
+		if c == "" {
 			continue
 		}
-		if !known[authz.Capability(c)] {
+		if _, ok := known[authz.Capability(c)]; !ok {
 			return nil, ErrUnknownCapability
 		}
-		seen[c] = true
+		if _, dup := seen[c]; dup {
+			continue
+		}
+		seen[c] = struct{}{}
 		out = append(out, c)
 	}
 	sort.Strings(out)
