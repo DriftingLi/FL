@@ -119,77 +119,7 @@
         stripe
         style="width: 100%"
         row-key="id"
-        :expand-row-keys="expandedRows"
-        @expand-change="handleExpand"
       >
-        <el-table-column type="expand" width="40">
-          <template #default="{ row }">
-            <UiAsyncSection
-              :error="replyErrors.includes(row.id)"
-              :loading="detailLoadingId === row.id"
-              :skeleton="false"
-              error-title="回复加载失败"
-              error-description="网络或服务端异常，可重试"
-              @retry="loadReplies(row.id)"
-            >
-            <div v-loading="detailLoadingId === row.id" class="expand-replies">
-              <template v-if="replyMap[row.id]">
-                <div class="topic-content">
-                  <!-- 治理面看**实际展示效果**（ADR-0044）：渲染版才看得出学员最终看到的是什么。
-                       raw HTML 在 escape 策略下以文本形式可见，所以渲染版不会掩盖藏起来的标记。 -->
-                  <ForumContent
-                    :content="row.content"
-                    :format="row.content_format"
-                    link-policy="plain"
-                    class="topic-content-text"
-                  />
-                  <ForumImageGallery :images="row.images" />
-                </div>
-                <div v-if="replyMap[row.id].length > 0" class="reply-list">
-                  <div v-for="reply in replyMap[row.id]" :key="reply.id" class="reply-item">
-                    <div class="reply-meta">
-                      <el-avatar :size="24" :src="reply.author.avatar_url || undefined">
-                        {{ displayName(reply.author).charAt(0).toUpperCase() }}
-                      </el-avatar>
-                      <span class="reply-author">{{ displayName(reply.author) }}</span>
-                      <!-- 与学员端一致的「› 被回复人」行内形态（ADR-0042），不再用独立引用块 -->
-                      <span v-if="reply.parent_id && reply.parent_name" class="reply-quote">
-                        › {{ reply.parent_name }}
-                      </span>
-                      <span class="reply-time">{{ formatLocaleDateTime(reply.created_at) }}</span>
-                      <UiButton variant="danger" class="reply-delete" size="small" @click="deleteReply(reply)">
-                        删除回复
-                      </UiButton>
-                    </div>
-                    <!-- 回复同样按声明格式渲染：管理员判断违规依据的是学员实际看到的样子 -->
-                    <ForumContent
-                      :content="reply.content"
-                      :format="toForumContentFormat(reply.content_format)"
-                      link-policy="plain"
-                      class="reply-content"
-                    />
-                    <ForumImageGallery :images="reply.images" />
-                  </div>
-                </div>
-                <!-- 回复分页（ADR-0042）：治理面必须能翻到底，不能只看首页 -->
-                <div v-if="replyMap[row.id] && hasMoreReplies(row.id)" class="reply-more">
-                  <span v-if="replyMoreErrors.includes(row.id)" class="reply-error">加载失败，可重试</span>
-                  <UiButton
-                    size="small"
-                    :loading="replyLoadingMoreIds.includes(row.id)"
-                    @click="loadMoreReplies(row.id)"
-                  >
-                    加载更多回复（剩余 {{ remainingRepliesOf(row.id) }} 条）
-                  </UiButton>
-                </div>
-                <UiEmptyState v-else-if="isEmptyReplies(row.id)" description="暂无回复" size="sm" />
-              </template>
-              <div v-else class="reply-loading">加载中…</div>
-            </div>
-            </UiAsyncSection>
-          </template>
-        </el-table-column>
-        <el-table-column prop="id" label="ID" width="70" align="center" />
         <el-table-column label="标题" min-width="240">
           <template #default="{ row }">
             <div class="title-cell">
@@ -203,10 +133,13 @@
                    不合并、也绝不出现「经验但非精选」的误导态 -->
               <UiTag v-if="row.is_experience" size="small" tone="warning" effect="dark" class="font-semibold">备考经验</UiTag>
               <UiTag v-if="row.is_featured" size="small" effect="dark" class="font-semibold">★ 精选</UiTag>
-              <span class="title-text">{{ row.title }}</span>
+              <button type="button" class="title-text cursor-pointer border-0 bg-transparent p-0 text-left underline-offset-2 hover:underline" @click="openTopic(row, $event)">
+                {{ row.title }}
+              </button>
             </div>
           </template>
         </el-table-column>
+        <el-table-column prop="id" label="ID" width="70" align="center" />
         <el-table-column label="作者" min-width="120">
           <template #default="{ row }">{{ displayName(row.author) }}</template>
         </el-table-column>
@@ -232,6 +165,73 @@
       
       </template>
       </UiCard>
+    <el-drawer v-model="topicDrawerOpen" :title="selectedTopic?.title" size="min(640px, 100vw)" @closed="restoreTopicFocus">
+      <template v-if="selectedTopic">
+        <div class="topic-content">
+          <!-- 治理面看**实际展示效果**（ADR-0044）：渲染版才看得出学员最终看到的是什么。
+               raw HTML 在 escape 策略下以文本形式可见，所以渲染版不会掩盖藏起来的标记。 -->
+          <ForumContent
+            :content="selectedTopic.content"
+            :format="toForumContentFormat(selectedTopic.content_format)"
+            link-policy="plain"
+            class="topic-content-text"
+          />
+          <ForumImageGallery :images="selectedTopic.images" />
+        </div>
+        <UiAsyncSection
+          :error="replyErrors.includes(selectedTopic.id)"
+          :loading="loadingReplyIds.has(selectedTopic.id)"
+          :skeleton="false"
+          error-title="回复加载失败"
+          error-description="网络或服务端异常，可重试"
+          @retry="loadReplies(selectedTopic.id)"
+        >
+          <div v-loading="loadingReplyIds.has(selectedTopic.id)" class="pt-2">
+            <template v-if="replyMap[selectedTopic.id]">
+              <div v-if="replyMap[selectedTopic.id].length > 0" class="reply-list">
+                <div v-for="reply in replyMap[selectedTopic.id]" :key="reply.id" class="reply-item">
+                  <div class="reply-meta">
+                    <el-avatar :size="24" :src="reply.author.avatar_url || undefined">
+                      {{ displayName(reply.author).charAt(0).toUpperCase() }}
+                    </el-avatar>
+                    <span class="reply-author">{{ displayName(reply.author) }}</span>
+                    <!-- 与学员端一致的「› 被回复人」行内形态（ADR-0042），不再用独立引用块 -->
+                    <span v-if="reply.parent_id && reply.parent_name" class="reply-quote">
+                      › {{ reply.parent_name }}
+                    </span>
+                    <span class="reply-time">{{ formatLocaleDateTime(reply.created_at) }}</span>
+                    <UiButton variant="danger" class="reply-delete" size="small" @click="deleteReply(reply)">
+                      删除回复
+                    </UiButton>
+                  </div>
+                  <!-- 回复同样按声明格式渲染：管理员判断违规依据的是学员实际看到的样子 -->
+                  <ForumContent
+                    :content="reply.content"
+                    :format="toForumContentFormat(reply.content_format)"
+                    link-policy="plain"
+                    class="reply-content"
+                  />
+                  <ForumImageGallery :images="reply.images" />
+                </div>
+              </div>
+              <!-- 回复分页（ADR-0042）：治理面必须能翻到底，不能只看首页 -->
+              <div v-if="replyMap[selectedTopic.id] && hasMoreReplies(selectedTopic.id)" class="reply-more">
+                <span v-if="replyMoreErrors.includes(selectedTopic.id)" class="reply-error">加载失败，可重试</span>
+                <UiButton
+                  size="small"
+                  :loading="replyLoadingMoreIds.includes(selectedTopic.id)"
+                  @click="loadMoreReplies(selectedTopic.id)"
+                >
+                  加载更多回复（剩余 {{ remainingRepliesOf(selectedTopic.id) }} 条）
+                </UiButton>
+              </div>
+              <UiEmptyState v-else-if="isEmptyReplies(selectedTopic.id)" description="暂无回复" size="sm" />
+            </template>
+            <div v-else class="reply-loading">加载中…</div>
+          </div>
+        </UiAsyncSection>
+      </template>
+    </el-drawer>
   </div>
 </template>
 
@@ -304,9 +304,11 @@ function handlePageChange(): void {
 // category='experience' 的存量行已由迁移降级为 discussion，发它必然空。
 const activeTab = ref<ForumTab>('all')
 const keyword = ref('')
-const expandedRows = ref<number[]>([])
+const selectedTopic = ref<AdminForumTopic | null>(null)
+const topicDrawerOpen = ref(false)
+let topicTrigger: HTMLElement | null = null
 const replyMap = ref<Record<number, AdminForumReply[]>>({})
-const detailLoadingId = ref<number | null>(null)
+const loadingReplyIds = ref(new Set<number>())
 // 回复分页（ADR-0042）：详情接口分页返回，治理面必须能翻到底——
 // 只渲染首页会让管理员看不见后面的违规回复。
 const ADMIN_REPLY_PAGE_SIZE = 20
@@ -402,16 +404,23 @@ function handleSearch() {
   loadList()
 }
 
-async function handleExpand(row: AdminForumTopic, expandedRowsNow: AdminForumTopic[]) {
-  const expanded = expandedRowsNow.map(r => r.id)
-  expandedRows.value = expanded
-  if (expanded.includes(row.id) && !replyMap.value[row.id]) {
-    await loadReplies(row.id)
-  }
+function openTopic(topic: AdminForumTopic, event: MouseEvent) {
+  topicTrigger = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  selectedTopic.value = topic
+  topicDrawerOpen.value = true
+  if (!replyMap.value[topic.id]) void loadReplies(topic.id)
+}
+
+function restoreTopicFocus() {
+  if (topicDrawerOpen.value) return
+  selectedTopic.value = null
+  if (topicTrigger?.isConnected) topicTrigger.focus({ preventScroll: true })
+  topicTrigger = null
 }
 
 async function loadReplies(topicId: number) {
-  detailLoadingId.value = topicId
+  if (loadingReplyIds.value.has(topicId)) return
+  loadingReplyIds.value.add(topicId)
   replyErrors.value = replyErrors.value.filter(id => id !== topicId)
   try {
     const res = await adminForumApi.getTopic(topicId, 1, ADMIN_REPLY_PAGE_SIZE)
@@ -422,10 +431,10 @@ async function loadReplies(topicId: number) {
     }
   } catch (e) {
     console.error('加载回复失败:', e)
-    /* 拦截器已 toast；错误态由本行的 replyErrors 承载（展开面板内可见 + 可重试） */
+    /* 抽屉内可重试。 */
     replyErrors.value = [...replyErrors.value, topicId]
   } finally {
-    detailLoadingId.value = null
+    loadingReplyIds.value.delete(topicId)
   }
 }
 
@@ -662,10 +671,6 @@ onMounted(loadList)
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.expand-replies {
-  padding: 8px 20px 8px 60px;
 }
 
 .topic-content {

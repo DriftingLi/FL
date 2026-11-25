@@ -138,7 +138,7 @@ describe('QuestionReview 分类与公开状态', () => {
     expect(questionBankApi.getQuestions).toHaveBeenCalledWith(expect.objectContaining({ category_id: 'legacy' }))
   })
 
-  it('列表和详情展示 canonical 分类、审核状态及全部公开原因', async () => {
+  it('列表展示首个原因，点击题干可在详情看全部原因', async () => {
     const wrapper = mountPage()
     await flushPromises()
 
@@ -146,14 +146,30 @@ describe('QuestionReview 分类与公开状态', () => {
     expect(row.text()).toContain('维修')
     expect(row.text()).toContain('待审核')
     expect(row.text()).toContain('未发布')
-    expect(row.text()).toContain('来源标签题不计入公开题库')
+    expect(row.text()).not.toContain('来源标签题不计入公开题库')
 
-    const detail = await openDetail(wrapper)
+    await row.get('button').trigger('click')
+    await flushPromises()
+    const detail = wrapper.findAllComponents(UiDialog).find(dialog => dialog.props('title') === '题目详情')!
     expect(detail.props('modelValue')).toBe(true)
     expect(document.body.textContent).toContain('分类：维修')
     expect(document.body.textContent).toContain('审核状态：待审核')
     expect(document.body.textContent).toContain('未发布')
     expect(document.body.textContent).toContain('来源标签题不计入公开题库')
+  })
+
+  it('批量操作只在表格有选中项时出现', async () => {
+    const wrapper = mountPage()
+    await flushPromises()
+    const table = wrapper.getComponent({ name: 'ElTable' })
+    expect(wrapper.text()).not.toContain('批量发布')
+    table.vm.$emit('selection-change', [{ id: 11 }])
+    await flushPromises()
+    expect(wrapper.get('[role="status"]').text()).toBe('已选 1 道题')
+    expect(wrapper.text()).toContain('批量驳回')
+    table.vm.$emit('selection-change', [])
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('批量发布')
   })
 
   it('发布后用接口终态刷新列表和详情，保留剩余公开原因', async () => {

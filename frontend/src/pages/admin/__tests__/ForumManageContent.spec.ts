@@ -66,9 +66,7 @@ async function mountManage(topic: ReturnType<typeof adminTopic>) {
     global: { plugins: [epLite()], stubs: { ForumImageGallery: true } }
   });
   await flushPromises();
-  // 触发展开：el-table 的 expand-change 是页面接线入口
-  const table = w.findComponent({ name: "ElTable" });
-  table.vm.$emit("expand-change", topic, [topic]);
+  await w.get('button.title-text').trigger('click');
   await flushPromises();
   await new Promise((r) => setTimeout(r, 0));
   await flushPromises();
@@ -78,12 +76,12 @@ async function mountManage(topic: ReturnType<typeof adminTopic>) {
 describe('管理端正文渲染（#880 / ADR-0044）', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('markdown 帖在展开面板里渲染成展示效果', async () => {
+  it('markdown 帖在详情抽屉里渲染成展示效果', async () => {
     const w = await mountManage(adminTopic());
     expect(w.find('.topic-content h2').exists()).toBe(true);
   });
 
-  it('markdown 回复在展开面板里也渲染（管理员同样要看实际展示效果）', async () => {
+  it('markdown 回复在详情抽屉里也渲染', async () => {
     const topic = adminTopic();
     listTopics.mockResolvedValue({ items: [topic], total: 1 } as never);
     getTopic.mockResolvedValue({
@@ -109,7 +107,7 @@ describe('管理端正文渲染（#880 / ADR-0044）', () => {
       global: { plugins: [epLite()], stubs: { ForumImageGallery: true } }
     });
     await flushPromises();
-    w.findComponent({ name: "ElTable" }).vm.$emit("expand-change", topic, [topic]);
+    await w.get('button.title-text').trigger('click');
     await flushPromises();
     await new Promise((r) => setTimeout(r, 0));
     await flushPromises();

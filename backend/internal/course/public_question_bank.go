@@ -63,6 +63,7 @@ func (s *Service) ListPublicQuestionBanks(ctx context.Context) (*PublicQuestionB
 	var rows []row
 	err := publicscope.ActiveCategoryScope(s.db.WithContext(ctx).Table("question"), publicscope.QuestionCategoryColumn).
 		Where(questionpool.PublishedSQL).
+		Where("question.public_hidden = ?", false).
 		Where(questionpool.ExcludeSourceTagsSQL).
 		Select("training_category.id AS category_id, training_category.name AS category_name, " +
 			"question.type AS question_type, COUNT(*) AS count").

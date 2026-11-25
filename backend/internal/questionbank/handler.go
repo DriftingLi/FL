@@ -93,6 +93,7 @@ func RegisterRoutes(rg *gin.RouterGroup, session *security.Session, credRes midd
 	g.PUT("/questions/:question_id", middleware.CapabilityRequired(authz.CapQuestionAuthor), h.UpdateQuestion)
 	g.DELETE("/questions/:question_id", middleware.CapabilityRequired(authz.CapQuestionAuthor), h.DeleteQuestion)
 	g.POST("/questions/:question_id/publish", middleware.CapabilityRequired(authz.CapQuestionReview), h.PublishQuestion)
+	g.PUT("/questions/:question_id/public-visibility", middleware.CapabilityRequired(authz.CapQuestionReview), h.SetPublicVisibility)
 	g.POST("/questions/:question_id/reject", middleware.CapabilityRequired(authz.CapQuestionReview), h.RejectQuestion)
 	g.POST("/questions/:question_id/submit", middleware.CapabilityRequired(authz.CapQuestionAuthor), h.SubmitQuestion)
 	g.GET("/stats", h.GetStats)

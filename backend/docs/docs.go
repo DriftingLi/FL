@@ -2543,6 +2543,87 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/course/{course_id}/public-visibility": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "课程管理"
+                ],
+                "summary": "设置课程的公开开关",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "课程ID",
+                        "name": "course_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "是否允许公开",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/publicscope.VisibilityInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/publicscope.Eligibility"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "无权限",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "内容不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/course/{course_id}/sort": {
             "put": {
                 "security": [
@@ -18205,6 +18286,87 @@ const docTemplate = `{
                 }
             }
         },
+        "/question-bank/questions/{question_id}/public-visibility": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "题目管理"
+                ],
+                "summary": "设置题目的公开开关",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "题目ID",
+                        "name": "question_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "是否允许公开",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/publicscope.VisibilityInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/publicscope.Eligibility"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "无权限",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "内容不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/question-bank/questions/{question_id}/publish": {
             "post": {
                 "security": [
@@ -32831,6 +32993,7 @@ const docTemplate = `{
         "publicscope.Reason": {
             "type": "string",
             "enum": [
+                "manually_hidden",
                 "not_published",
                 "category_missing",
                 "category_disabled",
@@ -32840,6 +33003,7 @@ const docTemplate = `{
                 "source_tag_excluded"
             ],
             "x-enum-varnames": [
+                "ReasonManuallyHidden",
                 "ReasonNotPublished",
                 "ReasonCategoryMissing",
                 "ReasonCategoryDisabled",
@@ -32848,6 +33012,17 @@ const docTemplate = `{
                 "ReasonCredentialDisabled",
                 "ReasonSourceTagExcluded"
             ]
+        },
+        "publicscope.VisibilityInput": {
+            "type": "object",
+            "required": [
+                "visible"
+            ],
+            "properties": {
+                "visible": {
+                    "type": "boolean"
+                }
+            }
         },
         "questionbank.QuestionBankStatsDTO": {
             "type": "object",

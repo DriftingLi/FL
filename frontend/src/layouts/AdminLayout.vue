@@ -1,6 +1,22 @@
 <template>
-  <SidebarLayout :menu-items="adminNav" :keep-alive-names="cachedNames">
-    <!-- 标签栏（#1620）：内容列顶部、贴顶栏下沿，随顶栏一起固定 -->
+  <SidebarLayout
+    class="admin-layout"
+    :menu-items="adminNav"
+    :keep-alive-names="cachedNames"
+    :content-header-visible="tabsStore.expanded"
+    expand-active-group
+  >
+    <template #topbar>
+      <UiButton
+        variant="ghost"
+        size="small"
+        aria-controls="admin-page-tabs"
+        :aria-expanded="tabsStore.expanded"
+        @click="tabsStore.expanded = !tabsStore.expanded"
+      >
+        {{ tabsStore.expanded ? '收起页签' : '展开页签' }}
+      </UiButton>
+    </template>
     <template #content-header>
       <AdminTabBar />
     </template>
@@ -11,6 +27,7 @@
 import { computed, watch } from 'vue'
 import SidebarLayout from './SidebarLayout.vue'
 import AdminTabBar from '@/components/layout/AdminTabBar.vue'
+import UiButton from '@/components/ui/UiButton.vue'
 import { roleNavigation, filterNavByCapability, keepAliveNames } from '@/config/navigation'
 import { useAuthStore } from '@/stores/auth'
 import { useAdminTabsStore } from '@/stores/adminTabs'
@@ -39,3 +56,17 @@ watch(
   }
 )
 </script>
+
+<style scoped>
+@media screen and (max-width: 768px) {
+  .admin-layout :deep(.app-topbar),
+  .admin-layout :deep(.app-topbar.is-collapsed) {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  .admin-layout :deep(.topbar-left) {
+    padding-inline: var(--space-2);
+    gap: var(--space-2);
+  }
+}
+</style>

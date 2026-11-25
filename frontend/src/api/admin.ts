@@ -12,6 +12,7 @@
 // 别名规则（片一统一口径）：旧名与生成形状确实对应时保留旧名（响应形状一律取生成类型）；
 // 旧名对应错形状时删旧名、改出生成名（本片差异逐条记于片七字段级差异清单）。
 import { unwrappedRequest } from './request'
+import type { Eligibility } from './generated/course'
 // 票 6（ADR-0060 决策 6）：本模块的分页端点在**出口处**把后端的键名（list / tutors / requests /
 // items）消解成中立容器 Page<T>——页面因此不再需要知道「导师列表的键叫 tutors」。
 import { toPage, type Page } from './page'
@@ -461,6 +462,10 @@ export const adminApi = {
 
   createCourse(data: CoursePayload) {
     return unwrappedRequest.post<CourseDTO>('/admin/course', data)
+  },
+
+  setPublicVisibility(id: number, visible: boolean) {
+    return unwrappedRequest.put<Eligibility>(`/admin/course/${id}/public-visibility`, { visible })
   },
 
   updateCourse(id: number, data: CoursePayload) {

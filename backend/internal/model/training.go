@@ -37,11 +37,12 @@ const (
 )
 
 type Course struct {
-	CourseID    int    `gorm:"column:course_id;primaryKey" json:"course_id"`
-	Name        string `gorm:"column:name" json:"name"`
-	Description string `gorm:"column:description" json:"description"`
-	CoverImage  string `gorm:"column:cover_image" json:"cover_image"`
-	Duration    int    `gorm:"column:duration;default:0" json:"duration"`
+	PublicHidden bool   `gorm:"column:public_hidden;not null;default:false;<-:create" json:"-"`
+	CourseID     int    `gorm:"column:course_id;primaryKey" json:"course_id"`
+	Name         string `gorm:"column:name" json:"name"`
+	Description  string `gorm:"column:description" json:"description"`
+	CoverImage   string `gorm:"column:cover_image" json:"cover_image"`
+	Duration     int    `gorm:"column:duration;default:0" json:"duration"`
 	// CredentialID 所属目标证件（顶层分区，单归属）。
 	CredentialID *int `gorm:"column:credential_id" json:"credential_id,omitempty"`
 	CategoryID   *int `gorm:"column:category_id" json:"-"`

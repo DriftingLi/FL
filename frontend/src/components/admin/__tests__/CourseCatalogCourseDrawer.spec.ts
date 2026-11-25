@@ -11,6 +11,7 @@ vi.mock('@/api/admin', () => ({
     getCourseDetail: vi.fn(),
     createCourse: vi.fn(),
     updateCourse: vi.fn(),
+    setPublicVisibility: vi.fn(),
     createChapter: vi.fn(),
     updateChapter: vi.fn(),
     deleteChapter: vi.fn()
@@ -159,5 +160,61 @@ describe('CourseCatalogCourseDrawer 积分价写入契约', () => {
     ;(wrapper.vm as unknown as { open: (c: null) => void }).open(null)
     await flushPromises()
     expect(categorySelect.props('options')).toEqual([{ label: '维修', value: 9 }])
+  })
+})
+
+describe('课程抽屉公开资格', () => {
+  it('先前课程的详情晚到时，保留当前课程的表单与公开原因', async () => {
+    let resolveFirst!: (detail: AdminCourseDetail) => void
+    const first = new Promise<AdminCourseDetail>(resolve => { resolveFirst = resolve })
+    vi.mocked(adminApi.getCourseDetail)
+      .mockReturnValueOnce(first)
+      .mockResolvedValueOnce(courseDetailDTO({
+        course_id: 2,
+        name: '当前课程',
+        public_eligibility: { eligible: false, reasons: ['manually_hidden'] }
+      }))
+    const wrapper = mountDrawer()
+    const drawer = wrapper.vm as unknown as { open: (course: AdminCourseItem) => void }
+    drawer.open(courseDTO())
+    drawer.open(courseDTO({ course_id: 2 }))
+    await flushPromises()
+    resolveFirst(courseDetailDTO({
+      name: '前一门课程',
+      public_eligibility: { eligible: false, reasons: ['category_missing'] }
+    }))
+    await flushPromises()
+    expect(wrapper.text()).toContain('管理员已关闭公开')
+    expect(wrapper.text()).not.toContain('未设置培训分类')
+    expect(wrapper.findAll('input').some(input => input.element.value === '当前课程')).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('开关更新失败保留原公开状态，打开同一开关可以重试', async () => {
+    const publicEligibility = { eligible: false, reasons: ['manually_hidden'] } as const
+    vi.mocked(adminApi.getCourseDetail).mockResolvedValue(courseDetailDTO({
+      public_eligibility: { ...publicEligibility, reasons: [...publicEligibility.reasons] }
+    }))
+    vi.mocked(adminApi.setPublicVisibility)
+      .mockRejectedValueOnce(new Error('请求失败'))
+      .mockResolvedValueOnce({ eligible: true, reasons: [] })
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const wrapper = mountDrawer()
+    try {
+      ;(wrapper.vm as unknown as { open: (course: AdminCourseItem) => void }).open(courseDTO())
+      await flushPromises()
+      const toggle = wrapper.getComponent({ name: 'ElSwitch' })
+      toggle.vm.$emit('change', true)
+      await flushPromises()
+      expect(toggle.props('modelValue')).toBe(false)
+      expect(wrapper.emitted('visibilityChanged')).toBeUndefined()
+      toggle.vm.$emit('change', true)
+      await flushPromises()
+      expect(toggle.props('modelValue')).toBe(true)
+      expect(wrapper.emitted('visibilityChanged')).toEqual([[1, { eligible: true, reasons: [] }]])
+    } finally {
+      log.mockRestore()
+      wrapper.unmount()
+    }
   })
 })

@@ -2,6 +2,7 @@ package course
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -226,5 +227,36 @@ func TestPublicQuestionBanksEmptyResultIsEmptyList(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), `"question_banks":[]`) {
 		t.Fatalf("空结果应是 []，实得: %s", w.Body)
+	}
+}
+
+func TestPublicSchoolVisibilitySwitchUpdatesVisitorOutlets(t *testing.T) {
+	f := setupQuestionBankFixture(t)
+	courseID := f.visibleCourse.CourseID
+	for _, hidden := range []bool{true, false} {
+		if err := f.db.Table("course").Where("course_id = ?", courseID).UpdateColumn("public_hidden", hidden).Error; err != nil {
+			t.Fatal(err)
+		}
+		if err := f.db.Table("question").Where("category_id = ?", f.bankOnlyCat.ID).UpdateColumn("public_hidden", hidden).Error; err != nil {
+			t.Fatal(err)
+		}
+		detail := f.get(t, "/api/public-school/courses/"+strconv.Itoa(courseID))
+		wantStatus := http.StatusOK
+		if hidden {
+			wantStatus = http.StatusNotFound
+		}
+		if detail.Code != wantStatus {
+			t.Fatalf("hidden=%v: course detail status=%d, want %d", hidden, detail.Code, wantStatus)
+		}
+		banks := decodeData[PublicQuestionBankListDTO](t, f.get(t, "/api/public-school/question-banks"))
+		found := false
+		for _, bank := range banks.QuestionBanks {
+			if bank.CategoryID == f.bankOnlyCat.ID {
+				found = true
+			}
+		}
+		if found == hidden {
+			t.Fatalf("hidden=%v: question bank present=%v", hidden, found)
+		}
 	}
 }

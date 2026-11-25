@@ -21,12 +21,6 @@
       />
       <UiInput v-model="filters.keyword" placeholder="搜索题目" clearable style="width: 200px" @keyup.enter="loadData"  />
       <UiButton variant="primary" @click="loadData">查询</UiButton>
-      <UiButton variant="success" v-if="selectedIds.length > 0" @click="batchPublish">
-        批量发布 ({{ selectedIds.length }})
-      </UiButton>
-      <UiButton variant="danger" v-if="selectedIds.length > 0" @click="batchReject">
-        批量驳回 ({{ selectedIds.length }})
-      </UiButton>
         </template>
       </UiFilterBar>
 
@@ -45,37 +39,50 @@
       :retrying="retrying"
       @retry="retryLoad"
     />
-    <el-table v-else :data="questions" stripe v-loading="loading" @selection-change="handleSelection">
-      <el-table-column type="selection" width="50" />
-      <el-table-column prop="id" label="ID" width="60" />
-      <el-table-column prop="type" label="题型" width="100">
-        <template #default="{ row }">{{ (typeMap as Record<string, string>)[row.type] }}</template>
-      </el-table-column>
-      <el-table-column prop="content" label="题干" show-overflow-tooltip />
-      <el-table-column label="分类" width="150">
-        <template #default="{ row }">
-          <UiTag v-if="row.category" :tone="row.category.status === 0 ? 'warning' : 'neutral'" size="small" effect="plain">
-            {{ row.category.name }}{{ row.category.status === 0 ? '（停用）' : '' }}
-          </UiTag>
-          <UiTag v-else tone="danger" size="small" effect="plain">未分类</UiTag>
-        </template>
-      </el-table-column>
-      <el-table-column label="审核状态" width="100">
-        <template #default="{ row }">
-          <UiTag :tone="questionStatusTone[row.status]" size="small">{{ questionStatusMap[row.status] }}</UiTag>
-        </template>
-      </el-table-column>
-      <el-table-column label="公开资格" min-width="280">
-        <template #default="{ row }">
-          <PublicEligibility :eligibility="row.public_eligibility" />
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" width="90" fixed="right" align="center">
-        <template #default="{ row }">
-          <UiMoreMenu trigger="text" :items="actionItems(row)" @select="(k: string) => handleAction(k, row)" />
-        </template>
-      </el-table-column>
-    </el-table>
+    <div v-else>
+      <div v-if="selectedIds.length && !loading" class="mb-3 flex flex-wrap items-center gap-2 rounded-card border border-line bg-panel p-3">
+        <span role="status">已选 {{ selectedIds.length }} 道题</span>
+        <UiButton variant="success" size="small" @click="batchPublish">批量发布</UiButton>
+        <UiButton variant="danger" size="small" @click="batchReject">批量驳回</UiButton>
+      </div>
+      <el-table :data="questions" stripe v-loading="loading" @selection-change="handleSelection">
+        <el-table-column type="selection" width="50" />
+        <el-table-column label="题干" min-width="260" show-overflow-tooltip>
+          <template #default="{ row }">
+            <button type="button" class="block w-full cursor-pointer truncate border-0 bg-transparent p-0 text-left text-ink underline-offset-2 hover:underline" @click="viewDetail(row)">
+              {{ row.content || '查看题目' }}
+            </button>
+          </template>
+        </el-table-column>
+        <el-table-column prop="id" label="ID" width="60" />
+        <el-table-column prop="type" label="题型" width="100">
+          <template #default="{ row }">{{ (typeMap as Record<string, string>)[row.type] }}</template>
+        </el-table-column>
+        <el-table-column label="分类" width="150">
+          <template #default="{ row }">
+            <UiTag v-if="row.category" :tone="row.category.status === 0 ? 'warning' : 'neutral'" size="small" effect="plain">
+              {{ row.category.name }}{{ row.category.status === 0 ? '（停用）' : '' }}
+            </UiTag>
+            <UiTag v-else tone="danger" size="small" effect="plain">未分类</UiTag>
+          </template>
+        </el-table-column>
+        <el-table-column label="审核状态" width="100">
+          <template #default="{ row }">
+            <UiTag :tone="questionStatusTone[row.status]" size="small">{{ questionStatusMap[row.status] }}</UiTag>
+          </template>
+        </el-table-column>
+        <el-table-column label="公开资格" width="150">
+          <template #default="{ row }">
+            <PublicEligibility :eligibility="row.public_eligibility" :reason-limit="1" />
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="90" fixed="right" align="center">
+          <template #default="{ row }">
+            <UiMoreMenu trigger="text" :items="actionItems(row)" @select="(k: string) => handleAction(k, row)" />
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
 
     <UiPagination
       v-model:current-page="page"
@@ -95,6 +102,15 @@
         <p><strong>审核状态：</strong>{{ questionStatusMap[currentQuestion.status] }}</p>
         <p><strong>公开资格：</strong></p>
         <PublicEligibility :eligibility="currentQuestion.public_eligibility" />
+        <div v-if="currentQuestion.public_eligibility">
+          <UiSwitch
+            :model-value="allowsPublicVisibility(currentQuestion.public_eligibility)"
+            :disabled="updatingVisibility"
+            aria-label="允许公开题目"
+            active-text="允许公开"
+            @change="setQuestionVisibility(currentQuestion, $event === true)"
+          />
+        </div>
         <div v-if="currentQuestion.options">
           <p><strong>选项：</strong></p>
           <p v-for="(val, key) in currentQuestion.options" :key="key">{{ key }}. {{ val }}</p>
@@ -166,6 +182,8 @@ import UiAlert from '@/components/ui/UiAlert.vue'
 import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 import UiSelect from '@/components/ui/UiSelect.vue'
+import UiSwitch from '@/components/ui/UiSwitch.vue'
+import { allowsPublicVisibility } from '@/utils/publicEligibility'
 import PublicEligibility from '@/components/catalog/PublicEligibility.vue'
 
 type ReviewQuestion = Question & {
@@ -224,6 +242,7 @@ const pendingCount = ref(0)
 
 const detailVisible = ref(false)
 const currentQuestion = ref<ReviewQuestion | null>(null)
+const updatingVisibility = ref(false)
 
 // 驳回相关
 // 驳回理由弹窗：#795 三域共用的弹窗状态机（visible/reason/submitting + 空理由校验 + 失败保留理由）
@@ -314,6 +333,22 @@ function viewDetail(row: ReviewQuestion) {
 }
 
 // 单题发布：接口返回的终态同时回填列表与详情，再按当前筛选重装实际列表。
+async function setQuestionVisibility(row: ReviewQuestion, visible: boolean) {
+  if (updatingVisibility.value) return
+  updatingVisibility.value = true
+  try {
+    const eligibility = await questionBankApi.setPublicVisibility(row.id, visible)
+    const listed = questions.value.find(question => question.id === row.id)
+    if (listed) listed.public_eligibility = eligibility
+    if (currentQuestion.value?.id === row.id) currentQuestion.value.public_eligibility = eligibility
+    ElMessage.success(visible ? '已允许公开' : '已关闭公开')
+  } catch (error) {
+    console.error('修改题目公开开关失败:', error)
+  } finally {
+    updatingVisibility.value = false
+  }
+}
+
 async function publishSingle(row: ReviewQuestion) {
   try {
     await useConfirm().confirm(`确定发布题目 #${row.id}？发布后将按公开资格决定是否计入公开题库。`, '确认发布', { type: 'success' })

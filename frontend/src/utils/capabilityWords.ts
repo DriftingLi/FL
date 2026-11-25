@@ -29,7 +29,7 @@ export const CAPABILITY_LABELS: Readonly<Record<AuthzCapability, string>> = {
   // 勾选框说「用户管理」而侧栏也写「用户管理」，超管不必在两套词汇之间做翻译。
   // #1645 订正：拆分前这个键盖着用户管理，故旧措辞是「管理端入口与用户管理」；#1639 之后
   // 用户管理独立成 hrwai_user.manage，本键只剩入口与仪表盘（与后端 authz.go 的行内注释同词）。
-  'admin.access': '管理端入口与仪表盘',
+  'admin.access': '管理端入口与工作台',
   'admin_account.manage': '管理员账号管理',
   'admin_role.manage': '管理角色与权限配置',
   'ai_assistant.use': 'AI 助手与维修诊断',
