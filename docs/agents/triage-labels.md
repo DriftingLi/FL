@@ -15,6 +15,8 @@ Skills 使用五个 canonical triage roles。这个文件把这些 roles 映射�
 （先例 #926 / #920 / #939 / #971 / #988 / #998 / #999），其余用 `ready-for-agent`。
 两个 label 在 tracker 里同时存在，取用其一，不要同时挂。
 
+**机检（2026-11-25 立）**：`pwsh scripts/check-triage-labels.ps1` —— 扫 open 票里同时挂两个 label 的票，冲突时列出票号并 `exit 1`；`-State all` 扫全部、`-Json` 供脚本消费。关闭票的 label 保持原样（见下节），默认不扫。
+
 ## 重复票的处置（canonical 五角色里**没有** duplicate）
 
 **不新增第 6 个 label** —— 重复用**动作**表达，两件都做：

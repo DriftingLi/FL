@@ -87,16 +87,19 @@ Windows 本机（`E:\` 盘）上 worktree 可用，但有几处与 Linux 不同�
 
   配套术语（2026-09-28 定）：**③ 可信树** = 其绝对路径下 `jest --config jest.config.unit.js -i --listTests` 能列出**非 0** 套件的工作树；路径含「段首为 `.` 或 glob 元字符」的目录段即不可信。宿主托管树**恒不是** ③ 可信树（落点不可配置），所以 `wt-bootstrap` 在那类树里**故意不给移动端项目建 junction**（`refuse` 态，判据与重审条件见 `training-app/叉车维修培训学员端跨端应用/docs/adr/0029-移动端不用宿主托管worktree.md`）——链上就等于装配假绿，不链则 jest 直接命令找不到（fail-loud）。注意：这条硬报错历史上会被误读成「测试坏了」（已有血账），所以入口必须先打红字再退，看到这行先读红字。
 
-- **HBuilderX 仍要唯一项目名（worktree 解决不了）**：HBuilderX 按**项目名**解析，worktree / 完整 clone 里的项目目录 basename 与主树相同 ⇒ 跑 HBuilderX 前要把该项目目录改成**唯一名**。改名期间 `git diff --name-only` 会误报整目录删除（删除 + 未跟踪新增），所以**任何 git 操作前必须先把项目目录名改回**。
+- **HBuilderX 与唯一项目名：GUI 要，CLI 待实测（2026-11-25 重审）**：分两种入口看，别混成一条。
+  - **GUI 手动**：项目列表按**项目名**列条目，主树与各 worktree 的项目目录 basename 相同 ⇒ 手动打开前把该项目目录改成**唯一名**（否则列表里两项同名、易点错）。改名期间 `git diff --name-only` 会误报整目录删除（删除 + 未跟踪新增），所以**任何 git 操作前必须先把项目目录名改回**。
+  - **CLI / 脚本（待实测）**：本仓脚本一律按**路径**寻址 —— `scripts/compile-check.ps1`、`scripts/kotlin-all-check.ps1`、`scripts/hx-run.ps1` 都是 `project open --path <项目>`。若 CLI 真按路径解析，同名不同路径不冲突、**跑前不必改名**。此点**未验证**（2026-11-25 复核时未实测），验证前按 GUI 规则处理；配方见下方「HBuilderX 待实测」。官方 `cli project open` **只接受 `--path`**，但**未记载同名项目的解析优先级** ⇒ 仍需 Q-A 实测。
 
   ⚠️ **但「改回来」这一步在本机会卡住，成因与解（2026-09-17 实测补，血账）**：本文件与 `hx-run.ps1` / `auto-screenshot.ps1` 的收尾建议都写「先 `cli project close --path <项目>` 结束会话」——
-  **HBuilderX 5.23 没有 `project` 这个子命令**（实测 `cli project close --path …` → `命令'project'不存在或缺少参数`），故这条配方**在本机不可用**。
+  **本机早期实测（HBuilderX 5.23）报 `cli project close --path …` → `命令'project'不存在或缺少参数`**，但**官方文档（3.1.5+）明确记载 `cli project` 子命令（`list`/`open`/`close`）**，且本文件下方 2026-09-21 实测里 `project close`/`project list` 都能用 ⇒ 按**版本 / 发行版差异**处理：动手前先现测 `cli project list`（Q-D），**不要把「官方没有」写成结论**。
   而「真运行」（`launch app-android`，不带 `--compile`）的会话**不自己收口**，且派发它的包装 `pwsh` 与其 `cli.exe` 子进程**把项目目录当作 CWD、并攥着 `.ci-verify\launch-*.out`**
   ⇒ **整个项目目录既改不回来也删不掉**（`Rename-Item` 报 `The process cannot access the file because it is being used by another process`；`git worktree remove` 同理）。
-  **唯一的非破坏解**是本文件已写的另外半句「发起下一次 launch 把它顶掉」：**任何一次新的 `cli launch`** 都会让旧会话退出、句柄随之释放（实测：卡住期间 `pwsh` 30040 + `cli.exe` 32676 一直活着；这两个进程属于**你自己那次 launch**，但这不改变纪律）。
+  **唯一的非破坏解**是本文件已写的另外半句「发起下一次 launch 把它顶掉」：**任何一次新的 `cli launch`** 都会让旧会话退出、句柄随之释放（本机实测、**官方未记载**、升级后须复测 Q-E：卡住期间 `pwsh` 30040 + `cli.exe` 32676 一直活着；这两个进程属于**你自己那次 launch**，但这不改变纪律）。
   **禁止**用 `Stop-Process` / `taskkill` 绕过（AGENTS.md 反模式「kill `cli` 或 HBuilderX 主程序」；`hx-run.ps1` 的契约测试 C2 也钉死脚本内不得引入强杀）。
-  ⇒ **实操**：在 worktree 里跑真运行（🟡/🔴，即 ①a 取证那类）**之前**先想清楚「这个项目目录还要不要改名 / 删 worktree」；改名必须发生在**任何 HBuilderX 步骤之前**，
+  ⇒ **实操**：在 worktree 里跑真运行（🟡/🔴，即 ①a 取证那类）**之前**先想清楚「这个项目目录还要不要改名 / 删 worktree」；**要改名的话**改名必须发生在**任何 HBuilderX 步骤之前**，
   而改回来只能等到**下一次 launch 之后**（或维护者在 HBuilderX GUI 里点「停止」）。
+  **不改名也不豁免**：真运行本身会把项目目录攥住（下一段实测的就是这件事），改名 / 删树照样被拒 —— 这条约束来自「真运行占目录」，不来自「必须改名」。
   **退路**：真的必须在同一会话里继续交付时，不要与锁硬碰 —— 证据文件仍可正常**读/复制**（只有改名与删除被拒），可用本文件下面「游离提交：完整配方」把产物按**正确入库路径**提交，交付不受影响；
   被卡住的 worktree 待旧会话退出后再 `改名 → git worktree remove` 收尾。
 
@@ -118,6 +121,23 @@ Windows 本机（`E:\` 盘）上 worktree 可用，但有几处与 Linux 不同�
 - **`stash` 是全仓共享的**：所有 worktree 共用同一个 stash 栈。别在多 worktree 之间长期留 stash，用完即 `pop`/`drop`；否则另一会话 `/clear` 后无法分辨哪条 stash 是自己的。
 
 - **worktree 元数据也在 `.git` 下**：`.git/worktrees/` 与 `git worktree list` 全局共享，不是每个 worktree 一份。
+
+### HBuilderX 待实测（2026-11-25 立，未验证）
+
+五条判据决定「改名」「并行」与「收尾配方」还能收多少。**测前按现有串行纪律办事**，测后按「日期 + 读数 + 结论」写回本节：
+
+- **Q-A 同名项目能否共存**：两棵树的移动端项目目录 basename 相同，各跑 `cli project open --path <项目>`，再 `cli project list`。
+  两项都在 ⇒ CLI 按路径寻址、同名不冲突；只剩一项 ⇒「跑前必须改名」对 CLI 也成立。
+- **Q-B 两树能否真并行**：两棵树同时跑 `hx:compile-only`。
+  第二个在 `HX_BUSY wait=` 排队到 `exit 2` ⇒ 并行只到「排队」为止；两者都出结果 ⇒ 锁粒度可再议（仍需确认假失败面）。
+- **Q-C 能否并存两个 HBuilderX 实例**：双开同一安装目录的 `HBuilderX.exe`（再试不同安装目录）。
+  第二个被拒 / 报锁错 ⇒ 单实例；两者都能用 ⇒ 多开成立（**官方未记载，结论只能记「本机实测」**）。
+- **Q-D `cli project` 子命令在本机是否可用、`project list` 输出哪些字段**：现测 `cli project list` 并留完整 stdout。
+  官方（3.1.5+）记载 `list`/`open`/`close` 存在 ⇒ 本机报「不存在」时写「版本差异」，**不写「官方没有」**。
+- **Q-E 新 `cli launch` 是否仍顶掉旧会话**：起一次真运行 → 不手动停 → 同项目再发一次 `launch`。
+  旧进程退出、目录句柄释放 ⇒ 成立；否则「发起下一次 launch 顶掉」这条收尾配方作废。
+
+未测完之前，本节与上方「HBuilderX 与唯一项目名」条、移动端 `docs/agents/concurrency.md`「HBuilderX 并发待实测」节互相引用，别单方面把猜测写成结论。
 
 ### worktree 元数据异常：先实测，再决定要不要修（2026-09-13 重写）
 

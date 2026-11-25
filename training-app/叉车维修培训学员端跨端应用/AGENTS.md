@@ -21,7 +21,7 @@
 
 **第 5 步的纪律面（#2320，2026-11-05 退役）**：② 微信开发者工具门**已整体退役**——不再有 `needs2` 触发面、不再要求 `MP_WEIXIN_RESULT` 读数行、不再要求截图，也不再有「自选跳过 reason」。日常 PR **不跑 ②**；需要看小程序运行时（console error / exception / 白屏）时，才手动跑一次作为诊断，结果只进日志、不判红。风险已接受：PR 粒度不再有 IDE 自动检查，该风险由发版前真机冒烟（ADR-0043）兜底。口径全文见 ADR-0008 顶部 2026-11-05 条。Automator 与 `dev:finish` 不自动跑。
 
-**成本尺**：常态 ≈12 min（同树）/ 17 min（新树）。超 2× 先查是不是在排队（HBuilderX 单实例，不是脚本慢）。
+**成本尺**：常态 ≈12 min（同树）/ 17 min（新树）。超 2× 先查是不是在排队（HBuilderX 串行，不是脚本慢）。
 
 **第 2 步四条红线**（全表在 [`docs/agents/uvue-css.md`](docs/agents/uvue-css.md)）：`<style>` 必须 `lang="scss"`；选择器只认 `.class`（tag / ID / 伪类 / 属性选择器一律不可用）；文字类样式只落 `<text>` / `<button>` / `<input>` / `<textarea>`（落 `<view>` 上静默忽略并逐处打 error，机检 `utils/uvueFontCarrierContract.test.js`）；`gap` / `calc()` / `env()` / `var(--x)` / `transition` / `animation` 原生端不支持。**WARNING 不阻断但可能不生效**——`gap` 被静默忽略把布局搞坏就是这一类。
 
@@ -50,7 +50,7 @@
 
 ## 并发会话纪律（多会话并行时必读）
 
-HBuilderX 是**单实例串行资源**——这是架构约束，不是可调优的缺陷。纪律只有这 6 行，本页是**唯一入口**（历史血账在 [`docs/agents/multi-agent-git.md`](../../docs/agents/multi-agent-git.md)，时间预算在 [`docs/agents/concurrency.md`](docs/agents/concurrency.md)）：
+HBuilderX 的 CLI 步骤**由仓内锁串行化**——不是平台上限（本仓选择；官方未记载多实例）。纪律 6 行，本页是**唯一入口**（血账在 [`docs/agents/multi-agent-git.md`](../../docs/agents/multi-agent-git.md)，预算在 [`docs/agents/concurrency.md`](docs/agents/concurrency.md)）：
 
 ```
 1. 一票一树一分支：建树只走 `pwsh training-app/叉车维修培训学员端跨端应用/scripts/new-worktree.ps1 -Task <票号>`，别裸用 `git worktree add`。
