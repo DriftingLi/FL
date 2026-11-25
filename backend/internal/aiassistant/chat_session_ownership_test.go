@@ -3,6 +3,7 @@ package aiassistant
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -109,6 +110,15 @@ func (f *chatFixture) messageCount(t *testing.T, sessionID int) int64 {
 	return n
 }
 
+func (f *chatFixture) messages(t *testing.T, sessionID int) []model.AIChatMessage {
+	t.Helper()
+	var msgs []model.AIChatMessage
+	if err := f.db.Where("session_id = ?", sessionID).Order("id ASC").Find(&msgs).Error; err != nil {
+		t.Fatalf("查询消息失败: %v", err)
+	}
+	return msgs
+}
+
 func (f *chatFixture) sessionUpdatedAt(t *testing.T, sessionID int) string {
 	t.Helper()
 	var s model.AIChatSession
@@ -195,8 +205,15 @@ func TestChatOwnSessionStillPersists(t *testing.T) {
 	if !strings.Contains(w.Body.String(), "event: done") {
 		t.Fatalf("应流完并发出 done 事件：%s", w.Body.String())
 	}
-	if got := f.messageCount(t, mine.ID); got != 2 {
-		t.Fatalf("自己的会话应落库两行（user + assistant），得到 %d", got)
+	msgs := f.messages(t, mine.ID)
+	if len(msgs) != 2 {
+		t.Fatalf("自己的会话应落库两行（user + assistant），得到 %d", len(msgs))
+	}
+	if msgs[0].Role != "user" || msgs[0].Content != "我自己的问题" {
+		t.Fatalf("首行应保存用户消息，得到 %+v", msgs[0])
+	}
+	if msgs[1].Role != "assistant" || msgs[1].Content != "答案" {
+		t.Fatalf("次行应保存助手消息，得到 %+v", msgs[1])
 	}
 	if got := f.sessionUpdatedAt(t, mine.ID); got == beforeUpdated {
 		t.Fatalf("自己的会话 updated_at 应被刷新，仍是 %s", got)
@@ -281,5 +298,139 @@ func TestChatPersistFailureDoesNotLeakDBError(t *testing.T) {
 		if strings.Contains(strings.ToLower(body), strings.ToLower(leak)) {
 			t.Fatalf("SSE 错误泄漏了数据库原文（%s）：%s", leak, body)
 		}
+	}
+}
+
+func requirePersistError(t *testing.T, err error, want string, cause error) {
+	t.Helper()
+	var got *persistError
+	if !errors.As(err, &got) {
+		t.Fatalf("应返回 persistError，得到 %T：%v", err, err)
+	}
+	if got.Error() != want {
+		t.Fatalf("对外文案 = %q，期望 %q", got.Error(), want)
+	}
+	if !errors.Is(err, cause) {
+		t.Fatalf("应保留底层错误供日志诊断：%v", err)
+	}
+}
+
+func TestStreamChatAssistantPersistFailureKeepsUserMessage(t *testing.T) {
+	f := newChatFixture(t)
+	session := f.createSession(t, 2001, "已命名会话")
+	beforeUpdated := f.sessionUpdatedAt(t, session.ID)
+	cause := errors.New("assistant insert blocked")
+	createCalls := 0
+	if err := f.db.Callback().Create().Before("gorm:create").Register("test:fail_assistant_message", func(tx *gorm.DB) {
+		if tx.Statement.Table != "ai_chat_messages" {
+			return
+		}
+		createCalls++
+		if createCalls == 2 {
+			_ = tx.AddError(cause)
+		}
+	}); err != nil {
+		t.Fatalf("注册助手消息失败回调失败: %v", err)
+	}
+
+	content, _, err := f.svc.StreamChat(context.Background(), 2001, StreamChatReq{
+		SessionID: session.ID,
+		Messages:  []StreamMessage{{Role: "user", Content: "保存助手消息会失败"}},
+	}, nil)
+	if content != "答案" {
+		t.Fatalf("部分成功时应返回已生成的回复，得到 %q", content)
+	}
+	requirePersistError(t, err, persistAssistantMsgFailed, cause)
+
+	msgs := f.messages(t, session.ID)
+	if len(msgs) != 1 || msgs[0].Role != "user" || msgs[0].Content != "保存助手消息会失败" {
+		t.Fatalf("助手消息失败应保留已成功的用户消息，得到 %+v", msgs)
+	}
+	if got := f.sessionUpdatedAt(t, session.ID); got != beforeUpdated {
+		t.Fatalf("助手消息失败时不应继续 touch 会话：%s → %s", beforeUpdated, got)
+	}
+}
+
+func TestStreamChatSessionTouchFailureKeepsPersistedTurn(t *testing.T) {
+	f := newChatFixture(t)
+	session := f.createSession(t, 2001, "已命名会话")
+	beforeUpdated := f.sessionUpdatedAt(t, session.ID)
+	cause := errors.New("session touch blocked")
+	if err := f.db.Callback().Update().Before("gorm:update").Register("test:fail_session_touch", func(tx *gorm.DB) {
+		if tx.Statement.Table == "ai_chat_sessions" {
+			_ = tx.AddError(cause)
+		}
+	}); err != nil {
+		t.Fatalf("注册会话时间失败回调失败: %v", err)
+	}
+
+	content, _, err := f.svc.StreamChat(context.Background(), 2001, StreamChatReq{
+		SessionID: session.ID,
+		Messages:  []StreamMessage{{Role: "user", Content: "touch 会失败"}},
+	}, nil)
+	if content != "答案" {
+		t.Fatalf("部分成功时应返回已生成的回复，得到 %q", content)
+	}
+	requirePersistError(t, err, persistSessionTouchFailed, cause)
+
+	msgs := f.messages(t, session.ID)
+	if len(msgs) != 2 || msgs[0].Role != "user" || msgs[0].Content != "touch 会失败" ||
+		msgs[1].Role != "assistant" || msgs[1].Content != "答案" {
+		t.Fatalf("touch 失败应保留已成功的整轮消息，得到 %+v", msgs)
+	}
+	if got := f.sessionUpdatedAt(t, session.ID); got != beforeUpdated {
+		t.Fatalf("touch 失败时 updated_at 不应变化：%s → %s", beforeUpdated, got)
+	}
+}
+
+func TestStreamChatPersistsImageOnlyLastUserMessage(t *testing.T) {
+	_, assistant, _, db := newAIStack(t)
+	ctx := context.Background()
+	fake := &fakeAIModelPort{content: "图片回复"}
+	assistant.port = fake
+	session, err := assistant.CreateSession(ctx, 7, "已命名会话", "", FeatureFaultDiagnosis)
+	if err != nil {
+		t.Fatalf("CreateSession 失败: %v", err)
+	}
+	imageURL := "https://example.com/not-a-site-image.png"
+
+	_, _, err = assistant.StreamChat(ctx, 7, StreamChatReq{
+		SessionID: session.ID,
+		Messages: []StreamMessage{
+			{Role: "user", Content: "历史问题"},
+			{Role: "assistant", Content: "历史回复"},
+			{Role: "user", Images: []string{imageURL}},
+		},
+	}, nil)
+	if err != nil {
+		t.Fatalf("StreamChat 失败: %v", err)
+	}
+
+	var msgs []model.AIChatMessage
+	if err := db.Where("session_id = ?", session.ID).Order("id ASC").Find(&msgs).Error; err != nil {
+		t.Fatalf("查询消息失败: %v", err)
+	}
+	if len(msgs) != 2 || msgs[0].Role != "user" || msgs[0].Content != "" {
+		t.Fatalf("应只持久化最后一条纯图片用户消息与助手回复，得到 %+v", msgs)
+	}
+	var images []string
+	if err := json.Unmarshal([]byte(msgs[0].Images), &images); err != nil || len(images) != 1 || images[0] != imageURL {
+		t.Fatalf("纯图片消息应保留原始图片 URL，得到 %q，err=%v", msgs[0].Images, err)
+	}
+	if msgs[1].Role != "assistant" || msgs[1].Content != "图片回复" {
+		t.Fatalf("助手回复持久化异常：%+v", msgs[1])
+	}
+
+	_, portMsgs, _ := fake.snapshot()
+	if len(portMsgs) != 4 {
+		t.Fatalf("端口应收到系统提示词与三条请求消息，得到 %d 条", len(portMsgs))
+	}
+	if portMsgs[1].Content != "历史问题" || len(portMsgs[1].UserInputMultiContent) != 0 {
+		t.Fatalf("历史用户消息不应重组图片：%+v", portMsgs[1])
+	}
+	parts := portMsgs[3].UserInputMultiContent
+	if len(parts) != 1 || parts[0].Type != schema.ChatMessagePartTypeText ||
+		!strings.Contains(parts[0].Text, "[部分图片加载失败: "+imageURL+"]") {
+		t.Fatalf("非本站图片应被拒绝并注入加载失败注记：%+v", parts)
 	}
 }
