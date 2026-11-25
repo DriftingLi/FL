@@ -112,7 +112,7 @@ func publicSchoolCategoryScope(db *gorm.DB) *gorm.DB {
 // 与 `PublishedCategoryCourseScope`（只要求「分类存在」）是**两套口径**：那个是既有学员端
 // 读面的判据（ADR-0058），本函数是公开网校的判据；后者更严，且只服务公开网校。
 func publicSchoolCourseScope(db *gorm.DB) *gorm.DB {
-	return publicSchoolCategoryScope(db.Where("course.status = ?", 1))
+	return publicSchoolCategoryScope(db.Where("course.status = ? AND course.public_hidden = ?", 1, false))
 }
 
 // escapeLikePattern 转义 LIKE 的通配符：关键词里的 % 与 _ 必须按字面匹配。

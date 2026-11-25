@@ -1,6 +1,7 @@
 package course
 
 import (
+	"context"
 	"reflect"
 	"strconv"
 	"testing"
@@ -134,5 +135,46 @@ func TestAdminCoursesCategoryFilterAndPublicState(t *testing.T) {
 	}
 	if detail.Category == nil || detail.PublicEligibility == nil || !detail.PublicEligibility.Eligible {
 		t.Fatalf("详情应返回 canonical 分类与公开资格, got %+v", detail.CourseDTO)
+	}
+}
+
+func TestCoursePublicVisibilityPreservesPublication(t *testing.T) {
+	db := testutil.NewMemoryDB(t)
+	credential := model.Credential{Code: "COURSE-VISIBILITY", Name: "证件", Category: "special_operation", Status: 1}
+	if err := db.Create(&credential).Error; err != nil {
+		t.Fatal(err)
+	}
+	category := model.TrainingCategory{Name: "分类", Status: 1, LegacyCredentialID: &credential.ID}
+	if err := db.Create(&category).Error; err != nil {
+		t.Fatal(err)
+	}
+	record := model.Course{Name: "课程", Status: 1, CategoryID: &category.ID}
+	if err := db.Create(&record).Error; err != nil {
+		t.Fatal(err)
+	}
+	admin := NewAdminService(db, nil, nil, zap.NewNop())
+	ctx := context.Background()
+	eligibility, err := admin.setPublicVisibility(ctx, record.CourseID, false)
+	if err != nil || eligibility.Eligible || !reflect.DeepEqual(eligibility.Reasons, []publicscope.Reason{publicscope.ReasonManuallyHidden}) {
+		t.Fatalf("关闭公开后资格 = %+v, err = %v", eligibility, err)
+	}
+	name := "编辑后的课程"
+	updated, err := admin.UpdateCourse(record.CourseID, &CourseInput{Name: &name})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Status != 1 || updated.PublicEligibility.Eligible {
+		t.Fatalf("编辑应保留发布状态及开关: %+v", updated)
+	}
+	var count int64
+	if err := publicSchoolCourseScope(db.Table("course")).Count(&count).Error; err != nil || count != 0 {
+		t.Fatalf("公开课程数 = %d, err = %v", count, err)
+	}
+	eligibility, err = admin.setPublicVisibility(ctx, record.CourseID, true)
+	if err != nil || !eligibility.Eligible {
+		t.Fatalf("重新允许公开后的资格 = %+v, err = %v", eligibility, err)
+	}
+	if err := publicSchoolCourseScope(db.Table("course")).Count(&count).Error; err != nil || count != 1 {
+		t.Fatalf("恢复后的公开课程数 = %d, err = %v", count, err)
 	}
 }

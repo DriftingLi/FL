@@ -1,6 +1,7 @@
 package questionbank
 
 import (
+	"context"
 	"reflect"
 	"strconv"
 	"testing"
@@ -124,5 +125,35 @@ func TestEditorQuestionsCategoryFilterAndPublicState(t *testing.T) {
 		if item.Category != nil || item.PublicEligibility != nil {
 			t.Fatalf("学员池读面不应泄漏内部公开状态, got %+v", item)
 		}
+	}
+}
+
+func TestQuestionPublicVisibilityPreservesReviewStatus(t *testing.T) {
+	svc, db := newQuestionBankSvc(t)
+	record := model.Question{Type: "true_false", Content: "待审核题目", Answer: "true", Status: "pending"}
+	if err := db.Create(&record).Error; err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	eligibility, err := svc.setPublicVisibility(ctx, record.ID, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if eligibility.Eligible || len(eligibility.Reasons) != 3 {
+		t.Fatalf("关闭公开应叠加在已有阻塞原因上: %+v", eligibility)
+	}
+	published, err := svc.PublishQuestion(record.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if published.Status != "published" || !published.publicHidden {
+		t.Fatalf("审核发布应保留开关: %+v", published)
+	}
+	eligibility, err = svc.setPublicVisibility(ctx, record.ID, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if eligibility.Eligible || len(eligibility.Reasons) != 1 || eligibility.Reasons[0] != publicscope.ReasonCategoryMissing {
+		t.Fatalf("重新开启后仍须符合公开条件: %+v", eligibility)
 	}
 }

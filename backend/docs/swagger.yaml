@@ -3501,6 +3501,7 @@ definitions:
     type: object
   publicscope.Reason:
     enum:
+    - manually_hidden
     - not_published
     - category_missing
     - category_disabled
@@ -3510,6 +3511,7 @@ definitions:
     - source_tag_excluded
     type: string
     x-enum-varnames:
+    - ReasonManuallyHidden
     - ReasonNotPublished
     - ReasonCategoryMissing
     - ReasonCategoryDisabled
@@ -3517,6 +3519,13 @@ definitions:
     - ReasonCredentialMissing
     - ReasonCredentialDisabled
     - ReasonSourceTagExcluded
+  publicscope.VisibilityInput:
+    properties:
+      visible:
+        type: boolean
+    required:
+    - visible
+    type: object
   questionbank.QuestionBankStatsDTO:
     properties:
       by_status:
@@ -6785,6 +6794,55 @@ paths:
       summary: 创建章节
       tags:
       - 管理端-章节
+  /admin/course/{course_id}/public-visibility:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: 课程ID
+        in: path
+        name: course_id
+        required: true
+        type: integer
+      - description: 是否允许公开
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/publicscope.VisibilityInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/publicscope.Eligibility'
+              type: object
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: 无权限
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 内容不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 设置课程的公开开关
+      tags:
+      - 课程管理
   /admin/course/{course_id}/sort:
     put:
       consumes:
@@ -16214,6 +16272,55 @@ paths:
       summary: 更新题目
       tags:
       - 题库管理
+  /question-bank/questions/{question_id}/public-visibility:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: 题目ID
+        in: path
+        name: question_id
+        required: true
+        type: integer
+      - description: 是否允许公开
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/publicscope.VisibilityInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/publicscope.Eligibility'
+              type: object
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: 无权限
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 内容不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 设置题目的公开开关
+      tags:
+      - 题目管理
   /question-bank/questions/{question_id}/publish:
     post:
       consumes:

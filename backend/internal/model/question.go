@@ -6,6 +6,7 @@ import "time"
 // ===== 11. 题目 =====
 
 type Question struct {
+	PublicHidden    bool   `gorm:"column:public_hidden;not null;default:false;<-:create" json:"-"`
 	ID              int    `gorm:"column:id;primaryKey" json:"id"`
 	Type            string `gorm:"column:type" json:"type"`
 	Content         string `gorm:"column:content" json:"content"`

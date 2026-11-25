@@ -95,6 +95,15 @@
         <p><strong>审核状态：</strong>{{ questionStatusMap[currentQuestion.status] }}</p>
         <p><strong>公开资格：</strong></p>
         <PublicEligibility :eligibility="currentQuestion.public_eligibility" />
+        <div v-if="currentQuestion.public_eligibility">
+          <UiSwitch
+            :model-value="allowsPublicVisibility(currentQuestion.public_eligibility)"
+            :disabled="updatingVisibility"
+            aria-label="允许公开题目"
+            active-text="允许公开"
+            @change="setQuestionVisibility(currentQuestion, $event === true)"
+          />
+        </div>
         <div v-if="currentQuestion.options">
           <p><strong>选项：</strong></p>
           <p v-for="(val, key) in currentQuestion.options" :key="key">{{ key }}. {{ val }}</p>
@@ -166,6 +175,8 @@ import UiAlert from '@/components/ui/UiAlert.vue'
 import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 import UiSelect from '@/components/ui/UiSelect.vue'
+import UiSwitch from '@/components/ui/UiSwitch.vue'
+import { allowsPublicVisibility } from '@/utils/publicEligibility'
 import PublicEligibility from '@/components/catalog/PublicEligibility.vue'
 
 type ReviewQuestion = Question & {
@@ -224,6 +235,7 @@ const pendingCount = ref(0)
 
 const detailVisible = ref(false)
 const currentQuestion = ref<ReviewQuestion | null>(null)
+const updatingVisibility = ref(false)
 
 // 驳回相关
 // 驳回理由弹窗：#795 三域共用的弹窗状态机（visible/reason/submitting + 空理由校验 + 失败保留理由）
@@ -314,6 +326,22 @@ function viewDetail(row: ReviewQuestion) {
 }
 
 // 单题发布：接口返回的终态同时回填列表与详情，再按当前筛选重装实际列表。
+async function setQuestionVisibility(row: ReviewQuestion, visible: boolean) {
+  if (updatingVisibility.value) return
+  updatingVisibility.value = true
+  try {
+    const eligibility = await questionBankApi.setPublicVisibility(row.id, visible)
+    const listed = questions.value.find(question => question.id === row.id)
+    if (listed) listed.public_eligibility = eligibility
+    if (currentQuestion.value?.id === row.id) currentQuestion.value.public_eligibility = eligibility
+    ElMessage.success(visible ? '已允许公开' : '已关闭公开')
+  } catch (error) {
+    console.error('修改题目公开开关失败:', error)
+  } finally {
+    updatingVisibility.value = false
+  }
+}
+
 async function publishSingle(row: ReviewQuestion) {
   try {
     await useConfirm().confirm(`确定发布题目 #${row.id}？发布后将按公开资格决定是否计入公开题库。`, '确认发布', { type: 'success' })

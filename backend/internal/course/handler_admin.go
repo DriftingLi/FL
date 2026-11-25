@@ -45,6 +45,7 @@ func RegisterAdminRoutes(rg *gin.RouterGroup, session *security.Session, svc *Ad
 	write := g.Group("", middleware.CapabilityRequired(authz.CapCourseManage))
 	write.POST("/course", h.CreateCourse)
 	write.PUT("/course/:course_id", h.UpdateCourse)
+	write.PUT("/course/:course_id/public-visibility", h.SetPublicVisibility)
 	write.PUT("/course/:course_id/sort", h.SwapCourseSort)
 	write.DELETE("/course/:course_id", h.DeleteCourse)
 	write.POST("/course/:course_id/chapter", h.CreateChapter)
