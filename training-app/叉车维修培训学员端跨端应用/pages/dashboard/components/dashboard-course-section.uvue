@@ -107,8 +107,9 @@
         font-weight: bold;
     }
 
+    /* 票 2827：线宽跟标签文字走（.tab-item 已是文字撑开的列容器），高度保持 6rpx。 */
     .tab-underline {
-        width: 40rpx;
+        width: 100%;
         height: 6rpx;
         border-radius: 3rpx;
         background-color: $primary-color;

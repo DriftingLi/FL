@@ -132,7 +132,7 @@
 | `$color-price` | `#FF2424` | 价格强调红 |
 | `$answer-correct` | `#7BD398` | 答题正确 |
 | `$answer-wrong` | `#FF5A5A` | 答题错误（收敛 #DF6454） |
-| `$segment-indicator` | `#239EDD` | 分段控件指示条（20×4rpx，R=10） |
+| `$segment-indicator` | `#239EDD` | 分段控件指示条（宽随标签文字撑开，高 4rpx，R=10） |
 | `$tag-bg-neutral` | `#ECECEC` | 中性标签底 |
 | `$radius-card` | `20rpx` | 卡面容圆角（区别于 `$radius-lg` 24rpx） |
 | `$font-size-2xl` | `40rpx` | 标题层级 2xl（原型 h1 40rpx） |
@@ -324,7 +324,7 @@
 
 ### 5.6 Tab 栏（appTabs）
 
-- underline 风格：文字下方 **20×4rpx** 指示条（`$segment-indicator`，R=10）；选中文字 `$text-color` + w500、未选 `$text-color-secondary` —— **2026-11-13 #2509 R2 冲突 11**（原型 322:9139：选中文字 #333333 16px w500 + 蓝指示条 20×4px R=10）
+- underline 风格：文字下方**高度 4rpx** 指示条（`$segment-indicator`，R=10），**宽度随标签文字撑开**——几何写法是「文字 + 线的列容器（`flex-direction: column; align-items: center`），线在其内 `width: 100%`」，不是写死的 rpx 短条；选中文字 `$text-color` + w500、未选 `$text-color-secondary` —— **2026-11-13 #2509 R2 冲突 11**（原型 322:9139：选中文字 #333333 16px w500 + 蓝指示条 20×4px R=10）；**2026-11-25 #2827 改宽度口径**：原型那 20px 是固定宽示意，真机按文字宽度对齐更好读（严格等宽，不设上限、不按字数分段）；同一几何规则**同时适用于两类**蓝线：Tab 选中指示条 + 板块标题装饰线（新闻资讯 / 每日任务 / 热门考证）；线高仍按三档现状（4 / 6 / 8rpx），本口径不统一线高
 - pill 风格：胶囊标签（同 appChip 选中态）
 - 字号：`$font-size-md`（28rpx）
 - 未选中：`$text-color-secondary`

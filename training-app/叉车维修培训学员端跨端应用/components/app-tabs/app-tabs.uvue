@@ -42,20 +42,22 @@
         color: $text-color-secondary;
     }
 
-    /* #2509 R2 冲突 11：选中文字改深色（原型 322:9139 = #333333 16px w500），色彩让给指示条；
-     * 指示条 = 20×4rpx、R=10（$radius-sm 之外的独立几何，故直接写 rpx）。 */
+    /* #2509 R2 冲突 11：选中文字改深色（原型 322:9139 = #333333 16px w500），色彩让给指示条。 */
     .app-tab-text--active {
         color: $text-color;
         font-weight: 500;
     }
 
+    /* 票 2827：指示条宽度跟标签文字走（.app-tab-item 已是文字撑开的列容器 ⇒ 100% 即文字宽），
+     * 高度 4rpx / R=10 保持原值。 */
     .app-tab-underline {
-        width: 20rpx;
+        width: 100%;
         height: 4rpx;
         background-color: $segment-indicator;
         border-radius: 2rpx;
         margin-top: 8rpx;
     }
 
-    .ml-16 { margin-left: 16rpx; }
+    /* 票 2827：等宽后相邻标签的线会连成一条断续长线，间距 16 → 40rpx（与首页课程 Tab 同值）。 */
+    .ml-16 { margin-left: 40rpx; }
 </style>
