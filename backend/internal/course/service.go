@@ -1099,12 +1099,8 @@ func applyCourseTrainingFields(db *gorm.DB, course *model.Course, in *CourseInpu
 		if id == 0 {
 			course.CredentialID = nil
 		} else {
-			var count int64
-			if err := db.Model(&model.Credential{}).Where("id = ?", id).Count(&count).Error; err != nil {
+			if err := fetchRow(db.Select("id").Where("id = ?", id), &model.Credential{}, ErrCourseCredentialRefNotFound); err != nil {
 				return err
-			}
-			if count == 0 {
-				return ErrCourseCredentialRefNotFound
 			}
 			course.CredentialID = coerce.IntPtr(id)
 		}
@@ -1137,12 +1133,8 @@ func applyCourseTrainingFields(db *gorm.DB, course *model.Course, in *CourseInpu
 		if id == 0 {
 			course.CertificateTemplateID = nil
 		} else {
-			var count int64
-			if err := db.Model(&model.CertificateTemplate{}).Where("id = ?", id).Count(&count).Error; err != nil {
+			if err := fetchRow(db.Select("id").Where("id = ?", id), &model.CertificateTemplate{}, model.ErrCertificateTemplateNotFound); err != nil {
 				return err
-			}
-			if count == 0 {
-				return model.ErrCertificateTemplateNotFound
 			}
 			course.CertificateTemplateID = coerce.IntPtr(id)
 		}

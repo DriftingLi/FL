@@ -29,7 +29,6 @@ import UiDialog from '@/components/ui/UiDialog.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 
 const authStore = useAuthStore()
-const visible = ref(false)
 const password = ref('')
 const confirm = ref('')
 const hasPassword = computed(()=> !!(authStore.userInfo as any)?.has_password)
@@ -42,12 +41,13 @@ const dlg = useVerifyDialog({
     if(password.value!==confirm.value){ElMessage.warning('两次输入的密码不一致'); throw new Error('mismatch')}
     await authApi.updateProfilePassword({ code: c, password: password.value })
   },
-  onSuccess: async ()=>{ ElMessage.success('密码设置成功'); password.value=''; confirm.value=''; await authStore.refreshUserInfo(); visible.value=false }
+  onSuccess: async ()=>{ ElMessage.success('密码设置成功'); password.value=''; confirm.value=''; await authStore.refreshUserInfo() }
 })
+const visible = dlg.visible
 const code = dlg.code; const sending = dlg.sending; const submitting = dlg.submitting
 const submit = dlg.submit
 async function sendCode(){ await dlg.send('', 'phone') }
-function open(){ visible.value=true; dlg.open() }
+function open(){ dlg.open() }
 defineExpose({ open })
 </script>
 

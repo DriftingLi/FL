@@ -3,7 +3,7 @@
 import { ref, reactive, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance } from 'element-plus'
-import { adminApi, type AdminCourseItem, type ChapterPayload } from '@/api/admin'
+import { adminApi, type AdminCourseItem, type AdminCourseDetail, type ChapterPayload, type CoursePayload } from '@/api/admin'
 import { useConfirm } from '@/composables/useConfirm'
 import type { CertificateTemplate, TrainingCategoryDTO } from '@/api/training'
 import type { Eligibility } from '@/api/generated/course'
@@ -75,6 +75,62 @@ const drawerForm = reactive<Record<string, any>>({
   is_featured: false
 })
 
+function applyCourseToForm(form: Record<string, any>, source: AdminCourseItem | AdminCourseDetail, mode: 'list' | 'detail') {
+  if (mode === 'list') {
+    Object.assign(form, {
+      course_id: source.course_id,
+      name: source.name,
+      category_id: source.category_id ?? null,
+      course_type: source.course_type ?? null,
+      status: source.status,
+      theory_hours: source.theory_hours || 0,
+      practice_hours: source.practice_hours || 0,
+      duration: source.duration || 0,
+      points_price: source.points_price ?? null,
+      certificate_template_id: source.certificate_template_id,
+      prerequisite_course_ids: source.prerequisite_course_ids || [],
+      description: source.description || '',
+      is_hot: !!source.is_hot,
+      is_featured: !!source.is_featured
+    })
+    return
+  }
+  Object.assign(form, {
+    name: source.name ?? form.name,
+    category_id: source.category_id ?? null,
+    course_type: source.course_type ?? form.course_type,
+    status: source.status ?? form.status,
+    theory_hours: source.theory_hours ?? 0,
+    practice_hours: source.practice_hours ?? 0,
+    duration: source.duration ?? 0,
+    points_price: source.points_price ?? null,
+    certificate_template_id: source.certificate_template_id ?? null,
+    prerequisite_course_ids: source.prerequisite_course_ids || [],
+    description: source.description ?? '',
+    is_hot: !!source.is_hot,
+    is_featured: !!source.is_featured
+  })
+}
+
+function buildCoursePayload(form: Record<string, any>): CoursePayload {
+  return {
+    name: form.name,
+    category_id: form.category_id,
+    course_type: form.course_type,
+    status: form.status,
+    theory_hours: form.theory_hours,
+    practice_hours: form.practice_hours,
+    duration: form.duration,
+    // 键恒携带；null 表示显式清空为免费，区别于未携带。
+    points_price: form.points_price ?? null,
+    certificate_template_id: form.certificate_template_id ?? 0,
+    prerequisite_course_ids: form.prerequisite_course_ids,
+    description: form.description,
+    is_hot: form.is_hot,
+    is_featured: form.is_featured
+  }
+}
+
 const courseRules = {
   name: [{ required: true, message: '请输入课程名称', trigger: 'blur' }],
   category_id: [{ required: true, message: '请选择课程分类', trigger: 'change' }],
@@ -122,22 +178,7 @@ function open(course: AdminCourseItem | null) {
   selectedCategory.value = course.category
     ?? props.categories.find(category => category.id === course.category_id)
     ?? null
-  Object.assign(drawerForm, {
-    course_id: course.course_id,
-    name: course.name,
-    category_id: course.category_id ?? null,
-    course_type: (course as any).course_type ?? null,
-    status: course.status,
-    theory_hours: course.theory_hours || 0,
-    practice_hours: course.practice_hours || 0,
-    duration: course.duration || 0,
-    points_price: course.points_price ?? null,
-    certificate_template_id: course.certificate_template_id,
-    prerequisite_course_ids: course.prerequisite_course_ids || [],
-    description: course.description || '',
-    is_hot: !!(course as any).is_hot,
-    is_featured: !!(course as any).is_featured
-  })
+  applyCourseToForm(drawerForm, course, 'list')
   void loadDrawerDetail()
 }
 
@@ -156,21 +197,7 @@ async function loadDrawerDetail() {
       selectedCategory.value = detail.category
         ?? props.categories.find(category => category.id === detail.category_id)
         ?? selectedCategory.value
-      Object.assign(drawerForm, {
-        name: detail.name ?? drawerForm.name,
-        category_id: detail.category_id ?? null,
-        course_type: (detail as any).course_type ?? drawerForm.course_type,
-        status: detail.status ?? drawerForm.status,
-        theory_hours: detail.theory_hours ?? 0,
-        practice_hours: detail.practice_hours ?? 0,
-        duration: detail.duration ?? 0,
-        points_price: detail.points_price ?? null,
-        certificate_template_id: detail.certificate_template_id ?? null,
-        prerequisite_course_ids: detail.prerequisite_course_ids || [],
-        description: detail.description ?? '',
-        is_hot: !!(detail as any).is_hot,
-        is_featured: !!(detail as any).is_featured
-      })
+      applyCourseToForm(drawerForm, detail, 'detail')
       drawerChapters.value = detail.chapters || []
     }
   } catch (error) {
@@ -207,22 +234,7 @@ async function submitCourse() {
   try {
     const valid = await courseFormRef.value.validate().catch(() => false)
     if (!valid || session !== drawerSession || !drawerVisible.value) return
-    const payload = {
-      name: drawerForm.name,
-      category_id: drawerForm.category_id,
-      course_type: drawerForm.course_type,
-      status: drawerForm.status,
-      theory_hours: drawerForm.theory_hours,
-      practice_hours: drawerForm.practice_hours,
-      duration: drawerForm.duration,
-      // 空输入 = null = 显式清空（免费）；键恒携带，后端靠它与「未携带=保留」分家（#2447）
-      points_price: drawerForm.points_price ?? null,
-      certificate_template_id: drawerForm.certificate_template_id ?? 0,
-      prerequisite_course_ids: drawerForm.prerequisite_course_ids,
-      description: drawerForm.description,
-      is_hot: drawerForm.is_hot,
-      is_featured: drawerForm.is_featured
-    }
+    const payload = buildCoursePayload(drawerForm)
     if (drawerForm.course_id) {
       await adminApi.updateCourse(drawerForm.course_id, payload)
       ElMessage.success('已更新')

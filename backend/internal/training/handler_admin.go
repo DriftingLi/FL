@@ -341,6 +341,22 @@ type catalogUpdateReq[I any] struct {
 	In I
 }
 
+// catalogUpdateParse 目录实体更新端点的 Parse 单点：路径错误必须先于 body 错误，
+// 五类实体只差路径参数名与 ID 无效文案。
+func catalogUpdateParse[I any](idParam, idMsg string) httpx.ParseFunc[catalogUpdateReq[I]] {
+	return func(c *gin.Context) (*catalogUpdateReq[I], error) {
+		id, err := httpx.PathInt(c, idParam, idMsg)
+		if err != nil {
+			return nil, err
+		}
+		in, err := httpx.BindJSONMsg[I](c, "请求数据无效")
+		if err != nil {
+			return nil, err
+		}
+		return &catalogUpdateReq[I]{ID: id, In: *in}, nil
+	}
+}
+
 // UpdateSpecialty 更新专业方向
 // @Summary 更新专业方向
 // @Description 管理员更新专业方向字典项
@@ -356,17 +372,7 @@ type catalogUpdateReq[I any] struct {
 // @Router /admin/specialty/{specialty_id} [put]
 func (h *handler) UpdateSpecialty(c *gin.Context) {
 	httpx.Endpoint[catalogUpdateReq[SpecialtyInput], SpecialtyDict]{
-		Parse: func(c *gin.Context) (*catalogUpdateReq[SpecialtyInput], error) {
-			id, err := httpx.PathInt(c, "specialty_id", "专业方向ID无效")
-			if err != nil {
-				return nil, err
-			}
-			var in SpecialtyInput
-			if err := c.ShouldBindJSON(&in); err != nil {
-				return nil, httpx.BadRequest("请求数据无效")
-			}
-			return &catalogUpdateReq[SpecialtyInput]{ID: id, In: in}, nil
-		},
+		Parse: catalogUpdateParse[SpecialtyInput]("specialty_id", "专业方向ID无效"),
 		Invoke: httpx.Invoke(func(req catalogUpdateReq[SpecialtyInput]) (SpecialtyDict, error) {
 			return h.svc.UpdateSpecialty(req.ID, req.In)
 		}),
@@ -389,17 +395,7 @@ func (h *handler) UpdateSpecialty(c *gin.Context) {
 // @Router /admin/level/{level_id} [put]
 func (h *handler) UpdateLevel(c *gin.Context) {
 	httpx.Endpoint[catalogUpdateReq[LevelInput], LevelDict]{
-		Parse: func(c *gin.Context) (*catalogUpdateReq[LevelInput], error) {
-			id, err := httpx.PathInt(c, "level_id", "课程等级ID无效")
-			if err != nil {
-				return nil, err
-			}
-			var in LevelInput
-			if err := c.ShouldBindJSON(&in); err != nil {
-				return nil, httpx.BadRequest("请求数据无效")
-			}
-			return &catalogUpdateReq[LevelInput]{ID: id, In: in}, nil
-		},
+		Parse: catalogUpdateParse[LevelInput]("level_id", "课程等级ID无效"),
 		Invoke: httpx.Invoke(func(req catalogUpdateReq[LevelInput]) (LevelDict, error) {
 			return h.svc.UpdateLevel(req.ID, req.In)
 		}),
@@ -422,17 +418,7 @@ func (h *handler) UpdateLevel(c *gin.Context) {
 // @Router /admin/certificate-template/{id} [put]
 func (h *handler) UpdateCertificateTemplate(c *gin.Context) {
 	httpx.Endpoint[catalogUpdateReq[CertificateTemplateInput], CertificateTemplateDict]{
-		Parse: func(c *gin.Context) (*catalogUpdateReq[CertificateTemplateInput], error) {
-			id, err := httpx.PathInt(c, "id", "证书模板ID无效")
-			if err != nil {
-				return nil, err
-			}
-			var in CertificateTemplateInput
-			if err := c.ShouldBindJSON(&in); err != nil {
-				return nil, httpx.BadRequest("请求数据无效")
-			}
-			return &catalogUpdateReq[CertificateTemplateInput]{ID: id, In: in}, nil
-		},
+		Parse: catalogUpdateParse[CertificateTemplateInput]("id", "证书模板ID无效"),
 		Invoke: httpx.Invoke(func(req catalogUpdateReq[CertificateTemplateInput]) (CertificateTemplateDict, error) {
 			return h.svc.UpdateCertificateTemplate(req.ID, req.In)
 		}),
@@ -455,17 +441,7 @@ func (h *handler) UpdateCertificateTemplate(c *gin.Context) {
 // @Router /admin/question-tag/{id} [put]
 func (h *handler) UpdateQuestionTag(c *gin.Context) {
 	httpx.Endpoint[catalogUpdateReq[QuestionTagInput], QuestionTagDict]{
-		Parse: func(c *gin.Context) (*catalogUpdateReq[QuestionTagInput], error) {
-			id, err := httpx.PathInt(c, "id", "题库标签ID无效")
-			if err != nil {
-				return nil, err
-			}
-			var in QuestionTagInput
-			if err := c.ShouldBindJSON(&in); err != nil {
-				return nil, httpx.BadRequest("请求数据无效")
-			}
-			return &catalogUpdateReq[QuestionTagInput]{ID: id, In: in}, nil
-		},
+		Parse: catalogUpdateParse[QuestionTagInput]("id", "题库标签ID无效"),
 		Invoke: httpx.Invoke(func(req catalogUpdateReq[QuestionTagInput]) (QuestionTagDict, error) {
 			return h.svc.UpdateQuestionTag(req.ID, req.In)
 		}),

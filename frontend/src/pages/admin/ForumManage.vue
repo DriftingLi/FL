@@ -507,119 +507,115 @@ function topicItems(row: AdminForumTopic): UiMoreMenuItem[] {
   return items
 }
 
+interface ForumActionDescriptor<T> {
+  confirmation: {
+    danger?: boolean
+    message: (target: T) => string
+    title: string
+    type: 'info' | 'warning'
+  }
+  request: (target: T) => Promise<unknown>
+  successMessage: string
+  errorLabel: string
+  onSuccess?: (target: T) => void
+}
+
+async function executeForumAction<T>(action: ForumActionDescriptor<T>, target: T): Promise<void> {
+  try {
+    const confirmation = useConfirm()
+    const { message, title, type, danger } = action.confirmation
+    if (danger) {
+      await confirmation.confirmDanger(message(target), title, { type })
+    } else {
+      await confirmation.confirm(message(target), title, { type })
+    }
+  } catch {
+    return
+  }
+  try {
+    await action.request(target)
+    ElMessage.success(action.successMessage)
+    action.onSuccess?.(target)
+    loadList()
+  } catch (e) {
+    console.error(`${action.errorLabel}失败:`, e)
+    /* 错误已由拦截器提示 */
+  }
+}
+
+const topicActionDescriptors = new Map<string, ForumActionDescriptor<AdminForumTopic>>([
+  ['designateExperience', {
+    confirmation: {
+      message: row => `认定后「${row.title}」将进入备考经验区并带上精选标识，帖主获 +30 分（每帖仅一次；已加精的帖子不重复发放）。`,
+      title: '认定备考经验',
+      type: 'info'
+    },
+    request: row => adminForumApi.designateExperience(row.id),
+    successMessage: '已认定为备考经验',
+    errorLabel: '认定备考经验'
+  }],
+  ['revokeExperience', {
+    confirmation: {
+      message: row => `确定取消「${row.title}」的备考经验认定？精选位保留，已发放积分不收回。`,
+      title: '取消经验认定',
+      type: 'info'
+    },
+    request: row => adminForumApi.revokeExperience(row.id),
+    successMessage: '已取消经验认定',
+    errorLabel: '取消经验认定'
+  }],
+  ['featureTopic', {
+    confirmation: {
+      message: row => `加精后「${row.title}」将带上精选标识，帖主获 +30 分（每帖仅一次）。`,
+      title: '加精帖子',
+      type: 'info'
+    },
+    request: row => adminForumApi.featureTopic(row.id),
+    successMessage: '已加精',
+    errorLabel: '加精'
+  }],
+  ['unfeatureTopic', {
+    confirmation: {
+      message: row => `确定取消「${row.title}」的精选标识？`,
+      title: '取消精选',
+      type: 'info'
+    },
+    request: row => adminForumApi.unfeatureTopic(row.id),
+    successMessage: '已取消精选',
+    errorLabel: '取消精选'
+  }],
+  ['delete', {
+    confirmation: {
+      danger: true,
+      message: row => `确定删除帖子「${row.title}」？删除后不可恢复。`,
+      title: '删除帖子',
+      type: 'warning'
+    },
+    request: row => adminForumApi.deleteTopic(row.id),
+    successMessage: '已删除',
+    errorLabel: '删除',
+    onSuccess: row => {
+      delete replyMap.value[row.id]
+    }
+  }]
+])
+
 function onTopicAction(key: string, row: AdminForumTopic) {
-  const handlers: Record<string, (r: AdminForumTopic) => void | Promise<void>> = {
-    designateExperience,
-    revokeExperience,
-    featureTopic,
-    unfeatureTopic,
-    deleteTopic
-  }
-  handlers[key]?.(row)
+  const action = topicActionDescriptors.get(key)
+  if (action) void executeForumAction(action, row)
 }
 
-async function deleteTopic(row: AdminForumTopic) {
-  try {
-    await useConfirm().confirmDanger(`确定删除帖子「${row.title}」？删除后不可恢复。`, '删除帖子', { type: 'warning' })
-  } catch {
-    return
-  }
-  try {
-    await adminForumApi.deleteTopic(row.id)
-    ElMessage.success('已删除')
-    delete replyMap.value[row.id]
-    loadList()
-  } catch (e) {
-    console.error('删除失败:', e)
-    /* 错误已由拦截器提示 */
-  }
-}
-
-// ===== 精选位（#742）：全类别可精/可撤；首次加精后端同事务发帖主 +30（幂等） =====
-
-async function featureTopic(row: AdminForumTopic) {
-  try {
-    await useConfirm().confirm(`加精后「${row.title}」将带上精选标识，帖主获 +30 分（每帖仅一次）。`, '加精帖子', { type: 'info' })
-  } catch {
-    return
-  }
-  try {
-    await adminForumApi.featureTopic(row.id)
-    ElMessage.success('已加精')
-    loadList()
-  } catch (e) {
-    console.error('加精失败:', e)
-    /* 错误已由拦截器提示 */
-  }
-}
-
-async function unfeatureTopic(row: AdminForumTopic) {
-  try {
-    await useConfirm().confirm(`确定取消「${row.title}」的精选标识？`, '取消精选', { type: 'info' })
-  } catch {
-    return
-  }
-  try {
-    await adminForumApi.unfeatureTopic(row.id)
-    ElMessage.success('已取消精选')
-    loadList()
-  } catch (e) {
-    console.error('取消精选失败:', e)
-    /* 错误已由拦截器提示 */
-  }
-}
-
-// ===== 备考经验认定（ADR-0040）：与精选位同轴的管理端认定，经验蕴含精选 =====
-
-async function designateExperience(row: AdminForumTopic) {
-  try {
-    await useConfirm().confirm(
-      `认定后「${row.title}」将进入备考经验区并带上精选标识，帖主获 +30 分（每帖仅一次；已加精的帖子不重复发放）。`,
-      '认定备考经验',
-      { type: 'info' }
-    )
-  } catch {
-    return
-  }
-  try {
-    await adminForumApi.designateExperience(row.id)
-    ElMessage.success('已认定为备考经验')
-    loadList()
-  } catch (e) {
-    console.error('认定备考经验失败:', e)
-    /* 错误已由拦截器提示 */
-  }
-}
-
-async function revokeExperience(row: AdminForumTopic) {
-  try {
-    await useConfirm().confirm(
-      `确定取消「${row.title}」的备考经验认定？精选位保留，已发放积分不收回。`,
-      '取消经验认定',
-      { type: 'info' }
-    )
-  } catch {
-    return
-  }
-  try {
-    await adminForumApi.revokeExperience(row.id)
-    ElMessage.success('已取消经验认定')
-    loadList()
-  } catch (e) {
-    console.error('取消经验认定失败:', e)
-    /* 错误已由拦截器提示 */
-  }
-}
-
-async function deleteReply(reply: AdminForumReply) {
-  try {
-    await useConfirm().confirmDanger('确定删除这条回复？删除后不可恢复。', '删除回复', { type: 'warning' })
-  } catch {
-    return
-  }
-  try {
-    await adminForumApi.deleteReply(reply.id)
-    ElMessage.success('已删除')
+const deleteReplyAction: ForumActionDescriptor<AdminForumReply> = {
+  confirmation: {
+    danger: true,
+    message: () => '确定删除这条回复？删除后不可恢复。',
+    title: '删除回复',
+    type: 'warning'
+  },
+  request: reply => adminForumApi.deleteReply(reply.id),
+  successMessage: '已删除',
+  errorLabel: '删除',
+  onSuccess: reply => {
     if (replyMap.value[reply.topic_id]) {
       replyMap.value = {
         ...replyMap.value,
@@ -635,11 +631,11 @@ async function deleteReply(reply: AdminForumReply) {
         }
       }
     }
-    loadList()
-  } catch (e) {
-    console.error('删除失败:', e)
-    /* 错误已由拦截器提示 */
   }
+}
+
+function deleteReply(reply: AdminForumReply) {
+  return executeForumAction(deleteReplyAction, reply)
 }
 
 onMounted(loadList)

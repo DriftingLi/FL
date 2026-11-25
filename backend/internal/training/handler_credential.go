@@ -139,17 +139,7 @@ func (h *handler) CreateCredential(c *gin.Context) {
 // @Router /admin/credential/{id} [put]
 func (h *handler) UpdateCredential(c *gin.Context) {
 	httpx.Endpoint[catalogUpdateReq[CredentialInput], CredentialDict]{
-		Parse: func(c *gin.Context) (*catalogUpdateReq[CredentialInput], error) {
-			id, err := httpx.PathInt(c, "id", "证件ID无效")
-			if err != nil {
-				return nil, err
-			}
-			var in CredentialInput
-			if err := c.ShouldBindJSON(&in); err != nil {
-				return nil, httpx.BadRequest("请求数据无效")
-			}
-			return &catalogUpdateReq[CredentialInput]{ID: id, In: in}, nil
-		},
+		Parse: catalogUpdateParse[CredentialInput]("id", "证件ID无效"),
 		Invoke: httpx.Invoke(func(req catalogUpdateReq[CredentialInput]) (CredentialDict, error) {
 			return h.svc.UpdateCredential(req.ID, req.In)
 		}),

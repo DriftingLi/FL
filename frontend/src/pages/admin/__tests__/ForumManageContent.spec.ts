@@ -3,9 +3,22 @@
 // 治理面必须看**实际展示效果**：管理员判断违规依据的是学员最终看到的样子，
 // 而不是 markdown 源串。raw HTML 在 escape 策略下以文本形式可见，
 // 所以「渲染版」不会把藏起来的标记掩盖掉。
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
+import { ElMessage } from 'element-plus'
 import { epLite } from '@/test/element-lite'
+
+const { confirmMock, confirmDangerMock } = vi.hoisted(() => ({
+  confirmMock: vi.fn(),
+  confirmDangerMock: vi.fn()
+}))
+
+vi.mock('@/composables/useConfirm', () => ({
+  useConfirm: () => ({ confirm: confirmMock, confirmDanger: confirmDangerMock })
+}))
+
+// 页面从 barrel 引 ElMessage；epLite 走 element-plus/es 子路径，不受此 mock 影响。
+vi.mock('element-plus', () => ({ ElMessage: { success: vi.fn() } }))
 
 vi.mock('@/api/request', () => ({
   unwrappedRequest: { get: vi.fn(), post: vi.fn(), delete: vi.fn(), put: vi.fn() }
@@ -36,6 +49,65 @@ import ForumManage from '../ForumManage.vue'
 
 const listTopics = vi.mocked(adminForumApi.listTopics)
 const getTopic = vi.mocked(adminForumApi.getTopic)
+const deleteReplyMock = vi.mocked(adminForumApi.deleteReply)
+
+const topicActionCases = [
+  {
+    key: 'designateExperience',
+    request: vi.mocked(adminForumApi.designateExperience),
+    confirmation: confirmMock,
+    otherConfirmation: confirmDangerMock,
+    message: '认定后「管理端看正文」将进入备考经验区并带上精选标识，帖主获 +30 分（每帖仅一次；已加精的帖子不重复发放）。',
+    title: '认定备考经验',
+    type: 'info',
+    successMessage: '已认定为备考经验',
+    errorLabel: '认定备考经验'
+  },
+  {
+    key: 'revokeExperience',
+    request: vi.mocked(adminForumApi.revokeExperience),
+    confirmation: confirmMock,
+    otherConfirmation: confirmDangerMock,
+    message: '确定取消「管理端看正文」的备考经验认定？精选位保留，已发放积分不收回。',
+    title: '取消经验认定',
+    type: 'info',
+    successMessage: '已取消经验认定',
+    errorLabel: '取消经验认定'
+  },
+  {
+    key: 'featureTopic',
+    request: vi.mocked(adminForumApi.featureTopic),
+    confirmation: confirmMock,
+    otherConfirmation: confirmDangerMock,
+    message: '加精后「管理端看正文」将带上精选标识，帖主获 +30 分（每帖仅一次）。',
+    title: '加精帖子',
+    type: 'info',
+    successMessage: '已加精',
+    errorLabel: '加精'
+  },
+  {
+    key: 'unfeatureTopic',
+    request: vi.mocked(adminForumApi.unfeatureTopic),
+    confirmation: confirmMock,
+    otherConfirmation: confirmDangerMock,
+    message: '确定取消「管理端看正文」的精选标识？',
+    title: '取消精选',
+    type: 'info',
+    successMessage: '已取消精选',
+    errorLabel: '取消精选'
+  },
+  {
+    key: 'delete',
+    request: vi.mocked(adminForumApi.deleteTopic),
+    confirmation: confirmDangerMock,
+    otherConfirmation: confirmMock,
+    message: '确定删除帖子「管理端看正文」？删除后不可恢复。',
+    title: '删除帖子',
+    type: 'warning',
+    successMessage: '已删除',
+    errorLabel: '删除'
+  }
+] as const
 
 function adminTopic(over: Record<string, unknown> = {}) {
   return {
@@ -53,65 +125,90 @@ function adminTopic(over: Record<string, unknown> = {}) {
   }
 }
 
-async function mountManage(topic: ReturnType<typeof adminTopic>) {
-  listTopics.mockResolvedValue({ items: [topic], total: 1 } as never);
-  getTopic.mockResolvedValue({
-    topic,
-    replies: [],
-    page: 1,
-    pages: 1,
-    total: 0
-  } as never);
-  const w = mount(ForumManage, {
-    global: { plugins: [epLite()], stubs: { ForumImageGallery: true } }
-  });
-  await flushPromises();
-  await w.get('button.title-text').trigger('click');
-  await flushPromises();
-  await new Promise((r) => setTimeout(r, 0));
-  await flushPromises();
-  return w;
+function adminReply(over: Record<string, unknown> = {}) {
+  return {
+    id: 9,
+    topic_id: 1,
+    parent_id: null,
+    parent_name: '',
+    content: '先量 `E01` 电压',
+    content_format: 'markdown',
+    images: [],
+    created_at: '2026-08-02T10:00:00+08:00',
+    author: { user_id: 3, username: '答主', avatar_url: '' },
+    ...over
+  }
 }
 
-describe('管理端正文渲染（#880 / ADR-0044）', () => {
-  beforeEach(() => vi.clearAllMocks());
+interface ManageVm {
+  onTopicAction(key: string, row: ReturnType<typeof adminTopic>): void
+  deleteReply(reply: ReturnType<typeof adminReply>): Promise<void>
+  replyMap: Record<number, Array<{ id: number }>>
+  replyMeta: Record<number, { page: number; pages: number; total: number }>
+}
 
+const wrappers: VueWrapper[] = []
+
+function vmOf(wrapper: VueWrapper): ManageVm {
+  return wrapper.vm as unknown as ManageVm
+}
+
+async function mountTopics(topic = adminTopic()) {
+  listTopics.mockResolvedValue({ items: [topic], total: 1 } as never)
+  const wrapper = mount(ForumManage, {
+    global: { plugins: [epLite()], stubs: { ForumImageGallery: true } }
+  })
+  wrappers.push(wrapper)
+  await flushPromises()
+  return wrapper
+}
+
+async function openReplies(
+  wrapper: VueWrapper,
+  topic: ReturnType<typeof adminTopic>,
+  replies: Array<ReturnType<typeof adminReply>>,
+  total = replies.length,
+  pages = 1
+) {
+  getTopic.mockResolvedValue({ topic, replies, page: 1, pages, total } as never)
+  await wrapper.get('button.title-text').trigger('click')
+  await flushPromises()
+  await new Promise(resolve => setTimeout(resolve, 0))
+  await flushPromises()
+}
+
+async function mountManage(topic: ReturnType<typeof adminTopic>) {
+  const wrapper = await mountTopics(topic)
+  await openReplies(wrapper, topic, [])
+  return wrapper
+}
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  confirmMock.mockResolvedValue('confirm')
+  confirmDangerMock.mockResolvedValue('delete')
+  deleteReplyMock.mockResolvedValue(undefined as never)
+  for (const action of topicActionCases) action.request.mockResolvedValue(undefined as never)
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+})
+
+afterEach(() => {
+  for (const wrapper of wrappers.splice(0)) wrapper.unmount()
+  document.body.replaceChildren()
+  vi.restoreAllMocks()
+})
+
+describe('管理端正文渲染（#880 / ADR-0044）', () => {
   it('markdown 帖在详情抽屉里渲染成展示效果', async () => {
     const w = await mountManage(adminTopic());
     expect(w.find('.topic-content h2').exists()).toBe(true);
   });
 
   it('markdown 回复在详情抽屉里也渲染', async () => {
-    const topic = adminTopic();
-    listTopics.mockResolvedValue({ items: [topic], total: 1 } as never);
-    getTopic.mockResolvedValue({
-      topic,
-      replies: [
-        {
-          id: 9,
-          topic_id: 1,
-          parent_id: null,
-          parent_name: '',
-          content: '先量 `E01` 电压',
-          content_format: 'markdown',
-          images: [],
-          created_at: '2026-08-02T10:00:00+08:00',
-          author: { user_id: 3, username: '答主', avatar_url: '' }
-        }
-      ],
-      page: 1,
-      pages: 1,
-      total: 1
-    } as never);
-    const w = mount(ForumManage, {
-      global: { plugins: [epLite()], stubs: { ForumImageGallery: true } }
-    });
-    await flushPromises();
-    await w.get('button.title-text').trigger('click');
-    await flushPromises();
-    await new Promise((r) => setTimeout(r, 0));
-    await flushPromises();
-    expect(w.find('.reply-content code').exists()).toBe(true);
+    const topic = adminTopic()
+    const w = await mountTopics(topic)
+    await openReplies(w, topic, [adminReply()])
+    expect(w.find('.reply-content code').exists()).toBe(true)
   });
 
   it('纯文本帖仍按纯文本渲染（不误伤存量）', async () => {
@@ -120,3 +217,170 @@ describe('管理端正文渲染（#880 / ADR-0044）', () => {
     expect(w.find('.topic-content').text()).toContain('## 原样');
   });
 });
+
+describe('论坛管理操作', () => {
+  it.each(topicActionCases)('$key 确认后请求、提示成功并刷新列表', async action => {
+    const topic = adminTopic()
+    const w = await mountTopics(topic)
+    const vm = vmOf(w)
+
+    vm.onTopicAction(action.key, topic)
+    await flushPromises()
+
+    expect(action.confirmation).toHaveBeenCalledWith(action.message, action.title, { type: action.type })
+    expect(action.otherConfirmation).not.toHaveBeenCalled()
+    expect(action.request).toHaveBeenCalledWith(topic.id)
+    expect(ElMessage.success).toHaveBeenCalledWith(action.successMessage)
+    expect(listTopics).toHaveBeenCalledTimes(2)
+  })
+
+  it.each(topicActionCases)('$key 请求失败时不发成功 toast、不刷新', async action => {
+    const topic = adminTopic()
+    const w = await mountTopics(topic)
+    const error = new Error('request failed')
+    action.request.mockRejectedValue(error)
+
+    vmOf(w).onTopicAction(action.key, topic)
+    await flushPromises()
+
+    expect(action.request).toHaveBeenCalledWith(topic.id)
+    expect(ElMessage.success).not.toHaveBeenCalled()
+    expect(listTopics).toHaveBeenCalledTimes(1)
+    expect(console.error).toHaveBeenCalledWith(`${action.errorLabel}失败:`, error)
+  })
+
+  it.each(topicActionCases)('$key 取消确认后不发请求、不刷新', async action => {
+    const topic = adminTopic()
+    const w = await mountTopics(topic)
+    action.confirmation.mockRejectedValue(new Error('cancel'))
+
+    vmOf(w).onTopicAction(action.key, topic)
+    await flushPromises()
+
+    expect(action.request).not.toHaveBeenCalled()
+    expect(ElMessage.success).not.toHaveBeenCalled()
+    expect(listTopics).toHaveBeenCalledTimes(1)
+  })
+
+  it('未知 action 保持 no-op', async () => {
+    const topic = adminTopic()
+    const w = await mountTopics(topic)
+    const vm = vmOf(w)
+
+    vm.onTopicAction('unknown', topic)
+    vm.onTopicAction('toString', topic)
+    await flushPromises()
+
+    expect(confirmMock).not.toHaveBeenCalled()
+    expect(confirmDangerMock).not.toHaveBeenCalled()
+    for (const action of topicActionCases) expect(action.request).not.toHaveBeenCalled()
+    expect(ElMessage.success).not.toHaveBeenCalled()
+    expect(listTopics).toHaveBeenCalledTimes(1)
+  })
+
+  it('删帖成功先清 replyMap，再刷新列表', async () => {
+    const topic = adminTopic()
+    const reply = adminReply()
+    const w = await mountTopics(topic)
+    await openReplies(w, topic, [reply])
+    const vm = vmOf(w)
+    expect(vm.replyMap[topic.id].map(item => item.id)).toEqual([reply.id])
+    let cachedTopicCountAtRefresh: number | undefined
+    listTopics.mockImplementationOnce(async () => {
+      cachedTopicCountAtRefresh = Object.keys(vm.replyMap).length
+      return { items: [topic], total: 1 } as never
+    })
+
+    vm.onTopicAction('delete', topic)
+    await flushPromises()
+
+    expect(cachedTopicCountAtRefresh).toBe(0)
+    expect(vm.replyMap[topic.id]).toBeUndefined()
+    expect(ElMessage.success).toHaveBeenCalledWith('已删除')
+    expect(listTopics).toHaveBeenCalledTimes(2)
+  })
+
+  it('删帖失败保留回复缓存，不执行成功回调', async () => {
+    const topic = adminTopic()
+    const reply = adminReply()
+    const w = await mountTopics(topic)
+    await openReplies(w, topic, [reply])
+    const vm = vmOf(w)
+    vi.mocked(adminForumApi.deleteTopic).mockRejectedValue(new Error('delete failed'))
+
+    vm.onTopicAction('delete', topic)
+    await flushPromises()
+
+    expect(vm.replyMap[topic.id].map(item => item.id)).toEqual([reply.id])
+    expect(ElMessage.success).not.toHaveBeenCalled()
+    expect(listTopics).toHaveBeenCalledTimes(1)
+  })
+
+  it('删回复成功更新列表与 total，只减 1 并保留子回复', async () => {
+    const topic = adminTopic()
+    const parent = adminReply()
+    const child = adminReply({ id: 10, parent_id: parent.id, parent_name: '答主' })
+    const w = await mountTopics(topic)
+    await openReplies(w, topic, [parent, child], 5, 2)
+    const vm = vmOf(w)
+    let stateAtRefresh: { ids: number[]; total: number } | undefined
+    listTopics.mockImplementationOnce(async () => {
+      stateAtRefresh = {
+        ids: vm.replyMap[topic.id].map(item => item.id),
+        total: vm.replyMeta[topic.id].total
+      }
+      return { items: [topic], total: 1 } as never
+    })
+
+    await vm.deleteReply(parent)
+    await flushPromises()
+
+    expect(confirmDangerMock).toHaveBeenCalledWith(
+      '确定删除这条回复？删除后不可恢复。',
+      '删除回复',
+      { type: 'warning' }
+    )
+    expect(confirmMock).not.toHaveBeenCalled()
+    expect(deleteReplyMock).toHaveBeenCalledWith(parent.id)
+    expect(stateAtRefresh).toEqual({ ids: [child.id], total: 4 })
+    expect(vm.replyMap[topic.id].map(item => item.id)).toEqual([child.id])
+    expect(vm.replyMeta[topic.id]).toEqual({ page: 1, pages: 2, total: 4 })
+    expect(ElMessage.success).toHaveBeenCalledWith('已删除')
+    expect(listTopics).toHaveBeenCalledTimes(2)
+  })
+
+  it('删回复失败不更新缓存、不发成功 toast、不刷新', async () => {
+    const topic = adminTopic()
+    const reply = adminReply()
+    const w = await mountTopics(topic)
+    await openReplies(w, topic, [reply], 3, 2)
+    const vm = vmOf(w)
+    deleteReplyMock.mockRejectedValue(new Error('delete failed'))
+
+    await vm.deleteReply(reply)
+    await flushPromises()
+
+    expect(vm.replyMap[topic.id].map(item => item.id)).toEqual([reply.id])
+    expect(vm.replyMeta[topic.id]).toEqual({ page: 1, pages: 2, total: 3 })
+    expect(ElMessage.success).not.toHaveBeenCalled()
+    expect(listTopics).toHaveBeenCalledTimes(1)
+  })
+
+  it('取消删回复不发请求，也不更新缓存或刷新', async () => {
+    const topic = adminTopic()
+    const reply = adminReply()
+    const w = await mountTopics(topic)
+    await openReplies(w, topic, [reply], 3, 2)
+    const vm = vmOf(w)
+    confirmDangerMock.mockRejectedValue(new Error('cancel'))
+
+    await vm.deleteReply(reply)
+    await flushPromises()
+
+    expect(deleteReplyMock).not.toHaveBeenCalled()
+    expect(vm.replyMap[topic.id].map(item => item.id)).toEqual([reply.id])
+    expect(vm.replyMeta[topic.id]).toEqual({ page: 1, pages: 2, total: 3 })
+    expect(ElMessage.success).not.toHaveBeenCalled()
+    expect(listTopics).toHaveBeenCalledTimes(1)
+  })
+})

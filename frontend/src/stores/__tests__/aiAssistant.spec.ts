@@ -76,6 +76,7 @@ function createStore() {
 beforeEach(() => {
   vi.clearAllMocks()
   vi.useFakeTimers()
+  authState.isLoggedIn = true
   // streamChat 返回带 spy 的 controller（中断/复位路径断言用）
   streamChatMock.mockImplementation(() => ({ abort: vi.fn() }))
   setActivePinia(createPinia())
@@ -107,6 +108,132 @@ async function sendAndStream(store: ReturnType<typeof useAIAssistantStore>, cont
   await p
   await flush()
 }
+
+describe('发送阶段边界与请求契约（W3-a）', () => {
+  it('空内容与空图片直接返回：不校验模型、不创建会话、不起流', async () => {
+    const store = useAIAssistantStore()
+    store.modeModels = { normal: null, expert: null }
+
+    await expect(store.send('   ', { images: [] })).resolves.toBeUndefined()
+
+    expect(aiAssistantApi.createSession).not.toHaveBeenCalled()
+    expect(streamChatMock).not.toHaveBeenCalled()
+    expect(store.messages).toEqual([])
+  })
+
+  it('通用请求体深比较：缺省键、历史顺序与图片形状保持不变', async () => {
+    const store = createStore()
+    store.currentSessionId = 7
+    store.messages = [
+      {
+        id: 1,
+        role: 'user',
+        content: '历史问题',
+        images: ['/uploads/history.png'],
+        sources: null,
+        meta: null,
+        created_at: ''
+      },
+      {
+        id: 2,
+        role: 'assistant',
+        content: '历史回答',
+        images: null,
+        sources: [{ id: 9, text: '历史来源', metadata: {} }],
+        meta: { badges: [], elapsed: 2 },
+        created_at: ''
+      }
+    ] as any
+
+    const p = store.send('  当前问题  ', {
+      images: ['/uploads/current.png'],
+      brand: '合力',
+      model: 'H2000'
+    })
+    await p
+    await flush()
+
+    const req = streamChatMock.mock.calls[0][0]
+    expect(req).toStrictEqual({
+      session_id: 7,
+      feature_key: undefined,
+      mode: 'normal',
+      model_source: 'admin',
+      config_id: 1,
+      brand: '合力',
+      model: 'H2000',
+      messages: [
+        { role: 'user', content: '历史问题' },
+        { role: 'assistant', content: '历史回答' },
+        { role: 'user', content: '  当前问题  ', images: ['/uploads/current.png'] }
+      ]
+    })
+    expect(store.messages[store.messages.length - 1]).toStrictEqual({
+      id: expect.any(Number),
+      role: 'user',
+      content: '  当前问题  ',
+      images: ['/uploads/current.png'],
+      sources: null,
+      meta: null,
+      created_at: expect.any(String)
+    })
+  })
+
+  it('游客默认请求体深比较：会话与差异参数保留 undefined，末条图片键仍存在', async () => {
+    authState.isLoggedIn = false
+    setActivePinia(createPinia())
+    const store = createStore()
+
+    const { p } = await startSend(store, '游客问')
+
+    const req = streamChatMock.mock.calls[0][0]
+    expect(req).toStrictEqual({
+      session_id: undefined,
+      feature_key: undefined,
+      mode: 'normal',
+      model_source: 'admin',
+      config_id: 1,
+      brand: undefined,
+      model: undefined,
+      messages: [{ role: 'user', content: '游客问', images: undefined }]
+    })
+    expect(store.messages[store.messages.length - 1]).toMatchObject({ images: null })
+    await p
+  })
+
+  it('新一轮开始后旧轮回调全部迟到：独立通道与终态均不得污染新轮', async () => {
+    const store = createStore()
+    const first = await startSend(store, '第一轮')
+    first.h.onChunk?.('第一轮增量')
+    first.h.onDone?.({ content: '第一轮回答', meta: { badges: [], elapsed: 1 } })
+    await first.p
+    await flush()
+
+    const second = await startSend(store, '第二轮')
+    first.h.onChunk?.('迟到增量')
+    first.h.onStatus?.('迟到状态')
+    first.h.onUsage?.(USAGE)
+    first.h.onSources?.([{ id: 99, text: '迟到来源', metadata: {} }])
+    first.h.onDone?.({ content: '迟到全文', meta: { badges: [], elapsed: 99 } })
+    first.h.onError?.('迟到失败')
+
+    expect(store.streaming).toBe(true)
+    expect(store.streamingContent).toBe('')
+    expect(store.streamingStatus).toBe('')
+    expect(store.lastUsage).toBeNull()
+    expect(store.lastTurnError).toBeNull()
+    expect(store.messages.filter(m => m.role === 'assistant').map(m => m.content)).toEqual(['第一轮回答'])
+
+    second.h.onChunk?.('第二轮回答')
+    second.h.onDone?.()
+    await second.p
+    await flush()
+    expect(store.messages.filter(m => m.role === 'assistant')).toEqual([
+      expect.objectContaining({ content: '第一轮回答', sources: null, meta: { badges: [], elapsed: 1 } }),
+      expect.objectContaining({ content: '第二轮回答', sources: null, meta: null })
+    ])
+  })
+})
 
 describe('usage 独立通道（#620）', () => {
   it('usage 事件写入 store.lastUsage；当轮由壳渲染，正文不再拼接计费脚注', async () => {
@@ -377,6 +504,24 @@ describe('当轮终态（#1104：done / error / aborted 一处收尾）', () => 
     })
     // 没有起流，也没有落用户消息（这一轮从未发出）
     expect(streamChatMock).not.toHaveBeenCalled()
+    expect(store.messages).toEqual([])
+    expect(store.currentSessionId).toBeNull()
+  })
+
+  it('空 session：本轮走 error 收尾且不落乐观用户消息', async () => {
+    const store = createStore()
+    vi.mocked(aiAssistantApi.createSession).mockResolvedValueOnce(null as never)
+
+    await store.send('空 session 的一轮')
+    await flush()
+
+    expect(store.lastTurnError).toMatchObject({
+      kind: 'error',
+      content: '空 session 的一轮'
+    })
+    expect(store.streaming).toBe(false)
+    expect(streamChatMock).not.toHaveBeenCalled()
+    expect(store.messages).toEqual([])
   })
 })
 

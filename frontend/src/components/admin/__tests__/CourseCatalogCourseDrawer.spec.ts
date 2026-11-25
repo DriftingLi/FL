@@ -163,6 +163,107 @@ describe('CourseCatalogCourseDrawer 积分价写入契约', () => {
   })
 })
 
+describe('CourseCatalogCourseDrawer 字段映射', () => {
+  it('列表首开保留假值回退，不被详情模式的空值语义覆盖', async () => {
+    vi.mocked(adminApi.getCourseDetail).mockReturnValue(new Promise(() => {}))
+    const wrapper = mountDrawer()
+    const vm = wrapper.vm as unknown as { open: (course: AdminCourseItem) => void; drawerForm: Record<string, unknown> }
+    vm.open(courseDTO({
+      name: undefined as never,
+      category_id: undefined as never,
+      status: undefined as never,
+      theory_hours: undefined as never,
+      practice_hours: 0,
+      duration: 0,
+      certificate_template_id: undefined as never,
+      description: undefined as never,
+      is_hot: undefined as never,
+      is_featured: undefined as never
+    }))
+
+    expect(vm.drawerForm).toMatchObject({
+      course_id: 1,
+      category_id: null,
+      theory_hours: 0,
+      practice_hours: 0,
+      duration: 0,
+      description: '',
+      is_hot: false,
+      is_featured: false
+    })
+    expect(vm.drawerForm.certificate_template_id).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('详情回填保留姓名与类型回退，并显式落 null、数值零和简介空串', async () => {
+    let resolveDetail!: (detail: AdminCourseDetail) => void
+    vi.mocked(adminApi.getCourseDetail).mockReturnValue(new Promise(resolve => { resolveDetail = resolve }))
+    const wrapper = mountDrawer()
+    const vm = wrapper.vm as unknown as { open: (course: AdminCourseItem) => void; drawerForm: Record<string, unknown> }
+    vm.open(courseDTO({
+      name: '列表名称',
+      description: '列表简介',
+      theory_hours: 5,
+      certificate_template_id: 3,
+      points_price: 100
+    }))
+    expect(vm.drawerForm.description).toBe('列表简介')
+    const detail = courseDetailDTO({
+      name: undefined as never,
+      category_id: null as never,
+      course_type: undefined as never,
+      status: undefined as never,
+      theory_hours: undefined as never,
+      practice_hours: 0,
+      duration: 0,
+      description: undefined as never,
+      certificate_template_id: null,
+      points_price: null as never
+    })
+    expect(detail.description).toBeUndefined()
+    resolveDetail(detail)
+    await flushPromises()
+
+    expect(vm.drawerForm).toMatchObject({
+      name: '列表名称',
+      category_id: null,
+      course_type: 'illustrated',
+      status: 1,
+      theory_hours: 0,
+      practice_hours: 0,
+      duration: 0,
+      description: '',
+      certificate_template_id: null,
+      points_price: null
+    })
+    wrapper.unmount()
+  })
+
+  it('提交 payload 保留证书空值转 0 与数组、布尔字段形状', async () => {
+    vi.mocked(adminApi.getCourseDetail).mockResolvedValue(courseDetailDTO({
+      certificate_template_id: null,
+      prerequisite_course_ids: [2, 3],
+      is_hot: true,
+      is_featured: false
+    }))
+    const wrapper = mountDrawer()
+    await openAndSubmit(wrapper, courseDTO({
+      certificate_template_id: null,
+      prerequisite_course_ids: [2, 3],
+      is_hot: true,
+      is_featured: false
+    }))
+
+    expect(adminApi.updateCourse).toHaveBeenCalledWith(1, expect.objectContaining({
+      certificate_template_id: 0,
+      prerequisite_course_ids: [2, 3],
+      is_hot: true,
+      is_featured: false
+    }))
+    wrapper.unmount()
+  })
+})
+
 describe('课程抽屉公开资格', () => {
   it('先前课程的详情晚到时，保留当前课程的表单与公开原因', async () => {
     let resolveFirst!: (detail: AdminCourseDetail) => void

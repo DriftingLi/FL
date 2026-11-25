@@ -5,14 +5,14 @@ import { ref } from 'vue'
 import type { Ref } from 'vue'
 
 // ===== 对/错模板 =====
-export const TRUE_FALSE_OPTIONS: ReadonlyArray<{ key: string; label: string }> = [
-  { key: '对', label: '正确' },
-  { key: '错', label: '错误' }
-]
+const TRUE_FALSE_OPTIONS: Readonly<Record<string, string>> = {
+  对: '正确',
+  错: '错误'
+}
 
 /** 题目选项 → 渲染选项记录（判断题渲染对/错模板） */
 export function buildQuestionOptions(question: { type?: string; options?: Record<string, string> | null }): Record<string, string> {
-  if (question?.type === 'true_false') return { 对: '正确', 错: '错误' }
+  if (question?.type === 'true_false') return { ...TRUE_FALSE_OPTIONS }
   return question?.options || {}
 }
 

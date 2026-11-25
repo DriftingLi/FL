@@ -595,11 +595,6 @@ func (s *Service) StreamChat(ctx context.Context, userID int, req StreamChatReq,
 		CustomModel:   req.CustomModel,
 	}
 
-	// 拼装消息：功能系统提示词 + 历史消息
-	msgs := []*schema.Message{
-		schema.SystemMessage(featureSystemPrompt(req.FeatureKey)),
-	}
-	// 仅最后一条用户消息附带图片（多模态）；历史图片不重发（控制 token，规避多图限制）
 	lastUserIdx := -1
 	for i := len(req.Messages) - 1; i >= 0; i-- {
 		if req.Messages[i].Role == "user" {
@@ -607,21 +602,9 @@ func (s *Service) StreamChat(ctx context.Context, userID int, req StreamChatReq,
 			break
 		}
 	}
-	for i, m := range req.Messages {
-		switch m.Role {
-		case "user":
-			if i == lastUserIdx && len(m.Images) > 0 {
-				userMsg, err := s.buildImageUserMessage(ctx, m.Content, m.Images)
-				if err != nil {
-					return "", nil, err
-				}
-				msgs = append(msgs, userMsg)
-				continue
-			}
-			msgs = append(msgs, schema.UserMessage(m.Content))
-		case "assistant":
-			msgs = append(msgs, &schema.Message{Role: schema.Assistant, Content: m.Content})
-		}
+	msgs, err := s.buildChatMessages(ctx, req.FeatureKey, req.Messages, lastUserIdx)
+	if err != nil {
+		return "", nil, err
 	}
 
 	// 计费事实随计费意图交给闸门：**传消息列表而不是算好的字符数**——口径（取哪一条用户
@@ -639,90 +622,120 @@ func (s *Service) StreamChat(ctx context.Context, userID int, req StreamChatReq,
 
 	// 持久化（仅登录用户且指定了 SessionID）
 	if userID > 0 && req.SessionID > 0 {
-		var lastUserMsg string
-		var lastUserImages []string
-		for i := len(req.Messages) - 1; i >= 0; i-- {
-			if req.Messages[i].Role == "user" {
-				lastUserMsg = req.Messages[i].Content
-				lastUserImages = req.Messages[i].Images
-				break
-			}
+		persisted, err := s.persistChatTurn(ctx, userID, req.SessionID, req.Messages, lastUserIdx, fullContent, sink)
+		if err != nil {
+			return fullContent, usage, err
 		}
-		if lastUserMsg != "" || len(lastUserImages) > 0 {
-			// 纯图片消息（无文本）也允许持久化
-			imagesJSON := ""
-			if len(lastUserImages) > 0 {
-				if b, err := json.Marshal(lastUserImages); err == nil {
-					imagesJSON = string(b)
-				}
-			}
-			now := time.Now()
-			if err := s.db.WithContext(ctx).Create(&model.AIChatMessage{
-				SessionID: req.SessionID, Role: "user", Content: lastUserMsg, Images: imagesJSON,
-			}).Error; err != nil {
-				s.logger.Error("保存用户消息失败", zap.Int("session_id", req.SessionID), zap.Int("user_id", userID), zap.Error(err))
-				return fullContent, usage, &persistError{msg: persistUserMsgFailed, cause: err}
-			}
-			// T5：诊断来源随助手消息持久化（sink.Result() → JSON 列；非诊断/空来源存空串）
-			sourcesJSON := ""
-			var result StreamResult
-			if sink != nil {
-				result = sink.Result()
-			}
-			if len(result.Sources) > 0 {
-				if b, err := json.Marshal(result.Sources); err == nil {
-					sourcesJSON = string(b)
-				} else {
-					s.logger.Warn("诊断来源序列化失败，按无来源落库", zap.Int("session_id", req.SessionID), zap.Error(err))
-				}
-			}
-			// 能力徽章与耗时随助手消息持久化（票 2245 决策：trace 不落库）。
-			// 只在该功能真产出元数据时写：通用对话的 done 载荷本来是 null，
-			// 落一个 `{"badges":[],"elapsed":0}` 会让「有元数据」这个判据失去区分力。
-			metaJSON := ""
-			if result.HasMeta {
-				meta := result.Meta
-				if meta.Badges == nil {
-					meta.Badges = []DiagnosisBadge{}
-				}
-				if b, err := json.Marshal(meta); err == nil {
-					metaJSON = string(b)
-				} else {
-					s.logger.Warn("诊断元数据序列化失败，按无元数据落库", zap.Int("session_id", req.SessionID), zap.Error(err))
-				}
-			}
-			if err := s.db.WithContext(ctx).Create(&model.AIChatMessage{
-				SessionID: req.SessionID, Role: "assistant", Content: fullContent,
-				Sources: sourcesJSON, Meta: metaJSON,
-			}).Error; err != nil {
-				s.logger.Error("保存助手消息失败", zap.Int("session_id", req.SessionID), zap.Int("user_id", userID), zap.Error(err))
-				return fullContent, usage, &persistError{msg: persistAssistantMsgFailed, cause: err}
-			}
-			if err := s.db.WithContext(ctx).Model(&model.AIChatSession{}).
-				Where("id = ?", req.SessionID).
-				Updates(map[string]any{"updated_at": now}).Error; err != nil {
-				s.logger.Error("更新会话时间失败", zap.Int("session_id", req.SessionID), zap.Int("user_id", userID), zap.Error(err))
-				return fullContent, usage, &persistError{msg: persistSessionTouchFailed, cause: err}
-			}
-
-			// 异步生成会话标题：仅当标题为占位符"新会话"时（首次对话）
-			// 使用独立 context 避免请求结束后被取消；recover 防止 panic 影响主流程。
-			// 凭证随选择子在端口内经 resolver 解析（与主对话同一路径）。
-			sessionID := req.SessionID
-			uid := userID
-			go func() {
-				defer func() {
-					if r := recover(); r != nil {
-						s.logger.Warn("自动命名 panic", zap.Int("session_id", sessionID), zap.Any("panic", r))
-					}
-				}()
-				bgCtx := context.Background()
-				s.maybeGenerateSessionTitle(bgCtx, uid, sessionID, sel)
-			}()
+		if persisted {
+			s.scheduleSessionTitle(userID, req.SessionID, sel)
 		}
 	}
 
 	return fullContent, usage, nil
+}
+
+func (s *Service) buildChatMessages(ctx context.Context, featureKey string, messages []StreamMessage, lastUserIdx int) ([]*schema.Message, error) {
+	msgs := []*schema.Message{schema.SystemMessage(featureSystemPrompt(featureKey))}
+	// 仅最后一条用户消息附带图片（多模态）；历史图片不重发（控制 token，规避多图限制）
+	for i, m := range messages {
+		switch m.Role {
+		case "user":
+			if i == lastUserIdx && len(m.Images) > 0 {
+				userMsg, err := s.buildImageUserMessage(ctx, m.Content, m.Images)
+				if err != nil {
+					return nil, err
+				}
+				msgs = append(msgs, userMsg)
+				continue
+			}
+			msgs = append(msgs, schema.UserMessage(m.Content))
+		case "assistant":
+			msgs = append(msgs, &schema.Message{Role: schema.Assistant, Content: m.Content})
+		}
+	}
+	return msgs, nil
+}
+
+// 各步独立提交；失败时保留已成功写入，且不再调度异步标题。
+func (s *Service) persistChatTurn(ctx context.Context, userID, sessionID int, messages []StreamMessage, lastUserIdx int, fullContent string, sink StreamSinkWithResult) (bool, error) {
+	if lastUserIdx < 0 || lastUserIdx >= len(messages) {
+		return false, nil
+	}
+	lastUser := messages[lastUserIdx]
+	if lastUser.Content == "" && len(lastUser.Images) == 0 {
+		return false, nil
+	}
+
+	// 纯图片消息（无文本）也允许持久化
+	imagesJSON := ""
+	if len(lastUser.Images) > 0 {
+		if b, err := json.Marshal(lastUser.Images); err == nil {
+			imagesJSON = string(b)
+		}
+	}
+	now := time.Now()
+	if err := s.db.WithContext(ctx).Create(&model.AIChatMessage{
+		SessionID: sessionID, Role: "user", Content: lastUser.Content, Images: imagesJSON,
+	}).Error; err != nil {
+		s.logger.Error("保存用户消息失败", zap.Int("session_id", sessionID), zap.Int("user_id", userID), zap.Error(err))
+		return false, &persistError{msg: persistUserMsgFailed, cause: err}
+	}
+	// T5：诊断来源随助手消息持久化（sink.Result() → JSON 列；非诊断/空来源存空串）
+	sourcesJSON := ""
+	var result StreamResult
+	if sink != nil {
+		result = sink.Result()
+	}
+	if len(result.Sources) > 0 {
+		if b, err := json.Marshal(result.Sources); err == nil {
+			sourcesJSON = string(b)
+		} else {
+			s.logger.Warn("诊断来源序列化失败，按无来源落库", zap.Int("session_id", sessionID), zap.Error(err))
+		}
+	}
+	// 能力徽章与耗时随助手消息持久化（票 2245 决策：trace 不落库）。
+	// 只在该功能真产出元数据时写：通用对话的 done 载荷本来是 null，
+	// 落一个 `{"badges":[],"elapsed":0}` 会让「有元数据」这个判据失去区分力。
+	metaJSON := ""
+	if result.HasMeta {
+		meta := result.Meta
+		if meta.Badges == nil {
+			meta.Badges = []DiagnosisBadge{}
+		}
+		if b, err := json.Marshal(meta); err == nil {
+			metaJSON = string(b)
+		} else {
+			s.logger.Warn("诊断元数据序列化失败，按无元数据落库", zap.Int("session_id", sessionID), zap.Error(err))
+		}
+	}
+	if err := s.db.WithContext(ctx).Create(&model.AIChatMessage{
+		SessionID: sessionID, Role: "assistant", Content: fullContent,
+		Sources: sourcesJSON, Meta: metaJSON,
+	}).Error; err != nil {
+		s.logger.Error("保存助手消息失败", zap.Int("session_id", sessionID), zap.Int("user_id", userID), zap.Error(err))
+		return false, &persistError{msg: persistAssistantMsgFailed, cause: err}
+	}
+	if err := s.db.WithContext(ctx).Model(&model.AIChatSession{}).
+		Where("id = ?", sessionID).
+		Updates(map[string]any{"updated_at": now}).Error; err != nil {
+		s.logger.Error("更新会话时间失败", zap.Int("session_id", sessionID), zap.Int("user_id", userID), zap.Error(err))
+		return false, &persistError{msg: persistSessionTouchFailed, cause: err}
+	}
+	return true, nil
+}
+
+func (s *Service) scheduleSessionTitle(userID, sessionID int, sel ModelSelector) {
+	// 异步生成会话标题：仅当标题为占位符"新会话"时（首次对话）
+	// 使用独立 context 避免请求结束后被取消；recover 防止 panic 影响主流程。
+	// 凭证随选择子在端口内经 resolver 解析（与主对话同一路径）。
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				s.logger.Warn("自动命名 panic", zap.Int("session_id", sessionID), zap.Any("panic", r))
+			}
+		}()
+		s.maybeGenerateSessionTitle(context.Background(), userID, sessionID, sel)
+	}()
 }
 
 // buildImageUserMessage 构建带图片的多模态用户消息。

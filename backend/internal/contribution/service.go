@@ -342,31 +342,31 @@ func (s *Service) CleanupOrphanFiles(ctx context.Context) int {
 // ===== 资格与配额 =====
 
 // countDaily 当日提交数（Asia/Shanghai 自然日起点之后的行数；time.Time 边界双方言可用）。
-func (s *Service) countDaily(userID int) (int64, error) {
+func countDaily(db *gorm.DB, userID int, dayStart time.Time) (int64, error) {
 	var cnt int64
-	err := s.db.Model(&model.UserContribution{}).
-		Where("user_id = ? AND created_at >= ?", userID, clock.DayStart(s.clk.Now())).Count(&cnt).Error
+	err := db.Model(&model.UserContribution{}).
+		Where("user_id = ? AND created_at >= ?", userID, dayStart).Count(&cnt).Error
 	return cnt, err
 }
 
 // countPending 名下 pending 积压数。
-func (s *Service) countPending(userID int) (int64, error) {
+func countPending(db *gorm.DB, userID int) (int64, error) {
 	var cnt int64
-	err := s.db.Model(&model.UserContribution{}).
+	err := db.Model(&model.UserContribution{}).
 		Where("user_id = ? AND status = ?", userID, ContributionStatusPending).Count(&cnt).Error
 	return cnt, err
 }
 
-// checkQuota 校验投稿配额两臂（读路径/写路径共用单实现）。
-func (s *Service) checkQuota(userID int) error {
-	daily, err := s.countDaily(userID)
+// checkQuota 校验投稿配额两臂（事务内外共用单实现）。
+func (s *Service) checkQuota(db *gorm.DB, userID int, dayStart time.Time) error {
+	daily, err := countDaily(db, userID, dayStart)
 	if err != nil {
 		return err
 	}
 	if daily >= ContributionDailyMax {
 		return ErrContributionQuotaDaily
 	}
-	pending, err := s.countPending(userID)
+	pending, err := countPending(db, userID)
 	if err != nil {
 		return err
 	}
@@ -402,6 +402,24 @@ func (s *Service) checkCredential(userID, credentialID int) error {
 	return nil
 }
 
+func createContributionFiles(tx *gorm.DB, contributionID int64, files []ContributionFileDTO, now time.Time) error {
+	if len(files) == 0 {
+		return nil
+	}
+	rows := make([]model.UserContributionFile, 0, len(files))
+	for _, f := range files {
+		rows = append(rows, model.UserContributionFile{
+			ContributionID: contributionID,
+			FileURL:        f.FileURL,
+			FileName:       f.FileName,
+			FileSize:       f.FileSize,
+			ContentType:    f.ContentType,
+			CreatedAt:      now,
+		})
+	}
+	return tx.Create(&rows).Error
+}
+
 // Create 创建投稿（pending）。配额两臂 + 证件校验在事务外先查一遍，事务内再守卫（防并发超投）。
 func (s *Service) Create(in CreateContributionInput) (*ContributionItemDTO, error) {
 	// 标题/简介校验
@@ -426,7 +444,7 @@ func (s *Service) Create(in CreateContributionInput) (*ContributionItemDTO, erro
 	} else if err := s.checkCredential(in.UserID, in.CredentialID); err != nil {
 		return nil, err
 	}
-	if err := s.checkQuota(in.UserID); err != nil {
+	if err := s.checkQuota(s.db, in.UserID, clock.DayStart(s.clk.Now())); err != nil {
 		return nil, err
 	}
 	if len(in.Files) == 0 {
@@ -458,19 +476,8 @@ func (s *Service) Create(in CreateContributionInput) (*ContributionItemDTO, erro
 	var created model.UserContribution
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		// 事务内配额守卫（防并发超投）
-		daily, err := s.countDailyTx(tx, in.UserID)
-		if err != nil {
+		if err := s.checkQuota(tx, in.UserID, clock.DayStart(s.clk.Now())); err != nil {
 			return err
-		}
-		if daily >= ContributionDailyMax {
-			return ErrContributionQuotaDaily
-		}
-		pending, err := s.countPendingTx(tx, in.UserID)
-		if err != nil {
-			return err
-		}
-		if pending >= ContributionPendingMax {
-			return ErrContributionQuotaPending
 		}
 		created = model.UserContribution{
 			UserID:       in.UserID,
@@ -490,18 +497,8 @@ func (s *Service) Create(in CreateContributionInput) (*ContributionItemDTO, erro
 		if err := write.Create(&created).Error; err != nil {
 			return err
 		}
-		for _, f := range in.Files {
-			fi := model.UserContributionFile{
-				ContributionID: created.ID,
-				FileURL:        f.FileURL,
-				FileName:       f.FileName,
-				FileSize:       f.FileSize,
-				ContentType:    f.ContentType,
-				CreatedAt:      now,
-			}
-			if err := tx.Create(&fi).Error; err != nil {
-				return err
-			}
+		if err := createContributionFiles(tx, created.ID, in.Files, now); err != nil {
+			return err
 		}
 		return nil
 	})
@@ -509,21 +506,6 @@ func (s *Service) Create(in CreateContributionInput) (*ContributionItemDTO, erro
 		return nil, err
 	}
 	return s.GetDetail(created.ID, in.UserID)
-}
-
-// countDailyTx / countPendingTx 事务内配额计数（与事务外共用条件形态）。
-func (s *Service) countDailyTx(tx *gorm.DB, userID int) (int64, error) {
-	var cnt int64
-	err := tx.Model(&model.UserContribution{}).
-		Where("user_id = ? AND created_at >= ?", userID, clock.DayStart(s.clk.Now())).Count(&cnt).Error
-	return cnt, err
-}
-
-func (s *Service) countPendingTx(tx *gorm.DB, userID int) (int64, error) {
-	var cnt int64
-	err := tx.Model(&model.UserContribution{}).
-		Where("user_id = ? AND status = ?", userID, ContributionStatusPending).Count(&cnt).Error
-	return cnt, err
 }
 
 // ListPublic 公开广场列表：仅 approved（非 archived——archived 是 approved 的下游状态，

@@ -15,12 +15,15 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { ref } from 'vue'
 import { ElTable } from 'element-plus/es/components/table/index.mjs'
 import { epLite } from '@/test/element-lite'
 import type { AlgorithmParameters } from '@/api/valuation/admin'
 
 const listAlgorithmParameters = vi.fn()
 const originalPricesList = vi.fn()
+const updateCoefficient = vi.fn()
+const updateConditionCoefficient = vi.fn()
 
 vi.mock('@/api/valuation/admin', () => ({
   listAlgorithmParameters: (...args: unknown[]) => listAlgorithmParameters(...args),
@@ -34,9 +37,9 @@ vi.mock('@/api/valuation/admin', () => ({
     },
     regionCoefficients: { create: vi.fn() }
   },
-  updateCoefficient: vi.fn(),
+  updateCoefficient: (...args: unknown[]) => updateCoefficient(...args),
   updateBrandCoefficient: vi.fn(),
-  updateConditionCoefficient: vi.fn(),
+  updateConditionCoefficient: (...args: unknown[]) => updateConditionCoefficient(...args),
   updateRegionCoefficient: vi.fn()
 }))
 
@@ -163,5 +166,73 @@ describe('ValuationConfigManage 算法参数装载（#1355 写回槽）', () => 
     await flushPromises()
     expect(w.text()).not.toContain('算法参数加载失败')
     expect(draftCounts(w)).toEqual([1, 1, 1, 1, 1])
+  })
+})
+
+describe('ValuationConfigManage 分区保存（W2-b）', () => {
+  it('共享 draft 的两个分区 loading 独立：一个保存挂起不阻塞另一个', async () => {
+    let releaseGlobal!: () => void
+    let releaseKc!: () => void
+    const globalPending = new Promise<void>(resolve => { releaseGlobal = resolve })
+    const kcPending = new Promise<void>(resolve => { releaseKc = resolve })
+    updateCoefficient
+      .mockImplementationOnce(() => globalPending)
+      .mockImplementationOnce(() => kcPending)
+
+    const w = await mountOnAlgorithmTab()
+    await flushPromises()
+    api(w).globalCoefficientsDraft[0].value = 0.8
+    api(w).kcModifiersDraft[0].value = 0.2
+
+    const globalFlight = api(w).saveCoefficients()
+    expect(api(w).savingCoefficients).toBe(true)
+    expect(api(w).savingKcModifiers).toBe(false)
+
+    const kcFlight = api(w).saveKcModifiers()
+    expect(api(w).savingCoefficients).toBe(true)
+    expect(api(w).savingKcModifiers).toBe(true)
+    expect(updateCoefficient).toHaveBeenNthCalledWith(1, 'kt_base', 0.8)
+    expect(updateCoefficient).toHaveBeenNthCalledWith(2, 'kc_paint', 0.2)
+
+    releaseGlobal()
+    await globalFlight
+    await flushPromises()
+    expect(api(w).savingCoefficients).toBe(false)
+    expect(api(w).savingKcModifiers).toBe(true)
+
+    releaseKc()
+    await kcFlight
+    await flushPromises()
+    expect(api(w).savingKcModifiers).toBe(false)
+  })
+
+  it('save 返回 false（车况标签校验失败）：不 reload，草稿仍 dirty，saving 复位', async () => {
+    const w = await mountOnAlgorithmTab()
+    await flushPromises()
+    api(w).conditionRatingsDraft[0].label = ' '
+    listAlgorithmParameters.mockClear()
+
+    await api(w).saveConditionRatings()
+    await flushPromises()
+
+    expect(updateConditionCoefficient).not.toHaveBeenCalled()
+    expect(listAlgorithmParameters).not.toHaveBeenCalled()
+    expect(api(w).isConditionRatingsDirty()).toBe(true)
+    expect(api(w).savingConditionRatings).toBe(false)
+  })
+
+  it('reload 抛错：saveSection 的 finally 仍复位 saving', async () => {
+    const w = await mountOnAlgorithmTab()
+    await flushPromises()
+    const saving = ref(false)
+    const boom = new Error('reload boom')
+
+    await expect(api(w).saveSection(
+      saving,
+      async () => true,
+      async () => { throw boom }
+    )).rejects.toBe(boom)
+
+    expect(saving.value).toBe(false)
   })
 })

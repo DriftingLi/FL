@@ -1,16 +1,23 @@
 // ChatPageShell 壳测试（#398）：槽位渲染、安全渲染单点（markstream escape、无裸 v-html）、
 // 侧栏会话操作（重命名/删除/选中）、输入区变体与发送事件、自动滚底钩子不回归。
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import { reactive, nextTick } from 'vue'
+import { reactive, nextTick, h } from 'vue'
 import { epLite } from '@/test/element-lite'
 import { testRouter } from '@/test/router'
 
 // 壳在重试被拒时把原因弹给用户（断言用；epLite 走 element-plus/es 子路径，不受影响）
 const ElMessage = vi.hoisted(() => ({ warning: vi.fn(), error: vi.fn(), success: vi.fn() }))
+const confirmDanger = vi.hoisted(() => vi.fn())
 vi.mock('element-plus', () => ({ ElMessage }))
+vi.mock('@/composables/useConfirm', () => ({
+  useConfirm: () => ({ confirmDanger })
+}))
 
 import ChatPageShell from '../ChatPageShell.vue'
+import ChatComposer from '../ChatComposer.vue'
+import ChatSidebar from '../ChatSidebar.vue'
+import ChatMessageList from '../ChatMessageList.vue'
 
 // ===== 模块替身：store / auth / 路由工具 / markstream =====
 const mocks = vi.hoisted(() => ({ store: undefined as any }))
@@ -53,8 +60,10 @@ function makeStore(overrides: Record<string, unknown> = {}) {
     sessions: [{ id: 1, title: '会话一', updated_at: '2026-01-01T00:00:00Z' }],
     currentSessionId: 1,
     messages: [] as Array<Record<string, unknown>>,
+    messagesLoading: false,
     streaming: false,
     streamingContent: '',
+    streamingStatus: '',
     // #620：当轮 usage 独立 state + 状态变更 action（壳渲染脚注、登出走 action）
     lastUsage: null as Record<string, number> | null,
     // #1104：发送判据（壳把页面 prop 与 store 闸门合成）与当轮失败/中断独立通道
@@ -95,6 +104,69 @@ function mountShell(props: Record<string, unknown> = {}, slots: Record<string, a
 
 beforeEach(() => {
   mocks.store = makeStore()
+  confirmDanger.mockReset()
+  confirmDanger.mockResolvedValue('confirm')
+  localStorage.removeItem('ai-sidebar-collapsed')
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
+  localStorage.removeItem('ai-sidebar-collapsed')
+})
+
+function mockViewport(matches: boolean, reducedMotion = false) {
+  const listeners = new Set<(event: MediaQueryListEvent) => void>()
+  let currentMatches = matches
+  const mql = {
+    get matches() { return currentMatches },
+    media: '(max-width: 768px)',
+    onchange: null,
+    addEventListener: (_type: string, listener: (event: MediaQueryListEvent) => void) => listeners.add(listener),
+    removeEventListener: (_type: string, listener: (event: MediaQueryListEvent) => void) => listeners.delete(listener),
+    addListener: (listener: (event: MediaQueryListEvent) => void) => listeners.add(listener),
+    removeListener: (listener: (event: MediaQueryListEvent) => void) => listeners.delete(listener),
+    dispatchEvent: () => true
+  } as unknown as MediaQueryList
+  vi.spyOn(window, 'matchMedia').mockImplementation(query => {
+    if (query === '(max-width: 768px)') return mql
+    return {
+      matches: query === '(prefers-reduced-motion: reduce)' && reducedMotion,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    } as unknown as MediaQueryList
+  })
+  return {
+    setMatches(next: boolean) {
+      currentMatches = next
+      const event = { matches: next, media: mql.media } as MediaQueryListEvent
+      listeners.forEach(listener => listener(event))
+    }
+  }
+}
+
+describe('ChatPageShell 子件装配', () => {
+  it('真实挂载 Composer/Sidebar/MessageList，根节点保留原 DOM 钩子', () => {
+    const w = mountShell({ canSend: true })
+    const composer = w.findComponent(ChatComposer)
+    const sidebar = w.findComponent(ChatSidebar)
+    const messages = w.findComponent(ChatMessageList)
+    expect(composer.exists()).toBe(true)
+    expect(sidebar.exists()).toBe(true)
+    expect(messages.exists()).toBe(true)
+    expect(composer.element.classList.contains('chat-input-area')).toBe(true)
+    expect(sidebar.find('.session-sidebar').exists()).toBe(true)
+    expect(messages.element.classList.contains('message-list')).toBe(true)
+    expect(w.find('.ai-chat-shell').exists()).toBe(true)
+  })
+
+  it('调用方未传 input-prefix 时不出现 has-image，传入后才出现', () => {
+    const plain = mountShell({})
+    expect(plain.find('.input-wrap').classes()).not.toContain('has-image')
+    const withPrefix = mountShell({}, {
+      'input-prefix': '<button class="upload-slot">上传</button>'
+    })
+    expect(withPrefix.find('.input-wrap').classes()).toContain('has-image')
+  })
 })
 
 describe('ChatPageShell 槽位', () => {
@@ -145,6 +217,47 @@ describe('ChatPageShell 槽位', () => {
     for (const b of bubbles) {
       expect(b.classes()).not.toContain('truncate')
     }
+  })
+
+  it('assistant-caps 与 assistant-extra 按消息透传，分别位于 Markdown 前后', () => {
+    mocks.store = makeStore({
+      messages: [{ id: 2, role: 'assistant', content: '回答', meta: { badges: ['维修知识库'] } }]
+    })
+    const w = mountShell({}, {
+      'assistant-caps': ({ message }: { message: { meta?: { badges?: string[] } } }) =>
+        h('div', { class: 'caps-slot' }, message.meta?.badges?.[0]),
+      'assistant-extra': ({ message }: { message: { content: string } }) =>
+        h('div', { class: 'extra-slot' }, message.content)
+    })
+    const html = w.find('.message-item.assistant .message-text').html()
+    expect(w.find('.caps-slot').text()).toBe('维修知识库')
+    expect(w.find('.extra-slot').text()).toBe('回答')
+    expect(html.indexOf('caps-slot')).toBeLessThan(html.indexOf('markdown-stub'))
+    expect(html.indexOf('markdown-stub')).toBeLessThan(html.indexOf('extra-slot'))
+  })
+
+  it('输入区全部槽位顺序稳定：toolbar → above → prefix/输入框/actions → extra', () => {
+    const w = mountShell({}, {
+      'input-toolbar': '<div class="toolbar-slot">工具栏</div>',
+      'input-above': '<div class="above-slot">图片队列</div>',
+      'input-prefix': '<button class="prefix-slot">上传</button>',
+      'input-extra': '<div class="extra-input-slot">模式告警</div>'
+    })
+    const html = w.find('.chat-input-area').html()
+    expect(html.indexOf('toolbar-slot')).toBeLessThan(html.indexOf('above-slot'))
+    expect(html.indexOf('above-slot')).toBeLessThan(html.indexOf('prefix-slot'))
+    expect(html.indexOf('prefix-slot')).toBeLessThan(html.indexOf('textarea'))
+    expect(html.indexOf('textarea')).toBeLessThan(html.indexOf('input-actions'))
+    expect(html.indexOf('input-actions')).toBeLessThan(html.indexOf('extra-input-slot'))
+  })
+
+  it('建议词更新后回到第一页', async () => {
+    const w = mountShell({ suggestions: ['一', '二', '三', '四'] })
+    await w.findAll('.suggestion-pager button')[1].trigger('click')
+    expect(w.find('.suggestion-track').attributes('style')).toContain('translateX(-100%)')
+    await w.setProps({ suggestions: ['新一', '新二'] })
+    expect(w.find('.suggestion-track').attributes('style')).toContain('translateX(-0%)')
+    expect(w.findAll('.suggestion-page')).toHaveLength(1)
   })
 
   it('空态：grid 三行布局——输入框正中行精确居中、欢迎区第一行底对齐依托其上；有消息沉底 1200', async () => {
@@ -263,6 +376,14 @@ describe('ChatPageShell 安全渲染', () => {
     expect(stub.exists()).toBe(true)
     expect(stub.props('htmlPolicy')).toBe('escape')
   })
+
+  it('流式过程文案在等待态显示，不混入消息正文', () => {
+    mocks.store.streaming = true
+    mocks.store.streamingStatus = '正在调取维修资料…'
+    const w = mountShell({})
+    expect(w.find('.loading-status').text()).toBe('正在调取维修资料…')
+    expect(w.findAll('.message-text').map(el => el.text()).join('')).not.toContain('正在调取维修资料')
+  })
 })
 
 describe('ChatPageShell 侧栏与会话操作', () => {
@@ -299,6 +420,115 @@ describe('ChatPageShell 侧栏与会话操作', () => {
     const w = mountShell({})
     expect(w.find('.session-rename').exists()).toBe(false)
     expect(w.find('.session-delete').exists()).toBe(true)
+  })
+
+  it('会话按更新时间倒序分入五档，非法日期归入更早', () => {
+    const day = 86_400_000
+    const now = Date.now()
+    mocks.store = makeStore({
+      sessions: [
+        { id: 5, title: '更早', updated_at: new Date(now - 40 * day).toISOString() },
+        { id: 1, title: '三十天内', updated_at: new Date(now - 10 * day).toISOString() },
+        { id: 4, title: '坏日期', updated_at: 'not-a-date' },
+        { id: 3, title: '七天内', updated_at: new Date(now - 3 * day).toISOString() },
+        { id: 2, title: '今天', updated_at: new Date(now).toISOString() }
+      ]
+    })
+    const w = mountShell({})
+    expect(w.findAll('.session-title').map(el => el.text())).toEqual(['今天', '七天内', '三十天内', '更早', '坏日期'])
+    expect(w.text()).toContain('7 天内')
+    expect(w.text()).toContain('30 天内')
+  })
+
+  it('桌面折叠写入 localStorage，侧栏 inert/aria-hidden，悬浮入口反向显隐', async () => {
+    localStorage.setItem('ai-sidebar-collapsed', '1')
+    const w = mountShell({})
+    const sidebar = w.find('.session-sidebar')
+    expect(sidebar.classes()).toContain('-ml-[260px]')
+    expect(sidebar.attributes('inert')).toBeDefined()
+    expect(sidebar.attributes('aria-hidden')).toBe('true')
+
+    await w.find('button[aria-label="展开侧栏"]').trigger('click')
+    expect(localStorage.getItem('ai-sidebar-collapsed')).toBe('0')
+    expect(sidebar.attributes('inert')).toBeUndefined()
+    expect(sidebar.attributes('aria-hidden')).toBeUndefined()
+    const floating = w.find('button[aria-label="展开侧栏"]').element.parentElement!.parentElement!
+    expect(floating.getAttribute('inert')).not.toBeNull()
+    expect(floating.getAttribute('aria-hidden')).toBe('true')
+
+    await w.find('button[aria-label="收起侧栏"]').trigger('click')
+    expect(localStorage.getItem('ai-sidebar-collapsed')).toBe('1')
+    expect(sidebar.attributes('inert')).toBeDefined()
+  })
+
+  it('移动端抽屉遮罩、关闭与选中会话后收抽屉；切回桌面强制关闭', async () => {
+    const viewport = mockViewport(true)
+    mocks.store.selectSession = vi.fn().mockResolvedValue(undefined)
+    const w = mountShell({})
+    await nextTick()
+    const sidebar = w.find('.session-sidebar')
+    expect(sidebar.classes()).toContain('fixed')
+    expect(sidebar.classes()).toContain('-translate-x-full')
+    expect(sidebar.attributes('inert')).toBeDefined()
+    expect(sidebar.attributes('aria-hidden')).toBe('true')
+    expect(w.find('.fixed.inset-0.z-30').exists()).toBe(false)
+
+    await w.find('button[aria-label="打开会话栏"]').trigger('click')
+    expect(sidebar.classes()).toContain('translate-x-0')
+    expect(sidebar.attributes('inert')).toBeUndefined()
+    expect(sidebar.attributes('aria-hidden')).toBeUndefined()
+    expect(w.find('.fixed.inset-0.z-30').exists()).toBe(true)
+
+    await w.find('.fixed.inset-0.z-30').trigger('click')
+    expect(sidebar.classes()).toContain('-translate-x-full')
+    expect(sidebar.attributes('inert')).toBeDefined()
+
+    await w.find('button[aria-label="打开会话栏"]').trigger('click')
+    await w.find('.session-item').trigger('click')
+    await flushPromises()
+    expect(sidebar.classes()).toContain('-translate-x-full')
+
+    await w.find('button[aria-label="打开会话栏"]').trigger('click')
+    await w.find('button[aria-label="关闭会话栏"]').trigger('click')
+    expect(sidebar.classes()).toContain('-translate-x-full')
+
+    await w.find('button[aria-label="打开会话栏"]').trigger('click')
+    viewport.setMatches(false)
+    await nextTick()
+    expect(sidebar.classes()).toContain('relative')
+    expect(sidebar.classes()).toContain('ml-0')
+    expect(sidebar.attributes('inert')).toBeUndefined()
+    expect(sidebar.attributes('aria-hidden')).toBeUndefined()
+  })
+
+  it('重命名 Enter 与 blur 只提交一次；Esc 取消不提交', async () => {
+    const w = mountShell({ enableRename: true })
+    await w.find('.session-rename').trigger('click')
+    const input = w.find('.session-item.editing input')
+    await input.setValue('新标题')
+    await input.trigger('keydown.enter')
+    await input.trigger('blur')
+    await flushPromises()
+    expect(mocks.store.renameSession).toHaveBeenCalledTimes(1)
+    expect(mocks.store.renameSession).toHaveBeenCalledWith(1, '新标题')
+
+    await w.find('.session-rename').trigger('click')
+    await w.find('.session-item.editing input').trigger('keydown.esc')
+    expect(mocks.store.renameSession).toHaveBeenCalledTimes(1)
+    expect(w.find('.session-item.editing').exists()).toBe(false)
+  })
+
+  it('删除会话经统一确认，取消不删除', async () => {
+    const w = mountShell({})
+    await w.find('.session-delete').trigger('click')
+    await flushPromises()
+    expect(confirmDanger).toHaveBeenCalledTimes(1)
+    expect(mocks.store.deleteSession).toHaveBeenCalledWith(1)
+
+    confirmDanger.mockRejectedValueOnce('cancel')
+    await w.find('.session-delete').trigger('click')
+    await flushPromises()
+    expect(mocks.store.deleteSession).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -555,6 +785,13 @@ describe('ChatPageShell 输入法守卫（CJK 选词不误发）', () => {
     expect(evt.defaultPrevented).toBe(false)
     expect(w.emitted('send')).toBeFalsy()
   })
+
+  it('Shift+Enter 保留换行语义，不发送', () => {
+    const w = mountShell({ canSend: true })
+    const evt = dispatchEnter(w.find('textarea').element, { shiftKey: true })
+    expect(evt.defaultPrevented).toBe(false)
+    expect(w.emitted('send')).toBeFalsy()
+  })
 })
 
 // ===== 视口跟随（回翻用户不被流式吐字夺走视口）=====
@@ -628,6 +865,15 @@ describe('ChatPageShell 视口跟随（回翻不被夺走）', () => {
     await w.find('.scroll-to-bottom').trigger('click')
     expect(read()).toBe(1000)
     expect(scrollCalls.at(-1)).toMatchObject({ top: 1000, behavior: 'smooth' })
+    expect(w.find('.scroll-to-bottom').exists()).toBe(false)
+  })
+
+  it('prefers-reduced-motion 下回底瞬时完成，不请求平滑滚动', async () => {
+    mockViewport(false, true)
+    const { w, read, scrollCalls } = await mountChatting(0)
+    await w.find('.scroll-to-bottom').trigger('click')
+    expect(read()).toBe(1000)
+    expect(scrollCalls).toHaveLength(0)
     expect(w.find('.scroll-to-bottom').exists()).toBe(false)
   })
 
