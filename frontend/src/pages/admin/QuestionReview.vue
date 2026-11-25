@@ -21,12 +21,6 @@
       />
       <UiInput v-model="filters.keyword" placeholder="搜索题目" clearable style="width: 200px" @keyup.enter="loadData"  />
       <UiButton variant="primary" @click="loadData">查询</UiButton>
-      <UiButton variant="success" v-if="selectedIds.length > 0" @click="batchPublish">
-        批量发布 ({{ selectedIds.length }})
-      </UiButton>
-      <UiButton variant="danger" v-if="selectedIds.length > 0" @click="batchReject">
-        批量驳回 ({{ selectedIds.length }})
-      </UiButton>
         </template>
       </UiFilterBar>
 
@@ -45,37 +39,50 @@
       :retrying="retrying"
       @retry="retryLoad"
     />
-    <el-table v-else :data="questions" stripe v-loading="loading" @selection-change="handleSelection">
-      <el-table-column type="selection" width="50" />
-      <el-table-column prop="id" label="ID" width="60" />
-      <el-table-column prop="type" label="题型" width="100">
-        <template #default="{ row }">{{ (typeMap as Record<string, string>)[row.type] }}</template>
-      </el-table-column>
-      <el-table-column prop="content" label="题干" show-overflow-tooltip />
-      <el-table-column label="分类" width="150">
-        <template #default="{ row }">
-          <UiTag v-if="row.category" :tone="row.category.status === 0 ? 'warning' : 'neutral'" size="small" effect="plain">
-            {{ row.category.name }}{{ row.category.status === 0 ? '（停用）' : '' }}
-          </UiTag>
-          <UiTag v-else tone="danger" size="small" effect="plain">未分类</UiTag>
-        </template>
-      </el-table-column>
-      <el-table-column label="审核状态" width="100">
-        <template #default="{ row }">
-          <UiTag :tone="questionStatusTone[row.status]" size="small">{{ questionStatusMap[row.status] }}</UiTag>
-        </template>
-      </el-table-column>
-      <el-table-column label="公开资格" min-width="280">
-        <template #default="{ row }">
-          <PublicEligibility :eligibility="row.public_eligibility" />
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" width="90" fixed="right" align="center">
-        <template #default="{ row }">
-          <UiMoreMenu trigger="text" :items="actionItems(row)" @select="(k: string) => handleAction(k, row)" />
-        </template>
-      </el-table-column>
-    </el-table>
+    <div v-else>
+      <div v-if="selectedIds.length && !loading" class="mb-3 flex flex-wrap items-center gap-2 rounded-card border border-line bg-panel p-3">
+        <span role="status">已选 {{ selectedIds.length }} 道题</span>
+        <UiButton variant="success" size="small" @click="batchPublish">批量发布</UiButton>
+        <UiButton variant="danger" size="small" @click="batchReject">批量驳回</UiButton>
+      </div>
+      <el-table :data="questions" stripe v-loading="loading" @selection-change="handleSelection">
+        <el-table-column type="selection" width="50" />
+        <el-table-column label="题干" min-width="260" show-overflow-tooltip>
+          <template #default="{ row }">
+            <button type="button" class="block w-full cursor-pointer truncate border-0 bg-transparent p-0 text-left text-ink underline-offset-2 hover:underline" @click="viewDetail(row)">
+              {{ row.content || '查看题目' }}
+            </button>
+          </template>
+        </el-table-column>
+        <el-table-column prop="id" label="ID" width="60" />
+        <el-table-column prop="type" label="题型" width="100">
+          <template #default="{ row }">{{ (typeMap as Record<string, string>)[row.type] }}</template>
+        </el-table-column>
+        <el-table-column label="分类" width="150">
+          <template #default="{ row }">
+            <UiTag v-if="row.category" :tone="row.category.status === 0 ? 'warning' : 'neutral'" size="small" effect="plain">
+              {{ row.category.name }}{{ row.category.status === 0 ? '（停用）' : '' }}
+            </UiTag>
+            <UiTag v-else tone="danger" size="small" effect="plain">未分类</UiTag>
+          </template>
+        </el-table-column>
+        <el-table-column label="审核状态" width="100">
+          <template #default="{ row }">
+            <UiTag :tone="questionStatusTone[row.status]" size="small">{{ questionStatusMap[row.status] }}</UiTag>
+          </template>
+        </el-table-column>
+        <el-table-column label="公开资格" width="150">
+          <template #default="{ row }">
+            <PublicEligibility :eligibility="row.public_eligibility" :reason-limit="1" />
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="90" fixed="right" align="center">
+          <template #default="{ row }">
+            <UiMoreMenu trigger="text" :items="actionItems(row)" @select="(k: string) => handleAction(k, row)" />
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
 
     <UiPagination
       v-model:current-page="page"

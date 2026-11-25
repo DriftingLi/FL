@@ -34,7 +34,7 @@ import RoleManage from '../RoleManage.vue'
 /** 动作能力组（挂不到任何管理页上的能力键）的标题，与 RoleManage.vue 里的判定同词。 */
 const ACTION_GROUP_TITLE = '动作能力（不占侧栏页面）'
 
-// 一个角色持有四个侧栏分组各一片 + 四枚动作能力：分组渲染的覆盖面由它一次打满。
+// 一个角色覆盖所有侧栏分组和四枚动作能力。
 const opsRole = {
   role_id: 2,
   name: '运营',
@@ -44,6 +44,7 @@ const opsRole = {
     'admin.access',
     'hrwai_user.manage',
     'tutor.manage',
+    'question.review',
     'course.manage',
     'position.manage',
     'credential.manage',
@@ -90,13 +91,15 @@ describe('角色权限页的分组', () => {
     expect(all.slice().sort()).toEqual([...opsRole.capabilities].sort())
   })
 
-  it('页面归属决定组：用户管理不在总览、证件管理与课程管理同组', async () => {
+  it('页面归属决定组，工作台的能力也有归属', async () => {
     const w = mount(RoleManage, { global: { plugins: [epLite()] } })
     await flushPromises()
-    expect(keysOf(w, '总览')).toEqual(['admin.access'])
-    expect(keysOf(w, '用户与内容').sort()).toEqual(['hrwai_user.manage', 'tutor.manage'])
+    expect(keysOf(w, '工作台')).toEqual(['admin.access'])
+    expect(keysOf(w, '审核处理')).toEqual(['question.review'])
+    expect(keysOf(w, '用户与招聘').sort()).toEqual(['hrwai_user.manage', 'tutor.manage'])
     expect(keysOf(w, '教学管理').sort()).toEqual(['course.manage', 'credential.manage', 'position.manage'])
-    expect(keysOf(w, '系统').sort()).toEqual(['ai_config.manage', 'audit.read', 'content.generate', 'featured.manage'])
+    expect(keysOf(w, '内容运营').sort()).toEqual(['content.generate', 'featured.manage'])
+    expect(keysOf(w, '系统与数据').sort()).toEqual(['ai_config.manage', 'audit.read'])
   })
 
   it('动作能力（导出/积分/举报处置/目录作者）不占侧栏页面，单独成组', async () => {

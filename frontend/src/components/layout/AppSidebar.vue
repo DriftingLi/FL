@@ -16,16 +16,20 @@
         <!-- 有子项的分组：分组头只出文字（与叶子行的「图标 + 文字」区分开），
              不再复用叶子图标。折叠态下它退化为一条分隔线，保留分组边界。 -->
         <template v-if="item.children && item.children.length">
-          <div
+          <button
+            type="button"
             class="nav-group-label"
             :class="{ 'is-active': isGroupActiveLocal(item), 'is-accordion': !effectiveCollapsed }"
+            :disabled="effectiveCollapsed"
+            :aria-hidden="effectiveCollapsed || undefined"
+            :aria-expanded="isGroupExpandedLocal(item.key)"
             @click="onGroupHeaderClick(item.key)"
           >
             <span class="nav-group-text">{{ item.label }}</span>
             <UiIcon name="chevron-down" class="nav-group-arrow" :class="{ expanded: isGroupExpandedLocal(item.key) }" />
-          </div>
+          </button>
           <!-- 高度过渡：grid 0fr → 1fr，不用 v-show 瞬时 display:none -->
-          <UiCollapse :open="isGroupExpandedLocal(item.key)" class="nav-group-collapse">
+          <UiCollapse :open="effectiveCollapsed || isGroupExpandedLocal(item.key)" class="nav-group-collapse">
             <div class="nav-group-children">
               <template v-for="child in item.children" :key="child.key">
                 <!-- 二级嵌套：child 自身还有 children（如 题库练习 ┬ 真题练习） -->
@@ -115,6 +119,7 @@ const props = defineProps<{
   menuItems: NavItem[]
   collapsed: boolean
   mobileOpen?: boolean
+  expandActiveGroup?: boolean
 }>()
 
 defineEmits<{
@@ -126,15 +131,20 @@ const effectiveCollapsed = computed(() => props.collapsed && !props.mobileOpen)
 
 const route = useRoute()
 
-// 侧栏分组折叠：默认全部展开，点击分组标题即可折叠/展开（桌面与移动端一致）
 const expandedMap = reactive<Record<string, boolean>>({})
 
+const activeGroup = computed(() => props.menuItems.find(isGroupActiveLocal)?.key)
+
 watch(
-  () => props.menuItems,
-  (items) => {
+  [() => props.menuItems, () => route.path, activeGroup],
+  ([items, path, currentGroup], [, previousPath]) => {
+    const resetGroups = props.expandActiveGroup && !currentGroup && path !== previousPath
     for (const item of items) {
-      if (item.children?.length && expandedMap[item.key] === undefined) {
-        expandedMap[item.key] = true
+      if (!item.children?.length) continue
+      if (props.expandActiveGroup && (resetGroups || item.key === currentGroup)) {
+        expandedMap[item.key] = item.key === currentGroup
+      } else {
+        expandedMap[item.key] ??= !props.expandActiveGroup
       }
     }
   },
@@ -151,7 +161,6 @@ function onGroupToggle(key: string): void {
   Object.assign(expandedMap, toggleGroupExpanded(expandedMap, key))
 }
 
-/** 折叠态的分组头只是图标入口（悬停出叶子清单），不承担展开/收起。 */
 function onGroupHeaderClick(key: string): void {
   if (effectiveCollapsed.value) return
   onGroupToggle(key)
@@ -239,6 +248,12 @@ function isRouteActive(item: NavItem): boolean {
   transition:
     padding var(--duration-normal) var(--ease-default),
     gap var(--duration-normal) var(--ease-default);
+}
+
+button.nav-group-label {
+  background: transparent;
+  border: 0;
+  text-align: left;
 }
 
 /* 分组名与箭头是**过渡件**：折叠时不换树，只移出布局并淡出（见下方 .collapsed 规则） */

@@ -6,6 +6,10 @@ import type { FormInstance } from 'element-plus'
 import { adminApi, type AdminCourseItem, type ChapterPayload } from '@/api/admin'
 import { useConfirm } from '@/composables/useConfirm'
 import type { CertificateTemplate, TrainingCategoryDTO } from '@/api/training'
+import type { Eligibility } from '@/api/generated/course'
+import PublicEligibility from '@/components/catalog/PublicEligibility.vue'
+import { allowsPublicVisibility } from '@/utils/publicEligibility'
+import UiSwitch from '@/components/ui/UiSwitch.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiRadioGroup from '@/components/ui/UiRadioGroup.vue'
@@ -21,7 +25,10 @@ const props = defineProps<{
   submitting: boolean
 }>()
 
-const emit = defineEmits<{ (e: 'saved'): void }>()
+const emit = defineEmits<{
+  saved: []
+  visibilityChanged: [courseId: number, eligibility: Eligibility]
+}>()
 
 const selectedCategory = ref<TrainingCategoryDTO | null>(null)
 const categoryOptions = computed(() => {
@@ -39,6 +46,14 @@ const categoryOptions = computed(() => {
 })
 
 const drawerVisible = ref(false)
+const publicEligibility = ref<Eligibility>()
+const loadingDetail = ref(false)
+const detailError = ref(false)
+const visibilityUpdates = ref(new Set<number>())
+const savingCourse = ref(false)
+let detailRequest = 0
+let drawerSession = 0
+let visibilityRevision = 0
 const courseFormRef = ref<FormInstance | null>(null)
 const drawerChapters = ref<{ chapter_id: number; title: string; duration?: number; order_num?: number }[]>([])
 const drawerForm = reactive<Record<string, any>>({
@@ -77,6 +92,11 @@ const courseRules = {
 }
 
 function open(course: AdminCourseItem | null) {
+  drawerSession++
+  detailRequest++
+  loadingDetail.value = false
+  detailError.value = false
+  publicEligibility.value = course?.public_eligibility
   drawerVisible.value = true
   drawerChapters.value = []
   selectedCategory.value = null
@@ -122,10 +142,17 @@ function open(course: AdminCourseItem | null) {
 }
 
 async function loadDrawerDetail() {
+  const request = ++detailRequest
+  const id = drawerForm.course_id
+  const revision = visibilityRevision
+  loadingDetail.value = true
+  detailError.value = false
   try {
-    const id = drawerForm.course_id
     const detail = await adminApi.getCourseDetail(id)
-    if (detail && drawerForm.course_id === id) {
+    if (detail && request === detailRequest && drawerVisible.value) {
+      if (revision === visibilityRevision) {
+        publicEligibility.value = detail.public_eligibility ?? publicEligibility.value
+      }
       selectedCategory.value = detail.category
         ?? props.categories.find(category => category.id === detail.category_id)
         ?? selectedCategory.value
@@ -147,14 +174,39 @@ async function loadDrawerDetail() {
       drawerChapters.value = detail.chapters || []
     }
   } catch (error) {
+    if (request === detailRequest) detailError.value = true
     console.error('加载课程详情失败:', error)
+  } finally {
+    if (request === detailRequest) loadingDetail.value = false
+  }
+}
+
+async function setCourseVisibility(visible: boolean) {
+  const id: number = drawerForm.course_id
+  if (!id || loadingDetail.value || savingCourse.value || visibilityUpdates.value.has(id)) return
+  visibilityUpdates.value.add(id)
+  try {
+    const eligibility = await adminApi.setPublicVisibility(id, visible)
+    if (drawerForm.course_id === id) {
+      visibilityRevision++
+      publicEligibility.value = eligibility
+    }
+    emit('visibilityChanged', id, eligibility)
+    ElMessage.success(visible ? '已允许公开' : '已关闭公开')
+  } catch (error) {
+    console.error('修改课程公开开关失败:', error)
+  } finally {
+    visibilityUpdates.value.delete(id)
   }
 }
 
 async function submitCourse() {
-  if (!courseFormRef.value) return
-  await courseFormRef.value.validate()
+  if (!courseFormRef.value || loadingDetail.value || savingCourse.value || visibilityUpdates.value.has(drawerForm.course_id)) return
+  const session = drawerSession
+  savingCourse.value = true
   try {
+    const valid = await courseFormRef.value.validate().catch(() => false)
+    if (!valid || session !== drawerSession || !drawerVisible.value) return
     const payload = {
       name: drawerForm.name,
       category_id: drawerForm.category_id,
@@ -178,11 +230,13 @@ async function submitCourse() {
       await adminApi.createCourse(payload)
       ElMessage.success('已创建')
     }
-    drawerVisible.value = false
+    if (session === drawerSession) drawerVisible.value = false
     emit('saved')
   } catch (error) {
     console.error('保存课程失败:', error)
     /* 错误已由拦截器提示 */
+  } finally {
+    savingCourse.value = false
   }
 }
 
@@ -267,7 +321,25 @@ defineExpose({ open })
 
 <template>
   <!-- 课程编辑抽屉（全字段 + 章节管理） -->
-  <el-drawer v-model="drawerVisible" :title="drawerForm.course_id ? '编辑课程' : '新增课程'" size="560px">
+  <el-drawer v-model="drawerVisible" :title="drawerForm.course_id ? '编辑课程' : '新增课程'" size="min(560px, 100vw)">
+    <section v-if="drawerForm.course_id" class="mb-4 rounded-card border border-line p-4">
+      <h3 class="mb-2 font-semibold">公开资格</h3>
+      <PublicEligibility :eligibility="publicEligibility" />
+      <p v-if="detailError" class="mt-2 flex flex-wrap items-center gap-2 text-sm">
+        课程详情加载失败
+        <UiButton variant="text" size="small" @click="loadDrawerDetail">重试</UiButton>
+      </p>
+      <label v-if="publicEligibility" class="mt-3 flex flex-wrap items-center gap-2 text-sm">
+        允许公开
+        <UiSwitch
+          aria-label="允许公开课程"
+          :model-value="allowsPublicVisibility(publicEligibility)"
+          :disabled="loadingDetail || savingCourse || submitting || visibilityUpdates.has(drawerForm.course_id)"
+          @change="setCourseVisibility($event === true)"
+        />
+        <span class="text-ink-3">立即作用于已保存的课程</span>
+      </label>
+    </section>
     <el-form ref="courseFormRef" :model="drawerForm" :rules="courseRules" label-width="96px">
       <el-form-item label="课程分类" prop="category_id">
         <UiSelect v-model="drawerForm.category_id" placeholder="请选择课程分类" class="w-full" :options="categoryOptions" />
@@ -343,7 +415,12 @@ defineExpose({ open })
 
     <template #footer>
       <UiButton @click="drawerVisible = false">取消</UiButton>
-      <UiButton variant="primary" :loading="submitting" @click="submitCourse">保存</UiButton>
+      <UiButton
+        variant="primary"
+        :loading="submitting || savingCourse"
+        :disabled="loadingDetail || visibilityUpdates.has(drawerForm.course_id)"
+        @click="submitCourse"
+      >保存</UiButton>
     </template>
   </el-drawer>
 

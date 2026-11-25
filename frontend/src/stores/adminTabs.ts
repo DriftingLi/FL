@@ -36,6 +36,7 @@ export const PINNED_ADMIN_TAB: RouteName = 'AdminDashboard'
 export const useAdminTabsStore = defineStore('adminTabs', () => {
   const tabs = ref<AdminTab[]>([])
   const activeName = ref<RouteName | ''>('')
+  const expanded = ref(false)
 
   const closable = computed(() => tabs.value.filter(t => !t.pinned))
   const canCloseOthers = computed(() => closable.value.length > 1)
@@ -87,6 +88,7 @@ export const useAdminTabsStore = defineStore('adminTabs', () => {
   function reset(): void {
     tabs.value = []
     activeName.value = ''
+    expanded.value = false
   }
 
   /**
@@ -118,6 +120,7 @@ export const useAdminTabsStore = defineStore('adminTabs', () => {
   return {
     tabs,
     activeName,
+    expanded,
     closable,
     canCloseOthers,
     open,

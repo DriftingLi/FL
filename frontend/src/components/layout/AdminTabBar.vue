@@ -120,6 +120,10 @@ function closeMenu(): void {
   menu.value = null
 }
 
+watch(() => tabsStore.expanded, expanded => {
+  if (!expanded) closeMenu()
+})
+
 function onMenuKeydown(event: KeyboardEvent): void {
   if (event.key === 'Escape') closeMenu()
 }
@@ -141,7 +145,7 @@ function closeTab(tab: AdminTab): void {
 </script>
 
 <template>
-  <div class="admin-tabbar" role="tablist" aria-label="已打开的页面">
+  <div id="admin-page-tabs" class="admin-tabbar" role="tablist" aria-label="已打开的页面">
     <div
       v-for="(tab, i) in tabsStore.tabs"
       :key="tab.name"

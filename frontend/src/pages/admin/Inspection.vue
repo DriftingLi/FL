@@ -23,207 +23,219 @@
       </UiAsyncSection>
       <div class="mt-1 text-xs text-ink-3">楼主删除自己已解决的帖子时累加，不自动惩罚、不回滚积分</div>
     </div>
-    <div class="rounded-card border border-line bg-panel p-4">
-      <div class="flex items-center gap-2 mb-3">
-        <span class="text-sm font-semibold text-ink">问答积分流水</span>
-        <UiSelect v-model="domain" class="!w-44" :options="[{ label: '问答域', value: 'forum_topic' }, { label: '跨业务域全量', value: '' }]" />
-        <UiSelect v-model="reason" placeholder="按原因筛选" clearable class="!w-40" @change="loadLedger" :options="[{ label: '答主被采纳', value: 'accepted_bonus' }, { label: '楼主采纳', value: 'accept_action' }, { label: '违规回收', value: 'rollback' }]" />
-        <UiInput v-model="userId" placeholder="按用户ID过滤" clearable class="!w-40" @change="loadLedger"  />
-        <UiButton size="small" @click="loadLedger">刷新</UiButton>
-      </div>
-      <UiAsyncSection
-        :error="ledgerError"
-        :loading="ledgerLoading"
-        :empty="isEmptyLedger"
-        :retrying="ledgerRetrying"
-        :skeleton="false"
-        error-title="流水加载失败"
-        error-description="网络或服务端异常，可重试"
-        @retry="retryLedger"
-      >
-        <div v-if="ledgerLoading" class="text-sm text-ink-3">加载中...</div>
-        <div v-else class="grid gap-2">
-        <div v-for="item in ledger" :key="String(item.id)" class="border border-line rounded-ctl p-2 text-xs">
-          <div>用户 {{ item.user_id }} · {{ item.reason }} · {{ item.delta }} 分 · {{ refLabel(item.ref_type) }} {{ item.ref_id }}</div>
-          <div class="text-ink-3">{{ item.created_at }}</div>
-        </div>
-      </div>
-        <template #empty>
-          <UiEmptyState description="暂无数据" size="sm" />
-        </template>
-      </UiAsyncSection>
-      <div class="mt-3 flex justify-end">
-        <UiPagination
-      v-model:current-page="page"
-      v-model:page-size="pageSize"
-      :total="total"
-      show-sizes
-      :page-sizes="[10, 20, 50]"
-      @current-change="handlePageChange"
-      @size-change="handleLedgerSizeChange"
-    />
-      </div>
-    </div>
-
-    <div class="rounded-card border border-line bg-panel p-4">
-      <div class="flex items-center gap-2 mb-3">
-        <span class="text-sm font-semibold text-ink">简历查看留痕</span>
-        <UiButton size="small" @click="loadViews">刷新</UiButton>
-      </div>
-      <UiAsyncSection
-        :error="viewsError"
-        :loading="viewsLoading"
-        :empty="isEmptyViews"
-        :retrying="viewsRetrying"
-        :skeleton="false"
-        error-title="留痕加载失败"
-        error-description="网络或服务端异常，可重试"
-        @retry="retryViews"
-      >
-        <div v-if="viewsLoading" class="text-sm text-ink-3">加载中...</div>
-        <div v-else class="grid gap-2">
-          <div v-for="item in views" :key="String(item.id)" class="border border-line rounded-ctl p-2 text-xs">
-            <div>招聘方 {{ item.recruiter_id }} · 学员 {{ item.resume_user_id }} · {{ item.viewed_at }}</div>
-          </div>
-        </div>
-        <template #empty>
-          <UiEmptyState description="暂无数据" size="sm" />
-        </template>
-      </UiAsyncSection>
-      <div class="mt-3 flex justify-end">
-        <UiPagination
-      v-model:current-page="viewsPage"
-      :page-size="20"
-      :total="viewsTotal"
-      @current-change="loadViews"
-    />
-      </div>
-    </div>
-
-    <div class="rounded-card border border-line bg-panel p-4">
-      <div class="flex items-center gap-2 mb-3">
-        <span class="text-sm font-semibold text-ink">联系方式申请记录</span>
-        <UiButton size="small" @click="loadRequests">刷新</UiButton>
-      </div>
-      <UiAsyncSection
-        :error="requestsError"
-        :loading="requestsLoading"
-        :empty="isEmptyRequests"
-        :retrying="requestsRetrying"
-        :skeleton="false"
-        error-title="申请记录加载失败"
-        error-description="网络或服务端异常，可重试"
-        @retry="retryRequests"
-      >
-        <div v-if="requestsLoading" class="text-sm text-ink-3">加载中...</div>
-        <div v-else class="grid gap-2">
-          <div v-for="item in requests" :key="String(item.id)" class="border border-line rounded-ctl p-2 text-xs">
-            <div>招聘方 {{ item.recruiter_id }} · 学员 {{ item.student_user_id }} · {{ describeContactRequest(item.status).label }}</div>
-            <div class="text-ink-3">{{ item.created_at }}</div>
-          </div>
-        </div>
-        <template #empty>
-          <UiEmptyState description="暂无数据" size="sm" />
-        </template>
-      </UiAsyncSection>
-      <div class="mt-3 flex justify-end">
-        <UiPagination
-      v-model:current-page="requestsPage"
-      :page-size="20"
-      :total="requestsTotal"
-      @current-change="loadRequests"
-    />
-      </div>
-    </div>
-
-    <div class="rounded-card border border-line bg-panel p-4">
-      <div class="flex items-center gap-2 mb-3">
-        <span class="text-sm font-semibold text-ink">招聘职位巡检</span>
-        <UiInput v-model="jobFilterRecruiter" placeholder="按企业 ID 筛" clearable class="!w-32" @change="loadJobs"  />
-        <UiButton size="small" @click="loadJobs">刷新</UiButton>
-      </div>
-      <UiAsyncSection
-        :error="jobsError"
-        :loading="jobsLoading"
-        :empty="isEmptyJobs"
-        :retrying="jobsRetrying"
-        :skeleton="false"
-        error-title="职位加载失败"
-        error-description="网络或服务端异常，可重试"
-        @retry="retryJobs"
-      >
-        <div v-if="jobsLoading" class="text-sm text-ink-3">加载中...</div>
-        <div v-else class="grid gap-2">
-          <div v-for="item in jobs" :key="String(item.id)" class="border border-line rounded-ctl p-2 text-xs">
-            <div class="flex items-center justify-between gap-2">
-              <div>
-                <span class="font-semibold text-ink">{{ item.title }}</span>
-                <span v-if="item.forced_offline" class="ml-2 text-red-500">已强制下架：{{ item.offline_reason }}</span>
-                <span v-else-if="item.status === 'closed'" class="ml-2 text-ink-3">已下架</span>
-                <span class="ml-2 text-ink-3">企业 {{ item.recruiter_id }} · {{ item.region }}</span>
-              </div>
-              <div class="flex items-center gap-2 shrink-0">
-                <UiButton v-if="!item.forced_offline" size="small" @click="openForceOffline(item)">强制下架</UiButton>
-              </div>
+    <el-tabs v-model="activePanel">
+      <el-tab-pane label="积分" name="points">
+        <div class="flex flex-col gap-4">
+          <div class="rounded-card border border-line bg-panel p-4">
+            <div class="mb-3 flex flex-wrap items-center gap-2">
+              <span class="text-sm font-semibold text-ink">问答积分流水</span>
+              <UiSelect v-model="domain" class="!w-44" :options="[{ label: '问答域', value: 'forum_topic' }, { label: '跨业务域全量', value: '' }]" />
+              <UiSelect v-model="reason" placeholder="按原因筛选" clearable class="!w-40" @change="loadLedger" :options="[{ label: '答主被采纳', value: 'accepted_bonus' }, { label: '楼主采纳', value: 'accept_action' }, { label: '违规回收', value: 'rollback' }]" />
+              <UiInput v-model="userId" placeholder="按用户ID过滤" clearable class="!w-40" @change="loadLedger"  />
+              <UiButton size="small" @click="loadLedger">刷新</UiButton>
             </div>
-          </div>
-        </div>
-        <template #empty>
-          <UiEmptyState description="暂无数据" size="sm" />
-        </template>
-      </UiAsyncSection>
-      <div class="mt-3 flex justify-end">
-        <UiPagination
-      v-model:current-page="jobsPage"
-      :page-size="20"
-      :total="jobsTotal"
-      @current-change="loadJobs"
-    />
-      </div>
-    </div>
-
-    <div class="rounded-card border border-line bg-panel p-4">
-      <div class="flex items-center gap-2 mb-3">
-        <span class="text-sm font-semibold text-ink">职位举报队列</span>
-        <UiButton size="small" @click="loadReports">刷新</UiButton>
-      </div>
-      <UiAsyncSection
-        :error="reportsError"
-        :loading="reportsLoading"
-        :empty="isEmptyReports"
-        :retrying="reportsRetrying"
-        :skeleton="false"
-        error-title="举报队列加载失败"
-        error-description="网络或服务端异常，可重试"
-        @retry="retryReports"
-      >
-        <div v-if="reportsLoading" class="text-sm text-ink-3">加载中...</div>
-        <div v-else class="grid gap-2">
-          <div v-for="item in reports" :key="String(item.id)" class="border border-line rounded-ctl p-2 text-xs">
-            <div class="flex items-center justify-between gap-2">
-              <div>
-                <span class="font-semibold text-ink">{{ item.job_title }}</span>
-                <span class="ml-2 text-ink-3">职位 #{{ item.job_posting_id }} · 举报人 {{ item.student_user_id }}</span>
-                <div class="text-ink-3">{{ item.reason }}</div>
+            <UiAsyncSection
+              :error="ledgerError"
+              :loading="ledgerLoading"
+              :empty="isEmptyLedger"
+              :retrying="ledgerRetrying"
+              :skeleton="false"
+              error-title="流水加载失败"
+              error-description="网络或服务端异常，可重试"
+              @retry="retryLedger"
+            >
+              <div v-if="ledgerLoading" class="text-sm text-ink-3">加载中...</div>
+              <div v-else class="grid gap-2">
+              <div v-for="item in ledger" :key="String(item.id)" class="border border-line rounded-ctl p-2 text-xs">
+                <div>用户 {{ item.user_id }} · {{ item.reason }} · {{ item.delta }} 分 · {{ refLabel(item.ref_type) }} {{ item.ref_id }}</div>
                 <div class="text-ink-3">{{ item.created_at }}</div>
               </div>
-              <UiButton size="small" @click="markHandled(item)">标记已处理</UiButton>
+            </div>
+              <template #empty>
+                <UiEmptyState description="暂无数据" size="sm" />
+              </template>
+            </UiAsyncSection>
+            <div class="mt-3 flex justify-end">
+              <UiPagination
+            v-model:current-page="page"
+            v-model:page-size="pageSize"
+            :total="total"
+            show-sizes
+            :page-sizes="[10, 20, 50]"
+            @current-change="handlePageChange"
+            @size-change="handleLedgerSizeChange"
+          />
             </div>
           </div>
         </div>
-        <template #empty>
-          <UiEmptyState description="暂无待处理举报" size="sm" />
-        </template>
-      </UiAsyncSection>
-      <div class="mt-3 flex justify-end">
-        <UiPagination
-      v-model:current-page="reportsPage"
-      :page-size="20"
-      :total="reportsTotal"
-      @current-change="loadReports"
-    />
-      </div>
-    </div>
+      </el-tab-pane>
+      <el-tab-pane label="招聘留痕" name="recruiting" lazy>
+        <div class="flex flex-col gap-4">
+          <div class="rounded-card border border-line bg-panel p-4">
+            <div class="mb-3 flex flex-wrap items-center gap-2">
+              <span class="text-sm font-semibold text-ink">简历查看留痕</span>
+              <UiButton size="small" @click="loadViews">刷新</UiButton>
+            </div>
+            <UiAsyncSection
+              :error="viewsError"
+              :loading="viewsLoading"
+              :empty="isEmptyViews"
+              :retrying="viewsRetrying"
+              :skeleton="false"
+              error-title="留痕加载失败"
+              error-description="网络或服务端异常，可重试"
+              @retry="retryViews"
+            >
+              <div v-if="viewsLoading" class="text-sm text-ink-3">加载中...</div>
+              <div v-else class="grid gap-2">
+                <div v-for="item in views" :key="String(item.id)" class="border border-line rounded-ctl p-2 text-xs">
+                  <div>招聘方 {{ item.recruiter_id }} · 学员 {{ item.resume_user_id }} · {{ item.viewed_at }}</div>
+                </div>
+              </div>
+              <template #empty>
+                <UiEmptyState description="暂无数据" size="sm" />
+              </template>
+            </UiAsyncSection>
+            <div class="mt-3 flex justify-end">
+              <UiPagination
+            v-model:current-page="viewsPage"
+            :page-size="20"
+            :total="viewsTotal"
+            @current-change="loadViews"
+          />
+            </div>
+          </div>
+
+          <div class="rounded-card border border-line bg-panel p-4">
+            <div class="mb-3 flex flex-wrap items-center gap-2">
+              <span class="text-sm font-semibold text-ink">联系方式申请记录</span>
+              <UiButton size="small" @click="loadRequests">刷新</UiButton>
+            </div>
+            <UiAsyncSection
+              :error="requestsError"
+              :loading="requestsLoading"
+              :empty="isEmptyRequests"
+              :retrying="requestsRetrying"
+              :skeleton="false"
+              error-title="申请记录加载失败"
+              error-description="网络或服务端异常，可重试"
+              @retry="retryRequests"
+            >
+              <div v-if="requestsLoading" class="text-sm text-ink-3">加载中...</div>
+              <div v-else class="grid gap-2">
+                <div v-for="item in requests" :key="String(item.id)" class="border border-line rounded-ctl p-2 text-xs">
+                  <div>招聘方 {{ item.recruiter_id }} · 学员 {{ item.student_user_id }} · {{ describeContactRequest(item.status).label }}</div>
+                  <div class="text-ink-3">{{ item.created_at }}</div>
+                </div>
+              </div>
+              <template #empty>
+                <UiEmptyState description="暂无数据" size="sm" />
+              </template>
+            </UiAsyncSection>
+            <div class="mt-3 flex justify-end">
+              <UiPagination
+            v-model:current-page="requestsPage"
+            :page-size="20"
+            :total="requestsTotal"
+            @current-change="loadRequests"
+          />
+            </div>
+          </div>
+        </div>
+      </el-tab-pane>
+      <el-tab-pane label="职位治理" name="jobs" lazy>
+        <div class="flex flex-col gap-4">
+          <div class="rounded-card border border-line bg-panel p-4">
+            <div class="mb-3 flex flex-wrap items-center gap-2">
+              <span class="text-sm font-semibold text-ink">招聘职位巡检</span>
+              <UiInput v-model="jobFilterRecruiter" placeholder="按企业 ID 筛" clearable class="!w-32" @change="loadJobs"  />
+              <UiButton size="small" @click="loadJobs">刷新</UiButton>
+            </div>
+            <UiAsyncSection
+              :error="jobsError"
+              :loading="jobsLoading"
+              :empty="isEmptyJobs"
+              :retrying="jobsRetrying"
+              :skeleton="false"
+              error-title="职位加载失败"
+              error-description="网络或服务端异常，可重试"
+              @retry="retryJobs"
+            >
+              <div v-if="jobsLoading" class="text-sm text-ink-3">加载中...</div>
+              <div v-else class="grid gap-2">
+                <div v-for="item in jobs" :key="String(item.id)" class="border border-line rounded-ctl p-2 text-xs">
+                  <div class="flex items-center justify-between gap-2">
+                    <div>
+                      <span class="font-semibold text-ink">{{ item.title }}</span>
+                      <span v-if="item.forced_offline" class="ml-2 text-red-500">已强制下架：{{ item.offline_reason }}</span>
+                      <span v-else-if="item.status === 'closed'" class="ml-2 text-ink-3">已下架</span>
+                      <span class="ml-2 text-ink-3">企业 {{ item.recruiter_id }} · {{ item.region }}</span>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                      <UiButton v-if="!item.forced_offline" size="small" @click="openForceOffline(item)">强制下架</UiButton>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <template #empty>
+                <UiEmptyState description="暂无数据" size="sm" />
+              </template>
+            </UiAsyncSection>
+            <div class="mt-3 flex justify-end">
+              <UiPagination
+            v-model:current-page="jobsPage"
+            :page-size="20"
+            :total="jobsTotal"
+            @current-change="loadJobs"
+          />
+            </div>
+          </div>
+
+          <div class="rounded-card border border-line bg-panel p-4">
+            <div class="mb-3 flex flex-wrap items-center gap-2">
+              <span class="text-sm font-semibold text-ink">职位举报队列</span>
+              <UiButton size="small" @click="loadReports">刷新</UiButton>
+            </div>
+            <UiAsyncSection
+              :error="reportsError"
+              :loading="reportsLoading"
+              :empty="isEmptyReports"
+              :retrying="reportsRetrying"
+              :skeleton="false"
+              error-title="举报队列加载失败"
+              error-description="网络或服务端异常，可重试"
+              @retry="retryReports"
+            >
+              <div v-if="reportsLoading" class="text-sm text-ink-3">加载中...</div>
+              <div v-else class="grid gap-2">
+                <div v-for="item in reports" :key="String(item.id)" class="border border-line rounded-ctl p-2 text-xs">
+                  <div class="flex items-center justify-between gap-2">
+                    <div>
+                      <span class="font-semibold text-ink">{{ item.job_title }}</span>
+                      <span class="ml-2 text-ink-3">职位 #{{ item.job_posting_id }} · 举报人 {{ item.student_user_id }}</span>
+                      <div class="text-ink-3">{{ item.reason }}</div>
+                      <div class="text-ink-3">{{ item.created_at }}</div>
+                    </div>
+                    <UiButton size="small" @click="markHandled(item)">标记已处理</UiButton>
+                  </div>
+                </div>
+              </div>
+              <template #empty>
+                <UiEmptyState description="暂无待处理举报" size="sm" />
+              </template>
+            </UiAsyncSection>
+            <div class="mt-3 flex justify-end">
+              <UiPagination
+            v-model:current-page="reportsPage"
+            :page-size="20"
+            :total="reportsTotal"
+            @current-change="loadReports"
+          />
+            </div>
+          </div>
+        </div>
+      </el-tab-pane>
+    </el-tabs>
 
     <UiDialog v-model="forceOfflineVisible" title="强制下架职位" width="440px" confirm-text="确认下架" :confirm-loading="forceOfflineing" @confirm="confirmForceOffline">
       <div class="text-sm text-ink">职位「{{ forceOfflineJob?.title }}」将被强制下架，学员侧立即不可见，企业不能自行重新上架。</div>
@@ -456,12 +468,23 @@ async function markHandled(item: any) {
   }
 }
 
+const activePanel = ref<'points' | 'recruiting' | 'jobs'>('points')
+const loadedPanels = new Set<typeof activePanel.value>()
+const panelLoaders = {
+  points: [loadLedger],
+  recruiting: [loadViews, loadRequests],
+  jobs: [loadJobs, loadReports]
+}
+
+function loadPanel(panel: typeof activePanel.value) {
+  if (loadedPanels.has(panel)) return
+  loadedPanels.add(panel)
+  for (const load of panelLoaders[panel]) void load()
+}
+
+watch(activePanel, loadPanel)
 onMounted(() => {
-  loadCount()
-  loadLedger()
-  loadViews()
-  loadRequests()
-  loadJobs()
-  loadReports()
+  void loadCount()
+  loadPanel(activePanel.value)
 })
 </script>

@@ -101,7 +101,10 @@ describe('导航树 ↔ 路由表', () => {
       const groups = navGroups[ws]
       if (!groups) continue
       const derived = buildNavigation(ws).map(g => g.key)
-      expect(derived).toEqual(groups.map(g => g.key))
+      expect(derived).toEqual(groups.flatMap(group => group.standalone
+        ? navPages(ws).filter(page => page.nav?.group === group.key).map(page => page.name)
+        : [group.key]
+      ))
     }
   })
 
