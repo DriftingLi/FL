@@ -15,10 +15,12 @@
  *   H3 任何脚本都不得出现 kill 主程序的调用（HBuilderX 是共享资源，**绝不抢占**）
  *   H4 忙/超时路径是 `exit 2`（环境不可用），不是 `exit 1`
  *   H5 锁在 `finally` 路径里释放
- *   H6 限制写实：helper 头注释必须写明「机械上无法可靠探测 GUI 是否正在编译」
+ *   H6 限制写实 + 口径归位（2026-11-25）：「机械上无法可靠探测 GUI 是否正在编译」必须在；
+ *      且「单实例串行」必须同时写明**本仓叫法**与**不是 HBuilderX 的平台上限**（只剩词 = 平台结论复活）
  *   H7 锁的陈旧判定（30 分钟）与 `-NoWait` 逃生都实现且写进注释
  *   H8 HX_BUSY 结果行（便于日志/评论里核对实际等待时长）
- *   H9 ADR-0008 已记录「HBuilderX 单实例/串行」坑位 + 「跑完 HBuilderX 门后 git status 看 manifest 是否被改脏」
+ *   H9 ADR-0008 已记录「HBuilderX 单实例/串行」坑位 + 「跑完 HBuilderX 门后 git status 看 manifest 是否被改脏」；
+ *      且必须带 2026-11-25 更正段（本仓叫法 / 不构成平台上限证据 / Q-A～Q-E 未完成前继续串行）
  *   H12 陈旧锁必须查「持有者 pid 是否还活着」（#974，2026-09-14 实测白等 ~25 分钟）：锁文件里本来就存着 pid，
  *       旧判据只比 mtime ⇒ 持有会话被强杀后仍要白等到 30 分钟。**优先级不可颠倒**：只有**确定**找不到该 pid
  *       才判死，拿不准（非数字 / 权限）一律回落 30 分钟时间线 —— 绝不放行活会话
@@ -83,9 +85,13 @@ function scanContract(sources) {
     if (finallyAt !== -1) must(/Release-HxLock/.test(t.slice(finallyAt)), 'H5', rel + ' 的 finally 路径里没有 Release-HxLock');
   });
 
-  // H6 限制写实
+  // H6 限制写实 + 口径归位（2026-11-25）：光有「单实例串行」这个词，与「HBuilderX 是平台独占资源」这个
+  // 结论在字面上无法区分 ⇒ 把「本仓叫法」与「不是平台上限」一起钉住，防止哪天被抄回平台结论
+  // （2026-11-25 调研：官方只记载多窗体/多项目，未记载实例数量与并发行为；见 docs/design/20261125-…调研.md）。
   must(helper.includes('无法可靠探测'), 'H6', 'helper 未写明「机械上无法可靠探测 GUI 是否正在编译」这一限制');
-  must(helper.includes('单实例串行'), 'H6', 'helper 未写明 HBuilderX 是单实例串行资源');
+  must(helper.includes('单实例串行'), 'H6', 'helper 未写明串行口径（「单实例串行」这个本仓叫法）');
+  must(/本仓(库)?的?(编排)?叫法|本仓选择/.test(helper), 'H6', 'helper 未把「单实例串行」写明为本仓叫法（照抄即成平台结论）');
+  must(/不是\s*HBuilderX\s*的平台上限|不构成[^\n]*平台上限/.test(helper), 'H6', 'helper 未写明「单实例串行」不是 HBuilderX 的平台上限');
 
   // H7 -NoWait 逃生
   must(helper.includes('[switch]$NoWait'), 'H7', 'helper 缺 -NoWait 逃生开关');
@@ -97,6 +103,11 @@ function scanContract(sources) {
   must(adr.includes('单实例'), 'H9', 'ADR-0008 未记录「HBuilderX 单实例/串行」坑位');
   must(adr.includes('hx-busy.ps1'), 'H9', 'ADR-0008 未记录 hx-busy.ps1 这个共享载体');
   must(adr.includes('git status'), 'H9', 'ADR-0008 未写「跑完 HBuilderX 门后先 git status 看 manifest 是否被改脏」');
+  // H9 语义化（2026-11-25 治理纠偏）：ADR 必须带「口径归位」的更正段 —— 只留「单实例」三个字，
+  // 等于把本仓编排约定继续读成平台结论（这正是 PR #2846 要纠的那处混读）。
+  must(adr.includes('2026-11-25 更正'), 'H9', 'ADR-0008 缺 2026-11-25 更正段（HBuilderX 并发口径归位）');
+  must(/本仓(库)?的?(编排)?叫法|本仓选择/.test(adr), 'H9', 'ADR-0008 的更正段未写明「单实例串行」是本仓叫法');
+  must(/不构成[^\n]*平台上限/.test(adr), 'H9', 'ADR-0008 的更正段未写明「单实例串行」不构成平台上限证据');
 
   // H10 锁交接（2026-09-14 加）：dev-finish 要在**一个临界区**里连跑三个需要 HBuilderX 的步骤
   // （编译门 → 真运行部署 → 逐页截图），若它自己持锁再调子脚本，子进程会看到父进程的新鲜锁
@@ -160,10 +171,16 @@ describe('HBuilderX 忙检测契约（单实例串行资源，2026-09-12）', ()
       ['H4', { ...real, helper: real.helper.replace(/exit 2/g, 'exit 1') }],
       ['H5', { ...real, scripts: { ...real.scripts, [first]: real.scripts[first].replace(/Release-HxLock/g, 'ReleaseNothing') } }],
       ['H6', { ...real, helper: real.helper.replace(/无法可靠探测/g, '可以精确探测') }],
+      // H6 语义化（2026-11-25）：口径词本身也要能被检出，否则「本仓叫法」被删也无人发现
+      ['H6', { ...real, helper: real.helper.replace(/本仓库的叫法/g, '官方规定的口径') }],
+      ['H6', { ...real, helper: real.helper.replace(/不是 HBuilderX 的平台上限/g, '是 HBuilderX 的平台上限') }],
       ['H7', { ...real, helper: real.helper.replace(/\[switch\]\$NoWait/g, '[switch]$WaitForever') }],
       ['H8', { ...real, helper: real.helper.replace(/HX_BUSY wait=/g, 'BUSY wait=') }],
       ['H9', { ...real, adr: real.adr.replace(/单实例/g, '多实例') }],
       ['H9', { ...real, adr: real.adr.replace(/git status/g, 'git diff') }],
+      // H9 语义化（2026-11-25）：更正段本身也必须能被检出（ADR 里「2026-11-25 更正」有两处，故用全局替换）
+      ['H9', { ...real, adr: real.adr.replace(/2026-11-25 更正/g, '2026-11-25 备注') }],
+      ['H9', { ...real, adr: real.adr.replace(/不构成 HBuilderX 的平台上限证据/g, '即平台上限证据') }],
       // H10/H11：交接机制与其 fail-safe 分开注入，确保两条规则各自有效
       ['H10', { ...real, helper: real.helper.replace(/HX_LOCK_OWNER/g, 'HX_LOCK_OTHER') }],
       ['H11', { ...real, helper: real.helper.replace(/-eq "\$\(\$env:HX_LOCK_OWNER\)"/g, '-ne ""') }],
@@ -219,5 +236,13 @@ describe('HBuilderX 忙检测契约（单实例串行资源，2026-09-12）', ()
     // 时间线必须**还在**（#974 是追加一条判据，不是替代它）
     expect(real.helper).toMatch(/\(Get-Date\) - \$Info\.MTime\)\.TotalMinutes\s*-gt\s*\$script:HxLockStaleMinutes/);
     expect(real.helper).toContain('HxLockStaleMinutes = 30');
+  });
+
+  it('H6/H9：口径归位（2026-11-25）——「单实例串行」必须同时标为本仓叫法、不构成平台上限', () => {
+    expect(real.helper).toMatch(/本仓(库)?的?(编排)?叫法|本仓选择/);
+    expect(real.helper).toMatch(/不是\s*HBuilderX\s*的平台上限|不构成[^\n]*平台上限/);
+    expect(real.adr).toContain('2026-11-25 更正');
+    expect(real.adr).toMatch(/本仓(库)?的?(编排)?叫法|本仓选择/);
+    expect(real.adr).toMatch(/不构成[^\n]*平台上限/);
   });
 });
