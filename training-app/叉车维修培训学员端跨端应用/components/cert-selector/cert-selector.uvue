@@ -435,8 +435,9 @@
     }
 
     /* 票 2730 docx ①：Figma 里线宽 20px、在 64px 标题下居中（Rectangle 38 x=22 w=20）⇒ 40rpx */
+    /* 票 2827：改跟标题文字等宽（.cert-dropdown-hot-header 已是文字撑开的列容器），高度保持 6rpx。 */
     .cert-dropdown-hot-line {
-        width: 40rpx;
+        width: 100%;
         height: 6rpx;
         border-radius: 3rpx;
         background-color: $primary-color;

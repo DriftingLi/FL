@@ -23,12 +23,16 @@
             <!-- Tab：收支方向走后端 direction 查询（#512）；「即将过期」随 G1 删除清单退役 -->
             <view class="tab-bar">
                 <view class="tab-item" @click="onTabClick('in')">
-                    <text :class="['tab-text', { 'tab-text-active': currentTab == 'in' }]">积分收入</text>
-                    <view :class="['tab-underline', { 'tab-underline-on': currentTab == 'in' }]"></view>
+                    <view class="tab-inner">
+                        <text :class="['tab-text', { 'tab-text-active': currentTab == 'in' }]">积分收入</text>
+                        <view :class="['tab-underline', { 'tab-underline-on': currentTab == 'in' }]"></view>
+                    </view>
                 </view>
                 <view class="tab-item" @click="onTabClick('out')">
-                    <text :class="['tab-text', { 'tab-text-active': currentTab == 'out' }]">积分支出</text>
-                    <view :class="['tab-underline', { 'tab-underline-on': currentTab == 'out' }]"></view>
+                    <view class="tab-inner">
+                        <text :class="['tab-text', { 'tab-text-active': currentTab == 'out' }]">积分支出</text>
+                        <view :class="['tab-underline', { 'tab-underline-on': currentTab == 'out' }]"></view>
+                    </view>
                 </view>
             </view>
 
@@ -299,6 +303,12 @@
         justify-content: center;
     }
 
+    /* 票 2827：文字+线由文字撑开的列容器（线宽 = 标签字宽） */
+    .tab-inner {
+        flex-direction: column;
+        align-items: center;
+    }
+
     .tab-text {
         font-size: 30rpx;
         color: $text-color-secondary;
@@ -310,7 +320,7 @@
     }
 
     .tab-underline {
-        width: 48rpx;
+        width: 100%;
         height: 6rpx;
         border-radius: 3rpx;
         background-color: $card-bg;
