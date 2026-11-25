@@ -371,67 +371,72 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     }
   }
 
-  /**
-   * 发送一轮：编排（前置校验 → 懒创建会话 → 乐观落用户消息 → 起流）与终态都收在这里，
-   * 页面只提交「正文 + 差异参数」，不再各写一份 trim / streaming 守卫 / 清空输入 / await / 吞错。
-   *
-   * 前置校验不静默吞：空内容 / 有在飞轮次时本轮不发起（调用方按 `canSend` 判断并在 UI 上表达），
-   * 通用模式模型未绑定时抛出文案**可据以行动**的 Error（#1061），由调用方提示；
-   * 会话创建失败与流上的失败一样进 lastTurnError（可重试），不丢用户输入。
-   */
-  async function send(text: string, opts: SendOptions = {}) {
+  type StreamChatRequest = Parameters<typeof aiAssistantApi.streamChat>[0]
+  type StreamChatHandlers = Parameters<typeof aiAssistantApi.streamChat>[1]
+
+  function validateSendRequest(text: string, opts: SendOptions): { images: string[] | undefined } | null {
     const images = opts.images && opts.images.length > 0 ? opts.images : undefined
-    if ((!text.trim() && !images) || streaming.value) return
-    // 专项功能模式：模型由后端按功能绑定解析；通用模式校验双模式可用性
+    if ((!text.trim() && !images) || streaming.value) return null
     if (!isFeatureMode.value) {
       const modeAvailable = selectedMode.value === 'normal' ? !!modeModels.value.normal : !!modeModels.value.expert
       if (!modeAvailable) throw new Error('通用对话暂不可用（平台模型未配置）；可改用「智能维修诊断」等专项功能，或联系管理员配置')
     }
+    return { images }
+  }
 
-    // ===== 开启当轮：轮次序号 + 重发载荷 + 助手消息位 =====
-    const turn = ++turnSeq
-    activeTurn = turn
-    turnDraft = { content: text, opts: { ...opts, images } }
-    turnMsgId = Date.now() + 1
-    lastTurnError.value = null
-
-    // 懒创建会话：后端仅在 session_id > 0 时持久化消息，因此「开启新对话」只切本地草稿态，
-    // 真正落库的时机推迟到用户发出第一条消息（避免侧栏出现没说过话的空会话）
+  async function ensureSessionForTurn(turn: number): Promise<boolean> {
     if (isLoggedIn.value && !currentSessionId.value) {
       let session: ChatSession | null = null
       try {
         session = await createSession()
       } catch (e: any) {
-        // 会话没建起来 = 这一轮没发出去：原因进独立通道（内容可重发），不静默丢
         finalizeTurn(turn, { kind: 'error', message: e?.message || '会话创建失败，请重试' })
-        return
+        return false
       }
       if (!session) {
         finalizeTurn(turn, { kind: 'error', message: '会话创建失败，请重试' })
-        return
+        return false
       }
     }
-    // #1122：懒创建的 await 期间当轮可能已被丢弃（切会话 / 切上下文 / 新草稿）—— 此时不得再落消息、
-    // 起流：否则终态会被轮次守卫丢弃，streaming 永远停在 true（停止按钮也失效）。
-    if (turn !== activeTurn) return
+    return turn === activeTurn
+  }
 
-    const reqImages = images
-    // 拼装消息历史（仅传当前会话已有消息 + 新消息）；历史消息仅文本（后端只取末条图片）
-    const historyMessages: Array<{ role: 'user' | 'assistant'; content: string; images?: string[] }> =
-      messages.value
-        .filter(m => m.role === 'user' || m.role === 'assistant')
-        .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
-    historyMessages.push({ role: 'user', content: text, images: reqImages })
+  function beginTurn(text: string, opts: SendOptions, images: string[] | undefined): number {
+    const turn = ++turnSeq
+    activeTurn = turn
+    turnDraft = { content: text, opts: { ...opts, images } }
+    turnMsgId = Date.now() + 1
+    lastTurnError.value = null
+    return turn
+  }
 
-    // 线格式（生成类型）里 images/sources 是「键在、值可 null」（ADR-0048 片八）：
-    // 本地乐观消息与线消息同形，消费处一律 ?. 判空
+  function buildStreamRequest(text: string, opts: SendOptions, images: string[] | undefined): StreamChatRequest {
+    const historyMessages: StreamChatRequest['messages'] = messages.value
+      .filter(m => m.role === 'user' || m.role === 'assistant')
+      .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+    historyMessages.push({ role: 'user', content: text, images })
+
+    return {
+      session_id: isLoggedIn.value ? currentSessionId.value ?? undefined : undefined,
+      feature_key: isFeatureMode.value ? featureKey.value : undefined,
+      mode: isFeatureMode.value ? undefined : selectedMode.value,
+      model_source: 'admin',
+      config_id: isFeatureMode.value
+        ? undefined
+        : (selectedMode.value === 'expert' ? modeModels.value.expert?.id : modeModels.value.normal?.id) ?? undefined,
+      brand: opts.brand,
+      model: opts.model,
+      messages: historyMessages
+    }
+  }
+
+  function appendOptimisticUserMessage(text: string, images: string[] | undefined) {
     const userMsg: ChatMessage = {
       id: Date.now(),
       role: 'user',
       content: text,
-      images: reqImages ?? null,
+      images: images ?? null,
       sources: null,
-      // 用户轮次永远没有徽章/耗时（meta 只挂在助手消息上），与线格式同形给 null。
       meta: null,
       created_at: new Date().toISOString()
     }
@@ -440,49 +445,25 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     streaming.value = true
     streamingContent.value = ''
     streamingStatus.value = ''
-    // 新一轮开始：清上一轮脚注/来源/元数据（usage/sources/meta 只描述当轮）
     lastUsage.value = null
     lastSources.value = []
     lastMeta.value = null
+  }
 
-    const req: any = {
-      session_id: isLoggedIn.value ? currentSessionId.value ?? undefined : undefined,
-      // 专项功能：feature_key（后端按绑定解析模型）；通用助手：mode + 兼容 config_id
-      feature_key: isFeatureMode.value ? featureKey.value : undefined,
-      mode: isFeatureMode.value ? undefined : selectedMode.value,
-      model_source: 'admin',
-      config_id: isFeatureMode.value
-        ? undefined
-        : (selectedMode.value === 'expert' ? modeModels.value.expert?.id : modeModels.value.normal?.id) ?? undefined,
-      // 智能维修诊断（fault_diagnosis）专用：品牌/车型结构化过滤
-      brand: opts.brand,
-      model: opts.model,
-      messages: historyMessages
-    }
-
-    const controller = aiAssistantApi.streamChat(req, {
-      // 事件回调只在当轮有效：收尾/换轮后的迟到事件丢弃（轮次守卫单点判定）
+  function assembleStreamHandlers(turn: number): StreamChatHandlers {
+    return {
       onChunk: (chunk) => {
         if (turn === activeTurn) streamingContent.value += chunk
       },
-      // usage 进独立 state（当轮脚注由壳渲染），不再拼进消息正文
       onUsage: (data) => {
         if (turn === activeTurn) lastUsage.value = data
       },
-      // 上游过程文案（票 2280）：壳的等待态读它 —— 三个点之外给一句人话，说明还没卡死。
-      // 不清 `turn === activeTurn` 之外的：迟到事件由轮次守卫丢弃。
       onStatus: (text) => {
         if (turn === activeTurn) streamingStatus.value = text
       },
-      // 来源资料进独立 state（智能维修诊断；当轮来源面板由本页渲染）
       onSources: (sources) => {
         if (turn === activeTurn) lastSources.value = sources
       },
-      // done 载荷里的 meta（徽章 + 耗时）进**独立的**元数据通道：与 sources 同构但不共用
-      // （sources 中途可增、meta 只在 done 到齐，清空时机与语义都不同）。
-      // done 之后才 finalizeTurn，所以快照拿到的就是这里刚写进去的值。
-      // 这里顺手把 SSE 的可选形状归一成线格式（badges 缺省 → 空数组、elapsed 缺省 → 0），
-      // 与后端 AIChatMessageMeta 的「必有键」对齐，避免下游到处 `?.`。
       onDone: (payload) => {
         if (turn === activeTurn && payload?.meta) {
           lastMeta.value = {
@@ -490,16 +471,29 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
             elapsed: payload.meta.elapsed ?? 0
           }
         }
-        // 终端权威全文：诊断配图归一在白名单外会把图降级成文字，增量里仍是第三方原始 URL。
-        // 有就给**替换**（不是追加）—— 否则浏览器会继续直连那台第三方主机（ADR-0091 决策 5）。
         if (turn === activeTurn && typeof payload?.content === 'string' && payload.content) {
           streamingContent.value = payload.content
         }
         finalizeTurn(turn, { kind: 'done' })
       },
       onError: (message) => finalizeTurn(turn, { kind: 'error', message })
-    })
-    // 当轮 abort 句柄：收尾处（finalizeTurn）统一释放
+    }
+  }
+
+  /**
+   * 发送一轮：只编排请求校验、会话保障、开启轮次、请求组装、乐观消息与回调装配。
+   * 三种终态仍统一由 finalizeTurn 收尾，页面只提交「正文 + 差异参数」。
+   */
+  async function send(text: string, opts: SendOptions = {}) {
+    const prepared = validateSendRequest(text, opts)
+    if (!prepared) return
+    const { images } = prepared
+    const turn = beginTurn(text, opts, images)
+    if (!(await ensureSessionForTurn(turn))) return
+
+    const req = buildStreamRequest(text, opts, images)
+    appendOptimisticUserMessage(text, images)
+    const controller = aiAssistantApi.streamChat(req, assembleStreamHandlers(turn))
     if (turn === activeTurn) abortController = controller
   }
 
