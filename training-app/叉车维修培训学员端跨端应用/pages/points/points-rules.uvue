@@ -5,16 +5,22 @@
         <!-- 三 Tab（原型 787:497 基础规则 / 845:719 消费积分详解 / 845:751 任务中心）：页内三态、不新增路由 -->
         <view class="tab-bar">
             <view class="tab-item" @click="onTab('basic')">
-                <text :class="['tab-text', { 'tab-text-active': activeTab == 'basic' }]">基础规则</text>
-                <view :class="['tab-underline', { 'tab-underline-on': activeTab == 'basic' }]"></view>
+                <view class="tab-inner">
+                    <text :class="['tab-text', { 'tab-text-active': activeTab == 'basic' }]">基础规则</text>
+                    <view :class="['tab-underline', { 'tab-underline-on': activeTab == 'basic' }]"></view>
+                </view>
             </view>
             <view class="tab-item" @click="onTab('consume')">
-                <text :class="['tab-text', { 'tab-text-active': activeTab == 'consume' }]">消费积分详解</text>
-                <view :class="['tab-underline', { 'tab-underline-on': activeTab == 'consume' }]"></view>
+                <view class="tab-inner">
+                    <text :class="['tab-text', { 'tab-text-active': activeTab == 'consume' }]">消费积分详解</text>
+                    <view :class="['tab-underline', { 'tab-underline-on': activeTab == 'consume' }]"></view>
+                </view>
             </view>
             <view class="tab-item" @click="onTab('tasks')">
-                <text :class="['tab-text', { 'tab-text-active': activeTab == 'tasks' }]">任务中心</text>
-                <view :class="['tab-underline', { 'tab-underline-on': activeTab == 'tasks' }]"></view>
+                <view class="tab-inner">
+                    <text :class="['tab-text', { 'tab-text-active': activeTab == 'tasks' }]">任务中心</text>
+                    <view :class="['tab-underline', { 'tab-underline-on': activeTab == 'tasks' }]"></view>
+                </view>
             </view>
         </view>
 
@@ -198,6 +204,12 @@
         justify-content: center;
     }
 
+    /* 票 2827：文字+线由文字撑开的列容器（线宽 = 标签字宽） */
+    .tab-inner {
+        flex-direction: column;
+        align-items: center;
+    }
+
     .tab-text {
         font-size: 30rpx;
         color: $text-color-secondary;
@@ -209,7 +221,7 @@
     }
 
     .tab-underline {
-        width: 48rpx;
+        width: 100%;
         height: 6rpx;
         border-radius: 3rpx;
         background-color: $card-bg;

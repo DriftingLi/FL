@@ -3,11 +3,17 @@
          纯展示件：选中态由页面持有（activeTab），本组件只吃 prop + emit 意图。 -->
     <view class="tab-bar">
         <view class="tab-tabs">
-            <view class="tab-item" :class="{ 'tab-item--active': activeTab == 'course' }" @click="onSelect('course')">
-                <text class="tab-text" :class="{ 'tab-text--active': activeTab == 'course' }">课程</text>
+            <view class="tab-item" @click="onSelect('course')">
+                <view class="tab-inner">
+                    <text class="tab-text" :class="{ 'tab-text--active': activeTab == 'course' }">课程</text>
+                    <view class="tab-underline" :class="{ 'tab-underline--active': activeTab == 'course' }"></view>
+                </view>
             </view>
-            <view class="tab-item" :class="{ 'tab-item--active': activeTab == 'material' }" @click="onSelect('material')">
-                <text class="tab-text" :class="{ 'tab-text--active': activeTab == 'material' }">资料</text>
+            <view class="tab-item" @click="onSelect('material')">
+                <view class="tab-inner">
+                    <text class="tab-text" :class="{ 'tab-text--active': activeTab == 'material' }">资料</text>
+                    <view class="tab-underline" :class="{ 'tab-underline--active': activeTab == 'material' }"></view>
+                </view>
             </view>
         </view>
         <!-- 整课打包下载：后端无接口，占位（点击给明确提示，不静默） -->
@@ -50,14 +56,29 @@
         align-items: center;
     }
 
+    /* 票 2827：命中区留在 .tab-item（padding 24rpx 8rpx）；下划线改由内层文字撑开的列容器承载，
+     * 线宽 = 标签字宽（原 border-bottom 方案线宽 = 文字 + 16rpx）。底部 padding 让位给线，
+     * 线仍贴在条目底边（与原 border-bottom 同位置），行高不变。 */
     .tab-item {
-        padding: 24rpx 8rpx;
+        padding: 24rpx 8rpx 0;
         margin-right: 40rpx;
-        border-bottom: 4rpx solid transparent;
     }
 
-    .tab-item--active {
-        border-bottom-color: $primary-color;
+    .tab-inner {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .tab-underline {
+        width: 100%;
+        height: 4rpx;
+        border-radius: 2rpx;
+        margin-top: 24rpx;
+        background-color: transparent;
+    }
+
+    .tab-underline--active {
+        background-color: $primary-color;
     }
 
     .tab-text {
