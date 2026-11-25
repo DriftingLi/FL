@@ -12,6 +12,7 @@
       :menu-items="menuItems"
       :collapsed="collapsed"
       :mobile-open="mobileOpen"
+      :expand-active-group="props.expandActiveGroup"
       :class="{ 'sidebar-mobile-open': mobileOpen }"
       @toggle-collapse="handleToggleCollapse"
     >
@@ -28,7 +29,7 @@
       <!-- 内容列顶部插槽（#1620）：管理端在此挂标签栏，其余三端不传即不渲染。
            它必须在 .main-content **之外**（#1633）：内容区有 --space-6 的内边距，插槽留在里面
            就会离顶栏下沿差 24px（线上形态：标签栏浮在内容中间，不像顶栏的第二行）。 -->
-      <div v-if="$slots['content-header']" class="content-header">
+      <div v-if="$slots['content-header']" v-show="props.contentHeaderVisible" class="content-header">
         <slot name="content-header" />
       </div>
 
@@ -86,6 +87,8 @@ import type { NavItem } from '@/config/navigation'
 const props = withDefaults(
   defineProps<{
     menuItems: NavItem[]
+    expandActiveGroup?: boolean
+    contentHeaderVisible?: boolean
     showFooter?: boolean
     /**
      * 内容区宽度。
@@ -99,7 +102,7 @@ const props = withDefaults(
      */
     keepAliveNames?: string[]
   }>(),
-  { showFooter: false, contentWidth: 'full', keepAliveNames: () => [] }
+  { showFooter: false, contentWidth: 'full', keepAliveNames: () => [], contentHeaderVisible: true }
 )
 
 const route = useRoute()

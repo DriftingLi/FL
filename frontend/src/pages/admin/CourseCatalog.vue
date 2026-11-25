@@ -57,6 +57,11 @@
       </UiFilterBar>
 
       <el-table :data="pagedCourses" v-loading="loading" style="width: 100%">
+        <el-table-column label="课程名称" min-width="220" show-overflow-tooltip>
+          <template #default="{ row }">
+            <UiButton variant="text" class="cc-cell-name" @click="openDrawer(row)">{{ row.name }}</UiButton>
+          </template>
+        </el-table-column>
         <el-table-column label="分类" width="150">
           <template #default="{ row }">
             <UiTag v-if="categoryNameOfRow(row)" :tone="row.category?.status === 0 ? 'warning' : 'neutral'" size="small" effect="plain">
@@ -65,35 +70,13 @@
             <UiTag v-else tone="danger" size="small" effect="plain">未分类</UiTag>
           </template>
         </el-table-column>
-        <el-table-column label="课程名称" min-width="220" show-overflow-tooltip>
+        <el-table-column label="推荐" min-width="110">
           <template #default="{ row }">
-            <span class="cc-cell-name">{{ row.name }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="课程类型" width="130">
-          <template #default="{ row }">
-            <UiTag tone="neutral" size="small" effect="plain">{{ courseTypeLabel(row.course_type) }}</UiTag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="chapter_count" label="章节" width="70" align="center" />
-        <el-table-column label="学时" width="130">
-          <template #default="{ row }">
-            <span class="cc-cell-dim">理论{{ row.theory_hours || 0 }} / 实操{{ row.practice_hours || 0 }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="证书" min-width="150" show-overflow-tooltip>
-          <template #default="{ row }">
-            <span class="cc-cell-dim">{{ certificateNameOf(row.certificate_template_id) || '—' }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="热门" width="90" align="center">
-          <template #default="{ row }">
-            <UiSwitch :model-value="!!row.is_hot" @change="(v: boolean) => toggleHot(row, v)" />
-          </template>
-        </el-table-column>
-        <el-table-column label="精品" width="90" align="center">
-          <template #default="{ row }">
-            <UiSwitch :model-value="!!row.is_featured" @change="(v: boolean) => toggleFeatured(row, v)" />
+            <div class="flex flex-wrap gap-1">
+              <UiTag v-if="row.is_hot" tone="warning" size="small">热门</UiTag>
+              <UiTag v-if="row.is_featured" tone="brand" size="small">精品</UiTag>
+              <span v-if="!row.is_hot && !row.is_featured" class="text-ink-3">—</span>
+            </div>
           </template>
         </el-table-column>
         <el-table-column label="发布状态" width="100">
@@ -103,20 +86,9 @@
             </UiTag>
           </template>
         </el-table-column>
-        <el-table-column label="公开资格" min-width="280">
+        <el-table-column label="公开资格" width="140">
           <template #default="{ row }">
-            <PublicEligibility :eligibility="row.public_eligibility" />
-          </template>
-        </el-table-column>
-        <el-table-column label="允许公开" width="100">
-          <template #default="{ row }">
-            <UiSwitch
-              v-if="row.public_eligibility"
-              :model-value="allowsPublicVisibility(row.public_eligibility)"
-              :disabled="updatingVisibility || submitting"
-              :aria-label="'允许公开课程 ' + row.name"
-              @change="setCourseVisibility(row, $event === true)"
-            />
+            <PublicEligibility :eligibility="row.public_eligibility" :show-reasons="false" />
           </template>
         </el-table-column>
         <el-table-column label="操作" width="90" fixed="right" align="center">
@@ -149,6 +121,7 @@
       :default-category-id="canSortCourses ? categoryId : null"
       :submitting="submitting"
       @saved="refreshCatalog"
+      @visibility-changed="syncCourseVisibility"
     />
     <CourseCatalogDialogs
       ref="catalogDialogsRef"
@@ -201,7 +174,7 @@ import FacetItem from '@/components/catalog/FacetItem.vue'
 import CourseCatalogCourseDrawer from '@/components/admin/CourseCatalogCourseDrawer.vue'
 import CourseCatalogDialogs from '@/components/admin/CourseCatalogDialogs.vue'
 import PublicEligibility from '@/components/catalog/PublicEligibility.vue'
-import { allowsPublicVisibility, hasLegacyCategoryReason } from '@/utils/publicEligibility'
+import { hasLegacyCategoryReason } from '@/utils/publicEligibility'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
@@ -209,13 +182,11 @@ import UiPagination from '@/components/ui/UiPagination.vue'
 import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import UiTag from '@/components/ui/UiTag.vue'
-import UiSwitch from '@/components/ui/UiSwitch.vue'
 import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 import UiSelect from '@/components/ui/UiSelect.vue'
 
 const submitting = ref(false)
-const updatingVisibility = ref(false)
 
 const LEGACY_CATEGORY = -1
 const categoryId = ref<number | null>(null)
@@ -315,12 +286,6 @@ function categoryNameOfRow(course: AdminCourseItem) {
   return course.category?.name || categoryNameOf(course.category_id)
 }
 
-function courseTypeLabel(type?: string) {
-  if (type === 'video') return '视频课程'
-  if (type === 'illustrated') return '图文课程'
-  return '—'
-}
-
 function selectCategory(id: number | null) {
   categoryId.value = id
   currentPage.value = 1
@@ -356,11 +321,6 @@ const pagedCourses = computed(() => {
   const start = (currentPage.value - 1) * pageSize.value
   return filteredCourses.value.slice(start, start + pageSize.value)
 })
-
-function certificateNameOf(id?: number | null) {
-  if (!id) return ''
-  return certificateTemplates.value.find(t => t.id === id)?.name || ''
-}
 
 const canSortCourses = computed(() => categoryId.value !== null && categoryId.value !== LEGACY_CATEGORY)
 
@@ -414,37 +374,9 @@ const courseOptions = computed(() =>
   }))
 )
 
-async function toggleHot(row: AdminCourseItem, val: boolean) {
-  try {
-    await adminApi.updateCourse(row.course_id, { is_hot: val })
-    row.is_hot = val
-    ElMessage.success(val ? '已设为热门' : '已取消热门')
-  } catch (error) {
-    console.error('切换热门失败:', error)
-  }
-}
-
-async function toggleFeatured(row: AdminCourseItem, val: boolean) {
-  try {
-    await adminApi.updateCourse(row.course_id, { is_featured: val })
-    row.is_featured = val
-    ElMessage.success(val ? '已设为精品' : '已取消精品')
-  } catch (error) {
-    console.error('切换精品失败:', error)
-  }
-}
-
-async function setCourseVisibility(row: AdminCourseItem, visible: boolean) {
-  if (updatingVisibility.value) return
-  updatingVisibility.value = true
-  try {
-    row.public_eligibility = await adminApi.setPublicVisibility(row.course_id, visible)
-    ElMessage.success(visible ? '已允许公开' : '已关闭公开')
-  } catch (error) {
-    console.error('修改课程公开开关失败:', error)
-  } finally {
-    updatingVisibility.value = false
-  }
+function syncCourseVisibility(courseId: number, eligibility: NonNullable<AdminCourseItem['public_eligibility']>) {
+  const row = allCourses.value.find(course => course.course_id === courseId)
+  if (row) row.public_eligibility = eligibility
 }
 
 async function toggleStatus(row: AdminCourseItem) {
@@ -598,17 +530,6 @@ function actionItems(row: AdminCourseItem): UiMoreMenuItem[] {
 
 .cc-cell-name {
   margin-left: 4px;
-}
-
-.cc-cell-dim {
-  color: var(--color-text-secondary);
-  font-size: var(--text-sm);
-  margin-left: 6px;
-}
-
-.cc-cell-warn {
-  color: var(--color-danger);
-  font-size: var(--text-sm);
 }
 
 .cc-pagination {

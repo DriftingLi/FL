@@ -57,6 +57,26 @@ beforeEach(() => {
 })
 
 describe('Inspection 问答积分流水（#411）', () => {
+  it('按面板首次加载，切换回来复用列表状态', async () => {
+    routeGet({ [COUNT_URL]: () => ({ count: 3 }) })
+    const wrapper = mountView()
+    const get = vi.mocked(unwrappedRequest.get)
+    const urls = () => get.mock.calls.map(call => call[0])
+    const selectPanel = async (label: string) => {
+      await wrapper.findAll('[role="tab"]').find(tab => tab.text() === label)!.trigger('click')
+      await flushPromises()
+    }
+    await flushPromises()
+    expect(urls()).toEqual([COUNT_URL, LEDGER_URL])
+    await selectPanel('招聘留痕')
+    expect(urls().slice(2)).toEqual(['/admin/recruit/views', '/admin/recruit/requests'])
+    await selectPanel('职位治理')
+    expect(urls().slice(4)).toEqual(['/admin/jobs', '/admin/job-reports'])
+    await selectPanel('招聘留痕')
+    expect(get).toHaveBeenCalledTimes(6)
+    wrapper.unmount()
+  })
+
   it('组件默认请求携带 ref_type=forum_topic（问答域锁定）', async () => {
     mountView()
     await flushPromises()

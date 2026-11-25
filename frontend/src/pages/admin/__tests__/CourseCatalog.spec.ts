@@ -11,6 +11,7 @@ vi.mock('@/api/admin', () => ({
     getCourseDetail: vi.fn(),
     createCourse: vi.fn(),
     updateCourse: vi.fn(),
+    setPublicVisibility: vi.fn(),
     deleteCourse: vi.fn(),
     swapCourse: vi.fn(),
     createChapter: vi.fn(),
@@ -209,17 +210,32 @@ describe('CourseCatalog 分类与公开状态', () => {
     expect(rows.some(text => text.includes('来源排除课程'))).toBe(false)
   })
 
-  it('列表展示 canonical 分类、课程类型、发布状态与全部公开原因', async () => {
+  it('列表保留公开结论，抽屉展示原因并同步公开开关的结果', async () => {
+    vi.mocked(adminApi.getCourseDetail).mockResolvedValueOnce(courseDetailDTO({
+      course_id: 2,
+      course_type: 'illustrated',
+      public_eligibility: { eligible: false, reasons: ['category_missing', 'not_published'] }
+    }))
+    vi.mocked(adminApi.setPublicVisibility).mockResolvedValueOnce({ eligible: true, reasons: [] })
     const wrapper = mountPage()
     await flushPromises()
 
     const legacyRow = wrapper.findAll('.el-table__row').find(row => row.text().includes('未挂载遗留课程'))!
     expect(legacyRow.text()).toContain('未发布')
-    expect(legacyRow.text()).toContain('未设置培训分类')
-    expect(legacyRow.text()).toContain('图文课程')
+    expect(legacyRow.text()).toContain('未公开')
+    expect(legacyRow.text()).not.toContain('未设置培训分类')
+    expect(legacyRow.text()).not.toContain('图文课程')
 
-    const sourceRow = wrapper.findAll('.el-table__row').find(row => row.text().includes('来源排除课程'))!
-    expect(sourceRow.text()).toContain('来源标签题不计入公开题库')
+    await legacyRow.get('.cc-cell-name').trigger('click')
+    await flushPromises()
+    const drawer = wrapper.getComponent({ name: 'ElDrawer' })
+    expect(drawer.text()).toContain('未设置培训分类')
+    expect(drawer.text()).toContain('未发布')
+    const visibility = drawer.getComponent({ name: 'ElSwitch' })
+    visibility.vm.$emit('change', true)
+    await flushPromises()
+    expect(adminApi.setPublicVisibility).toHaveBeenCalledWith(2, true)
+    expect(legacyRow.text()).toContain('已公开')
   })
 
   it('空分类课程可直接发布，不触发前端硬门', async () => {

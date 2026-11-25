@@ -132,20 +132,14 @@ export function buildNavigation(workspace: Workspace): NavItem[] {
       .sort((a, b) => (a.nav!.order ?? 0) - (b.nav!.order ?? 0))
       .map(toNavItem)
   }
-  return groups
-    .map(group => {
-      const inGroup = entries
-        .filter(e => e.nav!.group === group.key)
-        .slice()
-        .sort((a, b) => (a.nav!.order ?? 0) - (b.nav!.order ?? 0))
-      return {
-        key: group.key,
-        label: group.label,
-        icon: group.icon,
-        children: buildGroupChildren(inGroup, workspace, group.key)
-      } as NavItem
-    })
-    .filter(group => (group.children?.length ?? 0) > 0)
+  return groups.flatMap(group => {
+    const inGroup = entries
+      .filter(e => e.nav!.group === group.key)
+      .sort((a, b) => (a.nav!.order ?? 0) - (b.nav!.order ?? 0))
+    const children = buildGroupChildren(inGroup, workspace, group.key)
+    if (group.standalone || children.length === 0) return children
+    return [{ key: group.key, label: group.label, icon: group.icon, children }]
+  })
 }
 
 export const studentNav: NavItem[] = buildNavigation("training")

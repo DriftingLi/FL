@@ -7,12 +7,13 @@ import { describePublicEligibility, describePublicReason } from '@/utils/publicE
 const props = withDefaults(defineProps<{
   eligibility?: Eligibility
   showReasons?: boolean
+  reasonLimit?: number
 }>(), {
   showReasons: true
 })
 
 const summary = computed(() => describePublicEligibility(props.eligibility))
-const reasons = computed(() => props.eligibility?.reasons.map((reason: Reason) => ({
+const reasons = computed(() => props.eligibility?.reasons.slice(0, props.reasonLimit).map((reason: Reason) => ({
   code: reason,
   ...describePublicReason(reason)
 })) ?? [])

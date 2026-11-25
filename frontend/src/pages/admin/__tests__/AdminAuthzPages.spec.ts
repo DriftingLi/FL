@@ -82,13 +82,12 @@ describe('角色权限页', () => {
   it('能力按侧栏分组呈现，标题与勾选框都是中文（不印能力键）', async () => {
     const w = mount(RoleManage, { global: { plugins: [epLite()] } })
     await flushPromises()
-    // 分组标题 = 侧栏分组标签（#1639；本 fixture 的两个键分落总览与系统两组）。
+    // 分组标题取侧栏声明（#1639）。
     // 分组渲染在每张角色卡里，故取第一张卡的标题序列。
     const groups = w.findAll('.role-card')[0].findAll('.cap-group-title').map(g => g.text())
-    expect(groups).toEqual(['总览', '系统'])
+    expect(groups).toEqual(['工作台', '系统与数据'])
     expect(groups.join(' ')).not.toContain('admin.access')
-    // #1645 订正：#1639 之后用户管理已独立成 hrwai_user.manage，本键只剩入口与仪表盘
-    expect(w.text()).toContain('管理端入口与仪表盘')
+    expect(w.text()).toContain('管理端入口与工作台')
     expect(w.text()).toContain('审计日志')
     expect(w.text()).not.toContain('admin_role.manage')
   })
