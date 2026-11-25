@@ -15,7 +15,7 @@ defineOptions({ name: 'ValuationConfigManage' })
 // 第十二波票 3（#1168，ADR-0056 §9）：两档归位——读面/错误态收进档位（此前 useCrudTable 与
 // 手写 loadAlgorithmParams 各吞一份错，DB 故障渲染成「空表」）；弹窗 CRUD 交互与
 // useDirtyDraft 五态（dirty 检测/仅存变更/重置/保存 loading/成功 reload）是页面专属，留页面。
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, type Ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import PageHeader from '@/components/valuation/PageHeader.vue'
 import {
@@ -296,87 +296,73 @@ const isConditionRatingsDirty = () => conditionRatings.isDirty()
 const isRegionCoefficientsDirty = () => regionCoefficients.isDirty()
 
 // ----- 保存（仅提交变更项；成功后统一 reload）-----
-async function saveCoefficients() {
-  savingCoefficients.value = true
+async function saveSection(saving: Ref<boolean>, save: () => Promise<boolean>, reload: () => Promise<void>) {
+  saving.value = true
   try {
-    if (
-      await coefficients.save({
-        filter: isGlobal,
-        persist: (c) => updateCoefficient(c.key, c.value),
-        successLabel: (n) => `已保存 ${n} 项全局系数`
-      })
-    ) {
-      await loadAlgorithmParams()
+    if (await save()) {
+      await reload()
     }
   } finally {
-    savingCoefficients.value = false
+    saving.value = false
   }
 }
 
-async function saveKcModifiers() {
-  savingKcModifiers.value = true
-  try {
-    if (
-      await coefficients.save({
-        filter: isKc,
-        persist: (c) => updateCoefficient(c.key, c.value),
-        successLabel: (n) => `已保存 ${n} 项车况修正项`
-      })
-    ) {
-      await loadAlgorithmParams()
-    }
-  } finally {
-    savingKcModifiers.value = false
-  }
+function saveCoefficients() {
+  return saveSection(
+    savingCoefficients,
+    () => coefficients.save({
+      filter: isGlobal,
+      persist: (c) => updateCoefficient(c.key, c.value),
+      successLabel: (n) => `已保存 ${n} 项全局系数`
+    }),
+    loadAlgorithmParams
+  )
 }
 
-async function saveBrands() {
-  savingBrands.value = true
-  try {
-    if (
-      await brands.save({
-        persist: (b) => updateBrandCoefficient(b.id, b.k_brand, b.is_active),
-        successLabel: (n) => `已保存 ${n} 项品牌系数`
-      })
-    ) {
-      await loadAlgorithmParams()
-    }
-  } finally {
-    savingBrands.value = false
-  }
+function saveKcModifiers() {
+  return saveSection(
+    savingKcModifiers,
+    () => coefficients.save({
+      filter: isKc,
+      persist: (c) => updateCoefficient(c.key, c.value),
+      successLabel: (n) => `已保存 ${n} 项车况修正项`
+    }),
+    loadAlgorithmParams
+  )
 }
 
-async function saveConditionRatings() {
-  savingConditionRatings.value = true
-  try {
-    if (
-      await conditionRatings.save({
-        persist: (c) => updateConditionCoefficient(c.id, c.label, c.base_coefficient),
-        successLabel: (n) => `已保存 ${n} 项车况系数`,
-        validate: (c) => (!c.label || !c.label.trim() ? `评级 ${c.rating} 的中文标签不能为空` : undefined)
-      })
-    ) {
-      await loadAlgorithmParams()
-    }
-  } finally {
-    savingConditionRatings.value = false
-  }
+function saveBrands() {
+  return saveSection(
+    savingBrands,
+    () => brands.save({
+      persist: (b) => updateBrandCoefficient(b.id, b.k_brand, b.is_active),
+      successLabel: (n) => `已保存 ${n} 项品牌系数`
+    }),
+    loadAlgorithmParams
+  )
 }
 
-async function saveRegionCoefficients() {
-  savingRegionCoefficients.value = true
-  try {
-    if (
-      await regionCoefficients.save({
-        persist: (r) => updateRegionCoefficient(r.id, r.coefficient),
-        successLabel: (n) => `已保存 ${n} 项区域系数`
-      })
-    ) {
-      await loadAlgorithmParams()
-    }
-  } finally {
-    savingRegionCoefficients.value = false
-  }
+function saveConditionRatings() {
+  return saveSection(
+    savingConditionRatings,
+    () => conditionRatings.save({
+      persist: (c) => updateConditionCoefficient(c.id, c.label, c.base_coefficient),
+      successLabel: (n) => `已保存 ${n} 项车况系数`,
+      validate: (c) => (!c.label || !c.label.trim() ? `评级 ${c.rating} 的中文标签不能为空` : undefined)
+    }),
+    loadAlgorithmParams
+  )
+}
+
+function saveRegionCoefficients() {
+  return saveSection(
+    savingRegionCoefficients,
+    () => regionCoefficients.save({
+      persist: (r) => updateRegionCoefficient(r.id, r.coefficient),
+      successLabel: (n) => `已保存 ${n} 项区域系数`
+    }),
+    loadAlgorithmParams
+  )
 }
 
 // ----- 重置 -----
