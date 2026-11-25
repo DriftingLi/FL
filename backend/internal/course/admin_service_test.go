@@ -3,9 +3,12 @@
 package course
 
 import (
+	"errors"
+	"reflect"
 	"testing"
 
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 
 	"forklift-training/internal/coerce"
 	"forklift-training/internal/model"
@@ -190,6 +193,207 @@ func TestAdminCourse_TrainingFields(t *testing.T) {
 	prereqs = *detail.Prerequisites
 	if len(prereqs) != 1 || prereqs[0].Name != "课程C" {
 		t.Fatalf("成环拒绝后原关联应保留: %+v", prereqs)
+	}
+}
+
+func TestApplyCourseTrainingFields_ReferenceIDs(t *testing.T) {
+	db := testutil.NewMemoryDB(t)
+	credential := model.Credential{Code: "course-credential", Name: "课程证件", CreatedAt: testutil.Now()}
+	if err := db.Create(&credential).Error; err != nil {
+		t.Fatalf("创建证件失败: %v", err)
+	}
+	template := model.CertificateTemplate{Code: "COURSE-CERT", Name: "课程证书", ValidityDays: 365, Status: 1, CreatedAt: testutil.Now()}
+	if err := db.Create(&template).Error; err != nil {
+		t.Fatalf("创建证书模板失败: %v", err)
+	}
+
+	previousCredentialID := credential.ID + 1000
+	previousTemplateID := template.ID + 1000
+	missingCredentialID := credential.ID + 2000
+	missingTemplateID := template.ID + 2000
+	tests := []struct {
+		name             string
+		in               CourseInput
+		wantErr          error
+		wantCredentialID *int
+		wantTemplateID   *int
+	}{
+		{
+			name:    "missing credential keeps its sentinel and wins first",
+			in:      CourseInput{CredentialID: coerce.IntPtr(missingCredentialID), CertificateTemplateID: coerce.IntPtr(-1)},
+			wantErr: ErrCourseCredentialRefNotFound, wantCredentialID: coerce.IntPtr(previousCredentialID), wantTemplateID: coerce.IntPtr(previousTemplateID),
+		},
+		{
+			name:    "missing certificate template keeps its sentinel",
+			in:      CourseInput{CertificateTemplateID: coerce.IntPtr(missingTemplateID)},
+			wantErr: model.ErrCertificateTemplateNotFound, wantCredentialID: coerce.IntPtr(previousCredentialID), wantTemplateID: coerce.IntPtr(previousTemplateID),
+		},
+		{
+			name: "zero clears both references",
+			in:   CourseInput{CredentialID: coerce.IntPtr(0), CertificateTemplateID: coerce.IntPtr(0)},
+		},
+		{
+			name:    "negative credential wins over negative certificate template",
+			in:      CourseInput{CredentialID: coerce.IntPtr(-1), CertificateTemplateID: coerce.IntPtr(-1)},
+			wantErr: ErrCourseCredentialIDInvalid, wantCredentialID: coerce.IntPtr(previousCredentialID), wantTemplateID: coerce.IntPtr(previousTemplateID),
+		},
+		{
+			name:    "negative certificate template is rejected",
+			in:      CourseInput{CertificateTemplateID: coerce.IntPtr(-1)},
+			wantErr: ErrCertificateTemplateIDInvalid, wantCredentialID: coerce.IntPtr(previousCredentialID), wantTemplateID: coerce.IntPtr(previousTemplateID),
+		},
+		{
+			name:             "valid IDs assign both references",
+			in:               CourseInput{CredentialID: coerce.IntPtr(credential.ID), CertificateTemplateID: coerce.IntPtr(template.ID)},
+			wantCredentialID: coerce.IntPtr(credential.ID), wantTemplateID: coerce.IntPtr(template.ID),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			course := model.Course{
+				CredentialID: coerce.IntPtr(previousCredentialID), CertificateTemplateID: coerce.IntPtr(previousTemplateID),
+			}
+			err := applyCourseTrainingFields(db, &course, &tt.in)
+			if tt.wantErr == nil {
+				if err != nil {
+					t.Fatalf("applyCourseTrainingFields 失败: %v", err)
+				}
+			} else if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("错误 = %v，期望 %v", err, tt.wantErr)
+			}
+			if !reflect.DeepEqual(course.CredentialID, tt.wantCredentialID) {
+				t.Fatalf("CredentialID = %v，期望 %v", course.CredentialID, tt.wantCredentialID)
+			}
+			if !reflect.DeepEqual(course.CertificateTemplateID, tt.wantTemplateID) {
+				t.Fatalf("CertificateTemplateID = %v，期望 %v", course.CertificateTemplateID, tt.wantTemplateID)
+			}
+		})
+	}
+
+	t.Run("database errors stay distinct from not found", func(t *testing.T) {
+		cause := errors.New("reference lookup failed")
+		failingTable := ""
+		const callbackName = "test:fail_course_training_reference"
+		if err := db.Callback().Query().Before("gorm:query").Register(callbackName, func(tx *gorm.DB) {
+			if tx.Statement.Table == failingTable {
+				_ = tx.AddError(cause)
+			}
+		}); err != nil {
+			t.Fatalf("注册查询失败回调失败: %v", err)
+		}
+		t.Cleanup(func() { _ = db.Callback().Query().Before("gorm:query").Remove(callbackName) })
+
+		lookupTests := []struct {
+			table    string
+			in       CourseInput
+			notFound error
+		}{
+			{table: "credential", in: CourseInput{CredentialID: coerce.IntPtr(credential.ID)}, notFound: ErrCourseCredentialRefNotFound},
+			{table: "certificate_template", in: CourseInput{CertificateTemplateID: coerce.IntPtr(template.ID)}, notFound: model.ErrCertificateTemplateNotFound},
+		}
+		for _, tt := range lookupTests {
+			t.Run(tt.table, func(t *testing.T) {
+				failingTable = tt.table
+				course := model.Course{}
+				err := applyCourseTrainingFields(db, &course, &tt.in)
+				if !errors.Is(err, cause) {
+					t.Fatalf("错误 = %v，应保留数据库错误 %v", err, cause)
+				}
+				if errors.Is(err, tt.notFound) {
+					t.Fatalf("数据库错误不应映射为不存在: %v", err)
+				}
+			})
+		}
+	})
+}
+
+func TestApplyCourseTrainingFields_ErrorPriority(t *testing.T) {
+	db := testutil.NewMemoryDB(t)
+	category := testutil.SeedTrainingCategory(t, db, "维修")
+	credential := model.Credential{Code: "priority-credential", Name: "优先级证件", CreatedAt: testutil.Now()}
+	if err := db.Create(&credential).Error; err != nil {
+		t.Fatalf("创建证件失败: %v", err)
+	}
+	specialty := model.Specialty{Code: "priority-specialty", Name: "优先级方向", Status: 1, CreatedAt: testutil.Now()}
+	if err := db.Create(&specialty).Error; err != nil {
+		t.Fatalf("创建专业方向失败: %v", err)
+	}
+	level := model.CourseLevel{Code: "priority-level", Name: "优先级等级", Status: 1, CreatedAt: testutil.Now()}
+	if err := db.Create(&level).Error; err != nil {
+		t.Fatalf("创建课程等级失败: %v", err)
+	}
+	template := model.CertificateTemplate{Code: "PRIORITY-CERT", Name: "优先级证书", Status: 1, CreatedAt: testutil.Now()}
+	if err := db.Create(&template).Error; err != nil {
+		t.Fatalf("创建证书模板失败: %v", err)
+	}
+
+	tests := []struct {
+		name           string
+		in             CourseInput
+		wantErr        error
+		wantCategoryID *int
+	}{
+		{
+			name:    "credential before certificate template",
+			in:      CourseInput{CredentialID: coerce.IntPtr(-1), CertificateTemplateID: coerce.IntPtr(-1)},
+			wantErr: ErrCourseCredentialIDInvalid,
+		},
+		{
+			name:    "specialty before certificate template",
+			in:      CourseInput{SpecialtyID: coerce.IntPtr(0), CertificateTemplateID: coerce.IntPtr(-1)},
+			wantErr: ErrCourseSpecialtyIDInvalid,
+		},
+		{
+			name:    "level before certificate template",
+			in:      CourseInput{SpecialtyID: coerce.IntPtr(specialty.SpecialtyID), LevelID: coerce.IntPtr(0), CertificateTemplateID: coerce.IntPtr(-1)},
+			wantErr: ErrCourseLevelIDInvalid,
+		},
+		{
+			name:    "certential lookup before specialty validation",
+			in:      CourseInput{CredentialID: coerce.IntPtr(credential.ID + 1000), SpecialtyID: coerce.IntPtr(0)},
+			wantErr: ErrCourseCredentialRefNotFound,
+		},
+		{
+			name:           "category assignment precedes reference validation",
+			in:             CourseInput{CategoryID: &category.ID, CredentialID: coerce.IntPtr(-1), SpecialtyID: coerce.IntPtr(0)},
+			wantErr:        ErrCourseCredentialIDInvalid,
+			wantCategoryID: &category.ID,
+		},
+		{
+			name: "certificate template before theory hours",
+			in: CourseInput{
+				CredentialID: coerce.IntPtr(credential.ID), SpecialtyID: coerce.IntPtr(specialty.SpecialtyID), LevelID: coerce.IntPtr(level.LevelID),
+				CertificateTemplateID: coerce.IntPtr(-1), TheoryHours: coerce.IntPtr(-1),
+			},
+			wantErr: ErrCertificateTemplateIDInvalid,
+		},
+		{
+			name: "theory hours before practice and sort",
+			in: CourseInput{
+				CredentialID: coerce.IntPtr(credential.ID), SpecialtyID: coerce.IntPtr(specialty.SpecialtyID), LevelID: coerce.IntPtr(level.LevelID),
+				CertificateTemplateID: coerce.IntPtr(template.ID), TheoryHours: coerce.IntPtr(-1), PracticeHours: coerce.IntPtr(-1), SortOrder: coerce.IntPtr(-1),
+			},
+			wantErr: ErrCourseTheoryHoursNegative,
+		},
+		{
+			name: "practice hours before sort",
+			in: CourseInput{
+				CredentialID: coerce.IntPtr(credential.ID), SpecialtyID: coerce.IntPtr(specialty.SpecialtyID), LevelID: coerce.IntPtr(level.LevelID),
+				CertificateTemplateID: coerce.IntPtr(template.ID), TheoryHours: coerce.IntPtr(0), PracticeHours: coerce.IntPtr(-1), SortOrder: coerce.IntPtr(-1),
+			},
+			wantErr: ErrCoursePracticeHoursNegative,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			course := model.Course{}
+			if err := applyCourseTrainingFields(db, &course, &tt.in); !errors.Is(err, tt.wantErr) {
+				t.Fatalf("错误 = %v，期望 %v", err, tt.wantErr)
+			}
+			if !reflect.DeepEqual(course.CategoryID, tt.wantCategoryID) {
+				t.Fatalf("CategoryID = %v, want %v", course.CategoryID, tt.wantCategoryID)
+			}
+		})
 	}
 }
 
