@@ -121,6 +121,23 @@ type resumeCertificationRow struct {
 	ImageURLs    []string `json:"image_urls"`
 }
 
+type parsedResumeInput struct {
+	expectedRegions      model.JSONB
+	resumeExperiences    model.JSONB
+	resumeCertifications model.JSONB
+	certifications       []resumeCertificationRow
+	photos               model.JSONB
+	photoURLs            []string
+	photoFormatErr       error
+}
+
+func normalizeJSONB(raw []byte) model.JSONB {
+	if len(raw) == 0 || string(raw) == "null" {
+		return model.JSONB([]byte("[]"))
+	}
+	return model.JSONB(raw)
+}
+
 func (s *Service) Get(userID int) (*JobCardDTO, error) {
 	var card model.JobCard
 	if err := s.db.First(&card, "user_id = ?", userID).Error; err != nil {
@@ -131,11 +148,12 @@ func (s *Service) Get(userID int) (*JobCardDTO, error) {
 }
 
 func (s *Service) Upsert(userID int, in JobCardInput) (*JobCardDTO, error) {
-	if err := s.validateInput(in); err != nil {
+	parsed, err := s.validateInput(in)
+	if err != nil {
 		return nil, err
 	}
 	var card model.JobCard
-	err := s.db.First(&card, "user_id = ?", userID).Error
+	err = s.db.First(&card, "user_id = ?", userID).Error
 	isCreate := errors.Is(err, gorm.ErrRecordNotFound)
 	if err != nil && !isCreate {
 		return nil, err
@@ -148,16 +166,14 @@ func (s *Service) Upsert(userID int, in JobCardInput) (*JobCardDTO, error) {
 			CreatedAt:  now,
 			UpdatedAt:  now,
 		}
-		if err := ensureJSONBDefaults(&card); err != nil {
-			return nil, err
-		}
+		ensureJSONBDefaults(&card)
 	} else {
 		card.UpdatedAt = now
 	}
-	if err := validateAttachmentOwnership(&card, in); err != nil {
+	if err := validateAttachmentOwnership(&card, parsed); err != nil {
 		return nil, err
 	}
-	applyInput(&card, in)
+	applyInput(&card, in, parsed)
 	if in.Visibility != nil {
 		v := strings.TrimSpace(*in.Visibility)
 		if v != "hidden" && v != "open" {
@@ -195,7 +211,7 @@ func (s *Service) UpdateVisibility(userID int, visibility string) (*JobCardDTO, 
 			CreatedAt:  now,
 			UpdatedAt:  now,
 		}
-		_ = ensureJSONBDefaults(&card)
+		ensureJSONBDefaults(&card)
 		if err := s.db.Create(&card).Error; err != nil {
 			return nil, err
 		}
@@ -214,26 +230,17 @@ func (s *Service) UpdateVisibility(userID int, visibility string) (*JobCardDTO, 
 	return &dto, nil
 }
 
-func ensureJSONBDefaults(card *model.JobCard) error {
-	if len(card.ExpectedRegions) == 0 {
-		card.ExpectedRegions = model.JSONB([]byte("[]"))
-	}
-	if len(card.ResumeExperiences) == 0 {
-		card.ResumeExperiences = model.JSONB([]byte("[]"))
-	}
-	if len(card.ResumeCertifications) == 0 {
-		card.ResumeCertifications = model.JSONB([]byte("[]"))
-	}
-	if len(card.Photos) == 0 {
-		card.Photos = model.JSONB([]byte("[]"))
-	}
-	return nil
+func ensureJSONBDefaults(card *model.JobCard) {
+	card.ExpectedRegions = normalizeJSONB(card.ExpectedRegions)
+	card.ResumeExperiences = normalizeJSONB(card.ResumeExperiences)
+	card.ResumeCertifications = normalizeJSONB(card.ResumeCertifications)
+	card.Photos = normalizeJSONB(card.Photos)
 }
 
 // validateAttachmentOwnership 简历面写时门禁（第十二波票 4）：工作照与证书原图的归属
 // 吃附件归属 module 单条判据（本站 resumes/images 前缀）。编辑未改不动——库中已有 URL
 // 放行（存量外链不被门禁开启惩罚），新出现 URL 必须本站；创建面全量即新增，天然全覆盖。
-func validateAttachmentOwnership(card *model.JobCard, in JobCardInput) error {
+func validateAttachmentOwnership(card *model.JobCard, parsed *parsedResumeInput) error {
 	known := map[string]bool{}
 	var savedPhotos []string
 	if len(card.Photos) > 0 {
@@ -262,34 +269,25 @@ func validateAttachmentOwnership(card *model.JobCard, in JobCardInput) error {
 		return nil
 	}
 	// 形态不符即拒（不静默跳过）：无法解析的照片/证书载荷门禁吃不准，放行等于旁路。
-	if in.Photos != nil && len(*in.Photos) > 0 {
-		var arr []string
-		if err := json.Unmarshal(*in.Photos, &arr); err != nil {
-			return errors.New("工作照格式无效（需字符串数组）")
-		}
-		for _, u := range arr {
-			if err := check(u); err != nil {
-				return err
-			}
+	if parsed.photoFormatErr != nil {
+		return errors.New("工作照格式无效（需字符串数组）")
+	}
+	for _, u := range parsed.photoURLs {
+		if err := check(u); err != nil {
+			return err
 		}
 	}
-	if in.ResumeCertifications != nil && len(*in.ResumeCertifications) > 0 {
-		var rows []resumeCertificationRow
-		if err := json.Unmarshal(*in.ResumeCertifications, &rows); err != nil {
-			return errors.New("证书信息格式无效")
-		}
-		for _, r := range rows {
-			for _, u := range r.ImageURLs {
-				if err := check(u); err != nil {
-					return err
-				}
+	for _, r := range parsed.certifications {
+		for _, u := range r.ImageURLs {
+			if err := check(u); err != nil {
+				return err
 			}
 		}
 	}
 	return nil
 }
 
-func applyInput(card *model.JobCard, in JobCardInput) {
+func applyInput(card *model.JobCard, in JobCardInput, parsed *parsedResumeInput) {
 	if in.RealName != nil {
 		card.RealName = strings.TrimSpace(*in.RealName)
 	}
@@ -314,11 +312,7 @@ func applyInput(card *model.JobCard, in JobCardInput) {
 		card.ExpectedPositionExtra = strings.TrimSpace(*in.ExpectedPositionExtra)
 	}
 	if in.ExpectedRegions != nil {
-		if len(*in.ExpectedRegions) == 0 || string(*in.ExpectedRegions) == "null" {
-			card.ExpectedRegions = model.JSONB([]byte("[]"))
-		} else {
-			card.ExpectedRegions = model.JSONB([]byte(*in.ExpectedRegions))
-		}
+		card.ExpectedRegions = parsed.expectedRegions
 	}
 	if in.SalaryMin != nil {
 		card.SalaryMin = in.SalaryMin
@@ -342,107 +336,120 @@ func applyInput(card *model.JobCard, in JobCardInput) {
 		card.SelfIntro = *in.SelfIntro
 	}
 	if in.ResumeExperiences != nil {
-		if len(*in.ResumeExperiences) == 0 || string(*in.ResumeExperiences) == "null" {
-			card.ResumeExperiences = model.JSONB([]byte("[]"))
-		} else {
-			card.ResumeExperiences = model.JSONB([]byte(*in.ResumeExperiences))
-		}
+		card.ResumeExperiences = parsed.resumeExperiences
 	}
 	if in.ResumeCertifications != nil {
-		if len(*in.ResumeCertifications) == 0 || string(*in.ResumeCertifications) == "null" {
-			card.ResumeCertifications = model.JSONB([]byte("[]"))
-		} else {
-			card.ResumeCertifications = model.JSONB([]byte(*in.ResumeCertifications))
-		}
+		card.ResumeCertifications = parsed.resumeCertifications
 	}
 	if in.ResumeFileURL != nil {
 		card.ResumeFileURL = strings.TrimSpace(*in.ResumeFileURL)
 	}
 	if in.Photos != nil {
-		if len(*in.Photos) == 0 || string(*in.Photos) == "null" {
-			card.Photos = model.JSONB([]byte("[]"))
-		} else {
-			card.Photos = model.JSONB([]byte(*in.Photos))
-		}
+		card.Photos = parsed.photos
 	}
 }
 
-func (s *Service) validateInput(in JobCardInput) error {
+func (s *Service) validateInput(in JobCardInput) (*parsedResumeInput, error) {
+	parsed := &parsedResumeInput{}
 	if in.SelfIntro != nil && len([]rune(*in.SelfIntro)) > 1000 {
-		return errors.New("自我介绍不能超过 1000 字")
+		return nil, errors.New("自我介绍不能超过 1000 字")
 	}
 	if in.ExpectedPositionID != nil && *in.ExpectedPositionID > 0 {
 		var cnt int64
 		if err := s.db.Model(&model.Position{}).Where("position_id = ?", *in.ExpectedPositionID).Count(&cnt).Error; err != nil {
-			return err
+			return nil, err
 		}
 		if cnt == 0 {
-			return errors.New("期望岗位不存在")
+			return nil, errors.New("期望岗位不存在")
 		}
 	}
 	if in.SalaryMin != nil && *in.SalaryMin < 0 {
-		return errors.New("期望薪资不能为负")
+		return nil, errors.New("期望薪资不能为负")
 	}
 	if in.SalaryMax != nil && *in.SalaryMax < 0 {
-		return errors.New("期望薪资不能为负")
+		return nil, errors.New("期望薪资不能为负")
 	}
 	if in.SalaryMin != nil && in.SalaryMax != nil && *in.SalaryMin > 0 && *in.SalaryMax > 0 && *in.SalaryMin > *in.SalaryMax {
-		return errors.New("最低薪资不能高于最高薪资")
+		return nil, errors.New("最低薪资不能高于最高薪资")
 	}
 	if in.ExperienceYears != nil && *in.ExperienceYears < 0 {
-		return errors.New("工作年限不能为负")
+		return nil, errors.New("工作年限不能为负")
 	}
-	if in.ResumeCertifications != nil && len(*in.ResumeCertifications) > 0 && string(*in.ResumeCertifications) != "null" && string(*in.ResumeCertifications) != "[]" {
-		var rows []resumeCertificationRow
-		if err := json.Unmarshal([]byte(*in.ResumeCertifications), &rows); err != nil {
-			return errors.New("持证信息格式错误")
-		}
-		for i, r := range rows {
-			if r.CredentialID != nil && *r.CredentialID > 0 {
-				var cnt int64
-				if err := s.db.Model(&model.Credential{}).Where("id = ?", *r.CredentialID).Count(&cnt).Error; err != nil {
-					return err
+	if in.ResumeCertifications != nil {
+		parsed.resumeCertifications = normalizeJSONB(*in.ResumeCertifications)
+		if len(*in.ResumeCertifications) > 0 && string(*in.ResumeCertifications) != "null" && string(*in.ResumeCertifications) != "[]" {
+			if err := json.Unmarshal(*in.ResumeCertifications, &parsed.certifications); err != nil {
+				return nil, errors.New("持证信息格式错误")
+			}
+			credentialIDs := make([]int, 0, len(parsed.certifications))
+			seen := make(map[int]bool, len(parsed.certifications))
+			for _, r := range parsed.certifications {
+				if r.CredentialID != nil && *r.CredentialID > 0 && !seen[*r.CredentialID] {
+					seen[*r.CredentialID] = true
+					credentialIDs = append(credentialIDs, *r.CredentialID)
 				}
-				if cnt == 0 {
-					return fmt.Errorf("第 %d 条持证的证件不存在", i+1)
+			}
+			if len(credentialIDs) > 0 {
+				var foundIDs []int
+				if err := s.db.Model(&model.Credential{}).Where("id IN ?", credentialIDs).Pluck("id", &foundIDs).Error; err != nil {
+					return nil, err
+				}
+				missing := make(map[int]bool, len(credentialIDs))
+				for _, id := range credentialIDs {
+					missing[id] = true
+				}
+				for _, id := range foundIDs {
+					delete(missing, id)
+				}
+				for i, r := range parsed.certifications {
+					if r.CredentialID != nil && *r.CredentialID > 0 && missing[*r.CredentialID] {
+						return nil, fmt.Errorf("第 %d 条持证的证件不存在", i+1)
+					}
 				}
 			}
 		}
 	}
-	if in.Photos != nil && len(*in.Photos) > 0 && string(*in.Photos) != "null" {
-		var arr []string
-		if err := json.Unmarshal([]byte(*in.Photos), &arr); err == nil {
-			if len(arr) > 6 {
-				return errors.New("工作照最多 6 张")
+	if in.Photos != nil {
+		parsed.photos = normalizeJSONB(*in.Photos)
+		if len(*in.Photos) > 0 && string(*in.Photos) != "null" {
+			parsed.photoFormatErr = json.Unmarshal(*in.Photos, &parsed.photoURLs)
+			if parsed.photoFormatErr == nil && len(parsed.photoURLs) > 6 {
+				return nil, errors.New("工作照最多 6 张")
 			}
 		}
 	}
-	if in.ExpectedRegions != nil && len(*in.ExpectedRegions) > 0 && string(*in.ExpectedRegions) != "null" {
-		var arr []string
-		if err := json.Unmarshal([]byte(*in.ExpectedRegions), &arr); err != nil {
-			return errors.New("意向地区格式错误")
+	if in.ExpectedRegions != nil {
+		parsed.expectedRegions = normalizeJSONB(*in.ExpectedRegions)
+		if len(*in.ExpectedRegions) > 0 && string(*in.ExpectedRegions) != "null" {
+			var arr []string
+			if err := json.Unmarshal(*in.ExpectedRegions, &arr); err != nil {
+				return nil, errors.New("意向地区格式错误")
+			}
 		}
 	}
-	if in.ResumeExperiences != nil && len(*in.ResumeExperiences) > 0 && string(*in.ResumeExperiences) != "null" {
-		var arr []json.RawMessage
-		if err := json.Unmarshal([]byte(*in.ResumeExperiences), &arr); err != nil {
-			return errors.New("工作经历格式错误")
+	if in.ResumeExperiences != nil {
+		parsed.resumeExperiences = normalizeJSONB(*in.ResumeExperiences)
+		if len(*in.ResumeExperiences) > 0 && string(*in.ResumeExperiences) != "null" {
+			var arr []json.RawMessage
+			if err := json.Unmarshal(*in.ResumeExperiences, &arr); err != nil {
+				return nil, errors.New("工作经历格式错误")
+			}
 		}
 	}
 	if in.ResumeFileURL != nil && strings.TrimSpace(*in.ResumeFileURL) != "" {
 		url := strings.TrimSpace(*in.ResumeFileURL)
 		ext := filestore.FileExtension(url)
 		if ext != "pdf" {
-			return errors.New("简历附件仅支持 PDF")
+			return nil, errors.New("简历附件仅支持 PDF")
 		}
 	}
 	if in.Visibility != nil {
 		v := strings.TrimSpace(*in.Visibility)
 		if v != "" && v != "hidden" && v != "open" {
-			return errors.New("visibility 仅支持 hidden / open")
+			return nil, errors.New("visibility 仅支持 hidden / open")
 		}
 	}
-	return nil
+	return parsed, nil
 }
 
 // DeleteResumeFile 删除上传的 PDF 附件（#491：预览页操作区「删除 PDF 附件」）。
