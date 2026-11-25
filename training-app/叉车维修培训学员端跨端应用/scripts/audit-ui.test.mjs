@@ -4,7 +4,7 @@
  *
  * 六条判据，逐条对应契约 §9.1–§9.6：
  *   ① 判据表合规（id 唯一、seq 1–10 无重、coverage 四值、suites 路径存在、requiredSources 合法）
- *   ② 25 件扫描面全部被至少一项引用（并集闭合）
+ *   ② 26 件扫描面全部被至少一项引用（并集闭合）
  *   ③ 两栏判定是纯函数（coverage → status，未知值抛错）
  *   ④ reasonCode 互斥（未扫描行必填且不含 ruled-no-gate；已扫描行恒 null）
  *   ⑤ fail-closed（空 stdout / 非法 JSON / 零套件 / 来源崩 ⇒ run-failed 且 exit 2）
@@ -34,7 +34,7 @@ import {
 const APP_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const SCRIPT = join(APP_ROOT, 'scripts', 'audit-ui.mjs')
 
-/** 契约 §5 的 25 件扫描面（顺序无关，比对用集合）。 */
+/** 契约 §5 的 26 件扫描面（#2865 追加 sharedComponentUiContract；顺序无关，比对用集合）。 */
 const SCAN_FACE = [
   'utils/appNavBarCapsuleToolbarContract.test.js',
   'utils/appNavBarLeftEntryContract.test.js',
@@ -58,6 +58,7 @@ const SCAN_FACE = [
   'utils/resumeJobsBatch8Contract.test.js',
   'utils/safeAreaContract.test.js',
   'utils/searchContract.test.js',
+  'utils/sharedComponentUiContract.test.js',
   'utils/touchTargetContract.test.js',
   'utils/uiDocDocMapContract.test.js',
   'utils/uvueFontCarrierContract.test.js',
@@ -104,7 +105,7 @@ test('① 判据表合规：10 项、id 唯一、seq 1–10 无重、coverage �
 })
 
 // ② 扫描面并集闭合
-test('② 25 件扫描面全部被至少一项引用', () => {
+test('② 26 件扫描面全部被至少一项引用', () => {
   const items = loadItems()
   const referenced = new Set(items.flatMap((i) => i.suites))
   const missing = SCAN_FACE.filter((s) => !referenced.has(s))

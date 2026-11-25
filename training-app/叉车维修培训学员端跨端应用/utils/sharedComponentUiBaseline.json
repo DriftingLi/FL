@@ -1,0 +1,11 @@
+{
+  "components/ai-chat/ai-chat-bubble.uvue": 1,
+  "components/ai-chat/ai-chat-image-tray.uvue": 2,
+  "components/ai-chat/ai-chat-input.uvue": 4,
+  "components/ai-chat/ai-chat-model-picker.uvue": 3,
+  "components/ai-chat/ai-chat-sources.uvue": 1,
+  "components/cert-selector/cert-selector.uvue": 2,
+  "components/forum-wysiwyg-image-area.uvue": 8,
+  "components/forum-wysiwyg-input.uvue": 5,
+  "components/forum-wysiwyg-toolbar.uvue": 5
+}
