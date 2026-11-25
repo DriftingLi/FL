@@ -2,6 +2,7 @@ package contribution
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"io"
@@ -40,6 +41,83 @@ func (m *memContributionStorage) Delete(_ context.Context, url string) error {
 }
 
 func (m *memContributionStorage) Exists(context.Context, string) (bool, error) { return true, nil }
+
+// contributionTestStorage 记录 Exists 调用，并可在每次校验时观察真实事务状态。
+type contributionTestStorage struct {
+	memContributionStorage
+	existsCalls int
+	existsHook  func()
+}
+
+func (m *contributionTestStorage) Exists(ctx context.Context, url string) (bool, error) {
+	m.existsCalls++
+	if m.existsHook != nil {
+		m.existsHook()
+	}
+	return m.memContributionStorage.Exists(ctx, url)
+}
+
+// contributionTxTrackingPool 跟踪真实 BeginTx/Commit/Rollback；Create callback 在显式事务里可能尚未触发，不能用于证明 Exists 在事务外。
+type contributionTxTrackingPool struct {
+	gorm.ConnPool
+	inTx bool
+}
+
+func (p *contributionTxTrackingPool) BeginTx(ctx context.Context, opts *sql.TxOptions) (gorm.ConnPool, error) {
+	tx, err := p.ConnPool.(gorm.TxBeginner).BeginTx(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+	p.inTx = true
+	return &contributionTrackedTx{ConnPool: tx, pool: p}, nil
+}
+
+func (p *contributionTxTrackingPool) GetDBConn() (*sql.DB, error) {
+	return p.ConnPool.(*sql.DB), nil
+}
+
+type contributionTrackedTx struct {
+	gorm.ConnPool
+	pool *contributionTxTrackingPool
+}
+
+func (tx *contributionTrackedTx) Commit() error {
+	err := tx.ConnPool.(gorm.TxCommitter).Commit()
+	tx.pool.inTx = false
+	return err
+}
+
+func (tx *contributionTrackedTx) Rollback() error {
+	err := tx.ConnPool.(gorm.TxCommitter).Rollback()
+	tx.pool.inTx = false
+	return err
+}
+
+func trackContributionTransactions(t *testing.T, db *gorm.DB) *contributionTxTrackingPool {
+	t.Helper()
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatalf("取 sql.DB 失败: %v", err)
+	}
+	pool := &contributionTxTrackingPool{ConnPool: sqlDB}
+	db.ConnPool = pool
+	db.Statement.ConnPool = pool
+	return pool
+}
+
+// contributionSequenceClock 按调用次序返回不同时间，用来钉住事务内配额检查重新取时。
+type contributionSequenceClock struct {
+	times []time.Time
+	calls int
+}
+
+func (c *contributionSequenceClock) Now() time.Time {
+	c.calls++
+	if c.calls > len(c.times) {
+		return time.Time{}
+	}
+	return c.times[c.calls-1]
+}
 
 func (m *memContributionStorage) List(_ context.Context, _ string) ([]string, error) {
 	return m.files, nil
@@ -184,6 +262,280 @@ func TestContribution_QuotaPending(t *testing.T) {
 	_, err := svc.Create(contributionInput(u.ID, cred.ID, oneFile(stagedFor(u.ID, "z.pdf"), 1024)))
 	if !errors.Is(err, ErrContributionQuotaPending) {
 		t.Fatalf("pending=5 应拒投, got %v", err)
+	}
+}
+
+func TestContribution_QuotaErrorPrecedence(t *testing.T) {
+	cases := []struct {
+		name    string
+		daily   int
+		pending int
+		want    error
+	}{
+		{name: "日配额先于 pending", daily: ContributionDailyMax, pending: 2, want: ErrContributionQuotaDaily},
+		{name: "pending 配额先于存储校验", daily: 0, pending: ContributionPendingMax, want: ErrContributionQuotaPending},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			svc, db := newContributionTestSvc(t)
+			cred := seedCredential(t, db)
+			u := seedContributionUser(t, db, "quota_priority", cred.ID)
+			now := clock.Now()
+			for i := 0; i < tc.daily; i++ {
+				createdAt := now.Add(time.Duration(i) * time.Minute)
+				seedContributionRow(t, db, u.ID, cred.ID, ContributionStatusPending, createdAt)
+			}
+			for i := 0; i < tc.pending; i++ {
+				createdAt := now.AddDate(0, 0, -(i + 1))
+				seedContributionRow(t, db, u.ID, cred.ID, ContributionStatusPending, createdAt)
+			}
+			st := &contributionTestStorage{}
+			svc.fileSvc = filestore.NewFileStore("", st, zap.NewNop())
+
+			_, err := svc.Create(contributionInput(u.ID, cred.ID))
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("配额错误优先级应为 %v，实得 %v", tc.want, err)
+			}
+			if st.existsCalls != 0 {
+				t.Fatalf("配额拒绝不得进入存储校验，Exists 调用了 %d 次", st.existsCalls)
+			}
+		})
+	}
+}
+
+func TestContributionCreateValidatesStorageOutsideTransaction(t *testing.T) {
+	svc, db := newContributionTestSvc(t)
+	cred := seedCredential(t, db)
+	u := seedContributionUser(t, db, "storage_outside_tx", cred.ID)
+	pool := trackContributionTransactions(t, db)
+	if err := db.Transaction(func(*gorm.DB) error {
+		if !pool.inTx {
+			return errors.New("事务观察器未看到 BeginTx")
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("事务观察器自检失败: %v", err)
+	}
+	if pool.inTx {
+		t.Fatal("事务提交后观察器应退出事务态")
+	}
+
+	st := &contributionTestStorage{}
+	observedInTx := make([]bool, 0, 2)
+	st.existsHook = func() { observedInTx = append(observedInTx, pool.inTx) }
+	svc.fileSvc = filestore.NewFileStore("", st, zap.NewNop())
+	files := []ContributionFileDTO{
+		oneFile(stagedFor(u.ID, "outside-a.pdf"), 1024),
+		oneFile(stagedFor(u.ID, "outside-b.pdf"), 2048),
+	}
+	if _, err := svc.Create(contributionInput(u.ID, cred.ID, files...)); err != nil {
+		t.Fatalf("创建投稿失败: %v", err)
+	}
+	if st.existsCalls != len(files) || len(observedInTx) != len(files) {
+		t.Fatalf("每个文件应校验一次，Exists=%d observations=%d", st.existsCalls, len(observedInTx))
+	}
+	for i, inTx := range observedInTx {
+		if inTx {
+			t.Fatalf("第 %d 个文件的 Exists 落在事务内", i+1)
+		}
+	}
+}
+
+func TestContributionCreateReadsClockSeparatelyInsideTransaction(t *testing.T) {
+	svc, db := newContributionTestSvc(t)
+	cred := seedCredential(t, db)
+	u := seedContributionUser(t, db, "fresh_tx_clock", cred.ID)
+	first := time.Date(2026, 11, 18, 23, 59, 59, 0, clock.Location())
+	createdAt := first.Add(500 * time.Millisecond)
+	insideTx := first.Add(2 * time.Second)
+	clk := &contributionSequenceClock{times: []time.Time{first, createdAt, insideTx}}
+	svc.clk = clk
+	quotaClockCalls := make([]int, 0, 2)
+	if err := db.Callback().Query().After("gorm:query").Register("test:observe_daily_quota_clock", func(tx *gorm.DB) {
+		if strings.Contains(tx.Statement.SQL.String(), "created_at >=") {
+			quotaClockCalls = append(quotaClockCalls, clk.calls)
+		}
+	}); err != nil {
+		t.Fatalf("注册配额查询观察回调失败: %v", err)
+	}
+
+	created, err := svc.Create(contributionInput(u.ID, cred.ID))
+	if err != nil {
+		t.Fatalf("创建投稿失败: %v", err)
+	}
+	if clk.calls != 3 {
+		t.Fatalf("事务外配额、写入时间、事务内配额应各取一次时钟，实得 %d 次", clk.calls)
+	}
+	if len(quotaClockCalls) != 2 || quotaClockCalls[0] != 1 || quotaClockCalls[1] != 3 {
+		t.Fatalf("事务内日配额应使用重新读取的时钟，调用序=%v", quotaClockCalls)
+	}
+	var row model.UserContribution
+	if err := db.First(&row, created.ID).Error; err != nil {
+		t.Fatalf("查创建主行失败: %v", err)
+	}
+	if !row.CreatedAt.Equal(createdAt) {
+		t.Fatalf("主行 CreatedAt 应固定为写入取时 %s，实得 %s", createdAt, row.CreatedAt)
+	}
+}
+
+func TestContributionCreateCategoryOmitsCredential(t *testing.T) {
+	svc, db := newContributionTestSvc(t)
+	category := testutil.SeedTrainingCategory(t, db, "投稿分类")
+	u := seedContributionUser(t, db, "category_contribution", 0)
+	mainCreates := 0
+	omittedCredential := false
+	if err := db.Callback().Create().Before("gorm:create").Register("test:observe_category_credential_omit", func(tx *gorm.DB) {
+		if tx.Statement.Table != "user_contribution" {
+			return
+		}
+		mainCreates++
+		for _, column := range tx.Statement.Omits {
+			if column == "credential_id" {
+				omittedCredential = true
+			}
+		}
+	}); err != nil {
+		t.Fatalf("注册投稿主行回调失败: %v", err)
+	}
+
+	in := contributionInput(u.ID, 0)
+	in.CategoryID = &category.ID
+	created, err := svc.Create(in)
+	if err != nil {
+		t.Fatalf("分类投稿创建失败: %v", err)
+	}
+	if mainCreates != 1 || !omittedCredential {
+		t.Fatalf("分类投稿主行应 Omit credential_id，creates=%d omitted=%v", mainCreates, omittedCredential)
+	}
+	var credentialID sql.NullInt64
+	if err := db.Raw("SELECT credential_id FROM user_contribution WHERE id = ?", created.ID).Scan(&credentialID).Error; err != nil {
+		t.Fatalf("查分类投稿 credential_id 失败: %v", err)
+	}
+	if credentialID.Valid {
+		t.Fatalf("分类投稿 credential_id 应为 NULL，实得 %d", credentialID.Int64)
+	}
+}
+
+func TestContributionCreateBatchFilesPreservesFields(t *testing.T) {
+	svc, db := newContributionTestSvc(t)
+	cred := seedCredential(t, db)
+	u := seedContributionUser(t, db, "batch_files", cred.ID)
+	now := time.Date(2026, 11, 18, 10, 20, 30, 0, clock.Location())
+	svc.clk = clock.At(now)
+	files := []ContributionFileDTO{
+		{FileName: "液压手册.pdf", FileURL: stagedFor(u.ID, "hydraulic.pdf"), FileSize: 1024, ContentType: "document"},
+		{FileName: "安全演示.pptx", FileURL: stagedFor(u.ID, "safety.pptx"), FileSize: 4096, ContentType: "ppt"},
+		{FileName: "实操视频.mp4", FileURL: stagedFor(u.ID, "practice.mp4"), FileSize: 8192, ContentType: "video"},
+	}
+	fileCreates := 0
+	batchSizes := make([]int, 0, 1)
+	if err := db.Callback().Create().Before("gorm:create").Register("test:observe_contribution_file_batch", func(tx *gorm.DB) {
+		if tx.Statement.Table != "user_contribution_file" {
+			return
+		}
+		fileCreates++
+		batchSizes = append(batchSizes, tx.Statement.ReflectValue.Len())
+	}); err != nil {
+		t.Fatalf("注册投稿文件回调失败: %v", err)
+	}
+
+	created, err := svc.Create(contributionInput(u.ID, cred.ID, files...))
+	if err != nil {
+		t.Fatalf("批量创建投稿文件失败: %v", err)
+	}
+	if fileCreates != 1 || len(batchSizes) != 1 || batchSizes[0] != len(files) {
+		t.Fatalf("文件行应一次 Create 批量写入，calls=%d sizes=%v", fileCreates, batchSizes)
+	}
+	if len(created.Files) != len(files) {
+		t.Fatalf("详情文件数=%d，want %d", len(created.Files), len(files))
+	}
+	var rows []model.UserContributionFile
+	if err := db.Where("contribution_id = ?", created.ID).Order("id ASC").Find(&rows).Error; err != nil {
+		t.Fatalf("查投稿文件行失败: %v", err)
+	}
+	if len(rows) != len(files) {
+		t.Fatalf("库内文件行数=%d，want %d", len(rows), len(files))
+	}
+	for i, want := range files {
+		row := rows[i]
+		if row.ID == 0 || row.ContributionID != created.ID || row.FileURL != want.FileURL ||
+			row.FileName != want.FileName || row.FileSize != want.FileSize || row.ContentType != want.ContentType ||
+			!row.CreatedAt.Equal(now) {
+			t.Fatalf("第 %d 个文件字段不完整：%+v，want %+v contribution_id=%d created_at=%s", i+1, row, want, created.ID, now)
+		}
+		got := created.Files[i]
+		if got.FileID != row.ID || got.FileName != want.FileName || got.FileURL != want.FileURL ||
+			got.FileSize != want.FileSize || got.ContentType != want.ContentType {
+			t.Fatalf("第 %d 个文件详情字段不完整：%+v，want %+v", i+1, got, want)
+		}
+	}
+}
+
+func TestContributionCreateBatchFailureRollsBack(t *testing.T) {
+	svc, db := newContributionTestSvc(t)
+	cred := seedCredential(t, db)
+	u := seedContributionUser(t, db, "batch_rollback", cred.ID)
+	cause := errors.New("contribution file batch blocked")
+	fileCreates := 0
+	if err := db.Callback().Create().Before("gorm:create").Register("test:fail_contribution_file_batch", func(tx *gorm.DB) {
+		if tx.Statement.Table != "user_contribution_file" {
+			return
+		}
+		fileCreates++
+		_ = tx.AddError(cause)
+	}); err != nil {
+		t.Fatalf("注册投稿文件失败回调失败: %v", err)
+	}
+	files := []ContributionFileDTO{
+		oneFile(stagedFor(u.ID, "rollback-a.pdf"), 1024),
+		oneFile(stagedFor(u.ID, "rollback-b.pdf"), 2048),
+	}
+
+	created, err := svc.Create(contributionInput(u.ID, cred.ID, files...))
+	if created != nil || !errors.Is(err, cause) {
+		t.Fatalf("批量失败应整体返回错误，created=%+v err=%v", created, err)
+	}
+	if fileCreates != 1 {
+		t.Fatalf("批量文件写入应只尝试一次，实得 %d 次", fileCreates)
+	}
+	var contributions, contributionFiles int64
+	if err := db.Model(&model.UserContribution{}).Where("user_id = ?", u.ID).Count(&contributions).Error; err != nil {
+		t.Fatalf("查投稿主行数失败: %v", err)
+	}
+	if err := db.Model(&model.UserContributionFile{}).Count(&contributionFiles).Error; err != nil {
+		t.Fatalf("查投稿文件行数失败: %v", err)
+	}
+	if contributions != 0 || contributionFiles != 0 {
+		t.Fatalf("批量失败后不得留下主行或文件行，contributions=%d files=%d", contributions, contributionFiles)
+	}
+}
+
+func TestCreateContributionFilesEmptySliceIsNoop(t *testing.T) {
+	db := testutil.NewMemoryDB(t)
+	fileCreates := 0
+	if err := db.Callback().Create().Before("gorm:create").Register("test:observe_empty_contribution_files", func(tx *gorm.DB) {
+		if tx.Statement.Table == "user_contribution_file" {
+			fileCreates++
+		}
+	}); err != nil {
+		t.Fatalf("注册投稿文件回调失败: %v", err)
+	}
+	if err := createContributionFiles(db, 1, nil, time.Now()); err != nil {
+		t.Fatalf("空文件切片应无操作: %v", err)
+	}
+	if fileCreates != 0 {
+		t.Fatalf("空文件切片不得触发 Create，实得 %d 次", fileCreates)
+	}
+}
+
+func seedContributionRow(t *testing.T, db *gorm.DB, userID, credentialID int, status string, createdAt time.Time) {
+	t.Helper()
+	row := model.UserContribution{
+		UserID: userID, CredentialID: credentialID, Title: "配额种子", Intro: "配额种子",
+		Status: status, CreatedAt: createdAt, UpdatedAt: createdAt,
+	}
+	if err := db.Create(&row).Error; err != nil {
+		t.Fatalf("seed 投稿失败: %v", err)
 	}
 }
 
