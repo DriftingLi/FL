@@ -3,7 +3,6 @@
 // 倒计时状态机（start/tick/autosave/expire）见 useCountdown.spec.ts
 import { describe, it, expect } from 'vitest'
 import {
-  TRUE_FALSE_OPTIONS,
   buildQuestionOptions,
   toggleAnswer,
   isAnswerSelected,
@@ -13,13 +12,6 @@ import {
 } from '../useQuestionAnswer'
 
 describe('对/错模板', () => {
-  it('模板为 对/正确、错/错误', () => {
-    expect(TRUE_FALSE_OPTIONS).toEqual([
-      { key: '对', label: '正确' },
-      { key: '错', label: '错误' }
-    ])
-  })
-
   it('判断题渲染对/错模板，其他题型取 options', () => {
     expect(buildQuestionOptions({ type: 'true_false' })).toEqual({ 对: '正确', 错: '错误' })
     expect(buildQuestionOptions({ type: 'single_choice', options: { A: '甲' } })).toEqual({ A: '甲' })

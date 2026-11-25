@@ -63,8 +63,6 @@ export type {
 }
 
 // 旧名 → 生成名（形状一致，保留既有 import 路径与名字不破）：
-/** 管理员配置的可用模型（= 生成物 ModelOption，字段逐一一致） */
-export type AdminModelOption = ModelOption
 /** 会话（= 生成物 AIChatSessionDTO；feature_key 在注解层是**必有键**，旧手写的 `?` 已过时） */
 export type ChatSession = AIChatSessionDTO
 /** 会话消息（= 生成物 AIChatMessageDTO；images/sources 在注解层是「键在、值可 null」） */
@@ -147,11 +145,6 @@ export const aiAssistantApi = {
   /** GET /api/ai-assistant/modes — 公开，返回普通/专家分别绑定的模型（新） */
   listAssistantModes() {
     return client.get<AIAssistantModeModels>('/modes')
-  },
-
-  /** GET /api/ai-assistant/models — 公开，列出管理员配置的可用模型（兼容旧） */
-  listAdminModels() {
-    return client.get<ModelOption[]>('/models')
   },
 
   /** GET /api/ai-assistant/user-models — 需登录，列出当前用户的自定义模型 */
