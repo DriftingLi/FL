@@ -1,7 +1,7 @@
 # 叉车维修培训学员端 — 移动端 UI 规范
 
 > 适用范围：`training-app/叉车维修培训学员端跨端应用` 全部 `.uvue` 页面（**口径 133 份**：排除 `node_modules/` / `uni_modules/` / `unpackage/`，#1597 §7 实测；引用本数时必带口径）
-> 输入来源（2026-10-10 升级，map #1591）：**无外部设计稿**——此前「基于 Figma 设计稿 2026-09-01 版本」经 #1596 证伪：全仓无 `.fig`/`.sketch`/`.xd`，`2026-09-01` 是本文档首次提交（0c2ff1ce）的入库日而非设计稿导出日；现存「设计输入」仅两页粘贴截图的文字化残影（见 §12 遗留）。本规范的形态真源 = 本文 + `uni.scss` + #1595 六十页台账。
+> 输入来源（2026-11-25 更新，所有权与仲裁见 §0 的 ADR 行）：**设计输入来源为 Figma 只读原型**——Figma 用于**提出**视觉变更，**现行规范仍以本文件与 `uni.scss` 为准**。此前的「无外部设计稿」结论是 `2026-10-10` 的当时事实（当时「基于 Figma 设计稿 2026-09-01 版本」经 #1596 证伪：全仓无 `.fig`/`.sketch`/`.xd`，`2026-09-01` 是本文档首次提交 0c2ff1ce 的入库日而非设计稿导出日；「设计输入」仅两页粘贴截图的文字化残影，见 §12 遗留），现已作废。本规范的形态真源 = 本文 + `uni.scss` + **61 页 N×G 归属台账（`docs/design/20261125-移动端61页N×G归属台账.md`，根仓库相对路径，#2834 入仓；#1595 六十页台账降为历史来路）**。
 > 机检总开关：`<style>` 必须 `lang="scss"`（§1 校正块）；五硬指标见 §9。
 
 ---
@@ -9,8 +9,10 @@
 ## 0. 本仓 UI 文档地图（#1597 S3 裁定，#1611 落地）
 
 > 本表登记仓内全部 UI 文档与其现行状态，是「谁是真源、谁是快照」的唯一索引。守护 `utils/uiDocDocMapContract.test.js` 断言三件事：
-> ① 六份齐全（缺行、重复行都判红）；② 每行「状态」字段以四枚举类之一开头——`现行真源` / `现行` / `实施计划` / `历史快照`（括注如（值）（产品层）（Phase 1–3 已废止）是补充说明，不参与判定）；③ 各文档 token 表与 `uni.scss` **双向一致**（文档表里每个 `$token` 在 `uni.scss` 业务段存在且值一致；`uni.scss` 业务段每个定义也在文档表登记）。
+> ① 七份齐全（缺行、重复行都判红）；② 每行「状态」字段以四枚举类之一开头——`现行真源` / `现行` / `实施计划` / `历史快照`（括注如（值）（产品层）（Phase 1–3 已废止）是补充说明，不参与判定）；③ 各文档 token 表与 `uni.scss` **双向一致**（文档表里每个 `$token` 在 `uni.scss` 业务段存在且值一致；`uni.scss` 业务段每个定义也在文档表登记）。
 > **新增 UI 文档、变更文档状态、增删 token，必须先改本表与 `uni.scss`，让守护在同一次提交里判绿。**
+>
+> **上次同步的设计稿 version：`2425600668959465070`**（2026-11-25 快照）。只记版本号本身——整份元数据六字段在导出目录本地产出、**不入仓**；`version` ≠ `lastModified`，两者的比对以 `version` 为准，且只记顶层帧增删、帧 ID 与人读名称不在元数据里重复维护。
 
 | 文档 | 定位 | 状态 |
 |---|---|---|
@@ -20,6 +22,7 @@
 | `docs/product-design.md` | 产品设计 | 现行（产品层） |
 | `docs/对齐成果-AI助手底栏与专业版形态.md` | 对齐复盘 | 现行（复盘） |
 | `docs/ui-design-diff-analysis.md` | 设计稿差异快照 | 历史快照 |
+| `docs/adr/0076-视觉规范所有权与设计稿输入通道（2026-11-25 裁定）.md` | 视觉规范所有权与设计稿输入通道（ADR） | 现行（ADR） |
 
 ---
 
@@ -105,7 +108,7 @@
 
 ### 1.7 原型换血新增 Token（2026-11-13 裁定 #2509 R2 · #2516 **B0** 落地）
 
-> 出处：`.scratch/figma-proto-export/TOKEN_DECISIONS.md`（69 屏 PNG + deep.json 频次）。本节 27 条是
+> 出处：`docs/design/20261125-移动端token决定清单（原型换血#2509）.md`（#2834 落档；原件在 `.scratch/figma-proto-export/TOKEN_DECISIONS.md`，`.scratch/` 不入仓）。本节 27 条是
 > `uni.scss` 业务段「原型换血 Token」段的登记面，两侧由 `utils/uiDocDocMapContract.test.js` 双向对账。
 
 | Token | 色值 | 用途 |
@@ -435,11 +438,11 @@
 
 ### 7.1 页头层 N 套
 
-| 套 | 定义 | 底色 | 成员数（60 页口径，my-forum 删除后 59） |
+| 套 | 定义 | 底色 | 成员数（**61 页实测口径**，2026-11-25 #2834；逐页见 `docs/design/20261125-移动端61页N×G归属台账.md`） |
 |---|---|---|---|
-| N01 | 蓝底页头 | `$primary-color`（状态栏同色） | 19（S01 全体，my-forum 移出后） |
-| N02 | 白底页头 | `$bg-header`（#ffffff） | 10 |
-| N03 | 白底带分隔线 | `$bg-header` + border-bottom 1rpx `$border-color-light` | 17 |
+| N01 | 蓝底页头 | `$primary-color`（状态栏同色） | 17 |
+| N02 | 白底页头 | `$bg-header`（#ffffff） | 12 |
+| N03 | 白底带分隔线 | `$bg-header` + border-bottom 1rpx `$border-color-light` | 20 |
 | N04 | —— | **已并入 N03**（编号留洞不重排） | — |
 | N05 | 透明页头 | `transparent`，页面自垫背景 | 7 |
 | N06 | 无页头白名单 | 页面自绘（含自垫状态栏、走 token） | 5：`index` / `login` / `register` / `forgot-password` / `search`（#2757 下线 `profile-setup` 后由 6 页收窄） |
@@ -449,13 +452,13 @@
 
 ### 7.2 骨架层 G 套（内容区成员清单 + token 弱约束）
 
-| 套 | 成员数 | 代表页 |
+| 套 | 成员数（**61 页实测口径**，2026-11-25 #2834） | 代表页 |
 |---|---|---|
 | G1 | 3 | mock-exam、forum-detail、practice-do（`ai-feature` 随 #2593 并入 `ai-assistant` 的页内 scope） |
 | G2 | 5 | tabBar 五页 |
-| G3 | 21 | 通用列表页（my-forum 移出后） |
-| G4 | 8 | 表单页族 |
-| G5 | 11 | 设置/详情族 |
+| G3 | 23 | 通用列表页（my-forum 移出后） |
+| G4 | 10 | 普通详情页（单一对象分区，无条目数组） |
+| G5 | 10 | 表单页族（≥1 input/textarea + 主按钮） |
 | G6 | 5 | —— |
 | G7 | 3 | —— |
 | G8 | 1 | 日历页 `check-in`（§6.8 形态：日历网格 + 打卡态，成员唯一） |
@@ -466,10 +469,11 @@
 
 ### 7.3 N×G 全表真源与逐页验收
 
-**全表（59 页 × N×G 归属）真源 = #1595 六十页台账**（GitHub issue #1595 长评论，含 Δ1–Δ13 差条目代号），本文不复制（防两处漂移）。
+**全表（61 页 × N×G 归属）真源 = `docs/design/20261125-移动端61页N×G归属台账.md`**（#2834 入仓，2026-11-25 实测重建；页面清单以 `pages.json` 路由为权威面，含逐页 N/G 归属、共享件引用面与行数）。本文不复制表格，只留指针（防两处漂移——这正是 #2829 Q6 裁定的形态）。
+#1595 的六十页台账（GitHub issue 长评论，含 Δ1–Δ13 差条目代号）**降为历史来路**：它是 2026-10 的 60 页口径，未扣已删 `my-forum`、已下线 `profile-setup`，也没有 #1942/#2461/#2518 新增的 4 页；差集与 G 轴不可机械重判的理由写在台账 §4、§5。
 逐页验收判据 = 「页头归 N 套样式 + 骨架成员清单命中 G 套 + §9 机检五硬指标全绿」。
 **验收方式 = 抽样取证 + 机检**（2026-10-10 裁定，非逐页人工）：每 PR 抽样 10 页真机截图（名单见 §11 批注）+ 全量机检行。
-**14 页已判不可批量**（#1595）：check-in(G8)、practice(G9)、mall 双列、help-center 手风琴、task-center 双分区、notebook 行内编辑、chapter-view 二级导航、personal-activity 分段 feed、personal-info（11 input + 3 弹层）、custom-models CRUD、ai-settings switch 混排、resume-attach 卡片选择、choose-cert 三段、profile-setup 选证+表单 —— 这些页只归套、不做「三件套 −14 行」类批量替换。
+**14 页已判不可批量**（#1595）：check-in(G8)、practice(G9)、mall 双列、help-center 手风琴、task-center 双分区、notebook 行内编辑、chapter-view 二级导航、personal-activity 分段 feed、personal-info（11 input + 3 弹层）、custom-models CRUD、ai-settings switch 混排、resume-attach 卡片选择、choose-cert 三段、`profile-setup` 选证+表单（#2757 已下线，保留条目为历史）—— 这些页只归套、不做「三件套 −14 行」类批量替换。
 
 ---
 
@@ -512,7 +516,7 @@ hex 匹配口径：`<style>` 块**声明位** hex（3 位归一 6 位）；不�
 - 实施计划：`docs/ui-spec-implementation-plan.md`
 - 台账/对比类文档：`docs/choose-cert-diff.md`、`docs/ui-design-diff-analysis.md` 为**历史快照**（各自文首取代块），不作为形态依据
 
-**当前兑现度（2026-10-10 实测）**：8 件 `app-*` 中 **6 件 0 引用**（`app-badge` / `app-button` / `app-card` / `app-tabs` / `app-nav-bar` / `app-list-item`），活着的只有 `app-chip` 与 `app-empty-state`。本节不是现状清单而是**验收基线**——ADR-0035 的 T4/T5 就是把它推向兑现。死件里 `app-button` / `app-badge` / `app-tabs` / `app-list-item` 还引用了 `uni.scss` 里**不存在**的 `$text-inverse` / `$text-secondary` / `$text-placeholder`，且**自身没声明 `lang="scss"`** ⇒ 直接引用只会静默失效（扶正时一并修）。
+**当前兑现度（2026-11-25 实测，#2834）**：页级引用面 = `app-nav-bar` **55 页** / `app-icon-button` 5 / `app-empty-state` 3 / `app-tabs` 2 / `app-button` 1 / `app-chip` 1；真正 **0 引用的是四件** `app-badge` / `app-card` / `app-list-item` / `app-level-badge`（逐页明细见 `docs/design/20261125-移动端61页N×G归属台账.md` §2）。`app-nav-bar` 已从 0 推向 55/61 页头，ADR-0035 T4 的页头件兑现基本完成；T5 的卡/列表/徽章族仍未起动。死件里 `app-button` / `app-badge` / `app-tabs` / `app-list-item` 还引用了 `uni.scss` 里**不存在**的 `$text-inverse` / `$text-secondary` / `$text-placeholder`，且**自身没声明 `lang="scss"`** ⇒ 直接引用只会静默失效（扶正时一并修）。
 
 `components/common` 两死件（`platform-nav-bar.uvue` 165 行、`page-container.uvue` 89 行 tabBarHeight 恒假）**直接删除**，非新决策（ADR-0035:69）；连带 `CONTEXT.md:143` 词条改过去时 —— **随批 0 骨架层首票**。
 
@@ -525,7 +529,7 @@ hex 匹配口径：`<style>` 块**声明位** hex（3 位归一 6 位）；不�
 批内按入度降序（Top：login 10、recruiter/home 9、dashboard 9、course-detail 8、forum-create 8、forum-detail 7）。
 ③④⑤（§8）各随其页 PR 同票收。**每批真机抽样 10 页**：search/search、practice/practice、forum/check-in、forum/forum、courses/course-detail、ai-assistant/ai-assistant、recruiter/home、profile/personal-activity、mall/mall、practice/practice-do。
 
-**独立票清单**：my-forum 删除票 · exam-info mock 改真内容票 · past_paper 产品票 · uiDocDocMapContract 守护票（**已开 #1611**，2026-10-10：`utils/uiDocDocMapContract.test.js` 断言文档地图 6 份 + 状态枚举 + 文档 token 表↔uni.scss 一致性，§0 表即其判据面）。
+**独立票清单**：my-forum 删除票 · exam-info mock 改真内容票 · past_paper 产品票 · uiDocDocMapContract 守护票（**已开 #1611**，2026-10-10：`utils/uiDocDocMapContract.test.js` 断言文档地图份数（今 7 份）+ 状态枚举 + 文档 token 表↔uni.scss 一致性，§0 表即其判据面）。
 
 ---
 
@@ -540,6 +544,6 @@ hex 匹配口径：`<style>` 块**声明位** hex（3 位归一 6 位）；不�
 
 **遗留决策清单**（不阻塞本规范生效）：
 1. ~~#1597 §8 三问待维护者~~ **已收口（2026-10-10）**：C4 `$font-size-xxl` 删定义、C3 模板顺手改 SCSS token 已随 #1603 落地（`uni.scss:134` 占位、§6.1 渐变 token 化）；S3 守护已开票 #1611（§0 表即判据面）。
-2. #1596 仓外 Figma 存在性三选一（无 / 有但未入库 / 有且将入库）；现存两份残影文档已降级历史快照（§0 地图）。
+2. ~~#1596 仓外 Figma 存在性三选一（无 / 有但未入库 / 有且将入库）~~ **已收口（2026-11-25，ADR 0076）**：有，只读原型一份，作变更提议源，导出物本地产出、不入仓；现存两份残影文档已降级历史快照（§0 地图）。
 3. `docs/adr/0035-*.md` 本身未入库（git `??`），**单独提票入库**。
 4. ~~uiDocDocMapContract 守护票是否开~~ **已收口（2026-10-10）**：票 #1611，§0 表与守护同 PR 落地。

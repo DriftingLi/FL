@@ -3,8 +3,8 @@
     串行轮转外层：取一张移动端票 → 建可信树 → headless agent 写码 → 复跑 ③ → 调门。
 
 .DESCRIPTION
-    #1435。**一次一张票、串行**，不是并行 —— HBuilderX 是单实例资源（本侧 AGENTS.md
-    「并发会话纪律」：「这是架构约束，不是可以调优的缺陷」）。
+    #1435。**一次一张票、串行**，不是并行 —— 仓内把 CLI 驱动的 HBuilderX 步骤串行化（`hx-busy.ps1`
+    互斥锁；本侧 AGENTS.md「并发会话纪律（多会话并行时必读）」）。锁是**本仓的选择**，不是 HBuilderX 的平台上限。
 
     分工是这份脚本唯一的设计要点（判据在 lib/frontier.ps1 的 Get-FrontierRunPlan）：
 

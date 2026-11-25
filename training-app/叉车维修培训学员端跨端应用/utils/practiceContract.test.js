@@ -160,8 +160,9 @@ describe('幻影路由锁（#662 口径）：api 层路由必须落在后端已�
       ...scanRoutes(read('../../backend/internal/practicemode/handler.go')),
       ...scanRoutes(read('../../backend/internal/questionbank/handler.go')),
     ];
-    // 路径集合（同路径多方法只算一条）：practicemode 11（含 attempts 与 legacy 两个分组）+ questionbank 10
-    expect(registered.length).toBe(21);
+    // 路径集合（同路径多方法只算一条）：practicemode 11（含 attempts 与 legacy 两个分组）+ questionbank 11
+    // （#2839 增 /question-bank/questions/:question_id/public-visibility，此前该钉数漏跟）
+    expect(registered.length).toBe(22);
 
     const api = stripComments(read('api/practice.uts'));
     // 拼接连形态：'/question-bank/questions/' + <id 变量> → /question-bank/questions/:question_id
