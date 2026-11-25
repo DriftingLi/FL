@@ -75,7 +75,7 @@ export interface Eligibility {
   reasons: Reason[]
 }
 
-export type Reason = 'not_published' | 'category_missing' | 'category_disabled' | 'category_unmapped' | 'credential_missing' | 'credential_disabled' | 'source_tag_excluded'
+export type Reason = 'manually_hidden' | 'not_published' | 'category_missing' | 'category_disabled' | 'category_unmapped' | 'credential_missing' | 'credential_disabled' | 'source_tag_excluded'
 
 export interface QuestionDTO {
   answer?: string

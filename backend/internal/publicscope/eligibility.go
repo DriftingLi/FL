@@ -12,6 +12,7 @@ const (
 type Reason string
 
 const (
+	ReasonManuallyHidden     Reason = "manually_hidden"
 	ReasonNotPublished       Reason = "not_published"
 	ReasonCategoryMissing    Reason = "category_missing"
 	ReasonCategoryDisabled   Reason = "category_disabled"
@@ -20,6 +21,18 @@ const (
 	ReasonCredentialDisabled Reason = "credential_disabled"
 	ReasonSourceTagExcluded  Reason = "source_tag_excluded"
 )
+
+type VisibilityInput struct {
+	Visible *bool `json:"visible" binding:"required"`
+}
+
+func (e Eligibility) WithVisibility(hidden bool) Eligibility {
+	if hidden {
+		e.Eligible = false
+		e.Reasons = append(e.Reasons, ReasonManuallyHidden)
+	}
+	return e
+}
 
 type Eligibility struct {
 	Eligible bool     `json:"eligible"`

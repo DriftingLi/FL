@@ -108,6 +108,17 @@
             <PublicEligibility :eligibility="row.public_eligibility" />
           </template>
         </el-table-column>
+        <el-table-column label="允许公开" width="100">
+          <template #default="{ row }">
+            <UiSwitch
+              v-if="row.public_eligibility"
+              :model-value="allowsPublicVisibility(row.public_eligibility)"
+              :disabled="updatingVisibility || submitting"
+              :aria-label="'允许公开课程 ' + row.name"
+              @change="setCourseVisibility(row, $event === true)"
+            />
+          </template>
+        </el-table-column>
         <el-table-column label="操作" width="90" fixed="right" align="center">
           <template #default="{ row }">
             <UiMoreMenu trigger="text" :items="actionItems(row)" @select="(k: string) => handleAction(k, row)" />
@@ -190,7 +201,7 @@ import FacetItem from '@/components/catalog/FacetItem.vue'
 import CourseCatalogCourseDrawer from '@/components/admin/CourseCatalogCourseDrawer.vue'
 import CourseCatalogDialogs from '@/components/admin/CourseCatalogDialogs.vue'
 import PublicEligibility from '@/components/catalog/PublicEligibility.vue'
-import { hasLegacyCategoryReason } from '@/utils/publicEligibility'
+import { allowsPublicVisibility, hasLegacyCategoryReason } from '@/utils/publicEligibility'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
@@ -204,6 +215,7 @@ import UiInput from '@/components/ui/UiInput.vue'
 import UiSelect from '@/components/ui/UiSelect.vue'
 
 const submitting = ref(false)
+const updatingVisibility = ref(false)
 
 const LEGACY_CATEGORY = -1
 const categoryId = ref<number | null>(null)
@@ -419,6 +431,19 @@ async function toggleFeatured(row: AdminCourseItem, val: boolean) {
     ElMessage.success(val ? '已设为精品' : '已取消精品')
   } catch (error) {
     console.error('切换精品失败:', error)
+  }
+}
+
+async function setCourseVisibility(row: AdminCourseItem, visible: boolean) {
+  if (updatingVisibility.value) return
+  updatingVisibility.value = true
+  try {
+    row.public_eligibility = await adminApi.setPublicVisibility(row.course_id, visible)
+    ElMessage.success(visible ? '已允许公开' : '已关闭公开')
+  } catch (error) {
+    console.error('修改课程公开开关失败:', error)
+  } finally {
+    updatingVisibility.value = false
   }
 }
 

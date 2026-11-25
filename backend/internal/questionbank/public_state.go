@@ -42,7 +42,7 @@ func FillQuestionPublicStates(db *gorm.DB, items []QuestionDTO, sourceTagged map
 			state, exists = states[*items[i].CategoryID]
 		}
 		items[i].Category = state.Ref()
-		eligibility := publicscope.QuestionEligibility(items[i].Status, sourceTagged[items[i].ID], state, exists)
+		eligibility := publicscope.QuestionEligibility(items[i].Status, sourceTagged[items[i].ID], state, exists).WithVisibility(items[i].publicHidden)
 		items[i].PublicEligibility = &eligibility
 	}
 	return nil

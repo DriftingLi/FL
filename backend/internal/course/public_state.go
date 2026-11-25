@@ -31,7 +31,7 @@ func FillCoursePublicStates(db *gorm.DB, items []CourseDTO) error {
 			state, exists = states[*items[i].CategoryID]
 		}
 		items[i].Category = state.Ref()
-		eligibility := publicscope.CourseEligibility(items[i].Status, state, exists)
+		eligibility := publicscope.CourseEligibility(items[i].Status, state, exists).WithVisibility(items[i].publicHidden)
 		items[i].PublicEligibility = &eligibility
 	}
 	return nil

@@ -11,6 +11,7 @@
 //   PUT  /question-bank/questions/{question_id}
 //   DELETE /question-bank/questions/{question_id}
 //   POST /question-bank/questions/{question_id}/publish
+//   PUT  /question-bank/questions/{question_id}/public-visibility
 //   POST /question-bank/questions/{question_id}/reject
 //   POST /question-bank/questions/{question_id}/submit
 //   POST /question-bank/questions/batch-publish
@@ -42,7 +43,7 @@ export interface Eligibility {
   reasons: Reason[]
 }
 
-export type Reason = 'not_published' | 'category_missing' | 'category_disabled' | 'category_unmapped' | 'credential_missing' | 'credential_disabled' | 'source_tag_excluded'
+export type Reason = 'manually_hidden' | 'not_published' | 'category_missing' | 'category_disabled' | 'category_unmapped' | 'credential_missing' | 'credential_disabled' | 'source_tag_excluded'
 
 export interface QuestionBankStatsDTO {
   by_status: Record<string, number>

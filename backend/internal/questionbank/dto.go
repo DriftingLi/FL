@@ -11,6 +11,7 @@ import (
 // QuestionDTO 题目契约：JSON key 与历史 map 输出逐字一致（shape-lock 测试
 // question_dto_shape_test.go 冻结）。字段声明按 key 字母序，与 map 序列化字节序一致。
 type QuestionDTO struct {
+	publicHidden bool
 	// 学员侧（includeAnswer=false）省略以下四个字段。
 	Answer        *string `json:"answer,omitempty" extensions:"x-optional"`
 	Content       string  `json:"content"`
@@ -45,6 +46,7 @@ func NewQuestionDTO(q *model.Question, includeAnswer bool) QuestionDTO {
 		_ = json.Unmarshal(q.Options, &options)
 	}
 	d := QuestionDTO{
+		publicHidden:  q.PublicHidden,
 		Content:       q.Content,
 		CreatedAt:     timefmt.FormatISO(q.CreatedAt),
 		CreatedBy:     q.CreatedBy,
