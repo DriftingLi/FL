@@ -4,7 +4,7 @@
  * 钉住的是「UI 文档彼此不漂移」——#1597 全仓对账发现 UI 文档各说各话（token 名对不上
  * uni.scss、状态口径不一致、快照被当成真源引用），裁定唯一能防复发的手段是让守护读文档本身。
  * 三组断言：
- * - A 地图齐全：§0 表六份 UI 文档各登记一次（缺行 / 重复行 / 未登记杂项都判红）。
+ * - A 地图齐全：§0 表七份 UI 文档各登记一次（缺行 / 重复行 / 未登记杂项都判红）。
  * - B 状态枚举：每行「状态」以四枚举类之一开头——现行真源 / 现行 / 实施计划 / 历史快照
  *   （最长优先：现行真源 必须先于 现行 判；括注如（值）（产品层）（Phase 1–3 已废止）是
  *   补充说明不参与判定，#1597 S1 建议值与 S3 草表两种写法都兼容）。
@@ -28,7 +28,7 @@ const UNI_SCSS = read('uni.scss');
 
 const MAP_HEADER = '## 0. 本仓 UI 文档地图';
 const BUSINESS_MARKER = '业务主题变量';
-/** #1597 S3 六份；顺序即 §0 表顺序 */
+/** #1597 S3 六份 + 视觉规范所有权 ADR 一份（#2841 同批）；顺序即 §0 表顺序 */
 const REQUIRED_DOCS = [
   'docs/ui-spec.md',
   'uni.scss',
@@ -36,6 +36,7 @@ const REQUIRED_DOCS = [
   'docs/product-design.md',
   'docs/对齐成果-AI助手底栏与专业版形态.md',
   'docs/ui-design-diff-analysis.md',
+  'docs/adr/0076-视觉规范所有权与设计稿输入通道（2026-11-25 裁定）.md',
 ];
 /** 最长优先手写序：现行真源（4 字）先于 现行（2 字）判 */
 const STATUS_CLASSES = ['现行真源', '实施计划', '历史快照', '现行'];
@@ -92,7 +93,7 @@ function scanDocMap(docText) {
   const counts = new Map();
   for (const r of rows) counts.set(r.path, (counts.get(r.path) || 0) + 1);
   for (const p of REQUIRED_DOCS) {
-    if (!counts.get(p)) violations.push('文档地图缺行：' + p + '（#1597 S3 六份必须各登记一次）');
+    if (!counts.get(p)) violations.push('文档地图缺行：' + p + '（REQUIRED_DOCS 七份必须各登记一次）');
   }
   for (const [p, n] of counts) {
     if (n > 1) violations.push('文档地图重复行：' + p + '（登记 ' + n + ' 次）');
@@ -166,7 +167,7 @@ function scanPrimaryPair(uniText) {
   return [];
 }
 
-describe('uiDocDocMapContract（#1611）：文档地图 6 份 + 状态枚举 + token↔uni.scss 双向一致', () => {
+describe('uiDocDocMapContract（#1611）：文档地图 7 份 + 状态枚举 + token↔uni.scss 双向一致', () => {
   const realMap = scanDocMap(UI_SPEC);
   const realTok = scanTokenConsistency(UI_SPEC, UNI_SCSS);
 
@@ -175,7 +176,7 @@ describe('uiDocDocMapContract（#1611）：文档地图 6 份 + 状态枚举 + t
       expect(realMap.violations).toEqual([]);
     });
 
-    it('锚点：地图恰好六份、各一次、路径与 #1597 S3 一致', () => {
+    it('锚点：地图恰好七份、各一次、路径与 REQUIRED_DOCS 一致', () => {
       expect(realMap.rows.map((r) => r.path).sort()).toEqual([...REQUIRED_DOCS].sort());
     });
 
