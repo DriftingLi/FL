@@ -529,7 +529,7 @@ hex 匹配口径：`<style>` 块**声明位** hex（3 位归一 6 位）；不�
 批内按入度降序（Top：login 10、recruiter/home 9、dashboard 9、course-detail 8、forum-create 8、forum-detail 7）。
 ③④⑤（§8）各随其页 PR 同票收。**每批真机抽样 10 页**：search/search、practice/practice、forum/check-in、forum/forum、courses/course-detail、ai-assistant/ai-assistant、recruiter/home、profile/personal-activity、mall/mall、practice/practice-do。
 
-**独立票清单**：my-forum 删除票 · exam-info mock 改真内容票 · past_paper 产品票 · uiDocDocMapContract 守护票（**已开 #1611**，2026-10-10：`utils/uiDocDocMapContract.test.js` 断言文档地图 6 份 + 状态枚举 + 文档 token 表↔uni.scss 一致性，§0 表即其判据面）。
+**独立票清单**：my-forum 删除票 · exam-info mock 改真内容票 · past_paper 产品票 · uiDocDocMapContract 守护票（**已开 #1611**，2026-10-10：`utils/uiDocDocMapContract.test.js` 断言文档地图份数（今 7 份）+ 状态枚举 + 文档 token 表↔uni.scss 一致性，§0 表即其判据面）。
 
 ---
 
@@ -544,6 +544,6 @@ hex 匹配口径：`<style>` 块**声明位** hex（3 位归一 6 位）；不�
 
 **遗留决策清单**（不阻塞本规范生效）：
 1. ~~#1597 §8 三问待维护者~~ **已收口（2026-10-10）**：C4 `$font-size-xxl` 删定义、C3 模板顺手改 SCSS token 已随 #1603 落地（`uni.scss:134` 占位、§6.1 渐变 token 化）；S3 守护已开票 #1611（§0 表即判据面）。
-2. #1596 仓外 Figma 存在性三选一（无 / 有但未入库 / 有且将入库）；现存两份残影文档已降级历史快照（§0 地图）。
+2. ~~#1596 仓外 Figma 存在性三选一（无 / 有但未入库 / 有且将入库）~~ **已收口（2026-11-25，ADR 0076）**：有，只读原型一份，作变更提议源，导出物本地产出、不入仓；现存两份残影文档已降级历史快照（§0 地图）。
 3. `docs/adr/0035-*.md` 本身未入库（git `??`），**单独提票入库**。
 4. ~~uiDocDocMapContract 守护票是否开~~ **已收口（2026-10-10）**：票 #1611，§0 表与守护同 PR 落地。
