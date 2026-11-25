@@ -9,7 +9,7 @@
 ## 0. 本仓 UI 文档地图（#1597 S3 裁定，#1611 落地）
 
 > 本表登记仓内全部 UI 文档与其现行状态，是「谁是真源、谁是快照」的唯一索引。守护 `utils/uiDocDocMapContract.test.js` 断言三件事：
-> ① 七份齐全（缺行、重复行都判红）；② 每行「状态」字段以四枚举类之一开头——`现行真源` / `现行` / `实施计划` / `历史快照`（括注如（值）（产品层）（Phase 1–3 已废止）是补充说明，不参与判定）；③ 各文档 token 表与 `uni.scss` **双向一致**（文档表里每个 `$token` 在 `uni.scss` 业务段存在且值一致；`uni.scss` 业务段每个定义也在文档表登记）。
+> ① 八份齐全（缺行、重复行都判红）；② 每行「状态」字段以四枚举类之一开头——`现行真源` / `现行` / `实施计划` / `历史快照`（括注如（值）（产品层）（Phase 1–3 已废止）是补充说明，不参与判定）；③ 各文档 token 表与 `uni.scss` **双向一致**（文档表里每个 `$token` 在 `uni.scss` 业务段存在且值一致；`uni.scss` 业务段每个定义也在文档表登记）。
 > **新增 UI 文档、变更文档状态、增删 token，必须先改本表与 `uni.scss`，让守护在同一次提交里判绿。**
 >
 > **上次同步的设计稿 version：`2425600668959465070`**（2026-11-25 快照）。只记版本号本身——整份元数据六字段在导出目录本地产出、**不入仓**；`version` ≠ `lastModified`，两者的比对以 `version` 为准，且只记顶层帧增删、帧 ID 与人读名称不在元数据里重复维护。
@@ -23,6 +23,7 @@
 | `docs/对齐成果-AI助手底栏与专业版形态.md` | 对齐复盘 | 现行（复盘） |
 | `docs/ui-design-diff-analysis.md` | 设计稿差异快照 | 历史快照 |
 | `docs/adr/0076-视觉规范所有权与设计稿输入通道（2026-11-25 裁定）.md` | 视觉规范所有权与设计稿输入通道（ADR） | 现行（ADR） |
+| `docs/design/20261125-移动端视觉一致性治理spec.md` | 三层治理交接 spec（层定义 / 十项审计 / 批次 / 新页准入） | 现行（交接 spec） |
 
 ---
 
@@ -503,6 +504,8 @@ hex 匹配口径：`<style>` 块**声明位** hex（3 位归一 6 位）；不�
 | 4 | **`app-*` 引用 100%** | 对应交互一律走八件共享件（§10）；渐进转绿（先断言页头件自身，新页必须走共享件，旧页逐票转绿） |
 | 5 | **主色背景走 token** | 背景=主色处禁字面值 |
 
+**层适用性（交接 spec §2）**：五硬指标是**页面层**口径，对三层不是同一张表——指标 1（裸 hex）/ 2（`lang="scss"`）对 L1 token 值面、L2 共享件、L3 页面层都适用（扫描对象已含 `components/**`）；指标 3（手写 `.status-bar` + 页头件引用）/ 4（`app-*` 引用）只对 L3 页面层成立；指标 5（主色背景走 token）对三层都成立（L2 取更严口径：主色字面值一律为 0）。L2 共享件自身的三条值面判据、L3 私有子件的棘轮口径与「新增即合规」，见 `docs/design/20261125-移动端视觉一致性治理spec.md` §2，本节不复制。
+
 反向机检 + 渐进：机检先断言共享件自身合规，存量页逐票转绿；N 套即白名单结构基础。
 
 ---
@@ -522,14 +525,26 @@ hex 匹配口径：`<style>` 块**声明位** hex（3 位归一 6 位）；不�
 
 ---
 
-## 11. 推进批次（#1594 排序）
+## 11. 推进批次（P0–P3 层口径，#2830 裁定）
 
-**批 0 骨架层基建**：`app-nav-bar.uvue:37` 补 `lang="scss"` + `components/common` 两死件删除（连带 CONTEXT.md:143）+ `$bg-header` token 登记 + N04 并入 N03 + 行数登记漂移订正（`utils/modules.js:132` INFRA.oversized 611→712；`docs/refactor-decisions.md:33-36` recruit.uts 727→778、request.uts 643→712，口径见 §12）
-→ **批 1** 招聘端 9 页样板 → **批 2** N02 余 5 → **批 3** N03 余 14 → **批 4** N01 蓝底 19 → **批 5** N05 透明 7 → **批 6** N06 无页头 6。
-批内按入度降序（Top：login 10、recruiter/home 9、dashboard 9、course-detail 8、forum-create 8、forum-detail 7）。
-③④⑤（§8）各随其页 PR 同票收。**每批真机抽样 10 页**：search/search、practice/practice、forum/check-in、forum/forum、courses/course-detail、ai-assistant/ai-assistant、recruiter/home、profile/personal-activity、mall/mall、practice/practice-do。
+批次号必须同时回答「属于哪层」与「做完算什么」。旧口径按页面集合切，必然一票混主题——32 页欠账正是这么产生的。唯一口径按**层**切：
 
-**独立票清单**：my-forum 删除票 · exam-info mock 改真内容票 · past_paper 产品票 · uiDocDocMapContract 守护票（**已开 #1611**，2026-10-10：`utils/uiDocDocMapContract.test.js` 断言文档地图份数（今 7 份）+ 状态枚举 + 文档 token 表↔uni.scss 一致性，§0 表即其判据面）。
+| 批次 | 层 | 只准动 | 验收 |
+|---|---|---|---|
+| **P0 规划层** | 判据与条文 | 只写判据与条文，不改页面、不改 token 值 | spec 合并、可机读、无代码改动 |
+| **P1 机制层** | token 值面 + 共享件 | `uni.scss` 149 token、`components/` 27 件、`audit:ui`、N×G 台账；只动色值与判据 | token 表定稿、共享件引用面登记、`audit:ui` 只读可跑、台账唯一真源 |
+| **P2 页面入口件层** | `pages/*/*.uvue` 61 个 | 只动色值 + 接共享件，**禁止改布局/结构** | 该批入口件裸 hex 归零、§9 五指标自身合规、抽样真机已看 |
+| **P3 私有子件与结构层** | `pages/*/components/` 60 份 + 页面族布局/结构 + 新页准入 | 色值 + 布局/结构都归这层；**布局改动只准在此层** | 私有子件裸 hex 归零、结构改动附真机证据 |
+
+**拆票三问**（不新增 CI 门）：① 本票文件属哪层？② 动的是色值 / 布局 / 结构（一批只准一类）？③ 跨层或跨类了吗（跨了就拆票）？
+
+**每批真机抽样 10 页**（规则不变）：search/search、practice/practice、forum/check-in、forum/forum、courses/course-detail、ai-assistant/ai-assistant、recruiter/home、profile/personal-activity、mall/mall、practice/practice-do。
+
+**32 页欠账（#1864 OPEN）**：按**文件层**拆——入口件进 P2、私有子件进 P3，同页可各出半票；验证跟票走，不单独开验证票。N06 五页（index/login/register/forgot-password/search）豁免的是**页头件引用**，不豁免真机看过。#1864 的三角色（发版决策记录 / 产物归档主键 `docs/verification/device/1864/` / 人签汇总）全保留；其 4 个 `dirMissing` 缺口（`pages_index_index`、`ai-assistant/ai-feature`、`jobs/job-detail`、`recruiter/resume-detail`）是 #1864 自己的活，不并进 P2/P3。
+
+**独立票清单**：my-forum 删除票 · exam-info mock 改真内容票 · past_paper 产品票 · uiDocDocMapContract 守护票（**已开 #1611**，2026-10-10：`utils/uiDocDocMapContract.test.js` 断言文档地图份数（今 8 份）+ 状态枚举 + 文档 token 表↔uni.scss 一致性，§0 表即其判据面）。
+
+> 旧编号（#1594 批 0–6、#2508 B0–B8）→ P 编号完整对照见交接 spec 附录 A；**旧号只作历史，不得作为新票的批次字段**。
 
 ---
 
