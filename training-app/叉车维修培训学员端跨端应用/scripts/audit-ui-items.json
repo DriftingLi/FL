@@ -1,0 +1,163 @@
+{
+  "$comment": "10 项视觉审计 → 套件的唯一映射表（#2864，契约见 docs/design/20261125-audit-ui-只读聚合入口契约.md §5）。改结构必须同批改 scripts/audit-ui.test.mjs。coverage 抄 T1 §1；reason 只给未扫描项，必须带可核指针。",
+  "schemaVersion": 1,
+  "items": [
+    {
+      "id": "page-margin",
+      "seq": 1,
+      "label": "页面左右边距",
+      "coverage": "narrow",
+      "requiredSources": [
+        "spacing"
+      ],
+      "suites": [
+        "utils/batch2UiContract.test.js"
+      ],
+      "reason": null
+    },
+    {
+      "id": "font-scale",
+      "seq": 2,
+      "label": "字号与字重",
+      "coverage": "point",
+      "requiredSources": [
+        "jest"
+      ],
+      "suites": [
+        "utils/batch4UiContract.test.js",
+        "utils/uvueFontCarrierContract.test.js",
+        "utils/markdownTypographyContract.test.js",
+        "utils/dashboardPage.test.js"
+      ],
+      "reason": "已有 4 处点状断言，见 T1 §2.2 / §2.16 / §2.17"
+    },
+    {
+      "id": "color-token",
+      "seq": 3,
+      "label": "颜色 Token",
+      "coverage": "full",
+      "requiredSources": [
+        "jest"
+      ],
+      "suites": [
+        "utils/batch2UiContract.test.js",
+        "utils/batch4UiContract.test.js",
+        "utils/batch5UiContract.test.js",
+        "utils/batch6UiContract.test.js",
+        "utils/learnerUiContract.test.js",
+        "utils/recruiterUiContract.test.js",
+        "utils/legacyPrimaryColorRatchetContract.test.js",
+        "utils/uiDocDocMapContract.test.js",
+        "utils/searchContract.test.js",
+        "utils/gradientSyntaxContract.test.js"
+      ],
+      "reason": null
+    },
+    {
+      "id": "card-radius",
+      "seq": 4,
+      "label": "卡片圆角",
+      "coverage": "point",
+      "requiredSources": [
+        "jest"
+      ],
+      "suites": [
+        "utils/dashboardPage.test.js",
+        "utils/resumeJobsBatch8Contract.test.js",
+        "utils/resourcesContract.test.js",
+        "utils/markdownContract.test.js",
+        "utils/forumMarkdownInputContract.test.js",
+        "utils/touchTargetContract.test.js"
+      ],
+      "reason": "已有 9 处点状断言，见 T1 §2.21"
+    },
+    {
+      "id": "card-padding",
+      "seq": 5,
+      "label": "卡片内部间距",
+      "coverage": "narrow",
+      "requiredSources": [
+        "spacing"
+      ],
+      "suites": [
+        "utils/dashboardPage.test.js",
+        "utils/markdownContract.test.js",
+        "utils/markdownTypographyContract.test.js"
+      ],
+      "reason": null
+    },
+    {
+      "id": "image-ratio",
+      "seq": 6,
+      "label": "图片宽高比例",
+      "coverage": "none",
+      "requiredSources": [
+        "jest"
+      ],
+      "suites": [
+        "utils/imageWebpAttrContract.test.js",
+        "utils/pointsGoodsDetailContract.test.js",
+        "utils/loginContract.test.js"
+      ],
+      "reason": "全仓 aspect-ratio 0 命中；只有 <image mode> 属性字面（T1 §3.1）"
+    },
+    {
+      "id": "icon-size",
+      "seq": 7,
+      "label": "图标实际尺寸",
+      "coverage": "point",
+      "requiredSources": [
+        "jest"
+      ],
+      "suites": [
+        "utils/touchTargetContract.test.js",
+        "utils/appNavBarLeftEntryContract.test.js",
+        "utils/dashboardPage.test.js",
+        "utils/safeAreaContract.test.js",
+        "utils/iconGlyphContract.test.js"
+      ],
+      "reason": "已有 4 处点状断言，见 T1 §2.9 / §2.20"
+    },
+    {
+      "id": "nav-bar-position",
+      "seq": 8,
+      "label": "导航栏位置",
+      "coverage": "full",
+      "requiredSources": [
+        "jest"
+      ],
+      "suites": [
+        "utils/appNavBarCapsuleToolbarContract.test.js",
+        "utils/appNavBarLeftEntryContract.test.js",
+        "utils/safeAreaContract.test.js",
+        "utils/batch6UiContract.test.js"
+      ],
+      "reason": null
+    },
+    {
+      "id": "title-center",
+      "seq": 9,
+      "label": "标题实际视觉中心",
+      "coverage": "full",
+      "requiredSources": [
+        "jest"
+      ],
+      "suites": [
+        "utils/appNavBarLeftEntryContract.test.js",
+        "utils/markdownTypographyContract.test.js"
+      ],
+      "reason": null
+    },
+    {
+      "id": "visual-overall",
+      "seq": 10,
+      "label": "视觉整体效果",
+      "coverage": "none",
+      "requiredSources": [
+        "jest"
+      ],
+      "suites": [],
+      "reason": "截图能力已于 #2320 退役，无基线（T1 §3.1）"
+    }
+  ]
+}

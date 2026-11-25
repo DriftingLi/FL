@@ -26,6 +26,7 @@
     "dev:finish:distribute": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/dev-finish.ps1 -Distribute",
     "style:loop": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/style-loop.ps1",
     "audit:spacing": "node scripts/audit-spacing.mjs",
+    "audit:ui": "node scripts/audit-ui.mjs",
     "test:impact": "node scripts/test-impact-map.mjs"
   },
   "devDependencies": {
