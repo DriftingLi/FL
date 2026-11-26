@@ -2,10 +2,12 @@
             <view class="filter-bar">
                 <view class="filter-left">
                     <view class="filter-chip" :class="{ 'active': sortMode == 'time_asc' }" @click="onTimeTap">
-                        <text class="filter-chip-text" :class="{ 'filter-chip-text--active': sortMode == 'time_asc' }">{{ sortMode == 'time_asc' ? '最早在前 ▾' : '时间 ▾' }}</text>
+                        <text class="filter-chip-text" :class="{ 'filter-chip-text--active': sortMode == 'time_asc' }">{{ sortMode == 'time_asc' ? '最早在前' : '时间' }}</text>
+                        <image class="filter-chip-arrow" src="/static/icons/dashboard/credential-arrow.png" mode="aspectFit" />
                     </view>
                     <view class="filter-chip" :class="{ 'active': onlyFav }" @click="onFavTap">
-                        <text class="filter-chip-text" :class="{ 'filter-chip-text--active': onlyFav }">{{ onlyFav ? '仅收藏 ▾' : '收藏 ▾' }}</text>
+                        <text class="filter-chip-text" :class="{ 'filter-chip-text--active': onlyFav }">{{ onlyFav ? '仅收藏' : '收藏' }}</text>
+                        <image class="filter-chip-arrow" src="/static/icons/dashboard/credential-arrow.png" mode="aspectFit" />
                     </view>
                     <view class="filter-chip" :class="{ 'active': onlyWrongMany }" @click="onWrongManyTap">
                         <text class="filter-chip-text" :class="{ 'filter-chip-text--active': onlyWrongMany }">错多次</text>
@@ -80,6 +82,15 @@
         border-radius: $radius-pill;
         background-color: $tag-bg-neutral;
         margin-right: 14rpx;
+        flex-shrink: 0;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .filter-chip-arrow {
+        width: 24rpx;
+        height: 24rpx;
+        margin-left: 8rpx;
         flex-shrink: 0;
     }
 

@@ -17,11 +17,11 @@
                 <view class="group-list">
                     <view v-for="(g, idx) in groups" :key="idx" class="group-card" @click="onGroupClick(g.typeKey)">
                         <view class="group-icon">
-                            <text class="group-icon-text">›</text>
+                            <image class="group-icon-arrow" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
                         </view>
                         <text class="group-name">{{ g.label }}</text>
                         <text class="group-count">{{ g.count }}道</text>
-                        <text class="group-chevron">›</text>
+                        <image class="group-chevron" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
                     </view>
                 </view>
             </view>
@@ -29,7 +29,7 @@
             <!-- 列表视图（组内下钻） -->
             <template v-else>
                 <view class="group-back" @click="backToGroups">
-                    <text class="group-back-icon">‹</text>
+                    <image class="group-back-arrow" src="/static/icons/ai-chat/chevron-model.png" mode="aspectFit" />
                     <text class="group-back-text">{{ activeLabel }}</text>
                     <text class="group-back-hint">返回分组</text>
                 </view>
@@ -438,10 +438,9 @@
         flex-shrink: 0;
     }
 
-    .group-icon-text {
-        font-size: 30rpx;
-        color: $primary-color;
-        font-weight: bold;
+    .group-icon-arrow {
+        width: 28rpx;
+        height: 28rpx;
     }
 
     .group-name {
@@ -459,11 +458,8 @@
 
     .group-chevron {
         width: 32rpx;
+        height: 32rpx;
         flex-shrink: 0;
-        font-size: 32rpx;
-        line-height: 36rpx;
-        text-align: center;
-        color: $text-disabled;
     }
 
     /* 组内返回条 */
@@ -477,10 +473,11 @@
         border: 1rpx solid #EEEEEE;
     }
 
-    .group-back-icon {
-        font-size: 32rpx;
-        color: $primary-color;
+    .group-back-arrow {
+        width: 32rpx;
+        height: 32rpx;
         margin-right: 8rpx;
+        flex-shrink: 0;
     }
 
     .group-back-text {

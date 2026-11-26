@@ -18,7 +18,7 @@
         <view class="stat-card stat-card-last" @click="onReportClick">
             <view class="stat-report-wrap">
                 <text class="stat-report-text">数据报告</text>
-                <text class="stat-report-arrow">›</text>
+                <image class="stat-report-arrow" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
             </view>
         </view>
     </view>
@@ -94,12 +94,9 @@
     }
 
     .stat-report-arrow {
-        width: 32rpx;
+        width: 24rpx;
+        height: 24rpx;
         flex-shrink: 0;
-        font-size: 26rpx;
-        line-height: 30rpx;
-        text-align: center;
-        color: $text-color-secondary;
         margin-left: 4rpx;
     }
 </style>

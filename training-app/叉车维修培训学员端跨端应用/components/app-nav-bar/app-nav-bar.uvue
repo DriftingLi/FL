@@ -5,8 +5,9 @@
             <view class="nav-bar-side nav-bar-left"
                 :class="[leftSlotFloatClass, { 'nav-bar-left--back': leftIcon == '‹' }]" @click="onLeftClick">
                 <slot name="left">
-                    <text v-if="leftIcon.length > 0" class="nav-bar-icon"
-                        :class="[titleColorClass, { 'nav-bar-icon--back': leftIcon == '‹' }]">{{ leftIcon }}</text>
+                    <image v-if="leftIcon == '‹'" class="nav-bar-back-img" :src="isInverse ? '/static/icons/profile/chevron-left-inverse.png' : '/static/icons/ai-chat/chevron-model.png'" mode="aspectFit" />
+                    <text v-else-if="leftIcon.length > 0" class="nav-bar-icon"
+                        :class="titleColorClass">{{ leftIcon }}</text>
                 </slot>
             </view>
             <view v-if="title.length > 0 || subtitle.length > 0" class="nav-bar-title-block" :class="titleBlockClass"
@@ -394,18 +395,9 @@
         color: $text-color;
     }
 
-    /* #2757：56rpx → 88rpx。`‹` 是细笔画标点，ink 高只有字号的 ~0.36 倍
-       （56rpx 时 ink ≈ 20rpx，而 36rpx 标题的汉字 ink ≈ 34rpx ⇒ 视觉上箭头明显偏小）。
-       88rpx 时 ink ≈ 32rpx ≈ 标题 ink 的 93%，视觉等高；行盒约 105rpx 溢出 88rpx bar，
-       但 bar 定高不随行盒撑开。
-
-       #2761：字号等高 ≠ 中线对齐。文字 ink 锚在基线上、不随行盒居中 —— align-items:center
-       下基线恒在 bar 顶下 0.88em（88rpx 字号 ⇒ 77.4rpx），`‹` ink 中心约 55.4rpx，而标题
-       汉字 ink 中心恰在 44.0rpx（bar 正中）⇒ 箭头比标题低约 8rpx（浏览器 2× 实测 8.25）。
-       margin-bottom 让居中算法吃掉一半：16rpx ⇒ 上移 8rpx。**真机需复验**（① 门是发版前一次）。 */
-    .nav-bar-icon--back {
-        font-size: 88rpx;
-        margin-bottom: 16rpx;
+    .nav-bar-back-img {
+        width: 34rpx;
+        height: 34rpx;
     }
 
     .nav-bar-inverse-text {

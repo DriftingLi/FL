@@ -9,7 +9,8 @@
                 <text class="balance-value">{{ pointsBalance }}</text>
                 <view class="balance-side balance-side-right">
                     <view class="balance-rules" @click="onRulesClick">
-                        <text class="balance-rules-text">积分规则 ›</text>
+                        <text class="balance-rules-text">积分规则</text>
+                        <image class="balance-rules-arrow" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
                     </view>
                 </view>
             </view>
@@ -17,7 +18,7 @@
             <!-- 商城入口条：根 ADR-0082 积分暂不过期，不写「本月暂无过期积分」这类过期口径 -->
             <view class="notice-bar" @click="onGoShop">
                 <text class="notice-text">积分永久有效，去商城兑换心仪商品</text>
-                <text class="notice-arrow">›</text>
+                <image class="notice-arrow" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
             </view>
 
             <!-- Tab：收支方向走后端 direction 查询（#512）；「即将过期」随 G1 删除清单退役 -->
@@ -256,9 +257,21 @@
         color: $text-color;
     }
 
+    .balance-rules {
+        flex-direction: row;
+        align-items: center;
+    }
+
     .balance-rules-text {
         font-size: 26rpx;
         color: $text-color-secondary;
+    }
+
+    .balance-rules-arrow {
+        width: 24rpx;
+        height: 24rpx;
+        margin-left: 4rpx;
+        flex-shrink: 0;
     }
 
     /* 商城入口条（浅黄底） */
@@ -281,11 +294,8 @@
 
     .notice-arrow {
         width: 32rpx;
+        height: 32rpx;
         flex-shrink: 0;
-        font-size: 34rpx;
-        line-height: 38rpx;
-        text-align: center;
-        color: $text-color-secondary;
     }
 
     /* Tab（原型：白卡内文字 + 蓝色短下划线，选中加粗黑字） */

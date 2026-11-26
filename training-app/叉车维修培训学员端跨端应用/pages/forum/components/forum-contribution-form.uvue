@@ -8,7 +8,7 @@
                     <text class="method-title">微信聊天文档</text>
                     <text class="method-sub">选择微信聊天中的文档</text>
                 </view>
-                <text class="method-arrow">›</text>
+                <image class="method-arrow" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
             </view>
             <view class="method-row method-row-line" @click="onPickLocalFile">
                 <view class="method-icon-box method-icon-yellow"><text class="method-icon">📁</text></view>
@@ -16,7 +16,7 @@
                     <text class="method-title">本地文件上传</text>
                     <text class="method-sub">从本地文件管理器选择文档</text>
                 </view>
-                <text class="method-arrow">›</text>
+                <image class="method-arrow" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
             </view>
             <view class="method-row" @click="onPickZip">
                 <view class="method-icon-box method-icon-red"><text class="method-icon">📦</text></view>
@@ -24,7 +24,7 @@
                     <text class="method-title">选择压缩文件</text>
                     <text class="method-sub">选择微信聊天中的zip压缩文件</text>
                 </view>
-                <text class="method-arrow">›</text>
+                <image class="method-arrow" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
             </view>
             <view v-if="files.length > 0" class="file-list">
                 <view v-for="(item, idx) in files" :key="idx" class="file-item">
@@ -282,7 +282,7 @@
     .method-info { flex: 1; flex-direction: column; }
     .method-title { font-size: 28rpx; color: #333333; }
     .method-sub { font-size: 22rpx; color: #999999; margin-top: 4rpx; }
-    .method-arrow { font-size: 40rpx; color: #cccccc; }
+    .method-arrow { width: 32rpx; height: 32rpx; flex-shrink: 0; }
     .file-list { margin-top: 20rpx; }
     .file-item { background-color: #f5f5f5; border-radius: 8rpx; padding: 16rpx; flex-direction: row; align-items: center; margin-bottom: 12rpx; }
     .file-item-info { flex: 1; flex-direction: column; }

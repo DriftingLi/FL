@@ -14,7 +14,7 @@
                     <text class="file-name">{{ file.file_name }}</text>
                     <text class="file-type">{{ getFileTypeName(file.content_type) }}</text>
                 </view>
-                <text class="file-arrow">›</text>
+                <image class="file-arrow" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
             </view>
         </view>
     </view>
@@ -142,7 +142,8 @@
     }
 
     .file-arrow {
-        font-size: 40rpx;
-        color: #cccccc;
+        width: 32rpx;
+        height: 32rpx;
+        flex-shrink: 0;
     }
 </style>

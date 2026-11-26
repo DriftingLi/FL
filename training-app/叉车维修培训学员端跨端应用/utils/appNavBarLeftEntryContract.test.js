@@ -291,10 +291,12 @@ describe('页头标题恒居中（#2761）', () => {
     expect(src).toMatch(/class="nav-bar-title-block"[^>]*:style="titleCentered \? titleBlockStyle : ''"/);
   });
 
-  it('返回箭头有 ink 中线补偿（字号等高 ≠ 中线对齐，#2757 只做了前者）', () => {
-    const back = (src.match(/\.nav-bar-icon--back\s*\{[^}]*\}/) || [''])[0];
-    expect(back).toMatch(/font-size\s*:\s*88rpx/);
-    expect(back).toMatch(/margin-bottom\s*:\s*\d+rpx/);
+  it('默认返回改为 34rpx 切片图，不再依赖文字字号与基线补偿', () => {
+    const back = (src.match(/\.nav-bar-back-img\s*\{[^}]*\}/) || [''])[0];
+    expect(back).toMatch(/width\s*:\s*34rpx/);
+    expect(back).toMatch(/height\s*:\s*34rpx/);
+    expect(back).not.toMatch(/font-size|margin-bottom/);
+    expect(src).not.toContain('nav-bar-icon--back');
   });
 });
 
