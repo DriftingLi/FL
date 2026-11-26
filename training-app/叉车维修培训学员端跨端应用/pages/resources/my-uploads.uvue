@@ -139,7 +139,7 @@ import { goBack } from '../../utils/navigation'
     .upload-item-info { flex: 1; flex-direction: column; }
     .upload-item-title { font-size: 28rpx; font-weight: 500; color: #333333; }
     .upload-item-meta { font-size: 22rpx; color: #999999; margin-top: 6rpx; }
-    .upload-item-reason-box { background-color: #FFF0F0; border-radius: 8rpx; padding: 8rpx 12rpx; margin-top: 10rpx; }
+    .upload-item-reason-box { background-color: $danger-tint; border-radius: 8rpx; padding: 8rpx 12rpx; margin-top: 10rpx; }
     .upload-item-reason { font-size: 22rpx; color: #e5484d; }
     .upload-item-badge { border-radius: 24rpx; padding: 8rpx 20rpx; margin-left: 16rpx; }
     .upload-item-badge-text { font-size: 22rpx; font-weight: 500; }

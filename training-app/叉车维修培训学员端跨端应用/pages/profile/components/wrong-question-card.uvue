@@ -322,8 +322,8 @@
 
     .record-wrong-count {
         font-size: 22rpx;
-        color: #f44336;
-        background-color: #ffebee;
+        color: $danger-color;
+        background-color: $danger-tint;
         padding: 4rpx 12rpx;
         border-radius: 6rpx;
         margin-right: 12rpx;
@@ -394,12 +394,12 @@
 
     .option-correct {
         background-color: $success-tint;
-        border-color: #4caf50;
+        border-color: $success-color;
     }
 
     .option-wrong {
-        background-color: #ffebee;
-        border-color: #f44336;
+        background-color: $danger-tint;
+        border-color: $danger-color;
     }
 
     .option-key {
@@ -417,11 +417,11 @@
     }
 
     .option-key-correct {
-        background-color: #4caf50;
+        background-color: $success-color;
     }
 
     .option-key-wrong {
-        background-color: #f44336;
+        background-color: $danger-color;
     }
 
     .option-key-text {
@@ -455,7 +455,7 @@
     }
 
     .redo-result.wrong {
-        background-color: #ffebee;
+        background-color: $danger-tint;
     }
 
     .redo-result-text {
@@ -465,11 +465,11 @@
     }
 
     .redo-result-text--correct {
-        color: #4caf50;
+        color: $success-color;
     }
 
     .redo-result-text--wrong {
-        color: #f44336;
+        color: $danger-color;
     }
 
     .redo-result-answer {
@@ -479,7 +479,7 @@
 
     .redo-result-hint {
         font-size: 22rpx;
-        color: #ff9800;
+        color: $warning-color;
         margin-top: 8rpx;
     }
 
@@ -501,12 +501,12 @@
     }
 
     .redo-btn-success {
-        background-color: #4caf50;
+        background-color: $success-color;
     }
 
     .redo-btn-danger {
         background-color: #ffffff;
-        border: 1rpx solid #f44336;
+        border: 1rpx solid $danger-color;
     }
 
     .redo-btn-text {
@@ -515,7 +515,7 @@
     }
 
     .redo-btn-text--danger {
-        color: #f44336;
+        color: $danger-color;
     }
 
     /* 折叠态操作 */
@@ -540,7 +540,7 @@
 
     .card-action-danger {
         background-color: #ffffff;
-        border: 1rpx solid #f44336;
+        border: 1rpx solid $danger-color;
     }
 
     .card-action-text {
@@ -553,7 +553,7 @@
     }
 
     .card-action-danger-text {
-        color: #f44336;
+        color: $danger-color;
     }
     /* 折叠态「答案与解析」（#1083）：默认收起，展开后与操作行留白分隔。
        行文案与空态同字号 —— 合并为一条规则（空态只换色），避免重复声明 */

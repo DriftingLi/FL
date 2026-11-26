@@ -208,7 +208,7 @@ import { goBack } from '../../utils/navigation'
 
     .palette-chip.palette-answered {
         background-color: $success-tint;
-        border-color: #4caf50;
+        border-color: $success-color;
     }
 
     .palette-chip.palette-unanswered {
@@ -227,7 +227,7 @@ import { goBack } from '../../utils/navigation'
     }
 
     .palette-text-answered {
-        color: #4caf50;
+        color: $success-color;
     }
 
     .palette-text-unanswered {

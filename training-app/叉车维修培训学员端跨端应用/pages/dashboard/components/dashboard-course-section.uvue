@@ -178,7 +178,7 @@
     }
 
     .course-tag-hot {
-        background-color: #00A443;
+        background-color: $success-color;
         padding: 8rpx 20rpx;
         border-radius: 999rpx;
         margin-right: 16rpx;
@@ -208,6 +208,6 @@
     .course-price {
         font-size: 36rpx;
         font-weight: bold;
-        color: #FF2424;
+        color: $color-price;
     }
 </style>

@@ -239,7 +239,7 @@
         min-width: 32rpx;
         height: 32rpx;
         border-radius: 16rpx;
-        background-color: #ff3b30;
+        background-color: $danger-color;
         align-items: center;
         justify-content: center;
         padding: 0 8rpx;

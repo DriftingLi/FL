@@ -275,7 +275,7 @@
     }
 
     .field-req {
-        color: #fa3534;
+        color: $danger-color;
         font-size: 26rpx;
     }
 
@@ -386,7 +386,7 @@
 
     .sub-del {
         font-size: 26rpx;
-        color: #fa3534;
+        color: $danger-color;
     }
 
     /* 票 2730 第 1 项：按钮本体仍是 80rpx 高，命中区由外层 88rpx 盒撑开（§5.11）。 */

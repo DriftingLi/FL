@@ -218,12 +218,12 @@
         margin-bottom: 20rpx;
         padding: 12rpx 20rpx;
         border-radius: 16rpx;
-        background-color: #FFF1F0;
+        background-color: $danger-tint;
     }
 
     .error-text {
         font-size: 26rpx;
-        color: #D93025;
+        color: $danger-color;
         text-align: center;
     }
 
