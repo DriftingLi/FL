@@ -35,13 +35,13 @@
     .featured-chip {
         padding: 10rpx 24rpx;
         border-radius: 32rpx;
-        background-color: #f0f1f5;
+        background-color: $bg-color;
         border: 2rpx solid transparent;
         margin-right: 12rpx;
     }
 
     .featured-chip.active {
-        background-color: #e8f3ff;
+        background-color: $primary-tint;
         border-color: $primary-color;
     }
 

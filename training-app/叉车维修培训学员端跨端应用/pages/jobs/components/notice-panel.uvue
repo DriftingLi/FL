@@ -135,7 +135,7 @@
 
     /* 类别 chip：底色落在 view，文字样式只上 text（uvue 文字类样式只认文字载体） */
     .notice-tag {
-        background-color: #e8f0fe;
+        background-color: $primary-tint;
         border-radius: $radius-sm;
         padding: 4rpx 12rpx;
         margin-right: $spacing-sm;

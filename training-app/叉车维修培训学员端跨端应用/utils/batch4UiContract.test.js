@@ -217,12 +217,12 @@ describe('§1.6 白名单文件自检（批4 扫描面）', () => {
     }
   });
 
-  it('白名单值不得与 token 值重叠（重叠即该值应直接走 token；例外：#F5F5F5 渐变尾色语义不符）', () => {
+  it('白名单值不得与 token 值重叠（重叠即该值应直接走 token）', () => {
     // #2979FF 的豁免随 #2533（规格 #2493 批 A）条目退役一并删除：`$md-color-link` 自 #2338 起取值
     // `$color-link`（#1b6f9c），早已不等于旧主色 —— 那条「有意的过渡态」理由在当时就过期了。
-    const SEMANTIC_MISMATCH = new Set(['#F5F5F5']);
+    // #F5F5F5 的「渐变尾色语义不符」豁免随 #2862 一并删除：#F5F5F5 已作为中性底色收敛到 $bg-color，
+    // 白名单条目退役 ⇒ 例外不复存在，白名单值不得与任何 token 值重叠（§1.6 自检复原为无条件断言）。
     for (const value of Object.keys(WHITELIST)) {
-      if (SEMANTIC_MISMATCH.has(value)) continue;
       expect(tokenValues.has(value)).toBe(false);
     }
   });

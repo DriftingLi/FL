@@ -191,7 +191,7 @@ function familyClosureFindings(appRoot, privateRels) {
   return { findings, edges };
 }
 
-/** 白名单死条自检：71 值必须在全层（pages + components 的 .uvue style 块）真实出现。 */
+/** 白名单死条自检：每个在册值都必须在全层（pages + components 的 .uvue style 块）真实出现（#2862 起 55 值）。 */
 function whitelistDeadEntries(appRoot, whitelistValues) {
   const used = new Set();
   for (const rel of collectUvue(appRoot)) {

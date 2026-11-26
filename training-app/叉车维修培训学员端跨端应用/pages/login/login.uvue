@@ -287,7 +287,7 @@
         width: 132rpx;
         height: 132rpx;
         border-radius: 32rpx;
-        background-color: #F5F7FA;
+        background-color: $bg-color;
         align-items: center;
         justify-content: center;
     }
@@ -304,7 +304,7 @@
         flex-direction: row;
         align-items: center;
         height: 104rpx;
-        background-color: #F5F7FA;
+        background-color: $bg-color;
         border-radius: 24rpx;
         padding: 0 28rpx;
         margin-bottom: 24rpx;
@@ -347,14 +347,14 @@
     }
 
     /* 发送中 / 倒计时：退回中性灰，不再靠整块透明度 */
-    .inline-btn-disabled { color: $text-color-placeholder; background-color: #F5F7FA; }
+    .inline-btn-disabled { color: $text-color-placeholder; background-color: $bg-color; }
 
     /* 人机验证就地展开行：输入框在左、码图在右（#2517 裁定 A） */
     .cap-row {
         flex-direction: row;
         align-items: center;
         height: 104rpx;
-        background-color: #F5F7FA;
+        background-color: $bg-color;
         border-radius: 24rpx;
         padding: 0 28rpx;
         margin-bottom: 24rpx;
@@ -443,7 +443,7 @@
         border-radius: 44rpx;
         align-items: center;
         justify-content: center;
-        background-color: #F5F7FA;
+        background-color: $bg-color;
         margin: 0 12rpx;
     }
 
@@ -480,7 +480,7 @@
         width: 88rpx;
         height: 88rpx;
         border-radius: 44rpx;
-        background-color: #F5F7FA;
+        background-color: $bg-color;
         align-items: center;
         justify-content: center;
     }

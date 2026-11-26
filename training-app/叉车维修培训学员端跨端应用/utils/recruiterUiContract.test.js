@@ -132,12 +132,11 @@ describe('§1.6 白名单文件自检', () => {
     }
   });
 
-  it('白名单值不得与 token 值重叠（重叠即该值应直接走 token；例外：#F5F5F5=$gradient-end 渐变尾色，语义不是中性底）', () => {
+  it('白名单值不得与 token 值重叠（重叠即该值应直接走 token）', () => {
     // #2979FF 的豁免随 #2533（规格 #2493 批 A）条目退役一并删除：`$md-color-link` 自 #2338 起取值
     // `$color-link`（#1b6f9c），早已不等于旧主色 —— 那条「有意的过渡态」理由在当时就过期了。
-    const SEMANTIC_MISMATCH = new Set(['#F5F5F5']);
+    // #F5F5F5=$gradient-end 的豁免随 #2862 一并删除：该值归 $bg-color、白名单条目退役，例外不复存在。
     for (const value of Object.keys(WHITELIST)) {
-      if (SEMANTIC_MISMATCH.has(value)) continue;
       expect(tokenValues.has(value)).toBe(false);
     }
   });

@@ -226,7 +226,7 @@
 <style lang="scss">
     .page {
         flex: 1;
-        background-color: #f5f6fa;
+        background-color: $bg-color;
         flex-direction: column;
     }
 
@@ -329,7 +329,7 @@
         height: 80rpx;
         font-size: 28rpx;
         color: $text-color;
-        background-color: #f7f8fa;
+        background-color: $bg-color;
         border-radius: 8rpx;
         padding: 0 16rpx;
     }
@@ -352,7 +352,7 @@
         padding: 20rpx;
         font-size: 28rpx;
         color: $text-color;
-        background-color: #f7f8fa;
+        background-color: $bg-color;
         border-radius: 12rpx;
     }
 

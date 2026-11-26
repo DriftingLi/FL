@@ -31,7 +31,7 @@
     .progress-section {
         background-color: #ffffff;
         padding: 20rpx 32rpx 24rpx;
-        border-top: 1rpx solid #f5f5f5;
+        border-top: 1rpx solid $bg-color;
         flex-direction: column;
     }
 

@@ -536,7 +536,7 @@ import { goBack } from '../../utils/navigation'
     .topic-tag {
         padding: 6rpx 16rpx;
         border-radius: 8rpx;
-        background-color: #f0f1f5;
+        background-color: $bg-color;
     }
 
     .topic-tag-text {

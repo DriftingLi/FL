@@ -77,7 +77,7 @@ import { goBack } from '../../utils/navigation'
 <style lang="scss">
     .container {
         display: flex;
-        background-color: #f5f5f5;
+        background-color: $bg-color;
         flex-direction: column;
     }
 
@@ -112,7 +112,7 @@ import { goBack } from '../../utils/navigation'
     }
 
     .bottom-btn-secondary {
-        background-color: #f5f5f5;
+        background-color: $bg-color;
         border: 1px solid #e0e0e0;
     }
 

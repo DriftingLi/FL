@@ -243,7 +243,7 @@
     .container {
         flex: 1;
         /* 批5 N05（票1608）：灰底自垫 F5F6FA 走 uiHexWhitelist 留痕——G7 入口宫格非渐变页，映射值待 token 票统一收编 */
-        background-color: #f5f6fa;
+        background-color: $bg-color;
         flex-direction: column;
     }
 

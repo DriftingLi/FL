@@ -204,12 +204,12 @@
 
     .tag-closed {
         color: $text-color-placeholder;
-        background-color: #F5F5F5;
+        background-color: $bg-color;
     }
 
     .tag-unknown {
         color: $text-color-placeholder;
-        background-color: #F5F5F5;
+        background-color: $bg-color;
     }
 
     .empty-tip {

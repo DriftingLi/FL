@@ -167,7 +167,7 @@
 <style lang="scss">
     .page {
         flex: 1;
-        background-color: #f5f6fa;
+        background-color: $bg-color;
         flex-direction: column;
     }
 
