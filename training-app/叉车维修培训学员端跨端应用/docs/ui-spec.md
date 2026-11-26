@@ -44,8 +44,6 @@
 | Token | 色值 | 用途 |
 |---|---|---|
 | `$primary-color` | **`#239EDD`** | 选中态、Tab 高亮、**主色 header / 状态栏**（N01 蓝底套）——**#2509 R2 起不再直接做按钮底色**（主 CTA 改 §5.3 渐变对） |
-| `$primary-color-light` | `#5b9aff` | **#2509 R2 起待退役**：原「渐变底部」用途被 `$primary-grad-*`（§1.7）取代，全仓 `.uvue` 零消费 |
-| `$primary-color-dark` | `#1c9eff` | **#2509 R2 起待退役**：pressed 态改 `$primary-grad-pressed-*`（§1.7），全仓 `.uvue` 零消费 |
 | `$primary-tint` | `#EBF9FF` | 主色浅底（分区标题带、选中标签底、历史 chip 底）；**#2509 R2 冲突 1 改值**（原 `#ebf5ff`） |
 
 > **换色执行口径**：`uni.scss` 只改两处——`:18` `$uni-color-primary` 与 `:81` `$primary-color`，单点生效，**禁止逐页改字面色值**；
@@ -109,38 +107,41 @@
 
 ### 1.7 原型换血新增 Token（2026-11-13 裁定 #2509 R2 · #2516 **B0** 落地）
 
-> 出处：`docs/design/20261125-移动端token决定清单（原型换血#2509）.md`（#2834 落档；原件在 `.scratch/figma-proto-export/TOKEN_DECISIONS.md`，`.scratch/` 不入仓）。本节 27 条是
+> 出处：`docs/design/20261125-移动端token决定清单（原型换血#2509）.md`（#2834 落档；原件在 `.scratch/figma-proto-export/TOKEN_DECISIONS.md`，`.scratch/` 不入仓）。本节原登记 27 条，#2863 删 11 条死件后余 16 条（删项与判据见 §1.8）；本表是
 > `uni.scss` 业务段「原型换血 Token」段的登记面，两侧由 `utils/uiDocDocMapContract.test.js` 双向对账。
 
 | Token | 色值 | 用途 |
 |---|---|---|
-| `$accent-yellow` | `#FDE03B` | 品牌黄（433:751 品牌色圆声明；打卡格、积分底、评分星） |
 | `$accent-yellow-tint` | `#FDF9E6` | 品牌黄浅底 |
-| `$text-on-yellow` | `#271309` | 黄底上的文字色 |
 | `$primary-grad-start` | `#6ECCFD` | 主 CTA 渐变起（原型 65 处/16 屏） |
 | `$primary-grad-end` | `#0CA2EF` | 主 CTA 渐变止 / 实色兜底 |
 | `$primary-grad-pressed-start` | `#239EDD` | 主 CTA 按下态渐变起 |
 | `$primary-grad-pressed-end` | `#139DE4` | 主 CTA 按下态渐变止 |
 | `$brand-grad-start` | `#239EDD` | 品牌渐变起（着陆页） |
 | `$brand-grad-end` | `#14AE50` | 品牌渐变止 |
-| `$header-grad-start` | `#239EDD` | 页头渐变起 |
-| `$header-grad-end` | `#FFFFFF` | 页头渐变止（蓝转白） |
 | `$gradient-mid` | `#D0EBFD` | 浅蓝中停靠（forum 页头渐变尾色；原生端仍是两停靠，仅 web 预览用中停靠） |
-| `$checkin-cell-miss` | `#D9D9D9` | 打卡格：未打卡 |
-| `$checkin-cell-past-miss` | `#ECECEC` | 打卡格：过去未打卡 |
-| `$checkin-cell-inactive` | `rgba(255, 255, 255, 0.80)` | 打卡格：不可用 |
-| `$checkin-cell-streak` | `$accent-yellow` | 打卡格：连续打卡（复用品牌黄，不重复立值） |
 | `$tabbar-bg` | `#FFFFFF` | TabBar 底色 |
 | `$tabbar-active` | `#239EDD` | TabBar 选中（与 pages.json 原生 tabBar 同值） |
 | `$tabbar-inactive` | `#999999` | TabBar 未选中（同上） |
 | `$color-price` | `#FF2424` | 价格强调红 |
-| `$answer-correct` | `#7BD398` | 答题正确 |
 | `$answer-wrong` | `#FF5A5A` | 答题错误（收敛 #DF6454） |
 | `$segment-indicator` | `#239EDD` | 分段控件指示条（宽随标签文字撑开，高 4rpx，R=10） |
 | `$tag-bg-neutral` | `#ECECEC` | 中性标签底 |
 | `$radius-card` | `20rpx` | 卡面容圆角（区别于 `$radius-lg` 24rpx） |
-| `$font-size-2xl` | `40rpx` | 标题层级 2xl（原型 h1 40rpx） |
-| `$font-size-3xl` | `48rpx` | 标题层级 3xl（原型大标题 48rpx） |
+| `$font-size-2xl` | `40rpx` | 标题层级 2xl（原型 h1 40rpx）；**#2863 接上**：30 处 `font-size: 40rpx` 字面量已收敛到本 token |
+| `$font-size-3xl` | `48rpx` | 标题层级 3xl（原型大标题 48rpx）；**#2863 接上**：2 处 `font-size: 48rpx` 字面量已收敛到本 token |
+
+### 1.8 已删 token 登记（#2863 死件清理）
+
+判据是**值面有没有真实消费**：值被别处字面量在用而 token 0 引用 ⇒ **接上**（同值零视觉，见 §1.7 `$font-size-2xl/3xl` 与 §2 `$spacing-xl`）；值和语义都无消费 ⇒ **删**（原型登记过但产品没做的视觉，留着就是假契约——读表的人会以为改它能影响界面）。删前必查两件：值是否另有家、语义是否另有承接。
+
+- `$primary-color-light`（`#5b9aff`）/ `$primary-color-dark`（`#1c9eff`）：0 引用 + 0 字面量；用途已分别被 §5.3 的主 CTA 渐变对与 pressed 对取代。
+- `$accent-yellow`（`#FDE03B`）/ `$text-on-yellow`（`#271309`）：0/0；打卡格的实值是白名单 `#FFD666` / `#F6B93E`，与 #FDE03B **不等值**（接上即改视觉）。浅底档 `$accent-yellow-tint` 仍在用，保留。
+- `$header-grad-start` / `$header-grad-end`（`#239EDD` / `#FFFFFF`）：页头套自 #1592 起是**实色**（§7 的 N01–N06 全实色，唯一页头件 `components/app-nav-bar/app-nav-bar.uvue`），全仓 84 处 `linear-gradient` 里没有一处页头渐变 ⇒「页头渐变被硬编码、换血漏了」不成立；接上等于新造页头视觉并波及 56 页。
+- `$checkin-cell-miss` / `-past-miss` / `-inactive` / `-streak`：四态 0/0；日历实际渲染走白名单字面量（`pages/forum/check-in.uvue` 的 `#E8E8E8` / `#FFD666` / `#F6B93E`），与 token 值不等值。`$checkin-cell-miss` 的唯一消费点是打卡页开关轨色，已改挂同值的 `$border-color`（`#D9D9D9`，零视觉）。
+- `$answer-correct`（`#7BD398`）：0/0；答题正确面实际走 `$success-color`（`pages/exam/components/exam-result-detail-list.uvue:117`）。
+
+**保留的反例（不是死件）**：`$color-link`（`#1b6f9c`）经 `$md-color-link` 在 `pages/forum/components/markdown-blocks.uvue:367` 真实消费，`utils/markdownTypographyContract.test.js` 硬钉名字与色值——「没直接 grep 到」不等于死件。
 
 ---
 
@@ -152,7 +153,7 @@
 | `$spacing-sm` | `16rpx` | 小间距（标签间距、列表项间距） |
 | `$spacing-md` | `24rpx` | 标准间距（页面边距、卡片内边距、卡片间距） |
 | `$spacing-lg` | `32rpx` | 大间距（区块间距、列表水平内边距） |
-| `$spacing-xl` | `48rpx` | 超大间距（底部留白） |
+| `$spacing-xl` | `48rpx` | 超大间距（页面底留白、卡内纵向大内距）；**#2863 接上**：此前 0 token 引用、只有字面量在用，48 处 `padding`/`margin` 的 `48rpx` 已收敛到本 token（同值零视觉，`scripts/audit-spacing.mjs` 的 `px()` 已登记全表） |
 
 ---
 
@@ -299,7 +300,7 @@
 
 ### 5.3 主按钮（appButton type=primary）
 
-- 背景：`linear-gradient(to bottom, $primary-grad-start, $primary-grad-end)`（`#6ECCFD`→`#0CA2EF`），实色兜底 `background-color: $primary-grad-end` 写在渐变**之后**；按下态用 `$primary-grad-pressed-*`（`#239EDD`→`#139DE4`）。**方向只能写 `to` 关键字，禁 `deg`** —— ADR-0010；原生端只吃两停靠（§1.2 表头）
+- 背景：`linear-gradient(to bottom, $primary-grad-start, $primary-grad-end)`（`#6ECCFD`→`#0CA2EF`），实色兜底 `background-color: $primary-grad-end` 写在渐变**之后**；按下态用 `$primary-grad-pressed-*`（`#239EDD`→`#139DE4`），**#2863 已落地**：`components/app-button/app-button.uvue` 由 `@touchstart`/`@touchend`/`@touchcancel` 切 `.app-btn--primary.app-btn--pressed`（仅 primary 档、仅未禁用时点亮）。**方向只能写 `to` 关键字，禁 `deg`** —— ADR-0010；原生端只吃两停靠（§1.2 表头）
   - **2026-11-13（#2509 R2 冲突 8）**：原「`$primary-color`→`$primary-color-light`」纯色渐变被原型推翻（主 CTA 65 处/16 屏一律新渐变对），`$primary-color` 自此不再直接做按钮底色
 - 文字：`$text-color-inverse`，`$font-size-lg`，font-weight bold
 - 圆角：`$radius-pill`（999rpx 胶囊形）
@@ -358,8 +359,9 @@
 
 ### 5.10 伪类禁令
 
-`.uvue` 原生端**不支持 CSS 伪类**（§9 机检口径）。唯一存量 `pages/courses/course-detail.uvue:469` `.action-btn:active`
-改 `@touchstart`/`@touchend` 切 `pressed` class（#1593 裁定，执行票承接）。
+`.uvue` 原生端**不支持 CSS 伪类**（§9 机检口径）。原唯一存量 `pages/courses/course-detail.uvue` 的 `.action-btn:active`
+已按 #1593 裁定改为 `@touchstart`/`@touchend` 切 `pressed` class（`:50` `action-btn-pressed`）；共享件 `app-button` 同法
+在 #2863 落地（§5.3）。新增按压态一律走这条，别再写 `:active`。
 
 ### 5.11 触摸目标与长文本截断（#2445）
 

@@ -248,19 +248,21 @@ defineProps<{
 > `components/app-chip` 与 `components/app-empty-state` 就是这样中招的）。
 > 机检：`utils/searchContract.test.js`「引用的 $变量在 uni.scss 里都存在」。
 
+> ⚠️ 本表 2026-11-26（#2863）按 `uni.scss` 现值二次校正：`$primary-color-light` / `$primary-color-dark`
+> 两档已从 token 表删除（§1.8），`$bg-color` 与 `$border-color` 的现值也已换代——照旧表写会**映射到不存在的 token**或映射错值。
+
 | 硬编码值 | 替换为 Token |
 |---|---|
-| `#2979ff` | `$primary-color` |
-| `#5b9aff` | `$primary-color-light` |
-| `#1c9eff` | `$primary-color-dark` |
+| `#239EDD` / `#2979ff` | `$primary-color`（现值 `#239EDD`） |
+| ~~`#5b9aff`~~ / ~~`#1c9eff`~~ | **无对应 token**（两档已随 #2863 删除，见 `docs/ui-spec.md` §1.8；按下态改走 `$primary-grad-pressed-*`，不要新造浅/深阶） |
 | `#333333` / `#333` | `$text-color` |
 | `#666666` / `#666` | `$text-color-secondary` |
 | `#999999` / `#999` | `$text-color-placeholder` |
 | `#cccccc` / `#ccc` | 无对应 token（uni.scss 未定义；如确需请先补 token 再引用） |
-| `#f8f8f8` / `#F5F5F5` | `$bg-color`（`uni.scss` 定义为 `#f8f8f8`） |
+| `#F5F5F5` | `$bg-color`（现值 `#F5F5F5`；#2862 起中性底已收敛，白名单条目已退役） |
 | `#ffffff` / `#FFFFFF` | `$card-bg`（白字用 `$text-color-inverse`） |
-| `#e5e5e5` / `#e0e0e0` | `$border-color` |
-| `#F0F0F0` | `$border-color-light`（`$border-color` 是 `#e5e5e5`） |
+| `#D9D9D9` / `#e0e0e0` | `$border-color`（现值 `#D9D9D9`；`#e5e5e5` 已不是边界灰） |
+| `#f0f0f0` / `#F0F0F0` | `$border-color-light`（现值 `#f0f0f0`） |
 
 ### 4.2 border-radius 统一
 
