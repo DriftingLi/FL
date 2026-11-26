@@ -11,8 +11,10 @@ MOD_LIMIT=100000
 
 newf=$(mktemp) || exit 1
 modf=$(mktemp) || exit 1
-git diff --cached --name-only --diff-filter=A > "$newf" || { rm -f "$newf" "$modf"; exit 1; }
-git diff --cached --name-only --diff-filter=M > "$modf" || { rm -f "$newf" "$modf"; exit 1; }
+# core.quotepath=false 显式给：默认 true 时非 ASCII 路径会被写成 "training-app/\346\234…"，
+# 下面的 [ -f "$f" ] 就取不到文件、中文路径下的超限文件会静默漏检（#2873）。
+git -c core.quotepath=false diff --cached --name-only --diff-filter=A > "$newf" || { rm -f "$newf" "$modf"; exit 1; }
+git -c core.quotepath=false diff --cached --name-only --diff-filter=M > "$modf" || { rm -f "$newf" "$modf"; exit 1; }
 
 fail=0
 
