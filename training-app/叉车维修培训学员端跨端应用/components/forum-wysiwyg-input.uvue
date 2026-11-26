@@ -549,7 +549,7 @@
        （机检 utils/uvueFontCarrierContract.test.js）。 */
     .rich-editor {
         height: 400rpx;
-        background-color: #f8f9fa;
+        background-color: $bg-color;
         border-radius: 12rpx;
         padding: 24rpx;
         border: 1rpx solid #e0e0e0;
@@ -566,7 +566,7 @@
         margin-top: 8rpx;
         padding: 8rpx 16rpx;
         border-radius: 12rpx;
-        background-color: #fafbfc;
+        background-color: $bg-color;
         border: 1rpx solid #e4e7ed;
         min-height: 88rpx;
     }

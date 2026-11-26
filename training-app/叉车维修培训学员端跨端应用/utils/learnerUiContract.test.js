@@ -164,12 +164,11 @@ describe('§1.6 白名单文件自检（批2 扫描面）', () => {
     }
   });
 
-  it('白名单值不得与 token 值重叠（重叠即该值应直接走 token；例外：#F5F5F5 渐变尾色语义不符）', () => {
+  it('白名单值不得与 token 值重叠（重叠即该值应直接走 token）', () => {
     // #2979FF 的豁免随 #2533（规格 #2493 批 A）条目退役一并删除：`$md-color-link` 自 #2338 起取值
     // `$color-link`（#1b6f9c），早已不等于旧主色 —— 那条「有意的过渡态」理由在当时就过期了。
-    const SEMANTIC_MISMATCH = new Set(['#F5F5F5']);
+    // #F5F5F5 的「渐变尾色语义不符」豁免随 #2862 一并删除（条目退役后例外无从成立）。
     for (const value of Object.keys(WHITELIST)) {
-      if (SEMANTIC_MISMATCH.has(value)) continue;
       expect(tokenValues.has(value)).toBe(false);
     }
   });
@@ -210,7 +209,8 @@ describe('§1.6 白名单文件自检（批2 扫描面）', () => {
     // #2262 摘除 ai-feature 诊断面板后，#6DB8E8 唯一承载移至 components/ai-chat/ai-chat-input.uvue —— 扫描面随之补入组件文件
     // #2523 起 #FF8F00 的承载是 forum-topic-header 状态标签（task-center 改走 $warning-color token）—— 组件补入扫描面
     // #2786 删掉本页解锁专业版横幅后，#2E9E5B 唯一承载移至 ai-chat-pro-sheet 的已解锁按钮底 —— 组件补入扫描面
-    const all = PAGES.concat(batch1, batch1605, batch4, batch5, batch6, ['components/ai-chat/ai-chat-input.uvue', 'components/ai-chat/ai-chat-pro-sheet.uvue', 'pages/forum/components/forum-topic-header.uvue', 'pages/forum/components/forum-topic-actions.uvue', 'pages/forum/components/forum-more-menu.uvue']).map((p) => styleBlock(read(p)).toUpperCase()).join('\n');
+    // #2861 语义色收敛后 #22A45D/#F0FFF0/#4CAF50/#F44336 的最后承载落在 forum-resource-panel / forum-reply-list（私有子件，H1 判定面不变，只用于死条目判定）—— 两件补入扫描面
+    const all = PAGES.concat(batch1, batch1605, batch4, batch5, batch6, ['components/ai-chat/ai-chat-input.uvue', 'components/ai-chat/ai-chat-pro-sheet.uvue', 'pages/forum/components/forum-topic-header.uvue', 'pages/forum/components/forum-topic-actions.uvue', 'pages/forum/components/forum-more-menu.uvue', 'pages/forum/components/forum-resource-panel.uvue', 'pages/forum/components/forum-reply-list.uvue']).map((p) => styleBlock(read(p)).toUpperCase()).join('\n');
     for (const value of Object.keys(WHITELIST)) {
       expect(all).toContain(value);
     }

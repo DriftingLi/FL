@@ -125,8 +125,10 @@ describe('批5 N05 页面自垫底色（页头透明后背景由页面承担，�
     expect(style).not.toMatch(/#6ECCFD|#0CA2EF/i);
   });
 
-  it('resume 页自垫灰底 $bg-header 语义值 #F5F6FA（白名单在册）；login 自垫 $bg-header token', () => {
-    expect(styleBlock(read('pages/resume/resume.uvue'))).toMatch(/#f5f6fa/i);
+  it('resume 页自垫底色走 $bg-color token（#2862 起 7 个近邻底灰收敛为 1）；login 自垫 $bg-header token', () => {
+    // #2862：resume 页原自垫 #F5F6FA（中性底灰的近邻值之一，白名单在册），与 7 个近邻底灰一并收敛到
+    // $bg-color，白名单条目同步退役 ⇒ 断言由「字面值在册」翻成「token 引用」。视觉差异只在蓝通道 5/255。
+    expect(styleBlock(read('pages/resume/resume.uvue'))).toMatch(/background-color:\s*\$bg-color/);
     expect(styleBlock(read('pages/recruiter/login.uvue'))).toMatch(/background(-color)?:\s*\$bg-header/);
   });
 

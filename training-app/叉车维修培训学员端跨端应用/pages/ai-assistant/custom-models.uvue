@@ -212,7 +212,7 @@
 	.container {
 		display: flex;
 		flex-direction: column;
-		background-color: #F5F6F8;
+		background-color: $bg-color;
 	}
 
 	.add-label {
@@ -348,7 +348,7 @@
 
 	.form-input {
 		height: 80rpx;
-		background-color: #F5F6F8;
+		background-color: $bg-color;
 		border-radius: 12rpx;
 		padding: 0 24rpx;
 		font-size: 28rpx;

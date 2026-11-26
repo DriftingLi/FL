@@ -228,7 +228,7 @@
         font-size: 28rpx;
         color: $text-color;
         padding: 0 16rpx;
-        background-color: #F7F8FA;
+        background-color: $bg-color;
         border-radius: 8rpx;
     }
 
@@ -238,7 +238,7 @@
         font-size: 28rpx;
         color: $text-color;
         padding: 16rpx;
-        background-color: #F7F8FA;
+        background-color: $bg-color;
         border-radius: 8rpx;
     }
 
@@ -281,7 +281,7 @@
     .chip {
         padding: 10rpx 22rpx;
         border-radius: 30rpx;
-        background-color: #F7F8FA;
+        background-color: $bg-color;
         border: 1rpx solid $border-color-light;
         margin-right: 16rpx;
         margin-bottom: 16rpx;

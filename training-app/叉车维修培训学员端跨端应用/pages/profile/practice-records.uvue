@@ -230,7 +230,7 @@ import { goBack } from '../../utils/navigation'
 <style lang="scss">
     .container {
         display: flex;
-        background-color: #f5f5f5;
+        background-color: $bg-color;
         flex-direction: column;
     }
 
@@ -248,7 +248,7 @@ import { goBack } from '../../utils/navigation'
     .filter-chip {
         padding: 12rpx 28rpx;
         border-radius: 32rpx;
-        background-color: #f5f5f5;
+        background-color: $bg-color;
         margin-right: 16rpx;
         flex-shrink: 0;
     }
@@ -358,7 +358,7 @@ import { goBack } from '../../utils/navigation'
     }
 
     .record-status.wrong {
-        background-color: #ffebee;
+        background-color: $danger-tint;
     }
 
     .record-status-text {
@@ -370,11 +370,11 @@ import { goBack } from '../../utils/navigation'
        HarmonyOS Vapor 不支持；祖先为复合类（两个类名连写）再跟后代时，编译产物是
        含空格的死键、永远匹配不上 ⇒ 一律落成挂在元素自身的平类 */
     .record-status-text--correct {
-        color: #4caf50;
+        color: $success-color;
     }
 
     .record-status-text--wrong {
-        color: #f44336;
+        color: $danger-color;
     }
 
     .record-info {

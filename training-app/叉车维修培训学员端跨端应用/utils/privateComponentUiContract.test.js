@@ -157,7 +157,7 @@ describe('页面私有子件层契约 · 真实树（#2866 落地实测）', () 
     expect(closure.findings).toEqual([]);
   });
 
-  test('白名单值全层无死条（71 值都在 style 块真实出现）', () => {
+  test('白名单值全层无死条（在册值都在 style 块真实出现）', () => {
     expect(result.whitelistValues.size).toBeGreaterThanOrEqual(1);
     expect(scan.whitelistDeadEntries(APP_ROOT, result.whitelistValues)).toEqual([]);
   });

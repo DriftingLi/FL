@@ -581,7 +581,7 @@
 
     .foot-error-text {
         font-size: 24rpx;
-        color: #ee0a24;
+        color: $danger-color;
     }
 
     .bottom-spacer {

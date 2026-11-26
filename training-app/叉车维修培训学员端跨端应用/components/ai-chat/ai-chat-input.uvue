@@ -196,7 +196,7 @@
 	.model-chip {
 		flex-direction: row;
 		align-items: center;
-		background-color: #f5f6f8;
+		background-color: $bg-color;
 		border-radius: 14rpx;
 		padding: 10rpx 18rpx;
 		flex: 1;
@@ -253,7 +253,7 @@
 		width: 64rpx;
 		height: 64rpx;
 		border-radius: 32rpx;
-		background-color: #f5f6f8;
+		background-color: $bg-color;
 		align-items: center;
 		justify-content: center;
 	}

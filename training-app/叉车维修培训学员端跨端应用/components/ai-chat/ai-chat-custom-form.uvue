@@ -127,7 +127,7 @@
 
 	.custom-hint {
 		margin-bottom: 24rpx;
-		background-color: #f5f6f8;
+		background-color: $bg-color;
 		border-radius: 12rpx;
 		padding: 16rpx 20rpx;
 	}
@@ -150,7 +150,7 @@
 
 	.form-input {
 		height: 80rpx;
-		background-color: #f5f6f8;
+		background-color: $bg-color;
 		border-radius: 12rpx;
 		padding: 0 24rpx;
 		font-size: 28rpx;

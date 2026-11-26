@@ -168,7 +168,7 @@
     }
 
     .res-card-bg-red {
-        background-color: #FFF0F0;
+        background-color: $danger-tint;
     }
 
     .res-card-bg-blue {

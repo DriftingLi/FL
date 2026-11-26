@@ -73,13 +73,13 @@
     }
 
     .status-correct {
-        color: #4caf50;
+        color: $success-color;
         background-color: $success-tint;
     }
 
     .status-wrong {
-        color: #f44336;
-        background-color: #ffebee;
+        color: $danger-color;
+        background-color: $danger-tint;
     }
 
     .detail-title {
@@ -114,10 +114,10 @@
     }
 
     .answer-correct {
-        color: #4caf50;
+        color: $success-color;
     }
 
     .answer-wrong {
-        color: #f44336;
+        color: $danger-color;
     }
 </style>
