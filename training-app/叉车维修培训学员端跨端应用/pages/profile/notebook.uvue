@@ -54,7 +54,7 @@
                             </view>
                             <view v-else class="note-tag note-tag-question" @click="onJumpQuestion(item)">
                                 <text class="note-tag-text">查看原题</text>
-                                <text class="note-tag-arrow">›</text>
+                                <image class="note-tag-arrow" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
                             </view>
                         </view>
                         <text class="note-title">{{ titleText(item.content) }}</text>
@@ -78,11 +78,11 @@
                 <view v-else class="group-list">
                     <view v-for="g in groups" :key="g.key" class="group-card" @click="onGroupClick(g)">
                         <view v-if="g.question_id > 0" class="group-icon">
-                            <text class="group-icon-text">›</text>
+                            <image class="group-icon-arrow" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
                         </view>
                         <text class="group-name">{{ g.label }}</text>
                         <text class="group-count">{{ g.count }}题</text>
-                        <text class="group-chevron">›</text>
+                        <image class="group-chevron" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
                     </view>
                 </view>
 
@@ -430,11 +430,11 @@
     .note-clock { font-size: 26rpx; margin-right: 8rpx; }
     .note-tag { flex-direction: row; align-items: center; padding: 4rpx 8rpx; flex-shrink: 1; }
     .note-tag-standalone { background-color: $primary-tint; border-radius: $radius-sm; padding: 4rpx 12rpx; }
-    /* 题目徽标（B3 票 2519）：纯文字链接「查看原题 ›」，无底色；触摸区由 .note-tag 的 padding 保证 */
+    /* 题目徽标（B3 票 2519）：「查看原题 + 右向切片」，无底色；触摸区由 .note-tag 的 padding 保证 */
     .note-tag-question { flex-direction: row; align-items: center; padding: 4rpx 8rpx; }
     .note-tag-text-standalone { font-size: 22rpx; color: $primary-color; }
     .note-tag-text { font-size: 26rpx; color: $primary-color; }
-    .note-tag-arrow { font-size: 26rpx; color: $primary-color; margin-left: 4rpx; }
+    .note-tag-arrow { width: 24rpx; height: 24rpx; margin-left: 4rpx; flex-shrink: 0; }
     .note-time { font-size: 26rpx; color: $text-color; }
     .note-title { font-size: 30rpx; font-weight: 500; color: $text-color; margin-bottom: 8rpx; overflow: hidden; text-overflow: ellipsis; lines: 2; }
     .note-excerpt { font-size: 26rpx; color: #888888; line-height: 40rpx; margin-bottom: 16rpx; overflow: hidden; text-overflow: ellipsis; lines: 2; }
@@ -447,10 +447,10 @@
     .group-list { flex-direction: column; padding: 8rpx 24rpx 0; }
     .group-card { background-color: $card-bg; border-radius: $radius-card; padding: 32rpx 24rpx; margin-bottom: 20rpx; flex-direction: row; align-items: center; }
     .group-icon { width: 48rpx; height: 48rpx; border-radius: 24rpx; border: 3rpx solid $primary-color; align-items: center; justify-content: center; margin-right: 20rpx; flex-shrink: 0; }
-    .group-icon-text { font-size: 30rpx; color: $primary-color; font-weight: bold; }
+    .group-icon-arrow { width: 28rpx; height: 28rpx; }
     .group-name { flex: 1; font-size: 30rpx; color: $text-color; font-weight: 500; overflow: hidden; text-overflow: ellipsis; lines: 1; }
     .group-count { font-size: 26rpx; color: $text-color-secondary; margin-right: 12rpx; }
-    .group-chevron { width: 32rpx; flex-shrink: 0; font-size: 32rpx; line-height: 36rpx; text-align: center; color: $text-disabled; }
+    .group-chevron { width: 32rpx; height: 32rpx; flex-shrink: 0; }
     .foot-tip { align-items: center; padding: 24rpx 0; }
     .foot-text { font-size: 24rpx; color: $text-color-placeholder; }
     .editor-card { margin: 24rpx; background-color: $card-bg; border-radius: $radius-card; padding: 24rpx; flex-direction: column; }

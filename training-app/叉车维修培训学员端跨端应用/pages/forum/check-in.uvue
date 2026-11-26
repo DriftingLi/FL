@@ -41,11 +41,11 @@
 
             <view v-if="!loadError" class="month-bar">
                 <app-icon-button @click="onPrevMonth">
-                    <text class="arrow-text">‹</text>
+                    <image class="calendar-arrow-prev" src="/static/icons/ai-chat/chevron-model.png" mode="aspectFit" />
                 </app-icon-button>
                 <text class="month-text">{{ displayYear }}年{{ displayMonth }}月</text>
                 <app-icon-button @click="onNextMonth">
-                    <text class="arrow-text">›</text>
+                    <image class="calendar-arrow-next" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
                 </app-icon-button>
             </view>
 
@@ -368,9 +368,9 @@ import { goBack } from '../../utils/navigation'
     .switch-on { background-color: $primary-color; justify-content: flex-end; }
     .switch-knob { width: 40rpx; height: 40rpx; border-radius: 20rpx; background-color: #ffffff; }
     .month-bar { flex-direction: row; align-items: center; justify-content: center; padding: 20rpx 0; }
-    /* 票 2730 第 1 项：月历箭头命中区 64→88rpx；‹ › 字形 40rpx 不变。 */
     /* 票 2730 第 1 项：88rpx 命中盒 / 64rpx 承载面由 components/app-icon-button 承担。 */
-    .arrow-text { width: 32rpx; flex-shrink: 0; font-size: 40rpx; line-height: 44rpx; text-align: center; color: #333333; font-weight: bold; }
+    .calendar-arrow-prev,
+    .calendar-arrow-next { width: 40rpx; height: 40rpx; flex-shrink: 0; }
     .month-text { font-size: 32rpx; font-weight: bold; color: #333333; margin-left: 24rpx; margin-right: 24rpx; }
     .week-header { flex-direction: row; padding: 12rpx 24rpx; }
     .week-item { flex: 1; text-align: center; font-size: 24rpx; color: #999999; }

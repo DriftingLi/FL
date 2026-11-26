@@ -24,7 +24,7 @@
                     <text class="chapter-title" :class="{ 'chapter-title--done': isChapterCompleted(chapter.chapter_id) }">{{ chapter.title }}</text>
                     <text v-if="chapter.duration > 0" class="chapter-duration">{{ chapter.duration }} 分钟</text>
                 </view>
-                <text class="chapter-arrow">›</text>
+                <image class="chapter-arrow" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
             </view>
         </view>
     </view>
@@ -185,8 +185,8 @@
     }
 
     .chapter-arrow {
-        font-size: 40rpx;
-        color: #cccccc;
+        width: 32rpx;
+        height: 32rpx;
         margin-left: 12rpx;
         flex-shrink: 0;
     }

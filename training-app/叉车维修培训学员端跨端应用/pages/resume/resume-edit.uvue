@@ -40,7 +40,7 @@
                     <text class="field-label">意向岗位<text class="field-req">*</text></text>
                     <view class="field-picker">
                         <text :class="edit.selectedPositionName.value.length > 0 ? 'field-value' : 'field-ph'">{{ edit.selectedPositionName.value.length > 0 ? edit.selectedPositionName.value : '请选择' }}</text>
-                        <text class="field-arrow">›</text>
+                        <image class="field-arrow" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
                     </view>
                 </view>
                 <view class="divider"></view>
@@ -72,7 +72,7 @@
                     <text class="field-label">工作类型</text>
                     <view class="field-picker">
                         <text :class="edit.jobNature.value.length > 0 ? 'field-value' : 'field-ph'">{{ edit.jobNatureLabel.value.length > 0 ? edit.jobNatureLabel.value : '请选择' }}</text>
-                        <text class="field-arrow">›</text>
+                        <image class="field-arrow" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
                     </view>
                 </view>
                 <view class="divider"></view>
@@ -80,7 +80,7 @@
                     <text class="field-label">到岗时间</text>
                     <view class="field-picker">
                         <text :class="edit.availableIn.value.length > 0 ? 'field-value' : 'field-ph'">{{ edit.availableInLabel.value.length > 0 ? edit.availableInLabel.value : '请选择' }}</text>
-                        <text class="field-arrow">›</text>
+                        <image class="field-arrow" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
                     </view>
                 </view>
                 <view class="divider"></view>
@@ -112,7 +112,7 @@
                         <text class="field-label">学历</text>
                         <view class="field-picker">
                             <text :class="item.degree.length > 0 ? 'field-value' : 'field-ph'">{{ item.degree.length > 0 ? item.degree : '请选择' }}</text>
-                            <text class="field-arrow">›</text>
+                            <image class="field-arrow" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
                         </view>
                     </view>
                     <view class="divider"></view>
@@ -309,11 +309,8 @@
 
     .field-arrow {
         width: 32rpx;
+        height: 32rpx;
         flex-shrink: 0;
-        font-size: 32rpx;
-        line-height: 36rpx;
-        text-align: center;
-        color: $text-disabled;
         margin-left: 8rpx;
     }
 
