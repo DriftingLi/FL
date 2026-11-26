@@ -215,10 +215,11 @@ describe('首页格式契约（对照设计稿截图）', () => {
   });
 
   it('热销标签为绿色胶囊，课程小标签为无底灰字，价格红色', () => {
-    expect(styleBlock).toMatch(/\.course-tag-hot\s*\{[^}]*background-color:\s*#00A443/);
+    // #2861 语义色收敛：热销绿吃 $success-color（canon #14AE50），不再钉字面值
+    expect(styleBlock).toMatch(/\.course-tag-hot\s*\{[^}]*background-color:\s*\$success-color/);
     expect(styleBlock).toMatch(/\.course-tag-hot\s*\{[^}]*border-radius:\s*999rpx/);
     expect(styleBlock).not.toMatch(/\.course-tag-sm\s*\{[^}]*background-color/);
-    expect(styleBlock).toMatch(/\.course-price\s*\{[^}]*color:\s*#FF2424/);
+    expect(styleBlock).toMatch(/\.course-price\s*\{[^}]*color:\s*\$color-price/);
   });
 
   it('页面底部为 tabBar 预留留白', () => {
