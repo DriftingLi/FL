@@ -10,8 +10,7 @@ interface ReplyPages {
   total: number
   loading: boolean
   loadingMore: boolean
-  error: boolean
-  moreError: boolean
+  error: 'initial' | 'more' | null
 }
 
 export function useForumReplyPages() {
@@ -25,8 +24,7 @@ export function useForumReplyPages() {
     const page = append ? state.page + 1 : 1
     state.loading = !append
     state.loadingMore = append
-    state.error = false
-    state.moreError = false
+    state.error = null
     try {
       const result = await adminForumApi.getTopic(topicId, page, PAGE_SIZE)
       if (replyPages[topicId] !== state) return
@@ -37,8 +35,7 @@ export function useForumReplyPages() {
       state.total = result.total ?? state.total
     } catch {
       if (replyPages[topicId] !== state) return
-      state.error = !append
-      state.moreError = append
+      state.error = append ? 'more' : 'initial'
     } finally {
       state.loading = false
       state.loadingMore = false
@@ -53,8 +50,7 @@ export function useForumReplyPages() {
       total: 0,
       loading: false,
       loadingMore: false,
-      error: false,
-      moreError: false
+      error: null
     }))
     if (state.replies !== null || state.loading) return
     await loadPage(topicId, state, false)
