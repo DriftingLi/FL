@@ -817,6 +817,11 @@ jobs:
       - name: 表驱动单测（收尾判定 dev-close）
         run: node --test scripts/dev-close.test.mjs
 
+      # #2904：ADR-0106 复评脚本的判据层（季度边界 / 已归批机读行 fail-closed / 剔除计数）。
+      # 脚本本身只读、发现候选也不判红；这条 run 是它自测的唯一跑手，不进跑手 = 没有守护。
+      - name: 表驱动单测（路径编码复评脚本）
+        run: node --test scripts/complexity/path-encoding-review.test.mjs
+
   # ============================================================
   # Stage 6.5: collector 端到端契约测试（spec #2671 / 票 #2672）
   #   独立 Python 服务跑 fixture 进 → PG 行出；自带 postgres service，
