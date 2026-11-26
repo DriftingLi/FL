@@ -16,7 +16,7 @@ import { readdirSync, readFileSync, existsSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { decide, judgeVerdict, judgeIndexLock, parseRemoveJson, findTargetTree, resolveTree, shortRef, SCRIPT_REF_RE } from './lib/dev-close.mjs'
+import { decide, judgeVerdict, judgeIndexLock, judgePrHead, parseRemoveJson, findTargetTree, resolveTree, shortRef, SCRIPT_REF_RE } from './lib/dev-close.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(here, '..')
@@ -495,6 +495,56 @@ test('L16 dry-run 三态分离：无待办动作 / 确不存在 / 目录在但�
   })
   assert.equal(didWork.verdict, 'ok', '真拆完才是 ok')
   assert.doesNotMatch(didWork.line, /no-pending-action/, '干过活的腿不许挂无动作标记')
+})
+
+// ---------------------------------------------------------------------------
+// #2876：PR 头对象本地缺失。squash 合并后 GitHub 删掉源分支，`fetch --prune` 只更新 refs/remotes/*
+// ⇒ PR 头对象往往本地根本没有。缺对象时 `git log "$prHead..HEAD"` 打一行 fatal（被当成「还有活」）、
+// `merge-base --is-ancestor HEAD $prHead` 读成 unreadable ⇒ #2289 的 headInPr 逃生阀恒拿不到 yes，
+// 每棵树都要人工补一次 `git fetch origin refs/pull/<n>/head`（#2861 收尾实测）。
+// ---------------------------------------------------------------------------
+const MERGED_2829 = JSON.stringify([{ state: 'MERGED', headRefOid: 'c'.repeat(40), number: 2829 }])
+
+test('L2a5 PR 头对象本地缺失时按 PR 号补抓 refs/pull/<n>/head（#2289 逃生阀自己生效，#2876）', () => {
+  // 缺对象 + MERGED + 有 PR 号 ⇒ 该抓，且只能抓 PR 头 ref（GitHub 不保证能按 sha 直接取）
+  const need = judgePrHead({ prJson: MERGED_2829, prHeadObject: 'missing' })
+  assert.equal(need.need, 'fetch', '缺对象时该抓，否则祖先事实永远读不回来')
+  assert.equal(need.ref, 'refs/pull/2829/head', '只走 PR 头 ref，不按 sha 直取')
+  assert.match(need.line, /PR_HEAD need=fetch state=MERGED number=2829 object=missing ref=refs\/pull\/2829\/head reason=object-missing/)
+
+  // 对象已在 ⇒ 不抓（多一次网络往返没有意义）
+  assert.equal(judgePrHead({ prJson: MERGED_2829, prHeadObject: 'present' }).need, 'present')
+
+  // 没合并 / 没 PR 号 / 没 PR 头 / gh 读不回来 ⇒ 都不抓；fail-closed 仍由 decide 兜（不在这里放行）
+  assert.equal(judgePrHead({ prJson: JSON.stringify([{ state: 'OPEN', headRefOid: 'd'.repeat(40), number: 2 }]), prHeadObject: 'missing' }).need, 'skip')
+  assert.equal(judgePrHead({ prJson: JSON.stringify([{ state: 'MERGED', headRefOid: 'd'.repeat(40) }]), prHeadObject: 'missing' }).reason, 'no-pr-number')
+  assert.equal(judgePrHead({ prJson: '[]', prHeadObject: 'missing' }).reason, 'no-pr-head')
+  assert.equal(judgePrHead({ prJson: 'not json at all', prHeadObject: 'missing' }).need, 'skip', '读不回来不是「该抓」的理由')
+  // 抓不到对象时 decide 依旧 fail-closed（headInPr 读不回来就不拆）—— 补抓不是放行
+  const d = decide({ task: '2174', prState: 'MERGED', worktreeList: LIST_PRESENT, unmergedLog: 'deadbeef x', headInMaster: 'no', headInPr: 'unreadable', execute: true })
+  assert.equal(d.allow, false)
+  assert.equal(d.reason, 'unmerged-commits')
+
+  // 接线：ps1 必须把 fetch 提到采集/判定之前，且 PR 查询要带 number 才有 refs/pull/<n>/head 可抓
+  const ps1 = readFileSync(join(here, 'dev-close.ps1'), 'utf8')
+  const iFetch = ps1.indexOf('fetch --prune')
+  const iResolve = ps1.indexOf("'--resolve'")
+  const iPrList = ps1.indexOf('gh pr list')
+  assert.ok(iFetch > 0, 'ps1 必须真的 fetch')
+  assert.ok(iFetch < iResolve, 'fetch --prune 必须排在认树之前（否则祖先事实问的是旧远端）')
+  assert.ok(iFetch < iPrList, 'fetch --prune 必须排在 PR 查询之前')
+  assert.match(ps1, /--json state,headRefOid,number/, 'gh pr list 必须带 number，否则拼不出 refs/pull/<n>/head')
+  assert.match(ps1, /refs\/pull\//, '必须能按 PR 号补抓 PR 头 ref')
+  assert.match(ps1, /'--prhead'/, '该不该抓由判定层判，ps1 不自留判据')
+
+  // CLI 腿：ps1 侧就是走这条（stdin 喂 facts，退出码恒 0）
+  const core = join(here, 'lib', 'dev-close.mjs')
+  const cli = spawnSync(process.execPath, [core, '--prhead'], {
+    input: JSON.stringify({ prJson: MERGED_2829, prHeadObject: 'missing' }),
+    encoding: 'utf8',
+  })
+  assert.equal(cli.status, 0, cli.stdout + cli.stderr)
+  assert.match(cli.stdout, /PR_HEAD need=fetch .*ref=refs\/pull\/2829\/head/)
 })
 
 test('L17 三态真走 CLI（真执行注入事实）：进程退出码与读数行同源，noop 不许变成失败退出', () => {
