@@ -42,14 +42,10 @@ type CategoryRef struct {
 }
 
 func categoryColumnSQL(column CategoryColumn) string {
-	switch column {
-	case CourseCategoryColumn:
-		return string(CourseCategoryColumn)
-	case QuestionCategoryColumn:
-		return string(QuestionCategoryColumn)
-	default:
+	if column != CourseCategoryColumn && column != QuestionCategoryColumn {
 		panic("publicscope: unsupported category column")
 	}
+	return string(column)
 }
 
 func LegacyCategoryFilter(db *gorm.DB, column CategoryColumn) *gorm.DB {
@@ -98,7 +94,7 @@ func loadStates(db *gorm.DB, view, idColumn string, ids []int) (map[int]PublicSt
 		if row.CategoryID != nil {
 			state.Category = &CategoryRef{ID: *row.CategoryID, Name: row.CategoryName, Status: row.CategoryStatus}
 		}
-		for code := range strings.SplitSeq(strings.TrimSuffix(row.BlockerCodes, ","), ",") {
+		for code := range strings.SplitSeq(row.BlockerCodes, ",") {
 			if code != "" {
 				state.Eligibility.Reasons = append(state.Eligibility.Reasons, Reason(code))
 			}
