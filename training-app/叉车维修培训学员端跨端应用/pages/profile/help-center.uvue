@@ -571,11 +571,11 @@ import { goBack } from '../../utils/navigation'
 
     .history-status {
         font-size: 22rpx;
-        color: #ff9800;
+        color: $warning-color;
     }
 
     .history-status-handled {
-        color: #4caf50;
+        color: $success-color;
     }
 
     .history-time {

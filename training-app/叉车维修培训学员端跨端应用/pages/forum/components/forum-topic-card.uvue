@@ -211,7 +211,7 @@
     }
 
     .status-badge-text.status-badge-text-resolved {
-        color: #4caf50;
+        color: $success-color;
     }
 
     .topic-content-preview {

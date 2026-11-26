@@ -266,12 +266,12 @@
 
     .acc-stat {
         font-size: 24rpx;
-        color: #4caf50;
+        color: $success-color;
         margin-right: 32rpx;
     }
 
     .acc-stat-wrong {
-        color: #f44336;
+        color: $danger-color;
     }
 
     /* 题型分布 */

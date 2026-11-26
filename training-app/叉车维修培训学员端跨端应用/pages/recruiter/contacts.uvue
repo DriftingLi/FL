@@ -222,8 +222,8 @@
     }
 
     .tag-approved {
-        color: #22A45D;
-        background-color: #F0FFF0;
+        color: $success-color;
+        background-color: $success-tint;
     }
 
     .tag-rejected {

@@ -482,14 +482,14 @@ import { goBack } from '../../utils/navigation'
         margin-left: 16rpx;
         padding: 8rpx 20rpx;
         border-radius: 24rpx;
-        border: 1rpx solid #f44336;
+        border: 1rpx solid $danger-color;
         align-items: center;
         justify-content: center;
     }
 
     .fav-remove-text {
         font-size: 22rpx;
-        color: #f44336;
+        color: $danger-color;
     }
 
     .empty-tip {

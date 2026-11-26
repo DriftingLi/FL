@@ -295,7 +295,7 @@ import { goBack } from '../../utils/navigation'
         width: 14rpx;
         height: 14rpx;
         border-radius: 7rpx;
-        background-color: #ff3b30;
+        background-color: $danger-color;
         margin-left: 12rpx;
     }
 

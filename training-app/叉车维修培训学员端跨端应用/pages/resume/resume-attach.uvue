@@ -240,7 +240,7 @@
 
     .file-status {
         font-size: 24rpx;
-        color: #16a34a;
+        color: $success-color;
         flex-shrink: 0;
     }
 
@@ -271,12 +271,12 @@
 
     .action-btn-danger {
         background-color: $card-bg;
-        border: 2rpx solid #fadcd9;
+        border: 2rpx solid $danger-tint;
     }
 
     .action-btn-text-danger {
         font-size: 30rpx;
-        color: #fa3534;
+        color: $danger-color;
     }
 
     /* ===== 上传区 ===== */

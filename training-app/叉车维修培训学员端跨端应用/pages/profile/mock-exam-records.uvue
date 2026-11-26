@@ -261,7 +261,7 @@ import { goBack } from '../../utils/navigation'
 
     .summary-passed {
         font-size: 24rpx;
-        color: #4caf50;
+        color: $success-color;
         margin-left: 16rpx;
     }
 
@@ -338,11 +338,11 @@ import { goBack } from '../../utils/navigation'
     }
 
     .status-failed {
-        background-color: #ffebee;
+        background-color: $danger-tint;
     }
 
     .status-progress {
-        background-color: #fff3e0;
+        background-color: $warning-tint;
     }
 
     .record-status-text {
@@ -351,15 +351,15 @@ import { goBack } from '../../utils/navigation'
     }
 
     .status-text-passed {
-        color: #4caf50;
+        color: $success-color;
     }
 
     .status-text-failed {
-        color: #f44336;
+        color: $danger-color;
     }
 
     .status-text-progress {
-        color: #ff9800;
+        color: $warning-color;
     }
 
     .record-info {
@@ -401,12 +401,12 @@ import { goBack } from '../../utils/navigation'
 
     .tag-passed {
         color: #ffffff;
-        background-color: #4caf50;
+        background-color: $success-color;
     }
 
     .tag-failed {
         color: #ffffff;
-        background-color: #f44336;
+        background-color: $danger-color;
     }
 
     .tag-paper {
