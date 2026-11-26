@@ -229,6 +229,8 @@ L 系列钉 `-Mode` / `-Leg` 两维的机检可判读性（L1a–L1c 成对腿�
 
 处置（**拼接读数**，如实标注）：列出已完成套件清单 → 未跑到的尾段打包单跑 → 两份拼合 = 完整覆盖读数，PR/报告写明「全量 N 绿 + 尾段 M 套件批补 M 绿，合并覆盖 N+M、0 失败」。死亡本身（loadUts 累积？内存？）**值得调查票但别在交付票里恋战**——先拼接收口，调查另开票。
 
+**2026-11-26 复测（#2876 retro）：本机三次写法都跑不完两腿全量**——隐藏窗口（`Start-Process -WindowStyle Hidden`）在 `utils/autoScreenshotFullRepoBehavior.test.js` 卡 26 分钟无心跳（该套件单跑 2.0 s 绿，15 tests）；重定向到文件在 i=65 `utils/kotlinAllProcessCaptureBehavior.test.js`、i=66 `utils/mpWeixinBuildOnlyBehavior.test.js` 报 `An error occurred trying to start process 'C:\WINDOWS\system32\cmd.exe' with working directory …: 参数错误`（收尾行 `TEST_BEHAVIOR_RESULT exit=1 … missing=suites|tests|time`）；最小化真控制台停在 i=1。⇒ **本机不追 ③ 全量**，读数交给 CI 的 `ci-summary`，判据 `.github/scripts/lib/gate-validator.mjs:339`「正文无 changed 读数行（A1 下 ③ 不入正文，常态即此）」；单套件直跑仍是有效入口（`npx jest --config jest.config.behavior.js -i --runTestsByPath utils/<x>Behavior.test.js`）。
+
 
 ## agent 判读纪律（慢≠卡死 / 机检行 / 重跑半径）（#1656，2026-10-14 立）
 

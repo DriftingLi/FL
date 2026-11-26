@@ -35,7 +35,11 @@ const MOBILE_FILE = path.join(__dirname, 'diagnosisCompose.uts');
  * （web 用 `brand?.picker` 的可选链、移动端 UTS 必须显式 `if (brand == null) return`），
  * 比字面量会因写法差异恒红。判档口径另由下面第 ③ 条按**语义**断言。
  *
- * **不含 `faultStepTitle`**：Web 侧已删除零消费导出，移动端本地实现不参与跨栈同源比对。
+ * **已剔除 `faultStepTitle`**（#2882）：web 侧那一支是零消费导出，已随 #2880 的
+ * 「清理零消费导出」删除（`frontend/src/utils/diagnosisCompose.ts` 现只剩 `composeDiagnosisSentence`
+ * 与 `pickerKindOf`）。再要求「两侧同名」= 要求 web 复活死代码（与 #2880 口径冲突）。
+ * 第三层标题仍是对学员可见的文案，措辞改由第 ⑥ 条按**移动端单侧文本**钉死，
+ * 执行结果那一半在行为腿 `utils/diagnosisGuideBehavior.test.js:56-57`。
  */
 const SHARED_FUNCTIONS = ['composeDiagnosisSentence'];
 
@@ -147,7 +151,7 @@ describe('诊断组句模板跨栈同源（#2296）', () => {
     expect(tpl.length).toBeGreaterThanOrEqual(3);
   });
 
-  it('② 两侧同名函数的模板骨架逐位相等（改一个字 / 换分支位置 / 调顺序都会红）', () => {
+  it('② 同名函数的模板骨架逐位相等（改一个字 / 换分支位置 / 调顺序都会红）', () => {
     const web = skeletonsByName(WEB_SRC);
     const mobile = skeletonsByName(MOBILE_SRC);
     for (const name of SHARED_FUNCTIONS) {
@@ -188,5 +192,15 @@ describe('诊断组句模板跨栈同源（#2296）', () => {
     const web = skeletonsByName(WEB_SRC);
     const mobile = skeletonsByName(moved);
     expect(mobile.composeDiagnosisSentence).not.toEqual(web.composeDiagnosisSentence);
+  });
+
+  it('⑥ 第三层标题措辞只剩移动端单侧契约（web 侧已随 #2880 删除，见文件头 #2882）', () => {
+    // 学员看到的是这两个字面量本身，改一个字的后果与组句改字同性质（问错地方 = 检索不中），
+    // 故即便不再是「跨栈同名」，也按文本钉死；行为腿 56-57 行的两条断言钉的是同一对字面量。
+    const body = fnBody(MOBILE_SRC, 'function faultStepTitle');
+    expect(body).toContain("'选要查的维修部位 / 主题'");
+    expect(body).toContain("'选故障现象'");
+    // 若哪天 web 侧把它加回来（又有人消费），这里先红一次，提醒把名字放回 SHARED_FUNCTIONS 做逐位比对。
+    expect(WEB_SRC).not.toContain('faultStepTitle');
   });
 });
