@@ -225,7 +225,7 @@
                   加载更多回复（剩余 {{ Math.max(selectedReplyPages.total - selectedReplyPages.replies.length, 0) }} 条）
                 </UiButton>
               </div>
-              <UiEmptyState v-else-if="isEmptyReplies(selectedTopic.id)" description="暂无回复" size="sm" />
+              <UiEmptyState v-else-if="isEmptyReplies" description="暂无回复" size="sm" />
             </template>
             <div v-else class="reply-loading">加载中…</div>
           </div>
@@ -257,6 +257,7 @@ import ForumContent from '@/components/student/ForumContent.vue'
 import { formatLocaleDateTime } from '@/utils/format'
 import { useAdminTable } from '@/composables/useAdminTable'
 import { useForumReplyPages } from './useForumReplyPages'
+import { isEmptyList } from '@/utils/listState'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
@@ -308,9 +309,13 @@ const selectedTopic = ref<AdminForumTopic | null>(null)
 const topicDrawerOpen = ref(false)
 let topicTrigger: HTMLElement | null = null
 const {
-  replyPages, loadReplies, loadMoreReplies, refreshReplies, invalidateReplies, isEmptyReplies
+  replyPages, loadReplies, loadMoreReplies, refreshReplies, invalidateReplies
 } = useForumReplyPages()
 const selectedReplyPages = computed(() => selectedTopic.value && replyPages[selectedTopic.value.id])
+const isEmptyReplies = computed(() => isEmptyList(selectedReplyPages.value?.replies ?? null, {
+  error: selectedReplyPages.value?.error ?? false,
+  kind: null
+}))
 
 // ===== 举报管理（ADR-0018）=====
 // 档位一：分页列表 → useAdminTable（同页第二个实例）；reportStatus 是页面自管筛选轴。

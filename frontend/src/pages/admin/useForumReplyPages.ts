@@ -1,6 +1,5 @@
 import { reactive } from 'vue'
 import { adminForumApi, type AdminForumReply } from '@/api/forum'
-import { isEmptyList } from '@/utils/listState'
 
 const PAGE_SIZE = 20
 
@@ -72,10 +71,5 @@ export function useForumReplyPages() {
     return loadReplies(topicId)
   }
 
-  function isEmptyReplies(topicId: number) {
-    const state = replyPages[topicId]
-    return isEmptyList(state?.replies ?? null, { error: state?.error ?? false, kind: null })
-  }
-
-  return { replyPages, loadReplies, loadMoreReplies, refreshReplies, invalidateReplies, isEmptyReplies }
+  return { replyPages, loadReplies, loadMoreReplies, refreshReplies, invalidateReplies }
 }
