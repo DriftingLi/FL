@@ -23,10 +23,10 @@ import type { AuthzCapability } from './authz'
 import { AI_FEATURE_SLUG_PATTERN } from './aiFeatures'
 
 /** 布局键：一个页面最多属于一个布局外壳。 */
-export type LayoutKey = 'training' | 'tutor' | 'manage' | 'recruit' | 'valuation'
+export type LayoutKey = 'training' | 'tutor' | 'manage' | 'recruit'
 
 /** 工作区（meta.workspace）：守卫据此判定子域名/回跳目标；与布局不必一一对应。 */
-export type Workspace = 'auth' | 'training' | 'tutor' | 'manage' | 'recruit' | 'valuation'
+export type Workspace = 'auth' | 'training' | 'tutor' | 'manage' | 'recruit'
 
 /** 导航项描述（分组由 navGroups 提供标签与图标；parent 表达二级分组）。 */
 export interface PageNav {
@@ -39,8 +39,6 @@ export interface PageNav {
   routeParams?: Record<string, string | number>
   /** 外链（跨子域）导航项：无路由，只有地址 */
   externalUrl?: string
-  /** exact=true 时仅精确匹配 route.name 才高亮（兼容既有语义） */
-  exact?: boolean
   /** 二级分组：父导航项的路由名（如真题练习挂题库练习之下） */
   parent?: RouteName
   /** 同级排序（缺省按描述符声明序） */
@@ -62,8 +60,6 @@ export interface PageDescriptor {
    * 公开页面因此是一份可逐名核对的显式清单，由 __tests__/pages.spec.ts 锁定。
    */
   requiresAuth: boolean
-  /** 认证页标记（认证页外壳用） */
-  authPage?: boolean
   /** 兼容存量 meta.roles（估值历史页） */
   roles?: readonly string[]
   /** 可见性判据：角色需要拥有的能力 */
@@ -147,12 +143,12 @@ export const navGroups: Record<string, NavGroup[]> = {
 // pages 派生」这一种写法里，拆成两步即消失。
 const pagesData = [
   // ---------- 认证页（顶层，无布局）----------
-  { name: 'Login', path: '/login', component: () => import('@/pages/auth/Login.vue'), workspace: 'auth', requiresAuth: false, authPage: true },
-  { name: 'Register', path: '/register', component: () => import('@/pages/auth/Register.vue'), workspace: 'auth', requiresAuth: false, authPage: true },
-  { name: 'ForgotPassword', path: '/forgot-password', component: () => import('@/pages/auth/ForgotPassword.vue'), workspace: 'auth', requiresAuth: false, authPage: true },
+  { name: 'Login', path: '/login', component: () => import('@/pages/auth/Login.vue'), workspace: 'auth', requiresAuth: false },
+  { name: 'Register', path: '/register', component: () => import('@/pages/auth/Register.vue'), workspace: 'auth', requiresAuth: false },
+  { name: 'ForgotPassword', path: '/forgot-password', component: () => import('@/pages/auth/ForgotPassword.vue'), workspace: 'auth', requiresAuth: false },
 
   // ---------- 学员工作区（TrainingLayout）----------
-  { name: 'StudentDashboard', path: '/training', component: () => import('@/pages/student/Dashboard.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'student.access', nav: { group: 'learning', label: '仪表盘', icon: 'house-filled', exact: true, order: 1 } },
+  { name: 'StudentDashboard', path: '/training', component: () => import('@/pages/student/Dashboard.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'student.access', nav: { group: 'learning', label: '仪表盘', icon: 'house-filled', order: 1 } },
   { name: 'CourseList', path: '/training/courses', component: () => import('@/pages/student/PublicCourseCatalog.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'course.learn', nav: { group: 'learning', label: '课程中心', icon: 'notebook', activeRouteNames: ['ChapterView', 'PublicCourseDetail'], order: 2 } },
   { name: 'PublicCourseDetail', path: '/training/course/:courseId', component: () => import('@/pages/student/PublicCourseDetail.vue'), workspace: 'training', requiresAuth: false },
   { name: 'StudentSearch', path: '/training/search', component: () => import('@/pages/student/SearchPage.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'search.use', nav: { group: 'learning', label: '全局搜索', icon: 'search', order: 4 } },
@@ -188,7 +184,7 @@ const pagesData = [
   { name: 'MyApplications', path: '/training/applications', component: () => import('@/pages/student/MyApplications.vue'), layout: 'training', workspace: 'training', requiresAuth: true, capability: 'job.apply', nav: { group: 'personal', label: '我的投递', icon: 'file-text', order: 8 } },
 
   // ---------- 导师工作区（TutorLayout）----------
-  { name: 'TutorDashboard', path: '/training/tutor', component: () => import('@/pages/tutor/Dashboard.vue'), layout: 'tutor', workspace: 'tutor', requiresAuth: true, capability: 'tutor.access', nav: { group: 'tutor', label: '仪表盘', icon: 'house-filled', exact: true, order: 1 } },
+  { name: 'TutorDashboard', path: '/training/tutor', component: () => import('@/pages/tutor/Dashboard.vue'), layout: 'tutor', workspace: 'tutor', requiresAuth: true, capability: 'tutor.access', nav: { group: 'tutor', label: '仪表盘', icon: 'house-filled', order: 1 } },
   { name: 'TutorCourses', path: '/training/tutor/courses', component: () => import('@/pages/tutor/TutorCourses.vue'), layout: 'tutor', workspace: 'tutor', requiresAuth: true, capability: 'tutor.access', nav: { group: 'tutor', label: '我的课程', icon: 'notebook', activeRouteNames: ['TutorChapterManage', 'TutorChapterEdit'], order: 2 } },
   { name: 'TutorChapterManage', path: '/training/tutor/course/:id/chapters', component: () => import('@/pages/tutor/ChapterManage.vue'), layout: 'tutor', workspace: 'tutor', requiresAuth: true, capability: 'tutor.access' },
   { name: 'TutorChapterEdit', path: '/training/tutor/course/:courseId/chapter/:chapterId', component: () => import('@/pages/tutor/TutorChapterEdit.vue'), layout: 'tutor', workspace: 'tutor', requiresAuth: true, capability: 'course.author' },
@@ -248,7 +244,7 @@ const pagesData = [
   { name: 'AdminNoAccess', path: '/admin/no-access', component: () => import('@/pages/admin/NoAccess.vue'), layout: 'manage', workspace: 'manage', requiresAuth: true, title: '无管理权限' },
 
   // ---------- 招聘端（RecruitLayout）----------
-  { name: 'RecruitDashboard', path: '/recruit', component: () => import('@/pages/recruit/Dashboard.vue'), layout: 'recruit', workspace: 'recruit', requiresAuth: true, capability: 'recruit.access', nav: { group: 'recruit', label: '首页', icon: 'house-filled', exact: true, order: 1 } },
+  { name: 'RecruitDashboard', path: '/recruit', component: () => import('@/pages/recruit/Dashboard.vue'), layout: 'recruit', workspace: 'recruit', requiresAuth: true, capability: 'recruit.access', nav: { group: 'recruit', label: '首页', icon: 'house-filled', order: 1 } },
   { name: 'RecruitResumes', path: '/recruit/resumes', component: () => import('@/pages/recruit/Resumes.vue'), layout: 'recruit', workspace: 'recruit', requiresAuth: true, capability: 'application.review', nav: { group: 'recruit', label: '简历库', icon: 'file-text', activeRouteNames: ['RecruitResumeDetail'], order: 2 } },
   { name: 'RecruitResumeDetail', path: '/recruit/resumes/:id', component: () => import('@/pages/recruit/ResumeDetail.vue'), layout: 'recruit', workspace: 'recruit', requiresAuth: true, capability: 'application.review' },
   { name: 'RecruitRequests', path: '/recruit/requests', component: () => import('@/pages/recruit/MyRequests.vue'), layout: 'recruit', workspace: 'recruit', requiresAuth: true, capability: 'contact.request', nav: { group: 'recruit', label: '我的申请', icon: 'file-text', order: 3 } },
@@ -284,40 +280,9 @@ export function href(name: RouteName, params?: RouteParamsRaw): RouteLocationNam
   return params ? { name, params } : { name }
 }
 
-/** 导航项（含外链）派生结果：一个工作区下按分组组织的扁平清单。 */
-export interface DerivedNavItem {
-  key: string
-  label: string
-  icon?: IconName | Component
-  routeName?: RouteName
-  activeRouteNames?: readonly RouteName[]
-  routeParams?: Record<string, string | number>
-  externalUrl?: string
-  exact?: boolean
-  parent?: RouteName
-  children?: DerivedNavItem[]
-}
-
 /** 该工作区声明了导航的页面描述符（保持声明序）。 */
 export function navPages(workspace: Workspace): PageDescriptor[] {
   return pages.filter(p => p.workspace === workspace && !!p.nav)
-}
-
-/** 描述的叶子导航项（含外链）。 */
-export function toNavItem(page: PageDescriptor): DerivedNavItem {
-  const n = page.nav!
-  const isExternal = !!n.externalUrl
-  return {
-    key: page.name,
-    label: n.label,
-    icon: n.icon,
-    routeName: isExternal ? undefined : page.name,
-    activeRouteNames: n.activeRouteNames,
-    routeParams: n.routeParams,
-    externalUrl: n.externalUrl,
-    exact: n.exact,
-    parent: n.parent
-  }
 }
 
 /** 跨子域外链导航项：没有路由，只有地址（同样只在这里声明一次）。 */

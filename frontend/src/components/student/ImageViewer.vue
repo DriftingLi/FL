@@ -57,6 +57,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { resolveFileUrl } from '@/utils/fileUrl'
+import { downloadUrl, probeFileUrl } from '@/utils/fileBrowser'
+import { useFullscreen } from '@/composables/useFullscreen'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiTooltip from '@/components/ui/UiTooltip.vue'
@@ -114,15 +116,13 @@ function onImageError() {
 }
 
 async function checkFileExists() {
-  try {
-    const response = await fetch(resolvedSrc.value, { method: 'HEAD' })
-    if (response.status === 404) {
-      imgErrorMessage.value = '图片文件不存在或已过期，请重新上传'
-    } else if (!response.ok) {
-      imgErrorMessage.value = `图片加载失败 (${response.status})`
-    }
-  } catch (e) {
+  const result = await probeFileUrl(resolvedSrc.value)
+  if (result.networkError) {
     imgErrorMessage.value = '无法连接到文件服务器'
+  } else if (result.status === 404) {
+    imgErrorMessage.value = '图片文件不存在或已过期，请重新上传'
+  } else if (!result.ok) {
+    imgErrorMessage.value = `图片加载失败 (${result.status})`
   }
 }
 
@@ -223,20 +223,10 @@ function onTouchEnd() {
   isDragging.value = false
 }
 
-function toggleFullscreen() {
-  if (!containerRef.value) return
-  if (document.fullscreenElement) {
-    document.exitFullscreen()
-  } else {
-    containerRef.value.requestFullscreen()
-  }
-}
+const { toggleFullscreen } = useFullscreen(containerRef)
 
 function downloadFile() {
-  const link = document.createElement('a')
-  link.href = resolvedSrc.value
-  link.download = props.fileName || ''
-  link.click()
+  downloadUrl(resolvedSrc.value, { fileName: props.fileName || '' })
 }
 
 function onFullscreenChange() {

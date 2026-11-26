@@ -47,18 +47,12 @@ const props = withDefaults(defineProps<{
   contentLabel?: string
   /** 正文行数 */
   contentRows?: number
-  /**
-   * @deprecated 改为 label 上置后已无栅格可对齐，保留仅为兼容存量调用方
-   * （ForumAskPage.vue 传 56px、ForumPage.vue 走默认 70px），不参与渲染。
-   */
-  labelWidth?: string
   titlePlaceholder?: string
   contentPlaceholder?: string
   successMessage?: string
 }>(), {
   contentLabel: '内容',
   contentRows: 8,
-  labelWidth: '70px',
   titlePlaceholder: '请输入标题（1-100 字）',
   contentPlaceholder: '请输入内容（1-10000 字）',
   successMessage: '发布成功'

@@ -43,10 +43,14 @@ func NewConfigHandler(dictRepo DictionaryConfigStore, l *zap.Logger) *ConfigHand
 // @Failure 500 {object} response.R "服务器内部错误"
 // @Router /valuation/dictionaries/brands [get]
 func (h *ConfigHandler) ListBrands(c *gin.Context) {
-	list, err := h.dictRepo.ListBrands(c.Request.Context())
+	listAndRespond(h, c, h.dictRepo.ListBrands, "查询品牌失败")
+}
+
+func listAndRespond[T any](h *ConfigHandler, c *gin.Context, loader func(context.Context) (T, error), errMsg string) {
+	list, err := loader(c.Request.Context())
 	if err != nil {
-		h.logger.Error("查询品牌失败", zap.Error(err))
-		response.ServerError(c, "查询品牌失败")
+		h.logger.Error(errMsg, zap.Error(err))
+		response.ServerError(c, errMsg)
 		return
 	}
 	response.Success(c, list)
@@ -55,21 +59,11 @@ func (h *ConfigHandler) ListBrands(c *gin.Context) {
 // listCascadeOrFull 级联查询统一分派：级联参数全传时走级联查询，否则走全量列表。
 // paramsOK 由调用方按该字典的级联依赖判定；errMsg 为失败时的统一错误文案。
 func listCascadeOrFull[T any](h *ConfigHandler, c *gin.Context, paramsOK bool, cascade, full func(ctx context.Context) (T, error), errMsg string) {
-	var (
-		list T
-		err  error
-	)
+	loader := full
 	if paramsOK {
-		list, err = cascade(c.Request.Context())
-	} else {
-		list, err = full(c.Request.Context())
+		loader = cascade
 	}
-	if err != nil {
-		h.logger.Error(errMsg, zap.Error(err))
-		response.ServerError(c, errMsg)
-		return
-	}
-	response.Success(c, list)
+	listAndRespond(h, c, loader, errMsg)
 }
 
 // ListVehicleTypes 处理 GET /api/valuation/dictionaries/vehicle-types?brand=林德
@@ -277,13 +271,7 @@ func (h *ConfigHandler) ListBatteryTypes(c *gin.Context) {
 // @Failure 500 {object} response.R "服务器内部错误"
 // @Router /valuation/dictionaries/transmission-types [get]
 func (h *ConfigHandler) ListTransmissionTypes(c *gin.Context) {
-	list, err := h.dictRepo.ListTransmissionTypes(c.Request.Context())
-	if err != nil {
-		h.logger.Error("查询传动系统失败", zap.Error(err))
-		response.ServerError(c, "查询传动系统失败")
-		return
-	}
-	response.Success(c, list)
+	listAndRespond(h, c, h.dictRepo.ListTransmissionTypes, "查询传动系统失败")
 }
 
 // ListEngineTypes 处理 GET /api/valuation/dictionaries/engine-types
@@ -296,13 +284,7 @@ func (h *ConfigHandler) ListTransmissionTypes(c *gin.Context) {
 // @Failure 500 {object} response.R "服务器内部错误"
 // @Router /valuation/dictionaries/engine-types [get]
 func (h *ConfigHandler) ListEngineTypes(c *gin.Context) {
-	list, err := h.dictRepo.ListEngineTypes(c.Request.Context())
-	if err != nil {
-		h.logger.Error("查询发动机类型失败", zap.Error(err))
-		response.ServerError(c, "查询发动机类型失败")
-		return
-	}
-	response.Success(c, list)
+	listAndRespond(h, c, h.dictRepo.ListEngineTypes, "查询发动机类型失败")
 }
 
 // ListSeriesConfigOptions 处理 GET /api/valuation/dictionaries/series-config-options?brand=&series=
@@ -344,13 +326,7 @@ func (h *ConfigHandler) ListSeriesConfigOptions(c *gin.Context) {
 // @Failure 500 {object} response.R "服务器内部错误"
 // @Router /valuation/dictionaries/condition-ratings [get]
 func (h *ConfigHandler) ListConditionRatings(c *gin.Context) {
-	list, err := h.dictRepo.ListConditionRatings(c.Request.Context())
-	if err != nil {
-		h.logger.Error("查询车况评级失败", zap.Error(err))
-		response.ServerError(c, "查询车况评级失败")
-		return
-	}
-	response.Success(c, list)
+	listAndRespond(h, c, h.dictRepo.ListConditionRatings, "查询车况评级失败")
 }
 
 // ListRegionCoefficients 处理 GET /api/valuation/dictionaries/region-coefficients?province=江苏
@@ -366,13 +342,9 @@ func (h *ConfigHandler) ListConditionRatings(c *gin.Context) {
 // @Router /valuation/dictionaries/region-coefficients [get]
 func (h *ConfigHandler) ListRegionCoefficients(c *gin.Context) {
 	province := c.Query("province")
-	list, err := h.dictRepo.ListRegionCoefficients(c.Request.Context(), province)
-	if err != nil {
-		h.logger.Error("查询区域系数失败", zap.Error(err))
-		response.ServerError(c, "查询区域系数失败")
-		return
-	}
-	response.Success(c, list)
+	listAndRespond(h, c, func(ctx context.Context) ([]RegionCoefficient, error) {
+		return h.dictRepo.ListRegionCoefficients(ctx, province)
+	}, "查询区域系数失败")
 }
 
 // ListProvinces 处理 GET /api/valuation/dictionaries/provinces
@@ -386,13 +358,7 @@ func (h *ConfigHandler) ListRegionCoefficients(c *gin.Context) {
 // @Failure 500 {object} response.R "服务器内部错误"
 // @Router /valuation/dictionaries/provinces [get]
 func (h *ConfigHandler) ListProvinces(c *gin.Context) {
-	list, err := h.dictRepo.ListProvinces(c.Request.Context())
-	if err != nil {
-		h.logger.Error("查询省份失败", zap.Error(err))
-		response.ServerError(c, "查询省份失败")
-		return
-	}
-	response.Success(c, list)
+	listAndRespond(h, c, h.dictRepo.ListProvinces, "查询省份失败")
 }
 
 // ListCities 处理 GET /api/valuation/dictionaries/cities?province=江苏
@@ -433,13 +399,7 @@ func (h *ConfigHandler) ListCities(c *gin.Context) {
 // @Failure 500 {object} response.R "服务器内部错误"
 // @Router /valuation/dictionaries/coefficient-configs [get]
 func (h *ConfigHandler) ListCoefficientConfigs(c *gin.Context) {
-	list, err := h.dictRepo.ListCoefficientConfigs(c.Request.Context())
-	if err != nil {
-		h.logger.Error("查询系数配置失败", zap.Error(err))
-		response.ServerError(c, "查询系数配置失败")
-		return
-	}
-	response.Success(c, list)
+	listAndRespond(h, c, h.dictRepo.ListCoefficientConfigs, "查询系数配置失败")
 }
 
 // ListOriginalPrices 处理 GET /api/valuation/dictionaries/original-prices?page=1&page_size=20
@@ -528,11 +488,5 @@ func (h *ConfigHandler) GetEarliestFactoryYear(c *gin.Context) {
 // @Failure 500 {object} response.R "服务器内部错误"
 // @Router /valuation/dictionaries/algorithm-parameters [get]
 func (h *ConfigHandler) ListAlgorithmParameters(c *gin.Context) {
-	result, err := h.dictRepo.ListAlgorithmParameters(c.Request.Context())
-	if err != nil {
-		h.logger.Error("查询算法参数失败", zap.Error(err))
-		response.ServerError(c, "查询算法参数失败")
-		return
-	}
-	response.Success(c, result)
+	listAndRespond(h, c, h.dictRepo.ListAlgorithmParameters, "查询算法参数失败")
 }

@@ -4,6 +4,7 @@
 // `cd backend && go run ./cmd/gen-apitypes`（ADR-0048 决策 1/3，issue #964 片六）。
 // 本文件只留请求壳、端点装配与名称适配，入参（query / body）类型不生成、仍手写（决策 3）。
 import { unwrappedRequest } from './request'
+import type { TrainingCategoryFilter } from './training'
 import type { AxiosProgressEvent } from 'axios'
 import type {
   BatchDeleteFilesResult,
@@ -39,7 +40,7 @@ export interface TutorCoursesQuery {
   page?: number
   page_size?: number
   keyword?: string
-  category_id?: number | 'all' | 'legacy'
+  category_id?: TrainingCategoryFilter
 }
 
 /** 更新章节入参（不生成，ADR-0048 决策 3） */

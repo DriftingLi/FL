@@ -1,15 +1,7 @@
-// 能力中文词表（#1630）：角色权限页此前把能力键与资源域原样印给超管看（一屏英文）。
-//
-// 穷尽性由类型系统保证（`Record<AuthzCapability, string>` + `Record<CapabilityDomain, string>`，
-// 而后者的域集合又是从键的模板字面量推断出来的）—— 本用例锁的是**形状**：
-// 词表是不是中文、域表与键表出现的域是否一一对应、未登记键的降级是否可见。
+// 能力中文词表（#1630）：角色权限页此前把能力键原样印给超管看（一屏英文）。
+// 穷尽性由 `Record<AuthzCapability, string>` 保证；本用例锁中文标签、真实消费面与未知键降级。
 import { describe, expect, it } from 'vitest'
-import {
-  CAPABILITY_DOMAIN_LABELS,
-  CAPABILITY_LABELS,
-  describeCapability,
-  describeCapabilityDomain
-} from '@/utils/capabilityWords'
+import { CAPABILITY_LABELS, describeCapability } from '@/utils/capabilityWords'
 import { pages } from '@/config/pages'
 import type { AuthzCapability } from '@/config/authz'
 
@@ -24,14 +16,6 @@ describe('能力中文词表', () => {
       const label = describeCapability(key)
       expect(label, key).toMatch(CJK)
       expect(label, key).not.toBe(key)
-    }
-  })
-
-  it('域表覆盖键表里出现过的每一个域（域由键派生，不另立清单）', () => {
-    const domains = [...new Set(keys.map(key => key.split('.')[0]))].sort()
-    expect(Object.keys(CAPABILITY_DOMAIN_LABELS).sort()).toEqual(domains)
-    for (const domain of domains) {
-      expect(describeCapabilityDomain(domain), domain).toMatch(CJK)
     }
   })
 
@@ -50,8 +34,7 @@ describe('能力中文词表', () => {
     expect(describeCapability('admin.access')).toBe('管理端入口与工作台')
   })
 
-  it('未登记的键/域回落为原值（后端加了能力而前端产物未再生成时降级可见，不静默留空）', () => {
+  it('未登记的键回落为原值（后端加了能力而前端产物未再生成时降级可见，不静默留空）', () => {
     expect(describeCapability('future.thing')).toBe('future.thing')
-    expect(describeCapabilityDomain('future')).toBe('future')
   })
 })

@@ -10,7 +10,7 @@ import { ElMessage } from 'element-plus'
 import { contributionApi, type ContributionFile, type ContributionItem, type ContributionStatus } from '@/api/contribution'
 import { trainingApi, type TrainingCategoryDTO } from '@/api/training'
 import { resolveFileUrl } from '@/utils/fileUrl'
-import { formatLocaleDateTime } from '@/utils/format'
+import { formatFileSize as formatSize, formatLocaleDateTime } from '@/utils/format'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiSegmentTabs from '@/components/ui/UiSegmentTabs.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
@@ -102,14 +102,6 @@ const MAX_TOTAL_SIZE = 50 * 1024 * 1024
 function extAllowed(name: string): boolean {
   const ext = name.split('.').pop()?.toLowerCase() || ''
   return ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'zip', 'mp4'].includes(ext)
-}
-
-function formatSize(bytes?: number): string {
-  if (!bytes || bytes <= 0) return '-'
-  if (bytes < 1024) return `${bytes}B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)}MB`
-  return `${(bytes / 1024 / 1024 / 1024).toFixed(1)}GB`
 }
 
 /** 选择文件（逐个先传） */

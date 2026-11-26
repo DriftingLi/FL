@@ -42,6 +42,8 @@ export type {
   TrainingCategoryDTO
 }
 
+export type TrainingCategoryFilter = number | 'all' | 'legacy'
+
 // ===== 培训目录体系：专业方向(specialty) → 等级(level) → 课程 → 章节 =====
 // 契约与后端 LH-27 真实路由/字段对齐：
 //   学员端公开  /catalog/tree、/levels、/tags

@@ -11,7 +11,6 @@
         ref="postForm"
         category="question"
         :categories="['discussion', 'question']"
-        label-width="56px"
         content-label="正文"
         :content-rows="10"
         title-placeholder="一句话概括你的问题（1-100 字）"

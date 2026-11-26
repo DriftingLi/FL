@@ -33,9 +33,6 @@ export interface NavItem {
   children?: NavItem[]
   /** 外链地址（用于内容精选等跨子域跳转） */
   externalUrl?: string
-  // exact=true 时仅精确匹配 route.name 才高亮。
-  // name 匹配天然精确，因此该标记保留以兼容既有语义，但不再参与前缀判断。
-  exact?: boolean
   /**
    * 该项的可见性判据（来自页面描述符的 capability，ADR-0047 §2）。
    *
@@ -92,7 +89,6 @@ function toNavItem(page: PageDescriptor): NavItem {
     activeRouteNames: nav.activeRouteNames,
     routeParams: nav.routeParams,
     icon: nav.icon,
-    exact: nav.exact,
     capability: page.capability
   }
 }

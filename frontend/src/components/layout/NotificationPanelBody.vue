@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { notificationApi, type NotificationItem } from '@/api/notification'
 import { useNotificationAction } from '@/composables/useNotificationAction'
 import { useAuthStore } from '@/stores/auth'
-import { formatTime } from '@/utils/format'
+import { formatDateTime } from '@/utils/format'
 import UiButton from '@/components/ui/UiButton.vue'
 
 /**
@@ -123,7 +123,7 @@ defineExpose({ refresh })
         <div class="notification-main">
           <div class="notification-item-title">{{ item.title }}</div>
           <div class="notification-item-content">{{ item.content }}</div>
-          <div class="notification-item-time">{{ formatTime(item.created_at) }}</div>
+          <div class="notification-item-time">{{ formatDateTime(item.created_at) }}</div>
         </div>
       </div>
     </div>

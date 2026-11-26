@@ -33,7 +33,7 @@
         <FacetItem
           warn
           :active="categoryId === LEGACY_CATEGORY"
-          name="未分类/分类失效"
+          :name="LEGACY_CATEGORY_LABEL"
           :count="legacyCategoryCount"
           @select="selectCategory(LEGACY_CATEGORY)"
         />
@@ -175,6 +175,7 @@ import CourseCatalogCourseDrawer from '@/components/admin/CourseCatalogCourseDra
 import CourseCatalogDialogs from '@/components/admin/CourseCatalogDialogs.vue'
 import PublicEligibility from '@/components/catalog/PublicEligibility.vue'
 import { hasLegacyCategoryReason } from '@/utils/publicEligibility'
+import { LEGACY_CATEGORY_LABEL } from '@/utils/trainingCategoryFilter'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'

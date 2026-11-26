@@ -53,7 +53,7 @@ func (r *DictionaryRepository) ListOriginalPrices(ctx context.Context, limit, of
 
 // GetOriginalPriceByID 按主键查询原价
 func (r *DictionaryRepository) GetOriginalPriceByID(ctx context.Context, id int64) (OriginalPrice, error) {
-	return queryOne(r, ctx, "查询原价记录",
+	return getRow(r, ctx, "查询原价记录",
 		`SELECT `+originalPriceCols+` FROM original_prices WHERE id = $1`,
 		scanOriginalPrice, id)
 }

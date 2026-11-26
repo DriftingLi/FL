@@ -572,7 +572,6 @@ function openUploadDialog(type: string) {
 
 function handleUploadDialogClose() {
   fileUploadRef.value?.resetState()
-  loadChapterDetail()
 }
 
 interface UploadAllResult {
@@ -677,8 +676,6 @@ const { loading, loadError, retrying, isEmpty, retry: handleRetry, run: loadChap
     const chapterId = Number(route.params.chapterId)
     const res = await tutorApi.getChapterDetail(chapterId)
     // 默认 tab：图文优先，否则第一个媒体 tab
-    // 顺便加载课程信息拿课程名 + 章节列表（用于上下章标题）
-    await loadCourseInfo()
     return res
   },
   {
@@ -702,6 +699,8 @@ async function loadCourseInfo() {
     console.error('Failed to load course info:', e)
   }
 }
+
+watch(() => route.params.courseId, () => { void loadCourseInfo() }, { immediate: true })
 
 const getPrevChapterTitle = computed(() => {
   const detail = chapterDetail.value

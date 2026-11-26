@@ -47,8 +47,14 @@ export function formatShortDateTime(iso: string): string {
   return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-/** 完整日期时间（formatDateTime 的历史名称，语义一致） */
-export const formatTime = formatDateTime
+/** 文件字节数 → 紧凑大小；空值/非正数显示 - */
+export function formatFileSize(bytes?: number): string {
+  if (!bytes || bytes <= 0) return '-'
+  if (bytes < 1024) return `${bytes}B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)}MB`
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(1)}GB`
+}
 
 /**
  * 业务时区（Asia/Shanghai）自然日字符串 yyyy-MM-dd（打卡/连续签到等跨日边界口径）。
@@ -84,15 +90,4 @@ export function formatDurationCn(minutes: number): string {
     return mins > 0 ? `${hours}小时${mins}分钟` : `${hours}小时`
   }
   return `${mins}分钟`
-}
-
-/**
- * 学习进度 → 颜色（统计页进度条/图表）。
- * 注意：两档为既有裸 hex（EP 出厂警告色/危险色），迁移期保持值不变以免视觉回归（#796）。
- */
-export function getProgressColor(progress: number): string {
-  if (progress >= 100) return 'var(--color-success)'
-  if (progress >= 60) return 'var(--color-primary-500)'
-  if (progress >= 30) return '#e6a23c'
-  return '#f56c6c'
 }

@@ -243,8 +243,8 @@ describe('subdomainRoleStep', () => {
     path: '/login',
     fullPath: '/login',
     name: 'Login',
-    meta: { workspace: 'auth', requiresAuth: false, authPage: true },
-    matched: [{ workspace: 'auth', requiresAuth: false, authPage: true }]
+    meta: { workspace: 'auth', requiresAuth: false },
+    matched: [{ workspace: 'auth', requiresAuth: false }]
   }
 
   it('学员登录态访问 mentor. 受限页 → 清登录态回 /login 并携带回跳（而非角色回落弹去 training 子域）', () => {
@@ -325,8 +325,8 @@ describe('workspaceFallback 的子域身份不变式（回落出口不得跨子�
     path: '/login',
     fullPath: '/login',
     name: 'Login',
-    meta: { workspace: 'auth', requiresAuth: false, authPage: true },
-    matched: [{ workspace: 'auth', requiresAuth: false, authPage: true }]
+    meta: { workspace: 'auth', requiresAuth: false },
+    matched: [{ workspace: 'auth', requiresAuth: false }]
   }
 
   it.each([

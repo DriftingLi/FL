@@ -164,7 +164,8 @@ import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { href } from '@/config/pages'
 import { tutorApi, type CourseDTO } from '@/api/tutor'
-import { trainingApi, type TrainingCategoryDTO } from '@/api/training'
+import { trainingApi, type TrainingCategoryDTO, type TrainingCategoryFilter } from '@/api/training'
+import { trainingCategoryName, trainingCategoryOptions } from '@/utils/trainingCategoryFilter'
 import { credentialApi, type CredentialDict } from '@/api/credential'
 import { levelTagType, type LevelTagType } from '@/constants/level'
 import { useCourseCatalog, treeCatalogAdapter } from '@/composables/useCourseCatalog'
@@ -190,7 +191,7 @@ const router = useRouter()
 const credentials = ref<CredentialDict[]>([])
 const credentialId = ref<number | string | undefined>(undefined)
 const categories = ref<TrainingCategoryDTO[]>([])
-const categoryId = ref<number | 'all' | 'legacy'>('all')
+const categoryId = ref<TrainingCategoryFilter>('all')
 const courses = ref<TutorCourseRow[]>([])
 
 // 三态 + 分页三件套收编 useAsyncPage（#401）：错误详情由拦截器统一 toast，retry 防重入由 composable 提供
@@ -224,13 +225,9 @@ const credentialOptions = computed(() =>
   credentials.value.map((c) => ({ label: c.name, value: c.id as number | string }))
 )
 
-const categoryOptions = computed(() => [
-  { label: '全部培训分类', value: 'all' as const },
-  ...categories.value
-    .filter((category) => category.status !== 0)
-    .map((category) => ({ label: category.name, value: category.id })),
-  { label: '未分类/分类失效', value: 'legacy' as const }
-])
+const categoryOptions = computed(() =>
+  trainingCategoryOptions(categories.value, '全部培训分类')
+)
 
 const COURSE_TYPE_NAMES: Record<string, string> = {
   video: '视频课程',
@@ -238,8 +235,7 @@ const COURSE_TYPE_NAMES: Record<string, string> = {
 }
 
 function categoryNameOf(course: TutorCourseRow): string {
-  if (!course.category) return '未分类/分类失效'
-  return course.category.status === 0 ? `${course.category.name}（已停用）` : course.category.name
+  return trainingCategoryName(course.category)
 }
 
 function courseTypeNameOf(courseType: string): string {

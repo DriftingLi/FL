@@ -165,7 +165,8 @@ defineOptions({ name: 'QuestionReview' })
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { questionBankApi, type QuestionDTO } from '@/api/questionBank'
-import { trainingApi, type AdminTrainingCategoryDTO } from '@/api/training'
+import { trainingApi, type AdminTrainingCategoryDTO, type TrainingCategoryFilter } from '@/api/training'
+import { trainingCategoryOptions } from '@/utils/trainingCategoryFilter'
 import type { CategoryRef, Eligibility } from '@/api/generated/course'
 import type { Question } from '@/types/question'
 import { typeMap, questionTypeOptions, questionStatusOptions, questionStatusMap, questionStatusTone } from '@/constants/question'
@@ -195,17 +196,13 @@ const filters = ref<{
   type: string
   status: string
   keyword: string
-  category_id: number | 'all' | 'legacy'
+  category_id: TrainingCategoryFilter
 }>({ type: '', status: 'pending', keyword: '', category_id: 'all' })
 const categories = ref<AdminTrainingCategoryDTO[]>([])
 const categoryLoadError = ref(false)
-const categoryFilterOptions = computed(() => [
-  { label: '全部分类', value: 'all' as const },
-  ...categories.value
-    .filter(category => (category.status ?? 1) !== 0)
-    .map(category => ({ label: category.name, value: category.id })),
-  { label: '未分类/分类失效', value: 'legacy' as const }
-])
+const categoryFilterOptions = computed(() =>
+  trainingCategoryOptions(categories.value, '全部分类')
+)
 
 // 列表：admin 列表状态机 useAdminTable（#792，ADR-0039）——三态 + 分页 + 列表托管。
 // 解构改名保持模板零改动；filters 为页面自管筛选轴（由 fetch adapter 读取）。
