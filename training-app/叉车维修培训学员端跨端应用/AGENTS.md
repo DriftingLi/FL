@@ -19,7 +19,7 @@
 | 7 开 PR 与合并 | `pwsh scripts/preflight-pr.ps1`（**仓库根**跑）预检绿 → `pwsh scripts/submit-pr.ps1` 建 PR | 证据齐 → agent 直接合并 | 例外通道只认「已接受未验证风险」一句，**且由人合并** |
 | 8 收尾 | `pwsh scripts/dev-close.ps1 -Task <票号>`（仓库根；默认 dry-run，`-Yes` 执行）；**认树看目录 `wt-<票号>`、身份看登记分支**（`fix/…` 也认，别按 `feat/<票号>` 猜；裁定见根 `docs/adr/ADR-0092-树身份-目录为入口与登记分支为身份.md`） | `DEV_CLOSE_RESULT … verdict=ok`（dry-run 只 `verdict=planned`、无动作是 `verdict=noop`，**都别当已收尾**） | `verdict=blocked reason=pr-not-merged` = 还没合并，本就不该拆；`tree-branch-mismatch` = 目录在但判据没匹配上（必红，别当无树）；树被占用 ⇒ 关掉占用的工具再跑，别 kill |
 
-**第 5 步的纪律面（#2320，2026-11-05 退役）**：② 门**已整体退役**——无 `needs2` 触发面、不要求读数行与截图。日常 PR **不跑 ②**；要查小程序运行时才手动跑一次作诊断，只进日志、不判红。风险已接受：PR 粒度无 IDE 自动检查，由发版前真机冒烟（ADR-0043）兜底，见 ADR-0008 顶部 2026-11-05 条。
+**第 5 步的纪律面**：② 门已于 2026-11-05 整体退役（#2320）——日常 PR **不跑 ②**，要诊断才手动跑一次、只进日志；风险由发版前真机冒烟（ADR-0043）兜底，见 ADR-0008 顶部条。
 
 **成本尺**：≈12 min（同树）/ 17 min（新树）；超 2× 先查排队（HBuilderX 串行）。
 
@@ -85,7 +85,7 @@ HBuilderX 的 CLI 步骤**由仓内锁串行化**——不是平台上限（本�
 
 ## 按需层（本线 `docs/agents/`）
 
-`guards.md` 守护分类与新增三问 · `issue-dispatch.md` 派活与阶段闸门 · `uvue-css.md` 样式与 UTS 约束全表 · `concurrency.md` 锁与时间预算 · `dev-loop.md` 内循环时间账与坑位原文 · `skills.md` 技能供给 · `ai-workflow.md` 专项 AI 工作流与让位表 · `ui-hints.md` UI hint 例外 · `image-assets.md` 切图落位口径 · `domain.md` / `issue-tracker.md` / `triage-labels.md` / `credential-scope.md` 各按其名。
+`guards.md` 守护分类与新增三问 · `issue-dispatch.md` 派活与阶段闸门 · `uvue-css.md` 样式与 UTS 约束全表 · `concurrency.md` 锁与时间预算 · `dev-loop.md` 内循环时间账与坑位原文 · `skills.md` 技能供给 · `ai-workflow.md` 专项 AI 工作流与让位表 · `ui-hints.md` UI hint 例外 · `image-assets.md` 切图落位口径 · `path-encoding.md` 中文路径四边界（动 git 路径输出 / 中文路径判据前读） · `domain.md` / `issue-tracker.md` / `triage-labels.md` / `credential-scope.md` 各按其名。
 
 修改搜索页或首页宫格视觉时，先读 [`DESIGN.md`](DESIGN.md) 中对应的视觉约定。
 
