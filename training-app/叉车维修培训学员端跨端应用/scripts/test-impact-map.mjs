@@ -194,7 +194,13 @@ function main(argv) {
     }
     if (uncovered.length > 0) console.log(`  未覆盖面：${uncovered.join(', ')}（改动不在静态断言网内，按需人工判断）`)
     if (uniq.length === 0) {
-      console.log('\n无受影响套件 ⇒ 无需跑测试（改动面仅样式 / 未进契约）。')
+      // M3（2026-11-26）：这里原本写「无受影响套件 ⇒ 无需跑测试」，把「本图没扫到」说成了「不用跑」。
+      // 本图只认测试正文里的字面量路径，间接依赖一律漏（组件被页面引用但测试只断言页面、.uts 经变量或 harness 载入、
+      // 共享 composable / 常量、动态 import、跨文件 re-export），所以零命中只能说明「这张静态图没覆盖到」，不是判据。
+      console.log('\n静态引用图未命中任何套件 —— 这不等于「不用跑测试」（覆盖边界见下，别拿这句当放行条）：')
+      console.log('  · .uts 代码依赖 ⇒ 走 `npm run test:unit:changed`（scripts/behavior-suite-deps.mjs，含 import 反向闭包）')
+      console.log('  · .uvue 模板 / 样式 / 真实运行时 ⇒ 本图与 jest 都不覆盖，按「页面观测三档」实测页面')
+      console.log('  · 拿不准 ⇒ 跑受影响子集或全量接线腿；未覆盖文件见上方「未覆盖面」')
       return 0
     }
     console.log('\n受影响套件：')
