@@ -159,7 +159,8 @@ describe('批5 特殊页头形态（app-nav-bar 槽位承载）', () => {
     expect(s).not.toMatch(/nav-bell/);
     expect(s).toMatch(/<template #left>[\s\S]*?dashboard-brand[\s\S]*?<\/template>/);
     expect(s).toContain('class="credential-bar"');
-    expect(s).toMatch(/class="credential-picker"[^>]*@click="onCertTap"/);
+    // #2907：证件栏改整页入口（浮层开关退役），仍须可点
+    expect(s).toMatch(/class="credential-picker"[^>]*@click="openCertPage"/);
     expect(s).toContain('@click="onHeaderSearch"');
     expect(s).toContain('@click="onHeaderMall"');
     expect(read('pages/dashboard/components/dashboard-menu-grid.uvue')).not.toContain("title: '全局搜索'");

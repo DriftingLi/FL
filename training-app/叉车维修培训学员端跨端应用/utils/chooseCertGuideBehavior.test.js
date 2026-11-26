@@ -119,7 +119,41 @@ describe('接线（#2535：引导层叠在选证页内，不建路由）', () =>
     expect(guide).toBeGreaterThan(bottomBar);
   });
 
-  it('引导态是页内双态：三处 reLaunch 各司其职（未登录防护 / 完成落首页 / X 跳过落首页）', () => {
-    expect((src.match(/uni\.reLaunch\(/g) || []).length).toBe(3);
+  it('引导态是页内双态：两处 reLaunch 各司其职（未登录防护 / X 跳过落首页）', () => {
+    // #2907：完成与返回都改走 goBack()（栈 >1 返回、只有本页才 reLaunch），页面里直接 reLaunch 的只剩这两处
+    expect((src.match(/uni\.reLaunch\(/g) || []).length).toBe(2);
+  });
+});
+
+describe('首页入口进来是「改证件」，不再被引导态挡住（#2907）', () => {
+  const src = readText(PAGE);
+
+  it('onLoad 读 from 查询参数，等于 dashboard 时直接进主态', () => {
+    // Kotlin Function1<OnLoadOptions, Unit>：零参 onLoad 会在编译期 error17
+    expect(src).toMatch(/onLoad\(\(options : OnLoadOptions\) => \{/);
+    expect(src).toMatch(/const rawFrom = options\['from'\]/);
+    expect(src).toMatch(/rawFrom\.toString\(\) == CHOOSE_CERT_FROM_DASHBOARD/);
+    const body = src.slice(src.indexOf("onLoad((options : OnLoadOptions)"));
+    expect(body.slice(0, 400)).toMatch(/enterMain\(\)/);
+  });
+
+  it('from 取值来自 composable 常量（页面不抄字面量 dashboard）', () => {
+    expect(src).toContain('CHOOSE_CERT_FROM_DASHBOARD');
+    expect(src).not.toMatch(/== 'dashboard'/);
+  });
+
+  it('完成成功与页头返回共用同一出口 goBack()（不为整页入口另造一条导航）', () => {
+    expect(src).toContain("import { goBack } from '../../utils/navigation'");
+    const confirm = src.slice(src.indexOf('function onConfirmTap'));
+    expect(confirm.slice(0, 400)).toContain('goBack()');
+    const back = src.slice(src.indexOf('function toback'));
+    expect(back.slice(0, 200)).toContain('goBack()');
+  });
+
+  it('预选与提交归 composable：页面自己不调切换接口、不写凭证缓存', () => {
+    expect(src).toContain('useChooseCertSelection()');
+    expect(src).not.toContain('switchCredentialApi');
+    expect(src).not.toContain('writeCurrentCredentialCache');
+    expect(src).not.toContain('getCurrentCredentialApi');
   });
 });

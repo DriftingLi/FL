@@ -3,6 +3,7 @@
 - 日期：2026-10-14（小程序优先窗口，ADR-0039）
 - 分支/提交：feat/1677（源码 14:25 定稿 → 16:22 publish 产出 mp-weixin 产物；同内容树入库为 398e9b5f，首提 c4a481b5 经 amend 并入，差异仅本文件）
 - 会话：`.ci-verify/evidence-session-1677.ps1` → `scripts/cert-fix-evidence.mjs`（ws://127.0.0.1:9420）
+  - **已退役（#2907）**：该脚本随首页证件浮层一起删除（选择入口改整页，遮罩判据不存在）；本文件仅作历史记录。
 - 配套帧：`dashboard-overlay-open.png`（开态，83472B）· `dashboard-overlay-closed.png`（闭态，76197B）
 
 ## 关键行（原样摘自 evidence-session-run16.log）
