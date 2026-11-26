@@ -139,7 +139,7 @@
     }
 
     .material-item {
-        background-color: #f7f8fa;
+        background-color: $bg-color;
         border-radius: 16rpx;
         padding: 24rpx;
         margin-bottom: 16rpx;

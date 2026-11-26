@@ -116,7 +116,7 @@
         width: 88rpx;
         height: 88rpx;
         border-radius: 12rpx;
-        background-color: #f5f7fa;
+        background-color: $bg-color;
         border: 1rpx solid #e4e7ed;
         align-items: center;
         justify-content: center;
@@ -124,7 +124,7 @@
     }
 
     .tool-btn.active {
-        background-color: #e8f0fe;
+        background-color: $primary-tint;
         border: 1rpx solid $primary-color;
     }
 
@@ -180,7 +180,7 @@
         margin-top: 16rpx;
         padding: 16rpx;
         border-radius: 12rpx;
-        background-color: #fafbfc;
+        background-color: $bg-color;
         border: 1rpx solid #e4e7ed;
     }
 
@@ -214,7 +214,7 @@
     }
 
     .panel-btn.active {
-        background-color: #e8f0fe;
+        background-color: $primary-tint;
         border: 1rpx solid $primary-color;
     }
 

@@ -17,18 +17,13 @@ module.exports = {
     '#1B7BA0': 'pages/recruiter/home.uvue 紧迫行深青文字/箭头——品牌深青，token 表无对应',
     '#22A45D': 'pages/forum/components/forum-resource-panel.uvue res-title-green——资源标题装饰绿（#2861 裁：非成功语义位，不绑 $success-color）；原 recruiter tag-open/tag-approved 两处已改走 $success-color',
     '#F0FFF0': 'pages/forum/components/forum-resource-panel.uvue res-card-bg-green——资源卡装饰浅绿底（#2861 裁：非成功语义位）；原 recruiter 两处成功浅底已改走 $success-tint',
-    '#F5F5F5': 'pages/recruiter/jobs.uvue/contacts.uvue/applications.uvue tag-closed/unknown/applied-withdrawn 中性底——值虽等于 $gradient-end(#F5F5F5) 但那是渐变尾色，语义不是中性底色；待中性底 token 立项后迁',
     '#FF6B35': 'pages/recruiter/resumes.uvue 薪资/筛选徽标 + resume-detail.uvue 薪资强调——强调橙，token 表无对应（$warning-color #ff9900 偏黄）',
     '#EEF3FD': 'pages/recruiter/applications.uvue tag-applied 主色浅底——$primary-tint(#ebf5ff) 近似但值不等，视觉回归风险待真机裁',
-    '#F5F6FA': 'pages/recruiter/resume-detail.uvue btn-secondary 灰底——页面局部次要按钮底，$bg-color(#F8F8F8) 近似但值不等，待真机裁',
     '#E0E0E0': 'pages/recruiter/resume-detail.uvue btn-secondary 边框（批2 #1606 并入；B3 #2519 起 practice-do 已 token 化不再持此值）——$border-color(#e5e5e5) 近似但值不等，待真机裁',
-    '#F7F8FA': 'pages/recruiter/job-edit.uvue field-input/field-textarea/chip 输入底 + resume-edit.uvue field 输入底——\-color(#F8F8F8) 近似但值不等，输入件视觉回归风险待真机裁',
     '#1565C0': 'pages/guide/choose-cert.uvue btn-confirm 渐变深端与实底兜底 + components/cert-selector.uvue 同款按钮——主色深阶，token 表无深阶位；与 points-detail.uvue 会员卡渐变尾色（linear-gradient(#2979ff,#1565c0)）同值（先例）',
     '#888888': 'pages/guide/choose-cert.uvue province-label/error-text 次要说明文字——\-color-secondary(#666666) 偏深、\-color-placeholder(#999999) 偏浅，中间灰无 token；收敛待灰阶 token 票裁',
     '#F0F2F5': 'pages/guide/choose-cert.uvue province-bar 胶囊底（\-color(#F8F8F8)/\-color-light(#F0F0F0) 均不等，冷灰胶囊底）——待真机裁（#2524 起 resume-edit 分割线已改走 \-color-light）',
-    '#F5F7FA': 'pages/guide/choose-cert.uvue page 页底——\-color(#F8F8F8) 近似但值不等，视觉回归风险待真机裁',
     '#EEEEEE': 'batch2 profile 两页分割线/边框——\-color(#e5e5e5)/\-color-light(#f0f0f0) 之间的更浅边框，待真机裁（#2524 起 job-list 的边框已改走 token）',
-    '#E8F0FE': 'pages/practice/practice-do.uvue 题型标签浅蓝底 + 内容精选四页浅底——\-tint(#EBF9FF) 近似但值不等，视觉回归风险待真机裁（#2524 起 job-list 已改走 \-tint）',
 
     // ── 批2（#1606 学员端 14 页）新增 ──
     // '#2979FF' —— #2533（规格 #2493 批 A）起退役：受管页并集内 16 页 51 处旧主色已全部改走
@@ -37,23 +32,20 @@ module.exports = {
     // utils/legacyPrimaryColorRatchetContract.test.js 的逐文件棘轮兜住（批 B #2534 / 批 C #2536 继续清）。
     // '#4A9AFF' —— #2563 起 personal-info 头像兜底改走包内默认头像图（.cell-avatar-placeholder 的浅蓝底随类删除），该值无承载，条目退役
     '#FFF6E5': 'pages/profile/personal-info.uvue 提示条浅橙底——token 表无警告浅底对应（$warning-tint 是 #FFF3E0），语义相近但值不等，待真机裁',
-    '#E3F2FD': 'pages/profile/favorites.uvue 收藏封面兜底浅蓝底——token 表无对应浅蓝（$primary-tint 是 #EBF9FF），#2523 起 points-detail 的同值承载退役，此值仍由 favorites 承载',
     // '#FBE9E7' —— #2523 起 points-detail 流水图标位按原型退役（行内不再有图标底色），该浅红底无承载，条目退役
     '#FF8F00': 'pages/forum/components/forum-topic-header.uvue 限时/状态标签橙——$warning-color(#ff9900) 近似但值不等，待真机裁',
     // '#FFA000' / '#FFD700' —— 原型 569:4532 的金币是 3D 切图本身、没有底圆，task-center 的
     // .balance-coin 渐变圆底（起色 #FFD700 / 尾色 #FFA000）随之退役，两值无承载，条目退役
     '#222222': 'batch2 ai-assistant 两页/practice-report 重文字——$text-color(#333333) 近似但值不等，历史深灰，待文字 token 收敛裁',
     '#6DB8E8': 'components/ai-chat/ai-chat-input.uvue 发送按钮浅蓝强调——AI 模块品牌色（ai-feature 诊断面板 4 处承载随 #2262 面板摘除退役，页面本身随 #2593 并入 ai-assistant 的 scope），token 表无对应',
-    '#F5F6F8': 'batch2 ai-assistant 两页页面底——$bg-color(#F8F8F8) 近似但值不等，待真机裁',
     '#4CAF50': 'pages/forum/components/forum-reply-list.uvue reply-avatar 头像占位底——装饰绿（#2861 裁：头像底色不是成功语义位，不绑 token）；其余 22 处成功/正确语义已改走 $success-color',
     '#4FACFE': 'pages/practice/practice-report.uvue 图表/趋势蓝——品牌蓝变体，token 表无对应',
     '#BBBBBB': 'batch2 practice-report/resume-edit 占位/禁用边框——$text-disabled(#cccccc) 近似但值不等，待真机裁',
     '#EEF1F6': 'batch2 practice-report/resume-edit 卡片浅灰底——中性底，token 表无对应，待中性底 token 立项后迁',
     '#F44336': 'pages/forum/components/forum-reply-list.uvue reply-like-liked 点赞选中底/边——强调红（#2861 裁：点赞不是危险语义位，不绑 $danger-color）；其余 19 处错误/危险语义已改走 $danger-color',
-    '#FAFBFD': 'pages/resume/resume-edit.uvue 输入底——$bg-color 近似但值不等，输入件视觉回归风险待真机裁',
     '#16A34A': 'pages/forgot-password/forgot-password.uvue 成功页扳手插画成套主色（4 处，与 #15803D/#14532D/#86EFAC 同图）——插画色组不拆件（#2861 裁）；resume-attach 上传成功那处已改走 $success-color',
+    '#FAFBFD': 'pages/resume/resume-edit.uvue 输入底——$bg-color 近似但值不等，输入件视觉回归风险待真机裁（#2862 勘误：此值 ≠ 底灰七近邻的 #FAFBFC，收敛射程外，条目保留）',
     '#C8CDD8': 'pages/resume/resume-attach.uvue 文件图标底/边框——中性灰蓝，token 表无对应',
-    '#E8F3FF': 'pages/resume/resume-attach.uvue 文件图标浅蓝底——$primary-tint(#ebf5ff) 近似但值不等，待真机裁',
     '#F0F7FF': 'pages/practice/practice-do.uvue 选中项/考点标签浅蓝底——$primary-tint 近似但值不等，待真机裁',
 
     // ── 批4（#1607 N01 蓝底套 19 页）新增 ──
@@ -61,7 +53,6 @@ module.exports = {
     '#A8C4FF': 'pages/resources/materials.uvue material-action--busy 底——主操作蓝 busy 态，token 表无对应',
     '#EEF4FF': 'pages/resources/materials.uvue material-icon-box 底——资料图标浅蓝底，$primary-tint(#ebf5ff) 近似但值不等，待真机裁',
     '#D0E4FF': 'pages/notifications/notifications.uvue 状态条边框——浅蓝边框，$primary-tint 近似但值不等，待真机裁',
-    '#F8F9FA': 'pages/forum/forum-create.uvue 输入底——$bg-color(#F8F8F8) 近似但值不等，输入件视觉回归风险待真机裁',
     '#E2622C': 'pages/courses/course-detail.uvue 报名状态强调字色——强调橙红，token 表无对应（$warning-color 偏黄）',
     '#E5484D': 'pages/resources/my-uploads.uvue 审核驳回原因字色等 5 处危险红变体——与 $danger-color ΔE 23.2 非近似族（#2861 裁：区别子收敛）',
     '#FF6B6B': 'pages/exam/mock-exam.uvue timer-text.danger 倒计时告警红——与 $danger-color ΔE 29 非近似族，且与 .timer-text.warning #FFF3A0 成套（#2861 裁：不改）',
@@ -99,7 +90,6 @@ module.exports = {
     '#15803D': 'pages/forgot-password/forgot-password.uvue 成功态按钮按下底——#22C55E 的深一档配对（green-700），同上待成功系 token 票裁',
     '#14532D': 'pages/forgot-password/forgot-password.uvue 成功态深绿字——green-900，token 表无对应',
     '#86EFAC': 'pages/forgot-password/forgot-password.uvue 成功态浅绿字——green-300，token 表无对应',
-    '#F0F1F5': 'pages/register/register.uvue、pages/forgot-password/forgot-password.uvue mode-tab 未选中底——分段控件中性浅灰，$bg-color 近似但值不等（与批5 #EEF1F5 轨道灰用途不同，各守各点不并条）',
     // '#FF4D4F' 已随 #2518 第 4 刀退役（mall 价格红改两态制 + VIP 套餐位清退，两处承载均不存在）。
     // 免费价红的新承载（product-price-free）实测核心值 #FF2424 = 既有 $color-price token 值，
     // 值 ∈ token 值 ⇒ 走 token、不进白名单（§1.6 自检：白名单值不得与 token 值重叠）。

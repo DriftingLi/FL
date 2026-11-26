@@ -196,7 +196,7 @@
         margin-left: 12rpx;
         padding: 6rpx 20rpx;
         border-radius: 18rpx;
-        background-color: #e3f2fd;
+        background-color: $primary-tint;
         flex-shrink: 0;
     }
 
@@ -267,7 +267,7 @@
         align-items: center;
         justify-content: space-between;
         padding-top: 12rpx;
-        border-top: 1rpx solid #f5f5f5;
+        border-top: 1rpx solid $bg-color;
         margin-top: 12rpx;
     }
 

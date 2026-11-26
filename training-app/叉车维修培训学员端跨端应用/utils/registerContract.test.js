@@ -52,8 +52,12 @@ const LINE_BUDGET = 600;
  * ⚠️ **#2533 第三次显式变更（批 A 旧主色清退，规格 #2493）**：本页 9 处 `#2979ff` 字面值改走
  * `$primary-color`（#239EDD），**块内 39 条规则数不变**，只有主色声明位的值变 —— 这是规格裁定的
  * 视觉变更本身（旧蓝 → 达标主色），不是顺手改样式。
+ *
+ * ⚠️ **#2862 第四次显式变更（底灰与浅蓝底值面收敛）**：块内 4 处声明位改走 token —— 2 处 `#F5F6FA` +
+ * 1 处 `#F0F1F5` → `$bg-color`（#F5F5F5），1 处 `#E8F3FF` → `$primary-tint`（#EBF9FF）。
+ * **块内 39 条规则数不变**（冗余判据 ruleCount 仍 39），只有声明位的值变。
  */
-const STYLE_SHA256 = '4cbd706a754181186593d6af7bdf7bbc556b0fe5ab2f262a91c55e570f753e84';
+const STYLE_SHA256 = '84b88b21e89f4b8972981a3b22568d09253cceecefb9f467331e33879c109fa8';
 const sha256 = (s) => crypto.createHash('sha256').update(s, 'utf8').digest('hex');
 /** 块内 class 规则数 —— 与 sha256 互为冗余判据：数规则的锁漏属性值改动，sha 锁不漏 */
 const ruleCount = (s) => (s.match(/^\s*\.[a-zA-Z][\w-]*\s*\{/gm) || []).length;

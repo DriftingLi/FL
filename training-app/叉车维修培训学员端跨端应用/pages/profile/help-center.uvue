@@ -481,7 +481,7 @@ import { goBack } from '../../utils/navigation'
 
     .entry-answer-box {
         flex-direction: column;
-        background-color: #f7f8fa;
+        background-color: $bg-color;
         border-radius: 12rpx;
         padding: 20rpx;
         margin-bottom: 24rpx;
@@ -556,7 +556,7 @@ import { goBack } from '../../utils/navigation'
 
     .history-item {
         flex-direction: column;
-        background-color: #f7f8fa;
+        background-color: $bg-color;
         border-radius: 12rpx;
         padding: 20rpx;
         margin-bottom: 16rpx;

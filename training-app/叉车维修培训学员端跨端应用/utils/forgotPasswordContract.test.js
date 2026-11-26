@@ -61,8 +61,12 @@ const LINE_BUDGET = 600;
  * ⚠️ **#2533 第三次显式变更（批 A 旧主色清退，规格 #2493）**：本页 6 处 `#2979ff` 字面值改走
  * `$primary-color`（#239EDD），**块内 45 条规则数不变**，只有主色声明位的值变 —— 这是规格裁定的
  * 视觉变更本身（旧蓝 → 达标主色），不是顺手改样式。
+ *
+ * ⚠️ **#2862 第四次显式变更（底灰与浅蓝底值面收敛）**：块内 4 处声明位改走 token —— 2 处 `#F5F6FA` +
+ * 1 处 `#F0F1F5` → `$bg-color`（#F5F5F5），1 处 `#E8F3FF` → `$primary-tint`（#EBF9FF）。
+ * **块内 45 条规则数不变**，只有声明位的值变 ⇒ 像素面只有近邻色差（ΔE 1 量级），不是视觉改版。
  */
-const STYLE_SHA256 = '4878f3d0f9c61650f9476eacf9e1715009249e54d98595a3438c6f8bc84351fa';
+const STYLE_SHA256 = '4a27d045c06d228ac69324a6cb1376642a322b391fe30d188d7464c2f7830cc1';
 
 /** 页面块（template / script / style）。模板**有嵌套** `<template v-if>` ⇒ 闭合取最后一个 */
 function block(src, tag) {
