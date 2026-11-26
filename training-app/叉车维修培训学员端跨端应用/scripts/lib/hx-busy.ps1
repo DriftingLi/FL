@@ -43,6 +43,12 @@
     **子进程不得释放父进程的锁**：`Release-HxLock` 只在 `$script:HxLockOwned` 为真时动作，而该标志
     只在**本进程**真正 `Acquire` 成功时才置真 ⇒ 交接场景下 `Release-HxLock` 天然 no-op（无需特判）。
 
+    **现场快照（2026-11-26 加，用户 M2 ①）**：`Get-HxBusyStatus` + `Format-HxBusyStatusLine` 给出一行只读机读行
+    `HX_STATUS lock=<held|free> holder=<pid|none> age=<秒>s|none alive=<true|false|unknown|none> stale=<…> cli=<路径|none> hx=<running|absent>`
+    —— **不取锁、不调 cli、不写文件**，因此可随时跑（`npm run hx:run -- -Status`）。`Wait-HxFree` 也在**进入等待的第 0 秒**
+    打这一行并给出三条出路（等 / `-NoWait` 立刻退 / 改做不需要 HBuilderX 的事），不再让人盯「已等 N 秒」到超时才知道被谁挡。
+    职责分工：`HX_STATUS` 是**现场**，`HX_BUSY wait=… result=…` 是**结果**；两者都不参与任何门的判据。
+
     **失败语义**：等待超时 ⇒ 打印明确提示并 `exit 2`（环境不可用），提示里给出不依赖 HBuilderX 的替代门。
     **绝不 kill 主程序进程**、**绝不抢占项目**；本文件内**不得**出现任何按名字强杀 HBuilderX 主进程的调用（契约测试 H3 会拦截字面量）。
 
@@ -108,6 +114,104 @@ function Test-HxLockStale {
     if (-not $Info) { return $true }
     if ((Test-HxProcessAlive -PidText $Info.Pid) -eq $false) { return $true }
     try { return ((Get-Date) - $Info.MTime).TotalMinutes -gt $script:HxLockStaleMinutes } catch { return $true }
+}
+
+function Get-HxBusyStatus {
+    <#
+      只读占用快照（用户 M2 ①：**默认要能快速识别「HBuilderX 是否被其他会话占用」**）。
+      **不取锁、不调 cli、不写任何文件、不建目录** —— 因此可以在任何时刻跑，也不改变任何一个门的结果。
+      「谁占着」的唯一可靠来源是仓内锁文件（锁里存 pid + 起始时间）；HBuilderX 进程是否存在只是旁证
+      （它不代表有人在驱动它，也不代表本仓锁被占 —— 维护者用 GUI 时就是「进程在、锁不在」）。
+      Alive 沿用 Test-HxProcessAlive 的**三态**：拿不准一律 unknown，绝不把「未知」写成「已死」。
+    #>
+    param([string]$CliExe)
+    $info = Get-HxLockInfo
+    $age = -1
+    $alive = $null
+    $stale = $null
+    if ($info) {
+        try { $age = [int]((Get-Date) - $info.MTime).TotalSeconds } catch { $age = -1 }
+        $alive = Test-HxProcessAlive -PidText $info.Pid
+        $stale = [bool](Test-HxLockStale -Info $info)
+    }
+    $hxProc = $null
+    try { $hxProc = Get-Process HBuilderX -ErrorAction SilentlyContinue | Select-Object -First 1 } catch { $hxProc = $null }
+    $hxPid = 0
+    $hxPath = $null
+    if ($hxProc) {
+        $hxPid = [int]$hxProc.Id
+        try { $hxPath = "$($hxProc.Path)" } catch { $hxPath = $null }
+    }
+    $holder = $null
+    $started = $null
+    if ($info) { $holder = "$($info.Pid)"; $started = "$($info.Started)" }
+    return @{
+        LockPresent = [bool]$info
+        Holder      = $holder
+        Started     = $started
+        AgeSeconds  = $age
+        Alive       = $alive
+        Stale       = $stale
+        CliExe      = $CliExe
+        HxRunning   = [bool]$hxProc
+        HxPid       = $hxPid
+        HxPath      = $hxPath
+    }
+}
+
+function Format-HxTriState {
+    # 三态渲染：$true / $false / $null(未知) ⇒ true / false / unknown。未知绝不渲染成 false。
+    param($Value)
+    if ($Value -eq $true) { return 'true' }
+    if ($Value -eq $false) { return 'false' }
+    return 'unknown'
+}
+
+function Format-HxBusyStatusLine {
+    <#
+      机读行（一行、稳定形状，便于人眼与脚本同时消费）：
+        HX_STATUS lock=<held|free> holder=<pid|none> age=<秒>s|none alive=<true|false|unknown|none>
+                  stale=<true|false|none> cli=<路径|none> hx=<running|absent>
+      与 HX_BUSY 的分工：HX_BUSY 是**结果**（wait=… result=free|timeout|inherited），
+      HX_STATUS 是**现场**（谁占着、占多久、是否陈旧、cli 解析到哪）—— 两者都不含 exit 语义。
+    #>
+    param($Status)
+    $lock = 'free'; $holder = 'none'; $age = 'none'; $alive = 'none'; $stale = 'none'
+    if ($Status.LockPresent) {
+        $lock = 'held'
+        $holder = "$($Status.Holder)"
+        if ($Status.AgeSeconds -ge 0) { $age = "$($Status.AgeSeconds)s" }
+        $alive = Format-HxTriState $Status.Alive
+        $stale = Format-HxTriState $Status.Stale
+    }
+    $cli = 'none'
+    if ($Status.CliExe) { $cli = "$($Status.CliExe)" }
+    $hx = if ($Status.HxRunning) { 'running' } else { 'absent' }
+    return "HX_STATUS lock=$lock holder=$holder age=$age alive=$alive stale=$stale cli=$cli hx=$hx"
+}
+
+function Write-HxBusyStatusLine {
+    param($Status, [string]$LogPath)
+    $line = Format-HxBusyStatusLine -Status $Status
+    Write-Host $line
+    if ($LogPath) { Add-Content -LiteralPath $LogPath -Encoding utf8 -Value $line -ErrorAction SilentlyContinue }
+    return $line
+}
+
+function Write-HxBusyChooseHint {
+    <#
+      占用时**当场**给出的可诊断说明 + 三条出路（用户 M2 ②：明确、可诊断，避免无意义长等）。
+      口径必须写实：串行是**本仓的编排选择**，不是 HBuilderX 的平台上限（官方未记载并发行为）。
+    #>
+    param($Status, [int]$TimeoutSeconds)
+    $who = "持有者 pid=$($Status.Holder)（起始 $($Status.Started)，已持有 $($Status.AgeSeconds) 秒"
+    if ($Status.Alive -eq $true) { $who += '，进程仍在运行' }
+    elseif ($Status.Alive -eq $false) { $who += '，进程已不存在 ⇒ 属陈旧锁，下一次取锁会自动抢占' }
+    else { $who += '，进程是否存在**未知**（权限/pid 不可解析）⇒ 按 fail-safe 回落 30 分钟时间线' }
+    $who += '）'
+    Write-Host ">>> [hx-busy] 锁被占用：$who" -ForegroundColor Yellow
+    Write-Host ">>> [hx-busy] 这不是 HBuilderX 的平台上限，而是本仓的单实例串行编排（并发行为未实测）；别据此判断「HBuilderX 不能并行」。" -ForegroundColor Yellow
+    Write-Host ">>> [hx-busy] 现在可以选：① 等（-WaitSeconds <秒>，本次上限 $TimeoutSeconds 秒）② 立刻退（-NoWait，exit 2 环境不可用）③ 先做不需要 HBuilderX 的事（npm run test:unit / ④c -SkipPublish / npm run audit:*）" -ForegroundColor Yellow
 }
 
 function Acquire-HxLock {
@@ -194,6 +298,62 @@ function Test-HxResponsive {
     return @{ Responsive = $true; Output = ($so.Result + $se.Result); ElapsedMs = [int]$sw.Elapsed.TotalMilliseconds }
 }
 
+function Get-HxRegValue {
+    <#
+      安全读注册表条目属性（2026-11-26 加，真跑踩出来的）：
+      本仓脚本统一 `Set-StrictMode -Version Latest`，此时读一个**不存在的属性**会直接抛
+      「在此对象上找不到属性"DisplayName"」——卸载项里有的条目确实没有 DisplayName / InstallLocation
+      （非安装器写入的键、或权限受限读不全），于是整条 CLI 解析链断掉。
+      ⇒ 一律走 PSObject.Properties 显式判存在，缺了就返回空串，绝不抛错。
+    #>
+    param($Item, [string]$Name)
+    if (-not $Item) { return '' }
+    $prop = $Item.PSObject.Properties[$Name]
+    if (-not $prop) { return '' }
+    if ($null -eq $prop.Value) { return '' }
+    return [string]$prop.Value
+}
+
+function Get-HxCliCandidatesFromRegistry {
+    <#
+      安装信息的**第一手来源**（用户 M2 ④：CLI 解析不能只靠「当前运行中的 HBuilderX 进程反查」）。
+      从三项卸载注册表取 DisplayName 含 `HBuilderX` 的条目，按下述顺序产出候选 `cli.exe` 路径：
+        InstallLocation / InstallDir → `<loc>\cli.exe`、`<loc>\HBuilderX\cli.exe`
+        DisplayIcon / UninstallString 指向的 exe 目录 → `<dir>\cli.exe`
+      **只产出候选，不做判断**（存在性 / PE 头由调用方查）—— 注册表里有路径 ≠ 装好了，这条在本仓有先例。
+      读不到 / 非 Windows ⇒ 返回空数组、绝不抛错（ubuntu CI 与本机受限会话都要能跑）。
+    #>
+    $out = New-Object System.Collections.ArrayList
+    foreach ($root in @(
+            'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+            'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
+            'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*')) {
+        $items = $null
+        try { $items = Get-ItemProperty -Path $root -ErrorAction Stop } catch { continue }
+        if (-not $items) { continue }
+        foreach ($it in @($items)) {
+            $displayName = Get-HxRegValue -Item $it -Name 'DisplayName'
+            if ($displayName -notmatch 'HBuilderX') { continue }
+            foreach ($loc in @((Get-HxRegValue -Item $it -Name 'InstallLocation'), (Get-HxRegValue -Item $it -Name 'InstallDir'))) {
+                if (-not $loc) { continue }
+                [void]$out.Add((Join-Path $loc 'cli.exe'))
+                [void]$out.Add((Join-Path (Join-Path $loc 'HBuilderX') 'cli.exe'))
+            }
+            foreach ($raw in @((Get-HxRegValue -Item $it -Name 'DisplayIcon'), (Get-HxRegValue -Item $it -Name 'UninstallString'))) {
+                if (-not $raw) { continue }
+                $exe = ($raw -split ',')[0].Trim().Trim('"')
+                if ($exe -notmatch '\.exe$') { continue }
+                try { $dir = Split-Path -Path $exe -Parent } catch { continue }
+                if (-not $dir) { continue }
+                [void]$out.Add((Join-Path $dir 'cli.exe'))
+            }
+        }
+    }
+    # `,` 不能省：PowerShell 把空数组展开成「无输出」，调用方拿到的会是 $null（`Set-StrictMode` 下
+    # 随后 `.Count` / `foreach` 就踩空）。函数契约是「读不到 ⇒ 空数组」，这里用 `,` 把数组本身原样返回。
+    return ,@($out | Select-Object -Unique)
+}
+
 function Resolve-HxCliExe {
     <#
       找一个**能跑**的 HBuilderX `cli.exe`，供 `Wait-HxFree` 的一次忙探测用（#2112）。
@@ -233,13 +393,21 @@ function Resolve-HxCliExe {
     catch {
         # 进程路径读不到（权限）就继续走位置探测
     }
-    # 5) 常见安装位置
-    foreach ($pattern in @(
-            'D:\软件\HBuilderX*\HBuilderX\cli.exe',
-            'D:\HBuilderX*\HBuilderX\cli.exe',
-            'C:\Program Files\HBuilderX*\HBuilderX\cli.exe',
-            'C:\Program Files\HBuilderX\cli.exe',
-            "$env:LOCALAPPDATA\HBuilderX\cli.exe")) {
+    # 5) 注册表卸载项（不依赖「HBuilderX 此刻是否在跑」，用户 M2 ④）
+    foreach ($cand in (Get-HxCliCandidatesFromRegistry)) {
+        if (Test-Path -LiteralPath $cand -PathType Leaf) { return (Resolve-Path -LiteralPath $cand).Path }
+    }
+    # 6) 常见安装位置（env 为空就跳过，别拼出相对路径去扫当前目录）
+    $patterns = New-Object System.Collections.ArrayList
+    [void]$patterns.Add('D:\软件\HBuilderX*\HBuilderX\cli.exe')
+    [void]$patterns.Add('D:\HBuilderX*\HBuilderX\cli.exe')
+    foreach ($root in @($env:ProgramFiles, ${env:ProgramFiles(x86)}, 'C:\Program Files', 'D:\Program Files', "$env:LOCALAPPDATA\Programs")) {
+        if (-not $root) { continue }
+        [void]$patterns.Add((Join-Path $root 'HBuilderX*\HBuilderX\cli.exe'))
+        [void]$patterns.Add((Join-Path $root 'HBuilderX\cli.exe'))
+    }
+    if ($env:LOCALAPPDATA) { [void]$patterns.Add((Join-Path $env:LOCALAPPDATA 'HBuilderX\cli.exe')) }
+    foreach ($pattern in $patterns) {
         $hit = Get-ChildItem -Path $pattern -ErrorAction SilentlyContinue |
             Sort-Object FullName -Descending | Select-Object -First 1
         if ($hit) { return $hit.FullName }
@@ -274,14 +442,26 @@ function Wait-HxFree {
         return @{ Waited = 0; Result = 'inherited' }
     }
 
+    # 现场快照（用户 M2 ①）：**进等待的第 0 秒**就把「谁占着、占多久、cli 解析到哪」打出来，
+    # 而不是让人盯着每 10 秒一行的「已等 N 秒」直到超时才知道发生了什么。
+    $entry = Get-HxBusyStatus -CliExe $CliExe
+    Write-HxBusyStatusLine -Status $entry -LogPath $LogPath | Out-Null
+    if ($entry.LockPresent) { Write-HxBusyChooseHint -Status $entry -TimeoutSeconds $TimeoutSeconds }
+
     while (-not (Acquire-HxLock)) {
         if ($NoWait -or $lockWaited -ge $TimeoutSeconds) {
-            Write-HxBusyHint -Reason "锁被另一个 agent 会话持有：$script:HxLockPath" -Waited $lockWaited -LogPath $LogPath
+            Write-HxBusyHint -Reason "锁被另一个 agent 会话持有：$script:HxLockPath" -Waited $lockWaited -LogPath $LogPath -Status (Get-HxBusyStatus -CliExe $CliExe)
             exit 2
         }
-        Write-Host ">>> [hx-busy] 等待另一个 agent 会话释放 HBuilderX 锁（已等 $lockWaited 秒，上限 $TimeoutSeconds 秒）" -ForegroundColor Yellow
-        Start-Sleep -Seconds $PollSeconds
-        $lockWaited += $PollSeconds
+        # 每轮带上持有者 pid 与起始时间：不同会话在同一个终端里等待时，只看「已等 N 秒」分不清是谁在挡。
+        $who = ''
+        $cur = Get-HxLockInfo
+        if ($cur) { $who = "，持有者 pid=$($cur.Pid)（起始 $($cur.Started)）" }
+        Write-Host ">>> [hx-busy] 等待另一个 agent 会话释放 HBuilderX 锁$who（已等 $lockWaited 秒，上限 $TimeoutSeconds 秒）" -ForegroundColor Yellow
+        # 只睡到「余量」为止：否则 -WaitSeconds 6 会睡满一个 10 秒轮询，把「上限 6 秒」跑成 10 秒 —— 预算必须诚实。
+        $sleepSec = [Math]::Min($PollSeconds, [Math]::Max(1, $TimeoutSeconds - $lockWaited))
+        Start-Sleep -Seconds $sleepSec
+        $lockWaited += $sleepSec
     }
     while ($true) {
         $probe = Test-HxResponsive -CliExe $CliExe -ProbeTimeoutSeconds $ProbeTimeoutSeconds
@@ -298,20 +478,27 @@ function Wait-HxFree {
         }
         $waited = [int]$sw.Elapsed.TotalSeconds
         if ($NoWait -or $waited -ge $TimeoutSeconds) {
-            Write-HxBusyHint -Reason 'cli.exe 探测未在超时内返回（主程序无响应，可能正忙）' -Waited $waited -LogPath $LogPath
+            Write-HxBusyHint -Reason 'cli.exe 探测未在超时内返回（主程序无响应，可能正忙）' -Waited $waited -LogPath $LogPath -Status (Get-HxBusyStatus -CliExe $CliExe)
             exit 2
         }
-        Write-Host ">>> [hx-busy] 主程序暂不可响应，$PollSeconds 秒后重试（已等 $waited 秒，上限 $TimeoutSeconds 秒）" -ForegroundColor Yellow
-        Start-Sleep -Seconds $PollSeconds
+        $sleepSec = [Math]::Min($PollSeconds, [Math]::Max(1, $TimeoutSeconds - $waited))
+        Write-Host ">>> [hx-busy] 主程序暂不可响应，$sleepSec 秒后重试（已等 $waited 秒，上限 $TimeoutSeconds 秒）" -ForegroundColor Yellow
+        Start-Sleep -Seconds $sleepSec
     }
 }
 
 function Write-HxBusyHint {
-    param([string]$Reason, [int]$Waited, [string]$LogPath)
+    param([string]$Reason, [int]$Waited, [string]$LogPath, $Status)
     Write-Host "[error] HBuilderX 门暂不可执行：$Reason" -ForegroundColor Red
+    # 超时这一行必须能自解释（用户 M2 ②）：谁占着、占多久、是陈旧锁还是活会话 —— 否则「等 120 秒再退」读起来像偶发。
+    if ($Status -and $Status.LockPresent) {
+        Write-HxBusyStatusLine -Status $Status -LogPath $LogPath | Out-Null
+        Write-Host "        持有者 pid=$($Status.Holder)（起始 $($Status.Started)，已持有 $($Status.AgeSeconds) 秒，存活=$(Format-HxTriState $Status.Alive)，陈旧=$(Format-HxTriState $Status.Stale)）" -ForegroundColor Red
+        Write-Host '        若要等更久：给入口传更大的 -WaitSeconds（hx:run 默认 120 秒）；要立刻退：-NoWait。' -ForegroundColor Red
+    }
     Write-Host '        维护者可能正在用 HBuilderX（**GUI 优先**）；可稍后重试，或改跑不需要 HBuilderX 的门：' -ForegroundColor Red
     Write-Host '        仿真机冒烟（纯 adb/emulator）/ ④c `-SkipPublish` / `npm run test:unit`。' -ForegroundColor Red
-    Write-Host '        本脚本**绝不抢占主程序、绝不 kill 主程序**（HBuilderX 是单实例串行资源）。' -ForegroundColor Red
+    Write-Host '        本脚本**绝不抢占主程序、绝不 kill 主程序**（HBuilderX 是单实例串行资源，本仓编排选择）。' -ForegroundColor Red
     $script:HxBusyWaitSeconds = $Waited
     if ($LogPath) { Add-Content -LiteralPath $LogPath -Encoding utf8 -Value "HX_BUSY wait=$Waited result=timeout" -ErrorAction SilentlyContinue }
     Write-Host "HX_BUSY wait=$Waited result=timeout"

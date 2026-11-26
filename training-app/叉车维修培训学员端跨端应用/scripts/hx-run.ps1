@@ -133,6 +133,15 @@
 .PARAMETER DryRun
     只打印将要执行的命令行，**完全不调用 HBuilderX、不调 adb、不写日志**（零副作用，任何机器上都能跑）。
 
+.PARAMETER Status
+    零副作用地看一眼**现在能不能上机**：打印现场机读行 `HX_STATUS lock=<held|free> holder=<pid> age=…` 与一行判定，
+    然后 `exit 0`（可上机）/ `2`（锁被占，环境不可用）/ `3`（找不到 cli 且主程序没在跑）。
+    **不取锁、不调 cli、不碰设备、不写日志** —— 与 `-DryRun`（判计划）分工不同：`-Status` 判**资源此刻是否可用**。
+
+.PARAMETER NoWait
+    锁被占时**立刻** `exit 2`，不做任何轮询。与 `-WaitSeconds` 是同一件事的两端：默认等 120 秒，
+    要久等就传更大的 `-WaitSeconds`，要秒退就传 `-NoWait`。**任何一档都绝不抢占、绝不 kill 主程序。**
+
 .PARAMETER StepTimeoutSeconds
     `open` / `project open` 两小步的超时秒数（默认 180）。超时**不强杀**，判环境不可用并 exit 2。
 
@@ -159,8 +168,11 @@
 
 .EXAMPLE
     npm run hx:run                                            # 日常增量（推荐）
+    npm run hx:run -- -Status                                  # 现在能不能上机（零副作用，秒级）
     npm run hx:compile-only                                   # 只编译：拿编译期诊断，不碰设备（#949）
     pwsh -NoProfile -File scripts/hx-run.ps1 -DryRun           # 只看将要跑什么，零副作用
+    pwsh -NoProfile -File scripts/hx-run.ps1 -WaitSeconds 600  # 明确要等更久（默认 120 秒）
+    pwsh -NoProfile -File scripts/hx-run.ps1 -NoWait           # 忙就立刻 exit 2，不排队
     pwsh -NoProfile -File scripts/hx-run.ps1 -Device emulator-5554
     pwsh -NoProfile -File scripts/hx-run.ps1 -Full             # 偶尔要全量时（仍是「运行」，不是门）
 #>
@@ -172,6 +184,10 @@ param(
     [string]$Cli,
     [switch]$Full,
     [int]$WaitSeconds = 120,
+    # 零副作用地看一眼「现在能不能上机」：不取锁、不调 cli、不写日志（2026-11-26 加，用户 M2 ①）。
+    [switch]$Status,
+    # 显式「不等待」：锁被占就立刻 exit 2，不做任何轮询（用户 M2 ③ 的显式等待模式的正反面）。
+    [switch]$NoWait,
     [switch]$DryRun,
     [switch]$CompileOnly,
     # #2027：「无代码变更」预检的逃生门。预检只挡「上一轮已部署成功且 HEAD/工作树都没变」这一种，
@@ -198,6 +214,46 @@ $ErrorActionPreference = 'Stop'
 # 同族血账：#1542 缺陷 5、auto-screenshot S20、#2013 B 项（子 pwsh 退回 gb2312）。
 # 非控制台环境设置可能抛 ⇒ try 兜住（先例 = dev-finish.ps1 顶部同款写法）。
 try { [Console]::OutputEncoding = [Text.Encoding]::UTF8 } catch { }
+
+# ---------- -Status：只看「谁占着 HBuilderX」，零副作用（2026-11-26 加，用户 M2 ①） ----------
+# 位置：必须排在项目校验 / adb 解析 / cli 派发 / Wait-HxFree **之前** —— 这套检查要能在「不接设备、
+# 不在项目目录、HBuilderX 正被别的会话占用」时也秒级回答「现在能不能上机」。
+# 也不建目录、不写日志、不调 cli：Get-HxBusyStatus 只读锁文件与进程表。
+# 契约：hxRunContract C7 要求 -DryRun 在任何 HBuilderX 交互之前 exit 0；-Status 更早，且同样不产生交互。
+# 退出码：0 = 现在可上机；2 = 锁被占（环境不可用，与等待超时同一语义）；3 = 找不到 cli 且主程序没在跑。
+if ($Status) {
+    . (Join-Path $PSScriptRoot 'lib\hx-busy.ps1')
+    $statusCli = Resolve-HxCliExe -Explicit $Cli -HxDir $HBuilderX
+    $st = Get-HxBusyStatus -CliExe $statusCli
+    Write-Host '=== HBuilderX 占用现场（-Status：不取锁 / 不调 cli / 不写日志 / 不碰设备）===' -ForegroundColor Cyan
+    Write-Host (Format-HxBusyStatusLine -Status $st)
+    $lockText = '空闲（没有 agent 会话持锁）'
+    if ($st.LockPresent) {
+        $lockText = "被占用：pid=$($st.Holder) 起始=$($st.Started) 已持有=$($st.AgeSeconds)s 存活=$(Format-HxTriState $st.Alive) 陈旧=$(Format-HxTriState $st.Stale)"
+    }
+    Write-Host ("lock     = {0}" -f $lockText)
+    if ($statusCli) {
+        Write-Host ("cli      = {0}" -f $statusCli)
+    } else {
+        Write-Host 'cli      = <未解析到：用 -Cli <路径> / -HBuilderX <安装目录> / 设 $env:HBuilderX_CLI>' -ForegroundColor Yellow
+    }
+    if ($st.HxRunning) {
+        Write-Host ("hx       = running（pid={0}，{1}）" -f $st.HxPid, $st.HxPath)
+    } else {
+        Write-Host 'hx       = absent（主程序没在跑；cli 步骤会自己 cli open 唤醒它）'
+    }
+    $statusCode = 0
+    if ($st.LockPresent) {
+        $statusCode = 2
+        Write-Host '判定     = busy ⇒ exit 2（环境不可用。要等：加 -WaitSeconds <秒>；要立刻退：加 -NoWait）' -ForegroundColor Yellow
+    } elseif (-not $statusCli -and -not $st.HxRunning) {
+        $statusCode = 3
+        Write-Host '判定     = env（找不到 cli.exe 且主程序没在跑）⇒ exit 3' -ForegroundColor Red
+    } else {
+        Write-Host '判定     = free ⇒ exit 0（现在可以上机）'
+    }
+    exit $statusCode
+}
 
 # ---------- 常量 ----------
 
@@ -320,14 +376,23 @@ function Resolve-CliPath {
             }
         }
     }
-    # 5) 常见安装位置
+    # 5) 注册表卸载项（2026-11-26 加，用户 M2 ④）：**不依赖「HBuilderX 此刻是否在跑」** ——
+    #    进程反查只在「维护者正好开着 GUI」时有效，关掉 GUI 后 CLI 仍可用，解析就必须还能找到它。
+    foreach ($cand in (Get-HxCliCandidatesFromRegistry)) {
+        if (Test-PeHeader -Path $cand) { return (Resolve-Path -LiteralPath $cand).Path }
+    }
+    # 6) 常见安装位置（与 lib/hx-busy.ps1 的 Resolve-HxCliExe 同源同序；env 为空就跳过，不拼相对路径）
+    $patterns = New-Object System.Collections.ArrayList
+    [void]$patterns.Add('D:\软件\HBuilderX*\HBuilderX\cli.exe')
+    [void]$patterns.Add('D:\HBuilderX*\HBuilderX\cli.exe')
+    foreach ($root in @($env:ProgramFiles, ${env:ProgramFiles(x86)}, 'C:\Program Files', 'D:\Program Files', "$env:LOCALAPPDATA\Programs")) {
+        if (-not $root) { continue }
+        [void]$patterns.Add((Join-Path $root 'HBuilderX*\HBuilderX\cli.exe'))
+        [void]$patterns.Add((Join-Path $root 'HBuilderX\cli.exe'))
+    }
+    if ($env:LOCALAPPDATA) { [void]$patterns.Add((Join-Path $env:LOCALAPPDATA 'HBuilderX\cli.exe')) }
     $found = @()
-    foreach ($pattern in @(
-            'D:\软件\HBuilderX*\HBuilderX\cli.exe',
-            'D:\HBuilderX*\HBuilderX\cli.exe',
-            'C:\Program Files\HBuilderX*\HBuilderX\cli.exe',
-            'C:\Program Files\HBuilderX\cli.exe',
-            "$env:LOCALAPPDATA\HBuilderX\cli.exe")) {
+    foreach ($pattern in $patterns) {
         $found += (Get-ChildItem -Path $pattern -ErrorAction SilentlyContinue |
             Sort-Object FullName -Descending | ForEach-Object { $_.FullName })
     }
@@ -710,6 +775,10 @@ $mode = 'incremental'
 
 $explicitCli = $Cli
 if (-not $explicitCli) { $explicitCli = $env:HBuilderX_CLI }
+# 提前 dot-source：Resolve-CliPath 的第 5 步要用 `Get-HxCliCandidatesFromRegistry`（注册表安装信息），
+# 而它与下面的忙检测共用同一个 helper（一份实现、两处消费者）。本 helper 只定义函数、不取锁、不写文件，
+# 提前到解析之前**零副作用**；下方忙检测处的 dot-source 保留（幂等重定义，锁尚未获取）。
+. (Join-Path $PSScriptRoot 'lib\hx-busy.ps1')
 $cliPath = Resolve-CliPath -Explicit $explicitCli -HxDir $HBuilderX -SkipRunningProbe:$DryRun
 
 if ($CompileOnly -and $Full) {
@@ -840,7 +909,7 @@ Set-Content -LiteralPath $LogPath -Encoding utf8 -Value @(
     "# wait = $WaitSeconds 秒上限；本脚本绝不 kill HBuilderX / cli / 主程序"
 )
 
-$hx = Wait-HxFree -CliExe $cliPath -TimeoutSeconds $WaitSeconds -LogPath $LogPath
+$hx = Wait-HxFree -CliExe $cliPath -TimeoutSeconds $WaitSeconds -LogPath $LogPath -NoWait:$NoWait
 try {
 
 $runClock = [System.Diagnostics.Stopwatch]::StartNew()

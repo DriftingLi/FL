@@ -149,6 +149,70 @@ function scanContract(sources) {
     '「持有者已死」判定没有排在时间线之前（优先级颠倒 ⇒ 新判据形同虚设）'
   );
 
+  // H13 只读现场快照（2026-11-26 加，用户 M2 ①）：要有「不取锁就能看谁占着」的入口，
+  // 且该入口**必须是只读的** —— 一旦它自己也去写锁文件，「先查一下」就会变成「顺手抢一把」，
+  // 与「快速识别」的初衷相反。三态渲染同时钉住：未知不得渲染成 false（否则「不知道」被读成「没占用」）。
+  must(helper.includes('function Get-HxBusyStatus'), 'H13', 'helper 缺只读现场快照 Get-HxBusyStatus（没有零副作用的占用查询入口）');
+  must(helper.includes('HX_STATUS lock='), 'H13', 'helper 未输出 HX_STATUS 一行机读快照（人眼与脚本无法同时消费）');
+  must(helper.includes('function Format-HxTriState'), 'H13', 'helper 缺三态渲染（未知会被渲染成 false）');
+  must(/return 'unknown'/.test(helper), 'H13', 'Format-HxTriState 未把 $null 渲染成 unknown');
+  const statusBody = helper.slice(
+    helper.indexOf('function Get-HxBusyStatus'),
+    helper.indexOf('function Format-HxTriState')
+  );
+  ['Acquire-HxLock', 'Set-Content', 'Remove-Item', 'New-Item'].forEach((forbidden) => {
+    must(
+      !statusBody.includes(forbidden),
+      'H13',
+      `Get-HxBusyStatus 体内出现 ${forbidden}（快照必须只读：查询不得取锁/写文件）`
+    );
+  });
+
+  // H14 占用时的可诊断反馈 + CLI 解析不依赖「HBuilderX 正在跑」（用户 M2 ②④）：
+  // ② 超时行必须带上持有者信息与出路，否则「等 120 秒再退」读起来像偶发；
+  // ④ 进程反查只在「维护者正好开着 GUI」时有效，关掉 GUI 后 CLI 仍可用 ⇒ 必须有注册表这条腿，
+  //    且它要排在「猜常见安装路径」之前（猜路径会扫一堆无关目录，注册表是安装事实）。
+  const hintBody = helper.slice(helper.indexOf('function Write-HxBusyHint'));
+  must(
+    /\$Status/.test(hintBody) && hintBody.includes('Format-HxTriState'),
+    'H14',
+    'Write-HxBusyHint 未渲染持有者信息（超时行没有「谁占着 / 存活 / 陈旧」，读起来像偶发）'
+  );
+  must(
+    helper.includes('-Status (Get-HxBusyStatus'),
+    'H14',
+    'Wait-HxFree 的超时路径未把现场快照传给 Write-HxBusyHint（知道原因却没打印）'
+  );
+  must(helper.includes('function Get-HxCliCandidatesFromRegistry'), 'H14', 'helper 缺注册表安装信息探测（CLI 解析只剩进程反查与猜路径）');
+  const registryUseAt = helper.indexOf('Get-HxCliCandidatesFromRegistry', helper.indexOf('function Resolve-HxCliExe'));
+  const guessPathAt = helper.indexOf('D:\\软件\\HBuilderX*', helper.indexOf('function Resolve-HxCliExe'));
+  must(
+    registryUseAt !== -1 && guessPathAt !== -1 && registryUseAt < guessPathAt,
+    'H14',
+    '注册表探测没有排在「猜常见安装路径」之前（安装事实应优先于路径猜测）'
+  );
+
+  // H15 注册表条目必须走安全取属性（2026-11-26 加，真跑踩出来的）：
+  // 本仓脚本统一 `Set-StrictMode -Version Latest`，此时读**不存在**的属性会直接抛
+  // 「在此对象上找不到属性"DisplayName"」——卸载项里确实有条目没有这个属性，
+  // 于是 CLI 解析链当场断掉（2026-11-26 18:13 真跑 `hx:compile-only` 就是这样死的）。
+  // ⇒ 注册表读值只许经 Get-HxRegValue（PSObject.Properties 判存在），不许直接成员访问。
+  must(helper.includes('function Get-HxRegValue'), 'H15', 'helper 缺安全取注册表属性的 Get-HxRegValue（StrictMode 下缺属性会抛错，整条 CLI 解析会断）');
+  const registryBody = helper.slice(
+    helper.indexOf('function Get-HxCliCandidatesFromRegistry'),
+    helper.indexOf('function Resolve-HxCliExe')
+  );
+  must(
+    !/\$it\.(DisplayName|InstallLocation|InstallDir|DisplayIcon|UninstallString)\b/.test(registryBody),
+    'H15',
+    '注册表条目用了直接成员访问（$it.DisplayName 等）：StrictMode 下条目缺该属性即抛错，必须走 Get-HxRegValue'
+  );
+  must(
+    /Get-HxRegValue -Item \$it -Name 'DisplayName'/.test(registryBody),
+    'H15',
+    '注册表条目未用 Get-HxRegValue 读 DisplayName（过滤条件可能在缺属性时直接抛错）'
+  );
+
   return violations;
 }
 
@@ -194,6 +258,38 @@ describe('HBuilderX 忙检测契约（单实例串行资源，2026-09-12）', ()
         helper: real.helper.replace(
           'function Test-HxLockStale {',
           'function Test-HxLockStale {\n    try { if (((Get-Date) - $Info.MTime).TotalMinutes -gt $script:HxLockStaleMinutes) { return $true } } catch { }'
+        )
+      }],
+      // H13：只读快照（2026-11-26）—— 「没有快照」与「快照会写文件」是两种不同的失败，各自注入
+      ['H13', { ...real, helper: real.helper.replace(/function Get-HxBusyStatus/g, 'function X') }],
+      ['H13', { ...real, helper: real.helper.replace(/HX_STATUS lock=/g, 'HX_SNAPSHOT lock=') }],
+      ['H13', { ...real, helper: real.helper.replace(/function Format-HxTriState/g, 'function F') }],
+      ['H13', { ...real, helper: real.helper.replace("return 'unknown'", "return 'false'") }],
+      ['H13', {
+        ...real,
+        helper: real.helper.replace(
+          'function Get-HxBusyStatus {',
+          'function Get-HxBusyStatus {\n    Set-Content -LiteralPath (Join-Path $env:TEMP "probe") -Value x'
+        )
+      }],
+      // H14：可诊断反馈 + 注册表腿（2026-11-26）
+      ['H14', { ...real, helper: real.helper.replace(/function Write-HxBusyHint/g, 'function Write-HxHintX') }],
+      ['H14', { ...real, helper: real.helper.replace(/-Status \(Get-HxBusyStatus/g, '-Status (Get-HxLockInfo') }],
+      ['H14', { ...real, helper: real.helper.replace(/function Get-HxCliCandidatesFromRegistry/g, 'function R') }],
+      ['H14', {
+        ...real,
+        helper: real.helper.replace(
+          'function Resolve-HxCliExe {',
+          'function Resolve-HxCliExe {\n    $early = @("D:\\软件\\HBuilderX*\\HBuilderX\\cli.exe")'
+        )
+      }],
+      // H15：注册表安全取属性（2026-11-26）——「没有安全取属性函数」与「又用回直接成员访问」是两种失败
+      ['H15', { ...real, helper: real.helper.replace(/function Get-HxRegValue/g, 'function RegX') }],
+      ['H15', {
+        ...real,
+        helper: real.helper.replace(
+          /Get-HxRegValue -Item \$it -Name 'DisplayName'/g,
+          '$it.DisplayName'
         )
       }]
     ];
