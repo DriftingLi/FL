@@ -32,7 +32,7 @@
 			<view v-if="isScoped" class="scope-bar">
 				<view class="scope-chip" @click="toggleScopeMenu">
 					<text class="scope-chip-text">{{ scopeTitle }}</text>
-					<text class="scope-chip-arrow">{{ scopeMenuOpen ? '^' : 'v' }}</text>
+					<image class="scope-chip-arrow" :class="{ 'scope-chip-arrow--expanded': scopeMenuOpen }" src="/static/icons/dashboard/credential-arrow.png" mode="aspectFit" />
 				</view>
 			</view>
 			<view v-if="isScoped && scopeMenuOpen" class="scope-menu">
@@ -77,7 +77,7 @@
 				<view v-if="isWelcomeState" class="prompt-list">
 					<view v-for="(p, idx) in quickPrompts" :key="idx" class="prompt-card" @click="sendText(p)">
 						<text class="prompt-text">{{ p }}</text>
-						<text class="prompt-arrow">&#8250;</text>
+						<image class="prompt-arrow" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
 					</view>
 				</view>
 
@@ -107,7 +107,8 @@
 		     都**整行不渲染**（安静不打扰是判据）。点这一行 = 追问句替换进输入框（不自动发送）。 -->
 		<view v-if="isDiagnosis && codeHintView.visible" class="code-hint" @click="onCodeHintTap">
 			<text :class="codeHintView.kind == 'known' ? 'code-hint-text' : 'code-hint-text code-hint-text-warn'">{{ codeHintView.text }}</text>
-			<text v-if="codeHintView.followUp.length > 0" class="code-hint-action">追问 ›</text>
+			<text v-if="codeHintView.followUp.length > 0" class="code-hint-action">追问</text>
+			<image v-if="codeHintView.followUp.length > 0" class="code-hint-arrow" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
 		</view>
 
 		<!-- 待发图片托盘（#2299）：只在诊断 scope、且有内容/上传中出现；发送后由 picker.clear() 收空 -->
@@ -1126,11 +1127,8 @@
 
 	.prompt-arrow {
 		width: 32rpx;
+		height: 32rpx;
 		flex-shrink: 0;
-		font-size: 32rpx;
-		line-height: 40rpx;
-		text-align: center;
-		color: #999999;
 		margin-left: 16rpx;
 	}
 
@@ -1210,13 +1208,14 @@
 	}
 
 	.scope-chip-arrow {
-		width: 32rpx;
+		width: 24rpx;
+		height: 24rpx;
 		flex-shrink: 0;
-		font-size: 22rpx;
-		line-height: 26rpx;
-		text-align: center;
-		color: $text-color-placeholder;
 		margin-left: 10rpx;
+	}
+
+	.scope-chip-arrow--expanded {
+		transform: rotate(180deg);
 	}
 
 	.scope-menu {
@@ -1349,5 +1348,12 @@
 		font-size: 24rpx;
 		color: $uni-color-primary;
 		margin-left: 12rpx;
+	}
+
+	.code-hint-arrow {
+		width: 24rpx;
+		height: 24rpx;
+		margin-left: 4rpx;
+		flex-shrink: 0;
 	}
 </style>

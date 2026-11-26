@@ -5,7 +5,7 @@
     <view class="chapter-nav">
         <view class="nav-item nav-prev" :class="{ disabled: prevChapterId == 0 }"
             @click="onPrevTap">
-            <text class="nav-arrow">‹</text>
+            <image class="nav-arrow-prev" src="/static/icons/ai-chat/chevron-model.png" mode="aspectFit" />
             <view class="nav-content">
                 <text class="nav-label">上一章节</text>
                 <text v-if="prevChapterId != 0" class="nav-title">{{ prevTitle }}</text>
@@ -19,7 +19,7 @@
                 <text v-if="nextChapterId != 0" class="nav-title">{{ nextTitle }}</text>
                 <text v-else class="nav-title-muted">没有下一章节</text>
             </view>
-            <text class="nav-arrow">›</text>
+            <image class="nav-arrow-next" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
         </view>
     </view>
 </template>
@@ -76,9 +76,11 @@
         justify-content: flex-end;
     }
 
-    .nav-arrow {
-        font-size: 48rpx;
-        color: $primary-color;
+    .nav-arrow-prev,
+    .nav-arrow-next {
+        width: 40rpx;
+        height: 40rpx;
+        flex-shrink: 0;
     }
 
     .nav-content {

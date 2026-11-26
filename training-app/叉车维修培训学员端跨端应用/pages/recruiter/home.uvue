@@ -12,7 +12,7 @@
             <!-- 紧迫行：交换响应侧的核心价值线索（ADR-0022 已裁，保留）——点它直达交换面 -->
             <view v-if="urgencyText.length > 0" class="urgency-row" @click="goContacts">
                 <text class="urgency-text">{{ urgencyText }}</text>
-                <text class="urgency-arrow">›</text>
+                <image class="urgency-arrow" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
             </view>
 
             <!-- 快捷入口：零统计静态卡，功能参考 web Dashboard（简历库入口）+ 移动端的交换 / 职位管理 -->
@@ -177,11 +177,8 @@
 
     .urgency-arrow {
         width: 32rpx;
+        height: 32rpx;
         flex-shrink: 0;
-        font-size: 30rpx;
-        line-height: 34rpx;
-        text-align: center;
-        color: #1B7BA0;
         margin-left: 12rpx;
     }
 

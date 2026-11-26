@@ -31,13 +31,13 @@
         <view v-else class="module-list">
             <view v-for="(m, idx) in modules" :key="m.tag_id" class="module-card" @click="onModuleClick(m)">
                 <view class="module-icon">
-                    <text class="module-icon-text">›</text>
+                    <image class="module-icon-arrow" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
                 </view>
                 <view class="module-info">
                     <text class="module-name">{{ m.name }}</text>
                     <text class="module-meta">{{ moduleMeta(m) }}</text>
                 </view>
-                <text class="module-arrow">›</text>
+                <image class="module-arrow" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
             </view>
         </view>
     </view>
@@ -103,10 +103,9 @@
         flex-shrink: 0;
     }
 
-    .module-icon-text {
-        font-size: 30rpx;
-        color: $primary-color;
-        font-weight: bold;
+    .module-icon-arrow {
+        width: 28rpx;
+        height: 28rpx;
     }
 
     .module-info {
@@ -128,11 +127,8 @@
 
     .module-arrow {
         width: 32rpx;
+        height: 32rpx;
         flex-shrink: 0;
-        font-size: 36rpx;
-        line-height: 40rpx;
-        text-align: center;
-        color: $text-disabled;
         margin-left: 12rpx;
     }
 
