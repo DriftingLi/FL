@@ -138,7 +138,11 @@ function Resolve-CommitBinding {
             & git -C $ProjectDir merge-base --is-ancestor $tip $HeadSha 2>$null | Out-Null
             if ($LASTEXITCODE -eq 0) {
                 # `--relative` 让路径以 $ProjectDir 为基准（本仓是 monorepo，仓库根相对路径会多一层前缀）
-                $names = (& git -C $ProjectDir diff --name-only --relative "$tip..$HeadSha" -- . 2>$null | Out-String)
+                # `-c core.quotepath=false`（#2874）：默认 quotepath 把非 ASCII 文件名转义成「双引号 + 八进制」，
+                #   于是「归档文件名含中文」时下面的 `-notlike 'docs/verification/*'` 恒真 ⇒ onlyArchive 恒假
+                #   ⇒ 明明只改了归档也会退回 local-head 并告警「未推到远端」。失败方向是 louder（更保守），
+                #   不是 #1853 那种静默绿；补关转义即可，判据本身不动。
+                $names = (& git -C $ProjectDir -c core.quotepath=false diff --name-only --relative "$tip..$HeadSha" -- . 2>$null | Out-String)
                 $onlyArchive = $true
                 foreach ($n in ($names -split "`r?`n")) {
                     $t = $n.Trim()
