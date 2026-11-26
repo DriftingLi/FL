@@ -316,14 +316,15 @@
     }
 
     /* ---- 分组区块（设计稿里区块直接铺白，只有说明块是灰底卡） ---- */
+    /* #2906：区块之间 16rpx 太挤，按 24rpx 一档拉开（同页 32rpx 版心让给左右内距） */
     .cert-dropdown-section {
-        margin: 16rpx 32rpx 0;
+        margin: 24rpx 32rpx 0;
         background-color: transparent;
     }
 
     .cert-dropdown-detail-card {
         margin: 24rpx 32rpx 0;
-        padding: 24rpx;
+        padding: 32rpx;
         background-color: $bg-color;
         border-radius: 16rpx;
     }
@@ -421,21 +422,25 @@
     }
 
     /* ---- 热门考证标题 ---- */
-    /* 票 2730 docx ①：蓝线与标题文字居中对齐（原 flex-start 让线贴在「热」字下方） */
+    /* #2906：标题左对齐，与「特种作业配套上岗证」等板块标题同一条左起线（原居中）。 */
+    /* align-self: flex-start 让列容器贴标题文字宽 —— 这是线宽跟随文字的前提，
+       缺失时容器被父级 stretch 撑满区块，线里的 width: 100% 就会解析成区块全宽。 */
     .cert-dropdown-hot-header {
         flex-direction: column;
-        align-items: center;
+        align-items: flex-start;
+        align-self: flex-start;
         margin-bottom: 20rpx;
     }
 
+    /* #2906：30rpx 不在字号阶梯上（20/24/28/32/36），取 $font-size-lg 与板块标题 $font-size-md 拉开一档 */
     .cert-dropdown-hot-title {
-        font-size: 30rpx;
+        font-size: $font-size-lg;
         font-weight: 600;
         color: #222222;
     }
 
     /* 票 2730 docx ①：Figma 里线宽 20px、在 64px 标题下居中（Rectangle 38 x=22 w=20）⇒ 40rpx */
-    /* 票 2827：改跟标题文字等宽（.cert-dropdown-hot-header 已是文字撑开的列容器），高度保持 6rpx。 */
+    /* 票 2827 + #2906：线宽跟标题文字等宽（列容器已由 align-self 贴文字宽），高度保持 6rpx。 */
     .cert-dropdown-hot-line {
         width: 100%;
         height: 6rpx;
@@ -450,11 +455,12 @@
     }
 
     /* 票 2730 docx ①：参考图一 —— 浅蓝→中蓝渐变、大圆角、文字居中、左上角四角星 */
+    /* #2906：上下内距统一 32rpx，两张卡的标题/副标题不再被 24rpx 的下内距压扁 */
     .cert-dropdown-hot-card {
         flex: 1;
         position: relative;
         align-items: center;
-        padding: 32rpx 16rpx 24rpx;
+        padding: 32rpx 16rpx;
         background: linear-gradient(to bottom right, #6ECCFC, #0FA5F1);
         background-color: #0FA5F1;
         border-radius: 20rpx;
