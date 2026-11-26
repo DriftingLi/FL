@@ -93,7 +93,7 @@
 
     /* 底部交卷按钮 */
     .submit-section {
-        padding: 0 24rpx 48rpx;
+        padding: 0 24rpx $spacing-xl;
     }
 
     .submit-btn {

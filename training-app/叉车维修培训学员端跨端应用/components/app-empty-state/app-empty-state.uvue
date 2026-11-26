@@ -46,7 +46,7 @@
 
     .app-empty-action {
         margin-top: $spacing-lg;
-        padding: 12rpx 48rpx;
+        padding: 12rpx $spacing-xl;
         border-radius: $radius-pill;
         border-width: 2rpx;
         border-style: solid;

@@ -418,7 +418,7 @@
     .chip-text { font-size: 26rpx; color: $text-color; }
     .chip-text-active { color: $primary-color; }
     .content-scroll { flex: 1; height: 0; }
-    .state-box { flex-direction: column; align-items: center; padding: 160rpx 48rpx; }
+    .state-box { flex-direction: column; align-items: center; padding: 160rpx $spacing-xl; }
     .state-icon { font-size: 80rpx; margin-bottom: 24rpx; }
     .state-text { font-size: 28rpx; color: $text-color-placeholder; text-align: center; }
     .state-btn { margin-top: 32rpx; padding: 16rpx 40rpx; border-radius: 32rpx; border: 1rpx solid $primary-color; align-items: center; justify-content: center; }

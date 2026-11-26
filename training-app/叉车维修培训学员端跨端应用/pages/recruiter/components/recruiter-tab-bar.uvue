@@ -112,7 +112,7 @@
     }
 
     .recruiter-tab-glyph {
-        font-size: 40rpx;
+        font-size: $font-size-2xl;
         color: #999999;
         line-height: 48rpx;
         text-align: center;

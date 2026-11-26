@@ -215,7 +215,7 @@
     }
 
     .reply-panel-close-text {
-        font-size: 40rpx;
+        font-size: $font-size-2xl;
         color: #666666;
         line-height: 1;
     }

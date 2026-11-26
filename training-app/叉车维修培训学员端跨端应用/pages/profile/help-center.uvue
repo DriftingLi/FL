@@ -430,7 +430,7 @@ import { goBack } from '../../utils/navigation'
 
     .state-btn {
         background-color: $primary-color;
-        padding: 16rpx 48rpx;
+        padding: 16rpx $spacing-xl;
         border-radius: 32rpx;
         margin-top: 32rpx;
     }
