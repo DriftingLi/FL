@@ -9,6 +9,7 @@
 // （片一已知限制：注解层没有枚举词汇）；故列表响应用 `WithUIQuestions` 显式标注该替换点。
 // 题目 UI 模型的收口需要先补生成器的 enum 能力，另立片（ADR-0048 片一实施修订）。
 import { unwrappedRequest } from './request'
+import type { TrainingCategoryFilter } from './training'
 import type { Eligibility } from './generated/course'
 // 票 6（ADR-0060 决策 6）：题目列表在出口处归一为中立容器 Page<T>（后端行键 = `questions`）
 import { toPage, type Page } from './page'
@@ -44,7 +45,7 @@ export interface QuestionsQuery {
   /** 按题库标签筛选（LH-28） */
   tag_id?: number
   credential_id?: number
-  category_id?: number | 'all' | 'legacy'
+  category_id?: TrainingCategoryFilter
   /** 排序口径（#412）：id_asc 按 ID 升序；缺省为服务端默认（最新提交优先） */
   sort?: string
 }

@@ -29,7 +29,7 @@ import {
   type AdminResourceId,
   type AlgorithmParameters
 } from '@/api/valuation/admin'
-import type { CoefficientConfig } from '@/types/valuation/evaluation'
+import type { CoefficientConfig } from '@/api/generated/valuation'
 import { useAdminTable } from '@/composables/useAdminTable'
 import { toPage } from '@/api/page'
 import { useAsyncPage } from '@/composables/useAsyncPage'

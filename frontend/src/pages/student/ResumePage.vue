@@ -91,7 +91,7 @@ import { ref, onMounted } from 'vue'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { resumeApi, type ResumeContactRequest } from '@/api/resume'
+import { resumeApi, type ResumeContactRequest, type ResumeUploadResult } from '@/api/resume'
 import { describeContactRequest } from '@/utils/contactRequestStatus'
 import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
@@ -143,8 +143,8 @@ async function onPdfChange(e: Event) {
   const fd = new FormData()
   fd.append('file', file)
   try {
-    const res: any = await resumeApi.uploadPdf(fd)
-    resumeFileUrl.value = res.url || res.data?.url || ''
+    const res: ResumeUploadResult = await resumeApi.uploadPdf(fd)
+    resumeFileUrl.value = res.url || ''
     ElMessage.success('上传成功')
     load()
     loadViewStats()
@@ -172,7 +172,7 @@ async function deletePdf() {
 async function toggleVisibility(val: boolean) {
   const vis = val ? 'open' : 'hidden'
   try {
-    await resumeApi.updateVisibility(vis as any)
+    await resumeApi.updateVisibility(vis)
     visibilityOpen.value = val
     ElMessage.success(val ? '已公开' : '已设为不公开')
   } catch {

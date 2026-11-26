@@ -41,14 +41,3 @@ func getRow[T any](r *DictionaryRepository, ctx context.Context, what, query str
 	}
 	return v, nil
 }
-
-// queryOne 无缓存单行查询（读操作）；未命中返回 pgx.ErrNoRows。
-func queryOne[T any](r *DictionaryRepository, ctx context.Context, what, query string,
-	scan func(pgx.Row) (T, error), args ...any) (T, error) {
-	row := r.pool.QueryRow(ctx, query, args...)
-	v, err := scan(row)
-	if err != nil {
-		return v, fmt.Errorf("%s失败: %w", what, err)
-	}
-	return v, nil
-}

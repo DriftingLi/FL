@@ -68,6 +68,7 @@
 import UiIcon from '@/components/ui/UiIcon.vue'
 import { ref, computed, onBeforeUnmount } from 'vue'
 import { resolveFileUrl } from '@/utils/fileUrl'
+import { downloadUrl, probeFileUrl } from '@/utils/fileBrowser'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiTooltip from '@/components/ui/UiTooltip.vue'
@@ -103,15 +104,13 @@ function handleError() {
 }
 
 async function checkFileExists() {
-  try {
-    const response = await fetch(resolvedSrc.value, { method: 'HEAD' })
-    if (response.status === 404) {
-      errorMessage.value = '视频文件不存在或已过期，请重新上传'
-    } else if (!response.ok) {
-      errorMessage.value = `视频加载失败 (${response.status})`
-    }
-  } catch (e) {
+  const result = await probeFileUrl(resolvedSrc.value)
+  if (result.networkError) {
     errorMessage.value = '无法连接到文件服务器'
+  } else if (result.status === 404) {
+    errorMessage.value = '视频文件不存在或已过期，请重新上传'
+  } else if (!result.ok) {
+    errorMessage.value = `视频加载失败 (${result.status})`
   }
 }
 
@@ -189,10 +188,7 @@ async function togglePiP() {
 }
 
 function downloadVideo() {
-  const link = document.createElement('a')
-  link.href = resolvedSrc.value
-  link.download = ''
-  link.click()
+  downloadUrl(resolvedSrc.value, { fileName: '' })
 }
 
 onBeforeUnmount(() => {

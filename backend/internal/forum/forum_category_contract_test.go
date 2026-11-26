@@ -232,6 +232,18 @@ func TestForumCategorySplitContract(t *testing.T) {
 		t.Fatalf("管理端不带 category 应看全部 4 条, 实际 %d", all.Data.Total)
 	}
 
+	// time 是 latest 的历史别名，归一后必须返回同一顺序。
+	timeAlias := list(token, "?sort=time")
+	latest := list(token, "?sort=latest")
+	if len(timeAlias.Data.Topics) != len(latest.Data.Topics) {
+		t.Fatalf("sort=time 与 sort=latest 数量不一致: %d vs %d", len(timeAlias.Data.Topics), len(latest.Data.Topics))
+	}
+	for i := range timeAlias.Data.Topics {
+		if timeAlias.Data.Topics[i].ID != latest.Data.Topics[i].ID {
+			t.Fatalf("sort=time 与 sort=latest 顺序不一致: %+v vs %+v", timeAlias.Data.Topics, latest.Data.Topics)
+		}
+	}
+
 	// 12. 非法 category 作为查询参数同样拒绝，不静默当成"不过滤"。
 	if rec := do(token, http.MethodGet, "/api/forum/topics?category=bogus", nil); rec.Code != http.StatusBadRequest {
 		t.Fatalf("列表传非法 category 应 400, 实际 %d", rec.Code)

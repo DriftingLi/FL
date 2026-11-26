@@ -9,6 +9,7 @@ package valuation
 import (
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -169,7 +170,7 @@ func (d DictDescriptor) Validate() error {
 			if _, ok := d.Field(name); !ok {
 				return fmt.Errorf("%s.Required 引用未声明字段 %q", spec.kind, name)
 			}
-			if !contains(d.Create.Fields, name) {
+			if !slices.Contains(d.Create.Fields, name) {
 				return fmt.Errorf("%s.Required 字段 %q 不在 %s.Fields 中", spec.kind, name, spec.kind)
 			}
 		}
@@ -268,15 +269,6 @@ func (rg *DictRegistry) All() []DictDescriptor {
 		out = append(out, d)
 	}
 	return out
-}
-
-func contains(list []string, s string) bool {
-	for _, v := range list {
-		if v == s {
-			return true
-		}
-	}
-	return false
 }
 
 func defaultMatchesType(v any, t DictFieldType) bool {

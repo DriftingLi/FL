@@ -33,7 +33,7 @@
 
         <el-table :data="items" stripe border style="width: 100%">
           <el-table-column label="时间" width="150">
-            <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
+            <template #default="{ row }">{{ formatDateTime(row.created_at) }}</template>
           </el-table-column>
           <el-table-column label="提交人" width="120">
             <template #default="{ row }">{{ row.username || `学员 #${row.user_id}` }}</template>
@@ -101,7 +101,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { feedbackApi, type FeedbackDTO } from '@/api/feedback'
 import { describeFeedbackStatus } from '@/utils/feedbackStatus'
-import { formatTime } from '@/utils/format'
+import { formatDateTime } from '@/utils/format'
 import { useAdminTable } from '@/composables/useAdminTable'
 import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiButton from '@/components/ui/UiButton.vue'

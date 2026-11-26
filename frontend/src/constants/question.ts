@@ -28,24 +28,10 @@ export const questionStatusTone: Record<string, QuestionStatusTone> = {
   published: 'success'
 }
 
-// 考试场次状态
-export const sessionStatusMap: Record<string, string> = {
-  upcoming: '未开始',
-  ongoing: '进行中',
-  finished: '已结束'
-}
-
 // 随机练习可选题量
 export const randomCountOptions = [
   { value: 10, label: '10 题' },
   { value: 20, label: '20 题' },
   { value: 30, label: '30 题' },
   { value: 50, label: '50 题' }
-]
-
-// 模拟考试可选题量
-export const mockCountOptions = [
-  { value: 20, label: '20 题' },
-  { value: 40, label: '40 题' },
-  { value: 60, label: '60 题' }
 ]

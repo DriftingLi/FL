@@ -74,9 +74,7 @@ export function useExamSession(adapters: ExamSessionAdapters) {
 
   /** 交卷：先 save 再 submit（顺序约束），返回 submit 结果 */
   async function submit(payload: ExamSubmitPayload): Promise<unknown> {
-    try {
-      await saveProgress()
-    } catch (e) {}
+    await saveProgress()
     return adapters.submit(payload)
   }
 

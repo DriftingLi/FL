@@ -36,7 +36,7 @@
         </el-table-column>
         <el-table-column label="时间" width="140">
           <template #default="{ row }">
-            {{ formatTime(row.created_at) }}
+            {{ formatDateTime(row.created_at) }}
           </template>
         </el-table-column>
         <el-table-column prop="actor_name" label="操作人" width="110" />
@@ -72,7 +72,7 @@ defineOptions({ name: 'AuditLogs' })
 
 import { onMounted, reactive } from 'vue'
 import { adminApi, type AuditLogItem } from '@/api/admin'
-import { formatTime } from '@/utils/format'
+import { formatDateTime } from '@/utils/format'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import UiFilterBar from '@/components/ui/UiFilterBar.vue'

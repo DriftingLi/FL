@@ -98,7 +98,6 @@ async function submitLevel() {
 
 // ===== 证书模板 =====
 const certificateDialogVisible = ref(false)
-const certificateLoading = ref(false)
 const certificateFormVisible = ref(false)
 const certificateFormRef = ref<FormInstance | null>(null)
 const certificateForm = reactive<{ id: number | null; name: string; validity_days: number; description: string }>({
@@ -203,7 +202,7 @@ defineExpose({ openDirectionDialog, openLevelDialog, openCertificateDialog })
         <UiIcon name="plus" /> 新增模板
       </UiButton>
     </div>
-    <el-table :data="certificateTemplates" stripe border size="small" v-loading="certificateLoading">
+    <el-table :data="certificateTemplates" stripe border size="small">
       <el-table-column prop="id" label="ID" width="60" align="center" />
       <el-table-column prop="name" label="模板名称" min-width="140" show-overflow-tooltip />
       <el-table-column prop="code" label="编码" width="110" />
@@ -219,7 +218,7 @@ defineExpose({ openDirectionDialog, openLevelDialog, openCertificateDialog })
         </template>
       </el-table-column>
     </el-table>
-    <UiEmptyState v-if="!certificateLoading && certificateTemplates.length === 0" description="暂无证书模板" />
+    <UiEmptyState v-if="certificateTemplates.length === 0" description="暂无证书模板" />
     <template #footer>
       <UiButton @click="certificateDialogVisible = false">关闭</UiButton>
     </template>

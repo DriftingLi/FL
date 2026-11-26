@@ -41,10 +41,6 @@ export function getSubdomain(): SubdomainType {
   return 'main'
 }
 
-export function isMainSubdomain(): boolean {
-  return getSubdomain() === 'main'
-}
-
 // 推导当前 hostname 的根域名（用于跨子域名 URL 构建）。
 // 例：mentor.example.com → example.com
 //     mentor.example.top → example.top

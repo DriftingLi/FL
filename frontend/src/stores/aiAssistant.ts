@@ -208,6 +208,15 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     if (target) target.title = trimmed
   }
 
+  function resetConversationContext() {
+    currentSessionId.value = null
+    messages.value = []
+    lastUsage.value = null
+    lastSources.value = []
+    lastMeta.value = null
+    lastTurnError.value = null
+  }
+
   /**
    * 开启「新对话草稿态」：只清本地消息并断开当前会话，**不落库**。
    * 后端仅在 session_id > 0 时持久化，因此不预建会话即可避免「点一下就产生空历史」；
@@ -221,15 +230,7 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     // #1122：「离开当轮上下文」的入口统一走 dropInflightTurn —— 这里覆盖仍未置 streaming 的在飞轮次
     // （懒创建会话的 await 窗口：activeTurn 已领号、流还没起）。send 恢复后据 activeTurn 失效自行退出。
     dropInflightTurn()
-    currentSessionId.value = null
-    messages.value = []
-    streamingContent.value = ''
-    streamingStatus.value = ''
-    lastUsage.value = null
-    lastSources.value = []
-    lastMeta.value = null
-    lastTurnError.value = null
-    turnDraft = null
+    resetConversationContext()
     return true
   }
 
@@ -255,12 +256,7 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
    */
   function clearMessages() {
     dropInflightTurn()
-    messages.value = []
-    currentSessionId.value = null
-    lastUsage.value = null
-    lastSources.value = []
-    lastMeta.value = null
-    lastTurnError.value = null
+    resetConversationContext()
   }
 
   async function selectSession(id: number) {
@@ -527,14 +523,7 @@ export const useAIAssistantStore = defineStore('aiAssistant', () => {
     // #1104：切上下文时在飞轮次一并收尾（此前不复位 streaming，旧流会继续往新上下文追加内容）
     dropInflightTurn()
     sessions.value = []
-    messages.value = []
-    currentSessionId.value = null
-    streamingContent.value = ''
-    streamingStatus.value = ''
-    lastUsage.value = null
-    lastSources.value = []
-    lastMeta.value = null
-    lastTurnError.value = null
+    resetConversationContext()
   }
 
   // ===== 初始化（通用 AI 助手页）=====

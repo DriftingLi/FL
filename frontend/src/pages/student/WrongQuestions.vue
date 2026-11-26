@@ -371,8 +371,6 @@ function resetFilters() {
   sortOrder.value = 'desc'
   filterFavorited.value = false
   filterMultiWrong.value = false
-  page.value = 1
-  loadData()
 }
 
 // 行内收藏：态由列表行携带（服务端随错题下发 favorited / favorite_id，ADR-0059 口径），

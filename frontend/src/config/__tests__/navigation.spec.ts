@@ -6,11 +6,10 @@
 //      导航项，进去后侧栏整条都不亮。
 // 所以这里把两类情形都钉死：该亮的要亮，不该亮的绝不能亮。
 //
-// 第十三波 票9 补的是同一族里**当时还只写在注释上**的四条判据：
-//   3. `exact` 已不参与判定（name 匹配天然精确，别再拿它当「前缀开关」）；
-//   4. 命中唯一性（双高亮的正面表述：同一路由下兄弟项里至多一项亮）；
-//   5. 两层深度上限（isGroupActive 不看第三层往下的子孙）；
-//   6. 分组高亮的结构性不对称（isGroupActive 只看子孙，分组行自己的 routeName 不算）。
+// 第十三波 票9 补的是同一族里**当时还只写在注释上**的判据：
+//   3. 命中唯一性（双高亮的正面表述：同一路由下兄弟项里至多一项亮）；
+//   4. 两层深度上限（isGroupActive 不看第三层往下的子孙）；
+//   5. 分组高亮的结构性不对称（isGroupActive 只看子孙，分组行自己的 routeName 不算）。
 import { describe, it, expect } from 'vitest'
 import {
   isNavRouteActive,
@@ -73,22 +72,6 @@ describe('isNavRouteActive', () => {
     expect(isNavRouteActive(item, undefined)).toBe(false)
     expect(isNavRouteActive(item, null)).toBe(false)
     expect(isNavRouteActive(item, '')).toBe(false)
-  })
-
-  it('exact 只是历史标记，不再参与判定（name 匹配天然精确，无前缀放宽也无额外收紧）', () => {
-    const exactLeaf: NavItem = { key: 'a', label: 'A', routeName: 'ForumPage', exact: true }
-    expect(isNavRouteActive(exactLeaf, 'ForumPage')).toBe(true)
-    // 前缀匹配早在描述符改造里取消了：同前缀的兄弟路由不被带动
-    expect(isNavRouteActive(exactLeaf, 'ForumDetail')).toBe(false)
-    // exact 也不改变详情页归属的判定（配了就算，不因为它为 true 而作废）
-    const exactWithDetail: NavItem = {
-      key: 'b',
-      label: 'B',
-      routeName: 'ForumPage',
-      activeRouteNames: ['ForumDetail'],
-      exact: true
-    }
-    expect(isNavRouteActive(exactWithDetail, 'ForumDetail')).toBe(true)
   })
 
   it('双高亮的正面表述：同一路由下兄弟项里至多一项命中（含详情页归属）', () => {

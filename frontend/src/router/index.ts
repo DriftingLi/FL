@@ -34,7 +34,6 @@ function routeMeta(page: PageDescriptor): Record<string, unknown> {
   // 于是新增页面忘写声明从「静默匿名可访问」变成编译期报错。子记录写的值与它此前继承到的
   // 布局值一致，故 meta 内容零变化。
   meta.requiresAuth = page.requiresAuth
-  if (page.authPage) meta.authPage = true
   if (page.roles) meta.roles = page.roles
   if (page.capability) meta.capability = page.capability
   // 缓存位（#1620）：SidebarLayout 读它决定该页是否进 keep-alive 的 include 名单
@@ -165,7 +164,7 @@ router.beforeEach(async (to, _from, next) => {
     fullPath: to.fullPath,
     name: to.name,
     meta: to.meta as Record<string, unknown>,
-    // 逐条匹配记录的 meta（保持既有 some() 语义：requiresAuth/authPage 按逐条判断）
+    // 逐条匹配记录的 meta（保持既有 some() 语义：requiresAuth 按逐条判断）
     matched: to.matched.map(record => record.meta as Record<string, unknown>)
   })
 
