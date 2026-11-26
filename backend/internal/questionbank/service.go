@@ -753,11 +753,7 @@ func (s *Service) questionPage(list []model.Question, page, pageSize int, total 
 	}
 	s.attachTagsBatch(ids, out)
 	if withPublicState {
-		sourceTagged, err := s.sourceTaggedByQuestion(ids)
-		if err != nil {
-			return nil, err
-		}
-		if err := FillQuestionPublicStates(s.db, out, sourceTagged); err != nil {
+		if err := fillQuestionPublicStates(s.db, out); err != nil {
 			return nil, err
 		}
 	}

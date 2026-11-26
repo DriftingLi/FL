@@ -37,7 +37,6 @@ type CoursePageResult struct {
 // CourseDTO 课程。可选字段（chapter_count 等）在未填充路径省略，与旧 map 行为一致。
 // 字段声明按 key 字母序，保持与旧 map 序列化的字节序一致。
 type CourseDTO struct {
-	publicHidden          bool
 	Category              *publicscope.CategoryRef `json:"category,omitempty" extensions:"x-optional"`
 	CategoryID            *int                     `json:"category_id,omitempty" extensions:"x-optional"`
 	CertificateName       string                   `json:"certificate_name,omitempty" extensions:"x-optional"`
@@ -754,7 +753,6 @@ func LoadLearningPosition(db *gorm.DB, studentID, courseID int) LearningPosition
 
 func CourseToDTO(c *model.Course) CourseDTO {
 	return CourseDTO{
-		publicHidden:          c.PublicHidden,
 		CourseID:              c.CourseID,
 		CategoryID:            c.CategoryID,
 		Name:                  c.Name,

@@ -1,0 +1,3 @@
+DROP VIEW question_public_eligibility;
+DROP VIEW course_public_eligibility;
+DROP VIEW training_category_public_eligibility;

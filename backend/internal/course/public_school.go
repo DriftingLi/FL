@@ -96,23 +96,10 @@ type publicSchoolListRequest struct {
 	courseType string
 }
 
-// publicSchoolCategoryColumns 两个读面共用的分类列投影（别名固定为 training_category）。
-const publicSchoolCategoryColumns = "training_category.id AS category_id, training_category.name AS category_name"
+const publicSchoolCategoryColumns = "course.category_id, course.category_name"
 
-// publicSchoolCategoryScope 公开网校的分类资格谓词 —— 本包内**唯一**一处定义，
-// 分类选项 / 目录 / 详情三个读面都从这里取，避免「列表能进、直达详情却 404」的分叉。
-//
-// 表别名固定为 training_category / credential：调用点必须用这两个别名 join，
-// 不用别名（如 t / c）是为了让这几条 join 在三个调用点逐字一致。
-func publicSchoolCategoryScope(db *gorm.DB) *gorm.DB {
-	return publicscope.ActiveCategoryScope(db, publicscope.CourseCategoryColumn)
-}
-
-// publicSchoolCourseScope 公开网校的课程资格谓词：已发布 + 分类满足上面的口径。
-// 与 `PublishedCategoryCourseScope`（只要求「分类存在」）是**两套口径**：那个是既有学员端
-// 读面的判据（ADR-0058），本函数是公开网校的判据；后者更严，且只服务公开网校。
 func publicSchoolCourseScope(db *gorm.DB) *gorm.DB {
-	return publicSchoolCategoryScope(db.Where("course.status = ? AND course.public_hidden = ?", 1, false))
+	return db.Table(publicscope.CourseView + " AS course").Where("course.eligible")
 }
 
 // escapeLikePattern 转义 LIKE 的通配符：关键词里的 % 与 _ 必须按字面匹配。
@@ -143,7 +130,7 @@ func (s *Service) ListPublicSchoolCategories(ctx context.Context, courseType str
 	}
 	// 计数口径与目录读面共用同一个课程资格谓词（publicSchoolCourseScope）：两处不可能漂移。
 	// 先按分类聚合公开课，再 JOIN 回分类表 —— 计数为 0 的分类自然被 INNER JOIN 滤掉（= 空项隐藏）。
-	countQuery := publicSchoolCourseScope(s.db.WithContext(ctx).Table("course")).
+	countQuery := publicSchoolCourseScope(s.db.WithContext(ctx)).
 		Select("course.category_id AS category_id, COUNT(*) AS course_count").
 		Group("course.category_id")
 	if courseType != "" {
@@ -152,10 +139,7 @@ func (s *Service) ListPublicSchoolCategories(ctx context.Context, courseType str
 	var rows []row
 	err := s.db.WithContext(ctx).Table("training_category").
 		Select("training_category.id AS id, training_category.name AS name, counts.course_count AS course_count").
-		Joins("JOIN credential ON credential.id = training_category.legacy_credential_id").
 		Joins("JOIN (?) AS counts ON counts.category_id = training_category.id", countQuery).
-		Where("training_category.status = ?", 1).
-		Where("credential.status = ?", 1).
 		Order("training_category.sort_order, training_category.id").
 		Find(&rows).Error
 	if err != nil {
@@ -177,7 +161,7 @@ func (s *Service) ListPublicSchoolCourses(ctx context.Context, req publicSchoolL
 		s.db.WithContext(ctx), req.page, req.pageSize, 12, 60,
 		"course.sort_order, course.created_at DESC, course.course_id DESC",
 		func(db *gorm.DB) *gorm.DB {
-			query := publicSchoolCourseScope(db.Table("course")).
+			query := publicSchoolCourseScope(db).
 				Select("course.course_id, course.name, course.course_type, course.description, course.cover_image, course.points_price, " +
 					publicSchoolCategoryColumns)
 			// 类型筛选在分页前应用（#2760）：与分类、关键词同一层，不分先后。
@@ -224,7 +208,7 @@ func (s *Service) GetPublicSchoolCourseDetail(ctx context.Context, courseID int)
 	var item publicSchoolCourseRow
 	// 一次查询把课程与分类一起取回：分两次取会出现「课程可见但分类随后被停用」的时序窗口，
 	// 那时第二次查询失败会让详情答 500 而不是 404 —— 一次 join 让判据原子。
-	query := publicSchoolCourseScope(db.Table("course")).
+	query := publicSchoolCourseScope(db).
 		Select("course.course_id, course.name, course.course_type, course.description, course.cover_image, course.points_price, "+
 			publicSchoolCategoryColumns).
 		Where("course.course_id = ?", courseID)
