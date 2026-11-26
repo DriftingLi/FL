@@ -2,8 +2,9 @@
     <view class="app-btn" :class="[
         'app-btn--' + type,
         'app-btn--' + size,
-        { 'app-btn--disabled': disabled }
-    ]" @click="onClick">
+        { 'app-btn--disabled': disabled, 'app-btn--pressed': pressed }
+    ]" @click="onClick"
+        @touchstart="onPressStart" @touchend="onPressEnd" @touchcancel="onPressEnd">
         <text class="app-btn-text" :class="[
             'app-btn-text--' + type,
             'app-btn-text--' + size
@@ -12,6 +13,8 @@
 </template>
 
 <script setup lang="uts">
+    import { ref } from 'vue'
+
     const props = withDefaults(defineProps<{
         text ?: string
         type ?: string
@@ -31,6 +34,21 @@
             emit('click')
         }
     }
+
+    /* 按压态（#2863）：uvue 原生端不支持 `:active` 伪类（ui-spec §5.10），按压反馈由
+     * @touchstart/@touchend 切 class（先例 pages/courses/course-detail.uvue 的 .action-btn-pressed）；
+     * 只有 primary 档有按压视觉（§5.3 的 `$primary-grad-pressed-*` 对），故仅在 primary + 未禁用时点亮。 */
+    const pressed = ref<boolean>(false)
+
+    function onPressStart() : void {
+        if (!props.disabled && props.type == 'primary') {
+            pressed.value = true
+        }
+    }
+
+    function onPressEnd() : void {
+        pressed.value = false
+    }
 </script>
 
 <style lang="scss">
@@ -47,6 +65,13 @@
         background: linear-gradient(to bottom, $primary-grad-start, $primary-grad-end);
         background-color: $primary-grad-end;
         border-radius: $radius-pill;
+    }
+
+    /* 主 CTA 按压态（ui-spec §5.3 的 pressed 对；#2863 接上，此前该对 0 引用）。
+     * 原生端只吃「to 关键字 + 恰好 2 色」，实色兜底写在渐变之后（gradientSyntaxContract 口径）。 */
+    .app-btn--primary.app-btn--pressed {
+        background: linear-gradient(to bottom, $primary-grad-pressed-start, $primary-grad-pressed-end);
+        background-color: $primary-grad-pressed-end;
     }
 
     /* Secondary（#2509 R2 冲突 9：透明底 → $primary-tint 浅蓝底 + 1px 主色边框） */
@@ -73,7 +98,7 @@
     /* Size: large */
     .app-btn--large {
         height: 80rpx;
-        padding: 0 48rpx;
+        padding: 0 $spacing-xl;
     }
 
     /* Size: medium */

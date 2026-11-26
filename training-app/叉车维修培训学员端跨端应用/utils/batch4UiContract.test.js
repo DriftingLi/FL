@@ -19,6 +19,7 @@ const h = require('./contractHarness');
 const read = h.read;
 
 const WHITELIST = require('./uiHexWhitelist');
+const scan = require('./privateComponentUiScan');
 
 /** 批4 十九页（N01 蓝底套，S01 簇 20 − my-forum，#1595 台账） */
 const PAGES = [
@@ -63,11 +64,14 @@ function styleBlock(src) {
   return src.slice(start, src.indexOf('</style>'));
 }
 
+/** 剥注释（块注释与 // 行）：issue 引用如 #947/#1140 会伪装成 3 位 hex，历史句「原 #FF4D4F 已改 …」也不算声明位 */
+function stripComments(style) {
+  return style.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+}
+
 function hexViolations(src) {
-  // 先剥注释（/* */ 与 // 行）——issue 引用如 #947/#1140 会伪装成 3 位 hex（ui-spec §9 只判声明位）
-  const style = styleBlock(src)
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/^\s*\/\/.*$/gm, '');
+  // ui-spec §9 只判声明位 ⇒ 先剥注释再取 hex
+  const style = stripComments(styleBlock(src));
   const hexes = style.match(/#[0-9a-fA-F]{3,8}\b/g) || [];
   return hexes.filter((raw) => {
     const v = normalizeHex(raw);
@@ -210,7 +214,7 @@ describe('导航栏返回箭头命中区', () => {
   });
 });
 
-describe('§1.6 白名单文件自检（批4 扫描面）', () => {
+describe('§1.6 白名单文件自检（全层扫描面）', () => {
   it('白名单每个值都有理由且格式合法', () => {
     for (const [value, reason] of Object.entries(WHITELIST)) {
       expect(value).toMatch(/^#[0-9A-F]{6}$/);
@@ -228,42 +232,16 @@ describe('§1.6 白名单文件自检（批4 扫描面）', () => {
     }
   });
 
-  it('批1+批1605+批3+批4+批5+批6 受管页面并集内每个白名单值真实出现（防死条目）', () => {
-    const batch1 = [
-      'pages/recruiter/home.uvue', 'pages/recruiter/jobs.uvue', 'pages/recruiter/resumes.uvue',
-      'pages/recruiter/contacts.uvue', 'pages/recruiter/applications.uvue', 'pages/recruiter/me.uvue',
-      'pages/recruiter/job-edit.uvue', 'pages/recruiter/resume-detail.uvue', 'pages/recruiter/login.uvue',
-    ];
-    const batch1605 = [
-      'pages/exam-info/exam-info.uvue', 'pages/guide/choose-cert.uvue',
-      'pages/jobs/job-list.uvue', 'pages/profile/personal-activity.uvue',
-    ];
-    const batch3 = [
-      'pages/profile/settings.uvue', 'pages/profile/personal-info.uvue', 'pages/profile/wrong-questions.uvue',
-      'pages/points/points-detail.uvue', 'pages/points/task-center.uvue',
-      'pages/ai-assistant/ai-settings.uvue', 'pages/ai-assistant/custom-models.uvue', 'pages/practice/practice.uvue',
-      'pages/practice/practice-report.uvue', 'pages/jobs/job-detail.uvue', 'pages/resume/resume-edit.uvue',
-      'pages/resume/resume-attach.uvue', 'pages/practice/practice-do.uvue',
-    ];
-    // #1608 批5（N05 透明页头 7 页）白名单条目落在批5页面，纳入并集扫描面；清单与 recruiterUiContract/learnerUiContract 保持一致
-    const batch5 = [
-      'pages/dashboard/dashboard.uvue', 'pages/forum/forum.uvue', 'pages/ai-assistant/ai-assistant.uvue',
-      'pages/courses/courses.uvue', 'pages/profile/profile.uvue', 'pages/recruiter/login.uvue',
-      'pages/resume/resume.uvue',
-    ];
-    // #1609 批6（N06 无页头白名单 5 页 + mall N03 补漏；#2757 下线 profile-setup 后由 6 页收窄）白名单条目落在批6页面，纳入并集扫描面；清单与 learnerUiContract/recruiterUiContract 保持一致
-    const batch6 = [
-      'pages/index/index.uvue', 'pages/login/login.uvue', 'pages/register/register.uvue',
-      'pages/forgot-password/forgot-password.uvue',
-      'pages/search/search.uvue', 'pages/mall/mall.uvue',
-    ];
-    // #2262 摘除 ai-feature 诊断面板后，#6DB8E8 唯一承载移至 components/ai-chat/ai-chat-input.uvue —— 扫描面随之补入组件文件
-    // #2786 删掉 ai-assistant 解锁专业版横幅后，#2E9E5B 唯一承载移至 ai-chat-pro-sheet 的已解锁按钮底 —— 组件补入扫描面
-    // #2523 起 #E3F2FD 在批次并集内的承载只剩 favorites（points-detail 提示条改浅黄），#FF8F00 的承载是 forum-topic-header 状态标签 —— 两者一并补入扫描面
-    // #2861 语义色收敛后 #22A45D/#F0FFF0/#4CAF50/#F44336 的最后承载落在 forum-resource-panel / forum-reply-list（私有子件，H1 判定面不变，只用于死条目判定）—— 两件补入扫描面
-    const all = PAGES.concat(batch1, batch1605, batch3, batch5, batch6, ['components/ai-chat/ai-chat-input.uvue', 'components/ai-chat/ai-chat-pro-sheet.uvue', 'pages/profile/favorites.uvue', 'pages/forum/components/forum-topic-header.uvue', 'pages/forum/components/forum-topic-actions.uvue', 'pages/forum/components/forum-more-menu.uvue', 'pages/forum/components/forum-resource-panel.uvue', 'pages/forum/components/forum-reply-list.uvue']).map((p) => styleBlock(read(p)).toUpperCase()).join('\n');
-    for (const value of Object.keys(WHITELIST)) {
-      expect(all).toContain(value);
-    }
+  // #2863（验收项③）：扫描面由「受管页面手工并集」升级为**全层并集**（pages/** + components/** + App.uvue）。
+  // 旧写法靠逐票往并集里补件（#2262 ai-chat-input、#2786 ai-chat-pro-sheet、#2523 forum-topic-header、
+  // #2861 forum-resource-panel / forum-reply-list …），承载一迁移就漏；漏了死条目会被静默判活。
+  // 全层扫描让「白名单值还有没有承载体」只依赖磁盘事实，不再依赖这份清单记得准不准。
+  // 判据仍是**声明位**：style 块剥注释后比对（注释里写「原 #FF4D4F 已改 …」不算承载）。
+  it('全层并集（pages/** + components/** + App.uvue）内每个白名单值真实出现（死条目 = 0）', () => {
+    // 复用 #2866 的纯函数（utils/privateComponentUiScan.js:195）而不是再写一份：它已按 3/6/8 位 + 右边界
+    // 取 style 块声明位 hex，比字符串 includes 严（后者会把 #F5F5F5AA 误判成 #F5F5F5 还活着）。
+    // 入参要裸 hex（helper 内部按「无 # 大写 6 位」比对，返回的才是 `#XXXXXX` 形式）。
+    const values = Object.keys(WHITELIST).map((v) => scan.normalizeHex(v));
+    expect(scan.whitelistDeadEntries(h.ROOT, values)).toEqual([]);
   });
 });

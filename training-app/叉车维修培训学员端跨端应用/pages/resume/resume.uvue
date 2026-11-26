@@ -237,7 +237,7 @@
     }
 
     .nav-bell {
-        font-size: 40rpx;
+        font-size: $font-size-2xl;
     }
 
     .container {
@@ -380,7 +380,7 @@
 
     /* ===== 常用功能 ===== */
     .section-title {
-        margin-top: 48rpx;
+        margin-top: $spacing-xl;
         margin-bottom: 20rpx;
         font-size: 32rpx;
         font-weight: bold;

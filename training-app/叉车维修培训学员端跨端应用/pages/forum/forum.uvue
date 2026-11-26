@@ -228,7 +228,7 @@
     }
 
     .msg-icon {
-        font-size: 40rpx;
+        font-size: $font-size-2xl;
     }
 
     /* 未读角标 */
@@ -338,7 +338,7 @@
 
     .empty-btn {
         background-color: $primary-color;
-        padding: 16rpx 48rpx;
+        padding: 16rpx $spacing-xl;
         border-radius: 32rpx;
     }
 

@@ -169,7 +169,7 @@
     }
 
     .empty-action {
-        padding: 20rpx 48rpx;
+        padding: 20rpx $spacing-xl;
         border-radius: 40rpx;
         background-color: $card-bg;
         border: 1rpx solid $border-color-light;
@@ -193,7 +193,7 @@
     }
 
     .retry-btn {
-        padding: 20rpx 48rpx;
+        padding: 20rpx $spacing-xl;
         border-radius: 40rpx;
         background-color: $primary-color;
     }

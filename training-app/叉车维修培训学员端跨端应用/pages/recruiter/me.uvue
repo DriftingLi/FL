@@ -159,7 +159,7 @@
     }
 
     .logout-btn {
-        margin: 48rpx 24rpx 0 24rpx;
+        margin: $spacing-xl 24rpx 0 24rpx;
         height: 96rpx;
         align-items: center;
         justify-content: center;

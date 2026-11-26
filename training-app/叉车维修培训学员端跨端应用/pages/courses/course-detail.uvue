@@ -543,7 +543,7 @@ import { goBack } from '../../utils/navigation'
     .retry-btn {
         background-color: $primary-color;
         border-radius: 32rpx;
-        padding: 16rpx 48rpx;
+        padding: 16rpx $spacing-xl;
     }
 
     .retry-btn-text {
@@ -557,7 +557,7 @@ import { goBack } from '../../utils/navigation'
        点击区虽在、却没有任何可点的视觉提示，观感等同「没有收藏功能」。 */
     /* 票 2730 第 1 项：88rpx 命中盒 / 64rpx 承载面由 components/app-icon-button 承担，本处只留字形。 */
     .favorite-icon {
-        font-size: 40rpx;
+        font-size: $font-size-2xl;
         color: #ffffff;
     }
 </style>

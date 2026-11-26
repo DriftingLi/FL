@@ -526,7 +526,7 @@
        #2518 刀3：原型为实心主色胶囊（高 66rpx、radius 33rpx、白字 24rpx），非描边款 */
     .more-btn-wrap {
         align-items: center;
-        padding: 24rpx 38rpx 48rpx;
+        padding: 24rpx 38rpx $spacing-xl;
     }
 
     /* 票 2730 第 1 项：按钮本体仍是 66rpx 高，命中区由外层 88rpx 盒撑开（§5.11）。 */
@@ -569,14 +569,14 @@
         color: #999999;
         margin-top: 12rpx;
         text-align: center;
-        padding: 0 48rpx;
+        padding: 0 $spacing-xl;
     }
 
     /* #1331：失败态重试位（与 course-detail / chapter-view 的 retry-btn 同款形态） */
     .retry-btn {
         background-color: $primary-color;
         border-radius: 32rpx;
-        padding: 16rpx 48rpx;
+        padding: 16rpx $spacing-xl;
         margin-top: 24rpx;
     }
 

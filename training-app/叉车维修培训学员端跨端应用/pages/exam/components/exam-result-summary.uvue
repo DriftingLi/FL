@@ -59,7 +59,7 @@
     .summary-card {
         margin: 24rpx;
         border-radius: 24rpx;
-        padding: 48rpx 32rpx;
+        padding: $spacing-xl 32rpx;
         align-items: center;
         border: 1px solid #eeeeee;
     }

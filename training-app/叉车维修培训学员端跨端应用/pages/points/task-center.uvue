@@ -367,7 +367,7 @@
     }
 
     .balance-value {
-        font-size: 48rpx;
+        font-size: $font-size-3xl;
         font-weight: bold;
         color: $text-color;
         margin-top: 4rpx;
