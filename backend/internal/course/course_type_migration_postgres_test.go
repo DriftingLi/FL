@@ -16,6 +16,7 @@ import (
 
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
+	"forklift-training/migrations"
 )
 
 // TestCourseTypeMigrationBackfillsFromPublishedVideo 迁移 74 的预填判据：
@@ -43,6 +44,9 @@ func TestCourseTypeMigrationBackfillsFromPublishedVideo(t *testing.T) {
 	}
 
 	// 先回滚，再从零重建：预填判据只有在列尚不存在时才有意义。
+	if err := db.Exec(migrations.DropPublicEligibilityViews).Error; err != nil {
+		t.Fatalf("migration 000076 public eligibility down: %v", err)
+	}
 	apply("000074_course_type", "down")
 
 	categoryID := insertReturningID(t, db,

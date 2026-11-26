@@ -8,6 +8,7 @@ import (
 
 	"forklift-training/internal/model"
 	"forklift-training/internal/testutil"
+	"forklift-training/migrations"
 )
 
 func TestTrainingCategoryMigrationOnPostgres(t *testing.T) {
@@ -38,6 +39,9 @@ func TestTrainingCategoryMigrationOnPostgres(t *testing.T) {
 
 	const categoryMigration = "000069_training_category"
 	const publicationMigration = "000070_training_course_publication"
+	if err := db.Exec(migrations.DropPublicEligibilityViews).Error; err != nil {
+		t.Fatalf("migration 000076 public eligibility down: %v", err)
+	}
 	apply("000073_wrong_question_categories", "down")
 	apply(categoryMigration, "down")
 	student := testutil.SeedStudent(t, db, "category-migration", "x")
