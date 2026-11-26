@@ -173,6 +173,11 @@ function Invoke-Process {
     foreach ($a in $Arguments) { [void]$psi.ArgumentList.Add($a) }
     Write-Host ">>> [$Tag] $FilePath $($Arguments -join ' ')"
     $p = [System.Diagnostics.Process]::Start($psi)
+    # 异常兜底凭据（#2889）：等待期（含收流判据每片轮询）里若抛异常逃出本函数，调用方拿不到
+    # 这个进程对象，进程树就成了孤儿 —— 实测脚本 16:05 已 exit 2，产物 16:11 才落盘，调用方的
+    # 后台 job 因此一直显示 running。登记到脚本域，由 Stop-ActiveChildProcess 在顶层 catch 收掉；
+    # 正常返回的每个分支都撤销登记（收流分支**必须**撤销：那一条按红线要留着 cli 不杀）。
+    $script:activeChildProcess = $p
     $stdout = $p.StandardOutput.ReadToEndAsync()
     $stderr = $p.StandardError.ReadToEndAsync()
 
@@ -203,6 +208,7 @@ function Invoke-Process {
         if ($settled) {
             # 不 kill：留下活着的 cli（其进程树里还有 HBuilderX 拉起的开发者工具），只放弃输出流。
             Write-Host "[warn] [$Tag] cli 未在 grace 窗口（$SettleGraceSeconds s）内退出（pid=$($p.Id)）⇒ 按产物收流，**未终止任何进程**；输出流放弃读取" -ForegroundColor Yellow
+            $script:activeChildProcess = $null
             return @{
                 Output = ''; ExitCode = -1; TimedOut = $false; DrainAbandoned = $true
                 Settled = $true; ChildPid = $p.Id; SettleReason = $settleInfo.Reason
@@ -210,6 +216,7 @@ function Invoke-Process {
             }
         }
         try { $p.Kill($true) } catch { }
+        $script:activeChildProcess = $null
         # 到点被杀时把「为什么没收流」的实测量留在输出里：票面 A 形态要求日志能分清
         # 「没产物」与「有产物没退出」—— 旧实现两种都只打 reason=timeout，读不出差别。
         $why = 'settle=off'
@@ -238,7 +245,33 @@ function Invoke-Process {
     $outText = ''; $errText = ''
     try { if ($stdout.IsCompleted) { $outText = $stdout.Result } } catch { $outText = '' }
     try { if ($stderr.IsCompleted) { $errText = $stderr.Result } } catch { $errText = '' }
+    $script:activeChildProcess = $null
     return @{ Output = ($outText + $errText); ExitCode = $p.ExitCode; TimedOut = $false; DrainAbandoned = (-not $drained); Settled = $false; ChildPid = 0; SettleReason = ''; SettleDetail = ''; SettleFiles = 0; SettlePages = 0 }
+}
+
+# 异常路径的**唯一**收口入口（#2889）：收掉 Invoke-Process 等待期间仍活着的子进程树。
+# 为什么不放进 Invoke-Process 的 finally：那会连「收流不 kill」的红线一起破掉（收流分支刻意留活 cli）。
+# 判据因此是「有没有登记」——登记只覆盖等待期，正常返回的每个分支都已撤销登记。
+# 日志不在这里落（Write-Log 定义在本函数之后，早退路径上也还不可用），由调用方带 pid 记录。
+$script:activeChildProcess = $null
+$script:lastChildPid = 0
+function Stop-ActiveChildProcess {
+    param([string]$Reason = 'exception')
+    $p = $script:activeChildProcess
+    if ($null -eq $p) { return }
+    $script:activeChildProcess = $null
+    try { $script:lastChildPid = $p.Id } catch { $script:lastChildPid = 0 }
+    $killed = 0
+    try {
+        if (-not $p.HasExited) {
+            $p.Kill($true)
+            $null = $p.WaitForExit(10000)
+            $killed = 1
+        }
+    } catch {
+        Write-Host "[warn] 终止残留子进程失败（pid=$($script:lastChildPid)）：$($_.Exception.Message)" -ForegroundColor Yellow
+    }
+    Write-Host "[warn] 异常收口：残留子进程树已处置（pid=$($script:lastChildPid) killed=$killed reason=$Reason）" -ForegroundColor Yellow
 }
 
 # 探针 JSON 的安全取值：Set-StrictMode 下访问不存在的属性会抛异常，
@@ -862,8 +895,27 @@ Write-Host '   本检查只证明「publish 成功 + 产物合法」，**不含*
 Write-Host '   ② 微信开发者工具门已于 2026-11-05 整体退役（#2320）：需要看运行时请手动诊断，不作为验收证据。' -ForegroundColor Yellow
 exit 0
 } catch {
-    Write-Host "[error] mp-weixin 构建面脚本异常：$_" -ForegroundColor Red
-    Write-Log "$(Get-GateResultPrefix) errors=env-blocked reason=exception"
+    # 异常路径必须与正常收口一样**可判读、可收尾**（#2889 实测缺口，三条一起补）：
+    #   ① 只有一行 `reason=exception`，没有异常类型与栈 ⇒ 读日志时无从定位是哪一行抛的；
+    #   ② 等待期起的子进程无人收 ⇒ 孤儿继续写 dist，调用方的后台 job 仍显示 running；
+    #   ③ STAGE_SUMMARY 缺一行 ⇒ 那一段在阶段账本里永远不收口。
+    # 异常类型与完整栈同时进 stdout 与日志：stdout 给人看，日志给事后取证（日志才是唯一留存）。
+    $err = $_
+    $exType = $err.Exception.GetType().Name
+    $exMsg = $err.Exception.Message
+    $exStack = if ($err.ScriptStackTrace) { [string]$err.ScriptStackTrace } else { [string]$err.Exception.StackTrace }
+    $stackLines = @()
+    if ($exStack) { $stackLines = @($exStack -split "`r?`n" | Where-Object { $_.Trim().Length -gt 0 }) }
+    Write-Host "[error] mp-weixin 构建面脚本异常（$($exType)）：$($exMsg)" -ForegroundColor Red
+    foreach ($stackLine in $stackLines) { Write-Host "        $stackLine" -ForegroundColor DarkGray }
+    # 收口顺序：先杀孤儿（它还在写产物目录，留着会让「已经失败」的一轮继续改工作区），
+    # 再补阶段收尾行，最后打结果行 —— 结果行放最后，保证它一定出现。
+    Stop-ActiveChildProcess -Reason 'exception'
+    $nl = [string][char]10
+    Write-Log ($nl + '>>> exception' + $nl + "type=$exType" + $nl + "message=$exMsg" + $nl + 'stack:' + $nl + "$exStack")
+    Write-Log "$(Get-GateResultPrefix) errors=env-blocked reason=exception ex=$exType child_pid=$($script:lastChildPid)"
+    Write-Host "        已收口：残留子进程 pid=$($script:lastChildPid)（0 = 等待期没起子进程）；异常栈首行已入日志" -ForegroundColor Yellow
+    Stop-GateStageIfOpen
     $exitCode = 2
 } finally {
     # publish 尾段会自启开发者工具：收掉那个自启实例靠这一次 close（幂等；失败只警告）。

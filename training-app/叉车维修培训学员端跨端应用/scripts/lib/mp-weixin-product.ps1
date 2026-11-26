@@ -32,20 +32,34 @@
 function Read-ProductJsonFile {
     param([Parameter(Mandatory = $true)][string]$Path)
 
-    $raw = Get-Content -LiteralPath $Path -Raw
+    # 「文件读不到」是产物面的一种**已知状态**，不是脚本异常（#2889）：publish 期 HBuilderX 先清空
+    # 再重写产物目录，判据调用的这一刻文件可能刚被删掉（并发写者探针：4000 次调用中 137 次命中，3.4%）。
+    # 旧实现直接 Get-Content ⇒ ItemNotFoundException 逃到脚本顶层 catch，被兜成
+    # `errors=env-blocked reason=exception`（还把 stage 收尾整段丢掉），把「正在构建」判成「环境不可用」。
+    # 这里转成可判读的结果：missing=$true ⇒ 调用方按「产物还没就位」处置，判据自己继续等。
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return [ordered]@{ ok = $false; value = $null; missing = $true; error = '文件不存在（产物目录正在被重写）' }
+    }
+    $raw = $null
+    try {
+        # -ErrorAction Stop：共享冲突 / 权限等读取失败也走同一条兜底，不再漏成脚本异常
+        $raw = Get-Content -LiteralPath $Path -Raw -ErrorAction Stop
+    } catch {
+        return [ordered]@{ ok = $false; value = $null; missing = $true; error = $_.Exception.Message }
+    }
     if ([string]::IsNullOrWhiteSpace($raw)) {
-        return [ordered]@{ ok = $false; value = $null; error = '文件为空' }
+        return [ordered]@{ ok = $false; value = $null; missing = $false; error = '文件为空' }
     }
     try {
         $value = $raw | ConvertFrom-Json
     } catch {
         # PowerShell（System.Text.Json）的报错原文里带 `line N, position M`：原样带出，不再自己数行
-        return [ordered]@{ ok = $false; value = $null; error = $_.Exception.Message }
+        return [ordered]@{ ok = $false; value = $null; missing = $false; error = $_.Exception.Message }
     }
     if ($null -eq $value) {
-        return [ordered]@{ ok = $false; value = $null; error = '解析结果为 null（空 JSON 文档）' }
+        return [ordered]@{ ok = $false; value = $null; missing = $false; error = '解析结果为 null（空 JSON 文档）' }
     }
-    return [ordered]@{ ok = $true; value = $value; error = '' }
+    return [ordered]@{ ok = $true; value = $value; missing = $false; error = '' }
 }
 
 <#
@@ -70,6 +84,14 @@ function Get-MpWeixinProductReport {
 
     $cfg = Read-ProductJsonFile -Path (Join-Path $Dist 'project.config.json')
     if (-not $cfg.ok) {
+        # 读取时消失（上一条 Test-Path 与这一次读之间的窗口）⇒ 仍是 product-missing：
+        # 收流判据据此继续等，而不是把「正在写盘」报成「JSON 非法」（#2889）
+        if ($cfg.missing) {
+            return [ordered]@{
+                ok = $false; stage = 'product-missing'; appid = ''; pages = 0
+                detail = "产物在读判据时消失：project.config.json（目录 $Dist 正在被重写）"
+            }
+        }
         return [ordered]@{
             ok = $false; stage = 'product-json'; appid = ''; pages = 0
             detail = "project.config.json 非法 JSON：$($cfg.error)"
@@ -77,6 +99,12 @@ function Get-MpWeixinProductReport {
     }
     $appJson = Read-ProductJsonFile -Path (Join-Path $Dist 'app.json')
     if (-not $appJson.ok) {
+        if ($appJson.missing) {
+            return [ordered]@{
+                ok = $false; stage = 'product-missing'; appid = ''; pages = 0
+                detail = "产物在读判据时消失：app.json（目录 $Dist 正在被重写）"
+            }
+        }
         return [ordered]@{
             ok = $false; stage = 'product-json'; appid = ''; pages = 0
             detail = "app.json 非法 JSON：$($appJson.error)"
@@ -219,10 +247,17 @@ function Get-MpWeixinArtifactReadings {
     if (-not (Test-Path -LiteralPath $appPath)) { return & $fail 'product-missing' "产物缺 app.json：$appPath" }
     if (-not (Test-Path -LiteralPath $cfgPath)) { return & $fail 'product-missing' "产物缺 project.config.json：$cfgPath" }
 
+    # 两条读取各自可能落在「文件刚被删」的窗口里（同上，#2889）⇒ 仍按缺产物报，不冒充「JSON 非法」
     $app = Read-ProductJsonFile -Path $appPath
-    if (-not $app.ok) { return & $fail 'product-json' "app.json 非法 JSON：$($app.error)" }
+    if (-not $app.ok) {
+        if ($app.missing) { return & $fail 'product-missing' "产物在读判据时消失：app.json（$appPath）" }
+        return & $fail 'product-json' "app.json 非法 JSON：$($app.error)"
+    }
     $cfg = Read-ProductJsonFile -Path $cfgPath
-    if (-not $cfg.ok) { return & $fail 'product-json' "project.config.json 非法 JSON：$($cfg.error)" }
+    if (-not $cfg.ok) {
+        if ($cfg.missing) { return & $fail 'product-missing' "产物在读判据时消失：project.config.json（$cfgPath）" }
+        return & $fail 'product-json' "project.config.json 非法 JSON：$($cfg.error)"
+    }
 
     $setting = Get-ProductJsonProperty -Object $cfg.value -Name 'setting'
     $lazy = Get-ProductJsonProperty -Object $app.value -Name 'lazyCodeLoading'
