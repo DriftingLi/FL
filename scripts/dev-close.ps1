@@ -18,8 +18,12 @@
 
     并发边界（本票第一性约束）：只动 -Task 自己那一棵树。默认不 checkout、不 pull、不改主树分支状态 ——
     主树是多会话共享面（manifest.json / postcss.config.js 常年挂着别的会话的脏）。`git fetch --prune`
-    只动远端跟踪引用、不碰工作区，属安全对账，默认就做；ff-only 同步改的是主树工作区，是树的主人
-    自己的动作，要它请加 -SyncMaster（且仅在 -Yes 时生效）。
+    只动远端跟踪引用、不碰工作区，属安全对账，默认就做，且**排在采集与判定之前**——排在后面时，两个祖先
+    事实（HEAD vs origin/master、HEAD vs PR 头）读的都是上一次的远端状态（#2876）。PR 已合并而本地没有
+    PR 头对象时再补抓一次 `refs/pull/<n>/head`（同样只加本地引用、不动工作区）：squash 合并后源分支被
+    GitHub 删掉，PR 头对象往往本地根本没有，不补抓则 #2289 的 headInPr 逃生阀永远拿不到 yes（#2861 实测
+    每棵树都要人工补一次 fetch 才收得完）。ff-only 同步改的是主树工作区，是树的主人自己的动作，
+    要它请加 -SyncMaster（且仅在 -Yes 时生效）。
 
     编码：入口钉 [Console]::OutputEncoding 为 UTF-8（同 preflight-pr.ps1 入口那条），并把 $OutputEncoding 设成**无 BOM** 的
     UTF8Encoding —— 用 [Text.Encoding]::UTF8 会给子进程 stdin 冠一个 U+FEFF，JSON.parse 当场炸，
@@ -140,7 +144,15 @@ if ($lockState -eq 'stale') {
     Write-Host "[dev-close] 索引锁存在但不可清理（state=$lockState）：$lockPath —— 等占用方自己结束，别删" -ForegroundColor Yellow
 }
 
-# ---------- 1) 采集事实（只采集，不判断）----------
+# ---------- 1) 对账：先取远端事实（fetch 安全：只动远端跟踪引用）----------
+# 顺序本身是判据的一部分（#2876）：下面第 2 段要采的两个祖先事实（HEAD vs origin/master、HEAD vs PR 头）
+# 都读本地 ref —— fetch 排在判定之后时读到的是**上一次**的远端状态，#2861 收尾就是这么假红一次
+# （PR 明明已 MERGED，DECIDE 却是 reason=unmerged-commits）。
+$fetchState = 'ok'
+$fr = & git -C $root fetch --prune 2>&1 | Out-String
+if ($LASTEXITCODE -ne 0) { $fetchState = 'failed'; Write-Host "[dev-close] fetch --prune 失败：$fr" -ForegroundColor Yellow }
+
+# ---------- 2) 采集事实（只采集，不判断）----------
 $wtList = '' + (& git -C $root worktree list --porcelain 2>&1 | Out-String)
 $unmerged = ''
 $headInMaster = 'na'
@@ -170,7 +182,8 @@ if ($probeBranch -eq 'na') { $probeBranch = '' }
 Push-Location $root
 try {
     if ($probeBranch) {
-        $prJsonText = '' + (& gh pr list --state all --head $probeBranch --json state,headRefOid 2>&1 | Out-String)
+        # number 是补抓 PR 头 ref 的唯一钥匙（refs/pull/<n>/head），所以一并取回来
+        $prJsonText = '' + (& gh pr list --state all --head $probeBranch --json state,headRefOid,number 2>&1 | Out-String)
     } else {
         $prJsonText = ''
     }
@@ -178,6 +191,32 @@ try {
 $prHead = ''
 $mh = [regex]::Match($prJsonText, '"headRefOid"\s*:\s*"([0-9a-fA-F]{7,40})"')
 if ($mh.Success) { $prHead = $mh.Groups[1].Value }
+
+# PR 头对象在不在本地（#2876）：squash 合并后源分支被 GitHub 删掉，`fetch --prune` 只更新 refs/remotes/*，
+# 取不到它。缺了就按 gh 给的 PR 号补抓 refs/pull/<n>/head，否则下面的 log / merge-base 问的是一条不存在的
+# 对象：log 打一行 fatal（被当成「还有活」）、merge-base 读成 unreadable ⇒ #2289 的逃生阀恒拿不到 yes。
+# 该不该抓由判定层 judgePrHead 判（判据留在这里 CI 测不到），本文件只采集事实 + 执行。
+$prHeadObject = 'na'
+if ($prHead) {
+    & git -C $root cat-file -e "$prHead^{commit}" 2>&1 | Out-Null
+    $prHeadObject = $(if ($LASTEXITCODE -eq 0) { 'present' } else { 'missing' })
+}
+$prJudge = Invoke-Core '--prhead' ([ordered]@{ prJson = $prJsonText; prHeadObject = $prHeadObject })
+Write-Host $prJudge.Text
+if ((FactOf $prJudge.Text 'need') -eq 'fetch') {
+    # RefSpec 写 +<src>:<dst>：只取进 FETCH_HEAD 的对象留不住（gc 会回收），落成本地 ref 才稳。
+    $prRefSpec = ('+{0}:{0}' -f (FactOf $prJudge.Text 'ref'))
+    $pfOut = & git -C $root fetch --quiet origin $prRefSpec 2>&1 | Out-String
+    if ($LASTEXITCODE -eq 0) {
+        & git -C $root cat-file -e "$prHead^{commit}" 2>&1 | Out-Null
+        $prHeadObject = $(if ($LASTEXITCODE -eq 0) { 'present' } else { 'missing' })
+        Write-Host "PR_HEAD_FETCH ref=$prRefSpec state=ok object=$prHeadObject"
+    } else {
+        # 抓不到不在这里判红：后面祖先事实读不回来，decide 的 fail-closed 自然会拦住拆树。
+        Write-Host "PR_HEAD_FETCH ref=$prRefSpec state=failed" -ForegroundColor Yellow
+        Write-Host $pfOut -ForegroundColor Yellow
+    }
+}
 if ($treePathHint -and (Test-Path -LiteralPath $treePathHint)) {
     if ($prHead) {
         # 只问「PR 头之后还有没有提交」：合并后被本地补提交的活，就是没进 PR 的活
@@ -219,16 +258,13 @@ if ((FactOf $dec.Text 'allow') -ne 'true') {
     exit 1
 }
 
-# ---------- 2) 对账（fetch 安全：只动远端跟踪引用）----------
-$fetchState = 'ok'
-$fr = & git -C $root fetch --prune 2>&1 | Out-String
-if ($LASTEXITCODE -ne 0) { $fetchState = 'failed'; Write-Host "[dev-close] fetch --prune 失败：$fr" -ForegroundColor Yellow }
+# ---------- 3) 主树 ff 同步（只在 -Yes -SyncMaster 时；它改的是主树工作区，不属安全对账）----------
 if ($Yes -and $SyncMaster) {
     $mr = & git -C $root merge --ff-only origin/master 2>&1 | Out-String
     if ($LASTEXITCODE -ne 0) { Write-Host "[dev-close] ff-only 同步未成（主树可能正被别人用着）：$mr" -ForegroundColor Yellow }
 }
 
-# ---------- 3) 按判定行动：拆树 → 分支残留核对 ----------
+# ---------- 4) 按判定行动：拆树 → 分支残留核对 ----------
 $passExec = (FactOf $dec.Text 'pass_execute') -eq 'true'
 $skipRemove = (FactOf $dec.Text 'skip_remove') -eq 'true'
 $treeBefore = $(if ($skipRemove) { 'absent' } else { 'present' })
@@ -252,7 +288,7 @@ $residueText = '' + (& pwsh @argvC 2>&1 | Out-String)
 $residueCode = $LASTEXITCODE
 Write-Host $residueText.Trim()
 
-# ---------- 4) 读数：原始产物交回判定层，这里不解析 ----------
+# ---------- 5) 读数：原始产物交回判定层，这里不解析 ----------
 # local_branch 必须与 `git branch --list` 一致（#2188 验收第 3 条）：remove 跑完后现采事实，交判定层兜底。
 # 采集放这里不放别处——此刻分支若还在，就是「真没删掉」，早采晚采都会把中间态读成假话。
 # 核的仍是身份分支（#2247）：问 feat/<票号> 会恒答 absent，把「没删掉的 fix/* 分支」谎报成已清干净。
