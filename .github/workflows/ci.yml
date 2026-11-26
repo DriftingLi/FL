@@ -19,6 +19,14 @@ env:
   # 1.26.11 修 GO-2026-6859（net/http MaxBytesReader header race）；1.26.10 在 2026-11-12 被 govulncheck 判红。
   GO_VERSION: "1.26.11"
   NODE_VERSION: "24"
+  # CI 侧钉住 git 的路径输出编码（#2885，补 #2873 未闭环的 CI 侧）：runner 不装本仓钩子
+  # （scripts/install-hooks.ps1 只写本地 .git/config，见其文件头），git 默认 core.quotepath=true
+  # ⇒ 非 ASCII 路径被写成 "training-app/\346\234\211..."，任何「取路径再判前缀/后缀/相等」的
+  # 脚本都会静默失配。用 GIT_CONFIG_* 三件套在环境层钉住（git ≥ 2.31），job 内 git config --get
+  # 直接读回；读数与反向对照由 scripts/check-git-quotepath.sh 产出（各测试 job 里那一步）。
+  GIT_CONFIG_COUNT: 1
+  GIT_CONFIG_KEY_0: core.quotepath
+  GIT_CONFIG_VALUE_0: "false"
 
 jobs:
   # ============================================================
@@ -176,6 +184,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # 路径编码判据（#2885）：回显 core.quotepath 读数 + 用真实中文路径正反各证一次，
+      # 读数行 GIT_QUOTEPATH_RESULT 留进 job 日志。cwd 回仓库根：本 job 的 defaults.run.
+      # working-directory 不是仓库根，而脚本自己也会 git rev-parse --show-toplevel 定位（两重保险）。
+      - name: git 路径输出编码钉住（core.quotepath=false）
+        if: matrix.shard == 1
+        working-directory: ${{ github.workspace }}
+        run: bash scripts/check-git-quotepath.sh
+
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
@@ -230,6 +246,13 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v7
+
+      # 路径编码判据（#2885）：回显 core.quotepath 读数 + 用真实中文路径正反各证一次，
+      # 读数行 GIT_QUOTEPATH_RESULT 留进 job 日志。cwd 回仓库根：本 job 的 defaults.run.
+      # working-directory 不是仓库根，而脚本自己也会 git rev-parse --show-toplevel 定位（两重保险）。
+      - name: git 路径输出编码钉住（core.quotepath=false）
+        working-directory: ${{ github.workspace }}
+        run: bash scripts/check-git-quotepath.sh
 
       - name: Set up Node.js
         uses: actions/setup-node@v7
@@ -571,6 +594,14 @@ jobs:
         working-directory: training-app/叉车维修培训学员端跨端应用
     steps:
       - uses: actions/checkout@v7
+
+      # 路径编码判据（#2885）：回显 core.quotepath 读数 + 用真实中文路径正反各证一次，
+      # 读数行 GIT_QUOTEPATH_RESULT 留进 job 日志。cwd 回仓库根：本 job 的 defaults.run.
+      # working-directory 不是仓库根，而脚本自己也会 git rev-parse --show-toplevel 定位（两重保险）。
+      - name: git 路径输出编码钉住（core.quotepath=false）
+        if: matrix.shard == 1 && matrix.leg == 'unit'
+        working-directory: ${{ github.workspace }}
+        run: bash scripts/check-git-quotepath.sh
       - uses: actions/setup-node@v7
         with:
           node-version: '20'
@@ -811,6 +842,13 @@ jobs:
           --health-retries 5
     steps:
       - uses: actions/checkout@v7
+
+      # 路径编码判据（#2885）：回显 core.quotepath 读数 + 用真实中文路径正反各证一次，
+      # 读数行 GIT_QUOTEPATH_RESULT 留进 job 日志。cwd 回仓库根：本 job 的 defaults.run.
+      # working-directory 不是仓库根，而脚本自己也会 git rev-parse --show-toplevel 定位（两重保险）。
+      - name: git 路径输出编码钉住（core.quotepath=false）
+        working-directory: ${{ github.workspace }}
+        run: bash scripts/check-git-quotepath.sh
 
       - name: Set up Python
         uses: actions/setup-python@v6

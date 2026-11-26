@@ -60,6 +60,12 @@ env:
   # - workflow_dispatch 触发时优先用 inputs.ref(CI 传入),否则用当前分支 HEAD
   # - CI 主动触发 CD 时会显式传入 ref=触发 CI 的 commit,确保部署的就是 CI 验证过的代码
   DEPLOY_REF: ${{ inputs.ref || github.sha }}
+  # 路径编码与 ci.yml 同源（#2885）：非 ASCII 路径不得被 git 写成 C 风格转义
+  # （cd.yml:119 的 git log / :193 起 git ls-tree 虽然只碰标题与 ASCII 目录，
+  # 但部署链上新增脚本不该各自重踩一遍；读数判据只挂在 ci.yml 的测试 job）。
+  GIT_CONFIG_COUNT: 1
+  GIT_CONFIG_KEY_0: core.quotepath
+  GIT_CONFIG_VALUE_0: "false"
 
 jobs:
   # ============================================================
