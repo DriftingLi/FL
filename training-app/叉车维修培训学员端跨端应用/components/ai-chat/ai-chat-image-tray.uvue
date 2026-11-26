@@ -82,7 +82,7 @@
 		position: relative;
 		align-items: center;
 		justify-content: center;
-		background-color: #f5f7fa;
+		background-color: $bg-color;
 	}
 
 	.tray-thumb {

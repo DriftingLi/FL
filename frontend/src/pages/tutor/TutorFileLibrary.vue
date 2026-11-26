@@ -181,6 +181,7 @@ import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useConfirm } from '@/composables/useConfirm'
 import { tutorApi, type TutorChapter, type TutorCourse } from '@/api/tutor'
 import { tutorFileApi, uploadFileInChunks, TUTOR_FILE_ACCEPT, type FileDTO } from '@/api/tutorfile'
+import { describeFileCategory } from '@/utils/chapterFileDisplay'
 
 const uploading = ref(false)
 const uploadingName = ref('')
@@ -241,15 +242,10 @@ onMounted(() => {
   loadFiles()
 })
 
-/** 内容分类 → 语义色调（状态词表口径：单一 descriptor 派生 label 与 tone）。 */
-function describeCategory(t: string): { label: string; tone: 'brand' | 'success' | 'info' | 'neutral' } {
-  const map: Record<string, { label: string; tone: 'brand' | 'success' | 'info' | 'neutral' }> = {
-    video: { label: '视频', tone: 'brand' },
-    document: { label: '文档', tone: 'info' },
-    ppt: { label: '幻灯片', tone: 'success' },
-    image: { label: '图片', tone: 'neutral' }
-  }
-  return map[t] ?? { label: t, tone: 'neutral' }
+/** 内容分类 → 语义色调；空类型保留原空标签回退。 */
+function describeCategory(t: string) {
+  if (!t) return { label: t, tone: 'neutral' as const }
+  return describeFileCategory(t)
 }
 
 /** 挂接状态 → descriptor（状态词表口径：单一 descriptor 派生 label 与 tone）。 */

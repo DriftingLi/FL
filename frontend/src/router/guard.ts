@@ -24,19 +24,9 @@ import type { SubdomainType } from '@/utils/subdomain'
 import { getTargetSubdomainForPath } from '@/utils/subdomain'
 import { courseLearningReturn } from '@/utils/authRedirect'
 import { adminLandingPage, tutorLandingPage } from '@/config/navigation'
+import type { Workspace } from '@/config/pages'
 import type { AuthzCapability } from '@/config/authz'
 import { holdsCapability, isDynamicRole } from '@/utils/authzRuntime'
-
-/**
- * 工作区：产品区语义（≠子域名）。
- * training 学员培训（含 AI 助手）；tutor 导师工作区（mentor. 子域名）；
- * recruit 企业招聘；manage 管理后台（manage. 子域名，内部子域类型 admin）；
- * auth 主体系认证页（/login /register /forgot-password，无单一目标子域名）。
- *
- * 残值评估（valuation）本来也是一个工作区，2026-10 起公开界面迁到门户仓
- * （valuation.hrwai.cn/valuation），本仓不再有该工作区的任何路由。
- */
-export type Workspace = 'training' | 'tutor' | 'recruit' | 'manage' | 'auth'
 
 /** 工作区 → 目标子域名（auth 无单一目标子域名，由 subdomainBoundaryStep 特判） */
 export const WORKSPACE_SUBDOMAIN: Record<Exclude<Workspace, 'auth'>, SubdomainType> = {
@@ -54,7 +44,7 @@ export interface GuardInput {
   name: unknown
   /** to.meta（vue-router 已合并父链 meta，子记录覆盖父记录） */
   meta: Record<string, unknown>
-  /** 逐条匹配记录的 meta（保持既有 some() 语义：requiresAuth/authPage 按逐条判断） */
+  /** 逐条匹配记录的 meta（保持既有 some() 语义：requiresAuth 按逐条判断） */
   matched: Array<Record<string, unknown>>
 }
 

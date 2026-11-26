@@ -218,12 +218,12 @@ describe('§1.6 白名单文件自检（批4 扫描面）', () => {
     }
   });
 
-  it('白名单值不得与 token 值重叠（重叠即该值应直接走 token；例外：#F5F5F5 渐变尾色语义不符）', () => {
+  it('白名单值不得与 token 值重叠（重叠即该值应直接走 token）', () => {
     // #2979FF 的豁免随 #2533（规格 #2493 批 A）条目退役一并删除：`$md-color-link` 自 #2338 起取值
     // `$color-link`（#1b6f9c），早已不等于旧主色 —— 那条「有意的过渡态」理由在当时就过期了。
-    const SEMANTIC_MISMATCH = new Set(['#F5F5F5']);
+    // #F5F5F5 的「渐变尾色语义不符」豁免随 #2862 一并删除：#F5F5F5 已作为中性底色收敛到 $bg-color，
+    // 白名单条目退役 ⇒ 例外不复存在，白名单值不得与任何 token 值重叠（§1.6 自检复原为无条件断言）。
     for (const value of Object.keys(WHITELIST)) {
-      if (SEMANTIC_MISMATCH.has(value)) continue;
       expect(tokenValues.has(value)).toBe(false);
     }
   });
@@ -260,7 +260,8 @@ describe('§1.6 白名单文件自检（批4 扫描面）', () => {
     // #2262 摘除 ai-feature 诊断面板后，#6DB8E8 唯一承载移至 components/ai-chat/ai-chat-input.uvue —— 扫描面随之补入组件文件
     // #2786 删掉 ai-assistant 解锁专业版横幅后，#2E9E5B 唯一承载移至 ai-chat-pro-sheet 的已解锁按钮底 —— 组件补入扫描面
     // #2523 起 #E3F2FD 在批次并集内的承载只剩 favorites（points-detail 提示条改浅黄），#FF8F00 的承载是 forum-topic-header 状态标签 —— 两者一并补入扫描面
-    const all = PAGES.concat(batch1, batch1605, batch3, batch5, batch6, ['components/ai-chat/ai-chat-input.uvue', 'components/ai-chat/ai-chat-pro-sheet.uvue', 'pages/profile/favorites.uvue', 'pages/forum/components/forum-topic-header.uvue', 'pages/forum/components/forum-topic-actions.uvue', 'pages/forum/components/forum-more-menu.uvue']).map((p) => styleBlock(read(p)).toUpperCase()).join('\n');
+    // #2861 语义色收敛后 #22A45D/#F0FFF0/#4CAF50/#F44336 的最后承载落在 forum-resource-panel / forum-reply-list（私有子件，H1 判定面不变，只用于死条目判定）—— 两件补入扫描面
+    const all = PAGES.concat(batch1, batch1605, batch3, batch5, batch6, ['components/ai-chat/ai-chat-input.uvue', 'components/ai-chat/ai-chat-pro-sheet.uvue', 'pages/profile/favorites.uvue', 'pages/forum/components/forum-topic-header.uvue', 'pages/forum/components/forum-topic-actions.uvue', 'pages/forum/components/forum-more-menu.uvue', 'pages/forum/components/forum-resource-panel.uvue', 'pages/forum/components/forum-reply-list.uvue']).map((p) => styleBlock(read(p)).toUpperCase()).join('\n');
     for (const value of Object.keys(WHITELIST)) {
       expect(all).toContain(value);
     }

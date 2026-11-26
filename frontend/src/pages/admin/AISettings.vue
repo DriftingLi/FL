@@ -11,11 +11,11 @@
       <div class="dual-bind-grid">
         <div class="dual-bind-item">
           <div class="dual-label">普通模式</div>
-          <UiSelect :model-value="normalBinding?.config_id || 0" placeholder="请选择配置" style="width: 100%" @update:model-value="(val: any) => handleAssistantBind(MODE_KEY_NORMAL, val)" :options="[{ label: '未绑定', value: 0 }, ...(configs).map((cfg) => ({ label: `${cfg.name}（${cfg.model}）`, value: cfg.id, disabled: !cfg.is_active }))]" />
+          <UiSelect :model-value="normalBinding?.config_id || 0" placeholder="请选择配置" style="width: 100%" @update:model-value="(val) => bindFeature(MODE_KEY_NORMAL, Number(val))" :options="configOptions" />
         </div>
         <div class="dual-bind-item">
           <div class="dual-label">专家模式</div>
-          <UiSelect :model-value="expertBinding?.config_id || 0" placeholder="请选择配置" style="width: 100%" @update:model-value="(val: any) => handleAssistantBind(MODE_KEY_EXPERT, val)" :options="[{ label: '未绑定', value: 0 }, ...(configs).map((cfg) => ({ label: `${cfg.name}（${cfg.model}）`, value: cfg.id, disabled: !cfg.is_active }))]" />
+          <UiSelect :model-value="expertBinding?.config_id || 0" placeholder="请选择配置" style="width: 100%" @update:model-value="(val) => bindFeature(MODE_KEY_EXPERT, Number(val))" :options="configOptions" />
         </div>
       </div>
       <div class="dual-hint">普通/专家分别单绑定，不向用户暴露模型名；未绑定时该模式不可用</div>
@@ -35,7 +35,7 @@
         </el-table-column>
         <el-table-column label="绑定的配置" min-width="380">
           <template #default="{ row }">
-            <UiSelect :model-value="row.config_id || 0" placeholder="请选择配置" style="width: 100%" @update:model-value="(val: any) => handleBind(row.feature_key, val)" :options="[{ label: '未绑定', value: 0 }, ...(configs).map((cfg) => ({ label: `${cfg.name}（${cfg.model}）`, value: cfg.id, disabled: !cfg.is_active }))]" />
+            <UiSelect :model-value="row.config_id || 0" placeholder="请选择配置" style="width: 100%" @update:model-value="(val) => bindFeature(row.feature_key, Number(val))" :options="configOptions" />
           </template>
         </el-table-column>
       </el-table>
@@ -130,10 +130,18 @@ import UiTag from '@/components/ui/UiTag.vue'
 import UiSwitch from '@/components/ui/UiSwitch.vue'
 import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
 import UiInput from '@/components/ui/UiInput.vue'
-import UiSelect from '@/components/ui/UiSelect.vue'
+import UiSelect, { type UiSelectOption } from '@/components/ui/UiSelect.vue'
 
 const configs = ref<AIConfig[]>([])
 const bindings = ref<FeatureBinding[]>([])
+const configOptions = computed<UiSelectOption[]>(() => [
+  { label: '未绑定', value: 0 },
+  ...configs.value.map(cfg => ({
+    label: `${cfg.name}（${cfg.model}）`,
+    value: cfg.id,
+    disabled: !cfg.is_active
+  }))
+])
 
 const dialogVisible = ref(false)
 const dialogMode = ref<'create' | 'edit'>('create')
@@ -192,12 +200,13 @@ const otherBindings = computed(() =>
   bindings.value.filter(b => !([...AI_ASSISTANT_MODE_KEYS, 'ai_assistant'] as string[]).includes(b.feature_key))
 )
 
-async function handleAssistantBind(featureKey: string, configId: number) {
+async function bindFeature(featureKey: string, configId: number) {
   try {
     await adminApi.setFeatureBinding(featureKey, configId)
     ElMessage.success('绑定已更新')
     await loadBindings()
   } catch {
+    // 拦截器已统一 toast 业务失败信息
     await loadBindings()
   }
 }
@@ -314,17 +323,6 @@ async function handleAction(cmd: string, row: AIConfig) {
         // 用户取消
       }
       break
-  }
-}
-
-async function handleBind(featureKey: string, configId: number) {
-  try {
-    await adminApi.setFeatureBinding(featureKey, configId)
-    ElMessage.success('绑定已更新')
-    await loadBindings()
-  } catch {
-    // 拦截器已统一 toast 业务失败信息
-    await loadBindings()
   }
 }
 

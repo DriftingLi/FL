@@ -217,6 +217,55 @@ describe('管理端正文渲染（#880 / ADR-0044）', () => {
   });
 });
 
+describe('回复加载错误', () => {
+  it('首页失败显示错误，重试成功后恢复空态', async () => {
+    const topic = adminTopic()
+    getTopic.mockRejectedValueOnce(new Error('load failed'))
+    const w = await mountTopics(topic)
+
+    await w.get('button.title-text').trigger('click')
+    await flushPromises()
+
+    expect(w.text()).toContain('回复加载失败')
+    expect(w.text()).not.toContain('暂无回复')
+
+    getTopic.mockResolvedValueOnce({ topic, replies: [], page: 1, pages: 0, total: 0 } as never)
+    const retry = w.findAll('button').find(button => button.text() === '重试')
+    expect(retry).toBeDefined()
+    await retry!.trigger('click')
+    await flushPromises()
+
+    expect(getTopic).toHaveBeenLastCalledWith(topic.id, 1, 20)
+    expect(w.text()).toContain('暂无回复')
+    expect(w.text()).not.toContain('回复加载失败')
+  })
+
+  it('续页失败保留已有回复，重试后清错并只追加一次', async () => {
+    const topic = adminTopic()
+    const first = adminReply()
+    const next = adminReply({ id: 10, content: '服务端续页' })
+    const w = await mountTopics(topic)
+    await openReplies(w, topic, [first], 2, 2)
+
+    getTopic.mockRejectedValueOnce(new Error('load more failed'))
+    await w.get('.reply-more button').trigger('click')
+    await flushPromises()
+
+    expect(w.text()).toContain('答主')
+    expect(w.findAll('.reply-error')).toHaveLength(1)
+
+    const callsBeforeRetry = getTopic.mock.calls.length
+    getTopic.mockResolvedValueOnce({ topic, replies: [next], page: 2, pages: 2, total: 2 } as never)
+    await w.get('.reply-more button').trigger('click')
+    await flushPromises()
+
+    expect(getTopic).toHaveBeenCalledTimes(callsBeforeRetry + 1)
+    expect(getTopic).toHaveBeenLastCalledWith(topic.id, 2, 20)
+    expect(w.text()).toContain('服务端续页')
+    expect(w.findAll('.reply-error')).toHaveLength(0)
+  })
+})
+
 describe('论坛管理操作', () => {
   it.each(topicActionCases)('$key 确认后请求、提示成功并刷新列表', async action => {
     const topic = adminTopic()

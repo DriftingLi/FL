@@ -48,7 +48,7 @@
     }
 </script>
 
-<style>
+<style lang="scss">
     .topic-content {
         flex-direction: column;
     }

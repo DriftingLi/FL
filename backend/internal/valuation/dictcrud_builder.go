@@ -12,6 +12,7 @@
 package valuation
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -45,7 +46,7 @@ func BuildInsertSQL(d DictDescriptor) string {
 		updates := make([]string, 0, len(d.Create.Fields))
 		for _, name := range d.Create.Fields {
 			f, ok := d.Field(name)
-			if !ok || contains(d.UniqueColumns, f.Column) {
+			if !ok || slices.Contains(d.UniqueColumns, f.Column) {
 				continue
 			}
 			updates = append(updates, f.Column+" = EXCLUDED."+f.Column)

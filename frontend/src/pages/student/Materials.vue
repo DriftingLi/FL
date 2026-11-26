@@ -84,7 +84,7 @@ import { ref, onMounted } from 'vue'
 import { materialApi, type MaterialItem } from '@/api/material'
 import { courseApi, type CourseSummary } from '@/api/course'
 import { resolveFileUrl } from '@/utils/fileUrl'
-import { formatLocaleDateTime } from '@/utils/format'
+import { formatFileSize as formatSize, formatLocaleDateTime } from '@/utils/format'
 import { useAsyncPage } from '@/composables/useAsyncPage'
 import { useStagger } from '@/composables/useStagger'
 import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
@@ -141,14 +141,6 @@ const TYPE_CONFIG: Record<string, { label: string; icon: IconName; color: string
 
 function typeConfig(contentType?: string) {
   return TYPE_CONFIG[contentType || 'document'] || TYPE_CONFIG.document
-}
-
-function formatSize(bytes?: number): string {
-  if (!bytes || bytes <= 0) return '-'
-  if (bytes < 1024) return `${bytes}B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)}MB`
-  return `${(bytes / 1024 / 1024 / 1024).toFixed(1)}GB`
 }
 
 async function loadCourses() {

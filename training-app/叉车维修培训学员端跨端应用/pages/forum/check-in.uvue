@@ -348,7 +348,7 @@ import { goBack } from '../../utils/navigation'
 </script>
 
 <style lang="scss">
-    .container { display: flex; background-color: #f5f5f5; flex-direction: column; }
+    .container { display: flex; background-color: $bg-color; flex-direction: column; }
     .content-scroll { flex: 1; height: 0; }
     .checkin-banner { margin: 24rpx; padding: 32rpx; border-radius: 20rpx; background-color: $primary-color; flex-direction: row; align-items: center; justify-content: space-between; }
     .banner-left { flex: 1; flex-direction: column; margin-right: 24rpx; }

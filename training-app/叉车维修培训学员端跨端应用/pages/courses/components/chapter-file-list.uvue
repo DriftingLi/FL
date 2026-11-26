@@ -84,7 +84,7 @@
         flex-direction: row;
         align-items: center;
         padding: 24rpx 0;
-        border-bottom: 1rpx solid #f5f5f5;
+        border-bottom: 1rpx solid $bg-color;
     }
 
     /* uvue 原生端只认 .class 选择器，`:last-child` 会被静默忽略 ⇒ 由模板给末行加类去分隔线 */
@@ -106,7 +106,7 @@
     }
 
     .file-icon-doc {
-        background-color: #e3f2fd;
+        background-color: $primary-tint;
     }
 
     .file-icon-ppt {
@@ -118,7 +118,7 @@
     }
 
     .file-icon-default {
-        background-color: #f5f5f5;
+        background-color: $bg-color;
     }
 
     .file-icon {

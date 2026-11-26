@@ -195,8 +195,6 @@ export const adminResources: AdminResourceTable = {
   }
 }
 
-export type AdminResourceKey = keyof typeof adminResources
-
 // ========== 算法参数聚合接口 ==========
 
 /** 拉取算法参数聚合数据（一次返回 4 类参数） */

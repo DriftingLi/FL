@@ -56,6 +56,7 @@
 import UiIcon from '@/components/ui/UiIcon.vue'
 import { ref, computed, onMounted, watch } from 'vue'
 import { resolveFileUrl } from '@/utils/fileUrl'
+import { downloadUrl, probeFileUrl } from '@/utils/fileBrowser'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiTooltip from '@/components/ui/UiTooltip.vue'
@@ -103,22 +104,18 @@ const unsupportedTip = computed(() => {
 })
 
 async function checkFileExists() {
-  try {
-    const response = await fetch(resolvedSrc.value, { method: 'HEAD' })
-    if (!response.ok) {
-      loadError.value = true
-      if (response.status === 404) {
-        errorMessage.value = '文件不存在或已过期，请重新上传'
-      } else {
-        errorMessage.value = `文档加载失败 (${response.status})`
-      }
-    }
-  } catch (e) {
+  const result = await probeFileUrl(resolvedSrc.value)
+  if (!result.ok) {
     loadError.value = true
-    errorMessage.value = '无法连接到文件服务器'
-  } finally {
-    loading.value = false
+    if (result.networkError) {
+      errorMessage.value = '无法连接到文件服务器'
+    } else if (result.status === 404) {
+      errorMessage.value = '文件不存在或已过期，请重新上传'
+    } else {
+      errorMessage.value = `文档加载失败 (${result.status})`
+    }
   }
+  loading.value = false
 }
 
 function onIframeLoad() {
@@ -136,13 +133,11 @@ function openInNewTab() {
 }
 
 function downloadFile() {
-  const link = document.createElement('a')
-  link.href = resolvedSrc.value
-  link.download = props.fileName || 'document'
-  link.target = '_blank'
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
+  downloadUrl(resolvedSrc.value, {
+    fileName: props.fileName || 'document',
+    target: '_blank',
+    appendToBody: true
+  })
 }
 
 onMounted(() => {

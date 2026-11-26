@@ -174,8 +174,8 @@ export function usePracticeSession(adapters: PracticeSessionAdapters) {
     wrongCount.value = wrong
   }
 
-  /** 整段会话重置到起始下标（清空答题状态） */
-  function resetSession(startIdx: number) {
+  /** 清空答题状态，可指定续练起始下标。 */
+  function clearSessionState(startIdx = 0) {
     currentIdx.value = startIdx
     resetAnswers()
     textAnswerMap.value = {}
@@ -183,6 +183,11 @@ export function usePracticeSession(adapters: PracticeSessionAdapters) {
     resultMap.value = {}
     correctCount.value = 0
     wrongCount.value = 0
+  }
+
+  /** 整段会话重置到起始下标（清空答题状态） */
+  function resetSession(startIdx: number) {
+    clearSessionState(startIdx)
   }
 
   /** 进入/续练某模式；返回是否成功进入会话 */
@@ -259,13 +264,7 @@ export function usePracticeSession(adapters: PracticeSessionAdapters) {
   function backToEntry() {
     mode.value = null
     questions.value = []
-    currentIdx.value = 0
-    resetAnswers()
-    textAnswerMap.value = {}
-    submittedMap.value = {}
-    resultMap.value = {}
-    correctCount.value = 0
-    wrongCount.value = 0
+    clearSessionState()
   }
 
   return {

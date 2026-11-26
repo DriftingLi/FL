@@ -505,16 +505,13 @@ func (s *Service) ListTopics(in TopicListInput) (*ForumTopicPageResult, error) {
 	if scope == ForumScopeChapter && chapterID <= 0 {
 		return nil, ErrChapterIDRequired
 	}
+	// time 是 latest 的历史别名；未知值同样回落 latest。
 	if sort != "hot" && sort != "created" {
 		sort = "latest"
 	}
 	dir := "DESC"
 	if order == "asc" {
 		dir = "ASC"
-	}
-	// 统一 sort 别名：time 作为 latest 的别名（兼容详情页旧值）
-	if sort == "time" {
-		sort = "latest"
 	}
 	orderClause := "COALESCE(t.last_reply_at, t.created_at) " + dir + ", t.id " + dir
 	if sort == "hot" {
@@ -530,9 +527,7 @@ func (s *Service) ListTopics(in TopicListInput) (*ForumTopicPageResult, error) {
 		orderClause,
 		func(q *gorm.DB) *gorm.DB {
 			q = q.Table("forum_topics AS t").
-				Select(topicRowSelect +
-					"u.id AS user_id, u.username, u.avatar_url, " +
-					"COALESCE(ch.title, '') AS chapter_title").
+				Select(topicWithAuthorSelect).
 				Joins("JOIN hrwai_users AS u ON u.id = t.user_id").
 				Joins("LEFT JOIN chapter AS ch ON ch.chapter_id = t.chapter_id")
 			switch scope {
@@ -620,9 +615,7 @@ func (s *Service) GetTopic(in TopicDetailInput) (*ForumTopicDetailDTO, error) {
 	}
 	var row topicRow
 	err := s.db.Table("forum_topics AS t").
-		Select(topicRowSelect+
-			"u.id AS user_id, u.username, u.avatar_url, "+
-			"COALESCE(ch.title, '') AS chapter_title").
+		Select(topicWithAuthorSelect).
 		Joins("JOIN hrwai_users AS u ON u.id = t.user_id").
 		Joins("LEFT JOIN chapter AS ch ON ch.chapter_id = t.chapter_id").
 		Where("t.id = ?", topicID).
@@ -1366,8 +1359,7 @@ func (s *Service) MyTopics(userID, page, pageSize int) (*ForumTopicPageResult, e
 		"COALESCE(t.last_reply_at, t.created_at) DESC, t.id DESC",
 		func(q *gorm.DB) *gorm.DB {
 			return q.Table("forum_topics AS t").
-				Select(topicRowSelect+
-					"u.id AS user_id, u.username, u.avatar_url, COALESCE(ch.title, '') AS chapter_title").
+				Select(topicWithAuthorSelect).
 				Joins("JOIN hrwai_users AS u ON u.id = t.user_id").
 				Joins("LEFT JOIN chapter AS ch ON ch.chapter_id = t.chapter_id").
 				Where("t.user_id = ?", userID)
@@ -1375,25 +1367,15 @@ func (s *Service) MyTopics(userID, page, pageSize int) (*ForumTopicPageResult, e
 	if err != nil {
 		return nil, err
 	}
-	items := make([]ForumTopicDTO, 0, len(rows))
-	for _, r := range rows {
-		items = append(items, r.toDTO(userID))
-	}
-	// 点赞计数已由 likes_count 列提供，仅需回填是否已赞（单一 helper 收敛）
-	s.enrichTopicLikedByMe(toDTORefs(items), userID)
-	s.enrichRewardIssued(items)
-	return &ForumTopicPageResult{
-		Page: page, Pages: response.PageCount(total, pageSize),
-		Topics: items, Total: total,
-	}, nil
+	return s.finishPersonalTopics(rows, total, page, pageSize, userID), nil
 }
 
 // topicRowSelect topicRow 的共享投影（#742 审查收敛）：新增 topicRow 字段时只改这一处，
 // 全部列表/详情/个人视图查询共用，避免散落 5 处的投影字符串漂移。
 const topicRowSelect = "t.id, t.chapter_id, t.category, t.title, t.content, t.content_format, t.ip_province, t.ip_city, t.images, t.view_count, t.reply_count, t.likes_count, t.accepted_reply_id, t.solved_at, t.last_reply_at, t.is_featured, t.is_experience, t.created_at, "
 
-// personalTopicSelect 个人动态三列表的行装配投影（与 MyTopics 逐字一致，被删主题字段 NULL 由 Scan 零值承载）。
-const personalTopicSelect = topicRowSelect +
+// topicWithAuthorSelect 主题与作者/章节的共享投影；个人列表 LEFT JOIN 时被删主题字段由 Scan 零值承载。
+const topicWithAuthorSelect = topicRowSelect +
 	"u.id AS user_id, u.username, u.avatar_url, " +
 	"COALESCE(ch.title, '') AS chapter_title"
 
@@ -1418,7 +1400,7 @@ func (s *Service) MyLikedTopics(userID, page, pageSize int) (*ForumTopicPageResu
 		"l.created_at DESC, l.id DESC",
 		func(q *gorm.DB) *gorm.DB {
 			return q.Table("forum_topic_like AS l").
-				Select(personalTopicSelect).
+				Select(topicWithAuthorSelect).
 				Joins("LEFT JOIN forum_topics AS t ON t.id = l.topic_id").
 				Joins("LEFT JOIN hrwai_users AS u ON u.id = t.user_id").
 				Joins("LEFT JOIN chapter AS ch ON ch.chapter_id = t.chapter_id").
@@ -1430,23 +1412,31 @@ func (s *Service) MyLikedTopics(userID, page, pageSize int) (*ForumTopicPageResu
 	return s.finishPersonalTopics(rows, total, page, pageSize, userID), nil
 }
 
+func (s *Service) latestTopicViews(userID int) *gorm.DB {
+	return s.db.Table("forum_topic_views AS v").
+		Select("v.topic_id, MAX(v.viewed_at) AS last_viewed").
+		Where("v.user_id = ?", userID).
+		Group("v.topic_id")
+}
+
+func selectLatestTopics(q *gorm.DB, latestViews *gorm.DB) *gorm.DB {
+	return q.Table("(?) AS lv", latestViews).
+		Select(topicWithAuthorSelect).
+		Joins("LEFT JOIN forum_topics AS t ON t.id = lv.topic_id").
+		Joins("LEFT JOIN hrwai_users AS u ON u.id = t.user_id").
+		Joins("LEFT JOIN chapter AS ch ON ch.chapter_id = t.chapter_id")
+}
+
 // MyViewHistory 浏览记录（#701）：浏览行驱动 + 主题/作者/章节 LEFT JOIN，按主题去重取最近一次浏览倒序。
 // 去重面是「同一主题多日多行取最近一行」：先按主题聚合出每主题最近浏览（派生表），
 // 再 LEFT JOIN 主题取行装配——count 与 scan 同走派生表，去重语义在计数侧同样成立。
 // 自帖在写入侧已排除（GetTopic 不记录自帖浏览），此处不再过滤。主题被删时条目保留。
 func (s *Service) MyViewHistory(userID, page, pageSize int) (*ForumTopicPageResult, error) {
-	latestViews := s.db.Table("forum_topic_views AS v").
-		Select("v.topic_id, MAX(v.viewed_at) AS last_viewed").
-		Where("v.user_id = ?", userID).
-		Group("v.topic_id")
+	latestViews := s.latestTopicViews(userID)
 	rows, total, page, pageSize, err := paging.QueryWithScan[topicRow](s.db, page, pageSize, 10, 100,
 		"lv.last_viewed DESC, t.id DESC",
 		func(q *gorm.DB) *gorm.DB {
-			return q.Table("(?) AS lv", latestViews).
-				Select(personalTopicSelect).
-				Joins("LEFT JOIN forum_topics AS t ON t.id = lv.topic_id").
-				Joins("LEFT JOIN hrwai_users AS u ON u.id = t.user_id").
-				Joins("LEFT JOIN chapter AS ch ON ch.chapter_id = t.chapter_id")
+			return selectLatestTopics(q, latestViews)
 		})
 	if err != nil {
 		return nil, err
@@ -1458,18 +1448,11 @@ func (s *Service) MyViewHistory(userID, page, pageSize int) (*ForumTopicPageResu
 // 本人主题点赞、本人对该主题的收藏；回复点赞不计入），按最近浏览倒序。主题被删时条目保留。
 // 同浏览记录：先按主题聚合最近浏览，再做互动排除——排除谓词落在聚合后的主题维度上。
 func (s *Service) MyObservedTopics(userID, page, pageSize int) (*ForumTopicPageResult, error) {
-	latestViews := s.db.Table("forum_topic_views AS v").
-		Select("v.topic_id, MAX(v.viewed_at) AS last_viewed").
-		Where("v.user_id = ?", userID).
-		Group("v.topic_id")
+	latestViews := s.latestTopicViews(userID)
 	rows, total, page, pageSize, err := paging.QueryWithScan[topicRow](s.db, page, pageSize, 10, 100,
 		"lv.last_viewed DESC, t.id DESC",
 		func(q *gorm.DB) *gorm.DB {
-			return q.Table("(?) AS lv", latestViews).
-				Select(personalTopicSelect).
-				Joins("LEFT JOIN forum_topics AS t ON t.id = lv.topic_id").
-				Joins("LEFT JOIN hrwai_users AS u ON u.id = t.user_id").
-				Joins("LEFT JOIN chapter AS ch ON ch.chapter_id = t.chapter_id").
+			return selectLatestTopics(q, latestViews).
 				Where("t.user_id IS NULL OR t.user_id <> ?", userID).
 				Where("NOT EXISTS (SELECT 1 FROM forum_replies r WHERE r.topic_id = t.id AND r.user_id = ?)", userID).
 				Where("NOT EXISTS (SELECT 1 FROM forum_topic_like l WHERE l.topic_id = t.id AND l.user_id = ?)", userID).

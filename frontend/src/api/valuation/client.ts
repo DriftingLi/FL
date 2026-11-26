@@ -11,7 +11,7 @@ const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/ap
 const client = createHttpClient({
   baseURL: API_BASE_URL,
   successCodes: [200],
-  // 统一 401 策略（client.ts 单点）：清登录态 + 估值路径跳估值登录页、其余跳主登录页
+  // 统一 401 策略（client.ts 单点）：清登录态后跳主登录页
   onUnauthorized: createDefaultUnauthorizedPolicy({
     clearAuth: () => {
       // 延迟引入 auth store，避免循环依赖；store 不可用时兜底清 storage
@@ -27,9 +27,8 @@ const client = createHttpClient({
           clearLocalAuth()
         })
     },
-    resolveLoginPath: currentPath => (currentPath.startsWith('/valuation') ? '/valuation/login' : '/login')
+    resolveLoginPath: () => '/login'
   })
 })
 
 export default client
-export { API_BASE_URL }

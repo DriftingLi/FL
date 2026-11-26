@@ -12,12 +12,6 @@
       </UiEmptyState>
     </div>
 
-    <div v-else-if="slides.length === 0" class="ppt-empty">
-      <UiEmptyState description="暂无幻灯片预览">
-        <UiButton variant="primary" @click="downloadFile">下载PPT文件</UiButton>
-      </UiEmptyState>
-    </div>
-
     <template v-else>
       <div class="ppt-header">
         <span class="slide-title">{{ fileName }}</span>
@@ -85,6 +79,8 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { courseApi } from '@/api/course'
 import { resolveFileUrl } from '@/utils/fileUrl'
+import { downloadUrl } from '@/utils/fileBrowser'
+import { useFullscreen } from '@/composables/useFullscreen'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiTooltip from '@/components/ui/UiTooltip.vue'
@@ -160,23 +156,14 @@ function scrollToThumbnail() {
   }
 }
 
-function toggleFullscreen() {
-  if (!containerRef.value) return
-  if (document.fullscreenElement) {
-    document.exitFullscreen()
-  } else {
-    containerRef.value.requestFullscreen()
-  }
-}
+const { toggleFullscreen } = useFullscreen(containerRef)
 
 function downloadFile() {
-  const link = document.createElement('a')
-  link.href = resolvedSrc.value
-  link.download = props.fileName || ''
-  link.target = '_blank'
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
+  downloadUrl(resolvedSrc.value, {
+    fileName: props.fileName || '',
+    target: '_blank',
+    appendToBody: true
+  })
 }
 
 function onSlideImageError() {
@@ -455,8 +442,7 @@ onBeforeUnmount(() => {
   to { transform: rotate(360deg); }
 }
 
-.ppt-error,
-.ppt-empty {
+.ppt-error {
   position: absolute;
   top: 0;
   left: 0;

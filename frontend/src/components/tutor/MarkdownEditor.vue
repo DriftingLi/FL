@@ -123,7 +123,7 @@ let vditor: Vditor | null = null
 // 防止 setValue 触发 input 回环
 let internalUpdate = false
 
-const bodyHeight = ref(`${props.height}px`)
+const bodyHeight = computed(() => `${props.height}px`)
 
 // 上传请求头（唯一形态：有令牌才带 Authorization）
 function authHeaders(token: string): Record<string, string> {
@@ -202,6 +202,24 @@ function releaseBodyScrollLock(instance: Vditor | null) {
   }
 }
 
+function readEditorValue(fallback?: string): string | null {
+  if (!vditor || !isReady.value) return fallback ?? null
+  try {
+    return vditor.getValue() || ''
+  } catch {
+    return fallback ?? null
+  }
+}
+
+function writeEditorValue(value: string, clear = false): void {
+  if (!vditor || !isReady.value) return
+  try {
+    vditor.setValue(value || '', clear)
+  } catch (e) {
+    console.warn('Vditor setValue 失败:', e)
+  }
+}
+
 // 创建 vditor 实例（切换模式时复用）
 // valueToRestore：切换模式时，等 after 回调触发后再用 setValue 恢复内容
 function createVditor(targetMode: 'ir' | 'sv', valueToRestore?: string) {
@@ -250,11 +268,7 @@ function createVditor(targetMode: 'ir' | 'sv', valueToRestore?: string) {
     after: () => {
       isReady.value = true
       if (valueToRestore && vditor) {
-        try {
-          vditor.setValue(valueToRestore, true)
-        } catch (e) {
-          console.warn('Vditor setValue 失败:', e)
-        }
+        writeEditorValue(valueToRestore, true)
       } else if (vditor && props.modelValue !== initialValue) {
         // ready 期间内容被换掉了 —— 必须补一次，否则永久丢失。
         //
@@ -264,11 +278,7 @@ function createVditor(targetMode: 'ir' | 'sv', valueToRestore?: string) {
         // 下面那个 watch 会整条丢弃（:286 的 `if (!vditor || !isReady.value) return`）；
         // 而这里原先只在切模式（valueToRestore 有值）时才 setValue，
         // 首屏这条路径没人补 ⇒ 编辑器停在创建时的空串，用户看到的就是「什么都没加载」。
-        try {
-          vditor.setValue(props.modelValue || '')
-        } catch (e) {
-          console.warn('Vditor setValue 失败:', e)
-        }
+        writeEditorValue(props.modelValue || '')
       }
       nextTick(() => { internalUpdate = false })
     }
@@ -281,13 +291,7 @@ function switchMode(target: 'ir' | 'sv') {
   // 未 ready 时禁止切换：Vditor 内部 IR/SV 模块未就绪，调用 getValue 会报 VditorIRDOM2Md undefined
   if (!vditor || !isReady.value) return
 
-  // 切换前保存当前值（用 try/catch 兜底，避免极端情况下 getValue 抛错导致切换中断）
-  let currentVal = props.modelValue
-  try {
-    currentVal = vditor.getValue() || props.modelValue
-  } catch (e) {
-    console.warn('Vditor getValue 失败，使用 props.modelValue:', e)
-  }
+  const currentVal = readEditorValue(props.modelValue) || props.modelValue
   internalUpdate = true
   mode.value = target
   // 重建实例，等 after 回调触发后再恢复内容（避免在未 ready 时 setValue 报错）
@@ -301,38 +305,18 @@ onMounted(() => {
 // 外部 modelValue 变化时同步到 vditor（避免回环）
 watch(() => props.modelValue, (newVal) => {
   if (!vditor || !isReady.value) return
-  // 用 try/catch 包裹 getValue，避免 ready 但 IR 模块短暂未就绪时抛错
-  let current = ''
-  try {
-    current = vditor.getValue() || ''
-  } catch {
-    return
-  }
-  if (newVal === current) return
+  const current = readEditorValue()
+  if (current === null || newVal === current) return
   internalUpdate = true
-  try {
-    vditor.setValue(newVal || '')
-  } catch (e) {
-    console.warn('Vditor setValue 失败:', e)
-  }
+  writeEditorValue(newVal)
   nextTick(() => { internalUpdate = false })
-})
-
-// 高度变化时更新容器
-watch(() => props.height, (h) => {
-  bodyHeight.value = `${h}px`
 })
 
 // 主题切换：Vditor 的高亮主题在初始化时就定死了，重建一次让它换成 github-dark / github。
 // 内容从当前实例读出来再恢复（与模式切换同一手法），不改表单值、不触发 input 回环。
 watch(isDark, () => {
   if (!vditor || !isReady.value) return
-  let current = props.modelValue
-  try {
-    current = vditor.getValue() || props.modelValue
-  } catch {
-    // 读不出来就退回表单值：主题切换不值得为它中断编辑
-  }
+  const current = readEditorValue(props.modelValue) || props.modelValue
   internalUpdate = true
   createVditor(mode.value, current)
 })
@@ -346,15 +330,7 @@ onBeforeUnmount(() => {
 // 暴露给父组件：主动获取 Vditor 内部最新值
 // 用于保存前兜底（避免 v-model 在某些输入场景下未及时同步）
 defineExpose({
-  getValue: (): string => {
-    // 未 ready 时直接返回 props.modelValue，避免触发 VditorIRDOM2Md undefined
-    if (!vditor || !isReady.value) return props.modelValue || ''
-    try {
-      return vditor.getValue() || ''
-    } catch {
-      return props.modelValue || ''
-    }
-  }
+  getValue: (): string => readEditorValue(props.modelValue || '') || ''
 })
 </script>
 

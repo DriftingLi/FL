@@ -96,6 +96,26 @@ async function openRedo(wrapper: VueWrapper<any>) {
   await flushPromises()
 }
 
+describe('WrongQuestions 筛选刷新', () => {
+  it('重置筛选只触发一次列表请求', async () => {
+    const wrapper = mountPage()
+    await flushPromises()
+
+    const sort = wrapper.findAll('button').find(button => button.text().includes('错误在前'))
+    expect(sort).toBeTruthy()
+    await sort!.trigger('click')
+    await flushPromises()
+    vi.mocked(wrongQuestionApi.getWrongQuestions).mockClear()
+
+    const reset = wrapper.findAll('button').find(button => button.text().includes('重置筛选'))
+    expect(reset).toBeTruthy()
+    await reset!.trigger('click')
+    await flushPromises()
+
+    expect(wrongQuestionApi.getWrongQuestions).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('WrongQuestions 错题导出', () => {
   it('点击导出错题：以 exportWrongQuestions 的 Blob 调用 downloadBlob，文件名为 wrong_questions.txt', async () => {
     const wrapper = mountPage()

@@ -179,7 +179,7 @@
           <ForumImageGallery :images="selectedTopic.images" />
         </div>
         <UiAsyncSection
-          :error="selectedReplyPages?.error ?? false"
+          :error="selectedReplyPages?.error === 'initial'"
           :loading="selectedReplyPages?.loading ?? false"
           :skeleton="false"
           error-title="回复加载失败"
@@ -216,7 +216,7 @@
               </div>
               <!-- 回复分页（ADR-0042）：治理面必须能翻到底，不能只看首页 -->
               <div v-if="selectedReplyPages.page < selectedReplyPages.pages" class="reply-more">
-                <span v-if="selectedReplyPages.moreError" class="reply-error">加载失败，可重试</span>
+                <span v-if="selectedReplyPages.error === 'more'" class="reply-error">加载失败，可重试</span>
                 <UiButton
                   size="small"
                   :loading="selectedReplyPages.loadingMore"
@@ -255,6 +255,7 @@ import {
 import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
 import ForumContent from '@/components/student/ForumContent.vue'
 import { formatLocaleDateTime } from '@/utils/format'
+import { displayName } from '@/utils/forumDisplay'
 import { useAdminTable } from '@/composables/useAdminTable'
 import { useForumReplyPages } from './useForumReplyPages'
 import { isEmptyList } from '@/utils/listState'
@@ -313,7 +314,7 @@ const {
 } = useForumReplyPages()
 const selectedReplyPages = computed(() => selectedTopic.value && replyPages[selectedTopic.value.id])
 const isEmptyReplies = computed(() => isEmptyList(selectedReplyPages.value?.replies ?? null, {
-  error: selectedReplyPages.value?.error ?? false,
+  error: selectedReplyPages.value?.error === 'initial',
   kind: null
 }))
 
@@ -366,10 +367,6 @@ async function handleReport(row: AdminForumReportItem) {
     console.error('处理举报失败:', e)
     /* 错误已由拦截器提示 */
   }
-}
-
-function displayName(author: AdminForumTopic['author']) {
-  return author.username
 }
 
 const topicTabOptions = [

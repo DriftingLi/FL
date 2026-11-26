@@ -43,9 +43,11 @@ function classifyError(err: AxiosError): ApiErrorKind {
   return 'network'
 }
 
-function attachKind(err: unknown): void {
+function attachKind(err: unknown): ApiErrorKind {
   const e = err as AxiosError & { kind?: ApiErrorKind }
-  e.kind = classifyError(e)
+  const kind = classifyError(e)
+  e.kind = kind
+  return kind
 }
 
 // ===== 双令牌静默刷新（ADR-0016 / ADR-0067）：模块级共享的单飞行，三端实例并发去重 =====
@@ -272,6 +274,7 @@ export function createHttpClient<O extends HttpClientOptions>(opts: O): Unwrappe
       return body
     },
     async err => {
+      const kind = attachKind(err)
       if (err.response) {
         const status = err.response.status
         const data = err.response.data
@@ -279,7 +282,6 @@ export function createHttpClient<O extends HttpClientOptions>(opts: O): Unwrappe
           const url = err.config?.url || ''
           if (err.config?.method === 'post' && studentAuthSubmissions.has(url)) {
             if (!isSilent(err.config)) ElMessage.error(data?.message || '学员身份验证失败')
-            attachKind(err)
             return Promise.reject(err)
           }
           const cfg = err.config as AxiosRequestConfig & { _retry?: boolean }
@@ -298,7 +300,6 @@ export function createHttpClient<O extends HttpClientOptions>(opts: O): Unwrappe
           if (!isSilent(err.config)) {
             ElMessage.error('登录已过期，请重新登录')
           }
-          attachKind(err)
           return Promise.reject(err)
         }
         if (!isSilent(err.config)) {
@@ -319,14 +320,13 @@ export function createHttpClient<O extends HttpClientOptions>(opts: O): Unwrappe
             }
           }
         }
-      } else if (err.code === 'ECONNABORTED' || /timeout\s+of\s+\d+\s+ms\s+exceeded/i.test(err.message || '')) {
+      } else if (kind === 'timeout') {
         if (!isSilent(err.config)) {
           ElMessage.error('请求超时，请检查网络或稍后重试')
         }
       } else if (!isSilent(err.config)) {
         ElMessage.error('网络连接失败，请检查后端服务是否启动')
       }
-      attachKind(err)
       return Promise.reject(err)
     }
   )

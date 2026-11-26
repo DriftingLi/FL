@@ -126,7 +126,7 @@
 import { reactive, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { resumeApi } from '@/api/resume'
+import { resumeApi, type ResumeUploadResult } from '@/api/resume'
 import { positionApi } from '@/api/position'
 import { credentialApi } from '@/api/credential'
 import { buildCityLevelRegionOptions, splitRegionPath, regionElementsToPaths, cascaderToRegionStrings } from '@/utils/region'
@@ -204,8 +204,8 @@ async function onPhotoChange(e: Event) {
   const fd = new FormData()
   fd.append('file', file)
   try {
-    const res: any = await resumeApi.uploadImage(fd)
-    const url = res.url || res.data?.url || ''
+    const res: ResumeUploadResult = await resumeApi.uploadImage(fd)
+    const url = res.url || ''
     if (url) form.photos.push(url)
     ElMessage.success('上传成功')
   } catch {}

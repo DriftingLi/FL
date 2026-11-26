@@ -226,14 +226,14 @@
     .reply-sort-chip {
         padding: 10rpx 24rpx;
         border-radius: 32rpx;
-        background-color: #f0f1f5;
+        background-color: $bg-color;
         border: 2rpx solid transparent;
         margin-right: 12rpx;
         margin-bottom: 4rpx;
     }
 
     .reply-sort-chip.active {
-        background-color: #e8f3ff;
+        background-color: $primary-tint;
         border: 2rpx solid $primary-color;
     }
 
@@ -260,7 +260,7 @@
     .reply-card {
         flex-direction: column;
         padding: 24rpx 0;
-        border-bottom: 1rpx solid #f5f5f5;
+        border-bottom: 1rpx solid $bg-color;
     }
 
     .reply-header {
@@ -308,7 +308,7 @@
 
     .reply-delete-text {
         font-size: 24rpx;
-        color: #f44336;
+        color: $danger-color;
     }
 
     .reply-content {
@@ -414,7 +414,7 @@
         align-items: center;
         padding: 6rpx 16rpx;
         border-radius: 24rpx;
-        background-color: #f5f5f5;
+        background-color: $bg-color;
         border: 1px solid #eeeeee;
         margin-right: 12rpx;
     }
@@ -447,7 +447,7 @@
     /* 采纳徽章 */
     .reply-accepted-badge {
         font-size: 20rpx;
-        color: #4caf50;
+        color: $success-color;
         background-color: $success-tint;
         padding: 2rpx 12rpx;
         border-radius: 12rpx;
@@ -465,7 +465,7 @@
         background-color: $success-tint;
         padding: 8rpx 24rpx;
         border-radius: 24rpx;
-        border: 1rpx solid #4caf50;
+        border: 1rpx solid $success-color;
         align-items: center;
         justify-content: center;
         flex-direction: row;
@@ -473,12 +473,12 @@
 
     .reply-accept-btn-text {
         font-size: 24rpx;
-        color: #4caf50;
+        color: $success-color;
         font-weight: bold;
     }
 
     .reply-cancel-accept-btn {
-        background-color: #f5f5f5;
+        background-color: $bg-color;
         padding: 8rpx 24rpx;
         border-radius: 24rpx;
         border: 1rpx solid #cccccc;
@@ -499,7 +499,7 @@
     }
 
     .replies-more-btn {
-        background-color: #e8f0fe;
+        background-color: $primary-tint;
         border: 1rpx solid $primary-color;
         border-radius: 32rpx;
         padding: 14rpx 40rpx;

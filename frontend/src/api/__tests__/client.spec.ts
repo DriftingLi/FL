@@ -161,6 +161,28 @@ describe('404/500 toast 用后端 message（票 5 配套）', () => {
   })
 })
 
+describe('网络错误分类', () => {
+  it('超时保留 timeout kind 并提示重试', async () => {
+    axios.defaults.adapter = (async (config: any) => {
+      throw new AxiosError('timeout of 1000ms exceeded', 'ECONNABORTED', config)
+    }) as never
+    const client = makeClient()
+
+    await expect(client.get('/x')).rejects.toMatchObject({ kind: 'timeout' })
+    expect(ElMessage.error).toHaveBeenCalledWith('请求超时，请检查网络或稍后重试')
+  })
+
+  it('网络失败保留 network kind 并提示检查后端', async () => {
+    axios.defaults.adapter = (async (config: any) => {
+      throw new AxiosError('Network Error', 'ERR_NETWORK', config)
+    }) as never
+    const client = makeClient()
+
+    await expect(client.get('/x')).rejects.toMatchObject({ kind: 'network' })
+    expect(ElMessage.error).toHaveBeenCalledWith('网络连接失败，请检查后端服务是否启动')
+  })
+})
+
 describe('createDefaultUnauthorizedPolicy 统一 401 策略', () => {
   it('redirect=false（AI 助手）：仅清登录态，不跳转', async () => {
     const clearAuth = vi.fn()

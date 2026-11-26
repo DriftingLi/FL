@@ -145,6 +145,52 @@ export function parsePrState(prJsonText) {
   }
 }
 
+/** gh pr list 的第一条记录（读不回来 = null，不是「没有 PR」） */
+function firstPr(prJsonText) {
+  try {
+    const arr = JSON.parse(String(prJsonText ?? '').trim() || '[]')
+    return Array.isArray(arr) && arr.length > 0 ? arr[0] : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * PR 头对象在不在本地、缺了要不要补抓（#2289 的逃生阀自己生效，#2876）。
+ *
+ * 为什么需要：本链对账只用 `git fetch --prune`，它只更新 refs/remotes/* —— squash 合并后 GitHub 删掉
+ * 源分支，PR 头对象可能**本地根本没有**。那时 `git log "$prHead..HEAD"` 打一行 fatal 被当成「还有活」、
+ * `merge-base --is-ancestor HEAD $prHead` 读成 unreadable ⇒ headInPr 拿不到 yes，每棵走过 update-branch
+ * 的树都要人工补一次 `git fetch origin refs/pull/<n>/head` 才收得完（#2861 实测）。
+ *
+ * 只走 refs/pull/<n>/head：GitHub 不保证能按 sha 直接取（uploadpack.allowReachableSHA1InWant 默认关）；
+ * RefSpec 用 `+<src>:<dst>` 落成本地 ref，对象才不会在后续 gc 里消失（只取进 FETCH_HEAD 是留不住的）。
+ *
+ * 判据住这里而不是 ps1：ps1 的分支逻辑 CI 测不到（CI 全线 ubuntu），而「什么时候该抓」正是判据。
+ */
+export function judgePrHead(f) {
+  const o = firstPr(f.prJson)
+  const prState = String(f.prState || (o && o.state) || 'unknown').toUpperCase()
+  const prHead = String(f.prHead || (o && o.headRefOid) || '').trim()
+  const rawNum = String((f.prNumber != null && f.prNumber !== '' ? f.prNumber : (o && o.number)) ?? '')
+  const prNumber = /^[0-9]+$/.test(rawNum) ? rawNum : ''
+  const objectPresent = f.prHeadObject === 'present'
+  let need = 'skip'
+  let reason = 'na'
+  if (!prHead) reason = 'no-pr-head'
+  else if (objectPresent) { need = 'present'; reason = 'object-present' }
+  else if (prState !== 'MERGED') reason = 'pr-not-merged'
+  else if (!prNumber) reason = 'no-pr-number'
+  else { need = 'fetch'; reason = 'object-missing' }
+  const ref = prNumber ? `refs/pull/${prNumber}/head` : 'na'
+  const object = !prHead ? 'na' : objectPresent ? 'present' : 'missing'
+  const line = [
+    'PR_HEAD', `need=${need}`, `state=${prState || 'unknown'}`, `number=${prNumber || 'na'}`,
+    `object=${object}`, `ref=${ref}`, `reason=${reason}`,
+  ].join(' ')
+  return { need, reason, prState, prHead, prNumber, ref, objectPresent, line }
+}
+
 /**
  * ① + ②：准不准拆 / 要不要 -Execute。
  * fail-closed 三处：unknown、NONE、OPEN/CLOSED —— 一律不拆。读不到 PR 状态**不是**放行理由。
@@ -423,11 +469,18 @@ if (invokedDirectly) {
     console.log(l.line)
     process.exit(0)
   }
+  if (modeArg === '--prhead') {
+    // 只报事实与「该不该抓」，退出码恒 0（同 --lock）：抓不到仍由 decide 的 fail-closed 兜 ——
+    // 祖先事实读不回来就不拆，这一腿只负责把「该采的事实」采到手。
+    const h = judgePrHead(facts)
+    console.log(h.line)
+    process.exit(0)
+  }
   if (modeArg === '--verdict') {
     const v = judgeVerdict(facts)
     console.log(v.line)
     process.exit(v.ok ? 0 : 1)
   }
-  console.log('用法: node dev-close.mjs --resolve|--decide|--lock|--verdict < facts.json>')
+  console.log('用法: node dev-close.mjs --resolve|--decide|--lock|--prhead|--verdict < facts.json>')
   process.exit(2)
 }

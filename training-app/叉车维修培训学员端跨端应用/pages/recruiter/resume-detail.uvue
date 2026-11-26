@@ -643,7 +643,7 @@
     .btn-secondary {
         height: 88rpx;
         border-radius: 44rpx;
-        background-color: #f5f6fa;
+        background-color: $bg-color;
         border: 1rpx solid #e0e0e0;
         align-items: center;
         justify-content: center;

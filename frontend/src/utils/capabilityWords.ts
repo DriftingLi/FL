@@ -4,24 +4,7 @@
 // 是展示层的事。键集合不自立清单 —— 直接吃 `config/authz` 的 AuthzCapability（生成物，事实源是
 // backend/internal/authz/authz.go），`Record<AuthzCapability, string>` 穷尽：后端加一个能力而这里
 // 没跟上，`npm run type-check` 直接报错（authz.ts 与后端能力表的字节锁在后端 codegen_test 里）。
-//
-// 资源域同样没有第二份清单：域由键派生（`资源域.动作` 的域），CapabilityDomain 是
-// AuthzCapability 的模板字面量推断结果，域表也是穷尽 Record。
-//
-// 收敛前的形态：角色权限页把键与域**原样**印在勾选框上（超管看到的是一屏英文）。
 import type { AuthzCapability } from '@/config/authz'
-
-/**
- * 能力键的资源域（`AT.动作` 的前半段）。
- *
- * 写成 `Capability extends infer C ? …` 而不是直接对 AuthzCapability 求条件类型：条件类型只对
- * **裸类型参数**做分布，别名会被整体判定（整联合 extends 模板字面量 ⇒ 推断不出逐成员的结果）。
- */
-export type CapabilityDomain = AuthzCapability extends infer C
-  ? C extends `${infer Domain}.${string}`
-    ? Domain
-    : never
-  : never
 
 /** 能力键 → 中文名（与后端 authz.go 里每个键的行内注释同词）。 */
 export const CAPABILITY_LABELS: Readonly<Record<AuthzCapability, string>> = {
@@ -92,58 +75,6 @@ export const CAPABILITY_LABELS: Readonly<Record<AuthzCapability, string>> = {
 }
 
 /**
- * 资源域 → 中文名。
- *
- * 用途已收窄（#1639）：授权界面的分组标题改成**侧栏分组**（RoleManage.vue 从 pages.ts 派生），
- * 不再按资源域分组；本表只剩「单看一个能力键时要说出它属于哪个域」这类兜底展示。
- * catalog / content 两个域保留 —— catalog.author 与 content.generate 仍在用它们。
- */
-export const CAPABILITY_DOMAIN_LABELS: Readonly<Record<CapabilityDomain, string>> = {
-  admin: '管理端',
-  admin_account: '管理员账号',
-  admin_role: '管理角色',
-  ai_assistant: 'AI 助手',
-  ai_config: 'AI 配置',
-  application: '投递',
-  audit: '审计',
-  catalog: '培训目录',
-  check_in: '打卡',
-  chapter: '章节',
-  contact: '联系方式交换',
-  content: '内容',
-  contribution: '投稿',
-  course: '课程',
-  credential: '证件',
-  export: '数据导出',
-  faq: '帮助中心',
-  feedback: '反馈',
-  favorite: '收藏',
-  featured: '内容精选',
-  forum: '论坛',
-  hrwai_user: '用户',
-  inspection: '巡检',
-  job: '职位',
-  job_report: '职位举报',
-  material: '学习资料',
-  mock_exam: '模拟考试',
-  notification: '站内信',
-  points: '积分',
-  position: '岗位',
-  profile: '资料',
-  question: '题库',
-  real_exam: '真题',
-  recruit: '招聘方',
-  recruiter: '招聘者',
-  resume: '简历',
-  search: '全局搜索',
-  statistics: '统计',
-  student: '学员',
-  tutor: '讲师',
-  tutorfile: '讲师文件库',
-  valuation: '残值评估'
-}
-
-/**
  * 能力键 → 用户看到的中文名。
  *
  * 未登记的键**回落为原键**而不是空串：后端新增能力、前端产物还没再生成时，页面显示英文键
@@ -151,9 +82,4 @@ export const CAPABILITY_DOMAIN_LABELS: Readonly<Record<CapabilityDomain, string>
  */
 export function describeCapability(key: string): string {
   return CAPABILITY_LABELS[key as AuthzCapability] ?? key
-}
-
-/** 资源域 → 用户看到的中文名（未登记回落为原域，口径同上）。 */
-export function describeCapabilityDomain(domain: string): string {
-  return CAPABILITY_DOMAIN_LABELS[domain as CapabilityDomain] ?? domain
 }

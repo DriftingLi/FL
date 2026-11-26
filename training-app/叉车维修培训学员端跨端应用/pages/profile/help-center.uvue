@@ -482,7 +482,7 @@ import { goBack } from '../../utils/navigation'
 
     .entry-answer-box {
         flex-direction: column;
-        background-color: #f7f8fa;
+        background-color: $bg-color;
         border-radius: 12rpx;
         padding: 20rpx;
         margin-bottom: 24rpx;
@@ -558,7 +558,7 @@ import { goBack } from '../../utils/navigation'
 
     .history-item {
         flex-direction: column;
-        background-color: #f7f8fa;
+        background-color: $bg-color;
         border-radius: 12rpx;
         padding: 20rpx;
         margin-bottom: 16rpx;
@@ -573,11 +573,11 @@ import { goBack } from '../../utils/navigation'
 
     .history-status {
         font-size: 22rpx;
-        color: #ff9800;
+        color: $warning-color;
     }
 
     .history-status-handled {
-        color: #4caf50;
+        color: $success-color;
     }
 
     .history-time {

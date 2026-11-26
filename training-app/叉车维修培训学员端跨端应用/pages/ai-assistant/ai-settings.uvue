@@ -404,7 +404,7 @@
 	.container {
 		display: flex;
 		flex-direction: column;
-		background-color: #f5f6f8;
+		background-color: $bg-color;
 	}
 
 	.content-scroll {
@@ -531,7 +531,7 @@
 
 	.form-input {
 		height: 80rpx;
-		background-color: #f5f6f8;
+		background-color: $bg-color;
 		border-radius: 12rpx;
 		padding: 0 24rpx;
 		font-size: 28rpx;

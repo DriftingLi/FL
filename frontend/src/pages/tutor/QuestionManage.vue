@@ -185,7 +185,8 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { questionBankApi, type QuestionsQuery } from '@/api/questionBank'
 import { credentialApi, type CredentialDict } from '@/api/credential'
-import { trainingApi, type TrainingCategoryDTO } from '@/api/training'
+import { trainingApi, type TrainingCategoryDTO, type TrainingCategoryFilter } from '@/api/training'
+import { trainingCategoryName, trainingCategoryOptions } from '@/utils/trainingCategoryFilter'
 import type { CategoryRef, Eligibility } from '@/api/generated/course'
 import type { Question } from '@/types/question'
 import { typeMap, questionTypeOptions, questionStatusOptions, questionStatusMap, questionStatusTone } from '@/constants/question'
@@ -218,18 +219,14 @@ const router = useRouter()
 
 const credentials = ref<CredentialDict[]>([])
 const categories = ref<TrainingCategoryDTO[]>([])
-const categoryId = ref<number | 'all' | 'legacy'>('all')
+const categoryId = ref<TrainingCategoryFilter>('all')
 /** 所属证件 → {label,value} */
 const credentialOptions = computed<UiSelectOption[]>(() =>
   credentials.value.map((c) => ({ label: c.name, value: c.id }))
 )
-const categoryOptions = computed<UiSelectOption[]>(() => [
-  { label: '全部培训分类', value: 'all' },
-  ...categories.value
-    .filter((category) => category.status !== 0)
-    .map((category) => ({ label: category.name, value: category.id })),
-  { label: '未分类/分类失效', value: 'legacy' }
-])
+const categoryOptions = computed<UiSelectOption[]>(() =>
+  trainingCategoryOptions(categories.value, '全部培训分类')
+)
 /** 「浏览指定证件」：导师端筛选栏选择的证件（非「当前证件」——导师没有 current_credential_id）。 */
 const browseCredentialId = ref<number | null>(null)
 const questions = ref<TutorQuestion[]>([])
@@ -312,8 +309,7 @@ async function loadCategories() {
 }
 
 function categoryNameOf(row: TutorQuestion): string {
-  if (!row.category) return '未分类/分类失效'
-  return row.category.status === 0 ? `${row.category.name}（已停用）` : row.category.name
+  return trainingCategoryName(row.category)
 }
 
 function reviewStatusLabel(row: Question): string {

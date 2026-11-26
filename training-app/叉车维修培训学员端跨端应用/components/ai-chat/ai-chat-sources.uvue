@@ -104,7 +104,7 @@
 
 	.source-card {
 		flex-direction: column;
-		background-color: #f7f8fa;
+		background-color: $bg-color;
 		border-width: 1rpx;
 		border-style: solid;
 		border-color: #e5e7eb;

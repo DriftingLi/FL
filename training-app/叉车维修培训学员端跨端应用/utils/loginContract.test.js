@@ -160,9 +160,12 @@ const LINE_BUDGET = 600;
  * （`mode == 'phone' || mode == 'password'`，密码登录也是手机号通道，原实现切到 password 就变灰）；
  * 微信是导航入口不是通道，**不参与选中态**——去掉 `icon-circle-on` 绑定与 `wechat-active.png`
  * 三元，常灰图标 + 默认 `#F5F7FA` 圆底（该图已删，无引用）。样式块逐字节未动 ⇒ 只有模板 sha 前进。
+ * ⚠️ **#2862 显式变更（底灰值面收敛，经批准的改）**：style 块内 6 处 `#F5F7FA`（页面底 + 输入/按钮的
+ * 中性底）改走 `$bg-color`（#F5F5F5）—— 全端 7 个近邻底灰收敛为 1 个 token 的落地，属「同值收敛」
+ * 而非视觉改版；**块内 48 条规则数不变**，只有声明位的值变 ⇒ 仅 STYLE_SHA256 前进，模板 sha 逐字节不变。
  */
 const TEMPLATE_SHA256 = '9913162d4c46905fb25745fdad5b0acb54c3cb3dc5e437ea354e8e29c8f351f8';
-const STYLE_SHA256 = '94fd57863fda09ed676dc346ec831340754e009ba690a0016464ec2b12a1177c';
+const STYLE_SHA256 = '4bbad68ca0582e9a5cea1b83279ead778ec0878d724d9d6e4c40b48d437cc2f0';
 
 /** 页面块（template / script / style）。模板**有嵌套** `<template v-if>` ⇒ 闭合取最后一个 */
 function block(src, tag) {

@@ -182,7 +182,7 @@
 <style lang="scss">
     .page {
         flex: 1;
-        background-color: #f5f6fa;
+        background-color: $bg-color;
         flex-direction: column;
     }
 
@@ -209,7 +209,7 @@
         width: 88rpx;
         height: 88rpx;
         border-radius: 16rpx;
-        background-color: #E8F3FF;
+        background-color: $primary-tint;
         align-items: center;
         justify-content: center;
         flex-shrink: 0;
@@ -240,7 +240,7 @@
 
     .file-status {
         font-size: 24rpx;
-        color: #16a34a;
+        color: $success-color;
         flex-shrink: 0;
     }
 
@@ -271,12 +271,12 @@
 
     .action-btn-danger {
         background-color: $card-bg;
-        border: 2rpx solid #fadcd9;
+        border: 2rpx solid $danger-tint;
     }
 
     .action-btn-text-danger {
         font-size: 30rpx;
-        color: #fa3534;
+        color: $danger-color;
     }
 
     /* ===== 上传区 ===== */

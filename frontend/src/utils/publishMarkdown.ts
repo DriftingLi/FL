@@ -24,16 +24,6 @@ import markedKatex from 'marked-katex-extension'
 /** 内容子集档位：章节（可信面全集）/ 内容精选（门户可见子集，移动端降级）。 */
 export type PublishSubset = 'chapter' | 'featured'
 
-/**
- * 内容精选允许的语法（门户与 Web 可见）——写给作者看的清单，与 API.md 的契约同源。
- *
- * 表格于 2026-11 放开：门户侧一直是 marked 默认 gfm（表格本来就渲染），此前 Web 的精选档
- * 把它降级成原始文本，反而造成「预览说没有、门户看得见」。移动端仍不渲染表格
- * （手写解析器无表格实现，ADR-0046 决定 6），所以越界提示的口径从「门户与移动端」
- * 收窄为「移动端」——见 `outsideSubsetNotice`。
- */
-export const FEATURED_SUBSET_SYNTAX = '标题 / 列表 / 引用 / 代码块 / 图片 / 链接 / 表格'
-
 /** 越界种类 → 给作者看的名字（也是提示文案里的用词，唯一来源）。 */
 const OUTSIDE_SUBSET_LABELS: Record<'math', string> = {
   math: '公式'

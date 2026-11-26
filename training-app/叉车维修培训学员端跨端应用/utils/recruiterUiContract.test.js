@@ -132,12 +132,11 @@ describe('§1.6 白名单文件自检', () => {
     }
   });
 
-  it('白名单值不得与 token 值重叠（重叠即该值应直接走 token；例外：#F5F5F5=$gradient-end 渐变尾色，语义不是中性底）', () => {
+  it('白名单值不得与 token 值重叠（重叠即该值应直接走 token）', () => {
     // #2979FF 的豁免随 #2533（规格 #2493 批 A）条目退役一并删除：`$md-color-link` 自 #2338 起取值
     // `$color-link`（#1b6f9c），早已不等于旧主色 —— 那条「有意的过渡态」理由在当时就过期了。
-    const SEMANTIC_MISMATCH = new Set(['#F5F5F5']);
+    // #F5F5F5=$gradient-end 的豁免随 #2862 一并删除：该值归 $bg-color、白名单条目退役，例外不复存在。
     for (const value of Object.keys(WHITELIST)) {
-      if (SEMANTIC_MISMATCH.has(value)) continue;
       expect(tokenValues.has(value)).toBe(false);
     }
   });
@@ -180,7 +179,10 @@ describe('§1.6 白名单文件自检', () => {
     // #2262 摘除 ai-feature 诊断面板后，#6DB8E8 唯一承载移至 components/ai-chat/ai-chat-input.uvue —— 扫描面随之补入组件文件
     // #2786 删掉 ai-assistant 解锁专业版横幅后，#2E9E5B 唯一承载移至 ai-chat-pro-sheet 的已解锁按钮底 —— 组件补入扫描面
     // #2523 起 #FF8F00 的承载是 forum-topic-header 状态标签（task-center 改走 $warning-color token）—— 组件补入扫描面
-    const all = PAGES.concat(BATCH2_PAGES, BATCH4_PAGES, BATCH5_PAGES, BATCH6_PAGES, ['components/ai-chat/ai-chat-input.uvue', 'components/ai-chat/ai-chat-pro-sheet.uvue', 'pages/forum/components/forum-topic-header.uvue', 'pages/forum/components/forum-topic-actions.uvue', 'pages/forum/components/forum-more-menu.uvue'])
+    // #2861 语义色收敛把 #22A45D/#F0FFF0 的最后一处承载收到 forum-resource-panel（资源卡装饰底/标题），
+    // #4CAF50/#F44336 收到 forum-reply-list（头像占位底/点赞强调）——这两个私有子件补入扫描面（只用于死条目判定，
+    // H1 逐页判定面不变；它们的裸 hex 归 utils/privateComponentUiContract.test.js 的同族扫描）
+    const all = PAGES.concat(BATCH2_PAGES, BATCH4_PAGES, BATCH5_PAGES, BATCH6_PAGES, ['components/ai-chat/ai-chat-input.uvue', 'components/ai-chat/ai-chat-pro-sheet.uvue', 'pages/forum/components/forum-topic-header.uvue', 'pages/forum/components/forum-topic-actions.uvue', 'pages/forum/components/forum-more-menu.uvue', 'pages/forum/components/forum-resource-panel.uvue', 'pages/forum/components/forum-reply-list.uvue'])
       .map((p) => styleBlock(read(p)).toUpperCase())
       .join('\n');
     for (const value of Object.keys(WHITELIST)) {

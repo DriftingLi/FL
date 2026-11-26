@@ -226,7 +226,7 @@
 <style lang="scss">
     .page {
         flex: 1;
-        background-color: #f5f6fa;
+        background-color: $bg-color;
         flex-direction: column;
     }
 
@@ -275,7 +275,7 @@
     }
 
     .field-req {
-        color: #fa3534;
+        color: $danger-color;
         font-size: 26rpx;
     }
 
@@ -326,7 +326,7 @@
         height: 80rpx;
         font-size: 28rpx;
         color: $text-color;
-        background-color: #f7f8fa;
+        background-color: $bg-color;
         border-radius: 8rpx;
         padding: 0 16rpx;
     }
@@ -349,7 +349,7 @@
         padding: 20rpx;
         font-size: 28rpx;
         color: $text-color;
-        background-color: #f7f8fa;
+        background-color: $bg-color;
         border-radius: 12rpx;
     }
 
@@ -383,7 +383,7 @@
 
     .sub-del {
         font-size: 26rpx;
-        color: #fa3534;
+        color: $danger-color;
     }
 
     /* 票 2730 第 1 项：按钮本体仍是 80rpx 高，命中区由外层 88rpx 盒撑开（§5.11）。 */

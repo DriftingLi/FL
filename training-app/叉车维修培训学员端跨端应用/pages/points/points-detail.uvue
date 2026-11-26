@@ -387,7 +387,7 @@
     }
 
     .points-out {
-        color: #ee0a24;
+        color: $danger-color;
     }
 
     .empty-tip {
