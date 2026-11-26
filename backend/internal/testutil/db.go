@@ -14,6 +14,7 @@ import (
 
 	"forklift-training/internal/migrate"
 	"forklift-training/internal/model"
+	"forklift-training/migrations"
 )
 
 // Now 返回当前时间，测试数据使用。
@@ -48,6 +49,13 @@ func applyTutorRoleChain(t *testing.T, db *gorm.DB) {
 	}
 }
 
+func applyPublicEligibilityViews(t *testing.T, db *gorm.DB) {
+	t.Helper()
+	if err := db.Exec(migrations.PublicEligibilityViews).Error; err != nil {
+		t.Fatalf("测试库补建公开资格视图失败: %v", err)
+	}
+}
+
 // NewMemoryDB 返回一个内存中的 sqlite 数据库，已 AutoMigrate 全部表 + 补建关键唯一索引。
 // 每个测试用例应独立调用以获得隔离的数据库实例。
 func NewMemoryDB(t *testing.T) *gorm.DB {
@@ -63,6 +71,7 @@ func NewMemoryDB(t *testing.T) *gorm.DB {
 	}
 	applyCriticalUniqueIndexes(t, db)
 	applyTutorRoleChain(t, db)
+	applyPublicEligibilityViews(t, db)
 	return db
 }
 
@@ -89,6 +98,7 @@ func NewFileDB(t *testing.T) *gorm.DB {
 	}
 	applyCriticalUniqueIndexes(t, db)
 	applyTutorRoleChain(t, db)
+	applyPublicEligibilityViews(t, db)
 	return db
 }
 

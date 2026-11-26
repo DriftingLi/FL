@@ -179,17 +179,17 @@
           <ForumImageGallery :images="selectedTopic.images" />
         </div>
         <UiAsyncSection
-          :error="replyErrors.includes(selectedTopic.id)"
-          :loading="loadingReplyIds.has(selectedTopic.id)"
+          :error="selectedReplyPages?.error ?? false"
+          :loading="selectedReplyPages?.loading ?? false"
           :skeleton="false"
           error-title="回复加载失败"
           error-description="网络或服务端异常，可重试"
           @retry="loadReplies(selectedTopic.id)"
         >
-          <div v-loading="loadingReplyIds.has(selectedTopic.id)" class="pt-2">
-            <template v-if="replyMap[selectedTopic.id]">
-              <div v-if="replyMap[selectedTopic.id].length > 0" class="reply-list">
-                <div v-for="reply in replyMap[selectedTopic.id]" :key="reply.id" class="reply-item">
+          <div v-loading="selectedReplyPages?.loading ?? false" class="pt-2">
+            <template v-if="selectedReplyPages?.replies">
+              <div v-if="selectedReplyPages.replies.length > 0" class="reply-list">
+                <div v-for="reply in selectedReplyPages.replies" :key="reply.id" class="reply-item">
                   <div class="reply-meta">
                     <el-avatar :size="24" :src="reply.author.avatar_url || undefined">
                       {{ displayName(reply.author).charAt(0).toUpperCase() }}
@@ -215,14 +215,14 @@
                 </div>
               </div>
               <!-- 回复分页（ADR-0042）：治理面必须能翻到底，不能只看首页 -->
-              <div v-if="replyMap[selectedTopic.id] && hasMoreReplies(selectedTopic.id)" class="reply-more">
-                <span v-if="replyMoreErrors.includes(selectedTopic.id)" class="reply-error">加载失败，可重试</span>
+              <div v-if="selectedReplyPages.page < selectedReplyPages.pages" class="reply-more">
+                <span v-if="selectedReplyPages.moreError" class="reply-error">加载失败，可重试</span>
                 <UiButton
                   size="small"
-                  :loading="replyLoadingMoreIds.includes(selectedTopic.id)"
+                  :loading="selectedReplyPages.loadingMore"
                   @click="loadMoreReplies(selectedTopic.id)"
                 >
-                  加载更多回复（剩余 {{ remainingRepliesOf(selectedTopic.id) }} 条）
+                  加载更多回复（剩余 {{ Math.max(selectedReplyPages.total - selectedReplyPages.replies.length, 0) }} 条）
                 </UiButton>
               </div>
               <UiEmptyState v-else-if="isEmptyReplies(selectedTopic.id)" description="暂无回复" size="sm" />
@@ -241,7 +241,7 @@ import UiIcon from '@/components/ui/UiIcon.vue'
 // 否则该页不会被缓存（#1620 的锁测试会拦下这种漂移）。
 defineOptions({ name: 'ForumManage' })
 
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
   adminForumApi,
@@ -256,7 +256,7 @@ import ForumImageGallery from '@/components/student/ForumImageGallery.vue'
 import ForumContent from '@/components/student/ForumContent.vue'
 import { formatLocaleDateTime } from '@/utils/format'
 import { useAdminTable } from '@/composables/useAdminTable'
-import { isEmptyList } from '@/utils/listState'
+import { useForumReplyPages } from './useForumReplyPages'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
@@ -307,30 +307,10 @@ const keyword = ref('')
 const selectedTopic = ref<AdminForumTopic | null>(null)
 const topicDrawerOpen = ref(false)
 let topicTrigger: HTMLElement | null = null
-const replyMap = ref<Record<number, AdminForumReply[]>>({})
-const loadingReplyIds = ref(new Set<number>())
-// 回复分页（ADR-0042）：详情接口分页返回，治理面必须能翻到底——
-// 只渲染首页会让管理员看不见后面的违规回复。
-const ADMIN_REPLY_PAGE_SIZE = 20
-const replyMeta = ref<Record<number, { page: number; pages: number; total: number }>>({})
-// 按行记加载态：单个全局 id 会让「另一行同时点加载更多」被静默忽略
-const replyLoadingMoreIds = ref<number[]>([])
-// 行内追加形态的错误通道（第二档，按行）：首屏装载与「加载更多」各自可见，
-// 重试入口就在原地（错误态自带的重试钮 / 那颗「加载更多」按钮本身就是重试）。
-const replyErrors = ref<number[]>([])
-const replyMoreErrors = ref<number[]>([])
-
-/**
- * 该行回复的空态判据：与两档同源（utils/listState.isEmptyList），不手写 length === 0。
- * 行内追加形态装不进页面级的 useAsyncPage 实例——按行实例化会在 setup 之外建 watch——
- * 所以这里复用**同一条判定的实现**，而不是把它的表达式再抄一份。
- */
-function isEmptyReplies(topicId: number): boolean {
-  return isEmptyList(replyMap.value[topicId] ?? null, {
-    error: replyErrors.value.includes(topicId),
-    kind: null
-  })
-}
+const {
+  replyPages, loadReplies, loadMoreReplies, refreshReplies, invalidateReplies, isEmptyReplies
+} = useForumReplyPages()
+const selectedReplyPages = computed(() => selectedTopic.value && replyPages[selectedTopic.value.id])
 
 // ===== 举报管理（ADR-0018）=====
 // 档位一：分页列表 → useAdminTable（同页第二个实例）；reportStatus 是页面自管筛选轴。
@@ -408,7 +388,7 @@ function openTopic(topic: AdminForumTopic, event: MouseEvent) {
   topicTrigger = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
   selectedTopic.value = topic
   topicDrawerOpen.value = true
-  if (!replyMap.value[topic.id]) void loadReplies(topic.id)
+  void loadReplies(topic.id)
 }
 
 function restoreTopicFocus() {
@@ -416,68 +396,6 @@ function restoreTopicFocus() {
   selectedTopic.value = null
   if (topicTrigger?.isConnected) topicTrigger.focus({ preventScroll: true })
   topicTrigger = null
-}
-
-async function loadReplies(topicId: number) {
-  if (loadingReplyIds.value.has(topicId)) return
-  loadingReplyIds.value.add(topicId)
-  replyErrors.value = replyErrors.value.filter(id => id !== topicId)
-  try {
-    const res = await adminForumApi.getTopic(topicId, 1, ADMIN_REPLY_PAGE_SIZE)
-    replyMap.value = { ...replyMap.value, [topicId]: res.replies || [] }
-    replyMeta.value = {
-      ...replyMeta.value,
-      [topicId]: { page: res.page ?? 1, pages: res.pages ?? 1, total: res.total ?? 0 }
-    }
-  } catch (e) {
-    console.error('加载回复失败:', e)
-    /* 抽屉内可重试。 */
-    replyErrors.value = [...replyErrors.value, topicId]
-  } finally {
-    loadingReplyIds.value.delete(topicId)
-  }
-}
-
-/** 该帖是否还有未加载的回复页 */
-function hasMoreReplies(topicId: number) {
-  const meta = replyMeta.value[topicId]
-  return !!meta && meta.page < meta.pages
-}
-
-/** 尚未加载的回复条数 */
-function remainingRepliesOf(topicId: number) {
-  const meta = replyMeta.value[topicId]
-  if (!meta) return 0
-  return Math.max(meta.total - (replyMap.value[topicId]?.length ?? 0), 0)
-}
-
-/** 加载更多回复：**追加**下一页（不替换） */
-async function loadMoreReplies(topicId: number) {
-  if (replyLoadingMoreIds.value.includes(topicId) || !hasMoreReplies(topicId)) return
-  replyLoadingMoreIds.value = [...replyLoadingMoreIds.value, topicId]
-  replyMoreErrors.value = replyMoreErrors.value.filter(id => id !== topicId)
-  try {
-    const next = (replyMeta.value[topicId]?.page ?? 1) + 1
-    const res = await adminForumApi.getTopic(topicId, next, ADMIN_REPLY_PAGE_SIZE)
-    replyMap.value = {
-      ...replyMap.value,
-      [topicId]: [...(replyMap.value[topicId] ?? []), ...(res.replies || [])]
-    }
-    replyMeta.value = {
-      ...replyMeta.value,
-      [topicId]: {
-        page: res.page ?? next,
-        pages: res.pages ?? replyMeta.value[topicId]?.pages ?? 1,
-        total: res.total ?? replyMeta.value[topicId]?.total ?? 0
-      }
-    }
-  } catch (e) {
-    console.error('加载更多回复失败:', e)
-    /* 拦截器已 toast；失败可见（行内提示）且按钮原位可再点 = 重试同一批 */
-    replyMoreErrors.value = [...replyMoreErrors.value, topicId]
-  } finally {
-    replyLoadingMoreIds.value = replyLoadingMoreIds.value.filter((id) => id !== topicId)
-  }
 }
 
 /**
@@ -595,7 +513,7 @@ const topicActionDescriptors = new Map<string, ForumActionDescriptor<AdminForumT
     successMessage: '已删除',
     errorLabel: '删除',
     onSuccess: row => {
-      delete replyMap.value[row.id]
+      invalidateReplies(row.id)
     }
   }]
 ])
@@ -616,21 +534,7 @@ const deleteReplyAction: ForumActionDescriptor<AdminForumReply> = {
   successMessage: '已删除',
   errorLabel: '删除',
   onSuccess: reply => {
-    if (replyMap.value[reply.topic_id]) {
-      replyMap.value = {
-        ...replyMap.value,
-        [reply.topic_id]: replyMap.value[reply.topic_id].filter(r => r.id !== reply.id)
-      }
-      // total 要一起减，否则「剩余 N 条」比实际多（删父回复会级联删子树，实际减得更多，
-      // 但那是下一次加载才拿得到的真值——这里只保证不会**虚高**）。
-      const meta = replyMeta.value[reply.topic_id]
-      if (meta) {
-        replyMeta.value = {
-          ...replyMeta.value,
-          [reply.topic_id]: { ...meta, total: Math.max(meta.total - 1, 0) }
-        }
-      }
-    }
+    void refreshReplies(reply.topic_id)
   }
 }
 

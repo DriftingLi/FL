@@ -143,8 +143,7 @@ function adminReply(over: Record<string, unknown> = {}) {
 interface ManageVm {
   onTopicAction(key: string, row: ReturnType<typeof adminTopic>): void
   deleteReply(reply: ReturnType<typeof adminReply>): Promise<void>
-  replyMap: Record<number, Array<{ id: number }>>
-  replyMeta: Record<number, { page: number; pages: number; total: number }>
+  replyPages: Record<number, { replies: Array<{ id: number }>; page: number; pages: number; total: number }>
 }
 
 const wrappers: VueWrapper[] = []
@@ -278,16 +277,16 @@ describe('论坛管理操作', () => {
     expect(listTopics).toHaveBeenCalledTimes(1)
   })
 
-  it('删帖成功先清 replyMap，再刷新列表', async () => {
+  it('删帖成功先清回复缓存，再刷新列表', async () => {
     const topic = adminTopic()
     const reply = adminReply()
     const w = await mountTopics(topic)
     await openReplies(w, topic, [reply])
     const vm = vmOf(w)
-    expect(vm.replyMap[topic.id].map(item => item.id)).toEqual([reply.id])
+    expect(vm.replyPages[topic.id].replies.map(item => item.id)).toEqual([reply.id])
     let cachedTopicCountAtRefresh: number | undefined
     listTopics.mockImplementationOnce(async () => {
-      cachedTopicCountAtRefresh = Object.keys(vm.replyMap).length
+      cachedTopicCountAtRefresh = Object.keys(vm.replyPages).length
       return { items: [topic], total: 1 } as never
     })
 
@@ -295,7 +294,7 @@ describe('论坛管理操作', () => {
     await flushPromises()
 
     expect(cachedTopicCountAtRefresh).toBe(0)
-    expect(vm.replyMap[topic.id]).toBeUndefined()
+    expect(vm.replyPages[topic.id]).toBeUndefined()
     expect(ElMessage.success).toHaveBeenCalledWith('已删除')
     expect(listTopics).toHaveBeenCalledTimes(2)
   })
@@ -311,42 +310,65 @@ describe('论坛管理操作', () => {
     vm.onTopicAction('delete', topic)
     await flushPromises()
 
-    expect(vm.replyMap[topic.id].map(item => item.id)).toEqual([reply.id])
+    expect(vm.replyPages[topic.id].replies.map(item => item.id)).toEqual([reply.id])
     expect(ElMessage.success).not.toHaveBeenCalled()
     expect(listTopics).toHaveBeenCalledTimes(1)
   })
 
-  it('删回复成功更新列表与 total，只减 1 并保留子回复', async () => {
+  it('删回复后恢复首页，忽略删除前发出的续页响应', async () => {
     const topic = adminTopic()
-    const parent = adminReply()
-    const child = adminReply({ id: 10, parent_id: parent.id, parent_name: '答主' })
+    const parent = adminReply({ content: '待删除的父回复' })
+    const child = adminReply({ id: 10, parent_id: parent.id, content: '待删除的子回复' })
+    const replacement = adminReply({ id: 11, content: '服务端新首页' })
+    const next = adminReply({ id: 12, content: '服务端新续页' })
     const w = await mountTopics(topic)
     await openReplies(w, topic, [parent, child], 5, 2)
-    const vm = vmOf(w)
-    let stateAtRefresh: { ids: number[]; total: number } | undefined
-    listTopics.mockImplementationOnce(async () => {
-      stateAtRefresh = {
-        ids: vm.replyMap[topic.id].map(item => item.id),
-        total: vm.replyMeta[topic.id].total
-      }
-      return { items: [topic], total: 1 } as never
-    })
+    let resolveOldPage!: (value: Awaited<ReturnType<typeof adminForumApi.getTopic>>) => void
+    getTopic.mockImplementationOnce(() => new Promise(resolve => { resolveOldPage = resolve }))
+    await w.get('.reply-more button').trigger('click')
+    getTopic.mockResolvedValueOnce({ topic, replies: [replacement], page: 1, pages: 2, total: 3 } as never)
 
-    await vm.deleteReply(parent)
+    await w.get('.reply-delete').trigger('click')
+    await flushPromises()
+    resolveOldPage({ topic, replies: [child], page: 2, pages: 2, total: 5 } as never)
     await flushPromises()
 
     expect(confirmDangerMock).toHaveBeenCalledWith(
-      '确定删除这条回复？删除后不可恢复。',
-      '删除回复',
-      { type: 'warning' }
+      '确定删除这条回复？删除后不可恢复。', '删除回复', { type: 'warning' }
     )
-    expect(confirmMock).not.toHaveBeenCalled()
     expect(deleteReplyMock).toHaveBeenCalledWith(parent.id)
-    expect(stateAtRefresh).toEqual({ ids: [child.id], total: 4 })
-    expect(vm.replyMap[topic.id].map(item => item.id)).toEqual([child.id])
-    expect(vm.replyMeta[topic.id]).toEqual({ page: 1, pages: 2, total: 4 })
+    expect(getTopic.mock.calls).toEqual([[topic.id, 1, 20], [topic.id, 2, 20], [topic.id, 1, 20]])
+    expect(w.text()).toContain('服务端新首页')
+    expect(w.text()).not.toContain('待删除的父回复')
+    expect(w.text()).not.toContain('待删除的子回复')
+    expect(w.get('.reply-more').text()).toContain('剩余 2 条')
+
+    getTopic.mockResolvedValueOnce({ topic, replies: [next], page: 2, pages: 2, total: 3 } as never)
+    await w.get('.reply-more button').trigger('click')
+    await flushPromises()
+    expect(getTopic).toHaveBeenLastCalledWith(topic.id, 2, 20)
+    expect(w.text()).toContain('服务端新续页')
     expect(ElMessage.success).toHaveBeenCalledWith('已删除')
     expect(listTopics).toHaveBeenCalledTimes(2)
+  })
+
+  it('删除后恢复首页失败时，可重试首页', async () => {
+    const topic = adminTopic()
+    const w = await mountTopics(topic)
+    await openReplies(w, topic, [adminReply()], 2, 2)
+    getTopic.mockRejectedValueOnce(new Error('reload failed'))
+    await w.get('.reply-delete').trigger('click')
+    await flushPromises()
+
+    expect(w.text()).toContain('回复加载失败')
+    getTopic.mockResolvedValueOnce({ topic, replies: [], page: 1, pages: 0, total: 0 } as never)
+    const retry = w.findAll('button').find(button => button.text() === '重试')
+    expect(retry).toBeDefined()
+    await retry!.trigger('click')
+    await flushPromises()
+
+    expect(getTopic).toHaveBeenLastCalledWith(topic.id, 1, 20)
+    expect(w.text()).toContain('暂无回复')
   })
 
   it('删回复失败不更新缓存、不发成功 toast、不刷新', async () => {
@@ -360,8 +382,8 @@ describe('论坛管理操作', () => {
     await vm.deleteReply(reply)
     await flushPromises()
 
-    expect(vm.replyMap[topic.id].map(item => item.id)).toEqual([reply.id])
-    expect(vm.replyMeta[topic.id]).toEqual({ page: 1, pages: 2, total: 3 })
+    expect(vm.replyPages[topic.id].replies.map(item => item.id)).toEqual([reply.id])
+    expect(vm.replyPages[topic.id]).toMatchObject({ page: 1, pages: 2, total: 3 })
     expect(ElMessage.success).not.toHaveBeenCalled()
     expect(listTopics).toHaveBeenCalledTimes(1)
   })
@@ -378,8 +400,8 @@ describe('论坛管理操作', () => {
     await flushPromises()
 
     expect(deleteReplyMock).not.toHaveBeenCalled()
-    expect(vm.replyMap[topic.id].map(item => item.id)).toEqual([reply.id])
-    expect(vm.replyMeta[topic.id]).toEqual({ page: 1, pages: 2, total: 3 })
+    expect(vm.replyPages[topic.id].replies.map(item => item.id)).toEqual([reply.id])
+    expect(vm.replyPages[topic.id]).toMatchObject({ page: 1, pages: 2, total: 3 })
     expect(ElMessage.success).not.toHaveBeenCalled()
     expect(listTopics).toHaveBeenCalledTimes(1)
   })

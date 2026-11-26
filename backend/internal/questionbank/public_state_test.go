@@ -146,7 +146,10 @@ func TestQuestionPublicVisibilityPreservesReviewStatus(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if published.Status != "published" || !published.publicHidden {
+	if published.Status != "published" || published.PublicEligibility == nil ||
+		!reflect.DeepEqual(published.PublicEligibility.Reasons, []publicscope.Reason{
+			publicscope.ReasonCategoryMissing, publicscope.ReasonManuallyHidden,
+		}) {
 		t.Fatalf("审核发布应保留开关: %+v", published)
 	}
 	eligibility, err = svc.setPublicVisibility(ctx, record.ID, true)
