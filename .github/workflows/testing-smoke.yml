@@ -37,6 +37,13 @@ concurrency:
   group: smoke-${{ github.event.pull_request.head.sha }}
   cancel-in-progress: true
 
+env:
+  # 与 ci.yml / cd.yml 同源（#2885）：本 job 只等 ci-summary 并派发 CD，也不该让
+  # 以后加进来的 git 路径调用先踩一次转义坑；读数为三份 workflow 一致。
+  GIT_CONFIG_COUNT: 1
+  GIT_CONFIG_KEY_0: core.quotepath
+  GIT_CONFIG_VALUE_0: "false"
+
 jobs:
   ensure-testing-smoke:
     # 跳过草稿 PR：草稿阶段不该占 testing 机器（标记 ready_for_review 时会再触发一次）
