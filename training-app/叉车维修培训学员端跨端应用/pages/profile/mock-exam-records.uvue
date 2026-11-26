@@ -61,7 +61,7 @@
                     </view>
                     <view class="record-action">
                         <text class="record-action-text">{{ item.status == 'in_progress' ? '继续' : '查看' }}</text>
-                        <text class="record-action-arrow">›</text>
+                        <image class="record-action-arrow" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
                     </view>
                 </view>
             </view>
@@ -442,12 +442,9 @@ import { goBack } from '../../utils/navigation'
     }
 
     .record-action-arrow {
-        width: 32rpx;
+        width: 24rpx;
+        height: 24rpx;
         flex-shrink: 0;
-        font-size: 32rpx;
-        line-height: 36rpx;
-        text-align: center;
-        color: $primary-color;
         margin-left: 4rpx;
     }
 
