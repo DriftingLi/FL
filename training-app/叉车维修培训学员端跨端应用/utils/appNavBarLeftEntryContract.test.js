@@ -22,7 +22,7 @@ const h = require('./contractHarness');
 
 const SRC_REL = 'components/app-nav-bar/app-nav-bar.uvue';
 
-/** 抹注释（块 + 行，防注释文本里的字段名被误判成真接线）。先例 certSelectorOverlayContract。 */
+/** 抹注释（块 + 行，防注释文本里的字段名被误判成真接线）。先例 dashboardContract。 */
 function stripComments(s) {
   return s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
 }
@@ -438,7 +438,8 @@ describe('页头形态（#2442 / #2761）', () => {
     expect(dash).not.toMatch(/nav-bell/);
     expect(dash).not.toMatch(/:right-icons=/);
     expect(dash).toMatch(/class="credential-bar"/);
-    expect(dash).toMatch(/class="credential-picker"[^>]*@click="onCertTap"/);
+    // #2907：证件栏改整页入口（onCertTap 随浮层开关一起退役），仍须可点
+    expect(dash).toMatch(/class="credential-picker"[^>]*@click="openCertPage"/);
   });
 
   it('全页右槽必须空（#2761：侧槽脱流后右槽内容会盖在居中标题上）', () => {

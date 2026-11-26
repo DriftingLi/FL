@@ -1,0 +1,149 @@
+/**
+ * 选证页选择流（#2907：证件选择只剩「整页」一条路径，状态全归本件）
+ *
+ * ## 为什么从页面壳层搬出来
+ * 票面要求「首页证件面板那四条两段式判据（点选只改待确认项、完成才落库、恰一次 PATCH、
+ * 同证件不发 PATCH）迁到整页后仍成立」。行为腿只跑 `.uts`（`utils/utsHarness.loadUts`），
+ * 跑不了 `.uvue` —— 状态留在页面壳层，判据就只能退化成源码文本锁、判别力归零。
+ * 顺带收掉本页既有的「页面壳层自持四个 ref」违例（移动端 AGENTS.md 代码规范）。
+ *
+ * ## 两段式语义（自首页浮层原样迁来，#2535 Q3）
+ * - 进页先**预选**当前证件（真源 = `GET /me/credential`，本地缓存只是它的副本，不作首帧依据）；
+ * - 点选只改 `selectedId`，**不发请求**；
+ * - 点「完成」才 PATCH，后端确认（回带凭证）才算成功并写缓存；
+ * - 选中值 == 当前证件 ⇒ 未变更，直接返回、不发 PATCH（不选直接返回同理：什么都不动）。
+ *
+ * ## 边界
+ * 导航不在本件：`onConfirm` 只回结果，由页面决定「回首页」怎么回（`utils/navigation.goBack`
+ * 已封装「栈 >1 则 navigateBack，否则 reLaunch」，先搜现成的纪律）。
+ */
+import { ref } from 'vue'
+import type { Ref } from 'vue'
+import { getAllCredentialsApi, getCurrentCredentialApi, switchCredentialApi, writeCurrentCredentialCache } from '../../../api/credential'
+import type { CredentialGroup, CredentialItem } from '../../../types/index'
+import { DEFAULT_PROVINCE, pickProvince } from '../../../utils/provincePicker'
+
+/** 首页入口的 `from` 取值：整页据此跳过引导态；注册流不带它，仍走引导（#2535 Q2 不变） */
+export const CHOOSE_CERT_FROM_DASHBOARD : string = 'dashboard'
+
+/** 提交结果之一：后端已确认切换，页面可以退回首页 */
+export const SUBMIT_SWITCHED : string = 'switched'
+/** 提交结果之一：选中值就是当前证件，未变更（零请求） */
+export const SUBMIT_UNCHANGED : string = 'unchanged'
+/** 提交结果之一：还没选（已提示），留在本页 */
+export const SUBMIT_NONE : string = 'none'
+/** 提交结果之一：提交失败或正在提交（已提示），留在本页 */
+export const SUBMIT_FAILED : string = 'failed'
+
+/** useChooseCertSelection 的返回值（显式类型：UTS 对返回对象的函数字段推断不可靠） */
+export type UseChooseCertSelectionResult = {
+    /** 报考省份（展示性字段，选择逻辑在 utils/provincePicker） */
+    province : Ref<string>
+    groups : Ref<CredentialGroup[]>
+    /** 待提交的证件 id；0 = 尚未选（== 0 时点完成只提示、不发请求） */
+    selectedId : Ref<number>
+    /** 后端确认的当前证件 id；预选与「是否变更」判据都用它 */
+    currentId : Ref<number>
+    listFailed : Ref<boolean>
+    isSubmitting : Ref<boolean>
+    loadList : () => Promise<void>
+    onSelect : (item : CredentialItem) => void
+    onConfirm : () => Promise<string>
+    onProvinceTap : () => void
+}
+
+export function useChooseCertSelection() : UseChooseCertSelectionResult {
+    const province = ref<string>(DEFAULT_PROVINCE)
+    const groups = ref<CredentialGroup[]>([])
+    const selectedId = ref<number>(0)
+    const currentId = ref<number>(0)
+    const listFailed = ref<boolean>(false)
+    const isSubmitting = ref<boolean>(false)
+
+    /**
+     * 首屏装载：先取当前证件做预选，再拉字典。
+     * 两段各自呈现失败：字典失败只影响列表（`listFailed` → 空态 + 重试），
+     * 预选失败（未登录/网络）只是没有预选值，不能把整页打成错误态。
+     */
+    async function loadList() : Promise<void> {
+        const current = await getCurrentCredentialApi()
+        if (current != null) {
+            currentId.value = current!.id
+            // 只有还没选过才预选：重试/回前台重拉不得覆盖用户已点选的值
+            if (selectedId.value == 0) {
+                selectedId.value = current!.id
+            }
+        }
+        try {
+            const res = await getAllCredentialsApi()
+            groups.value = res
+            listFailed.value = false
+        } catch (e) {
+            console.warn('[choose-cert] load credential list failed:', e)
+            listFailed.value = true
+        }
+    }
+
+    /** 组件只回抛选中项（纯选择器，#1379 裁定⑥）：这里只改待提交值，不发请求 */
+    function onSelect(item : CredentialItem) : void {
+        selectedId.value = item.id
+    }
+
+    /**
+     * 完成 = 一次真切换（#1395：跳转权交给后端确认）
+     * 返回结果字符串而**不导航** —— 导航归页面（同 #1379 裁定⑥：动作时机不在件内）。
+     */
+    async function onConfirm() : Promise<string> {
+        if (selectedId.value == 0) {
+            uni.showToast({ title: '请先选择一个证书', icon: 'none' })
+            return SUBMIT_NONE
+        }
+        if (isSubmitting.value) {
+            return SUBMIT_FAILED
+        }
+        // 未变更：不选直接返回、或把当前证件又点了一遍 ⇒ 证件不变、不发 PATCH
+        if (selectedId.value == currentId.value) {
+            return SUBMIT_UNCHANGED
+        }
+        isSubmitting.value = true
+        try {
+            const result = await switchCredentialApi(selectedId.value)
+            if (result.success && result.credential != null) {
+                // 后端确认值进缓存：首页 onShow 回退时读的就是它（#1349）
+                writeCurrentCredentialCache(result.credential)
+                currentId.value = result.credential!.id
+                selectedId.value = result.credential!.id
+                return SUBMIT_SWITCHED
+            }
+            // 后端 200 但未回凭证 = 未确认 ⇒ 按失败处理（#1346 K4 口径）
+            uni.showToast({ title: '切换失败，请重试', icon: 'none' })
+            return SUBMIT_FAILED
+        } catch (e) {
+            console.warn('[choose-cert] switch credential failed:', e)
+            uni.showToast({ title: '切换失败，请重试', icon: 'none' })
+            return SUBMIT_FAILED
+        } finally {
+            isSubmitting.value = false
+        }
+    }
+
+    /** 报考省份：弹系统 action sheet，选中只改本地回显（后端证件接口无该维度） */
+    function onProvinceTap() : void {
+        pickProvince((p : string) : void => {
+            province.value = p
+        })
+    }
+
+    return {
+        province: province,
+        groups: groups,
+        selectedId: selectedId,
+        currentId: currentId,
+        listFailed: listFailed,
+        isSubmitting: isSubmitting,
+        loadList: () => loadList(),
+        onSelect: (item : CredentialItem) => onSelect(item),
+        onConfirm: () => onConfirm(),
+        onProvinceTap: () => onProvinceTap()
+    } as UseChooseCertSelectionResult
+}

@@ -18,6 +18,8 @@
  * 返回 void 的透传函数（viewFeaturedContentApi / markNotificationReadApi / markAllReadApi）不硬套 identity map。
  */
 /** harness：读取层归一 + 模块归属面（ADR-0023 票 C 起，本文件不再自建 ROOT / read / walker） */
+const fs = require('fs');
+const path = require('path');
 const h = require('./contractHarness');
 const ROOT = h.ROOT;
 const read = h.read;
@@ -214,10 +216,11 @@ describe('页面预算落袋锁（手术目标本身也断言，防「只挪注�
 
 /* ══ ③ 拆出物接线收口 ══ */
 describe('组件接线汇总（T05 拆出物 5 组件 + 2 composable：显式 import + 模板挂载/调用）', () => {
-  // #1395：证件下拉组件提升为共享领域件 `components/cert-selector/`（dashboard 与 guide 共挂），
-  // 接线锁随搬家改路径 —— 组件本体仍是「只 emit、不发请求」的纯选择器（裁定④）。
+  // #1395：证件下拉组件提升为共享领域件 `components/cert-selector/`。
+  // #2907：证件选择只剩「选择学习阶段」整页一条路径 ⇒ 首页不再挂它（浮层退役），
+  // 它的接线改由 guide 侧 `chooseCertGuideBehavior` 与本文件末尾的 #2907 组守；
+  // 首页只留「点证件栏压栈进整页」这一条入口锁（见下方 #2907 describe）。
   const WIRING = [
-    ['CertSelector', '../../components/cert-selector/cert-selector.uvue'],
     ['DashboardMenuGrid', './components/dashboard-menu-grid.uvue'],
     ['DashboardContinueCard', './components/dashboard-continue-card.uvue'],
     ['DashboardNewsSection', './components/dashboard-news-section.uvue'],
@@ -288,16 +291,19 @@ describe('行为保持点（手术偏离与回退风险的显式钉锁）', () =
     expect(start).toContain('30000');
   });
 
-  it('证件切换乐观更新 + 失败回滚（prevId/prevName）与错误文案保持', () => {
-    const body = cred.slice(cred.indexOf('async function onSelectCredential'));
-    expect(body).toContain('const prevId = currentCredentialId.value');
-    expect(body).toContain('const prevName = currentCert.value');
-    expect(body).toContain('currentCredentialId.value = prevId');
-    expect(body).toContain('currentCert.value = prevName');
-    expect(body).toContain('切换失败，请重试');
-    expect(body).toContain('isSwitching.value = false');
-    // #1346：未确认切换（success:false）不得再当成功写本地存储 ⇒ else 分支不再有 item.code 写入
-    expect(body).not.toContain("uni.setStorageSync('selected_cert', item.code)");
+  it('证件切换不再有乐观更新与回滚（#2907：首页只显示，切换全在整页）', () => {
+    // 旧形态：点选即改 currentCredentialId/currentCert，失败再按 prevId/prevName 回滚。
+    // 整页两段式后首页没有切换动作 ⇒ 回滚机制整体失去消费方；留在件里就是死码。
+    expect(cred).not.toContain('onSelectCredential');
+    expect(cred).not.toContain('prevId');
+    expect(cred).not.toContain('isSwitching');
+    // 失败文案与「未确认 = 失败」口径搬到整页选择流（判据在行为腿 chooseCertSelectionBehavior）
+    const sel = read('pages/guide/composables/useChooseCertSelection.uts');
+    expect(sel).toContain('切换失败，请重试');
+    expect(sel).toContain('result.success && result.credential != null');
+    // 首页只读当前证件：不再拉分组字典、不再 PATCH
+    expect(cred).not.toContain('getAllCredentialsApi');
+    expect(cred).not.toContain('switchCredentialApi');
   });
 
   it("selected_cert 键退役（#1395：证件域**零业务读写**；唯一允许触碰点 = 登录域清槽）", () => {
@@ -329,9 +335,10 @@ describe('行为保持点（手术偏离与回退风险的显式钉锁）', () =
     // 允许点必须**恰好是**登录域那一处：多出来 = 有人重新碰这个键；少了 = 白名单过期
     // （拿等式而不是「包含于」，免得将来偷偷往白名单里塞写点）
     expect(touched).toEqual(['stores/auth.uts']);
-    // 缓存出口的接线：1 读（回退）+ 3 写（后端确认 ×2、确认无证件清空 ×1）
+    // 缓存出口的接线：1 读（回退）+ 2 写（后端确认 ×1、确认无证件清空 ×1）
+    // #2907：第三处写随浮层的「待确认项落库」一起搬去整页选择流（那边写 PATCH 回带值）
     expect((cred.match(/readCurrentCredentialCache\(\)/g) || []).length).toBe(1);
-    expect((cred.match(/writeCurrentCredentialCache\(/g) || []).length).toBe(3);
+    expect((cred.match(/writeCurrentCredentialCache\(/g) || []).length).toBe(2);
     // 清空必须显式传 null（供旧值冒充当前证件是 #1349 要堵的第二处漂移）
     expect(cred).toContain('writeCurrentCredentialCache(null)');
   });
@@ -386,6 +393,59 @@ describe('行为保持点（手术偏离与回退风险的显式钉锁）', () =
     expect(page).toContain("url: '/pages/courses/course-detail?id=' + course.course_id.toString()");
     expect(page).toContain("url: '/pages/featured/featured-detail?id=' + news.content_id.toString()");
     expect((page.match(/\/pages\/featured\/featured-list/g) || []).length).toBe(1);
+  });
+});
+
+/* ══ #2907 证件选择入口改整页：首页只剩一条入口，浮层整套退役 ══ */
+describe('证件选择入口改整页（#2907）', () => {
+  const page = read('pages/dashboard/dashboard.uvue');
+  const comp = read('components/cert-selector/cert-selector.uvue');
+  // .uvue 的说明性文字在 <!-- --> 里，stripComments 只抹 /* */ 与 //，故这里再抹一层模板注释
+  const compCode = stripComments(comp).replace(/<!--[\s\S]*?-->/g, '');
+  const guidePage = read('pages/guide/choose-cert.uvue');
+
+  it('证件栏点击压栈进整页，且带 from=dashboard（注册流原入口不动）', () => {
+    expect(page).toMatch(/class="credential-picker"[^>]*@click="openCertPage"/);
+    expect(page).toContain("uni.navigateTo({ url: '/pages/guide/choose-cert?from=dashboard' })");
+  });
+
+  it('首页不再挂浮层：零 CertSelector 引用、零浮层开关与顶部内距', () => {
+    expect(page).not.toContain('cert-selector/cert-selector.uvue');
+    expect(page).not.toMatch(/<CertSelector/);
+    expect(page).not.toContain('showCertDropdown');
+    expect(page).not.toContain('credentialPanelTop');
+  });
+
+  it('整页是唯一挂载点（引导页挂它，且不再传 embedded）', () => {
+    expect(guidePage).toContain('<CertSelector');
+    expect(guidePage).not.toContain(':embedded');
+    expect(guidePage).toContain(':current-id="selectedId"');
+  });
+
+  it('组件只剩内嵌形态：六个开关与遮罩/头部/省份/完成条全部退役（抹注释后零命中）', () => {
+    for (const gone of ['embedded', 'showProvince', 'confirmable', 'belowNavBar', 'topInset']) {
+      expect(compCode).not.toContain(gone);
+    }
+    // 浮层专属结构的类名与事件一律不许回来（本件现在只有 content 类：cert-selector-*）
+    expect(compCode).not.toContain('cert-dropdown-mask');
+    expect(compCode).not.toMatch(/defineEmits\(\[('close'|'confirm'|'provinceTap')/);
+    expect(compCode).toMatch(/defineEmits\(\['select'\]\)/);
+  });
+
+  it('组件是纯选择器：只 emit 选中项，不发请求、不落库（#1379 裁定⑥）', () => {
+    expect(compCode).not.toContain('api/credential');
+    expect(compCode).not.toContain('uni.request');
+    expect(compCode).not.toContain('switchCredentialApi');
+    expect(comp).toContain('flex: 1');
+    expect(comp).toContain('<scroll-view scroll-y class="cert-selector-scroll">');
+  });
+
+  it('浮层取证工具整套退役（遮罩判据消失 ⇒ 不留读已删结构的死脚本）', () => {
+    // cert-fix-evidence.mjs：本票拍板删除，不为已不存在的判据重建 519 行工具
+    expect(fs.existsSync(path.join(ROOT, 'scripts', 'cert-fix-evidence.mjs'))).toBe(false);
+    // probe-certstate.cjs（#1602 一次性探针）读的就是 showCertDropdown / .cert-dropdown-mask，
+    // 结构已删 ⇒ 脚本一并删除，别留一个点进去必报错的历史工具
+    expect(fs.existsSync(path.join(ROOT, 'scripts', 'probe-certstate.cjs'))).toBe(false);
   });
 });
 

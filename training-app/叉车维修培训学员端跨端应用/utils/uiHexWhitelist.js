@@ -22,7 +22,7 @@ module.exports = {
     '#FF6B35': 'pages/recruiter/resumes.uvue 薪资/筛选徽标 + resume-detail.uvue 薪资强调——强调橙，token 表无对应（$warning-color #ff9900 偏黄）',
     '#EEF3FD': 'pages/recruiter/applications.uvue tag-applied 主色浅底——$primary-tint(#ebf5ff) 近似但值不等，视觉回归风险待真机裁',
     '#E0E0E0': 'pages/recruiter/resume-detail.uvue btn-secondary 边框（批2 #1606 并入；B3 #2519 起 practice-do 已 token 化不再持此值）——$border-color(#D9D9D9) 近似但值不等，待真机裁',
-    '#1565C0': 'pages/guide/choose-cert.uvue btn-confirm 渐变深端与实底兜底 + components/cert-selector.uvue 同款按钮——主色深阶，token 表无深阶位；与 points-detail.uvue 会员卡渐变尾色（linear-gradient(#2979ff,#1565c0)）同值（先例）',
+    '#1565C0': 'pages/guide/choose-cert.uvue btn-confirm 渐变深端与实底兜底——主色深阶，token 表无深阶位；与 points-detail.uvue 会员卡渐变尾色（linear-gradient(#2979ff,#1565c0)）同值（先例）；#2907 起 cert-selector 的浮层完成条退役，本值只剩整页这一处承载',
     '#888888': 'pages/guide/choose-cert.uvue province-label/error-text 次要说明文字——$text-color-secondary(#666666) 偏深、$text-color-placeholder(#999999) 偏浅，中间灰无 token；收敛待灰阶 token 票裁',
     '#F0F2F5': 'pages/guide/choose-cert.uvue province-bar 胶囊底（$bg-color(#F5F5F5)/$border-color-light(#F0F0F0) 均不等，冷灰胶囊底）——待真机裁（#2524 起 resume-edit 分割线已改走 $border-color-light）',
     '#EEEEEE': 'batch2 profile 两页分割线/边框——$border-color(#D9D9D9)/$border-color-light(#f0f0f0) 之间的更浅边框，待真机裁（#2524 起 job-list 的边框已改走 token）',

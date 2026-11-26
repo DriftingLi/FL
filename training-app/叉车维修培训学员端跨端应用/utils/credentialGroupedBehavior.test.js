@@ -171,44 +171,46 @@ describe('当前证件缓存（selected_cert_id / selected_cert_name）读写出
   });
 });
 
-describe('use-dashboard-credential：当前证件与列表各自失败各自呈现（#1349）', () => {
-  /** 起真 composable：三个 api 出口 + 两个缓存出口注入替身，只测编排 */
-  function loadComposable({ getCurrent, getAll, writeCache, readCache, switchApi }) {
+describe('use-dashboard-credential：首页只承载「当前证件」这一件事（#2907）', () => {
+  /** 起真 composable：只剩 api / 缓存出口（列表、分组、切换、省份 #2907 迁去整页选证流） */
+  function loadComposable({ getCurrent, writeCache, readCache }) {
     const { uni, toasts } = makeUni();
     const writes = [];
+    const calls = { get: 0 };
     const mod = loadUts(COMPOSABLE, {
       ref: (v) => ({ value: v }),
-      getCurrentCredentialApi: getCurrent == null ? () => Promise.resolve(null) : getCurrent,
-      getAllCredentialsApi: getAll == null ? () => Promise.resolve([]) : getAll,
-      switchCredentialApi: switchApi == null ? () => Promise.resolve({ success: true, credential: null }) : switchApi,
+      getCurrentCredentialApi: () => {
+        calls.get += 1;
+        return getCurrent == null ? Promise.resolve(null) : getCurrent();
+      },
       readCurrentCredentialCache: readCache == null ? () => null : readCache,
       writeCurrentCredentialCache: (c) => { writes.push(c); if (writeCache) writeCache(c); },
-      // #2535：证件面板的报考省份走 utils/provincePicker（展示性字段，不参与落库）
-      DEFAULT_PROVINCE: '全国',
-      pickProvince: () => {},
       uni,
     });
-    return { face: mod.useDashboardCredential(), toasts, writes };
+    return { face: mod.useDashboardCredential(), toasts, writes, calls };
   }
 
-  const group = (cat, id, name) => ({ group_name: cat, icon: 'x', category: cat, items: [{ id, code: 'c' + id, name }] });
+  test('返回面收窄：只剩 currentCert / currentCredentialId / loadCredentials', () => {
+    const { face } = loadComposable({});
+    // 浮层那套（分组 / 切证 / 提交中 / 省份）随 #2907 整页入口一起退役，首页不许再私藏一份
+    expect(Object.keys(face).sort()).toEqual(['currentCert', 'currentCredentialId', 'loadCredentials']);
+  });
 
-  test('列表失败不污染已取到的当前证件：currentCert 保持后端值，分组留空，提示一次', async () => {
-    const { face, toasts } = loadComposable({
+  test('只发一条 GET /me/credential：列表不再由首页拉（字典失败判据迁至整页 listFailed）', async () => {
+    const { face, calls, toasts } = loadComposable({
       getCurrent: () => Promise.resolve({ id: 7, code: 'maintenance_L2', name: '二级' }),
-      getAll: () => Promise.reject(new Error('list 500')),
     });
     await face.loadCredentials();
+    expect(calls.get).toBe(1);
     expect(face.currentCert.value).toBe('二级');
     expect(face.currentCredentialId.value).toBe(7);
-    expect(face.credentialGroups.value).toEqual([]);
-    expect(toasts).toEqual(['证件列表加载失败，请重试']);
+    // 首页不再有「列表加载失败」这种面：列表在整页，失败态也归整页
+    expect(toasts).toEqual([]);
   });
 
   test('后端确认无证件 + 缓存命中 ⇒ 用缓存显示，且不回写缓存', async () => {
     const { face, writes } = loadComposable({
       getCurrent: () => Promise.resolve(null),
-      getAll: () => Promise.resolve([group('special_operation', 1, 'N1')]),
       readCache: () => ({ id: 1, code: '', name: '叉车司机N1证' }),
     });
     await face.loadCredentials();
@@ -220,7 +222,6 @@ describe('use-dashboard-credential：当前证件与列表各自失败各自呈�
   test('后端确认无证件 + 无缓存 ⇒ 清空缓存三键并显示「选择证件」', async () => {
     const { face, writes } = loadComposable({
       getCurrent: () => Promise.resolve(null),
-      getAll: () => Promise.resolve([]),
       readCache: () => null,
     });
     await face.loadCredentials();
@@ -228,48 +229,11 @@ describe('use-dashboard-credential：当前证件与列表各自失败各自呈�
     expect(writes).toEqual([null]);
   });
 
-  test('同一错误不重复弹 toast（onShow 高频重进首页），错误变化才再弹', async () => {
-    let msg = 'list A';
-    const { face, toasts } = loadComposable({
-      getCurrent: () => Promise.resolve({ id: 7, code: 'x', name: '二级' }),
-      getAll: () => Promise.reject(new Error(msg)),
-    });
-    await face.loadCredentials();
-    await face.loadCredentials();
-    expect(toasts).toEqual(['证件列表加载失败，请重试']);
-    msg = 'list B';
-    await face.loadCredentials();
-    expect(toasts).toEqual(['证件列表加载失败，请重试', '证件列表加载失败，请重试']);
-  });
-
-  test('列表成功 ⇒ 分组落位到 credentialGroups', async () => {
-    const gs = [group('special_operation', 1, 'N1')];
-    const { face, toasts } = loadComposable({
-      getCurrent: () => Promise.resolve({ id: 1, code: 'forklift_n1', name: 'N1' }),
-      getAll: () => Promise.resolve(gs),
-    });
-    await face.loadCredentials();
-    expect(face.credentialGroups.value).toEqual(gs);
-    expect(toasts).toEqual([]);
-  });
-
-  test('切换成功 ⇒ 后端确认值进缓存（离线回退读的就是它）', async () => {
-    const cred = { id: 3, code: 'welder', name: '焊工证' };
-    const { face, writes } = loadComposable({
-      switchApi: () => Promise.resolve({ success: true, credential: cred }),
-    });
-    await face.onSelectCredential({ id: 3, code: 'welder', name: '焊工证' });
-    expect(writes).toEqual([cred]);
-  });
-
-  test('后端 200 没回凭证（未确认切换）⇒ 不回滚外不加写缓存（#1346 口径不回潮）', async () => {
-    const { face, writes } = loadComposable({
-      switchApi: () => Promise.resolve({ success: false, credential: null }),
-    });
-    await face.onSelectCredential({ id: 3, code: 'welder', name: '焊工证' });
-    expect(writes).toEqual([]);
-    expect(face.currentCert.value).toBe('加载中...');
-  });
+  // 列表失败 / 分组落位 / 切换成功后回写缓存 / 未确认 200 不计成功
+  // —— 这四条判据随 #2907 从首页浮层迁到整页选择流，现由
+  // `utils/chooseCertSelectionBehavior.test.js`（行为腿，真跑 composable）与
+  // `utils/dashboardContract.test.js` 的 #2907 组（接线锁）共同守。
+  // 「精确值与缓存校验」口径未变：真源仍是 GET /me/credential，缓存只是副本。
 });
 
 // ===== #1380：登出 / 身份切换必须清掉证件域三键 =====

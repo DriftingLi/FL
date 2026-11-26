@@ -30,7 +30,7 @@ function scriptBlocks(src) {
   return out;
 }
 
-/** 抹 JS 注释（块注释 + 行注释，`://` 例外防误杀 URL）。先例 certSelectorOverlayContract.stripComments */
+/** 抹 JS 注释（块注释 + 行注释，`://` 例外防误杀 URL）。先例 dashboardContract.stripComments */
 function stripJsComments(s) {
   return s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
 }

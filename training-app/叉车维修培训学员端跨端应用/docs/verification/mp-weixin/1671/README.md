@@ -28,6 +28,7 @@
 - crop-closed-top.png / crop-open-top.png（0-260）、crop-closed-bottom.png / crop-open-bottom.png（697-996）
 - 判读：scripts/png-lum-profile.mjs（自 wt-1650 复制，与 #1650 同口径）、scripts/png-crop.mjs
 - 取证脚本：scripts/cert-fix-evidence.mjs（v4：sweep 复位 + closed→open 双帧 + console/exception 采集）
+  - **已退役（#2907）**：浮层形态整体删除（证件选择只剩整页一条路径），本判据随遮罩一并消失，脚本与遮罩契约套件同步删除；本文件保留为历史记录，勿按它复跑。
 - console 采集：CONSOLE 3 条（request mock 200×2 + getSystemInfo deprecation warn），EXCEPTIONS=0
 
 ## 与 #1650 判读结论对照

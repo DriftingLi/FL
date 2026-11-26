@@ -15,21 +15,15 @@
              原「特种作业 / 技能等级 / 热门考证」三块静态列表已随 #1395 整删——自持静态列表
              的 key 与后端 code 不通，是「选了永远匹配不上、从不落库」病灶的根。 -->
         <view class="content">
-            <CertSelector v-if="!listFailed" :groups="groups" :current-id="selectedId" :embedded="true"
-                @select="onSelect" />
+            <CertSelector v-if="!listFailed" :groups="groups" :current-id="selectedId" @select="onSelect" />
             <!-- 列表加载失败 = 空态 + 重试，不静态兜底（兜底列表 = 重引入本票要埋掉的病灶）。
                  两条各拿一个并列 v-if（不用 v-else）：uvue 的 v-else 不容注释/空行间隔。 -->
-            <view v-if="listFailed" class="error-section">
-                <text class="error-text">证件列表加载失败</text>
-                <view class="btn-retry" @click="loadList">
-                    <text class="btn-retry-text">重试</text>
-                </view>
-            </view>
+            <app-empty-state v-if="listFailed" text="证件列表加载失败" action-text="重试" @action="loadList" />
         </view>
 
         <!-- 底部完成按钮：一次真切换——PATCH 后端确认成功才跳首页，失败留页可重试 -->
         <view class="bottom-bar">
-            <view class="btn-confirm" :class="{ 'btn-confirm--disabled': selectedId == 0 }" @click="onConfirm">
+            <view class="btn-confirm" :class="{ 'btn-confirm--disabled': selectedId == 0 }" @click="onConfirmTap">
                 <text class="btn-confirm-text">完成</text>
             </view>
         </view>
@@ -62,15 +56,18 @@
 </template>
 
 <script setup lang="uts">
-    import { ref } from 'vue'
+    import { onLoad } from '@dcloudio/uni-app'
     import { goBack } from '../../utils/navigation'
     import { useAuthStore } from '../../stores/auth'
     import appNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
-    import { getAllCredentialsApi, switchCredentialApi, writeCurrentCredentialCache } from '../../api/credential'
-    import type { CredentialGroup, CredentialItem } from '../../types/index'
     import CertSelector from '../../components/cert-selector/cert-selector.uvue'
+    import appEmptyState from '../../components/app-empty-state/app-empty-state.uvue'
     import { useChooseCertGuide } from './composables/useChooseCertGuide'
-    import { DEFAULT_PROVINCE, pickProvince } from '../../utils/provincePicker'
+    import {
+        CHOOSE_CERT_FROM_DASHBOARD,
+        SUBMIT_SWITCHED,
+        useChooseCertSelection
+    } from './composables/useChooseCertSelection'
 
     // 未登录防护
     const auth = useAuthStore()
@@ -79,65 +76,38 @@
         uni.reLaunch({ url: '/pages/login/login' })
     }
 
+    // ---- 选择流（#2907：状态与动作全归 composable，本页只剩模板 / 生命周期 / 薄包装） ----
+    // 两段式语义随之搬入：点选只改待提交项、完成才 PATCH、同证件不发 PATCH（判据可跑行为腿）。
+    const { province, groups, selectedId, listFailed, loadList, onSelect, onConfirm, onProvinceTap } =
+        useChooseCertSelection()
+
     // ---- 引导态（#2535 Q2）：首屏引导 → 点击/上滑进主态；X 跳过选证直达首页 ----
+    // #2907：整页已是证件选择的唯一路径 ⇒ 从首页来是「改证件」，不能再由一屏引导挡住；
+    // 注册流落地（不带 from）保持原引导态。
     const { guideVisible, onGuideTouchStart, onGuideTouchEnd, enterMain } = useChooseCertGuide()
 
-    // ---- 省份（展示性字段，选择逻辑收口在 utils/provincePicker） ----
-    const province = ref(DEFAULT_PROVINCE)
-
-    // ---- 选证列表（唯一真源 = 后端 GET /credentials/grouped，零硬编码） ----
-    const groups = ref<CredentialGroup[]>([])
-    const selectedItem = ref<CredentialItem | null>(null)
-    const selectedId = ref<number>(0)
-    const listFailed = ref<boolean>(false)
-    const isSubmitting = ref<boolean>(false)
-
-    /** 拉证件字典：失败置空态（不静态兜底），重试按钮重新走这里 */
-    function loadList() : void {
-        getAllCredentialsApi().then((res : CredentialGroup[]) => {
-            groups.value = res
-            listFailed.value = false
-        }).catch((e) => {
-            console.warn('[choose-cert] load credential list failed:', e)
-            listFailed.value = true
-        })
-    }
+    // 首屏装载：预选当前证件 + 拉分组字典（唯一真源 = 后端，零硬编码）
     loadList()
 
-    /** 组件只 emit 选中项（纯选择器，#1379 裁定⑥）；动作时机归页面 */
-    function onSelect(item : CredentialItem) : void {
-        selectedItem.value = item
-        selectedId.value = item.id
-    }
+    // onLoad 必须带 options 形参：Kotlin Function1<OnLoadOptions, Unit>，零参即 error17。
+    // 键取 options['from'] 索引形态（utils/navQueryKeyContract.test.js 按括号字符串键解析）。
+    onLoad((options : OnLoadOptions) => {
+        const rawFrom = options['from']
+        if (rawFrom != null && rawFrom.toString() == CHOOSE_CERT_FROM_DASHBOARD) {
+            enterMain()
+        }
+    })
 
     /**
-     * 完成 = 一次真切换（#1395，病灶 2 的直译：跳转权交给后端确认）：
-     * PATCH /me/credential 后端确认成功才 reLaunch 首页；失败留页可重试，不得 reLaunch。
-     * 后端 200 但未回凭证 = 未确认 ⇒ 按失败处理（#1346 K4 口径）。
+     * 完成：切换成功后回首页。走既有 goBack()（栈 >1 则 navigateBack，栈只有 1 层才 reLaunch 回首页）
+     * —— 注册流落地时栈只有本页，靠它兜住；从首页压栈进来的走返回，首页 onShow 自会重拉当前证件。
+     * 失败/未选/未变更都留页（composable 已提示），不导航。
      */
-    function onConfirm() : void {
-        const item = selectedItem.value
-        if (item == null) {
-            uni.showToast({ title: '请先选择一个证书', icon: 'none' })
-            return
-        }
-        if (isSubmitting.value) {
-            return
-        }
-        isSubmitting.value = true
-        switchCredentialApi(item!.id).then((result) => {
-            if (result.success && result.credential != null) {
-                // 后端确认值进缓存：首页立即显示所选证件（离线回退读的就是它）
-                writeCurrentCredentialCache(result.credential)
-                uni.reLaunch({ url: '/pages/dashboard/dashboard' })
-            } else {
-                uni.showToast({ title: '切换失败，请重试', icon: 'none' })
+    function onConfirmTap() : void {
+        onConfirm().then((result : string) : void => {
+            if (result == SUBMIT_SWITCHED) {
+                goBack()
             }
-            isSubmitting.value = false
-        }).catch((e) => {
-            console.warn('[choose-cert] switch credential failed:', e)
-            uni.showToast({ title: '切换失败，请重试', icon: 'none' })
-            isSubmitting.value = false
         })
     }
 
@@ -161,12 +131,6 @@
     /** X = 跳过选证：不改证件、不 PATCH，直接落首页（票面 Q2 拍板） */
     function onSkipGuide() : void {
         uni.reLaunch({ url: '/pages/dashboard/dashboard' })
-    }
-
-    function onProvinceTap() : void {
-        pickProvince((p : string) : void => {
-            province.value = p
-        })
     }
 </script>
 
@@ -207,34 +171,6 @@
     /* ---- 内容区（滚动面在 cert-selector 内，这里只给 flex 高度） ---- */
     .content {
         flex: 1;
-    }
-
-    /* ---- 列表失败空态 ---- */
-    .error-section {
-        margin: $spacing-sm 32rpx 0;
-        padding: $spacing-lg 28rpx;
-        background-color: $bg-header;
-        border-radius: 20rpx;
-        align-items: center;
-    }
-
-    .error-text {
-        font-size: $font-size-md;
-        color: #888888;
-        margin-bottom: $spacing-md;
-    }
-
-    .btn-retry {
-        padding: 14rpx $spacing-lg;
-        border-radius: 40rpx;
-        border-width: 2rpx;
-        border-color: $primary-color;
-    }
-
-    .btn-retry-text {
-        font-size: $font-size-md;
-        color: $primary-color;
-        font-weight: 600;
     }
 
     /* ---- 底部完成按钮（页面 flex 列的末子元素，不再 fixed） ---- */
