@@ -34,8 +34,10 @@ const MOBILE_FILE = path.join(__dirname, 'diagnosisCompose.uts');
  * **不含 `pickerKindOf`**：它的骨架是「判档取值」，两侧的 null 兜底写法不同
  * （web 用 `brand?.picker` 的可选链、移动端 UTS 必须显式 `if (brand == null) return`），
  * 比字面量会因写法差异恒红。判档口径另由下面第 ③ 条按**语义**断言。
+ *
+ * **不含 `faultStepTitle`**：Web 侧已删除零消费导出，移动端本地实现不参与跨栈同源比对。
  */
-const SHARED_FUNCTIONS = ['composeDiagnosisSentence', 'faultStepTitle'];
+const SHARED_FUNCTIONS = ['composeDiagnosisSentence'];
 
 /** 去注释（块 + 行）：注释里提到某句中文不算「模板里有它」 */
 function stripComments(src) {
@@ -145,7 +147,7 @@ describe('诊断组句模板跨栈同源（#2296）', () => {
     expect(tpl.length).toBeGreaterThanOrEqual(3);
   });
 
-  it('② 三个同名函数的模板骨架逐位相等（改一个字 / 换分支位置 / 调顺序都会红）', () => {
+  it('② 两侧同名函数的模板骨架逐位相等（改一个字 / 换分支位置 / 调顺序都会红）', () => {
     const web = skeletonsByName(WEB_SRC);
     const mobile = skeletonsByName(MOBILE_SRC);
     for (const name of SHARED_FUNCTIONS) {
