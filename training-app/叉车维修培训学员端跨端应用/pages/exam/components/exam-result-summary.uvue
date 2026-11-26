@@ -54,7 +54,7 @@
     })
 </script>
 
-<style>
+<style lang="scss">
     /* 成绩汇总卡片 */
     .summary-card {
         margin: 24rpx;
