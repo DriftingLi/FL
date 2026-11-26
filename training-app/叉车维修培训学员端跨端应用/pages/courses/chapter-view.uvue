@@ -380,7 +380,7 @@ import { goBack } from '../../utils/navigation'
     /* 收藏位字形（#1140）：与 course-detail.uvue 的 .favorite-icon 同值（40rpx / 白），
        未收藏态渲染 '♡' 而不是空串 —— 空串观感上等于「这页没有收藏功能」（#1087 的教训） */
     .favorite-icon {
-        font-size: 40rpx;
+        font-size: $font-size-2xl;
         color: #ffffff;
     }
 
@@ -471,7 +471,7 @@ import { goBack } from '../../utils/navigation'
     .retry-btn {
         background-color: $primary-color;
         border-radius: 32rpx;
-        padding: 16rpx 48rpx;
+        padding: 16rpx $spacing-xl;
     }
 
     .retry-btn-text {
@@ -483,7 +483,7 @@ import { goBack } from '../../utils/navigation'
     .unlock-btn {
         background-color: $primary-color;
         border-radius: 32rpx;
-        padding: 16rpx 48rpx;
+        padding: 16rpx $spacing-xl;
         margin-top: 24rpx;
     }
 

@@ -374,7 +374,7 @@ import { goBack } from '../../utils/navigation'
     }
 
     .record-score {
-        font-size: 40rpx;
+        font-size: $font-size-2xl;
         font-weight: bold;
         color: #333333;
     }

@@ -330,7 +330,7 @@
     /* 右槽设置按钮（app-nav-bar slot name=right 的增强形态，批2 引入） */
     /* 票 2730 第 1 项：88rpx 命中盒 / 64rpx 承载面由 components/app-icon-button 承担；齿轮字形 40rpx 不变。 */
     .settings-icon {
-        font-size: 40rpx;
+        font-size: $font-size-2xl;
         color: $text-color-secondary;
     }
 

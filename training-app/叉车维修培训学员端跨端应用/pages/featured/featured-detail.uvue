@@ -276,7 +276,7 @@
     }
 
     .fav-icon {
-        font-size: 40rpx;
+        font-size: $font-size-2xl;
     }
 
     .content-scroll {
@@ -386,7 +386,7 @@
     }
 
     .docx-btn {
-        padding: 18rpx 48rpx;
+        padding: 18rpx $spacing-xl;
         background-color: $primary-color;
         border-radius: 44rpx;
         align-items: center;
@@ -409,7 +409,7 @@
     /* 异常正文的可见提示（不许空白）：与空态同色阶，但不占满屏 */
     .body-hint {
         margin-top: 16rpx;
-        padding: 48rpx 0;
+        padding: $spacing-xl 0;
         align-items: center;
     }
 

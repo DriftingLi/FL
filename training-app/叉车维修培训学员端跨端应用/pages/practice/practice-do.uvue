@@ -267,7 +267,7 @@
     .status-progress { font-size: 30rpx; color: $text-color; font-weight: 600; margin-left: 32rpx; }
     .status-progress-total { font-size: 24rpx; color: $text-color-placeholder; font-weight: 400; }
     .status-actions { flex-direction: row; align-items: center; }
-    .status-icon { font-size: 40rpx; padding: 8rpx 0 8rpx 32rpx; }
+    .status-icon { font-size: $font-size-2xl; padding: 8rpx 0 8rpx 32rpx; }
 
     .content-scroll { flex: 1; height: 0; }
     /* 题卡（原型 435:797）：chip+题干+选项同卡 */
@@ -347,7 +347,7 @@
 
     /* 答题卡弹层（原型 435:903）：标题居中 + 右上 X，宫格当前题实底主色 */
     .answer-card-mask { position: fixed; left: 0; top: 0; right: 0; bottom: 0; background-color: $uni-bg-color-mask; justify-content: flex-end; }
-    .answer-card-sheet { background-color: $card-bg; border-radius: 32rpx 32rpx 0 0; padding: 40rpx 32rpx; padding-bottom: 48rpx; flex-direction: column; max-height: 960rpx; }
+    .answer-card-sheet { background-color: $card-bg; border-radius: 32rpx 32rpx 0 0; padding: 40rpx 32rpx; padding-bottom: $spacing-xl; flex-direction: column; max-height: 960rpx; }
     .answer-card-header { flex-direction: row; align-items: center; justify-content: space-between; margin-bottom: 40rpx; }
     .answer-card-header-spacer { width: 64rpx; height: 44rpx; }
     .answer-card-title { font-size: 34rpx; font-weight: 600; color: $text-color; }
@@ -368,7 +368,7 @@
     .submit-paper-text { font-size: 32rpx; font-weight: 600; color: $card-bg; }
 
     .summary-mask { position: fixed; left: 0; top: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.6); justify-content: center; align-items: center; }
-    .summary-box { width: 600rpx; background-color: $card-bg; border-radius: 24rpx; padding: 48rpx 32rpx; align-items: center; }
+    .summary-box { width: 600rpx; background-color: $card-bg; border-radius: 24rpx; padding: $spacing-xl 32rpx; align-items: center; }
     .summary-title { font-size: 36rpx; font-weight: bold; color: $text-color; margin-bottom: 40rpx; }
     .summary-stats { flex-direction: row; justify-content: space-around; margin-bottom: 40rpx; align-self: stretch; }
     .summary-stat { flex-direction: column; align-items: center; }

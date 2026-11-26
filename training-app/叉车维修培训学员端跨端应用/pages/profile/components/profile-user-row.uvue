@@ -124,7 +124,7 @@
     }
 
     .user-name {
-        font-size: 40rpx;
+        font-size: $font-size-2xl;
         font-weight: bold;
         color: $text-color;
     }

@@ -131,7 +131,7 @@
     }
 
     .retry-btn {
-        padding: 20rpx 48rpx;
+        padding: 20rpx $spacing-xl;
         border-radius: 40rpx;
         background-color: $primary-color;
     }
@@ -144,7 +144,7 @@
     /* ===== 商品主卡（810:3399 顶部白卡，通栏无边距）===== */
     .hero-card {
         background-color: $card-bg;
-        padding: 64rpx 60rpx 48rpx;
+        padding: 64rpx 60rpx $spacing-xl;
         flex-direction: column;
     }
 
@@ -163,7 +163,7 @@
         font-size: 32rpx;
         font-weight: bold;
         color: $text-color;
-        margin-top: 48rpx;
+        margin-top: $spacing-xl;
     }
 
     .price-row {
@@ -173,7 +173,7 @@
     }
 
     .price-value {
-        font-size: 40rpx;
+        font-size: $font-size-2xl;
         font-weight: bold;
         color: $text-color;
     }
@@ -224,7 +224,7 @@
         margin: 20rpx 32rpx 0;
         background-color: $card-bg;
         border-radius: 24rpx;
-        padding: 44rpx 48rpx;
+        padding: 44rpx $spacing-xl;
         flex-direction: column;
     }
 

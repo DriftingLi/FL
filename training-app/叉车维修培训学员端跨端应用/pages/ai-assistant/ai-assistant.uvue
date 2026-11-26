@@ -1269,7 +1269,7 @@
 	}
 
 	.welcome-brand-icon {
-		font-size: 40rpx;
+		font-size: $font-size-2xl;
 	}
 
 	.welcome-brand-name {

@@ -56,11 +56,21 @@ function lineOf(fullText, idx) {
   return fullText.slice(0, idx).split('\n').length
 }
 
-/** rpx 值解析；`$spacing-md` 按 24 计；解析不出返回 null（如 50%、rgba） */
+/** 间距 token → rpx（与 uni.scss 的 `$spacing-*` 同步；#2863 起 48rpx 也走 `$spacing-xl`。
+ * 漏登记一条会让该 declaration 整条静默跳过（horizontal() 见 null 就 continue），故全表列。 */
+const SPACING_TOKEN_PX = {
+  '$spacing-xs': 8,
+  '$spacing-sm': 16,
+  '$spacing-md': 24,
+  '$spacing-lg': 32,
+  '$spacing-xl': 48,
+}
+
+/** rpx 值解析；`$spacing-*` 查 token 表；解析不出返回 null（如 50%、rgba） */
 function px(v) {
   const s = String(v).trim().replace(/;$/, '')
   if (s === '0') return 0
-  if (s === '$spacing-md') return 24
+  if (Object.prototype.hasOwnProperty.call(SPACING_TOKEN_PX, s)) return SPACING_TOKEN_PX[s]
   const m = s.match(/^(-?\d+(?:\.\d+)?)rpx$/)
   return m ? Number(m[1]) : null
 }

@@ -79,8 +79,8 @@ $uni-font-size-paragraph:15px;
 
 /* 主题色 */
 $primary-color: #239EDD; // #1597 裁定 #2979ff → #239EDD（#1603 落地）
-$primary-color-light: #5b9aff;
-$primary-color-dark: #1c9eff;
+/* $primary-color-light（原 #5b9aff）/ $primary-color-dark（原 #1c9eff）已删（#2863）：
+ * 全仓 0 引用 + 0 字面量；两者用途自 #2509 R2 起已被 §5.3 主 CTA 渐变对与 pressed 对取代。 */
 $success-color: #14AE50; // 原型裁定（#2509 R2 冲突 2）：#4cd964 在 69 屏原型 0 次；绿收敛为单值 #14AE50
 $warning-color: #ff9900;
 /* $error-color（原 #dd524d）已删：与 $danger-color（:137 一带）同语义位，#1597 Z12 裁定删定义留占位（#1603） */
@@ -136,6 +136,7 @@ $spacing-xs: 8rpx;
 $spacing-sm: 16rpx;
 $spacing-md: 24rpx;
 $spacing-lg: 32rpx;
+/* 48rpx 档（#2863 接上：此前只有字面量在用，padding/margin 里 48 处 48rpx（33 行）已收敛到本 token） */
 $spacing-xl: 48rpx;
 
 /* 字号（rpx） */
@@ -146,7 +147,8 @@ $font-size-lg: 32rpx;
 $font-size-xl: 36rpx;
 /* $font-size-xxl（原 44rpx）已删：全站零消费 + 两份文档均写明「统一为 5 级」，#1597 Z7/C4 裁定删定义留占位（#1603）。
  * #2516 补 2xl/3xl 两档是 #2509 R2 的新增裁定（原型标题 40/48rpx 有实际消费面），
- * 与原「5 级」不冲突：那五级是界面字号，这两档是**标题层级**的补充档。 */
+ * 与原「5 级」不冲突：那五级是界面字号，这两档是**标题层级**的补充档。
+ * #2863 接上：30 处 `font-size: 40rpx`、2 处 `font-size: 48rpx` 字面量改为引用本对（同值，零视觉）。 */
 $font-size-2xl: 40rpx;
 $font-size-3xl: 48rpx;
 
@@ -164,15 +166,18 @@ $input-border: #e5e5e5;
 
 /* ==================== 原型换血 Token（#2509 R2 裁定 · #2516 B0 落地） ====================
  * 逐值出处见 `.scratch/figma-proto-export/TOKEN_DECISIONS.md`（69 屏 PNG + deep.json 频次）。
- * 分组与裁定一致：品牌黄三件套 / 主 CTA 渐变四端点 / 品牌-页头渐变对 / 打卡格四态 /
- * TabBar 三色 / 功能强调四色 / 中性面二值 / 几何与字号三档。
+ * 分组与裁定一致：品牌黄浅底 / 主 CTA 渐变四端点 / 品牌渐变对 / TabBar 三色 /
+ * 功能强调三色 / 中性面二值 / 几何与字号三档。
  * 约束：#2509 新增 27 条里 `$checkin-cell-streak` 复用 `$accent-yellow`（默认位 null），按裁定计 4 项。
+ *
+ * **#2863 收口**：删掉 11 条「0 引用 + 0 字面量」的死件（逐个结论见票 #2863），并把 40/48rpx 字号、
+ * 48rpx 间距的字面量接回 `$font-size-2xl` / `$font-size-3xl` / `$spacing-xl`。
  */
 
-/* 品牌黄三件套（433:751 品牌色圆声明：黄升格第三品牌色；打卡格 / 积分底 / 评分星） */
-$accent-yellow: #FDE03B;
+/* 品牌黄浅底（433:751 品牌色圆声明的第三品牌色，落地面只剩浅底档：practice 功能宫格）。
+ * #2863 删 `$accent-yellow`（#FDE03B）与 `$text-on-yellow`（#271309）：全仓 0 引用 0 字面量；
+ * 打卡格的实值是白名单里的 `#FFD666` / `#F6B93E`，与 #FDE03B 不等值，接上即改视觉。 */
 $accent-yellow-tint: #FDF9E6;
-$text-on-yellow: #271309;
 
 /* 主 CTA 渐变四端点（原型主 CTA 65 处/16 屏一律 `#6ECCFD`→`#0CA2EF`，含 pressed 对） */
 $primary-grad-start: #6ECCFD;
@@ -180,19 +185,19 @@ $primary-grad-end: #0CA2EF;
 $primary-grad-pressed-start: #239EDD;
 $primary-grad-pressed-end: #139DE4;
 
-/* 品牌 / 页头渐变对（我的页整页渐变、页头蓝转白） */
+/* 品牌渐变对（着陆页 `pages/index/index.uvue:128`）。
+ * #2863 删 `$header-grad-start/-end`：页头套自 #1592 起是**实色**（ui-spec §7：N01 `$primary-color` /
+ * N02–N03 `$bg-header` / N05 transparent；唯一页头件 `app-nav-bar`），全仓 84 处渐变里没有一处页头渐变
+ * ⇒「页头渐变是硬编码的」不成立；接上等于新造页头视觉、波及 56 页共享件。 */
 $brand-grad-start: #239EDD;
 $brand-grad-end: #14AE50;
-$header-grad-start: #239EDD;
-$header-grad-end: #FFFFFF;
 /* 渐变中停靠色：uvue 原生端两停靠限制下只 web 预览可用（gradientSyntaxContract 口径） */
 $gradient-mid: #D0EBFD;
 
-/* 打卡格四态（G8 日历套） */
-$checkin-cell-miss: #D9D9D9;
-$checkin-cell-past-miss: #ECECEC;
-$checkin-cell-inactive: rgba(255, 255, 255, 0.80);
-$checkin-cell-streak: $accent-yellow;
+/* 打卡格四态已删（#2863）：G8 日历实际渲染走白名单字面量（`pages/forum/check-in.uvue` 的
+ * #E8E8E8 / #FFD666 / #F6B93E / #C9C9C9 / #F5E3B3），与四态 token 值不等值
+ * （#ECECEC vs #E8E8E8、$accent-yellow #FDE03B vs #FFD666）⇒ 接上即改视觉，先删值、不留假契约。
+ * 原 `$checkin-cell-miss` 的唯一消费点是打卡页开关轨色，已改回 `$border-color`（同值 #D9D9D9，零视觉）。 */
 
 /* TabBar 三色（pages.json 原生 tabBar 已同值；此处是 token 侧登记） */
 $tabbar-bg: #FFFFFF;
@@ -201,7 +206,8 @@ $tabbar-inactive: #999999;
 
 /* 功能强调四色 */
 $color-price: #FF2424;
-$answer-correct: #7BD398;
+/* #2863 删 `$answer-correct`（#7BD398）：答题正确面实际走 `$success-color`
+ * （`pages/exam/components/exam-result-detail-list.uvue:117`），全仓 0 引用 0 字面量。 */
 $answer-wrong: #FF5A5A;
 $segment-indicator: #239EDD;
 

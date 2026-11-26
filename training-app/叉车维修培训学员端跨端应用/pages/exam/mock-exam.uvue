@@ -269,7 +269,7 @@ import { goBack } from '../../utils/navigation'
 
     .retry-btn {
         margin-top: 24rpx;
-        padding: 16rpx 48rpx;
+        padding: 16rpx $spacing-xl;
         background-color: $primary-color;
         border-radius: 40rpx;
     }
