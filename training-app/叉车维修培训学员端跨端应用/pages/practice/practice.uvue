@@ -1,14 +1,14 @@
 <template>
     <view class="page" :style="{ height: windowHeight + 'px' }">
         <app-nav-bar title="题库练习" @left-click="onBack" divider></app-nav-bar>
-        <!-- 地区行（原型 473:4247）：「全国 ∨」在左、搜索在右，直接坐在页面浅蓝渐变上，无白条无胶囊底 -->
+        <!-- 地区行（原型 473:4247）：「全国」在左、搜索在右，直接坐在页面浅蓝渐变上，无白条无胶囊底 -->
         <view class="region-bar">
             <view class="region-left" @click="onRegionTap">
                 <text class="region-text">{{ region }}</text>
-                <text class="region-arrow">∨</text>
+                <image class="region-arrow-image" src="/static/icons/dashboard/credential-arrow.png" mode="aspectFit" />
             </view>
             <view class="region-right">
-                <text class="nav-icon" @click="onSearch">🔍</text>
+                <image class="nav-search-image" src="/static/icons/mall/search.png" mode="aspectFit" @click="onSearch" />
             </view>
         </view>
         <scroll-view class="scroll-content" scroll-y="true" :refresher-enabled="true" :refresher-triggered="isRefreshing" @refresherrefresh="onRefresh">
@@ -64,17 +64,15 @@
     }
     .scroll-content { flex: 1; height: 0; }
     .region-bar {
-        padding: 8rpx 24rpx 20rpx;
+        padding: 8rpx 30rpx 20rpx;
         flex-direction: row;
         align-items: center;
         justify-content: space-between;
     }
     .region-left { flex-direction: row; align-items: center; padding: 8rpx 0; }
     .region-text { font-size: 32rpx; font-weight: 600; color: $text-color; }
-    .region-arrow { width: 32rpx; flex-shrink: 0; font-size: 24rpx; line-height: 28rpx; text-align: center; color: $text-color-secondary; margin-left: 8rpx; }
+    .region-arrow-image { width: 24rpx; height: 24rpx; flex-shrink: 0; margin-left: 8rpx; }
     .region-right { flex-direction: row; align-items: center; }
     .safe-bottom { height: 34rpx; }
-    /* 页头右槽搜索入口（#2442）：此前全仓无样式定义 ⇒ 命中区只有字形高。
-       44rpx 字形 + 上下各 22rpx = 88rpx，触摸目标 44×44。 */
-    .nav-icon { font-size: 44rpx; padding: 10rpx 12rpx 10rpx 24rpx; }
+    .nav-search-image { width: 40rpx; height: 40rpx; padding: 12rpx 12rpx 12rpx 24rpx; }
 </style>
