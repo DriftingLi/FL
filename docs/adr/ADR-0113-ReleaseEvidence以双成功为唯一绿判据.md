@@ -1,4 +1,4 @@
-# ADR-0109：ReleaseEvidence 以双成功为唯一绿判据
+# ADR-0113：ReleaseEvidence 以双成功为唯一绿判据
 
 - 状态：已接受
 - 日期：2026-11-27
@@ -24,5 +24,5 @@
 ## 关联
 
 - `CONTEXT.md`：ReleaseEvidence
-- ADR-0108：发布计划与回滚生命周期
+- ADR-0112：发布计划与回滚生命周期
 - ADR-0047：部署事实源与 codegen 约束

@@ -1,4 +1,4 @@
-# ADR-0108：ReleaseTransaction 统一应用回滚与版本化发布计划
+# ADR-0112：ReleaseTransaction 统一应用回滚与版本化发布计划
 
 - 状态：已接受
 - 日期：2026-11-27
@@ -24,5 +24,5 @@
 ## 关联
 
 - ADR-0088：回滚只动变化服务
-- ADR-0107：拓扑快照提供回滚所需的环境结论
+- ADR-0111：拓扑快照提供回滚所需的环境结论
 - `CONTEXT.md`：ReleaseTransaction
