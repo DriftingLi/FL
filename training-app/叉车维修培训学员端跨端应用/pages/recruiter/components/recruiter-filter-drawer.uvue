@@ -260,7 +260,7 @@
     .drawer-panel {
         width: 620rpx;
         height: 100%;
-        background-color: #ffffff;
+        background-color: $card-bg;
         flex-direction: column;
     }
 
@@ -270,18 +270,18 @@
         justify-content: space-between;
         height: 96rpx;
         padding: 0 28rpx;
-        border-bottom: 1rpx solid #f0f0f0;
+        border-bottom: 1rpx solid $border-color-light;
     }
 
     .drawer-title {
         font-size: 32rpx;
         font-weight: bold;
-        color: #333333;
+        color: $text-color;
     }
 
     .drawer-close {
         font-size: 28rpx;
-        color: #239EDD;
+        color: $primary-color;
         padding: 12rpx 8rpx;
     }
 
@@ -305,7 +305,7 @@
 
     .field-label {
         font-size: 26rpx;
-        color: #666666;
+        color: $text-color-secondary;
         margin-bottom: 12rpx;
     }
 
@@ -315,7 +315,7 @@
         border-radius: 12rpx;
         padding: 0 20rpx;
         font-size: 28rpx;
-        color: #333333;
+        color: $text-color;
     }
 
     .chip-row {
@@ -331,22 +331,22 @@
 
     .chip-active {
         background-color: $primary-tint;
-        border-color: #239EDD;
+        border-color: $primary-color;
     }
 
     .chip-text {
         font-size: 26rpx;
-        color: #666666;
+        color: $text-color-secondary;
     }
 
     .chip-text-active {
-        color: #239EDD;
+        color: $primary-color;
     }
 
     .drawer-footer {
         flex-direction: row;
         padding: 20rpx 28rpx;
-        border-top: 1rpx solid #f0f0f0;
+        border-top: 1rpx solid $border-color-light;
     }
 
     .btn-reset {
@@ -360,7 +360,7 @@
 
     .btn-reset-text {
         font-size: 30rpx;
-        color: #666666;
+        color: $text-color-secondary;
     }
 
     .btn-apply {
@@ -369,13 +369,13 @@
         align-items: center;
         justify-content: center;
         border-radius: 44rpx;
-        background-color: #239EDD;
+        background-color: $primary-color;
     }
 
     .btn-apply-text {
         font-size: 30rpx;
         font-weight: bold;
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 
     .ml-16 { margin-left: 16rpx; }
