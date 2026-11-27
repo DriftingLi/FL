@@ -273,7 +273,7 @@
         width: 96rpx;
         height: 96rpx;
         border-radius: 48rpx;
-        background-color: #ffffff;
+        background-color: $card-bg;
     }
 
     .user-meta {
@@ -285,7 +285,7 @@
     .user-name {
         font-size: 34rpx;
         font-weight: bold;
-        color: #333333;
+        color: $text-color;
     }
 
     /* 原型 485:5793：等级是名字后的纯文本「Lv3」，不是实底胶囊 */
@@ -307,7 +307,7 @@
         flex: 1;
         margin: 0 8rpx;
         align-items: center;
-        background-color: #ffffff;
+        background-color: $card-bg;
         border-radius: 16rpx;
         padding: 20rpx 0;
     }
@@ -321,14 +321,14 @@
     .stat-label {
         margin-top: 6rpx;
         font-size: 24rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     /* ===== 简历完善度引导（白卡，对齐原型「去填写简历」卡） ===== */
     .resume-guide {
         flex-direction: column;
         align-items: center;
-        background-color: #ffffff;
+        background-color: $card-bg;
         border-radius: 24rpx;
         padding: 32rpx 24rpx;
         margin-top: 24rpx;
@@ -375,7 +375,7 @@
 
     .resume-guide-btn-text {
         font-size: 26rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 
     /* ===== 常用功能 ===== */
@@ -384,7 +384,7 @@
         margin-bottom: 20rpx;
         font-size: 32rpx;
         font-weight: bold;
-        color: #333333;
+        color: $text-color;
     }
 
     .func-grid {
@@ -395,7 +395,7 @@
     .func-card {
         width: 31.5%;
         align-items: center;
-        background-color: #ffffff;
+        background-color: $card-bg;
         border-radius: $radius-card;
         padding: 28rpx 8rpx;
     }
