@@ -76,7 +76,7 @@
           <el-tab-pane label="图文" name="content">
             <div class="flex flex-col gap-3">
               <div class="flex items-center justify-between">
-                <span class="text-sm text-ink-3">使用 Markdown 编辑，支持实时预览</span>
+                <span class="text-sm text-ink-3">工作副本 · 使用 Markdown 编辑，支持实时预览</span>
                 <div class="flex items-center gap-2">
                   <UiButton size="small" @click="openPreview">发布端预览</UiButton>
                   <UiButton
@@ -202,6 +202,28 @@
         </el-tabs>
       </UiCard>
 
+      <section v-if="reviewSnapshot" class="review-snapshot mt-4 rounded-card border border-line bg-panel p-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 class="text-sm font-semibold text-ink">在审快照</h3>
+            <p class="mt-1 text-xs text-ink-3">本次送审时冻结的正文与文件；当前编辑只改动工作副本。</p>
+          </div>
+          <UiButton size="small" @click="openReviewSnapshotPreview">预览在审快照</UiButton>
+        </div>
+        <div class="mt-4 text-sm font-medium text-ink">冻结文件清单（{{ reviewSnapshot.files.length }}）</div>
+        <ul v-if="reviewSnapshot.files.length" class="mt-2 list-disc pl-5 text-sm text-ink-3">
+          <li v-for="file in reviewSnapshot.files" :key="`${file.source}-${file.file_id}`">{{ file.file_name }}</li>
+        </ul>
+        <div v-else class="mt-2 text-sm text-ink-3">本章节无附件</div>
+      </section>
+      <UiAlert
+        v-else-if="chapterDetail.review_status === 'pending'"
+        title="在审快照不可用"
+        description="未能读取本次送审的冻结正文与文件；当前编辑器仅为工作副本，请刷新页面重试。"
+        type="warning"
+        :closable="false"
+      />
+
       <!-- 上一章 / 下一章 -->
       <nav class="flex items-center justify-between gap-4 border-t border-line py-4 max-md:flex-col">
         <div class="nav-prev flex-1 max-w-[48%] max-md:max-w-full">
@@ -265,7 +287,8 @@
     <PublishPreviewDialog
       v-model="previewVisible"
       :content="previewContent"
-      subtitle="与 Web 学员端章节正文同一渲染器：表格 / 代码高亮 / 公式。"
+      :title="previewSource === 'review' ? '在审快照预览' : '发布端预览'"
+      :subtitle="previewSource === 'review' ? '送审时冻结的正文，与当前工作副本相互独立。' : '与 Web 学员端章节正文同一渲染器：表格 / 代码高亮 / 公式。'"
     />
 
     <!-- 上传文件弹窗 -->
@@ -320,7 +343,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { href } from '@/config/pages'
-import { tutorApi, type TutorChapter, type TutorChapterDetail } from '@/api/tutor'
+import { tutorApi, type TutorChapter } from '@/api/tutor'
 import { tutorFileApi, type FileDTO } from '@/api/tutorfile'
 import type { ChapterFile } from '@/api/course'
 import MarkdownEditor from '@/components/tutor/MarkdownEditor.vue'
@@ -336,61 +359,41 @@ import UiTag from '@/components/ui/UiTag.vue'
 import UiSkeleton from '@/components/ui/UiSkeleton.vue'
 import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiAlert from '@/components/ui/UiAlert.vue'
 import { useAsyncPage } from '@/composables/useAsyncPage'
+import { useChapterEditingSession } from './useChapterEditingSession'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 import { useConfirm } from '@/composables/useConfirm'
 
 const route = useRoute()
 const router = useRouter()
+const session = useChapterEditingSession()
+const {
+  chapterDetail,
+  editContent,
+  chapterFiles,
+  reviewSnapshot,
+  activeTab,
+  selectedFileKey,
+  selectedFile,
+  claimState,
+  claiming,
+  canWrite,
+  contentChanged,
+  savingContent,
+  submittingReview,
+  saveContent,
+  fileKey,
+  selectFile
+} = session
 
-// ===== 认领状态（#2596 D3）=====
-// 'unknown' 是刻意的初值：名单还没拉回来时**不能**当作「已认领」（否则未认领讲师会先看到
-// 可点的写按钮、点下去才 403），也不能当作「未认领」（已认领者会看到一条莫名的提示条）。
-// 故初值禁用写操作、但不显示提示条；名单回来后再落成 claimed / unclaimed。
-const claimState = ref<'unknown' | 'claimed' | 'unclaimed'>('unknown')
-const claiming = ref(false)
-const canWrite = computed(() => claimState.value === 'claimed')
-
-async function loadClaimState() {
-  const courseId = Number(route.params.courseId)
-  if (!courseId) {
-    // 直达本页时 URL 缺课程 id：无法判定认领，按未认领降级（fail closed，后端 403 兜底仍在）
-    claimState.value = 'unclaimed'
-    return
-  }
-  try {
-    const res = await tutorApi.getCourseClaimants(courseId)
-    claimState.value = res.claimed_by_me ? 'claimed' : 'unclaimed'
-  } catch {
-    // 名单拉不到：保持 unknown（写操作保持禁用），不猜
-  }
+function handleClaim() {
+  void session.claimCourse(Number(route.params.courseId))
 }
 
-async function handleClaim() {
-  if (claiming.value) return
-  claiming.value = true
-  try {
-    await tutorApi.claimCourse(Number(route.params.courseId))
-    ElMessage.success('已认领，可以开始编辑章节')
-    claimState.value = 'claimed'
-  } catch {
-    await loadClaimState()
-  } finally {
-    claiming.value = false
-  }
-}
-
-const chapterDetail = ref<TutorChapterDetail | null>(null)
 const courseName = ref('')
 const chapters = ref<TutorChapter[]>([])
-const activeTab = ref('content')
-
-// 正文编辑
-const editContent = ref('')
-const originalContent = ref('')
-const savingContent = ref(false)
-const contentChanged = computed(() => editContent.value !== originalContent.value)
 
 // 发布端预览（#903）：取编辑器里的**最新**正文快照渲染，不写回表单、不发请求。
 // 不直接用 v-model：ir 模式下 v-model 偶发滞后一拍，预览会显示上一版内容——
@@ -398,9 +401,19 @@ const contentChanged = computed(() => editContent.value !== originalContent.valu
 const markdownEditorRef = ref<{ getValue: () => string } | null>(null)
 const previewVisible = ref(false)
 const previewContent = ref('')
+const previewSource = ref<'working' | 'review'>('working')
 
 function openPreview() {
+  previewSource.value = 'working'
   previewContent.value = markdownEditorRef.value?.getValue() || editContent.value
+  previewVisible.value = true
+}
+
+function openReviewSnapshotPreview() {
+  const snapshot = reviewSnapshot.value
+  if (!snapshot) return
+  previewSource.value = 'review'
+  previewContent.value = snapshot.content
   previewVisible.value = true
 }
 
@@ -425,8 +438,6 @@ const chapterImageUploadUrl = computed(() => {
   return chapterId ? `/api/tutor/upload-image?chapter_id=${chapterId}` : '/api/tutor/upload-image'
 })
 
-const chapterFiles = computed<ChapterFile[]>(() => chapterDetail.value?.files || [])
-
 const fileGroups = computed(() => {
   const groups: Record<string, ChapterFile[]> = {}
   for (const file of chapterFiles.value) {
@@ -443,23 +454,6 @@ const fileGroups = computed(() => {
     files: groups[type] || []
   }))
 })
-
-// 选中文件预览。选中标识用 source+file_id 复合键：chapter_file 与 tutor_file 的
-// file_id 是两套独立编号，只比 file_id 会跨来源误选（#2497 挂接条目合入后成真）。
-const selectedFileKey = ref<string | null>(null)
-function fileKey(file: ChapterFile): string {
-  return `${file.source || 'chapter_file'}:${file.file_id}`
-}
-const selectedFile = computed(() => {
-  if (selectedFileKey.value == null) return null
-  return chapterFiles.value.find((f) => fileKey(f) === selectedFileKey.value) || null
-})
-
-function selectFile(file?: ChapterFile) {
-  if (!file) return
-  const key = fileKey(file)
-  selectedFileKey.value = selectedFileKey.value === key ? null : key
-}
 
 // 元信息编辑
 const metaDialogVisible = ref(false)
@@ -501,26 +495,7 @@ async function saveMeta() {
   }
 }
 
-// 正文保存
-async function saveContent() {
-  if (!chapterDetail.value) return
-  savingContent.value = true
-  try {
-    await tutorApi.updateChapter(chapterDetail.value.chapter_id, {
-      content: editContent.value
-    })
-    chapterDetail.value.content = editContent.value
-    originalContent.value = editContent.value
-    ElMessage.success('正文保存成功')
-  } catch {
-    /* 错误已由拦截器提示 */
-  } finally {
-    savingContent.value = false
-  }
-}
-
 // #2498 C1/C2：审核状态与显式「提交审核」动作（保存只落草稿，提交冻结整章快照入队）。
-const submittingReview = ref(false)
 const reviewDescriptor = computed<{ label: string; tone: 'warning' | 'info' | 'success' } | null>(() => {
   switch (chapterDetail.value?.review_status) {
     case 'draft':
@@ -534,25 +509,11 @@ const reviewDescriptor = computed<{ label: string; tone: 'warning' | 'info' | 's
   }
 })
 
-async function submitReview() {
-  if (!chapterDetail.value) return
-  await useConfirm().confirm(
-    '提交后将冻结当前正文与文件清单进入审核（后续改动不影响在审版本），确认提交？',
+function submitReview() {
+  void session.submitReview(() => useConfirm().confirm(
+    '提交后将冻结已保存正文与文件清单进入审核（后续改动不影响在审版本），确认提交？',
     '提交审核'
-  )
-  submittingReview.value = true
-  try {
-    const updated = await tutorApi.submitChapterReview(chapterDetail.value.chapter_id)
-    if (chapterDetail.value) {
-      chapterDetail.value.review_status = updated.review_status ?? 'pending'
-      chapterDetail.value.reject_reason = updated.reject_reason ?? ''
-    }
-    ElMessage.success('已提交审核')
-  } catch {
-    /* 错误已由拦截器提示（重复提交 400 / 章节不存在 404） */
-  } finally {
-    submittingReview.value = false
-  }
+  ))
 }
 
 // 上传弹窗
@@ -587,7 +548,7 @@ function handleUploadAll(result: UploadAllResult) {
     ElMessage.warning(`上传完成：成功${result.success}个，失败${result.failed}个`)
   }
   // 上传完成后立即刷新章节详情，让用户看到新文件
-  loadChapterDetail()
+  void session.refreshFiles()
 }
 
 // 删除文件
@@ -605,7 +566,7 @@ async function handleDeleteFile(file: ChapterFile) {
     if (selectedFileKey.value === fileKey(file)) {
       selectedFileKey.value = null
     }
-    await loadChapterDetail()
+    await session.refreshFiles()
   } catch {
     /* 取消确认或删除失败；错误已由拦截器提示 */
   }
@@ -648,7 +609,7 @@ async function handleAttachLibrary(file: FileDTO) {
       ElMessage.success('已挂接到本章节')
     }
     libraryDialogVisible.value = false
-    await loadChapterDetail()
+    await session.refreshFiles()
   } catch {
     /* 错误已由拦截器提示 */
   }
@@ -662,7 +623,7 @@ async function handleDetachFile(file: ChapterFile) {
     if (selectedFileKey.value === fileKey(file)) {
       selectedFileKey.value = null
     }
-    await loadChapterDetail()
+    await session.refreshFiles()
   } catch {
     /* 取消确认或解挂失败；错误已由拦截器提示 */
   }
@@ -680,11 +641,7 @@ const { loading, loadError, retrying, isEmpty, retry: handleRetry, run: loadChap
   },
   {
     apply: (res) => {
-      chapterDetail.value = res
-      editContent.value = res.content || ''
-      originalContent.value = res.content || ''
-      activeTab.value = 'content'
-      selectedFileKey.value = null
+      session.loadChapter(res)
     }, itemsRef: chapterDetail }
 )
 
@@ -755,7 +712,7 @@ watch(activeTab, () => {
 
 onMounted(() => {
   loadChapterDetail()
-  loadClaimState()
+  void session.loadClaimState(Number(route.params.courseId))
 })
 </script>
 

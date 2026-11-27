@@ -1,9 +1,11 @@
-// 管理端课程目录测试：遗留桶、公开原因、空分类发布与分类维护。
+// 管理端课程目录：服务端分页、legacy 桶、公开状态与分类维护。
 // seam：组件层，mock API 层。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { ElMessage } from 'element-plus'
 import { epLite } from '@/test/element-lite'
+import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
+import UiErrorState from '@/components/ui/UiErrorState.vue'
 
 vi.mock('@/api/admin', () => ({
   adminApi: {
@@ -14,6 +16,7 @@ vi.mock('@/api/admin', () => ({
     setPublicVisibility: vi.fn(),
     deleteCourse: vi.fn(),
     swapCourse: vi.fn(),
+    getCourseSortNeighbors: vi.fn(),
     createChapter: vi.fn(),
     updateChapter: vi.fn(),
     deleteChapter: vi.fn()
@@ -21,27 +24,15 @@ vi.mock('@/api/admin', () => ({
 }))
 
 vi.mock('@/api/credential', () => ({
-  credentialApi: {
-    listAdminCredentials: vi.fn()
-  }
+  credentialApi: { listAdminCredentials: vi.fn() }
 }))
 
 vi.mock('@/api/training', () => ({
   trainingApi: {
     getAdminCategories: vi.fn(),
     getCertificateTemplates: vi.fn(),
-    createDirection: vi.fn(),
-    updateDirection: vi.fn(),
-    swapDirection: vi.fn(),
-    deleteDirection: vi.fn(),
-    createLevel: vi.fn(),
-    updateLevel: vi.fn(),
-    deleteLevel: vi.fn(),
-    createQuestionTag: vi.fn(),
-    updateQuestionTag: vi.fn(),
-    createCertificateTemplate: vi.fn(),
-    updateCertificateTemplate: vi.fn(),
-    deleteCertificateTemplate: vi.fn()
+    createTrainingCategory: vi.fn(),
+    updateTrainingCategory: vi.fn()
   }
 }))
 
@@ -49,14 +40,9 @@ import { adminApi, type AdminCourseItem, type AdminCourseDetail } from '@/api/ad
 import { credentialApi } from '@/api/credential'
 import { trainingApi } from '@/api/training'
 import CourseCatalog from '../CourseCatalog.vue'
-import UiSelect from '@/components/ui/UiSelect.vue'
 
-
-const warnSpy = vi.spyOn(ElMessage, 'warning').mockImplementation(() => undefined as never)
 const successSpy = vi.spyOn(ElMessage, 'success').mockImplementation(() => undefined as never)
 
-// AdminCourseItem = 生成的 CourseDTO（注解产物，必填字段比旧手写类型多）：
-// 用工厂补齐默认值，用例只写自己的差异面。
 function courseDTO(over: Partial<AdminCourseItem> = {}): AdminCourseItem {
   return {
     certificate_template_id: null,
@@ -84,69 +70,92 @@ function courseDetailDTO(over: Partial<AdminCourseDetail> = {}): AdminCourseDeta
   return { ...courseDTO(), chapters: [], ...over }
 }
 
-function mountPage() {
-  return mount(CourseCatalog, {
-    global: { plugins: [epLite()] }
+const courses = [
+  courseDTO({
+    course_id: 1,
+    name: '液压系统',
+    category_id: 9,
+    public_state: {
+      category: { id: 9, name: '维修', status: 1 },
+      public_visibility: true,
+      eligibility: { eligible: true, reasons: [] }
+    }
+  }),
+  courseDTO({
+    course_id: 2,
+    name: '未挂载遗留课程',
+    status: 0,
+    public_state: {
+      public_visibility: false,
+      eligibility: { eligible: true, reasons: [] }
+    },
+    public_eligibility: { eligible: false, reasons: ['manually_hidden'] }
+  }),
+  courseDTO({
+    course_id: 3,
+    name: '草稿课程',
+    category_id: 9,
+    status: 0,
+    public_state: {
+      category: { id: 9, name: '维修', status: 1 },
+      public_visibility: true,
+      eligibility: { eligible: false, reasons: ['not_published'] }
+    }
+  }),
+  courseDTO({
+    course_id: 4,
+    name: '停用分类课程',
+    category_id: 8,
+    public_state: {
+      category: { id: 8, name: '旧分类', status: 0 },
+      public_visibility: true,
+      eligibility: { eligible: false, reasons: ['category_disabled'] }
+    }
+  }),
+  courseDTO({
+    course_id: 5,
+    name: '来源排除课程',
+    category_id: 9,
+    public_state: {
+      category: { id: 9, name: '维修', status: 1 },
+      public_visibility: true,
+      eligibility: { eligible: false, reasons: ['source_tag_excluded'] }
+    }
   })
+]
+
+function mountPage() {
+  return mount(CourseCatalog, { global: { plugins: [epLite()] } })
 }
 
 beforeEach(() => {
   vi.clearAllMocks()
-  vi.mocked(adminApi.getCourses).mockResolvedValue({
-    page: 1,
-    pages: 1,
-    total: 5,
-    courses: [
-      courseDTO({
-        course_id: 1,
-        name: '液压系统',
-        category_id: 9,
-        category: { id: 9, name: '维修', status: 1 },
-        status: 1,
-        chapter_count: 7,
-        theory_hours: 24,
-        practice_hours: 16,
-        public_eligibility: { eligible: true, reasons: [] }
-      }),
-      courseDTO({
-        course_id: 2,
-        name: '未挂载遗留课程',
-        specialty_id: null,
-        level_id: null,
-        status: 0,
-        chapter_count: 2,
-        public_eligibility: { eligible: false, reasons: ['not_published', 'category_missing'] }
-      }),
-      courseDTO({
-        course_id: 3,
-        name: '草稿课程',
-        category_id: 9,
-        status: 0,
-        chapter_count: 0,
-        public_eligibility: { eligible: false, reasons: ['not_published'] }
-      }),
-      courseDTO({
-        course_id: 4,
-        name: '停用分类课程',
-        category_id: 8,
-        category: { id: 8, name: '旧分类', status: 0 },
-        status: 1,
-        public_eligibility: { eligible: false, reasons: ['category_disabled'] }
-      }),
-      courseDTO({
-        course_id: 5,
-        name: '来源排除课程',
-        category_id: 9,
-        category: { id: 9, name: '维修', status: 1 },
-        status: 1,
-        public_eligibility: { eligible: false, reasons: ['source_tag_excluded'] }
-      })
-    ]
+  vi.mocked(adminApi.getCourseSortNeighbors).mockResolvedValue({ previous_id: null, next_id: null })
+  vi.mocked(adminApi.swapCourse).mockResolvedValue(null)
+  vi.mocked(adminApi.getCourses).mockImplementation(async params => {
+    const facets = { total: 5, legacy: 2, categories: [{ category_id: 9, total: 3 }, { category_id: 8, total: 1 }] }
+    if (params.page_size === 1) {
+      const counts: Record<string, number> = { all: 5, legacy: 2, '8': 1, '9': 3 }
+      const total = counts[String(params.category_id ?? 'all')] ?? 0
+      return { items: [], total, facets }
+    }
+    const category = params.category_id ?? 'all'
+    const filtered = courses.filter(course => {
+      if (category === 'legacy') return course.course_id === 2 || course.course_id === 4
+      if (category !== 'all' && course.category_id !== category) return false
+      if (params.keyword && !course.name.includes(params.keyword)) return false
+      if (params.status != null && course.status !== params.status) return false
+      if (params.filter === 'hot' && !course.is_hot) return false
+      if (params.filter === 'featured' && !course.is_featured) return false
+      return true
+    })
+    return { items: filtered, total: filtered.length, facets }
   })
   vi.mocked(adminApi.getCourseDetail).mockResolvedValue(courseDetailDTO({
     course_id: 1,
     name: '液压系统',
-    category_id: 9
+    category_id: 9,
+    public_state: courses[0].public_state
   }))
   vi.mocked(adminApi.updateCourse).mockResolvedValue(courseDTO())
   vi.mocked(trainingApi.getAdminCategories).mockResolvedValue({
@@ -169,122 +178,144 @@ beforeEach(() => {
       updated_at: ''
     }]
   })
-  vi.mocked(trainingApi.getCertificateTemplates).mockResolvedValue({
-    certificate_templates: []
-  })
+  vi.mocked(trainingApi.getCertificateTemplates).mockResolvedValue({ certificate_templates: [] })
 })
 
-describe('CourseCatalog 分类与公开状态', () => {
-  it('筛选只列启用分类，遗留桶仅包含分类异常，维护入口保留停用分类', async () => {
+describe('CourseCatalog 服务端分页与公开状态', () => {
+  it('课程加载失败显示错误态，重试成功后恢复表格', async () => {
+    vi.mocked(adminApi.getCourses).mockRejectedValueOnce(new Error('课程加载失败'))
     const wrapper = mountPage()
     await flushPromises()
 
-    const navNames = wrapper.findAll('.cc-nav-item').map(n => n.text())
-    expect(navNames.some(t => t.includes('维修'))).toBe(true)
-    expect(navNames.some(t => t.includes('旧分类'))).toBe(false)
+    const asyncSection = wrapper.getComponent(UiAsyncSection)
+    expect(asyncSection.props()).toMatchObject({
+      loading: false,
+      error: true,
+      retrying: false,
+      skeleton: false,
+      errorTitle: '课程加载失败',
+      errorDescription: '网络或服务端异常，可重试'
+    })
+    const errorState = asyncSection.getComponent(UiErrorState)
+    expect(errorState.text()).toContain('课程加载失败')
+    expect(wrapper.findComponent({ name: 'ElTable' }).exists()).toBe(false)
 
-    const legacy = navNames.find(t => t.includes('未分类/分类失效'))
-    expect(legacy).toBeTruthy()
-    expect(legacy).toContain('2')
+    await errorState.get('button').trigger('click')
+    await flushPromises()
 
-    const management = wrapper.findAllComponents(UiSelect)
-      .find(select => select.props('placeholder') === '维护全部分类')
-    expect(management?.props('options')).toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: '旧分类（停用）', value: 8 })
-    ]))
+    expect(wrapper.findComponent(UiErrorState).exists()).toBe(false)
+    expect(wrapper.findComponent({ name: 'ElTable' }).exists()).toBe(true)
+    expect(vi.mocked(adminApi.getCourses).mock.calls.filter(([params]) => params.page_size === 10)).toHaveLength(2)
   })
 
-  it('遗留桶不把仅未发布或来源排除的课程算入', async () => {
+  it('首屏只请求当前页，分类计数由后端分页信封提供', async () => {
     const wrapper = mountPage()
     await flushPromises()
 
-    const legacy = wrapper.findAll('.cc-nav-item').find(item => item.text().includes('未分类/分类失效'))
-    await legacy!.trigger('click')
+    const calls = vi.mocked(adminApi.getCourses).mock.calls.map(([params]) => params)
+    expect(calls).toContainEqual(expect.objectContaining({ page: 1, page_size: 10, category_id: 'all' }))
+    expect(calls.some(params => params.page_size === 500)).toBe(false)
+    expect(calls.filter(params => params.page_size === 10)).toHaveLength(1)
+    expect(calls.some(params => params.page_size === 1)).toBe(false)
+
+    const nav = wrapper.findAll('.cc-nav-count')
+    expect(nav[0]?.text()).toBe('5')
+    expect(nav[1]?.text()).toBe('3')
+    expect(nav[2]?.text()).toBe('2')
+  })
+
+  it('选择 legacy 桶由后端筛选并返回对应页', async () => {
+    const wrapper = mountPage()
     await flushPromises()
 
+    const legacy = wrapper.findAll('.cc-nav-item').find(item => item.text().includes('未分类/分类失效'))!
+    await legacy.trigger('click')
+    await flushPromises()
+
+    expect(adminApi.getCourses).toHaveBeenLastCalledWith(expect.objectContaining({
+      page: 1,
+      page_size: 10,
+      category_id: 'legacy'
+    }))
     const rows = wrapper.findAll('.el-table__row').map(row => row.text())
     expect(rows).toHaveLength(2)
     expect(rows.some(text => text.includes('未挂载遗留课程'))).toBe(true)
     expect(rows.some(text => text.includes('停用分类课程'))).toBe(true)
-    expect(rows.some(text => text.includes('草稿课程'))).toBe(false)
-    expect(rows.some(text => text.includes('来源排除课程'))).toBe(false)
   })
 
-  it('列表保留公开结论，抽屉展示原因并同步公开开关的结果', async () => {
-    vi.mocked(adminApi.getCourseDetail).mockResolvedValueOnce(courseDetailDTO({
-      course_id: 2,
-      course_type: 'illustrated',
-      public_eligibility: { eligible: false, reasons: ['category_missing', 'not_published'] }
-    }))
-    vi.mocked(adminApi.setPublicVisibility).mockResolvedValueOnce({ eligible: true, reasons: [] })
+  it('跨页移动通过后端同分类全局邻居定位目标，并保留当前页刷新', async () => {
+    vi.mocked(adminApi.getCourses).mockImplementation(async params => {
+      const facets = { total: 2, legacy: 0, categories: [{ category_id: 9, total: 2 }] }
+      if (params.page_size === 50) return { items: [courses[0], courses[2]], total: 2, facets }
+      if (params.category_id === 9 && params.page === 2) return { items: [courses[2]], total: 2, facets }
+      return { items: [courses[0]], total: 2, facets }
+    })
+    vi.mocked(adminApi.getCourseSortNeighbors).mockResolvedValue({ previous_id: null, next_id: 3 })
     const wrapper = mountPage()
     await flushPromises()
 
-    const legacyRow = wrapper.findAll('.el-table__row').find(row => row.text().includes('未挂载遗留课程'))!
-    expect(legacyRow.text()).toContain('未发布')
-    expect(legacyRow.text()).toContain('未公开')
-    expect(legacyRow.text()).not.toContain('未设置培训分类')
-    expect(legacyRow.text()).not.toContain('图文课程')
+    const category = wrapper.findAll('.cc-nav-item').find(item => item.text().includes('维修'))!
+    await category.trigger('click')
+    await flushPromises()
+    const row = wrapper.get('.el-table__row')
+    await row.getComponent({ name: 'ElDropdown' }).vm.$emit('command', 'moveDown')
+    await flushPromises()
 
-    await legacyRow.get('.cc-cell-name').trigger('click')
+    expect(adminApi.getCourseSortNeighbors).toHaveBeenCalledWith(1)
+    expect(adminApi.swapCourse).toHaveBeenCalledWith(1, 3)
+    expect(adminApi.getCourses).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, page_size: 10, category_id: 9 }))
+  })
+
+  it('状态筛选值传给后端', async () => {
+    const wrapper = mountPage()
     await flushPromises()
+
+    const statusSelect = wrapper.findAllComponents({ name: 'ElSelect' })[1]!
+    statusSelect.vm.$emit('update:modelValue', 0)
+    statusSelect.vm.$emit('change', 0)
+    await flushPromises()
+
+    expect(adminApi.getCourses).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, page_size: 10, status: 0 }))
+    const rows = wrapper.findAll('.el-table__row').map(row => row.text())
+    expect(rows).toHaveLength(2)
+    expect(rows.every(text => text.includes('未发布'))).toBe(true)
+  })
+
+  it('公开开关只读 public_state.public_visibility，不从旧 reasons 反推', async () => {
+    vi.mocked(adminApi.getCourseDetail).mockResolvedValue(courseDetailDTO({
+      course_id: 2,
+      public_state: courses[1].public_state,
+      public_eligibility: courses[1].public_eligibility
+    }))
+    vi.mocked(adminApi.setPublicVisibility).mockResolvedValue({ eligible: false, reasons: ['not_published'] })
+    const wrapper = mountPage()
+    await flushPromises()
+
+    const row = wrapper.findAll('.el-table__row').find(item => item.text().includes('未挂载遗留课程'))!
+    expect(row.text()).toContain('已公开')
+    await row.get('.cc-cell-name').trigger('click')
+    await flushPromises()
+
     const drawer = wrapper.getComponent({ name: 'ElDrawer' })
-    expect(drawer.text()).toContain('未设置培训分类')
-    expect(drawer.text()).toContain('未发布')
-    const visibility = drawer.getComponent({ name: 'ElSwitch' })
-    visibility.vm.$emit('change', true)
+    const toggle = drawer.getComponent({ name: 'ElSwitch' })
+    expect(toggle.props('modelValue')).toBe(false)
+    toggle.vm.$emit('change', true)
     await flushPromises()
+
     expect(adminApi.setPublicVisibility).toHaveBeenCalledWith(2, true)
-    expect(legacyRow.text()).toContain('已公开')
+    expect(toggle.props('modelValue')).toBe(true)
+    expect(row.text()).toContain('未公开')
   })
 
   it('空分类课程可直接发布，不触发前端硬门', async () => {
     const wrapper = mountPage()
     await flushPromises()
 
-    const legacyRow = wrapper.findAll('.el-table__row').find(row => row.text().includes('未挂载遗留课程'))
-    await legacyRow!.findComponent({ name: 'ElDropdown' }).vm.$emit('command', 'toggle')
+    const row = wrapper.findAll('.el-table__row').find(item => item.text().includes('未挂载遗留课程'))!
+    await row.findComponent({ name: 'ElDropdown' }).vm.$emit('command', 'toggle')
     await flushPromises()
 
     expect(adminApi.updateCourse).toHaveBeenCalledWith(2, { status: 1 })
-    expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining('请先补全课程分类'))
-  })
-
-  it('已挂载课程可以正常发布/下架', async () => {
-    const wrapper = mountPage()
-    await flushPromises()
-
-    const draftRow = wrapper.findAll('.el-table__row').find(r => r.text().includes('草稿课程'))
-    await draftRow!.findComponent({ name: 'ElDropdown' }).vm.$emit('command', 'toggle')
-    await flushPromises()
-
-    expect(adminApi.updateCourse).toHaveBeenCalledWith(3, { status: 1 })
     expect(successSpy).toHaveBeenCalled()
-  })
-
-  it('facet 计数按全量、启用分类与遗留桶展示', async () => {
-    const wrapper = mountPage()
-    await flushPromises()
-
-    const navItems = wrapper.findAll('.cc-nav-item')
-    expect(navItems[0].find('.cc-nav-count').text()).toBe('5')
-    expect(navItems[1].find('.cc-nav-count').text()).toBe('3')
-    expect(navItems.find(item => item.text().includes('未分类/分类失效'))!.find('.cc-nav-count').text()).toBe('2')
-  })
-
-  it('先筛选再清除状态筛选恢复全量，不为空', async () => {
-    const wrapper = mountPage()
-    await flushPromises()
-
-    const statusSelect = wrapper
-      .findAllComponents({ name: 'ElSelect' })
-      .find(s => s.props('placeholder') === '状态')
-    await statusSelect!.vm.$emit('update:modelValue', 0)
-    await flushPromises()
-    expect(wrapper.findAll('.el-table__row').length).toBe(2)
-
-    await statusSelect!.vm.$emit('update:modelValue', undefined)
-    await flushPromises()
-    expect(wrapper.findAll('.el-table__row').length).toBe(5)
   })
 })

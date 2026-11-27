@@ -36,6 +36,7 @@ import type {
   ChapterReviewSnapshotDTO,
   CourseDTO,
   CoursePageResult,
+  CourseSortNeighbors,
   CourseStatDTO,
   DeleteChapterResult,
   DeleteCourseResult,
@@ -174,6 +175,7 @@ export interface AdminCoursesQuery {
   specialty_id?: number
   level_id?: number
   category_id?: TrainingCategoryFilter
+  status?: number
   filter?: 'hot' | 'featured' | 'all'
 }
 
@@ -453,8 +455,13 @@ export const adminApi = {
     return unwrappedRequest.get<GenTaskStatus>(`/admin/course/generate-content/${taskId}`)
   },
 
-  getCourses(params: AdminCoursesQuery) {
-    return unwrappedRequest.get<CoursePageResult>('/admin/courses', { params })
+  async getCourses(params: AdminCoursesQuery): Promise<Page<CourseDTO> & Pick<CoursePageResult, 'facets'>> {
+    const res = await unwrappedRequest.get<CoursePageResult>('/admin/courses', { params })
+    return { ...toPage(res?.courses, res?.total), facets: res?.facets }
+  },
+
+  getCourseSortNeighbors(id: number) {
+    return unwrappedRequest.get<CourseSortNeighbors>(`/admin/course/${id}/sort-neighbors`)
   },
 
   getCourseDetail(id: number) {

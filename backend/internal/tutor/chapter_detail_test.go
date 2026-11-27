@@ -76,7 +76,7 @@ func seedChapterWithMeta(t *testing.T, db *gorm.DB) (*model.Course, []model.Chap
 }
 
 // cloneDetailToMap 将 course.ChapterDetailDTO 序列化为 map，便于比对两端 shape 零漂移。
-func cloneDetailToMap(t *testing.T, d *course.ChapterDetailDTO) map[string]any {
+func cloneDetailToMap(t *testing.T, d any) map[string]any {
 	t.Helper()
 	b, err := json.Marshal(d)
 	if err != nil {
@@ -129,6 +129,55 @@ func TestTutorChapterDetailPrevNextAndFiles(t *testing.T) {
 	m := cloneDetailToMap(t, mid)
 	if _, ok := m["study_status"]; ok {
 		t.Fatal("导师端详情不应包含 study_status key")
+	}
+}
+
+func TestTutorChapterDetailIncludesFrozenReviewSnapshot(t *testing.T) {
+	db := testutil.NewMemoryDB(t)
+	svc := newTutorServiceForTest(t, db)
+	_, chapters := seedChapterWithMeta(t, db)
+	chapterID := chapters[0].ChapterID
+
+	if err := db.Model(&model.Chapter{}).Where("chapter_id = ?", chapterID).
+		Update("content", "送审时正文").Error; err != nil {
+		t.Fatalf("改送审正文失败: %v", err)
+	}
+	if err := course.SubmitChapterForReview(context.Background(), db, chapterID, 7); err != nil {
+		t.Fatalf("提交审核失败: %v", err)
+	}
+	if err := db.Model(&model.Chapter{}).Where("chapter_id = ?", chapterID).
+		Update("content", "审中的工作副本").Error; err != nil {
+		t.Fatalf("改工作副本失败: %v", err)
+	}
+	if err := db.Create(&model.ChapterFile{
+		ChapterID: &chapterID, FileName: "late.pdf", FileURL: "/late.pdf",
+		ContentType: "document", FileSize: 10, CreatedAt: testutil.Now(),
+	}).Error; err != nil {
+		t.Fatalf("造审中新增文件失败: %v", err)
+	}
+
+	detail, err := svc.GetChapterDetail(chapterID)
+	if err != nil {
+		t.Fatalf("导师端在审章节详情失败: %v", err)
+	}
+	shape := cloneDetailToMap(t, detail)
+	raw, ok := shape["review_snapshot"]
+	if !ok {
+		t.Fatal("在审章节详情应返回真实 review_snapshot")
+	}
+	encoded, err := json.Marshal(raw)
+	if err != nil {
+		t.Fatalf("序列化快照失败: %v", err)
+	}
+	var snapshot course.ChapterReviewSnapshotDTO
+	if err := json.Unmarshal(encoded, &snapshot); err != nil {
+		t.Fatalf("反序列化快照失败: %v", err)
+	}
+	if snapshot.Content != "送审时正文" {
+		t.Fatalf("快照正文 = %q, want 送审时正文（不得读工作副本）", snapshot.Content)
+	}
+	if len(snapshot.Files) != 1 || snapshot.Files[0].FileName != "a.pdf" {
+		t.Fatalf("快照文件应保持送审清单: %#v", snapshot.Files)
 	}
 }
 

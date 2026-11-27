@@ -4,6 +4,7 @@ package course
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -66,7 +67,7 @@ func TestCourseSortOrder(t *testing.T) {
 	c0 := model.Course{Name: "课程C", Status: 1, CategoryID: &category.ID, SortOrder: 0,
 		SpecialtyID: coerce.IntPtr(spec.SpecialtyID), LevelID: coerce.IntPtr(lv.LevelID), CreatedAt: testutil.Now()}
 	db.Create(&c0)
-	page, err := svc.GetCourses(1, 10, "", nil, nil, nil, scope.CategoryFilter{}, "")
+	page, err := svc.GetCourses(1, 10, "", nil, nil, nil, scope.CategoryFilter{}, "", nil)
 	if err != nil {
 		t.Fatalf("GetCourses 失败: %v", err)
 	}
@@ -76,6 +77,103 @@ func TestCourseSortOrder(t *testing.T) {
 	}
 	if list[0].Name != "课程C" || list[1].Name != "课程A" {
 		t.Fatalf("课程列表应按 sort_order 升序: %+v", list)
+	}
+}
+
+func TestAdminCourseSortNeighborsAcrossPages(t *testing.T) {
+	db := testutil.NewMemoryDB(t)
+	svc := NewAdminService(db, nil, nil, zap.NewNop())
+	category := testutil.SeedTrainingCategory(t, db, "维修")
+	now := testutil.Now()
+	rows := []model.Course{
+		{Name: "第一门", CategoryID: &category.ID, SortOrder: 1, Status: 1, CreatedAt: now},
+		{Name: "第二门", CategoryID: &category.ID, SortOrder: 2, Status: 1, CreatedAt: now},
+		{Name: "第三门", CategoryID: &category.ID, SortOrder: 3, Status: 0, CreatedAt: now},
+		{Name: "第四门", CategoryID: &category.ID, SortOrder: 4, Status: 1, CreatedAt: now},
+	}
+	for i := range rows {
+		if err := db.Create(&rows[i]).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	other := testutil.SeedTrainingCategory(t, db, "其他")
+	if err := db.Create(&model.Course{Name: "其他分类", CategoryID: &other.ID, SortOrder: 2, Status: 1, CreatedAt: now}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	firstPage, err := svc.GetCourses(1, 2, "", nil, nil, nil, scope.CategoryFilter{}, "all", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondPage, err := svc.GetCourses(2, 2, "", nil, nil, nil, scope.CategoryFilter{}, "all", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(firstPage.Courses) != 2 || len(secondPage.Courses) != 2 {
+		t.Fatalf("分页数据不完整: %+v %+v", firstPage.Courses, secondPage.Courses)
+	}
+
+	neighbors, err := svc.GetCourseSortNeighbors(rows[1].CourseID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if neighbors.PreviousID == nil || *neighbors.PreviousID != rows[0].CourseID {
+		t.Fatalf("前邻错误: %+v", neighbors)
+	}
+	if neighbors.NextID == nil || *neighbors.NextID != rows[2].CourseID {
+		got := 0
+		if neighbors.NextID != nil {
+			got = *neighbors.NextID
+		}
+		t.Fatalf("跨页后邻错误: got %d want %d", got, rows[2].CourseID)
+	}
+}
+
+func TestAdminCourseFacets(t *testing.T) {
+	db := testutil.NewMemoryDB(t)
+	svc := NewAdminService(db, nil, nil, zap.NewNop())
+	active := testutil.SeedTrainingCategory(t, db, "维修")
+	disabled := testutil.SeedTrainingCategory(t, db, "停用")
+	for i, category := range []*model.TrainingCategory{active, disabled} {
+		credential := model.Credential{Code: fmt.Sprintf("facet-credential-%d", i), Name: "证件", Status: 1, CreatedAt: testutil.Now()}
+		if err := db.Create(&credential).Error; err != nil {
+			t.Fatal(err)
+		}
+		if err := db.Model(category).Update("legacy_credential_id", credential.ID).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := db.Model(&model.TrainingCategory{}).Where("id = ?", disabled.ID).Update("status", 0).Error; err != nil {
+		t.Fatal(err)
+	}
+	rows := []model.Course{
+		{Name: "维修一", CategoryID: &active.ID, Status: 1},
+		{Name: "维修二", CategoryID: &active.ID, Status: 0},
+		{Name: "停用", CategoryID: &disabled.ID, Status: 1},
+		{Name: "未分类", Status: 1},
+	}
+	for i := range rows {
+		if err := db.Create(&rows[i]).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	page, err := svc.GetCourses(1, 1, "", nil, nil, nil, scope.CategoryFilter{}, "all", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Facets == nil {
+		t.Fatal("管理端列表应返回 facets")
+	}
+	if page.Facets.Total != 4 || page.Facets.Legacy != 2 {
+		t.Fatalf("facets 总数/legacy 错误: %+v", page.Facets)
+	}
+	counts := map[int]int64{}
+	for _, item := range page.Facets.Categories {
+		counts[item.CategoryID] = item.Total
+	}
+	if counts[active.ID] != 2 || counts[disabled.ID] != 1 {
+		t.Fatalf("facets 分类计数错误: %+v", page.Facets.Categories)
 	}
 }
 

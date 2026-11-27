@@ -18,7 +18,7 @@
 //   GET  /practice-mode/stats
 //   GET  /practice-mode/history
 //
-// 覆盖的 Go 类型：CategoryPracticeStartDTO / HistoryItemDTO / HistoryResultDTO / PracticePracticeStatsDTO / PracticeStartResultDTO / PracticeStatsDTO / PracticeTagStat / PracticeTypeStat / ProgressResultDTO / ProgressSaveResultDTO / SubmitResultDTO / CategoryRef / Eligibility / Reason / QuestionDTO
+// 覆盖的 Go 类型：CategoryPracticeStartDTO / HistoryItemDTO / HistoryResultDTO / PracticePracticeStatsDTO / PracticeStartResultDTO / PracticeStatsDTO / PracticeTagStat / PracticeTypeStat / ProgressResultDTO / ProgressSaveResultDTO / SubmitResultDTO / CategoryRef / Eligibility / PublicState / Reason / QuestionDTO
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -135,6 +135,12 @@ export interface Eligibility {
   reasons: Reason[]
 }
 
+export interface PublicState {
+  category?: CategoryRef
+  eligibility: Eligibility
+  public_visibility: boolean
+}
+
 export type Reason = 'manually_hidden' | 'not_published' | 'category_missing' | 'category_disabled' | 'category_unmapped' | 'credential_missing' | 'credential_disabled' | 'source_tag_excluded'
 
 export interface QuestionDTO {
@@ -151,6 +157,7 @@ export interface QuestionDTO {
   image_url: string
   options: unknown
   public_eligibility?: Eligibility
+  public_state?: PublicState
   reference_answer?: string
   reject_reason: string
   score: number

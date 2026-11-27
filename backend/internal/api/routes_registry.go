@@ -91,7 +91,7 @@ var routeRegistrars = []routeRegistrar{
 	{
 		Domain: "讲师端",
 		Register: func(api *gin.RouterGroup, rd RouterDeps, deps *Deps) {
-			tutor.RegisterRoutes(api, rd.Session, deps.TutorSvc, deps.FileSvc, uploadVditorImage)
+			tutor.RegisterRoutes(api, rd.Session, deps.TutorSvc, deps.FileSvc, uploadTutorVditorImage)
 			// 导师个人文件库：分片上传四段契约 + 列表/删除（#2494）
 			tutorfile.RegisterRoutes(api, rd.Session, deps.TutorFileSvc)
 		},

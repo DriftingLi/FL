@@ -75,7 +75,7 @@ func TestTutorCourseRoutesAbsent(t *testing.T) {
 	r := gin.New()
 	api := r.Group("/api")
 	deps := newContractDeps(t, db, cfg)
-	tutor.RegisterRoutes(api, deps.RouterDeps().Session, deps.TutorSvc, deps.FileSvc, uploadVditorImage)
+	tutor.RegisterRoutes(api, deps.RouterDeps().Session, deps.TutorSvc, deps.FileSvc, uploadTutorVditorImage)
 
 	for _, tc := range []struct {
 		method string

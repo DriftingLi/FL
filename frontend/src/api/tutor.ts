@@ -9,7 +9,6 @@ import type { AxiosProgressEvent } from 'axios'
 import type {
   BatchDeleteFilesResult,
   ChapterDTO,
-  ChapterDetailDTO,
   ChapterFileDTO,
   ClaimResult,
   CourseClaimantsResult,
@@ -17,13 +16,13 @@ import type {
   CoursePageResult,
   DeleteFileResult,
   TutorCapabilitiesDTO,
+  TutorChapterDetailDTO,
   TutorCourseChaptersDTO
 } from './generated/tutor'
 
 export type {
   BatchDeleteFilesResult,
   ChapterDTO,
-  ChapterDetailDTO,
   ChapterFileDTO,
   ClaimResult,
   CourseClaimant,
@@ -32,6 +31,7 @@ export type {
   CoursePageResult,
   DeleteFileResult,
   TutorCapabilitiesDTO,
+  TutorChapterDetailDTO,
   TutorCourseChaptersDTO
 } from './generated/tutor'
 
@@ -77,11 +77,11 @@ export type TutorCourse = Pick<
 export type TutorChapter = Pick<ChapterDTO, 'chapter_id' | 'title' | 'content' | 'order_num' | 'duration'>
 
 /**
- * 导师章节详情 = 生成 ChapterDetailDTO（章节字段平铺 + files + 上下章ID）。
+ * 导师章节详情 = 生成 TutorChapterDetailDTO（章节字段平铺 + files + 上下章ID + 可选在审快照）。
  * 旧手写版额外声明了 `course` / `chapters` 两个**后端从不返回**的字段（页面也未消费）——
  * 字段级差异清单第 ② 类「手写类型过时」，此处收敛为生成形状（保留旧名不破 import 路径）。
  */
-export type TutorChapterDetail = ChapterDetailDTO
+export type TutorChapterDetail = TutorChapterDetailDTO
 
 export const tutorApi = {
   getCourses(params: TutorCoursesQuery) {
@@ -93,7 +93,7 @@ export const tutorApi = {
   },
 
   getChapterDetail(chapterId: number) {
-    return unwrappedRequest.get<ChapterDetailDTO>(`/tutor/chapter/${chapterId}`)
+    return unwrappedRequest.get<TutorChapterDetailDTO>(`/tutor/chapter/${chapterId}`)
   },
 
   /** 上传章节文件：后端返回落库后的 ChapterFileDTO（此前手写为 {url,file_id}，与后端不符） */

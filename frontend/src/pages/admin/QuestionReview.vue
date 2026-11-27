@@ -60,8 +60,8 @@
         </el-table-column>
         <el-table-column label="分类" width="150">
           <template #default="{ row }">
-            <UiTag v-if="row.category" :tone="row.category.status === 0 ? 'warning' : 'neutral'" size="small" effect="plain">
-              {{ row.category.name }}{{ row.category.status === 0 ? '（停用）' : '' }}
+            <UiTag v-if="row.public_state?.category" :tone="row.public_state.category.status === 0 ? 'warning' : 'neutral'" size="small" effect="plain">
+              {{ row.public_state.category.name }}{{ row.public_state.category.status === 0 ? '（停用）' : '' }}
             </UiTag>
             <UiTag v-else tone="danger" size="small" effect="plain">未分类</UiTag>
           </template>
@@ -73,7 +73,7 @@
         </el-table-column>
         <el-table-column label="公开资格" width="150">
           <template #default="{ row }">
-            <PublicEligibility :eligibility="row.public_eligibility" :reason-limit="1" />
+            <PublicEligibility :eligibility="row.public_state?.eligibility" />
           </template>
         </el-table-column>
         <el-table-column label="操作" width="90" fixed="right" align="center">
@@ -101,10 +101,10 @@
         <p><strong>分类：</strong>{{ categoryLabel(currentQuestion) }}</p>
         <p><strong>审核状态：</strong>{{ questionStatusMap[currentQuestion.status] }}</p>
         <p><strong>公开资格：</strong></p>
-        <PublicEligibility :eligibility="currentQuestion.public_eligibility" />
-        <div v-if="currentQuestion.public_eligibility">
+        <PublicEligibility :eligibility="currentQuestion.public_state?.eligibility" />
+        <div v-if="currentQuestion.public_state">
           <UiSwitch
-            :model-value="allowsPublicVisibility(currentQuestion.public_eligibility)"
+            :model-value="currentQuestion.public_state.public_visibility"
             :disabled="updatingVisibility"
             aria-label="允许公开题目"
             active-text="允许公开"
@@ -167,7 +167,7 @@ import { ElMessage } from 'element-plus'
 import { questionBankApi, type QuestionDTO } from '@/api/questionBank'
 import { trainingApi, type AdminTrainingCategoryDTO, type TrainingCategoryFilter } from '@/api/training'
 import { trainingCategoryOptions } from '@/utils/trainingCategoryFilter'
-import type { CategoryRef, Eligibility } from '@/api/generated/course'
+import type { PublicState } from '@/api/generated/course'
 import type { Question } from '@/types/question'
 import { typeMap, questionTypeOptions, questionStatusOptions, questionStatusMap, questionStatusTone } from '@/constants/question'
 import { useAdminTable } from '@/composables/useAdminTable'
@@ -184,12 +184,10 @@ import UiMoreMenu, { type UiMoreMenuItem } from '@/components/ui/UiMoreMenu.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 import UiSelect from '@/components/ui/UiSelect.vue'
 import UiSwitch from '@/components/ui/UiSwitch.vue'
-import { allowsPublicVisibility } from '@/utils/publicEligibility'
 import PublicEligibility from '@/components/catalog/PublicEligibility.vue'
 
 type ReviewQuestion = Question & {
-  category?: CategoryRef
-  public_eligibility?: Eligibility
+  public_state?: PublicState
 }
 
 const filters = ref<{
@@ -280,10 +278,11 @@ async function loadCategories() {
 }
 
 function categoryLabel(question: ReviewQuestion) {
-  if (!question.category) return '未分类'
-  return question.category.status === 0
-    ? `${question.category.name}（停用）`
-    : question.category.name
+  const category = question.public_state?.category
+  if (!category) return '未分类'
+  return category.status === 0
+    ? `${category.name}（停用）`
+    : category.name
 }
 
 function applyQuestionUpdate(updated: QuestionDTO) {
@@ -336,8 +335,16 @@ async function setQuestionVisibility(row: ReviewQuestion, visible: boolean) {
   try {
     const eligibility = await questionBankApi.setPublicVisibility(row.id, visible)
     const listed = questions.value.find(question => question.id === row.id)
-    if (listed) listed.public_eligibility = eligibility
-    if (currentQuestion.value?.id === row.id) currentQuestion.value.public_eligibility = eligibility
+    if (listed?.public_state) {
+      listed.public_state = { ...listed.public_state, public_visibility: visible, eligibility }
+    }
+    if (currentQuestion.value?.id === row.id && currentQuestion.value.public_state) {
+      currentQuestion.value.public_state = {
+        ...currentQuestion.value.public_state,
+        public_visibility: visible,
+        eligibility
+      }
+    }
     ElMessage.success(visible ? '已允许公开' : '已关闭公开')
   } catch (error) {
     console.error('修改题目公开开关失败:', error)

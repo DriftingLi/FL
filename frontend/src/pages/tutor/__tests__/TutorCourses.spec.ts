@@ -187,10 +187,15 @@ describe('TutorCourses 导师端我的课程', () => {
         category: { id: 11, name: '叉车安全', status: 1 },
         course_type: 'video',
         status: 1,
-        public_eligibility: {
-          eligible: false,
-          reasons: ['category_disabled', 'credential_disabled']
-        }
+        public_state: {
+          category: { id: 11, name: '叉车安全', status: 1 },
+          public_visibility: true,
+          eligibility: {
+            eligible: false,
+            reasons: ['category_disabled', 'credential_disabled']
+          }
+        },
+        public_eligibility: { eligible: true, reasons: [] }
       })]
     })
     const wrapper = mountPage()
@@ -212,7 +217,10 @@ describe('TutorCourses 导师端我的课程', () => {
       page: 1,
       pages: 1,
       courses: [courseOf(1, '历史课程', {
-        public_eligibility: { eligible: false, reasons: ['category_missing'] }
+        public_state: {
+          public_visibility: true,
+          eligibility: { eligible: false, reasons: ['category_missing'] }
+        }
       })]
     })
     const wrapper = mountPage()

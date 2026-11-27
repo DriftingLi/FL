@@ -80,7 +80,7 @@
         </el-table-column>
         <el-table-column label="培训分类" width="150">
           <template #default="{ row }">
-            <UiTag :tone="row.category ? 'brand' : 'danger'" size="small" effect="plain">
+            <UiTag :tone="row.public_state?.category ? 'brand' : 'danger'" size="small" effect="plain">
               {{ categoryNameOf(row) }}
             </UiTag>
           </template>
@@ -111,7 +111,7 @@
         </el-table-column>
         <el-table-column label="公开题库" min-width="300">
           <template #default="{ row }">
-            <PublicEligibility :eligibility="row.public_eligibility" show-reasons />
+            <PublicEligibility :eligibility="row.public_state?.eligibility" show-reasons />
           </template>
         </el-table-column>
         <el-table-column label="操作" width="90" fixed="right" align="center">
@@ -147,7 +147,7 @@
         <p><strong>审核状态：</strong>{{ reviewStatusLabel(currentQuestion) }}</p>
         <div class="flex items-start gap-2">
           <strong>公开题库：</strong>
-          <PublicEligibility :eligibility="currentQuestion.public_eligibility" show-reasons />
+          <PublicEligibility :eligibility="currentQuestion.public_state?.eligibility" show-reasons />
         </div>
         <p><strong>题干：</strong>{{ currentQuestion.content }}</p>
         <div v-if="currentQuestion.options">
@@ -187,7 +187,7 @@ import { questionBankApi, type QuestionsQuery } from '@/api/questionBank'
 import { credentialApi, type CredentialDict } from '@/api/credential'
 import { trainingApi, type TrainingCategoryDTO, type TrainingCategoryFilter } from '@/api/training'
 import { trainingCategoryName, trainingCategoryOptions } from '@/utils/trainingCategoryFilter'
-import type { CategoryRef, Eligibility } from '@/api/generated/course'
+import type { PublicState } from '@/api/generated/course'
 import type { Question } from '@/types/question'
 import { typeMap, questionTypeOptions, questionStatusOptions, questionStatusMap, questionStatusTone } from '@/constants/question'
 import UiPageHeader from '@/components/ui/UiPageHeader.vue'
@@ -211,8 +211,7 @@ import PublicEligibility from '@/components/catalog/PublicEligibility.vue'
 import { useAuthStore } from '@/stores/auth'
 
 type TutorQuestion = Question & {
-  category?: CategoryRef
-  public_eligibility?: Eligibility
+  public_state?: PublicState
 }
 
 const router = useRouter()
@@ -309,7 +308,7 @@ async function loadCategories() {
 }
 
 function categoryNameOf(row: TutorQuestion): string {
-  return trainingCategoryName(row.category)
+  return trainingCategoryName(row.public_state?.category)
 }
 
 function reviewStatusLabel(row: Question): string {

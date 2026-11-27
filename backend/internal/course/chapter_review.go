@@ -34,50 +34,55 @@ var (
 // 章节归属（ADR-0095 决策二）：actorID 是讲师，若 chapter.tutor_id 为空则顺手落定
 // （首次落定后不改——讲师 B 提交讲师 A 的章节不会抢走归属）。
 func SubmitChapterForReview(ctx context.Context, db *gorm.DB, chapterID, actorID int) error {
+	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return submitChapterForReviewInTx(tx, chapterID, actorID)
+	})
+}
+
+// submitChapterForReviewInTx 是提审冻结快照的事务内实现；调用方可在同一事务内先校验章节认领。
+func submitChapterForReviewInTx(tx *gorm.DB, chapterID, actorID int) error {
 	var chapter model.Chapter
-	if err := fetchRow(db.WithContext(ctx).Where("chapter_id = ?", chapterID), &chapter, ErrChapterNotFound); err != nil {
+	if err := fetchRow(tx.Where("chapter_id = ?", chapterID), &chapter, ErrChapterNotFound); err != nil {
 		return err
 	}
-	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// C8：单 pending——已有在审快照即拒（复合主键兜底，这里给业务哨兵与 400 映射）
-		var n int64
-		if err := tx.Model(&model.ChapterContentSlot{}).
-			Where("slot = ? AND chapter_id = ?", model.ChapterReviewPending, chapterID).
-			Count(&n).Error; err != nil {
-			return err
-		}
-		if n > 0 {
-			return ErrChapterReviewPending
-		}
-		// 冻结内容快照（working 行当前值）；frozen_at 显式落当前时刻——
-		// 审核队列按它排序（C9「按提交时间排序」），不能靠库默认值（内存库 AutoMigrate 无默认）。
-		snapshot := model.ChapterContentSlot{
-			Slot:        model.ChapterReviewPending,
-			ChapterID:   chapterID,
-			Content:     chapter.Content,
-			ContentType: chapter.ContentType,
-			FileURL:     chapter.FileURL,
-			SubmittedBy: actorID,
-			FrozenAt:    clock.Now(),
-		}
-		if err := tx.Create(&snapshot).Error; err != nil {
-			return err
-		}
-		// 冻结文件挂接清单（live 读面三源，C3 整章一个审核单元）
-		if err := freezeFileManifest(tx, &chapter); err != nil {
-			return err
-		}
-		updates := map[string]any{
-			"review_status": model.ChapterReviewPending,
-			"reject_reason": "",
-		}
-		if err := tx.Model(&model.Chapter{}).Where("chapter_id = ?", chapterID).Updates(updates).Error; err != nil {
-			return err
-		}
-		// 章节归属（ADR-0095 决策二）：只落空位，首次落定后不改。条件写在 UPDATE 里而非
-		// 复用事务外读到的 chapter.TutorID——两个讲师并发提交时，后者不该覆盖前者的归属。
-		return ClaimChapterOwnership(tx, chapterID, actorID)
-	})
+	// C8：单 pending——已有在审快照即拒（复合主键兜底，这里给业务哨兵与 400 映射）
+	var n int64
+	if err := tx.Model(&model.ChapterContentSlot{}).
+		Where("slot = ? AND chapter_id = ?", model.ChapterReviewPending, chapterID).
+		Count(&n).Error; err != nil {
+		return err
+	}
+	if n > 0 {
+		return ErrChapterReviewPending
+	}
+	// 冻结内容快照（working 行当前值）；frozen_at 显式落当前时刻——
+	// 审核队列按它排序（C9「按提交时间排序」），不能靠库默认值（内存库 AutoMigrate 无默认）。
+	snapshot := model.ChapterContentSlot{
+		Slot:        model.ChapterReviewPending,
+		ChapterID:   chapterID,
+		Content:     chapter.Content,
+		ContentType: chapter.ContentType,
+		FileURL:     chapter.FileURL,
+		SubmittedBy: actorID,
+		FrozenAt:    clock.Now(),
+	}
+	if err := tx.Create(&snapshot).Error; err != nil {
+		return err
+	}
+	// 冻结文件挂接清单（live 读面三源，C3 整章一个审核单元）
+	if err := freezeFileManifest(tx, &chapter); err != nil {
+		return err
+	}
+	updates := map[string]any{
+		"review_status": model.ChapterReviewPending,
+		"reject_reason": "",
+	}
+	if err := tx.Model(&model.Chapter{}).Where("chapter_id = ?", chapterID).Updates(updates).Error; err != nil {
+		return err
+	}
+	// 章节归属（ADR-0095 决策二）：只落空位，首次落定后不改。条件写在 UPDATE 里而非
+	// 复用事务外读到的 chapter.TutorID——两个讲师并发提交时，后者不该覆盖前者的归属。
+	return ClaimChapterOwnership(tx, chapterID, actorID)
 }
 
 // ClaimChapterOwnership 讲师写章节时落定归属（ADR-0095 决策二）：仅当 tutor_id 为空时落当前

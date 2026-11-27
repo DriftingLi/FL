@@ -24,7 +24,7 @@ const GENERATED = ['## 故障排查', '', '```js', 'const code = "E01"', '```'].
 let wrapper: ReturnType<typeof mount> | null = null
 
 beforeEach(() => {
-  vi.mocked(adminApi.getCourses).mockResolvedValue({ courses: [{ course_id: 1, name: '叉车维修' }] } as never)
+  vi.mocked(adminApi.getCourses).mockResolvedValue({ items: [{ course_id: 1, name: '叉车维修' }], total: 1 } as never)
   vi.mocked(adminApi.getCourseDetail).mockResolvedValue({ chapters: [{ chapter_id: 11, title: '第一章', content: '' }] } as never)
   // 真实契约（片七）：创建端点只回 { task_id }（注解 201 data=service.GenerateContentResultDTO），
   // 完整快照由轮询端点 GET /admin/course/generate-content/{task_id} 提供。

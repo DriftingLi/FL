@@ -26,6 +26,7 @@ type CourseListOptions struct {
 	CredentialID                *int
 	CategoryFilter              scope.CategoryFilter
 	Filter                      string
+	Status                      *int16
 	WithStudentCount            bool
 	WithPublicState             bool
 	LegacyIncludesUncategorized bool
@@ -48,6 +49,9 @@ func ListCourses(db *gorm.DB, page, pageSize int, opts CourseListOptions) (Cours
 		}
 		if opts.Keyword != "" {
 			q = q.Where("name LIKE ?", "%"+opts.Keyword+"%")
+		}
+		if opts.Status != nil {
+			q = q.Where("course.status = ?", *opts.Status)
 		}
 		if opts.SpecialtyID != nil {
 			q = q.Where("specialty_id = ?", *opts.SpecialtyID)

@@ -271,6 +271,196 @@ func TestAdminContract_UsersTutorsRecruiters(t *testing.T) {
 	assertKeysExact(t, adminObject(t, rec, http.StatusOK), "status")
 }
 
+// TestAdminCoursesStaffPublicStateContract 走真实管理员 HTTP 路由，验证员工端公开状态读模型：
+// 显式开关、资格、全部原因、canonical 分类，以及 legacy 桶的后端计数/分页。
+func TestAdminCoursesStaffPublicStateContract(t *testing.T) {
+	t.Parallel()
+	r, db, token := newAdminContractEnv(t)
+
+	credentials := []model.Credential{
+		{Code: "staff-public-active", Name: "有效分类证件", Category: "special_operation", Status: 1},
+		{Code: "staff-public-disabled", Name: "停用分类证件", Category: "special_operation", Status: 1},
+	}
+	if err := db.Create(&credentials).Error; err != nil {
+		t.Fatal(err)
+	}
+	activeCategory := model.TrainingCategory{Name: "有效分类", Status: 1, LegacyCredentialID: &credentials[0].ID}
+	disabledCategory := model.TrainingCategory{Name: "停用分类", Status: 0, LegacyCredentialID: &credentials[1].ID}
+	unmappedCategory := model.TrainingCategory{Name: "未映射分类", Status: 1}
+	if err := db.Create(&activeCategory).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&disabledCategory).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&unmappedCategory).Error; err != nil {
+		t.Fatal(err)
+	}
+	courses := []model.Course{
+		{Name: "公开课", Status: 1, CategoryID: &activeCategory.ID},
+		{Name: "关闭公开课", Status: 1, CategoryID: &activeCategory.ID, PublicHidden: true},
+		{Name: "未发布课", Status: 1, CategoryID: &activeCategory.ID},
+		{Name: "停用分类课", Status: 1, CategoryID: &disabledCategory.ID},
+		{Name: "未映射分类课", Status: 1, CategoryID: &unmappedCategory.ID},
+		{Name: "空分类课", Status: 1},
+	}
+	if err := db.Create(&courses).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.Course{}).Where("course_id = ?", courses[2].CourseID).Update("status", 0).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	rec := doWithToken(t, r, token, http.MethodGet, "/api/admin/courses?page=1&page_size=10", nil)
+	page := adminObject(t, rec, http.StatusOK)
+	assertKeysExact(t, page, "courses", "facets", "page", "pages", "total")
+	if got := jsonInt(t, page["total"]); got != len(courses) {
+		t.Fatalf("管理端课程总数 = %d, want %d", got, len(courses))
+	}
+	var facets struct {
+		Total      int64 `json:"total"`
+		Legacy     int64 `json:"legacy"`
+		Categories []struct {
+			CategoryID int   `json:"category_id"`
+			Total      int64 `json:"total"`
+		} `json:"categories"`
+	}
+	if err := json.Unmarshal(page["facets"], &facets); err != nil {
+		t.Fatal(err)
+	}
+	if facets.Total != int64(len(courses)) || facets.Legacy != 3 {
+		t.Fatalf("管理端课程 facets 错误: %+v", facets)
+	}
+	var items []map[string]json.RawMessage
+	if err := json.Unmarshal(page["courses"], &items); err != nil {
+		t.Fatal(err)
+	}
+	byName := make(map[string]map[string]json.RawMessage, len(items))
+	for _, item := range items {
+		var name string
+		if err := json.Unmarshal(item["name"], &name); err != nil {
+			t.Fatal(err)
+		}
+		byName[name] = item
+		if _, ok := item["public_state"]; !ok {
+			t.Fatalf("员工端课程缺少 public_state: %s", item["name"])
+		}
+		if _, ok := item["public_eligibility"]; !ok {
+			t.Fatalf("员工端课程应保留既有 public_eligibility: %s", item["name"])
+		}
+		if _, ok := item["category"]; !ok && name != "空分类课" {
+			t.Fatalf("员工端课程应保留既有 category: %s", item["name"])
+		}
+	}
+	assertStaffPublicState(t, byName["公开课"], true, true, activeCategory.ID, []string{})
+	assertStaffPublicState(t, byName["关闭公开课"], false, false, activeCategory.ID, []string{"manually_hidden"})
+	assertStaffPublicState(t, byName["停用分类课"], true, false, disabledCategory.ID, []string{"category_disabled"})
+	assertStaffPublicState(t, byName["未映射分类课"], true, false, unmappedCategory.ID, []string{"category_unmapped"})
+	assertStaffPublicState(t, byName["空分类课"], true, false, 0, []string{"category_missing"})
+
+	for _, tc := range []struct {
+		status     string
+		wantStatus int16
+		wantTotal  int
+		wantName   string
+	}{
+		{status: "0", wantStatus: 0, wantTotal: 1, wantName: "未发布课"},
+		{status: "1", wantStatus: 1, wantTotal: len(courses) - 1, wantName: "公开课"},
+	} {
+		rec = doWithToken(t, r, token, http.MethodGet, "/api/admin/courses?status="+tc.status, nil)
+		filtered := adminObject(t, rec, http.StatusOK)
+		if got := jsonInt(t, filtered["total"]); got != tc.wantTotal {
+			t.Fatalf("status=%s 课程总数 = %d, want %d", tc.status, got, tc.wantTotal)
+		}
+		var filteredItems []map[string]json.RawMessage
+		if err := json.Unmarshal(filtered["courses"], &filteredItems); err != nil {
+			t.Fatal(err)
+		}
+		if len(filteredItems) != tc.wantTotal {
+			t.Fatalf("status=%s 返回条数 = %d, want %d", tc.status, len(filteredItems), tc.wantTotal)
+		}
+		found := false
+		for _, item := range filteredItems {
+			var name string
+			var status int16
+			if err := json.Unmarshal(item["name"], &name); err != nil {
+				t.Fatal(err)
+			}
+			if err := json.Unmarshal(item["status"], &status); err != nil {
+				t.Fatal(err)
+			}
+			if status != tc.wantStatus {
+				t.Fatalf("status=%s 返回了 status=%d 的课程 %s", tc.status, status, name)
+			}
+			if name == tc.wantName {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("status=%s 结果缺少课程 %s", tc.status, tc.wantName)
+		}
+	}
+
+	rec = doWithToken(t, r, token, http.MethodGet, fmt.Sprintf("/api/admin/course/%d", courses[1].CourseID), nil)
+	detail := adminObject(t, rec, http.StatusOK)
+	assertStaffPublicState(t, detail, false, false, activeCategory.ID, []string{"manually_hidden"})
+
+	rec = doWithToken(t, r, token, http.MethodGet, "/api/admin/courses?category_id=legacy&page=2&page_size=2", nil)
+	legacyPage := adminObject(t, rec, http.StatusOK)
+	if got := jsonInt(t, legacyPage["total"]); got != 3 {
+		t.Fatalf("legacy 桶后端计数 = %d, want 3", got)
+	}
+	if got := jsonInt(t, legacyPage["pages"]); got != 2 {
+		t.Fatalf("legacy 桶后端页数 = %d, want 2", got)
+	}
+	var legacyItems []map[string]json.RawMessage
+	if err := json.Unmarshal(legacyPage["courses"], &legacyItems); err != nil {
+		t.Fatal(err)
+	}
+	if len(legacyItems) != 1 {
+		t.Fatalf("legacy 桶第二页条数 = %d, want 1", len(legacyItems))
+	}
+}
+
+func assertStaffPublicState(t *testing.T, item map[string]json.RawMessage, wantVisible, wantEligible bool, wantCategoryID int, wantReasons []string) {
+	t.Helper()
+	raw, ok := item["public_state"]
+	if !ok {
+		t.Fatalf("缺少 public_state: %v", item)
+	}
+	var state struct {
+		PublicVisibility bool `json:"public_visibility"`
+		Eligibility      struct {
+			Eligible bool     `json:"eligible"`
+			Reasons  []string `json:"reasons"`
+		} `json:"eligibility"`
+		Category *struct {
+			ID int `json:"id"`
+		} `json:"category"`
+	}
+	if err := json.Unmarshal(raw, &state); err != nil {
+		t.Fatalf("public_state 不是对象: %v raw=%s", err, raw)
+	}
+	if state.PublicVisibility != wantVisible || state.Eligibility.Eligible != wantEligible {
+		t.Fatalf("public_state 开关/资格不符: %+v", state)
+	}
+	if state.Eligibility.Reasons == nil || len(state.Eligibility.Reasons) != len(wantReasons) {
+		t.Fatalf("public_state 原因 = %v, want %v", state.Eligibility.Reasons, wantReasons)
+	}
+	for i := range wantReasons {
+		if state.Eligibility.Reasons[i] != wantReasons[i] {
+			t.Fatalf("public_state 原因 = %v, want %v", state.Eligibility.Reasons, wantReasons)
+		}
+	}
+	if wantCategoryID == 0 {
+		if state.Category != nil {
+			t.Fatalf("空分类应省略 category 或返回 null, got %+v", state.Category)
+		}
+	} else if state.Category == nil || state.Category.ID != wantCategoryID {
+		t.Fatalf("canonical 分类 = %+v, want id=%d", state.Category, wantCategoryID)
+	}
+}
+
 // TestAdminContract_StatisticsCoursesChapters 统计 / 课程 / 章节端点。
 func TestAdminContract_StatisticsCoursesChapters(t *testing.T) {
 	t.Parallel()
@@ -323,7 +513,30 @@ func TestAdminContract_StatisticsCoursesChapters(t *testing.T) {
 	courseID2 := jsonInt(t, adminObject(t, rec, http.StatusCreated)["course_id"])
 
 	rec = doWithToken(t, r, token, http.MethodGet, "/api/admin/courses", nil)
-	assertKeysExact(t, adminObject(t, rec, http.StatusOK), "courses", "page", "pages", "total")
+	adminCourses := adminObject(t, rec, http.StatusOK)
+	assertKeysExact(t, adminCourses, "courses", "facets", "page", "pages", "total")
+	var courseFacets map[string]json.RawMessage
+	if err := json.Unmarshal(adminCourses["facets"], &courseFacets); err != nil {
+		t.Fatalf("facets 不是对象: %v", err)
+	}
+	assertKeysExact(t, courseFacets, "total", "legacy", "categories")
+	if got := jsonInt(t, courseFacets["total"]); got != 2 {
+		t.Fatalf("管理端课程 facets 总数 = %d, want 2", got)
+	}
+	var facetCategories []map[string]json.RawMessage
+	if err := json.Unmarshal(courseFacets["categories"], &facetCategories); err != nil {
+		t.Fatalf("facets.categories 不是数组: %v", err)
+	}
+	if len(facetCategories) != 1 {
+		t.Fatalf("管理端课程 facets 分类数 = %d, want 1", len(facetCategories))
+	}
+	assertKeysExact(t, facetCategories[0], "category_id", "total")
+	if got := jsonInt(t, facetCategories[0]["category_id"]); got != categoryID {
+		t.Fatalf("管理端课程 facets 分类 ID = %d, want %d", got, categoryID)
+	}
+	if got := jsonInt(t, facetCategories[0]["total"]); got != 2 {
+		t.Fatalf("管理端课程 facets 分类计数 = %d, want 2", got)
+	}
 
 	rec = doWithToken(t, r, token, http.MethodGet, fmt.Sprintf("/api/admin/courses?category_id=%d", categoryID), nil)
 	filtered := adminObject(t, rec, http.StatusOK)
@@ -660,6 +873,32 @@ func mustRFC3339(t *testing.T, s string) time.Time {
 		t.Fatalf("用例自造的 RFC3339 串不合法: %s (%v)", s, err)
 	}
 	return parsed
+}
+
+func TestAdminContract_CourseSortNeighbors(t *testing.T) {
+	t.Parallel()
+	r, db, token := newAdminContractEnv(t)
+	category := testutil.SeedTrainingCategory(t, db, "维修")
+	first := model.Course{Name: "第一门", CategoryID: &category.ID, SortOrder: 1, Status: 1, CreatedAt: testutil.Now()}
+	second := model.Course{Name: "第二门", CategoryID: &category.ID, SortOrder: 2, Status: 1, CreatedAt: testutil.Now()}
+	if err := db.Create(&first).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&second).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	rec := doWithToken(t, r, token, http.MethodGet, fmt.Sprintf("/api/admin/course/%d/sort-neighbors", first.CourseID), nil)
+	var body struct {
+		PreviousID *int `json:"previous_id"`
+		NextID     *int `json:"next_id"`
+	}
+	if err := json.Unmarshal(adminData(t, rec, http.StatusOK), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.PreviousID != nil || body.NextID == nil || *body.NextID != second.CourseID {
+		t.Fatalf("排序邻居契约错误: %+v", body)
+	}
 }
 
 // TestAdminContract_ExportRoutes 导出路由（非统一信封的 CSV 附件）：

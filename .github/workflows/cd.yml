@@ -81,6 +81,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      actions: read
       pull-requests: read
       deployments: read
     outputs:
@@ -114,7 +115,8 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: 校验来源 PR 的 CI 与 testing 冒烟
+      - name: 校验来源 PR 的 CI 并定位 testing run
+        id: prepare
         if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -130,9 +132,9 @@ jobs:
           fi
 
           # 独立赋值以便 set -e 捕获 gh 调用失败（放进 read 的替换里会被 read 的退出码吞掉）
-          TSV=$(gh pr view "$PR" --json state,headRefOid,mergeCommit \
-                  --jq '[.state, .headRefOid, .mergeCommit.oid] | @tsv')
-          IFS=$'\t' read -r PSTATE SHA MERGE <<EOF
+          TSV=$(gh pr view "$PR" --json state,headRefName,headRefOid,mergeCommit \
+                  --jq '[.state, .headRefName, .headRefOid, .mergeCommit.oid] | @tsv')
+          IFS=$'\t' read -r PSTATE BRANCH SHA MERGE <<EOF
           $TSV
           EOF
           echo ">>> PR #$PR state=$PSTATE head=$SHA merge=$MERGE"
@@ -152,20 +154,46 @@ jobs:
             exit 1
           fi
 
-          # 2) testing 冒烟:轮询委托给 release-evidence module（#2455）
-          #    gate-verdict 拥有轮询语义（8 分钟上限 / 瞬时 API 失败按未就绪处理 / 明确失败立即阻断）
-          export INPUT_SHA="$SHA"
-          export INPUT_ENVIRONMENT="testing"
-          export INPUT_TIMEOUT="480"
-          export INPUT_POLL_INTERVAL="30"
-          if ! bash "$GITHUB_WORKSPACE/.github/actions/release-evidence/gate-verdict.sh"; then
-            echo "    出口 A:到 Actions 重跑该分支的 testing CD run,通过后重新合并"
-            echo "    出口 B:确认无需冒烟时$MANUAL"
+          # 2) 定位最新一条 SHA 对齐的 testing CD run；状态与 deployment 判定交给 ReleaseEvidence。
+          RUN_ID=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow cd.yml --event workflow_dispatch \
+                     --commit "$SHA" --branch "$BRANCH" --limit 30 --json databaseId,headSha,createdAt \
+                     --jq 'sort_by(.createdAt) | last | .databaseId // empty')
+          if [ -z "$RUN_ID" ]; then
+            echo "::error::找不到 PR #$PR head $SHA 的 testing CD run，阻断生产部署；确需放行请$MANUAL"
             exit 1
           fi
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
 
-          echo "✅ 门禁通过:PR #$PR / ci-summary=success / testing 冒烟=success"
-          echo "| 门禁 | PR #$PR · ci-summary ✅ · testing 冒烟 ✅ |" >> "$GITHUB_STEP_SUMMARY"
+      - name: 判定 testing 冒烟证据
+        id: evidence
+        if: github.event_name == 'push' && steps.prepare.outputs.sha != ''
+        continue-on-error: true
+        uses: ./.github/actions/release-evidence
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          step: gateVerdict
+          sha: ${{ steps.prepare.outputs.sha }}
+          run-id: ${{ steps.prepare.outputs.run_id }}
+          environment: testing
+          timeout: 480
+          poll-interval: 30
+
+      - name: 消费 ReleaseEvidence verdict
+        if: always() && github.event_name == 'push' && steps.prepare.outputs.sha != ''
+        env:
+          VERDICT: ${{ steps.evidence.outputs.verdict }}
+          REASON: ${{ steps.evidence.outputs.reason }}
+        run: |
+          if [ "$VERDICT" != "green" ]; then
+            echo "::error::testing 冒烟证据未通过：${REASON:-verdict 缺失}"
+            echo "    出口 A:到 Actions 重跑该分支的 testing CD run,通过后重新合并"
+            echo "    出口 B:确认无需冒烟时手动 dispatch cd.yml(environment=production, ref=$GITHUB_SHA)"
+            exit 1
+          fi
+          echo "门禁通过: ci-summary=success / testing 冒烟=success"
+          echo "| 门禁 | ci-summary success · testing 冒烟双成功 |" >> "$GITHUB_STEP_SUMMARY"
 
   # ============================================================
   # Stage 1: 构建后端 Docker 镜像并推送 ghcr.io
@@ -403,10 +431,11 @@ jobs:
       # 域名（Caddyfile 用原生的 {$DOMAIN} 占位符展开，不做 envsubst）
       DOMAIN: ${{ secrets.DOMAIN }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # 数据库
+      # 数据库：workflow 只传环境与原值，testing/production 默认策略由 Python topology 持有
+      DEPLOY_ENVIRONMENT: ${{ needs.gate.outputs.environment }}
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      DB_MODE: ${{ needs.gate.outputs.environment != 'production' && 'docker' || vars.DB_MODE }}
-      POSTGRES_IMAGE: ${{ needs.gate.outputs.environment == 'testing' && 'postgres:19.0-trixie' || 'postgres:18-alpine' }}
+      DB_MODE: ${{ vars.DB_MODE }}
+      POSTGRES_IMAGE: ${{ vars.POSTGRES_IMAGE }}
       DB_USER: ${{ secrets.DB_USER }}
       DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
       # 密钥
@@ -489,7 +518,7 @@ jobs:
       # Volume 路径：两环境均在 PVE 宿主机直接运行 Docker 26+，named volume 正常工作
       # 留空 → deploy/deploy.py 默认使用 named volume（pgdata-prod 等）
       # Ceph 化后可在 environment secret 配置（如 PG_VOLUME=/srv/ceph/pgdata 指向 RBD 挂载点）
-      PG_VOLUME: ${{ secrets.PG_VOLUME || '' }}
+      PG_VOLUME: ${{ secrets.PG_VOLUME }}
       UPLOADS_VOLUME: ${{ secrets.UPLOADS_VOLUME || '' }}
       REPORTS_VOLUME: ${{ secrets.REPORTS_VOLUME || '' }}
       # ===== testing 加速参数（按环境注入,环境名取自 gate outputs 以兼容 push 事件）=====
@@ -578,6 +607,7 @@ jobs:
           # /usr/local/bin 里的旧副本仍在盯它，连续 3 次判红并发出了告警邮件。
           tar czf /tmp/deploy-files.tar.gz \
             deploy/deploy.py \
+            deploy/topology.py \
             deploy/release_transaction.py \
             deploy/effective_config.py \
             deploy/docker-compose.prod.yml \
@@ -644,18 +674,11 @@ jobs:
             printf 'export REGISTRY_PROXY=%q\n' "${REGISTRY_PROXY:-}"
             printf 'export REGISTRY_PROXY_BIND=%q\n' "${REGISTRY_PROXY_BIND:-}"
             printf 'export KEEP_IMAGES=%q\n' "${KEEP_IMAGES:-}"
-            if [ -n "${DATABASE_URL:-}" ] || [ "${DB_MODE:-}" = external ]; then
-              printf 'export DATABASE_URL=%q\n' "${DATABASE_URL:-}"
-            fi
+            printf 'export DEPLOY_ENVIRONMENT=%q\n' "${DEPLOY_ENVIRONMENT:-}"
+            printf 'export DATABASE_URL=%q\n' "${DATABASE_URL:-}"
             printf 'export DB_MODE=%q\n' "${DB_MODE:-}"
-            printf 'export POSTGRES_IMAGE=%q\n' "${POSTGRES_IMAGE:-postgres:18-alpine}"
-            if [ "${POSTGRES_IMAGE:-}" = postgres:19.0-trixie ]; then
-              echo 'export PG_VOLUME=pgdata-testing-19'
-            elif [ -n "${PG_VOLUME:-}" ]; then
-              printf 'export PG_VOLUME=%q\n' "${PG_VOLUME}"
-            else
-              echo 'unset PG_VOLUME'
-            fi
+            printf 'export POSTGRES_IMAGE=%q\n' "${POSTGRES_IMAGE:-}"
+            printf 'export PG_VOLUME=%q\n' "${PG_VOLUME:-}"
             printf 'export DB_PASSWORD=%q\n' "${DB_PASSWORD:-}"
             printf 'export SECRET_KEY=%q\n' "${SECRET_KEY:-}"
             printf 'export JWT_SECRET_KEY=%q\n' "${JWT_SECRET_KEY:-}"

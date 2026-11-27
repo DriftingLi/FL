@@ -2,6 +2,7 @@ package course
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"strconv"
 	"testing"
@@ -79,7 +80,7 @@ func TestAdminCoursesCategoryFilterAndPublicState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	activePage, err := svc.GetCourses(1, 10, "", nil, nil, nil, activeFilter, "")
+	activePage, err := svc.GetCourses(1, 10, "", nil, nil, nil, activeFilter, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,6 +94,9 @@ func TestAdminCoursesCategoryFilterAndPublicState(t *testing.T) {
 	if got := byName["公开课"]; got.Category == nil || got.Category.ID != activeCategory.ID || got.PublicEligibility == nil || !got.PublicEligibility.Eligible {
 		t.Fatalf("有效分类课程应公开且返回 canonical 分类, got %+v", got)
 	}
+	if got := byName["公开课"]; got.PublicState == nil || !got.PublicState.PublicVisibility || !got.PublicState.Eligibility.Eligible {
+		t.Fatalf("员工端应显式返回公开开关与资格, got %+v", got.PublicState)
+	}
 	if got := byName["未发布课"]; got.PublicEligibility == nil || !reflect.DeepEqual(got.PublicEligibility.Reasons, []publicscope.Reason{publicscope.ReasonNotPublished}) {
 		t.Fatalf("未发布课程应只返回未发布原因, got %+v", got.PublicEligibility)
 	}
@@ -101,7 +105,7 @@ func TestAdminCoursesCategoryFilterAndPublicState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	legacyPage, err := svc.GetCourses(1, 2, "", nil, nil, nil, legacyFilter, "")
+	legacyPage, err := svc.GetCourses(1, 2, "", nil, nil, nil, legacyFilter, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +116,7 @@ func TestAdminCoursesCategoryFilterAndPublicState(t *testing.T) {
 	for _, item := range legacyPage.Courses {
 		legacyNames[item.Name] = item
 	}
-	secondPage, err := svc.GetCourses(2, 2, "", nil, nil, nil, legacyFilter, "")
+	secondPage, err := svc.GetCourses(2, 2, "", nil, nil, nil, legacyFilter, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,6 +139,24 @@ func TestAdminCoursesCategoryFilterAndPublicState(t *testing.T) {
 	}
 	if detail.Category == nil || detail.PublicEligibility == nil || !detail.PublicEligibility.Eligible {
 		t.Fatalf("详情应返回 canonical 分类与公开资格, got %+v", detail.CourseDTO)
+	}
+}
+
+func TestAdminCoursePublicStateMissingViewRowFails(t *testing.T) {
+	db := testutil.NewMemoryDB(t)
+	record := model.Course{Name: "视图缺行课程", Status: 1}
+	if err := db.Create(&record).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Migrator().DropView(publicscope.CourseView); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("CREATE VIEW course_public_state AS SELECT course_id, NULL AS category_id, '' AS category_name, 0 AS category_status, 0 AS eligible, 0 AS public_visibility, '' AS blocker_codes FROM course WHERE 0").Error; err != nil {
+		t.Fatal(err)
+	}
+	_, err := NewAdminService(db, nil, nil, zap.NewNop()).GetCourseDetail(record.CourseID)
+	if !errors.Is(err, publicscope.ErrPublicStateMissing) {
+		t.Fatalf("内容行存在但公开视图缺行应显式失败, got %v", err)
 	}
 }
 
@@ -165,6 +187,9 @@ func TestCoursePublicVisibilityPreservesPublication(t *testing.T) {
 	}
 	if updated.Status != 1 || updated.PublicEligibility.Eligible {
 		t.Fatalf("编辑应保留发布状态及开关: %+v", updated)
+	}
+	if updated.PublicState == nil || updated.PublicState.PublicVisibility || len(updated.PublicState.Eligibility.Reasons) != 1 {
+		t.Fatalf("编辑后应显式返回关闭的公开开关: %+v", updated.PublicState)
 	}
 	var count int64
 	if err := publicSchoolCourseScope(db.Table("course")).Count(&count).Error; err != nil || count != 0 {

@@ -38,6 +38,9 @@ class FakeEnvironment:
     def recreate_service(self, service: str, force: bool = False) -> None:
         self.calls.append(("recreate_service", service))
 
+    def stop_service(self, service: str) -> None:
+        self.calls.append(("stop_service", service))
+
     def set_service_image(self, service: str, image: str) -> None:
         self.calls.append(("set_service_image", service, image))
 
@@ -239,6 +242,16 @@ class TestRollback(unittest.TestCase):
         recreate_calls = [c for c in env.calls if c[0] == "recreate_service"]
         self.assertEqual(len(recreate_calls), 1)
         self.assertEqual(recreate_calls[0][1], "backend")
+
+    def test_rollback_stops_services_that_did_not_exist_before_deploy(self):
+        env = FakeEnvironment()
+        plan = build_release_plan(env, {"backend": "b:v2"}, migration_needed=False)
+        txn = ReleaseTransaction(plan, env)
+        txn.execute()
+        env.calls.clear()
+        txn.rollback()
+        self.assertIn(("stop_service", "backend"), env.calls)
+        self.assertIn(("verify_running_image", "backend", "unknown"), env.calls)
 
     def test_rollback_with_no_applied_is_noop(self):
         """没 apply 过任何服务时 rollback 不做事。"""

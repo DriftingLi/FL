@@ -148,8 +148,13 @@ func (s *AdminService) ListPendingChapterReviews(ctx context.Context, page, page
 // GetChapterReviewSnapshot 在审快照详情（C9 预览）：读 pending 槽 + 冻结文件清单，
 // **不读 working 草稿**——审中讲师改了草稿也不影响管理员看到的内容（C4 消除 TOCTOU）。
 func (s *AdminService) GetChapterReviewSnapshot(ctx context.Context, chapterID int) (*ChapterReviewSnapshotDTO, error) {
+	return GetChapterReviewSnapshot(s.db.WithContext(ctx), chapterID)
+}
+
+// GetChapterReviewSnapshot 是从 pending 槽读取真实在审快照的唯一实现，管理员与讲师详情共用。
+func GetChapterReviewSnapshot(db *gorm.DB, chapterID int) (*ChapterReviewSnapshotDTO, error) {
 	var slot model.ChapterContentSlot
-	err := s.db.Where("slot = ? AND chapter_id = ?", model.ChapterReviewPending, chapterID).
+	err := db.Where("slot = ? AND chapter_id = ?", model.ChapterReviewPending, chapterID).
 		First(&slot).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, ErrChapterReviewNoPending
@@ -158,17 +163,17 @@ func (s *AdminService) GetChapterReviewSnapshot(ctx context.Context, chapterID i
 		return nil, err
 	}
 	var chapter model.Chapter
-	if err := s.db.First(&chapter, chapterID).Error; err != nil {
+	if err := db.First(&chapter, chapterID).Error; err != nil {
 		return nil, err
 	}
 	var course model.Course
-	if err := s.db.Select("course_id", "name").First(&course, chapter.CourseID).Error; err != nil {
+	if err := db.Select("course_id", "name").First(&course, chapter.CourseID).Error; err != nil {
 		return nil, err
 	}
 	courseName := course.Name
 	// 冻结清单：source/file_id 主键序，与提交时一致
 	var fileSlots []model.ChapterFileSlot
-	if err := s.db.Where("slot = ? AND chapter_id = ?", model.ChapterReviewPending, chapterID).
+	if err := db.Where("slot = ? AND chapter_id = ?", model.ChapterReviewPending, chapterID).
 		Order("source, file_id").Find(&fileSlots).Error; err != nil {
 		return nil, err
 	}

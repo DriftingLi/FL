@@ -2,6 +2,7 @@ package questionbank
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"strconv"
 	"testing"
@@ -73,6 +74,9 @@ func TestEditorQuestionsCategoryFilterAndPublicState(t *testing.T) {
 	if got := byName["公开题"]; got.Category == nil || got.Category.ID != activeCategory.ID || got.PublicEligibility == nil || !got.PublicEligibility.Eligible {
 		t.Fatalf("有效分类题目应入池且返回 canonical 分类, got %+v", got)
 	}
+	if got := byName["公开题"]; got.PublicState == nil || !got.PublicState.PublicVisibility || !got.PublicState.Eligibility.Eligible {
+		t.Fatalf("员工端应显式返回公开开关与资格, got %+v", got.PublicState)
+	}
 	if got := byName["待审真题"]; got.PublicEligibility == nil || !reflect.DeepEqual(got.PublicEligibility.Reasons, []publicscope.Reason{publicscope.ReasonNotPublished, publicscope.ReasonSourceTagExcluded}) {
 		t.Fatalf("待审与来源排除应同时返回, got %+v", got.PublicEligibility)
 	}
@@ -128,6 +132,24 @@ func TestEditorQuestionsCategoryFilterAndPublicState(t *testing.T) {
 	}
 }
 
+func TestEditorQuestionPublicStateMissingViewRowFails(t *testing.T) {
+	svc, db := newQuestionBankSvc(t)
+	record := model.Question{Type: "true_false", Content: "视图缺行题目", Answer: "true", Status: "published"}
+	if err := db.Create(&record).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Migrator().DropView(publicscope.QuestionView); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("CREATE VIEW question_public_state AS SELECT id, NULL AS category_id, '' AS category_name, 0 AS category_status, 0 AS eligible, 0 AS public_visibility, '' AS blocker_codes FROM question WHERE 0").Error; err != nil {
+		t.Fatal(err)
+	}
+	_, err := svc.GetQuestion(record.ID)
+	if !errors.Is(err, publicscope.ErrPublicStateMissing) {
+		t.Fatalf("内容行存在但公开视图缺行应显式失败, got %v", err)
+	}
+}
+
 func TestQuestionPublicVisibilityPreservesReviewStatus(t *testing.T) {
 	svc, db := newQuestionBankSvc(t)
 	record := model.Question{Type: "true_false", Content: "待审核题目", Answer: "true", Status: "pending"}
@@ -151,6 +173,9 @@ func TestQuestionPublicVisibilityPreservesReviewStatus(t *testing.T) {
 			publicscope.ReasonCategoryMissing, publicscope.ReasonManuallyHidden,
 		}) {
 		t.Fatalf("审核发布应保留开关: %+v", published)
+	}
+	if published.PublicState == nil || published.PublicState.PublicVisibility || len(published.PublicState.Eligibility.Reasons) != 2 {
+		t.Fatalf("发布后应显式返回关闭的公开开关: %+v", published.PublicState)
 	}
 	eligibility, err = svc.setPublicVisibility(ctx, record.ID, true)
 	if err != nil {

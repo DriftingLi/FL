@@ -26,6 +26,7 @@ type QuestionDTO struct {
 	ImageURL          string                   `json:"image_url"`
 	Options           any                      `json:"options"`
 	PublicEligibility *publicscope.Eligibility `json:"public_eligibility,omitempty" extensions:"x-optional"`
+	PublicState       *publicscope.PublicState `json:"public_state,omitempty" extensions:"x-optional"`
 	ReferenceAnswer   *string                  `json:"reference_answer,omitempty" extensions:"x-optional"`
 	RejectReason      string                   `json:"reject_reason"`
 	Score             int                      `json:"score"`

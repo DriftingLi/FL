@@ -1,6 +1,7 @@
 <!--
-  列表档位：useAsyncPage（只读计数）—— 课程目录档：目录树 + facet 计数 + 课程汇总卡
-  （非服务端分页列表：筛选/分页在客户端，故不套 useAdminTable；依据 ADR-0056 §9）
+  列表档位：useAdminTable（分页列表）—— 课程列表（服务端分页与筛选）
+  列表档位：useAsyncPage（只读计数）—— 课程分类与证件字典装载
+  分类计数由列表响应的 facets 提供，排序通过后端同分类全局邻居定位，均不在前端回拉全量。
   判定口径见 docs/agents/ui-conventions.md「管理端列表两档归属」。
 -->
 <template>
@@ -19,7 +20,7 @@
         <UiButton variant="ghost" size="small" @click="openCertificateDialog()">证书模板</UiButton>
       </div>
       <FacetCard title="课程分类">
-        <FacetItem :active="categoryId === null" name="全部课程" :count="allCourses.length" @select="selectCategory(null)" />
+        <FacetItem :active="categoryId === 'all'" name="全部课程" :count="totalCourses" @select="selectCategory('all')" />
         <div v-for="category in enabledCategories" :key="category.id" class="flex items-center gap-1">
           <FacetItem
             class="min-w-0 flex-1"
@@ -32,10 +33,10 @@
         </div>
         <FacetItem
           warn
-          :active="categoryId === LEGACY_CATEGORY"
+          :active="categoryId === 'legacy'"
           :name="LEGACY_CATEGORY_LABEL"
           :count="legacyCategoryCount"
-          @select="selectCategory(LEGACY_CATEGORY)"
+          @select="selectCategory('legacy')"
         />
       </FacetCard>
     </aside>
@@ -45,18 +46,27 @@
       <UiFilterBar>
         <template #filters>
 
-        <UiInput v-model="keyword" placeholder="搜索课程名称…" clearable class="cc-search" @input="currentPage = 1">
+        <UiInput v-model="keyword" placeholder="搜索课程名称…" clearable class="cc-search" @input="currentPage = 1; loadData()">
           <template #prefix>
             <UiIcon name="search" />
           </template>
         </UiInput>
-        <UiSelect v-model="filterStatus" placeholder="状态" clearable style="width: 120px" @change="currentPage = 1" :options="[{ label: '已发布', value: 1 }, { label: '未发布', value: 0 }]" />
-        <UiSelect v-model="filterHotFeatured" placeholder="热门/精品" clearable style="width: 140px" @change="currentPage = 1" :options="[{ label: '热门', value: 'hot' }, { label: '精品', value: 'featured' }, { label: '全部', value: 'all' }]" />
+        <UiSelect v-model="filterStatus" placeholder="状态" clearable style="width: 120px" @change="currentPage = 1; loadData()" :options="[{ label: '已发布', value: 1 }, { label: '未发布', value: 0 }]" />
+        <UiSelect v-model="filterHotFeatured" placeholder="热门/精品" clearable style="width: 140px" @change="currentPage = 1; loadData()" :options="[{ label: '热门', value: 'hot' }, { label: '精品', value: 'featured' }, { label: '全部', value: 'all' }]" />
         <UiButton variant="primary" @click="openDrawer()">新增课程</UiButton>
         </template>
       </UiFilterBar>
 
-      <el-table :data="pagedCourses" v-loading="loading" style="width: 100%">
+      <UiAsyncSection
+        :loading="loading"
+        :error="loadError"
+        :retrying="retrying"
+        :skeleton="false"
+        error-title="课程加载失败"
+        error-description="网络或服务端异常，可重试"
+        @retry="retry"
+      >
+        <el-table :data="courses" v-loading="loading" style="width: 100%">
         <el-table-column label="课程名称" min-width="220" show-overflow-tooltip>
           <template #default="{ row }">
             <UiButton variant="text" class="cc-cell-name" @click="openDrawer(row)">{{ row.name }}</UiButton>
@@ -64,8 +74,8 @@
         </el-table-column>
         <el-table-column label="分类" width="150">
           <template #default="{ row }">
-            <UiTag v-if="categoryNameOfRow(row)" :tone="row.category?.status === 0 ? 'warning' : 'neutral'" size="small" effect="plain">
-              {{ categoryNameOfRow(row) }}{{ row.category?.status === 0 ? '（停用）' : '' }}
+            <UiTag v-if="categoryNameOfRow(row)" :tone="row.public_state?.category?.status === 0 ? 'warning' : 'neutral'" size="small" effect="plain">
+              {{ categoryNameOfRow(row) }}{{ row.public_state?.category?.status === 0 ? '（停用）' : '' }}
             </UiTag>
             <UiTag v-else tone="danger" size="small" effect="plain">未分类</UiTag>
           </template>
@@ -88,7 +98,7 @@
         </el-table-column>
         <el-table-column label="公开资格" width="140">
           <template #default="{ row }">
-            <PublicEligibility :eligibility="row.public_eligibility" :show-reasons="false" />
+            <PublicEligibility :eligibility="row.public_state?.eligibility" :show-reasons="false" />
           </template>
         </el-table-column>
         <el-table-column label="操作" width="90" fixed="right" align="center">
@@ -100,15 +110,18 @@
           <UiEmptyState description="暂无课程" size="sm" />
         </template>
       </el-table>
+      </UiAsyncSection>
 
-      <div class="cc-pagination" v-if="filteredCourses.length > pageSize">
+      <div class="cc-pagination" v-if="!loadError && total > pageSize">
         <UiPagination
-      v-model:current-page="currentPage"
-      v-model:page-size="pageSize"
-      :total="filteredCourses.length"
-      show-sizes
-      :page-sizes="[10, 20, 50]"
-    />
+          v-model:current-page="currentPage"
+          v-model:page-size="pageSize"
+          :total="total"
+          show-sizes
+          :page-sizes="[10, 20, 50]"
+          @current-change="loadData"
+          @size-change="handleSizeChange"
+        />
       </div>
     </main>
 
@@ -118,10 +131,11 @@
       :categories="categories"
       :certificate-templates="certificateTemplates"
       :course-options="courseOptions"
-      :default-category-id="canSortCourses ? categoryId : null"
+      :default-category-id="canSortCourses && typeof categoryId === 'number' ? categoryId : null"
       :submitting="submitting"
       @saved="refreshCatalog"
       @visibility-changed="syncCourseVisibility"
+      @search-courses="loadCourseOptions"
     />
     <CourseCatalogDialogs
       ref="catalogDialogsRef"
@@ -165,20 +179,22 @@ defineOptions({ name: 'CourseCatalog' })
 
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { trainingApi, type AdminTrainingCategoryDTO, type CertificateTemplate } from '@/api/training'
+import { trainingApi, type AdminTrainingCategoryDTO, type CertificateTemplate, type TrainingCategoryFilter } from '@/api/training'
 import { credentialApi, type CredentialDict } from '@/api/credential'
-import { adminApi, type AdminCourseItem } from '@/api/admin'
+import { adminApi, type AdminCourseItem, type AdminCoursePageData } from '@/api/admin'
+import type { PublicState } from '@/api/generated/course'
 import { useAsyncPage } from '@/composables/useAsyncPage'
+import { useAdminTable } from '@/composables/useAdminTable'
 import FacetCard from '@/components/catalog/FacetCard.vue'
 import FacetItem from '@/components/catalog/FacetItem.vue'
 import CourseCatalogCourseDrawer from '@/components/admin/CourseCatalogCourseDrawer.vue'
 import CourseCatalogDialogs from '@/components/admin/CourseCatalogDialogs.vue'
 import PublicEligibility from '@/components/catalog/PublicEligibility.vue'
-import { hasLegacyCategoryReason } from '@/utils/publicEligibility'
 import { LEGACY_CATEGORY_LABEL } from '@/utils/trainingCategoryFilter'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiAsyncSection from '@/components/ui/UiAsyncSection.vue'
 import UiPagination from '@/components/ui/UiPagination.vue'
 import UiFilterBar from '@/components/ui/UiFilterBar.vue'
 import { useConfirm } from '@/composables/useConfirm'
@@ -189,12 +205,13 @@ import UiSelect from '@/components/ui/UiSelect.vue'
 
 const submitting = ref(false)
 
-const LEGACY_CATEGORY = -1
-const categoryId = ref<number | null>(null)
+const categoryId = ref<TrainingCategoryFilter>('all')
 const managementCategoryId = ref<number | null>(null)
 const categories = ref<AdminTrainingCategoryDTO[]>([])
 const credentials = ref<CredentialDict[]>([])
-const allCourses = ref<AdminCourseItem[]>([])
+const categoryCounts = ref(new Map<number, number>())
+const totalCourses = ref(0)
+const legacyCategoryCount = ref(0)
 const certificateTemplates = ref<CertificateTemplate[]>([])
 const categoryDialog = ref(false)
 const editingCategoryId = ref<number>()
@@ -235,26 +252,59 @@ async function saveCategory() {
   }
 }
 
-const { loading, run: refreshCatalog } = useAsyncPage(async () => {
-  const pageSize = 500
-  const [categoryData, firstPage, credentialData] = await Promise.all([
-    trainingApi.getAdminCategories(),
-    adminApi.getCourses({ page: 1, page_size: pageSize }),
-    credentialApi.listAdminCredentials()
-  ])
-  const courses = [...firstPage.courses]
-  for (let page = 2; page <= firstPage.pages; page++) {
-    const nextPage = await adminApi.getCourses({ page, page_size: pageSize })
-    courses.push(...nextPage.courses)
-  }
-  return { categories: categoryData.categories, courses, credentials: credentialData.credentials }
-}, {
-  apply: (bundle) => {
-    categories.value = bundle.categories
-    allCourses.value = bundle.courses
-    credentials.value = bundle.credentials
+function applyCourseFacets(facets: AdminCoursePageData['facets']) {
+  if (!facets) return
+  totalCourses.value = facets.total
+  legacyCategoryCount.value = facets.legacy
+  categoryCounts.value = new Map(facets.categories.map(item => [item.category_id, item.total]))
+}
+
+const {
+  loading,
+  loadError,
+  retrying,
+  list: courses,
+  total,
+  currentPage,
+  pageSize,
+  load: loadData,
+  retry
+} = useAdminTable<AdminCourseItem>({
+  fetch: async ({ page, pageSize: size }) => {
+    const result = await adminApi.getCourses({
+      page,
+      page_size: size,
+      category_id: categoryId.value,
+      keyword: keyword.value.trim() || undefined,
+      status: filterStatus.value ?? undefined,
+      filter: filterHotFeatured.value || 'all'
+    })
+    applyCourseFacets(result.facets)
+    return result
   }
 })
+
+const { run: refreshFacets } = useAsyncPage(async () => {
+  const [categoryData, credentialData] = await Promise.all([
+    trainingApi.getAdminCategories(),
+    credentialApi.listAdminCredentials()
+  ])
+  return { categoryData, credentialData }
+}, {
+  apply: ({ categoryData, credentialData }) => {
+    categories.value = categoryData.categories
+    credentials.value = credentialData.credentials
+  }
+})
+
+async function refreshCatalog() {
+  await Promise.all([loadData(), refreshFacets(), loadCourseOptions()])
+}
+
+function handleSizeChange() {
+  currentPage.value = 1
+  void loadData()
+}
 
 function openManagedCategory(id: number | null) {
   const category = categories.value.find(item => item.id === id)
@@ -267,63 +317,25 @@ const categoryManagementOptions = computed(() => categories.value.map(category =
   value: category.id
 })))
 
-const categoryCounts = computed(() => {
-  const counts = new Map<number, number>()
-  for (const course of allCourses.value) {
-    if (course.category_id == null) continue
-    counts.set(course.category_id, (counts.get(course.category_id) ?? 0) + 1)
-  }
-  return counts
-})
-const legacyCategoryCount = computed(() =>
-  allCourses.value.filter(course => hasLegacyCategoryReason(course.public_eligibility?.reasons)).length
-)
-
 function categoryNameOf(id?: number) {
   return categories.value.find(category => category.id === id)?.name ?? ''
 }
 
 function categoryNameOfRow(course: AdminCourseItem) {
-  return course.category?.name || categoryNameOf(course.category_id)
+  return course.public_state?.category?.name ?? ''
 }
 
-function selectCategory(id: number | null) {
+function selectCategory(id: TrainingCategoryFilter) {
   categoryId.value = id
   currentPage.value = 1
+  void loadData()
 }
 
 const filterStatus = ref<number | null>(null)
-const filterHotFeatured = ref<string | null>(null)
+const filterHotFeatured = ref<'hot' | 'featured' | 'all' | null>(null)
 const keyword = ref('')
-const currentPage = ref(1)
-const pageSize = ref(10)
 
-// el-select clearable 清除后值为 undefined（valueOnClear 默认）/'' 而非 null，
-// 须归一化判断，否则「先筛选再清除」会把全表过滤为空
-function filterActive(v: unknown): boolean {
-  return v !== null && v !== undefined && v !== ''
-}
-
-const filteredCourses = computed(() => {
-  const k = keyword.value.trim().toLowerCase()
-  const status = filterStatus.value
-  return allCourses.value.filter(c => {
-    if (categoryId.value === LEGACY_CATEGORY && !hasLegacyCategoryReason(c.public_eligibility?.reasons)) return false
-    if (categoryId.value !== null && categoryId.value !== LEGACY_CATEGORY && c.category_id !== categoryId.value) return false
-    if (filterActive(status) && c.status !== status) return false
-    if (filterHotFeatured.value === 'hot' && !c.is_hot) return false
-    if (filterHotFeatured.value === 'featured' && !c.is_featured) return false
-    if (k && !c.name.toLowerCase().includes(k)) return false
-    return true
-  })
-})
-
-const pagedCourses = computed(() => {
-  const start = (currentPage.value - 1) * pageSize.value
-  return filteredCourses.value.slice(start, start + pageSize.value)
-})
-
-const canSortCourses = computed(() => categoryId.value !== null && categoryId.value !== LEGACY_CATEGORY)
+const canSortCourses = computed(() => typeof categoryId.value === 'number')
 
 // ===== 子组件（抽屉/弹窗）入口 =====
 const courseDrawerRef = ref<InstanceType<typeof CourseCatalogCourseDrawer> | null>(null)
@@ -339,16 +351,15 @@ function openCertificateDialog() {
 
 // ===== 排序（后端 swap 端点，同值默认也生效） =====
 async function moveCourse(row: AdminCourseItem, delta: -1 | 1) {
-  if (row.category_id == null) return
-  const sibs = filteredCourses.value.filter(c => c.category_id === row.category_id)
-  const idx = sibs.findIndex(c => c.course_id === row.course_id)
-  const target = sibs[idx + delta]
-  if (!target) return
+  if (row.public_state?.category?.id == null) return
   submitting.value = true
   try {
-    await adminApi.swapCourse(row.course_id, target.course_id)
+    const neighbors = await adminApi.getCourseSortNeighbors(row.course_id)
+    const targetID = delta === -1 ? neighbors.previous_id : neighbors.next_id
+    if (targetID == null) return
+    await adminApi.swapCourse(row.course_id, targetID)
     ElMessage.success('排序已更新')
-    await refreshCatalog()
+    await loadData()
   } catch (error) {
     console.error('排序失败:', error)
     /* 错误已由拦截器提示 */
@@ -368,16 +379,25 @@ async function loadCertificateTemplates() {
   }
 }
 
-const courseOptions = computed(() =>
-  allCourses.value.filter(c => c.category_id != null).map(c => ({
-    course_id: c.course_id,
-    name: categoryNameOf(c.category_id) + ' · ' + c.name
-  }))
-)
+const courseOptions = ref<{ course_id: number; name: string }[]>([])
+let courseOptionsRequest = 0
 
-function syncCourseVisibility(courseId: number, eligibility: NonNullable<AdminCourseItem['public_eligibility']>) {
-  const row = allCourses.value.find(course => course.course_id === courseId)
-  if (row) row.public_eligibility = eligibility
+async function loadCourseOptions(keyword = '') {
+  const request = ++courseOptionsRequest
+  const result = await adminApi.getCourses({ page: 1, page_size: 50, keyword: keyword || undefined, filter: 'all' })
+  if (request !== courseOptionsRequest) return
+  courseOptions.value = result.items.flatMap(course => {
+    const id = course.public_state?.category?.id
+    return id == null ? [] : [{
+      course_id: course.course_id,
+      name: categoryNameOf(id) + ' · ' + course.name
+    }]
+  })
+}
+
+function syncCourseVisibility(courseId: number, publicState: PublicState) {
+  const row = courses.value.find(course => course.course_id === courseId)
+  if (row) row.public_state = publicState
 }
 
 async function toggleStatus(row: AdminCourseItem) {
@@ -430,7 +450,9 @@ async function handleDeleteCourse(row: AdminCourseItem) {
 }
 
 onMounted(() => {
-  refreshCatalog()
+  void loadData()
+  void refreshFacets()
+  void loadCourseOptions()
   loadCertificateTemplates()
 })
 

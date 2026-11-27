@@ -26,10 +26,30 @@ import (
 
 // CoursePageResult 课程分页结果（学员端/管理端/导师端共用）。
 type CoursePageResult struct {
-	Courses []CourseDTO `json:"courses" nullability:"nonnil"`
-	Page    int         `json:"page"`
-	Pages   int         `json:"pages"`
-	Total   int64       `json:"total"`
+	Courses []CourseDTO   `json:"courses" nullability:"nonnil"`
+	Facets  *CourseFacets `json:"facets,omitempty" extensions:"x-optional"`
+	Page    int           `json:"page"`
+	Pages   int           `json:"pages"`
+	Total   int64         `json:"total"`
+}
+
+// CourseFacets 管理端课程分类计数； Categories 保留原始分类归属，legacy 按公开资格口径单列。
+type CourseFacets struct {
+	Total      int64              `json:"total"`
+	Legacy     int64              `json:"legacy"`
+	Categories []CourseFacetCount `json:"categories" nullability:"nonnil"`
+}
+
+// CourseFacetCount 单个分类的课程数。
+type CourseFacetCount struct {
+	CategoryID int   `json:"category_id"`
+	Total      int64 `json:"total"`
+}
+
+// CourseSortNeighbors 同分类全局排序中的前后邻居；用于服务端分页下的跨页移动。
+type CourseSortNeighbors struct {
+	PreviousID *int `json:"previous_id" extensions:"x-nullable"`
+	NextID     *int `json:"next_id" extensions:"x-nullable"`
 }
 
 // ===== DTO（JSON 契约与 B5 前的 map key 逐字一致，前端零改动约束）=====
@@ -72,6 +92,7 @@ type CourseDTO struct {
 	PrerequisiteCourseIDs *[]int                   `json:"prerequisite_course_ids,omitempty" extensions:"x-optional" nullability:"nonnil"`
 	Prerequisites         *[]CourseBriefDTO        `json:"prerequisites,omitempty" extensions:"x-optional" nullability:"nonnil"`
 	PublicEligibility     *publicscope.Eligibility `json:"public_eligibility,omitempty" extensions:"x-optional"`
+	PublicState           *publicscope.PublicState `json:"public_state,omitempty" extensions:"x-optional"`
 	SortOrder             int                      `json:"sort_order"`
 	Specialty             *SpecialtyBriefDTO       `json:"specialty,omitempty" extensions:"x-optional"`
 	SpecialtyID           *int                     `json:"specialty_id" extensions:"x-nullable"`
@@ -173,6 +194,12 @@ type ChapterDetailDTO struct {
 	// 另一条并发请求填的 map，谁先回来全凭运气 ⇒ 多半读到 0，每次从片头重播
 	// （词表「学习位置」的承诺在最常用的入口上不成立）。
 	ResumePosition int `json:"resume_position"`
+}
+
+// TutorChapterDetailDTO 讲师章节详情：工作副本与真实在审快照分字段返回。
+type TutorChapterDetailDTO struct {
+	ChapterDetailDTO
+	ReviewSnapshot *ChapterReviewSnapshotDTO `json:"review_snapshot,omitempty" extensions:"x-optional"`
 }
 
 // CourseDetailDTO 学员端课程详情信封。

@@ -19,7 +19,7 @@ name: PR - testing 冒烟补齐
 # 派发出去的 CD run 在 cd-testing 组繁忙时只是排队；合并一旦发生在它前面，删分支会把排队中的 run 一起
 # 取消（实测 2026-10-29：run 40811195831 一个作业都没启动就被 cancelled），deployment 记录于是永不存在，
 # 而 cd.yml 的生产 gate 要求它 ⇒ 生产部署被永久阻断（`69ec84d6` / `7dee52b7` 连中两次）。
-# 现语义：**派发后等这条 run 真的 success，并复核 deployment 记录存在，才让检查变绿**；cancelled / 超时
+# 现语义：**派发后等这条 run 与 deployment 双成功，才让检查变绿**；cancelled / 超时
 # 一律 fail-closed 判红。代价是合并要等一次 testing 部署的时间（绿不了的 PR 本就不该合）。
 on:
   pull_request:
@@ -54,13 +54,14 @@ jobs:
       # ADR-0053 §10：ci-summary 的聚合收成了单点脚本（scripts/ci-summary-status.sh），
       # 本 job 原先刻意不 checkout（gh 用 --repo 显式指定仓库），但脚本文件必须存在于工作区 ——
       # 故补一个浅 checkout（只取文件，不取历史），代价 ~1s。
-      - name: Checkout（仅为取到聚合脚本）
+      - name: Checkout（仅为取到聚合脚本与 ReleaseEvidence action）
         uses: actions/checkout@v7
         with:
           fetch-depth: 1
           persist-credentials: false
 
       - name: 等 CI 结论并补发 testing 冒烟
+        id: prepare
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SHA: ${{ github.event.pull_request.head.sha }}
@@ -72,6 +73,7 @@ jobs:
 
           if [ "$HEAD_REPO" != "$GITHUB_REPOSITORY" ]; then
             echo "fork 来源的 PR（$HEAD_REPO），无法在本仓库按 ref 派发冒烟，交由 CI 处理" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "required=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -94,39 +96,40 @@ jobs:
 
           if [ "$CI" != "success" ]; then
             echo "ci-summary=$CI，CI 未通过 ⇒ 不补发冒烟（合并本就被 ci-summary 挡住）" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "required=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          # ===== 2. 已有记录就不重复部署 =====
-          DEP=$(gh api "repos/$GITHUB_REPOSITORY/deployments?per_page=100" \
-                 --jq "[.[] | select(.sha==\"$SHA\" and .environment==\"testing\")] | length")
-          if [ "$DEP" != "0" ]; then
-            echo "commit ${SHA:0:8} 已有 testing 冒烟记录，无需补发" | tee -a "$GITHUB_STEP_SUMMARY"
+          # ===== 2. 已有 CD run 时不再重复部署，统一交给 ReleaseEvidence 判定 =====
+          # 这里只定位 run，不查询/解释 deployment 状态；旧 failure 记录也不能放行。
+          RUN_ID=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow cd.yml --event workflow_dispatch \
+                     --commit "$SHA" --branch "$REF" --limit 30 --json databaseId,headSha,createdAt \
+                     --jq 'sort_by(.createdAt) | last | .databaseId // empty')
+          if [ -n "$RUN_ID" ]; then
+            echo "commit ${SHA:0:8} 已有 testing CD run ${RUN_ID}，由 ReleaseEvidence 判定" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "required=true" >> "$GITHUB_OUTPUT"
+            echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           # ===== 3. 派发 =====
-          echo ">>> CI 已绿但缺冒烟记录（CI 跑完早于开 PR），补发 testing 部署" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo ">>> CI 已绿但缺 testing CD run，补发 testing 部署" | tee -a "$GITHUB_STEP_SUMMARY"
           # 与 ci.yml 的派发方式保持一致：--ref 用分支名，使 CD run 与部署记录的 sha == 被测 SHA
           # （workflow_dispatch 的 --ref 不接受裸 SHA；`refs/pull/<n>/head` 也实测 422 —— #1852 里试过）。
-          # 必须显式 --repo：本 job 不 checkout，gh 没有 git 上下文可推断仓库
           if ! gh workflow run cd.yml --repo "$GITHUB_REPOSITORY" \
                  --ref "$REF" -f ref="$SHA" -f environment=testing; then
-            echo "::error::派发失败（分支 ${REF} 可能已被删除）。这是 #1852 描述过的竞态：本检查若为必过检查，正常应发生在合并之前；走人工合并时请用应急通道 gh workflow run cd.yml -f environment=production -f ref=${SHA}"
+            echo "::error::派发失败（分支 ${REF} 可能已被删除）。这是 #1852 描述过的竞态；本检查若为必过检查，正常应发生在合并之前；走人工合并时请用应急通道 gh workflow run cd.yml -f environment=production -f ref=${SHA}"
             exit 1
           fi
           echo "| 补发 | PR #${PR_NUMBER} · commit ${SHA:0:8} → testing |" >> "$GITHUB_STEP_SUMMARY"
 
-          # ===== 4. 等这条 run 真的成功（#2120：让「检查绿」⇔「deployment 记录已存在」）=====
-          # 以前派发完就 exit 0，检查在冒烟尚未成功时即变绿；合并一旦抢先（cd-testing 组繁忙时必然如此），
-          # 删分支会把排队中的 run 取消 ⇒ 记录永不出现 ⇒ 生产 gate 永久阻断。
+          # ===== 4. 定位派发出的 run ID（状态判定仍只属于 ReleaseEvidence）=====
           RUN_ID=''
           FIND_DEADLINE=$(( $(date +%s) + 120 ))
           while :; do
-            # 注意：这里不能写 `[ -n "$RUN_ID" ] && break` —— 独立语句在 set -e 下失败即退出（首次迭代必然失败）
             RUN_ID=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow cd.yml --event workflow_dispatch \
-                       --limit 30 --json databaseId,headSha,createdAt \
-                       --jq "[.[] | select(.headSha==\"$SHA\")] | sort_by(.createdAt) | last | .databaseId // empty" || true)
+                       --commit "$SHA" --branch "$REF" --limit 30 --json databaseId,headSha,createdAt \
+                       --jq 'sort_by(.createdAt) | last | .databaseId // empty')
             if [ -n "$RUN_ID" ]; then break; fi
             if [ "$(date +%s)" -ge "$FIND_DEADLINE" ]; then
               echo "::error::派发后 2 分钟仍找不到 commit ${SHA:0:8} 的 CD run —— 无法确认冒烟是否真的跑起来，不放行"
@@ -135,18 +138,33 @@ jobs:
             sleep 10
           done
           echo "| 冒烟 run | [${RUN_ID}](https://github.com/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}) |" >> "$GITHUB_STEP_SUMMARY"
+          echo "required=true" >> "$GITHUB_OUTPUT"
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
 
-          # 轮询委托给 release-evidence module（#2455）：waitForRun 拥有轮询语义
-          export INPUT_RUN_ID="$RUN_ID"
-          export INPUT_SHA="$SHA"
-          export INPUT_TIMEOUT="2400"
-          export INPUT_POLL_INTERVAL="30"
-          bash "$GITHUB_WORKSPACE/.github/actions/release-evidence/wait-for-run.sh"
+      - name: 判定 testing 冒烟证据
+        id: evidence
+        if: steps.prepare.outputs.required == 'true'
+        continue-on-error: true
+        uses: ./.github/actions/release-evidence
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          step: gateVerdict
+          sha: ${{ github.event.pull_request.head.sha }}
+          run-id: ${{ steps.prepare.outputs.run_id }}
+          environment: testing
+          timeout: 2400
+          poll-interval: 30
 
-          # ===== 5. 复核 deployment 记录（#2455 module：checkDeployment）=====
-          export INPUT_SHA="$SHA"
-          export INPUT_ENVIRONMENT="testing"
-          export INPUT_TIMEOUT="0"
-          export INPUT_POLL_INTERVAL="1"
-          bash "$GITHUB_WORKSPACE/.github/actions/release-evidence/check-deployment.sh"
-          echo "✅ testing 冒烟记录已就位（sha=${SHA:0:8}）" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: 消费 ReleaseEvidence verdict
+        if: always() && steps.prepare.outputs.required == 'true'
+        env:
+          VERDICT: ${{ steps.evidence.outputs.verdict }}
+          REASON: ${{ steps.evidence.outputs.reason }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$VERDICT" != "green" ]; then
+            echo "::error::testing 冒烟证据未通过：${REASON:-verdict 缺失}"
+            exit 1
+          fi
+          echo "testing 冒烟双成功（sha=${SHA:0:8}）" | tee -a "$GITHUB_STEP_SUMMARY"

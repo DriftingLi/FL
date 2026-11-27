@@ -2693,6 +2693,70 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/course/{course_id}/sort-neighbors": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "返回同分类全局排序中的前后邻居 ID，供服务端分页列表跨页移动",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-课程"
+                ],
+                "summary": "管理端课程排序邻居",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "课程 ID",
+                        "name": "course_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/course.CourseSortNeighbors"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "课程ID无效或课程未分类",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "课程不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/courses": {
             "get": {
                 "security": [
@@ -21614,7 +21678,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/course.ChapterDetailDTO"
+                                            "$ref": "#/definitions/course.TutorChapterDetailDTO"
                                         }
                                     }
                                 }
@@ -23008,7 +23072,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Vditor 编辑器内嵌图上传（需讲师能力）；chapter_id 支持 query（Vditor 走 URL）与 form（直接 multipart）两种传递方式，用于按章节分目录存储。返回 Vditor 约定的**非统一信封**响应 {msg,code,data:{errFiles,succMap}}（code=0 表示成功），与 /admin/featured-content/upload-image 同一适配器",
+                "description": "Vditor 编辑器内嵌图上传（需讲师能力与章节认领）；chapter_id 支持 query（Vditor 走 URL）与 form（直接 multipart）两种传递方式，且必填。返回 Vditor 约定的**非统一信封**响应 {msg,code,data:{errFiles,succMap}}（code=0 表示成功），与 /admin/featured-content/upload-image 同一适配器",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -23029,9 +23093,10 @@ const docTemplate = `{
                     },
                     {
                         "type": "integer",
-                        "description": "章节ID（可选，按章节分目录存储 images/chapters/\u003cid\u003e）",
+                        "description": "章节ID（query 或 form 必填，按章节分目录存储 images/chapters/\u003cid\u003e）",
                         "name": "chapter_id",
-                        "in": "query"
+                        "in": "query",
+                        "required": true
                     }
                 ],
                 "responses": {
@@ -23042,8 +23107,32 @@ const docTemplate = `{
                             "additionalProperties": true
                         }
                     },
+                    "400": {
+                        "description": "章节ID无效",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
                     "401": {
                         "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "未认领章节所属课程",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "章节不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "图片落盘后章节写入失败",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -29602,6 +29691,14 @@ const docTemplate = `{
                     ],
                     "x-optional": true
                 },
+                "public_state": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/publicscope.PublicState"
+                        }
+                    ],
+                    "x-optional": true
+                },
                 "sort_order": {
                     "type": "integer"
                 },
@@ -30157,6 +30254,14 @@ const docTemplate = `{
                     ],
                     "x-optional": true
                 },
+                "public_state": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/publicscope.PublicState"
+                        }
+                    ],
+                    "x-optional": true
+                },
                 "sort_order": {
                     "type": "integer"
                 },
@@ -30217,6 +30322,34 @@ const docTemplate = `{
                 }
             }
         },
+        "course.CourseFacetCount": {
+            "type": "object",
+            "properties": {
+                "category_id": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "course.CourseFacets": {
+            "type": "object",
+            "properties": {
+                "categories": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/course.CourseFacetCount"
+                    }
+                },
+                "legacy": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
         "course.CoursePageResult": {
             "type": "object",
             "properties": {
@@ -30226,6 +30359,14 @@ const docTemplate = `{
                         "$ref": "#/definitions/course.CourseDTO"
                     }
                 },
+                "facets": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/course.CourseFacets"
+                        }
+                    ],
+                    "x-optional": true
+                },
                 "page": {
                     "type": "integer"
                 },
@@ -30234,6 +30375,19 @@ const docTemplate = `{
                 },
                 "total": {
                     "type": "integer"
+                }
+            }
+        },
+        "course.CourseSortNeighbors": {
+            "type": "object",
+            "properties": {
+                "next_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "previous_id": {
+                    "type": "integer",
+                    "x-nullable": true
                 }
             }
         },
@@ -30565,6 +30719,80 @@ const docTemplate = `{
                 },
                 "study_duration": {
                     "type": "integer"
+                }
+            }
+        },
+        "course.TutorChapterDetailDTO": {
+            "type": "object",
+            "properties": {
+                "chapter_id": {
+                    "type": "integer"
+                },
+                "content": {
+                    "type": "string"
+                },
+                "content_type": {
+                    "type": "string"
+                },
+                "course_id": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "duration": {
+                    "type": "integer"
+                },
+                "file_url": {
+                    "type": "string"
+                },
+                "files": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/course.ChapterFileDTO"
+                    }
+                },
+                "next_chapter_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "order_num": {
+                    "type": "integer"
+                },
+                "previous_chapter_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "reject_reason": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "resume_position": {
+                    "description": "ResumePosition 该学员在本章节的最后播放位置（秒，契约只增不改 —— ADR-0048）。\nADR-0062 决策 11：断点续播的位置由后端下发。旧形状是前端在章节详情装载里同步读\n另一条并发请求填的 map，谁先回来全凭运气 ⇒ 多半读到 0，每次从片头重播\n（词表「学习位置」的承诺在最常用的入口上不成立）。",
+                    "type": "integer"
+                },
+                "review_snapshot": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/course.ChapterReviewSnapshotDTO"
+                        }
+                    ],
+                    "x-optional": true
+                },
+                "review_status": {
+                    "description": "ReviewStatus/RejectReason 章节审核状态机（#2498 C1）：draft/pending/published + 驳回理由。\n只在管理读面/导师编辑面有意义，学生读面省略（x-optional）。",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "study_status": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "title": {
+                    "type": "string"
                 }
             }
         },
@@ -32990,6 +33218,25 @@ const docTemplate = `{
                 }
             }
         },
+        "publicscope.PublicState": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/publicscope.CategoryRef"
+                        }
+                    ],
+                    "x-optional": true
+                },
+                "eligibility": {
+                    "$ref": "#/definitions/publicscope.Eligibility"
+                },
+                "public_visibility": {
+                    "type": "boolean"
+                }
+            }
+        },
         "publicscope.Reason": {
             "type": "string",
             "enum": [
@@ -33111,6 +33358,14 @@ const docTemplate = `{
                     "allOf": [
                         {
                             "$ref": "#/definitions/publicscope.Eligibility"
+                        }
+                    ],
+                    "x-optional": true
+                },
+                "public_state": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/publicscope.PublicState"
                         }
                     ],
                     "x-optional": true
