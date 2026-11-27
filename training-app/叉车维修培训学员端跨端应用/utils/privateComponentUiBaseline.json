@@ -4,9 +4,5 @@
   "pages/courses/components/course-info-grid.uvue": 1,
   "pages/courses/components/course-progress-section.uvue": 1,
   "pages/courses/components/course-tab-bar.uvue": 1,
-  "pages/forum/components/forum-contribution-form.uvue": 3,
-  "pages/forum/components/forum-markdown-input.uvue": 4,
-  "pages/forum/components/forum-topic-actions.uvue": 1,
-  "pages/forum/components/forum-topic-card.uvue": 1,
   "pages/profile/components/activity-user-card.uvue": 1
 }

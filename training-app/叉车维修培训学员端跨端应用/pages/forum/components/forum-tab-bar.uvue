@@ -92,7 +92,7 @@
 
     .tab-text {
         font-size: 30rpx;
-        color: #666666;
+        color: $text-color-secondary;
     }
 
     .tab-text--active {
