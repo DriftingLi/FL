@@ -63,7 +63,7 @@
 
 <style lang="scss">
     .section {
-        background-color: #ffffff;
+        background-color: $card-bg;
         margin-top: 16rpx;
         padding: 32rpx;
     }
@@ -71,7 +71,7 @@
     .section-title {
         font-size: 30rpx;
         font-weight: bold;
-        color: #333333;
+        color: $text-color;
         margin-bottom: 20rpx;
     }
 
@@ -102,7 +102,7 @@
     }
 
     .file-icon-video {
-        background-color: #ffebee;
+        background-color: $danger-tint;
     }
 
     .file-icon-doc {
@@ -110,7 +110,7 @@
     }
 
     .file-icon-ppt {
-        background-color: #fff3e0;
+        background-color: $warning-tint;
     }
 
     .file-icon-image {
@@ -132,13 +132,13 @@
 
     .file-name {
         font-size: 28rpx;
-        color: #333333;
+        color: $text-color;
         margin-bottom: 4rpx;
     }
 
     .file-type {
         font-size: 22rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .file-arrow {

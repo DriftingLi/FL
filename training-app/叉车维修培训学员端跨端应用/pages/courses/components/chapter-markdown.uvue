@@ -42,7 +42,7 @@
 <style lang="scss">
     /* 只留容器样式：正文块的一切字号 / 行高 / 间距都由 MarkdownBlocks 的 $md-* 刻度提供 */
     .section {
-        background-color: #ffffff;
+        background-color: $card-bg;
         margin-top: 16rpx;
         padding: 32rpx;
     }

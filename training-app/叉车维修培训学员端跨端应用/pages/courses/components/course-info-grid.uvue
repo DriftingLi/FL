@@ -100,7 +100,7 @@
 <style lang="scss">
     /* ===== 课程信息网格 ===== */
     .info-grid {
-        background-color: #ffffff;
+        background-color: $card-bg;
         padding: 20rpx 32rpx 24rpx;
         border-top: 1rpx solid $bg-color;
         flex-direction: column;
@@ -114,7 +114,7 @@
     .info-summary-text {
         flex: 1;
         font-size: 24rpx;
-        color: #666666;
+        color: $text-color-secondary;
         line-height: 36rpx;
     }
 
@@ -146,19 +146,19 @@
 
     .info-label {
         font-size: 22rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         margin-bottom: 6rpx;
     }
 
     .info-value {
         font-size: 28rpx;
-        color: #333333;
+        color: $text-color;
         font-weight: 500;
     }
 
     .info-sub {
         font-size: 22rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         font-weight: normal;
     }
 
@@ -169,7 +169,7 @@
 
     .prereq-tag {
         font-size: 22rpx;
-        color: #909399;
+        color: $text-color-placeholder;
         background-color: $bg-color;
         padding: 6rpx 14rpx;
         border-radius: 6rpx;
@@ -187,6 +187,6 @@
 
     .info-collapse-text {
         font-size: 24rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 </style>

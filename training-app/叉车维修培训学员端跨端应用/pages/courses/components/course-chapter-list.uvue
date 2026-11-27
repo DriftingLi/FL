@@ -81,7 +81,7 @@
 <style lang="scss">
     /* ===== 通用 section ===== */
     .section {
-        background-color: #ffffff;
+        background-color: $card-bg;
         padding: 28rpx 32rpx;
     }
 
@@ -100,7 +100,7 @@
 
     .chapter-count {
         font-size: 24rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     /* ===== 章节列表 ===== */
@@ -126,7 +126,7 @@
     }
 
     .chapter-item.chapter-current {
-        background-color: #ecf5ff;
+        background-color: $primary-tint;
         margin: 0 -32rpx;
         padding: 24rpx 32rpx;
         border-radius: 12rpx;
@@ -169,19 +169,19 @@
 
     .chapter-title {
         font-size: 28rpx;
-        color: #333333;
+        color: $text-color;
         margin-bottom: 6rpx;
         lines: 2;
         text-overflow: ellipsis;
     }
 
     .chapter-title--done {
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .chapter-duration {
         font-size: 22rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .chapter-arrow {
@@ -193,7 +193,7 @@
 
     .empty-text {
         font-size: 28rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         margin-bottom: 24rpx;
     }
 
