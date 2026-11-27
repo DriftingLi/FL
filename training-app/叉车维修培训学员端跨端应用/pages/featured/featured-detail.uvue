@@ -290,11 +290,11 @@
 
     .loading-text {
         font-size: 28rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .article-wrap {
-        background-color: #ffffff;
+        background-color: $card-bg;
         padding: 32rpx;
     }
 
@@ -324,7 +324,7 @@
         margin-bottom: 24rpx;
         padding-bottom: 20rpx;
         border-bottom-width: 1rpx;
-        border-bottom-color: #f0f0f0;
+        border-bottom-color: $border-color-light;
     }
 
     .meta-category {
@@ -338,7 +338,7 @@
 
     .meta-text {
         font-size: 24rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         margin-right: 16rpx;
     }
 
@@ -378,7 +378,7 @@
 
     .docx-file {
         font-size: 28rpx;
-        color: #333333;
+        color: $text-color;
         lines: 2;
         text-overflow: ellipsis;
         text-align: center;
@@ -395,12 +395,12 @@
 
     .docx-btn-text {
         font-size: 28rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 
     .docx-tip {
         font-size: 22rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         margin-top: 20rpx;
         text-align: center;
         lines: 2;
@@ -415,7 +415,7 @@
 
     .body-hint-text {
         font-size: 26rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     /* 正文外链段（#2097）：无链接整段不渲染；样式落在 text 上（C1：App 端子节点不继承父样式） */
@@ -423,12 +423,12 @@
         margin-top: 24rpx;
         padding-top: 20rpx;
         border-top-width: 1rpx;
-        border-top-color: #f0f0f0;
+        border-top-color: $border-color-light;
     }
 
     .link-title {
         font-size: 24rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         margin-bottom: 8rpx;
     }
 
@@ -445,7 +445,7 @@
 
     .link-item-host {
         font-size: 22rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         margin-top: 4rpx;
     }
 
@@ -454,18 +454,18 @@
         margin-top: 40rpx;
         padding-top: 24rpx;
         border-top-width: 1rpx;
-        border-top-color: #f0f0f0;
+        border-top-color: $border-color-light;
     }
 
     .nav-item {
         padding: 20rpx 0;
         border-bottom-width: 1rpx;
-        border-bottom-color: #f0f0f0;
+        border-bottom-color: $border-color-light;
     }
 
     .nav-label {
         font-size: 22rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         margin-bottom: 6rpx;
     }
 
@@ -483,6 +483,6 @@
 
     .empty-text {
         font-size: 28rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 </style>

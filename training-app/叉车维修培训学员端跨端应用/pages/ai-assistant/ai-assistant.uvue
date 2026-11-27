@@ -1095,7 +1095,7 @@
 	.function-title {
 		/* #2520：原型功能名 ≈12px CSS（24rpx）；4 格后格宽 ≈86px，6 字标题仍单行 */
 		font-size: 24rpx;
-		color: #333333;
+		color: $text-color;
 		text-align: center;
 		/* 单行收敛：格宽只够 6 字（86px ≈ 7 字 @24rpx），限免小签再占一行后
 		   任何意外换行都会让四格标题基线错开 */
@@ -1110,7 +1110,7 @@
 	/* #2520：推荐问题卡按原型放宽（卡高 ≈ 100rpx、圆角 20rpx、行距 20rpx）。
 	   #2785：内距与卡间距收敛到 24/16 两档（原 32/28 内距、20 卡间距）。 */
 	.prompt-card {
-		background-color: #ffffff;
+		background-color: $card-bg;
 		border-radius: $radius-card;
 		padding: 24rpx;
 		margin-bottom: 16rpx;
@@ -1122,7 +1122,7 @@
 	.prompt-text {
 		flex: 1;
 		font-size: 28rpx;
-		color: #333333;
+		color: $text-color;
 	}
 
 	.prompt-arrow {
@@ -1162,16 +1162,16 @@
 		max-width: 600rpx;
 		padding: 20rpx 24rpx;
 		border-radius: 16rpx;
-		background-color: #ffffff;
+		background-color: $card-bg;
 	}
 
 	.message-bubble.thinking {
-		background-color: #f0f0f0;
+		background-color: $border-color-light;
 	}
 
 	.message-text {
 		font-size: 28rpx;
-		color: #333333;
+		color: $text-color;
 		line-height: 1.6;
 	}
 	/* 功能入口头部（#998）：宫格**移出滚动容器**后的容器，故本块只需处理外观（#2785 起不再有收起态），
@@ -1196,7 +1196,7 @@
 	.scope-chip {
 		flex-direction: row;
 		align-items: center;
-		background-color: #ffffff;
+		background-color: $card-bg;
 		border: 1rpx solid $border-color-light;
 		border-radius: $radius-pill;
 		padding: 10rpx 22rpx;
@@ -1220,7 +1220,7 @@
 
 	.scope-menu {
 		flex-direction: column;
-		background-color: #ffffff;
+		background-color: $card-bg;
 		border: 1rpx solid $border-color-light;
 		border-radius: $radius-md;
 		margin-bottom: 16rpx;
