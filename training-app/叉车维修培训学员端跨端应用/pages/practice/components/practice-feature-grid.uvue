@@ -1,28 +1,26 @@
 <template>
-    <!-- 功能入口网格 ——T06 手术自 practice.uvue 逐段搬出；B3（票 2519）按原型 473:4247 收口：
-         四入口直接坐在页面渐变上（原型无白卡容器），图标为插画位图（不入包，emoji 承载同位） -->
     <view class="feature-grid">
         <view class="feature-item" @click="onFeatureClick('past_paper')">
-            <view class="feature-icon-wrap feature-color-paper">
-                <text class="feature-icon-text">📄</text>
+            <view class="feature-icon-wrap">
+                <image class="feature-icon-image" src="/static/icons/practice/past-paper.png" mode="aspectFit" />
             </view>
             <text class="feature-name">历年真题</text>
         </view>
         <view class="feature-item" @click="onFeatureClick('mock_exam')">
-            <view class="feature-icon-wrap feature-color-mock">
-                <text class="feature-icon-text">📋</text>
+            <view class="feature-icon-wrap">
+                <image class="feature-icon-image" src="/static/icons/practice/mock-exam.png" mode="aspectFit" />
             </view>
             <text class="feature-name">套卷模拟</text>
         </view>
         <view class="feature-item" @click="onFeatureClick('level_exam')">
-            <view class="feature-icon-wrap feature-color-level">
-                <text class="feature-icon-text">🏆</text>
+            <view class="feature-icon-wrap">
+                <image class="feature-icon-image" src="/static/icons/practice/mock-contest.png" mode="aspectFit" />
             </view>
             <text class="feature-name">模考大赛</text>
         </view>
         <view class="feature-item" @click="onFeatureClick('wrong_question')">
-            <view class="feature-icon-wrap feature-color-wrong">
-                <text class="feature-icon-text">❌</text>
+            <view class="feature-icon-wrap">
+                <image class="feature-icon-image" src="/static/icons/profile/wrong-questions.png" mode="aspectFit" />
             </view>
             <text class="feature-name">错题本</text>
         </view>
@@ -39,7 +37,7 @@
 
 <style lang="scss">
     .feature-grid {
-        margin: 0 24rpx 28rpx 24rpx;
+        margin: 0 30rpx 28rpx 30rpx;
         padding: 8rpx 0 0;
         flex-direction: row;
         justify-content: space-around;
@@ -52,22 +50,16 @@
     }
 
     .feature-icon-wrap {
-        width: 88rpx;
-        height: 88rpx;
-        border-radius: 20rpx;
+        width: 100rpx;
+        height: 100rpx;
         align-items: center;
         justify-content: center;
         margin-bottom: 12rpx;
-        background-color: $card-bg;
     }
 
-    .feature-color-paper { background-color: $accent-yellow-tint; }
-    .feature-color-mock { background-color: $success-tint; }
-    .feature-color-level { background-color: $primary-tint; }
-    .feature-color-wrong { background-color: $danger-tint; }
-
-    .feature-icon-text {
-        font-size: 44rpx;
+    .feature-icon-image {
+        width: 100rpx;
+        height: 100rpx;
     }
 
     .feature-name {

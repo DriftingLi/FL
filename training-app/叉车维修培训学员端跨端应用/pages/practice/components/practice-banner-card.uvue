@@ -1,22 +1,6 @@
 <template>
-    <!-- 培训横幅卡片 ——T06 手术自 practice.uvue 逐段搬出；B3（票 2519）按原型 473:4247 收口：
-         原型此位是插画位图（包体积红线不入包，#2513），CSS 复刻同版式：左标题/副标题、右侧三枚蓝标签 -->
     <view class="banner-card">
-        <view class="banner-image-area">
-            <view class="banner-forklift">
-                <text class="banner-emoji">🏗️</text>
-            </view>
-            <view class="banner-overlay">
-                <text class="banner-title-cn">叉车维修培训</text>
-                <text class="banner-title-sub">规范检修 · 安全作业</text>
-            </view>
-            <!-- 右侧标签（原型只见实操教学 / 案例分析 / 考核发证三枚） -->
-            <view class="banner-tags">
-                <text class="banner-tag">实操教学</text>
-                <text class="banner-tag">案例分析</text>
-                <text class="banner-tag">考核发证</text>
-            </view>
-        </view>
+        <image class="banner-image" src="/static/practice-banner.png" mode="aspectFill" />
     </view>
 </template>
 
@@ -26,68 +10,13 @@
 
 <style lang="scss">
     .banner-card {
-        margin: 24rpx 24rpx;
-        background-color: $card-bg;
+        margin: 0 30rpx 24rpx;
         border-radius: $radius-card;
         overflow: hidden;
     }
 
-    .banner-image-area {
-        height: 260rpx;
-        background: linear-gradient(to bottom right, $gradient-mid, $primary-tint);
-        background-color: $gradient-mid;
-        flex-direction: row;
-        align-items: center;
-        position: relative;
-    }
-
-    .banner-forklift {
-        width: 180rpx;
-        height: 180rpx;
-        align-items: center;
-        justify-content: center;
-        margin-left: 32rpx;
-    }
-
-    .banner-emoji {
-        font-size: 100rpx;
-    }
-
-    .banner-overlay {
-        position: absolute;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        padding: 16rpx 28rpx;
-        flex-direction: column;
-    }
-
-    .banner-title-cn {
-        font-size: 34rpx;
-        font-weight: bold;
-        color: $text-strong;
-        margin-bottom: 4rpx;
-    }
-
-    .banner-title-sub {
-        font-size: 24rpx;
-        color: $text-color;
-    }
-
-    .banner-tags {
-        position: absolute;
-        right: 20rpx;
-        top: 20rpx;
-        flex-direction: column;
-    }
-
-    .banner-tag {
-        font-size: 20rpx;
-        color: $text-color-inverse;
-        background-color: $primary-color;
-        padding: 6rpx 16rpx;
-        border-radius: $radius-sm;
-        text-align: center;
-        margin-bottom: 8rpx;
+    .banner-image {
+        width: 100%;
+        height: 308rpx;
     }
 </style>

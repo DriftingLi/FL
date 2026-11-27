@@ -45,11 +45,11 @@
 
 <style lang="scss">
     .stat-bar {
-        margin: 0 24rpx 24rpx 24rpx;
+        margin: 0 30rpx 24rpx 30rpx;
         background: linear-gradient(to bottom, $primary-grad-start, $primary-grad-end);
         background-color: $primary-grad-start;
         border-radius: $radius-card;
-        padding: 16rpx;
+        padding: 12rpx;
         flex-direction: row;
         align-items: stretch;
     }
@@ -61,17 +61,17 @@
         justify-content: center;
         background-color: $card-bg;
         border-radius: $radius-md;
-        padding: 20rpx 0;
-        margin-right: 12rpx;
+        padding: 18rpx 0;
+        margin-right: 10rpx;
     }
 
     /* 末格不吃右距（无 gap 的等价写法；伪类选择器在 uvue 不可用，显式 class） */
     .stat-card-last { margin-right: 0; }
 
     .stat-num {
-        font-size: 34rpx;
+        font-size: 32rpx;
         font-weight: bold;
-        margin-bottom: 6rpx;
+        margin-bottom: 4rpx;
     }
 
     .stat-num-success { color: $success-color; }
@@ -88,7 +88,7 @@
     }
 
     .stat-report-text {
-        font-size: 26rpx;
+        font-size: 24rpx;
         color: $text-color;
         font-weight: 600;
     }
