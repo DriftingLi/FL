@@ -2,7 +2,7 @@
 #
 # 目的不是多一道手续，而是把「先开 PR 再补证据」这个导致首推必红的顺序堵在工具上——
 # 靠人自律守不住（#1770 的根因就是顺序，不是人不认真）。判据在
-# .github/scripts/lib/gate-validator.mjs，本脚本只做：预检 → 补 ③ run 链接 → gh pr create。
+# .github/scripts/lib/gate-validator.mjs，本脚本只做：预检 → gh pr create。
 #
 # 用法：
 #   pwsh -NoProfile -File scripts/submit-pr.ps1 -Title "fix(ci): ..." -BodyFile .scratch/pr-body.md
