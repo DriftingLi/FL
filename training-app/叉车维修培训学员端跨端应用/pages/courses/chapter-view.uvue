@@ -381,7 +381,7 @@ import { goBack } from '../../utils/navigation'
        未收藏态渲染 '♡' 而不是空串 —— 空串观感上等于「这页没有收藏功能」（#1087 的教训） */
     .favorite-icon {
         font-size: $font-size-2xl;
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 
     .content-scroll {
@@ -391,7 +391,7 @@ import { goBack } from '../../utils/navigation'
 
     /* 章节标题区 */
     .chapter-header {
-        background-color: #ffffff;
+        background-color: $card-bg;
         padding: 32rpx;
         flex-direction: column;
     }
@@ -436,7 +436,7 @@ import { goBack } from '../../utils/navigation'
 
     .chapter-duration {
         font-size: 24rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     /* 加载/空状态 */
@@ -454,12 +454,12 @@ import { goBack } from '../../utils/navigation'
 
     .loading-text {
         font-size: 28rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .empty-text {
         font-size: 28rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         margin-bottom: 24rpx;
     }
 
@@ -476,7 +476,7 @@ import { goBack } from '../../utils/navigation'
 
     .retry-btn-text {
         font-size: 28rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 
     /* #1421：未解锁支「去解锁」出路（与 retry-btn 同形态，但语义是跳回详情兑换面而非重试本请求） */
@@ -489,7 +489,7 @@ import { goBack } from '../../utils/navigation'
 
     .unlock-btn-text {
         font-size: 28rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 
     /* 标记完成（#1111）：与页面骨架同构的底部主操作，非 hint 文本 */
@@ -512,6 +512,6 @@ import { goBack } from '../../utils/navigation'
 
     .mark-done-text {
         font-size: 30rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 </style>
