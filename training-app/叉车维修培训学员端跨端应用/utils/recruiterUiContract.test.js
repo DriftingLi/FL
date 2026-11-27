@@ -182,7 +182,9 @@ describe('§1.6 白名单文件自检', () => {
     // #2861 语义色收敛把 #22A45D/#F0FFF0 的最后一处承载收到 forum-resource-panel（资源卡装饰底/标题），
     // #4CAF50/#F44336 收到 forum-reply-list（头像占位底/点赞强调）——这两个私有子件补入扫描面（只用于死条目判定，
     // H1 逐页判定面不变；它们的裸 hex 归 utils/privateComponentUiContract.test.js 的同族扫描）
-    const all = PAGES.concat(BATCH2_PAGES, BATCH4_PAGES, BATCH5_PAGES, BATCH6_PAGES, ['components/ai-chat/ai-chat-input.uvue', 'components/ai-chat/ai-chat-pro-sheet.uvue', 'pages/forum/components/forum-topic-header.uvue', 'pages/forum/components/forum-topic-actions.uvue', 'pages/forum/components/forum-more-menu.uvue', 'pages/forum/components/forum-resource-panel.uvue', 'pages/forum/components/forum-reply-list.uvue'])
+    // #2910 缺口裁决入册的 10 个装饰值承载分散在 exam-action-bar / wrong-question-card / activity-topic-card /
+    // forum-topic-card / dashboard-news-section 五个私有子件 —— 补入扫描面（同上，只用于死条目判定）
+    const all = PAGES.concat(BATCH2_PAGES, BATCH4_PAGES, BATCH5_PAGES, BATCH6_PAGES, ['components/ai-chat/ai-chat-input.uvue', 'components/ai-chat/ai-chat-pro-sheet.uvue', 'pages/forum/components/forum-topic-header.uvue', 'pages/forum/components/forum-topic-actions.uvue', 'pages/forum/components/forum-more-menu.uvue', 'pages/forum/components/forum-resource-panel.uvue', 'pages/forum/components/forum-reply-list.uvue', 'pages/forum/components/forum-topic-card.uvue', 'pages/exam/components/exam-action-bar.uvue', 'pages/profile/components/wrong-question-card.uvue', 'pages/profile/components/activity-topic-card.uvue', 'pages/dashboard/components/dashboard-news-section.uvue'])
       .map((p) => styleBlock(read(p)).toUpperCase())
       .join('\n');
     for (const value of Object.keys(WHITELIST)) {
