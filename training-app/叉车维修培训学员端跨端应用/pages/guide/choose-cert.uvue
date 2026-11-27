@@ -243,17 +243,17 @@
     .guide-hi {
         font-size: 64rpx;
         font-weight: bold;
-        color: #FFFFFF;
+        color: $text-color-inverse;
     }
 
     .guide-ask {
         font-size: 46rpx;
-        color: #FFFFFF;
+        color: $text-color-inverse;
     }
 
     .guide-tip {
         font-size: 38rpx;
-        color: #FFFFFF;
+        color: $text-color-inverse;
     }
 
     .guide-mascot-box {
@@ -282,6 +282,6 @@
 
     .guide-close-icon {
         font-size: 32rpx;
-        color: #FFFFFF;
+        color: $text-color-inverse;
     }
 </style>
