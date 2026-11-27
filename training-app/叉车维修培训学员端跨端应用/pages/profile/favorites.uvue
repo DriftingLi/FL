@@ -405,7 +405,7 @@ import { goBack } from '../../utils/navigation'
     }
 
     .fav-card {
-        background-color: #ffffff;
+        background-color: $text-color-inverse;
         border-radius: 16rpx;
         padding: 24rpx;
         margin-bottom: 16rpx;
@@ -454,7 +454,7 @@ import { goBack } from '../../utils/navigation'
 
     .fav-type-tag {
         font-size: 20rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
         padding: 4rpx 10rpx;
         border-radius: 6rpx;
         margin-right: 12rpx;
@@ -463,7 +463,7 @@ import { goBack } from '../../utils/navigation'
 
     .fav-title {
         font-size: 28rpx;
-        color: #333333;
+        color: $text-color;
         font-weight: 500;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -473,7 +473,7 @@ import { goBack } from '../../utils/navigation'
 
     .fav-time {
         font-size: 22rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         margin-top: 4rpx;
     }
 
@@ -505,7 +505,7 @@ import { goBack } from '../../utils/navigation'
 
     .empty-text {
         font-size: 28rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .loading-more {
@@ -515,7 +515,7 @@ import { goBack } from '../../utils/navigation'
 
     .loading-text {
         font-size: 24rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     /* 职位条目第二行「企业 · 地区」（#1946）：文字类样式必须落 <text>，故挂在 .fav-sub 上 */

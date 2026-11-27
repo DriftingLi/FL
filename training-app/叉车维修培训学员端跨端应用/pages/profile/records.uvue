@@ -238,8 +238,8 @@ import { goBack } from '../../utils/navigation'
     }
 
     .filter-bar {
-        background-color: #ffffff;
-        border-bottom: 1rpx solid #f0f0f0;
+        background-color: $text-color-inverse;
+        border-bottom: 1rpx solid $border-color-light;
     }
 
     .filter-scroll {
@@ -262,14 +262,14 @@ import { goBack } from '../../utils/navigation'
 
     .filter-chip-text {
         font-size: 26rpx;
-        color: #666666;
+        color: $text-color-secondary;
     }
 
     /* 关系选择器（父类 + 空格 + 子类）在 UCSS 里需运行时动态计算、有额外性能损耗，
        HarmonyOS Vapor 不支持；祖先为复合类（两个类名连写）再跟后代时，编译产物是
        含空格的死键、永远匹配不上 ⇒ 一律落成挂在元素自身的平类 */
     .filter-chip-text--active {
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 
     .summary {
@@ -280,7 +280,7 @@ import { goBack } from '../../utils/navigation'
 
     .summary-text {
         font-size: 26rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .summary-range {
@@ -291,7 +291,7 @@ import { goBack } from '../../utils/navigation'
 
     /* 统计卡片 */
     .stats-card {
-        background-color: #ffffff;
+        background-color: $text-color-inverse;
         margin: 0 24rpx 16rpx;
         border-radius: 16rpx;
         padding: 24rpx 0;
@@ -318,7 +318,7 @@ import { goBack } from '../../utils/navigation'
 
     .stats-label {
         font-size: 22rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .stats-divider {
@@ -338,7 +338,7 @@ import { goBack } from '../../utils/navigation'
     }
 
     .record-card {
-        background-color: #ffffff;
+        background-color: $text-color-inverse;
         border-radius: 16rpx;
         padding: 24rpx;
         margin-bottom: 16rpx;
@@ -357,7 +357,7 @@ import { goBack } from '../../utils/navigation'
         flex: 1;
         font-size: 30rpx;
         font-weight: bold;
-        color: #333333;
+        color: $text-color;
         lines: 1;
         text-overflow: ellipsis;
         margin-right: 16rpx;
@@ -365,7 +365,7 @@ import { goBack } from '../../utils/navigation'
 
     .record-date {
         font-size: 24rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .record-bottom {
@@ -377,7 +377,7 @@ import { goBack } from '../../utils/navigation'
     .record-chapter {
         flex: 1;
         font-size: 26rpx;
-        color: #666666;
+        color: $text-color-secondary;
         lines: 1;
         text-overflow: ellipsis;
         margin-right: 16rpx;
@@ -396,7 +396,7 @@ import { goBack } from '../../utils/navigation'
 
     .empty-text {
         font-size: 28rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .loading-more {
@@ -406,6 +406,6 @@ import { goBack } from '../../utils/navigation'
 
     .loading-text {
         font-size: 24rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 </style>
