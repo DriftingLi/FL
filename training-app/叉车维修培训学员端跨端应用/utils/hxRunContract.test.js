@@ -343,7 +343,10 @@ describe('日常增量运行契约（scripts/hx-run.ps1，2026-09-12）', () => 
       ['C2', '混入强杀主程序', (s) => ({ ...s, script: s.script + '\nStop-Process -Name HBuilderX -Force\n' })],
       ['C2', '混入 taskkill', (s) => ({ ...s, script: s.script + '\ntaskkill /IM HBuilderX.exe /F\n' })],
       ['C2', '混入进程对象 .Kill()', (s) => ({ ...s, script: s.script + '\n$proc.Kill()\n' })],
-      ['C3', 'dot-source 被删', (s) => ({ ...s, script: s.script.replace(/lib\\hx-busy\.ps1/g, 'other.ps1') })],
+      // 注入必须打中 C3 规则的**全部**形态：脚本里既有 `lib\hx-busy.ps1`（反斜杠）也有
+      // `lib/hx-busy.ps1`（斜杠，2026-11-26 M2 新增注释里的写法）⇒ 只替换反斜杠会让规则仍命中、
+      // 注入失效（期望 hit=true 却得 false）。用与 C3 同形的字符类，别回退成正则转义硬编码。
+      ['C3', 'dot-source 被删', (s) => ({ ...s, script: s.script.replace(/lib[\\/]hx-busy\.ps1/g, 'other.ps1') })],
       ['C3', 'Wait-HxFree 被删', (s) => ({ ...s, script: s.script.replace(/Wait-HxFree -CliExe/g, 'WaitNothing -CliExe') })],
       ['C3', '锁没在 finally 里释放', (s) => ({ ...s, script: s.script.replace(/Release-HxLock/g, 'ReleaseNothing') })],
       ['C4', '忙等待上限被改大', (s) => ({ ...s, script: s.script.replace('[int]$WaitSeconds = 120', '[int]$WaitSeconds = 3600') })],

@@ -197,14 +197,14 @@
 <style lang="scss">
     /* 回复列表 */
     .replies-section {
-        background-color: #ffffff;
+        background-color: $card-bg;
         padding: 32rpx;
         flex-direction: column;
     }
 
     .replies-header {
         padding-bottom: 24rpx;
-        border-bottom: 1rpx solid #f0f0f0;
+        border-bottom: 1rpx solid $border-color-light;
         margin-bottom: 16rpx;
         flex-direction: column;
     }
@@ -212,7 +212,7 @@
     .replies-title {
         font-size: 30rpx;
         font-weight: bold;
-        color: #333333;
+        color: $text-color;
         margin-bottom: 16rpx;
     }
 
@@ -239,7 +239,7 @@
 
     .reply-sort-text {
         font-size: 24rpx;
-        color: #666666;
+        color: $text-color-secondary;
     }
 
     .reply-sort-text.active {
@@ -254,7 +254,7 @@
 
     .empty-replies-text {
         font-size: 26rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .reply-card {
@@ -292,14 +292,14 @@
 
     .reply-author {
         font-size: 26rpx;
-        color: #333333;
+        color: $text-color;
         font-weight: bold;
         margin-bottom: 4rpx;
     }
 
     .reply-time {
         font-size: 22rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .reply-delete {
@@ -313,7 +313,7 @@
 
     .reply-content {
         font-size: 28rpx;
-        color: #333333;
+        color: $text-color;
         line-height: 1.6;
         padding-left: $md-reply-indent;
     }
@@ -349,7 +349,7 @@
         width: 200rpx;
         height: 200rpx;
         border-radius: 12rpx;
-        background-color: #f0f0f0;
+        background-color: $border-color-light;
     }
 
     /* 关系选择器（父类 + 空格 + 子类）在 UCSS 里需运行时动态计算、有额外性能损耗，
@@ -366,7 +366,7 @@
 
     .reply-more-text {
         font-size: 24rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     /* 回复操作行 */
@@ -380,7 +380,7 @@
 
     .reply-action-time {
         font-size: 22rpx;
-        color: #cccccc;
+        color: $text-disabled;
     }
 
     /* 署名行左侧：相对时间 + 属地（ADR-0045，属地单独成节，空则不渲染） */
@@ -391,7 +391,7 @@
 
     .reply-region {
         font-size: 22rpx;
-        color: #cccccc;
+        color: $text-disabled;
         margin-left: 8rpx;
     }
 
@@ -426,21 +426,21 @@
 
     .reply-like-icon {
         font-size: 26rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         margin-right: 6rpx;
     }
 
     .reply-like-icon-liked {
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 
     .reply-like-count {
         font-size: 22rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .reply-like-count-liked {
-        color: #ffffff;
+        color: $text-color-inverse;
         font-weight: bold;
     }
 
@@ -481,7 +481,7 @@
         background-color: $bg-color;
         padding: 8rpx 24rpx;
         border-radius: 24rpx;
-        border: 1rpx solid #cccccc;
+        border: 1rpx solid $text-disabled;
         align-items: center;
         justify-content: center;
         flex-direction: row;
@@ -489,7 +489,7 @@
 
     .reply-cancel-accept-btn-text {
         font-size: 24rpx;
-        color: #666666;
+        color: $text-color-secondary;
     }
 
     /* 加载更多 / 到底（ADR-0042 分页） */
@@ -520,6 +520,6 @@
 
     .replies-end-text {
         font-size: 24rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 </style>

@@ -59,7 +59,7 @@
                     <view v-for="(e, ei) in g.entries" :key="e.id" class="entry">
                         <view class="entry-head" @click="onToggle(e.id)">
                             <text class="entry-question">{{ e.question }}</text>
-                            <text class="entry-arrow">{{ isExpanded(e.id) ? '▾' : '▸' }}</text>
+                            <image class="entry-arrow" :class="{ 'entry-arrow--expanded': isExpanded(e.id) }" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
                         </view>
                         <view v-if="isExpanded(e.id)" class="entry-answer-box">
                             <text class="entry-answer">{{ e.answer }}</text>
@@ -76,19 +76,19 @@
                     <image class="service-icon" src="/static/icons/help-center/feedback-write.png" mode="aspectFit" />
                     <text class="service-label">意见反馈</text>
                     <text class="service-desc">问题提交后有落点，可附图</text>
-                    <text class="service-arrow">▸</text>
+                    <image class="service-arrow" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
                 </view>
                 <view class="service-row" @click="onToggleHistory">
                     <image class="service-icon" src="/static/icons/help-center/feedback-records.png" mode="aspectFit" />
                     <text class="service-label">我的反馈</text>
                     <text class="service-desc">查看处理状态</text>
-                    <text class="service-arrow">{{ historyVisible ? '▾' : '▸' }}</text>
+                    <image class="service-arrow" :class="{ 'service-arrow--expanded': historyVisible }" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
                 </view>
                 <view class="service-row" @click="onOpenCustomerService">
                     <image class="service-icon" src="/static/icons/help-center/headset.png" mode="aspectFit" />
                     <text class="service-label">在线客服</text>
                     <text class="service-desc">AI 学助手，随时可问</text>
-                    <text class="service-arrow">▸</text>
+                    <image class="service-arrow" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
                 </view>
 
                 <!-- 历史列表：点「我的反馈」就地展开，不另开一页（提交成功自动重拉） -->
@@ -425,19 +425,19 @@ import { goBack } from '../../utils/navigation'
 
     .state-text {
         font-size: 28rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .state-btn {
         background-color: $primary-color;
-        padding: 16rpx 48rpx;
+        padding: 16rpx $spacing-xl;
         border-radius: 32rpx;
         margin-top: 32rpx;
     }
 
     .state-btn-text {
         font-size: 28rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 
     /* 问答分组 */
@@ -477,7 +477,8 @@ import { goBack } from '../../utils/navigation'
         color: $text-color;
     }
 
-    .entry-arrow { width: 32rpx; flex-shrink: 0; font-size: 28rpx; line-height: 32rpx; text-align: center; color: $text-color-placeholder; margin-left: 16rpx; }
+    .entry-arrow { width: 32rpx; height: 32rpx; flex-shrink: 0; margin-left: 16rpx; }
+    .entry-arrow--expanded { transform: rotate(90deg); }
 
     .entry-answer-box {
         flex-direction: column;
@@ -490,7 +491,7 @@ import { goBack } from '../../utils/navigation'
     /* 答案：纯文本、原样换行（不引 Markdown 渲染口径） */
     .entry-answer {
         font-size: 26rpx;
-        color: #666666;
+        color: $text-color-secondary;
         line-height: 42rpx;
     }
 
@@ -534,10 +535,11 @@ import { goBack } from '../../utils/navigation'
     .service-desc {
         flex: 1;
         font-size: 24rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
-    .service-arrow { width: 32rpx; flex-shrink: 0; font-size: 28rpx; line-height: 32rpx; text-align: center; color: #999999; margin-left: 16rpx; }
+    .service-arrow { width: 32rpx; height: 32rpx; flex-shrink: 0; margin-left: 16rpx; }
+    .service-arrow--expanded { transform: rotate(90deg); }
 
     .history-box {
         flex-direction: column;
@@ -551,7 +553,7 @@ import { goBack } from '../../utils/navigation'
 
     .history-tip-text {
         font-size: 26rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .history-item {
@@ -580,18 +582,18 @@ import { goBack } from '../../utils/navigation'
 
     .history-time {
         font-size: 22rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .history-content {
         font-size: 26rpx;
-        color: #333333;
+        color: $text-color;
         line-height: 40rpx;
     }
 
     .history-contact {
         font-size: 24rpx;
-        color: #666666;
+        color: $text-color-secondary;
         padding-top: 12rpx;
     }
 </style>

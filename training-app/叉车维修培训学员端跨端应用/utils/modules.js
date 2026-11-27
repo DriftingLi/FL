@@ -68,9 +68,7 @@ const MAX_DEPTH = 2;
 const INFRA = {
   /** 整目录都属基础设施：这些目录里的源文件不归任何模块（`uni_modules` 是 vendor 面） */
   dirs: [
-    'components/app-badge',
     'components/app-button',
-    'components/app-card',
     'components/app-chip',
     'components/app-empty-state',
     // 'components/app-icon-button' —— 票 2730：88rpx 命中盒 / 64rpx 可见承载面 / 50% 圆角的
@@ -78,7 +76,6 @@ const INFRA = {
     // `components/app-*` 整族口径登记为 INFRA。
     'components/app-icon-button',
     'components/app-level-badge',
-    'components/app-list-item',
     'components/app-nav-bar',
     'components/app-tabs',
     // 'components/login-agreement' —— #1478：协议勾选 + 注册引导的展示件，被 index（着陆页）与
@@ -228,13 +225,16 @@ const MODULES = {
   },
 
   dashboard: {
-    /** #1395：cert-selector 是 dashboard 与 guide 共挂的共享领域件，住 `components/` 而非模块目录 */
-    extraDirs: ['components/cert-selector'],
+    /**
+     * #1395：cert-selector 是共享领域件，住 `components/` 而非模块目录；
+     * #2907：证件选择只剩整页一条路径 ⇒ 首页不再挂它，本域归属随消费面移到 `guide`
+     * （首页只读当前证件显示，不再有选证交互面）。
+     */
+    extraDirs: [],
     files: [
       'api/credential.uts',
       'api/featured.uts',
       'api/notification.uts',
-      'components/cert-selector/cert-selector.uvue',
       'pages/dashboard/components/dashboard-continue-card.uvue',
       'pages/dashboard/components/dashboard-course-section.uvue',
       'pages/dashboard/components/dashboard-menu-grid.uvue',
@@ -243,10 +243,11 @@ const MODULES = {
       'pages/dashboard/composables/use-dashboard-feeds.uts',
       'pages/dashboard/dashboard.uvue',
     ],
-    extractDirs: ['components/cert-selector', 'pages/dashboard/components', 'pages/dashboard/composables'],
+    extractDirs: ['pages/dashboard/components', 'pages/dashboard/composables'],
     /**
      * 两侧登记在此合并（#1401 / #1402 都改过这一行）：
      * - `guide` 自 #1395 起消费 `api/credential.uts` 与 `components/cert-selector/`（引导页选证单源化）；
+     *   #2907 起它是**唯一**消费面（首页浮层退役），故 cert-selector 的模块归属也落在 `guide`；
      * - `profile` 随 #1396 删除 credential-switch.uvue 退出消费者面（它曾是 profile 消费
      *   `api/credential.uts` 的唯一接线；A9 实测面对账逼登记诚实）。
      * - `jobs` 自票 1945 起消费 `api/credential.uts`（职位广场证件筛选组的选项=证件字典单源）。
@@ -385,12 +386,15 @@ const MODULES = {
   },
 
   guide: {
-    extraDirs: [],
+    /** #2907：cert-selector 的唯一挂载点在本域整页（首页浮层退役后由它独占归属） */
+    extraDirs: ['components/cert-selector'],
     files: [
+      'components/cert-selector/cert-selector.uvue',
       'pages/guide/composables/useChooseCertGuide.uts',
+      'pages/guide/composables/useChooseCertSelection.uts',
       'pages/guide/choose-cert.uvue',
     ],
-    extractDirs: ['pages/guide/composables'],
+    extractDirs: ['components/cert-selector', 'pages/guide/composables'],
     crossModuleConsumers: [],
     budget: BUDGET,
     budgetOverrides: {},

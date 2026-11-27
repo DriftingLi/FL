@@ -159,7 +159,7 @@
 
     /* 表单区（资源投稿 / 反馈模式沿用） */
     .form-section {
-        background-color: #ffffff;
+        background-color: $text-color-inverse;
         margin: 24rpx;
         border-radius: 16rpx;
         padding: 32rpx;
@@ -169,7 +169,7 @@
 
     /* 发帖单卡（#2689 决策 1）：标题 / 正文 / 工具栏 / 图片 / 提示 / 发布按钮同处一张卡 */
     .post-card {
-        background-color: #ffffff;
+        background-color: $text-color-inverse;
         margin: 24rpx;
         border-radius: 16rpx;
         padding: 32rpx;
@@ -185,7 +185,7 @@
     .form-label {
         font-size: 28rpx;
         font-weight: bold;
-        color: #333333;
+        color: $text-color;
         margin-bottom: 16rpx;
     }
 
@@ -195,13 +195,13 @@
         border-radius: 12rpx;
         padding: 0 24rpx;
         font-size: 30rpx;
-        color: #333333;
+        color: $text-color;
         border: 1rpx solid #e0e0e0;
     }
 
     .form-counter {
         font-size: 22rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         text-align: right;
         margin-top: 8rpx;
     }
@@ -211,13 +211,13 @@
         height: 88rpx;
         font-size: 34rpx;
         font-weight: bold;
-        color: #333333;
+        color: $text-color;
         margin-top: 16rpx;
     }
 
     .post-title-counter {
         font-size: 22rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         text-align: right;
         margin-top: 8rpx;
     }
@@ -247,7 +247,7 @@
 
     .category-chip-text {
         font-size: 26rpx;
-        color: #666666;
+        color: $text-color-secondary;
     }
 
     .category-chip-text.active {
@@ -276,12 +276,12 @@
     }
 
     .submit-btn.disabled {
-        background-color: #cccccc;
+        background-color: $text-disabled;
     }
 
     .submit-btn-text {
         font-size: 32rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
         font-weight: bold;
     }
 
@@ -293,7 +293,7 @@
         border-radius: 12rpx;
         padding: 16rpx 24rpx;
         font-size: 30rpx;
-        color: #333333;
+        color: $text-color;
         border: 1rpx solid #e0e0e0;
     }
 
@@ -316,13 +316,13 @@
     .feedback-done-title {
         font-size: 36rpx;
         font-weight: bold;
-        color: #333333;
+        color: $text-color;
         margin-top: 24rpx;
     }
 
     .feedback-done-sub {
         font-size: 26rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         margin-top: 8rpx;
     }
 
@@ -337,7 +337,7 @@
 
     .feedback-done-btn-text {
         font-size: 28rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
         font-weight: bold;
     }
 </style>

@@ -43,7 +43,7 @@
     }
 
     .detail-card {
-        background-color: #ffffff;
+        background-color: $card-bg;
         border-radius: 16rpx;
         padding: 24rpx;
         margin-bottom: 16rpx;
@@ -59,7 +59,7 @@
 
     .detail-type-tag {
         font-size: 20rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
         background-color: $primary-color;
         padding: 4rpx 12rpx;
         border-radius: 6rpx;
@@ -84,14 +84,14 @@
 
     .detail-title {
         font-size: 28rpx;
-        color: #333333;
+        color: $text-color;
         line-height: 44rpx;
         margin-bottom: 16rpx;
     }
 
     .detail-answers {
         flex-direction: column;
-        background-color: #fafafa;
+        background-color: $bg-color;
         padding: 16rpx;
         border-radius: 8rpx;
     }
@@ -104,7 +104,7 @@
 
     .detail-answer-label {
         font-size: 24rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         margin-right: 8rpx;
     }
 

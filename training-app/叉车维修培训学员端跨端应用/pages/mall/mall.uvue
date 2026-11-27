@@ -296,13 +296,13 @@
     .retry-btn {
         background-color: $primary-color;
         border-radius: 32rpx;
-        padding: 16rpx 48rpx;
+        padding: 16rpx $spacing-xl;
         margin-top: 24rpx;
     }
 
     .retry-btn-text {
         font-size: 28rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 
     /* ===== 加载更多 ===== */

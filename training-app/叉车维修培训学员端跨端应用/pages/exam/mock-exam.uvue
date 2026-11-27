@@ -128,7 +128,7 @@ import { goBack } from '../../utils/navigation'
            低于 150rpx 预算与典型可用槽宽约 164rpx（顶部布局调研 §4.2 记 32rpx 时约 150rpx 临界） */
         font-size: 26rpx;
         font-weight: bold;
-        color: #ffffff;
+        color: $text-color-inverse;
         font-family: monospace;
     }
 
@@ -169,7 +169,7 @@ import { goBack } from '../../utils/navigation'
 
     .progress-text {
         font-size: 24rpx;
-        color: #666666;
+        color: $text-color-secondary;
         min-width: 80rpx;
         text-align: right;
     }
@@ -194,7 +194,7 @@ import { goBack } from '../../utils/navigation'
         width: 56rpx;
         height: 56rpx;
         border-radius: 28rpx;
-        background-color: #ffffff;
+        background-color: $card-bg;
         border: 2rpx solid #e0e0e0;
         align-items: center;
         justify-content: center;
@@ -212,17 +212,17 @@ import { goBack } from '../../utils/navigation'
     }
 
     .palette-chip.palette-unanswered {
-        background-color: #ffffff;
+        background-color: $card-bg;
         border-color: #e0e0e0;
     }
 
     .palette-chip-text {
         font-size: 24rpx;
-        color: #666666;
+        color: $text-color-secondary;
     }
 
     .palette-text-current {
-        color: #ffffff;
+        color: $text-color-inverse;
         font-weight: bold;
     }
 
@@ -231,7 +231,7 @@ import { goBack } from '../../utils/navigation'
     }
 
     .palette-text-unanswered {
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     /* 已答统计 */
@@ -241,7 +241,7 @@ import { goBack } from '../../utils/navigation'
 
     .answer-summary-text {
         font-size: 24rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     /* 加载/空状态 */
@@ -259,23 +259,23 @@ import { goBack } from '../../utils/navigation'
 
     .loading-text {
         font-size: 28rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .empty-text {
         font-size: 28rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .retry-btn {
         margin-top: 24rpx;
-        padding: 16rpx 48rpx;
+        padding: 16rpx $spacing-xl;
         background-color: $primary-color;
         border-radius: 40rpx;
     }
 
     .retry-btn-text {
         font-size: 28rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 </style>

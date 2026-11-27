@@ -343,7 +343,7 @@
     }
 
     .category-card--active {
-        border-color: #FFFFFF;
+        border-color: $card-bg;
     }
 
     .category-card-icon {
@@ -370,7 +370,7 @@
     }
 
     .building-card {
-        background-color: #ffffff;
+        background-color: $card-bg;
         border-radius: 20rpx;
         padding: 60rpx 40rpx;
         align-items: center;
@@ -385,13 +385,13 @@
     .building-title {
         font-size: 32rpx;
         font-weight: 600;
-        color: #333333;
+        color: $text-color;
         margin-bottom: 16rpx;
     }
 
     .building-desc {
         font-size: 26rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         text-align: center;
     }
 
@@ -526,7 +526,7 @@
        #2518 刀3：原型为实心主色胶囊（高 66rpx、radius 33rpx、白字 24rpx），非描边款 */
     .more-btn-wrap {
         align-items: center;
-        padding: 24rpx 38rpx 48rpx;
+        padding: 24rpx 38rpx $spacing-xl;
     }
 
     /* 票 2730 第 1 项：按钮本体仍是 66rpx 高，命中区由外层 88rpx 盒撑开（§5.11）。 */
@@ -560,29 +560,29 @@
 
     .empty-text {
         font-size: 28rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     /* #2443：空态出路提示（比主文案小一号；色沿用 $text-color-placeholder(#999999)，不自造灰） */
     .empty-hint {
         font-size: 24rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         margin-top: 12rpx;
         text-align: center;
-        padding: 0 48rpx;
+        padding: 0 $spacing-xl;
     }
 
     /* #1331：失败态重试位（与 course-detail / chapter-view 的 retry-btn 同款形态） */
     .retry-btn {
         background-color: $primary-color;
         border-radius: 32rpx;
-        padding: 16rpx 48rpx;
+        padding: 16rpx $spacing-xl;
         margin-top: 24rpx;
     }
 
     .retry-btn-text {
         font-size: 28rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 
     .loading-more {
@@ -592,7 +592,7 @@
 
     .loading-text {
         font-size: 24rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .ml-20 { margin-left: 20rpx; }

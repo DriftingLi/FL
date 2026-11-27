@@ -7,8 +7,10 @@
  * - 主色字面值不豁免（#239EDD 必须写 $primary-color）。
  *
  * 机检消费方：utils/recruiterUiContract.test.js（批1 招聘端 9 页）、
- * utils/batch2UiContract.test.js（批2 学员端 4 页，N02 白底套收口 #1605）。
- * 后续批（3–6）铺开时把 pages/** 全量纳入扫描面，白名单跟着扩。
+ * utils/batch2UiContract.test.js（批2 学员端 4 页，N02 白底套收口 #1605）、
+ * utils/batch4UiContract.test.js（§1.6 文件级自检：白名单值 ∩ token 值 = ∅ + 死条目 = 0）。
+ * 两条自检的扫描面自 #2863 起是**全层并集**（pages/** + components/** + App.uvue，style 块剥注释后比对），
+ * 不再逐票往手工并集里补件——补漏一次就是一个死条目被静默判活。
  */
 
 module.exports = {
@@ -19,11 +21,11 @@ module.exports = {
     '#F0FFF0': 'pages/forum/components/forum-resource-panel.uvue res-card-bg-green——资源卡装饰浅绿底（#2861 裁：非成功语义位）；原 recruiter 两处成功浅底已改走 $success-tint',
     '#FF6B35': 'pages/recruiter/resumes.uvue 薪资/筛选徽标 + resume-detail.uvue 薪资强调——强调橙，token 表无对应（$warning-color #ff9900 偏黄）',
     '#EEF3FD': 'pages/recruiter/applications.uvue tag-applied 主色浅底——$primary-tint(#ebf5ff) 近似但值不等，视觉回归风险待真机裁',
-    '#E0E0E0': 'pages/recruiter/resume-detail.uvue btn-secondary 边框（批2 #1606 并入；B3 #2519 起 practice-do 已 token 化不再持此值）——$border-color(#e5e5e5) 近似但值不等，待真机裁',
-    '#1565C0': 'pages/guide/choose-cert.uvue btn-confirm 渐变深端与实底兜底 + components/cert-selector.uvue 同款按钮——主色深阶，token 表无深阶位；与 points-detail.uvue 会员卡渐变尾色（linear-gradient(#2979ff,#1565c0)）同值（先例）',
-    '#888888': 'pages/guide/choose-cert.uvue province-label/error-text 次要说明文字——\-color-secondary(#666666) 偏深、\-color-placeholder(#999999) 偏浅，中间灰无 token；收敛待灰阶 token 票裁',
-    '#F0F2F5': 'pages/guide/choose-cert.uvue province-bar 胶囊底（\-color(#F8F8F8)/\-color-light(#F0F0F0) 均不等，冷灰胶囊底）——待真机裁（#2524 起 resume-edit 分割线已改走 \-color-light）',
-    '#EEEEEE': 'batch2 profile 两页分割线/边框——\-color(#e5e5e5)/\-color-light(#f0f0f0) 之间的更浅边框，待真机裁（#2524 起 job-list 的边框已改走 token）',
+    '#E0E0E0': 'pages/recruiter/resume-detail.uvue btn-secondary 边框（批2 #1606 并入；B3 #2519 起 practice-do 已 token 化不再持此值）——$border-color(#D9D9D9) 近似但值不等，待真机裁',
+    '#1565C0': 'pages/guide/choose-cert.uvue btn-confirm 渐变深端与实底兜底——主色深阶，token 表无深阶位；与 points-detail.uvue 会员卡渐变尾色（linear-gradient(#2979ff,#1565c0)）同值（先例）；#2907 起 cert-selector 的浮层完成条退役，本值只剩整页这一处承载',
+    '#888888': 'pages/guide/choose-cert.uvue province-label/error-text 次要说明文字——$text-color-secondary(#666666) 偏深、$text-color-placeholder(#999999) 偏浅，中间灰无 token；收敛待灰阶 token 票裁',
+    '#F0F2F5': 'pages/guide/choose-cert.uvue province-bar 胶囊底（$bg-color(#F5F5F5)/$border-color-light(#F0F0F0) 均不等，冷灰胶囊底）——待真机裁（#2524 起 resume-edit 分割线已改走 $border-color-light）',
+    '#EEEEEE': 'batch2 profile 两页分割线/边框——$border-color(#D9D9D9)/$border-color-light(#f0f0f0) 之间的更浅边框，待真机裁（#2524 起 job-list 的边框已改走 token）',
 
     // ── 批2（#1606 学员端 14 页）新增 ──
     // '#2979FF' —— #2533（规格 #2493 批 A）起退役：受管页并集内 16 页 51 处旧主色已全部改走
@@ -84,9 +86,9 @@ module.exports = {
     // '#0066FF'/'#00CC99' 已随 #2558 收敛为 $brand-grad-start/$brand-grad-end（#2516 B0 落 token）：
     // 值成了 token 值 ⇒ 白名单行必须删（§1.6 自检：白名单值不得与 token 值重叠），index.uvue 裸字面同步清零。
     '#22C55E': 'pages/index/index.uvue cta-wechat 微信品牌绿（第三方品牌色，非本端语义位）+ forgot-password 扳手插画成套（2 处）——#2861 裁：品牌色与插画组都不绑 $success-color',
-    '#F2F4F7': 'pages/index/index.uvue cta-secondary 底——次级按钮中性浅灰，$bg-color(#f8f8f8) 近似但值不等，待真机裁',
+    '#F2F4F7': 'pages/index/index.uvue cta-secondary 底——次级按钮中性浅灰，$bg-color(#F5F5F5) 近似但值不等，待真机裁',
     '#1E9FFF': 'pages/index/index.uvue cta-secondary-text 字色——uView 系蓝文字，token 表无对应，待蓝系 token 票裁',
-    '#E0E2EA': 'pages/login/login.uvue、pages/register/register.uvue、pages/forgot-password/forgot-password.uvue 区号与输入分隔竖线——中性灰蓝分隔，$border-color(#e5e5e5) 近似但值不等，待灰阶 token 票裁',
+    '#E0E2EA': 'pages/login/login.uvue、pages/register/register.uvue、pages/forgot-password/forgot-password.uvue 区号与输入分隔竖线——中性灰蓝分隔，$border-color(#D9D9D9) 近似但值不等，待灰阶 token 票裁',
     '#15803D': 'pages/forgot-password/forgot-password.uvue 成功态按钮按下底——#22C55E 的深一档配对（green-700），同上待成功系 token 票裁',
     '#14532D': 'pages/forgot-password/forgot-password.uvue 成功态深绿字——green-900，token 表无对应',
     '#86EFAC': 'pages/forgot-password/forgot-password.uvue 成功态浅绿字——green-300，token 表无对应',
@@ -99,4 +101,18 @@ module.exports = {
     // 声明位判据不再拦它们（值 ∈ token 值）。
     // #2354 已把 ai-chat-bubble.uvue 从这份清单里划掉：气泡的 .md-* 整段删除、正文块改由
     // components/markdown/markdown-blocks.uvue 渲染，该文件里的 #1a1a1a 随之消失。
+
+    // ── #2910（28 值缺口裁决）：装饰性 10 值入册；其余 18 值映射既有 token，不进本表 ──
+    // 判据：立 token 只发生在「同语义角色无 token」时；装饰色（渐变 / 徽章 / 图标底 / 浅蓝钮）与
+    // 「强调橙红」这类无同族语义位的值不立色，逐值理由见 docs/design/20261127-视觉取值裁决-28值缺口与圆角档位.md。
+    '#FF5722': 'pages/exam/components/exam-action-bar.uvue submit-btn 底 + pages/profile/components/wrong-question-card.uvue record-type-tag 底——强调橙红（CTA / 错题类型签），token 表无同族：$warning-color 偏黄、$danger-color 偏红，改值即改设计意图；与白名单 #FF6B35 同族先例',
+    '#1E88E5': 'pages/forum/components/forum-resource-panel.uvue res-coin-banner 渐变尾色与实底兜底——资源币横幅装饰渐变，与 #6FB9F7 成对（同 #1565C0 渐变白名单口径，不绑主色）',
+    '#6FB9F7': 'pages/forum/components/forum-resource-panel.uvue res-coin-banner 渐变首色——同上，装饰渐变对首色',
+    '#F0F5FF': 'pages/forum/components/forum-resource-panel.uvue res-card-bg-blue 卡底 + pages/profile/components/activity-topic-card.uvue topic-edit-btn 底——装饰浅蓝底系列（与已白名单 #F0FFF0 同口径：资源卡按内容分色，不绑 $primary-tint 语义）',
+    '#F0F8FF': 'pages/forum/components/forum-resource-panel.uvue res-card-bg-sky 卡底——装饰浅蓝底系列第三色（同上，与 #F0F5FF / #F0FFF0 同族）',
+    '#D0E0FF': 'pages/profile/components/activity-topic-card.uvue topic-edit-btn 描边——#F0F5FF 浅蓝钮的配对边框，装饰浅蓝钮成套；token 表无蓝色浅边框（$border-color 系中性灰）',
+    '#FFF7E6': 'pages/forum/components/forum-topic-card.uvue experience-badge / featured-badge 底——论坛「备考经验 / 精选」徽章装饰底（Ant 橙系），徽章是内容标识不是状态语义，不绑 $warning-tint',
+    '#D46B08': 'pages/forum/components/forum-topic-card.uvue experience-badge-text 字色——同上徽章装饰字色（Ant orange-8），与底色成套',
+    '#FA8C16': 'pages/forum/components/forum-topic-card.uvue featured-badge-text 字色——同上徽章装饰字色（Ant orange-6），与底色成套',
+    '#FFB300': 'pages/dashboard/components/dashboard-news-section.uvue news-icon 色——首页新闻图标琥珀装饰色，图标装饰不绑语义色（与白名单 #FF8F00 同族）',
 }

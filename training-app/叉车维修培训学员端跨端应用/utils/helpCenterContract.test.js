@@ -202,8 +202,16 @@ describe('折叠 Q&A', () => {
     expect(scriptOf(page)).toContain('if (!removed) next.push(id)');
   });
 
-  it('展开指示器随状态变化（▾ / ▸）', () => {
-    expect(tplOf(page)).toMatch(/isExpanded\(e\.id\) \? '▾' : '▸'/);
+  it('展开指示器用右向切片图，展开态旋转为下向', () => {
+    expect(tplOf(page)).toMatch(/<image class="entry-arrow"\s*:class="\{ 'entry-arrow--expanded': isExpanded\(e\.id\) \}"\s*src="\/static\/icons\/profile\/chevron-right\.png" mode="aspectFit"/);
+    expect(styleOf(page)).toMatch(/\.entry-arrow--expanded\s*\{[^}]*transform:\s*rotate\(90deg\)/);
+  });
+
+  it('服务区三个入口都用切片图，反馈历史展开态同样旋转为下向', () => {
+    const tpl = tplOf(page);
+    expect(tpl.match(/<image class="service-arrow"/g)).toHaveLength(3);
+    expect(tpl).toMatch(/<image class="service-arrow"\s*:class="\{ 'service-arrow--expanded': historyVisible \}"\s*src="\/static\/icons\/profile\/chevron-right\.png" mode="aspectFit"/);
+    expect(styleOf(page)).toMatch(/\.service-arrow--expanded\s*\{[^}]*transform:\s*rotate\(90deg\)/);
   });
 });
 

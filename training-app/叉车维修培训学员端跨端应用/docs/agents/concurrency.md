@@ -25,6 +25,44 @@
 
 这样每个会话边界清晰，不会因争抢 HBuilderX 互相阻塞。
 
+## 快查占用：`-Status` 与 `HX_STATUS`（2026-11-26 加，不取锁）
+
+**先查现场，再决定要不要排队** —— 2026-11-26 之前只有一个「等」的入口：进入等待后每 10 秒刷一行
+「已等 N 秒」，直到自己的上限才给一行 `HX_BUSY … result=timeout`，**全程不说谁占着、占多久、是不是陈旧锁**，
+读起来像偶发失败（用户 M2 ①②）。现在多了一个**只读**入口：
+
+| 入口 | 做什么 | 取锁 / 碰设备 | 副作用 |
+| --- | --- | --- | --- |
+| `npm run hx:run -- -Status` | 报「此刻谁占着、cli 解析到哪、HBuilderX 是否在跑」 | 都不 | **零**（不取锁、不调 cli、不写日志、不碰设备） |
+| `pwsh scripts/hx-run.ps1 -DryRun` | 报「将要跑什么」（计划，不是现场） | 都不 | 零 |
+| `npm run hx:compile-only` | 只编译：拿编译期诊断 | 取锁，不碰设备 | 写产物 / 日志 |
+| `npm run hx:run` | 真运行：编译 → 部署 → 启动到设备 | 取锁 + 设备 | 写产物 / 日志 / 装基座 |
+
+一行机读快照（人眼与脚本同时可读；`HX_STATUS` 是**现场**，`HX_BUSY` 是**结果**，两者都不参与任何门判据）：
+
+```
+HX_STATUS lock=<held|free> holder=<pid|none> age=<秒>s|none alive=<true|false|unknown|none> stale=<true|false|none> cli=<路径|none> hx=<running|absent>
+```
+
+- `alive=unknown` 是**真的未知**（pid 非数字 / 权限不足），不是「已死」—— 此时按 fail-safe 回落 30 分钟时间线；
+- `stale=true` 且 `alive=false` ⇒ 陈旧锁（持有会话被强杀留下），**下一次取锁会自动抢占**，不必手删；
+- `hx=running` 只说明主程序开着（维护者可能正在用 GUI），**不代表锁被占**：锁才是唯一可靠来源。
+
+退出码：`0` 可上机 / `2` 锁被占（与等待超时同语义：环境不可用）/ `3` 找不到 `cli.exe` 且主程序没在跑。
+
+⚠️ **`-Status` 是设备判定之前唯一的零副作用入口**：非 `-CompileOnly` 的 `hx:run` 会**先**查「有没有在线安卓
+设备」（没有就 `[error] 没有在线安卓设备…` `exit 2`），**走不到锁那一步**。所以「现在能不能上机」的顺序是
+先看 `-Status`（锁）再看设备，别用「跑一次 hx:run 看看」来试，那在无设备时会给你一个与锁无关的错。
+
+被占时有三条出路（脚本发现锁被占会当场把这三条打出来）：
+
+1. **等**：`-WaitSeconds <秒>`（`hx:run` 默认 120，见下表；显式给大一点就是「我知道在等谁」）；
+2. **立刻退**：`-NoWait` ⇒ 立刻 `exit 2`，不排队；
+3. **先做不需要 HBuilderX 的事**：`npm run test:unit` / `build:kotlin-all -SkipPublish` / `npm run audit:*`。
+
+> 口径不变：串行是**本仓的编排选择**，不是 HBuilderX 的平台上限（见上「边界（2026-11-25 更正）」）。
+> 这三种出路解决的是「等得不明不白」，不是「HBuilderX 只能串行」。
+
 **锁交接（会话内连跑多个 HBuilderX 步骤，2026-09-14 加）**：锁**按 PID 判定且不可重入** ⇒
 一个会话内父进程持锁后调子脚本会**自死锁**。`dev:finish` 通过 `$env:HX_LOCK_OWNER` + PID 比对把锁
 **交接**给子脚本（认到同一持有者就复用、不再加锁）；**fail-safe**：PID 对不上 ⇒ 照常加锁，绝不放开互斥。
@@ -45,14 +83,15 @@
 
   | 入口 | 取锁等待上限 | 备注 |
   | --- | --- | --- |
-  | `hx-run.ps1`（`hx:run` / `hx:compile-only`） | **120 秒** | 故意短：忙就快速 `exit 2`，不无声等 |
+  | `hx-run.ps1`（`hx:run` / `hx:compile-only`） | **120 秒** | 故意短：忙就快速 `exit 2`，不无声等；要等更久显式给 `-WaitSeconds <秒>`，要立刻退给 `-NoWait` |
   | `dev:finish`（步骤 4–6 临界区） | **1800 秒** | 临界区长，故上限宽 |
   | `build:kotlin-all` / `build:compile` / `build:mp-weixin-check` | **600 秒** | 中等 |
 
 - **超过上限不是失败，是「环境不可用」**（`exit 2`）：此时改跑不需要 HBuilderX 的检查
   （`npm run test:unit` / `build:kotlin-all -SkipPublish`），**绝不 kill 主程序、绝不抢占**。
-- **不要拿「另一个会话空着」当假设**：判据现测，不看记忆 ——
-  `Get-Process HBuilderX,cli`、`$env:TEMP\hx-agent.lock`、以及 `.ci-verify\` 里是否有文件**正在被写**。
+- **不要拿「另一个会话空着」当假设**：判据现测，不看记忆 —— 首选
+  `npm run hx:run -- -Status`（一行 `HX_STATUS`：谁占着 / 占多久 / 是否陈旧 / cli 在哪），
+  再辅以 `Get-Process HBuilderX,cli` 与 `.ci-verify\` 里是否有文件**正在被写**。
 
 ## ③ 行为腿与手动 ②/④ 串行（2026-10-20 补；② 门已于 #2320 退役）
 

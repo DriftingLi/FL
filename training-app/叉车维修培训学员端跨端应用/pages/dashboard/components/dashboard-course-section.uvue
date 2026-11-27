@@ -98,12 +98,12 @@
 
     .tab-text {
         font-size: 28rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         padding-bottom: 12rpx;
     }
 
     .tab-text-active {
-        color: #333333;
+        color: $text-color;
         font-weight: bold;
     }
 
@@ -131,32 +131,32 @@
     .filter-tag {
         padding: 14rpx 28rpx;
         border-radius: 999rpx;
-        background-color: #ECECEC;
+        background-color: $tag-bg-neutral;
         margin-right: 24rpx;
     }
 
     .filter-tag-active {
-        background-color: #EBF9FF;
+        background-color: $primary-tint;
     }
 
     .filter-tag-text {
         font-size: 24rpx;
-        color: #666666;
+        color: $text-color-secondary;
     }
 
     .filter-tag-text-active {
-        color: #239EDD;
+        color: $primary-color;
     }
 
     .filter-btn {
         padding: 14rpx 28rpx;
         border-radius: 999rpx;
-        background-color: #ECECEC;
+        background-color: $tag-bg-neutral;
     }
 
     .filter-btn-text {
         font-size: 24rpx;
-        color: #666666;
+        color: $text-color-secondary;
     }
 
     /* 课程卡片 */
@@ -165,7 +165,7 @@
     }
 
     .course-card {
-        background-color: #FFFFFF;
+        background-color: $card-bg;
         border-radius: 16rpx;
         padding: 24rpx;
         margin-bottom: 20rpx;
@@ -186,14 +186,14 @@
 
     .course-tag-hot-text {
         font-size: 22rpx;
-        color: #FFFFFF;
+        color: $text-color-inverse;
         font-weight: 600;
     }
 
     .course-title {
         font-size: 30rpx;
         font-weight: 600;
-        color: #333333;
+        color: $text-color;
         flex: 1;
         lines: 1;
         text-overflow: ellipsis;

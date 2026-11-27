@@ -94,7 +94,7 @@ import { goBack } from '../../utils/navigation'
     .section-title {
         font-size: 30rpx;
         font-weight: bold;
-        color: #333333;
+        color: $text-color;
     }
 
     /* 底部操作 */
@@ -123,11 +123,11 @@ import { goBack } from '../../utils/navigation'
     .bottom-btn-text {
         font-size: 30rpx;
         font-weight: bold;
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 
     .bottom-btn-text-secondary {
-        color: #666666;
+        color: $text-color-secondary;
     }
 
     /* 加载/错误状态 */
@@ -139,7 +139,7 @@ import { goBack } from '../../utils/navigation'
 
     .loading-text {
         font-size: 28rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .error-wrap {
@@ -150,18 +150,18 @@ import { goBack } from '../../utils/navigation'
 
     .error-text {
         font-size: 28rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         margin-bottom: 24rpx;
     }
 
     .retry-btn {
-        padding: 16rpx 48rpx;
+        padding: 16rpx $spacing-xl;
         background-color: $primary-color;
         border-radius: 32rpx;
     }
 
     .retry-btn-text {
         font-size: 28rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 </style>

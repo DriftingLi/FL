@@ -372,7 +372,7 @@
     }
 
     .stats-num {
-        font-size: 40rpx;
+        font-size: $font-size-2xl;
         font-weight: bold;
         line-height: 48rpx;
     }

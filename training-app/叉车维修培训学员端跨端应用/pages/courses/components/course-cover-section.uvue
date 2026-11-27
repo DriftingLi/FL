@@ -41,7 +41,7 @@
 <style lang="scss">
     /* ===== 标题卡 ===== */
     .cover-section {
-        background-color: #ffffff;
+        background-color: $card-bg;
         padding: 28rpx 32rpx 24rpx;
         flex-direction: column;
     }
@@ -88,23 +88,23 @@
     }
 
     .tag-level {
-        color: #e6a23c;
-        background-color: #fdf6ec;
+        color: $warning-color;
+        background-color: $warning-tint;
     }
 
     .tag-specialty {
-        color: #409eff;
-        background-color: #ecf5ff;
+        color: $primary-color;
+        background-color: $primary-tint;
     }
 
     .tag-cert {
-        color: #67c23a;
-        background-color: #f0f9eb;
+        color: $success-color;
+        background-color: $success-tint;
     }
 
     .cover-desc {
         font-size: 26rpx;
-        color: #666666;
+        color: $text-color-secondary;
         line-height: 40rpx;
         margin-top: 12rpx;
         lines: 2;

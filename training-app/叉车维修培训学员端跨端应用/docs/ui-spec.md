@@ -9,7 +9,7 @@
 ## 0. 本仓 UI 文档地图（#1597 S3 裁定，#1611 落地）
 
 > 本表登记仓内全部 UI 文档与其现行状态，是「谁是真源、谁是快照」的唯一索引。守护 `utils/uiDocDocMapContract.test.js` 断言三件事：
-> ① 八份齐全（缺行、重复行都判红）；② 每行「状态」字段以四枚举类之一开头——`现行真源` / `现行` / `实施计划` / `历史快照`（括注如（值）（产品层）（Phase 1–3 已废止）是补充说明，不参与判定）；③ 各文档 token 表与 `uni.scss` **双向一致**（文档表里每个 `$token` 在 `uni.scss` 业务段存在且值一致；`uni.scss` 业务段每个定义也在文档表登记）。
+> ① 九份齐全（缺行、重复行都判红）；② 每行「状态」字段以四枚举类之一开头——`现行真源` / `现行` / `实施计划` / `历史快照`（括注如（值）（产品层）（Phase 1–3 已废止）是补充说明，不参与判定）；③ 各文档 token 表与 `uni.scss` **双向一致**（文档表里每个 `$token` 在 `uni.scss` 业务段存在且值一致；`uni.scss` 业务段每个定义也在文档表登记）。
 > **新增 UI 文档、变更文档状态、增删 token，必须先改本表与 `uni.scss`，让守护在同一次提交里判绿。**
 >
 > **上次同步的设计稿 version：`2425600668959465070`**（2026-11-25 快照）。只记版本号本身——整份元数据六字段在导出目录本地产出、**不入仓**；`version` ≠ `lastModified`，两者的比对以 `version` 为准，且只记顶层帧增删、帧 ID 与人读名称不在元数据里重复维护。
@@ -24,6 +24,7 @@
 | `docs/ui-design-diff-analysis.md` | 设计稿差异快照 | 历史快照 |
 | `docs/adr/0076-视觉规范所有权与设计稿输入通道（2026-11-25 裁定）.md` | 视觉规范所有权与设计稿输入通道（ADR） | 现行（ADR） |
 | `docs/design/20261125-移动端视觉一致性治理spec.md` | 三层治理交接 spec（层定义 / 十项审计 / 批次 / 新页准入） | 现行（交接 spec） |
+| `docs/design/20261127-视觉取值裁决-28值缺口与圆角档位.md` | 28 值缺口逐条裁决 + 圆角定档依据（P3 执行真源） | 现行（裁决账本） |
 
 ---
 
@@ -44,8 +45,6 @@
 | Token | 色值 | 用途 |
 |---|---|---|
 | `$primary-color` | **`#239EDD`** | 选中态、Tab 高亮、**主色 header / 状态栏**（N01 蓝底套）——**#2509 R2 起不再直接做按钮底色**（主 CTA 改 §5.3 渐变对） |
-| `$primary-color-light` | `#5b9aff` | **#2509 R2 起待退役**：原「渐变底部」用途被 `$primary-grad-*`（§1.7）取代，全仓 `.uvue` 零消费 |
-| `$primary-color-dark` | `#1c9eff` | **#2509 R2 起待退役**：pressed 态改 `$primary-grad-pressed-*`（§1.7），全仓 `.uvue` 零消费 |
 | `$primary-tint` | `#EBF9FF` | 主色浅底（分区标题带、选中标签底、历史 chip 底）；**#2509 R2 冲突 1 改值**（原 `#ebf5ff`） |
 
 > **换色执行口径**：`uni.scss` 只改两处——`:18` `$uni-color-primary` 与 `:81` `$primary-color`，单点生效，**禁止逐页改字面色值**；
@@ -107,40 +106,45 @@
 存量基线 2142 处声明位/171 种色值（#1593 口径）：裁定 1–6 收敛约 1440 处，余约 700 处属**低频内容色**（130 种、每种 ≤4 次）——
 **逐值一行理由入册**（写在机检白名单文件里，注明「哪个文件为什么留」），**不按次数自动豁免**。Material 近似族（如 `#f44336`→`$danger-color`，约 135 处）收敛进既有 token，不进白名单。
 
+**缺口值裁决（#2910）**：私有子件层 28 个缺口值（35 处）已逐条裁决为 **18 映射既有 token / 10 入本白名单 / 0 新增色 token**——立色 token 只发生在「同语义角色没有任何 token」时，色板来源（Element / Ant / Material）不构成立 token 的理由；装饰性（渐变、徽章、图标底、插画）不进 token。逐值表见 `docs/design/20261127-视觉取值裁决-28值缺口与圆角档位.md`，映射项由 P3 执行。
+
 ### 1.7 原型换血新增 Token（2026-11-13 裁定 #2509 R2 · #2516 **B0** 落地）
 
-> 出处：`docs/design/20261125-移动端token决定清单（原型换血#2509）.md`（#2834 落档；原件在 `.scratch/figma-proto-export/TOKEN_DECISIONS.md`，`.scratch/` 不入仓）。本节 27 条是
+> 出处：`docs/design/20261125-移动端token决定清单（原型换血#2509）.md`（#2834 落档；原件在 `.scratch/figma-proto-export/TOKEN_DECISIONS.md`，`.scratch/` 不入仓）。本节原登记 27 条，#2863 删 11 条死件后余 16 条（删项与判据见 §1.8）；本表是
 > `uni.scss` 业务段「原型换血 Token」段的登记面，两侧由 `utils/uiDocDocMapContract.test.js` 双向对账。
 
 | Token | 色值 | 用途 |
 |---|---|---|
-| `$accent-yellow` | `#FDE03B` | 品牌黄（433:751 品牌色圆声明；打卡格、积分底、评分星） |
 | `$accent-yellow-tint` | `#FDF9E6` | 品牌黄浅底 |
-| `$text-on-yellow` | `#271309` | 黄底上的文字色 |
 | `$primary-grad-start` | `#6ECCFD` | 主 CTA 渐变起（原型 65 处/16 屏） |
 | `$primary-grad-end` | `#0CA2EF` | 主 CTA 渐变止 / 实色兜底 |
 | `$primary-grad-pressed-start` | `#239EDD` | 主 CTA 按下态渐变起 |
 | `$primary-grad-pressed-end` | `#139DE4` | 主 CTA 按下态渐变止 |
 | `$brand-grad-start` | `#239EDD` | 品牌渐变起（着陆页） |
 | `$brand-grad-end` | `#14AE50` | 品牌渐变止 |
-| `$header-grad-start` | `#239EDD` | 页头渐变起 |
-| `$header-grad-end` | `#FFFFFF` | 页头渐变止（蓝转白） |
 | `$gradient-mid` | `#D0EBFD` | 浅蓝中停靠（forum 页头渐变尾色；原生端仍是两停靠，仅 web 预览用中停靠） |
-| `$checkin-cell-miss` | `#D9D9D9` | 打卡格：未打卡 |
-| `$checkin-cell-past-miss` | `#ECECEC` | 打卡格：过去未打卡 |
-| `$checkin-cell-inactive` | `rgba(255, 255, 255, 0.80)` | 打卡格：不可用 |
-| `$checkin-cell-streak` | `$accent-yellow` | 打卡格：连续打卡（复用品牌黄，不重复立值） |
 | `$tabbar-bg` | `#FFFFFF` | TabBar 底色 |
 | `$tabbar-active` | `#239EDD` | TabBar 选中（与 pages.json 原生 tabBar 同值） |
 | `$tabbar-inactive` | `#999999` | TabBar 未选中（同上） |
 | `$color-price` | `#FF2424` | 价格强调红 |
-| `$answer-correct` | `#7BD398` | 答题正确 |
 | `$answer-wrong` | `#FF5A5A` | 答题错误（收敛 #DF6454） |
 | `$segment-indicator` | `#239EDD` | 分段控件指示条（宽随标签文字撑开，高 4rpx，R=10） |
 | `$tag-bg-neutral` | `#ECECEC` | 中性标签底 |
 | `$radius-card` | `20rpx` | 卡面容圆角（区别于 `$radius-lg` 24rpx） |
-| `$font-size-2xl` | `40rpx` | 标题层级 2xl（原型 h1 40rpx） |
-| `$font-size-3xl` | `48rpx` | 标题层级 3xl（原型大标题 48rpx） |
+| `$font-size-2xl` | `40rpx` | 标题层级 2xl（原型 h1 40rpx）；**#2863 接上**：30 处 `font-size: 40rpx` 字面量已收敛到本 token |
+| `$font-size-3xl` | `48rpx` | 标题层级 3xl（原型大标题 48rpx）；**#2863 接上**：2 处 `font-size: 48rpx` 字面量已收敛到本 token |
+
+### 1.8 已删 token 登记（#2863 死件清理）
+
+判据是**值面有没有真实消费**：值被别处字面量在用而 token 0 引用 ⇒ **接上**（同值零视觉，见 §1.7 `$font-size-2xl/3xl` 与 §2 `$spacing-xl`）；值和语义都无消费 ⇒ **删**（原型登记过但产品没做的视觉，留着就是假契约——读表的人会以为改它能影响界面）。删前必查两件：值是否另有家、语义是否另有承接。
+
+- `$primary-color-light`（`#5b9aff`）/ `$primary-color-dark`（`#1c9eff`）：0 引用 + 0 字面量；用途已分别被 §5.3 的主 CTA 渐变对与 pressed 对取代。
+- `$accent-yellow`（`#FDE03B`）/ `$text-on-yellow`（`#271309`）：0/0；打卡格的实值是白名单 `#FFD666` / `#F6B93E`，与 #FDE03B **不等值**（接上即改视觉）。浅底档 `$accent-yellow-tint` 仍在用，保留。
+- `$header-grad-start` / `$header-grad-end`（`#239EDD` / `#FFFFFF`）：页头套自 #1592 起是**实色**（§7 的 N01–N06 全实色，唯一页头件 `components/app-nav-bar/app-nav-bar.uvue`），全仓 84 处 `linear-gradient` 里没有一处页头渐变 ⇒「页头渐变被硬编码、换血漏了」不成立；接上等于新造页头视觉并波及 55 页。
+- `$checkin-cell-miss` / `-past-miss` / `-inactive` / `-streak`：四态 0/0；日历实际渲染走白名单字面量（`pages/forum/check-in.uvue` 的 `#E8E8E8` / `#FFD666` / `#F6B93E`），与 token 值不等值。`$checkin-cell-miss` 的唯一消费点是打卡页开关轨色，已改挂同值的 `$border-color`（`#D9D9D9`，零视觉）。
+- `$answer-correct`（`#7BD398`）：0/0；答题正确面实际走 `$success-color`（`pages/exam/components/exam-result-detail-list.uvue:117`）。
+
+**保留的反例（不是死件）**：`$color-link`（`#1b6f9c`）经 `$md-color-link` 在 `pages/forum/components/markdown-blocks.uvue:367` 真实消费，`utils/markdownTypographyContract.test.js` 硬钉名字与色值——「没直接 grep 到」不等于死件。
 
 ---
 
@@ -152,22 +156,36 @@
 | `$spacing-sm` | `16rpx` | 小间距（标签间距、列表项间距） |
 | `$spacing-md` | `24rpx` | 标准间距（页面边距、卡片内边距、卡片间距） |
 | `$spacing-lg` | `32rpx` | 大间距（区块间距、列表水平内边距） |
-| `$spacing-xl` | `48rpx` | 超大间距（底部留白） |
+| `$spacing-xl` | `48rpx` | 超大间距（页面底留白、卡内纵向大内距）；**#2863 接上**：此前 0 token 引用、只有字面量在用，48 处 `padding`/`margin` 的 `48rpx` 已收敛到本 token（同值零视觉，`scripts/audit-spacing.mjs` 的 `px()` 已登记全表） |
 
 ---
 
-## 3. 圆角系统
+## 3. 圆角系统（#2910 定档：8 档，其中 `$radius-card` 登记在 §1.7）
+
+> 定档判据（#2910，2026-11-27）：**一档 = 一种承载语义**，圆角值只在这张表里；色板/组件来源不构成新增档位的理由。实测存量 149 件、514 处 `border-radius` 声明（95 处已走 token、419 处仍是字面量，36 种写法），归并按下方三条规则、随 P2/P3 逐件执行，本票不改任何页面。
 
 | Token | 值 | 用途 |
 |---|---|---|
-| `$radius-sm` | `8rpx` | Tag 标签、小 badge |
-| `$radius-md` | `16rpx` | 卡片、图标容器 |
-| `$radius-lg` | `24rpx` | 次按钮描边、大卡片（**#1597 C2：24rpx 为准**，旧文「32rpx」系写错 token——次按钮统一 `$radius-lg`） |
-| `$radius-xl` | `32rpx` | 大面板、对话框 |
-| `$radius-pill` | `999rpx` | 胶囊按钮（主按钮、筛选按钮；**#1597 C2：999rpx 胶囊是对的**） |
+| `$radius-xs` | `4rpx` | 进度条、细线、微角（原 2/3/5/6rpx 的非半高承载） |
+| `$radius-sm` | `8rpx` | Tag 标签、小 badge（原 7/8rpx） |
+| `$radius-base` | `12rpx` | 图片缩略、输入框、小卡（原 10/11/12rpx；12rpx 66 处主承载） |
+| `$radius-md` | `16rpx` | **卡内**子件容器：图标底、图片框、按钮底（原 14–18rpx） |
+| `$radius-lg` | `24rpx` | 次按钮描边、大卡片（**#1597 C2：24rpx 为准**，旧文「32rpx」系写错 token——次按钮统一 `$radius-lg`；原 22–27rpx） |
+| `$radius-xl` | `32rpx` | 大面板、对话框（原 28–32rpx 的非半高承载） |
+| `$radius-pill` | `999rpx` | 胶囊按钮（主按钮、筛选按钮；**#1597 C2：999rpx 胶囊是对的**）＋**一切「半高」与「方形整圆」写法的唯一归处** |
+
+> 第 5 档 `$radius-card`（`20rpx`，**卡面**本身：列表卡 / 内容卡 / 面板卡，#2509 R2）登记在 §1.7——文档地图要求每个 `$token` 只登记一次，故本表不重复行。`$radius-card` 与 `$radius-md` 的边界是「整卡 vs 卡内件」，不是「大 vs 小」。
+> **没有「整圆」专档**：`50%` 与 `999rpx` 对宽高相等的容器几何等价，单独立档只会多一个整圆 token（`$uni-border-radius-circle` 是 uni 内建框架值、px 单位、不参加业务 token 对账）；方形头像/图标容器按规则 1 归 `$radius-pill`。
+
+**存量字面量归并规则**（判断类，只报告不建断言；逐件由 P2/P3 执行并在真机核）：
+
+1. **先判几何等价**：`radius ≥ 承载件高度/2`（半高写法）或宽高相等的方形件（如 40rpx on 80rpx、48rpx on 96rpx 的头像/图标容器）→ 一律归 `$radius-pill`，这类半径本就被 CSS 钳成胶囊/整圆，零视觉。实测这类写法集中在 26/28/33/36/40/44/48/50/53/54/58/999rpx 共 12 种值、103 处。
+2. **不满足规则 1 的取最近档**：2/3rpx → xs，7rpx → sm，10–12rpx → base，14–18rpx → md，22–27rpx → lg，28–32rpx → xl。
+3. **奇数字面量**（11/17/22/33/53rpx 等）同样先判规则 1、再按规则 2 取档，不做像素级还原。规则 1 优先于规则 2：同一字面量在不同承载件上可以落到不同档，判据是承载件本身。
+
+> 逐值裁决、存量读数与「为什么不立新色 token」的判据见 `docs/design/20261127-视觉取值裁决-28值缺口与圆角档位.md`。
 
 ---
-
 ## 4. 字号系统
 
 | Token | 值 | 用途 |
@@ -299,7 +317,7 @@
 
 ### 5.3 主按钮（appButton type=primary）
 
-- 背景：`linear-gradient(to bottom, $primary-grad-start, $primary-grad-end)`（`#6ECCFD`→`#0CA2EF`），实色兜底 `background-color: $primary-grad-end` 写在渐变**之后**；按下态用 `$primary-grad-pressed-*`（`#239EDD`→`#139DE4`）。**方向只能写 `to` 关键字，禁 `deg`** —— ADR-0010；原生端只吃两停靠（§1.2 表头）
+- 背景：`linear-gradient(to bottom, $primary-grad-start, $primary-grad-end)`（`#6ECCFD`→`#0CA2EF`），实色兜底 `background-color: $primary-grad-end` 写在渐变**之后**；按下态用 `$primary-grad-pressed-*`（`#239EDD`→`#139DE4`），**#2863 已落地**：`components/app-button/app-button.uvue` 由 `@touchstart`/`@touchend`/`@touchcancel` 切 `.app-btn--primary.app-btn--pressed`（仅 primary 档、仅未禁用时点亮）。**方向只能写 `to` 关键字，禁 `deg`** —— ADR-0010；原生端只吃两停靠（§1.2 表头）
   - **2026-11-13（#2509 R2 冲突 8）**：原「`$primary-color`→`$primary-color-light`」纯色渐变被原型推翻（主 CTA 65 处/16 屏一律新渐变对），`$primary-color` 自此不再直接做按钮底色
 - 文字：`$text-color-inverse`，`$font-size-lg`，font-weight bold
 - 圆角：`$radius-pill`（999rpx 胶囊形）
@@ -328,7 +346,7 @@
 
 ### 5.6 Tab 栏（appTabs）
 
-- underline 风格：文字下方**高度 4rpx** 指示条（`$segment-indicator`，R=10），**宽度随标签文字撑开**——几何写法是「文字 + 线的列容器（`flex-direction: column; align-items: center`），线在其内 `width: 100%`」，不是写死的 rpx 短条；选中文字 `$text-color` + w500、未选 `$text-color-secondary` —— **2026-11-13 #2509 R2 冲突 11**（原型 322:9139：选中文字 #333333 16px w500 + 蓝指示条 20×4px R=10）；**2026-11-25 #2827 改宽度口径**：原型那 20px 是固定宽示意，真机按文字宽度对齐更好读（严格等宽，不设上限、不按字数分段）；同一几何规则**同时适用于两类**蓝线：Tab 选中指示条 + 板块标题装饰线（新闻资讯 / 每日任务 / 热门考证）；线高仍按三档现状（4 / 6 / 8rpx），本口径不统一线高
+- underline 风格：文字下方**高度 4rpx** 指示条（`$segment-indicator`，R=10），**宽度随标签文字撑开**——几何写法是「文字 + 线的列容器（`flex-direction: column; align-items: center`），线在其内 `width: 100%`」，不是写死的 rpx 短条；选中文字 `$text-color` + w500、未选 `$text-color-secondary` —— **2026-11-13 #2509 R2 冲突 11**（原型 322:9139：选中文字 #333333 16px w500 + 蓝指示条 20×4px R=10）；**2026-11-25 #2827 改宽度口径**：原型那 20px 是固定宽示意，真机按文字宽度对齐更好读（严格等宽，不设上限、不按字数分段）；同一几何规则**同时适用于两类**蓝线：Tab 选中指示条 + 板块标题装饰线（新闻资讯 / 每日任务 / 热门考证）；线高仍按三档现状（4 / 6 / 8rpx），本口径不统一线高。**2026-11-26 #2906 补实现前提**：「线 width:100%」只有在**列容器自己贴文字宽**时才等于文字宽；容器被父级 stretch 撑满时（缺 `align-self: flex-start`），100% 会解析成区块全宽 —— 热门考证正是这样把线拉满整行。左对齐的板块标题把 `align-items` 写 `flex-start`、列容器补 `align-self: flex-start`，线宽仍跟文字。
 - pill 风格：胶囊标签（同 appChip 选中态）
 - 字号：`$font-size-md`（28rpx）
 - 未选中：`$text-color-secondary`
@@ -358,8 +376,9 @@
 
 ### 5.10 伪类禁令
 
-`.uvue` 原生端**不支持 CSS 伪类**（§9 机检口径）。唯一存量 `pages/courses/course-detail.uvue:469` `.action-btn:active`
-改 `@touchstart`/`@touchend` 切 `pressed` class（#1593 裁定，执行票承接）。
+`.uvue` 原生端**不支持 CSS 伪类**（§9 机检口径）。原唯一存量 `pages/courses/course-detail.uvue` 的 `.action-btn:active`
+已按 #1593 裁定改为 `@touchstart`/`@touchend` 切 `pressed` class（`:50` `action-btn-pressed`）；共享件 `app-button` 同法
+在 #2863 落地（§5.3）。新增按压态一律走这条，别再写 `:active`。
 
 ### 5.11 触摸目标与长文本截断（#2445）
 
@@ -501,7 +520,7 @@ hex 匹配口径：`<style>` 块**声明位** hex（3 位归一 6 位）；不�
 | 1 | **裸 hex = 0** | 声明位 hex 全部走 token 或白名单；无豁免 |
 | 2 | **`lang="scss"` 100%** | 全部 `<style>` 声明；无豁免 |
 | 3 | **手写 `.status-bar` = 0 且页头件引用 100%** | 页头唯一件 `app-nav-bar`；豁免名单 = N06 五页 |
-| 4 | **`app-*` 引用 100%** | 对应交互一律走八件共享件（§10）；渐进转绿（先断言页头件自身，新页必须走共享件，旧页逐票转绿） |
+| 4 | **`app-*` 引用 100%** | 对应交互一律走现役共享件（§10；#2912 清零引用件后 `app-*` 由八件收为 **五件**）；渐进转绿（先断言页头件自身，新页必须走共享件，旧页逐票转绿） |
 | 5 | **主色背景走 token** | 背景=主色处禁字面值 |
 
 **层适用性（交接 spec §2）**：五硬指标是**页面层**口径，对三层不是同一张表——指标 1（裸 hex）/ 2（`lang="scss"`）对 L1 token 值面、L2 共享件、L3 页面层都适用（扫描对象已含 `components/**`）；指标 3（手写 `.status-bar` + 页头件引用）/ 4（`app-*` 引用）只对 L3 页面层成立；指标 5（主色背景走 token）对三层都成立（L2 取更严口径：主色字面值一律为 0）。L2 共享件自身的三条值面判据、L3 私有子件的棘轮口径与「新增即合规」，见 `docs/design/20261125-移动端视觉一致性治理spec.md` §2，本节不复制。
@@ -515,11 +534,11 @@ hex 匹配口径：`<style>` 块**声明位** hex（3 位归一 6 位）；不�
 - UI 规范文档：`docs/ui-spec.md`（本文件）
 - Token 定义：`uni.scss`（**唯一真源**；收编清单见 §1 各裁定注：改 :18/:81、删 :86/:128、增 `$bg-header` + 3 tint）
 - 全局样式：`App.uvue` 中的 `<style>` 块
-- 共享组件：`components/app-*/` 目录 —— **八件扶正**（ADR-0035：`app-*` 八件全部保留并推向兑现；#0022/#0028 的禁令**只限分段类组件**，`app-nav-bar` 不受限）
+- 共享组件：`components/app-*/` 目录 —— ADR-0035「八件扶正」的**现役面是五件**（`app-button` / `app-chip` / `app-empty-state` / `app-nav-bar` / `app-tabs`）；`app-badge` / `app-card` / `app-list-item` 三件 0 引用、且不含视觉一致性信息，已按 `docs/design/20261125-共享件层判据.md` 裁定 A（#2897）随 #2912 删除。仍限「分段类组件不入库」，`app-nav-bar` 不受限
 - 实施计划：`docs/ui-spec-implementation-plan.md`
 - 台账/对比类文档：`docs/choose-cert-diff.md`、`docs/ui-design-diff-analysis.md` 为**历史快照**（各自文首取代块），不作为形态依据
 
-**当前兑现度（2026-11-25 实测，#2834）**：页级引用面 = `app-nav-bar` **55 页** / `app-icon-button` 5 / `app-empty-state` 3 / `app-tabs` 2 / `app-button` 1 / `app-chip` 1；真正 **0 引用的是四件** `app-badge` / `app-card` / `app-list-item` / `app-level-badge`（逐页明细见 `docs/design/20261125-移动端61页N×G归属台账.md` §2）。`app-nav-bar` 已从 0 推向 55/61 页头，ADR-0035 T4 的页头件兑现基本完成；T5 的卡/列表/徽章族仍未起动。死件里 `app-button` / `app-badge` / `app-tabs` / `app-list-item` 还引用了 `uni.scss` 里**不存在**的 `$text-inverse` / `$text-secondary` / `$text-placeholder`，且**自身没声明 `lang="scss"`** ⇒ 直接引用只会静默失效（扶正时一并修）。
+**当前兑现度（2026-11-27 实测，#2912）**：页级引用面 = `app-nav-bar` **55 页** / `app-empty-state` 5 / `app-icon-button` 5 / `app-tabs` 2 / `app-button` 1 / `app-chip` 1（`pages/search`，模板里写作 `<AppChip>`）/ `app-level-badge` 1（`pages/profile/components/profile-user-row.uvue`）。`app-nav-bar` 已从 0 推向 55/61 页头，ADR-0035 T4 的页头件兑现基本完成；T5 的卡/列表/徽章族仍未起动。原 0 引用四件里，`app-badge` / `app-card` / `app-list-item` 已随 **#2912** 删除（裁定 A：只包 padding/margin/radius + slot、不含视觉一致性信息），`app-level-badge` 因有真实消费方保留 ⇒ 现役 `app-*` 五件**均有页级引用、零死件**。现存共享件已**不带** `$text-inverse` / `$text-secondary` / `$text-placeholder` 短名（#2912 实测，`utils/globalComponentsContract.test.js` C 段守）。
 
 `components/common` 两死件（`platform-nav-bar.uvue` 165 行、`page-container.uvue` 89 行 tabBarHeight 恒假）**直接删除**，非新决策（ADR-0035:69）；连带 `CONTEXT.md:143` 词条改过去时 —— **随批 0 骨架层首票**。
 

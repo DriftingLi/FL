@@ -139,7 +139,7 @@
 
 <style lang="scss">
     .topic-card {
-        background-color: #ffffff;
+        background-color: $card-bg;
         border-radius: 16rpx;
         padding: 24rpx;
         margin-bottom: 16rpx;
@@ -156,7 +156,7 @@
     .topic-title {
         font-size: 32rpx;
         font-weight: bold;
-        color: #333333;
+        color: $text-color;
         line-height: 1.4;
         flex: 1;
     }
@@ -206,7 +206,7 @@
 
     .status-badge-text {
         font-size: 24rpx;
-        color: #2196f3;
+        color: $primary-color;
         font-weight: 500;
     }
 
@@ -216,7 +216,7 @@
 
     .topic-content-preview {
         font-size: 26rpx;
-        color: #666666;
+        color: $text-color-secondary;
         line-height: 1.5;
         margin-bottom: 16rpx;
     }
@@ -240,7 +240,7 @@
         width: 160rpx;
         height: 160rpx;
         border-radius: 12rpx;
-        background-color: #f0f0f0;
+        background-color: $border-color-light;
     }
 
     .topic-image-more {
@@ -256,7 +256,7 @@
 
     .topic-image-more-text {
         font-size: 36rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
         font-weight: bold;
     }
 
@@ -299,7 +299,7 @@
 
     .footer-author-name {
         font-size: 24rpx;
-        color: #666666;
+        color: $text-color-secondary;
     }
 
     .footer-date {
@@ -327,6 +327,6 @@
 
     .footer-stat-text {
         font-size: 24rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 </style>

@@ -243,7 +243,7 @@
     }
 
     .submit-field {
-        margin: 32rpx 24rpx 48rpx 24rpx;
+        margin: 32rpx 24rpx $spacing-xl 24rpx;
     }
 
     .submit-btn {

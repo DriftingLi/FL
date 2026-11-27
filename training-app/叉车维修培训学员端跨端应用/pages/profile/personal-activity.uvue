@@ -330,7 +330,7 @@
     /* 右槽设置按钮（app-nav-bar slot name=right 的增强形态，批2 引入） */
     /* 票 2730 第 1 项：88rpx 命中盒 / 64rpx 承载面由 components/app-icon-button 承担；齿轮字形 40rpx 不变。 */
     .settings-icon {
-        font-size: 40rpx;
+        font-size: $font-size-2xl;
         color: $text-color-secondary;
     }
 
@@ -349,7 +349,7 @@
        图标 + 加粗文案 + 主按钮，与其余 tab 的纯文字空态不同，故单独一类。 */
     .empty-card {
         align-items: center;
-        background-color: #ffffff;
+        background-color: $text-color-inverse;
         border-radius: $radius-card;
         margin: $spacing-md;
         padding: 64rpx 0 56rpx;

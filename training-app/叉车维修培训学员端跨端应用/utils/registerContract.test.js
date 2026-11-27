@@ -56,8 +56,13 @@ const LINE_BUDGET = 600;
  * ⚠️ **#2862 第四次显式变更（底灰与浅蓝底值面收敛）**：块内 4 处声明位改走 token —— 2 处 `#F5F6FA` +
  * 1 处 `#F0F1F5` → `$bg-color`（#F5F5F5），1 处 `#E8F3FF` → `$primary-tint`（#EBF9FF）。
  * **块内 39 条规则数不变**（冗余判据 ruleCount 仍 39），只有声明位的值变。
+ *
+ * ⚠️ **#2916 第五次显式变更（P2 入口件裸 hex 归零，经批准的改）**：块内 15 处字面量改走语义 token ——
+ * 3 处 `#ffffff` 背景 → `$card-bg`、2 处 `#ffffff` 文字 → `$text-color-inverse`、3 处 `#333333` →
+ * `$text-color`、4 处 `#999999` → `$text-color-placeholder`、3 处 `#666666` → `$text-color-secondary`。
+ * **token 值与字面量逐位相同**，像素面零变化；**块内 39 条规则数不变**，只有声明位的写法变。
  */
-const STYLE_SHA256 = '84b88b21e89f4b8972981a3b22568d09253cceecefb9f467331e33879c109fa8';
+const STYLE_SHA256 = '8ddb7c96b276a71b2d186cfa4e790b16664aca725edb34251fe7d56703c944ea';
 const sha256 = (s) => crypto.createHash('sha256').update(s, 'utf8').digest('hex');
 /** 块内 class 规则数 —— 与 sha256 互为冗余判据：数规则的锁漏属性值改动，sha 锁不漏 */
 const ruleCount = (s) => (s.match(/^\s*\.[a-zA-Z][\w-]*\s*\{/gm) || []).length;

@@ -89,6 +89,43 @@ describe('组件接线零孤儿（#779 回归锁：import 的组件文件必须�
   });
 });
 
+describe('题库练习原型位图契约（banner 与四入口）', () => {
+  const banner = read('pages/practice/components/practice-banner-card.uvue');
+  const grid = read('pages/practice/components/practice-feature-grid.uvue');
+  const page = read('pages/practice/practice.uvue');
+  const list = read('pages/practice/components/practice-module-list.uvue');
+
+  it('banner 使用包内 PNG，不再用 emoji 或渐变模拟插画', () => {
+    expect(banner).toContain('src="/static/practice-banner.png"');
+    expect(h.exists('static/practice-banner.png')).toBe(true);
+    expect(banner).not.toMatch(/🏗️|banner-emoji|linear-gradient/);
+  });
+
+  it('四入口使用同套 3D 切片，不再用 emoji 占位', () => {
+    const assets = [
+      '/static/icons/practice/past-paper.png',
+      '/static/icons/practice/mock-exam.png',
+      '/static/icons/practice/mock-contest.png',
+      '/static/icons/profile/wrong-questions.png',
+    ];
+    for (const asset of assets) {
+      expect(grid).toContain(`src="${asset}"`);
+      expect(h.exists(asset.slice(1))).toBe(true);
+    }
+    expect(grid).not.toMatch(/📄|📋|🏆|❌/);
+  });
+
+  it('地区行搜索与下拉使用切片图标，不渲染文本符号', () => {
+    expect(page).toContain('src="/static/icons/mall/search.png"');
+    expect(page).toContain('src="/static/icons/dashboard/credential-arrow.png"');
+    expect(page).not.toMatch(/🔍|∨/);
+  });
+
+  it('错误态与空态删除装饰性 emoji', () => {
+    expect(list).not.toMatch(/⚠️|📭/);
+  });
+});
+
 describe('零直发请求（页面层不直接 uni.request）', () => {
   it('practice-do.uvue 不直接调用 uni.request', () => {
     const src = read('pages/practice/practice-do.uvue');

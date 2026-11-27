@@ -8,7 +8,7 @@
         </AppNavBar>
 
         <view class="credential-bar">
-            <view class="credential-picker" @click="onCertTap">
+            <view class="credential-picker" @click="openCertPage">
                 <text class="credential-name">{{ currentCert }}</text>
                 <image class="credential-arrow" src="/static/icons/dashboard/credential-arrow.png" mode="aspectFit"></image>
             </view>
@@ -21,15 +21,6 @@
                 </view>
             </view>
         </view>
-
-        <!-- 证件选择面板（共享领域件 cert-selector，#1395 提升搬家）
-             #2535 Q3：浮层升级为与 choose-cert 主态同源的完整面板——省份 + 分组 + 热门考证 + 完成；
-             点选只改待确认项，点「完成」才 PATCH 落库，关闭面板不改证件。
-             below-nav-bar 让页头保持可见（设计稿 324_9793：面板从页头下方起、上圆角）。 -->
-        <CertSelector v-if="showCertDropdown" :groups="credentialGroups"
-            :current-id="pendingCredentialId" :province="province" :show-province="true" :confirmable="true"
-            :below-nav-bar="true" :top-inset="credentialPanelTop" @close="onCloseCertDropdown" @select="onPickCredential"
-            @confirm="onConfirmCredential" @province-tap="onProvinceTap" />
 
         <scroll-view class="content-scroll" scroll-y="true">
             <!-- Banner 海报（原型 404_2195 的 Rectangle 39：704x320 = 352x160 容器 2x，图内含「叉车维修培训」整版文案） -->
@@ -97,11 +88,10 @@
 </template>
 
 <script setup lang="uts">
-    import { ref, computed } from 'vue'
+    import { ref } from 'vue'
     import { onShow, onHide } from '@dcloudio/uni-app'
     import type { FeaturedContentItem, CourseItem } from '../../types/index'
     import AppNavBar from '../../components/app-nav-bar/app-nav-bar.uvue'
-    import CertSelector from '../../components/cert-selector/cert-selector.uvue'
     import DashboardMenuGrid from './components/dashboard-menu-grid.uvue'
     import DashboardContinueCard from './components/dashboard-continue-card.uvue'
     import DashboardNewsSection from './components/dashboard-news-section.uvue'
@@ -110,24 +100,20 @@
     import { useDashboardFeeds } from './composables/use-dashboard-feeds.uts'
 
     const windowHeight = uni.getSystemInfoSync().windowHeight
-    const credentialPanelTop = computed((): number => {
-        const system = uni.getSystemInfoSync()
-        let statusHeight = system.statusBarHeight
-        if (statusHeight == null || statusHeight <= 0) statusHeight = 44
-        const navHeight = Math.round(88 * system.windowWidth / 750)
-        const credentialHeight = Math.round(88 * system.windowWidth / 750)
-        return statusHeight + navHeight + credentialHeight
-    })
 
-    // 首页证件栏保留证件切换、顶部搜索与商城入口；快捷宫格只保留原型四项。
+    // 首页证件栏保留证件入口、顶部搜索与商城入口；快捷宫格只保留原型四项。
 
-    // ---- 证件切换流（composable 持有） ----
-    const {
-        currentCert, showCertDropdown, credentialGroups, currentCredentialId,
-        pendingCredentialId, province,
-        loadCredentials, onCertTap, onPickCredential, onConfirmCredential,
-        onProvinceTap, onCloseCertDropdown,
-    } = useDashboardCredential()
+    // ---- 证件显示（composable 持有；#2907 起首页不再改证件，只显示 + 跳整页） ----
+    const { currentCert, currentCredentialId, loadCredentials } = useDashboardCredential()
+
+    /**
+     * 证件栏点击 = 压栈进「选择学习阶段」整页（#2907：证件选择只剩整页一条路径）。
+     * `from=dashboard` 让整页跳过首屏引导态、并预选当前证件；注册流仍从自己的入口进、仍看引导。
+     * 跳转谓词留在页面（同 #1846/#1422 的落点纪律：组件与 composable 不写页面路由）。
+     */
+    function openCertPage() : void {
+        uni.navigateTo({ url: '/pages/guide/choose-cert?from=dashboard' })
+    }
 
     // ---- 数据流：未读轮询 / 继续学习 / 新闻资讯 / 首页课程区（composable 持有） ----
     const {
@@ -328,7 +314,7 @@
     }
 
     .filter-drawer {
-        background-color: #FFFFFF;
+        background-color: $card-bg;
         border-top-left-radius: 28rpx;
         border-top-right-radius: 28rpx;
         padding-bottom: 32rpx;
@@ -350,7 +336,7 @@
     /* 票 2730 第 1 项：88rpx 命中盒 / 64rpx 承载面由 components/app-icon-button 承担；✕ 字形 32rpx 不变。 */
     .filter-close-icon {
         font-size: 32rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .filter-section {
@@ -360,7 +346,7 @@
     .filter-label {
         font-size: 28rpx;
         font-weight: 600;
-        color: #333333;
+        color: $text-color;
         margin-bottom: 20rpx;
     }
 
@@ -390,7 +376,7 @@
 
     .filter-chip-text {
         font-size: 28rpx;
-        color: #555555;
+        color: $uni-color-subtitle;
     }
 
     .filter-chip-text--active {
@@ -429,7 +415,7 @@
     .filter-btn-confirm-text {
         font-size: 30rpx;
         font-weight: 600;
-        color: #FFFFFF;
+        color: $text-color-inverse;
     }
 
     /* ---- 间距工具类（替代 gap） ---- */

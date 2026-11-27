@@ -61,7 +61,7 @@
                     </view>
                     <view class="record-action">
                         <text class="record-action-text">{{ item.status == 'in_progress' ? '继续' : '查看' }}</text>
-                        <text class="record-action-arrow">›</text>
+                        <image class="record-action-arrow" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
                     </view>
                 </view>
             </view>
@@ -256,7 +256,7 @@ import { goBack } from '../../utils/navigation'
 
     .summary-text {
         font-size: 26rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .summary-passed {
@@ -267,7 +267,7 @@ import { goBack } from '../../utils/navigation'
 
     /* 统计卡片 */
     .stats-card {
-        background-color: #ffffff;
+        background-color: $text-color-inverse;
         margin: 0 24rpx 16rpx;
         border-radius: 16rpx;
         padding: 24rpx 0;
@@ -294,7 +294,7 @@ import { goBack } from '../../utils/navigation'
 
     .stats-label {
         font-size: 22rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .stats-divider {
@@ -315,7 +315,7 @@ import { goBack } from '../../utils/navigation'
     }
 
     .record-card {
-        background-color: #ffffff;
+        background-color: $text-color-inverse;
         border-radius: 16rpx;
         padding: 24rpx;
         margin-bottom: 16rpx;
@@ -374,14 +374,14 @@ import { goBack } from '../../utils/navigation'
     }
 
     .record-score {
-        font-size: 40rpx;
+        font-size: $font-size-2xl;
         font-weight: bold;
-        color: #333333;
+        color: $text-color;
     }
 
     .record-score-total {
         font-size: 24rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         margin-left: 8rpx;
     }
 
@@ -400,34 +400,34 @@ import { goBack } from '../../utils/navigation'
     }
 
     .tag-passed {
-        color: #ffffff;
+        color: $text-color-inverse;
         background-color: $success-color;
     }
 
     .tag-failed {
-        color: #ffffff;
+        color: $text-color-inverse;
         background-color: $danger-color;
     }
 
     .tag-paper {
-        color: #ffffff;
+        color: $text-color-inverse;
         background-color: $primary-color;
     }
 
     .record-stat {
         font-size: 22rpx;
-        color: #666666;
+        color: $text-color-secondary;
         margin-right: 12rpx;
     }
 
     .record-time {
         font-size: 22rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .record-date {
         font-size: 20rpx;
-        color: #cccccc;
+        color: $text-disabled;
     }
 
     .record-action {
@@ -442,12 +442,9 @@ import { goBack } from '../../utils/navigation'
     }
 
     .record-action-arrow {
-        width: 32rpx;
+        width: 24rpx;
+        height: 24rpx;
         flex-shrink: 0;
-        font-size: 32rpx;
-        line-height: 36rpx;
-        text-align: center;
-        color: $primary-color;
         margin-left: 4rpx;
     }
 
@@ -459,7 +456,7 @@ import { goBack } from '../../utils/navigation'
 
     .empty-text {
         font-size: 28rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .loading-more {
@@ -469,6 +466,6 @@ import { goBack } from '../../utils/navigation'
 
     .loading-text {
         font-size: 24rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 </style>

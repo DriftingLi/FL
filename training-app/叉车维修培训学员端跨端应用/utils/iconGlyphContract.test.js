@@ -73,6 +73,111 @@ function allSourceFiles() {
 
 const relOf = (abs) => path.relative(ROOT, abs).split(path.sep).join('/');
 
+/** 当前切片里的四向箭头：上下方向由同一张切图旋转得到，蓝底返回单独用反白切图。 */
+const ARROW_RIGHT = '/static/icons/profile/chevron-right.png';
+const ARROW_LEFT = '/static/icons/ai-chat/chevron-model.png';
+const ARROW_DOWN = '/static/icons/dashboard/credential-arrow.png';
+const ARROW_LEFT_INVERSE = '/static/icons/profile/chevron-left-inverse.png';
+
+/**
+ * 原文本箭头槽位清单。数量钉住旧实现，防止「只删字符、不补图标」假绿。
+ * src 可以是单张图，也可以是默认返回按页头底色二选一的两张图。
+ */
+const ARROW_IMAGE_SLOTS = [
+  ['components/ai-chat/ai-chat-drawer-left.uvue', 'recent-chevron', ARROW_DOWN, 1],
+  ['components/app-nav-bar/app-nav-bar.uvue', 'nav-bar-back-img', [ARROW_LEFT, ARROW_LEFT_INVERSE], 1],
+  ['pages/ai-assistant/ai-assistant.uvue', 'scope-chip-arrow', ARROW_DOWN, 1],
+  ['pages/ai-assistant/ai-assistant.uvue', 'prompt-arrow', ARROW_RIGHT, 1],
+  ['pages/ai-assistant/ai-assistant.uvue', 'code-hint-arrow', ARROW_RIGHT, 1],
+  ['pages/courses/components/chapter-file-list.uvue', 'file-arrow', ARROW_RIGHT, 1],
+  ['pages/courses/components/chapter-nav.uvue', 'nav-arrow-prev', ARROW_LEFT, 1],
+  ['pages/courses/components/chapter-nav.uvue', 'nav-arrow-next', ARROW_RIGHT, 1],
+  ['pages/courses/components/course-chapter-list.uvue', 'chapter-arrow', ARROW_RIGHT, 1],
+  ['pages/courses/components/course-info-grid.uvue', 'info-summary-arrow', ARROW_DOWN, 2],
+  ['pages/dashboard/components/dashboard-continue-card.uvue', 'continue-arrow', ARROW_RIGHT, 1],
+  ['pages/forum/check-in.uvue', 'calendar-arrow-prev', ARROW_LEFT, 1],
+  ['pages/forum/check-in.uvue', 'calendar-arrow-next', ARROW_RIGHT, 1],
+  ['pages/forum/components/forum-contribution-form.uvue', 'method-arrow', ARROW_RIGHT, 3],
+  ['pages/notifications/notifications.uvue', 'notify-arrow-img', ARROW_RIGHT, 1],
+  ['pages/points/points-detail.uvue', 'balance-rules-arrow', ARROW_RIGHT, 1],
+  ['pages/points/points-detail.uvue', 'notice-arrow', ARROW_RIGHT, 1],
+  ['pages/practice/components/practice-module-list.uvue', 'module-icon-arrow', ARROW_RIGHT, 1],
+  ['pages/practice/components/practice-module-list.uvue', 'module-arrow', ARROW_RIGHT, 1],
+  ['pages/practice/components/practice-stats-bar.uvue', 'stat-report-arrow', ARROW_RIGHT, 1],
+  ['pages/profile/components/wrong-filter-bar.uvue', 'filter-chip-arrow', ARROW_DOWN, 2],
+  ['pages/profile/help-center.uvue', 'entry-arrow', ARROW_RIGHT, 1],
+  ['pages/profile/help-center.uvue', 'service-arrow', ARROW_RIGHT, 3],
+  ['pages/profile/mock-exam-records.uvue', 'record-action-arrow', ARROW_RIGHT, 1],
+  ['pages/profile/notebook.uvue', 'note-tag-arrow', ARROW_RIGHT, 1],
+  ['pages/profile/notebook.uvue', 'group-icon-arrow', ARROW_RIGHT, 1],
+  ['pages/profile/notebook.uvue', 'group-chevron', ARROW_RIGHT, 1],
+  ['pages/profile/personal-info.uvue', 'cell-arrow', ARROW_RIGHT, 8],
+  ['pages/profile/wrong-questions.uvue', 'group-icon-arrow', ARROW_RIGHT, 1],
+  ['pages/profile/wrong-questions.uvue', 'group-chevron', ARROW_RIGHT, 1],
+  ['pages/profile/wrong-questions.uvue', 'group-back-arrow', ARROW_LEFT, 1],
+  ['pages/recruiter/home.uvue', 'urgency-arrow', ARROW_RIGHT, 1],
+  ['pages/resources/my-purchases.uvue', 'course-item-arrow', ARROW_RIGHT, 1],
+  ['pages/resume/resume-edit.uvue', 'field-arrow', ARROW_RIGHT, 4],
+];
+
+/** 数字实体先解码再判方向字符，避免 `&#8250;` 绕过字形扫描。 */
+function decodeNumericEntities(text) {
+  return text.replace(/&#(x[0-9a-f]+|\d+);/gi, (whole, raw) => {
+    const value = raw[0].toLowerCase() === 'x' ? parseInt(raw.slice(1), 16) : parseInt(raw, 10);
+    if (!Number.isFinite(value) || value < 0 || value > 0x10ffff) return whole;
+    return String.fromCodePoint(value);
+  });
+}
+
+/** 纯函数：只扫模板 <text> 的实际内容；注释、脚本里的历史说明不算渲染箭头。 */
+function scanTextDirectionArrows(source) {
+  const start = source.indexOf('<template>');
+  const end = source.lastIndexOf('</template>');
+  if (start < 0 || end < 0) return [];
+  const tpl = source.slice(start, end)
+    .replace(/<!--[\s\S]*?-->/g, (m) => m.replace(/[^\n]/g, ' '));
+  const violations = [];
+  const re = /<text\b(?:[^>"']|"[^"]*"|'[^']*')*>([\s\S]*?)<\/text>/g;
+  let m;
+  while ((m = re.exec(tpl)) !== null) {
+    const decoded = decodeNumericEntities(m[1].replace(/&lt;/g, '<').replace(/&gt;/g, '>'));
+    let reason = null;
+    if (/[›‹▾▸⌃⌄→←↑↓]/.test(decoded)) reason = '文本方向箭头字符';
+    else if (/["'][\^vV]["']/.test(decoded)) reason = 'ASCII 文本方向箭头（^ / v）';
+    else if (/^\s*[<>]\s*$/.test(decoded)) reason = 'ASCII 文本方向箭头（< / >）';
+    if (reason !== null) {
+      const line = source.slice(0, start + m.index).split('\n').length;
+      violations.push(reason + '（文件第 ' + line + ' 行）');
+    }
+  }
+  return violations;
+}
+
+/** 取指定 class 的 <image> 标签；base class 保持静态，旋转状态另挂动态 class。 */
+function imageTagsForClass(source, className) {
+  const tags = [];
+  for (const m of source.matchAll(/<image\b(?:[^>"']|"[^"]*"|'[^']*')*>/g)) {
+    const cls = (/class="([^"]*)"/.exec(m[0]) || ['', ''])[1].split(/\s+/);
+    if (cls.includes(className)) tags.push(m[0]);
+  }
+  return tags;
+}
+
+/** 纯函数：槽位数量、切片来源、aspectFit 三件事必须同时成立。 */
+function arrowImageViolations(source, className, expectedSrc, expectedCount) {
+  const tags = imageTagsForClass(source, className);
+  const violations = [];
+  if (tags.length !== expectedCount) {
+    violations.push(className + ' 图片槽数量应为 ' + expectedCount + '，实际 ' + tags.length);
+  }
+  const sources = Array.isArray(expectedSrc) ? expectedSrc : [expectedSrc];
+  for (const tag of tags) {
+    if (!sources.some((src) => tag.includes(src))) violations.push(className + ' 未使用既定切片图');
+    if (!tag.includes('mode="aspectFit"')) violations.push(className + ' 缺 mode="aspectFit"');
+  }
+  return violations;
+}
+
 /**
  * 剥离注释（`//` 与 `/* *​/`），但**保留换行与列**以便报行号。
  * 已知边界（如实声明，与 uvueEntityLiteralContract 同款）：不解析正则字面量 ⇒ 若某处正则里
@@ -312,6 +417,68 @@ describe('图标字形契约（#1071：全仓零空槽 + 零孤立 U+FE0F）', (
     });
   });
 
+  describe('③ 方向箭头切片契约（注入样本与真实槽位）', () => {
+    const rejected = [
+      ['右单书名号', '<text>›</text>'],
+      ['左单书名号', '<text>‹</text>'],
+      ['下三角', '<text>▾</text>'],
+      ['右三角', '<text>▸</text>'],
+      ['上 V 形', '<text>⌃</text>'],
+      ['下 V 形', '<text>⌄</text>'],
+      ['十进制右箭头实体', '<text>&#8250;</text>'],
+      ['十进制左箭头实体', '<text>&#8249;</text>'],
+      ['十六进制右箭头实体', '<text>&#x203A;</text>'],
+      ['ASCII 上下箭头三元式', "<text>{{ open ? '^' : 'v' }}</text>"],
+    ];
+    rejected.forEach(([name, tpl]) => {
+      it('文本扫描判红：' + name, () => {
+        expect(scanTextDirectionArrows('<template>' + tpl + '</template>')).toHaveLength(1);
+      });
+    });
+
+    it('文本扫描判绿：注释里的历史箭头与普通字母 v 不算渲染箭头', () => {
+      const src = '<template>\n<!-- <text>›</text> -->\n<text>版本 v1.2</text>\n<text>下一章</text>\n</template>';
+      expect(scanTextDirectionArrows(src)).toEqual([]);
+    });
+
+    it('图片槽检测器自检：缺图与错图都必须判红', () => {
+      const good = '<image class="arrow" src="' + ARROW_RIGHT + '" mode="aspectFit" />';
+      expect(arrowImageViolations(good, 'arrow', ARROW_RIGHT, 1)).toEqual([]);
+      expect(arrowImageViolations('', 'arrow', ARROW_RIGHT, 1).join('\n')).toMatch(/数量应为 1/);
+      expect(arrowImageViolations(good.replace(ARROW_RIGHT, ARROW_LEFT), 'arrow', ARROW_RIGHT, 1).join('\n')).toMatch(/未使用既定切片图/);
+      expect(arrowImageViolations(good.replace(' mode="aspectFit"', ''), 'arrow', ARROW_RIGHT, 1).join('\n')).toMatch(/缺 mode/);
+    });
+
+    it('pages / components 的 <text> 不再渲染方向字符', () => {
+      const files = ['pages', 'components']
+        .flatMap((dir) => collectSource(path.join(ROOT, dir)))
+        .filter((file) => file.endsWith('.uvue'));
+      expect(files.length).toBeGreaterThan(100);
+      const offenders = [];
+      for (const file of files) {
+        const violations = scanTextDirectionArrows(readText(file));
+        if (violations.length) offenders.push(relOf(file) + '\n    ' + violations.join('\n    '));
+      }
+      expect(offenders.join('\n')).toBe('');
+    });
+
+    for (const [rel, className, src, count] of ARROW_IMAGE_SLOTS) {
+      it(rel + ' 的 ' + className + ' 保留为切片图片槽（' + count + ' 个）', () => {
+        expect(arrowImageViolations(readText(path.join(ROOT, rel)), className, src, count)).toEqual([]);
+      });
+    }
+
+    it('四向箭头切片 PNG 真实存在且文件头有效', () => {
+      for (const src of [ARROW_RIGHT, ARROW_LEFT, ARROW_DOWN, ARROW_LEFT_INVERSE]) {
+        const file = path.join(ROOT, src);
+        expect(fs.existsSync(file)).toBe(true);
+        const bytes = fs.readFileSync(file);
+        expect(bytes.length).toBeGreaterThan(24);
+        expect(bytes.subarray(1, 4).toString('ascii')).toBe('PNG');
+      }
+    });
+  });
+
   // ---- 对真实文件断言：本票的交付判据 ----
   describe('③ 全仓图标位零空槽（#1071 交付物）', () => {
     const files = allSourceFiles();
@@ -365,7 +532,7 @@ describe('图标字形契约（#1071：全仓零空槽 + 零孤立 U+FE0F）', (
   });
 
   // ---- 反向锁：本票 29 处逐处钉住，改动必须留痕 ----
-  it('④ 本票口径：修复前恰好 29 处空槽（20 函数坏分支 + 9 模板空槽）', () => {
+  it('⑤ 本票口径：修复前恰好 29 处空槽（20 函数坏分支 + 9 模板空槽）', () => {
     // 这条锁的作用是**钉住口径**：若有人把某处字形又改回空串，函数扫描会红；
     // 若有人新增了图标位而没更新 EXPECTED_SLOTS，这里也提醒他去补表。
     // 判据 = 修复后归零（见 ③），本表是「有多少处要守」的显式痕迹。

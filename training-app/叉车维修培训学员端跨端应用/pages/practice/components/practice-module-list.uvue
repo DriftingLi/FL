@@ -14,7 +14,6 @@
 
         <!-- 错误态 -->
         <view v-else-if="error.length > 0 && modules.length == 0" class="error-state" @click="onRetry">
-            <text class="error-icon">⚠️</text>
             <text class="error-text">{{ error }}</text>
             <view class="error-btn">
                 <text class="error-btn-text">点击重试</text>
@@ -23,7 +22,6 @@
 
         <!-- 空状态 -->
         <view v-else-if="modules.length == 0" class="empty-state">
-            <text class="empty-icon">📭</text>
             <text class="empty-text">暂无题库标签</text>
         </view>
 
@@ -31,13 +29,13 @@
         <view v-else class="module-list">
             <view v-for="(m, idx) in modules" :key="m.tag_id" class="module-card" @click="onModuleClick(m)">
                 <view class="module-icon">
-                    <text class="module-icon-text">›</text>
+                    <image class="module-icon-arrow" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
                 </view>
                 <view class="module-info">
                     <text class="module-name">{{ m.name }}</text>
                     <text class="module-meta">{{ moduleMeta(m) }}</text>
                 </view>
-                <text class="module-arrow">›</text>
+                <image class="module-arrow" src="/static/icons/profile/chevron-right.png" mode="aspectFit" />
             </view>
         </view>
     </view>
@@ -103,10 +101,9 @@
         flex-shrink: 0;
     }
 
-    .module-icon-text {
-        font-size: 30rpx;
-        color: $primary-color;
-        font-weight: bold;
+    .module-icon-arrow {
+        width: 28rpx;
+        height: 28rpx;
     }
 
     .module-info {
@@ -128,11 +125,8 @@
 
     .module-arrow {
         width: 32rpx;
+        height: 32rpx;
         flex-shrink: 0;
-        font-size: 36rpx;
-        line-height: 40rpx;
-        text-align: center;
-        color: $text-disabled;
         margin-left: 12rpx;
     }
 
@@ -189,11 +183,6 @@
         align-items: center;
     }
 
-    .error-icon {
-        font-size: 64rpx;
-        margin-bottom: 16rpx;
-    }
-
     .error-text {
         font-size: 28rpx;
         color: $text-color-placeholder;
@@ -220,11 +209,6 @@
         padding: 80rpx 0;
         flex-direction: column;
         align-items: center;
-    }
-
-    .empty-icon {
-        font-size: 64rpx;
-        margin-bottom: 16rpx;
     }
 
     .empty-text {

@@ -111,7 +111,7 @@
         right: 24rpx;
         z-index: 91;
         min-width: 130rpx;
-        background-color: #ffffff;
+        background-color: $card-bg;
         border-radius: 12rpx;
         padding: 6rpx 0;
         box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.12);
@@ -125,7 +125,7 @@
     .more-item-text {
         font-size: 24rpx;
         line-height: 34rpx;
-        color: #333333;
+        color: $text-color;
     }
 
     /* 已收藏：沿用收藏橙（§1.6 白名单 #FF8F00 的承载点，自 forum-topic-actions 迁来） */
