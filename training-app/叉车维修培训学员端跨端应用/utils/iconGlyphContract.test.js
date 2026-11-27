@@ -84,7 +84,6 @@ const ARROW_LEFT_INVERSE = '/static/icons/profile/chevron-left-inverse.png';
  * src 可以是单张图，也可以是默认返回按页头底色二选一的两张图。
  */
 const ARROW_IMAGE_SLOTS = [
-  ['components/app-list-item/app-list-item.uvue', 'app-list-item-arrow', ARROW_RIGHT, 1],
   ['components/ai-chat/ai-chat-drawer-left.uvue', 'recent-chevron', ARROW_DOWN, 1],
   ['components/app-nav-bar/app-nav-bar.uvue', 'nav-bar-back-img', [ARROW_LEFT, ARROW_LEFT_INVERSE], 1],
   ['pages/ai-assistant/ai-assistant.uvue', 'scope-chip-arrow', ARROW_DOWN, 1],

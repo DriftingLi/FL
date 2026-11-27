@@ -8,17 +8,17 @@
  * 所以本文件钉的是「它们真的能用」，不是它们的视觉。
  *
  * 判据来源：四条红线（docs/agents/uvue-css.md）、ADR-0007「easycom 仅全局件」、#2438 裁定。
+ *
+ * 现役 5 件：#2912 按 #2897 裁定 A 删掉了 0 引用的 `app-badge` / `app-card` / `app-list-item`，
+ * 断言面随之从 8 件收窄到 5 件（判据本身不变，剩下的件照旧钉目录约定与四条红线）。
  */
 const h = require('./contractHarness');
 
-/** easycom autoscan 的目录约定是 `components/<name>/<name>.uvue`；这里是 `app-*` 家族 8 件。 */
+/** easycom autoscan 的目录约定是 `components/<name>/<name>.uvue`；这里是 `app-*` 家族 5 件。 */
 const APP_COMPONENTS = [
-  'app-badge',
   'app-button',
-  'app-card',
   'app-chip',
   'app-empty-state',
-  'app-list-item',
   'app-nav-bar',
   'app-tabs',
 ];
@@ -35,13 +35,13 @@ function styleTagViolations(src) {
 const WRONG_VARS = /\$(?:text-inverse|text-secondary|text-placeholder)\b/;
 
 describe('全局件可用性（#2444）', () => {
-  it('A: 8 个 app-* 全局件都在 components/<name>/<name>.uvue（autoscan 的目录约定）', () => {
+  it('A: 5 个 app-* 全局件都在 components/<name>/<name>.uvue（autoscan 的目录约定）', () => {
     for (const name of APP_COMPONENTS) {
       expect(h.exists(`components/${name}/${name}.uvue`)).toBe(true);
     }
   });
 
-  it('B: 8 个 app-* 全局件的 <style> 全部带 lang="scss"（四条红线之一）', () => {
+  it('B: 5 个 app-* 全局件的 <style> 全部带 lang="scss"（四条红线之一）', () => {
     const bad = APP_COMPONENTS.filter((name) =>
       styleTagViolations(h.read(`components/${name}/${name}.uvue`)));
     expect(bad).toEqual([]);

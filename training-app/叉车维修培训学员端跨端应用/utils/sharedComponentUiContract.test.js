@@ -1,8 +1,9 @@
 /**
- * 共享件层值面契约（#2865，T3 判据落地）—— components/** 27 件自身合规 + 逐文件棘轮
+ * 共享件层值面契约（#2865，T3 判据落地）—— components/** 24 件自身合规 + 逐文件棘轮
  *
  * 判据源：docs/design/20261125-共享件层判据.md 第 6 / 10 节（X.1-X.7）。
- * 层 = components 目录下所有 .uvue（27 件），是资产库，不是「全站标准件」。
+ * 层 = components 目录下所有 .uvue（24 件），是资产库，不是「全站标准件」。
+ * 件数随 #2912 清零引用件（app-card / app-badge / app-list-item）从 27 收到 24。
  *
  * 三条值面判据（只判自身合规，不判引用率）：
  *  1. style 块内声明位裸 hex 属于 uni.scss token 值集合或 utils/uiHexWhitelist.js；
@@ -12,7 +13,7 @@
  * 棘轮（两向都红，缺一条就会长成假锁）：
  *  - 实测 > 基线（含基线没有的新件）=> 新写入判红；
  *  - 基线 > 实测（含文件被删）=> 清了没改账判红。
- *  基线 utils/sharedComponentUiBaseline.json 由扫描产出、键排序；存量 9 件 31 处只减不增，
+ *  基线 utils/sharedComponentUiBaseline.json 由扫描产出、键排序；存量 9 件 26 处只减不增，
  *  新共享件不在基线 => 按 0 算 => 任何一处值面违规即红（X.7）。
  *
  * 为什么引用率不判：见判据第 8 / 9 节——「该不该用某件共享件」是判断类，机检只能回答
@@ -89,7 +90,7 @@ function scanCountsFromSources(sources) {
   return counts;
 }
 
-/** 现测：components/** 27 件的逐文件违规处数。 */
+/** 现测：components/** 24 件的逐文件违规处数。 */
 function scanCounts() {
   const sources = {};
   for (const rel of COMPONENTS) sources[rel] = read(rel);
@@ -144,20 +145,17 @@ function primaryLiterals(src) {
   return n;
 }
 
-describe('共享件层值面契约（#2865，components/** 27 件）', () => {
+describe('共享件层值面契约（#2865，components/** 24 件）', () => {
   describe('① 扫描面完整性', () => {
-    it('层 = components 目录下所有 .uvue，27 件（增删件须同步本套件与基线，不得静默漂移）', () => {
-      expect(COMPONENTS.length).toBe(27);
+    it('层 = components 目录下所有 .uvue，24 件（增删件须同步本套件与基线，不得静默漂移）', () => {
+      expect(COMPONENTS.length).toBe(24);
     });
 
-    it('具名钉住：页头件 / 违规存量件 / 零引用资产件都在扫描面内', () => {
+    it('具名钉住：页头件 / 违规存量件都在扫描面内', () => {
       const pinned = [
         'components/app-nav-bar/app-nav-bar.uvue',
         'components/ai-chat/ai-chat-input.uvue',
         'components/forum-wysiwyg-input.uvue',
-        'components/app-card/app-card.uvue',
-        'components/app-badge/app-badge.uvue',
-        'components/app-list-item/app-list-item.uvue',
       ];
       for (const rel of pinned) {
         expect([rel, COMPONENTS.includes(rel)]).toEqual([rel, true]);
@@ -257,7 +255,7 @@ describe('共享件层值面契约（#2865，components/** 27 件）', () => {
     });
   });
 
-  describe('④ 真实文件（components/** 27 件）', () => {
+  describe('④ 真实文件（components/** 24 件）', () => {
     it('lang="scss" 100%（有 style 块则每个块都要 lang="scss"）', () => {
       const bad = COMPONENTS
         .map((rel) => [rel, styleTagProblems(read(rel))])

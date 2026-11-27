@@ -173,7 +173,7 @@ describe('image 网络图 webp 属性契约（#2543）', () => {
         'pages/forum/components/forum-topic-card.uvue',
         'pages/mall/mall.uvue',
         'pages/login/login.uvue',
-        'components/app-list-item/app-list-item.uvue',
+        'components/ai-chat/ai-chat-bubble.uvue',
       ]) {
         expect(files.map(relOf)).toContain(rel);
       }
