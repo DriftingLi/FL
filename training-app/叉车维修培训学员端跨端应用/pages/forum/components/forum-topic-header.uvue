@@ -67,7 +67,7 @@
 
     .author-name {
         font-size: 28rpx;
-        color: #333333;
+        color: $text-color;
         font-weight: bold;
     }
 
@@ -79,11 +79,11 @@
 
     .post-region {
         font-size: 22rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .post-time {
         font-size: 22rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 </style>
