@@ -83,7 +83,7 @@
 
 <style lang="scss">
   .topic-card {
-    background-color: #ffffff;
+    background-color: $card-bg;
     border-radius: 16rpx;
     padding: 24rpx;
     margin-bottom: 16rpx;
@@ -94,14 +94,14 @@
   .topic-title {
     font-size: 30rpx;
     font-weight: bold;
-    color: #333333;
+    color: $text-color;
     line-height: 1.4;
     margin-bottom: 12rpx;
   }
 
   .topic-preview {
     font-size: 26rpx;
-    color: #666666;
+    color: $text-color-secondary;
     line-height: 1.5;
     margin-bottom: 12rpx;
   }
@@ -145,12 +145,12 @@
 
   .stat-text {
     font-size: 22rpx;
-    color: #999999;
+    color: $text-color-placeholder;
     margin-right: 16rpx;
   }
 
   .topic-time {
     font-size: 22rpx;
-    color: #cccccc;
+    color: $text-disabled;
   }
 </style>

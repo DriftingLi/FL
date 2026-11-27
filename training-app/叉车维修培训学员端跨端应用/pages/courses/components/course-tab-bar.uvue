@@ -47,7 +47,7 @@
         flex-direction: row;
         align-items: center;
         padding: 0 24rpx;
-        border-bottom: 1rpx solid #f0f0f0;
+        border-bottom: 1rpx solid $border-color-light;
     }
 
     .tab-tabs {
@@ -83,18 +83,18 @@
 
     .tab-text {
         font-size: 30rpx;
-        color: #666666;
+        color: $text-color-secondary;
     }
 
     .tab-text--active {
-        color: #333333;
+        color: $text-color;
         font-weight: bold;
     }
 
     .tab-download {
         padding: 10rpx 24rpx;
         border-radius: 28rpx;
-        background-color: #f2f6ff;
+        background-color: $bg-tint;
     }
 
     .tab-download-text {

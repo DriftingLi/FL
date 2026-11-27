@@ -297,7 +297,7 @@
 
 <style lang="scss">
     .record-card {
-        background-color: #ffffff;
+        background-color: $card-bg;
         border-radius: 16rpx;
         padding: 24rpx;
         margin-bottom: 16rpx;
@@ -313,7 +313,7 @@
 
     .record-type-tag {
         font-size: 20rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
         background-color: #ff5722;
         padding: 4rpx 12rpx;
         border-radius: 6rpx;
@@ -340,7 +340,7 @@
 
     .record-date {
         font-size: 22rpx;
-        color: #cccccc;
+        color: $text-disabled;
     }
 
     /* 最近错误时间（#1083）：与 created_at 区分，卡片窄屏下可换行不挤爆标题 */
@@ -351,7 +351,7 @@
 
     .record-title {
         font-size: 30rpx;
-        color: #333333;
+        color: $text-color;
         line-height: 1.5;
         margin-bottom: 16rpx;
     }
@@ -427,20 +427,20 @@
     .option-key-text {
         font-size: 24rpx;
         font-weight: bold;
-        color: #333333;
+        color: $text-color;
     }
 
     /* 关系选择器（父类 + 空格 + 子类）在 UCSS 里需运行时动态计算、有额外性能损耗，
        HarmonyOS Vapor 不支持；祖先为复合类（两个类名连写）再跟后代时，编译产物是
        含空格的死键、永远匹配不上 ⇒ 一律落成挂在元素自身的平类 */
     .option-key-text--inverse {
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 
     .option-text {
         flex: 1;
         font-size: 26rpx;
-        color: #333333;
+        color: $text-color;
     }
 
     .redo-result {
@@ -474,7 +474,7 @@
 
     .redo-result-answer {
         font-size: 24rpx;
-        color: #666666;
+        color: $text-color-secondary;
     }
 
     .redo-result-hint {
@@ -505,13 +505,13 @@
     }
 
     .redo-btn-danger {
-        background-color: #ffffff;
+        background-color: $card-bg;
         border: 1rpx solid $danger-color;
     }
 
     .redo-btn-text {
         font-size: 24rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 
     .redo-btn-text--danger {
@@ -529,7 +529,7 @@
     .card-action-btn {
         padding: 8rpx 24rpx;
         border-radius: 24rpx;
-        background-color: #ffffff;
+        background-color: $card-bg;
         border: 1rpx solid $primary-color;
         margin-left: 16rpx;
     }
@@ -539,7 +539,7 @@
     }
 
     .card-action-danger {
-        background-color: #ffffff;
+        background-color: $card-bg;
         border: 1rpx solid $danger-color;
     }
 
@@ -549,7 +549,7 @@
     }
 
     .card-action-text--primary {
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 
     .card-action-danger-text {
@@ -568,10 +568,10 @@
     .answer-line, .answer-explain, .answer-empty {
         font-size: 24rpx;
         line-height: 1.5;
-        color: #666666;
+        color: $text-color-secondary;
     }
 
     .answer-empty {
-        color: #999999;
+        color: $text-color-placeholder;
     }
 </style>

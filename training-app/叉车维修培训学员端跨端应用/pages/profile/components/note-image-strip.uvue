@@ -112,7 +112,7 @@
         width: 148rpx;
         height: 148rpx;
         border-radius: 12rpx;
-        background-color: #f0f0f0;
+        background-color: $border-color-light;
     }
 
     /* 票 2730 第 1 项：× 徽标本体仍是 40rpx，命中区由外层 88rpx 盒撑开（§5.11）；
@@ -133,12 +133,12 @@
         border-radius: 20rpx;
         align-items: center;
         justify-content: center;
-        background-color: #333333;
+        background-color: $text-color;
     }
 
     .remove-x {
         font-size: 24rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
         line-height: 28rpx;
     }
 
@@ -146,7 +146,7 @@
         width: 148rpx;
         height: 148rpx;
         border-radius: 12rpx;
-        border: 1rpx dashed #cccccc;
+        border: 1rpx dashed $text-disabled;
         align-items: center;
         justify-content: center;
         margin-bottom: 12rpx;
@@ -154,13 +154,13 @@
 
     .add-x {
         font-size: 44rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         line-height: 48rpx;
     }
 
     .tip {
         font-size: 22rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         margin-top: 4rpx;
     }
 </style>
