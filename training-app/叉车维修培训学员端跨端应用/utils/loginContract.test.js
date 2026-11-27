@@ -163,9 +163,13 @@ const LINE_BUDGET = 600;
  * ⚠️ **#2862 显式变更（底灰值面收敛，经批准的改）**：style 块内 6 处 `#F5F7FA`（页面底 + 输入/按钮的
  * 中性底）改走 `$bg-color`（#F5F5F5）—— 全端 7 个近邻底灰收敛为 1 个 token 的落地，属「同值收敛」
  * 而非视觉改版；**块内 48 条规则数不变**，只有声明位的值变 ⇒ 仅 STYLE_SHA256 前进，模板 sha 逐字节不变。
+ * ⚠️ **#2916 显式变更（P2 入口件裸 hex 归零，经批准的改）**：style 块内 5 处字面量改走语义 token ——
+ * 3 处 `#ffffff` 背景 → `$card-bg`、2 处 `#ffffff` 文字 → `$text-color-inverse`；**token 值与字面量逐位
+ * 相同**（#FFFFFF），像素面零变化；**块内 48 条规则数不变**，只有声明位的写法变 ⇒ 仅 STYLE_SHA256 前进，
+ * 模板 sha 逐字节不变。
  */
 const TEMPLATE_SHA256 = '9913162d4c46905fb25745fdad5b0acb54c3cb3dc5e437ea354e8e29c8f351f8';
-const STYLE_SHA256 = '4bbad68ca0582e9a5cea1b83279ead778ec0878d724d9d6e4c40b48d437cc2f0';
+const STYLE_SHA256 = '4eec95041ae6c15ef5f99faa41667dd60f395d84921f8d83b645c3fc1b928935';
 
 /** 页面块（template / script / style）。模板**有嵌套** `<template v-if>` ⇒ 闭合取最后一个 */
 function block(src, tag) {

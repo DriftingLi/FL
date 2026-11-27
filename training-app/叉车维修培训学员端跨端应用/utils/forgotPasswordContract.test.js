@@ -65,8 +65,14 @@ const LINE_BUDGET = 600;
  * ⚠️ **#2862 第四次显式变更（底灰与浅蓝底值面收敛）**：块内 4 处声明位改走 token —— 2 处 `#F5F6FA` +
  * 1 处 `#F0F1F5` → `$bg-color`（#F5F5F5），1 处 `#E8F3FF` → `$primary-tint`（#EBF9FF）。
  * **块内 45 条规则数不变**，只有声明位的值变 ⇒ 像素面只有近邻色差（ΔE 1 量级），不是视觉改版。
+ *
+ * ⚠️ **#2916 第五次显式变更（P2 入口件裸 hex 归零，经批准的改）**：块内 10 处字面量改走语义 token ——
+ * 2 处 `#ffffff` 背景 → `$card-bg`、1 处 `#ffffff` 文字 → `$text-color-inverse`、3 处 `#333333` →
+ * `$text-color`、2 处 `#999999` → `$text-color-placeholder`、2 处 `#666666` → `$text-color-secondary`。
+ * **token 值与字面量逐位相同**，像素面零变化；成功页插画成套色（`#16A34A` 等 11 处）是 §1.6 白名单
+ * 冻结值，本票不动（换色要么改视觉要么新立 token，均超本票边界）。**块内 45 条规则数不变**。
  */
-const STYLE_SHA256 = '4a27d045c06d228ac69324a6cb1376642a322b391fe30d188d7464c2f7830cc1';
+const STYLE_SHA256 = '12a279ecffaf993306d42499ce60572af4911c9bb5e261d14de41629dbc5443d';
 
 /** 页面块（template / script / style）。模板**有嵌套** `<template v-if>` ⇒ 闭合取最后一个 */
 function block(src, tag) {
