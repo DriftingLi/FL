@@ -69,8 +69,3 @@ export function composeDiagnosisSentence(
 export function pickerKindOf(brand: DiagnosisIntentBrand | null | undefined): 'system' | 'model' {
   return brand?.picker === 'model' ? 'model' : 'system'
 }
-
-/** 第三层标题：型号档选的是「维修部位 / 主题」，系统档选的是「故障现象」（对方同口径） */
-export function faultStepTitle(brand: DiagnosisIntentBrand | null | undefined): string {
-  return pickerKindOf(brand) === 'model' ? '选要查的维修部位 / 主题' : '选故障现象'
-}

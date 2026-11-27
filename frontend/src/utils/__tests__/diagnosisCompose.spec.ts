@@ -9,7 +9,6 @@
 import { describe, it, expect } from 'vitest'
 import {
   composeDiagnosisSentence,
-  faultStepTitle,
   pickerKindOf,
   type DiagnosisSelection
 } from '../diagnosisCompose'
@@ -97,10 +96,5 @@ describe('picker 分档', () => {
     expect(pickerKindOf(brand())).toBe('system')
     expect(pickerKindOf(brand({ picker: 'some-new-value' }))).toBe('system')
     expect(pickerKindOf(null)).toBe('system')
-  })
-
-  it('第三层标题按 picker 返回与移动端一致的文案', () => {
-    expect(faultStepTitle(linde)).toBe('选要查的维修部位 / 主题')
-    expect(faultStepTitle(brand())).toBe('选故障现象')
   })
 })
