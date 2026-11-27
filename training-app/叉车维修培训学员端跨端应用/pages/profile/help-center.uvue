@@ -425,7 +425,7 @@ import { goBack } from '../../utils/navigation'
 
     .state-text {
         font-size: 28rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .state-btn {
@@ -437,7 +437,7 @@ import { goBack } from '../../utils/navigation'
 
     .state-btn-text {
         font-size: 28rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 
     /* 问答分组 */
@@ -491,7 +491,7 @@ import { goBack } from '../../utils/navigation'
     /* 答案：纯文本、原样换行（不引 Markdown 渲染口径） */
     .entry-answer {
         font-size: 26rpx;
-        color: #666666;
+        color: $text-color-secondary;
         line-height: 42rpx;
     }
 
@@ -535,7 +535,7 @@ import { goBack } from '../../utils/navigation'
     .service-desc {
         flex: 1;
         font-size: 24rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .service-arrow { width: 32rpx; height: 32rpx; flex-shrink: 0; margin-left: 16rpx; }
@@ -553,7 +553,7 @@ import { goBack } from '../../utils/navigation'
 
     .history-tip-text {
         font-size: 26rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .history-item {
@@ -582,18 +582,18 @@ import { goBack } from '../../utils/navigation'
 
     .history-time {
         font-size: 22rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .history-content {
         font-size: 26rpx;
-        color: #333333;
+        color: $text-color;
         line-height: 40rpx;
     }
 
     .history-contact {
         font-size: 24rpx;
-        color: #666666;
+        color: $text-color-secondary;
         padding-top: 12rpx;
     }
 </style>

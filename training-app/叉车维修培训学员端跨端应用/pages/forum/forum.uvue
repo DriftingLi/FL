@@ -247,7 +247,7 @@
 
     .msg-badge-text {
         font-size: 20rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
         font-weight: bold;
     }
 
@@ -264,7 +264,7 @@
         flex-direction: row;
         align-items: center;
         justify-content: space-between;
-        background-color: #ffffff;
+        background-color: $text-color-inverse;
         border-radius: 36rpx;
         padding: 16rpx 24rpx;
         margin-right: 20rpx;
@@ -277,7 +277,7 @@
 
     .res-search-placeholder {
         font-size: 28rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         flex: 1;
     }
 
@@ -332,7 +332,7 @@
 
     .empty-text {
         font-size: 28rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         margin-bottom: 32rpx;
     }
 
@@ -344,7 +344,7 @@
 
     .empty-btn-text {
         font-size: 28rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 
     /* 加载更多 */
@@ -355,7 +355,7 @@
 
     .loading-text {
         font-size: 24rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     /* 悬浮发帖按钮（避开底部 tab-bar） */
@@ -374,7 +374,7 @@
 
     .fab-icon {
         font-size: 56rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
         font-weight: bold;
     }
 </style>

@@ -478,12 +478,12 @@ import { goBack } from '../../utils/navigation'
 
     .loading-text {
         font-size: 28rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     /* 帖子内容区 */
     .topic-section {
-        background-color: #ffffff;
+        background-color: $text-color-inverse;
         padding: 32rpx;
         margin-bottom: 16rpx;
         flex-direction: column;
@@ -502,7 +502,7 @@ import { goBack } from '../../utils/navigation'
         flex: 1;
         font-size: 32rpx;
         font-weight: bold;
-        color: #333333;
+        color: $text-color;
         line-height: 1.5;
     }
 
@@ -510,7 +510,7 @@ import { goBack } from '../../utils/navigation'
        旧注释写的「56rpx 命中区」是估值，实测 48rpx 且无垂直内距 —— 命中区不在这里，见 .title-more-hit（票 2782）。 */
     .title-more {
         font-size: 32rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         line-height: 1.5;
         padding: 0 0 0 16rpx;
     }
@@ -541,7 +541,7 @@ import { goBack } from '../../utils/navigation'
 
     .topic-tag-text {
         font-size: 22rpx;
-        color: #666666;
+        color: $text-color-secondary;
     }
 
     /* 底部回复栏（形态本身在 forum-markdown-input，本页只留外壳与发送按钮） */
@@ -549,7 +549,7 @@ import { goBack } from '../../utils/navigation'
         flex-direction: row;
         align-items: center;
         padding: 16rpx 24rpx;
-        background-color: #ffffff;
+        background-color: $text-color-inverse;
         border-top: 1rpx solid #eeeeee;
     }
 
@@ -569,7 +569,7 @@ import { goBack } from '../../utils/navigation'
 
     .reply-trigger-ph {
         font-size: 28rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     /* 蓝色发送按钮（票 2767）：与输入框同高，同样只是升起浮层的触发点 */
@@ -585,7 +585,7 @@ import { goBack } from '../../utils/navigation'
 
     .reply-send-text {
         font-size: 28rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
         font-weight: bold;
     }
 </style>
