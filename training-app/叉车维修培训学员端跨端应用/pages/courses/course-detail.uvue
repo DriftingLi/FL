@@ -466,14 +466,14 @@ import { goBack } from '../../utils/navigation'
 
     /* ===== 标题卡（#2518 C 方案）：封面 + 进度 + 信息摘要收进一张白卡 ===== */
     .hero-card {
-        background-color: #ffffff;
+        background-color: $card-bg;
         margin-bottom: 16rpx;
         flex-direction: column;
     }
 
     /* ===== 课程 / 资料 双 Tab ===== */
     .tab-panel {
-        background-color: #ffffff;
+        background-color: $card-bg;
         flex-direction: column;
     }
 
@@ -500,7 +500,7 @@ import { goBack } from '../../utils/navigation'
     .action-btn-text {
         font-size: 32rpx;
         font-weight: bold;
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 
     /* 余额不足的装饰提示行（可点直达任务中心；uVue 仅 class 选择器，文字样式落在 <text> 上） */
@@ -526,12 +526,12 @@ import { goBack } from '../../utils/navigation'
 
     .loading-text {
         font-size: 28rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .empty-text {
         font-size: 28rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         margin-bottom: 24rpx;
     }
 
@@ -548,7 +548,7 @@ import { goBack } from '../../utils/navigation'
 
     .retry-btn-text {
         font-size: 28rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 
     /* ===== 收藏按钮 ===== */
@@ -558,6 +558,6 @@ import { goBack } from '../../utils/navigation'
     /* 票 2730 第 1 项：88rpx 命中盒 / 64rpx 承载面由 components/app-icon-button 承担，本处只留字形。 */
     .favorite-icon {
         font-size: $font-size-2xl;
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 </style>

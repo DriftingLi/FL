@@ -314,7 +314,7 @@
     }
 
     .filter-drawer {
-        background-color: #FFFFFF;
+        background-color: $card-bg;
         border-top-left-radius: 28rpx;
         border-top-right-radius: 28rpx;
         padding-bottom: 32rpx;
@@ -336,7 +336,7 @@
     /* 票 2730 第 1 项：88rpx 命中盒 / 64rpx 承载面由 components/app-icon-button 承担；✕ 字形 32rpx 不变。 */
     .filter-close-icon {
         font-size: 32rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .filter-section {
@@ -346,7 +346,7 @@
     .filter-label {
         font-size: 28rpx;
         font-weight: 600;
-        color: #333333;
+        color: $text-color;
         margin-bottom: 20rpx;
     }
 
@@ -376,7 +376,7 @@
 
     .filter-chip-text {
         font-size: 28rpx;
-        color: #555555;
+        color: $uni-color-subtitle;
     }
 
     .filter-chip-text--active {
@@ -415,7 +415,7 @@
     .filter-btn-confirm-text {
         font-size: 30rpx;
         font-weight: 600;
-        color: #FFFFFF;
+        color: $text-color-inverse;
     }
 
     /* ---- 间距工具类（替代 gap） ---- */

@@ -140,7 +140,7 @@
 
 - `$primary-color-light`（`#5b9aff`）/ `$primary-color-dark`（`#1c9eff`）：0 引用 + 0 字面量；用途已分别被 §5.3 的主 CTA 渐变对与 pressed 对取代。
 - `$accent-yellow`（`#FDE03B`）/ `$text-on-yellow`（`#271309`）：0/0；打卡格的实值是白名单 `#FFD666` / `#F6B93E`，与 #FDE03B **不等值**（接上即改视觉）。浅底档 `$accent-yellow-tint` 仍在用，保留。
-- `$header-grad-start` / `$header-grad-end`（`#239EDD` / `#FFFFFF`）：页头套自 #1592 起是**实色**（§7 的 N01–N06 全实色，唯一页头件 `components/app-nav-bar/app-nav-bar.uvue`），全仓 84 处 `linear-gradient` 里没有一处页头渐变 ⇒「页头渐变被硬编码、换血漏了」不成立；接上等于新造页头视觉并波及 56 页。
+- `$header-grad-start` / `$header-grad-end`（`#239EDD` / `#FFFFFF`）：页头套自 #1592 起是**实色**（§7 的 N01–N06 全实色，唯一页头件 `components/app-nav-bar/app-nav-bar.uvue`），全仓 84 处 `linear-gradient` 里没有一处页头渐变 ⇒「页头渐变被硬编码、换血漏了」不成立；接上等于新造页头视觉并波及 55 页。
 - `$checkin-cell-miss` / `-past-miss` / `-inactive` / `-streak`：四态 0/0；日历实际渲染走白名单字面量（`pages/forum/check-in.uvue` 的 `#E8E8E8` / `#FFD666` / `#F6B93E`），与 token 值不等值。`$checkin-cell-miss` 的唯一消费点是打卡页开关轨色，已改挂同值的 `$border-color`（`#D9D9D9`，零视觉）。
 - `$answer-correct`（`#7BD398`）：0/0；答题正确面实际走 `$success-color`（`pages/exam/components/exam-result-detail-list.uvue:117`）。
 

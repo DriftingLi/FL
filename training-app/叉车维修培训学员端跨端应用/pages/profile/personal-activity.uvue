@@ -349,7 +349,7 @@
        图标 + 加粗文案 + 主按钮，与其余 tab 的纯文字空态不同，故单独一类。 */
     .empty-card {
         align-items: center;
-        background-color: #ffffff;
+        background-color: $text-color-inverse;
         border-radius: $radius-card;
         margin: $spacing-md;
         padding: 64rpx 0 56rpx;
