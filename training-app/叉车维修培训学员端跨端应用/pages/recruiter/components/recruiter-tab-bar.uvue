@@ -86,7 +86,7 @@
 <style lang="scss">
     .recruiter-tab-bar {
         flex-direction: row;
-        background-color: #ffffff;
+        background-color: $card-bg;
         border-top: 1rpx solid #eeeeee;
         padding-bottom: 8rpx;
     }
@@ -113,13 +113,13 @@
 
     .recruiter-tab-glyph {
         font-size: $font-size-2xl;
-        color: #999999;
+        color: $text-color-placeholder;
         line-height: 48rpx;
         text-align: center;
     }
 
     .recruiter-tab-glyph-active {
-        color: #239EDD;
+        color: $primary-color;
     }
 
     .recruiter-tab-badge {
@@ -131,7 +131,7 @@
         padding: 0 8rpx;
         border-radius: 15rpx;
         background-color: #E5484D;
-        color: #ffffff;
+        color: $text-color-inverse;
         font-size: 20rpx;
         text-align: center;
     }
@@ -139,10 +139,10 @@
     .recruiter-tab-text {
         margin-top: 4rpx;
         font-size: 20rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .recruiter-tab-text-active {
-        color: #239EDD;
+        color: $primary-color;
     }
 </style>

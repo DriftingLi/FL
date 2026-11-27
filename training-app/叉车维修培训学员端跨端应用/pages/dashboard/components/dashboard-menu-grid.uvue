@@ -69,6 +69,6 @@
     /* 原型 404_2195 宫格标签 14px */
     .menu-label {
         font-size: 28rpx;
-        color: #333333;
+        color: $text-color;
     }
 </style>

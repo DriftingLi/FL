@@ -55,7 +55,7 @@
 <style lang="scss">
     /* 题目卡片 */
     .question-card {
-        background-color: #ffffff;
+        background-color: $card-bg;
         margin: 0 24rpx 24rpx;
         border-radius: 16rpx;
         padding: 32rpx;
@@ -70,7 +70,7 @@
 
     .question-type-tag {
         font-size: 22rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
         background-color: $primary-color;
         padding: 6rpx 16rpx;
         border-radius: 8rpx;
@@ -79,15 +79,15 @@
 
     .question-score {
         font-size: 22rpx;
-        color: #ff9800;
-        background-color: #fff3e0;
+        color: $warning-color;
+        background-color: $warning-tint;
         padding: 6rpx 16rpx;
         border-radius: 8rpx;
     }
 
     .question-title {
         font-size: 32rpx;
-        color: #333333;
+        color: $text-color;
         line-height: 48rpx;
         margin-bottom: 32rpx;
     }
@@ -129,19 +129,19 @@
     .option-key-text {
         font-size: 28rpx;
         font-weight: bold;
-        color: #666666;
+        color: $text-color-secondary;
     }
 
     /* 关系选择器（父类 + 空格 + 子类）在 UCSS 里需运行时动态计算、有额外性能损耗，
        HarmonyOS Vapor 不支持；祖先为复合类（两个类名连写）再跟后代时，编译产物是
        含空格的死键、永远匹配不上 ⇒ 一律落成挂在元素自身的平类 */
     .option-key-text--inverse {
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 
     .option-text {
         flex: 1;
         font-size: 28rpx;
-        color: #333333;
+        color: $text-color;
     }
 </style>

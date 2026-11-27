@@ -79,7 +79,7 @@
     .summary-status-text {
         font-size: 32rpx;
         font-weight: bold;
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 
     .summary-score {
@@ -91,12 +91,12 @@
     .summary-score-num {
         font-size: 96rpx;
         font-weight: bold;
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 
     .summary-score-total {
         font-size: 28rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
         opacity: 0.9;
         margin-left: 12rpx;
     }
@@ -118,13 +118,13 @@
     .summary-meta-num {
         font-size: 36rpx;
         font-weight: bold;
-        color: #ffffff;
+        color: $text-color-inverse;
         margin-bottom: 4rpx;
     }
 
     .summary-meta-label {
         font-size: 22rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
         opacity: 0.9;
     }
 

@@ -193,7 +193,8 @@ describe('首页格式契约（对照设计稿截图）', () => {
 
   it('新闻资讯标题下有蓝色短划线', () => {
     expect(template).toContain('class="section-underline"');
-    expect(styleBlock).toMatch(/\.section-underline\s*\{[^}]*background-color:\s*#239EDD/);
+    // #2919 私有子件裸 hex 归零：断言钉 token 名（$primary-color canon #239EDD），不再钉字面值
+    expect(styleBlock).toMatch(/\.section-underline\s*\{[^}]*background-color:\s*\$primary-color/);
   });
 
   it('新闻资讯：四枚分类 chips + 白卡包列表 + 序号与 MM.DD 日期（#2581 原型 404_2195）', () => {
@@ -202,15 +203,16 @@ describe('首页格式契约（对照设计稿截图）', () => {
     expect(template).toContain('class="news-index"');
     // chips 文案单点在 utils/dashboardNews（组件只引用，不另抄一份）
     expect(script).toContain('DASHBOARD_NEWS_FILTERS');
-    expect(styleBlock).toMatch(/\.news-card\s*\{[^}]*background-color:\s*#FFFFFF/);
-    expect(styleBlock).toMatch(/\.news-filter-tag-active\s*\{[^}]*background-color:\s*#EBF9FF/);
-    expect(styleBlock).toMatch(/\.news-filter-tag-text-active\s*\{[^}]*color:\s*#239EDD/);
+    // #2919：白卡 / 激活浅蓝底 / 蓝字均走 token（canon 与旧字面值逐位同值，像素面零变化）
+    expect(styleBlock).toMatch(/\.news-card\s*\{[^}]*background-color:\s*\$card-bg/);
+    expect(styleBlock).toMatch(/\.news-filter-tag-active\s*\{[^}]*background-color:\s*\$primary-tint/);
+    expect(styleBlock).toMatch(/\.news-filter-tag-text-active\s*\{[^}]*color:\s*\$primary-color/);
   });
 
   it('筛选胶囊为填充式（无描边）：默认灰底、激活浅蓝底蓝字', () => {
-    expect(styleBlock).toMatch(/\.filter-tag\s*\{[^}]*background-color:\s*#ECECEC/);
-    expect(styleBlock).toMatch(/\.filter-tag-active\s*\{[^}]*background-color:\s*#EBF9FF/);
-    expect(styleBlock).toMatch(/\.filter-tag-text-active\s*\{[^}]*color:\s*#239EDD/);
+    expect(styleBlock).toMatch(/\.filter-tag\s*\{[^}]*background-color:\s*\$tag-bg-neutral/);
+    expect(styleBlock).toMatch(/\.filter-tag-active\s*\{[^}]*background-color:\s*\$primary-tint/);
+    expect(styleBlock).toMatch(/\.filter-tag-text-active\s*\{[^}]*color:\s*\$primary-color/);
     expect(styleBlock).not.toMatch(/\.filter-tag\s*\{[^}]*border:\s*1rpx solid/);
   });
 
