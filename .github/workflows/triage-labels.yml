@@ -1,0 +1,36 @@
+name: Triage label scan
+
+# 把 2026-11-25 已立的机检接线（票 #2923）：scripts/check-triage-labels.ps1 之前只是个
+# 没人调用的脚本 —— 2026-11-27 的 /to-tickets 一次造出 10 张「两个 triage label 同时挂」的票，
+# 没有任何一道门吭声。本 workflow 只做「可见报警」：建票/改标签当下就跑一次，外加每日兜底。
+#
+# 边界：不是 ruleset 必检项、不阻塞合并（#2715 不新增判红门的边界）。
+# 只有 open 票进判据 —— 关闭票的 label 按 docs/agents/triage-labels.md 裁定「保持原样」，
+# 扫 closed 会永久红灯（仓内有 267 张历史关票仍挂 ready-for-*）。
+
+on:
+  issues:
+    types: [opened, labeled, unlabeled, reopened]
+  schedule:
+    - cron: '23 2 * * *'   # 每天 02:23 UTC（与 branch-residue 的 02:17 错开，避开整点）
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: read
+
+concurrency:
+  group: triage-labels-${{ github.event.issue.number || 'scheduled' }}
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Triage label conflict scan（两个 label 同时挂即红）
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pwsh -NoProfile -File scripts/check-triage-labels.ps1

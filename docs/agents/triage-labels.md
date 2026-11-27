@@ -15,7 +15,9 @@ Skills 使用五个 canonical triage roles。这个文件把这些 roles 映射�
 （先例 #926 / #920 / #939 / #971 / #988 / #998 / #999），其余用 `ready-for-agent`。
 两个 label 在 tracker 里同时存在，取用其一，不要同时挂。
 
-**机检（2026-11-25 立）**：`pwsh scripts/check-triage-labels.ps1` —— 扫 open 票里同时挂两个 label 的票，冲突时列出票号并 `exit 1`；`-State all` 扫全部、`-Json` 供脚本消费。关闭票的 label 保持原样（见下节），默认不扫。
+**机检（2026-11-25 立、2026-11-27 接线，#2923）**：`pwsh scripts/check-triage-labels.ps1` —— 扫 open 票里同时挂两个 label 的票，冲突时列出票号并 `exit 1`；`-State all` 扫全部、`-Json` 供脚本消费。关闭票的 label 保持原样（见下节），默认不扫。它由 `.github/workflows/triage-labels.yml` 在执行（`issues` 事件当下跑一次 + 每日兜底）：**可见报警，不是 ruleset 必检项**，红了按本文件把它修成绿的即可，不阻塞合并。
+
+**建票时会被自动补 canonical（2026-11-27 实测，#2923）**：`deck_issue_create` 的 `kind=spec` / `spec-ticket` 由插件内置 `triageLabels: ['ready-for-agent']` 强制补上，而移动端变体只活在本文件、插件读不到 ⇒ 建移动端票会得到两个 label。**摘法**：建完立刻 `deck_issue_patch({ key, removeLabels: ['ready-for-agent'] })`（或 `gh issue edit <n> --remove-label ready-for-agent`）。`kind=issue` / `map-ticket` 不自动补，无需摘。
 
 ## 重复票的处置（canonical 五角色里**没有** duplicate）
 
