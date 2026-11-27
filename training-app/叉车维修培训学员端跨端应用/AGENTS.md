@@ -11,13 +11,13 @@
 | 步 | 命令 | 判据（读数行） | 失败先查 |
 | --- | --- | --- | --- |
 | 1 开工 | `pwsh training-app/叉车维修培训学员端跨端应用/scripts/new-worktree.ps1 -Task <票号>`；建树后立刻建分支、尽早推 origin | `git status --porcelain` 无 `training-app/` | 宿主树里改 = ③ 门静默假绿（#1144）。判据看**意图**（含未 add 的新文件），不看 `git diff` |
-| 2 改完自检（**含页面观测**） | ① `npm run hx:compile-only` 拿编译期诊断；② `.uvue` / 样式 / UI 状态改动 **PR 前看真实页面**，显示类看页面、交互类必须实操：有设备走 `npm run hx:run`；没设备走小程序运行时（微信开发者工具 + automator）；都不通才写 `页面观测：BLOCKED（原因）`，不许用编译或单测替代 | `HX_RUN mode=` 无 `ERROR`；页面观测写 `PASS / FAIL / BLOCKED`（三档见 dev-loop「页面观测三档」） | **编译成功 ≠ 页面验证成功**（#2804）；`style:loop` 本机未验证、**不作默认**；真运行 / 截图 / 只编译三者不可互替 |
+| 2 改完自检（**含页面观测**） | ① `npm run hx:compile-only` 拿编译期诊断；② `.uvue` / 样式 / UI 状态改动 **PR 前看真实页面**，显示类看页面、交互类必须实操：按目标端选环境、不得跨平台替代；目标端不可观测才写 `页面观测：BLOCKED（原因）`，不许用编译或单测替代 | `HX_RUN mode=` 无 `ERROR`；页面观测写 `PASS / FAIL / BLOCKED`（三档见 dev-loop「页面观测三档」） | **编译成功 ≠ 页面验证成功**（#2804）；`style:loop` 本机未验证、**不作默认**；真运行 / 截图 / 只编译三者不可互替 |
 | 3 ③ 两腿 | `npm run test:unit:changed`（接线全量 + 行为**受影响子集**；全量两腿走 `npm run test:unit:gate`） | `TEST_UNIT_CHANGED_RESULT` / `TEST_BEHAVIOR_CHANGED_RESULT … mode=changed planned=N` | 子集红而 CI 绿 → 先自查，**不当 flake**；选错腿的 config = 0 套件假绿 |
 | 4 ④c（+④a） | `npm run build:kotlin-all`；命中三份 json / 新增页 / 模块手术再加 `npm run build:compile` | 退出码 0 | ④a 命中**必须清缓存**：`pages.json` 改一行不清 = 产物没更新还报编译成功 |
 | 5 可选构建面检查（② 已退役） | 需要时手动跑 `npm run build:mp-weixin-buildonly`（**不是门**、不判红、不产截图）；**发行上传目录 `unpackage/dist/build/mp-weixin`**（[ADR-0064](docs/adr/0064-小程序端发布范围仅学员端与唯一发行路径.md)，非 dev 产物） | 无门禁判据；结果行 `MP_WEIXIN_BUILDONLY_RESULT` 只作人工诊断读数 | 日常**不要**为凑证据跑 ② 或启开发者工具；真要诊断才手动启，截图只作参考、不进证据 |
 | 6 证据 | 正文 `## 验收证据` 分三段 `### 编译 / ### 测试 / ### 页面观测`（模板见根 `.github/PULL_REQUEST_TEMPLATE.md`） | 编译段一行 `- ④ 跑于 <sha7> · <读数行原样>`；测试段 ③ 读数或「见 CI `ci-summary`」；页面段 `页面观测：PASS/FAIL/BLOCKED（原因）` + `人工验收：待确认`（「通过」只有人能写） | **编译段不得替代页面段**：没观测就写 `BLOCKED`，不许留空、不许把 ④ 抄进页面段；图不作证据（#2320） |
-| 7 开 PR 与合并 | `pwsh scripts/preflight-pr.ps1`（**仓库根**跑）预检绿 → `pwsh scripts/submit-pr.ps1` 建 PR | 证据齐 → agent 直接合并 | 例外通道只认「已接受未验证风险」一句，**且由人合并** |
-| 8 收尾 | `pwsh scripts/dev-close.ps1 -Task <票号>`（仓库根；默认 dry-run，`-Yes` 执行）；**认树看目录 `wt-<票号>`、身份看登记分支**（`fix/…` 也认，别按 `feat/<票号>` 猜；裁定见根 `docs/adr/ADR-0092-树身份-目录为入口与登记分支为身份.md`） | `DEV_CLOSE_RESULT … verdict=ok`（dry-run 只 `verdict=planned`、无动作是 `verdict=noop`，**都别当已收尾**） | `verdict=blocked reason=pr-not-merged` = 还没合并，本就不该拆；`tree-branch-mismatch` = 目录在但判据没匹配上（必红，别当无树）；树被占用 ⇒ 关掉占用的工具再跑，别 kill |
+| 7 开 PR 与合并 | `pwsh scripts/preflight-pr.ps1`（**仓库根**跑）预检绿 → `pwsh scripts/submit-pr.ps1` 建 PR | `人工验收：通过` 才可合；`待确认`/`退回` 不合；交付状态不授权 | 观测 PASS ≠ 人工验收通过；例外通道由人合并 |
+| 8 收尾 | `pwsh scripts/dev-close.ps1 -Task <票号>`（仓库根；默认 dry-run，`-Yes` 执行）；**认树看目录 `wt-<票号>`、身份看登记分支**（`fix/…` 也认，别按 `feat/<票号>` 猜；裁定见根 `docs/adr/ADR-0092-树身份-目录为入口与登记分支为身份.md`） | `DEV_CLOSE_RESULT … verdict=ok`（dry-run 只 `verdict=planned`、无动作是 `verdict=noop`，**都别当已收尾**；`ok` 只代表工程收尾、非验收通过） | `verdict=blocked reason=pr-not-merged` = 还没合并，本就不该拆；`tree-branch-mismatch` = 目录在但判据没匹配上（必红，别当无树）；树被占用 ⇒ 关掉占用的工具再跑，别 kill |
 
 **第 5 步的纪律面**：② 门已于 2026-11-05 整体退役（#2320）——日常 PR **不跑 ②**，要诊断才手动跑一次、只进日志；风险由发版前真机冒烟（ADR-0043）兜底，见 ADR-0008 顶部条。
 
