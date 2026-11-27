@@ -230,7 +230,7 @@ import { goBack } from '../../utils/navigation'
 
     .empty-text {
         font-size: 28rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     /* 通知列表 */
@@ -240,7 +240,7 @@ import { goBack } from '../../utils/navigation'
     }
 
     .notify-card {
-        background-color: #ffffff;
+        background-color: $card-bg;
         border-radius: 16rpx;
         padding: 24rpx;
         margin-bottom: 16rpx;
@@ -283,7 +283,7 @@ import { goBack } from '../../utils/navigation'
 
     .notify-title {
         font-size: 28rpx;
-        color: #333333;
+        color: $text-color;
         font-weight: 500;
         flex: 1;
         lines: 1;
@@ -301,7 +301,7 @@ import { goBack } from '../../utils/navigation'
 
     .notify-content {
         font-size: 26rpx;
-        color: #666666;
+        color: $text-color-secondary;
         margin-bottom: 8rpx;
         lines: 2;
         text-overflow: ellipsis;
@@ -310,7 +310,7 @@ import { goBack } from '../../utils/navigation'
 
     .notify-time {
         font-size: 22rpx;
-        color: #cccccc;
+        color: $text-disabled;
     }
 
     /* 右箭头 */
@@ -337,6 +337,6 @@ import { goBack } from '../../utils/navigation'
 
     .loading-text {
         font-size: 24rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 </style>
