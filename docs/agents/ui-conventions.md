@@ -38,6 +38,8 @@
 | **能力的中文名** | 能力键（`admin_role.manage` 这类）**不得原样印给用户看**：展示名走 `utils/capabilityWords.ts` 的 `describeCapability`，词表是 `Record<AuthzCapability, string>` 的**穷尽**映射 —— 后端加能力而前端产物没再生成时 `npm run type-check` 直接红（键集合的事实源仍是 `config/authz.ts`）；未登记的键回落为原键（降级可见，不静默留空）。角色权限页（`pages/admin/RoleManage.vue`）是当前唯一消费面，原始键留在勾选框的 `title` 上供对照后端日志。 |
 | **侧栏导航行** | 侧栏每一项由 `components/layout/AppSidebarItem.vue` **这一个**项级渲染 module 出行（行种类外链 `<a>` / `<router-link>` / 目标未就绪的不可点行，只在它的 `kind` 判据上分档），`AppSidebar.vue` 只管分组编排（分组标题、展开态；**分组头只出文字、不复用叶子图标**，折叠态退化为一条分隔线以保留分组边界）。**不得在任一层级里另抄一份 `<a>`/`<router-link>` markup**（第十三波 票9 前：三层嵌套各写两遍、共 9 份）。高亮与展开判定一律走 `config/navigation.ts` 的纯函数（`isNavRouteActive` / `isGroupExpanded` / `toggleGroupExpanded` / `isGroupActive`，测试面 `config/__tests__/navigation.spec.ts`），**组件里不自建匹配逻辑**。项级样式（`.nav-item` 一族）随组件下沉到 `AppSidebarItem.vue` 的 scoped 块——`scoped` 不穿子组件，祖先选择器（`.app-sidebar.collapsed`）仍照常命中。**密度只有单档**：`density` / `sidebarDensity` 与 `is-compact` 一档已随 ADR-0081 退役（四端统一到管理端那档），不要再为某一端加回来。 |
 
+| **新组件三态图（移动端）** | **移动端线专属**（`training-app/叉车维修培训学员端跨端应用`），Web 端不受此条约束。**新组件进正式实现前，必须先随设计稿交齐「默认 / 选中 /（适用时）禁用或错误」三态图；未给出的状态不得以猜测补齐** —— 让状态缺失不在实现期被猜（#2897 US13 / #2940）。默认（未选）、选中（激活）为必备两态；禁用 / 错误按组件实际是否有该状态给图，适用时必须给、不适用时书面写明「不适用」，不得留白。这是设计交付准入（判断面），**不新增 CI / pre-commit / pr-evidence 机检门**。规则真源与判定细则见 `training-app/叉车维修培训学员端跨端应用/docs/ui-spec.md` §5.0。 |
+
 ### 意图登记表（ADR-0083 / #1957）
 
 > **判重与判「新意图」只用三轴**；层级（页面级 / 卡片级）不是轴，只派生尺寸档。三轴全同 = 同一意图，必须收敛到一个形态。
