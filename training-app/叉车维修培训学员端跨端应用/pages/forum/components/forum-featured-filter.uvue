@@ -47,7 +47,7 @@
 
     .featured-chip-text {
         font-size: 24rpx;
-        color: #666666;
+        color: $text-color-secondary;
     }
 
     .featured-chip-text.active {

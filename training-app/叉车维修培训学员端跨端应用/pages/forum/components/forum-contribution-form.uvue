@@ -270,34 +270,34 @@
 </script>
 
 <style lang="scss">
-    .attach-card { background-color: #ffffff; border-radius: 16rpx; padding: 32rpx; margin-bottom: 24rpx; flex-direction: column; }
-    .attach-label { font-size: 28rpx; font-weight: bold; color: #333333; margin-bottom: 16rpx; }
+    .attach-card { background-color: $card-bg; border-radius: 16rpx; padding: 32rpx; margin-bottom: 24rpx; flex-direction: column; }
+    .attach-label { font-size: 28rpx; font-weight: bold; color: $text-color; margin-bottom: 16rpx; }
     .method-row { flex-direction: row; align-items: center; padding: 24rpx 0; }
-    .method-row-line { border-bottom: 1rpx solid #f0f0f0; }
+    .method-row-line { border-bottom: 1rpx solid $border-color-light; }
     .method-icon-box { width: 72rpx; height: 72rpx; border-radius: 36rpx; align-items: center; justify-content: center; margin-right: 20rpx; }
     .method-icon { font-size: 36rpx; }
-    .method-icon-green { background-color: #e3f6e8; }
-    .method-icon-yellow { background-color: #fff4d6; }
-    .method-icon-red { background-color: #fdeaea; }
+    .method-icon-green { background-color: $success-tint; }
+    .method-icon-yellow { background-color: $warning-tint; }
+    .method-icon-red { background-color: $danger-tint; }
     .method-info { flex: 1; flex-direction: column; }
-    .method-title { font-size: 28rpx; color: #333333; }
-    .method-sub { font-size: 22rpx; color: #999999; margin-top: 4rpx; }
+    .method-title { font-size: 28rpx; color: $text-color; }
+    .method-sub { font-size: 22rpx; color: $text-color-placeholder; margin-top: 4rpx; }
     .method-arrow { width: 32rpx; height: 32rpx; flex-shrink: 0; }
     .file-list { margin-top: 20rpx; }
     .file-item { background-color: $bg-color; border-radius: 8rpx; padding: 16rpx; flex-direction: row; align-items: center; margin-bottom: 12rpx; }
     .file-item-info { flex: 1; flex-direction: column; }
-    .file-item-name { font-size: 26rpx; color: #333333; }
-    .file-item-size { font-size: 22rpx; color: #999999; margin-top: 4rpx; }
+    .file-item-name { font-size: 26rpx; color: $text-color; }
+    .file-item-size { font-size: 22rpx; color: $text-color-placeholder; margin-top: 4rpx; }
     .file-item-remove { font-size: 26rpx; color: #e5484d; padding: 8rpx 0 8rpx 24rpx; }
-    .upload-total { font-size: 24rpx; color: #999999; margin-top: 4rpx; }
+    .upload-total { font-size: 24rpx; color: $text-color-placeholder; margin-top: 4rpx; }
     .credential-row { margin-top: 24rpx; flex-direction: row; align-items: center; justify-content: space-between; }
-    .credential-label { font-size: 28rpx; font-weight: bold; color: #333333; }
+    .credential-label { font-size: 28rpx; font-weight: bold; color: $text-color; }
     .credential-name { font-size: 28rpx; color: $primary-color; }
     .submit-section { padding: 0 0 64rpx; align-items: center; }
     /* #816：失败原因常驻页内（不再只写 console） */
     .submit-error-box { width: 100%; background-color: $danger-tint; border-radius: 12rpx; padding: 16rpx 20rpx; margin-bottom: 20rpx; }
     .submit-error-text { font-size: 24rpx; color: #e5484d; }
     .submit-btn { width: 100%; height: 88rpx; border-radius: 44rpx; background-color: $primary-color; align-items: center; justify-content: center; }
-    .submit-btn.disabled { background-color: #cccccc; }
-    .submit-btn-text { font-size: 32rpx; color: #ffffff; font-weight: bold; }
+    .submit-btn.disabled { background-color: $text-disabled; }
+    .submit-btn-text { font-size: 32rpx; color: $text-color-inverse; font-weight: bold; }
 </style>

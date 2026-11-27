@@ -131,7 +131,7 @@
     .res-coin-value {
         font-size: 44rpx;
         font-weight: bold;
-        color: #ffffff;
+        color: $text-color-inverse;
         margin-top: 4rpx;
     }
 
@@ -142,7 +142,7 @@
 
     .res-coin-detail-text {
         font-size: 26rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 
     .res-feature-grid {
@@ -191,7 +191,7 @@
     .res-feature-card-title {
         font-size: 28rpx;
         font-weight: 500;
-        color: #333333;
+        color: $text-color;
     }
     .res-title-red { color: #E5484D; }
     .res-title-blue { color: $primary-color; }

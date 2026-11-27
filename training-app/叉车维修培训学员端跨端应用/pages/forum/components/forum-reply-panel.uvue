@@ -180,7 +180,7 @@
        键盘上沿 —— 照 practice-do .answer-card-sheet 的可用形态。旧写法把面板也做成 fixed，会被
        fixed 遮罩在 z 序上盖住 ⇒ 点输入先命中遮罩而收起（①a 真机抓获）。 */
     .reply-panel {
-        background-color: #ffffff;
+        background-color: $card-bg;
         border-radius: 20rpx 20rpx 0 0;
         padding: 24rpx;
         flex-direction: column;
@@ -203,7 +203,7 @@
     .reply-panel-title {
         font-size: 30rpx;
         font-weight: bold;
-        color: #333333;
+        color: $text-color;
     }
 
     /* 关闭 X：88rpx 方形命中区（触摸目标 ≥44×44） */
@@ -216,7 +216,7 @@
 
     .reply-panel-close-text {
         font-size: $font-size-2xl;
-        color: #666666;
+        color: $text-color-secondary;
         line-height: 1;
     }
 
@@ -243,7 +243,7 @@
 
     .reply-add-image-text {
         font-size: 28rpx;
-        color: #666666;
+        color: $text-color-secondary;
     }
 
     .reply-btn {
@@ -256,11 +256,11 @@
     }
 
     .reply-btn.disabled {
-        background-color: #cccccc;
+        background-color: $text-disabled;
     }
 
     .reply-btn-text {
         font-size: 28rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 </style>
