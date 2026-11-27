@@ -123,13 +123,15 @@ $danger-tint: #ffebee;
 $border-color: #D9D9D9;
 $border-color-light: #f0f0f0;
 
-/* 圆角（rpx） */
-$radius-sm: 8rpx;
-$radius-md: 16rpx;
-$radius-lg: 24rpx;
-$radius-xl: 32rpx;
-$radius-pill: 999rpx;
+/* 圆角（rpx）——#2910 定档 8 档（第 5 档 $radius-card 见下），档位表与归并规则见 docs/ui-spec.md §3 */
+$radius-xs: 4rpx; // 进度条、细线、微角（原 2/3/4/5/6rpx 的归处）
+$radius-sm: 8rpx; // Tag 标签、小 badge
+$radius-base: 12rpx; // 图片缩略、输入框、小卡（原 10/11/12rpx；66 处主承载）
+$radius-md: 16rpx; // 卡片、图标容器
 $radius-card: 20rpx; // #2509 R2 新增：原型卡面圆角 20rpx（卡类容器专用，区别于 $radius-lg 的 24rpx）
+$radius-lg: 24rpx; // 次按钮描边、大卡片（#1597 C2：24rpx 为准）
+$radius-xl: 32rpx; // 大面板、对话框
+$radius-pill: 999rpx; // 胶囊按钮；一切「半高」写法的唯一归处（几何等价，零视觉）
 
 /* 间距（rpx） */
 $spacing-xs: 8rpx;

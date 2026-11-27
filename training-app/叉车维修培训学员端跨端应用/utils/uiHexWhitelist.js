@@ -101,4 +101,18 @@ module.exports = {
     // 声明位判据不再拦它们（值 ∈ token 值）。
     // #2354 已把 ai-chat-bubble.uvue 从这份清单里划掉：气泡的 .md-* 整段删除、正文块改由
     // components/markdown/markdown-blocks.uvue 渲染，该文件里的 #1a1a1a 随之消失。
+
+    // ── #2910（28 值缺口裁决）：装饰性 10 值入册；其余 18 值映射既有 token，不进本表 ──
+    // 判据：立 token 只发生在「同语义角色无 token」时；装饰色（渐变 / 徽章 / 图标底 / 浅蓝钮）与
+    // 「强调橙红」这类无同族语义位的值不立色，逐值理由见 docs/design/20261127-视觉取值裁决-28值缺口与圆角档位.md。
+    '#FF5722': 'pages/exam/components/exam-action-bar.uvue submit-btn 底 + pages/profile/components/wrong-question-card.uvue record-type-tag 底——强调橙红（CTA / 错题类型签），token 表无同族：$warning-color 偏黄、$danger-color 偏红，改值即改设计意图；与白名单 #FF6B35 同族先例',
+    '#1E88E5': 'pages/forum/components/forum-resource-panel.uvue res-coin-banner 渐变尾色与实底兜底——资源币横幅装饰渐变，与 #6FB9F7 成对（同 #1565C0 渐变白名单口径，不绑主色）',
+    '#6FB9F7': 'pages/forum/components/forum-resource-panel.uvue res-coin-banner 渐变首色——同上，装饰渐变对首色',
+    '#F0F5FF': 'pages/forum/components/forum-resource-panel.uvue res-card-bg-blue 卡底 + pages/profile/components/activity-topic-card.uvue topic-edit-btn 底——装饰浅蓝底系列（与已白名单 #F0FFF0 同口径：资源卡按内容分色，不绑 $primary-tint 语义）',
+    '#F0F8FF': 'pages/forum/components/forum-resource-panel.uvue res-card-bg-sky 卡底——装饰浅蓝底系列第三色（同上，与 #F0F5FF / #F0FFF0 同族）',
+    '#D0E0FF': 'pages/profile/components/activity-topic-card.uvue topic-edit-btn 描边——#F0F5FF 浅蓝钮的配对边框，装饰浅蓝钮成套；token 表无蓝色浅边框（$border-color 系中性灰）',
+    '#FFF7E6': 'pages/forum/components/forum-topic-card.uvue experience-badge / featured-badge 底——论坛「备考经验 / 精选」徽章装饰底（Ant 橙系），徽章是内容标识不是状态语义，不绑 $warning-tint',
+    '#D46B08': 'pages/forum/components/forum-topic-card.uvue experience-badge-text 字色——同上徽章装饰字色（Ant orange-8），与底色成套',
+    '#FA8C16': 'pages/forum/components/forum-topic-card.uvue featured-badge-text 字色——同上徽章装饰字色（Ant orange-6），与底色成套',
+    '#FFB300': 'pages/dashboard/components/dashboard-news-section.uvue news-icon 色——首页新闻图标琥珀装饰色，图标装饰不绑语义色（与白名单 #FF8F00 同族）',
 }

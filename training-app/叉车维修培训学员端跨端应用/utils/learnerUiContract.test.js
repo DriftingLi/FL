@@ -210,7 +210,8 @@ describe('§1.6 白名单文件自检（批2 扫描面）', () => {
     // #2523 起 #FF8F00 的承载是 forum-topic-header 状态标签（task-center 改走 $warning-color token）—— 组件补入扫描面
     // #2786 删掉本页解锁专业版横幅后，#2E9E5B 唯一承载移至 ai-chat-pro-sheet 的已解锁按钮底 —— 组件补入扫描面
     // #2861 语义色收敛后 #22A45D/#F0FFF0/#4CAF50/#F44336 的最后承载落在 forum-resource-panel / forum-reply-list（私有子件，H1 判定面不变，只用于死条目判定）—— 两件补入扫描面
-    const all = PAGES.concat(batch1, batch1605, batch4, batch5, batch6, ['components/ai-chat/ai-chat-input.uvue', 'components/ai-chat/ai-chat-pro-sheet.uvue', 'pages/forum/components/forum-topic-header.uvue', 'pages/forum/components/forum-topic-actions.uvue', 'pages/forum/components/forum-more-menu.uvue', 'pages/forum/components/forum-resource-panel.uvue', 'pages/forum/components/forum-reply-list.uvue']).map((p) => styleBlock(read(p)).toUpperCase()).join('\n');
+    // #2910 缺口裁决入册的 10 个装饰值承载分散在 exam-action-bar / wrong-question-card / activity-topic-card / forum-topic-card / dashboard-news-section 五个私有子件 —— 补入扫描面（同上，只用于死条目判定）
+    const all = PAGES.concat(batch1, batch1605, batch4, batch5, batch6, ['components/ai-chat/ai-chat-input.uvue', 'components/ai-chat/ai-chat-pro-sheet.uvue', 'pages/forum/components/forum-topic-header.uvue', 'pages/forum/components/forum-topic-actions.uvue', 'pages/forum/components/forum-more-menu.uvue', 'pages/forum/components/forum-resource-panel.uvue', 'pages/forum/components/forum-reply-list.uvue', 'pages/forum/components/forum-topic-card.uvue', 'pages/exam/components/exam-action-bar.uvue', 'pages/profile/components/wrong-question-card.uvue', 'pages/profile/components/activity-topic-card.uvue', 'pages/dashboard/components/dashboard-news-section.uvue']).map((p) => styleBlock(read(p)).toUpperCase()).join('\n');
     for (const value of Object.keys(WHITELIST)) {
       expect(all).toContain(value);
     }
