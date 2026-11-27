@@ -302,7 +302,7 @@
 
     .retry-btn-text {
         font-size: 28rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 
     /* ===== 加载更多 ===== */

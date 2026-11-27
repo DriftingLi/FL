@@ -275,7 +275,7 @@
 </script>
 
 <style lang="scss">
-    .login-page { flex: 1; background-color: #ffffff; }
+    .login-page { flex: 1; background-color: $card-bg; }
 
     .status-bar { background-color: $bg-header; }
 
@@ -382,7 +382,7 @@
         width: 176rpx;
         height: 72rpx;
         border-radius: 16rpx;
-        background-color: #ffffff;
+        background-color: $card-bg;
     }
 
     .cap-fail-box { align-items: center; justify-content: center; }
@@ -420,13 +420,13 @@
         border: 2rpx solid #C8CDD8;
         align-items: center;
         justify-content: center;
-        background-color: #ffffff;
+        background-color: $card-bg;
         margin-right: 12rpx;
     }
 
     .checkbox-checked { background-color: $primary-color; border-color: $primary-color; }
 
-    .check-mark { font-size: 24rpx; color: #ffffff; }
+    .check-mark { font-size: 24rpx; color: $text-color-inverse; }
 
     .meta-text { font-size: 25rpx; color: $text-color-secondary; }
 
@@ -462,7 +462,7 @@
         border-radius: 54rpx;
         background-color: $primary-color;
         box-shadow: 0 12rpx 28rpx rgba(35, 158, 221, 0.28);
-        color: #ffffff;
+        color: $text-color-inverse;
         font-size: 32rpx;
         font-weight: bold;
         text-align: center;
