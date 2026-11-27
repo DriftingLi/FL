@@ -105,7 +105,8 @@ func TestPublicEligibilityAcrossReadPathsPostgres(t *testing.T) {
 		if i == 1 {
 			wantCategory = categories[2]
 		}
-		if item.PublicState == nil || item.PublicState.PublicVisibility != (i == 0) || item.PublicState.Category == nil || item.PublicState.Category.ID != wantCategory.ID {
+		// 公开开关与公开资格正交，来源标记只影响资格。
+		if item.PublicState == nil || item.PublicState.PublicVisibility != !questions[i].PublicHidden || item.PublicState.Category == nil || item.PublicState.Category.ID != wantCategory.ID {
 			t.Fatalf("PostgreSQL 员工端题目公开状态 = %+v", item.PublicState)
 		}
 	}
