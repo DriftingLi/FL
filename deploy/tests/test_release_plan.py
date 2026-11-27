@@ -182,11 +182,48 @@ class VersionedReleasePlanTest(unittest.TestCase):
         self.assertEqual(plan.target_topology["database_mode"], "external")
         self.assertEqual(plan.previous_release_id, "v1")
 
-    def test_unresolvable_previous_release_id_fails_closed(self):
-        with self.assertRaises(ReleasePlanError):
+    def test_different_service_tags_use_backend_tag_as_previous_release_id(self):
+        previous_images = {
+            "backend": "registry:5000/org/backend:backend-old",
+            "frontend": "registry:5000/org/frontend:frontend-old",
+            "open_school": "registry:5000/org/backend:backend-old",
+            "libreoffice": "registry:5000/org/libreoffice:libreoffice-old",
+        }
+        plan = create_release_plan(
+            env=self.env,
+            desired_images={
+                "backend": "b:new",
+                "frontend": "f:new",
+                "open_school": "b:new",
+                "libreoffice": "l:new",
+            },
+            decisions=None,
+            migration_needed=False,
+            migration_preflight_verified=True,
+            release_id="new",
+            topology=FakeTopology("new"),
+            path=self.path,
+            last_version_path=self.root / "backups" / "last-version.txt",
+            previous_images=previous_images,
+            fallback_previous_topology=FakeTopology("placeholder").to_dict(),
+        )
+        self.assertEqual(plan.previous_release_id, "backend-old")
+        self.assertEqual(plan.previous_topology["release_id"], "backend-old")
+        self.assertEqual(
+            {change.service: change.previous_image for change in plan.services},
+            previous_images,
+        )
+
+    def test_unknown_backend_image_fails_closed_with_other_service_images(self):
+        with self.assertRaisesRegex(ReleasePlanError, "backend"):
             create_release_plan(
                 env=self.env,
-                desired_images={"backend": "b:new", "frontend": "f:new"},
+                desired_images={
+                    "backend": "b:new",
+                    "frontend": "f:new",
+                    "open_school": "b:new",
+                    "libreoffice": "l:new",
+                },
                 decisions=None,
                 migration_needed=False,
                 migration_preflight_verified=True,
@@ -195,10 +232,12 @@ class VersionedReleasePlanTest(unittest.TestCase):
                 path=self.path,
                 last_version_path=self.root / "backups" / "last-version.txt",
                 previous_images={
-                    "backend": "registry:5000/org/backend:old-a",
-                    "frontend": "registry:5000/org/frontend:old-b",
+                    "backend": "unknown",
+                    "frontend": "registry:5000/org/frontend:frontend-old",
+                    "open_school": "registry:5000/org/backend:backend-old",
+                    "libreoffice": "registry:5000/org/libreoffice:libreoffice-old",
                 },
-                fallback_previous_topology=FakeTopology("old-a").to_dict(),
+                fallback_previous_topology=FakeTopology("placeholder").to_dict(),
             )
 
     def test_saved_environment_supplies_previous_topology_without_previous_plan(self):
