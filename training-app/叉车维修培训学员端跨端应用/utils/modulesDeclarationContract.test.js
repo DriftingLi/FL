@@ -216,7 +216,7 @@ describe('B. 判别力：注入违规必须判红（成对取证：改坏必红 
       id: 'B8',
       name: '拆出物孤儿：extractDirs 指向一个本模块没接线的真目录',
       key: 'orphanExtracts',
-      apply: (d) => { d.courses.extractDirs = ['components/app-card']; },
+      apply: (d) => { d.courses.extractDirs = ['components/app-button']; },
     },
     {
       id: 'B9',

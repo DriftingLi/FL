@@ -520,7 +520,7 @@ hex 匹配口径：`<style>` 块**声明位** hex（3 位归一 6 位）；不�
 | 1 | **裸 hex = 0** | 声明位 hex 全部走 token 或白名单；无豁免 |
 | 2 | **`lang="scss"` 100%** | 全部 `<style>` 声明；无豁免 |
 | 3 | **手写 `.status-bar` = 0 且页头件引用 100%** | 页头唯一件 `app-nav-bar`；豁免名单 = N06 五页 |
-| 4 | **`app-*` 引用 100%** | 对应交互一律走八件共享件（§10）；渐进转绿（先断言页头件自身，新页必须走共享件，旧页逐票转绿） |
+| 4 | **`app-*` 引用 100%** | 对应交互一律走现役共享件（§10；#2912 清零引用件后 `app-*` 由八件收为 **五件**）；渐进转绿（先断言页头件自身，新页必须走共享件，旧页逐票转绿） |
 | 5 | **主色背景走 token** | 背景=主色处禁字面值 |
 
 **层适用性（交接 spec §2）**：五硬指标是**页面层**口径，对三层不是同一张表——指标 1（裸 hex）/ 2（`lang="scss"`）对 L1 token 值面、L2 共享件、L3 页面层都适用（扫描对象已含 `components/**`）；指标 3（手写 `.status-bar` + 页头件引用）/ 4（`app-*` 引用）只对 L3 页面层成立；指标 5（主色背景走 token）对三层都成立（L2 取更严口径：主色字面值一律为 0）。L2 共享件自身的三条值面判据、L3 私有子件的棘轮口径与「新增即合规」，见 `docs/design/20261125-移动端视觉一致性治理spec.md` §2，本节不复制。
@@ -534,11 +534,11 @@ hex 匹配口径：`<style>` 块**声明位** hex（3 位归一 6 位）；不�
 - UI 规范文档：`docs/ui-spec.md`（本文件）
 - Token 定义：`uni.scss`（**唯一真源**；收编清单见 §1 各裁定注：改 :18/:81、删 :86/:128、增 `$bg-header` + 3 tint）
 - 全局样式：`App.uvue` 中的 `<style>` 块
-- 共享组件：`components/app-*/` 目录 —— **八件扶正**（ADR-0035：`app-*` 八件全部保留并推向兑现；#0022/#0028 的禁令**只限分段类组件**，`app-nav-bar` 不受限）
+- 共享组件：`components/app-*/` 目录 —— ADR-0035「八件扶正」的**现役面是五件**（`app-button` / `app-chip` / `app-empty-state` / `app-nav-bar` / `app-tabs`）；`app-badge` / `app-card` / `app-list-item` 三件 0 引用、且不含视觉一致性信息，已按 `docs/design/20261125-共享件层判据.md` 裁定 A（#2897）随 #2912 删除。仍限「分段类组件不入库」，`app-nav-bar` 不受限
 - 实施计划：`docs/ui-spec-implementation-plan.md`
 - 台账/对比类文档：`docs/choose-cert-diff.md`、`docs/ui-design-diff-analysis.md` 为**历史快照**（各自文首取代块），不作为形态依据
 
-**当前兑现度（2026-11-25 实测，#2834）**：页级引用面 = `app-nav-bar` **55 页** / `app-icon-button` 5 / `app-empty-state` 3 / `app-tabs` 2 / `app-button` 1 / `app-chip` 1；真正 **0 引用的是四件** `app-badge` / `app-card` / `app-list-item` / `app-level-badge`（逐页明细见 `docs/design/20261125-移动端61页N×G归属台账.md` §2）。`app-nav-bar` 已从 0 推向 55/61 页头，ADR-0035 T4 的页头件兑现基本完成；T5 的卡/列表/徽章族仍未起动。死件里 `app-button` / `app-badge` / `app-tabs` / `app-list-item` 还引用了 `uni.scss` 里**不存在**的 `$text-inverse` / `$text-secondary` / `$text-placeholder`，且**自身没声明 `lang="scss"`** ⇒ 直接引用只会静默失效（扶正时一并修）。
+**当前兑现度（2026-11-27 实测，#2912）**：页级引用面 = `app-nav-bar` **55 页** / `app-empty-state` 5 / `app-icon-button` 5 / `app-tabs` 2 / `app-button` 1 / `app-chip` 1（`pages/search`，模板里写作 `<AppChip>`）/ `app-level-badge` 1（`pages/profile/components/profile-user-row.uvue`）。`app-nav-bar` 已从 0 推向 55/61 页头，ADR-0035 T4 的页头件兑现基本完成；T5 的卡/列表/徽章族仍未起动。原 0 引用四件里，`app-badge` / `app-card` / `app-list-item` 已随 **#2912** 删除（裁定 A：只包 padding/margin/radius + slot、不含视觉一致性信息），`app-level-badge` 因有真实消费方保留 ⇒ 现役 `app-*` 五件**均有页级引用、零死件**。现存共享件已**不带** `$text-inverse` / `$text-secondary` / `$text-placeholder` 短名（#2912 实测，`utils/globalComponentsContract.test.js` C 段守）。
 
 `components/common` 两死件（`platform-nav-bar.uvue` 165 行、`page-container.uvue` 89 行 tabBarHeight 恒假）**直接删除**，非新决策（ADR-0035:69）；连带 `CONTEXT.md:143` 词条改过去时 —— **随批 0 骨架层首票**。
 

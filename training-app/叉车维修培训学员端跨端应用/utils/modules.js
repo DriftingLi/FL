@@ -68,9 +68,7 @@ const MAX_DEPTH = 2;
 const INFRA = {
   /** 整目录都属基础设施：这些目录里的源文件不归任何模块（`uni_modules` 是 vendor 面） */
   dirs: [
-    'components/app-badge',
     'components/app-button',
-    'components/app-card',
     'components/app-chip',
     'components/app-empty-state',
     // 'components/app-icon-button' —— 票 2730：88rpx 命中盒 / 64rpx 可见承载面 / 50% 圆角的
@@ -78,7 +76,6 @@ const INFRA = {
     // `components/app-*` 整族口径登记为 INFRA。
     'components/app-icon-button',
     'components/app-level-badge',
-    'components/app-list-item',
     'components/app-nav-bar',
     'components/app-tabs',
     // 'components/login-agreement' —— #1478：协议勾选 + 注册引导的展示件，被 index（着陆页）与
