@@ -254,6 +254,70 @@ class VersionedReleasePlanTest(unittest.TestCase):
         self.assertIsNone(plan.previous_topology)
         self.assertEqual(load_release_plan(self.path), plan)
 
+    def test_stale_plan_with_no_running_containers_becomes_first_release(self):
+        self.create()
+        write_topology_snapshot(snapshot_path_for(self.root), FakeTopology("sha-new"))
+        plan = create_release_plan(
+            env=FakeEnvironment(),
+            desired_images={
+                "backend": "registry:5000/org/backend:sha-next",
+                "frontend": "registry:5000/org/frontend:sha-next",
+                "open_school": "registry:5000/org/backend:sha-next",
+            },
+            decisions=None,
+            migration_needed=False,
+            migration_preflight_verified=True,
+            release_id="sha-next",
+            topology=FakeTopology("sha-next"),
+            path=self.path,
+            last_version_path=self.root / "backups" / "last-version.txt",
+        )
+        self.assertIsNone(plan.previous_release_id)
+        self.assertIsNone(plan.previous_topology)
+        self.assertTrue(all(change.previous_image == "unknown" for change in plan.services))
+        self.assertEqual(load_release_plan(self.path), plan)
+
+    def test_stale_plan_with_any_running_container_restores_previous_release(self):
+        self.create()
+        write_topology_snapshot(snapshot_path_for(self.root), FakeTopology("sha-new"))
+        plan = create_release_plan(
+            env=FakeEnvironment({
+                "backend": "registry:5000/org/backend:sha-new",
+            }),
+            desired_images={
+                "backend": "registry:5000/org/backend:sha-next",
+                "frontend": "registry:5000/org/frontend:sha-next",
+                "open_school": "registry:5000/org/backend:sha-next",
+            },
+            decisions=None,
+            migration_needed=False,
+            migration_preflight_verified=True,
+            release_id="sha-next",
+            topology=FakeTopology("sha-next"),
+            path=self.path,
+            last_version_path=self.root / "backups" / "last-version.txt",
+        )
+        self.assertEqual(plan.previous_release_id, "sha-new")
+        self.assertEqual(plan.previous_topology["release_id"], "sha-new")
+        previous_images = {change.service: change.previous_image for change in plan.services}
+        self.assertEqual(previous_images["backend"], "registry:5000/org/backend:sha-new")
+        self.assertEqual(previous_images["frontend"], "unknown")
+        self.assertEqual(previous_images["open_school"], "unknown")
+
+    def test_running_images_without_previous_plan_or_fallback_fail_closed(self):
+        with self.assertRaisesRegex(ReleasePlanError, "previous_topology|保存环境|历史镜像"):
+            create_release_plan(
+                env=FakeEnvironment({"backend": "registry:5000/org/backend:sha-old"}),
+                desired_images={"backend": "registry:5000/org/backend:sha-new"},
+                decisions=None,
+                migration_needed=False,
+                migration_preflight_verified=True,
+                release_id="sha-new",
+                topology=FakeTopology("sha-new"),
+                path=self.path,
+                last_version_path=self.root / "backups" / "last-version.txt",
+            )
+
     def test_first_deployment_plan_rejects_invented_previous_state(self):
         plan = create_release_plan(
             env=FakeEnvironment(),

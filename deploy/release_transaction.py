@@ -451,24 +451,23 @@ def create_release_plan(
         plan = replace(plan, services=tuple(
             replace(c, previous_image=previous_images[c.service]) for c in plan.services
         ))
-    if previous_plan is not None:
+    known_previous = [c for c in plan.services if c.previous_image != "unknown"]
+    if previous_plan is not None and known_previous:
         previous_id = previous_plan.release_id
         previous_topology = previous_plan.target_topology
+    elif not known_previous:
+        previous_id = None
+        previous_topology = None
     else:
-        known_previous = [c for c in plan.services if c.previous_image != "unknown"]
-        if not known_previous:
-            previous_id = None
-            previous_topology = None
-        else:
-            tags = {_image_tag(c.previous_image) for c in known_previous}
-            if len(tags) != 1:
-                raise ReleasePlanError("历史镜像 tag 不一致且没有上一份发布计划，拒绝猜测 previous_release_id")
-            if fallback_previous_topology is None:
-                raise ReleasePlanError(
-                    "没有上一份发布计划且缺少可用保存环境，拒绝从历史镜像猜测 previous_topology"
-                )
-            previous_id = next(iter(tags))
-            previous_topology = {**fallback_previous_topology, "release_id": previous_id}
+        tags = {_image_tag(c.previous_image) for c in known_previous}
+        if len(tags) != 1:
+            raise ReleasePlanError("历史镜像 tag 不一致且没有上一份发布计划，拒绝猜测 previous_release_id")
+        if fallback_previous_topology is None:
+            raise ReleasePlanError(
+                "没有上一份发布计划且缺少可用保存环境，拒绝从历史镜像猜测 previous_topology"
+            )
+        previous_id = next(iter(tags))
+        previous_topology = {**fallback_previous_topology, "release_id": previous_id}
     target_topology = topology.to_dict()
     backend = next((c for c in plan.services if c.service == "backend"), None)
     migration = {
