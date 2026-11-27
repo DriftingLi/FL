@@ -70,7 +70,7 @@
     .ask-bar {
         margin: 16rpx 24rpx;
         padding: 20rpx 24rpx;
-        background-color: #ffffff;
+        background-color: $card-bg;
         border-radius: 16rpx;
         display: flex;
         flex-direction: row;
@@ -92,7 +92,7 @@
         justify-content: center;
     }
     .ask-bar-btn-icon {
-        color: #ffffff;
+        color: $text-color-inverse;
         font-size: 36rpx;
         line-height: 36rpx;
     }
@@ -125,7 +125,7 @@
 
     .qa-chip-text {
         font-size: 26rpx;
-        color: #666666;
+        color: $text-color-secondary;
     }
 
     .qa-chip-text.active {

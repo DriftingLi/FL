@@ -77,7 +77,7 @@
 
     .exp-chip-text {
         font-size: 24rpx;
-        color: #666666;
+        color: $text-color-secondary;
     }
 
     .exp-chip-text.active {

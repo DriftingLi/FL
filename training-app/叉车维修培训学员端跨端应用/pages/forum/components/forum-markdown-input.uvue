@@ -277,7 +277,7 @@
 
     .format-chip-text {
         font-size: 24rpx;
-        color: #666666;
+        color: $text-color-secondary;
     }
 
     .format-chip-text.active {
@@ -303,7 +303,7 @@
 
     .view-tab {
         padding-bottom: 12rpx;
-        border-bottom: 4rpx solid #ffffff;
+        border-bottom: 4rpx solid $card-bg;
     }
 
     .view-tab.active {
@@ -312,7 +312,7 @@
 
     .view-tab-text {
         font-size: 28rpx;
-        color: #666666;
+        color: $text-color-secondary;
     }
 
     .view-tab-text.active {
@@ -331,7 +331,7 @@
         border-radius: 12rpx;
         padding: 24rpx;
         font-size: 30rpx;
-        color: #333333;
+        color: $text-color;
         border: 1rpx solid #e0e0e0;
     }
 
@@ -349,12 +349,12 @@
         border-radius: 36rpx;
         padding: 0 28rpx;
         font-size: 28rpx;
-        color: #333333;
+        color: $text-color;
     }
 
     .counter-text {
         font-size: 22rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         text-align: right;
         margin-top: 8rpx;
     }
@@ -377,7 +377,7 @@
         margin-right: 16rpx;
         border-radius: 8rpx;
         background-color: $bg-color;
-        border: 1rpx solid #e4e7ed;
+        border: 1rpx solid $border-color;
         align-items: center;
         justify-content: center;
     }
@@ -391,13 +391,13 @@
     /* ===== 功能提示（两条都是 ui-conventions 的明确例外，别当装饰删）===== */
     .region-notice {
         font-size: 22rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         margin-top: 12rpx;
     }
 
     .boundary-notice {
         font-size: 22rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         margin-top: 8rpx;
     }
 
@@ -411,7 +411,7 @@
 
     .preview-empty {
         font-size: 26rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     /* ===== 图片区 ===== */
@@ -434,7 +434,7 @@
         width: 160rpx;
         height: 160rpx;
         border-radius: 12rpx;
-        background-color: #f0f0f0;
+        background-color: $border-color-light;
     }
 
     /* 票 2730 第 1 项：× 徽标本体仍是 40rpx，命中区由外层 88rpx 盒撑开（§5.11）；
@@ -460,7 +460,7 @@
 
     .image-remove-text {
         font-size: 28rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
         line-height: 1;
     }
 
@@ -469,7 +469,7 @@
         height: 160rpx;
         margin-right: 16rpx;
         margin-bottom: 16rpx;
-        border: 2rpx dashed #c0c4cc;
+        border: 2rpx dashed $border-color;
         border-radius: 12rpx;
         background-color: $bg-color;
         align-items: center;
@@ -478,12 +478,12 @@
 
     .image-add-icon {
         font-size: 44rpx;
-        color: #909399;
+        color: $text-color-placeholder;
     }
 
     .image-add-text {
         font-size: 22rpx;
-        color: #909399;
+        color: $text-color-placeholder;
         margin-top: 8rpx;
     }
 </style>

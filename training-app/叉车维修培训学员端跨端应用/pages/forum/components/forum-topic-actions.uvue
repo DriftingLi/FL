@@ -48,7 +48,7 @@ function onLike() : void {
         align-items: center;
         margin-top: 24rpx;
         padding-top: 20rpx;
-        border-top: 1rpx solid #f2f3f5;
+        border-top: 1rpx solid $border-color-light;
     }
 
     .stat-item {
@@ -66,7 +66,7 @@ function onLike() : void {
 
     .stat-text {
         font-size: 24rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     /* 已点赞：文字转主色加粗（图标只有一份切图，不做双态换图） */
