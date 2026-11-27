@@ -1186,6 +1186,10 @@ definitions:
         allOf:
         - $ref: '#/definitions/publicscope.Eligibility'
         x-optional: true
+      public_state:
+        allOf:
+        - $ref: '#/definitions/publicscope.PublicState'
+        x-optional: true
       sort_order:
         type: integer
       specialty:
@@ -1571,6 +1575,10 @@ definitions:
         allOf:
         - $ref: '#/definitions/publicscope.Eligibility'
         x-optional: true
+      public_state:
+        allOf:
+        - $ref: '#/definitions/publicscope.PublicState'
+        x-optional: true
       sort_order:
         type: integer
       specialty:
@@ -1610,18 +1618,49 @@ definitions:
       progress:
         type: number
     type: object
+  course.CourseFacetCount:
+    properties:
+      category_id:
+        type: integer
+      total:
+        type: integer
+    type: object
+  course.CourseFacets:
+    properties:
+      categories:
+        items:
+          $ref: '#/definitions/course.CourseFacetCount'
+        type: array
+      legacy:
+        type: integer
+      total:
+        type: integer
+    type: object
   course.CoursePageResult:
     properties:
       courses:
         items:
           $ref: '#/definitions/course.CourseDTO'
         type: array
+      facets:
+        allOf:
+        - $ref: '#/definitions/course.CourseFacets'
+        x-optional: true
       page:
         type: integer
       pages:
         type: integer
       total:
         type: integer
+    type: object
+  course.CourseSortNeighbors:
+    properties:
+      next_id:
+        type: integer
+        x-nullable: true
+      previous_id:
+        type: integer
+        x-nullable: true
     type: object
   course.CredentialBriefDTO:
     properties:
@@ -1841,6 +1880,62 @@ definitions:
         type: integer
       study_duration:
         type: integer
+    type: object
+  course.TutorChapterDetailDTO:
+    properties:
+      chapter_id:
+        type: integer
+      content:
+        type: string
+      content_type:
+        type: string
+      course_id:
+        type: integer
+      created_at:
+        type: string
+      description:
+        type: string
+      duration:
+        type: integer
+      file_url:
+        type: string
+      files:
+        items:
+          $ref: '#/definitions/course.ChapterFileDTO'
+        type: array
+      next_chapter_id:
+        type: integer
+        x-nullable: true
+      order_num:
+        type: integer
+      previous_chapter_id:
+        type: integer
+        x-nullable: true
+      reject_reason:
+        type: string
+        x-optional: true
+      resume_position:
+        description: |-
+          ResumePosition 该学员在本章节的最后播放位置（秒，契约只增不改 —— ADR-0048）。
+          ADR-0062 决策 11：断点续播的位置由后端下发。旧形状是前端在章节详情装载里同步读
+          另一条并发请求填的 map，谁先回来全凭运气 ⇒ 多半读到 0，每次从片头重播
+          （词表「学习位置」的承诺在最常用的入口上不成立）。
+        type: integer
+      review_snapshot:
+        allOf:
+        - $ref: '#/definitions/course.ChapterReviewSnapshotDTO'
+        x-optional: true
+      review_status:
+        description: |-
+          ReviewStatus/RejectReason 章节审核状态机（#2498 C1）：draft/pending/published + 驳回理由。
+          只在管理读面/导师编辑面有意义，学生读面省略（x-optional）。
+        type: string
+        x-optional: true
+      study_status:
+        type: string
+        x-optional: true
+      title:
+        type: string
     type: object
   course.TutorCourseChaptersDTO:
     properties:
@@ -3499,6 +3594,17 @@ definitions:
           $ref: '#/definitions/publicscope.Reason'
         type: array
     type: object
+  publicscope.PublicState:
+    properties:
+      category:
+        allOf:
+        - $ref: '#/definitions/publicscope.CategoryRef'
+        x-optional: true
+      eligibility:
+        $ref: '#/definitions/publicscope.Eligibility'
+      public_visibility:
+        type: boolean
+    type: object
   publicscope.Reason:
     enum:
     - manually_hidden
@@ -3585,6 +3691,10 @@ definitions:
       public_eligibility:
         allOf:
         - $ref: '#/definitions/publicscope.Eligibility'
+        x-optional: true
+      public_state:
+        allOf:
+        - $ref: '#/definitions/publicscope.PublicState'
         x-optional: true
       reference_answer:
         type: string
@@ -6885,6 +6995,44 @@ paths:
       security:
       - BearerAuth: []
       summary: 交换课程排序
+      tags:
+      - 管理端-课程
+  /admin/course/{course_id}/sort-neighbors:
+    get:
+      description: 返回同分类全局排序中的前后邻居 ID，供服务端分页列表跨页移动
+      parameters:
+      - description: 课程 ID
+        in: path
+        name: course_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/course.CourseSortNeighbors'
+              type: object
+        "400":
+          description: 课程ID无效或课程未分类
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 课程不存在
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 管理端课程排序邻居
       tags:
       - 管理端-课程
   /admin/course/generate-content:
@@ -18365,7 +18513,7 @@ paths:
             - $ref: '#/definitions/response.R'
             - properties:
                 data:
-                  $ref: '#/definitions/course.ChapterDetailDTO'
+                  $ref: '#/definitions/course.TutorChapterDetailDTO'
               type: object
         "401":
           description: 未认证
@@ -19212,8 +19360,8 @@ paths:
     post:
       consumes:
       - multipart/form-data
-      description: Vditor 编辑器内嵌图上传（需讲师能力）；chapter_id 支持 query（Vditor 走 URL）与 form（直接
-        multipart）两种传递方式，用于按章节分目录存储。返回 Vditor 约定的**非统一信封**响应 {msg,code,data:{errFiles,succMap}}（code=0
+      description: Vditor 编辑器内嵌图上传（需讲师能力与章节认领）；chapter_id 支持 query（Vditor 走 URL）与
+        form（直接 multipart）两种传递方式，且必填。返回 Vditor 约定的**非统一信封**响应 {msg,code,data:{errFiles,succMap}}（code=0
         表示成功），与 /admin/featured-content/upload-image 同一适配器
       parameters:
       - description: 图片文件
@@ -19221,9 +19369,10 @@ paths:
         name: file
         required: true
         type: file
-      - description: 章节ID（可选，按章节分目录存储 images/chapters/<id>）
+      - description: 章节ID（query 或 form 必填，按章节分目录存储 images/chapters/<id>）
         in: query
         name: chapter_id
+        required: true
         type: integer
       produces:
       - application/json
@@ -19233,8 +19382,24 @@ paths:
           schema:
             additionalProperties: true
             type: object
+        "400":
+          description: 章节ID无效
+          schema:
+            $ref: '#/definitions/response.R'
         "401":
           description: 未认证
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: 未认领章节所属课程
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 章节不存在
+          schema:
+            $ref: '#/definitions/response.R'
+        "500":
+          description: 图片落盘后章节写入失败
           schema:
             $ref: '#/definitions/response.R'
       security:

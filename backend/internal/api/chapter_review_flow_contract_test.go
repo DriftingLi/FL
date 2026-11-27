@@ -105,11 +105,40 @@ func TestChapterReviewFlowContract(t *testing.T) {
 		t.Fatalf("审中改草稿应 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
+	// 讲师详情同时返回 working 正文与真实 pending 快照，前端不得把前者冒充后者。
+	rec := do("GET", "/api/tutor/chapter/"+itoa(ch.ChapterID), tutorTok, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("导师在审章节详情应 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var tutorDetail struct {
+		Data struct {
+			Content        string `json:"content"`
+			ReviewSnapshot *struct {
+				Content string `json:"content"`
+				Files   []struct {
+					FileName string `json:"file_name"`
+				} `json:"files"`
+			} `json:"review_snapshot"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &tutorDetail); err != nil {
+		t.Fatalf("解析导师在审章节详情失败: %v: %s", err, rec.Body.String())
+	}
+	if tutorDetail.Data.Content != "v2 草稿" {
+		t.Fatalf("导师详情工作副本 = %q, want v2 草稿", tutorDetail.Data.Content)
+	}
+	if tutorDetail.Data.ReviewSnapshot == nil || tutorDetail.Data.ReviewSnapshot.Content != "v1 正文" {
+		t.Fatalf("导师详情应返回真实 pending 快照: %s", rec.Body.String())
+	}
+	if tutorDetail.Data.ReviewSnapshot.Files == nil {
+		t.Fatalf("在审快照文件清单应为非 nil 数组: %s", rec.Body.String())
+	}
+
 	// 过审：切换的是快照（v1），不是 v2 草稿
 	if rec := do("POST", "/api/admin/chapter/"+itoa(ch.ChapterID)+"/approve-review", adminTok, ""); rec.Code != http.StatusOK {
 		t.Fatalf("过审应 200, got %d: %s", rec.Code, rec.Body.String())
 	}
-	rec := do("GET", "/api/course/"+itoa(c.CourseID)+"/chapter/"+itoa(ch.ChapterID), stuTok, "")
+	rec = do("GET", "/api/course/"+itoa(c.CourseID)+"/chapter/"+itoa(ch.ChapterID), stuTok, "")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("过审后学员应可读, got %d: %s", rec.Code, rec.Body.String())
 	}

@@ -86,18 +86,26 @@ test('镜像自证：一致 ⇒ 退出码 0；不一致 ⇒ 非零且打印 mism
   assert.equal(bad.out.split('\n').pop(), 'mismatch')
 })
 
-// 结构判据（照 check-async-section.mjs 的文本守卫手法）：回滚必须只改 tag 变量、必须带自证，
-// 且不得把历史镜像写回进程环境 —— write_env_file 不读它，正是空操作回滚的成因。
-test('回滚接线：只改 tag + write_env_file + assert_running_image，且不写 BACKEND_IMAGE 环境变量', () => {
+test('回滚接线：自动与手工入口都只调用共享 rollback_transaction', () => {
+  const src = readFileSync(resolve(ROOT, 'deploy/deploy.py'), 'utf8')
+  const deployStart = src.indexOf('def deploy(self)')
+  const deployEnd = src.indexOf('def rollback_transaction', deployStart)
+  const deployBody = src.slice(deployStart, deployEnd)
+  assert.ok(deployBody.includes('self.rollback_transaction(txn)'), '自动回滚绕过共享编排')
+  assert.ok(!deployBody.includes('txn.rollback()'), '自动回滚另写 transaction 编排')
+})
+
+// 结构判据：手工回滚只负责恢复 transaction，不能另写 tag 选择/重建/自证编排。
+test('回滚接线：手工入口恢复同一 transaction，不再自行选择 tag 或重建', () => {
   const src = readFileSync(resolve(ROOT, 'deploy/deploy.py'), 'utf8')
   const start = src.indexOf('def do_rollback(')
   assert.ok(start > 0, '找不到 do_rollback')
   const end = src.indexOf('# ---------------------------------------------------------------- down', start)
   const body = src.slice(start, end > 0 ? end : src.length)
-  for (const needle of ['setattr(self, f"tag_{service}"', 'write_env_file', 'assert_running_image']) {
+  for (const needle of ['load_release_plan', 'ReleaseTransaction.restore', 'rollback_transaction']) {
     assert.ok(body.includes(needle), 'do_rollback 缺少：' + needle)
   }
-  for (const banned of ['os.environ', 'export BACKEND_IMAGE', 'export FRONTEND_IMAGE']) {
-    assert.ok(!body.includes(banned), 'do_rollback 又出现 ' + banned + '（容易绕过 .env ⇒ 空操作回滚回归）')
+  for (const banned of ['last-version.txt', 'setattr(self, f"tag_', 'write_env_file', 'assert_running_image', '"--force-recreate"']) {
+    assert.ok(!body.includes(banned), 'do_rollback 又出现独立编排：' + banned)
   }
 })

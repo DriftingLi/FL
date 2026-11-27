@@ -1,15 +1,17 @@
 # deploy/ — 部署面
 
-> ADR-0088：部署相关文件统一收在这里。部署 CLI 是 **Python 3.9+ 标准库单文件**（`deploy.py`），
-> 目标服务器（Debian / PVE）自带 `python3`，不要求 Node。
+> ADR-0088：部署相关文件统一收在这里。部署 CLI 使用 **Python 3.9+ 标准库**，入口是 `deploy.py`，
+> 目标服务器（Debian / PVE）自带 `python3`，不要求 Node。数据库与发布拓扑由 `topology.py` 统一解析。
 
 ## 目录
 
 | 文件 | 作用 |
 | --- | --- |
-| `deploy.py` | 部署 CLI：按变更重启、迁移、回滚、健康检查、测试环境 down |
+| `deploy.py` | 部署 CLI：拓扑输出、按变更重启、迁移、回滚、健康检查、测试环境 down |
+| `topology.py` | 部署拓扑唯一 owner：解析 DB 模式、compose、迁移、备份与巡检策略，发布/校验拓扑快照 |
+| `release_transaction.py` | 版本化发布计划与 `plan → execute → rollback → verify` 事务 |
 | `docker-compose.prod.yml` / `docker-compose.external-db.yml` | 基础编排及外部 PostgreSQL 覆盖配置 |
-| `env.defaults` | 部署默认值生成物（唯一事实源 `backend/internal/deploy/topology.go`；`cd backend && go run ./cmd/gen-deploy`） |
+| `env.defaults` | 部署默认值生成物（普通配置项唯一事实源 `backend/internal/deploy/topology.go`；`cd backend && go run ./cmd/gen-deploy`）；数据库拓扑策略以 `topology.py` 为准 |
 | `setup-server.sh` | 服务器首次初始化（Docker / 部署用户 / 目录 / 防火墙 / cron） |
 | `lxc-install-docker.sh` / `lxc-setup-ssh.sh` | LXC 容器内 Docker / SSH 初始化 |
 | `backup-daily.sh` / `rbd-snap-hourly.sh` | 每日逻辑备份 / 每小时 RBD 快照 |
@@ -22,9 +24,11 @@
 
 ```bash
 python3 deploy/deploy.py                 # 部署（CD 默认调用）
+python3 deploy/deploy.py --topology      # 只读输出当前配置解析出的拓扑 JSON（不碰 docker）
+python3 deploy/deploy.py --check-topology-snapshot --json  # 校验已发布快照与当前发布标识，输出快照 JSON
 python3 deploy/deploy.py --plan          # 只读计划：会动哪些容器、是否要迁移
 python3 deploy/deploy.py --plan --json   # 机器可读计划（stdout 只有 JSON）
-python3 deploy/deploy.py rollback        # 回滚到 backups/last-version.txt
+python3 deploy/deploy.py rollback        # 从版本化发布计划恢复上一版应用与拓扑
 python3 deploy/deploy.py down            # 停栈，命名卷保留（testing 冒烟收尾）
 python3 deploy/deploy.py local           # 本地 / 手动一键：构建前端 → 迁移 → 部署
 ```
@@ -62,7 +66,7 @@ python3 deploy/deploy.py local           # 本地 / 手动一键：构建前端 
 
 1. 预检查（docker / compose / curl / 磁盘 ≥ 2GB）；
 2. 解析镜像加速代理 → 写 `.env`（内容未变则跳过写入）；
-3. 记录当前运行镜像到 `backups/last-version.txt`；生产环境并行做 `pg_dump` 备份；
+3. 记录当前运行镜像到 `backups/last-version.txt`；docker 模式并行做 `pg_dump` 备份，external 模式在迁移前同步备份；
 4. 只拉取本地缺失的镜像（内容哈希标签命中即跳过）；
 5. 确保 postgres 在运行，等待数据库就绪；
 6. 迁移兼容性预检（镜像内迁移版本不得落后于数据库）；
@@ -71,8 +75,9 @@ python3 deploy/deploy.py local           # 本地 / 手动一键：构建前端 
    **不带 `--no-deps`**：compose 的 config-hash 包含 `depends_on`，带它创建出的容器标签哈希
    与 `compose config --hash` 永远不同，backend/frontend 会被判「配置变更」每次重建。
    数据服务仍由 `plan_data` 的 blocked 保护，`up <app>` 不会重建未变化的依赖；
-9. 后端 / 前端真实 HTTP 健康检查；
-10. 清理悬空镜像、旧镜像、旧备份。
+10. 后端 / 前端真实 HTTP 健康检查通过后，原子发布 `backups/deployment-topology.json`，随后原子发布
+    `backups/current-release-id`；两者属于同一发布标识，缺一、损坏或发布标识不一致都会使消费方失败关闭；
+11. 清理悬空镜像、旧镜像、旧备份。
 
 失败时：只有**已经动过应用容器**才自动回滚（回滚同样只重建 tag 变化的服务，并做运行镜像自证）；
 镜像拉取 / 迁移预检阶段失败时线上版本没变，不回滚。
@@ -84,6 +89,23 @@ python3 deploy/deploy.py local           # 本地 / 手动一键：构建前端 
   更不会 `source`。CD 传入的值（例如 `PG_VOLUME=/srv/ceph/pgdata`）永远优先。
 - 镜像引用（`BACKEND_IMAGE` / `FRONTEND_IMAGE` / `LIBREOFFICE_IMAGE`）只由 `.env` 控制，
   避免 `env.defaults` 的本地镜像名盖掉部署脚本算好的 registry + tag。
+
+## 配置拓扑与已发布快照
+
+`deploy/topology.py` 是 `DB_MODE`、compose 组合、迁移、备份与巡检拓扑的唯一 owner。部署输入仍可包含
+`DEPLOY_ENVIRONMENT`、`DB_MODE`、`POSTGRES_IMAGE`、`PG_VOLUME` 等环境变量，但消费方不再各自解释这些配置：
+
+- testing 默认 `docker` / `postgres:19.0-trixie` / `pgdata-testing-19`；production 默认
+  `docker` / `postgres:18-alpine` / `pgdata-prod`。环境变量可覆盖默认值。
+- `external` 在基础 compose 上叠加 `deploy/docker-compose.external-db.yml`；不使用仓库内 PostgreSQL 容器。
+- 迁移、发布前备份和巡检策略由拓扑一并解析。`--topology` 只读输出当前配置解析结果；
+  `--plan --json` 还包含容器变更计划，两者都不是已发布快照。
+
+部署成功（包括成功回滚）后发布 `backups/deployment-topology.json` 与 `backups/current-release-id`。
+`backup-daily.sh` 和 `forklift-watchdog.sh` 只通过
+`python3 deploy/deploy.py --check-topology-snapshot --json` 消费并校验这份快照，按其中的
+`backup.strategy`、`watchdog.strategy` 与 `expected_containers` 执行；它们不读取 `DB_MODE`。
+快照缺失、损坏或与当前发布标识不一致时 fail closed，拒绝备份或巡检。修改拓扑配置后，以成功部署发布的快照为准。
 
 ## compose 项目名与数据卷
 
@@ -101,9 +123,9 @@ name: ${COMPOSE_PROJECT_NAME:-forklift-training}
 
 1. 登记固定地址和 DNS 后，在 pve-01 创建 Debian 13 非特权 LXC，配置 2 vCPU、2 GiB RAM、20 GiB `local-lvm` 根卷与 `vmbr0`。用 PGDG 安装 PostgreSQL 19.0。建库显式指定 `--encoding=UTF8`，核对源库的 locale 设置，配置 `pg_stat_statements`、SCRAM、TLS 和网络访问控制。pve-02 安装 PostgreSQL 19 客户端，将签发数据库服务证书的 CA 写入 `/etc/forklift/postgres-ca.crt`，确保应用容器用户可读。
 2. 先用 PostgreSQL 19 客户端演练 `pg_dump -Fc` 和 `pg_restore --exit-on-error`。显式建角色，核对所有权、授权和库级设置。对比迁移状态、关键表行数、序列、文本排序和唯一约束。用生产镜像、隔离的应用环境和实际发行链路验证后端启动、读写、迁移与发布前备份。testing Docker 使用独立 `pgdata-testing-19` 卷。
-3. 将基础备份与持续 WAL 归档存入独立 NFS `backup-nfs`。pve-01 故障时，先确认原库无法继续写入，在 pve-02 本地盘仅用 NFS 副本恢复，再将数据库服务入口切到恢复节点。切流前计时验证定点恢复、TLS 连通和应用探活。每日逻辑备份在 `/etc/forklift-backup.env` 设置 `DB_MODE=external` 和 `PGSERVICEFILE`。服务文件权限为 0600，默认服务名 `forklift-backup`，包含连接参数和证书校验配置。核对 RGW 与远端副本。旧库的备份和快照先保留。
-4. 维护窗口内暂停 CD，暂停所有写入方，包括启用时的采集器。确认停写后重做最终导出和恢复。production 环境变量设 `DB_MODE=external`，同环境 secret `DATABASE_URL` 指向新库，形式为 `postgresql://用户:编码后的密码@数据库域名/forklift_training?sslmode=verify-full&sslrootcert=/etc/forklift/postgres-ca.crt`。执行已验证的生产部署，并在放开写入前通过只读探活。采集器启用时使用同一覆盖配置重新创建。确认生产连接和备份均指向新库后停止旧 PostgreSQL 容器，保留原卷。
-5. 开放写入前失败时，显式将 production 的 `DB_MODE` 改回 `docker`，确认 `PG_VOLUME` 指向原 RBD 挂载路径后重新部署。开放写入后优先恢复 PostgreSQL 19。回切 18 前须先对账和转移新库写入。外部模式的应用回滚仍使用该外部库，终止发布时保留底层数据库。
+3. 将基础备份与持续 WAL 归档存入独立 NFS `backup-nfs`。pve-01 故障时，先确认原库无法继续写入，在 pve-02 本地盘仅用 NFS 副本恢复，再将数据库服务入口切到恢复节点。切流前计时验证定点恢复、TLS 连通和应用探活。每日逻辑备份在 `/etc/forklift-backup.env` 配置 `PGSERVICEFILE`（服务文件权限为 0600，默认服务名 `forklift-backup`，包含连接参数和证书校验配置）；不再在该文件设置 `DB_MODE`，备份策略由成功部署发布的拓扑快照提供。核对 RGW 与远端副本。旧库的备份和快照先保留。
+4. 维护窗口内暂停 CD，暂停所有写入方，包括启用时的采集器。确认停写后重做最终导出和恢复。production 部署配置设 `DB_MODE=external`，同环境 secret `DATABASE_URL` 指向新库，形式为 `postgresql://用户:编码后的密码@数据库域名/forklift_training?sslmode=verify-full&sslrootcert=/etc/forklift/postgres-ca.crt`。先用 `python3 deploy/deploy.py --topology` 与 `python3 deploy/deploy.py --plan` 核对 external overlay 和变更计划，再执行已验证的生产部署；成功后用 `python3 deploy/deploy.py --check-topology-snapshot --json` 确认快照为 external 策略，并在放开写入前通过只读探活。采集器启用时使用同一覆盖配置重新创建。确认生产连接和备份均指向新库后停止旧 PostgreSQL 容器，保留原卷。
+5. 开放写入前失败时，按版本化发布计划执行 `python3 deploy/deploy.py rollback`，恢复上一版应用与拓扑；若尚未形成可回滚发布而需显式改回 docker，则将 production 的 `DB_MODE` 改回 `docker`，确认 `PG_VOLUME` 指向原 RBD 挂载路径，先跑 `--plan` 核对再重新部署。开放写入后优先恢复 PostgreSQL 19。回切 18 前须先对账和转移新库写入。回滚只恢复发布计划中的上一版应用与拓扑；若上一版为 external，仍使用该外部库，终止发布时保留底层数据库。数据库恢复仍是独立 runbook，不由应用回滚自动执行。
 
 ## 大版本升级：PostgreSQL 15 → 18（一次性 runbook，#2109）
 
@@ -232,8 +254,9 @@ $COMPOSE up -d postgres
 
 ## 巡检脚本与 systemd 单元（forklift-watchdog）
 
-生产使用外部 PostgreSQL 时，巡检从部署 `.env` 读取 `DB_MODE`，使用
-`/etc/forklift/postgres-backup.service.conf` 的 TLS 服务配置执行只读探针。
+巡检只消费成功部署发布的拓扑快照，不再从部署 `.env` 读取 `DB_MODE`。快照为
+`external_postgres_tls` 时，使用 `/etc/forklift/postgres-backup.service.conf` 的 TLS 服务配置执行只读探针；
+为 `docker_postgres` 时使用仓库内 PostgreSQL 容器。容器清单同样取自快照的 `expected_containers`。
 在生产巡检配置中设置 `WATCH_REMOTE_HOST=root@pve-01` 和 `WATCH_REMOTE_LXC=103`，
 同时检查数据库 LXC 的磁盘、WAL 归档计时器和最近一次归档巡检结果。
 
@@ -279,8 +302,8 @@ sha256sum /usr/local/bin/forklift-watchdog.sh "$DEPLOY_PATH/deploy/forklift-watc
 （`/diagnosis/intents` 之类）：那类面要 v2 上游，上游没配就回 502，「后端活没活」会被
 外部依赖绑架，把一次外部抖动报成本站故障。配图链路（`/diagnosis/ossimg/*`）同理不单列。
 
-脚本里的 `EXPECT_CONTAINERS` 是容器判据：**部署面增减容器时必须同步它**（否则误报）。
-删掉某个服务（例如 #2109 的 redis）时，连它一起从这条清单里删。
+运行中的容器清单由拓扑快照提供：**部署面增减容器时必须修改 `topology.py` 的拓扑定义并重新部署**，
+不再手工同步脚本里的 `EXPECT_CONTAINERS`。删掉某个服务（例如 #2109 的 redis）时，也要从拓扑定义中移除。
 
 ## 判据物与本地校验
 

@@ -8,7 +8,7 @@ import UiDialog from '@/components/ui/UiDialog.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 import UiSelect from '@/components/ui/UiSelect.vue'
 import type { Question } from '@/types/question'
-import type { Eligibility } from '@/api/generated/course'
+import type { Eligibility, PublicState } from '@/api/generated/course'
 
 const confirmMock = vi.hoisted(() => vi.fn())
 
@@ -22,7 +22,8 @@ vi.mock('@/api/questionBank', () => ({
     publishQuestion: vi.fn(),
     rejectQuestion: vi.fn(),
     batchPublish: vi.fn(),
-    batchReject: vi.fn()
+    batchReject: vi.fn(),
+    setPublicVisibility: vi.fn()
   }
 }))
 
@@ -38,6 +39,7 @@ import QuestionReview from '../QuestionReview.vue'
 
 type ReviewQuestion = Question & {
   category?: { id: number; name: string; status: number }
+  public_state?: PublicState
   public_eligibility?: Eligibility
 }
 
@@ -56,7 +58,12 @@ function questionDTO(over: Partial<ReviewQuestion> = {}): ReviewQuestion {
     created_at: '2026-11-01T10:00:00+08:00',
     updated_at: '2026-11-01T10:00:00+08:00',
     category: { id: 9, name: '维修', status: 1 },
-    public_eligibility: { eligible: false, reasons: ['not_published', 'source_tag_excluded'] },
+    public_state: {
+      category: { id: 9, name: '维修', status: 1 },
+      public_visibility: true,
+      eligibility: { eligible: false, reasons: ['not_published', 'source_tag_excluded'] }
+    },
+    public_eligibility: { eligible: true, reasons: [] },
     ...over
   }
 }
@@ -95,13 +102,24 @@ beforeEach(() => {
     ]
   })
   vi.mocked(questionBankApi.publishQuestion).mockResolvedValue(
-    questionDTO({ status: 'published', public_eligibility: { eligible: false, reasons: ['source_tag_excluded'] } }) as unknown as QuestionDTO
+    questionDTO({
+      status: 'published',
+      public_state: {
+        category: { id: 9, name: '维修', status: 1 },
+        public_visibility: true,
+        eligibility: { eligible: false, reasons: ['source_tag_excluded'] }
+      }
+    }) as unknown as QuestionDTO
   )
   vi.mocked(questionBankApi.rejectQuestion).mockResolvedValue(
     questionDTO({
       status: 'draft',
       reject_reason: '分类信息不足',
-      public_eligibility: { eligible: false, reasons: ['not_published', 'source_tag_excluded'] }
+      public_state: {
+        category: { id: 9, name: '维修', status: 1 },
+        public_visibility: true,
+        eligibility: { eligible: false, reasons: ['not_published', 'source_tag_excluded'] }
+      }
     }) as unknown as QuestionDTO
   )
   vi.spyOn(ElMessage, 'success').mockImplementation(() => undefined as never)
@@ -138,7 +156,7 @@ describe('QuestionReview 分类与公开状态', () => {
     expect(questionBankApi.getQuestions).toHaveBeenCalledWith(expect.objectContaining({ category_id: 'legacy' }))
   })
 
-  it('列表展示首个原因，点击题干可在详情看全部原因', async () => {
+  it('列表直接展示全部公开阻塞原因，点击题干可在详情继续查看', async () => {
     const wrapper = mountPage()
     await flushPromises()
 
@@ -146,7 +164,7 @@ describe('QuestionReview 分类与公开状态', () => {
     expect(row.text()).toContain('维修')
     expect(row.text()).toContain('待审核')
     expect(row.text()).toContain('未发布')
-    expect(row.text()).not.toContain('来源标签题不计入公开题库')
+    expect(row.text()).toContain('来源标签题不计入公开题库')
 
     await row.get('button').trigger('click')
     await flushPromises()
@@ -155,6 +173,36 @@ describe('QuestionReview 分类与公开状态', () => {
     expect(document.body.textContent).toContain('分类：维修')
     expect(document.body.textContent).toContain('审核状态：待审核')
     expect(document.body.textContent).toContain('未发布')
+    expect(document.body.textContent).toContain('来源标签题不计入公开题库')
+  })
+
+  it('公开开关只读 public_state.public_visibility，不被旧 reasons 反推', async () => {
+    listResult = {
+      items: [questionDTO({
+        public_state: {
+          category: { id: 9, name: '维修', status: 1 },
+          public_visibility: false,
+          eligibility: { eligible: true, reasons: [] }
+        },
+        public_eligibility: { eligible: false, reasons: ['manually_hidden'] }
+      })],
+      total: 1
+    }
+    vi.mocked(questionBankApi.setPublicVisibility).mockResolvedValue({
+      eligible: false,
+      reasons: ['source_tag_excluded']
+    })
+    const wrapper = mountPage()
+    await flushPromises()
+    const detail = await openDetail(wrapper)
+
+    const toggle = detail.getComponent({ name: 'ElSwitch' })
+    expect(toggle.props('modelValue')).toBe(false)
+    toggle.vm.$emit('change', true)
+    await flushPromises()
+
+    expect(questionBankApi.setPublicVisibility).toHaveBeenCalledWith(11, true)
+    expect(toggle.props('modelValue')).toBe(true)
     expect(document.body.textContent).toContain('来源标签题不计入公开题库')
   })
 

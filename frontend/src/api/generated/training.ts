@@ -40,7 +40,7 @@
 //   PUT  /admin/position/{position_id}/sort
 //   DELETE /admin/position/{position_id}
 //
-// 覆盖的 Go 类型：CertificateTemplateDTO / ChapterDTO / ChapterFileDTO / CourseBriefDTO / CourseDTO / CredentialBriefDTO / LevelBriefDTO / SpecialtyBriefDTO / CategoryRef / Eligibility / Reason / AdminTrainingCategoryDTO / AdminTrainingCategoryListDTO / CatalogLevelNode / CatalogSpecialtyNode / CatalogTreeDTO / CertificateTemplateDict / CertificateTemplateListDTO / LevelDict / LevelListDTO / PositionDict / PositionListDTO / QuestionTagDict / QuestionTagListDTO / QuestionTagsResultDTO / SpecialtyDict / SpecialtyListDTO / TrainingCategoryDTO / TrainingCategoryListDTO
+// 覆盖的 Go 类型：CertificateTemplateDTO / ChapterDTO / ChapterFileDTO / CourseBriefDTO / CourseDTO / CredentialBriefDTO / LevelBriefDTO / SpecialtyBriefDTO / CategoryRef / Eligibility / PublicState / Reason / AdminTrainingCategoryDTO / AdminTrainingCategoryListDTO / CatalogLevelNode / CatalogSpecialtyNode / CatalogTreeDTO / CertificateTemplateDict / CertificateTemplateListDTO / LevelDict / LevelListDTO / PositionDict / PositionListDTO / QuestionTagDict / QuestionTagListDTO / QuestionTagsResultDTO / SpecialtyDict / SpecialtyListDTO / TrainingCategoryDTO / TrainingCategoryListDTO
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -122,6 +122,7 @@ export interface CourseDTO {
   prerequisite_course_ids?: number[]
   prerequisites?: CourseBriefDTO[]
   public_eligibility?: Eligibility
+  public_state?: PublicState
   sort_order: number
   specialty?: SpecialtyBriefDTO
   specialty_id: number | null
@@ -159,6 +160,12 @@ export interface CategoryRef {
 export interface Eligibility {
   eligible: boolean
   reasons: Reason[]
+}
+
+export interface PublicState {
+  category?: CategoryRef
+  eligibility: Eligibility
+  public_visibility: boolean
 }
 
 export type Reason = 'manually_hidden' | 'not_published' | 'category_missing' | 'category_disabled' | 'category_unmapped' | 'credential_missing' | 'credential_disabled' | 'source_tag_excluded'

@@ -34,13 +34,11 @@ import { epLite } from '@/test/element-lite'
 import TutorCourseAssignDrawer from '../TutorCourseAssignDrawer.vue'
 
 const coursesPage = {
-  courses: [
+  items: [
     { course_id: 1, name: '叉车安全' },
     { course_id: 2, name: '叉车维修' },
     { course_id: 3, name: '电池维护' }
   ],
-  page: 1,
-  pages: 1,
   total: 3
 }
 

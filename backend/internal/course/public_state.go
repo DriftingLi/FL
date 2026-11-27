@@ -25,10 +25,10 @@ func FillCoursePublicStates(db *gorm.DB, items []CourseDTO) error {
 		return err
 	}
 	for i := range items {
-		if state, ok := states[items[i].CourseID]; ok {
-			items[i].Category = state.Category
-			items[i].PublicEligibility = &state.Eligibility
-		}
+		state := states[items[i].CourseID]
+		items[i].Category = state.Category
+		items[i].PublicEligibility = &state.Eligibility
+		items[i].PublicState = &state
 	}
 	return nil
 }

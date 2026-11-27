@@ -18,7 +18,7 @@
 //   GET  /chapter/{chapter_id}/slides
 //   POST /chapter/{chapter_id}/slides/regenerate
 //
-// 覆盖的 Go 类型：CertificateTemplateDTO / ChapterDTO / ChapterDetailDTO / ChapterFileDTO / ChapterSlidesDTO / CourseBriefDTO / CourseBrowseResult / CourseDTO / CourseDetailDTO / CoursePageResult / CredentialBriefDTO / LevelBriefDTO / PublicCourseCategoryDTO / PublicCourseChapterDTO / PublicCourseDetailDTO / PublicCoursePageDTO / PublicCourseSummaryDTO / PublicSchoolCategoryDTO / PublicSchoolCategoryListDTO / PublicSchoolCourseDetailDTO / PublicSchoolCoursePageDTO / PublicSchoolCourseSummaryDTO / SpecialtyBriefDTO / StudyProgressDTO / CategoryRef / Eligibility / Reason
+// 覆盖的 Go 类型：CertificateTemplateDTO / ChapterDTO / ChapterDetailDTO / ChapterFileDTO / ChapterSlidesDTO / CourseBriefDTO / CourseBrowseResult / CourseDTO / CourseDetailDTO / CourseFacetCount / CourseFacets / CoursePageResult / CredentialBriefDTO / LevelBriefDTO / PublicCourseCategoryDTO / PublicCourseChapterDTO / PublicCourseDetailDTO / PublicCoursePageDTO / PublicCourseSummaryDTO / PublicSchoolCategoryDTO / PublicSchoolCategoryListDTO / PublicSchoolCourseDetailDTO / PublicSchoolCoursePageDTO / PublicSchoolCourseSummaryDTO / SpecialtyBriefDTO / StudyProgressDTO / CategoryRef / Eligibility / PublicState / Reason
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -129,6 +129,7 @@ export interface CourseDTO {
   prerequisite_course_ids?: number[]
   prerequisites?: CourseBriefDTO[]
   public_eligibility?: Eligibility
+  public_state?: PublicState
   sort_order: number
   specialty?: SpecialtyBriefDTO
   specialty_id: number | null
@@ -148,8 +149,20 @@ export interface CourseDetailDTO {
   progress: number
 }
 
+export interface CourseFacetCount {
+  category_id: number
+  total: number
+}
+
+export interface CourseFacets {
+  categories: CourseFacetCount[]
+  legacy: number
+  total: number
+}
+
 export interface CoursePageResult {
   courses: CourseDTO[]
+  facets?: CourseFacets
   page: number
   pages: number
   total: number
@@ -270,6 +283,12 @@ export interface CategoryRef {
 export interface Eligibility {
   eligible: boolean
   reasons: Reason[]
+}
+
+export interface PublicState {
+  category?: CategoryRef
+  eligibility: Eligibility
+  public_visibility: boolean
 }
 
 export type Reason = 'manually_hidden' | 'not_published' | 'category_missing' | 'category_disabled' | 'category_unmapped' | 'credential_missing' | 'credential_disabled' | 'source_tag_excluded'

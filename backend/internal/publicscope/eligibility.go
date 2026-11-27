@@ -1,6 +1,8 @@
 package publicscope
 
 import (
+	"errors"
+	"fmt"
 	"strings"
 
 	"gorm.io/gorm"
@@ -53,13 +55,17 @@ func LegacyCategoryFilter(db *gorm.DB, column CategoryColumn) *gorm.DB {
 }
 
 const (
-	CourseView   = "course_public_eligibility"
-	QuestionView = "question_public_eligibility"
+	CourseView   = "course_public_state"
+	QuestionView = "question_public_state"
 )
 
+// ErrPublicStateMissing 表示内容行存在，但公开资格视图没有对应读模型行。
+var ErrPublicStateMissing = errors.New("内容公开状态缺失")
+
 type PublicState struct {
-	Category    *CategoryRef
-	Eligibility Eligibility
+	PublicVisibility bool         `json:"public_visibility"`
+	Category         *CategoryRef `json:"category,omitempty" extensions:"x-optional"`
+	Eligibility      Eligibility  `json:"eligibility"`
 }
 
 func LoadCourseStates(db *gorm.DB, ids []int) (map[int]PublicState, error) {
@@ -76,21 +82,25 @@ func loadStates(db *gorm.DB, view, idColumn string, ids []int) (map[int]PublicSt
 		return states, nil
 	}
 	var rows []struct {
-		ID             int
-		CategoryID     *int
-		CategoryName   string
-		CategoryStatus int16
-		Eligible       bool
-		BlockerCodes   string
+		ID               int
+		CategoryID       *int
+		CategoryName     string
+		CategoryStatus   int16
+		Eligible         bool
+		PublicVisibility bool
+		BlockerCodes     string
 	}
 	if err := db.Table(view).
-		Select(idColumn+" AS id, category_id, category_name, category_status, eligible, blocker_codes").
+		Select(idColumn+" AS id, category_id, category_name, category_status, eligible, public_visibility, blocker_codes").
 		Where(idColumn+" IN ?", ids).
 		Scan(&rows).Error; err != nil {
 		return nil, err
 	}
 	for _, row := range rows {
-		state := PublicState{Eligibility: Eligibility{Eligible: row.Eligible, Reasons: make([]Reason, 0)}}
+		state := PublicState{
+			PublicVisibility: row.PublicVisibility,
+			Eligibility:      Eligibility{Eligible: row.Eligible, Reasons: make([]Reason, 0)},
+		}
 		if row.CategoryID != nil {
 			state.Category = &CategoryRef{ID: *row.CategoryID, Name: row.CategoryName, Status: row.CategoryStatus}
 		}
@@ -100,6 +110,15 @@ func loadStates(db *gorm.DB, view, idColumn string, ids []int) (map[int]PublicSt
 			}
 		}
 		states[row.ID] = state
+	}
+	missing := make([]int, 0)
+	for _, id := range ids {
+		if _, ok := states[id]; !ok {
+			missing = append(missing, id)
+		}
+	}
+	if len(missing) > 0 {
+		return nil, fmt.Errorf("%w: ids=%v", ErrPublicStateMissing, missing)
 	}
 	return states, nil
 }

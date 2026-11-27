@@ -55,13 +55,13 @@ const (
 
 var (
 	// ErrNotFound 会话或文件行不存在。
-	ErrNotFound = errors.New("上传会话或文件不存在")
+	ErrNotFound = course.ErrChapterWriteFileNotFound
 	// ErrForbidden 资源归属他人。
-	ErrForbidden = errors.New("无权操作该资源")
+	ErrForbidden = course.ErrChapterWriteFileForbidden
 	// ErrInvalidState 会话状态不允许该操作（如 abort 后 complete）。
-	ErrInvalidState = errors.New("上传会话状态不允许该操作")
+	ErrInvalidState = course.ErrChapterWriteFileInvalidState
 	// ErrInvalidParam 参数越界（大小/类型/分片档/序号/长度）。
-	ErrInvalidParam = errors.New("上传参数不合法")
+	ErrInvalidParam = course.ErrChapterWriteFileInvalidParam
 	// ErrQuotaFileCount 配额数量臂（spec B3，400 沿投稿配额先例）。
 	ErrQuotaFileCount = errors.New("文件数量已达上限")
 	// ErrQuotaTotalSize 配额容量臂（spec B3，400 沿投稿配额先例）。
@@ -83,16 +83,17 @@ type FileFilter struct {
 // 依赖 storage.Storage（与全域同型）；分片四段走 multipart 能力（UploadStore），
 // 驱动不支持时 Init/Chunk/Complete/Abort 调用面报错，List/Delete 仍按普通存储走。
 type Service struct {
-	db     *gorm.DB
-	st     storage.Storage
-	mp     storage.UploadStore
-	logger *zap.Logger
+	db           *gorm.DB
+	st           storage.Storage
+	mp           storage.UploadStore
+	logger       *zap.Logger
+	chapterWrite *course.ChapterWriter
 }
 
 // NewService 创建文件库服务。st 为 nil 时仅当调用面走到存储操作才报错
 // （契约测试装配允许 nil 存储，与 FileSvc 同构）；logger 可为 nil（尽力而为日志）。
 func NewService(db *gorm.DB, st storage.Storage, logger *zap.Logger) *Service {
-	s := &Service{db: db, st: st, logger: logger}
+	s := &Service{db: db, st: st, logger: logger, chapterWrite: course.NewChapterWriter(db, nil, nil, logger)}
 	s.mp, _ = st.(storage.UploadStore)
 	return s
 }
@@ -462,32 +463,7 @@ func (s *Service) ListFiles(ctx context.Context, tutorID int, filter FileFilter)
 // 只回答「能不能进文件库」；「这门课的章节你能不能动」由域谓词回答，两者正交。
 // 位置在文件归属校验之后、章节读取之前：先把「文件是不是你的」答完，再答「课是不是你能动的」。
 func (s *Service) AttachFile(ctx context.Context, tutorID, fileID, chapterID int) error {
-	file, err := s.loadFile(ctx, tutorID, fileID)
-	if err != nil {
-		return err
-	}
-	if file.ChapterID != nil {
-		if *file.ChapterID == chapterID {
-			return nil
-		}
-		return fmt.Errorf("%w: 文件已挂接到其他章节（#%d），先解挂再挂接", ErrInvalidState, *file.ChapterID)
-	}
-	if err := course.RequireChapterClaim(s.db, tutorID, chapterID); err != nil {
-		return err
-	}
-	var ch model.Chapter
-	if err := s.db.WithContext(ctx).First(&ch, "chapter_id = ?", chapterID).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return course.ErrChapterNotFound
-		}
-		return fmt.Errorf("读取章节失败: %w", err) // 查不动不得被读成「不存在」（ADR-0064 决策 1）
-	}
-	if err := s.db.WithContext(ctx).Model(&model.TutorFile{}).
-		Where("file_id = ?", fileID).Update("chapter_id", chapterID).Error; err != nil {
-		return err
-	}
-	// 挂接清单属审核单元（C3）：标回草稿（C2 语义见 course.MarkChapterDraft）。
-	return course.MarkChapterDraft(s.db, chapterID)
+	return s.chapterWrite.AttachFile(ctx, tutorID, fileID, chapterID)
 }
 
 // DetachFile 取消挂接回库（spec B2）：chapter_id 清空回到未挂状态。重复解挂幂等。
@@ -495,63 +471,13 @@ func (s *Service) AttachFile(ctx context.Context, tutorID, fileID, chapterID int
 // 认领谓词前置（#2596）：解挂同样会改章节的附件清单并打回草稿。空挂（早已在库）幂等返回，
 // 不查认领——那时它不碰任何章节，也就没有「这门课你能不能动」的问题。
 func (s *Service) DetachFile(ctx context.Context, tutorID, fileID int) error {
-	file, err := s.loadFile(ctx, tutorID, fileID)
-	if err != nil {
-		return err
-	}
-	if file.ChapterID != nil {
-		if err := course.RequireChapterClaim(s.db, tutorID, *file.ChapterID); err != nil {
-			return err
-		}
-	}
-	if err := s.db.WithContext(ctx).Model(&model.TutorFile{}).
-		Where("file_id = ?", fileID).Update("chapter_id", nil).Error; err != nil {
-		return err
-	}
-	if file.ChapterID != nil {
-		return course.MarkChapterDraft(s.db, *file.ChapterID)
-	}
-	return nil
+	return s.chapterWrite.DetachFile(ctx, tutorID, fileID)
 }
 
 // SwapChapterFile 章节侧换挂（spec B6）：挂新 + 旧回库一步原子——「换文件」是章节侧动作，
 // 库侧不提供替换。旧文件必须挂在本章、新文件必须在库未挂（单挂互斥同样成立）。
 func (s *Service) SwapChapterFile(ctx context.Context, tutorID, chapterID, oldFileID, newFileID int) error {
-	if oldFileID == newFileID {
-		return fmt.Errorf("%w: 新旧文件不能相同", ErrInvalidParam)
-	}
-	// 认领谓词前置（#2596 / 规格 B2 + #2595 遗留的 swap 洞）：换挂改的是**章节**的附件挂接
-	// 并把章节打回草稿，与「管自己的文件库」是两件事。能力键已归 course.author（#2595 裁定），
-	// 但能力键只回答「能不能用这一组端点」，不回答「有没有权改这门课」——故谓词仍必须前置。
-	// 放在文件归属校验之前：先答「你有没有资格动这门课」，再说「这两个文件是不是你的」。
-	if err := course.RequireChapterClaim(s.db, tutorID, chapterID); err != nil {
-		return err
-	}
-	old, err := s.loadFile(ctx, tutorID, oldFileID)
-	if err != nil {
-		return err
-	}
-	fresh, err := s.loadFile(ctx, tutorID, newFileID)
-	if err != nil {
-		return err
-	}
-	if old.ChapterID == nil || *old.ChapterID != chapterID {
-		return fmt.Errorf("%w: 旧文件未挂在该章节，无法换挂", ErrInvalidState)
-	}
-	if fresh.ChapterID != nil {
-		return fmt.Errorf("%w: 新文件已挂接到其他章节（#%d），先解挂再换挂", ErrInvalidState, *fresh.ChapterID)
-	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&model.TutorFile{}).
-			Where("file_id = ?", newFileID).Update("chapter_id", chapterID).Error; err != nil {
-			return err
-		}
-		if err := tx.Model(&model.TutorFile{}).
-			Where("file_id = ?", oldFileID).Update("chapter_id", nil).Error; err != nil {
-			return err
-		}
-		return course.MarkChapterDraft(tx, chapterID)
-	})
+	return s.chapterWrite.SwapChapterFile(ctx, tutorID, chapterID, oldFileID, newFileID)
 }
 
 // RenameFile 改名（spec B7）：只改显示名 FileName，存储 key 不动（命名契约 A5 在落库时已定）。

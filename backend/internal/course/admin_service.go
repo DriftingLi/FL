@@ -37,11 +37,83 @@ func NewAdminService(db *gorm.DB, fileSvc *filestore.FileStore, notifSvc *notifi
 }
 
 // GetCourses 管理端课程列表。filter 支持 hot|featured|all（空串 = all；#1096：显式参数，不再是变参）。
-func (s *AdminService) GetCourses(page, pageSize int, keyword string, credentialID, specialtyID, levelID *int, category scope.CategoryFilter, filter string) (CoursePageResult, error) {
-	return ListCourses(s.db, page, pageSize, CourseListOptions{
+// status nil = 全部；0 = 未发布；1 = 已发布。
+func (s *AdminService) GetCourses(page, pageSize int, keyword string, credentialID, specialtyID, levelID *int, category scope.CategoryFilter, filter string, status *int16) (CoursePageResult, error) {
+	result, err := ListCourses(s.db, page, pageSize, CourseListOptions{
 		Keyword: keyword, CredentialID: credentialID, SpecialtyID: specialtyID, LevelID: levelID,
-		CategoryFilter: category, Filter: filter, WithPublicState: true, DefaultPageSize: 10,
+		CategoryFilter: category, Filter: filter, Status: status, WithPublicState: true, DefaultPageSize: 10,
 	})
+	if err != nil {
+		return CoursePageResult{}, err
+	}
+	facets, err := loadAdminCourseFacets(s.db)
+	if err != nil {
+		return CoursePageResult{}, err
+	}
+	result.Facets = &facets
+	return result, nil
+}
+
+func loadAdminCourseFacets(db *gorm.DB) (CourseFacets, error) {
+	var rows []struct {
+		CategoryID *int
+		Total      int64
+		Legacy     int64
+	}
+	if err := db.Table("course AS course").
+		Select("course.category_id, COUNT(*) AS total, COALESCE(SUM(CASE WHEN category.id IS NULL OR category.blocker_codes <> '' THEN 1 ELSE 0 END), 0) AS legacy").
+		Joins("LEFT JOIN training_category_public_eligibility AS category ON category.id = course.category_id").
+		Group("course.category_id").Order("course.category_id").Scan(&rows).Error; err != nil {
+		return CourseFacets{}, err
+	}
+	facets := CourseFacets{Categories: make([]CourseFacetCount, 0, len(rows))}
+	for _, row := range rows {
+		facets.Total += row.Total
+		facets.Legacy += row.Legacy
+		if row.CategoryID != nil {
+			facets.Categories = append(facets.Categories, CourseFacetCount{CategoryID: *row.CategoryID, Total: row.Total})
+		}
+	}
+	return facets, nil
+}
+
+// GetCourseSortNeighbors 返回同分类全局排序的前后邻居，不受列表关键词、状态或热门精品筛选影响。
+func (s *AdminService) GetCourseSortNeighbors(courseID int) (CourseSortNeighbors, error) {
+	var course model.Course
+	if err := s.db.First(&course, courseID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return CourseSortNeighbors{}, model.ErrCourseNotFound
+		}
+		return CourseSortNeighbors{}, err
+	}
+	if course.CategoryID == nil {
+		return CourseSortNeighbors{}, ErrCourseNotMountedForSort
+	}
+
+	var neighbors CourseSortNeighbors
+	previousQuery := s.db.Model(&model.Course{}).
+		Where("category_id = ? AND (sort_order < ? OR (sort_order = ? AND created_at > ?) OR (sort_order = ? AND created_at = ? AND course_id > ?))",
+			*course.CategoryID, course.SortOrder, course.SortOrder, course.CreatedAt, course.SortOrder, course.CreatedAt, courseID).
+		Order("sort_order DESC, created_at ASC, course_id ASC").Limit(1)
+	var previousIDs []int
+	if err := previousQuery.Pluck("course_id", &previousIDs).Error; err != nil {
+		return CourseSortNeighbors{}, err
+	}
+	if len(previousIDs) > 0 {
+		neighbors.PreviousID = &previousIDs[0]
+	}
+	nextQuery := s.db.Model(&model.Course{}).
+		Where("category_id = ? AND (sort_order > ? OR (sort_order = ? AND created_at < ?) OR (sort_order = ? AND created_at = ? AND course_id < ?))",
+			*course.CategoryID, course.SortOrder, course.SortOrder, course.CreatedAt, course.SortOrder, course.CreatedAt, courseID).
+		Order("sort_order ASC, created_at DESC, course_id DESC").Limit(1)
+	var nextIDs []int
+	if err := nextQuery.Pluck("course_id", &nextIDs).Error; err != nil {
+		return CourseSortNeighbors{}, err
+	}
+	if len(nextIDs) > 0 {
+		neighbors.NextID = &nextIDs[0]
+	}
+	return neighbors, nil
 }
 
 // GetCourseDetail 管理端课程详情。

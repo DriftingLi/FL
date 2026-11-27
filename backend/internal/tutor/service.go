@@ -3,14 +3,11 @@ package tutor
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"forklift-training/internal/clock"
 	"forklift-training/internal/course"
 	"forklift-training/internal/filestore"
 	"forklift-training/internal/model"
@@ -24,6 +21,7 @@ type Service struct {
 	uploadFolder  string
 	fileStore     *filestore.FileStore
 	slideRenderer *course.SlideRenderer
+	chapterWrite  *course.ChapterWriter
 
 	logger *zap.Logger
 
@@ -36,7 +34,8 @@ type Service struct {
 func NewService(db *gorm.DB, uploadFolder string, fileStore *filestore.FileStore, slideRenderer *course.SlideRenderer, logger *zap.Logger) *Service {
 	return &Service{
 		db: db, uploadFolder: uploadFolder, fileStore: fileStore, slideRenderer: slideRenderer,
-		logger: logger, caps: tutorcap.New(db, logger),
+		chapterWrite: course.NewChapterWriter(db, fileStore, slideRenderer, logger),
+		logger:       logger, caps: tutorcap.New(db, logger),
 	}
 }
 
@@ -44,7 +43,7 @@ func NewService(db *gorm.DB, uploadFolder string, fileStore *filestore.FileStore
 // 本文件的「课程/章节不存在」直接用课程域的唯一载体 model.ErrCourseNotFound / course.ErrChapterNotFound。
 // （声明必须留在函数文档块之外：它一度夹在下面那条注释与 func 之间，把 godoc 抢走了 ——
 // 同形缺陷在 api 层会让整条 swagger 路由消失，见 4c488c3c。）
-var ErrChapterFileNotFound = errors.New("文件不存在")
+var ErrChapterFileNotFound = course.ErrChapterFileNotFound
 
 // ClaimCourse 讲师自助认领课程（#2596 B3/B5）：委托课程域，本层不加逻辑——认领是课程域的事实。
 func (s *Service) ClaimCourse(tutorID, courseID int) error {
@@ -160,7 +159,7 @@ func (s *Service) GetCourseChapters(courseID int) (*course.TutorCourseChaptersDT
 
 // GetChapterDetail 章节详情（含上下章ID + 文件列表，供导师端编辑页使用）。
 // 实现收敛到共享章节详情 module；导师端不回填 study_status（fillStudyStatus=false）。
-func (s *Service) GetChapterDetail(chapterID int) (*course.ChapterDetailDTO, error) {
+func (s *Service) GetChapterDetail(chapterID int) (*course.TutorChapterDetailDTO, error) {
 	var chapter model.Chapter
 	if err := s.db.First(&chapter, chapterID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -168,7 +167,28 @@ func (s *Service) GetChapterDetail(chapterID int) (*course.ChapterDetailDTO, err
 		}
 		return nil, err // 查不动不得被读成「不存在」（ADR-0064 决策 1）
 	}
-	return course.ChapterDetailShared(s.db, &chapter, false, 0, false)
+	detail, err := course.ChapterDetailShared(s.db, &chapter, false, 0, false)
+	if err != nil {
+		return nil, err
+	}
+	result := &course.TutorChapterDetailDTO{ChapterDetailDTO: *detail}
+	if chapter.ReviewStatus == model.ChapterReviewPending {
+		result.ReviewSnapshot, err = course.GetChapterReviewSnapshot(s.db, chapterID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return result, nil
+}
+
+// RequireChapterWrite 在解析上传文件前校验章节写入权。
+func (s *Service) RequireChapterWrite(chapterID, tutorID int) error {
+	return s.chapterWrite.RequireWritable(chapterID, tutorID)
+}
+
+// UploadChapterImage 上传章节内嵌图片，章节写入不变式由 course.ChapterWriter 承载。
+func (s *Service) UploadChapterImage(ctx context.Context, chapterID, tutorID int, content []byte, filename string) (string, error) {
+	return s.chapterWrite.UploadImage(ctx, chapterID, tutorID, content, filename)
 }
 
 // UploadChapterFile 上传章节文件。
@@ -176,74 +196,7 @@ func (s *Service) GetChapterDetail(chapterID int) (*course.ChapterDetailDTO, err
 // 认领谓词前置（#2596 / 规格 B2）：能进讲师面 ≠ 能改这门课的章节。tutorID 是当前登录
 // 讲师，未认领该课程即拒（course.ErrCourseClaimRequired → 403）。
 func (s *Service) UploadChapterFile(chapterID, tutorID int, filename string, fileContent []byte) (*course.ChapterFileDTO, error) {
-	var chapter model.Chapter
-	if err := s.db.First(&chapter, chapterID).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, course.ErrChapterNotFound
-		}
-		return nil, err // 查不动不得被读成「不存在」（ADR-0064 决策 1）
-	}
-	if err := course.RequireCourseClaim(s.db, tutorID, chapter.CourseID); err != nil {
-		return nil, err
-	}
-	if filename == "" {
-		return nil, errors.New("文件名不能为空")
-	}
-	if s.fileStore == nil {
-		return nil, errors.New("文件服务不可用")
-	}
-	if !filestore.AllowedFile(filename) {
-		return nil, errors.New("不支持的文件格式")
-	}
-	if !filestore.ValidateFileSize(int64(len(fileContent)), filename) {
-		return nil, errors.New("文件大小超出限制")
-	}
-
-	contentType := filestore.FileContentType(filename)
-	// 内容级互斥（#2760）：上传的这份文件会成为本章的生效内容形态，必须与本课类型同质。
-	// 放在认领校验之后、落盘之前——先答「你有没有资格动这门课」，再答「这份内容合不合规」，
-	// 最后才写存储（写盘失败要清理，拒得越早越干净）。
-	if err := course.RequireChapterContentNature(s.db, chapterID, contentType); err != nil {
-		return nil, err
-	}
-	fileURL, err := s.fileStore.Save(fileContent, filename, filestore.ChapterFileDirPrefix)
-	if err != nil {
-		return nil, fmt.Errorf("保存文件失败: %w", err)
-	}
-
-	chapterFile := model.ChapterFile{
-		ChapterID:   &chapterID,
-		FileURL:     fileURL,
-		FileName:    filename,
-		ContentType: contentType,
-		FileSize:    int64(len(fileContent)),
-		CreatedAt:   clock.Now(),
-	}
-	if err := s.db.Create(&chapterFile).Error; err != nil {
-		return nil, err
-	}
-	// 文件挂接清单属审核单元（C3）：标回草稿（语义见 course.MarkChapterDraft）。
-	if err := course.MarkChapterDraft(s.db, chapterID); err != nil {
-		return nil, err
-	}
-
-	if chapter.ContentType == "" || chapter.ContentType == "text" {
-		chapter.ContentType = contentType
-		chapter.FileURL = fileURL
-		s.db.Save(&chapter)
-	}
-
-	// PPT 自动转图片并持久化 slide URL 列表到 chapter.slide_urls
-	if contentType == "ppt" && s.slideRenderer != nil {
-		slideURLs := s.slideRenderer.Render(fileContent, chapterID)
-		if len(slideURLs) > 0 {
-			slideURLsJSON, _ := json.Marshal(slideURLs)
-			s.db.Model(&model.Chapter{}).Where("chapter_id = ?", chapterID).Update("slide_urls", string(slideURLsJSON))
-		}
-	}
-
-	d := course.ChapterFileToDTO(&chapterFile)
-	return &d, nil
+	return s.chapterWrite.UploadFile(context.Background(), chapterID, tutorID, filename, fileContent)
 }
 
 // SubmitChapterReview 提交审核（#2498 C2 显式动作）：冻结整章快照（正文+文件挂接清单）
@@ -252,18 +205,7 @@ func (s *Service) UploadChapterFile(chapterID, tutorID int, filename string, fil
 // 认领谓词前置（#2596 / 规格 B2）：提交审核是「把这章推进发布流程」，与写正文同属编辑权，
 // 未认领即拒。
 func (s *Service) SubmitChapterReview(ctx context.Context, chapterID, tutorID int) (*course.ChapterDTO, error) {
-	if err := course.RequireChapterClaim(s.db, tutorID, chapterID); err != nil {
-		return nil, err
-	}
-	if err := course.SubmitChapterForReview(ctx, s.db, chapterID, tutorID); err != nil {
-		return nil, err
-	}
-	var chapter model.Chapter
-	if err := s.db.First(&chapter, chapterID).Error; err != nil {
-		return nil, err
-	}
-	d := course.ChapterToDTO(&chapter)
-	return &d, nil
+	return s.chapterWrite.SubmitForReview(ctx, chapterID, tutorID)
 }
 
 // UpdateChapterInfo 更新章节信息（讲师面）。tutorID 是当前登录讲师：章节归属为空时
@@ -271,50 +213,7 @@ func (s *Service) SubmitChapterReview(ctx context.Context, chapterID, tutorID in
 //
 // 认领谓词前置（#2596 / 规格 B2）：未认领该课程的讲师不能改它的章节。
 func (s *Service) UpdateChapterInfo(chapterID, tutorID int, in *course.ChapterInput) (*course.ChapterDTO, error) {
-	var chapter model.Chapter
-	if err := s.db.First(&chapter, chapterID).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, course.ErrChapterNotFound
-		}
-		return nil, err // 查不动不得被读成「不存在」（ADR-0064 决策 1）
-	}
-	if err := course.RequireCourseClaim(s.db, tutorID, chapter.CourseID); err != nil {
-		return nil, err
-	}
-	if in == nil {
-		in = &course.ChapterInput{}
-	}
-	if in.Title != nil && *in.Title != "" {
-		chapter.Title = *in.Title
-	}
-	if in.Content != nil {
-		chapter.Content = *in.Content
-	}
-	if in.Duration != nil {
-		chapter.Duration = *in.Duration
-	}
-	if in.OrderNum != nil {
-		chapter.OrderNum = *in.OrderNum
-	}
-	if in.Description != nil {
-		chapter.Description = *in.Description
-	}
-	if err := s.db.Save(&chapter).Error; err != nil {
-		return nil, err
-	}
-	// 章节归属（ADR-0095 决策二）：首次落定后不改——讲师 B 编辑讲师 A 的章节不会抢走归属。
-	if err := course.ClaimChapterOwnership(s.db, chapterID, tutorID); err != nil {
-		return nil, err
-	}
-	// C2/C5：讲师保存只落草稿（学生仍见已发布旧版）——正文变化把工作副本标回草稿，
-	// 重新显式提交审核才进队列。标题/时长等元数据不入审核单元（C3），不触发。
-	if in.Content != nil {
-		if err := course.MarkChapterDraft(s.db, chapterID); err != nil {
-			return nil, err
-		}
-	}
-	d := course.ChapterToDTO(&chapter)
-	return &d, nil
+	return s.chapterWrite.Update(context.Background(), chapterID, tutorID, in)
 }
 
 // DeleteChapterFileByID 删除章节文件。
@@ -322,41 +221,8 @@ func (s *Service) UpdateChapterInfo(chapterID, tutorID int, in *course.ChapterIn
 // 认领谓词前置（#2596 / 规格 B2）：删附件同样是改章节。文件未挂章节（ChapterID 为空）时
 // 无处可认领——这类孤儿行只可能是历史遗留，允许删（否则永远清不掉）；挂着的必须有认领。
 func (s *Service) DeleteChapterFileByID(fileID, tutorID int) (*DeleteFileResult, error) {
-	var chapterFile model.ChapterFile
-	if err := s.db.First(&chapterFile, fileID).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrChapterFileNotFound
-		}
-		return nil, err // 查不动不得被读成「不存在」（ADR-0064 决策 1）
-	}
-	if chapterFile.ChapterID != nil {
-		if err := course.RequireChapterClaim(s.db, tutorID, *chapterFile.ChapterID); err != nil {
-			return nil, err
-		}
-	}
-	if s.fileStore != nil {
-		_ = s.fileStore.Delete(chapterFile.FileURL)
-	}
-	chapterID := chapterFile.ChapterID
-	s.db.Delete(&chapterFile)
-	if chapterID != nil {
-		// 文件行已删成事实，此处失败只能记录不能回滚（返回值只有删除结果）；
-		// 漏标草稿会让讲师看到旧的「已发布」状态，故必须留痕而不是静默吞。
-		if err := course.MarkChapterDraft(s.db, *chapterID); err != nil {
-			s.logger.Warn("[tutor] 删除章节文件后标回草稿失败",
-				zap.Int("chapter_id", *chapterID), zap.Error(err))
-		}
-	}
-
-	var remaining []model.ChapterFile
-	s.db.Where("chapter_id = ?", chapterID).Find(&remaining)
-	if chapterID != nil {
-		// #2760：删附件后重算形态，但**不跨侧**——视频课删掉最后一_video_文件不该把章节
-		// 变成 text，否则「视频课程」目录里就混进了图文章节。形态归类只在 course 包一处。
-		if err := course.RecomputeChapterContentTypeAfterFileChange(s.db, *chapterID); err != nil {
-			s.logger.Warn("[tutor] 删除章节文件后重算内容形态失败",
-				zap.Int("chapter_id", *chapterID), zap.Error(err))
-		}
+	if err := s.chapterWrite.DeleteFile(context.Background(), fileID, tutorID); err != nil {
+		return nil, err
 	}
 	return &DeleteFileResult{FileID: fileID, Deleted: true}, nil
 }
@@ -368,50 +234,9 @@ func (s *Service) DeleteChapterFileByID(fileID, tutorID int) (*DeleteFileResult,
 // 这里再立一套「有未授权就一行不动」等于给同一件事两种语义：调用方拿到 403 时既不知道
 // 是哪几个文件、也丢掉了已经算好的失败清单。整批原子性只属于单条写入，不属于批量删除。
 func (s *Service) BatchDeleteChapterFiles(fileIDs []int, tutorID int) (*BatchDeleteFilesResult, error) {
-	rows := make([]model.ChapterFile, 0, len(fileIDs))
-	failedIDs := make([]int, 0)
-	for _, fid := range fileIDs {
-		var chapterFile model.ChapterFile
-		if err := s.db.First(&chapterFile, fid).Error; err != nil {
-			failedIDs = append(failedIDs, fid)
-			continue
-		}
-		if chapterFile.ChapterID != nil {
-			if err := course.RequireChapterClaim(s.db, tutorID, *chapterFile.ChapterID); err != nil {
-				if errors.Is(err, course.ErrCourseClaimRequired) {
-					failedIDs = append(failedIDs, fid)
-					continue
-				}
-				return nil, err // 查不动的错误原样上抛，不压成「删不掉」（ADR-0064 决策 1）
-			}
-		}
-		rows = append(rows, chapterFile)
-	}
-
-	successCount := 0
-	for i := range rows {
-		chapterFile := rows[i]
-		if s.fileStore != nil {
-			_ = s.fileStore.Delete(chapterFile.FileURL)
-		}
-		chapterID := chapterFile.ChapterID
-		s.db.Delete(&chapterFile)
-		if chapterID != nil {
-			// 同 DeleteChapterFileByID：漏标草稿要留痕，不静默吞（C2 不变量）。
-			if err := course.MarkChapterDraft(s.db, *chapterID); err != nil {
-				s.logger.Warn("[tutor] 批量删除章节文件后标回草稿失败",
-					zap.Int("chapter_id", *chapterID), zap.Error(err))
-			}
-		}
-		// #2760：与单条删除同一口径——重算形态但不跨课程类型那一侧。
-		// 原来只有「删到空」时才把 ContentType 写死成 text，视频课删空附件后即破互斥。
-		if chapterID != nil {
-			if err := course.RecomputeChapterContentTypeAfterFileChange(s.db, *chapterID); err != nil {
-				s.logger.Warn("[tutor] 批量删除后重算内容形态失败",
-					zap.Int("chapter_id", *chapterID), zap.Error(err))
-			}
-		}
-		successCount++
+	successCount, failedIDs, err := s.chapterWrite.BatchDeleteFiles(context.Background(), fileIDs, tutorID)
+	if err != nil {
+		return nil, err
 	}
 	return &BatchDeleteFilesResult{
 		SuccessCount: successCount,

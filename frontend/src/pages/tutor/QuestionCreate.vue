@@ -265,13 +265,13 @@ function writeQuestionToForm(res: Awaited<ReturnType<typeof fetchQuestion>>) {
     status: _status,
     credential_id: _legacy,
     category: _category,
-    public_eligibility: _publicEligibility,
+    public_state: _publicState,
     ...rest
   } = res as unknown as Record<string, unknown>
   form.value = {
     ...form.value,
     ...rest,
-    category_id: res.category_id ?? res.category?.id ?? null,
+    category_id: res.public_state?.category?.id ?? null,
     options:
       (res.options as { A: string; B: string; C: string; D: string } | undefined) ??
       form.value.options,

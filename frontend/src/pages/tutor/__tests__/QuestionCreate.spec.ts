@@ -91,15 +91,20 @@ describe('QuestionCreate 培训分类', () => {
     expect(questionBankApi.createQuestion).toHaveBeenCalledTimes(1)
     const payload = vi.mocked(questionBankApi.createQuestion).mock.calls[0][0]
     expect(payload.category_id).toBe(11)
-    expect(payload).not.toHaveProperty('public_eligibility')
+    expect(payload).not.toHaveProperty('public_state')
     expect(routeState.push).toHaveBeenCalledWith({ name: 'TutorQuestionManage' })
   })
 
   it('编辑按 canonical 分类回显，并不把只读分类与公开资格回流到更新请求', async () => {
     routeState.query = { id: '42' }
     vi.mocked(questionBankApi.getQuestion).mockResolvedValue(questionOf({
-      category: { id: 11, name: '叉车安全', status: 1 },
-      public_eligibility: { eligible: false, reasons: ['not_published'] }
+      category: { id: 99, name: '旧分类', status: 0 },
+      public_state: {
+        category: { id: 11, name: '叉车安全', status: 1 },
+        public_visibility: true,
+        eligibility: { eligible: false, reasons: ['not_published'] }
+      },
+      public_eligibility: { eligible: true, reasons: [] }
     }))
     vi.mocked(questionBankApi.updateQuestion).mockResolvedValue(questionOf())
     const wrapper = mountPage()
@@ -117,6 +122,6 @@ describe('QuestionCreate 培训分类', () => {
     const payload = vi.mocked(questionBankApi.updateQuestion).mock.calls[0][1]
     expect(payload.category_id).toBe(11)
     expect(payload).not.toHaveProperty('category')
-    expect(payload).not.toHaveProperty('public_eligibility')
+    expect(payload).not.toHaveProperty('public_state')
   })
 })

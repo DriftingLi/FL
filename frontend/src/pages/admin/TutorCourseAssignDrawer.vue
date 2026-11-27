@@ -148,7 +148,7 @@ async function loadAll() {
       adminApi.getCourses({ page: 1, page_size: 200, filter: 'all' }),
       adminApi.getTutorCourses(props.tutorId)
     ])
-    courses.value = coursePage.courses ?? []
+    courses.value = coursePage.items
     assignments.value = new Map(
       (assignmentList.items ?? []).map(item => [item.course_id, item])
     )

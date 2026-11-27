@@ -83,14 +83,12 @@ FE_HOST=${WATCH_FE_HOST:-api.gdyidao.cn}
 # 不必改脚本。
 REMOTE_HOST=${WATCH_REMOTE_HOST:-}
 REMOTE_LXC=${WATCH_REMOTE_LXC:-}
-DEPLOY_ENV=${WATCH_DEPLOY_ENV:-${DEPLOY_PATH:-/opt/forklift-training}/.env}
-DB_MODE=$(awk -F= '$1=="DB_MODE"{print $2}' "$DEPLOY_ENV" 2>/dev/null || true)
-DB_MODE=${DB_MODE:-docker}
+DEPLOY_PATH=${DEPLOY_PATH:-/opt/forklift-training}
+DEPLOY_CLI=${WATCH_DEPLOY_CLI:-$DEPLOY_PATH/deploy/deploy.py}
 POSTGRES_SERVICE_FILE=${WATCH_POSTGRES_SERVICE_FILE:-/etc/forklift/postgres-backup.service.conf}
-EXPECT_CONTAINERS=(forklift-frontend-prod forklift-backend-prod forklift-libreoffice-prod)
-if [ "$DB_MODE" = docker ]; then
-  EXPECT_CONTAINERS+=(forklift-pg-prod)
-fi
+PSQL_BIN=${WATCH_PSQL_BIN:-/usr/lib/postgresql/19/bin/psql}
+EXPECT_CONTAINERS=()
+WATCHDOG_STRATEGY=
 # install_drift：跑着的这份脚本 vs CD 上传到部署目录的参考副本。
 # SELF_PATH 用 $0 的真实路径（systemd 跑的是 /usr/local/bin/forklift-watchdog.sh）。
 SELF_PATH=${WATCH_SELF_PATH:-$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || printf '%s' "$0")}
@@ -104,6 +102,24 @@ case "${1:-}" in
   --test-mail) MODE=test-mail ;;
   --alert-failure) MODE=alert-failure; FAILED_UNIT=${2:-unknown} ;;
 esac
+
+# 正常运行只消费已发布快照；告警自身失败时仍须能发信，不能依赖快照可用。
+if [ "$MODE" = check ]; then
+  TOPOLOGY_JSON=$(python3 "$DEPLOY_CLI" --check-topology-snapshot --json) ||
+    die_no_mail "拓扑快照校验失败，拒绝执行容器/数据库巡检"
+  TOPOLOGY_FIELDS=$(python3 -c '
+import json, sys
+snapshot = json.load(sys.stdin)
+print(snapshot["watchdog"]["strategy"])
+for name in snapshot["expected_containers"]:
+    print(name)
+' <<<"$TOPOLOGY_JSON") || die_no_mail "拓扑快照结论无法解析"
+  TOPOLOGY_FIELDS=${TOPOLOGY_FIELDS//$'\r'/}
+  mapfile -t TOPOLOGY_LINES <<<"$TOPOLOGY_FIELDS"
+  [ ${#TOPOLOGY_LINES[@]} -ge 2 ] || die_no_mail "拓扑快照缺少容器或巡检策略"
+  WATCHDOG_STRATEGY=${TOPOLOGY_LINES[0]}
+  EXPECT_CONTAINERS=("${TOPOLOGY_LINES[@]:1}")
+fi
 
 MAIL_FAILED=0
 
@@ -171,19 +187,19 @@ probe_containers() {
 }
 
 probe_postgres() {
-  case "$DB_MODE" in
-    docker) REASON="Docker PostgreSQL 由容器巡检覆盖"; return 2 ;;
-    external) ;;
-    *) REASON="部署文件的 DB_MODE 不受支持"; return 1 ;;
+  case "$WATCHDOG_STRATEGY" in
+    docker_postgres) REASON="Docker PostgreSQL 由容器巡检覆盖"; return 2 ;;
+    external_postgres_tls) ;;
+    *) REASON="拓扑快照的 PostgreSQL 巡检策略不受支持"; return 1 ;;
   esac
   local result
   result=$(PGSERVICEFILE="$POSTGRES_SERVICE_FILE" PGSERVICE=forklift-backup PGCONNECT_TIMEOUT=5 \
-    timeout 8s /usr/lib/postgresql/19/bin/psql -XwAt -v ON_ERROR_STOP=1 -c 'SELECT 1' 2>/dev/null) &&
+    timeout 8s "$PSQL_BIN" -XwAt -v ON_ERROR_STOP=1 -c 'SELECT 1' 2>/dev/null) &&
     [ "$result" = 1 ] || { REASON="外部 PostgreSQL TLS 查询失败"; return 1; }
 }
 
 probe_postgres_archive() {
-  if [ "$DB_MODE" != external ] || [ -z "$REMOTE_HOST" ] || [ -z "$REMOTE_LXC" ]; then
+  if [ "$WATCHDOG_STRATEGY" != external_postgres_tls ] || [ -z "$REMOTE_HOST" ] || [ -z "$REMOTE_LXC" ]; then
     REASON="未配置外部 PostgreSQL LXC"; return 2
   fi
   [[ "$REMOTE_LXC" =~ ^[0-9]+$ ]] || { REASON="WATCH_REMOTE_LXC 不是数字"; return 1; }

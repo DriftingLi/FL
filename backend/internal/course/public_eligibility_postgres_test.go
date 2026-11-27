@@ -87,6 +87,9 @@ func TestPublicEligibilityAcrossReadPathsPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	checkEligibility(t, staffCourse.PublicEligibility, publicscope.ReasonManuallyHidden)
+	if staffCourse.PublicState == nil || staffCourse.PublicState.PublicVisibility || staffCourse.PublicState.Category == nil || staffCourse.PublicState.Category.ID != categories[0].ID {
+		t.Fatalf("PostgreSQL 员工端课程公开状态 = %+v", staffCourse.PublicState)
+	}
 	staffQuestions := questionbank.NewService(db, nil, zap.NewNop())
 	for i, want := range [][]publicscope.Reason{
 		{},
@@ -98,6 +101,13 @@ func TestPublicEligibilityAcrossReadPathsPostgres(t *testing.T) {
 			t.Fatal(err)
 		}
 		checkEligibility(t, item.PublicEligibility, want...)
+		wantCategory := categories[1]
+		if i == 1 {
+			wantCategory = categories[2]
+		}
+		if item.PublicState == nil || item.PublicState.PublicVisibility != (i == 0) || item.PublicState.Category == nil || item.PublicState.Category.ID != wantCategory.ID {
+			t.Fatalf("PostgreSQL 员工端题目公开状态 = %+v", item.PublicState)
+		}
 	}
 
 	public := course.NewService(db, nil, zap.NewNop())

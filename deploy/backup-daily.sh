@@ -7,11 +7,34 @@
 #   REMOTE_HOST / REMOTE_DIR / REMOTE_KEY（可选，留空跳过异地同步）
 set -euo pipefail
 # shellcheck source=/dev/null
-. /etc/forklift-backup.env
+BACKUP_ENV_FILE=${BACKUP_ENV_FILE:-/etc/forklift-backup.env}
+. "$BACKUP_ENV_FILE"
+
+DEPLOY_PATH=${DEPLOY_PATH:-/opt/forklift-training}
+DEPLOY_CLI=${BACKUP_DEPLOY_CLI:-$DEPLOY_PATH/deploy/deploy.py}
+PG_DUMP_BIN=${PG_DUMP_BIN:-/usr/lib/postgresql/19/bin/pg_dump}
+
+# 先校验已发布快照；缺失、损坏或发布标识不一致时不得产生备份。
+TOPOLOGY_JSON=$(python3 "$DEPLOY_CLI" --check-topology-snapshot --json) || {
+    echo "[backup] 拓扑快照校验失败，拒绝备份" >&2
+    exit 1
+}
+BACKUP_STRATEGY=$(python3 -c '
+import json, sys
+print(json.load(sys.stdin)["backup"]["strategy"])
+' <<<"$TOPOLOGY_JSON") || {
+    echo "[backup] 拓扑快照结论无法解析" >&2
+    exit 1
+}
+BACKUP_STRATEGY=${BACKUP_STRATEGY//$'\r'/}
+case "$BACKUP_STRATEGY" in
+    docker_exec|external_pg_dump) ;;
+    *) echo "[backup] 拓扑快照的备份策略不受支持: $BACKUP_STRATEGY" >&2; exit 1 ;;
+esac
 
 BKT=forklift-backups
 EP="${RGW_ENDPOINT:-http://172.17.1.42:8088}"
-BKDIR=/var/backups/forklift
+BKDIR=${BKDIR:-/var/backups/forklift}
 KEEP_DAYS="${KEEP_DAYS:-14}"
 TS=$(date +%Y%m%d_%H%M%S)
 DB_BK="${BKDIR}/db_${TS}.sql.gz"
@@ -23,12 +46,11 @@ echo "[backup] $(date '+%F %T') 开始每日备份..."
 
 # 1. pg_dump + gzip（逻辑备份，可精确恢复单表）
 dump_database() {
-    case "${DB_MODE:-docker}" in
-        docker) docker exec forklift-pg-prod pg_dump -U forklift -d forklift_training ;;
-        external) PGSERVICEFILE="${PGSERVICEFILE:?external backup service file required}" \
+    case "$BACKUP_STRATEGY" in
+        docker_exec) docker exec forklift-pg-prod pg_dump -U forklift -d forklift_training ;;
+        external_pg_dump) PGSERVICEFILE="${PGSERVICEFILE:?external backup service file required}" \
             PGSERVICE="${PGSERVICE:-forklift-backup}" PGCONNECT_TIMEOUT=5 \
-            /usr/lib/postgresql/19/bin/pg_dump -w ;;
-        *) return 1 ;;
+            "$PG_DUMP_BIN" -w ;;
     esac
 }
 if ! dump_database 2>/dev/null | gzip -9 > "$DB_BK"; then

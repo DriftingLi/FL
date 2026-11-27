@@ -1,5 +1,5 @@
 // 本文件：讲师域 HTTP 出口（/api/tutor 蓝图）。
-// 装配点：internal/api/routes_registry.go 调 tutor.RegisterRoutes(api, rd.Session, deps.TutorSvc, deps.FileSvc, uploadVditorImage)。
+// 装配点：internal/api/routes_registry.go 调 tutor.RegisterRoutes(api, rd.Session, deps.TutorSvc, deps.FileSvc, uploadTutorVditorImage)。
 package tutor
 
 import (
@@ -22,7 +22,7 @@ import (
 )
 
 // VditorUploader 注入的 Vditor 上传适配器（实现在 backend/internal/api/vditor_upload.go，信封单点）。
-type VditorUploader func(c *gin.Context, fileSvc *filestore.FileStore, saver func(content []byte, filename string) (string, error))
+type VditorUploader func(c *gin.Context, fileSvc *filestore.FileStore, preflight func() error, saver func(content []byte, filename string) (string, error))
 
 // handler 导师端 handler。
 type handler struct {
@@ -185,12 +185,12 @@ func (h *handler) GetCourseChapters(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param chapter_id path int true "章节ID"
-// @Success 200 {object} response.R{data=course.ChapterDetailDTO} "success"
+// @Success 200 {object} response.R{data=course.TutorChapterDetailDTO} "success"
 // @Failure 401 {object} response.R "未认证"
 // @Failure 404 {object} response.R "章节不存在"
 // @Router /tutor/chapter/{chapter_id} [get]
 func (h *handler) GetChapterDetail(c *gin.Context) {
-	httpx.Endpoint[idParam, course.ChapterDetailDTO]{
+	httpx.Endpoint[idParam, course.TutorChapterDetailDTO]{
 		Parse: func(c *gin.Context) (*idParam, error) {
 			id, err := httpx.PathInt(c, "chapter_id", "章节ID无效")
 			if err != nil {
@@ -198,7 +198,7 @@ func (h *handler) GetChapterDetail(c *gin.Context) {
 			}
 			return &idParam{ID: id}, nil
 		},
-		Invoke: func(ctx context.Context, req *idParam) (*course.ChapterDetailDTO, error) {
+		Invoke: func(ctx context.Context, req *idParam) (*course.TutorChapterDetailDTO, error) {
 			return h.svc.GetChapterDetail(req.ID)
 		},
 	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).
@@ -245,6 +245,8 @@ func (h *handler) UploadChapterFile(c *gin.Context) {
 			response.Forbidden(c, err.Error())
 		case errors.Is(err, course.ErrChapterNotFound):
 			response.NotFound(c, err.Error())
+		case errors.Is(err, course.ErrChapterWriteFailed):
+			response.ServerErrorCause(c, "文件上传失败", err)
 		default:
 			response.BadRequest(c, err.Error())
 		}
@@ -254,32 +256,38 @@ func (h *handler) UploadChapterFile(c *gin.Context) {
 }
 
 // UploadImage 上传图文 Markdown 中的图片（Vditor 格式）POST /api/tutor/upload-image
-// form 字段：file（图片）、chapter_id（可选，用于按章节分目录存储 images/chapters/<chapterId>/）
+// form 字段：file（图片）、chapter_id（query 或 form 必填，用于按章节分目录存储 images/chapters/<chapterId>/）
 // 返回 Vditor 期望的响应格式：{ msg: "", code: 0, data: { errFiles: [], succMap: { "name": "url" } } }
 // @Summary 上传讲师图文内嵌图片
-// @Description Vditor 编辑器内嵌图上传（需讲师能力）；chapter_id 支持 query（Vditor 走 URL）与 form（直接 multipart）两种传递方式，用于按章节分目录存储。返回 Vditor 约定的**非统一信封**响应 {msg,code,data:{errFiles,succMap}}（code=0 表示成功），与 /admin/featured-content/upload-image 同一适配器
+// @Description Vditor 编辑器内嵌图上传（需讲师能力与章节认领）；chapter_id 支持 query（Vditor 走 URL）与 form（直接 multipart）两种传递方式，且必填。返回 Vditor 约定的**非统一信封**响应 {msg,code,data:{errFiles,succMap}}（code=0 表示成功），与 /admin/featured-content/upload-image 同一适配器
 // @Tags 讲师端-课程
 // @Accept multipart/form-data
 // @Produce json
 // @Security BearerAuth
 // @Param file formData file true "图片文件"
-// @Param chapter_id query int false "章节ID（可选，按章节分目录存储 images/chapters/<id>）"
+// @Param chapter_id query int true "章节ID（query 或 form 必填，按章节分目录存储 images/chapters/<id>）"
 // @Success 200 {object} map[string]any "Vditor 响应（非统一信封）"
+// @Failure 400 {object} response.R "章节ID无效"
 // @Failure 401 {object} response.R "未认证"
+// @Failure 403 {object} response.R "未认领章节所属课程"
+// @Failure 404 {object} response.R "章节不存在"
+// @Failure 500 {object} response.R "图片落盘后章节写入失败"
 // @Router /tutor/upload-image [post]
 func (h *handler) UploadImage(c *gin.Context) {
-	// 按章节分目录存储，便于删除章节时按前缀清理（历史旧目录孤儿文件不处理）
-	// chapter_id 支持 query（Vditor 走 URL）与 form（直接 multipart）两种传递方式
-	h.uploader(c, h.fileSvc, func(content []byte, filename string) (string, error) {
-		subfolder := filestore.ChapterImageDirPrefix
-		chapterIDStr := c.Query("chapter_id")
-		if chapterIDStr == "" {
-			chapterIDStr = c.PostForm("chapter_id")
-		}
-		if chapterID, err := strconv.Atoi(chapterIDStr); err == nil && chapterID > 0 {
-			subfolder = filestore.ChapterImageDirPrefix + "/" + chapterIDStr
-		}
-		return h.fileSvc.Save(content, filename, subfolder)
+	chapterIDStr := c.Query("chapter_id")
+	if chapterIDStr == "" {
+		chapterIDStr = c.PostForm("chapter_id")
+	}
+	chapterID, err := strconv.Atoi(chapterIDStr)
+	if err != nil || chapterID <= 0 {
+		response.BadRequest(c, "章节ID无效")
+		return
+	}
+	tutorID := middleware.CurrentUserID(c)
+	h.uploader(c, h.fileSvc, func() error {
+		return h.svc.RequireChapterWrite(chapterID, tutorID)
+	}, func(content []byte, filename string) (string, error) {
+		return h.svc.UploadChapterImage(c.Request.Context(), chapterID, tutorID, content, filename)
 	})
 }
 

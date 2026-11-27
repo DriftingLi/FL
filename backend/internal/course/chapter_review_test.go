@@ -5,6 +5,7 @@ package course
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"testing"
 
@@ -27,6 +28,55 @@ func seedReviewChapter(t *testing.T, db *gorm.DB) *model.Chapter {
 		t.Fatalf("造 chapter_file 失败: %v", err)
 	}
 	return &ch
+}
+
+func TestChapterWriteSubmitForReviewRejectsClaimRevokedInTransaction(t *testing.T) {
+	db := testutil.NewMemoryDB(t)
+	ch := seedReviewChapter(t, db)
+	ctx := context.Background()
+	const tutorID = 7
+	claim := model.TutorCourseClaim{TutorID: tutorID, CourseID: ch.CourseID, Source: model.ClaimSourceSelf, CreatedAt: testutil.Now()}
+	if err := db.Create(&claim).Error; err != nil {
+		t.Fatalf("造认领行失败: %v", err)
+	}
+
+	revoked := false
+	const callbackName = "test:revoke_claim_in_submit_transaction"
+	if err := db.Callback().Query().Before("gorm:query").Register(callbackName, func(tx *gorm.DB) {
+		if tx.Statement.Table != "tutor_course_claim" {
+			return
+		}
+		if _, inTx := tx.Statement.ConnPool.(*sql.Tx); !inTx {
+			return
+		}
+		if err := tx.Session(&gorm.Session{NewDB: true}).Where("tutor_id = ? AND course_id = ?", tutorID, ch.CourseID).
+			Delete(&model.TutorCourseClaim{}).Error; err != nil {
+			if got := tx.AddError(err); !errors.Is(got, err) {
+				t.Errorf("AddError 未保留删除认领错误: got=%v want=%v", got, err)
+			}
+			return
+		}
+		revoked = true
+	}); err != nil {
+		t.Fatalf("注册事务内撤销认领回调失败: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Callback().Query().Before("gorm:query").Remove(callbackName) })
+
+	writer := NewChapterWriter(db, nil, nil, nil)
+	if _, err := writer.SubmitForReview(ctx, ch.ChapterID, tutorID); !errors.Is(err, ErrCourseClaimRequired) {
+		t.Fatalf("事务内撤销认领后提审应拒绝，实际 %v", err)
+	}
+	if !revoked {
+		t.Fatal("测试未在提审事务内撤销认领")
+	}
+	var pending int64
+	if err := db.Model(&model.ChapterContentSlot{}).
+		Where("slot = ? AND chapter_id = ?", model.ChapterReviewPending, ch.ChapterID).Count(&pending).Error; err != nil {
+		t.Fatalf("查在审快照失败: %v", err)
+	}
+	if pending != 0 {
+		t.Fatalf("拒绝提审不得残留 pending 快照，实际 %d", pending)
+	}
 }
 
 func TestChapterReviewStateMachineFullCycle(t *testing.T) {

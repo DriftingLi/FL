@@ -40,6 +40,7 @@ func RegisterAdminRoutes(rg *gin.RouterGroup, session *security.Session, svc *Ad
 	read := g.Group("", middleware.CapabilityRequired(authz.CapCourseManage, authz.CapContentGenerate))
 	read.GET("/courses", h.ListCourses)
 	read.GET("/course/:course_id", h.GetCourseDetail)
+	read.GET("/course/:course_id/sort-neighbors", h.GetCourseSortNeighbors)
 
 	// ===== 课程与章节写面 =====
 	write := g.Group("", middleware.CapabilityRequired(authz.CapCourseManage))
@@ -97,6 +98,15 @@ func (h *adminHandler) ListCourses(c *gin.Context) {
 			if f == "" {
 				f = "all"
 			}
+			var status *int16
+			if c.Query("status") != "" {
+				value := httpx.QueryIntDefault(c, "status", -1)
+				if value != 0 && value != 1 {
+					return nil, httpx.BadRequest("status 仅支持 0（未发布）/ 1（已发布）")
+				}
+				parsed := int16(value)
+				status = &parsed
+			}
 			return &adminCourseListReq{
 				Page:         httpx.QueryIntDefault(c, "page", 1),
 				PageSize:     httpx.QueryIntDefault(c, "page_size", 10),
@@ -106,10 +116,11 @@ func (h *adminHandler) ListCourses(c *gin.Context) {
 				LevelID:      httpx.QueryIDPtr(c, "level_id"),
 				Category:     category,
 				Filter:       f,
+				Status:       status,
 			}, nil
 		},
 		Invoke: func(ctx context.Context, req *adminCourseListReq) (*CoursePageResult, error) {
-			result, err := h.courseSvc.GetCourses(req.Page, req.PageSize, req.Keyword, req.CredentialID, req.SpecialtyID, req.LevelID, req.Category, req.Filter)
+			result, err := h.courseSvc.GetCourses(req.Page, req.PageSize, req.Keyword, req.CredentialID, req.SpecialtyID, req.LevelID, req.Category, req.Filter, req.Status)
 			if err != nil {
 				return nil, err
 			}
@@ -190,6 +201,39 @@ func (h *adminHandler) GetCourseDetail(c *gin.Context) {
 		},
 	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).
 		WithSentinel(model.ErrCourseNotFound, http.StatusNotFound).Handle(c)
+}
+
+// @Summary 管理端课程排序邻居
+// @Description 返回同分类全局排序中的前后邻居 ID，供服务端分页列表跨页移动
+// @Tags 管理端-课程
+// @Produce json
+// @Security BearerAuth
+// @Param course_id path int true "课程 ID"
+// @Success 200 {object} response.R{data=CourseSortNeighbors} "success"
+// @Failure 400 {object} response.R "课程ID无效或课程未分类"
+// @Failure 401 {object} response.R "未认证"
+// @Failure 404 {object} response.R "课程不存在"
+// @Router /admin/course/{course_id}/sort-neighbors [get]
+// GetCourseSortNeighbors 课程排序邻居 GET /api/admin/course/:course_id/sort-neighbors
+func (h *adminHandler) GetCourseSortNeighbors(c *gin.Context) {
+	httpx.Endpoint[idParam, CourseSortNeighbors]{
+		Parse: func(c *gin.Context) (*idParam, error) {
+			id, err := httpx.PathInt(c, "course_id", "课程ID无效")
+			if err != nil {
+				return nil, err
+			}
+			return &idParam{ID: id}, nil
+		},
+		Invoke: func(ctx context.Context, req *idParam) (*CourseSortNeighbors, error) {
+			neighbors, err := h.courseSvc.GetCourseSortNeighbors(req.ID)
+			if err != nil {
+				return nil, err
+			}
+			return &neighbors, nil
+		},
+	}.WithSuccess(httpx.OkMsg("success"), http.StatusInternalServerError).
+		WithSentinel(model.ErrCourseNotFound, http.StatusNotFound).
+		WithSentinels(http.StatusBadRequest, courseSortFacts400...).Handle(c)
 }
 
 // @Summary 更新课程
@@ -649,4 +693,5 @@ type adminCourseListReq struct {
 	LevelID      *int
 	Category     scope.CategoryFilter
 	Filter       string
+	Status       *int16
 }

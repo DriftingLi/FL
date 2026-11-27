@@ -103,7 +103,7 @@
                     {{ credentialNameOf(course.credential_id) }}
                   </UiTag>
                 </div>
-                <PublicEligibility :eligibility="course.public_eligibility" show-reasons />
+                <PublicEligibility :eligibility="course.public_state?.eligibility" show-reasons />
               </template>
               <template #meta>
                 <div class="flex items-center justify-between gap-2 text-xs text-ink-3">
@@ -235,7 +235,7 @@ const COURSE_TYPE_NAMES: Record<string, string> = {
 }
 
 function categoryNameOf(course: TutorCourseRow): string {
-  return trainingCategoryName(course.category)
+  return trainingCategoryName(course.public_state?.category)
 }
 
 function courseTypeNameOf(courseType: string): string {

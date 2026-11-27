@@ -432,6 +432,7 @@ var Domains = []Domain{
 			"tutor.BatchDeleteFilesResult",
 			"course.ChapterDTO",
 			"course.ChapterDetailDTO",
+			"course.TutorChapterDetailDTO",
 			"course.ChapterFileDTO",
 			"course.CoursePageResult",
 			// #2596：课程认领的名单与动作回执（名单页/卡片认领直接消费）。
@@ -698,6 +699,7 @@ var Domains = []Domain{
 			"core.GenerateContentResultDTO",
 			"core.GenTaskStatus",
 			"course.CoursePageResult",
+			"course.CourseSortNeighbors",
 			"course.AdminCourseDetailDTO",
 			"course.ChapterDTO",
 			"course.DeleteCourseResult",
@@ -753,6 +755,7 @@ var Domains = []Domain{
 			{Method: "GET", Path: "/admin/course/generate-content/{task_id}"},
 			{Method: "GET", Path: "/admin/courses"},
 			{Method: "GET", Path: "/admin/course/{course_id}"},
+			{Method: "GET", Path: "/admin/course/{course_id}/sort-neighbors"},
 			{Method: "POST", Path: "/admin/course"},
 			{Method: "PUT", Path: "/admin/course/{course_id}"},
 			{Method: "PUT", Path: "/admin/course/{course_id}/public-visibility"},

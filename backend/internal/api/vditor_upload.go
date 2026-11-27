@@ -4,9 +4,13 @@
 package api
 
 import (
+	"errors"
+
 	"github.com/gin-gonic/gin"
 
+	"forklift-training/internal/course"
 	"forklift-training/internal/filestore"
+	"forklift-training/pkg/response"
 )
 
 // vditorError 构造 Vditor 期望的错误响应体（协议单点：code=1 + errFiles/succMap 信封）。
@@ -18,6 +22,27 @@ func vditorError(msg string, errFiles []string) gin.H {
 // 公共骨架：FormFile 读取 → 空文件名守卫 → Open/ReadAll → ValidateImage → 保存（saver 注入）→ 信封。
 // 返回 Vditor 期望格式：{ msg:"", code:0, data:{ errFiles:[], succMap:{"name":"url"} } }。
 func uploadVditorImage(c *gin.Context, fileSvc *filestore.FileStore, saver func(content []byte, filename string) (string, error)) {
+	uploadVditorImageWithPreflight(c, fileSvc, nil, saver)
+}
+
+func uploadTutorVditorImage(c *gin.Context, fileSvc *filestore.FileStore, preflight func() error, saver func(content []byte, filename string) (string, error)) {
+	uploadVditorImageWithPreflight(c, fileSvc, preflight, saver)
+}
+
+func uploadVditorImageWithPreflight(c *gin.Context, fileSvc *filestore.FileStore, preflight func() error, saver func(content []byte, filename string) (string, error)) {
+	if preflight != nil {
+		if err := preflight(); err != nil {
+			switch {
+			case errors.Is(err, course.ErrChapterNotFound):
+				response.NotFound(c, err.Error())
+			case errors.Is(err, course.ErrCourseClaimRequired):
+				response.Forbidden(c, err.Error())
+			default:
+				response.ServerErrorCause(c, "图片上传失败", err)
+			}
+			return
+		}
+	}
 	file, err := c.FormFile("file")
 	if err != nil {
 		c.JSON(200, vditorError("未找到上传文件", []string{}))
@@ -38,7 +63,16 @@ func uploadVditorImage(c *gin.Context, fileSvc *filestore.FileStore, saver func(
 	}
 	url, err := saver(content, file.Filename)
 	if err != nil {
-		c.JSON(200, vditorError("文件保存失败", []string{file.Filename}))
+		switch {
+		case errors.Is(err, course.ErrChapterNotFound):
+			response.NotFound(c, err.Error())
+		case errors.Is(err, course.ErrCourseClaimRequired):
+			response.Forbidden(c, err.Error())
+		case errors.Is(err, course.ErrChapterWriteFailed):
+			response.ServerErrorCause(c, "图片保存失败", err)
+		default:
+			c.JSON(200, vditorError("文件保存失败", []string{file.Filename}))
+		}
 		return
 	}
 	c.JSON(200, gin.H{

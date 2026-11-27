@@ -45,6 +45,11 @@ function courseDTO(over: Partial<AdminCourseItem> = {}): AdminCourseItem {
     specialty_id: 2,
     status: 1,
     theory_hours: 0,
+    public_state: {
+      category: { id: 9, name: '维修', status: 1 },
+      public_visibility: true,
+      eligibility: { eligible: true, reasons: [] }
+    },
     ...over
   }
 }
@@ -125,7 +130,12 @@ describe('CourseCatalogCourseDrawer 积分价写入契约', () => {
   it('编辑停用分类仍回显并保留当前归属，新建时不提供停用分类', async () => {
     vi.mocked(adminApi.getCourseDetail).mockResolvedValue(courseDetailDTO({
       category_id: 8,
-      category: { id: 8, name: '旧分类', status: 0 }
+      category: { id: 8, name: '旧分类', status: 0 },
+      public_state: {
+        category: { id: 8, name: '旧分类', status: 0 },
+        public_visibility: true,
+        eligibility: { eligible: false, reasons: ['category_disabled'] }
+      }
     }))
     const wrapper = mount(CourseCatalogCourseDrawer, {
       props: {
@@ -142,7 +152,12 @@ describe('CourseCatalogCourseDrawer 积分价写入契约', () => {
     })
     await openAndSubmit(wrapper, courseDTO({
       category_id: 8,
-      category: { id: 8, name: '旧分类', status: 0 }
+      category: { id: 8, name: '旧分类', status: 0 },
+      public_state: {
+        category: { id: 8, name: '旧分类', status: 0 },
+        public_visibility: true,
+        eligibility: { eligible: false, reasons: ['category_disabled'] }
+      }
     }))
 
     const categorySelect = wrapper.findAllComponents(UiSelect)
@@ -171,6 +186,10 @@ describe('CourseCatalogCourseDrawer 字段映射', () => {
     vm.open(courseDTO({
       name: undefined as never,
       category_id: undefined as never,
+      public_state: {
+        public_visibility: true,
+        eligibility: { eligible: false, reasons: ['category_missing'] }
+      },
       status: undefined as never,
       theory_hours: undefined as never,
       practice_hours: 0,
@@ -205,7 +224,11 @@ describe('CourseCatalogCourseDrawer 字段映射', () => {
       description: '列表简介',
       theory_hours: 5,
       certificate_template_id: 3,
-      points_price: 100
+      points_price: 100,
+      public_state: {
+        public_visibility: true,
+        eligibility: { eligible: false, reasons: ['category_missing'] }
+      }
     }))
     expect(vm.drawerForm.description).toBe('列表简介')
     const detail = courseDetailDTO({
@@ -218,7 +241,11 @@ describe('CourseCatalogCourseDrawer 字段映射', () => {
       duration: 0,
       description: undefined as never,
       certificate_template_id: null,
-      points_price: null as never
+      points_price: null as never,
+      public_state: {
+        public_visibility: true,
+        eligibility: { eligible: false, reasons: ['category_missing'] }
+      }
     })
     expect(detail.description).toBeUndefined()
     resolveDetail(detail)
@@ -273,7 +300,11 @@ describe('课程抽屉公开资格', () => {
       .mockResolvedValueOnce(courseDetailDTO({
         course_id: 2,
         name: '当前课程',
-        public_eligibility: { eligible: false, reasons: ['manually_hidden'] }
+        public_state: {
+          category: { id: 9, name: '维修', status: 1 },
+          public_visibility: false,
+          eligibility: { eligible: false, reasons: ['manually_hidden'] }
+        }
       }))
     const wrapper = mountDrawer()
     const drawer = wrapper.vm as unknown as { open: (course: AdminCourseItem) => void }
@@ -282,7 +313,11 @@ describe('课程抽屉公开资格', () => {
     await flushPromises()
     resolveFirst(courseDetailDTO({
       name: '前一门课程',
-      public_eligibility: { eligible: false, reasons: ['category_missing'] }
+      public_state: {
+        category: { id: 9, name: '维修', status: 1 },
+        public_visibility: false,
+        eligibility: { eligible: false, reasons: ['category_missing'] }
+      }
     }))
     await flushPromises()
     expect(wrapper.text()).toContain('管理员已关闭公开')
@@ -292,9 +327,13 @@ describe('课程抽屉公开资格', () => {
   })
 
   it('开关更新失败保留原公开状态，打开同一开关可以重试', async () => {
-    const publicEligibility = { eligible: false, reasons: ['manually_hidden'] } as const
+    const publicState = {
+      category: { id: 9, name: '维修', status: 1 },
+      public_visibility: false,
+      eligibility: { eligible: false, reasons: ['manually_hidden'] }
+    } as const
     vi.mocked(adminApi.getCourseDetail).mockResolvedValue(courseDetailDTO({
-      public_eligibility: { ...publicEligibility, reasons: [...publicEligibility.reasons] }
+      public_state: { ...publicState, eligibility: { ...publicState.eligibility, reasons: [...publicState.eligibility.reasons] } }
     }))
     vi.mocked(adminApi.setPublicVisibility)
       .mockRejectedValueOnce(new Error('请求失败'))
@@ -312,7 +351,11 @@ describe('课程抽屉公开资格', () => {
       toggle.vm.$emit('change', true)
       await flushPromises()
       expect(toggle.props('modelValue')).toBe(true)
-      expect(wrapper.emitted('visibilityChanged')).toEqual([[1, { eligible: true, reasons: [] }]])
+      expect(wrapper.emitted('visibilityChanged')).toEqual([[1, {
+        category: { id: 9, name: '维修', status: 1 },
+        public_visibility: true,
+        eligibility: { eligible: true, reasons: [] }
+      }]])
     } finally {
       log.mockRestore()
       wrapper.unmount()

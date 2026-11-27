@@ -12,6 +12,7 @@ import os
 import sys
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -45,6 +46,30 @@ class ExternalDatabaseTest(unittest.TestCase):
                 self.deployer._external_pg.return_value = state
                 with self.assertRaises(deploy.DeployError):
                     self.deployer.wait_postgres()
+
+    def test_saved_environment_is_used_as_previous_topology_fallback(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {
+            "DEPLOY_PATH": tmp,
+            "DEPLOY_ENVIRONMENT": "production",
+            "IMAGE_TAG": "new",
+            "DB_MODE": "external",
+            "DATABASE_URL": (
+                "postgresql://forklift:local%26test@pg.internal/forklift_training"
+                "?sslmode=verify-full&sslrootcert=/etc/forklift/postgres-ca.crt"
+            ),
+        }, clear=True):
+            (Path(tmp) / ".env").write_text(
+                "DB_MODE=docker\nPOSTGRES_IMAGE=postgres:18-alpine\nPG_VOLUME=pgdata-prod\n",
+                encoding="utf-8",
+            )
+            options = deploy._parser().parse_args([])
+            instance = deploy.Deployer("deploy", options)
+            self.assertEqual(instance.topology.database.mode, "external")
+            self.assertEqual(instance.fallback_previous_topology["database_mode"], "docker")
+            self.assertEqual(
+                instance.fallback_previous_topology["compose_files"],
+                [str((Path(tmp) / "deploy" / "docker-compose.prod.yml").resolve())],
+            )
 
     def test_manual_operations_keep_saved_database_mode_and_volume(self):
         with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {"DEPLOY_PATH": tmp}, clear=True):
@@ -291,6 +316,95 @@ class RenderEnvFileTest(unittest.TestCase):
         self.assertIn("OPEN_SCHOOL_IMAGE=ghcr.io/o/backend:previous", out)
         self.assertIn("DB_PASSWORD=\"p@ss word\"", out)
         self.assertIn("COMPOSE_PROJECT_NAME=forklift-training", out)
+
+
+class DeploymentRollbackTest(unittest.TestCase):
+    def _deployer(self, root):
+        d = deploy.Deployer.__new__(deploy.Deployer)
+        d.mode = "deploy"
+        d.opts = argparse.Namespace(force=False, remove_orphans=False, force_data_services=False)
+        d.profiles = []
+        d.skip_backup = True
+        d.backup_wait_timeout = 1
+        d.backup_dir = root / "backups"
+        d.backup_error = None
+        d.previous_images = {}
+        d.fallback_previous_topology = None
+        d.release_plan_path = root / "backups" / "release-plan.json"
+        d.topology = SimpleNamespace(
+            release_id="new",
+            database=SimpleNamespace(backup=SimpleNamespace(synchronous=False)),
+        )
+        d.backend_ref = "b:new"
+        for name in (
+            "preflight", "login_registry", "ensure_registry_proxy", "write_env_file",
+            "_validate_compose", "cleanup_conflicting_containers", "capture_previous_images",
+            "pull_images", "apply_data", "wait_postgres", "fix_dirty_state", "cleanup",
+        ):
+            setattr(d, name, Mock())
+        d.plan_data = Mock(return_value=[])
+        d.plan_app = Mock(return_value=[deploy.Decision("backend", "create", "new", "b:new")])
+        d.preflight_migration_check = Mock(return_value=True)
+        d.migration_needed = Mock(return_value=False)
+        d.desired_app_images = Mock(return_value={"backend": "b:new"})
+        d.rollback_transaction = Mock()
+        return d
+
+    def test_progress_persistence_failure_enters_automatic_rollback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = self._deployer(Path(tmp))
+            plan = deploy.build_release_plan(
+                env=SimpleNamespace(get_running_image=lambda service: "unknown"),
+                desired_images={"backend": "b:new"},
+                migration_needed=False,
+            )
+            with patch.object(deploy, "create_release_plan", return_value=plan), patch.object(
+                deploy, "persist_applied_services", side_effect=deploy.ReleasePlanError("disk full")
+            ):
+                with self.assertRaisesRegex(deploy.ReleasePlanError, "disk full"):
+                    d.deploy()
+            d.rollback_transaction.assert_called_once()
+            txn = d.rollback_transaction.call_args.args[0]
+            self.assertEqual(txn.applied_services, ["backend"])
+
+    def test_first_deployment_rollback_stops_new_services_without_publishing_snapshot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            d = self._deployer(root)
+            del d.rollback_transaction
+            plan = replace(
+                deploy.build_release_plan(
+                    env=SimpleNamespace(get_running_image=lambda service: "unknown"),
+                    desired_images={"backend": "b:new"},
+                    migration_needed=False,
+                ),
+                release_id="new",
+                target_topology={
+                    "schema_version": 1,
+                    "release_id": "new",
+                    "database_mode": "docker",
+                    "postgres_image": "postgres:18-alpine",
+                    "pg_volume": "pgdata-prod",
+                    "compose_files": ["/opt/forklift/deploy/docker-compose.prod.yml"],
+                    "expected_containers": [
+                        "forklift-backend-prod", "forklift-frontend-prod",
+                        "forklift-open-school-prod", "forklift-pg-prod",
+                    ],
+                    "migration": {"entrypoint": "docker_run", "command": ["/app/bin/migrate", "up"]},
+                    "backup": {"strategy": "docker_exec"},
+                    "watchdog": {"strategy": "docker_postgres"},
+                },
+            )
+            env = Mock()
+            env.verify_running_image.return_value = True
+            txn = deploy.ReleaseTransaction(plan, env)
+            txn.execute()
+            d.publish_topology_snapshot = Mock()
+            with patch.object(deploy, "rollback_plan") as rollback_plan:
+                d.rollback_transaction(txn)
+            env.stop_service.assert_called_once_with("backend")
+            d.publish_topology_snapshot.assert_not_called()
+            rollback_plan.assert_not_called()
 
 
 class ForceDataServicesEnvTest(unittest.TestCase):

@@ -205,6 +205,8 @@ var envelopeRegistry = []EnvelopeSpec{
 var totalPayloadRegistry = []PayloadSpec{
 	{Result: "checkin.CheckInCalendarResult",
 		Reason: "打卡日历：days 是整月逐日数组、total 是累计打卡天数，不是列表页"},
+	{Result: "course.CourseFacets",
+		Reason: "管理端课程分页响应内的分类计数 facet：categories 是分类计数数组、total 是 facet 总数，不是独立列表"},
 	{Result: "core.GenTaskStatus",
 		Reason: "内容生成任务进度：results 是章节生成结果、total/completed 是任务进度，不是列表页"},
 	{Result: "practicemode.PracticeStartResultDTO",

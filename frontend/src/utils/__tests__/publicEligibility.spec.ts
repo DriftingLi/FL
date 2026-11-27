@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Eligibility, Reason } from '@/api/generated/course'
-import { describePublicEligibility, describePublicReason, hasLegacyCategoryReason } from '../publicEligibility'
+import { describePublicEligibility, describePublicReason } from '../publicEligibility'
 
 describe('publicEligibility', () => {
   it('distinguishes workflow status from public eligibility', () => {
@@ -23,12 +23,5 @@ describe('publicEligibility', () => {
     for (const reason of reasons) {
       expect(describePublicReason(reason).label).not.toContain('未知')
     }
-  })
-
-  it('recognizes the legacy category bucket without treating workflow blockers as legacy', () => {
-    expect(hasLegacyCategoryReason(['category_missing'])).toBe(true)
-    expect(hasLegacyCategoryReason(['credential_disabled'])).toBe(true)
-    expect(hasLegacyCategoryReason(['not_published', 'source_tag_excluded'])).toBe(false)
-    expect(hasLegacyCategoryReason(undefined)).toBe(false)
   })
 })

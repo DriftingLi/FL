@@ -19,7 +19,7 @@
 //   GET  /tutor/course/{course_id}/claims
 //   GET  /tutor/me/capabilities
 //
-// 覆盖的 Go 类型：CertificateTemplateDTO / ChapterDTO / ChapterDetailDTO / ChapterFileDTO / CourseBriefDTO / CourseClaimant / CourseClaimantsResult / CourseDTO / CoursePageResult / CredentialBriefDTO / LevelBriefDTO / SpecialtyBriefDTO / TutorCourseChaptersDTO / CategoryRef / Eligibility / Reason / BatchDeleteFilesResult / ClaimResult / DeleteFileResult / TutorCapabilitiesDTO
+// 覆盖的 Go 类型：CertificateTemplateDTO / ChapterDTO / ChapterDetailDTO / ChapterFileDTO / ChapterReviewSnapshotDTO / CourseBriefDTO / CourseClaimant / CourseClaimantsResult / CourseDTO / CourseFacetCount / CourseFacets / CoursePageResult / CredentialBriefDTO / LevelBriefDTO / SpecialtyBriefDTO / TutorChapterDetailDTO / TutorCourseChaptersDTO / CategoryRef / Eligibility / PublicState / Reason / BatchDeleteFilesResult / ClaimResult / DeleteFileResult / TutorCapabilitiesDTO
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -87,6 +87,19 @@ export interface ChapterFileDTO {
   source?: string
 }
 
+export interface ChapterReviewSnapshotDTO {
+  chapter_id: number
+  chapter_title: string
+  content: string
+  content_type: string
+  course_id: number
+  course_name: string
+  file_url: string
+  files: ChapterFileDTO[]
+  frozen_at: string
+  submitted_by: number
+}
+
 export interface CourseBriefDTO {
   course_id: number
   name: string
@@ -134,6 +147,7 @@ export interface CourseDTO {
   prerequisite_course_ids?: number[]
   prerequisites?: CourseBriefDTO[]
   public_eligibility?: Eligibility
+  public_state?: PublicState
   sort_order: number
   specialty?: SpecialtyBriefDTO
   specialty_id: number | null
@@ -142,8 +156,20 @@ export interface CourseDTO {
   theory_hours: number
 }
 
+export interface CourseFacetCount {
+  category_id: number
+  total: number
+}
+
+export interface CourseFacets {
+  categories: CourseFacetCount[]
+  legacy: number
+  total: number
+}
+
 export interface CoursePageResult {
   courses: CourseDTO[]
+  facets?: CourseFacets
   page: number
   pages: number
   total: number
@@ -169,6 +195,27 @@ export interface SpecialtyBriefDTO {
   specialty_id: number
 }
 
+export interface TutorChapterDetailDTO {
+  chapter_id: number
+  content: string
+  content_type: string
+  course_id: number
+  created_at: string
+  description: string
+  duration: number
+  file_url: string
+  files: ChapterFileDTO[]
+  next_chapter_id: number | null
+  order_num: number
+  previous_chapter_id: number | null
+  reject_reason?: string
+  resume_position: number
+  review_snapshot?: ChapterReviewSnapshotDTO
+  review_status?: string
+  study_status?: string
+  title: string
+}
+
 export interface TutorCourseChaptersDTO {
   chapters: ChapterDTO[]
   course: CourseDTO
@@ -183,6 +230,12 @@ export interface CategoryRef {
 export interface Eligibility {
   eligible: boolean
   reasons: Reason[]
+}
+
+export interface PublicState {
+  category?: CategoryRef
+  eligibility: Eligibility
+  public_visibility: boolean
 }
 
 export type Reason = 'manually_hidden' | 'not_published' | 'category_missing' | 'category_disabled' | 'category_unmapped' | 'credential_missing' | 'credential_disabled' | 'source_tag_excluded'

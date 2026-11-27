@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed, customRef } from 'vue'
+import { ref, computed, customRef, watch } from 'vue'
 import type { Ref } from 'vue'
 import { authApi } from '@/api/auth'
 import { adminApi } from '@/api/admin'
@@ -9,13 +9,12 @@ import { isDynamicRole } from '@/utils/authzRuntime'
 import type { UserProfile } from '@/types/user'
 import { getToken, getUserInfo, setToken, removeToken, removeRefreshToken, setUserInfo, clearLocalAuth } from '@/utils/storage'
 import { consumeAuthTokenFromUrl } from '@/utils/authToken'
+import {
+  createDynamicCapabilityLoad,
+  type DynamicCapabilityLoadState
+} from './dynamicCapabilityLoad'
 
-/**
- * 能力集装载状态（#1645）：`idle` 未开始（未登录 / 静态角色，它们的可达面由生成的能力表回答）
- * ｜`loading` 在途 ｜`ready` 已装载（此时空集 = 真的一个能力都没有）｜`failed` 装载失败
- * （集合按空处理 = fail closed，但它**不是**「没有能力」这个事实）。
- */
-export type CapabilityLoadState = 'idle' | 'loading' | 'ready' | 'failed'
+export type CapabilityLoadState = DynamicCapabilityLoadState
 
 export const useAuthStore = defineStore('auth', () => {
   /**
@@ -44,33 +43,28 @@ export const useAuthStore = defineStore('auth', () => {
   }))
   const userInfo: Ref<UserProfile> = ref({})
   const isLoggedIn: Ref<boolean> = ref(false)
-  /**
-   * 运行时能力集（#1618 段1）：**只有动态角色（管理端）有内容** —— 登录/恢复登录后经
-   * GET /admin/me/capabilities 拉取；静态角色（学员/讲师/招聘者）恒为空数组，它们的可达面
-   * 仍由生成的能力表回答。两条件并存是刻意的，「谁能做什么」的判定入口只有
-   * `utils/authzRuntime.ts` 的 holdsCapability（守卫与侧栏都走它，不各写一遍）。
-   */
-  const capabilities: Ref<string[]> = ref([])
-  /**
-   * 能力集装载状态（#1645）。
-   *
-   * 为什么要有它：「装载中」与「没有能力」在数据上都是空数组，而**两者不是同一件事** ——
-   * #1638 的落点判定把它们当成同一件事，于是能力集晚到一拍时，全权限的超管也会被送到
-   * 「无管理权限」页（线上形态：侧栏与标签栏正常，内容区写着"你没有权限"）。
-   * 守卫据此把可见性判定推迟到**落定**之后（ready / failed），而不是拿一个还不知道的集合下结论。
-   */
-  const capabilityState: Ref<CapabilityLoadState> = ref('idle')
-  /** 装载是否已落定（ready / failed）：守卫的 load-capabilities 判据读它。 */
-  const capabilitiesSettled = computed(
-    () => capabilityState.value === 'ready' || capabilityState.value === 'failed'
+  const capabilityLoad = createDynamicCapabilityLoad({
+    admin: () => adminApi.fetchMyCapabilities(),
+    tutor: () => tutorApi.fetchMyCapabilities()
+  })
+  const capabilityIdentity = computed(() => {
+    const role = userInfo.value?.role ?? ''
+    if (!isDynamicRole(role)) return { key: '', role: '' }
+    const id = userInfo.value.user_id ?? userInfo.value.uid ?? userInfo.value.account ?? ''
+    return { key: `${role}:${id}`, role }
+  })
+  watch(
+    capabilityIdentity,
+    identity => capabilityLoad.setIdentity(identity),
+    { immediate: true, flush: 'sync' }
   )
+
+  const capabilities = capabilityLoad.capabilities
+  const capabilityState = capabilityLoad.state
+  const capabilitiesSettled = capabilityLoad.settled
 
   // 初始化 Promise 缓存：main.ts 显式启动一次，路由守卫 await 同一 Promise 等待完成
   let readyPromise: Promise<void> | null = null
-  // 在途的能力集请求：并发调用复用同一次（守卫与登录预热不重复发）；装载代次使
-  // 换账号/登出时**在途结果不落到新的登录态上**（旧账号的能力集不得成为新账号的可见面）
-  let capabilityInFlight: Promise<void> | null = null
-  let capabilityGeneration = 0
 
   function initFromStorage() {
     // ADR-0067（票 #1363）：#1363 之前的登录把 refresh 写进了 localStorage，那是**存量残留**。
@@ -161,63 +155,20 @@ export const useAuthStore = defineStore('auth', () => {
 
     // 登录响应只含基础字段（无昵称/头像等），异步拉取 /auth/me 补齐完整资料
     refreshUserInfo()
-    // 管理端能力集随登录态刷新（非管理角色会直接清空，不发请求）。
+    // 动态角色能力集随登录态刷新（非动态角色会直接清空，不发请求）。
     // 换账号先作废上一份在途装载：这里只预热，**不**阻塞跳转 —— 守卫会 await 这次装载
     // 落定后再判可见性（#1645）
-    resetCapabilityLoad()
     void loadCapabilities()
   }
 
   /**
    * 拉取当前动态角色（管理员 / 讲师）的运行时能力集。
    *
-   * fail closed：拉取失败一律落空集，**不保留上一份** —— 上一份可能已被超管改小，
-   * 留着它等于让「刚被收回权限的人」继续看到菜单（点进去才 403）。
-   * 非动态角色不发请求（学员/招聘者的可达面由静态表回答）。
-   *
-   * 端点按角色分派（#2600 / 规格 F2）：管理员走 `/admin/me/capabilities`，讲师走
-   * `/tutor/me/capabilities` —— 两个域的可见面互不相同，合成一个端点会把两边口径缠在一起。
-   *
-   * 返回的 Promise 在**状态落定**（ready / failed）后 resolve，且**必然落定**（两条分支都写
-   * capabilityState）—— 守卫的 load-capabilities 决策据此把可见性判定推迟到落定之后（#1645），
-   * 落定承诺也是「这一步不会二次触发」的前提。
+   * 端点选择、并发去重、代次隔离与失败落定均由 dynamicCapabilityLoad module 负责；
+   * store 只把当前身份 key 交给它并暴露结果。返回 Promise 在 ready / failed 后 resolve。
    */
   function loadCapabilities(): Promise<void> {
-    const role = userInfo.value?.role
-    if (!isDynamicRole(role)) {
-      capabilities.value = []
-      capabilityState.value = 'idle'
-      return Promise.resolve()
-    }
-    if (capabilityInFlight) return capabilityInFlight
-    const generation = capabilityGeneration
-    capabilityState.value = 'loading'
-    capabilityInFlight = (async () => {
-      try {
-        const res =
-          role === 'tutor'
-            ? await tutorApi.fetchMyCapabilities()
-            : await adminApi.fetchMyCapabilities()
-        if (generation !== capabilityGeneration) return
-        capabilities.value = res?.capabilities ?? []
-        capabilityState.value = 'ready'
-      } catch (e) {
-        if (generation !== capabilityGeneration) return
-        capabilities.value = []
-        capabilityState.value = 'failed'
-        console.warn('[Auth] loadCapabilities failed:', e)
-      } finally {
-        if (generation === capabilityGeneration) capabilityInFlight = null
-      }
-    })()
-    return capabilityInFlight
-  }
-
-  /** 换账号 / 登出：作废在途装载（其结果不得落到新的登录态上）。 */
-  function resetCapabilityLoad() {
-    capabilityGeneration += 1
-    capabilityInFlight = null
-    capabilityState.value = 'idle'
+    return capabilityLoad.load()
   }
 
   function clearAuthData() {
@@ -226,8 +177,7 @@ export const useAuthStore = defineStore('auth', () => {
     token.value = ''
     userInfo.value = {}
     isLoggedIn.value = false
-    capabilities.value = []
-    resetCapabilityLoad()
+    capabilityLoad.reset()
 
     clearLocalAuth()
   }

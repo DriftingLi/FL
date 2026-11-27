@@ -6,9 +6,8 @@ import type { FormInstance } from 'element-plus'
 import { adminApi, type AdminCourseItem, type AdminCourseDetail, type ChapterPayload, type CoursePayload } from '@/api/admin'
 import { useConfirm } from '@/composables/useConfirm'
 import type { CertificateTemplate, TrainingCategoryDTO } from '@/api/training'
-import type { Eligibility } from '@/api/generated/course'
+import type { PublicState } from '@/api/generated/course'
 import PublicEligibility from '@/components/catalog/PublicEligibility.vue'
-import { allowsPublicVisibility } from '@/utils/publicEligibility'
 import UiSwitch from '@/components/ui/UiSwitch.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
@@ -27,7 +26,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   saved: []
-  visibilityChanged: [courseId: number, eligibility: Eligibility]
+  visibilityChanged: [courseId: number, publicState: PublicState]
+  searchCourses: [keyword: string]
 }>()
 
 const selectedCategory = ref<TrainingCategoryDTO | null>(null)
@@ -46,7 +46,7 @@ const categoryOptions = computed(() => {
 })
 
 const drawerVisible = ref(false)
-const publicEligibility = ref<Eligibility>()
+const publicState = ref<PublicState>()
 const loadingDetail = ref(false)
 const detailError = ref(false)
 const visibilityUpdates = ref(new Set<number>())
@@ -80,7 +80,7 @@ function applyCourseToForm(form: Record<string, any>, source: AdminCourseItem | 
     Object.assign(form, {
       course_id: source.course_id,
       name: source.name,
-      category_id: source.category_id ?? null,
+      category_id: source.public_state?.category?.id ?? null,
       course_type: source.course_type ?? null,
       status: source.status,
       theory_hours: source.theory_hours || 0,
@@ -97,7 +97,7 @@ function applyCourseToForm(form: Record<string, any>, source: AdminCourseItem | 
   }
   Object.assign(form, {
     name: source.name ?? form.name,
-    category_id: source.category_id ?? null,
+    category_id: source.public_state?.category?.id ?? null,
     course_type: source.course_type ?? form.course_type,
     status: source.status ?? form.status,
     theory_hours: source.theory_hours ?? 0,
@@ -152,7 +152,7 @@ function open(course: AdminCourseItem | null) {
   detailRequest++
   loadingDetail.value = false
   detailError.value = false
-  publicEligibility.value = course?.public_eligibility
+  publicState.value = course?.public_state
   drawerVisible.value = true
   drawerChapters.value = []
   selectedCategory.value = null
@@ -175,8 +175,8 @@ function open(course: AdminCourseItem | null) {
     })
     return
   }
-  selectedCategory.value = course.category
-    ?? props.categories.find(category => category.id === course.category_id)
+  selectedCategory.value = course?.public_state?.category
+    ?? props.categories.find(category => category.id === course.public_state?.category?.id)
     ?? null
   applyCourseToForm(drawerForm, course, 'list')
   void loadDrawerDetail()
@@ -192,10 +192,10 @@ async function loadDrawerDetail() {
     const detail = await adminApi.getCourseDetail(id)
     if (detail && request === detailRequest && drawerVisible.value) {
       if (revision === visibilityRevision) {
-        publicEligibility.value = detail.public_eligibility ?? publicEligibility.value
+        publicState.value = detail.public_state ?? publicState.value
       }
-      selectedCategory.value = detail.category
-        ?? props.categories.find(category => category.id === detail.category_id)
+      selectedCategory.value = detail.public_state?.category
+        ?? props.categories.find(category => category.id === detail.public_state?.category?.id)
         ?? selectedCategory.value
       applyCourseToForm(drawerForm, detail, 'detail')
       drawerChapters.value = detail.chapters || []
@@ -210,15 +210,16 @@ async function loadDrawerDetail() {
 
 async function setCourseVisibility(visible: boolean) {
   const id: number = drawerForm.course_id
-  if (!id || loadingDetail.value || savingCourse.value || visibilityUpdates.value.has(id)) return
+  const current = publicState.value
+  if (!id || !current || loadingDetail.value || savingCourse.value || visibilityUpdates.value.has(id)) return
   visibilityUpdates.value.add(id)
   try {
     const eligibility = await adminApi.setPublicVisibility(id, visible)
     if (drawerForm.course_id === id) {
       visibilityRevision++
-      publicEligibility.value = eligibility
+      publicState.value = { ...current, public_visibility: visible, eligibility }
     }
-    emit('visibilityChanged', id, eligibility)
+    emit('visibilityChanged', id, { ...current, public_visibility: visible, eligibility })
     ElMessage.success(visible ? '已允许公开' : '已关闭公开')
   } catch (error) {
     console.error('修改课程公开开关失败:', error)
@@ -336,16 +337,16 @@ defineExpose({ open })
   <el-drawer v-model="drawerVisible" :title="drawerForm.course_id ? '编辑课程' : '新增课程'" size="min(560px, 100vw)">
     <section v-if="drawerForm.course_id" class="mb-4 rounded-card border border-line p-4">
       <h3 class="mb-2 font-semibold">公开资格</h3>
-      <PublicEligibility :eligibility="publicEligibility" />
+      <PublicEligibility :eligibility="publicState?.eligibility" />
       <p v-if="detailError" class="mt-2 flex flex-wrap items-center gap-2 text-sm">
         课程详情加载失败
         <UiButton variant="text" size="small" @click="loadDrawerDetail">重试</UiButton>
       </p>
-      <label v-if="publicEligibility" class="mt-3 flex flex-wrap items-center gap-2 text-sm">
+      <label v-if="publicState" class="mt-3 flex flex-wrap items-center gap-2 text-sm">
         允许公开
         <UiSwitch
           aria-label="允许公开课程"
-          :model-value="allowsPublicVisibility(publicEligibility)"
+          :model-value="publicState.public_visibility"
           :disabled="loadingDetail || savingCourse || submitting || visibilityUpdates.has(drawerForm.course_id)"
           @change="setCourseVisibility($event === true)"
         />
@@ -386,7 +387,7 @@ defineExpose({ open })
         <UiSelect v-model="drawerForm.certificate_template_id" clearable placeholder="不关联" style="width: 100%" :options="(certificateTemplates).map((t) => ({ label: t.name, value: t.id }))" />
       </el-form-item>
       <el-form-item label="前置课程">
-        <UiSelect v-model="drawerForm.prerequisite_course_ids" multiple filterable collapse-tags placeholder="选择需先完成的课程" style="width: 100%" :options="(courseOptions).map((c) => ({ label: c.name, value: c.course_id, disabled: c.course_id === drawerForm.course_id }))" />
+        <UiSelect v-model="drawerForm.prerequisite_course_ids" multiple filterable collapse-tags remote placeholder="选择需先完成的课程" style="width: 100%" :options="(courseOptions).map((c) => ({ label: c.name, value: c.course_id, disabled: c.course_id === drawerForm.course_id }))" @remote-method="emit('searchCourses', $event)" />
       </el-form-item>
       <el-form-item label="课程简介">
         <UiInput v-model="drawerForm.description" type="textarea" :rows="2" :maxlength="500" />

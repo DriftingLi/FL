@@ -1,5 +1,5 @@
 name: "Release Evidence"
-description: "发布证据收集：waitForRun / checkDeployment / gateVerdict 三步可组合（#2455）"
+description: "发布证据判定：SHA 对齐的 run success + 最新 deployment success（#2920）"
 
 inputs:
   step:
@@ -13,7 +13,7 @@ inputs:
     required: false
     default: "testing"
   run-id:
-    description: "要等待的 run ID（waitForRun / gateVerdict 用）"
+    description: "要等待的 run ID（waitForRun / gateVerdict 必填）"
     required: false
     default: ""
   timeout:
@@ -52,7 +52,7 @@ runs:
       id: waitForRun
       if: inputs.step == 'waitForRun'
       shell: bash
-      run: ${{ github.action_path }}/wait-for-run.sh
+      run: bash "${{ github.action_path }}/wait-for-run.sh"
       env:
         INPUT_RUN_ID: ${{ inputs.run-id }}
         INPUT_SHA: ${{ inputs.sha }}
@@ -63,7 +63,7 @@ runs:
       id: checkDeployment
       if: inputs.step == 'checkDeployment'
       shell: bash
-      run: ${{ github.action_path }}/check-deployment.sh
+      run: bash "${{ github.action_path }}/check-deployment.sh"
       env:
         INPUT_SHA: ${{ inputs.sha }}
         INPUT_ENVIRONMENT: ${{ inputs.environment }}
@@ -74,7 +74,7 @@ runs:
       id: gateVerdict
       if: inputs.step == 'gateVerdict'
       shell: bash
-      run: ${{ github.action_path }}/gate-verdict.sh
+      run: bash "${{ github.action_path }}/gate-verdict.sh"
       env:
         INPUT_SHA: ${{ inputs.sha }}
         INPUT_ENVIRONMENT: ${{ inputs.environment }}

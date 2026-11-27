@@ -26,17 +26,3 @@ export function describePublicEligibility(eligibility?: Eligibility): PublicStat
   if (eligibility.eligible) return { label: '已公开', tone: 'success' }
   return { label: '未公开', tone: 'warning' }
 }
-
-export function allowsPublicVisibility(eligibility: Eligibility): boolean {
-  return !eligibility.reasons.includes('manually_hidden')
-}
-
-export function hasLegacyCategoryReason(reasons?: Reason[]): boolean {
-  return reasons?.some(reason => [
-    'category_missing',
-    'category_disabled',
-    'category_unmapped',
-    'credential_missing',
-    'credential_disabled'
-  ].includes(reason)) ?? false
-}

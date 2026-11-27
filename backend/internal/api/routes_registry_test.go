@@ -74,4 +74,5 @@ func TestRouteRegistryCoverage(t *testing.T) {
 // 2026-11-21 #2753 独立公开网校读面 3 条（GET /api/public-school/categories、
 // GET /api/public-school/courses、GET /api/public-school/courses/{course_id}）→ 396。
 // 2026-11-22 #2760 公开题库目录 1 条（GET /api/public-school/question-banks）→ 397。
-const expectedRouteCount = 399
+// 管理端课程排序邻居新增 1 条（GET /api/admin/course/{course_id}/sort-neighbors），当前总数 → 400。
+const expectedRouteCount = 400

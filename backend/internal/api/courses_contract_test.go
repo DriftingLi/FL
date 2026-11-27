@@ -132,7 +132,7 @@ func TestTutorCoursesListContract(t *testing.T) {
 	api := r.Group("/api")
 	useCapabilityResolvers(api, db)
 	deps := newContractDeps(t, db, cfg)
-	tutor.RegisterRoutes(api, deps.RouterDeps().Session, deps.TutorSvc, deps.FileSvc, uploadVditorImage)
+	tutor.RegisterRoutes(api, deps.RouterDeps().Session, deps.TutorSvc, deps.FileSvc, uploadTutorVditorImage)
 
 	// #2600 起讲师能力由所挂角色回答：令牌必须对应真实且挂了角色的讲师行。
 	tutor := testutil.SeedTutor(t, db, "courses_tutor1", "x")

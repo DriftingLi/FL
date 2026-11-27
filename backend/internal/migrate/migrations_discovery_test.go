@@ -24,6 +24,8 @@ import (
 	"github.com/golang-migrate/migrate/v4/source"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"go.uber.org/zap"
+
+	"forklift-training/migrations"
 )
 
 // migrationFileRe 匹配 golang-migrate 要求的命名：<version>_<title>.(up|down).sql。
@@ -126,5 +128,45 @@ func TestMigrationsLoadViaRunner(t *testing.T) {
 				t.Fatalf("版本 %d 的 %s 迁移正文为空", v, part.name)
 			}
 		}
+	}
+}
+
+// TestPublicStateReadModelIsThinWrapper 钉住 000077 的职责边界：公开资格规则只由 000076 持有，
+// 000077 只能在外层补 public_visibility；down 也只能撤掉包装视图。
+func TestPublicStateReadModelIsThinWrapper(t *testing.T) {
+	up := strings.ToLower(migrations.PublicStateViews)
+	for _, view := range []string{"course_public_eligibility", "question_public_eligibility"} {
+		if strings.Contains(up, "drop view if exists "+view) || strings.Contains(up, "drop view "+view) {
+			t.Fatalf("000077 不得删除 000076 的资格视图 %s", view)
+		}
+		if strings.Contains(up, "create view "+view) {
+			t.Fatalf("000077 不得重建 000076 的资格视图 %s", view)
+		}
+		if !strings.Contains(up, "from "+view) {
+			t.Fatalf("000077 的包装视图必须读取 %s", view)
+		}
+	}
+	for _, rule := range []string{"blocker_codes", "category_disabled", "source_tag_excluded", "not_published", "eligible"} {
+		if strings.Contains(up, rule) {
+			t.Fatalf("000077 复制了 000076 的资格规则 %q", rule)
+		}
+	}
+	for _, visibility := range []string{
+		"not course.public_hidden as public_visibility",
+		"not question.public_hidden as public_visibility",
+	} {
+		if !strings.Contains(up, visibility) {
+			t.Fatalf("000077 缺少公开开关派生式 %q", visibility)
+		}
+	}
+
+	down := strings.ToLower(migrations.DropPublicStateViews)
+	for _, view := range []string{"course_public_state", "question_public_state"} {
+		if !strings.Contains(down, "drop view if exists "+view) {
+			t.Fatalf("000077 down 必须删除包装视图 %s", view)
+		}
+	}
+	if strings.Contains(down, "create view") {
+		t.Fatal("000077 down 不得重建 000076 的资格视图")
 	}
 }

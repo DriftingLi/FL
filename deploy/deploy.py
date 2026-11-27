@@ -14,7 +14,7 @@ docs/adr/ADR-0088-部署脚本收敛与按变更重启.md：
     python3 deploy/deploy.py                 # 部署（默认模式）
     python3 deploy/deploy.py --plan          # 只打印变更计划，不重建运行中的容器
     python3 deploy/deploy.py --plan --json   # 机器可读计划
-    python3 deploy/deploy.py rollback        # 回滚到 backups/last-version.txt
+    python3 deploy/deploy.py rollback        # 从版本化发布计划恢复并回滚应用
     python3 deploy/deploy.py down            # 停止本 compose 项目（testing 冒烟收尾）
     python3 deploy/deploy.py local [--skip-build] [--skip-migrate]
                                              # 本地 / 手动一键部署
@@ -38,7 +38,7 @@ import sys
 import tempfile
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Dict, List, Optional
 from urllib.parse import parse_qs, quote, unquote, urlsplit
@@ -47,8 +47,27 @@ from urllib.parse import parse_qs, quote, unquote, urlsplit
 _deploy_dir = str(Path(__file__).resolve().parent)
 if _deploy_dir not in sys.path:
     sys.path.insert(0, _deploy_dir)
-from release_transaction import ReleaseTransaction, build_release_plan
+from release_transaction import (
+    ReleasePlanError,
+    ReleaseTransaction,
+    build_release_plan,
+    create_release_plan,
+    load_release_plan,
+    persist_applied_services,
+    release_plan_path_for,
+    rollback_plan,
+)
 from effective_config import EffectiveConfig, parse_env_text
+from topology import (
+    TopologySnapshotError,
+    _validate_snapshot,
+    database_topology_for_mode,
+    read_topology_snapshot,
+    resolve_release_id,
+    resolve_topology,
+    snapshot_path_for,
+    write_topology_snapshot,
+)
 RED = "\033[0;31m"
 GREEN = "\033[0;32m"
 YELLOW = "\033[1;33m"
@@ -86,7 +105,13 @@ def _configure_stdio() -> None:
 
 def _log(level: str, color: str, msg: str) -> None:
     prefix = f"{color}[DEPLOY]{NC}" if sys.stdout.isatty() else "[DEPLOY]"
-    print(f"{prefix} {time.strftime('%H:%M:%S')} {msg}", file=LOG_STREAM, flush=True)
+    line = f"{prefix} {time.strftime('%H:%M:%S')} {msg}"
+    try:
+        print(line, file=LOG_STREAM, flush=True)
+    except UnicodeEncodeError:
+        encoding = getattr(LOG_STREAM, "encoding", None) or "utf-8"
+        safe_line = line.encode(encoding, errors="replace").decode(encoding)
+        print(safe_line, file=LOG_STREAM, flush=True)
 
 
 def log_info(msg: str) -> None:
@@ -334,11 +359,18 @@ class DeployerEnvironment:
             self._d._tail_logs(service)
             raise DeployError(f"{service} 启动失败")
 
+    def stop_service(self, service: str) -> None:
+        cp = self._d.run(self._d._compose() + ["rm", "-sf", service], check=False)
+        if cp.returncode != 0:
+            raise DeployError(f"{service} 停止失败")
+
     def set_service_image(self, service: str, image: str) -> None:
         setattr(self._d, f"{service}_ref", image)
         self._d.write_env_file()
 
     def verify_running_image(self, service: str, expected: str) -> bool:
+        if expected == "unknown":
+            return not self._d.compose_ps_id(service, include_stopped=False)
         return self._d.assert_running_image(service, expected)
 
     def preflight_migration_check(self, image: str) -> bool:
@@ -375,24 +407,6 @@ class Deployer:
         self.config = EffectiveConfig.load_from_env_defaults(self.deploy_path)
         self.config.derived = {"SMTP_USERNAME": "SMTP_FROM"}
 
-        raw_compose = os.environ.get("COMPOSE_FILE", "")
-        if raw_compose:
-            p = Path(raw_compose)
-            composed = (p if p.is_absolute() else self.deploy_path / p).resolve()
-        else:
-            composed = (self.deploy_path / "deploy" / "docker-compose.prod.yml").resolve()
-        # 兼容旧值 COMPOSE_FILE=docker-compose.prod.yml（文件已迁到 deploy/）：
-        # 服务器上旧根文件可能还在，优先用 deploy/ 下的新文件，避免误用过期路径。
-        if composed.name == "docker-compose.prod.yml" and composed.parent == self.deploy_path:
-            preferred = self.deploy_path / "deploy" / composed.name
-            if preferred.is_file():
-                composed = preferred.resolve()
-        if not composed.is_file():
-            legacy = self.deploy_path / "deploy" / composed.name
-            if legacy.is_file():
-                composed = legacy.resolve()
-        self.compose_file = composed
-
         raw_env = os.environ.get("ENV_FILE", "")
         if raw_env:
             p = Path(raw_env)
@@ -405,6 +419,37 @@ class Deployer:
 
         self.profiles = [p.strip() for p in getenv("COMPOSE_PROFILES").split(",") if p.strip()]
         self.libreoffice_enabled = "full" in self.profiles
+        saved = self._load_saved_topology_environment()
+        topology_environment = dict(saved)
+        cd_environment = bool(os.environ.get("DEPLOY_ENVIRONMENT"))
+        for key, value in os.environ.items():
+            if value or key not in topology_environment or cd_environment:
+                topology_environment[key] = value
+        try:
+            self.topology = resolve_topology(
+                config=self.config,
+                environment=topology_environment,
+                deploy_path=self.deploy_path,
+                profiles=self.profiles,
+            )
+        except ValueError as exc:
+            raise DeployError(str(exc)) from exc
+        self.compose_file = self.topology.database.compose_files[0]
+        self.db_mode = self.topology.database.mode
+        self.fallback_previous_topology = None
+        if mode != "local" and saved.get("DB_MODE") in ("docker", "external"):
+            try:
+                self.fallback_previous_topology = resolve_topology(
+                    config=self.config,
+                    environment=saved,
+                    deploy_path=self.deploy_path,
+                    profiles=self.profiles,
+                ).to_dict()
+            except ValueError:
+                pass
+        self.topology_snapshot_path = snapshot_path_for(self.deploy_path)
+        self.release_plan_path = release_plan_path_for(self.deploy_path)
+
         # 本地模式用仓库目录名当 compose 项目名（对齐旧 deploy.sh 的「按 cwd 命名」行为，
         # 也避免在开发机上和 forklift-training_* 生产卷撞名）。
         self.compose_project_args: List[str] = []
@@ -449,48 +494,69 @@ class Deployer:
         self.db_user = getenv("DB_USER", "forklift")
         self.db_password = getenv("DB_PASSWORD")
         self.db_name = "forklift_training"
-        saved = {}
-        if self.env_file.is_file() and mode != "local":
-            saved = parse_env_text("\n".join(
-                f"export {line}" for line in self.env_file.read_text(encoding="utf-8").splitlines()
-                if line.startswith(("DB_MODE=", "DATABASE_URL=", "POSTGRES_IMAGE=", "PG_VOLUME="))
-            ))
-        self.postgres_image = getenv("POSTGRES_IMAGE") or saved.get("POSTGRES_IMAGE") or "postgres:18-alpine"
-        self.pg_volume = os.environ.get("PG_VOLUME") or saved.get("PG_VOLUME") or getenv("PG_VOLUME", "pgdata-prod")
-        self.db_mode = getenv("DB_MODE") or saved.get("DB_MODE") or "docker"
-        if self.db_mode not in ("docker", "external"):
-            raise DeployError("DB_MODE 必须为 docker 或 external")
+        self.postgres_image = self.topology.postgres_image
+        self.pg_volume = self.topology.pg_volume
         self.external_db_url = ""
-        if self.db_mode == "external":
-            self.external_db_url = os.environ.get("DATABASE_URL", saved.get("DATABASE_URL", ""))
-            try:
-                uri = urlsplit(self.external_db_url)
-                options = parse_qs(uri.query)
-                port = uri.port or 5432
-                valid = (uri.scheme in ("postgresql", "postgres") and uri.hostname
-                         and "," not in uri.hostname and uri.username and uri.password
-                         and uri.path == "/forklift_training"
-                         and set(options) == {"sslmode", "sslrootcert"}
-                         and options.get("sslmode") == ["verify-full"]
-                         and options.get("sslrootcert") == ["/etc/forklift/postgres-ca.crt"])
-            except ValueError:
-                valid = False
-            if not valid:
-                raise DeployError("外部数据库要求 forklift_training、verify-full 和 /etc/forklift/postgres-ca.crt")
-            self.external_pg_settings = {
-                "PGHOST": uri.hostname,
-                "PGPORT": str(port),
-                "PGDATABASE": self.db_name,
-                "PGUSER": unquote(uri.username),
-                "PGPASSWORD": unquote(uri.password),
-                "PGSSLMODE": "verify-full",
-                "PGSSLROOTCERT": "/etc/forklift/postgres-ca.crt",
-                "PGCONNECT_TIMEOUT": "5",
-            }
+        self.external_pg_settings: Dict[str, str] = {}
+        if self.database.mode == "external":
+            self._configure_external_database(
+                os.environ.get("DATABASE_URL") or saved.get("DATABASE_URL", "")
+            )
             if opts.remove_orphans or opts.force_data_services:
                 raise DeployError("外部数据库模式禁止移除孤儿容器或重建数据服务")
             if {"*", "retained-postgres"}.intersection(self.profiles):
                 raise DeployError("外部数据库模式不能启用保留的 PostgreSQL 容器")
+
+    def _load_saved_topology_environment(self) -> Dict[str, str]:
+        if not self.env_file.is_file() or self.mode == "local":
+            return {}
+        return parse_env_text("\n".join(
+            f"export {line}" for line in self.env_file.read_text(encoding="utf-8").splitlines()
+            if line.startswith(("DB_MODE=", "DATABASE_URL=", "POSTGRES_IMAGE=", "PG_VOLUME="))
+        ))
+
+    def _configure_external_database(self, database_url: str) -> None:
+        try:
+            uri = urlsplit(database_url)
+            options = parse_qs(uri.query)
+            port = uri.port or 5432
+            valid = (uri.scheme in ("postgresql", "postgres") and uri.hostname
+                     and "," not in uri.hostname and uri.username and uri.password
+                     and uri.path == "/forklift_training"
+                     and set(options) == {"sslmode", "sslrootcert"}
+                     and options.get("sslmode") == ["verify-full"]
+                     and options.get("sslrootcert") == ["/etc/forklift/postgres-ca.crt"])
+        except ValueError:
+            valid = False
+        if not valid:
+            raise DeployError("外部数据库要求 forklift_training、verify-full 和 /etc/forklift/postgres-ca.crt")
+        self.external_db_url = database_url
+        self.external_pg_settings = {
+            "PGHOST": uri.hostname,
+            "PGPORT": str(port),
+            "PGDATABASE": self.db_name,
+            "PGUSER": unquote(uri.username),
+            "PGPASSWORD": unquote(uri.password),
+            "PGSSLMODE": "verify-full",
+            "PGSSLROOTCERT": "/etc/forklift/postgres-ca.crt",
+            "PGCONNECT_TIMEOUT": "5",
+        }
+
+    @property
+    def database(self):
+        """当前数据库拓扑 adapter；兼容直接构造 Deployer 的旧测试。"""
+        topology = getattr(self, "topology", None)
+        if topology is not None:
+            return topology.database
+        compose = Path(getattr(self, "compose_file", "docker-compose.prod.yml"))
+        files = (compose,)
+        if getattr(self, "db_mode", "docker") == "external":
+            files += (compose.with_name("docker-compose.external-db.yml"),)
+        return database_topology_for_mode(
+            getattr(self, "db_mode", "docker"),
+            files,
+            tuple(getattr(self, "profiles", ())),
+        )
 
     # ---------------------------------------------------------------- 基础
     def _to_proxy(self, image: str) -> str:
@@ -518,8 +584,8 @@ class Deployer:
         if self.env_file.exists():
             cmd += ["--env-file", str(self.env_file)]
         cmd += ["-f", str(self.compose_file)]
-        if self.db_mode == "external":
-            cmd += ["-f", str(self.compose_file.with_name("docker-compose.external-db.yml"))]
+        for compose_file in self.database.compose_files[1:]:
+            cmd += ["-f", str(compose_file)]
         cmd += self.compose_project_args
         for profile in self.profiles:
             cmd += ["--profile", profile]
@@ -646,7 +712,7 @@ class Deployer:
             return
         managed = {line.strip() for line in (ps.stdout or "").splitlines() if line.strip()}
         for name in names & set(KNOWN_CONTAINERS):
-            if name == "forklift-pg-prod" and getattr(self, "db_mode", "docker") == "external":
+            if name == "forklift-pg-prod" and "postgres" not in self.database.data_services:
                 continue
             # docker ps -aq 默认给 12 位短 ID，compose ps -q 给 64 位完整 ID；
             # 直接比较字符串会把本项目容器误判成「另一个 compose 项目」（2026-10-27 实测）。
@@ -687,7 +753,7 @@ class Deployer:
         def add(name: str, value: str) -> None:
             lines.append(f"{name}={value}")
 
-        add("DB_MODE", getattr(self, "db_mode", "docker"))
+        add("DB_MODE", self.database.mode)
         add("POSTGRES_IMAGE", getattr(self, "postgres_image", "postgres:18-alpine"))
         add("DATABASE_URL", env_val(getattr(self, "external_db_url", "") or gv("DATABASE_URL")))
         add("DB_USER", env_val(gv("DB_USER", "forklift")))
@@ -1028,7 +1094,10 @@ class Deployer:
                 continue
             if not self._pull_one(name, image):
                 raise DeployError(f"{name}镜像拉取失败: {image}")
-        for base in (() if self.db_mode == "external" else (self.postgres_image,)):
+        for service in self.database.base_image_services:
+            base = self.postgres_image if service == "postgres" else ""
+            if not base:
+                continue
             if self.image_exists(base):
                 log_ok(f"基础镜像已缓存: {base}")
                 continue
@@ -1040,20 +1109,21 @@ class Deployer:
 
     # ---------------------------------------------------------------- 数据服务
     def plan_data(self) -> List[Decision]:
-        if self.db_mode == "external":
+        services = self.database.data_services
+        if not services:
             return []
-        hashes = self.compose_config_hashes(list(DATA_SERVICES))
-        states = {name: self.service_state(name) for name in DATA_SERVICES}
+        hashes = self.compose_config_hashes(list(services))
+        states = {name: self.service_state(name) for name in services}
         return plan_decisions(
-            {name: "" for name in DATA_SERVICES},
+            {name: "" for name in services},
             states,
             hashes,
-            services=list(DATA_SERVICES),
+            services=list(services),
             force_data=self.opts.force_data_services,
         )
 
     def apply_data(self, decisions: List[Decision]) -> None:
-        if self.db_mode == "external":
+        if not self.database.data_services:
             return
         blocked = [d for d in decisions if d.action == "blocked"]
         if blocked:
@@ -1073,7 +1143,7 @@ class Deployer:
 
     def wait_postgres(self) -> bool:
         log_info(">>> 等待数据库就绪...")
-        if self.db_mode == "external":
+        if self.database.readiness_strategy == "external_query":
             self._db_version()
             log_ok("外部数据库就绪")
             return True
@@ -1102,10 +1172,6 @@ class Deployer:
                 cp = self.run(["docker", "inspect", "-f", "{{.Config.Image}}", cid], check=False, capture=True)
                 value = (cp.stdout or "").strip() or "unknown"
             self.previous_images[service] = value
-        if self.mode != "local":
-            self.backup_dir.mkdir(parents=True, exist_ok=True)
-            lines = "".join(f"PREVIOUS_{k.upper()}_IMAGE={v}\n" for k, v in self.previous_images.items())
-            (self.backup_dir / "last-version.txt").write_text(lines, encoding="utf-8")
 
     def _backup_once(self) -> None:
         try:
@@ -1121,8 +1187,8 @@ class Deployer:
         db_file = self.backup_dir / f"db_backup_{stamp}.sql.gz"
         self.backup_dir.mkdir(parents=True, exist_ok=True)
 
-        pg_id = "" if self.db_mode == "external" else self.compose_ps_id("postgres")
-        if self.db_mode == "external":
+        pg_id = "" if self.database.backup.strategy == "external_pg_dump" else self.compose_ps_id("postgres")
+        if self.database.backup.strategy == "external_pg_dump":
             self._backup_external_db(db_file)
         elif pg_id:
             log_info("备份数据库（pg_dump + gzip）...")
@@ -1242,7 +1308,7 @@ class Deployer:
         return f"postgres://{user}:{password}@localhost:5432/{self.db_name}?sslmode=disable"
 
     def _db_version(self) -> int:
-        if self.db_mode == "external":
+        if self.database.readiness_strategy == "external_query":
             state = self._external_pg("psql", ["-XAt", "-c",
                 "SELECT version, dirty FROM schema_migrations LIMIT 2"], 10)
             match = re.fullmatch(r"(\d+)\|([tf])", state.strip())
@@ -1270,7 +1336,7 @@ class Deployer:
         log_info(f">>> 迁移兼容性预检: {image}")
         img_max = self._image_max_migration(image)
         if img_max is None:
-            if self.db_mode == "external":
+            if self.database.migration.require_image_metadata:
                 log_error("无法读取镜像迁移版本，拒绝对外部数据库部署")
                 return False
             log_warn(f"本地无镜像 {image}，无法读取迁移版本，跳过预检")
@@ -1294,7 +1360,7 @@ class Deployer:
 
     def fix_dirty_state(self) -> None:
         log_info(">>> 检查数据库迁移状态...")
-        if self.db_mode == "external":
+        if self.database.migration.dirty_state_strategy == "reject":
             self._db_version()
             return
         pg_id = self.compose_ps_id("postgres")
@@ -1333,7 +1399,7 @@ class Deployer:
             log_info(">>> 跳过数据库迁移（SKIP_MIGRATION / --skip-migrate）")
             return True
         log_info(">>> 执行数据库迁移...")
-        if self.db_mode == "external":
+        if self.database.migration.entrypoint == "compose_run":
             self._db_version()
             cp = self.run(self._compose() + [
                 "run", "-T", "--rm", "--no-deps", "--entrypoint", "/app/bin/migrate",
@@ -1508,6 +1574,28 @@ class Deployer:
                 self.run(["docker", "image", "rm", "-f", parts[1]], check=False, capture=True)
         log_ok("旧镜像清理完成")
 
+    # ---------------------------------------------------------------- 拓扑快照
+    def publish_topology_snapshot(self) -> None:
+        if not self.topology.release_id:
+            raise DeployError("缺少发布标识（IMAGE_TAG / GITHUB_SHA / RELEASE_ID），拒绝发布拓扑快照")
+        try:
+            write_topology_snapshot(self.topology_snapshot_path, self.topology)
+        except (OSError, TopologySnapshotError) as exc:
+            raise DeployError(f"发布拓扑快照失败: {exc}") from exc
+        log_ok(f"拓扑快照已发布: {self.topology_snapshot_path}")
+
+    def check_topology_snapshot(self) -> Dict[str, object]:
+        expected = self.topology.release_id or None
+        try:
+            snapshot = read_topology_snapshot(
+                self.topology_snapshot_path,
+                expected_release_id=expected,
+            )
+        except TopologySnapshotError as exc:
+            raise DeployError(str(exc)) from exc
+        log_ok(f"拓扑快照校验通过: {self.topology_snapshot_path}")
+        return snapshot
+
     # ---------------------------------------------------------------- 部署主流程
     def print_plan(self, json_output: bool = False) -> None:
         data_decisions = self.plan_data()
@@ -1517,7 +1605,9 @@ class Deployer:
             payload = {
                 "mode": self.mode,
                 "deploy_path": str(self.deploy_path),
+                "release_id": self.topology.release_id,
                 "compose_file": str(self.compose_file),
+                "topology": self.topology.to_dict(),
                 "images": {
                     "backend": self.backend_ref,
                     "frontend": self.frontend_ref,
@@ -1539,6 +1629,8 @@ class Deployer:
             label = {"skip": "跳过", "start": "启动", "create": "创建", "recreate": "重建", "blocked": "阻止"}[d.action]
             print(f"{d.service:<12}{label:<8}{d.reason}")
         print("-" * 72)
+        print(f"数据库模式: {self.database.mode}")
+        print(f"发布标识: {self.topology.release_id or '(未提供)'}")
         print(f"数据库迁移: {'需要' if migration else '不需要（已是最新版本）'}")
         print(f"镜像: backend={self.backend_ref or '(本地构建)'} frontend={self.frontend_ref or '(本地构建)'}")
 
@@ -1560,7 +1652,7 @@ class Deployer:
         self.capture_previous_images()
 
         backup_thread: Optional[threading.Thread] = None
-        if self.mode != "local" and not self.skip_backup and self.db_mode != "external":
+        if self.mode != "local" and not self.skip_backup and not self.database.backup.synchronous:
             backup_thread = threading.Thread(target=self._backup_once, name="deploy-backup", daemon=True)
             backup_thread.start()
 
@@ -1571,7 +1663,7 @@ class Deployer:
             data_decisions = self.plan_data()
             self.apply_data(data_decisions)
             self.wait_postgres()
-            if self.db_mode == "external" and not self.skip_backup:
+            if self.database.backup.synchronous and not self.skip_backup:
                 self._create_backup()
 
             if not self.preflight_migration_check(self.backend_ref):
@@ -1597,22 +1689,49 @@ class Deployer:
                 log_info(f"计划 {d.service}: {label}（{d.reason}）")
 
             env = DeployerEnvironment(self)
-            plan = build_release_plan(
-                env=env,
-                desired_images=self.desired_app_images(),
-                decisions=app_decisions,
-                migration_needed=self.migration_needed(self.backend_ref),
-            )
-            txn = ReleaseTransaction(plan, env)
+            if self.mode == "local":
+                plan = build_release_plan(
+                    env=env,
+                    desired_images=self.desired_app_images(),
+                    decisions=app_decisions,
+                    migration_needed=self.migration_needed(self.backend_ref),
+                )
+            else:
+                try:
+                    plan = create_release_plan(
+                        env=env,
+                        desired_images=self.desired_app_images(),
+                        decisions=app_decisions,
+                        migration_needed=self.migration_needed(self.backend_ref),
+                        migration_preflight_verified=True,
+                        release_id=self.topology.release_id,
+                        topology=self.topology,
+                        path=self.release_plan_path,
+                        last_version_path=self.backup_dir / "last-version.txt",
+                        previous_images=self.previous_images,
+                        fallback_previous_topology=self.fallback_previous_topology,
+                    )
+                except ReleasePlanError as exc:
+                    raise DeployError(str(exc)) from exc
+                current_plan = plan
+
+                def persist_progress(applied):
+                    nonlocal current_plan
+                    current_plan = persist_applied_services(self.release_plan_path, current_plan, applied)
+
+                txn = ReleaseTransaction(plan, env, on_applied=persist_progress)
+            if self.mode == "local":
+                txn = ReleaseTransaction(plan, env)
             txn.backup_error = self.backup_error
             txn.execute()
             txn.verify()
-        except (DeployError, RuntimeError):
+            self.publish_topology_snapshot()
+        except (DeployError, RuntimeError, ReleasePlanError):
             # 只有真的动过应用容器才回滚；镜像拉取/迁移阶段失败时线上版本没变，不需要回滚。
-            if txn and txn.applied_services and (self.backup_dir / "last-version.txt").is_file():
+            if txn and txn.applied_services:
                 log_warn("部署失败，尝试回滚已变更的服务...")
                 try:
-                    txn.rollback()
+                    self.rollback_transaction(txn)
                 except Exception as exc:  # noqa: BLE001 — 回滚失败也要保留原始失败
                     log_error(f"自动回滚失败: {exc}")
             raise
@@ -1625,17 +1744,6 @@ class Deployer:
         log_ok("部署完成!")
 
     # ---------------------------------------------------------------- 回滚
-    def _read_last_version(self) -> Dict[str, str]:
-        path = self.backup_dir / "last-version.txt"
-        if not path.is_file():
-            raise DeployError(f"未找到备份文件，无法回滚: {path}")
-        out: Dict[str, str] = {}
-        for line in path.read_text(encoding="utf-8").splitlines():
-            if "=" in line:
-                k, v = line.split("=", 1)
-                out[k.strip()] = v.strip()
-        return out
-
     def assert_running_image(self, service: str, expected: str) -> bool:
         cid = self.compose_ps_id(service, include_stopped=False)
         if not cid:
@@ -1649,71 +1757,80 @@ class Deployer:
         log_ok(f"回滚自证通过：{service} = {actual}")
         return True
 
+    def restore_previous_topology(self, plan: ReleasePlan) -> None:
+        """从已校验计划恢复 previous 拓扑；任何不一致都拒绝触碰数据服务。"""
+        if plan.previous_release_id is None:
+            return
+        try:
+            previous = _validate_snapshot(
+                plan.previous_topology,
+                expected_release_id=plan.previous_release_id,
+            )
+            database = database_topology_for_mode(
+                previous["database_mode"],
+                tuple(Path(item) for item in previous["compose_files"]),
+                tuple(self.profiles),
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise DeployError(f"恢复 previous 拓扑失败: {exc}") from exc
+        if database.mode == "external":
+            saved = self._load_saved_topology_environment()
+            self._configure_external_database(
+                os.environ.get("DATABASE_URL") or saved.get("DATABASE_URL", "")
+            )
+        else:
+            self.external_db_url = ""
+            self.external_pg_settings = {}
+        # recreate 也必须使用 previous 计划的 compose 组合，不能借当前 desired 拓扑。
+        self.topology = replace(
+            self.topology,
+            release_id=previous["release_id"],
+            database=database,
+            postgres_image=previous["postgres_image"],
+            pg_volume=previous["pg_volume"],
+        )
+        self.compose_file = database.compose_files[0]
+        self.db_mode = database.mode
+        self.postgres_image = previous["postgres_image"]
+        self.pg_volume = previous["pg_volume"]
+
+    def rollback_transaction(self, txn: ReleaseTransaction) -> None:
+        """自动与手工回滚唯一编排：transaction 反转 + previous 拓扑/计划发布。"""
+        self.restore_previous_topology(txn.plan)
+        try:
+            txn.rollback()
+        except RuntimeError as exc:
+            raise DeployError(str(exc)) from exc
+        if txn.plan.previous_release_id is None:
+            return
+        try:
+            self.publish_topology_snapshot()
+            rollback_plan(txn.plan, self.release_plan_path, self.backup_dir / "last-version.txt")
+        except (ReleasePlanError, TopologySnapshotError, OSError, KeyError, TypeError) as exc:
+            raise DeployError(f"发布回滚后的拓扑与计划失败: {exc}") from exc
+        log_ok(f"回滚成功，当前发布标识: {self.topology.release_id}")
+
     def do_rollback(self) -> None:
         log_warn(">>> 执行回滚操作...")
-        previous = self._read_last_version()
-
+        try:
+            plan = load_release_plan(self.release_plan_path)
+        except ReleasePlanError as exc:
+            raise DeployError(str(exc)) from exc
+        self.restore_previous_topology(plan)
         self.apply_data(self.plan_data())
         self.wait_postgres()
-
-        # 回滚所有有变更的应用服务（含 libreoffice），只动 tag 变化的服务（ADR-0088 决策 6）
-        changed_services = []
-        for service in self.desired_app_images():
-            prev_key = f"PREVIOUS_{service.upper()}_IMAGE"
-            prev_image = previous.get(prev_key, "unknown")
-            prev_tag = rollback_tag(prev_image)
-            cur_ref = self.desired_app_images().get(service, "")
-            cur_tag = rollback_tag(cur_ref)
-
-            if not prev_tag:
-                log_warn(f"无{service}历史版本，跳过{service}回滚")
-                continue
-
-            base = _strip_tag(cur_ref) or _strip_tag(getattr(self, f"{service}_ref_orig", ""))
-            if not base or prev_tag == cur_tag:
-                log_ok(f"{service}已是历史版本 tag={prev_tag}，无需重建")
-                continue
-
-            # 后端特殊：迁移预检不过则保持当前版本（避免回滚到会崩溃循环的镜像）
-            if service == "backend":
-                candidate = f"{base}:{prev_tag}"
-                if not self.preflight_migration_check(candidate):
-                    log_error(f"拒绝回滚后端到 {candidate}（迁移版本落后数据库，会崩溃循环）")
-                    log_error(f"保持当前后端镜像: {cur_ref}")
-                    continue
-
-            setattr(self, f"tag_{service}", prev_tag)
-            setattr(self, f"{service}_ref", f"{base}:{prev_tag}")
-            log_info(f"回滚{service}到: {base}:{prev_tag}")
-            changed_services.append(service)
-
-        self.write_env_file()
-
-        for service in changed_services:
-            args = ["up", "-d", "--force-recreate", service]
-            log_info(f">>> 回滚重建 {service}")
-            cp = self.run(self._compose() + args, check=False)
-            if cp.returncode != 0:
-                self._tail_logs(service)
-                raise DeployError(f"{service} 回滚失败")
-
-        for service in changed_services:
-            expected = getattr(self, f"{service}_ref", "")
-            if not self.assert_running_image(service, expected):
-                raise DeployError(f"{service}回滚自证失败：.env 已写 tag，但运行容器不是该镜像")
-
-        self.health_check()
-        log_ok("回滚成功")
-        if self.db_mode == "external":
-            log_info("如需恢复外部数据库，请按 PostgreSQL 19 恢复流程操作")
+        txn = ReleaseTransaction.restore(plan, DeployerEnvironment(self))
+        self.rollback_transaction(txn)
+        if not self.database.supports_full_down:
+            log_info("数据库恢复仍是独立 runbook；外部 PostgreSQL 请显式执行恢复流程")
             return
-        log_info("如需恢复数据库，可执行：")
+        log_info("数据库恢复仍是独立 runbook，可显式执行：")
         log_info(f"  gunzip -c {self.backup_dir}/db_backup_*.sql.gz | docker exec -i $(docker compose -f {self.compose_file} ps -q postgres) "
                  f"psql -U {self.db_user} -d {self.db_name}")
 
     # ---------------------------------------------------------------- down
     def compose_down(self) -> None:
-        if self.db_mode == "external":
+        if not self.database.supports_full_down:
             raise DeployError("外部数据库模式不支持整栈 down，请显式停止需要维护的应用服务")
         self.run(self._compose() + ["down"])
         log_ok("容器已停止（命名卷保留）")
@@ -1766,9 +1883,13 @@ def _parser() -> argparse.ArgumentParser:
     )
     p.add_argument("mode", nargs="?", default="deploy",
                    help="deploy（默认）/ rollback / local / down / plan / production（deploy 别名）")
-    p.add_argument("--rollback", action="store_true", help="回滚到 backups/last-version.txt")
+    p.add_argument("--rollback", action="store_true", help="从版本化发布计划恢复并回滚应用")
     p.add_argument("--plan", "--dry-run", dest="plan", action="store_true",
                    help="只打印变更计划，不重建运行中的容器")
+    p.add_argument("--topology", action="store_true",
+                   help="只读输出当前部署拓扑 JSON（不碰 docker）")
+    p.add_argument("--check-topology-snapshot", action="store_true",
+                   help="只读校验拓扑快照与当前发布标识（缺失/损坏/不匹配即失败）")
     p.add_argument("--json", action="store_true", help="--plan 输出 JSON（stdout 只有 JSON）")
     p.add_argument("--force", action="store_true", help="重建全部应用服务（不含数据服务）")
     p.add_argument("--force-data-services", action="store_true", help="允许重建 postgres（危险）")
@@ -1825,7 +1946,26 @@ def main(argv: Optional[List[str]] = None) -> int:
         LOG_STREAM = sys.stderr
 
     try:
+        if args.check_topology_snapshot:
+            deploy_path = Path(os.environ.get("DEPLOY_PATH", str(REPO_ROOT))).resolve()
+            expected = resolve_release_id(os.environ) or None
+            try:
+                snapshot = read_topology_snapshot(
+                    snapshot_path_for(deploy_path),
+                    expected_release_id=expected,
+                )
+            except TopologySnapshotError as exc:
+                raise DeployError(str(exc)) from exc
+            if args.json:
+                print(json.dumps(snapshot, ensure_ascii=False, indent=2))
+            else:
+                log_ok(f"拓扑快照校验通过: {snapshot_path_for(deploy_path)}")
+            return 0
+
         deployer = Deployer(mode, args)
+        if args.topology:
+            print(json.dumps(deployer.topology.to_dict(), ensure_ascii=False, indent=2))
+            return 0
         if args.plan:
             deployer.print_plan(json_output=args.json)
             return 0

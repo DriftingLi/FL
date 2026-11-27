@@ -72,6 +72,9 @@ func NewMemoryDB(t *testing.T) *gorm.DB {
 	applyCriticalUniqueIndexes(t, db)
 	applyTutorRoleChain(t, db)
 	applyPublicEligibilityViews(t, db)
+	if err := db.Exec(migrations.PublicStateViews).Error; err != nil {
+		t.Fatalf("测试库补建员工端公开状态视图失败: %v", err)
+	}
 	return db
 }
 
@@ -99,6 +102,9 @@ func NewFileDB(t *testing.T) *gorm.DB {
 	applyCriticalUniqueIndexes(t, db)
 	applyTutorRoleChain(t, db)
 	applyPublicEligibilityViews(t, db)
+	if err := db.Exec(migrations.PublicStateViews).Error; err != nil {
+		t.Fatalf("测试库补建员工端公开状态视图失败: %v", err)
+	}
 	return db
 }
 

@@ -8,6 +8,9 @@ import { authApi } from '@/api/auth'
 import { adminApi } from '@/api/admin'
 import { tutorApi } from '@/api/tutor'
 import { useAuthStore } from '@/stores/auth'
+import { createDynamicCapabilityLoad } from '@/stores/dynamicCapabilityLoad'
+import * as authzRuntime from '@/utils/authzRuntime'
+import { resolveGuardDecision, type GuardInput, type GuardState } from '@/router/guard'
 
 vi.mock('@/api/auth', () => ({
   authApi: { getUserInfo: vi.fn(), logout: vi.fn() }
@@ -202,5 +205,154 @@ describe('讲师端能力集拉取（#2600 / 规格 F2）', () => {
     expect(store.capabilities).toEqual([])
     expect(store.capabilityState).toBe('failed')
     expect(store.capabilitiesSettled).toBe(true)
+  })
+})
+
+describe('动态角色判定的单一入口', () => {
+  it('能力装载器按 authzRuntime 的判定选择 adapter，不维护第二份角色判定', async () => {
+    const isDynamicRole = vi.spyOn(authzRuntime, 'isDynamicRole').mockReturnValue(true)
+    try {
+      const admin = vi.fn().mockResolvedValue({ capabilities: ['admin.access'] })
+      const tutor = vi.fn().mockResolvedValue({ capabilities: ['tutor.access'] })
+      const loader = createDynamicCapabilityLoad({ admin, tutor })
+
+      loader.setIdentity({ key: 'custom-role', role: 'custom_dynamic_role' })
+      await loader.load()
+
+      expect(isDynamicRole).toHaveBeenCalledWith('custom_dynamic_role')
+      expect(admin).toHaveBeenCalledTimes(1)
+      expect(tutor).not.toHaveBeenCalled()
+      expect(loader.capabilities.value).toEqual(['admin.access'])
+    } finally {
+      isDynamicRole.mockRestore()
+    }
+  })
+})
+
+describe('动态能力装载：真实 auth store → router guard 组合（spec #2920 切片 4）', () => {
+  const adminDashboard: GuardInput = {
+    path: '/admin/dashboard',
+    fullPath: '/admin/dashboard',
+    name: 'AdminDashboard',
+    meta: { requiresAuth: true, workspace: 'manage', role: 'admin', capability: 'admin.access' },
+    matched: [{ requiresAuth: true, workspace: 'manage', role: 'admin', capability: 'admin.access' }]
+  }
+
+  function stateFromStore(store: ReturnType<typeof useAuthStore>, role: 'admin' | 'tutor'): GuardState {
+    return {
+      isLoggedIn: store.isLoggedIn,
+      role: store.userInfo?.role ?? '',
+      hasValidToken: !!(store.token && store.isLoggedIn && store.userInfo?.role),
+      subdomain: role,
+      ipDirect: true,
+      capabilities: store.capabilities,
+      capabilitiesSettled: store.capabilitiesSettled
+    }
+  }
+
+  it('loading 不判权：守卫只消费 store 的落定标志并等待装载', async () => {
+    getUserInfo.mockResolvedValue({ pending_fields: [], account: 'admin1', role: 'admin', user_id: 1, username: 'admin1' })
+    fetchMyCapabilities.mockImplementationOnce(() => new Promise(() => {}) as never)
+
+    const store = useAuthStore()
+    store.setAuthData({ token: 't-admin', role: 'admin', account: 'admin1', user_id: 1 } as never)
+
+    expect(store.capabilityState).toBe('loading')
+    expect(resolveGuardDecision(adminDashboard, stateFromStore(store, 'admin'))).toEqual({
+      action: 'load-capabilities'
+    })
+  })
+
+  it('failed 显式重试成功后重新判定落点，而不是停留在无权限页', async () => {
+    getUserInfo.mockResolvedValue({ pending_fields: [], account: 'admin1', role: 'admin', user_id: 1, username: 'admin1' })
+    fetchMyCapabilities
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockResolvedValueOnce({ capabilities: ['audit.read'], granted: true })
+
+    const store = useAuthStore()
+    store.setAuthData({ token: 't-admin', role: 'admin', account: 'admin1', user_id: 1 } as never)
+    await flushPromises()
+
+    expect(store.capabilityState).toBe('failed')
+    expect(resolveGuardDecision(adminDashboard, stateFromStore(store, 'admin'))).toEqual({
+      action: 'redirect',
+      to: { name: 'AdminNoAccess' }
+    })
+
+    await store.loadCapabilities()
+
+    expect(store.capabilityState).toBe('ready')
+    expect(resolveGuardDecision(adminDashboard, stateFromStore(store, 'admin'))).toEqual({
+      action: 'redirect',
+      to: { name: 'AuditLogs' }
+    })
+  })
+
+  it('并发进入受保护页面复用同一次在途装载', async () => {
+    getUserInfo.mockResolvedValue({ pending_fields: [], account: 'admin1', role: 'admin', user_id: 1, username: 'admin1' })
+    let resolveCaps: (value: unknown) => void = () => {}
+    fetchMyCapabilities.mockImplementationOnce(
+      () => new Promise(resolve => { resolveCaps = resolve }) as never
+    )
+
+    const store = useAuthStore()
+    store.setAuthData({ token: 't-admin', role: 'admin', account: 'admin1', user_id: 1 } as never)
+    const first = store.loadCapabilities()
+    const second = store.loadCapabilities()
+    resolveCaps({ capabilities: ['admin.access'], granted: true })
+    await Promise.all([first, second])
+
+    expect(fetchMyCapabilities).toHaveBeenCalledTimes(1)
+    expect(resolveGuardDecision(adminDashboard, stateFromStore(store, 'admin'))).toEqual({ action: 'allow' })
+  })
+
+  it('讲师复用同一装载协议：loading 等待，落定后守卫按讲师能力放行', async () => {
+    getUserInfo.mockResolvedValue({ pending_fields: [], account: 'tutor1', role: 'tutor', user_id: 9, username: 'tutor1' })
+    let resolveCaps: (value: unknown) => void = () => {}
+    fetchTutorCapabilities.mockImplementationOnce(
+      () => new Promise(resolve => { resolveCaps = resolve }) as never
+    )
+    const tutorDashboard: GuardInput = {
+      path: '/training/tutor',
+      fullPath: '/training/tutor',
+      name: 'TutorDashboard',
+      meta: { requiresAuth: true, workspace: 'tutor', role: 'tutor', capability: 'tutor.access' },
+      matched: [{ requiresAuth: true, workspace: 'tutor', role: 'tutor', capability: 'tutor.access' }]
+    }
+
+    const store = useAuthStore()
+    store.setAuthData({ token: 't-tutor', role: 'tutor', account: 'tutor1', user_id: 9 } as never)
+
+    expect(resolveGuardDecision(tutorDashboard, stateFromStore(store, 'tutor'))).toEqual({
+      action: 'load-capabilities'
+    })
+    resolveCaps({ capabilities: ['tutor.access'], granted: true })
+    await flushPromises()
+
+    expect(fetchMyCapabilities).not.toHaveBeenCalled()
+    expect(resolveGuardDecision(tutorDashboard, stateFromStore(store, 'tutor'))).toEqual({ action: 'allow' })
+  })
+
+  it('identity key 变化立即使旧在途请求失效，旧结果不得写入新账号', async () => {
+    getUserInfo.mockResolvedValue({ pending_fields: [], account: 'admin2', role: 'admin', user_id: 2, username: 'admin2' })
+    let resolveOldCaps: (value: unknown) => void = () => {}
+    fetchMyCapabilities
+      .mockImplementationOnce(() => new Promise(resolve => { resolveOldCaps = resolve }) as never)
+      .mockResolvedValueOnce({ capabilities: ['admin.access'], granted: true })
+
+    const store = useAuthStore()
+    store.setAuthData({ token: 't-admin-1', role: 'admin', account: 'admin1', user_id: 1 } as never)
+    await flushPromises()
+    expect(store.userInfo.user_id).toBe(2)
+
+    resolveOldCaps({ capabilities: ['audit.read'], granted: true })
+    await flushPromises()
+
+    expect(store.capabilities).toEqual([])
+    expect(store.capabilityState).toBe('idle')
+
+    await store.loadCapabilities()
+    expect(fetchMyCapabilities).toHaveBeenCalledTimes(2)
+    expect(store.capabilities).toEqual(['admin.access'])
   })
 })

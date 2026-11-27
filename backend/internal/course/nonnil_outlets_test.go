@@ -28,6 +28,7 @@ import (
 // internal/apitypes/nullability_lock_test.go 的 nonNilEvidenceSources）。
 var nonnilOutletsCourse = map[string]func(t *testing.T) any{
 	"course.CoursePageResult.courses":          outletCoursePageNoCourses,
+	"course.CourseFacets.categories":           outletAdminCourseFacetsEmpty,
 	"course.AdminCourseDetailDTO.chapters":     outletAdminCourseDetailNoChapters,
 	"course.CourseDTO.prerequisites":           outletAdminCourseDetailMeta,
 	"course.CourseDTO.prerequisite_course_ids": outletAdminCourseDetailMeta,
@@ -52,6 +53,16 @@ var nonnilOutletsCourse = map[string]func(t *testing.T) any{
 	// 空 map（JSON `{}`，不是 null）——前端模板与 open-school 的 range 都直接消费。
 	"course.PublicQuestionBankListDTO.question_banks": outletPublicQuestionBanksEmpty,
 	"course.PublicQuestionBankCategoryDTO.by_type":    outletPublicQuestionBanksAggregated,
+}
+
+// outletAdminCourseFacetsEmpty 空库管理端列表：facet 分类数组发 `[]` 而不是 null。
+func outletAdminCourseFacetsEmpty(t *testing.T) any {
+	t.Helper()
+	facets, err := loadAdminCourseFacets(testutil.NewMemoryDB(t))
+	if err != nil {
+		t.Fatalf("空库加载课程 facets 失败: %v", err)
+	}
+	return facets
 }
 
 // outletPublicQuestionBanksEmpty 空库拉题库目录：question_banks 发 `[]` 而不是 null。

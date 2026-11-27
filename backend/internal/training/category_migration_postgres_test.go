@@ -39,6 +39,9 @@ func TestTrainingCategoryMigrationOnPostgres(t *testing.T) {
 
 	const categoryMigration = "000069_training_category"
 	const publicationMigration = "000070_training_course_publication"
+	if err := db.Exec(migrations.DropPublicStateViews).Error; err != nil {
+		t.Fatalf("migration 000077 public state down: %v", err)
+	}
 	if err := db.Exec(migrations.DropPublicEligibilityViews).Error; err != nil {
 		t.Fatalf("migration 000076 public eligibility down: %v", err)
 	}

@@ -190,7 +190,7 @@ func TestAdminCourseListHasChapterCountAndPrereqIDs(t *testing.T) {
 	svc := NewAdminService(db, nil, notification.NewService(db, zap.NewNop()), zap.NewNop())
 	course, prereq := seedCatalogCourse(t, db)
 
-	list, err := svc.GetCourses(1, 10, "", nil, nil, nil, scope.CategoryFilter{}, "")
+	list, err := svc.GetCourses(1, 10, "", nil, nil, nil, scope.CategoryFilter{}, "", nil)
 	if err != nil {
 		t.Fatalf("GetCourses 失败: %v", err)
 	}

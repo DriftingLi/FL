@@ -17,10 +17,10 @@ func fillQuestionPublicStates(db *gorm.DB, items []QuestionDTO) error {
 		return err
 	}
 	for i := range items {
-		if state, ok := states[items[i].ID]; ok {
-			items[i].Category = state.Category
-			items[i].PublicEligibility = &state.Eligibility
-		}
+		state := states[items[i].ID]
+		items[i].Category = state.Category
+		items[i].PublicEligibility = &state.Eligibility
+		items[i].PublicState = &state
 	}
 	return nil
 }

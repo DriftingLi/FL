@@ -61,7 +61,12 @@ beforeEach(() => {
     created_by_type: 'tutor',
     credential_id: 3,
     category: { id: 11, name: '叉车安全', status: 1 },
-    public_eligibility: { eligible: true, reasons: [] },
+    public_state: {
+      category: { id: 11, name: '叉车安全', status: 1 },
+      public_visibility: true,
+      eligibility: { eligible: true, reasons: [] }
+    },
+    public_eligibility: { eligible: false, reasons: ['manually_hidden'] },
     created_at: '2026-08-31T10:00:00Z',
     updated_at: '2026-08-31T10:00:00Z',
   }
@@ -199,10 +204,15 @@ describe('创建者列与「只看我创建的」（#2598）', () => {
     mockRows([questionRow({
       category: { id: 11, name: '叉车安全', status: 1 },
       status: 'published',
-      public_eligibility: {
-        eligible: false,
-        reasons: ['category_disabled', 'credential_disabled']
-      }
+      public_state: {
+        category: { id: 11, name: '叉车安全', status: 1 },
+        public_visibility: true,
+        eligibility: {
+          eligible: false,
+          reasons: ['category_disabled', 'credential_disabled']
+        }
+      },
+      public_eligibility: { eligible: true, reasons: [] }
     })])
     const wrapper = mountPage()
     await flushPromises()
@@ -221,7 +231,10 @@ describe('创建者列与「只看我创建的」（#2598）', () => {
   it('来源标签排除显示为未公开，即使题目已审核发布', async () => {
     mockRows([questionRow({
       status: 'published',
-      public_eligibility: { eligible: false, reasons: ['source_tag_excluded'] }
+      public_state: {
+        public_visibility: true,
+        eligibility: { eligible: false, reasons: ['source_tag_excluded'] }
+      }
     })])
     const wrapper = mountPage()
     await flushPromises()
@@ -235,9 +248,13 @@ describe('创建者列与「只看我创建的」（#2598）', () => {
     mockRows([questionRow({
       category: { id: 11, name: '叉车安全', status: 1 },
       status: 'published',
-      public_eligibility: {
-        eligible: false,
-        reasons: ['category_unmapped', 'credential_missing']
+      public_state: {
+        category: { id: 11, name: '叉车安全', status: 1 },
+        public_visibility: true,
+        eligibility: {
+          eligible: false,
+          reasons: ['category_unmapped', 'credential_missing']
+        }
       }
     })])
     const wrapper = mountPage()
@@ -257,7 +274,10 @@ describe('创建者列与「只看我创建的」（#2598）', () => {
   it('无 canonical 分类的题目回显到遗留桶文案', async () => {
     mockRows([questionRow({
       category: undefined,
-      public_eligibility: { eligible: false, reasons: ['category_missing'] }
+      public_state: {
+        public_visibility: true,
+        eligibility: { eligible: false, reasons: ['category_missing'] }
+      }
     })])
     const wrapper = mountPage()
     await flushPromises()

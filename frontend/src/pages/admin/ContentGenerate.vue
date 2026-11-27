@@ -160,7 +160,7 @@ async function loadCourses() {
   try {
     const data = await adminApi.getCourses({ page: 1, page_size: 100 })
     if (data) {
-      courses.value = data.courses
+      courses.value = data.items
     }
   } catch (error) {
     console.error('加载课程失败:', error)
