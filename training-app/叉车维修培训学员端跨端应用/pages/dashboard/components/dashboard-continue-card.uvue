@@ -54,16 +54,16 @@
     .section-title {
         font-size: 32rpx;
         font-weight: bold;
-        color: #333333;
+        color: $text-color;
     }
 
     .section-more {
         font-size: 24rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .continue-card {
-        background-color: #ffffff;
+        background-color: $card-bg;
         border-radius: 16rpx;
         padding: 24rpx;
         flex-direction: row;
@@ -78,13 +78,13 @@
     .continue-course-name {
         font-size: 30rpx;
         font-weight: bold;
-        color: #333333;
+        color: $text-color;
         margin-bottom: 8rpx;
     }
 
     .continue-chapter {
         font-size: 24rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         margin-bottom: 16rpx;
     }
 

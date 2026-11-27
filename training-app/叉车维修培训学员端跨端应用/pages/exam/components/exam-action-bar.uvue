@@ -79,11 +79,11 @@
     .action-btn-text {
         font-size: 30rpx;
         font-weight: bold;
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 
     .action-btn-text-secondary {
-        color: #666666;
+        color: $text-color-secondary;
     }
 
     .action-btn-disabled {
@@ -106,6 +106,6 @@
     .submit-btn-text {
         font-size: 32rpx;
         font-weight: bold;
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 </style>

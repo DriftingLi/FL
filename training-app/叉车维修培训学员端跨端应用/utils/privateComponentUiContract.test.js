@@ -139,9 +139,11 @@ describe('页面私有子件层契约 · 真实树（#2866 落地实测）', () 
   });
 
   test('基线数据卫生：排序、整数 ≥1、路径合法、键 ⊆ 扫描面（禁手抄漂移）', () => {
+    // #2918：私有子件层违规已归零 ⇒ 基线文件就是 {}（棘轮终态）。「键数 > 0」不再是卫生条件——
+    // 清零的基线由下一条「两向棘轮」兜底（实测有违规而基线缺键 ⇒ increases 非空判红），
+    // 拿非空当护栏恰恰会让「全层归零」这件本票目标无法合入。
     const keys = Object.keys(BASELINE);
     expect(keys).toEqual([...keys].sort());
-    expect(keys.length).toBeGreaterThan(0);
     for (const [rel, count] of Object.entries(BASELINE)) {
       expect(rel).toMatch(scan.PRIVATE_REL_RE);
       expect(Number.isInteger(count) && count >= 1).toBe(true);

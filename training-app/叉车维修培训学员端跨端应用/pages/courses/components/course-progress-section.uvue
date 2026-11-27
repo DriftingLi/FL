@@ -29,7 +29,7 @@
 <style lang="scss">
     /* ===== 学习进度 ===== */
     .progress-section {
-        background-color: #ffffff;
+        background-color: $card-bg;
         padding: 20rpx 32rpx 24rpx;
         border-top: 1rpx solid $bg-color;
         flex-direction: column;
@@ -44,7 +44,7 @@
 
     .progress-label {
         font-size: 26rpx;
-        color: #666666;
+        color: $text-color-secondary;
     }
 
     .progress-percent {
@@ -55,7 +55,7 @@
 
     .progress-bar-wrap {
         height: 12rpx;
-        background-color: #e8eaec;
+        background-color: $border-color-light;
         border-radius: 6rpx;
         overflow: hidden;
     }
@@ -68,7 +68,7 @@
 
     .progress-detail {
         font-size: 22rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         margin-top: 8rpx;
     }
 </style>

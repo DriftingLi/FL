@@ -52,7 +52,7 @@
     /* 上/下章导航 */
     .chapter-nav {
         flex-direction: row;
-        background-color: #ffffff;
+        background-color: $card-bg;
         margin-top: 16rpx;
         padding: 24rpx 32rpx;
     }
@@ -96,13 +96,13 @@
 
     .nav-label {
         font-size: 22rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         margin-bottom: 4rpx;
     }
 
     .nav-title {
         font-size: 26rpx;
-        color: #333333;
+        color: $text-color;
         lines: 1;
         text-overflow: ellipsis;
         max-width: 220rpx;
@@ -110,6 +110,6 @@
 
     .nav-title-muted {
         font-size: 26rpx;
-        color: #cccccc;
+        color: $text-disabled;
     }
 </style>

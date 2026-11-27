@@ -129,7 +129,7 @@
 
 <style lang="scss">
     .material-panel {
-        background-color: #ffffff;
+        background-color: $card-bg;
         flex-direction: column;
     }
 
@@ -170,14 +170,14 @@
     .material-title {
         font-size: 28rpx;
         font-weight: 500;
-        color: #333333;
+        color: $text-color;
         lines: 2;
         text-overflow: ellipsis;
     }
 
     .material-meta {
         font-size: 22rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         margin-top: 6rpx;
     }
 
@@ -201,7 +201,7 @@
 
     .material-action-text {
         font-size: 24rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 
     .empty-tip {
@@ -217,7 +217,7 @@
 
     .empty-text {
         font-size: 28rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         margin-bottom: 32rpx;
     }
 
@@ -229,7 +229,7 @@
 
     .empty-btn-text {
         font-size: 28rpx;
-        color: #ffffff;
+        color: $text-color-inverse;
     }
 
     .loading-more {
@@ -239,7 +239,7 @@
 
     .loading-text {
         font-size: 24rpx;
-        color: #999999;
+        color: $text-color-placeholder;
     }
 
     .load-more-btn {

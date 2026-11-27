@@ -33,7 +33,7 @@
 
 <style lang="scss">
   .user-card {
-    background-color: #e8f4fd;
+    background-color: $primary-tint;
     margin: 20rpx 24rpx;
     border-radius: 16rpx;
     padding: 24rpx;
@@ -71,12 +71,12 @@
   .user-name {
     font-size: 32rpx;
     font-weight: bold;
-    color: #333333;
+    color: $text-color;
     margin-right: 12rpx;
   }
 
   .level-badge {
-    background-color: #ffffff;
+    background-color: $card-bg;
     border-radius: 16rpx;
     padding: 4rpx 14rpx;
   }
@@ -89,6 +89,6 @@
 
   .user-ip {
     font-size: 24rpx;
-    color: #999999;
+    color: $text-color-placeholder;
   }
 </style>

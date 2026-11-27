@@ -1,9 +1,1 @@
-{
-  "pages/courses/components/course-chapter-list.uvue": 1,
-  "pages/courses/components/course-cover-section.uvue": 6,
-  "pages/courses/components/course-info-grid.uvue": 1,
-  "pages/courses/components/course-progress-section.uvue": 1,
-  "pages/courses/components/course-tab-bar.uvue": 1,
-  "pages/exam/components/exam-result-detail-list.uvue": 1,
-  "pages/profile/components/activity-user-card.uvue": 1
-}
+{}

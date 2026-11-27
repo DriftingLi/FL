@@ -104,12 +104,12 @@
         border-radius: 12rpx;
         padding: 16rpx;
         font-size: 26rpx;
-        color: #333333;
+        color: $text-color;
     }
 
     .fb-count {
         font-size: 22rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         text-align: right;
         padding: 8rpx 0 12rpx 0;
     }
@@ -121,13 +121,13 @@
         border-radius: 12rpx;
         padding: 0 16rpx;
         font-size: 26rpx;
-        color: #333333;
+        color: $text-color;
         margin-top: 12rpx;
     }
 
     .fb-tip {
         font-size: 22rpx;
-        color: #999999;
+        color: $text-color-placeholder;
         line-height: 34rpx;
         padding-top: 12rpx;
     }
