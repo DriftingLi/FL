@@ -14,25 +14,33 @@ var TrialFormulaHash = sha256Hex([]byte(trialFormulaSpec))
 
 // TrialPolicy 显式试算策略。迁移不预置任何行，未配置组合一律关闭。
 type TrialPolicy struct {
-	ID                               int64     `json:"id,omitempty"`
+	ID                               int64     `json:"id,omitempty" extensions:"x-optional"`
 	Name                             string    `json:"policy_name"`
 	Version                          int       `json:"version"`
 	Brand                            string    `json:"brand"`
 	VehicleType                      string    `json:"vehicle_type"`
 	Tonnage                          float64   `json:"tonnage"`
 	MaxWidthRatio                    float64   `json:"max_width_ratio"`
-	UsageHourRatios                  []float64 `json:"usage_hour_ratios"`
-	ConditionRatings                 []string  `json:"condition_ratings"`
-	OriginalPaintValues              []bool    `json:"original_paint_values,omitempty"`
-	HasLicensePlateValues            []bool    `json:"has_license_plate_values,omitempty"`
-	HasRegistrationCertificateValues []bool    `json:"has_registration_certificate_values,omitempty"`
-	HasMaintenanceRecordsValues      []bool    `json:"has_maintenance_records_values,omitempty"`
+	UsageHourRatios                  []float64 `json:"usage_hour_ratios" nullability:"nonnil"`
+	ConditionRatings                 []string  `json:"condition_ratings" nullability:"nonnil"`
+	OriginalPaintValues              []bool    `json:"original_paint_values" nullability:"nonnil"`
+	HasLicensePlateValues            []bool    `json:"has_license_plate_values" nullability:"nonnil"`
+	HasRegistrationCertificateValues []bool    `json:"has_registration_certificate_values" nullability:"nonnil"`
+	HasMaintenanceRecordsValues      []bool    `json:"has_maintenance_records_values" nullability:"nonnil"`
 	Enabled                          bool      `json:"enabled"`
+}
+
+// TrialControl 是独立于组合策略的全局试算开关；零值表示关闭。
+type TrialControl struct {
+	Enabled   bool   `json:"enabled"`
+	Version   int64  `json:"version"`
+	UpdatedAt string `json:"updated_at"`
 }
 
 // TrialSnapshot 一次事务冻结的目录、系数与策略；全批回放只构造一次。
 type TrialSnapshot struct {
 	ReplayInput
+	Control       TrialControl
 	Hash          string
 	PolicyHash    string
 	PolicyVersion string

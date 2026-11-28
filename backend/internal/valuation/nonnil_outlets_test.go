@@ -11,11 +11,14 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/cloudwego/eino/schema"
+	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
 	"forklift-training/internal/aiassistant"
+	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
 )
 
@@ -23,32 +26,98 @@ import (
 // 前缀 nonnilOutlets 是约定的证据表名：apitypes 的表态锁按它扫目录收键（见
 // internal/apitypes/nullability_lock_test.go 的 nonNilEvidenceSources）。
 var nonnilOutletsValuation = map[string]func(t *testing.T) any{
-	"valuation.EvaluationDetail.dimension_scores":       outletEvalDetailData,
-	"valuation.EvaluationDetail.suggestions":            outletEvalDetailData,
-	"valuation.EvaluationResponse.dimension_scores":     outletEvalResponseData,
-	"valuation.EvaluationResponse.suggestions":          outletEvalResponseData,
-	"valuation.TrialResponse.assumptions":               outletTrialResponseData,
-	"valuation.TrialResponse.candidates":                outletTrialResponseData,
-	"valuation.TrialResponse.missing_fields":            outletTrialResponseData,
-	"valuation.BatteryEvaluation.feature_importance":    outletBatteryDetailData,
-	"valuation.BatteryEvaluation.cycle_features":        outletBatteryDetailData,
-	"valuation.BatteryEvaluation.suggestions":           outletBatteryDetailData,
-	"valuation.CycleFeature.feature_vector":             outletBatteryFirstCycleFeature,
-	"valuation.CreateBatteryResponse.suggestions":       outletBatteryCreateData,
-	"valuation.ListBatteryResponse.items":               outletBatteryListData,
-	"valuation.ValuationDraft.fields":                   outletConversationDraftData,
-	"valuation.ValuationDraft.supplemental":             outletConversationDraftData,
-	"valuation.DraftField.candidates":                   outletConversationDraftCandidate,
-	"valuation.ValuationSuggestionResult.patches":       outletConversationSuggestionResult,
-	"valuation.ValuationSuggestionResult.supplements":   outletConversationSuggestionResult,
-	"valuation.ValuationSuggestionResult.questions":     outletConversationSuggestionResult,
-	"valuation.ValuationExplanationResult.facts":        outletConversationExplanationResult,
-	"valuation.ValuationExplanationResult.evidence_ids": outletConversationExplanationResult,
+	"valuation.EvaluationDetail.dimension_scores":               outletEvalDetailData,
+	"valuation.EvaluationDetail.suggestions":                    outletEvalDetailData,
+	"valuation.EvaluationResponse.dimension_scores":             outletEvalResponseData,
+	"valuation.EvaluationResponse.suggestions":                  outletEvalResponseData,
+	"valuation.TrialResponse.assumptions":                       outletTrialResponseData,
+	"valuation.TrialResponse.candidates":                        outletTrialResponseData,
+	"valuation.TrialResponse.missing_fields":                    outletTrialResponseData,
+	"valuation.BatteryEvaluation.feature_importance":            outletBatteryDetailData,
+	"valuation.BatteryEvaluation.cycle_features":                outletBatteryDetailData,
+	"valuation.BatteryEvaluation.suggestions":                   outletBatteryDetailData,
+	"valuation.CycleFeature.feature_vector":                     outletBatteryFirstCycleFeature,
+	"valuation.CreateBatteryResponse.suggestions":               outletBatteryCreateData,
+	"valuation.ListBatteryResponse.items":                       outletBatteryListData,
+	"valuation.ValuationDraft.fields":                           outletConversationDraftData,
+	"valuation.ValuationDraft.supplemental":                     outletConversationDraftData,
+	"valuation.DraftField.candidates":                           outletConversationDraftCandidate,
+	"valuation.ValuationSuggestionResult.patches":               outletConversationSuggestionResult,
+	"valuation.ValuationSuggestionResult.supplements":           outletConversationSuggestionResult,
+	"valuation.ValuationSuggestionResult.questions":             outletConversationSuggestionResult,
+	"valuation.ValuationExplanationResult.facts":                outletConversationExplanationResult,
+	"valuation.ValuationExplanationResult.evidence_ids":         outletConversationExplanationResult,
+	"valuation.TrialPoliciesResponse.policies":                  outletTrialPoliciesData,
+	"valuation.TrialMetricsResponse.items":                      outletTrialMetricsData,
+	"valuation.TrialReadiness.blockers":                         outletTrialReadinessData,
+	"valuation.TrialPolicy.usage_hour_ratios":                   outletTrialPolicyData,
+	"valuation.TrialPolicy.condition_ratings":                   outletTrialPolicyData,
+	"valuation.TrialPolicy.original_paint_values":               outletTrialPolicyData,
+	"valuation.TrialPolicy.has_license_plate_values":            outletTrialPolicyData,
+	"valuation.TrialPolicy.has_registration_certificate_values": outletTrialPolicyData,
+	"valuation.TrialPolicy.has_maintenance_records_values":      outletTrialPolicyData,
+	"valuation.TrialMetricSummary.unpriced_reasons":             outletTrialMetricSummaryData,
 }
 
 // TestNonNilDeclaredOutletsNeverEmitNull 本域的举证入口（判据本体在 testutil）。
 func TestNonNilDeclaredOutletsNeverEmitNull(t *testing.T) {
 	testutil.AssertNonNilOutlets(t, []map[string]func(t *testing.T) any{nonnilOutletsValuation})
+}
+
+type outletTrialAdminStore struct{}
+
+func (outletTrialAdminStore) GetTrialControl(context.Context) (TrialControl, error) {
+	return TrialControl{Enabled: false, Version: 1}, nil
+}
+func (outletTrialAdminStore) SetTrialControl(context.Context, bool) (TrialControl, error) {
+	return TrialControl{}, nil
+}
+func (outletTrialAdminStore) ListTrialPolicies(context.Context, TrialPolicyFilter) ([]TrialPolicy, error) {
+	return []TrialPolicy{{Name: "pilot", UsageHourRatios: []float64{0}, ConditionRatings: []string{"B"},
+		OriginalPaintValues: []bool{false}, HasLicensePlateValues: []bool{false},
+		HasRegistrationCertificateValues: []bool{false}, HasMaintenanceRecordsValues: []bool{false}}}, nil
+}
+func (outletTrialAdminStore) ReplaceTrialPolicies(context.Context, []TrialPolicyInput) error {
+	return nil
+}
+func (outletTrialAdminStore) ListTrialMetrics(context.Context, TrialMetricFilter) ([]TrialMetricSummary, error) {
+	return []TrialMetricSummary{{UnpricedReasons: map[string]int64{}}}, nil
+}
+func (outletTrialAdminStore) RecordTrialMetric(context.Context, TrialMetricEvent) error { return nil }
+
+func outletTrialAdminData(t *testing.T, path string) map[string]any {
+	t.Helper()
+	r := gin.New()
+	attachAdminCapabilities(r)
+	session := security.NewSession("test-secret", time.Hour, security.CookieConfig{Name: "hrwai_token"})
+	RegisterTrialAdminRoutes(r.Group("/api"), session, outletTrialAdminStore{}, zap.NewNop(), nil)
+	w := performRequestWithAuth(r, http.MethodGet, path, nil, adminAuthHeader(t))
+	if w.Code != http.StatusOK {
+		t.Fatalf("试算管理出口状态码=%d: %s", w.Code, w.Body.String())
+	}
+	return mustDecodeData(t, w)
+}
+
+func outletTrialControlData(t *testing.T) any {
+	return outletTrialAdminData(t, "/api/valuation/admin/trials/control")
+}
+func outletTrialReadinessData(t *testing.T) any {
+	data := outletTrialControlData(t).(map[string]any)
+	return data["readiness"]
+}
+func outletTrialPoliciesData(t *testing.T) any {
+	return outletTrialAdminData(t, "/api/valuation/admin/trials/policies")
+}
+func outletTrialMetricsData(t *testing.T) any {
+	return outletTrialAdminData(t, "/api/valuation/admin/trials/metrics")
+}
+func outletTrialPolicyData(t *testing.T) any {
+	data := outletTrialPoliciesData(t).(map[string]any)
+	return data["policies"].([]any)[0]
+}
+func outletTrialMetricSummaryData(t *testing.T) any {
+	data := outletTrialMetricsData(t).(map[string]any)
+	return data["items"].([]any)[0]
 }
 
 // outletEvalResponseData POST /api/valuation/evaluations 的 data：dimension_scores / suggestions

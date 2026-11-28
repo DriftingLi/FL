@@ -28,6 +28,9 @@ func (r *PostgresTrialSnapshotReader) LoadTrialCard(ctx context.Context, request
 	if err := json.Unmarshal([]byte(requestJSON), &req); err != nil {
 		return nil, err
 	}
+	// 旧卡是已出卡的历史快照：全局开关只约束新试算受理（#2958），
+	// 不得让默认关闭的开关把已定价旧卡的「为什么」打成 not_found（#2957）。
+	snapshot.Control = TrialControl{Enabled: true, Version: 1}
 	response, err := CalculateTrial(ctx, req, snapshot, "development")
 	if err != nil || response.Status != TrialStatusPriced {
 		return nil, ErrOperationNotFound

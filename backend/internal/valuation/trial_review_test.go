@@ -17,6 +17,7 @@ func TestTrialUnknownBooleanInputsRequireApprovedScenarios(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	snapshot.Control = TrialControl{Enabled: true, Version: 1}
 	req := trialCompleteRequest()
 	req.OriginalPaint = nil
 	req.HasMaintenanceRecords = nil
@@ -78,6 +79,7 @@ func TestTrialFollowUpChoosesFieldWithLargestWidthReduction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	snapshot.Control = TrialControl{Enabled: true, Version: 1}
 	req := trialCompleteRequest()
 	req.Series = nil
 	req.UsageHours = nil
@@ -108,6 +110,7 @@ func TestTrialFollowUpUsesCandidateDiscriminationAsTieBreaker(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	snapshot.Control = TrialControl{Enabled: true, Version: 1}
 	req := trialCompleteRequest()
 	req.Series = nil
 	req.ConfigType = nil

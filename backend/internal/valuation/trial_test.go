@@ -28,6 +28,7 @@ func TestTrialPolicyDefaultsClosedAndDemoForbiddenInProduction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	snapshot.Control = TrialControl{Enabled: true, Version: 1}
 	for _, tc := range []struct {
 		name   string
 		policy string
@@ -133,6 +134,7 @@ func TestTrialRequiresCompleteCoefficientSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	snapshot.Control = TrialControl{Enabled: true, Version: 1}
 	response, err := CalculateTrial(context.Background(), trialCompleteRequest(), snapshot, "development")
 	if err != nil {
 		t.Fatal(err)
@@ -302,6 +304,7 @@ func TestTrialSnapshotFreezesCatalogCoefficientsAndPolicy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	snapshot.Control = TrialControl{Enabled: true, Version: 1}
 	before, err := CalculateTrial(context.Background(), trialCompleteRequest(), snapshot, "development")
 	if err != nil {
 		t.Fatal(err)
@@ -443,5 +446,6 @@ func newTrialSnapshotForTest(t *testing.T, prices []OriginalPrice) *TrialSnapsho
 	if err != nil {
 		t.Fatal(err)
 	}
+	snapshot.Control = TrialControl{Enabled: true, Version: 1}
 	return snapshot
 }

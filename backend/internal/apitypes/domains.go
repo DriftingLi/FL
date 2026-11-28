@@ -895,6 +895,9 @@ var Domains = []Domain{
 			"valuation.ConversationOperation",
 			"valuation.ValuationSuggestionResult",
 			"valuation.TrialResponse",
+			"valuation.TrialControlResponse",
+			"valuation.TrialPoliciesResponse",
+			"valuation.TrialMetricsResponse",
 			"valuation.DimensionScore",
 			"valuation.CreateBatteryResponse",
 			"valuation.ListBatteryResponse",
@@ -955,6 +958,9 @@ var Domains = []Domain{
 			{Method: "GET", Path: "/valuation/battery/evaluations/{id}/report", NoData: true},
 			// 公开组：估值登出（有意无载荷）
 			{Method: "POST", Path: "/valuation/auth/logout", NoData: true},
+			// 公开组：参考试算（匿名可调、不读写用户资源；全局开关默认关闭，显式 demo/pilot
+			// 仍须命中服务端冻结的组合 allowlist，生产禁止 demo）——不是 CapValuationUse 鉴权组。
+			{Method: "POST", Path: "/valuation/trials"},
 			// 可选认证组：匿名可提交（登录则记录 user_id）
 			{Method: "POST", Path: "/valuation/evaluations"},
 			{Method: "POST", Path: "/valuation/battery/evaluations"},
@@ -973,6 +979,14 @@ var Domains = []Domain{
 			{Method: "GET", Path: "/valuation/battery/evaluations"},
 			{Method: "GET", Path: "/valuation/battery/evaluations/{id}"},
 			{Method: "GET", Path: "/valuation/auth/me"},
+			// 管理端试算控制面（JWTAuth + CapValuationConfig + AuditLog；开关/allowlist/观测，
+			// 与下面同前缀的写面同一道门，读接口也走该组）
+			{Method: "GET", Path: "/valuation/admin/trials/control"},
+			{Method: "PUT", Path: "/valuation/admin/trials/control"},
+			{Method: "GET", Path: "/valuation/admin/trials/policies"},
+			{Method: "PUT", Path: "/valuation/admin/trials/policies"},
+			{Method: "GET", Path: "/valuation/admin/trials/metrics"},
+			{Method: "GET", Path: "/valuation/admin/trials/metrics/export", NoData: true},
 			// 管理端写面（JWTAuth + CapValuationConfig + AuditLog；描述符注册表驱动）
 			{Method: "POST", Path: "/valuation/admin/original-prices"},
 			{Method: "PUT", Path: "/valuation/admin/original-prices/{id}"},

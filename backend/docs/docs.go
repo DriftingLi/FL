@@ -25354,6 +25354,528 @@ const docTemplate = `{
                 }
             }
         },
+        "/valuation/admin/trials/control": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "独立全局开关默认关闭；记录缺失或读取失败时按关闭处理。响应同时给出上线准备度（readiness），存在未批准项时开关不可开启。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "估值-管理"
+                ],
+                "summary": "读取试算全局开关",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/valuation.TrialControlResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "仅影响 trials，不影响草稿、建议、手动或正式评估；enabled 缺省为 false。上线准备度未通过时拒绝开启（409）。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "估值-管理"
+                ],
+                "summary": "更新试算全局开关",
+                "parameters": [
+                    {
+                        "description": "全局开关",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/valuation.TrialControlRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/valuation.TrialControlResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "409": {
+                        "description": "上线准备度未通过，开关不可开启",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/valuation/admin/trials/metrics": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "估值-管理"
+                ],
+                "summary": "查询试算观测指标",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "RFC3339 开始时间",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "RFC3339 结束时间",
+                        "name": "to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "策略名",
+                        "name": "policy_name",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "品牌",
+                        "name": "brand",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "车型",
+                        "name": "vehicle_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "number",
+                        "description": "吨位",
+                        "name": "tonnage",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "complete、masked 或 year_range",
+                        "name": "scenario",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "公式哈希",
+                        "name": "formula_hash",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "策略版本",
+                        "name": "policy_version",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "返回组数，1-1000，默认 200",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/valuation.TrialMetricsResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/valuation/admin/trials/metrics/export": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "估值-管理"
+                ],
+                "summary": "导出试算观测指标 JSON",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "RFC3339 开始时间",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "RFC3339 结束时间",
+                        "name": "to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "策略名",
+                        "name": "policy_name",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "品牌",
+                        "name": "brand",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "车型",
+                        "name": "vehicle_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "number",
+                        "description": "吨位",
+                        "name": "tonnage",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "complete、masked 或 year_range",
+                        "name": "scenario",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "公式哈希",
+                        "name": "formula_hash",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "策略版本",
+                        "name": "policy_version",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "返回组数，1-1000，默认 200",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "JSON 附件",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/valuation.TrialMetricSummary"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/valuation/admin/trials/policies": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "估值-管理"
+                ],
+                "summary": "查询试算获批策略",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "demo 或 pilot",
+                        "name": "policy_name",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "品牌",
+                        "name": "brand",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "车型",
+                        "name": "vehicle_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "number",
+                        "description": "吨位",
+                        "name": "tonnage",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/valuation.TrialPoliciesResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "空列表清空 allowlist；策略版本按替换内容重新计算并生成策略哈希。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "估值-管理"
+                ],
+                "summary": "全量更新试算获批策略",
+                "parameters": [
+                    {
+                        "description": "获批品牌×车型×吨位组合与情景",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/valuation.TrialPoliciesRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/valuation.TrialPoliciesResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/valuation/admin/vehicle-types": {
             "post": {
                 "security": [
@@ -28176,7 +28698,7 @@ const docTemplate = `{
         },
         "/valuation/trials": {
             "post": {
-                "description": "使用同一冻结目录、系数快照与 V2 公式计算参考区间。默认关闭，仅显式 demo/pilot 且组合已配置时可用；不写 evaluations、不生成报告。",
+                "description": "使用同一冻结目录、系数快照与 V2 公式计算参考区间。全局开关默认关闭，仅显式 demo/pilot 且组合已配置时可用；不写 evaluations、不生成报告。",
                 "consumes": [
                     "application/json"
                 ],
@@ -28224,7 +28746,7 @@ const docTemplate = `{
                         }
                     },
                     "403": {
-                        "description": "参考试算未开放",
+                        "description": "参考试算未开放；data 仍带 reason_code、missing_fields 与 next_action",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -36918,6 +37440,31 @@ const docTemplate = `{
                 }
             }
         },
+        "valuation.TrialControlRequest": {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "valuation.TrialControlResponse": {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
+                },
+                "readiness": {
+                    "$ref": "#/definitions/valuation.TrialReadiness"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
         "valuation.TrialInterval": {
             "type": "object",
             "properties": {
@@ -36935,6 +37482,270 @@ const docTemplate = `{
                 },
                 "width_ratio": {
                     "type": "number"
+                }
+            }
+        },
+        "valuation.TrialMetricSummary": {
+            "type": "object",
+            "properties": {
+                "brand": {
+                    "type": "string"
+                },
+                "completion_tokens": {
+                    "type": "integer"
+                },
+                "cost_micros": {
+                    "type": "integer"
+                },
+                "covered": {
+                    "type": "integer"
+                },
+                "denominator": {
+                    "type": "integer"
+                },
+                "duration_sum_ms": {
+                    "type": "integer"
+                },
+                "follow_up_count": {
+                    "type": "integer"
+                },
+                "formula_hash": {
+                    "type": "string"
+                },
+                "formula_version": {
+                    "type": "string"
+                },
+                "policy_name": {
+                    "type": "string"
+                },
+                "policy_version": {
+                    "type": "string"
+                },
+                "priced": {
+                    "type": "integer"
+                },
+                "prompt_tokens": {
+                    "type": "integer"
+                },
+                "scenario": {
+                    "type": "string"
+                },
+                "tonnage": {
+                    "type": "number"
+                },
+                "too_wide": {
+                    "type": "integer"
+                },
+                "unpriced_reasons": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                },
+                "vehicle_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "valuation.TrialMetricsResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/valuation.TrialMetricSummary"
+                    }
+                }
+            }
+        },
+        "valuation.TrialPoliciesRequest": {
+            "type": "object",
+            "properties": {
+                "policies": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/valuation.TrialPolicyInput"
+                    }
+                }
+            }
+        },
+        "valuation.TrialPoliciesResponse": {
+            "type": "object",
+            "properties": {
+                "policies": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/valuation.TrialPolicy"
+                    }
+                }
+            }
+        },
+        "valuation.TrialPolicy": {
+            "type": "object",
+            "properties": {
+                "brand": {
+                    "type": "string"
+                },
+                "condition_ratings": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "has_license_plate_values": {
+                    "type": "array",
+                    "items": {
+                        "type": "boolean"
+                    }
+                },
+                "has_maintenance_records_values": {
+                    "type": "array",
+                    "items": {
+                        "type": "boolean"
+                    }
+                },
+                "has_registration_certificate_values": {
+                    "type": "array",
+                    "items": {
+                        "type": "boolean"
+                    }
+                },
+                "id": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "max_width_ratio": {
+                    "type": "number"
+                },
+                "original_paint_values": {
+                    "type": "array",
+                    "items": {
+                        "type": "boolean"
+                    }
+                },
+                "policy_name": {
+                    "type": "string"
+                },
+                "tonnage": {
+                    "type": "number"
+                },
+                "usage_hour_ratios": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
+                "vehicle_type": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
+        "valuation.TrialPolicyInput": {
+            "type": "object",
+            "required": [
+                "brand",
+                "condition_ratings",
+                "has_license_plate_values",
+                "has_maintenance_records_values",
+                "has_registration_certificate_values",
+                "max_width_ratio",
+                "original_paint_values",
+                "policy_name",
+                "tonnage",
+                "usage_hour_ratios",
+                "vehicle_type"
+            ],
+            "properties": {
+                "brand": {
+                    "type": "string"
+                },
+                "condition_ratings": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "has_license_plate_values": {
+                    "type": "array",
+                    "items": {
+                        "type": "boolean"
+                    }
+                },
+                "has_maintenance_records_values": {
+                    "type": "array",
+                    "items": {
+                        "type": "boolean"
+                    }
+                },
+                "has_registration_certificate_values": {
+                    "type": "array",
+                    "items": {
+                        "type": "boolean"
+                    }
+                },
+                "max_width_ratio": {
+                    "type": "number"
+                },
+                "original_paint_values": {
+                    "type": "array",
+                    "items": {
+                        "type": "boolean"
+                    }
+                },
+                "policy_name": {
+                    "type": "string"
+                },
+                "tonnage": {
+                    "type": "number"
+                },
+                "usage_hour_ratios": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
+                "vehicle_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "valuation.TrialReadiness": {
+            "type": "object",
+            "properties": {
+                "blockers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/valuation.TrialReadinessBlocker"
+                    }
+                },
+                "ready": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "valuation.TrialReadinessBlocker": {
+            "type": "object",
+            "properties": {
+                "approved": {
+                    "type": "boolean"
+                },
+                "detail": {
+                    "type": "string"
+                },
+                "evidence": {
+                    "type": "string"
+                },
+                "key": {
+                    "type": "string"
                 }
             }
         },
@@ -37061,6 +37872,10 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                },
+                "next_action": {
+                    "type": "string",
+                    "x-optional": true
                 },
                 "reason_code": {
                     "type": "string",

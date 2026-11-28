@@ -172,6 +172,8 @@ var ModelBlocks = []ModelBlock{
 		Models: []any{
 			&ValuationTrialPolicy{},
 			&ValuationTrialSnapshot{},
+			&ValuationTrialControl{},
+			&ValuationTrialMetric{},
 		},
 	},
 	{

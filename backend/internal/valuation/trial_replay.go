@@ -84,6 +84,11 @@ func ReplayTrialBatch(ctx context.Context, snapshot *TrialSnapshot, cases []Tria
 	if snapshot == nil {
 		return nil, fmt.Errorf("批量试算回放需要冻结快照")
 	}
+	// 离线回放评估的是冻结快照本身，不受在线全局开关（#2958）约束：
+	// 该开关只决定在线试算是否受理，回放工具的命令行输入里没有也不该有开关行。
+	frozen := *snapshot
+	frozen.Control = TrialControl{Enabled: true, Version: 1}
+	snapshot = &frozen
 	report := &TrialReplayReport{
 		SnapshotHash:   snapshot.Hash,
 		SnapshotSHA7:   shortHash(snapshot.Hash),

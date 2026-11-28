@@ -95,6 +95,8 @@ var criticalUniqueIndexes = []UniqueIndexSpec{
 		DDL: "CREATE UNIQUE INDEX uq_valuation_suggestion_calls_operation_key ON valuation_suggestion_calls (operation_key)"},
 	{Name: "uq_valuation_explanation_calls_operation_key", Table: "valuation_explanation_calls", Migration: "000082_valuation_explanations.up.sql",
 		DDL: "CREATE UNIQUE INDEX uq_valuation_explanation_calls_operation_key ON valuation_explanation_calls (operation_key)"},
+	{Name: "uq_valuation_trial_control_singleton", Table: "valuation_trial_control", Migration: "000083_valuation_trial_pilot.up.sql",
+		DDL: "CREATE UNIQUE INDEX uq_valuation_trial_control_singleton ON valuation_trial_control (id)"},
 }
 
 // CriticalUniqueIndexes 返回登记表副本（testutil 建库后补跑、check-columns 对账共用同一宿主）。
