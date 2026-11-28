@@ -28,6 +28,9 @@ var nonnilOutletsValuation = map[string]func(t *testing.T) any{
 	"valuation.CycleFeature.feature_vector":          outletBatteryFirstCycleFeature,
 	"valuation.CreateBatteryResponse.suggestions":    outletBatteryCreateData,
 	"valuation.ListBatteryResponse.items":            outletBatteryListData,
+	"valuation.ValuationDraft.fields":                outletConversationDraftData,
+	"valuation.ValuationDraft.supplemental":          outletConversationDraftData,
+	"valuation.DraftField.candidates":                outletConversationDraftCandidate,
 }
 
 // TestNonNilDeclaredOutletsNeverEmitNull 本域的举证入口（判据本体在 testutil）。
@@ -123,4 +126,30 @@ func outletEvalDetailData(t *testing.T) any {
 		t.Fatalf("评估详情状态码 = %d: %s", w.Code, w.Body.String())
 	}
 	return mustDecodeData(t, w)
+}
+
+func outletConversationDraftData(t *testing.T) any {
+	t.Helper()
+	r, _, _ := newTestValuationEngine(t)
+	w := performRequest(r, http.MethodPost, "/api/valuation/conversation/drafts", map[string]any{
+		"fields": map[string]any{"tonnage": map[string]any{
+			"state": "candidate", "candidates": []any{map[string]any{"value": 3}},
+		}},
+		"supplemental": map[string]any{"engine_model": "YC6B"},
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("草稿创建状态码 = %d: %s", w.Code, w.Body.String())
+	}
+	return mustDecodeData(t, w)
+}
+
+func outletConversationDraftCandidate(t *testing.T) any {
+	t.Helper()
+	data, ok := outletConversationDraftData(t).(map[string]any)
+	if !ok {
+		t.Fatal("草稿 data 不是对象")
+	}
+	fields, _ := data["fields"].(map[string]any)
+	field, _ := fields["tonnage"].(map[string]any)
+	return field
 }

@@ -26034,6 +26034,438 @@ const docTemplate = `{
                 }
             }
         },
+        "/valuation/conversation/drafts": {
+            "post": {
+                "description": "创建 30 分钟闲置过期的匿名可用草稿；value 状态保留真实 0/false 与来源依据。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "估值-对话"
+                ],
+                "summary": "创建估值草稿",
+                "parameters": [
+                    {
+                        "description": "初始字段与补充资料",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/valuation.CreateDraftRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/valuation.ValuationDraft"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/valuation/conversation/drafts/{id}": {
+            "get": {
+                "description": "按随机能力 ID 读取未过期草稿；读取不延长闲置有效期。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "估值-对话"
+                ],
+                "summary": "读取估值草稿",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "草稿能力 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/valuation.ValuationDraft"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "草稿不存在或已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "主动清除草稿；重复删除保持幂等。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "估值-对话"
+                ],
+                "summary": "删除估值草稿",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "草稿能力 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "success"
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "description": "按 base_version 执行 CAS；过期版本返回 409。成功修改生成新版本并刷新闲置 TTL。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "估值-对话"
+                ],
+                "summary": "修改估值草稿",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "草稿能力 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "基准版本与字段变更",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/valuation.PatchDraftRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/valuation.ValuationDraft"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "草稿不存在或已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "409": {
+                        "description": "版本冲突或草稿不可编辑",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/valuation/conversation/drafts/{id}/undo": {
+            "post": {
+                "description": "恢复上一版字段与依据，生成新版本并回到 editing；仅支持一级撤回。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "估值-对话"
+                ],
+                "summary": "撤回最近一次草稿修改",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "草稿能力 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "可选基准版本；省略时使用当前版本",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/valuation.DraftUndoRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/valuation.ValuationDraft"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "草稿不存在或已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "409": {
+                        "description": "版本冲突或无可撤回修改",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/valuation/conversation/operations": {
+            "post": {
+                "description": "仅接受已核对的完整草稿版本；operation 与 evaluation 同事务。同键同哈希重试返回首次结果，同键不同哈希返回 409。匿名首次受理的归属不因之后登录而改变。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "估值-对话"
+                ],
+                "summary": "确认草稿并创建正式评估",
+                "parameters": [
+                    {
+                        "description": "操作标识、草稿版本与正式评估请求",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/valuation.ConversationOperationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/valuation.ConversationOperation"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "草稿不存在或已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "409": {
+                        "description": "草稿不完整、版本冲突或请求哈希冲突",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/valuation/conversation/operations/{id}": {
+            "get": {
+                "description": "按操作能力 ID 返回首次受理状态与正式评估结果。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "估值-对话"
+                ],
+                "summary": "读取估值操作",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "操作能力 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/valuation.ConversationOperation"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "操作不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/valuation/dictionaries/algorithm-parameters": {
             "get": {
                 "description": "一次返回 4 类算法参数（全局系数 + 品牌系数 + 车况系数 + 区域系数）。公开端点：无需登录。",
@@ -35188,6 +35620,66 @@ const docTemplate = `{
                 }
             }
         },
+        "valuation.ConversationOperation": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "draft_id": {
+                    "type": "string"
+                },
+                "draft_version": {
+                    "type": "integer"
+                },
+                "error_code": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "evaluation": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/valuation.EvaluationDetail"
+                        }
+                    ],
+                    "x-optional": true
+                },
+                "evaluation_id": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "first_accepted_user_id": {},
+                "id": {
+                    "type": "string"
+                },
+                "operation_id": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "valuation.ConversationOperationRequest": {
+            "type": "object",
+            "properties": {
+                "draft_id": {
+                    "type": "string"
+                },
+                "draft_version": {
+                    "type": "integer"
+                },
+                "operation_id": {
+                    "type": "string"
+                },
+                "request": {
+                    "$ref": "#/definitions/valuation.EvaluationRequest"
+                }
+            }
+        },
         "valuation.CreateBatteryRequest": {
             "type": "object",
             "required": [
@@ -35251,6 +35743,21 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "valuation.CreateDraftRequest": {
+            "type": "object",
+            "properties": {
+                "fields": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/valuation.DraftField"
+                    }
+                },
+                "supplemental": {
+                    "type": "object",
+                    "additionalProperties": {}
                 }
             }
         },
@@ -35323,6 +35830,96 @@ const docTemplate = `{
                 },
                 "value": {
                     "type": "number"
+                }
+            }
+        },
+        "valuation.DraftCandidate": {
+            "type": "object",
+            "properties": {
+                "evidence": {
+                    "x-optional": true
+                },
+                "id": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "label": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "source": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "value": {}
+            }
+        },
+        "valuation.DraftField": {
+            "type": "object",
+            "properties": {
+                "candidates": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/valuation.DraftCandidate"
+                    },
+                    "x-optional": true
+                },
+                "evidence": {
+                    "x-optional": true
+                },
+                "range": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/valuation.DraftRange"
+                        }
+                    ],
+                    "x-optional": true
+                },
+                "source": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "state": {
+                    "$ref": "#/definitions/valuation.DraftFieldState"
+                },
+                "value": {
+                    "x-optional": true
+                }
+            }
+        },
+        "valuation.DraftFieldState": {
+            "type": "string",
+            "enum": [
+                "missing",
+                "unknown",
+                "value",
+                "range",
+                "candidate"
+            ],
+            "x-enum-varnames": [
+                "DraftFieldMissing",
+                "DraftFieldUnknown",
+                "DraftFieldValue",
+                "DraftFieldRange",
+                "DraftFieldCandidate"
+            ]
+        },
+        "valuation.DraftRange": {
+            "type": "object",
+            "properties": {
+                "max": {
+                    "type": "number"
+                },
+                "min": {
+                    "type": "number"
+                }
+            }
+        },
+        "valuation.DraftUndoRequest": {
+            "type": "object",
+            "properties": {
+                "base_version": {
+                    "type": "integer"
                 }
             }
         },
@@ -35764,6 +36361,24 @@ const docTemplate = `{
                 }
             }
         },
+        "valuation.PatchDraftRequest": {
+            "type": "object",
+            "properties": {
+                "base_version": {
+                    "type": "integer"
+                },
+                "fields": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/valuation.DraftField"
+                    }
+                },
+                "supplemental": {
+                    "type": "object",
+                    "additionalProperties": {}
+                }
+            }
+        },
         "valuation.RawStats": {
             "type": "object",
             "properties": {
@@ -35876,6 +36491,42 @@ const docTemplate = `{
                 },
                 "name": {
                     "type": "string"
+                }
+            }
+        },
+        "valuation.ValuationDraft": {
+            "type": "object",
+            "properties": {
+                "can_submit": {
+                    "type": "boolean"
+                },
+                "can_undo": {
+                    "type": "boolean"
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "fields": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/valuation.DraftField"
+                    }
+                },
+                "id": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "supplemental": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "integer"
                 }
             }
         },

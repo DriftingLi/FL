@@ -66,10 +66,18 @@ type CreateEvaluationParams struct {
 	LambdaCombustion float64
 }
 
+type evaluationQuerier interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}
+
 // CreateEvaluation 插入评估主记录，返回新 ID
 func (r *EvaluationRepository) CreateEvaluation(ctx context.Context, p *CreateEvaluationParams) (int64, error) {
+	return createEvaluation(ctx, r.pool, p)
+}
+
+func createEvaluation(ctx context.Context, querier evaluationQuerier, p *CreateEvaluationParams) (int64, error) {
 	var id int64
-	err := r.pool.QueryRow(ctx, `
+	err := querier.QueryRow(ctx, `
 		INSERT INTO evaluations (
 			brand, vehicle_type, series, tonnage,
 			config_type, mast_type, mast_height_mm,

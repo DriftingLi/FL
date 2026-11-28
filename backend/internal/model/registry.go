@@ -116,6 +116,12 @@ var ModelBlocks = []ModelBlock{
 		},
 	},
 	{
+		Name: "残值评估",
+		Models: []any{
+			&ValuationOperation{},
+		},
+	},
+	{
 		Name: "AI",
 		Models: []any{
 			&AIConfig{},

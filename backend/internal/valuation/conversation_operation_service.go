@@ -1,0 +1,325 @@
+package valuation
+
+import (
+	"bytes"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+)
+
+func (s *ConversationService) ExecuteOperation(ctx context.Context, req *ConversationOperationRequest, userID int) (*ConversationOperation, error) {
+	operationID, err := normalizeOperationID(req.OperationID)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := normalizeDraftID(req.DraftID); err != nil {
+		return nil, fmt.Errorf("%w: invalid draft_id", ErrInvalidOperation)
+	}
+	if req.DraftVersion <= 0 {
+		return nil, fmt.Errorf("%w: draft_version must be positive", ErrInvalidOperation)
+	}
+	hash, err := hashOperationRequest(req.DraftID, req.DraftVersion, req.Request)
+	if err != nil {
+		return nil, err
+	}
+	existing, err := s.operations.GetOperation(ctx, operationID)
+	if err == nil {
+		if existing.RequestHash != hash {
+			return nil, ErrOperationHashConflict
+		}
+		if existing.Status == OperationStatusFailed {
+			return nil, operationError(existing.ErrorCode)
+		}
+		return s.operationResponse(ctx, existing)
+	}
+	if !errors.Is(err, ErrOperationNotFound) {
+		return nil, err
+	}
+
+	now := s.now()
+	operation := &ConversationOperation{
+		OperationID: operationID, DraftID: req.DraftID, DraftVersion: req.DraftVersion,
+		Status: OperationStatusPending, RequestHash: hash, CreatedAt: now, UpdatedAt: now,
+	}
+	if userID > 0 {
+		operation.FirstAcceptedUserID = &userID
+	}
+	result, err := s.evaluateOperationDraft(ctx, req)
+	if err != nil {
+		return s.recordOperationFailure(ctx, operation, err)
+	}
+	accepted, inserted, err := s.operations.AcceptOperation(ctx, operation,
+		func(writer OperationEvaluationWriter) (int64, error) {
+			return writer.CreateEvaluation(ctx, evaluationParams(result, userID))
+		})
+	if err != nil {
+		return nil, err
+	}
+	if !inserted {
+		if accepted.RequestHash != hash {
+			return nil, ErrOperationHashConflict
+		}
+		if accepted.Status == OperationStatusFailed {
+			return nil, operationError(accepted.ErrorCode)
+		}
+	} else {
+		// 草稿是临时展示状态；正式事实已由 operation/evaluation 事务保证，标记失败不得撤回已提交结果。
+		_ = s.markDraftSubmitted(ctx, req.DraftID, req.DraftVersion)
+	}
+	return s.operationResponse(ctx, accepted)
+}
+
+func (s *ConversationService) GetOperation(ctx context.Context, operationID string) (*ConversationOperation, error) {
+	id, err := normalizeOperationID(operationID)
+	if err != nil {
+		return nil, err
+	}
+	operation, err := s.operations.GetOperation(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if operation.Status == OperationStatusFailed {
+		return operation, nil
+	}
+	return s.operationResponse(ctx, operation)
+}
+
+func (s *ConversationService) evaluateOperationDraft(ctx context.Context, req *ConversationOperationRequest) (*EvaluationResult, error) {
+	draft, err := s.GetDraft(ctx, req.DraftID)
+	if err != nil {
+		return nil, err
+	}
+	if draft.Version != req.DraftVersion {
+		return nil, ErrDraftVersionConflict
+	}
+	if draft.Status != DraftStatusEditing {
+		return nil, ErrDraftNotEditing
+	}
+	if !draftComplete(*draft) {
+		return nil, ErrDraftIncomplete
+	}
+	evaluationRequest, err := evaluationRequestFromDraft(draft)
+	if err != nil {
+		return nil, err
+	}
+	matches, err := sameEvaluationRequest(*evaluationRequest, req.Request)
+	if err != nil {
+		return nil, err
+	}
+	if !matches {
+		return nil, ErrOperationDraftMismatch
+	}
+	if err := evaluationRequest.Validate(); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrEvaluationRejected, err)
+	}
+	result, err := s.valuation.Evaluate(ctx, evaluationRequest)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrEvaluationRejected, err)
+	}
+	return result, nil
+}
+
+func (s *ConversationService) recordOperationFailure(ctx context.Context, operation *ConversationOperation, cause error) (*ConversationOperation, error) {
+	code := errorCodeFor(cause)
+	if code == "" {
+		return nil, cause
+	}
+	failed, inserted, err := s.operations.FailOperation(ctx, operation, code)
+	if err != nil {
+		return nil, cause
+	}
+	if !inserted {
+		if failed.RequestHash != operation.RequestHash {
+			return nil, ErrOperationHashConflict
+		}
+		if failed.Status != OperationStatusFailed {
+			return s.operationResponse(ctx, failed)
+		}
+	}
+	return nil, cause
+}
+
+func (s *ConversationService) operationResponse(ctx context.Context, operation *ConversationOperation) (*ConversationOperation, error) {
+	result := *operation
+	result.Evaluation = nil
+	if operation.Status == OperationStatusSucceeded {
+		if operation.EvaluationID <= 0 {
+			return nil, ErrOperationResultMissing
+		}
+		evaluation, err := s.evaluations.GetEvaluation(ctx, operation.EvaluationID)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrOperationResultMissing, err)
+		}
+		RebuildDerivedFromDetail(evaluation)
+		if evaluation.Suggestions == nil {
+			evaluation.Suggestions = []string{}
+		}
+		result.Evaluation = evaluation
+	}
+	return &result, nil
+}
+
+func (s *ConversationService) markDraftSubmitted(ctx context.Context, id string, version int) error {
+	for attempt := 0; attempt < 3; attempt++ {
+		stored, err := s.drafts.GetDraft(ctx, id, s.now())
+		if err != nil {
+			return err
+		}
+		if stored.Draft.Version != version || stored.Draft.Status != DraftStatusEditing {
+			return nil
+		}
+		draft, err := cloneDraft(&stored.Draft)
+		if err != nil {
+			return err
+		}
+		now := s.now()
+		draft.Status = DraftStatusSubmitted
+		draft.UpdatedAt = now
+		draft.ExpiresAt = now.Add(DraftIdleTTL)
+		saved, err := s.drafts.SaveDraft(ctx, id, stored.Raw, &storedDraft{Draft: *draft, Previous: stored.Previous}, draft.ExpiresAt, now)
+		if err != nil {
+			return err
+		}
+		if saved {
+			return nil
+		}
+	}
+	return ErrDraftVersionConflict
+}
+
+func hashOperationRequest(draftID string, draftVersion int, request EvaluationRequest) (string, error) {
+	payload := struct {
+		DraftID      string            `json:"draft_id"`
+		DraftVersion int               `json:"draft_version"`
+		Request      EvaluationRequest `json:"request"`
+	}{draftID, draftVersion, request}
+	value, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("hash valuation operation: %w", err)
+	}
+	sum := sha256.Sum256(value)
+	return hex.EncodeToString(sum[:]), nil
+}
+
+func sameEvaluationRequest(left, right EvaluationRequest) (bool, error) {
+	a, err := json.Marshal(left)
+	if err != nil {
+		return false, err
+	}
+	b, err := json.Marshal(right)
+	if err != nil {
+		return false, err
+	}
+	return bytes.Equal(a, b), nil
+}
+
+func evaluationRequestFromDraft(draft *ValuationDraft) (*EvaluationRequest, error) {
+	request := &EvaluationRequest{}
+	values := map[string]any{
+		"brand": &request.Brand, "vehicle_type": &request.VehicleType, "series": &request.Series,
+		"config_type": &request.ConfigType, "mast_type": &request.MastType,
+		"province": &request.Province, "city": &request.City, "condition_rating": &request.ConditionRating,
+		"original_paint": &request.OriginalPaint, "has_license_plate": &request.HasLicensePlate,
+		"has_registration_certificate": &request.HasRegistrationCertificate,
+		"has_maintenance_records":      &request.HasMaintenanceRecords,
+		"tonnage":                      &request.Tonnage, "mast_height_mm": &request.MastHeightMM,
+		"factory_year": &request.FactoryYear, "sale_year": &request.SaleYear,
+		"usage_hours": &request.UsageHours,
+	}
+	for name, target := range values {
+		field := draft.Fields[name]
+		if field.State != DraftFieldValue || field.Value == nil {
+			return nil, ErrDraftIncomplete
+		}
+		if err := assignDraftValue(target, field.Value); err != nil {
+			return nil, fmt.Errorf("%w: %s", ErrInvalidDraftField, name)
+		}
+	}
+	return request, nil
+}
+
+func assignDraftValue(target, value any) error {
+	switch out := target.(type) {
+	case *string:
+		v, ok := value.(string)
+		if !ok {
+			return errors.New("not a string")
+		}
+		*out = v
+	case *bool:
+		v, ok := value.(bool)
+		if !ok {
+			return errors.New("not a boolean")
+		}
+		*out = v
+	case *float64:
+		v, ok := draftNumber(value)
+		if !ok {
+			return errors.New("not a number")
+		}
+		*out = v
+	case *int:
+		v, ok := draftNumber(value)
+		if !ok || v != float64(int(v)) {
+			return errors.New("not an integer")
+		}
+		*out = int(v)
+	default:
+		return errors.New("unsupported target")
+	}
+	return nil
+}
+
+func normalizeOperationID(id string) (string, error) {
+	id = strings.TrimSpace(id)
+	if id == "" || len(id) > 128 || strings.ContainsAny(id, "/?#") {
+		return "", fmt.Errorf("%w: invalid operation_id", ErrInvalidOperation)
+	}
+	return id, nil
+}
+
+func errorCodeFor(err error) string {
+	switch {
+	case errors.Is(err, ErrDraftNotFound):
+		return ErrorCodeDraftNotFound
+	case errors.Is(err, ErrDraftVersionConflict):
+		return ErrorCodeDraftVersionConflict
+	case errors.Is(err, ErrDraftNotEditing):
+		return ErrorCodeDraftNotEditing
+	case errors.Is(err, ErrDraftIncomplete):
+		return ErrorCodeDraftIncomplete
+	case errors.Is(err, ErrInvalidDraftField):
+		return ErrorCodeInvalidDraftField
+	case errors.Is(err, ErrOperationDraftMismatch):
+		return ErrorCodeOperationDraftMismatch
+	case errors.Is(err, ErrEvaluationRejected):
+		return ErrorCodeEvaluationRejected
+	default:
+		return ""
+	}
+}
+
+func operationError(code string) error {
+	switch code {
+	case ErrorCodeDraftNotFound:
+		return ErrDraftNotFound
+	case ErrorCodeDraftVersionConflict:
+		return ErrDraftVersionConflict
+	case ErrorCodeDraftNotEditing:
+		return ErrDraftNotEditing
+	case ErrorCodeDraftIncomplete:
+		return ErrDraftIncomplete
+	case ErrorCodeInvalidDraftField:
+		return ErrInvalidDraftField
+	case ErrorCodeOperationDraftMismatch:
+		return ErrOperationDraftMismatch
+	case ErrorCodeEvaluationRejected:
+		return ErrEvaluationRejected
+	default:
+		return ErrInvalidOperation
+	}
+}

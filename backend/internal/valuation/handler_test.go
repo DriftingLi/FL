@@ -277,9 +277,10 @@ func (m *memDictStore) Delete(_ context.Context, d DictDescriptor, id int64) err
 // 内存 adapter：评估存储 / 电池存储 / PDF 生成
 
 type memEvalStore struct {
-	mu      sync.Mutex
-	nextID  int64
-	records map[int64]EvaluationDetail
+	mu                 sync.Mutex
+	nextID             int64
+	records            map[int64]EvaluationDetail
+	userIDByEvaluation map[int64]int
 	// lastFilter 最近一次 List/Count 收到的过滤参数（handler 透传断言用）。
 	lastFilter evalListFilter
 }
@@ -292,7 +293,13 @@ type evalListFilter struct {
 }
 
 func newMemEvalStore() *memEvalStore {
-	return &memEvalStore{nextID: 1, records: map[int64]EvaluationDetail{}}
+	return &memEvalStore{nextID: 1, records: map[int64]EvaluationDetail{}, userIDByEvaluation: map[int64]int{}}
+}
+
+func (m *memEvalStore) count() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.records)
 }
 
 func (m *memEvalStore) CreateEvaluation(_ context.Context, p *CreateEvaluationParams) (int64, error) {
@@ -300,6 +307,7 @@ func (m *memEvalStore) CreateEvaluation(_ context.Context, p *CreateEvaluationPa
 	defer m.mu.Unlock()
 	id := m.nextID
 	m.nextID++
+	m.userIDByEvaluation[id] = p.UserID
 	m.records[id] = EvaluationDetail{
 		ID: id, Brand: p.Brand, VehicleType: p.VehicleType, Series: p.Series, Tonnage: p.Tonnage,
 		ConfigType: p.ConfigType, MastType: p.MastType, MastHeightMM: p.MastHeightMM,
@@ -444,6 +452,11 @@ func newTestValuationEngine(t *testing.T) (*gin.Engine, *memDictStore, *memEvalS
 // 第 4 个返回值是电池 store（电池报告测试用）。
 func newTestValuationEngineWithStorage(t *testing.T, st storage.Storage) (*gin.Engine, *memDictStore, *memEvalStore, *memBatteryStore) {
 	t.Helper()
+	return newTestValuationEngineWithDrafts(t, st, newMemDraftRepository(), time.Now)
+}
+
+func newTestValuationEngineWithDrafts(t *testing.T, st storage.Storage, drafts DraftRepository, now func() time.Time) (*gin.Engine, *memDictStore, *memEvalStore, *memBatteryStore) {
+	t.Helper()
 	gin.SetMode(gin.TestMode)
 
 	dict := newSeedMemDict()
@@ -465,12 +478,14 @@ func newTestValuationEngineWithStorage(t *testing.T, st storage.Storage) (*gin.E
 	// 管理端能力解析源（#1618 段1）：本域测试用内存 adapter 装配，故用替身（见 admin_caps_stub_test.go）。
 	attachAdminCapabilities(r)
 
+	conversationSvc := NewConversationService(drafts, newMemOperationRepository(evalStore), valuationSvc, evalStore, now)
 	RegisterRoutes(r, sess, zap.NewNop(), nil,
 		dict, evalStore, batteryStore,
 		valuationSvc, NewBatteryRULService(),
 		&memReportGenerator{}, st,
 		nil, // ValuationAuthService 未装配：本 seam 覆盖的公开评估路径不触达 /auth/*
 		nil, // ValuationLoginFunc 未装配：覆盖的公开路径不触达 /auth/login
+		conversationSvc,
 	)
 	return r, dict, evalStore, batteryStore
 }

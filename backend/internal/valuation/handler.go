@@ -66,6 +66,7 @@ func RegisterRoutes(
 	st storage.Storage,
 	valuationAuthSvc ValuationAuth,
 	login ValuationLoginFunc,
+	conversationSvc *ConversationService,
 ) {
 	evalHandler := NewEvaluationHandler(valuationSvc, evalRepo, logger)
 	configHandler := NewConfigHandler(dictRepo, logger)
@@ -127,6 +128,16 @@ func RegisterRoutes(
 	{
 		optional.POST("/evaluations", evalHandler.Create)
 		optional.POST("/battery/evaluations", batteryHandler.Create)
+		if conversationSvc != nil {
+			conversation := NewConversationHandler(conversationSvc)
+			optional.POST("/conversation/drafts", conversation.CreateDraft)
+			optional.GET("/conversation/drafts/:id", conversation.GetDraft)
+			optional.PATCH("/conversation/drafts/:id", conversation.PatchDraft)
+			optional.DELETE("/conversation/drafts/:id", conversation.DeleteDraft)
+			optional.POST("/conversation/drafts/:id/undo", conversation.UndoDraft)
+			optional.POST("/conversation/operations", conversation.CreateOperation)
+			optional.GET("/conversation/operations/:id", conversation.GetOperation)
+		}
 	}
 
 	// === HRWAI 账号鉴权组（需 middleware.JWTAuth + role=hrwai_user） ===

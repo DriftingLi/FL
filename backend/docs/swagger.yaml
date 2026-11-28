@@ -4910,6 +4910,45 @@ definitions:
       name:
         type: string
     type: object
+  valuation.ConversationOperation:
+    properties:
+      created_at:
+        type: string
+      draft_id:
+        type: string
+      draft_version:
+        type: integer
+      error_code:
+        type: string
+        x-optional: true
+      evaluation:
+        allOf:
+        - $ref: '#/definitions/valuation.EvaluationDetail'
+        x-optional: true
+      evaluation_id:
+        type: integer
+        x-optional: true
+      first_accepted_user_id: {}
+      id:
+        type: string
+      operation_id:
+        type: string
+      status:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  valuation.ConversationOperationRequest:
+    properties:
+      draft_id:
+        type: string
+      draft_version:
+        type: integer
+      operation_id:
+        type: string
+      request:
+        $ref: '#/definitions/valuation.EvaluationRequest'
+    type: object
   valuation.CreateBatteryRequest:
     properties:
       battery_model:
@@ -4952,6 +4991,16 @@ definitions:
         items:
           type: string
         type: array
+    type: object
+  valuation.CreateDraftRequest:
+    properties:
+      fields:
+        additionalProperties:
+          $ref: '#/definitions/valuation.DraftField'
+        type: object
+      supplemental:
+        additionalProperties: {}
+        type: object
     type: object
   valuation.CycleData:
     properties:
@@ -5002,6 +5051,68 @@ definitions:
         type: string
       value:
         type: number
+    type: object
+  valuation.DraftCandidate:
+    properties:
+      evidence:
+        x-optional: true
+      id:
+        type: string
+        x-optional: true
+      label:
+        type: string
+        x-optional: true
+      source:
+        type: string
+        x-optional: true
+      value: {}
+    type: object
+  valuation.DraftField:
+    properties:
+      candidates:
+        items:
+          $ref: '#/definitions/valuation.DraftCandidate'
+        type: array
+        x-optional: true
+      evidence:
+        x-optional: true
+      range:
+        allOf:
+        - $ref: '#/definitions/valuation.DraftRange'
+        x-optional: true
+      source:
+        type: string
+        x-optional: true
+      state:
+        $ref: '#/definitions/valuation.DraftFieldState'
+      value:
+        x-optional: true
+    type: object
+  valuation.DraftFieldState:
+    enum:
+    - missing
+    - unknown
+    - value
+    - range
+    - candidate
+    type: string
+    x-enum-varnames:
+    - DraftFieldMissing
+    - DraftFieldUnknown
+    - DraftFieldValue
+    - DraftFieldRange
+    - DraftFieldCandidate
+  valuation.DraftRange:
+    properties:
+      max:
+        type: number
+      min:
+        type: number
+    type: object
+  valuation.DraftUndoRequest:
+    properties:
+      base_version:
+        type: integer
     type: object
   valuation.EngineType:
     properties:
@@ -5305,6 +5416,18 @@ definitions:
       vehicle_type:
         type: string
     type: object
+  valuation.PatchDraftRequest:
+    properties:
+      base_version:
+        type: integer
+      fields:
+        additionalProperties:
+          $ref: '#/definitions/valuation.DraftField'
+        type: object
+      supplemental:
+        additionalProperties: {}
+        type: object
+    type: object
   valuation.RawStats:
     properties:
       capacity:
@@ -5380,6 +5503,30 @@ definitions:
         type: integer
       name:
         type: string
+    type: object
+  valuation.ValuationDraft:
+    properties:
+      can_submit:
+        type: boolean
+      can_undo:
+        type: boolean
+      expires_at:
+        type: string
+      fields:
+        additionalProperties:
+          $ref: '#/definitions/valuation.DraftField'
+        type: object
+      id:
+        type: string
+      status:
+        type: string
+      supplemental:
+        additionalProperties: {}
+        type: object
+      updated_at:
+        type: string
+      version:
+        type: integer
     type: object
   valuation.VehicleType:
     properties:
@@ -21170,6 +21317,274 @@ paths:
       summary: 生成电池报告
       tags:
       - 估值-报告
+  /valuation/conversation/drafts:
+    post:
+      consumes:
+      - application/json
+      description: 创建 30 分钟闲置过期的匿名可用草稿；value 状态保留真实 0/false 与来源依据。
+      parameters:
+      - description: 初始字段与补充资料
+        in: body
+        name: body
+        schema:
+          $ref: '#/definitions/valuation.CreateDraftRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/valuation.ValuationDraft'
+              type: object
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 创建估值草稿
+      tags:
+      - 估值-对话
+  /valuation/conversation/drafts/{id}:
+    delete:
+      description: 主动清除草稿；重复删除保持幂等。
+      parameters:
+      - description: 草稿能力 ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: success
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 删除估值草稿
+      tags:
+      - 估值-对话
+    get:
+      description: 按随机能力 ID 读取未过期草稿；读取不延长闲置有效期。
+      parameters:
+      - description: 草稿能力 ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/valuation.ValuationDraft'
+              type: object
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 草稿不存在或已过期
+          schema:
+            $ref: '#/definitions/response.R'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 读取估值草稿
+      tags:
+      - 估值-对话
+    patch:
+      consumes:
+      - application/json
+      description: 按 base_version 执行 CAS；过期版本返回 409。成功修改生成新版本并刷新闲置 TTL。
+      parameters:
+      - description: 草稿能力 ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: 基准版本与字段变更
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/valuation.PatchDraftRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/valuation.ValuationDraft'
+              type: object
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 草稿不存在或已过期
+          schema:
+            $ref: '#/definitions/response.R'
+        "409":
+          description: 版本冲突或草稿不可编辑
+          schema:
+            $ref: '#/definitions/response.R'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 修改估值草稿
+      tags:
+      - 估值-对话
+  /valuation/conversation/drafts/{id}/undo:
+    post:
+      consumes:
+      - application/json
+      description: 恢复上一版字段与依据，生成新版本并回到 editing；仅支持一级撤回。
+      parameters:
+      - description: 草稿能力 ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: 可选基准版本；省略时使用当前版本
+        in: body
+        name: body
+        schema:
+          $ref: '#/definitions/valuation.DraftUndoRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/valuation.ValuationDraft'
+              type: object
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 草稿不存在或已过期
+          schema:
+            $ref: '#/definitions/response.R'
+        "409":
+          description: 版本冲突或无可撤回修改
+          schema:
+            $ref: '#/definitions/response.R'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 撤回最近一次草稿修改
+      tags:
+      - 估值-对话
+  /valuation/conversation/operations:
+    post:
+      consumes:
+      - application/json
+      description: 仅接受已核对的完整草稿版本；operation 与 evaluation 同事务。同键同哈希重试返回首次结果，同键不同哈希返回
+        409。匿名首次受理的归属不因之后登录而改变。
+      parameters:
+      - description: 操作标识、草稿版本与正式评估请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/valuation.ConversationOperationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/valuation.ConversationOperation'
+              type: object
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 草稿不存在或已过期
+          schema:
+            $ref: '#/definitions/response.R'
+        "409":
+          description: 草稿不完整、版本冲突或请求哈希冲突
+          schema:
+            $ref: '#/definitions/response.R'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 确认草稿并创建正式评估
+      tags:
+      - 估值-对话
+  /valuation/conversation/operations/{id}:
+    get:
+      description: 按操作能力 ID 返回首次受理状态与正式评估结果。
+      parameters:
+      - description: 操作能力 ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/valuation.ConversationOperation'
+              type: object
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 操作不存在
+          schema:
+            $ref: '#/definitions/response.R'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 读取估值操作
+      tags:
+      - 估值-对话
   /valuation/dictionaries/algorithm-parameters:
     get:
       consumes:

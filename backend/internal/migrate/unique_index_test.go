@@ -66,7 +66,7 @@ func TestCriticalUniqueIndexesCoverPartialIndexes(t *testing.T) {
 			partial[s.Name] = true
 		}
 	}
-	// 票面清单 + 自己 grep 出的全量核对结果（12 条，其中偏索引 9 条）。
+	// 票面清单 + 自己 grep 出的全量核对结果（14 条偏索引）。
 	wantPartial := []string{
 		"idx_hrwai_users_email_unique", "idx_hrwai_users_wechat_openid_unique", "idx_hrwai_users_phone_unique",
 		"uq_points_task_claim_daily", "uq_points_task_claim_ref",
@@ -74,6 +74,7 @@ func TestCriticalUniqueIndexesCoverPartialIndexes(t *testing.T) {
 		"uq_practice_progress_cred", "uq_practice_progress_nocred",
 		"uq_practice_progress_category", "uq_real_exam_paper_category_source",
 		"uq_wrong_question_category", "uq_wrong_question_unclassified",
+		"uq_valuation_operations_evaluation_id",
 	}
 	for _, n := range wantPartial {
 		if !partial[n] {

@@ -32,6 +32,13 @@
 //   POST /valuation/auth/logout
 //   POST /valuation/evaluations
 //   POST /valuation/battery/evaluations
+//   POST /valuation/conversation/drafts
+//   GET  /valuation/conversation/drafts/{id}
+//   PATCH /valuation/conversation/drafts/{id}
+//   DELETE /valuation/conversation/drafts/{id}
+//   POST /valuation/conversation/drafts/{id}/undo
+//   POST /valuation/conversation/operations
+//   GET  /valuation/conversation/operations/{id}
 //   GET  /valuation/evaluations
 //   GET  /valuation/evaluations/{id}
 //   GET  /valuation/battery/evaluations
@@ -69,7 +76,7 @@
 //   DELETE /valuation/admin/condition-ratings/{id}
 //   DELETE /valuation/admin/region-coefficients/{id}
 //
-// 覆盖的 Go 类型：AlgorithmParameters / BatteryEvaluation / BatteryEvaluationSummary / BatteryType / BatteryTypeDict / Brand / CoefficientConfig / ConditionRating / ConfigOption / CreateBatteryResponse / CycleFeature / DimensionScore / EngineType / EvaluationDetail / EvaluationResponse / FeatureImportance / ListBatteryResponse / MastHeight / MastType / OriginalPrice / RawStats / RegionCoefficient / Series / SeriesConfigOptions / Tonnage / TransmissionType / VehicleType
+// 覆盖的 Go 类型：AlgorithmParameters / BatteryEvaluation / BatteryEvaluationSummary / BatteryType / BatteryTypeDict / Brand / CoefficientConfig / ConditionRating / ConfigOption / ConversationOperation / CreateBatteryResponse / CycleFeature / DimensionScore / DraftCandidate / DraftField / DraftFieldState / DraftRange / EngineType / EvaluationDetail / EvaluationResponse / FeatureImportance / ListBatteryResponse / MastHeight / MastType / OriginalPrice / RawStats / RegionCoefficient / Series / SeriesConfigOptions / Tonnage / TransmissionType / ValuationDraft / VehicleType
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -151,6 +158,20 @@ export interface ConfigOption {
   name: string
 }
 
+export interface ConversationOperation {
+  created_at: string
+  draft_id: string
+  draft_version: number
+  error_code?: string
+  evaluation?: EvaluationDetail
+  evaluation_id?: number
+  first_accepted_user_id: unknown
+  id: string
+  operation_id: string
+  status: string
+  updated_at: string
+}
+
 export interface CreateBatteryResponse {
   battery_type: BatteryType
   confidence: number
@@ -176,6 +197,30 @@ export interface CycleFeature {
 export interface DimensionScore {
   label: string
   value: number
+}
+
+export interface DraftCandidate {
+  evidence?: unknown
+  id?: string
+  label?: string
+  source?: string
+  value: unknown
+}
+
+export interface DraftField {
+  candidates?: DraftCandidate[]
+  evidence?: unknown
+  range?: DraftRange
+  source?: string
+  state: DraftFieldState
+  value?: unknown
+}
+
+export type DraftFieldState = 'missing' | 'unknown' | 'value' | 'range' | 'candidate'
+
+export interface DraftRange {
+  max: number
+  min: number
 }
 
 export interface EngineType {
@@ -337,6 +382,18 @@ export interface Tonnage {
 export interface TransmissionType {
   id: number
   name: string
+}
+
+export interface ValuationDraft {
+  can_submit: boolean
+  can_undo: boolean
+  expires_at: string
+  fields: Record<string, DraftField>
+  id: string
+  status: string
+  supplemental: Record<string, unknown>
+  updated_at: string
+  version: number
 }
 
 export interface VehicleType {

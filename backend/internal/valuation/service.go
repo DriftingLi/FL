@@ -223,7 +223,11 @@ func (s *Service) Persist(ctx context.Context, result *EvaluationResult, userID 
 	if s.evalRepo == nil {
 		return 0, fmt.Errorf("evalRepo 未装配")
 	}
-	params := &CreateEvaluationParams{
+	return s.evalRepo.CreateEvaluation(ctx, evaluationParams(result, userID))
+}
+
+func evaluationParams(result *EvaluationResult, userID int) *CreateEvaluationParams {
+	return &CreateEvaluationParams{
 		Brand:                      result.Brand,
 		VehicleType:                result.VehicleType,
 		Series:                     result.Series,
@@ -258,7 +262,6 @@ func (s *Service) Persist(ctx context.Context, result *EvaluationResult, userID 
 		LambdaCombustion: result.LambdaCombustion,
 		DecayAnchor:      result.DecayAnchor,
 	}
-	return s.evalRepo.CreateEvaluation(ctx, params)
 }
 
 // lookupOriginalPrice 查询基准原价：先精确匹配，未命中则模糊匹配
