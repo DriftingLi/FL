@@ -13,11 +13,14 @@ type OperationEvaluationWriter interface {
 	CreateEvaluation(context.Context, *CreateEvaluationParams) (int64, error)
 }
 
+// OperationRepository 保存正式评估的最小幂等凭据。终态记录随正式评估持久保留、不设 TTL；
+// 草稿的 30 分钟闲置状态独立落在 ephemeral_kv，清理草稿不能重新打开已受理 operation 的重复提交面。
 type OperationRepository interface {
 	GetOperation(ctx context.Context, operationID string) (*ConversationOperation, error)
+	// AcceptOperation 只有唯一键争用的胜者会执行 persist；带 failureCode 的业务失败提交终态凭据，
+	// 无错误码的持久化故障则回滚占位，允许同一操作重试。同键竞争者在胜者提交前阻塞。
 	AcceptOperation(ctx context.Context, operation *ConversationOperation,
-		persist func(OperationEvaluationWriter) (int64, error)) (*ConversationOperation, bool, error)
-	FailOperation(ctx context.Context, operation *ConversationOperation, errorCode string) (*ConversationOperation, bool, error)
+		persist func(OperationEvaluationWriter) (int64, string, error)) (*ConversationOperation, bool, error)
 }
 
 type operationRepository struct {
@@ -37,7 +40,7 @@ func (r *operationRepository) GetOperation(ctx context.Context, operationID stri
 }
 
 func (r *operationRepository) AcceptOperation(ctx context.Context, operation *ConversationOperation,
-	persist func(OperationEvaluationWriter) (int64, error)) (*ConversationOperation, bool, error) {
+	persist func(OperationEvaluationWriter) (int64, string, error)) (*ConversationOperation, bool, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return nil, false, fmt.Errorf("begin valuation operation: %w", err)
@@ -48,7 +51,7 @@ func (r *operationRepository) AcceptOperation(ctx context.Context, operation *Co
 		(operation_key, request_hash, draft_id, draft_version, first_accepted_user_id, status)
 		VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (operation_key) DO NOTHING`,
 		operation.OperationID, operation.RequestHash, operation.DraftID, operation.DraftVersion,
-		nullableUserPointer(operation.FirstAcceptedUserID), OperationStatusPending)
+		operation.FirstAcceptedUserID, OperationStatusPending)
 	if err != nil {
 		return nil, false, fmt.Errorf("reserve valuation operation: %w", err)
 	}
@@ -61,9 +64,25 @@ func (r *operationRepository) AcceptOperation(ctx context.Context, operation *Co
 		return existing, false, nil
 	}
 
-	evaluationID, err := persist(pgxEvaluationWriter{tx: tx})
-	if err != nil {
+	evaluationID, failureCode, err := persist(pgxEvaluationWriter{tx: tx})
+	if err != nil && failureCode == "" {
 		return nil, false, fmt.Errorf("persist valuation evaluation: %w", err)
+	}
+	if err != nil {
+		if _, err := tx.Exec(ctx, `UPDATE valuation_operations
+			SET status = $2, error_code = $3, updated_at = NOW()
+			WHERE operation_key = $1`, operation.OperationID, OperationStatusFailed, failureCode); err != nil {
+			return nil, false, fmt.Errorf("record valuation operation failure: %w", err)
+		}
+		accepted, err := scanOperation(tx.QueryRow(ctx, `SELECT `+operationColumns+`
+			FROM valuation_operations WHERE operation_key = $1`, operation.OperationID))
+		if err != nil {
+			return nil, false, err
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return nil, false, fmt.Errorf("commit failed valuation operation: %w", err)
+		}
+		return accepted, true, nil
 	}
 	if _, err := tx.Exec(ctx, `UPDATE valuation_operations
 		SET evaluation_id = $2, status = $3, error_code = NULL, updated_at = NOW()
@@ -79,31 +98,6 @@ func (r *operationRepository) AcceptOperation(ctx context.Context, operation *Co
 		return nil, false, fmt.Errorf("commit valuation operation: %w", err)
 	}
 	return accepted, true, nil
-}
-
-func (r *operationRepository) FailOperation(ctx context.Context, operation *ConversationOperation, errorCode string) (*ConversationOperation, bool, error) {
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return nil, false, fmt.Errorf("begin failed valuation operation: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	tag, err := tx.Exec(ctx, `INSERT INTO valuation_operations
-		(operation_key, request_hash, draft_id, draft_version, first_accepted_user_id, status, error_code)
-		VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (operation_key) DO NOTHING`,
-		operation.OperationID, operation.RequestHash, operation.DraftID, operation.DraftVersion,
-		nullableUserPointer(operation.FirstAcceptedUserID), OperationStatusFailed, errorCode)
-	if err != nil {
-		return nil, false, fmt.Errorf("record failed valuation operation: %w", err)
-	}
-	failed, err := scanOperation(tx.QueryRow(ctx, `SELECT `+operationColumns+`
-		FROM valuation_operations WHERE operation_key = $1`, operation.OperationID))
-	if err != nil {
-		return nil, false, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return nil, false, fmt.Errorf("commit failed valuation operation: %w", err)
-	}
-	return failed, tag.RowsAffected() == 1, nil
 }
 
 type pgxEvaluationWriter struct {
@@ -138,20 +132,4 @@ func scanOperation(row pgx.Row) (*ConversationOperation, error) {
 	operation.CreatedAt = createdAt
 	operation.UpdatedAt = updatedAt
 	return &operation, nil
-}
-
-func nullableUserPointer(userID any) any {
-	switch value := userID.(type) {
-	case nil:
-		return nil
-	case *int:
-		if value == nil {
-			return nil
-		}
-		return *value
-	case int:
-		return value
-	default:
-		return nil
-	}
 }

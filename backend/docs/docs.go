@@ -26339,7 +26339,7 @@ const docTemplate = `{
         },
         "/valuation/conversation/operations": {
             "post": {
-                "description": "仅接受已核对的完整草稿版本；operation 与 evaluation 同事务。同键同哈希重试返回首次结果，同键不同哈希返回 409。匿名首次受理的归属不因之后登录而改变。",
+                "description": "仅接受已核对的完整草稿版本；operation 与 evaluation 同事务。同键同哈希重试返回首次结果，同键不同哈希返回 409。匿名首次受理的归属不因之后登录而改变。操作去重凭据随正式评估持久保留，不适用草稿的 30 分钟闲置 TTL。",
                 "consumes": [
                     "application/json"
                 ],
@@ -35648,7 +35648,10 @@ const docTemplate = `{
                     "type": "integer",
                     "x-optional": true
                 },
-                "first_accepted_user_id": {},
+                "first_accepted_user_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
                 "id": {
                     "type": "string"
                 },

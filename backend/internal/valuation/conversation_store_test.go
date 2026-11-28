@@ -90,37 +90,25 @@ func (m *memOperationRepository) GetOperation(_ context.Context, operationID str
 }
 
 func (m *memOperationRepository) AcceptOperation(_ context.Context, operation *ConversationOperation,
-	persist func(OperationEvaluationWriter) (int64, error)) (*ConversationOperation, bool, error) {
+	persist func(OperationEvaluationWriter) (int64, string, error)) (*ConversationOperation, bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if existing, ok := m.operations[operation.OperationID]; ok {
 		copied := *existing
 		return &copied, false, nil
 	}
-	evaluationID, err := persist(m.evaluations)
-	if err != nil {
+	evaluationID, failureCode, err := persist(m.evaluations)
+	if err != nil && failureCode == "" {
 		return nil, false, err
 	}
 	stored := *operation
 	stored.ID = stored.OperationID
 	stored.Status = OperationStatusSucceeded
-	stored.EvaluationID = evaluationID
-	stored.UpdatedAt = time.Now()
-	m.operations[stored.OperationID] = &stored
-	return &stored, true, nil
-}
-
-func (m *memOperationRepository) FailOperation(_ context.Context, operation *ConversationOperation, errorCode string) (*ConversationOperation, bool, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if existing, ok := m.operations[operation.OperationID]; ok {
-		copied := *existing
-		return &copied, false, nil
+	if err != nil {
+		stored.Status = OperationStatusFailed
+		stored.ErrorCode = failureCode
 	}
-	stored := *operation
-	stored.ID = stored.OperationID
-	stored.Status = OperationStatusFailed
-	stored.ErrorCode = errorCode
+	stored.EvaluationID = evaluationID
 	stored.UpdatedAt = time.Now()
 	m.operations[stored.OperationID] = &stored
 	return &stored, true, nil

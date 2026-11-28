@@ -24,7 +24,7 @@ type ConversationOperation struct {
 	ErrorCode           string            `json:"error_code,omitempty" extensions:"x-optional"`
 	EvaluationID        int64             `json:"evaluation_id,omitempty" extensions:"x-optional"`
 	Evaluation          *EvaluationDetail `json:"evaluation,omitempty" extensions:"x-optional"`
-	FirstAcceptedUserID any               `json:"first_accepted_user_id"`
+	FirstAcceptedUserID *int              `json:"first_accepted_user_id" extensions:"x-nullable"`
 	RequestHash         string            `json:"-"`
 	CreatedAt           time.Time         `json:"created_at"`
 	UpdatedAt           time.Time         `json:"updated_at"`

@@ -1,8 +1,13 @@
 package valuation
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
+	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -12,6 +17,127 @@ import (
 	"forklift-training/internal/clock"
 	"forklift-training/internal/storage"
 )
+
+func TestConversationOperationFirstAcceptedUserIDIsNullableInteger(t *testing.T) {
+	field, ok := reflect.TypeOf(ConversationOperation{}).FieldByName("FirstAcceptedUserID")
+	if !ok || field.Type != reflect.TypeOf((*int)(nil)) {
+		t.Fatalf("first_accepted_user_id 必须是可空整数，got %v", field.Type)
+	}
+	if !strings.Contains(field.Tag.Get("extensions"), "x-nullable") {
+		t.Fatalf("first_accepted_user_id 必须声明 x-nullable，got %q", field.Tag.Get("extensions"))
+	}
+	encoded, err := json.Marshal(ConversationOperation{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(encoded, &body); err != nil {
+		t.Fatal(err)
+	}
+	value, exists := body["first_accepted_user_id"]
+	if !exists || value != nil {
+		t.Fatalf("匿名首次受理必须显式发出 null: %s", encoded)
+	}
+}
+
+func TestConversationOperationErrorCodeMappingRoundTrip(t *testing.T) {
+	for _, item := range []struct {
+		sentinel error
+		code     string
+	}{
+		{ErrDraftNotFound, ErrorCodeDraftNotFound},
+		{ErrDraftVersionConflict, ErrorCodeDraftVersionConflict},
+		{ErrDraftNotEditing, ErrorCodeDraftNotEditing},
+		{ErrDraftNothingToUndo, ErrorCodeDraftNothingToUndo},
+		{ErrDraftIncomplete, ErrorCodeDraftIncomplete},
+		{ErrInvalidDraftField, ErrorCodeInvalidDraftField},
+		{ErrInvalidOperation, ErrorCodeInvalidOperation},
+		{ErrEvaluationRejected, ErrorCodeEvaluationRejected},
+		{ErrOperationResultMissing, ErrorCodeOperationResultMissing},
+		{ErrOperationDraftMismatch, ErrorCodeOperationDraftMismatch},
+	} {
+		t.Run(item.code, func(t *testing.T) {
+			if got := errorCodeFor(fmt.Errorf("wrapped: %w", item.sentinel)); got != item.code {
+				t.Errorf("errorCodeFor(%v) = %q, want %q", item.sentinel, got, item.code)
+			}
+			if got := operationError(item.code); !errors.Is(got, item.sentinel) {
+				t.Errorf("operationError(%q) = %v, want %v", item.code, got, item.sentinel)
+			}
+		})
+	}
+	if got := errorCodeFor(errors.New("unmapped")); got != "" {
+		t.Errorf("未知错误不得持久化为业务错误码: %q", got)
+	}
+	if got := operationError("unknown"); !errors.Is(got, ErrInvalidOperation) {
+		t.Errorf("未知持久化错误码必须降级为 ErrInvalidOperation: %v", got)
+	}
+}
+
+type reservationObservingDictionary struct {
+	*memDictStore
+	beforeCalculation func() error
+}
+
+func (d *reservationObservingDictionary) FindOriginalPriceMatch(ctx context.Context, brand, vehicleType, series string,
+	tonnage float64, configType, mastType string, mastHeightMM int) (OriginalPrice, error) {
+	if err := d.beforeCalculation(); err != nil {
+		return OriginalPrice{}, err
+	}
+	return d.memDictStore.FindOriginalPriceMatch(ctx, brand, vehicleType, series, tonnage, configType, mastType, mastHeightMM)
+}
+
+type reservationObservingRepository struct {
+	OperationRepository
+	onAccept func(*ConversationOperation)
+}
+
+func (r *reservationObservingRepository) AcceptOperation(ctx context.Context, operation *ConversationOperation,
+	persist func(OperationEvaluationWriter) (int64, string, error)) (*ConversationOperation, bool, error) {
+	r.onAccept(operation)
+	return r.OperationRepository.AcceptOperation(ctx, operation, persist)
+}
+
+func TestConversationOperationReservesFirstAcceptedUserBeforeCalculation(t *testing.T) {
+	dict := &reservationObservingDictionary{memDictStore: newSeedMemDict()}
+	evaluations := newMemEvalStore()
+	valuationSvc, err := NewService(dict, evaluations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var accepted *ConversationOperation
+	operations := &reservationObservingRepository{
+		OperationRepository: newMemOperationRepository(evaluations),
+		onAccept: func(operation *ConversationOperation) {
+			accepted = operation
+		},
+	}
+	dict.beforeCalculation = func() error {
+		if accepted == nil {
+			return errors.New("计算开始前尚未争用 operation")
+		}
+		if accepted.FirstAcceptedUserID == nil || *accepted.FirstAcceptedUserID != 7 {
+			return fmt.Errorf("计算开始前首次受理身份未记录: %v", accepted.FirstAcceptedUserID)
+		}
+		return nil
+	}
+	svc := NewConversationService(newMemDraftRepository(), operations, valuationSvc, evaluations, time.Now)
+	draft, err := svc.CreateDraft(context.Background(), &CreateDraftRequest{Fields: completeDraftFields(t, baseEvalRequest())})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := svc.ExecuteOperation(context.Background(), &ConversationOperationRequest{
+		OperationID: "reserve-before-calculation", DraftID: draft.ID, DraftVersion: draft.Version, Request: baseEvalRequest(),
+	}, 7)
+	if err != nil {
+		t.Fatalf("首次受理后计算失败: %v", err)
+	}
+	if result.FirstAcceptedUserID == nil || *result.FirstAcceptedUserID != 7 {
+		t.Fatalf("首次受理身份丢失: %v", result.FirstAcceptedUserID)
+	}
+	if evaluations.userIDByEvaluation[result.EvaluationID] != 7 {
+		t.Fatalf("正式评估未归属首次受理用户: %v", evaluations.userIDByEvaluation)
+	}
+}
 
 func TestConversationOperationIdempotentReplayAndHashConflict(t *testing.T) {
 	r, _, evaluations := newTestValuationEngine(t)

@@ -29,3 +29,19 @@ const (
 	ErrorCodeOperationResultMissing = "operation_result_missing"
 	ErrorCodeOperationDraftMismatch = "operation_draft_mismatch"
 )
+
+var operationErrorMappings = [...]struct {
+	sentinel error
+	code     string
+}{
+	{ErrDraftNotFound, ErrorCodeDraftNotFound},
+	{ErrDraftVersionConflict, ErrorCodeDraftVersionConflict},
+	{ErrDraftNotEditing, ErrorCodeDraftNotEditing},
+	{ErrDraftNothingToUndo, ErrorCodeDraftNothingToUndo},
+	{ErrDraftIncomplete, ErrorCodeDraftIncomplete},
+	{ErrInvalidDraftField, ErrorCodeInvalidDraftField},
+	{ErrInvalidOperation, ErrorCodeInvalidOperation},
+	{ErrEvaluationRejected, ErrorCodeEvaluationRejected},
+	{ErrOperationResultMissing, ErrorCodeOperationResultMissing},
+	{ErrOperationDraftMismatch, ErrorCodeOperationDraftMismatch},
+}

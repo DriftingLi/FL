@@ -32,11 +32,8 @@ func (s *ConversationService) revalidateDraftDownstream(ctx context.Context, dra
 	for name := range changed {
 		markDraftDownstream(affected, name)
 	}
-	validationContext, err := cloneDraft(draft)
-	if err != nil {
-		return err
-	}
 	dictionary, supported := s.valuation.dictRepo.(draftCascadeDictionary)
+	var err error
 	for _, name := range requiredDraftFields {
 		if !affected[name] {
 			continue
@@ -51,7 +48,7 @@ func (s *ConversationService) revalidateDraftDownstream(ctx context.Context, dra
 		var allowed []any
 		var ready bool
 		if supported {
-			allowed, ready, err = allowedDraftValues(ctx, dictionary, validationContext, name)
+			allowed, ready, err = allowedDraftValues(ctx, dictionary, draft, name)
 			if err != nil {
 				return fmt.Errorf("revalidate valuation draft field %s: %w", name, err)
 			}

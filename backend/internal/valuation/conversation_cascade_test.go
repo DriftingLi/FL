@@ -5,6 +5,17 @@ import (
 	"fmt"
 )
 
+type cascadeVehicleTypeGapDictionary struct {
+	*memDictStore
+}
+
+func (m *cascadeVehicleTypeGapDictionary) ListVehicleTypesByBrand(ctx context.Context, brand string) ([]VehicleType, error) {
+	if brand == "丰田" {
+		return []VehicleType{{ID: 1, Name: "内燃叉车", PowerType: "combustion"}}, nil
+	}
+	return m.memDictStore.ListVehicleTypesByBrand(ctx, brand)
+}
+
 func (m *memDictStore) ListVehicleTypesByBrand(_ context.Context, brand string) ([]VehicleType, error) {
 	seen := map[string]bool{}
 	rows := make([]VehicleType, 0)

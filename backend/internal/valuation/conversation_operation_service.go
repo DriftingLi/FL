@@ -48,25 +48,30 @@ func (s *ConversationService) ExecuteOperation(ctx context.Context, req *Convers
 	if userID > 0 {
 		operation.FirstAcceptedUserID = &userID
 	}
-	result, err := s.evaluateOperationDraft(ctx, req)
-	if err != nil {
-		return s.recordOperationFailure(ctx, operation, err)
-	}
+	var evaluationErr error
 	accepted, inserted, err := s.operations.AcceptOperation(ctx, operation,
-		func(writer OperationEvaluationWriter) (int64, error) {
-			return writer.CreateEvaluation(ctx, evaluationParams(result, userID))
+		func(writer OperationEvaluationWriter) (int64, string, error) {
+			result, err := s.evaluateOperationDraft(ctx, req)
+			if err != nil {
+				evaluationErr = err
+				return 0, errorCodeFor(err), err
+			}
+			evaluationID, err := writer.CreateEvaluation(ctx, evaluationParams(result, userID))
+			return evaluationID, "", err
 		})
 	if err != nil {
 		return nil, err
 	}
-	if !inserted {
-		if accepted.RequestHash != hash {
-			return nil, ErrOperationHashConflict
+	if accepted.RequestHash != hash {
+		return nil, ErrOperationHashConflict
+	}
+	if accepted.Status == OperationStatusFailed {
+		if inserted {
+			return nil, evaluationErr
 		}
-		if accepted.Status == OperationStatusFailed {
-			return nil, operationError(accepted.ErrorCode)
-		}
-	} else {
+		return nil, operationError(accepted.ErrorCode)
+	}
+	if inserted {
 		// 草稿是临时展示状态；正式事实已由 operation/evaluation 事务保证，标记失败不得撤回已提交结果。
 		_ = s.markDraftSubmitted(ctx, req.DraftID, req.DraftVersion)
 	}
@@ -121,26 +126,6 @@ func (s *ConversationService) evaluateOperationDraft(ctx context.Context, req *C
 		return nil, fmt.Errorf("%w: %v", ErrEvaluationRejected, err)
 	}
 	return result, nil
-}
-
-func (s *ConversationService) recordOperationFailure(ctx context.Context, operation *ConversationOperation, cause error) (*ConversationOperation, error) {
-	code := errorCodeFor(cause)
-	if code == "" {
-		return nil, cause
-	}
-	failed, inserted, err := s.operations.FailOperation(ctx, operation, code)
-	if err != nil {
-		return nil, cause
-	}
-	if !inserted {
-		if failed.RequestHash != operation.RequestHash {
-			return nil, ErrOperationHashConflict
-		}
-		if failed.Status != OperationStatusFailed {
-			return s.operationResponse(ctx, failed)
-		}
-	}
-	return nil, cause
 }
 
 func (s *ConversationService) operationResponse(ctx context.Context, operation *ConversationOperation) (*ConversationOperation, error) {
@@ -283,43 +268,19 @@ func normalizeOperationID(id string) (string, error) {
 }
 
 func errorCodeFor(err error) string {
-	switch {
-	case errors.Is(err, ErrDraftNotFound):
-		return ErrorCodeDraftNotFound
-	case errors.Is(err, ErrDraftVersionConflict):
-		return ErrorCodeDraftVersionConflict
-	case errors.Is(err, ErrDraftNotEditing):
-		return ErrorCodeDraftNotEditing
-	case errors.Is(err, ErrDraftIncomplete):
-		return ErrorCodeDraftIncomplete
-	case errors.Is(err, ErrInvalidDraftField):
-		return ErrorCodeInvalidDraftField
-	case errors.Is(err, ErrOperationDraftMismatch):
-		return ErrorCodeOperationDraftMismatch
-	case errors.Is(err, ErrEvaluationRejected):
-		return ErrorCodeEvaluationRejected
-	default:
-		return ""
+	for _, mapping := range operationErrorMappings {
+		if errors.Is(err, mapping.sentinel) {
+			return mapping.code
+		}
 	}
+	return ""
 }
 
 func operationError(code string) error {
-	switch code {
-	case ErrorCodeDraftNotFound:
-		return ErrDraftNotFound
-	case ErrorCodeDraftVersionConflict:
-		return ErrDraftVersionConflict
-	case ErrorCodeDraftNotEditing:
-		return ErrDraftNotEditing
-	case ErrorCodeDraftIncomplete:
-		return ErrDraftIncomplete
-	case ErrorCodeInvalidDraftField:
-		return ErrInvalidDraftField
-	case ErrorCodeOperationDraftMismatch:
-		return ErrOperationDraftMismatch
-	case ErrorCodeEvaluationRejected:
-		return ErrEvaluationRejected
-	default:
-		return ErrInvalidOperation
+	for _, mapping := range operationErrorMappings {
+		if mapping.code == code {
+			return mapping.sentinel
+		}
 	}
+	return ErrInvalidOperation
 }

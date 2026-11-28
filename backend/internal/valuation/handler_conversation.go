@@ -213,7 +213,7 @@ func parseOperationPath(c *gin.Context) (*operationPathRequest, error) {
 
 // CreateOperation 处理 POST /api/valuation/conversation/operations。
 // @Summary 确认草稿并创建正式评估
-// @Description 仅接受已核对的完整草稿版本；operation 与 evaluation 同事务。同键同哈希重试返回首次结果，同键不同哈希返回 409。匿名首次受理的归属不因之后登录而改变。
+// @Description 仅接受已核对的完整草稿版本；operation 与 evaluation 同事务。同键同哈希重试返回首次结果，同键不同哈希返回 409。匿名首次受理的归属不因之后登录而改变。操作去重凭据随正式评估持久保留，不适用草稿的 30 分钟闲置 TTL。
 // @Tags 估值-对话
 // @Accept json
 // @Produce json

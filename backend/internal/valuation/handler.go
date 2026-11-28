@@ -14,7 +14,14 @@
 //
 //	/api/valuation                      可选认证组（登录与否都能用，登录则记录 user_id）
 //	  ├── POST /evaluations             评估提交
-//	  └── POST /battery/evaluations     电池 RUL 评估提交
+//	  ├── POST /battery/evaluations     电池 RUL 评估提交
+//	  ├── POST /conversation/drafts     创建对话估值草稿
+//	  ├── GET  /conversation/drafts/:id 读取草稿
+//	  ├── PATCH /conversation/drafts/:id 修改草稿
+//	  ├── DELETE /conversation/drafts/:id 删除草稿
+//	  ├── POST /conversation/drafts/:id/undo 撤回最近一次修改
+//	  ├── POST /conversation/operations 确认草稿并创建正式评估
+//	  └── GET  /conversation/operations/:id 读取操作与正式结果
 //
 //	/api/valuation                      估值鉴权组（统一主体系 JWT）
 //	  ├── GET  /evaluations             评估历史/详情（需登录）
@@ -48,7 +55,7 @@ const valuationAdminGroupPath = "/api/valuation/admin"
 // RegisterRoutes 注册残值评估模块路由。
 // 路由分五组：
 //   - 公开组 /api/valuation：字典查询、统计、健康检查、报告生成/下载、登录/注册（匿名可访问）
-//   - 可选认证组 /api/valuation：评估提交、电池评估提交（匿名可提交，登录则记录 user_id）
+//   - 可选认证组 /api/valuation：评估提交、电池评估提交、对话草稿与 operation（匿名可提交，登录则记录 user_id）
 //   - 估值鉴权组 /api/valuation：评估历史/详情、电池历史、/auth/me（需登录）
 //   - 公开组补充：/auth/logout（refresh_token 自证身份，不依赖 JWTAuth，ADR-0016）
 //   - 管理员组 /api/valuation/admin：字典 CRUD（需主体系 admin JWT）
@@ -122,7 +129,8 @@ func RegisterRoutes(
 	}
 
 	// === 可选认证组（登录与否都能用，登录则记录 user_id） ===
-	// 评估提交/电池评估：未登录可提交（user_id 落 NULL），登录用户提交则归属到自己
+	// 评估提交/电池评估/对话草稿与 operation：未登录可提交（user_id 落 NULL），登录用户提交则归属到自己。
+	// operation 同键并发按首次受理时的身份归属，不因后续登录或重试改写。
 	optional := r.Group("/api/valuation")
 	optional.Use(middleware.OptionalAuth(sess))
 	{

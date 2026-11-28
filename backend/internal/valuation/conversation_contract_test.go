@@ -1,7 +1,11 @@
 package valuation
 
 import (
+	"context"
+	"encoding/json"
 	"net/http"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,6 +14,41 @@ import (
 	"forklift-training/internal/clock"
 	"forklift-training/internal/storage"
 )
+
+func TestConversationRoutesAreListedInPackageGuide(t *testing.T) {
+	source, err := os.ReadFile("handler.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	packageClause := strings.Index(string(source), "package valuation")
+	if packageClause < 0 {
+		t.Fatal("handler.go 缺少 package 子句，无法读取包级路由导览")
+	}
+	guide := strings.Join(strings.Fields(string(source[:packageClause])), " ")
+	r, _, _ := newTestValuationEngine(t)
+	registered := make(map[string]bool)
+	for _, route := range r.Routes() {
+		registered[route.Method+" "+route.Path] = true
+	}
+	for _, route := range []string{
+		"POST /api/valuation/conversation/drafts",
+		"GET /api/valuation/conversation/drafts/:id",
+		"PATCH /api/valuation/conversation/drafts/:id",
+		"DELETE /api/valuation/conversation/drafts/:id",
+		"POST /api/valuation/conversation/drafts/:id/undo",
+		"POST /api/valuation/conversation/operations",
+		"GET /api/valuation/conversation/operations/:id",
+	} {
+		if !registered[route] {
+			t.Errorf("生产路由未注册 %s", route)
+		}
+		guideEntry := route
+		guideEntry = strings.Join(strings.Fields(strings.Replace(guideEntry, "/api/valuation", "", 1)), " ")
+		if !strings.Contains(guide, guideEntry) {
+			t.Errorf("包级路由导览缺少可选认证路由 %s", guideEntry)
+		}
+	}
+}
 
 func TestConversationDraftCreateAndGetPreservesZeroAndFalse(t *testing.T) {
 	r, _, _ := newTestValuationEngine(t)
@@ -256,6 +295,87 @@ func TestConversationDraftUpstreamCorrectionRevalidatesOnlyDownstream(t *testing
 		undoneFields["mast_type"].(map[string]any)["value"] != "旧门架" {
 		t.Errorf("undo 未恢复上游及其下游状态: %v", undoneFields)
 	}
+}
+
+func TestConversationDraftCascadeUsesInvalidatedUpstreamSnapshot(t *testing.T) {
+	dict := &cascadeVehicleTypeGapDictionary{memDictStore: newSeedMemDict()}
+	dict.originalPrices = append(dict.originalPrices,
+		OriginalPrice{
+			Brand: "丰田", VehicleType: "电动叉车", Series: "K系列", Tonnage: 3,
+			ConfigType: "标准", MastType: "标准门架", MastHeightMM: 3000,
+		},
+		OriginalPrice{
+			Brand: "丰田", VehicleType: "内燃叉车", Series: "新系列", Tonnage: 3,
+			ConfigType: "标准", MastType: "标准门架", MastHeightMM: 3000,
+		},
+	)
+	evaluations := newMemEvalStore()
+	valuationSvc, err := NewService(dict, evaluations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := NewConversationService(newMemDraftRepository(), newMemOperationRepository(evaluations), valuationSvc, evaluations, time.Now)
+	request := baseEvalRequest()
+	draft, err := svc.CreateDraft(context.Background(), &CreateDraftRequest{Fields: completeDraftFields(t, request)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	baseVersion := 1
+	patched, err := svc.PatchDraft(context.Background(), draft.ID, &PatchDraftRequest{
+		BaseVersion: &baseVersion,
+		Fields:      map[string]DraftField{"brand": {State: DraftFieldValue, Value: "丰田", Source: "user"}},
+	})
+	if err != nil {
+		t.Fatalf("更正品牌失败: %v", err)
+	}
+	for _, name := range []string{"vehicle_type", "series", "tonnage", "config_type", "mast_type", "mast_height_mm"} {
+		field := patched.Fields[name]
+		if field.State != DraftFieldCandidate {
+			t.Errorf("上游品牌变更后 %s 应按新上下文逐项失效: %+v", name, field)
+		}
+	}
+}
+
+func TestConversationDraftCascadeRevalidatesLaterFieldsAfterConfigInvalidation(t *testing.T) {
+	r, _, _ := newTestValuationEngine(t)
+	draft := createCompleteConversationDraft(t, r)
+	w := performRequest(r, http.MethodPatch, "/api/valuation/conversation/drafts/"+draft["id"].(string), map[string]any{
+		"base_version": 1,
+		"fields": map[string]any{
+			"config_type": map[string]any{"state": "value", "value": "不存在的配置", "source": "user"},
+		},
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("更正配置失败: %d\nbody=%s", w.Code, w.Body.String())
+	}
+	_, _, patched := decodeBody(t, w)
+	fields := patched["fields"].(map[string]any)
+	for _, name := range []string{"mast_type", "mast_height_mm"} {
+		field := fields[name].(map[string]any)
+		if field["state"] != "candidate" {
+			t.Errorf("配置变更后 %s 应使用失效后的门架上下文: %v", name, field)
+		}
+	}
+	if hours := fields["usage_hours"].(map[string]any); hours["state"] != "value" || hours["value"] != float64(baseEvalRequest().UsageHours) {
+		t.Errorf("无关工时事实被级联覆盖: %v", hours)
+	}
+}
+
+func completeDraftFields(t *testing.T, request EvaluationRequest) map[string]DraftField {
+	t.Helper()
+	encoded, err := json.Marshal(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var values map[string]any
+	if err := json.Unmarshal(encoded, &values); err != nil {
+		t.Fatal(err)
+	}
+	fields := make(map[string]DraftField, len(values))
+	for name, value := range values {
+		fields[name] = DraftField{State: DraftFieldValue, Value: value, Source: "user", Evidence: "用户已核对"}
+	}
+	return fields
 }
 
 func createConversationDraft(t *testing.T, r *gin.Engine, body map[string]any) map[string]any {

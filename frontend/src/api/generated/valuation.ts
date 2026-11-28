@@ -165,7 +165,7 @@ export interface ConversationOperation {
   error_code?: string
   evaluation?: EvaluationDetail
   evaluation_id?: number
-  first_accepted_user_id: unknown
+  first_accepted_user_id: number | null
   id: string
   operation_id: string
   status: string

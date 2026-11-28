@@ -12,3 +12,6 @@ CREATE TABLE valuation_operations (
 );
 
 CREATE UNIQUE INDEX uq_valuation_operations_evaluation_id ON valuation_operations (evaluation_id) WHERE evaluation_id IS NOT NULL;
+
+COMMENT ON TABLE valuation_operations IS
+    'Durable idempotency receipt retained with the formal evaluation; not short-lived draft state. Minimal completion metadata only; no TTL or automatic cleanup.';
