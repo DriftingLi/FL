@@ -14,16 +14,26 @@ type TrialReplayCase struct {
 	CompleteRequest *EvaluationRequest `json:"complete_request,omitempty"`
 }
 
+type TrialReplayAttempt struct {
+	Status     string         `json:"status"`
+	ReasonCode string         `json:"reason_code,omitempty"`
+	Interval   *TrialInterval `json:"interval,omitempty"`
+	WidthRatio *float64       `json:"width_ratio,omitempty"`
+}
+
 type TrialReplayResult struct {
-	Index         int            `json:"index"`
-	Group         string         `json:"group"`
-	TrialStatus   string         `json:"trial_status"`
-	ReasonCode    string         `json:"reason_code,omitempty"`
-	Interval      *TrialInterval `json:"interval,omitempty"`
-	WidthRatio    *float64       `json:"width_ratio,omitempty"`
-	CompleteValid bool           `json:"complete_valid"`
-	CompleteValue float64        `json:"complete_value,omitempty"`
-	CompleteError string         `json:"complete_error,omitempty"`
+	Index            int                           `json:"index"`
+	Group            string                        `json:"group"`
+	MaskedDimensions int                           `json:"masked_dimensions"`
+	OcclusionRate    float64                       `json:"occlusion_rate"`
+	TrialStatus      string                        `json:"trial_status"`
+	ReasonCode       string                        `json:"reason_code,omitempty"`
+	Interval         *TrialInterval                `json:"interval,omitempty"`
+	WidthRatio       *float64                      `json:"width_ratio,omitempty"`
+	Thresholds       map[string]TrialReplayAttempt `json:"thresholds"`
+	CompleteValid    bool                          `json:"complete_valid"`
+	CompleteValue    float64                       `json:"complete_value,omitempty"`
+	CompleteError    string                        `json:"complete_error,omitempty"`
 }
 
 type TrialWidthMetrics struct {
@@ -33,6 +43,7 @@ type TrialWidthMetrics struct {
 	Priced            int            `json:"priced"`
 	Covered           int            `json:"covered"`
 	TooWide           int            `json:"too_wide"`
+	WidthLimit        float64        `json:"width_limit_ratio"`
 	PricedOverValid   float64        `json:"priced_over_valid"`
 	CoveredOverPriced float64        `json:"covered_over_priced"`
 	TooWideOverValid  float64        `json:"too_wide_over_valid"`
@@ -40,10 +51,12 @@ type TrialWidthMetrics struct {
 }
 
 type TrialReplayGroup struct {
-	N          int                          `json:"n"`
-	Valid      int                          `json:"valid"`
-	Excluded   int                          `json:"excluded"`
-	Thresholds map[string]TrialWidthMetrics `json:"thresholds"`
+	N                  int                          `json:"n"`
+	Valid              int                          `json:"valid"`
+	Excluded           int                          `json:"excluded"`
+	OccludedDimensions int                          `json:"occluded_dimensions"`
+	OcclusionRate      float64                      `json:"occlusion_rate"`
+	Thresholds         map[string]TrialWidthMetrics `json:"thresholds"`
 }
 
 type TrialReplayReport struct {
@@ -94,7 +107,13 @@ func ReplayTrialBatch(ctx context.Context, snapshot *TrialSnapshot, cases []Tria
 			}
 		}
 		group.N++
-		result := TrialReplayResult{Index: index, Group: groupName}
+		maskedDimensions := trialOccludedDimensions(testCase.Request)
+		group.OccludedDimensions += maskedDimensions
+		result := TrialReplayResult{
+			Index: index, Group: groupName, MaskedDimensions: maskedDimensions,
+			OcclusionRate: ratio(maskedDimensions, trialOcclusionDimensionCount),
+			Thresholds:    make(map[string]TrialReplayAttempt, len(trialReplayThresholds)),
+		}
 		if testCase.CompleteRequest == nil {
 			result.CompleteError = "complete_request_missing"
 			group.Excluded++
@@ -131,6 +150,11 @@ func ReplayTrialBatch(ctx context.Context, snapshot *TrialSnapshot, cases []Tria
 			}
 			metrics := group.Thresholds[threshold.key]
 			metrics.N, metrics.Valid, metrics.Excluded = group.N, group.Valid, group.Excluded
+			metrics.WidthLimit = threshold.value
+			result.Thresholds[threshold.key] = TrialReplayAttempt{
+				Status: result.TrialStatus, ReasonCode: result.ReasonCode,
+				Interval: result.Interval, WidthRatio: result.WidthRatio,
+			}
 			if result.CompleteValid {
 				if result.TrialStatus == TrialStatusPriced && result.Interval != nil {
 					metrics.Priced++
@@ -153,10 +177,34 @@ func ReplayTrialBatch(ctx context.Context, snapshot *TrialSnapshot, cases []Tria
 			metrics.TooWideOverValid = ratio(metrics.TooWide, metrics.Valid)
 			group.Thresholds[threshold.key] = metrics
 		}
+		group.OcclusionRate = ratio(group.OccludedDimensions, group.N*trialOcclusionDimensionCount)
 		report.Groups[groupName] = group
 		report.Results = append(report.Results, result)
 	}
 	return report, nil
+}
+
+const trialOcclusionDimensionCount = 10
+
+func trialOccludedDimensions(req TrialRequest) int {
+	missing := 0
+	for _, masked := range []bool{
+		req.Series == nil,
+		req.ConfigType == nil,
+		req.MastType == nil,
+		req.MastHeightMM == nil,
+		req.UsageHours == nil,
+		req.Condition == nil,
+		req.OriginalPaint == nil,
+		req.HasLicensePlate == nil || req.HasRegistrationCertificate == nil,
+		req.HasMaintenanceRecords == nil,
+		req.Province == nil || req.City == nil,
+	} {
+		if masked {
+			missing++
+		}
+	}
+	return missing
 }
 
 func ratio(numerator, denominator int) float64 {

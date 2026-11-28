@@ -15,4 +15,28 @@ CREATE TABLE valuation_trial_policy (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE valuation_trial_policy
+    ADD COLUMN original_paint_values JSONB NOT NULL DEFAULT '[]'::jsonb,
+    ADD COLUMN has_license_plate_values JSONB NOT NULL DEFAULT '[]'::jsonb,
+    ADD COLUMN has_registration_certificate_values JSONB NOT NULL DEFAULT '[]'::jsonb,
+    ADD COLUMN has_maintenance_records_values JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+ALTER TABLE valuation_trial_policy
+    ADD CONSTRAINT ck_valuation_trial_original_paint_values CHECK (jsonb_typeof(original_paint_values) = 'array'),
+    ADD CONSTRAINT ck_valuation_trial_license_plate_values CHECK (jsonb_typeof(has_license_plate_values) = 'array'),
+    ADD CONSTRAINT ck_valuation_trial_registration_certificate_values CHECK (jsonb_typeof(has_registration_certificate_values) = 'array'),
+    ADD CONSTRAINT ck_valuation_trial_maintenance_records_values CHECK (jsonb_typeof(has_maintenance_records_values) = 'array');
+
 CREATE UNIQUE INDEX uq_valuation_trial_policy_combo ON valuation_trial_policy (policy_name, brand, vehicle_type, tonnage);
+
+CREATE TABLE valuation_trial_snapshots (
+    id BIGSERIAL PRIMARY KEY,
+    snapshot_id VARCHAR(64) NOT NULL,
+    request_id VARCHAR(128) NOT NULL UNIQUE,
+    request_json JSONB NOT NULL,
+    snapshot_json JSONB NOT NULL,
+    formula_hash VARCHAR(64) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_valuation_trial_snapshots_snapshot_id ON valuation_trial_snapshots (snapshot_id);

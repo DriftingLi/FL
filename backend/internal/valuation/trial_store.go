@@ -1,8 +1,13 @@
 package valuation
 
 import (
+	"bytes"
 	"context"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -18,10 +23,116 @@ func NewPostgresTrialSnapshotReader(pool *pgxpool.Pool) *PostgresTrialSnapshotRe
 	return &PostgresTrialSnapshotReader{pool: pool}
 }
 
-func (r *PostgresTrialSnapshotReader) LoadTrialSnapshot(ctx context.Context) (*TrialSnapshot, error) {
+func (r *PostgresTrialSnapshotReader) LoadTrialSnapshot(ctx context.Context, req TrialRequest) (*TrialSnapshot, error) {
 	if r == nil || r.pool == nil {
 		return nil, fmt.Errorf("试算快照 PostgreSQL 连接池未装配")
 	}
+	if err := validateTrialSnapshotReference(req); err != nil {
+		return nil, err
+	}
+	if req.SnapshotID != "" {
+		return r.loadStoredTrialSnapshot(ctx, req.SnapshotID)
+	}
+	if stored, err := r.loadTrialSnapshotByRequestID(ctx, req); err == nil {
+		return stored, nil
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, err
+	}
+	current, err := r.loadCurrentTrialSnapshot(ctx)
+	if err != nil {
+		return nil, err
+	}
+	requestJSON, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("序列化试算请求失败: %w", err)
+	}
+	snapshotJSON, err := json.Marshal(current.ReplayInput)
+	if err != nil {
+		return nil, fmt.Errorf("序列化试算快照失败: %w", err)
+	}
+	if _, err := r.pool.Exec(ctx, `INSERT INTO valuation_trial_snapshots
+		(snapshot_id, request_id, request_json, snapshot_json, formula_hash)
+		VALUES ($1, $2, $3::jsonb, $4::jsonb, $5)
+		ON CONFLICT (request_id) DO NOTHING`, current.Hash, req.RequestID, requestJSON, snapshotJSON, TrialFormulaHash); err != nil {
+		return nil, fmt.Errorf("保存试算快照失败: %w", err)
+	}
+	return r.loadTrialSnapshotByRequestID(ctx, req)
+}
+
+func validateTrialSnapshotReference(req TrialRequest) error {
+	if strings.TrimSpace(req.RequestID) == "" || len(req.RequestID) > 128 {
+		return fmt.Errorf("试算 request_id 缺失或过长")
+	}
+	if req.SnapshotID == "" {
+		return nil
+	}
+	decoded, err := hex.DecodeString(req.SnapshotID)
+	if err != nil || len(decoded) != 32 || req.SnapshotID != strings.ToLower(req.SnapshotID) {
+		return fmt.Errorf("试算 snapshot_id 必须是快照 SHA-256")
+	}
+	return nil
+}
+
+func (r *PostgresTrialSnapshotReader) loadStoredTrialSnapshot(ctx context.Context, snapshotID string) (*TrialSnapshot, error) {
+	var requestJSON, snapshotJSON, formulaHash string
+	err := r.pool.QueryRow(ctx, `SELECT request_json, snapshot_json, formula_hash
+		FROM valuation_trial_snapshots WHERE snapshot_id = $1 ORDER BY id LIMIT 1`, snapshotID).
+		Scan(&requestJSON, &snapshotJSON, &formulaHash)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("试算快照不存在: %s", snapshotID)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("读取试算快照失败: %w", err)
+	}
+	return decodeStoredTrialSnapshot(snapshotID, requestJSON, snapshotJSON, formulaHash)
+}
+
+func (r *PostgresTrialSnapshotReader) loadTrialSnapshotByRequestID(ctx context.Context, req TrialRequest) (*TrialSnapshot, error) {
+	var snapshotID, storedRequestJSON, snapshotJSON, formulaHash string
+	err := r.pool.QueryRow(ctx, `SELECT snapshot_id, request_json, snapshot_json, formula_hash
+		FROM valuation_trial_snapshots WHERE request_id = $1`, req.RequestID).
+		Scan(&snapshotID, &storedRequestJSON, &snapshotJSON, &formulaHash)
+	if err != nil {
+		return nil, err
+	}
+	currentJSON, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("序列化试算幂等请求失败: %w", err)
+	}
+	var storedReq TrialRequest
+	if err := json.Unmarshal([]byte(storedRequestJSON), &storedReq); err != nil {
+		return nil, fmt.Errorf("解析试算幂等请求失败: %w", err)
+	}
+	storedJSON, err := json.Marshal(storedReq)
+	if err != nil {
+		return nil, fmt.Errorf("规范化试算幂等请求失败: %w", err)
+	}
+	if !bytes.Equal(currentJSON, storedJSON) {
+		return nil, fmt.Errorf("request_id 已用于不同试算请求")
+	}
+	return decodeStoredTrialSnapshot(snapshotID, storedRequestJSON, snapshotJSON, formulaHash)
+}
+
+func decodeStoredTrialSnapshot(snapshotID, requestJSON, snapshotJSON, formulaHash string) (*TrialSnapshot, error) {
+	var req TrialRequest
+	if err := json.Unmarshal([]byte(requestJSON), &req); err != nil {
+		return nil, fmt.Errorf("解析试算快照请求失败: %w", err)
+	}
+	var input ReplayInput
+	if err := json.Unmarshal([]byte(snapshotJSON), &input); err != nil {
+		return nil, fmt.Errorf("解析试算快照载荷失败: %w", err)
+	}
+	snapshot, err := NewTrialSnapshot(input)
+	if err != nil {
+		return nil, err
+	}
+	if formulaHash != TrialFormulaHash || snapshot.Hash != snapshotID {
+		return nil, fmt.Errorf("试算快照哈希或公式版本校验失败")
+	}
+	return snapshot, nil
+}
+
+func (r *PostgresTrialSnapshotReader) loadCurrentTrialSnapshot(ctx context.Context) (*TrialSnapshot, error) {
 	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly, IsoLevel: pgx.RepeatableRead})
 	if err != nil {
 		return nil, fmt.Errorf("开始试算快照事务失败: %w", err)
@@ -154,14 +265,17 @@ func loadTrialSnapshotTx(ctx context.Context, tx trialSnapshotQuerier) (ReplayIn
 	rows.Close()
 
 	rows, err = tx.Query(ctx, `SELECT id, policy_name, version, brand, vehicle_type, tonnage, max_width_ratio,
-		usage_hour_ratios, condition_ratings, enabled FROM valuation_trial_policy ORDER BY id`)
+		usage_hour_ratios, condition_ratings, original_paint_values, has_license_plate_values,
+		has_registration_certificate_values, has_maintenance_records_values, enabled FROM valuation_trial_policy ORDER BY id`)
 	if err != nil {
 		return in, fmt.Errorf("读取试算策略快照失败: %w", err)
 	}
 	for rows.Next() {
 		var policy TrialPolicy
 		if err := rows.Scan(&policy.ID, &policy.Name, &policy.Version, &policy.Brand, &policy.VehicleType,
-			&policy.Tonnage, &policy.MaxWidthRatio, &policy.UsageHourRatios, &policy.ConditionRatings, &policy.Enabled); err != nil {
+			&policy.Tonnage, &policy.MaxWidthRatio, &policy.UsageHourRatios, &policy.ConditionRatings,
+			&policy.OriginalPaintValues, &policy.HasLicensePlateValues, &policy.HasRegistrationCertificateValues,
+			&policy.HasMaintenanceRecordsValues, &policy.Enabled); err != nil {
 			rows.Close()
 			return in, err
 		}

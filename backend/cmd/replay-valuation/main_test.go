@@ -43,7 +43,9 @@ func TestRunBatchJSONLUsesOneFrozenSnapshot(t *testing.T) {
 			{Key: valuation.KeyKcNoRegistrationPenaltyPct, Value: 0.1},
 		},
 		TrialPolicies: []valuation.TrialPolicy{{Name: "demo", Version: 1, Brand: "林德", VehicleType: "电动叉车", Tonnage: 3,
-			MaxWidthRatio: 0.4, UsageHourRatios: []float64{0.85}, ConditionRatings: []string{"B"}, Enabled: true}},
+			MaxWidthRatio: 0.4, UsageHourRatios: []float64{0.85}, ConditionRatings: []string{"B"},
+			OriginalPaintValues: []bool{false, true}, HasLicensePlateValues: []bool{false, true},
+			HasRegistrationCertificateValues: []bool{false, true}, HasMaintenanceRecordsValues: []bool{false, true}, Enabled: true}},
 	}
 	dir := t.TempDir()
 	inputPath := filepath.Join(dir, "snapshot.json")
@@ -55,7 +57,8 @@ func TestRunBatchJSONLUsesOneFrozenSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	request := valuation.TrialRequest{
-		Brand: "林德", VehicleType: "电动叉车", Tonnage: 3, FactoryYear: &year, SaleYear: 2026,
+		RequestID: "trial-replay-smoke",
+		Brand:     "林德", VehicleType: "电动叉车", Tonnage: 3, FactoryYear: &year, SaleYear: 2026,
 		Series: &series, ConfigType: &configType, MastType: &mastType, MastHeightMM: &height,
 		UsageHours: &hours, Condition: &condition, Province: &province, City: &city,
 		HasLicensePlate: boolPointer(true), HasRegistrationCertificate: boolPointer(true), Policy: "demo",

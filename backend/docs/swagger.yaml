@@ -5464,10 +5464,15 @@ definitions:
       province:
         type: string
         x-optional: true
+      request_id:
+        type: string
       sale_year:
         type: integer
         x-optional: true
       series:
+        type: string
+        x-optional: true
+      snapshot_id:
         type: string
         x-optional: true
       tonnage:
@@ -5504,8 +5509,13 @@ definitions:
       reason_code:
         type: string
         x-optional: true
+      request_id:
+        type: string
       snapshot:
         $ref: '#/definitions/valuation.TrialSnapshotMeta'
+      snapshot_id:
+        type: string
+        x-optional: true
       status:
         type: string
       width_ratio:

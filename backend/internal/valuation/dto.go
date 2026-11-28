@@ -41,6 +41,71 @@ type EvaluationRequest struct {
 	ConditionRating string `json:"condition_rating" binding:"required"` // 车况评级 A/B/C/D/E
 }
 
+// TrialRequest 参考试算输入。指针区分未知与明确的 false、0、"无"、"其它"。
+type TrialRequest struct {
+	RequestID    string  `json:"request_id"`
+	SnapshotID   string  `json:"snapshot_id,omitempty" extensions:"x-optional"`
+	Brand        string  `json:"brand"`
+	VehicleType  string  `json:"vehicle_type"`
+	Tonnage      float64 `json:"tonnage"`
+	FactoryYear  *int    `json:"factory_year,omitempty" extensions:"x-optional"`
+	FactoryMin   *int    `json:"factory_year_min,omitempty" extensions:"x-optional"`
+	FactoryMax   *int    `json:"factory_year_max,omitempty" extensions:"x-optional"`
+	SaleYear     int     `json:"sale_year,omitempty" extensions:"x-optional"`
+	Series       *string `json:"series,omitempty" extensions:"x-optional"`
+	ConfigType   *string `json:"config_type,omitempty" extensions:"x-optional"`
+	MastType     *string `json:"mast_type,omitempty" extensions:"x-optional"`
+	MastHeightMM *int    `json:"mast_height_mm,omitempty" extensions:"x-optional"`
+	UsageHours   *int    `json:"usage_hours,omitempty" extensions:"x-optional"`
+	Condition    *string `json:"condition_rating,omitempty" extensions:"x-optional"`
+	Province     *string `json:"province,omitempty" extensions:"x-optional"`
+	City         *string `json:"city,omitempty" extensions:"x-optional"`
+
+	OriginalPaint              *bool `json:"original_paint,omitempty" extensions:"x-optional"`
+	HasLicensePlate            *bool `json:"has_license_plate,omitempty" extensions:"x-optional"`
+	HasRegistrationCertificate *bool `json:"has_registration_certificate,omitempty" extensions:"x-optional"`
+	HasMaintenanceRecords      *bool `json:"has_maintenance_records,omitempty" extensions:"x-optional"`
+
+	Policy string `json:"policy"`
+}
+
+// TrialResponse 参考试算卡。needs_info 不暴露价格区间。
+type TrialResponse struct {
+	RequestID     string            `json:"request_id"`
+	SnapshotID    string            `json:"snapshot_id,omitempty" extensions:"x-optional"`
+	Status        string            `json:"status"`
+	ReasonCode    string            `json:"reason_code,omitempty" extensions:"x-optional"`
+	Message       string            `json:"message,omitempty" extensions:"x-optional"`
+	Input         TrialRequest      `json:"input"`
+	Assumptions   []string          `json:"assumptions" nullability:"nonnil"`
+	Candidates    []TrialCandidate  `json:"candidates" nullability:"nonnil"`
+	MissingFields []string          `json:"missing_fields" nullability:"nonnil"`
+	Interval      *TrialInterval    `json:"interval,omitempty" extensions:"x-optional"`
+	WidthRatio    *float64          `json:"width_ratio,omitempty" extensions:"x-optional"`
+	Snapshot      TrialSnapshotMeta `json:"snapshot"`
+}
+
+type TrialCandidate struct {
+	OriginalPrice
+}
+
+type TrialInterval struct {
+	Min        float64 `json:"min"`
+	Max        float64 `json:"max"`
+	Mid        float64 `json:"mid"`
+	Width      float64 `json:"width"`
+	WidthRatio float64 `json:"width_ratio"`
+}
+
+type TrialSnapshotMeta struct {
+	Hash           string `json:"hash"`
+	SHA7           string `json:"sha7"`
+	FormulaVersion string `json:"formula_version"`
+	FormulaHash    string `json:"formula_hash"`
+	Policy         string `json:"policy"`
+	PolicyVersion  string `json:"policy_version"`
+}
+
 // Validate 业务级参数校验（在 binding 之后补充校验）
 // 支持字段值为 "无"（字符串）或 0（mast_height_mm）表示该属性不适用
 func (r *EvaluationRequest) Validate() error {

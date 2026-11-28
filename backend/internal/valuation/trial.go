@@ -31,85 +31,12 @@ const (
 	TrialReasonTooWide               = "too_wide"
 )
 
-// TrialRequest 参考试算输入。指针区分未知与明确的 false、0、"无"、"其它"。
-type TrialRequest struct {
-	Brand        string  `json:"brand"`
-	VehicleType  string  `json:"vehicle_type"`
-	Tonnage      float64 `json:"tonnage"`
-	FactoryYear  *int    `json:"factory_year,omitempty" extensions:"x-optional"`
-	FactoryMin   *int    `json:"factory_year_min,omitempty" extensions:"x-optional"`
-	FactoryMax   *int    `json:"factory_year_max,omitempty" extensions:"x-optional"`
-	SaleYear     int     `json:"sale_year,omitempty" extensions:"x-optional"`
-	Series       *string `json:"series,omitempty" extensions:"x-optional"`
-	ConfigType   *string `json:"config_type,omitempty" extensions:"x-optional"`
-	MastType     *string `json:"mast_type,omitempty" extensions:"x-optional"`
-	MastHeightMM *int    `json:"mast_height_mm,omitempty" extensions:"x-optional"`
-	UsageHours   *int    `json:"usage_hours,omitempty" extensions:"x-optional"`
-	Condition    *string `json:"condition_rating,omitempty" extensions:"x-optional"`
-	Province     *string `json:"province,omitempty" extensions:"x-optional"`
-	City         *string `json:"city,omitempty" extensions:"x-optional"`
-
-	OriginalPaint              *bool `json:"original_paint,omitempty" extensions:"x-optional"`
-	HasLicensePlate            *bool `json:"has_license_plate,omitempty" extensions:"x-optional"`
-	HasRegistrationCertificate *bool `json:"has_registration_certificate,omitempty" extensions:"x-optional"`
-	HasMaintenanceRecords      *bool `json:"has_maintenance_records,omitempty" extensions:"x-optional"`
-
-	Policy string `json:"policy"`
-}
-
-// TrialResponse 参考试算卡。needs_info 不暴露价格区间。
-type TrialResponse struct {
-	Status        string            `json:"status"`
-	ReasonCode    string            `json:"reason_code,omitempty" extensions:"x-optional"`
-	Message       string            `json:"message,omitempty" extensions:"x-optional"`
-	Input         TrialRequest      `json:"input"`
-	Assumptions   []string          `json:"assumptions" nullability:"nonnil"`
-	Candidates    []TrialCandidate  `json:"candidates" nullability:"nonnil"`
-	MissingFields []string          `json:"missing_fields" nullability:"nonnil"`
-	Interval      *TrialInterval    `json:"interval,omitempty" extensions:"x-optional"`
-	WidthRatio    *float64          `json:"width_ratio,omitempty" extensions:"x-optional"`
-	Snapshot      TrialSnapshotMeta `json:"snapshot"`
-}
-
-type TrialCandidate struct {
-	OriginalPrice
-}
-
-type TrialInterval struct {
-	Min        float64 `json:"min"`
-	Max        float64 `json:"max"`
-	Mid        float64 `json:"mid"`
-	Width      float64 `json:"width"`
-	WidthRatio float64 `json:"width_ratio"`
-}
-
-type TrialSnapshotMeta struct {
-	Hash           string `json:"hash"`
-	SHA7           string `json:"sha7"`
-	FormulaVersion string `json:"formula_version"`
-	FormulaHash    string `json:"formula_hash"`
-	Policy         string `json:"policy"`
-	PolicyVersion  string `json:"policy_version"`
-}
-
 // CalculateTrial 是 HTTP 与离线回放共用的试算路径。
 func CalculateTrial(ctx context.Context, req TrialRequest, snapshot *TrialSnapshot, appEnv string) (TrialResponse, error) {
-	response := newTrialResponse(req)
-	if problems := req.validateMinimum(); len(problems) > 0 {
-		response.Status = TrialStatusNeedsInfo
-		response.ReasonCode = TrialReasonInvalidInput
-		response.Message = "参考试算所需关键输入不足或无效"
-		response.MissingFields = problems
-		return response, nil
+	prepared, policy, ok := preflightTrial(req, snapshot, appEnv, true)
+	if !ok {
+		return prepared, nil
 	}
-	policy, reason, message := resolveTrialPolicy(req, snapshot, appEnv)
-	if reason != "" {
-		response.Status = TrialStatusNeedsInfo
-		response.ReasonCode = reason
-		response.Message = message
-		return response, nil
-	}
-	response.Snapshot = snapshot.meta(policy)
 	return calculateTrialSnapshot(ctx, req, snapshot, policy, policy.MaxWidthRatio)
 }
 
@@ -118,30 +45,47 @@ func CalculateTrialAtWidthLimit(ctx context.Context, req TrialRequest, snapshot 
 	if widthLimit <= 0 || widthLimit > 1 || math.IsNaN(widthLimit) || math.IsInf(widthLimit, 0) {
 		return newTrialResponse(req), fmt.Errorf("试算宽度上限必须在 (0,1] 内")
 	}
-	if problems := req.validateMinimum(); len(problems) > 0 {
-		response := newTrialResponse(req)
-		response.Status, response.ReasonCode, response.Message = TrialStatusNeedsInfo, TrialReasonInvalidInput, "参考试算所需关键输入不足或无效"
-		response.MissingFields = problems
-		return response, nil
+	prepared, policy, ok := preflightTrial(req, snapshot, appEnv, true)
+	if !ok {
+		return prepared, nil
 	}
-	policy, reason, message := resolveTrialPolicy(req, snapshot, appEnv)
-	if reason != "" {
-		response := newTrialResponse(req)
-		response.Status, response.ReasonCode, response.Message = TrialStatusNeedsInfo, reason, message
-		return response, nil
-	}
-	response := newTrialResponse(req)
-	response.Snapshot = snapshot.meta(policy)
 	return calculateTrialSnapshot(ctx, req, snapshot, policy, widthLimit)
 }
 
-func resolveTrialPolicy(req TrialRequest, snapshot *TrialSnapshot, appEnv string) (TrialPolicy, string, string) {
+func preflightTrial(req TrialRequest, snapshot *TrialSnapshot, appEnv string, checkSnapshot bool) (TrialResponse, TrialPolicy, bool) {
+	response := newTrialResponse(req)
+	if problems := req.validateMinimum(); len(problems) > 0 {
+		return trialNeedsInfo(response, TrialReasonInvalidInput, "参考试算所需关键输入不足或无效", problems), TrialPolicy{}, false
+	}
+	if reason, message := validateTrialPolicySelection(req, appEnv); reason != "" {
+		return trialNeedsInfo(response, reason, message, nil), TrialPolicy{}, false
+	}
+	if !checkSnapshot {
+		return response, TrialPolicy{}, true
+	}
+	policy, reason, message := resolveConfiguredTrialPolicy(req, snapshot)
+	if reason != "" {
+		return trialNeedsInfo(response, reason, message, nil), TrialPolicy{}, false
+	}
+	if req.SnapshotID != "" && req.SnapshotID != snapshot.Hash {
+		return trialNeedsInfo(response, TrialReasonInvalidInput, "指定快照与本次加载的快照不一致", []string{"snapshot_id"}), TrialPolicy{}, false
+	}
+	response.Snapshot = snapshot.meta(policy)
+	response.SnapshotID = snapshot.Hash
+	return response, policy, true
+}
+
+func validateTrialPolicySelection(req TrialRequest, appEnv string) (string, string) {
 	if req.Policy != "demo" && req.Policy != "pilot" {
-		return TrialPolicy{}, TrialReasonPolicyDisabled, "参考试算未开放，必须显式选择已配置的 demo 或 pilot 策略"
+		return TrialReasonPolicyDisabled, "参考试算未开放，必须显式选择已配置的 demo 或 pilot 策略"
 	}
 	if req.Policy == "demo" && appEnv == "production" {
-		return TrialPolicy{}, TrialReasonPolicyForbidden, "生产环境禁止 demo 参考试算"
+		return TrialReasonPolicyForbidden, "生产环境禁止 demo 参考试算"
 	}
+	return "", ""
+}
+
+func resolveConfiguredTrialPolicy(req TrialRequest, snapshot *TrialSnapshot) (TrialPolicy, string, string) {
 	if snapshot == nil {
 		return TrialPolicy{}, TrialReasonPolicyNotConfigured, "当前组合未配置参考试算策略"
 	}
@@ -158,6 +102,8 @@ func resolveTrialPolicy(req TrialRequest, snapshot *TrialSnapshot, appEnv string
 
 func newTrialResponse(req TrialRequest) TrialResponse {
 	return TrialResponse{
+		RequestID:     req.RequestID,
+		SnapshotID:    req.SnapshotID,
 		Input:         req,
 		Assumptions:   []string{},
 		Candidates:    []TrialCandidate{},
@@ -168,7 +114,10 @@ func newTrialResponse(req TrialRequest) TrialResponse {
 func trialPointer[T any](value T) *T { return &value }
 
 func (r TrialRequest) validateMinimum() []string {
-	missing := make([]string, 0, 5)
+	missing := make([]string, 0, 6)
+	if strings.TrimSpace(r.RequestID) == "" || len(r.RequestID) > 128 {
+		missing = append(missing, "request_id")
+	}
 	if strings.TrimSpace(r.Brand) == "" {
 		missing = append(missing, "brand")
 	}

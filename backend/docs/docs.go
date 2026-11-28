@@ -36062,11 +36062,18 @@ const docTemplate = `{
                     "type": "string",
                     "x-optional": true
                 },
+                "request_id": {
+                    "type": "string"
+                },
                 "sale_year": {
                     "type": "integer",
                     "x-optional": true
                 },
                 "series": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "snapshot_id": {
                     "type": "string",
                     "x-optional": true
                 },
@@ -36122,8 +36129,15 @@ const docTemplate = `{
                     "type": "string",
                     "x-optional": true
                 },
+                "request_id": {
+                    "type": "string"
+                },
                 "snapshot": {
                     "$ref": "#/definitions/valuation.TrialSnapshotMeta"
+                },
+                "snapshot_id": {
+                    "type": "string",
+                    "x-optional": true
                 },
                 "status": {
                     "type": "string"

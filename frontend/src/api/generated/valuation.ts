@@ -378,8 +378,10 @@ export interface TrialRequest {
   original_paint?: boolean
   policy: string
   province?: string
+  request_id: string
   sale_year?: number
   series?: string
+  snapshot_id?: string
   tonnage: number
   usage_hours?: number
   vehicle_type: string
@@ -393,7 +395,9 @@ export interface TrialResponse {
   message?: string
   missing_fields: string[]
   reason_code?: string
+  request_id: string
   snapshot: TrialSnapshotMeta
+  snapshot_id?: string
   status: string
   width_ratio?: number
 }

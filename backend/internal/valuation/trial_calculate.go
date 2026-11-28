@@ -20,6 +20,10 @@ func (exactOnlyDictionary) FindOriginalPriceFuzzy(context.Context, string, strin
 func calculateTrialSnapshot(ctx context.Context, req TrialRequest, snapshot *TrialSnapshot, policy TrialPolicy, widthLimit float64) (TrialResponse, error) {
 	response := newTrialResponse(req)
 	response.Snapshot = snapshot.meta(policy)
+	response.SnapshotID = snapshot.Hash
+	if missing := unsupportedTrialScenarioFields(req, policy, snapshot.ConditionRatings); len(missing) > 0 {
+		return trialNeedsInfo(response, TrialReasonNoValidScenario, "存在未获策略批准的未知情景，暂不给价", missing), nil
+	}
 	if !trialCoefficientsComplete(snapshot.Coefficients) {
 		return trialNeedsInfo(response, TrialReasonNoValidScenario, "系数快照不完整或无效，暂不给价", []string{"coefficient_snapshot"}), nil
 	}
@@ -97,15 +101,15 @@ func calculateTrialSnapshot(ctx context.Context, req TrialRequest, snapshot *Tri
 	}
 	interval, intervalReason := BuildTrialInterval(values)
 	if intervalReason == TrialReasonMidpointNonPositive {
-		return trialNeedsInfo(response, intervalReason, "试算区间中点非正，暂不给价", trialFollowUpFields(req)), nil
+		return trialNeedsInfo(response, intervalReason, "试算区间中点非正，暂不给价", trialMissingFields(req)), nil
 	}
 	if interval == nil {
-		return trialNeedsInfo(response, TrialReasonNoValidScenario, "没有有效、有限且为正的试算情景", trialFollowUpFields(req)), nil
+		return trialNeedsInfo(response, TrialReasonNoValidScenario, "没有有效、有限且为正的试算情景", trialMissingFields(req)), nil
 	}
 	response.WidthRatio = trialPointer(interval.WidthRatio)
 	if interval.WidthRatio > widthLimit+1e-6 {
 		response.Interval = nil
-		return trialNeedsInfo(response, TrialReasonTooWide, "试算区间超过可用宽度上限，请补充最能缩小范围的资料", trialFollowUpFields(req)), nil
+		return trialNeedsInfo(response, TrialReasonTooWide, "试算区间超过可用宽度上限，请补充最能缩小范围的资料", rankTrialFollowUpFields(ctx, req, snapshot, policy, response)), nil
 	}
 	response.Status = TrialStatusPriced
 	response.Interval = interval
@@ -182,34 +186,90 @@ func trialScenarios(ctx context.Context, req TrialRequest, price OriginalPrice, 
 			}
 		}
 	}
-	certificates := [][2]bool{{true, true}}
-	if req.HasLicensePlate == nil || req.HasRegistrationCertificate == nil {
-		certificates = [][2]bool{{true, true}, {true, false}, {false, true}, {false, false}}
-	}
-	out := make([]EvaluationRequest, 0, len(hours)*len(conditions)*len(certificates))
+	paint := trialBoolValues(req.OriginalPaint, policy.OriginalPaintValues)
+	plates := trialBoolValues(req.HasLicensePlate, policy.HasLicensePlateValues)
+	registrations := trialBoolValues(req.HasRegistrationCertificate, policy.HasRegistrationCertificateValues)
+	maintenance := trialBoolValues(req.HasMaintenanceRecords, policy.HasMaintenanceRecordsValues)
+	out := make([]EvaluationRequest, 0, len(hours)*len(conditions)*len(paint)*len(plates)*len(registrations)*len(maintenance))
 	for _, usageHours := range hours {
 		for _, condition := range conditions {
-			for _, certificate := range certificates {
-				scenario := EvaluationRequest{
-					Brand: req.Brand, VehicleType: req.VehicleType, Series: price.Series, Tonnage: price.Tonnage,
-					ConfigType: price.ConfigType, MastType: price.MastType, MastHeightMM: price.MastHeightMM,
-					FactoryYear: factoryYear, SaleYear: saleYear, UsageHours: usageHours,
-					OriginalPaint: trialBool(req.OriginalPaint, false), Province: trialString(req.Province, "中性"),
-					City: trialString(req.City, "中性"), HasLicensePlate: certificate[0],
-					HasRegistrationCertificate: certificate[1], HasMaintenanceRecords: trialBool(req.HasMaintenanceRecords, false),
-					ConditionRating: condition,
+			for _, originalPaint := range paint {
+				for _, hasPlate := range plates {
+					for _, hasRegistration := range registrations {
+						for _, hasMaintenance := range maintenance {
+							out = append(out, EvaluationRequest{
+								Brand: req.Brand, VehicleType: req.VehicleType, Series: price.Series, Tonnage: price.Tonnage,
+								ConfigType: price.ConfigType, MastType: price.MastType, MastHeightMM: price.MastHeightMM,
+								FactoryYear: factoryYear, SaleYear: saleYear, UsageHours: usageHours,
+								OriginalPaint: originalPaint, Province: trialString(req.Province, "中性"),
+								City: trialString(req.City, "中性"), HasLicensePlate: hasPlate,
+								HasRegistrationCertificate: hasRegistration, HasMaintenanceRecords: hasMaintenance,
+								ConditionRating: condition,
+							})
+						}
+					}
 				}
-				if req.HasLicensePlate != nil {
-					scenario.HasLicensePlate = *req.HasLicensePlate
-				}
-				if req.HasRegistrationCertificate != nil {
-					scenario.HasRegistrationCertificate = *req.HasRegistrationCertificate
-				}
-				out = append(out, scenario)
 			}
 		}
 	}
 	return out
+}
+
+func unsupportedTrialScenarioFields(req TrialRequest, policy TrialPolicy, conditions []ConditionRating) []string {
+	missing := make([]string, 0, 6)
+	if req.UsageHours == nil {
+		valid := len(policy.UsageHourRatios) > 0
+		for _, ratio := range policy.UsageHourRatios {
+			if ratio < 0 || math.IsNaN(ratio) || math.IsInf(ratio, 0) {
+				valid = false
+			}
+		}
+		if !valid {
+			missing = append(missing, "usage_hours")
+		}
+	}
+	if req.Condition == nil {
+		supported := false
+		for _, rating := range policy.ConditionRatings {
+			if trialConditionSupported(conditions, rating) {
+				supported = true
+				break
+			}
+		}
+		if !supported {
+			missing = append(missing, "condition_rating")
+		}
+	}
+	for _, field := range []struct {
+		name  string
+		value *bool
+		allow []bool
+	}{
+		{name: "original_paint", value: req.OriginalPaint, allow: policy.OriginalPaintValues},
+		{name: "has_license_plate", value: req.HasLicensePlate, allow: policy.HasLicensePlateValues},
+		{name: "has_registration_certificate", value: req.HasRegistrationCertificate, allow: policy.HasRegistrationCertificateValues},
+		{name: "has_maintenance_records", value: req.HasMaintenanceRecords, allow: policy.HasMaintenanceRecordsValues},
+	} {
+		if field.value == nil && len(trialBoolValues(nil, field.allow)) == 0 {
+			missing = append(missing, field.name)
+		}
+	}
+	return missing
+}
+
+func trialBoolValues(value *bool, approved []bool) []bool {
+	if value != nil {
+		return []bool{*value}
+	}
+	seen := make(map[bool]bool, len(approved))
+	values := make([]bool, 0, len(approved))
+	for _, candidate := range approved {
+		if !seen[candidate] {
+			values = append(values, candidate)
+			seen[candidate] = true
+		}
+	}
+	return values
 }
 
 func trialCoefficientsComplete(configs []CoefficientConfig) bool {
@@ -251,13 +311,6 @@ func trialConditionSupported(conditions []ConditionRating, rating string) bool {
 		}
 	}
 	return false
-}
-
-func trialBool(value *bool, fallback bool) bool {
-	if value == nil {
-		return fallback
-	}
-	return *value
 }
 
 func trialString(value *string, fallback string) string {
@@ -314,7 +367,13 @@ func trialAssumptions(req TrialRequest, saleYear int) []string {
 		assumptions = append(assumptions, "未知车况按策略批准的车况评级枚举")
 	}
 	if req.HasLicensePlate == nil || req.HasRegistrationCertificate == nil {
-		assumptions = append(assumptions, "未知证件按有、无情景枚举")
+		assumptions = append(assumptions, "未知证件按策略批准的有、无情景枚举")
+	}
+	if req.OriginalPaint == nil {
+		assumptions = append(assumptions, "未知原厂漆按策略批准的有、无情景枚举")
+	}
+	if req.HasMaintenanceRecords == nil {
+		assumptions = append(assumptions, "未知维保记录按策略批准的有、无情景枚举")
 	}
 	if req.Province == nil || req.City == nil {
 		assumptions = append(assumptions, "未知区域采用中性市场系数 1.0")
@@ -322,7 +381,7 @@ func trialAssumptions(req TrialRequest, saleYear int) []string {
 	return assumptions
 }
 
-func trialFollowUpFields(req TrialRequest) []string {
+func trialMissingFields(req TrialRequest) []string {
 	fields := []struct {
 		missing bool
 		name    string
@@ -331,18 +390,19 @@ func trialFollowUpFields(req TrialRequest) []string {
 		{req.ConfigType == nil, "config_type"},
 		{req.MastType == nil, "mast_type"},
 		{req.MastHeightMM == nil, "mast_height_mm"},
-		{req.FactoryYear == nil, "factory_year"},
+		{req.FactoryYear == nil, "factory_year_or_range"},
 		{req.UsageHours == nil, "usage_hours"},
 		{req.Condition == nil, "condition_rating"},
+		{req.OriginalPaint == nil, "original_paint"},
 		{req.HasRegistrationCertificate == nil, "has_registration_certificate"},
 		{req.HasLicensePlate == nil, "has_license_plate"},
+		{req.HasMaintenanceRecords == nil, "has_maintenance_records"},
 		{req.Province == nil || req.City == nil, "province_or_city"},
 	}
-	out := make([]string, 0, 1)
+	out := make([]string, 0, len(fields))
 	for _, field := range fields {
 		if field.missing {
 			out = append(out, field.name)
-			break
 		}
 	}
 	return out

@@ -162,6 +162,7 @@ var ModelBlocks = []ModelBlock{
 		Name: "残值评估",
 		Models: []any{
 			&ValuationTrialPolicy{},
+			&ValuationTrialSnapshot{},
 		},
 	},
 	{

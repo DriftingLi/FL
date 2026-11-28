@@ -58,7 +58,7 @@ func TestTrialPolicyDefaultsClosedAndDemoForbiddenInProduction(t *testing.T) {
 
 func trialMinimumRequest() TrialRequest {
 	year := 2021
-	return TrialRequest{Brand: "林德", VehicleType: "电动叉车", Tonnage: 3, FactoryYear: &year, SaleYear: 2026, Policy: "demo"}
+	return TrialRequest{RequestID: "trial-test", Brand: "林德", VehicleType: "电动叉车", Tonnage: 3, FactoryYear: &year, SaleYear: 2026, Policy: "demo"}
 }
 
 func TestTrialPreservesNoZeroOtherAndKnownSpecifications(t *testing.T) {
@@ -251,7 +251,7 @@ type stubTrialSnapshotReader struct {
 	loads    int
 }
 
-func (s *stubTrialSnapshotReader) LoadTrialSnapshot(context.Context) (*TrialSnapshot, error) {
+func (s *stubTrialSnapshotReader) LoadTrialSnapshot(context.Context, TrialRequest) (*TrialSnapshot, error) {
 	s.loads++
 	if s.snapshot == nil {
 		return nil, fmt.Errorf("测试快照未配置")
@@ -436,7 +436,9 @@ func newTrialSnapshotForTest(t *testing.T, prices []OriginalPrice) *TrialSnapsho
 		OriginalPrices:     prices,
 		Coefficients:       configs,
 		TrialPolicies: []TrialPolicy{{Name: "demo", Version: 1, Brand: "林德", VehicleType: "电动叉车", Tonnage: 3,
-			MaxWidthRatio: 0.4, UsageHourRatios: []float64{0, 0.85, 1.15, 1.45, 1.7}, ConditionRatings: []string{"B", "C"}, Enabled: true}},
+			MaxWidthRatio: 0.4, UsageHourRatios: []float64{0, 0.85, 1.15, 1.45, 1.7}, ConditionRatings: []string{"B", "C"},
+			OriginalPaintValues: []bool{false, true}, HasLicensePlateValues: []bool{false, true},
+			HasRegistrationCertificateValues: []bool{false, true}, HasMaintenanceRecordsValues: []bool{false, true}, Enabled: true}},
 	})
 	if err != nil {
 		t.Fatal(err)

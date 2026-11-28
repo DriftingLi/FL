@@ -14,16 +14,20 @@ var TrialFormulaHash = sha256Hex([]byte(trialFormulaSpec))
 
 // TrialPolicy 显式试算策略。迁移不预置任何行，未配置组合一律关闭。
 type TrialPolicy struct {
-	ID               int64     `json:"id,omitempty"`
-	Name             string    `json:"policy_name"`
-	Version          int       `json:"version"`
-	Brand            string    `json:"brand"`
-	VehicleType      string    `json:"vehicle_type"`
-	Tonnage          float64   `json:"tonnage"`
-	MaxWidthRatio    float64   `json:"max_width_ratio"`
-	UsageHourRatios  []float64 `json:"usage_hour_ratios"`
-	ConditionRatings []string  `json:"condition_ratings"`
-	Enabled          bool      `json:"enabled"`
+	ID                               int64     `json:"id,omitempty"`
+	Name                             string    `json:"policy_name"`
+	Version                          int       `json:"version"`
+	Brand                            string    `json:"brand"`
+	VehicleType                      string    `json:"vehicle_type"`
+	Tonnage                          float64   `json:"tonnage"`
+	MaxWidthRatio                    float64   `json:"max_width_ratio"`
+	UsageHourRatios                  []float64 `json:"usage_hour_ratios"`
+	ConditionRatings                 []string  `json:"condition_ratings"`
+	OriginalPaintValues              []bool    `json:"original_paint_values,omitempty"`
+	HasLicensePlateValues            []bool    `json:"has_license_plate_values,omitempty"`
+	HasRegistrationCertificateValues []bool    `json:"has_registration_certificate_values,omitempty"`
+	HasMaintenanceRecordsValues      []bool    `json:"has_maintenance_records_values,omitempty"`
+	Enabled                          bool      `json:"enabled"`
 }
 
 // TrialSnapshot 一次事务冻结的目录、系数与策略；全批回放只构造一次。
