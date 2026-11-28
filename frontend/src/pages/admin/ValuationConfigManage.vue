@@ -266,10 +266,11 @@ const {
   run: loadAlgorithmParams
 } = useAsyncPage(async (): Promise<AlgorithmParameters> => await listAlgorithmParameters(), {
   apply: (data) => {
-    coefficients.setAll(data.coefficients)
-    brands.setAll(data.brands)
-    conditionRatings.setAll(data.condition_ratings)
-    regionCoefficients.setAll(data.region_coefficients)
+    // 服务端契约四份数组均 nullable（x-nullable），null 归一为空草稿：空态语义不变，缺失即空
+    coefficients.setAll(data.coefficients ?? [])
+    brands.setAll(data.brands ?? [])
+    conditionRatings.setAll(data.condition_ratings ?? [])
+    regionCoefficients.setAll(data.region_coefficients ?? [])
   },
   onError: () => {
     coefficients.clear()
