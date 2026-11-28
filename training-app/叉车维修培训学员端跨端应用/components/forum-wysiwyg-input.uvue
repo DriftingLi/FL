@@ -12,19 +12,20 @@
                  重建一次编辑器再写（#2658「失败后不可再聚焦」）。其余情况不重建 —— editor 的初始化
                  属性只在挂载时生效，把重建变成隐式副作用会丢正文。 -->
             <editor v-if="showEditor" id="forum-wysiwyg-editor" class="rich-editor"
-                :class="isReply ? 'rich-editor-reply' : ''" :read-only="readOnly"
+                :read-only="readOnly"
                 :placeholder="placeholder" :show-img-size="false" :show-img-toolbar="false"
                 :show-img-resize="false" @ready="onEditorReady" @focus="onEditorFocus"
                 @blur="onEditorBlur" @input="onEditorInput" @statuschange="onStatusChange" />
         </view>
 
+        <!-- 字数：正文右下（#2689 决策 5），紧贴编辑区、在工具条之前 —— 它说的是「这段正文」。回复面原先是
+             隐藏的（`!isReply` 闸门），浮层里作者更需要知道还剩多少 ⇒ 两面都显示。 -->
+        <text class="counter-text">{{ counterText }}</text>
+
         <!-- 格式工具条（常驻四键 + 更多面板）拆成独立件：它只渲染并 emit 动作，
              怎么落地由本组件按 editorCtx 决定（#2658 拆分，行数预算 ADR-0023）。 -->
         <ForumWysiwygToolbar :active-ids="activeIds" @action="onActionTap" @paste="onPasteTap"
             @press="onToolbarPress" />
-
-        <!-- 字数：正文右下（#2689 决策 5）。上限仍由 maxlength 决定（发帖 10000 / 回复 10000）。 -->
-        <text v-if="!isReply" class="counter-text">{{ counterText }}</text>
 
         <!-- 图片区两态（#2689 决策 3）拆成独立展示件：本组件只把列表与计数递下去，动作原样 emit 回宿主。 -->
         <ForumWysiwygImageArea v-if="showImages" :preview-images="previewImages" :image-count="imageCount"
@@ -174,7 +175,6 @@
     /** 重建编辑器只试一次，避免 insertText 持续失败时来回重建 */
     let pasteRebuildTried : boolean = false
 
-    const isReply = computed<boolean>(() : boolean => props.variant == 'reply')
     const fidelityNotice = computed<string>(() : string => richFidelityNotice(issues.value))
     const counterText = computed<string>(() : string => markdownLength.value.toString() + '/' + props.maxlength.toString())
 
@@ -488,11 +488,9 @@
     }
 
     /**
-     * 清空编辑器正文（#2691：宿主在「发送成功」后调用）。
-     *
-     * 为什么必须由组件自己清：正文的**事实源**是 editor 的 delta，宿主只持有序列化产物；
-     * 只把 `replyContent` 置空不会动编辑器 —— 浮层改成常驻挂载后，下次展开会看到已发送的旧正文。
-     * 未 ready 时把待写串一并清掉，避免 ready 后把旧内容补写回来。
+     * 清空编辑器正文（#2691：宿主「发送成功」后调用）。正文**事实源**是 editor 的 delta，宿主只持序列化产物 ——
+     * 只把 `replyContent` 置空不动编辑器，浮层常驻后下次展开会看到已发送的旧正文；未 ready 时把待写串一并清掉，
+     * 避免 ready 后补写回旧内容。
      */
     function clear() : void {
         pendingMention = ''
@@ -549,16 +547,11 @@
        （机检 utils/uvueFontCarrierContract.test.js）。 */
     .rich-editor {
         height: 400rpx;
-        background-color: $bg-color;
+        /* 白底 + 浅灰描边：编辑区是「可写的那块」，灰底会读成禁用/只读（提示带与面板才用 $bg-color） */
+        background-color: #ffffff;
         border-radius: 12rpx;
         padding: 24rpx;
         border: 1rpx solid #e0e0e0;
-    }
-
-    /* 回复栏里比发帖矮一档，别把回复栏顶到半屏 */
-    .rich-editor-reply {
-        height: 220rpx;
-        padding: 16rpx;
     }
 
     /* ===== 提示带（#2689 决策 4）：保真 / 粘贴 / 属地 / 边界合并成一行 ===== */

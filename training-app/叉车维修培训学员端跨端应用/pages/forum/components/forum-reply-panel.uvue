@@ -20,21 +20,41 @@
                     <text class="reply-panel-close-text">×</text>
                 </view>
             </view>
-            <!-- #ifndef MP-ALIPAY || MP-BAIDU || MP-TOUTIAO -->
-            <ForumWysiwygInput v-if="useWysiwyg" ref="wysiwygRef" :preview-images="previewImages"
-                :image-count="images.length" variant="reply" :max-images="maxImages"
-                :maxlength="10000" placeholder="写下你的回复..." :uploading="uploading"
-                @update:markdown="onContentChange"
-                @add-image="onAddImage" @remove-image="onRemoveImage"
-                @preview-image="onPreviewImage" @keyboard-height="onKeyboardHeight" />
-            <!-- #endif -->
-            <ForumMarkdownInput v-if="!useWysiwyg" :content="content" :preview-images="previewImages"
-                :image-count="images.length" variant="reply" :max-images="maxImages"
-                :maxlength="10000" placeholder="写下你的回复..." :uploading="uploading"
-                @update:content="onContentChange"
-                @add-image="onAddImage" @remove-image="onRemoveImage"
-                @preview-image="onPreviewImage" />
-            <!-- 底部操作区（#2691）：左「＋ 添加图片」、右「回复」主按钮（替代原「收起 / 发送」）。
+            <!-- 原讨论内容引文：回复哪条就把那条压成一行放这儿（摘录与截断在 utils/forumReplyQuote）。
+                 没有引文时整块不渲染 —— 直接回复帖子也能有（取帖子正文），弱端同形。
+                 放在滚动区**里面**：面板高度 = 主体定高 + 头部 + 底部操作区，引文若常驻在外面会把
+                 主体挤到溢出（又变回「发送键被截断」）；写长回复时它随正文一起滚走正合适。 -->
+            <!-- 主体（输入区 + 工具条 + 提示带）**自己滚**：展开「更多工具」后内容会超过面板上限，
+                 旧写法让面板整体被 maxHeight 截断 ⇒ 面板最下面一组按钮（操作/粘贴）看不到（P0 截断）。
+                 高度由 utils/replyPanelLayout.panelBodyMaxHeightPx 给出（面板上限 − 非滚动部分），
+                 且必须给**确定高度**而不是 maxHeight：uvue 的 scroll-view 在高度为 auto 时不收口、
+                 也就不会滚（先例 pages/courses/courses.uvue 的 flex:1 + height:0 注释）。 -->
+            <scroll-view class="reply-panel-body" scroll-y="true"
+                :style="{ height: bodyHeight + 'px' }">
+                <view v-if="quoteText.length > 0" class="reply-quote">
+                    <text class="reply-quote-label">{{ quoteLabel }}</text>
+                    <text class="reply-quote-text">{{ quoteText }}</text>
+                    <view class="reply-quote-link" @click="onViewOriginal">
+                        <text class="reply-quote-link-text">{{ viewOriginalLabel }}</text>
+                    </view>
+                </view>
+                <!-- #ifndef MP-ALIPAY || MP-BAIDU || MP-TOUTIAO -->
+                <ForumWysiwygInput v-if="useWysiwyg" ref="wysiwygRef" :preview-images="previewImages"
+                    :image-count="images.length" variant="reply" :max-images="maxImages"
+                    :maxlength="10000" placeholder="写下你的回复..." :uploading="uploading"
+                    @update:markdown="onContentChange"
+                    @add-image="onAddImage" @remove-image="onRemoveImage"
+                    @preview-image="onPreviewImage" @keyboard-height="onKeyboardHeight" />
+                <!-- #endif -->
+                <ForumMarkdownInput v-if="!useWysiwyg" :content="content" :preview-images="previewImages"
+                    :image-count="images.length" variant="reply" :max-images="maxImages"
+                    :maxlength="10000" placeholder="写下你的回复..." :uploading="uploading"
+                    @update:content="onContentChange"
+                    @add-image="onAddImage" @remove-image="onRemoveImage"
+                    @preview-image="onPreviewImage" />
+            </scroll-view>
+            <!-- 底部操作区（#2691）：左「＋ 添加图片」、右「发送回复」主按钮。
+                 它**在滚动区之外** —— 主体滚到哪，发送键都在面板内可见（P0 可达）。
                  弱端输入区自带添加入口，故左侧按钮只在能力端出现，避免两个入口。 -->
             <view class="reply-actions">
                 <view class="reply-actions-left">
@@ -43,7 +63,7 @@
                     </view>
                 </view>
                 <view class="reply-btn" :class="{ disabled: !canSubmit }" @click="onSubmit">
-                    <text class="reply-btn-text">{{ submitting ? '发送中' : '回复' }}</text>
+                    <text class="reply-btn-text">{{ submitting ? '发送中' : '发送回复' }}</text>
                 </view>
             </view>
         </view>
@@ -51,8 +71,10 @@
 </template>
 
 <script setup lang="uts">
-    import { ref } from 'vue'
+    import { ref, computed } from 'vue'
     import ForumMarkdownInput from './forum-markdown-input.uvue'
+    import { REPLY_QUOTE_LABEL, REPLY_VIEW_ORIGINAL } from '../../../utils/forumReplyQuote'
+    import { panelBodyMaxHeightPx } from '../../../utils/replyPanelLayout'
     // #ifndef MP-ALIPAY || MP-BAIDU || MP-TOUTIAO
     import ForumWysiwygInput from '../../../components/forum-wysiwyg-input.uvue'
     // #endif
@@ -74,6 +96,8 @@
         panelMaxHeight?: number,
         /** 头部标题：有 @ 时「回复 @昵称」，否则「回复」 */
         headerText?: string,
+        /** 原讨论内容引文（宿主已摘录成一行；空串 = 整块不渲染，不占位） */
+        quoteText?: string,
         /** 输入区形态：能力端 WYSIWYG，平台例外恒 false */
         useWysiwyg?: boolean,
         /** 草稿正文（弱端受控 :content；能力端只作回流镜像） */
@@ -97,7 +121,8 @@
         expanded: false,
         panelBottom: 0,
         panelMaxHeight: 0,
-        headerText: '回复',
+        headerText: '回复帖子',
+        quoteText: '',
         useWysiwyg: false,
         content: '',
         images: () => [] as string[],
@@ -116,7 +141,19 @@
         (e: 'preview-image', index: number): void
         (e: 'keyboard-height', height: number): void
         (e: 'submit'): void
+        /** 「查看原帖」：收起浮层回到正文（本件不持有滚动位置，跳转由宿主决定） */
+        (e: 'view-original'): void
     }>()
+
+    /** 引文块两条文案单点在 utils/forumReplyQuote（模板不硬编码中文） */
+    const quoteLabel : string = REPLY_QUOTE_LABEL
+    const viewOriginalLabel : string = REPLY_VIEW_ORIGINAL
+
+    /**
+     * 主体高度（px，定高可滚）：面板上限减去头部与底部操作区，见 utils/replyPanelLayout.panelBodyMaxHeightPx。
+     * 定高而非 maxHeight —— scroll-view 在 auto 高度下不滚（见模板注释）。
+     */
+    const bodyHeight = computed<number>(() : number => panelBodyMaxHeightPx(props.panelMaxHeight))
 
     const wysiwygRef = ref<ReplyInputInstance | null>(null)
 
@@ -146,6 +183,11 @@
 
     function onSubmit() : void {
         emit('submit')
+    }
+
+    /** 「查看原帖」：本件不滚正文（宿主持有 scroll-view），只把「要看原帖」这件事交出去 */
+    function onViewOriginal() : void {
+        emit('view-original')
     }
 
     /** 宿主写入通道（#2642 @某人）：转给能力端输入区，弱端由宿主直接改草稿 */
@@ -220,6 +262,47 @@
         line-height: 1;
     }
 
+    /* 原讨论内容引文块：一行小标题 + 一行引文 + 跳转文字。
+       底色沿用提示带一档的浅灰（不用品牌色），与编辑区白底区分开。 */
+    .reply-quote {
+        flex-direction: column;
+        padding: 16rpx;
+        border-radius: 12rpx;
+        background-color: $bg-color;
+        border: 1rpx solid $border-color;
+        margin-bottom: 16rpx;
+    }
+
+    .reply-quote-label {
+        font-size: 22rpx;
+        color: #999999;
+    }
+
+    .reply-quote-text {
+        font-size: 26rpx;
+        color: $text-color-secondary;
+        line-height: 1.5;
+        margin-top: 4rpx;
+    }
+
+    /* 「查看原帖」：整行高 88rpx 的可点区（触摸目标 R2），文字左对齐不居中 */
+    .reply-quote-link {
+        min-height: 88rpx;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .reply-quote-link-text {
+        font-size: 26rpx;
+        color: $primary-color;
+    }
+
+    /* 主体滚动区：高度由 :style 下发（定高才滚，见模板注释）；
+       父容器 flex-direction: column，故它自然占中间、底部操作区跟在其后常驻。 */
+    .reply-panel-body {
+        flex-direction: column;
+    }
+
     .reply-actions {
         flex-direction: row;
         justify-content: space-between;
@@ -227,7 +310,7 @@
         margin-top: 8rpx;
     }
 
-    /* 左侧占满剩余宽度：添加入口选满消失后，「回复」仍贴右（不靠 auto margin） */
+    /* 左侧占满剩余宽度：添加入口选满消失后，「发送回复」仍贴右（不靠 auto margin） */
     .reply-actions-left {
         flex: 1;
         flex-direction: row;

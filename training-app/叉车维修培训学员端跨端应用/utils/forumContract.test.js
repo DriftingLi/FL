@@ -447,8 +447,8 @@ describe('行为保持契约（源码接线侧：跳转/时序/乐观更新的�
     expect(detailPage).not.toContain('v-model="replyContent"');
     expect(replyPanel).toContain(':image-count="images.length"');
     expect(detailPage).toContain(':max-images="replyImageLimit"');
-    // #2691：主按钮文案由「发送」改「回复」（底部左「＋ 添加图片」右「回复」）
-    expect(replyPanel).toContain("{{ submitting ? '发送中' : '回复' }}");
+    // #2691：主按钮文案由「发送」改「回复」，形态对齐后为「发送回复」（底部左「＋ 添加图片」右「发送回复」）
+    expect(replyPanel).toContain("{{ submitting ? '发送中' : '发送回复' }}");
     // 发送闸门与 `onSubmitReply` 的 trim 口径一致（纯空白不许亮着按钮却静默 return）
     expect(replyPanel).toContain(':class="{ disabled: !canSubmit }"');
     expect(detailPage).toContain(':can-submit="canSubmitReply"');
@@ -509,6 +509,27 @@ describe('行为保持契约（源码接线侧：跳转/时序/乐观更新的�
     expect(replyPanel).toMatch(/\.reply-panel-mask-hidden\s*\{[^}]*display:\s*none/);
     // 发送成功清编辑器正文（图片与 @ 态由 composable 清）
     expect(detailPage).toContain('.clear()');
+  });
+
+  it('回复浮层主体可滚、发送键常驻、原讨论内容引文（P0 截断修复的接线守护）', () => {
+    // 主体（输入区 + 工具条 + 提示带）自己滚：上限由纯函数给（数值判据见 replyPanelLayoutBehavior）
+    expect(replyPanel).toContain('class="reply-panel-body"');
+    expect(replyPanel).toContain(':style="{ height: bodyHeight + \'px\' }"');
+    expect(replyPanel).toContain('panelBodyMaxHeightPx(props.panelMaxHeight)');
+    // 底部操作区在滚动区之外 ⇒ 主体滚到哪，发送键都在面板内可见
+    const bodyAt = replyPanel.indexOf('class="reply-panel-body"');
+    const actionsAt = replyPanel.indexOf('class="reply-actions"');
+    expect(bodyAt).toBeGreaterThan(-1);
+    expect(actionsAt).toBeGreaterThan(bodyAt);
+    // 引文：回复谁就展示谁的正文摘录（摘录口径见 utils/forumReplyQuoteBehavior.test.js）
+    expect(replyPanel).toContain('v-if="quoteText.length > 0"');
+    expect(replyPanel).toContain('{{ quoteText }}');
+    expect(replyPanel).toContain('@click="onViewOriginal"');
+    expect(detailPage).toContain(':quote-text="replyQuoteText"');
+    expect(detailPage).toContain('@view-original="onViewOriginal"');
+    // 引文来源两条入口都在：点某条回复的「回复」取那条正文，点常驻触发条取帖子正文
+    expect(detailPage).toContain('replyQuoteExcerpt(r.content)');
+    expect(detailPage).toMatch(/onOpenReply\(\)[\s\S]*?replyQuoteExcerpt\(t != null \? t\.content : ''\)/);
   });
 });
 
@@ -832,8 +853,8 @@ describe('断言分类登记（#2332：接线 / 自称行为 两分法与 1:1 �
     }
   });
 
-  it('读数锁：声明单元 81 条（77 条 it + 4 条 it.each，后者运行时展开成 12 个用例 ⇒ 89 个运行时用例）', () => {
-    expect(cases.length).toBe(81);
+  it('读数锁：声明单元 82 条（78 条 it + 4 条 it.each，后者运行时展开成 12 个用例 ⇒ 90 个运行时用例）', () => {
+    expect(cases.length).toBe(82);
     expect(cases.filter((c) => c.kind === 'each').length).toBe(4);
     expect(AUDIT.filter((r) => r.kind === 'behavior-claim').length).toBe(13);
   });

@@ -79,7 +79,7 @@ export function useReplyComposer() : UseReplyComposerResult {
 
     /**
      * `@` 态（#2691）：只记「这次是回复谁」，正文里的 `@昵称` 由输入区自己插。
-     * 头部标题按「正文里是否真的还带着它」判 —— 用户把 `@昵称` 删掉后标题自动退回「回复」，
+     * 头部标题按「正文里是否真的还带着它」判 —— 用户把 `@昵称` 删掉后标题自动退回「回复帖子」，
      * 不会出现「头说回复 @张三、正文里没有张三」的错位。
      */
     const replyMentionName = ref<string>('')
@@ -89,7 +89,7 @@ export function useReplyComposer() : UseReplyComposerResult {
         if (name.length > 0 && replyContent.value.indexOf('@' + name) >= 0) {
             return '回复 @' + name
         }
-        return '回复'
+        return '回复帖子'
     })
 
     function onReplyToUser(name : string) : void {

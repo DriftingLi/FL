@@ -57,12 +57,31 @@ describe('⑪-1/⑪-2 面板 bottom 与 60% 上限', () => {
     expect(panelTop).toBeGreaterThanOrEqual(0);
   });
 
-  it('面板高度上限 = 视口 60%（向下取整，不越过窗口六成）', () => {
+  it('面板高度上限 = 视口 75%（向下取整，不越过窗口七成半）', () => {
     const { panelMaxHeightPx } = layout();
-    expect(panelMaxHeightPx(800)).toBe(480);
-    expect(panelMaxHeightPx(801)).toBe(480);   // 480.6 向下取整
-    expect(panelMaxHeightPx(667)).toBe(400);   // 400.2 向下取整
-    expect(panelMaxHeightPx(1000)).toBe(600);
+    // #2959：60%（480@800）装不下「引文 + 200px 编辑区 + 工具行」，放到 75%
+    expect(panelMaxHeightPx(800)).toBe(600);
+    expect(panelMaxHeightPx(801)).toBe(600);   // 600.75 向下取整
+    expect(panelMaxHeightPx(667)).toBe(500);   // 500.25 向下取整
+    expect(panelMaxHeightPx(1000)).toBe(750);
+  });
+});
+
+describe('面板主体上限：主体可滚，发送键常驻（P0 截断修复）', () => {
+  it('主体上限 = 面板上限 − 非滚动部分（头部 + 底部操作区）', () => {
+    const { panelMaxHeightPx, panelBodyMaxHeightPx, REPLY_PANEL_CHROME_PX } = layout();
+    const panel = panelMaxHeightPx(800);          // 600
+    expect(panelBodyMaxHeightPx(panel)).toBe(panel - REPLY_PANEL_CHROME_PX);
+    // 主体 + 非滚动部分 == 面板上限：整体不越界，发送键不会落到面板外
+    expect(panelBodyMaxHeightPx(panel) + REPLY_PANEL_CHROME_PX).toBe(panel);
+  });
+
+  it('面板上限很小时主体收回下限，不把输入区压成零高', () => {
+    const { panelBodyMaxHeightPx, REPLY_PANEL_MIN_BODY_PX } = layout();
+    expect(panelBodyMaxHeightPx(200)).toBe(REPLY_PANEL_MIN_BODY_PX);
+    expect(panelBodyMaxHeightPx(0)).toBe(REPLY_PANEL_MIN_BODY_PX);
+    // 下限本身也要能看见：不小于一行工具键的高度（88rpx ≈ 44px）
+    expect(REPLY_PANEL_MIN_BODY_PX).toBeGreaterThan(88);
   });
 });
 

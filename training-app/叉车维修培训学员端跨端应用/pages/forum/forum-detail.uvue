@@ -1,11 +1,9 @@
 <template>
     <view class="container" :style="{ height: windowHeight + 'px' }">
-        <!-- #2771：页头只留标题行 —— 原第二行工具栏（删除/编辑/举报）整行删除，
-             删除/编辑/举报与收藏一起收进标题行右侧的「···」菜单，页头不再留空行。 -->
+        <!-- #2771：页头只留标题行，删除/编辑/举报与收藏一起收进右侧「···」菜单（不再留空行） -->
         <app-nav-bar title="帖子详情" variant="inverse" @left-click="onBack" />
 
-        <!-- 「···」菜单（票 2767；#2771 收编页头动作）：收藏 / 删除 / 编辑 / 举报；
-             触发按钮在标题行右侧，浮层与遮罩在组件内 -->
+        <!-- 「···」菜单（票 2767；#2771 收编页头动作）：收藏 / 删除 / 编辑 / 举报；按钮在标题行右侧 -->
         <ForumMoreMenu ref="moreMenuRef" :favorited="tFavorited" :can-delete="canDelete"
             :can-edit="canEdit" @toggle-favorite="onToggleFavorite" @delete-topic="onDelete"
             @edit-topic="onEditTopic" @report-topic="onReportTopicClick" />
@@ -22,8 +20,8 @@
                 <view class="topic-title-row">
                     <text v-if="tTitle.length > 0" class="topic-title" lines="2">{{ tTitle }}</text>
                     <text class="title-more">···</text>
-                    <!-- 票 2782：视觉「···」盒只有 48rpx（32rpx × 1.5），命中区由这层 88×88rpx 透明盒撑开；
-                         绝对定位不进布局 ⇒ 标题行高度与按钮视觉底边（statusBar + 168rpx）都不变 -->
+                    <!-- 票 2782：视觉「···」盒只有 48rpx，命中区由这层 88×88rpx 透明盒撑开；绝对定位不进
+                         布局 ⇒ 标题行高度与按钮视觉底边（statusBar + 168rpx）都不变 -->
                     <view class="title-more-hit" @click="onOpenMoreMenu"></view>
                 </view>
                 <!-- 正文格式由壳层扁平下发（ADR-0025 P2）：组件不读 topic，档位决策在 utils/forumBody -->
@@ -56,10 +54,9 @@
                 @load-more="loadMoreReplies" />
         </scroll-view>
 
-        <!-- 底部**常驻触发条**（⑪-1：形态不变，点它升起半屏浮层）。数据档位常驻一行是
-             「Markdown 完全 opt-in」下唯一入口；tab / 工具栏 / 边界提示行只在 Markdown 档出现（⑥-5）。
-             票 2767：视觉改为「内联输入框 + 蓝色发送」，两者都只是升起浮层的触发点，
-             真正的编辑与提交仍在 forum-reply-panel 里。 -->
+        <!-- 底部**常驻触发条**（⑪-1：形态不变，点它升起半屏浮层）。数据档位常驻一行是「Markdown 完全
+             opt-in」下唯一入口；tab / 工具栏 / 边界提示行只在 Markdown 档出现（⑥-5）。票 2767：视觉改为
+             「内联输入框 + 蓝色发送」，两者都只是升起浮层的触发点，真正的编辑与提交仍在 forum-reply-panel。 -->
         <view v-if="topic != null" class="reply-bar">
             <view class="reply-trigger" @click="onOpenReply">
                 <text class="reply-trigger-ph">写下你的回复...</text>
@@ -69,9 +66,9 @@
             </view>
         </view>
 
-        <!-- 半屏浮层（⑪-1/⑪-4；#2691 重排）：遮罩 + 头部 + 输入区 + 底部操作区整体收进
-             `forum-reply-panel`（本页 600 行预算，按 ADR-0023 ③「拆而不覆盖」处理）。
-             本页只接线：展开态 / 已挂载态 / 面板尺寸 / 头部标题 / 草稿与图片 / 提交与收起。 -->
+        <!-- 半屏浮层（⑪-1/⑪-4；#2691 重排）：遮罩 + 头部 + 输入区 + 底部操作区整体收进 `forum-reply-panel`
+             （本页 600 行预算，按 ADR-0023 ③「拆而不覆盖」）。本页只接线：展开态 / 已挂载态 / 面板尺寸 /
+             头部标题 / 引文 / 草稿与图片 / 提交与收起。 -->
         <ForumReplyPanel v-if="replyMounted" ref="replyPanelRef" :mounted="replyMounted"
             :expanded="replyExpanded" :panel-bottom="panelBottom" :panel-max-height="panelMaxHeight"
             :header-text="replyHeaderText" :use-wysiwyg="useWysiwyg" :content="replyContent"
@@ -81,6 +78,7 @@
             @collapse="onCollapseReply" @update:content="onReplyContentChange"
             @add-image="onAddReplyImage" @remove-image="onRemoveReplyImage"
             @preview-image="onPreviewReplyImage" @keyboard-height="keyboardTracker"
+            :quote-text="replyQuoteText" @view-original="onViewOriginal"
             @submit="onSubmitReply" />
 
         <!-- 举报弹窗 -->
@@ -109,6 +107,7 @@ import { goBack } from '../../utils/navigation'
     import { resolveFileUrl, getAvatarColor, regionLabel } from '../../utils/forumDisplay'
     import { FORUM_MAX_REPLY_IMAGES } from '../../constants/app'
     import { createKeyboardHeightTracker, panelBottomPx, panelMaxHeightPx } from '../../utils/replyPanelLayout'
+    import { replyQuoteExcerpt } from '../../utils/forumReplyQuote'
     import type { ForumReply } from '../../types/index'
 
     /** 回复面的图片限额（`constants/app` 单点；组件不持缺省值，本页只报自己那一档） */
@@ -153,13 +152,15 @@ import { goBack } from '../../utils/navigation'
     /** 底部回复浮层展开态（点常驻触发条 / @某人 升起半屏面板，遮罩点击或发送成功后收起） */
     const replyExpanded = ref<boolean>(false)
     /**
-     * 浮层是否**已挂载过**（#2691 草稿保留）。
-     *
-     * 首次打开必须在可见状态下挂载：editor 在 `display:none` 里 ready 可能失败。故首次打开照旧
-     * 挂载（`replyMounted` 置 true 且 `replyExpanded` 置 true），之后收起只切隐藏态、不卸载 ——
-     * 文字 / 图片 / `@` 态都留在组件内，重开即见。
+     * 浮层是否**已挂载过**（#2691 草稿保留）。首次打开必须在可见状态下挂载（editor 在 display:none 里
+     * ready 可能失败），之后收起只切隐藏态、不卸载 —— 文字 / 图片 / @ 态都留在组件内，重开即见。
      */
     const replyMounted = ref<boolean>(false)
+
+    /** 浮层「原讨论内容」引文（一行摘录，空串 = 不展示）：点某条回复 ⇒ 那条正文，点常驻触发条 ⇒ 帖子正文。
+     *  摘录与截断在 `utils/forumReplyQuote`（纯函数，③ 门真跑），本页只记来源；不进 composable —— 它随
+     *  「这次回复指向谁」变，composable 只持草稿。 */
+    const replyQuoteText = ref<string>('')
 
     /** 底部「＋ 添加图片」入口：仅能力端（弱端输入区自带入口，避免重复）；选满即消失 */
     const showReplyAddImage = computed<boolean>(() : boolean => {
@@ -191,8 +192,8 @@ import { goBack } from '../../utils/navigation'
     } = report
 
     /**
-     * 帖子头部展示字段（扁平下发：模板不直读可空 topic 成员，Kotlin 可空接收者规避）
-     * 帖子图片预解析为完整 URL：模板中不再调用 resolveFileUrl（UTS 模板函数解析不稳定）
+     * 帖子头部展示字段（扁平下发：模板不直读可空 topic 成员，Kotlin 可空接收者规避；图片预解析成完整 URL，
+     * 模板里不调 resolveFileUrl —— UTS 模板函数解析不稳定）
      */
     const tTitle = computed<string>(() : string => {
         const t = topic.value
@@ -371,10 +372,7 @@ import { goBack } from '../../utils/navigation'
     }
 
     // ===== 回复某条回复 =====
-    /**
-     * 升起半屏浮层（触发条见模板 `.reply-trigger`，浮层见 `forum-reply-panel`）。
-     * 首次打开才挂载（见 `replyMounted` 注释）；已挂载过则只切回可见。
-     */
+    /** 升起半屏浮层（触发条 `.reply-trigger`，浮层 `forum-reply-panel`）；首次打开才挂载，之后只切可见 */
     function openReplyPanel() : void {
         replyMounted.value = true
         replyExpanded.value = true
@@ -384,16 +382,16 @@ import { goBack } from '../../utils/navigation'
         const r = replyById(id)
         if (r == null) return
         const name = r.author_name.length > 0 ? r.author_name : '匿名学员'
-        // 先展开、等输入组件挂载完成再写草稿：收起态下组件未挂载，原生 <input> 的
-        // :value 不认「挂载那一帧之前」刚写的值（实测点回复后框是空的）。nextTick 后
-        // 再写，走的是「已挂载后 :value 反应式更新」这条与工具栏插入同源、已验证可用的路径。
-        // #2691：`@` 态记在 composable（草稿的一部分），头部标题据此显示「回复 @昵称」。
+        // 先展开、等输入组件挂载完成再写草稿：收起态组件未挂载，原生 <input> 的 :value 不认「挂载那一帧
+        // 之前」刚写的值（实测点回复后框是空的）；nextTick 后写走已验证的反应式更新路径。
         onReplyToUser(name)
+        // 引文指向被回复的那条：点「回复」后能看见自己在回谁、回什么（楼中楼上下文）
+        replyQuoteText.value = replyQuoteExcerpt(r.content)
         openReplyPanel()
         nextTick(() => {
             if (useWysiwyg.value) {
-                // WYSIWYG 的 delta 留在组件内，宿主不能直写 replyContent（那样只改草稿、编辑器无感）。
-                // 经浮层 expose 的 insertMention 转给输入区走 insertText 逃生舱；组件 ready 前的点击由它内部暂存。
+                // WYSIWYG 的 delta 留在组件内，宿主不能直写 replyContent（那样只改草稿、编辑器无感）⇒
+                // 经浮层 expose 的 insertMention 走进 insertText 逃生舱（组件 ready 前的点击由它暂存）。
                 const w = replyPanelRef.value
                 if (w != null) w.insertMention(name)
             } else {
@@ -404,6 +402,9 @@ import { goBack } from '../../utils/navigation'
     }
 
     function onOpenReply() : void {
+        const t = topic.value
+        // 直接回复帖子：引文取帖子正文（没有正文时不展示引文块）
+        replyQuoteText.value = replyQuoteExcerpt(t != null ? t.content : '')
         openReplyPanel()
     }
 
@@ -412,14 +413,21 @@ import { goBack } from '../../utils/navigation'
         uni.hideKeyboard()
     }
 
-    // ⑪-3：原 onContentScroll「相对展开锚点下滑 > 60px 自动收起」（来自 #1300）整条删除 ——
-    // 浮层带全屏遮罩，面板开着时列表滚不动 ⇒ 那条永不成立，#1300 的真机判据同批作废。
+    /**
+     * 「查看原帖」：收起浮层。只收起不滚到顶 —— 详情页 scroll-view 没挂 scroll-top，硬跳顶会丢掉「刚读到
+     * 哪儿」。定义须在 `onCollapseReply` 之后（UTS error18：定义前引用编译失败）。
+     */
+    function onViewOriginal() : void {
+        onCollapseReply()
+    }
+
+    // ⑪-3：原 onContentScroll「下滑 > 60px 自动收起」整条删除 —— 全屏遮罩下面板开着时列表滚不动（#1300 判据作废）。
 
     function onSubmitReply() : void {
         composer.onSubmitReply(topicId.value, (reply : ForumReply) => {
             afterReplyPosted(reply)
-            // 发送成功：先清编辑器正文（此刻面板仍可见，原生 clear 命令已发出），再收起。
-            // 浮层常驻挂载后不清会残留已发送内容 —— 文字由组件 clear() 清，图片与 @ 态由 composable 清。
+            // 发送成功：先清编辑器正文（面板仍可见、原生 clear 已发出）再收起；常驻挂载后不清会残留已发送
+            // 内容 —— 文字由组件 clear() 清，图片与 @ 态由 composable 清。
             if (useWysiwyg.value) {
                 const w = replyPanelRef.value
                 if (w != null) w.clear()

@@ -39,12 +39,40 @@ export function panelBottomPx(
 }
 
 /**
- * 面板高度上限（px）：视口 60%（向下取整），超出走面板内滚动（⑪-2）。
+ * 面板高度上限（px）：视口 75%（向下取整），超出走面板内滚动（⑪-2）。
  *
  * #2691：原为 `windowHeight / 2`（半屏）。回复浮层加了头部与图片带后，半屏装不下
- * 「编辑器 + 工具栏 + 图片带 + 提示带 + 底部操作区」，故放到 60%；键盘避让链路
- * （`createKeyboardHeightTracker` / `panelBottomPx`）不动 —— 只改这一个系数。
+ * 「编辑器 + 工具栏 + 图片带 + 提示带 + 底部操作区」，故放到 60%。
+ *
+ * #2959：60% 仍不够 —— 微信小程序的 `<editor>` 实测恒为 200px 高（内联 `height` 与动态 class 都不生效），
+ * 60% 下主体只有 346px，正好被「引文 125 + 编辑区 200 + 字数行 22」吃满，B/I/S/≡/⋯ 工具行落在折叠线以下。
+ * 放到 75%（844px 视口 ⇒ 633px）后主体 473px 装得下引文 + 编辑区 + 工具行，发送键仍常驻底部；
+ * 键盘避让链路（`createKeyboardHeightTracker` / `panelBottomPx`）不动 —— 只改这一个系数。
  */
 export function panelMaxHeightPx(windowHeightPx : number) : number {
-	return Math.floor(windowHeightPx * 0.6)
+	return Math.floor(windowHeightPx * 0.75)
+}
+
+/**
+ * 面板里**非滚动部分**占的高度（px）：头部（标题行）+ 底部操作区（发送键）+ 面板内边距。
+ * 实测口径：88rpx 头部 ≈ 44px + 88rpx 发送键 ≈ 44px + 上下内边距 ≈ 24px，向上取整留 48px 余量。
+ * 数字的意义只有一个：让「主体可滚」时面板整体不越过 `panelMaxHeightPx`，发送键永远在面板内可见。
+ */
+export const REPLY_PANEL_CHROME_PX : number = 160
+
+/** 主体高度下限（px）：再挤也要留出「编辑区 + 一行工具」的可视高度，别把输入区压成一条缝。 */
+export const REPLY_PANEL_MIN_BODY_PX : number = 240
+
+/**
+ * 浮层**主体**（输入区 + 工具条 + 提示带）的高度（px，定高可滚）：面板上限减去非滚动部分，且不低于下限。
+ *
+ * 为什么需要它：面板内改成「主体滚动 + 底部操作区常驻」后，主体必须拿到一个**确定高度**才会滚
+ * （uvue 的 `scroll-view` 在高度为 auto 时不收口，先例 pages/courses/courses.uvue 的 flex:1 + height:0）；
+ * 下限则保证窄屏 / 键盘弹起、面板上限被压到很小时输入区仍可用 —— 那一点溢出由主体自己的滚动消化，
+ * 不把发送键挤出屏幕。
+ */
+export function panelBodyMaxHeightPx(panelMaxHeightPx : number) : number {
+	const body = panelMaxHeightPx - REPLY_PANEL_CHROME_PX
+	if (body < REPLY_PANEL_MIN_BODY_PX) return REPLY_PANEL_MIN_BODY_PX
+	return body
 }

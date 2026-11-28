@@ -877,7 +877,7 @@ jobs:
   # ============================================================
   #   ⚠️ changes 必须在 needs 里（2026-09-28 修，真实缺陷 #2 / spec #1345）：它是所有子 job 的上游，
   #   漏掉它时「changes 失败 ⇒ 子 job 全部 skipped ⇒ FAILED 为空 ⇒ 汇总 success」，
-  #   而 ci-summary 是 ruleset 唯一必检 + cd.yml 生产 gate 的唯一 CI 判据 ⇒ 零检查的 PR 可直发 production。
+  #   而 ci-summary 与 ensure-testing-smoke 是 ruleset 两条必检 + cd.yml 生产 gate 的 CI 判据 ⇒ 零检查的 PR 可直发 production。
   #   两条锁见 scripts/ci-summary-needs.test.mjs（依赖闭包 + needs==check 清单相等），由 el-controls-selftest 跑。
   ci-summary:
     needs: [changes, backend-lint, backend-test, frontend-check, mobile-test, collector-test, pr-evidence-selftest, el-controls-selftest, security-scan, migration-check]

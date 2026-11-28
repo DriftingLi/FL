@@ -60,8 +60,8 @@
             </scroll-view>
         </view>
 
-        <!-- 发帖侧的字数计数（回复侧单行输入，不占这一行） -->
-        <text v-if="!isReply" class="counter-text">{{ content.length }}/{{ maxlength }}</text>
+        <!-- 字数计数：发帖与回复两面都显示（回复面原先是隐藏的；浮层里作者更需要知道还剩多少） -->
+        <text class="counter-text">{{ content.length }}/{{ maxlength }}</text>
 
         <!-- 两条功能提示都放在编辑/预览**之外**：预览档也要看得见（属地是发布前披露，不能只在编写档出现） -->
         <text v-if="showRegionNotice" class="region-notice">{{ regionNotice }}</text>
