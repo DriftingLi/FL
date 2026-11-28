@@ -5540,6 +5540,8 @@ definitions:
     properties:
       enabled:
         type: boolean
+      readiness:
+        $ref: '#/definitions/valuation.TrialReadiness'
       updated_at:
         type: string
       version:
@@ -5612,8 +5614,6 @@ definitions:
         items:
           $ref: '#/definitions/valuation.TrialPolicyInput'
         type: array
-    required:
-    - policies
     type: object
   valuation.TrialPoliciesResponse:
     properties:
@@ -5717,6 +5717,26 @@ definitions:
     - usage_hour_ratios
     - vehicle_type
     type: object
+  valuation.TrialReadiness:
+    properties:
+      blockers:
+        items:
+          $ref: '#/definitions/valuation.TrialReadinessBlocker'
+        type: array
+      ready:
+        type: boolean
+    type: object
+  valuation.TrialReadinessBlocker:
+    properties:
+      approved:
+        type: boolean
+      detail:
+        type: string
+      evidence:
+        type: string
+      key:
+        type: string
+    type: object
   valuation.TrialRequest:
     properties:
       brand:
@@ -5804,6 +5824,9 @@ definitions:
         items:
           type: string
         type: array
+      next_action:
+        type: string
+        x-optional: true
       reason_code:
         type: string
         x-optional: true
@@ -21232,7 +21255,7 @@ paths:
       - 估值-管理端
   /valuation/admin/trials/control:
     get:
-      description: 独立全局开关默认关闭；读取失败时试算按关闭处理。
+      description: 独立全局开关默认关闭；记录缺失或读取失败时按关闭处理。响应同时给出上线准备度（readiness），存在未批准项时开关不可开启。
       produces:
       - application/json
       responses:
@@ -21265,7 +21288,7 @@ paths:
     put:
       consumes:
       - application/json
-      description: 仅影响 trials，不影响草稿、建议、手动或正式评估；enabled 缺省为 false。
+      description: 仅影响 trials，不影响草稿、建议、手动或正式评估；enabled 缺省为 false。上线准备度未通过时拒绝开启（409）。
       parameters:
       - description: 全局开关
         in: body
@@ -21295,6 +21318,10 @@ paths:
             $ref: '#/definitions/response.R'
         "403":
           description: Forbidden
+          schema:
+            $ref: '#/definitions/response.R'
+        "409":
+          description: 上线准备度未通过，开关不可开启
           schema:
             $ref: '#/definitions/response.R'
         "500":
@@ -23186,7 +23213,7 @@ paths:
           schema:
             $ref: '#/definitions/response.R'
         "403":
-          description: 参考试算未开放
+          description: 参考试算未开放；data 仍带 reason_code、missing_fields 与 next_action
           schema:
             $ref: '#/definitions/response.R'
         "500":

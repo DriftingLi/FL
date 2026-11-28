@@ -25361,7 +25361,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "独立全局开关默认关闭；读取失败时试算按关闭处理。",
+                "description": "独立全局开关默认关闭；记录缺失或读取失败时按关闭处理。响应同时给出上线准备度（readiness），存在未批准项时开关不可开启。",
                 "produces": [
                     "application/json"
                 ],
@@ -25414,7 +25414,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "仅影响 trials，不影响草稿、建议、手动或正式评估；enabled 缺省为 false。",
+                "description": "仅影响 trials，不影响草稿、建议、手动或正式评估；enabled 缺省为 false。上线准备度未通过时拒绝开启（409）。",
                 "consumes": [
                     "application/json"
                 ],
@@ -25469,6 +25469,12 @@ const docTemplate = `{
                     },
                     "403": {
                         "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "409": {
+                        "description": "上线准备度未通过，开关不可开启",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -28545,7 +28551,7 @@ const docTemplate = `{
                         }
                     },
                     "403": {
-                        "description": "参考试算未开放",
+                        "description": "参考试算未开放；data 仍带 reason_code、missing_fields 与 next_action",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -37129,6 +37135,9 @@ const docTemplate = `{
                 "enabled": {
                     "type": "boolean"
                 },
+                "readiness": {
+                    "$ref": "#/definitions/valuation.TrialReadiness"
+                },
                 "updated_at": {
                     "type": "string"
                 },
@@ -37232,9 +37241,6 @@ const docTemplate = `{
         },
         "valuation.TrialPoliciesRequest": {
             "type": "object",
-            "required": [
-                "policies"
-            ],
             "properties": {
                 "policies": {
                     "type": "array",
@@ -37393,6 +37399,37 @@ const docTemplate = `{
                 }
             }
         },
+        "valuation.TrialReadiness": {
+            "type": "object",
+            "properties": {
+                "blockers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/valuation.TrialReadinessBlocker"
+                    }
+                },
+                "ready": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "valuation.TrialReadinessBlocker": {
+            "type": "object",
+            "properties": {
+                "approved": {
+                    "type": "boolean"
+                },
+                "detail": {
+                    "type": "string"
+                },
+                "evidence": {
+                    "type": "string"
+                },
+                "key": {
+                    "type": "string"
+                }
+            }
+        },
         "valuation.TrialRequest": {
             "type": "object",
             "properties": {
@@ -37516,6 +37553,10 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                },
+                "next_action": {
+                    "type": "string",
+                    "x-optional": true
                 },
                 "reason_code": {
                     "type": "string",

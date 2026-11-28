@@ -248,7 +248,7 @@ func setupValuation(r *gin.Engine, cfg *config.Config, authSvc valuation.Valuati
 	valuation.RegisterRoutes(r, sess, logger, auditSvc, dictRepo, evalRepo, batteryRepo, valuationSvc, batterySvc, pdfGen, st, authSvc, login, conversationSvc)
 	trialStore := valuation.NewPostgresTrialAdminStore(pool)
 	valuation.RegisterTrialRoutes(r, valuation.NewPostgresTrialSnapshotReader(pool), logger, cfg.AppEnv, trialStore)
-	valuation.RegisterTrialAdminRoutes(r.Group("/api"), sess, trialStore, logger)
+	valuation.RegisterTrialAdminRoutes(r.Group("/api"), sess, trialStore, logger, auditSvc)
 	logger.Info("valuation 路由注册完成", zap.String("prefix", "/api/valuation"))
 
 	return func() {

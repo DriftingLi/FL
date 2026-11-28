@@ -2,6 +2,7 @@ package valuation
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
+	"forklift-training/internal/audit"
 	"forklift-training/internal/authz"
 	"forklift-training/internal/middleware"
 	"forklift-training/internal/security"
@@ -23,9 +25,14 @@ type TrialAdminHandler struct {
 }
 
 // RegisterTrialAdminRoutes 注册仅管理员可用的试算控制面。
-func RegisterTrialAdminRoutes(rg *gin.RouterGroup, session *security.Session, store TrialAdminStore, logger *zap.Logger) {
+// 审计挂法与同前缀的 /valuation/admin 组一致：未注入审计服务时不挂（测试装配传 nil），
+// 判空必须在装配点做——typed nil 装进 middleware.AuditWriter 不等于 nil 接口。
+func RegisterTrialAdminRoutes(rg *gin.RouterGroup, session *security.Session, store TrialAdminStore, logger *zap.Logger, auditSvc *audit.Service) {
 	h := &TrialAdminHandler{store: store, logger: logger}
 	g := rg.Group("/valuation/admin/trials", middleware.JWTAuth(session), middleware.CapabilityRequired(authz.CapValuationConfig))
+	if auditSvc != nil {
+		g.Use(middleware.AuditLog(auditSvc, logger))
+	}
 	g.GET("/control", h.GetControl)
 	g.PUT("/control", h.SetControl)
 	g.GET("/policies", h.ListPolicies)
@@ -35,7 +42,7 @@ func RegisterTrialAdminRoutes(rg *gin.RouterGroup, session *security.Session, st
 }
 
 // @Summary 读取试算全局开关
-// @Description 独立全局开关默认关闭；读取失败时试算按关闭处理。
+// @Description 独立全局开关默认关闭；记录缺失或读取失败时按关闭处理。响应同时给出上线准备度（readiness），存在未批准项时开关不可开启。
 // @Tags 估值-管理
 // @Produce json
 // @Security BearerAuth
@@ -46,15 +53,19 @@ func RegisterTrialAdminRoutes(rg *gin.RouterGroup, session *security.Session, st
 // @Router /valuation/admin/trials/control [get]
 func (h *TrialAdminHandler) GetControl(c *gin.Context) {
 	control, err := h.store.GetTrialControl(c.Request.Context())
-	if err != nil {
+	if errors.Is(err, ErrTrialControlMissing) {
+		// 单行缺失按关闭处理：管理读面也不升 500，试算链路同样回 403 global_disabled。
+		h.logger.Warn("试算全局开关记录缺失，按关闭处理")
+		control = TrialControl{}
+	} else if err != nil {
 		h.fail(c, "读取试算全局开关失败", err)
 		return
 	}
-	response.Success(c, TrialControlResponse{TrialControl: control})
+	response.Success(c, TrialControlResponse{TrialControl: control, Readiness: trialReadiness()})
 }
 
 // @Summary 更新试算全局开关
-// @Description 仅影响 trials，不影响草稿、建议、手动或正式评估；enabled 缺省为 false。
+// @Description 仅影响 trials，不影响草稿、建议、手动或正式评估；enabled 缺省为 false。上线准备度未通过时拒绝开启（409）。
 // @Tags 估值-管理
 // @Accept json
 // @Produce json
@@ -64,6 +75,7 @@ func (h *TrialAdminHandler) GetControl(c *gin.Context) {
 // @Failure 400 {object} response.R
 // @Failure 401 {object} response.R
 // @Failure 403 {object} response.R
+// @Failure 409 {object} response.R "上线准备度未通过，开关不可开启"
 // @Failure 500 {object} response.R
 // @Router /valuation/admin/trials/control [put]
 func (h *TrialAdminHandler) SetControl(c *gin.Context) {
@@ -72,12 +84,19 @@ func (h *TrialAdminHandler) SetControl(c *gin.Context) {
 		response.BadRequest(c, "请求参数格式错误")
 		return
 	}
+	if req.Enabled {
+		readiness := trialReadiness()
+		if !readiness.Ready {
+			response.Conflict(c, "试算上线准备度未通过，全局开关不可开启: "+trialReadinessPending(readiness))
+			return
+		}
+	}
 	control, err := h.store.SetTrialControl(c.Request.Context(), req.Enabled)
 	if err != nil {
 		h.fail(c, "更新试算全局开关失败", err)
 		return
 	}
-	response.Success(c, TrialControlResponse{TrialControl: control})
+	response.Success(c, TrialControlResponse{TrialControl: control, Readiness: trialReadiness()})
 }
 
 // @Summary 查询试算获批策略
@@ -139,7 +158,6 @@ func (h *TrialAdminHandler) ReplacePolicies(c *gin.Context) {
 		return
 	}
 	if err := h.store.ReplaceTrialPolicies(c.Request.Context(), req.Policies); err != nil {
-		h.logger.Error("试算策略更新失败", zap.Error(err))
 		h.fail(c, "更新试算策略失败", err)
 		return
 	}
@@ -172,14 +190,8 @@ func (h *TrialAdminHandler) ReplacePolicies(c *gin.Context) {
 // @Failure 500 {object} response.R
 // @Router /valuation/admin/trials/metrics [get]
 func (h *TrialAdminHandler) ListMetrics(c *gin.Context) {
-	filter, err := parseTrialMetricFilter(c)
-	if err != nil {
-		response.BadRequest(c, err.Error())
-		return
-	}
-	items, err := h.store.ListTrialMetrics(c.Request.Context(), filter)
-	if err != nil {
-		h.fail(c, "查询试算指标失败", err)
+	items, ok := h.loadMetrics(c, "查询试算指标失败")
+	if !ok {
 		return
 	}
 	response.Success(c, TrialMetricsResponse{Items: items})
@@ -206,14 +218,8 @@ func (h *TrialAdminHandler) ListMetrics(c *gin.Context) {
 // @Failure 500 {object} response.R
 // @Router /valuation/admin/trials/metrics/export [get]
 func (h *TrialAdminHandler) ExportMetrics(c *gin.Context) {
-	filter, err := parseTrialMetricFilter(c)
-	if err != nil {
-		response.BadRequest(c, err.Error())
-		return
-	}
-	items, err := h.store.ListTrialMetrics(c.Request.Context(), filter)
-	if err != nil {
-		h.fail(c, "导出试算指标失败", err)
+	items, ok := h.loadMetrics(c, "导出试算指标失败")
+	if !ok {
 		return
 	}
 	payload, err := json.Marshal(items)
@@ -223,6 +229,21 @@ func (h *TrialAdminHandler) ExportMetrics(c *gin.Context) {
 	}
 	c.Header("Content-Disposition", contentDisposition("valuation-trial-metrics.json"))
 	c.Data(http.StatusOK, "application/json; charset=utf-8", payload)
+}
+
+// loadMetrics 是列表与导出的共用入口：同一套过滤解析 + 同一存储读面，只有失败文案随动作不同。
+func (h *TrialAdminHandler) loadMetrics(c *gin.Context, failure string) ([]TrialMetricSummary, bool) {
+	filter, err := parseTrialMetricFilter(c)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return nil, false
+	}
+	items, err := h.store.ListTrialMetrics(c.Request.Context(), filter)
+	if err != nil {
+		h.fail(c, failure, err)
+		return nil, false
+	}
+	return items, true
 }
 
 func parseTrialMetricFilter(c *gin.Context) (TrialMetricFilter, error) {
@@ -266,10 +287,6 @@ func parseTrialMetricFilter(c *gin.Context) (TrialMetricFilter, error) {
 }
 
 func (h *TrialAdminHandler) fail(c *gin.Context, message string, err error) {
-	if h.store == nil {
-		response.ServerError(c, "试算管理存储未装配")
-		return
-	}
 	h.logger.Error(message, zap.Error(err))
 	response.ServerError(c, message)
 }

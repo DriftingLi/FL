@@ -69,7 +69,11 @@ func (r *PostgresTrialSnapshotReader) LoadTrialSnapshot(ctx context.Context, req
 		}
 	}
 	control, err := loadTrialControl(ctx, r.pool)
-	if err != nil {
+	if errors.Is(err, ErrTrialControlMissing) {
+		// 单行缺失按「关闭」处理：后面的 preflight 会给出 403 global_disabled，
+		// 不能把配置缺失变成 500（#2958 审查项 5）。
+		control = TrialControl{}
+	} else if err != nil {
 		return nil, err
 	}
 	snapshot.Control = control

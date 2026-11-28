@@ -103,6 +103,122 @@ func TestTrialMetricEventRecordsTooWideAndFollowUp(t *testing.T) {
 	}
 }
 
+func TestTrialReadinessStaysBlockedUntilApprovalsRecorded(t *testing.T) {
+	readiness := trialReadiness()
+	if readiness.Ready {
+		t.Fatal("未取得任何批准时准备度必须 blocked，开关不得开启")
+	}
+	want := map[string]bool{
+		"formula_regression":    false,
+		"sample_replay_holdout": false,
+		"launch_condition_2949": false,
+		"allowlist_width_2951":  false,
+		"policy_width_unified":  false,
+	}
+	for _, blocker := range readiness.Blockers {
+		approved, ok := want[blocker.Key]
+		if !ok {
+			t.Fatalf("上线阻塞项未登记: %s", blocker.Key)
+		}
+		if blocker.Approved != approved {
+			t.Fatalf("%s 的批准只能来自决策记录，不得在代码里伪造: %+v", blocker.Key, blocker)
+		}
+		if blocker.Detail == "" || blocker.Evidence == "" {
+			t.Fatalf("阻塞项必须写清原因与依据: %+v", blocker)
+		}
+		delete(want, blocker.Key)
+	}
+	if len(want) != 0 {
+		t.Fatalf("缺少必须报告的阻塞项: %v", want)
+	}
+	wantPending := "formula_regression, sample_replay_holdout, launch_condition_2949, allowlist_width_2951, policy_width_unified"
+	if pending := trialReadinessPending(readiness); pending != wantPending {
+		t.Fatalf("未批准项清单漂移: got=%s want=%s", pending, wantPending)
+	}
+}
+
+func TestTrialMetricEventKeepsReasonOutOfPolicyVersion(t *testing.T) {
+	price := OriginalPrice{ID: 1, Brand: "林德", VehicleType: "电动叉车", Series: "K系列", Tonnage: 3,
+		ConfigType: "标准", MastType: "标准门架", MastHeightMM: 3000, EarliestFactoryYear: 2020, OriginalPrice: 100000}
+	snapshot := newTrialSnapshotForTest(t, []OriginalPrice{price})
+	snapshot.Control = TrialControl{}
+	result, err := CalculateTrial(context.Background(), trialCompleteRequest(), snapshot, "development")
+	if err != nil {
+		t.Fatal(err)
+	}
+	event := NewTrialMetricEvent(trialCompleteRequest(), result, 3)
+	if event.PolicyVersion == TrialReasonGlobalDisabled {
+		t.Fatalf("关闭原因不得写进 policy_version 维度: %+v", event)
+	}
+	if event.UnpricedReason != TrialReasonGlobalDisabled {
+		t.Fatalf("关闭原因必须落独立原因字段 unpriced_reason: %+v", event)
+	}
+}
+
+func TestTrialPolicyAllowlistGapIsStructured(t *testing.T) {
+	snapshot, err := NewTrialSnapshot(ReplayInput{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot.Control = TrialControl{Enabled: true, Version: 1}
+	req := trialMinimumRequest()
+	req.Policy = "pilot"
+	result, err := CalculateTrial(context.Background(), req, snapshot, "development")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ReasonCode != TrialReasonPolicyNotConfigured {
+		t.Fatalf("名单外必须 fail-closed: %+v", result)
+	}
+	if len(result.MissingFields) != 1 || result.MissingFields[0] != "policy_allowlist" {
+		t.Fatalf("名单外必须给出结构化缺失项而不是空提示: %+v", result.MissingFields)
+	}
+	if result.NextAction != TrialNextActionSwitchToFormal {
+		t.Fatalf("名单外的下一步必须是转正式评估: %q", result.NextAction)
+	}
+}
+
+func TestTrialTooWideCarriesStructuredNextAction(t *testing.T) {
+	price := OriginalPrice{ID: 1, Brand: "林德", VehicleType: "电动叉车", Series: "K系列", Tonnage: 3,
+		ConfigType: "标准", MastType: "标准门架", MastHeightMM: 3000, EarliestFactoryYear: 2020, OriginalPrice: 40000}
+	higher := price
+	higher.ID, higher.OriginalPrice = 2, 60000
+	snapshot := newTrialSnapshotForTest(t, []OriginalPrice{price, higher})
+	snapshot.TrialPolicies[0].MaxWidthRatio = 0.2
+	req := trialCompleteRequest()
+	req.UsageHours = nil
+	result, err := CalculateTrial(context.Background(), req, snapshot, "development")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ReasonCode != TrialReasonTooWide || result.Interval != nil {
+		t.Fatalf("过宽必须不给价: %+v", result)
+	}
+	if len(result.MissingFields) == 0 || result.NextAction != TrialNextActionSupplementFields {
+		t.Fatalf("过宽必须给出补件字段与下一步: fields=%v next=%q", result.MissingFields, result.NextAction)
+	}
+}
+
+func TestTrialMetricProjectionMatchesEventValues(t *testing.T) {
+	columns := 1 + len(trialMetricDimensionColumns) + len(trialMetricMeasureColumns())
+	if got := len(trialMetricEventValues(TrialMetricEvent{})); got != columns {
+		t.Fatalf("指标列与取值错位: columns=%d values=%d", columns, got)
+	}
+	// Summary 的聚合清单由同一张度量表派生：只跳过 unpriced_reason / model_name 两个只写列。
+	if got := strings.Count(trialMetricSummaryAggregates(), "SUM("); got != len(trialMetricMeasureColumns())-2 {
+		t.Fatalf("Summary 聚合列数漂移: aggregates=%d measures=%d", got, len(trialMetricMeasureColumns()))
+	}
+}
+
+func TestTrialEmptyAllowlistIsAValidReplacement(t *testing.T) {
+	if err := validateTrialPolicySet(nil); err != nil {
+		t.Fatalf("空列表用于清空 allowlist，必须合法: %v", err)
+	}
+	if err := validateTrialPolicySet([]TrialPolicyInput{}); err != nil {
+		t.Fatalf("空数组用于清空 allowlist，必须合法: %v", err)
+	}
+}
+
 func TestPostgresTrialPilotControlMetricsAndRollback(t *testing.T) {
 	testutil.SetTestGinMode()
 	db := testutil.NewPostgresDB(t)
@@ -165,8 +281,32 @@ func TestPostgresTrialPilotControlMetricsAndRollback(t *testing.T) {
 		t.Fatalf("管理开关必须要求管理员: %d %s", w.Code, w.Body.String())
 	}
 	adminAuth := adminAuthHeader(t)
-	if w := performRequestWithAuth(r, http.MethodPut, "/api/valuation/admin/trials/control", map[string]any{"enabled": true}, adminAuth); w.Code != http.StatusOK {
-		t.Fatalf("开启全局开关失败: %d %s", w.Code, w.Body.String())
+	// 上线准备度未通过时开关不可开（#2958 审查项 9）：API 必须明确拒绝，且不得在代码里伪造批准。
+	if w := performRequestWithAuth(r, http.MethodPut, "/api/valuation/admin/trials/control", map[string]any{"enabled": true}, adminAuth); w.Code != http.StatusConflict {
+		t.Fatalf("准备度未通过时开启开关必须 409: %d %s", w.Code, w.Body.String())
+	}
+	readinessResp := performRequestWithAuth(r, http.MethodGet, "/api/valuation/admin/trials/control", nil, adminAuth)
+	if readinessResp.Code != http.StatusOK {
+		t.Fatalf("读取开关与准备度失败: %d %s", readinessResp.Code, readinessResp.Body.String())
+	}
+	_, _, controlData := decodeBody(t, readinessResp)
+	readiness := controlData["readiness"].(map[string]any)
+	if readiness["ready"].(bool) {
+		t.Fatalf("未取得任何批准时准备度必须 blocked: %v", readiness)
+	}
+	blockers := readiness["blockers"].([]any)
+	if len(blockers) == 0 {
+		t.Fatalf("准备度必须逐项列出阻塞项: %v", readiness)
+	}
+	for _, raw := range blockers {
+		if raw.(map[string]any)["approved"].(bool) {
+			t.Fatalf("代码里不得预填已批准: %v", raw)
+		}
+	}
+	// 测试用直连 SQL 模拟「批准后」的开关状态：批准本身只能来自决策记录，
+	// 这里只让下游计算与观测链路可被验证。
+	if _, err := pool.Exec(ctx, `UPDATE valuation_trial_control SET enabled = TRUE, version = version + 1 WHERE id = 1`); err != nil {
+		t.Fatal(err)
 	}
 	if w := performRequestWithAuth(r, http.MethodPut, "/api/valuation/admin/trials/policies", TrialPoliciesRequest{Policies: []TrialPolicyInput{policy}}, adminAuth); w.Code != http.StatusOK {
 		t.Fatalf("更新获批策略失败: %d %s", w.Code, w.Body.String())
@@ -224,6 +364,27 @@ func TestPostgresTrialPilotControlMetricsAndRollback(t *testing.T) {
 		t.Fatalf("指标导出包含 PII 或请求标识: %s", exported.Body.String())
 	}
 
+	// 空数组是显式清空 allowlist；null 才是请求写错（nil 语义与空数组不同）。
+	if w := performRequestWithAuth(r, http.MethodPut, "/api/valuation/admin/trials/policies", map[string]any{"policies": []any{}}, adminAuth); w.Code != http.StatusOK {
+		t.Fatalf("空数组必须允许清空 allowlist: %d %s", w.Code, w.Body.String())
+	}
+	if cleared, err := store.ListTrialPolicies(ctx, TrialPolicyFilter{}); err != nil || len(cleared) != 0 {
+		t.Fatalf("清空后 allowlist 必须为空: policies=%v err=%v", cleared, err)
+	}
+	if w := performRequestWithAuth(r, http.MethodPut, "/api/valuation/admin/trials/policies", map[string]any{"policies": nil}, adminAuth); w.Code != http.StatusBadRequest {
+		t.Fatalf("null policies 必须拒绝（与空数组合法清空区分）: %d %s", w.Code, w.Body.String())
+	}
+	// 名单外 403 必须带结构化缺失项与下一步，不是空提示（#2958 审查项 8）。
+	clearedReq := trialReq
+	clearedReq.RequestID = "pg-pilot-cleared-allowlist"
+	if w := performRequest(r, http.MethodPost, "/api/valuation/trials", clearedReq); w.Code != http.StatusForbidden {
+		t.Fatalf("清空 allowlist 后必须 403: %d %s", w.Code, w.Body.String())
+	} else if _, _, data := decodeBody(t, w); data["reason_code"] != TrialReasonPolicyNotConfigured ||
+		data["next_action"] != TrialNextActionSwitchToFormal ||
+		len(data["missing_fields"].([]any)) != 1 || data["missing_fields"].([]any)[0] != "policy_allowlist" {
+		t.Fatalf("名单外必须返回结构化缺失项与转正式下一步: %v", data)
+	}
+
 	closed := performRequestWithAuth(r, http.MethodPut, "/api/valuation/admin/trials/control", map[string]any{"enabled": false}, adminAuth)
 	if closed.Code != http.StatusOK {
 		t.Fatalf("关闭全局开关失败: %d %s", closed.Code, closed.Body.String())
@@ -237,10 +398,36 @@ func TestPostgresTrialPilotControlMetricsAndRollback(t *testing.T) {
 		t.Fatalf("关闭试算不得影响正式评估: %d %s", w.Code, w.Body.String())
 	} else {
 		_, _, evaluation := decodeBody(t, w)
+		suggestions, ok := evaluation["suggestions"].([]any)
+		if !ok || len(suggestions) == 0 {
+			t.Fatalf("关闭试算后正式评估必须仍产出建议: %v", evaluation["suggestions"])
+		}
 		id := int64(evaluation["id"].(float64))
 		if w := performRequest(r, http.MethodPost, fmt.Sprintf("/api/valuation/evaluations/%d/report", id), nil); w.Code != http.StatusOK {
 			t.Fatalf("关闭试算不得影响正式报告: %d %s", w.Code, w.Body.String())
 		}
+	}
+	// 回退演练：关停参考试算后对话草稿照常可用（#2958 审查项 11）。
+	if w := performRequest(r, http.MethodPost, "/api/valuation/conversation/drafts", map[string]any{}); w.Code != http.StatusOK {
+		t.Fatalf("关闭试算不得影响对话草稿: %d %s", w.Code, w.Body.String())
+	} else if _, _, draft := decodeBody(t, w); draft["id"] == nil || draft["id"] == "" {
+		t.Fatalf("对话草稿必须返回可用能力 ID: %v", draft)
+	}
+	// 开关记录缺失按关闭处理：403 global_disabled，不得 500（#2958 审查项 5）。
+	if _, err := pool.Exec(ctx, `DELETE FROM valuation_trial_control`); err != nil {
+		t.Fatal(err)
+	}
+	missingControl := trialReq
+	missingControl.RequestID = "pg-pilot-missing-control"
+	if w := performRequest(r, http.MethodPost, "/api/valuation/trials", missingControl); w.Code != http.StatusForbidden {
+		t.Fatalf("开关记录缺失必须 403 关闭态而不是 500: %d %s", w.Code, w.Body.String())
+	} else if _, _, data := decodeBody(t, w); data["reason_code"] != TrialReasonGlobalDisabled || data["next_action"] != TrialNextActionSwitchToFormal {
+		t.Fatalf("开关记录缺失必须回 global_disabled 且给出转正式下一步: %v", data)
+	}
+	if w := performRequestWithAuth(r, http.MethodGet, "/api/valuation/admin/trials/control", nil, adminAuth); w.Code != http.StatusOK {
+		t.Fatalf("开关记录缺失时管理读面也按关闭处理而不是 500: %d %s", w.Code, w.Body.String())
+	} else if _, _, data := decodeBody(t, w); data["enabled"].(bool) {
+		t.Fatalf("开关记录缺失必须报关闭: %v", data)
 	}
 }
 
@@ -252,12 +439,13 @@ func newPilotPostgresRouter(t *testing.T, pool *pgxpool.Pool, session *security.
 	if err != nil {
 		t.Fatal(err)
 	}
+	conversationSvc := NewConversationService(NewDraftRepository(pool), NewOperationRepository(pool), valuationSvc, evaluations, time.Now)
 	r := gin.New()
 	r.Use(gin.Recovery())
 	attachAdminCapabilities(r)
 	RegisterRoutes(r, session, zap.NewNop(), nil, dict, evaluations, NewBatteryRepository(pool), valuationSvc,
-		NewBatteryRULService(), &memReportGenerator{}, storage.NewLocalStorage(t.TempDir()), nil, nil, nil)
+		NewBatteryRULService(), &memReportGenerator{}, storage.NewLocalStorage(t.TempDir()), nil, nil, conversationSvc)
 	RegisterTrialRoutes(r, NewPostgresTrialSnapshotReader(pool), zap.NewNop(), "development", store)
-	RegisterTrialAdminRoutes(r.Group("/api"), session, store, zap.NewNop())
+	RegisterTrialAdminRoutes(r.Group("/api"), session, store, zap.NewNop(), nil)
 	return r
 }

@@ -80,6 +80,7 @@ type TrialResponse struct {
 	Assumptions   []string          `json:"assumptions" nullability:"nonnil"`
 	Candidates    []TrialCandidate  `json:"candidates" nullability:"nonnil"`
 	MissingFields []string          `json:"missing_fields" nullability:"nonnil"`
+	NextAction    string            `json:"next_action,omitempty" extensions:"x-optional"`
 	Interval      *TrialInterval    `json:"interval,omitempty" extensions:"x-optional"`
 	WidthRatio    *float64          `json:"width_ratio,omitempty" extensions:"x-optional"`
 	Snapshot      TrialSnapshotMeta `json:"snapshot"`

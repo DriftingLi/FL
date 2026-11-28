@@ -30,6 +30,7 @@
 //   POST /valuation/battery/evaluations/{id}/report
 //   GET  /valuation/battery/evaluations/{id}/report
 //   POST /valuation/auth/logout
+//   POST /valuation/trials
 //   POST /valuation/evaluations
 //   POST /valuation/battery/evaluations
 //   POST /valuation/conversation/drafts
@@ -44,7 +45,6 @@
 //   GET  /valuation/battery/evaluations
 //   GET  /valuation/battery/evaluations/{id}
 //   GET  /valuation/auth/me
-//   POST /valuation/trials
 //   GET  /valuation/admin/trials/control
 //   PUT  /valuation/admin/trials/control
 //   GET  /valuation/admin/trials/policies
@@ -83,7 +83,7 @@
 //   DELETE /valuation/admin/condition-ratings/{id}
 //   DELETE /valuation/admin/region-coefficients/{id}
 //
-// 覆盖的 Go 类型：AlgorithmParameters / BatteryEvaluation / BatteryEvaluationSummary / BatteryType / BatteryTypeDict / Brand / CoefficientConfig / ConditionRating / ConfigOption / ConversationOperation / CreateBatteryResponse / CycleFeature / DimensionScore / DraftCandidate / DraftField / DraftFieldState / DraftRange / EngineType / EvaluationDetail / EvaluationResponse / FeatureImportance / ListBatteryResponse / MastHeight / MastType / OriginalPrice / RawStats / RegionCoefficient / Series / SeriesConfigOptions / Tonnage / TransmissionType / TrialCandidate / TrialControlResponse / TrialInterval / TrialMetricSummary / TrialMetricsResponse / TrialPoliciesResponse / TrialPolicy / TrialRequest / TrialResponse / TrialSnapshotMeta / ValuationDraft / VehicleType
+// 覆盖的 Go 类型：AlgorithmParameters / BatteryEvaluation / BatteryEvaluationSummary / BatteryType / BatteryTypeDict / Brand / CoefficientConfig / ConditionRating / ConfigOption / ConversationOperation / CreateBatteryResponse / CycleFeature / DimensionScore / DraftCandidate / DraftField / DraftFieldState / DraftRange / EngineType / EvaluationDetail / EvaluationResponse / FeatureImportance / ListBatteryResponse / MastHeight / MastType / OriginalPrice / RawStats / RegionCoefficient / Series / SeriesConfigOptions / Tonnage / TransmissionType / TrialCandidate / TrialControlResponse / TrialInterval / TrialMetricSummary / TrialMetricsResponse / TrialPoliciesResponse / TrialPolicy / TrialReadiness / TrialReadinessBlocker / TrialRequest / TrialResponse / TrialSnapshotMeta / ValuationDraft / VehicleType
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -407,6 +407,7 @@ export interface TrialCandidate {
 
 export interface TrialControlResponse {
   enabled: boolean
+  readiness: TrialReadiness
   updated_at: string
   version: number
 }
@@ -465,6 +466,18 @@ export interface TrialPolicy {
   version: number
 }
 
+export interface TrialReadiness {
+  blockers: TrialReadinessBlocker[]
+  ready: boolean
+}
+
+export interface TrialReadinessBlocker {
+  approved: boolean
+  detail: string
+  evidence: string
+  key: string
+}
+
 export interface TrialRequest {
   brand: string
   city?: string
@@ -497,6 +510,7 @@ export interface TrialResponse {
   interval?: TrialInterval
   message?: string
   missing_fields: string[]
+  next_action?: string
   reason_code?: string
   request_id: string
   snapshot: TrialSnapshotMeta

@@ -33,6 +33,13 @@ const (
 	TrialReasonTooWide               = "too_wide"
 )
 
+// needs_info 之后客户端能做的下一步：补件后重试，或转正式评估。
+// 名单外、开关关闭与「已无件可补」一律给 switch_to_formal，避免回一张空提示的卡。
+const (
+	TrialNextActionSupplementFields = "supplement_fields"
+	TrialNextActionSwitchToFormal   = "switch_to_formal"
+)
+
 // CalculateTrial 是 HTTP 与离线回放共用的试算路径。
 func CalculateTrial(ctx context.Context, req TrialRequest, snapshot *TrialSnapshot, appEnv string) (TrialResponse, error) {
 	prepared, policy, ok := preflightTrial(req, snapshot, appEnv, true)
@@ -60,7 +67,7 @@ func preflightTrial(req TrialRequest, snapshot *TrialSnapshot, appEnv string, ch
 		return trialNeedsInfo(response, TrialReasonInvalidInput, "参考试算所需关键输入不足或无效", problems), TrialPolicy{}, false
 	}
 	if reason, message := validateTrialPolicySelection(req, appEnv); reason != "" {
-		return trialNeedsInfo(response, reason, message, nil), TrialPolicy{}, false
+		return trialNeedsInfo(response, reason, message, trialPolicyAllowlistGap(reason)), TrialPolicy{}, false
 	}
 	if !checkSnapshot {
 		return response, TrialPolicy{}, true
@@ -70,7 +77,7 @@ func preflightTrial(req TrialRequest, snapshot *TrialSnapshot, appEnv string, ch
 	}
 	policy, reason, message := resolveConfiguredTrialPolicy(req, snapshot)
 	if reason != "" {
-		return trialNeedsInfo(response, reason, message, nil), TrialPolicy{}, false
+		return trialNeedsInfo(response, reason, message, trialPolicyAllowlistGap(reason)), TrialPolicy{}, false
 	}
 	if req.SnapshotID != "" && req.SnapshotID != snapshot.Hash {
 		return trialNeedsInfo(response, TrialReasonInvalidInput, "指定快照与本次加载的快照不一致", []string{"snapshot_id"}), TrialPolicy{}, false
@@ -88,6 +95,16 @@ func validateTrialPolicySelection(req TrialRequest, appEnv string) (string, stri
 		return TrialReasonPolicyForbidden, "生产环境禁止 demo 参考试算"
 	}
 	return "", ""
+}
+
+// trialPolicyAllowlistGap 把「组合不在获批名单内」翻译成结构化缺失项：
+// 调用方拿到的不是空提示，而是「缺的是名单覆盖」这一格 + next_action=switch_to_formal。
+func trialPolicyAllowlistGap(reason string) []string {
+	switch reason {
+	case TrialReasonPolicyNotConfigured, TrialReasonPolicyDisabled:
+		return []string{"policy_allowlist"}
+	}
+	return nil
 }
 
 func resolveConfiguredTrialPolicy(req TrialRequest, snapshot *TrialSnapshot) (TrialPolicy, string, string) {

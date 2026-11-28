@@ -2,6 +2,7 @@ package valuation
 
 import (
 	"context"
+	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -40,7 +41,7 @@ func RegisterTrialRoutes(r *gin.Engine, reader TrialSnapshotReader, logger *zap.
 // @Param body body TrialRequest true "参考试算请求"
 // @Success 200 {object} response.R{data=TrialResponse} "success"
 // @Failure 400 {object} response.R "参数错误"
-// @Failure 403 {object} response.R "参考试算未开放"
+// @Failure 403 {object} response.R "参考试算未开放；data 仍带 reason_code、missing_fields 与 next_action"
 // @Failure 500 {object} response.R "服务器内部错误"
 // @Router /valuation/trials [post]
 func (h *TrialHandler) Create(c *gin.Context) {
@@ -52,8 +53,8 @@ func (h *TrialHandler) Create(c *gin.Context) {
 	}
 	if prepared, _, ok := preflightTrial(req, nil, h.appEnv, false); !ok {
 		h.recordMetrics(c, req, prepared, time.Since(started))
-		if prepared.ReasonCode == TrialReasonPolicyDisabled || prepared.ReasonCode == TrialReasonGlobalDisabled || prepared.ReasonCode == TrialReasonPolicyNotConfigured || prepared.ReasonCode == TrialReasonPolicyForbidden {
-			response.Forbidden(c, prepared.Message)
+		if trialClosedReason(prepared.ReasonCode) {
+			forbiddenTrial(c, prepared)
 			return
 		}
 		response.Success(c, prepared)
@@ -80,11 +81,27 @@ func (h *TrialHandler) Create(c *gin.Context) {
 		return
 	}
 	h.recordMetrics(c, req, result, time.Since(started))
-	if result.ReasonCode == TrialReasonPolicyDisabled || result.ReasonCode == TrialReasonGlobalDisabled || result.ReasonCode == TrialReasonPolicyNotConfigured || result.ReasonCode == TrialReasonPolicyForbidden {
-		response.Forbidden(c, result.Message)
+	if trialClosedReason(result.ReasonCode) {
+		forbiddenTrial(c, result)
 		return
 	}
 	response.Success(c, result)
+}
+
+// trialClosedReason 标识「参考试算本身未开放」的关闭态原因码（HTTP 回 403）。
+func trialClosedReason(reason string) bool {
+	switch reason {
+	case TrialReasonPolicyDisabled, TrialReasonGlobalDisabled,
+		TrialReasonPolicyNotConfigured, TrialReasonPolicyForbidden:
+		return true
+	}
+	return false
+}
+
+// forbiddenTrial 回 403 但保留结构化载荷：名单外与关闭态也要带 missing_fields / next_action，
+// 客户端才能给出「补件或转正式」的可执行下一步，而不是只剩一句提示。
+func forbiddenTrial(c *gin.Context, result TrialResponse) {
+	c.JSON(http.StatusForbidden, response.R{Code: http.StatusForbidden, Message: result.Message, Data: result})
 }
 
 func (h *TrialHandler) recordMetrics(c *gin.Context, req TrialRequest, result TrialResponse, duration time.Duration) {

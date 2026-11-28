@@ -27,6 +27,10 @@ type TrialMetricRecorder interface {
 	RecordTrialMetric(context.Context, TrialMetricEvent) error
 }
 
+// ErrTrialControlMissing 表示全局开关单行缺失。调用方按「关闭」处理（试算回 403 global_disabled），
+// 不得升级成 500。
+var ErrTrialControlMissing = errors.New("试算全局开关记录缺失，按关闭处理")
+
 // TrialPolicyFilter 管理查询过滤项；空字段表示不过滤。
 type TrialPolicyFilter struct {
 	PolicyName  string
@@ -75,7 +79,7 @@ func loadTrialControl(ctx context.Context, q trialControlQuerier) (TrialControl,
 	if err := q.QueryRow(ctx, `SELECT enabled, version, updated_at FROM valuation_trial_control WHERE id = 1`).
 		Scan(&control.Enabled, &control.Version, &updatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return TrialControl{}, fmt.Errorf("试算全局开关缺失，按关闭处理")
+			return TrialControl{}, ErrTrialControlMissing
 		}
 		return TrialControl{}, fmt.Errorf("读取试算全局开关失败: %w", err)
 	}
@@ -89,8 +93,11 @@ func (s *PostgresTrialAdminStore) SetTrialControl(ctx context.Context, enabled b
 	}
 	var control TrialControl
 	var updatedAt time.Time
-	if err := s.pool.QueryRow(ctx, `UPDATE valuation_trial_control
-		SET enabled = $1, version = version + 1, updated_at = NOW() WHERE id = 1
+	// upsert 而非纯 UPDATE：单行缺失时关闭动作也必须能落地（缺失按关闭处理，不允许把恢复路径也堵死）。
+	if err := s.pool.QueryRow(ctx, `INSERT INTO valuation_trial_control (id, enabled, version, updated_at)
+		VALUES (1, $1, 1, NOW())
+		ON CONFLICT (id) DO UPDATE SET enabled = EXCLUDED.enabled,
+			version = valuation_trial_control.version + 1, updated_at = NOW()
 		RETURNING enabled, version, updated_at`, enabled).Scan(&control.Enabled, &control.Version, &updatedAt); err != nil {
 		return TrialControl{}, fmt.Errorf("更新试算全局开关失败: %w", err)
 	}
@@ -138,6 +145,34 @@ func (s *PostgresTrialAdminStore) ListTrialPolicies(ctx context.Context, filter 
 	return policies, rows.Err()
 }
 
+// trialPolicyPayload 是策略情景列在写库前的 JSONB 投影；编码失败必须返回错误而不是 panic。
+type trialPolicyPayload struct {
+	usageHourRatios, conditionRatings, originalPaint, licensePlate, registration, maintenance string
+}
+
+func encodeTrialPolicyPayload(policy TrialPolicyInput) (trialPolicyPayload, error) {
+	var payload trialPolicyPayload
+	for _, field := range []struct {
+		name   string
+		value  any
+		target *string
+	}{
+		{"usage_hour_ratios", policy.UsageHourRatios, &payload.usageHourRatios},
+		{"condition_ratings", policy.ConditionRatings, &payload.conditionRatings},
+		{"original_paint_values", policy.OriginalPaintValues, &payload.originalPaint},
+		{"has_license_plate_values", policy.HasLicensePlateValues, &payload.licensePlate},
+		{"has_registration_certificate_values", policy.HasRegistrationCertificateValues, &payload.registration},
+		{"has_maintenance_records_values", policy.HasMaintenanceRecordsValues, &payload.maintenance},
+	} {
+		encoded, err := json.Marshal(field.value)
+		if err != nil {
+			return trialPolicyPayload{}, fmt.Errorf("序列化试算策略 %s 失败: %w", field.name, err)
+		}
+		*field.target = string(encoded)
+	}
+	return payload, nil
+}
+
 func (s *PostgresTrialAdminStore) ReplaceTrialPolicies(ctx context.Context, policies []TrialPolicyInput) error {
 	if s == nil || s.pool == nil {
 		return fmt.Errorf("试算策略 PostgreSQL 连接池未装配")
@@ -154,15 +189,18 @@ func (s *PostgresTrialAdminStore) ReplaceTrialPolicies(ctx context.Context, poli
 		return fmt.Errorf("清空试算策略失败: %w", err)
 	}
 	for _, policy := range policies {
+		payload, err := encodeTrialPolicyPayload(policy)
+		if err != nil {
+			return err
+		}
 		if _, err := tx.Exec(ctx, `INSERT INTO valuation_trial_policy
 			(policy_name, version, brand, vehicle_type, tonnage, max_width_ratio, usage_hour_ratios,
 			condition_ratings, original_paint_values, has_license_plate_values,
 			has_registration_certificate_values, has_maintenance_records_values, enabled)
 			VALUES ($1, 1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::jsonb, $9::jsonb, $10::jsonb, $11::jsonb, $12)`,
 			strings.TrimSpace(policy.Name), strings.TrimSpace(policy.Brand), strings.TrimSpace(policy.VehicleType), policy.Tonnage,
-			policy.MaxWidthRatio, mustJSON(policy.UsageHourRatios), mustJSON(policy.ConditionRatings),
-			mustJSON(policy.OriginalPaintValues), mustJSON(policy.HasLicensePlateValues),
-			mustJSON(policy.HasRegistrationCertificateValues), mustJSON(policy.HasMaintenanceRecordsValues), policy.Enabled); err != nil {
+			policy.MaxWidthRatio, payload.usageHourRatios, payload.conditionRatings,
+			payload.originalPaint, payload.licensePlate, payload.registration, payload.maintenance, policy.Enabled); err != nil {
 			return fmt.Errorf("保存试算策略失败: %w", err)
 		}
 	}
@@ -172,6 +210,77 @@ func (s *PostgresTrialAdminStore) ReplaceTrialPolicies(ctx context.Context, poli
 	return nil
 }
 
+// 指标维度列是 Event 写入与 Summary 聚合读面的**单一投影**：INSERT 列、GROUP BY、ORDER BY、
+// unpriced_reasons 的关联键都从这里来，改一处即改全链。
+var trialMetricDimensionColumns = []string{
+	"brand", "vehicle_type", "tonnage", "policy_name", "scenario", "formula_version", "formula_hash", "policy_version",
+}
+
+// 指标度量列与 trialMetricEventValues 的取值顺序一一对应；aggregate 是聚合读面同一列的表达式
+// （空表示该列只写不聚合），这样 Event 写入与 Summary 读面共用一张字段表（单一投影）。
+var trialMetricMeasures = []struct {
+	column    string
+	aggregate string
+}{
+	{"denominator", "SUM(denominator)"},
+	{"priced", "SUM(priced)"},
+	{"covered", "SUM(covered)"},
+	{"too_wide", "SUM(too_wide)"},
+	{"unpriced_reason", ""},
+	{"follow_up_count", "SUM(follow_up_count)"},
+	{"duration_ms", "SUM(duration_ms)"},
+	{"model_name", ""},
+	{"prompt_tokens", "SUM(prompt_tokens)"},
+	{"completion_tokens", "SUM(completion_tokens)"},
+	{"cost_micros", "SUM(cost_micros)"},
+}
+
+func trialMetricMeasureColumns() []string {
+	columns := make([]string, len(trialMetricMeasures))
+	for i, measure := range trialMetricMeasures {
+		columns[i] = measure.column
+	}
+	return columns
+}
+
+// trialMetricSummaryAggregates 是 Summary 的 SUM 表达式清单（保持度量列顺序，与 Scan 顺序一致）。
+func trialMetricSummaryAggregates() string {
+	parts := make([]string, 0, len(trialMetricMeasures))
+	for _, measure := range trialMetricMeasures {
+		if measure.aggregate != "" {
+			parts = append(parts, measure.aggregate)
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
+// trialMetricInsertSQL 由列清单生成 INSERT（含 occurred_at 的时间类型转换）。
+func trialMetricInsertSQL() string {
+	columns := append([]string{"occurred_at"}, trialMetricDimensionColumns...)
+	columns = append(columns, trialMetricMeasureColumns()...)
+	placeholders := make([]string, len(columns))
+	for i, column := range columns {
+		placeholders[i] = fmt.Sprintf("$%d", i+1)
+		if column == "occurred_at" {
+			placeholders[i] += "::timestamptz"
+		}
+	}
+	return `INSERT INTO valuation_trial_metrics (` + strings.Join(columns, ", ") + `) VALUES (` +
+		strings.Join(placeholders, ", ") + `)`
+}
+
+// trialMetricEventValues 按列清单同一顺序取值，杜绝 INSERT 列表与实参错位。
+func trialMetricEventValues(event TrialMetricEvent) []any {
+	return []any{
+		event.OccurredAt,
+		event.Brand, event.VehicleType, event.Tonnage, event.PolicyName, event.Scenario,
+		event.FormulaVersion, event.FormulaHash, event.PolicyVersion,
+		event.Denominator, event.Priced, event.Covered, event.TooWide, event.UnpricedReason,
+		event.FollowUpCount, event.DurationMS, event.ModelName, event.PromptTokens,
+		event.CompletionTokens, event.CostMicros,
+	}
+}
+
 func (s *PostgresTrialAdminStore) RecordTrialMetric(ctx context.Context, event TrialMetricEvent) error {
 	if s == nil || s.pool == nil {
 		return fmt.Errorf("试算指标 PostgreSQL 连接池未装配")
@@ -179,15 +288,7 @@ func (s *PostgresTrialAdminStore) RecordTrialMetric(ctx context.Context, event T
 	if event.OccurredAt == "" {
 		event.OccurredAt = time.Now().UTC().Format(time.RFC3339)
 	}
-	if _, err := s.pool.Exec(ctx, `INSERT INTO valuation_trial_metrics
-		(occurred_at, brand, vehicle_type, tonnage, policy_name, scenario, formula_version, formula_hash,
-		policy_version, denominator, priced, covered, too_wide, unpriced_reason, follow_up_count,
-		duration_ms, model_name, prompt_tokens, completion_tokens, cost_micros)
-		VALUES ($1::timestamptz,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
-		event.OccurredAt, event.Brand, event.VehicleType, event.Tonnage, event.PolicyName, event.Scenario,
-		event.FormulaVersion, event.FormulaHash, event.PolicyVersion, event.Denominator, event.Priced,
-		event.Covered, event.TooWide, event.UnpricedReason, event.FollowUpCount, event.DurationMS,
-		event.ModelName, event.PromptTokens, event.CompletionTokens, event.CostMicros); err != nil {
+	if _, err := s.pool.Exec(ctx, trialMetricInsertSQL(), trialMetricEventValues(event)...); err != nil {
 		return fmt.Errorf("记录试算指标失败: %w", err)
 	}
 	return nil
@@ -198,12 +299,11 @@ func (s *PostgresTrialAdminStore) ListTrialMetrics(ctx context.Context, filter T
 		return nil, fmt.Errorf("试算指标 PostgreSQL 连接池未装配")
 	}
 	where, args := trialMetricWhere(filter)
-	rows, err := s.pool.Query(ctx, `SELECT brand, vehicle_type, tonnage, policy_name, scenario,
-		formula_version, formula_hash, policy_version, SUM(denominator), SUM(priced), SUM(covered),
-		SUM(too_wide), SUM(follow_up_count), SUM(duration_ms), SUM(prompt_tokens), SUM(completion_tokens), SUM(cost_micros)
+	dimensions := strings.Join(trialMetricDimensionColumns, ", ")
+	rows, err := s.pool.Query(ctx, `SELECT `+dimensions+`, `+trialMetricSummaryAggregates()+`
 		FROM valuation_trial_metrics `+where+`
-		GROUP BY brand, vehicle_type, tonnage, policy_name, scenario, formula_version, formula_hash, policy_version
-		ORDER BY brand, vehicle_type, tonnage, policy_name, scenario, formula_hash, policy_version
+		GROUP BY `+dimensions+`
+		ORDER BY `+dimensions+`
 		LIMIT $`+fmt.Sprint(len(args)+1), append(args, filter.Limit)...)
 	if err != nil {
 		return nil, fmt.Errorf("查询试算指标失败: %w", err)
@@ -228,11 +328,9 @@ func (s *PostgresTrialAdminStore) ListTrialMetrics(ctx context.Context, filter T
 	if where == "" {
 		reasonWhere = "WHERE unpriced_reason <> ''"
 	}
-	reasonRows, err := s.pool.Query(ctx, `SELECT brand, vehicle_type, tonnage, policy_name, scenario,
-		formula_version, formula_hash, policy_version, unpriced_reason, COUNT(*)
+	reasonRows, err := s.pool.Query(ctx, `SELECT `+dimensions+`, unpriced_reason, COUNT(*)
 		FROM valuation_trial_metrics `+reasonWhere+`
-		GROUP BY brand, vehicle_type, tonnage, policy_name, scenario, formula_version, formula_hash, policy_version, unpriced_reason`,
-		args...)
+		GROUP BY `+dimensions+`, unpriced_reason`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("查询试算无价原因失败: %w", err)
 	}
@@ -298,12 +396,4 @@ func trialMetricWhere(filter TrialMetricFilter) (string, []any) {
 
 func trialMetricKey(parts ...string) string {
 	return strings.Join(parts, "\x00")
-}
-
-func mustJSON(value any) string {
-	encoded, err := json.Marshal(value)
-	if err != nil {
-		panic(err)
-	}
-	return string(encoded)
 }

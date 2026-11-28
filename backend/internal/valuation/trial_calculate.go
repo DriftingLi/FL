@@ -109,7 +109,11 @@ func calculateTrialSnapshot(ctx context.Context, req TrialRequest, snapshot *Tri
 	response.WidthRatio = trialPointer(interval.WidthRatio)
 	if interval.WidthRatio > widthLimit+1e-6 {
 		response.Interval = nil
-		return trialNeedsInfo(response, TrialReasonTooWide, "试算区间超过可用宽度上限，请补充最能缩小范围的资料", rankTrialFollowUpFields(ctx, req, snapshot, policy, response)), nil
+		followUps := rankTrialFollowUpFields(ctx, req, snapshot, policy, response)
+		if len(followUps) == 0 {
+			return trialNeedsInfo(response, TrialReasonTooWide, "试算区间超过可用宽度上限，且没有可补充资料能进一步缩窄，建议转正式评估", nil), nil
+		}
+		return trialNeedsInfo(response, TrialReasonTooWide, "试算区间超过可用宽度上限，请补充最能缩小范围的资料", followUps), nil
 	}
 	response.Status = TrialStatusPriced
 	response.Interval = interval
@@ -125,7 +129,22 @@ func trialNeedsInfo(response TrialResponse, reason, message string, missing []st
 		missing = []string{}
 	}
 	response.MissingFields = missing
+	response.NextAction = trialNextAction(reason, missing)
 	return response
+}
+
+// trialNextAction 决定 needs_info 卡片的下一步：名单外、策略关闭与「已无件可补」都转正式评估，
+// 其余按补件重试；这样每种 needs_info 都带一个可执行的下一步，不留空提示。
+func trialNextAction(reason string, missing []string) string {
+	switch reason {
+	case TrialReasonGlobalDisabled, TrialReasonPolicyDisabled,
+		TrialReasonPolicyForbidden, TrialReasonPolicyNotConfigured:
+		return TrialNextActionSwitchToFormal
+	}
+	if len(missing) == 0 {
+		return TrialNextActionSwitchToFormal
+	}
+	return TrialNextActionSupplementFields
 }
 
 func trialKnownStringMatches(known *string, catalog string) bool {

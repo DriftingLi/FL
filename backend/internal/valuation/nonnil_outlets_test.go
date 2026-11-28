@@ -42,6 +42,7 @@ var nonnilOutletsValuation = map[string]func(t *testing.T) any{
 	"valuation.DraftField.candidates":                           outletConversationDraftCandidate,
 	"valuation.TrialPoliciesResponse.policies":                  outletTrialPoliciesData,
 	"valuation.TrialMetricsResponse.items":                      outletTrialMetricsData,
+	"valuation.TrialReadiness.blockers":                         outletTrialReadinessData,
 	"valuation.TrialPolicy.usage_hour_ratios":                   outletTrialPolicyData,
 	"valuation.TrialPolicy.condition_ratings":                   outletTrialPolicyData,
 	"valuation.TrialPolicy.original_paint_values":               outletTrialPolicyData,
@@ -82,7 +83,7 @@ func outletTrialAdminData(t *testing.T, path string) map[string]any {
 	r := gin.New()
 	attachAdminCapabilities(r)
 	session := security.NewSession("test-secret", time.Hour, security.CookieConfig{Name: "hrwai_token"})
-	RegisterTrialAdminRoutes(r.Group("/api"), session, outletTrialAdminStore{}, zap.NewNop())
+	RegisterTrialAdminRoutes(r.Group("/api"), session, outletTrialAdminStore{}, zap.NewNop(), nil)
 	w := performRequestWithAuth(r, http.MethodGet, path, nil, adminAuthHeader(t))
 	if w.Code != http.StatusOK {
 		t.Fatalf("试算管理出口状态码=%d: %s", w.Code, w.Body.String())
@@ -90,6 +91,13 @@ func outletTrialAdminData(t *testing.T, path string) map[string]any {
 	return mustDecodeData(t, w)
 }
 
+func outletTrialControlData(t *testing.T) any {
+	return outletTrialAdminData(t, "/api/valuation/admin/trials/control")
+}
+func outletTrialReadinessData(t *testing.T) any {
+	data := outletTrialControlData(t).(map[string]any)
+	return data["readiness"]
+}
 func outletTrialPoliciesData(t *testing.T) any {
 	return outletTrialAdminData(t, "/api/valuation/admin/trials/policies")
 }

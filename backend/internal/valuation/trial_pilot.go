@@ -27,9 +27,67 @@ type TrialControlRequest struct {
 	Enabled bool `json:"enabled"`
 }
 
-// TrialControlResponse 返回当前全局开关与单调版本。
+// TrialControlResponse 返回当前全局开关、单调版本与上线准备度。
 type TrialControlResponse struct {
 	TrialControl
+	Readiness TrialReadiness `json:"readiness"`
+}
+
+// TrialReadinessBlocker 是一项上线前必须取得的批准；Approved=false 即阻塞项。
+type TrialReadinessBlocker struct {
+	Key      string `json:"key"`
+	Approved bool   `json:"approved"`
+	Detail   string `json:"detail"`
+	Evidence string `json:"evidence"`
+}
+
+// TrialReadiness 汇总上线准备度；Ready=false 时全局开关不得开启（见 SetControl 的守卫）。
+type TrialReadiness struct {
+	Ready    bool                    `json:"ready"`
+	Blockers []TrialReadinessBlocker `json:"blockers" nullability:"nonnil"`
+}
+
+// trialReadinessPending 列出未批准项，供开关拒绝时的人话说明使用。
+func trialReadinessPending(readiness TrialReadiness) string {
+	pending := make([]string, 0, len(readiness.Blockers))
+	for _, blocker := range readiness.Blockers {
+		if !blocker.Approved {
+			pending = append(pending, blocker.Key)
+		}
+	}
+	return strings.Join(pending, ", ")
+}
+
+// trialReadinessBlockers 是上线批准状态的唯一台账（#2958）。
+//
+// 逐项翻成 Approved=true 必须同时引用对应决策记录（#2949 首发条件、#2951 名单与宽度、
+// 回归与样本回放结论），并同批改这里——**不得预填任何「已批准」**：readiness 的全部作用
+// 就是挡住「审批还没落地就把开关打开」，在代码里先填 true 等于伪造批准。
+func trialReadinessBlockers() []TrialReadinessBlocker {
+	return []TrialReadinessBlocker{
+		{Key: "formula_regression", Approved: false,
+			Detail: "新公式（V2 工时衰减方向修正后）回归结果尚未取得批准", Evidence: "#2953"},
+		{Key: "sample_replay_holdout", Approved: false,
+			Detail: "脱敏样本回放与留出集复验结果尚未取得批准", Evidence: "#2952"},
+		{Key: "launch_condition_2949", Approved: false,
+			Detail: "对话估值验收指标与首发条件（#2949）尚未给出批准结论", Evidence: "#2949"},
+		{Key: "allowlist_width_2951", Approved: false,
+			Detail: "首发车型名单与统一宽度上限（#2951）尚未给出批准结论", Evidence: "#2951"},
+		{Key: "policy_width_unified", Approved: false,
+			Detail: "统一宽度上限尚未实现强制：当前仅按每条策略的 max_width_ratio 逐条生效", Evidence: "#2951"},
+	}
+}
+
+// trialReadiness 汇总台账；任一阻塞项未批准即 Ready=false，且不允许开启全局开关。
+func trialReadiness() TrialReadiness {
+	blockers := trialReadinessBlockers()
+	ready := len(blockers) > 0
+	for _, blocker := range blockers {
+		if !blocker.Approved {
+			ready = false
+		}
+	}
+	return TrialReadiness{Ready: ready, Blockers: blockers}
 }
 
 // TrialPoliciesResponse 管理端策略全量读面。
@@ -37,9 +95,10 @@ type TrialPoliciesResponse struct {
 	Policies []TrialPolicy `json:"policies" nullability:"nonnil"`
 }
 
-// TrialPoliciesRequest 全量替换策略；空列表用于清空 allowlist。
+// TrialPoliciesRequest 全量替换策略；空列表用于清空 allowlist，null 与「没给」一样拒绝
+// （nil 语义与空数组不同：前者是请求写错，后者是一次显式清空）。
 type TrialPoliciesRequest struct {
-	Policies []TrialPolicyInput `json:"policies" binding:"required"`
+	Policies []TrialPolicyInput `json:"policies"`
 }
 
 // TrialMetricEvent 仅保存组合、枚举情景与数值元数据，不保存请求标识或自由文本。
@@ -163,10 +222,9 @@ func NewTrialMetricEvent(req TrialRequest, result TrialResponse, durationMS int6
 	}
 	policyVersion := result.Snapshot.PolicyVersion
 	if policyVersion == "" {
+		// 维度只承载「用了哪份策略」；原因码一律落 unpriced_reason（见下方 else 分支），
+		// 不得写进 policy_version——否则聚合读面会把关闭态混成一个假策略版本。
 		policyVersion = "unresolved"
-		if result.ReasonCode == TrialReasonGlobalDisabled {
-			policyVersion = TrialReasonGlobalDisabled
-		}
 	}
 	event := TrialMetricEvent{
 		Brand: req.Brand, VehicleType: req.VehicleType, Tonnage: req.Tonnage,
