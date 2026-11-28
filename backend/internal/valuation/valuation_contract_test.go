@@ -74,7 +74,7 @@ func TestValuationEndpointTopLevelKeys(t *testing.T) {
 			"config_type", "mast_type", "mast_height_mm", "factory_year", "sale_year",
 			"usage_hours", "original_paint", "province", "city", "has_license_plate",
 			"has_registration_certificate", "has_maintenance_records", "condition_rating",
-			"original_price", "k_time", "k_hours", "k_brand", "k_condition", "k_market",
+			"formula_version", "original_price", "k_time", "k_hours", "k_brand", "k_condition", "k_market",
 			"k_time_adjusted", "estimated_value", "confidence_low", "confidence_high",
 			"dimension_scores", "suggestions", "lambda_electric", "lambda_combustion",
 			"decay_anchor")

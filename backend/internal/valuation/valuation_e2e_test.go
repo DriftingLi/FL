@@ -153,9 +153,9 @@ func TestEvaluateFullFlow(t *testing.T) {
 	if res.LambdaElectric != 0.12 || res.LambdaCombustion != 0.10 {
 		t.Errorf("λ 锁定字段错误: electric=%v combustion=%v", res.LambdaElectric, res.LambdaCombustion)
 	}
-	// Kt_adj = Kt^(Kh/Kb)：Kh=1.10（usage 1000/8750 < low 0.7），Kb=1.0
-	// 注意：estimated 用全精度中间值计算，KTimeAdjusted 仅输出时取整到 4 位
-	wantKtAdj := math.Pow(wantKt, 1.10)
+	// Kt_adj = Kt^(1/(Kh×Kb))：Kh=1.10（usage 1000/8750 < low 0.7），Kb=1.0
+	// estimated 使用全精度中间值，KTimeAdjusted 仅在输出时取整到 4 位。
+	wantKtAdj := math.Pow(wantKt, 1/1.10)
 	if math.Abs(res.KTimeAdjusted-math.Round(wantKtAdj*1e4)/1e4) > 1e-9 {
 		t.Errorf("KTimeAdjusted = %v, 期望 ≈ %v", res.KTimeAdjusted, math.Round(wantKtAdj*1e4)/1e4)
 	}

@@ -44,6 +44,7 @@ type CreateEvaluationParams struct {
 	HasMaintenanceRecords      bool
 	ConditionRating            string
 	// 结果字段
+	FormulaVersion string
 	OriginalPrice  float64
 	KTime          float64
 	KHours         float64
@@ -79,7 +80,7 @@ func (r *EvaluationRepository) CreateEvaluation(ctx context.Context, p *CreateEv
 			original_price, k_time, k_hours, k_brand, k_condition, k_market,
 			estimated_value, confidence_low, confidence_high, report_pdf_path,
 			user_id,
-			suggestions, lambda_electric, lambda_combustion, decay_anchor
+			suggestions, lambda_electric, lambda_combustion, decay_anchor, formula_version
 		) VALUES (
 			$1, $2, $3, $4,
 			$5, $6, $7,
@@ -90,7 +91,7 @@ func (r *EvaluationRepository) CreateEvaluation(ctx context.Context, p *CreateEv
 			$18, $19, $20, $21, $22, $23,
 			$24, $25, $26, $27,
 			$28,
-			$29, $30, $31, $32
+			$29, $30, $31, $32, $33
 		)
 		RETURNING id, created_at, updated_at`,
 		p.Brand, p.VehicleType, p.Series, p.Tonnage,
@@ -102,7 +103,7 @@ func (r *EvaluationRepository) CreateEvaluation(ctx context.Context, p *CreateEv
 		p.OriginalPrice, p.KTime, p.KHours, p.KBrand, p.KCondition, p.KMarket,
 		p.EstimatedValue, p.ConfidenceLow, p.ConfidenceHigh, nullableString(p.ReportPdfPath),
 		nullableUserID(p.UserID),
-		nullableJSON(p.Suggestions), p.LambdaElectric, p.LambdaCombustion, p.DecayAnchor,
+		nullableJSON(p.Suggestions), p.LambdaElectric, p.LambdaCombustion, p.DecayAnchor, p.FormulaVersion,
 	).Scan(&id, new(time.Time), new(time.Time))
 	if err != nil {
 		return 0, fmt.Errorf("插入评估记录失败: %w", err)
@@ -136,7 +137,7 @@ const evaluationDetailColumns = `id, brand, vehicle_type, series, tonnage,
 		factory_year, sale_year, usage_hours, original_paint,
 		province, city,
 		has_license_plate, has_registration_certificate, has_maintenance_records,
-		condition_rating,
+		condition_rating, formula_version,
 		original_price, k_time, k_hours, k_brand, k_condition, k_market,
 		estimated_value, confidence_low, confidence_high, report_pdf_path,
 		suggestions, lambda_electric, lambda_combustion, decay_anchor,
@@ -147,6 +148,7 @@ const evaluationDetailColumns = `id, brand, vehicle_type, series, tonnage,
 func scanEvaluationDetailRow(row pgx.Row) (EvaluationDetail, error) {
 	var (
 		d               EvaluationDetail
+		formulaVersion  *string
 		reportPath      *string
 		suggestionsJSON *[]string
 		createdAt       time.Time
@@ -158,7 +160,7 @@ func scanEvaluationDetailRow(row pgx.Row) (EvaluationDetail, error) {
 		&d.FactoryYear, &d.SaleYear, &d.UsageHours, &d.OriginalPaint,
 		&d.Province, &d.City,
 		&d.HasLicensePlate, &d.HasRegistrationCertificate, &d.HasMaintenanceRecords,
-		&d.ConditionRating,
+		&d.ConditionRating, &formulaVersion,
 		&d.OriginalPrice, &d.KTime, &d.KHours, &d.KBrand, &d.KCondition, &d.KMarket,
 		&d.EstimatedValue, &d.ConfidenceLow, &d.ConfidenceHigh, &reportPath,
 		&suggestionsJSON, &d.LambdaElectric, &d.LambdaCombustion, &d.DecayAnchor,
@@ -166,6 +168,10 @@ func scanEvaluationDetailRow(row pgx.Row) (EvaluationDetail, error) {
 	); err != nil {
 		return d, err
 	}
+	if formulaVersion != nil {
+		d.FormulaVersion = *formulaVersion
+	}
+	d.FormulaVersion = normalizeFormulaVersion(d.FormulaVersion)
 	if reportPath != nil {
 		d.ReportPdfPath = *reportPath
 	}

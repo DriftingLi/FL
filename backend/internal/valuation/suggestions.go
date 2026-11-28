@@ -16,6 +16,7 @@ func (p *CoefficientProvider) ReadFloat(ctx context.Context, key string, fallbac
 
 // SuggestionsInput 建议生成的输入（评估结果与持久化记录都可映射，保持 builder 中立）。
 type SuggestionsInput struct {
+	FormulaVersion             string
 	KCondition                 float64
 	HasLicensePlate            bool
 	HasRegistrationCertificate bool
@@ -32,6 +33,7 @@ type SuggestionsInput struct {
 // FromResult 从评估结果映射建议输入。
 func FromResult(r *EvaluationResult) SuggestionsInput {
 	return SuggestionsInput{
+		FormulaVersion:             r.FormulaVersion,
 		KCondition:                 r.KCondition,
 		HasLicensePlate:            r.HasLicensePlate,
 		HasRegistrationCertificate: r.HasRegistrationCertificate,
@@ -49,6 +51,7 @@ func FromResult(r *EvaluationResult) SuggestionsInput {
 // FromDetail 从持久化评估详情映射建议输入（PDF 重建路径）。
 func FromDetail(d *EvaluationDetail) SuggestionsInput {
 	return SuggestionsInput{
+		FormulaVersion:             d.FormulaVersion,
 		KCondition:                 d.KCondition,
 		HasLicensePlate:            d.HasLicensePlate,
 		HasRegistrationCertificate: d.HasRegistrationCertificate,
@@ -117,11 +120,8 @@ func BuildSuggestions(ctx context.Context, in SuggestionsInput, resolver Coeffic
 
 	// 4. 品牌/强度对时间衰减的修正方向
 	//    Kb 高 → 衰减速率被压低（保值好）；Kh 高 → 衰减速率被抬高（磨损大）
-	//    用 Kh/Kb 比值判断：> 1.05 加速衰减；< 0.95 减缓衰减；中间视为持平
-	ratioHK := 1.0
-	if in.KBrand > 0 {
-		ratioHK = in.KHours / in.KBrand
-	}
+	//    用记录公式版本对应的时间衰减指数判断：> 1.05 加速；< 0.95 减缓
+	ratioHK := timeDecayExponent(in.KHours, in.KBrand, in.FormulaVersion)
 	switch {
 	case ratioHK >= 1.10:
 		s = append(s, "使用强度显著高于品牌保值能力，时间衰减被加速")

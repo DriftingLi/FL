@@ -5038,6 +5038,9 @@ definitions:
         type: number
       factory_year:
         type: integer
+      formula_version:
+        description: 结果字段
+        type: string
       has_license_plate:
         type: boolean
       has_maintenance_records:
@@ -5070,7 +5073,6 @@ definitions:
       original_paint:
         type: boolean
       original_price:
-        description: 结果字段
         type: number
       province:
         type: string
@@ -5188,6 +5190,9 @@ definitions:
         type: number
       factory_year:
         type: integer
+      formula_version:
+        description: 计算结果
+        type: string
       has_license_plate:
         type: boolean
       has_maintenance_records:
@@ -5220,7 +5225,6 @@ definitions:
       original_paint:
         type: boolean
       original_price:
-        description: 计算结果
         type: number
       province:
         type: string

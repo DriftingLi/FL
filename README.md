@@ -30,7 +30,7 @@
 > 公开界面（填报 / 历史 / 报告）已北迁到门户仓的 Nuxt 应用（`valuation.hrwai.cn/valuation`）；本仓保留后端与数据、管理端的「残值配置」。旧子域现在只是一条 301。
 
 - **整机残值**：按品牌、车型、吨位、出厂年份、工时、车况、区域等参数输出残值估算、置信区间与多维系数雷达图
-- **评估公式**：`残值 = 原价 × Kt_adj × Kc × Km`，其中 `Kt_adj = Kt^(Kh/Kb)`；五维系数为出厂时间 Kt、使用强度 Kh、品牌价值 Kb、车况 Kc、市场需求 Km
+- **评估公式**：`残值 = 原价 × Kt_adj × Kc × Km`；新评估使用 `Kt_adj = Kt^(1/(Kh×Kb))`，无版本历史记录沿用 `Kt^(Kh/Kb)`；五维系数为出厂时间 Kt、使用强度 Kh、品牌价值 Kb、车况 Kc、市场需求 Km
 - **电池 RUL**：基于特征提取与混合神经网络的锂电池剩余寿命预测（含 SOH、置信区间与建议）
 - **PDF 报告**：评估结果一键生成可下载的中文 PDF
 
@@ -249,6 +249,7 @@ make dev-up / dev-down / dev-reset   # 起停依赖容器 / 清卷重建（数�
 ```
 
 也可直接用 Go 运行迁移 CLI：`cd backend && go run ./cmd/migrate up|down|version|force|check-columns`。
+授权环境可用完整参数、目录与系数快照离线复算：`cd backend && go run ./cmd/replay-valuation -input replay.json`；该命令不连接数据库，也不创建正式评估记录。
 
 ### 前端（在仓库根目录）
 

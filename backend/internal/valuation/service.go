@@ -2,7 +2,7 @@
 // 本文件：主评估服务 Service
 // 公式：残值 = 基准原价 × Kt_adj × Kc × Km
 //
-//	Kt_adj = Kt^(Kh/Kb) = exp(-λ × (Kh/Kb) × age)
+//	Kt_adj = Kt^(1/(Kh×Kb)) = exp(-λ × age / (Kh×Kb))
 //	品牌系数 Kb 与使用强度系数 Kh 不再直接乘到残值，而是修正时间衰减速率 λ
 //	全局兜底：estimated ≤ originalPrice（残值率不超过 100%）
 //
@@ -61,7 +61,7 @@ func NewService(
 //  2. 查询 vehicle_type 派生 power_type（电动/内燃）
 //  3. 查询 original_prices 获取基准价（精确匹配 → 模糊匹配 → 错误）
 //  4. 计算 Kt / Kh / Kb / Kc / Km
-//  5. 用 Kh、Kb 修正时间衰减：Kt_adj = Kt^(Kh/Kb)
+//  5. 用 Kh、Kb 修正时间衰减：Kt_adj = Kt^(1/(Kh×Kb))
 //  6. 残值 = 基准价 × Kt_adj × Kc × Km，并钳制 ≤ 基准价
 //  7. 置信区间 = 残值 × (1 ± confidence_range)
 //  8. 生成维度评分与文本建议
@@ -78,9 +78,13 @@ func (s *Service) Evaluate(ctx context.Context, req *EvaluationRequest) (*Evalua
 
 // evaluateInternal 包含原 Evaluate 的全部计算逻辑（纯函数，无副作用）
 func (s *Service) evaluateInternal(ctx context.Context, req *EvaluationRequest) (*EvaluationResult, error) {
-	// 0. 系数快照：一次全表读取替代逐 key 串行缓存往返（失败时回退逐 key provider，保持既有容错）
-	var coeff CoefficientResolver = s.provider
-	if snap, err := LoadCoefficientSnapshot(ctx, s.dictRepo); err == nil {
+	return s.evaluateWithDictionary(ctx, req, s.dictRepo)
+}
+
+func (s *Service) evaluateWithDictionary(ctx context.Context, req *EvaluationRequest, dict DictionaryReader) (*EvaluationResult, error) {
+	provider := NewCoefficientProvider(dict)
+	var coeff CoefficientResolver = provider
+	if snap, err := LoadCoefficientSnapshot(ctx, dict); err == nil {
 		coeff = snap
 	}
 
@@ -93,12 +97,12 @@ func (s *Service) evaluateInternal(ctx context.Context, req *EvaluationRequest) 
 	//    优先从 vehicle_types 字典表读取；字典表未命中时从车型名推断
 	//    （含"内燃"→combustion，其他→electric），原价表车型名不再受字典表约束
 	powerType := inferPowerType(req.VehicleType)
-	if vt, err := s.dictRepo.GetVehicleTypeByName(ctx, req.VehicleType); err == nil {
+	if vt, err := dict.GetVehicleTypeByName(ctx, req.VehicleType); err == nil {
 		powerType = PowerType(vt.PowerType)
 	}
 
 	// 3. 查询基准原价：精确匹配 → 模糊匹配
-	originalPrice, err := s.lookupOriginalPrice(ctx, req)
+	originalPrice, err := lookupOriginalPrice(ctx, req, dict)
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +120,7 @@ func (s *Service) evaluateInternal(ctx context.Context, req *EvaluationRequest) 
 	}
 
 	// 6. 计算 Kb（直接使用 brands.k_brand）
-	kbRes, err := CalcKBrand(ctx, req.Brand, s.dictRepo)
+	kbRes, err := CalcKBrand(ctx, req.Brand, dict)
 	if err != nil {
 		return nil, err
 	}
@@ -124,20 +128,20 @@ func (s *Service) evaluateInternal(ctx context.Context, req *EvaluationRequest) 
 	// 7. 计算 Kc（condition_rating + 修正项，4 个修正项从系数快照读取）
 	kcRes, err := CalcKCondition(ctx, req.ConditionRating,
 		req.OriginalPaint, req.HasMaintenanceRecords, req.HasLicensePlate, req.HasRegistrationCertificate,
-		s.dictRepo, coeff)
+		dict, coeff)
 	if err != nil {
 		return nil, err
 	}
 
 	// 8. 计算 Km（region_coefficients，未命中默认 1.0）
-	kmRes, err := CalcKMarket(ctx, req.Province, req.City, s.dictRepo)
+	kmRes, err := CalcKMarket(ctx, req.Province, req.City, dict)
 	if err != nil {
 		return nil, err
 	}
 
 	// 9. 主公式：残值 = 基准原价 × Kt_adj × Kc × Km
-	//    Kt_adj = Kt^(Kh/Kb)，品牌系数与使用强度系数修正时间衰减速率
-	ktAdjusted := AdjustKTimeByBrandAndIntensity(ktRes.KTime, khRes.KHours, kbRes.KBrand)
+	//    Kt_adj = Kt^(1/(Kh×Kb))，品牌系数与使用强度系数修正时间衰减速率
+	ktAdjusted := AdjustKTimeByHoursAndBrand(ktRes.KTime, khRes.KHours, kbRes.KBrand)
 	estimated := originalPrice * ktAdjusted * kcRes.KCondition * kmRes.KMarket
 
 	// 9.1 全局兜底：残值率不超过 100%
@@ -157,6 +161,7 @@ func (s *Service) evaluateInternal(ctx context.Context, req *EvaluationRequest) 
 	// 11. 装配结果
 	result := &EvaluationResult{
 		EvaluationRequest: *req,
+		FormulaVersion:    FormulaVersionV2,
 		OriginalPrice:     originalPrice,
 		PowerType:         powerType,
 		KTime:             roundTo4(ktRes.KTime),
@@ -183,21 +188,22 @@ func (s *Service) evaluateInternal(ctx context.Context, req *EvaluationRequest) 
 	if powerType == PowerTypeCombustion {
 		anchorLambda = result.LambdaCombustion
 	}
-	result.DecayAnchor = roundTo4(DecayAnchor(ktAdjusted, khRes.KHours, kbRes.KBrand, ktRes.Age, anchorLambda))
+	result.DecayAnchor = roundTo4(DecayAnchorForVersion(ktAdjusted, khRes.KHours, kbRes.KBrand, ktRes.Age, anchorLambda, result.FormulaVersion))
 	return result, nil
 }
 
 // DecayAnchor 未来价值曲线年衰减锚点 d：future(n) = estimated × d^n。
 // age>0：d = Kt_adj^(1/age)，曲线从当前残值精确出发；
-// age=0（新车）或 Kt_adj 缺失：用评估时点 λ 与 Kh/Kb 推算 d = e^(-λ·Kh/Kb)。
+// age=0（新车）或 Kt_adj 缺失：用评估时点 λ 与记录公式版本推算衰减锚点。
 func DecayAnchor(ktAdjusted, kHours, kBrand float64, age int, lambda float64) float64 {
+	return DecayAnchorForVersion(ktAdjusted, kHours, kBrand, age, lambda, FormulaVersionLegacy)
+}
+
+func DecayAnchorForVersion(ktAdjusted, kHours, kBrand float64, age int, lambda float64, formulaVersion string) float64 {
 	if age > 0 && ktAdjusted > 0 {
 		return math.Pow(ktAdjusted, 1/float64(age))
 	}
-	if kBrand <= 0 {
-		return math.Exp(-lambda)
-	}
-	return math.Exp(-lambda * (kHours / kBrand))
+	return math.Exp(-lambda * timeDecayExponent(kHours, kBrand, formulaVersion))
 }
 
 // inferPowerType 从车型名推断动力类型
@@ -235,6 +241,7 @@ func (s *Service) Persist(ctx context.Context, result *EvaluationResult, userID 
 		HasRegistrationCertificate: result.HasRegistrationCertificate,
 		HasMaintenanceRecords:      result.HasMaintenanceRecords,
 		ConditionRating:            result.ConditionRating,
+		FormulaVersion:             result.FormulaVersion,
 		OriginalPrice:              result.OriginalPrice,
 		KTime:                      result.KTime,
 		KHours:                     result.KHours,
@@ -256,9 +263,9 @@ func (s *Service) Persist(ctx context.Context, result *EvaluationResult, userID 
 
 // lookupOriginalPrice 查询基准原价：先精确匹配，未命中则模糊匹配
 // 当字段值为 "无"（字符串）或 0（mast_height_mm）时，模糊匹配会忽略该字段
-func (s *Service) lookupOriginalPrice(ctx context.Context, req *EvaluationRequest) (float64, error) {
+func lookupOriginalPrice(ctx context.Context, req *EvaluationRequest, dict DictionaryReader) (float64, error) {
 	// 1. 精确匹配
-	op, err := s.dictRepo.FindOriginalPriceMatch(ctx,
+	op, err := dict.FindOriginalPriceMatch(ctx,
 		req.Brand, req.VehicleType, req.Series,
 		req.Tonnage, req.ConfigType, req.MastType, req.MastHeightMM)
 	if err == nil {
@@ -273,7 +280,7 @@ func (s *Service) lookupOriginalPrice(ctx context.Context, req *EvaluationReques
 	if seriesForFuzzy == "其它" {
 		seriesForFuzzy = ""
 	}
-	op, err = s.dictRepo.FindOriginalPriceFuzzy(ctx,
+	op, err = dict.FindOriginalPriceFuzzy(ctx,
 		req.Brand, req.VehicleType, seriesForFuzzy, req.Tonnage)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -302,12 +309,16 @@ func BuildDimensionScores(kTime, kHours, kBrand, kCondition, kMarket float64) []
 // KTimeAdjusted 与维度评分是入库 K 系数的纯函数（不漂移，ADR-0004），
 // 建议直接读持久化值。详情/列表/报告/创建响应全部经过这里，装配只实现一次。
 func RebuildDerivedFromDetail(d *EvaluationDetail) {
-	d.KTimeAdjusted = AdjustKTimeByBrandAndIntensity(d.KTime, d.KHours, d.KBrand)
+	d.FormulaVersion = normalizeFormulaVersion(d.FormulaVersion)
+	if d.FormulaVersion == FormulaVersionV2 {
+		d.KTimeAdjusted = AdjustKTimeByHoursAndBrand(d.KTime, d.KHours, d.KBrand)
+	} else {
+		d.KTimeAdjusted = AdjustKTimeByBrandAndIntensity(d.KTime, d.KHours, d.KBrand)
+	}
 	d.DimensionScores = BuildDimensionScores(d.KTime, d.KHours, d.KBrand, d.KCondition, d.KMarket)
-	// 旧记录无锚点：从已锁定的 Kt/Kh/Kb/λ 重推（age=0 边界用电动 λ，主流车型口径）
 	if d.DecayAnchor == 0 {
 		age := d.SaleYear - d.FactoryYear
-		d.DecayAnchor = roundTo4(DecayAnchor(d.KTimeAdjusted, d.KHours, d.KBrand, age, d.LambdaElectric))
+		d.DecayAnchor = roundTo4(DecayAnchorForVersion(d.KTimeAdjusted, d.KHours, d.KBrand, age, d.LambdaElectric, d.FormulaVersion))
 	}
 }
 

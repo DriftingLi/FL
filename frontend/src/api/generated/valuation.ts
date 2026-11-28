@@ -195,6 +195,7 @@ export interface EvaluationDetail {
   dimension_scores: DimensionScore[]
   estimated_value: number
   factory_year: number
+  formula_version: string
   has_license_plate: boolean
   has_maintenance_records: boolean
   has_registration_certificate: boolean
@@ -233,6 +234,7 @@ export interface EvaluationResponse {
   dimension_scores: DimensionScore[]
   estimated_value: number
   factory_year: number
+  formula_version: string
   has_license_plate: boolean
   has_maintenance_records: boolean
   has_registration_certificate: boolean

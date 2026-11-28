@@ -35378,6 +35378,10 @@ const docTemplate = `{
                 "factory_year": {
                     "type": "integer"
                 },
+                "formula_version": {
+                    "description": "结果字段",
+                    "type": "string"
+                },
                 "has_license_plate": {
                     "type": "boolean"
                 },
@@ -35425,7 +35429,6 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "original_price": {
-                    "description": "结果字段",
                     "type": "number"
                 },
                 "province": {
@@ -35587,6 +35590,10 @@ const docTemplate = `{
                 "factory_year": {
                     "type": "integer"
                 },
+                "formula_version": {
+                    "description": "计算结果",
+                    "type": "string"
+                },
                 "has_license_plate": {
                     "type": "boolean"
                 },
@@ -35634,7 +35641,6 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "original_price": {
-                    "description": "计算结果",
                     "type": "number"
                 },
                 "province": {
