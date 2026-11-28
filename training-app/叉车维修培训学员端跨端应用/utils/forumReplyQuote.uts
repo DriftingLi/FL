@@ -1,0 +1,64 @@
+/**
+ * 回复浮层的**原讨论内容引文**（形态对齐：回复哪条就把那条压成一行放在输入区上方）
+ *
+ * 为什么单独成文件：`pages/forum/components/forum-reply-panel.uvue` 只负责把这段文字摆出来，
+ * 「Markdown 正文怎么压成一行、截断到几个字」是纯逻辑 —— 放进纯函数才能由
+ * `utils/forumReplyQuoteBehavior.test.js` 经 utsHarness 真执行（③ 门不解析 `.uvue`）。
+ *
+ * 口径三条：
+ * - **只取一行**：引文是「上下文提示」，不是第二个正文框；换行一律压成空格。
+ * - **不留 Markdown 记号**：`#` / `>` / `*` / `` ` `` 与图片语法去掉，链接只留文字 ——
+ *   引文区不做富文本渲染（回复浮层里再挂一个渲染器成本与收益不成比例）。
+ * - **截断带省略号**：超长正文只留前 N 个字符，N 落在常量里，面板与测试同源。
+ */
+
+/** 引文上方的小标题（回复某条回复时展示「正在回复谁」的上下文） */
+export const REPLY_QUOTE_LABEL : string = '正在回复 · 原讨论内容'
+
+/** 引文块的跳转文案（回到原帖正文） */
+export const REPLY_VIEW_ORIGINAL : string = '查看原帖'
+
+/**
+ * 引文最多展示多少个字符（超出截断并补省略号）。
+ *
+ * 定 40 而非 60：引文只占「两行以内」，面板主体（≈346px）要同时装下引文、编辑区与工具行 ——
+ * 引文每多一行就吃掉工具行 20px，实测 60 字会把工具行挤出可视区（#2959 微信小程序取证）。
+ */
+export const REPLY_QUOTE_MAX_CHARS : number = 40
+
+/**
+ * 去掉行内 / 块级 Markdown 记号，并把所有空白压成单个空格。
+ *
+ * 顺序有讲究：图片先删（否则 `[alt](url)` 那条规则会把 alt 留下），链接再降级成纯文字，
+ * 最后才收拾强调记号与行首的 `#` / `-`。
+ */
+function stripMarkdown(raw : string) : string {
+    let s = raw
+    s = s.replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+    s = s.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    // 代码块整段丢：引文不是第二个正文框，` ```python\nprint(x) ``` ` 压成一行只剩噪声
+    s = s.replace(/```[\s\S]*?```/g, ' ')
+    s = s.replace(/`{1,3}/g, '')
+    s = s.replace(/[*_~]+/g, '')
+    // 分隔线（---/***/___）与有序列表序号：留着会在引文里读成「--- 1. 2.」这样的乱码
+    s = s.replace(/^[ \t]*(-{3,}|\*{3,}|_{3,})[ \t]*$/gm, ' ')
+    s = s.replace(/^[ \t]*\d+\.[ \t]+/gm, '')
+    s = s.replace(/^[ \t]*>+[ \t]*/gm, '')
+    s = s.replace(/^[ \t]*#{1,6}[ \t]*/gm, '')
+    s = s.replace(/^[ \t]*[-+][ \t]+/gm, '')
+    s = s.replace(/\s+/g, ' ')
+    return s.trim()
+}
+
+/**
+ * 正文 → 一行引文。
+ *
+ * @param raw 被回复对象的正文（帖子或回复，原文，可能带 Markdown）
+ * @param maxChars 截断长度，缺省 `REPLY_QUOTE_MAX_CHARS`；<= 0 时返回空串（不展示引文）
+ */
+export function replyQuoteExcerpt(raw : string, maxChars : number = REPLY_QUOTE_MAX_CHARS) : string {
+    if (maxChars <= 0) return ''
+    const text = stripMarkdown(raw)
+    if (text.length <= maxChars) return text
+    return text.substring(0, maxChars) + '…'
+}
