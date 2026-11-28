@@ -145,6 +145,7 @@ func RegisterRoutes(
 			optional.DELETE("/conversation/drafts/:id", conversation.DeleteDraft)
 			optional.POST("/conversation/drafts/:id/undo", conversation.UndoDraft)
 			optional.POST("/conversation/drafts/:id/suggestions", conversation.SuggestDraft)
+			optional.POST("/conversation/explanations", conversation.RequestExplanation)
 			optional.POST("/conversation/operations", conversation.CreateOperation)
 			optional.GET("/conversation/operations/:id", conversation.GetOperation)
 		}

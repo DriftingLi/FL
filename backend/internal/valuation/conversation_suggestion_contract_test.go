@@ -148,15 +148,17 @@ func (m *memSuggestionRepository) AcceptSuggestion(_ context.Context, operation 
 		copied := *existing
 		return &copied, false, nil
 	}
-	draft, err := m.drafts.GetDraft(context.Background(), operation.DraftID, now)
-	if err != nil {
-		return nil, false, err
-	}
-	if draft.Draft.Version != operation.BaseVersion {
-		return nil, false, ErrDraftVersionConflict
-	}
-	if draft.Draft.Status != DraftStatusEditing {
-		return nil, false, ErrDraftNotEditing
+	if operation.Kind != ConversationOperationKindExplanation {
+		draft, err := m.drafts.GetDraft(context.Background(), operation.DraftID, now)
+		if err != nil {
+			return nil, false, err
+		}
+		if draft.Draft.Version != operation.BaseVersion {
+			return nil, false, ErrDraftVersionConflict
+		}
+		if draft.Draft.Status != DraftStatusEditing {
+			return nil, false, ErrDraftNotEditing
+		}
 	}
 	draftKey := reservation.DraftKey
 	draftBefore := m.draftCounts[draftKey]

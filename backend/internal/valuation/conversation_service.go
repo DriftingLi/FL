@@ -20,12 +20,14 @@ var requiredDraftFields = []string{
 }
 
 type ConversationService struct {
-	drafts      DraftRepository
-	operations  OperationRepository
-	valuation   *Service
-	evaluations EvaluationStore
-	suggestions *suggestionRunner
-	now         func() time.Time
+	drafts       DraftRepository
+	operations   OperationRepository
+	valuation    *Service
+	evaluations  EvaluationStore
+	suggestions  *suggestionRunner
+	explanations *explanationRunner
+	trialCards   TrialCardReader
+	now          func() time.Time
 }
 
 func NewConversationService(drafts DraftRepository, operations OperationRepository, valuation *Service, evaluations EvaluationStore, now func() time.Time) *ConversationService {

@@ -4774,18 +4774,22 @@ definitions:
         items:
           $ref: '#/definitions/valuation.Brand'
         type: array
+        x-nullable: true
       coefficients:
         items:
           $ref: '#/definitions/valuation.CoefficientConfig'
         type: array
+        x-nullable: true
       condition_ratings:
         items:
           $ref: '#/definitions/valuation.ConditionRating'
         type: array
+        x-nullable: true
       region_coefficients:
         items:
           $ref: '#/definitions/valuation.RegionCoefficient'
         type: array
+        x-nullable: true
     type: object
   valuation.BatteryEvaluation:
     properties:
@@ -4915,6 +4919,12 @@ definitions:
       base_version:
         type: integer
         x-optional: true
+      card_key:
+        type: string
+        x-optional: true
+      card_kind:
+        type: string
+        x-optional: true
       created_at:
         type: string
       draft_id:
@@ -4930,6 +4940,10 @@ definitions:
         x-optional: true
       evaluation_id:
         type: integer
+        x-optional: true
+      explanation:
+        allOf:
+        - $ref: '#/definitions/valuation.ValuationExplanationResult'
         x-optional: true
       first_accepted_user_id:
         type: integer
@@ -5365,6 +5379,45 @@ definitions:
       vehicle_type:
         type: string
     type: object
+  valuation.ExplainCardRequest:
+    properties:
+      card:
+        $ref: '#/definitions/valuation.ExplanationCard'
+      draft_version:
+        type: integer
+      operation_id:
+        type: string
+      question:
+        type: string
+    type: object
+  valuation.ExplanationCard:
+    properties:
+      draft_id:
+        type: string
+        x-optional: true
+      evaluation_id:
+        type: integer
+        x-optional: true
+      kind:
+        type: string
+      operation_id:
+        type: string
+        x-optional: true
+      request_id:
+        type: string
+        x-optional: true
+      snapshot_id:
+        type: string
+        x-optional: true
+    type: object
+  valuation.ExplanationFact:
+    properties:
+      id:
+        type: string
+      label:
+        type: string
+      value: {}
+    type: object
   valuation.FeatureImportance:
     properties:
       group:
@@ -5492,14 +5545,17 @@ definitions:
         items:
           type: string
         type: array
+        x-nullable: true
       engine:
         items:
           type: string
         type: array
+        x-nullable: true
       transmission:
         items:
           type: string
         type: array
+        x-nullable: true
     type: object
   valuation.SuggestDraftRequest:
     properties:
@@ -5703,6 +5759,34 @@ definitions:
         type: string
       version:
         type: integer
+    type: object
+  valuation.ValuationExplanationResult:
+    properties:
+      action:
+        type: string
+      card_version:
+        type: integer
+      evidence_ids:
+        items:
+          type: string
+        type: array
+      facts:
+        items:
+          $ref: '#/definitions/valuation.ExplanationFact'
+        type: array
+      formula_version:
+        type: string
+      requires_user_action:
+        type: boolean
+      schema_version:
+        type: integer
+      snapshot_id:
+        type: string
+        x-optional: true
+      template:
+        type: string
+      template_key:
+        type: string
     type: object
   valuation.ValuationSuggestionResult:
     properties:
@@ -21674,6 +21758,15 @@ paths:
       produces:
       - application/json
       responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/valuation.ConversationOperation'
+              type: object
         "202":
           description: 已受理
           schema:
@@ -21751,6 +21844,63 @@ paths:
           schema:
             $ref: '#/definitions/response.R'
       summary: 撤回最近一次草稿修改
+      tags:
+      - 估值-对话
+  /valuation/conversation/explanations:
+    post:
+      consumes:
+      - application/json
+      description: 仅允许草稿能力 ID、匿名正式 operation 或登录 owner、试算 request/snapshot 能力对。模型只选模板键与证据
+        ID，事实由原快照回填；工时反事实返回 recalculate，由用户触发重算。建议与解释共享草稿/IP/全站额度。
+      parameters:
+      - description: 操作标识、卡片版本、原卡片与问题
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/valuation.ExplainCardRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/valuation.ConversationOperation'
+              type: object
+        "202":
+          description: 已受理
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/valuation.ConversationOperation'
+              type: object
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 卡片不存在或无权访问
+          schema:
+            $ref: '#/definitions/response.R'
+        "409":
+          description: 旧卡或幂等负载冲突
+          schema:
+            $ref: '#/definitions/response.R'
+        "429":
+          description: 共享额度耗尽
+          schema:
+            $ref: '#/definitions/response.R'
+        "500":
+          description: 解释暂不可用或已关停
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 异步解释估值卡片
       tags:
       - 估值-对话
   /valuation/conversation/operations:

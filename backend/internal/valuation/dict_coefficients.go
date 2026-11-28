@@ -48,10 +48,10 @@ func (r *DictionaryRepository) GetCoefficientByKey(ctx context.Context, key stri
 
 // AlgorithmParameters 算法参数聚合结果（管理员后台「算法参数」tab 一次加载）
 type AlgorithmParameters struct {
-	Coefficients       []CoefficientConfig `json:"coefficients" nullability:"nullable"`
-	Brands             []Brand             `json:"brands" nullability:"nullable"`
-	ConditionRatings   []ConditionRating   `json:"condition_ratings" nullability:"nullable"`
-	RegionCoefficients []RegionCoefficient `json:"region_coefficients" nullability:"nullable"`
+	Coefficients       []CoefficientConfig `json:"coefficients" nullability:"nullable" extensions:"x-nullable"`
+	Brands             []Brand             `json:"brands" nullability:"nullable" extensions:"x-nullable"`
+	ConditionRatings   []ConditionRating   `json:"condition_ratings" nullability:"nullable" extensions:"x-nullable"`
+	RegionCoefficients []RegionCoefficient `json:"region_coefficients" nullability:"nullable" extensions:"x-nullable"`
 }
 
 // ListAlgorithmParameters 聚合查询全部算法参数（4 类），供管理员后台一次加载。

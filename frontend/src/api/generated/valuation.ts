@@ -37,8 +37,10 @@
 //   PATCH /valuation/conversation/drafts/{id}
 //   DELETE /valuation/conversation/drafts/{id}
 //   POST /valuation/conversation/drafts/{id}/undo
+//   POST /valuation/conversation/drafts/{id}/suggestions
 //   POST /valuation/conversation/operations
 //   GET  /valuation/conversation/operations/{id}
+//   POST /valuation/conversation/explanations
 //   GET  /valuation/evaluations
 //   GET  /valuation/evaluations/{id}
 //   GET  /valuation/battery/evaluations
@@ -76,7 +78,7 @@
 //   DELETE /valuation/admin/condition-ratings/{id}
 //   DELETE /valuation/admin/region-coefficients/{id}
 //
-// 覆盖的 Go 类型：AlgorithmParameters / BatteryEvaluation / BatteryEvaluationSummary / BatteryType / BatteryTypeDict / Brand / CoefficientConfig / ConditionRating / ConfigOption / ConversationOperation / CreateBatteryResponse / CycleFeature / DimensionScore / DraftCandidate / DraftField / DraftFieldState / DraftRange / EngineType / EvaluationDetail / EvaluationResponse / FeatureImportance / ListBatteryResponse / MastHeight / MastType / OriginalPrice / RawStats / RegionCoefficient / Series / SeriesConfigOptions / Tonnage / TransmissionType / TrialCandidate / TrialInterval / TrialRequest / TrialResponse / TrialSnapshotMeta / ValuationDraft / VehicleType
+// 覆盖的 Go 类型：AlgorithmParameters / BatteryEvaluation / BatteryEvaluationSummary / BatteryType / BatteryTypeDict / Brand / CoefficientConfig / ConditionRating / ConfigOption / ConversationOperation / CreateBatteryResponse / CycleFeature / DimensionScore / DraftCandidate / DraftField / DraftFieldState / DraftRange / EngineType / EvaluationDetail / EvaluationResponse / ExplanationFact / FeatureImportance / ListBatteryResponse / MastHeight / MastType / OriginalPrice / RawStats / RegionCoefficient / Series / SeriesConfigOptions / Tonnage / TransmissionType / TrialCandidate / TrialInterval / TrialRequest / TrialResponse / TrialSnapshotMeta / ValuationDraft / ValuationExplanationResult / ValuationSuggestionResult / VehicleType
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -89,10 +91,10 @@
 // 需要更精确的形状时先在注解层补齐（先例见 spec #940 片五②的差集清单）。
 
 export interface AlgorithmParameters {
-  brands: Brand[]
-  coefficients: CoefficientConfig[]
-  condition_ratings: ConditionRating[]
-  region_coefficients: RegionCoefficient[]
+  brands: Brand[] | null
+  coefficients: CoefficientConfig[] | null
+  condition_ratings: ConditionRating[] | null
+  region_coefficients: RegionCoefficient[] | null
 }
 
 export interface BatteryEvaluation {
@@ -159,15 +161,21 @@ export interface ConfigOption {
 }
 
 export interface ConversationOperation {
+  base_version?: number
+  card_key?: string
+  card_kind?: string
   created_at: string
   draft_id: string
   draft_version: number
   error_code?: string
   evaluation?: EvaluationDetail
   evaluation_id?: number
+  explanation?: ValuationExplanationResult
   first_accepted_user_id: number | null
   id: string
+  kind: string
   operation_id: string
+  result?: ValuationSuggestionResult
   status: string
   updated_at: string
 }
@@ -305,6 +313,12 @@ export interface EvaluationResponse {
   vehicle_type: string
 }
 
+export interface ExplanationFact {
+  id: string
+  label: string
+  value: unknown
+}
+
 export interface FeatureImportance {
   group: string
   index: number
@@ -369,9 +383,9 @@ export interface Series {
 }
 
 export interface SeriesConfigOptions {
-  battery: string[]
-  engine: string[]
-  transmission: string[]
+  battery: string[] | null
+  engine: string[] | null
+  transmission: string[] | null
 }
 
 export interface Tonnage {
@@ -465,6 +479,27 @@ export interface ValuationDraft {
   supplemental: Record<string, unknown>
   updated_at: string
   version: number
+}
+
+export interface ValuationExplanationResult {
+  action: string
+  card_version: number
+  evidence_ids: string[]
+  facts: ExplanationFact[]
+  formula_version: string
+  requires_user_action: boolean
+  schema_version: number
+  snapshot_id?: string
+  template: string
+  template_key: string
+}
+
+export interface ValuationSuggestionResult {
+  draft_version: number
+  patches: Record<string, DraftField>
+  questions: string[]
+  schema_version: number
+  supplements: Record<string, string>
 }
 
 export interface VehicleType {

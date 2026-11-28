@@ -251,8 +251,15 @@ func setupValuation(r *gin.Engine, cfg *config.Config, authSvc valuation.Valuati
 		GlobalLimit: cfg.Valuation.SuggestionGlobalLimit, GlobalWindow: time.Duration(cfg.Valuation.SuggestionGlobalWindowSeconds) * time.Second,
 		Timeout: time.Duration(cfg.Valuation.SuggestionTimeoutSeconds) * time.Second, HMACKey: cfg.SecretKey,
 	}, logger)
+	trialReader := valuation.NewPostgresTrialSnapshotReader(pool)
+	conversationSvc.EnableExplanations(model, valuation.NewExplanationRepository(pool), valuation.SuggestionConfig{
+		IPLimit: cfg.Valuation.SuggestionIPLimit, IPWindow: time.Duration(cfg.Valuation.SuggestionIPWindowSeconds) * time.Second,
+		GlobalLimit: cfg.Valuation.SuggestionGlobalLimit, GlobalWindow: time.Duration(cfg.Valuation.SuggestionGlobalWindowSeconds) * time.Second,
+		Timeout: time.Duration(cfg.Valuation.SuggestionTimeoutSeconds) * time.Second, HMACKey: cfg.SecretKey,
+	}, logger)
+	conversationSvc.SetTrialCardReader(trialReader)
 	valuation.RegisterRoutes(r, sess, logger, auditSvc, dictRepo, evalRepo, batteryRepo, valuationSvc, batterySvc, pdfGen, st, authSvc, login, conversationSvc)
-	valuation.RegisterTrialRoutes(r, valuation.NewPostgresTrialSnapshotReader(pool), logger, cfg.AppEnv)
+	valuation.RegisterTrialRoutes(r, trialReader, logger, cfg.AppEnv)
 	logger.Info("valuation 路由注册完成", zap.String("prefix", "/api/valuation"))
 
 	return func() {

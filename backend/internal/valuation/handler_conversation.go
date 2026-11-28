@@ -241,6 +241,7 @@ func parseDraftSuggestion(c *gin.Context) (*draftSuggestionPathRequest, error) {
 // @Produce json
 // @Param id path string true "草稿能力 ID"
 // @Param body body SuggestDraftRequest true "操作标识、基准版本与待整理资料"
+// @Success 200 {object} response.R{data=ConversationOperation} "success"
 // @Success 202 {object} response.R{data=ConversationOperation} "已受理"
 // @Failure 400 {object} response.R "参数错误或 IP 不可解析"
 // @Failure 404 {object} response.R "草稿不存在或已过期"
@@ -255,6 +256,34 @@ func (h *ConversationHandler) SuggestDraft(c *gin.Context) {
 			return h.svc.RequestSuggestions(ctx, req.ID, &req.SuggestDraftRequest, middleware.CurrentUserID(c), middleware.ClientIP(c))
 		},
 		Render: func(c *gin.Context, _ *draftSuggestionPathRequest, operation *ConversationOperation) {
+			c.JSON(http.StatusAccepted, response.R{Code: http.StatusAccepted, Message: "accepted", Data: operation})
+		},
+		ErrStatus: conversationErrStatus,
+	}.Handle(c)
+}
+
+// RequestExplanation 处理 POST /api/valuation/conversation/explanations。
+// @Summary 异步解释估值卡片
+// @Description 仅允许草稿能力 ID、匿名正式 operation 或登录 owner、试算 request/snapshot 能力对。模型只选模板键与证据 ID，事实由原快照回填；工时反事实返回 recalculate，由用户触发重算。建议与解释共享草稿/IP/全站额度。
+// @Tags 估值-对话
+// @Accept json
+// @Produce json
+// @Param body body ExplainCardRequest true "操作标识、卡片版本、原卡片与问题"
+// @Success 200 {object} response.R{data=ConversationOperation} "success"
+// @Success 202 {object} response.R{data=ConversationOperation} "已受理"
+// @Failure 400 {object} response.R "参数错误"
+// @Failure 404 {object} response.R "卡片不存在或无权访问"
+// @Failure 409 {object} response.R "旧卡或幂等负载冲突"
+// @Failure 429 {object} response.R "共享额度耗尽"
+// @Failure 500 {object} response.R "解释暂不可用或已关停"
+// @Router /valuation/conversation/explanations [post]
+func (h *ConversationHandler) RequestExplanation(c *gin.Context) {
+	httpx.Endpoint[ExplainCardRequest, ConversationOperation]{
+		Parse: httpx.BindJSON[ExplainCardRequest],
+		Invoke: func(ctx context.Context, req *ExplainCardRequest) (*ConversationOperation, error) {
+			return h.svc.RequestExplanation(ctx, req, middleware.CurrentUserID(c), middleware.ClientIP(c))
+		},
+		Render: func(c *gin.Context, _ *ExplainCardRequest, operation *ConversationOperation) {
 			c.JSON(http.StatusAccepted, response.R{Code: http.StatusAccepted, Message: "accepted", Data: operation})
 		},
 		ErrStatus: conversationErrStatus,
@@ -299,7 +328,7 @@ func (h *ConversationHandler) GetOperation(c *gin.Context) {
 	httpx.Endpoint[operationPathRequest, ConversationOperation]{
 		Parse: parseOperationPath,
 		Invoke: func(ctx context.Context, req *operationPathRequest) (*ConversationOperation, error) {
-			return h.svc.GetOperation(ctx, req.ID)
+			return h.svc.GetOperation(ctx, req.ID, middleware.CurrentUserID(c))
 		},
 		ErrStatus: conversationErrStatus,
 	}.Handle(c)

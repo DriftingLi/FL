@@ -7,12 +7,15 @@
 package valuation
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"testing"
 
+	"github.com/cloudwego/eino/schema"
 	"go.uber.org/zap"
 
+	"forklift-training/internal/aiassistant"
 	"forklift-training/internal/testutil"
 )
 
@@ -20,25 +23,27 @@ import (
 // 前缀 nonnilOutlets 是约定的证据表名：apitypes 的表态锁按它扫目录收键（见
 // internal/apitypes/nullability_lock_test.go 的 nonNilEvidenceSources）。
 var nonnilOutletsValuation = map[string]func(t *testing.T) any{
-	"valuation.EvaluationDetail.dimension_scores":     outletEvalDetailData,
-	"valuation.EvaluationDetail.suggestions":          outletEvalDetailData,
-	"valuation.EvaluationResponse.dimension_scores":   outletEvalResponseData,
-	"valuation.EvaluationResponse.suggestions":        outletEvalResponseData,
-	"valuation.TrialResponse.assumptions":             outletTrialResponseData,
-	"valuation.TrialResponse.candidates":              outletTrialResponseData,
-	"valuation.TrialResponse.missing_fields":          outletTrialResponseData,
-	"valuation.BatteryEvaluation.feature_importance":  outletBatteryDetailData,
-	"valuation.BatteryEvaluation.cycle_features":      outletBatteryDetailData,
-	"valuation.BatteryEvaluation.suggestions":         outletBatteryDetailData,
-	"valuation.CycleFeature.feature_vector":           outletBatteryFirstCycleFeature,
-	"valuation.CreateBatteryResponse.suggestions":     outletBatteryCreateData,
-	"valuation.ListBatteryResponse.items":             outletBatteryListData,
-	"valuation.ValuationDraft.fields":                 outletConversationDraftData,
-	"valuation.ValuationDraft.supplemental":           outletConversationDraftData,
-	"valuation.DraftField.candidates":                 outletConversationDraftCandidate,
-	"valuation.ValuationSuggestionResult.patches":      outletConversationSuggestionResult,
-	"valuation.ValuationSuggestionResult.supplements": outletConversationSuggestionResult,
-	"valuation.ValuationSuggestionResult.questions":    outletConversationSuggestionResult,
+	"valuation.EvaluationDetail.dimension_scores":       outletEvalDetailData,
+	"valuation.EvaluationDetail.suggestions":            outletEvalDetailData,
+	"valuation.EvaluationResponse.dimension_scores":     outletEvalResponseData,
+	"valuation.EvaluationResponse.suggestions":          outletEvalResponseData,
+	"valuation.TrialResponse.assumptions":               outletTrialResponseData,
+	"valuation.TrialResponse.candidates":                outletTrialResponseData,
+	"valuation.TrialResponse.missing_fields":            outletTrialResponseData,
+	"valuation.BatteryEvaluation.feature_importance":    outletBatteryDetailData,
+	"valuation.BatteryEvaluation.cycle_features":        outletBatteryDetailData,
+	"valuation.BatteryEvaluation.suggestions":           outletBatteryDetailData,
+	"valuation.CycleFeature.feature_vector":             outletBatteryFirstCycleFeature,
+	"valuation.CreateBatteryResponse.suggestions":       outletBatteryCreateData,
+	"valuation.ListBatteryResponse.items":               outletBatteryListData,
+	"valuation.ValuationDraft.fields":                   outletConversationDraftData,
+	"valuation.ValuationDraft.supplemental":             outletConversationDraftData,
+	"valuation.DraftField.candidates":                   outletConversationDraftCandidate,
+	"valuation.ValuationSuggestionResult.patches":       outletConversationSuggestionResult,
+	"valuation.ValuationSuggestionResult.supplements":   outletConversationSuggestionResult,
+	"valuation.ValuationSuggestionResult.questions":     outletConversationSuggestionResult,
+	"valuation.ValuationExplanationResult.facts":        outletConversationExplanationResult,
+	"valuation.ValuationExplanationResult.evidence_ids": outletConversationExplanationResult,
 }
 
 // TestNonNilDeclaredOutletsNeverEmitNull 本域的举证入口（判据本体在 testutil）。
@@ -184,6 +189,23 @@ func outletConversationSuggestionResult(t *testing.T) any {
 	if result == nil {
 		t.Fatalf("建议操作缺少 result: %v", data)
 	}
+	return result
+}
+
+func outletConversationExplanationResult(t *testing.T) any {
+	t.Helper()
+	model := &suggestionModelFake{structured: func(context.Context, string, []*schema.Message, string, aiassistant.StructuredCompleteOptions) (string, error) {
+		return explanationJSON("explain", "hours_coefficient", []string{"input.usage_hours"}), nil
+	}}
+	r, _, _, _ := newExplanationTestEngine(t, model)
+	draft := createConversationDraft(t, r, map[string]any{})
+	w := requestExplanation(t, r, map[string]any{"operation_id": "nonnil", "draft_version": 1,
+		"card": map[string]any{"kind": "draft", "draft_id": draft["id"]}, "question": "工时如何影响？"}, "")
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("解释受理状态码 = %d: %s", w.Code, w.Body.String())
+	}
+	data := waitForExplanation(t, r, "explain:"+draft["id"].(string)+":nonnil")
+	result, _ := data["explanation"].(map[string]any)
 	return result
 }
 

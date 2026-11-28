@@ -78,10 +78,17 @@ func (s *ConversationService) ExecuteOperation(ctx context.Context, req *Convers
 	return s.operationResponse(ctx, accepted)
 }
 
-func (s *ConversationService) GetOperation(ctx context.Context, operationID string) (*ConversationOperation, error) {
+func (s *ConversationService) GetOperation(ctx context.Context, operationID string, userIDs ...int) (*ConversationOperation, error) {
 	id, err := normalizeConversationOperationKey(operationID)
 	if err != nil {
 		return nil, err
+	}
+	userID := 0
+	if len(userIDs) > 0 {
+		userID = userIDs[0]
+	}
+	if strings.HasPrefix(id, "explain:") && s.explanations != nil {
+		return s.GetExplanation(ctx, id, userID)
 	}
 	if strings.HasPrefix(id, "op:") && s.suggestions != nil {
 		operation, err := s.suggestions.repository.GetSuggestion(ctx, id)

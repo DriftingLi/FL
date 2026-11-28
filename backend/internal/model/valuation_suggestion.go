@@ -20,3 +20,14 @@ type ValuationSuggestionBudget struct {
 }
 
 func (ValuationSuggestionBudget) TableName() string { return "valuation_suggestion_budgets" }
+
+type ValuationExplanationCall struct {
+	CallKey      string    `gorm:"column:call_key;primaryKey;size:320"`
+	OperationKey string    `gorm:"column:operation_key;size:320;not null"`
+	CardKind     string    `gorm:"column:card_kind;size:16;not null"`
+	CardKey      string    `gorm:"column:card_key;size:320;not null"`
+	IPHash       *string   `gorm:"column:ip_hash;size:64"`
+	ReservedAt   time.Time `gorm:"column:reserved_at;not null"`
+}
+
+func (ValuationExplanationCall) TableName() string { return "valuation_explanation_calls" }

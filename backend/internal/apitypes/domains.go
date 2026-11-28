@@ -893,6 +893,7 @@ var Domains = []Domain{
 			"valuation.EvaluationDetail",
 			"valuation.ValuationDraft",
 			"valuation.ConversationOperation",
+			"valuation.ValuationSuggestionResult",
 			"valuation.TrialResponse",
 			"valuation.DimensionScore",
 			"valuation.CreateBatteryResponse",
@@ -962,8 +963,10 @@ var Domains = []Domain{
 			{Method: "PATCH", Path: "/valuation/conversation/drafts/{id}"},
 			{Method: "DELETE", Path: "/valuation/conversation/drafts/{id}", NoData: true},
 			{Method: "POST", Path: "/valuation/conversation/drafts/{id}/undo"},
+			{Method: "POST", Path: "/valuation/conversation/drafts/{id}/suggestions"},
 			{Method: "POST", Path: "/valuation/conversation/operations"},
 			{Method: "GET", Path: "/valuation/conversation/operations/{id}"},
+			{Method: "POST", Path: "/valuation/conversation/explanations"},
 			// 估值鉴权组（JWTAuth + CapValuationUse）
 			{Method: "GET", Path: "/valuation/evaluations"},
 			{Method: "GET", Path: "/valuation/evaluations/{id}"},

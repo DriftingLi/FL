@@ -33,7 +33,7 @@ func NewOperationRepository(pool *pgxpool.Pool) OperationRepository {
 }
 
 const operationColumns = `operation_key, request_hash, draft_id, draft_version,
-	first_accepted_user_id, evaluation_id, status, error_code, operation_kind, result_json, created_at, updated_at`
+	first_accepted_user_id, evaluation_id, status, error_code, operation_kind, result_json, created_at, updated_at, card_kind, card_key`
 
 func (r *operationRepository) GetOperation(ctx context.Context, operationID string) (*ConversationOperation, error) {
 	row := r.pool.QueryRow(ctx, `SELECT `+operationColumns+` FROM valuation_operations WHERE operation_key = $1`, operationID)
@@ -116,9 +116,10 @@ func scanOperation(row pgx.Row) (*ConversationOperation, error) {
 	var errorCode *string
 	var operationKind string
 	var resultJSON []byte
+	var cardKind, cardKey *string
 	var createdAt, updatedAt time.Time
 	if err := row.Scan(&operation.OperationID, &operation.RequestHash, &operation.DraftID, &operation.DraftVersion,
-		&userID, &evaluationID, &operation.Status, &errorCode, &operationKind, &resultJSON, &createdAt, &updatedAt); err != nil {
+		&userID, &evaluationID, &operation.Status, &errorCode, &operationKind, &resultJSON, &createdAt, &updatedAt, &cardKind, &cardKey); err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, ErrOperationNotFound
 		}
@@ -126,16 +127,30 @@ func scanOperation(row pgx.Row) (*ConversationOperation, error) {
 	}
 	operation.ID = operation.OperationID
 	operation.Kind = operationKind
+	if cardKind != nil {
+		operation.CardKind = *cardKind
+	}
+	if cardKey != nil {
+		operation.CardKey = *cardKey
+	}
 	operation.FirstAcceptedUserID = userID
 	if operationKind == ConversationOperationKindSuggestion {
 		operation.BaseVersion = operation.DraftVersion
 	}
 	if len(resultJSON) > 0 {
-		var result ValuationSuggestionResult
-		if err := json.Unmarshal(resultJSON, &result); err != nil {
-			return nil, fmt.Errorf("decode valuation suggestion result: %w", err)
+		if operationKind == ConversationOperationKindExplanation {
+			var result ValuationExplanationResult
+			if err := json.Unmarshal(resultJSON, &result); err != nil {
+				return nil, fmt.Errorf("decode valuation explanation result: %w", err)
+			}
+			operation.Explanation = &result
+		} else {
+			var result ValuationSuggestionResult
+			if err := json.Unmarshal(resultJSON, &result); err != nil {
+				return nil, fmt.Errorf("decode valuation suggestion result: %w", err)
+			}
+			operation.Result = &result
 		}
-		operation.Result = &result
 	}
 	if evaluationID != nil {
 		operation.EvaluationID = *evaluationID

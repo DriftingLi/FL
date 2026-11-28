@@ -121,6 +121,7 @@ var ModelBlocks = []ModelBlock{
 			&ValuationOperation{},
 			&ValuationSuggestionCall{},
 			&ValuationSuggestionBudget{},
+			&ValuationExplanationCall{},
 		},
 	},
 	{

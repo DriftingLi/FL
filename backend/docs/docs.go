@@ -26293,6 +26293,24 @@ const docTemplate = `{
                     }
                 ],
                 "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/valuation.ConversationOperation"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
                     "202": {
                         "description": "已受理",
                         "schema": {
@@ -26413,6 +26431,100 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/valuation/conversation/explanations": {
+            "post": {
+                "description": "仅允许草稿能力 ID、匿名正式 operation 或登录 owner、试算 request/snapshot 能力对。模型只选模板键与证据 ID，事实由原快照回填；工时反事实返回 recalculate，由用户触发重算。建议与解释共享草稿/IP/全站额度。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "估值-对话"
+                ],
+                "summary": "异步解释估值卡片",
+                "parameters": [
+                    {
+                        "description": "操作标识、卡片版本、原卡片与问题",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/valuation.ExplainCardRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/valuation.ConversationOperation"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "202": {
+                        "description": "已受理",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/valuation.ConversationOperation"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "卡片不存在或无权访问",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "409": {
+                        "description": "旧卡或幂等负载冲突",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "429": {
+                        "description": "共享额度耗尽",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "解释暂不可用或已关停",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -35562,25 +35674,29 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/valuation.Brand"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "coefficients": {
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/valuation.CoefficientConfig"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "condition_ratings": {
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/valuation.ConditionRating"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "region_coefficients": {
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/valuation.RegionCoefficient"
-                    }
+                    },
+                    "x-nullable": true
                 }
             }
         },
@@ -35774,6 +35890,14 @@ const docTemplate = `{
                     "type": "integer",
                     "x-optional": true
                 },
+                "card_key": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "card_kind": {
+                    "type": "string",
+                    "x-optional": true
+                },
                 "created_at": {
                     "type": "string"
                 },
@@ -35797,6 +35921,14 @@ const docTemplate = `{
                 },
                 "evaluation_id": {
                     "type": "integer",
+                    "x-optional": true
+                },
+                "explanation": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/valuation.ValuationExplanationResult"
+                        }
+                    ],
                     "x-optional": true
                 },
                 "first_accepted_user_id": {
@@ -36431,6 +36563,63 @@ const docTemplate = `{
                 }
             }
         },
+        "valuation.ExplainCardRequest": {
+            "type": "object",
+            "properties": {
+                "card": {
+                    "$ref": "#/definitions/valuation.ExplanationCard"
+                },
+                "draft_version": {
+                    "type": "integer"
+                },
+                "operation_id": {
+                    "type": "string"
+                },
+                "question": {
+                    "type": "string"
+                }
+            }
+        },
+        "valuation.ExplanationCard": {
+            "type": "object",
+            "properties": {
+                "draft_id": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "evaluation_id": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "kind": {
+                    "type": "string"
+                },
+                "operation_id": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "request_id": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "snapshot_id": {
+                    "type": "string",
+                    "x-optional": true
+                }
+            }
+        },
+        "valuation.ExplanationFact": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "value": {}
+            }
+        },
         "valuation.FeatureImportance": {
             "type": "object",
             "properties": {
@@ -36621,19 +36810,22 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "type": "string"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "engine": {
                     "type": "array",
                     "items": {
                         "type": "string"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "transmission": {
                     "type": "array",
                     "items": {
                         "type": "string"
-                    }
+                    },
+                    "x-nullable": true
                 }
             }
         },
@@ -36934,6 +37126,48 @@ const docTemplate = `{
                 },
                 "version": {
                     "type": "integer"
+                }
+            }
+        },
+        "valuation.ValuationExplanationResult": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string"
+                },
+                "card_version": {
+                    "type": "integer"
+                },
+                "evidence_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "facts": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/valuation.ExplanationFact"
+                    }
+                },
+                "formula_version": {
+                    "type": "string"
+                },
+                "requires_user_action": {
+                    "type": "boolean"
+                },
+                "schema_version": {
+                    "type": "integer"
+                },
+                "snapshot_id": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "template": {
+                    "type": "string"
+                },
+                "template_key": {
+                    "type": "string"
                 }
             }
         },

@@ -42,6 +42,8 @@ func newSuggestionPostgresService(t *testing.T) (*ConversationService, *pgxpool.
 	conversation := NewConversationService(NewDraftRepository(pool), NewOperationRepository(pool), valuationSvc, evaluations, fakeClock.Now)
 	model := &suggestionModelFake{}
 	conversation.EnableSuggestions(model, NewSuggestionRepository(pool), defaultSuggestionConfig(), zap.NewNop())
+	conversation.EnableExplanations(model, NewExplanationRepository(pool), defaultSuggestionConfig(), zap.NewNop())
+	conversation.SetTrialCardReader(NewPostgresTrialSnapshotReader(pool))
 	return conversation, pool, fakeClock, model
 }
 
