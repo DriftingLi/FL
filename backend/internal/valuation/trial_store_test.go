@@ -36,15 +36,18 @@ func TestPostgresTrialSnapshotReadOnlyTransactionAndUniquePolicy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(empty.TrialPolicies) != 0 || len(empty.Brands) == 0 || len(empty.Coefficients) == 0 {
-		t.Fatalf("迁移必须保持策略为空并冻结完整目录/系数: policies=%d brands=%d coefficients=%d",
-			len(empty.TrialPolicies), len(empty.Brands), len(empty.Coefficients))
+	if len(empty.TrialPolicies) != 0 || len(empty.Brands) == 0 || len(empty.Coefficients) == 0 || empty.Control.Enabled {
+		t.Fatalf("迁移必须保持策略与全局开关为空/关闭并冻结完整目录/系数: policies=%d brands=%d coefficients=%d control=%+v",
+			len(empty.TrialPolicies), len(empty.Brands), len(empty.Coefficients), empty.Control)
 	}
 	var before int64
 	if err := db.Raw(`SELECT COUNT(*) FROM evaluations`).Scan(&before).Error; err != nil {
 		t.Fatal(err)
 	}
 
+	if _, err := pool.Exec(ctx, `UPDATE valuation_trial_control SET enabled = TRUE, version = version + 1 WHERE id = 1`); err != nil {
+		t.Fatal(err)
+	}
 	_, err = pool.Exec(ctx, `INSERT INTO valuation_trial_policy
 		(policy_name, version, brand, vehicle_type, tonnage, max_width_ratio, usage_hour_ratios, condition_ratings, enabled)
 		VALUES ('demo', 1, '林德', '电动叉车', 3, 0.4, '[0,0.85,1.15]'::jsonb, '["B","C"]'::jsonb, true)`)
@@ -96,6 +99,9 @@ func TestPostgresTrialSnapshotRecalculationUsesFrozenSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer pool.Close()
+	if _, err := pool.Exec(ctx, `UPDATE valuation_trial_control SET enabled = TRUE, version = version + 1 WHERE id = 1`); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := pool.Exec(ctx, `INSERT INTO valuation_trial_policy
 		(policy_name, version, brand, vehicle_type, tonnage, max_width_ratio, usage_hour_ratios, condition_ratings, enabled)
 		VALUES ('demo', 1, '林德', '电动平衡重式', 1.6, 0.4, '[0,1.7]'::jsonb, '["B"]'::jsonb, true)`); err != nil {

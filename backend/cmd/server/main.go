@@ -246,7 +246,9 @@ func setupValuation(r *gin.Engine, cfg *config.Config, authSvc valuation.Valuati
 	// Session 单例：与主体系共用同一实例（装配一次，B2 D4；现由 NewDeps 创建）
 	conversationSvc := valuation.NewConversationService(valuation.NewDraftRepository(pool), valuation.NewOperationRepository(pool), valuationSvc, evalRepo, clock.Now)
 	valuation.RegisterRoutes(r, sess, logger, auditSvc, dictRepo, evalRepo, batteryRepo, valuationSvc, batterySvc, pdfGen, st, authSvc, login, conversationSvc)
-	valuation.RegisterTrialRoutes(r, valuation.NewPostgresTrialSnapshotReader(pool), logger, cfg.AppEnv)
+	trialStore := valuation.NewPostgresTrialAdminStore(pool)
+	valuation.RegisterTrialRoutes(r, valuation.NewPostgresTrialSnapshotReader(pool), logger, cfg.AppEnv, trialStore)
+	valuation.RegisterTrialAdminRoutes(r.Group("/api"), sess, trialStore, logger)
 	logger.Info("valuation 路由注册完成", zap.String("prefix", "/api/valuation"))
 
 	return func() {

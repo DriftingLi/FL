@@ -5531,6 +5531,20 @@ definitions:
       vehicle_type:
         type: string
     type: object
+  valuation.TrialControlRequest:
+    properties:
+      enabled:
+        type: boolean
+    type: object
+  valuation.TrialControlResponse:
+    properties:
+      enabled:
+        type: boolean
+      updated_at:
+        type: string
+      version:
+        type: integer
+    type: object
   valuation.TrialInterval:
     properties:
       max:
@@ -5543,6 +5557,165 @@ definitions:
         type: number
       width_ratio:
         type: number
+    type: object
+  valuation.TrialMetricSummary:
+    properties:
+      brand:
+        type: string
+      completion_tokens:
+        type: integer
+      cost_micros:
+        type: integer
+      covered:
+        type: integer
+      denominator:
+        type: integer
+      duration_sum_ms:
+        type: integer
+      follow_up_count:
+        type: integer
+      formula_hash:
+        type: string
+      formula_version:
+        type: string
+      policy_name:
+        type: string
+      policy_version:
+        type: string
+      priced:
+        type: integer
+      prompt_tokens:
+        type: integer
+      scenario:
+        type: string
+      tonnage:
+        type: number
+      too_wide:
+        type: integer
+      unpriced_reasons:
+        additionalProperties:
+          type: integer
+        type: object
+      vehicle_type:
+        type: string
+    type: object
+  valuation.TrialMetricsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/valuation.TrialMetricSummary'
+        type: array
+    type: object
+  valuation.TrialPoliciesRequest:
+    properties:
+      policies:
+        items:
+          $ref: '#/definitions/valuation.TrialPolicyInput'
+        type: array
+    required:
+    - policies
+    type: object
+  valuation.TrialPoliciesResponse:
+    properties:
+      policies:
+        items:
+          $ref: '#/definitions/valuation.TrialPolicy'
+        type: array
+    type: object
+  valuation.TrialPolicy:
+    properties:
+      brand:
+        type: string
+      condition_ratings:
+        items:
+          type: string
+        type: array
+      enabled:
+        type: boolean
+      has_license_plate_values:
+        items:
+          type: boolean
+        type: array
+      has_maintenance_records_values:
+        items:
+          type: boolean
+        type: array
+      has_registration_certificate_values:
+        items:
+          type: boolean
+        type: array
+      id:
+        type: integer
+        x-optional: true
+      max_width_ratio:
+        type: number
+      original_paint_values:
+        items:
+          type: boolean
+        type: array
+      policy_name:
+        type: string
+      tonnage:
+        type: number
+      usage_hour_ratios:
+        items:
+          type: number
+        type: array
+      vehicle_type:
+        type: string
+      version:
+        type: integer
+    type: object
+  valuation.TrialPolicyInput:
+    properties:
+      brand:
+        type: string
+      condition_ratings:
+        items:
+          type: string
+        type: array
+      enabled:
+        type: boolean
+      has_license_plate_values:
+        items:
+          type: boolean
+        type: array
+      has_maintenance_records_values:
+        items:
+          type: boolean
+        type: array
+      has_registration_certificate_values:
+        items:
+          type: boolean
+        type: array
+      max_width_ratio:
+        type: number
+      original_paint_values:
+        items:
+          type: boolean
+        type: array
+      policy_name:
+        type: string
+      tonnage:
+        type: number
+      usage_hour_ratios:
+        items:
+          type: number
+        type: array
+      vehicle_type:
+        type: string
+    required:
+    - brand
+    - condition_ratings
+    - has_license_plate_values
+    - has_maintenance_records_values
+    - has_registration_certificate_values
+    - max_width_ratio
+    - original_paint_values
+    - policy_name
+    - tonnage
+    - usage_hour_ratios
+    - vehicle_type
     type: object
   valuation.TrialRequest:
     properties:
@@ -21057,6 +21230,323 @@ paths:
       summary: 删除传动系统类型
       tags:
       - 估值-管理端
+  /valuation/admin/trials/control:
+    get:
+      description: 独立全局开关默认关闭；读取失败时试算按关闭处理。
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/valuation.TrialControlResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.R'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 读取试算全局开关
+      tags:
+      - 估值-管理
+    put:
+      consumes:
+      - application/json
+      description: 仅影响 trials，不影响草稿、建议、手动或正式评估；enabled 缺省为 false。
+      parameters:
+      - description: 全局开关
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/valuation.TrialControlRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/valuation.TrialControlResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.R'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 更新试算全局开关
+      tags:
+      - 估值-管理
+  /valuation/admin/trials/metrics:
+    get:
+      parameters:
+      - description: RFC3339 开始时间
+        in: query
+        name: from
+        type: string
+      - description: RFC3339 结束时间
+        in: query
+        name: to
+        type: string
+      - description: 策略名
+        in: query
+        name: policy_name
+        type: string
+      - description: 品牌
+        in: query
+        name: brand
+        type: string
+      - description: 车型
+        in: query
+        name: vehicle_type
+        type: string
+      - description: 吨位
+        in: query
+        name: tonnage
+        type: number
+      - description: complete、masked 或 year_range
+        in: query
+        name: scenario
+        type: string
+      - description: 公式哈希
+        in: query
+        name: formula_hash
+        type: string
+      - description: 策略版本
+        in: query
+        name: policy_version
+        type: string
+      - description: 返回组数，1-1000，默认 200
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/valuation.TrialMetricsResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.R'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 查询试算观测指标
+      tags:
+      - 估值-管理
+  /valuation/admin/trials/metrics/export:
+    get:
+      parameters:
+      - description: RFC3339 开始时间
+        in: query
+        name: from
+        type: string
+      - description: RFC3339 结束时间
+        in: query
+        name: to
+        type: string
+      - description: 策略名
+        in: query
+        name: policy_name
+        type: string
+      - description: 品牌
+        in: query
+        name: brand
+        type: string
+      - description: 车型
+        in: query
+        name: vehicle_type
+        type: string
+      - description: 吨位
+        in: query
+        name: tonnage
+        type: number
+      - description: complete、masked 或 year_range
+        in: query
+        name: scenario
+        type: string
+      - description: 公式哈希
+        in: query
+        name: formula_hash
+        type: string
+      - description: 策略版本
+        in: query
+        name: policy_version
+        type: string
+      - description: 返回组数，1-1000，默认 200
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: JSON 附件
+          schema:
+            items:
+              $ref: '#/definitions/valuation.TrialMetricSummary'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.R'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 导出试算观测指标 JSON
+      tags:
+      - 估值-管理
+  /valuation/admin/trials/policies:
+    get:
+      parameters:
+      - description: demo 或 pilot
+        in: query
+        name: policy_name
+        type: string
+      - description: 品牌
+        in: query
+        name: brand
+        type: string
+      - description: 车型
+        in: query
+        name: vehicle_type
+        type: string
+      - description: 吨位
+        in: query
+        name: tonnage
+        type: number
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/valuation.TrialPoliciesResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.R'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 查询试算获批策略
+      tags:
+      - 估值-管理
+    put:
+      consumes:
+      - application/json
+      description: 空列表清空 allowlist；策略版本按替换内容重新计算并生成策略哈希。
+      parameters:
+      - description: 获批品牌×车型×吨位组合与情景
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/valuation.TrialPoliciesRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/valuation.TrialPoliciesResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.R'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.R'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.R'
+      security:
+      - BearerAuth: []
+      summary: 全量更新试算获批策略
+      tags:
+      - 估值-管理
   /valuation/admin/vehicle-types:
     post:
       consumes:
@@ -22670,7 +23160,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: 使用同一冻结目录、系数快照与 V2 公式计算参考区间。默认关闭，仅显式 demo/pilot 且组合已配置时可用；不写 evaluations、不生成报告。
+      description: 使用同一冻结目录、系数快照与 V2 公式计算参考区间。全局开关默认关闭，仅显式 demo/pilot 且组合已配置时可用；不写
+        evaluations、不生成报告。
       parameters:
       - description: 参考试算请求
         in: body

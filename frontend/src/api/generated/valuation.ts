@@ -44,6 +44,13 @@
 //   GET  /valuation/battery/evaluations
 //   GET  /valuation/battery/evaluations/{id}
 //   GET  /valuation/auth/me
+//   POST /valuation/trials
+//   GET  /valuation/admin/trials/control
+//   PUT  /valuation/admin/trials/control
+//   GET  /valuation/admin/trials/policies
+//   PUT  /valuation/admin/trials/policies
+//   GET  /valuation/admin/trials/metrics
+//   GET  /valuation/admin/trials/metrics/export
 //   POST /valuation/admin/original-prices
 //   PUT  /valuation/admin/original-prices/{id}
 //   DELETE /valuation/admin/original-prices/{id}
@@ -76,7 +83,7 @@
 //   DELETE /valuation/admin/condition-ratings/{id}
 //   DELETE /valuation/admin/region-coefficients/{id}
 //
-// 覆盖的 Go 类型：AlgorithmParameters / BatteryEvaluation / BatteryEvaluationSummary / BatteryType / BatteryTypeDict / Brand / CoefficientConfig / ConditionRating / ConfigOption / ConversationOperation / CreateBatteryResponse / CycleFeature / DimensionScore / DraftCandidate / DraftField / DraftFieldState / DraftRange / EngineType / EvaluationDetail / EvaluationResponse / FeatureImportance / ListBatteryResponse / MastHeight / MastType / OriginalPrice / RawStats / RegionCoefficient / Series / SeriesConfigOptions / Tonnage / TransmissionType / TrialCandidate / TrialInterval / TrialRequest / TrialResponse / TrialSnapshotMeta / ValuationDraft / VehicleType
+// 覆盖的 Go 类型：AlgorithmParameters / BatteryEvaluation / BatteryEvaluationSummary / BatteryType / BatteryTypeDict / Brand / CoefficientConfig / ConditionRating / ConfigOption / ConversationOperation / CreateBatteryResponse / CycleFeature / DimensionScore / DraftCandidate / DraftField / DraftFieldState / DraftRange / EngineType / EvaluationDetail / EvaluationResponse / FeatureImportance / ListBatteryResponse / MastHeight / MastType / OriginalPrice / RawStats / RegionCoefficient / Series / SeriesConfigOptions / Tonnage / TransmissionType / TrialCandidate / TrialControlResponse / TrialInterval / TrialMetricSummary / TrialMetricsResponse / TrialPoliciesResponse / TrialPolicy / TrialRequest / TrialResponse / TrialSnapshotMeta / ValuationDraft / VehicleType
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -398,12 +405,64 @@ export interface TrialCandidate {
   vehicle_type: string
 }
 
+export interface TrialControlResponse {
+  enabled: boolean
+  updated_at: string
+  version: number
+}
+
 export interface TrialInterval {
   max: number
   mid: number
   min: number
   width: number
   width_ratio: number
+}
+
+export interface TrialMetricSummary {
+  brand: string
+  completion_tokens: number
+  cost_micros: number
+  covered: number
+  denominator: number
+  duration_sum_ms: number
+  follow_up_count: number
+  formula_hash: string
+  formula_version: string
+  policy_name: string
+  policy_version: string
+  priced: number
+  prompt_tokens: number
+  scenario: string
+  tonnage: number
+  too_wide: number
+  unpriced_reasons: Record<string, number>
+  vehicle_type: string
+}
+
+export interface TrialMetricsResponse {
+  items: TrialMetricSummary[]
+}
+
+export interface TrialPoliciesResponse {
+  policies: TrialPolicy[]
+}
+
+export interface TrialPolicy {
+  brand: string
+  condition_ratings: string[]
+  enabled: boolean
+  has_license_plate_values: boolean[]
+  has_maintenance_records_values: boolean[]
+  has_registration_certificate_values: boolean[]
+  id?: number
+  max_width_ratio: number
+  original_paint_values: boolean[]
+  policy_name: string
+  tonnage: number
+  usage_hour_ratios: number[]
+  vehicle_type: string
+  version: number
 }
 
 export interface TrialRequest {

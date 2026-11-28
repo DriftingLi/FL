@@ -16,6 +16,8 @@ const (
 
 	TrialReasonInvalidInput          = "invalid_input"
 	TrialReasonPolicyDisabled        = "policy_disabled"
+	TrialReasonGlobalDisabled        = "global_disabled"
+	TrialReasonTrialError            = "trial_error"
 	TrialReasonPolicyNotConfigured   = "policy_not_configured"
 	TrialReasonPolicyForbidden       = "policy_forbidden"
 	TrialReasonBrandUnreliable       = "brand_unreliable"
@@ -62,6 +64,9 @@ func preflightTrial(req TrialRequest, snapshot *TrialSnapshot, appEnv string, ch
 	}
 	if !checkSnapshot {
 		return response, TrialPolicy{}, true
+	}
+	if snapshot == nil || !snapshot.Control.Enabled {
+		return trialNeedsInfo(response, TrialReasonGlobalDisabled, "参考试算已由全局开关关闭", nil), TrialPolicy{}, false
 	}
 	policy, reason, message := resolveConfiguredTrialPolicy(req, snapshot)
 	if reason != "" {

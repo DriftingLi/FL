@@ -30,33 +30,50 @@ func (r *PostgresTrialSnapshotReader) LoadTrialSnapshot(ctx context.Context, req
 	if err := validateTrialSnapshotReference(req); err != nil {
 		return nil, err
 	}
+	var snapshot *TrialSnapshot
 	if req.SnapshotID != "" {
-		return r.loadStoredTrialSnapshot(ctx, req.SnapshotID)
+		stored, err := r.loadStoredTrialSnapshot(ctx, req.SnapshotID)
+		if err != nil {
+			return nil, err
+		}
+		snapshot = stored
+	} else {
+		stored, err := r.loadTrialSnapshotByRequestID(ctx, req)
+		if err == nil {
+			snapshot = stored
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			return nil, err
+		} else {
+			current, err := r.loadCurrentTrialSnapshot(ctx)
+			if err != nil {
+				return nil, err
+			}
+			requestJSON, err := json.Marshal(req)
+			if err != nil {
+				return nil, fmt.Errorf("序列化试算请求失败: %w", err)
+			}
+			snapshotJSON, err := json.Marshal(current.ReplayInput)
+			if err != nil {
+				return nil, fmt.Errorf("序列化试算快照失败: %w", err)
+			}
+			if _, err := r.pool.Exec(ctx, `INSERT INTO valuation_trial_snapshots
+				(snapshot_id, request_id, request_json, snapshot_json, formula_hash)
+				VALUES ($1, $2, $3::jsonb, $4::jsonb, $5)
+				ON CONFLICT (request_id) DO NOTHING`, current.Hash, req.RequestID, requestJSON, snapshotJSON, TrialFormulaHash); err != nil {
+				return nil, fmt.Errorf("保存试算快照失败: %w", err)
+			}
+			snapshot, err = r.loadTrialSnapshotByRequestID(ctx, req)
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
-	if stored, err := r.loadTrialSnapshotByRequestID(ctx, req); err == nil {
-		return stored, nil
-	} else if !errors.Is(err, pgx.ErrNoRows) {
-		return nil, err
-	}
-	current, err := r.loadCurrentTrialSnapshot(ctx)
+	control, err := loadTrialControl(ctx, r.pool)
 	if err != nil {
 		return nil, err
 	}
-	requestJSON, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("序列化试算请求失败: %w", err)
-	}
-	snapshotJSON, err := json.Marshal(current.ReplayInput)
-	if err != nil {
-		return nil, fmt.Errorf("序列化试算快照失败: %w", err)
-	}
-	if _, err := r.pool.Exec(ctx, `INSERT INTO valuation_trial_snapshots
-		(snapshot_id, request_id, request_json, snapshot_json, formula_hash)
-		VALUES ($1, $2, $3::jsonb, $4::jsonb, $5)
-		ON CONFLICT (request_id) DO NOTHING`, current.Hash, req.RequestID, requestJSON, snapshotJSON, TrialFormulaHash); err != nil {
-		return nil, fmt.Errorf("保存试算快照失败: %w", err)
-	}
-	return r.loadTrialSnapshotByRequestID(ctx, req)
+	snapshot.Control = control
+	return snapshot, nil
 }
 
 func validateTrialSnapshotReference(req TrialRequest) error {

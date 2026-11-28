@@ -40,7 +40,7 @@ func TestBlueprintCapabilityCoverage(t *testing.T) {
 		"questioninteraction.RegisterRoutes": "题目评论/笔记/考点为学员面，但讲师与管理端审核读同一份；能力位细化留待后续",
 		"questionbank.RegisterRoutes":        "题库蓝图混合学员读写与管理端审核：管理端路由逐条挂能力守卫，学员侧继承组级 JWTAuth",
 		"note.RegisterRoutes":                "学员笔记：纯用户私有数据（读写一律以 user_id 收口，越权按「不存在」处理），门禁与既有题目笔记端点一致——只要求登录；同一资源的两条路径挂两套门才是真不一致（ADR-0055）",
-		"valuation.RegisterTrialRoutes":      "参考试算不读写用户资源：默认关闭，显式 demo/pilot 仍须命中服务端事务冻结的组合 allowlist；生产禁止 demo 且迁移不预置策略",
+		"valuation.RegisterTrialRoutes":      "参考试算不读写用户资源：全局开关默认关闭，显式 demo/pilot 仍须命中服务端冻结的组合 allowlist；生产禁止 demo 且迁移不预置策略",
 	}
 	// 射程 = HTTP 面（testutil.HTTPSurface）：拆包后蓝图注册函数跟着域包走，这一处定义自动覆盖。
 	fset := token.NewFileSet()
