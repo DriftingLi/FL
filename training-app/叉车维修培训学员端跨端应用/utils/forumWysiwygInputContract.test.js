@@ -35,6 +35,8 @@ const IMAGE_AREA_REL = 'components/forum-wysiwyg-image-area.uvue';
 const MODEL_REL = 'utils/forumWysiwygInput.uts';
 /** #2659：收敛判定与落地（reconcileMarkerInsert / settleMarkerInsert）在 delta 管线里，与序列化同文件。 */
 const DELTA_REL = 'utils/forumDeltaMarkdown.uts';
+/** #2962：工具态状态机（面板开合 / 只读保活 / 选区闸门）从输入区拆成 composable（行数预算，ADR-0023 ③）。 */
+const TOOL_STATE_REL = 'composables/useWysiwygToolState.uts';
 
 const input = read(INPUT_REL);
 /** #2658：格式工具条（常驻四键 + 更多面板）拆成独立件，按钮集与触摸目标的判据落在它身上。 */
@@ -42,6 +44,7 @@ const toolbar = read(TOOLBAR_REL);
 const imageArea = read(IMAGE_AREA_REL);
 const model = read(MODEL_REL);
 const delta = read(DELTA_REL);
+const toolState = read(TOOL_STATE_REL);
 
 /** 取某个函数/方法的函数体（从签名到下一个同缩进的 `}`），用于「这个函数里不许出现 X」类判据。 */
 function bodyOf(src, signature) {
@@ -69,7 +72,8 @@ describe('常驻四键由数据驱动（按钮集是单点，不是模板硬编�
         // 拆分的接缝：工具条只 emit，输入区持有 editorCtx 才决定怎么落地
         expect(toolbar).toContain("(e: 'action', id: string): void");
         expect(toolbar).toContain("emit('action', id)");
-        expect(input).toContain('<ForumWysiwygToolbar :active-ids="activeIds" @action="onActionTap" @paste="onPasteTap"');
+        expect(input).toContain('<ForumWysiwygToolbar :active-ids="activeIds" :open="toolOpen" @action="onActionTap"');
+        expect(input).toContain('@paste="onPasteTap"');
         // #2709：工具条按下要单独上报（touchstart 早于 blur），失焦检测才分得清「点键」与「粘贴被丢弃」
         expect(input).toContain('@press="onToolbarPress"');
     });
@@ -224,14 +228,14 @@ describe('编辑器侧无图片插入入口：正文不产出 ![alt](url)（R3�
 
 describe('记号四件走 insertText 逃生舱（editor 的 link 丢 URL、code 是 no-op）', () => {
     it('有选区包裹 / 无选区插模板，都经 buildMarker + insertText', () => {
-        expect(input).toContain('ctx.getSelectionText({');
-        expect(input).toContain('buildMarker(action.id, selected)');
-        expect(input).toContain('ctx.insertText({');
+        expect(toolState).toContain('ctx.getSelectionText({');
+        expect(toolState).toContain('buildMarker(action.id, selected)');
+        expect(toolState).toContain('ctx.insertText({');
     });
 
     it('插入后必须收敛：insertText 在真机上不删选区（#2659），写成后按 delta 复核并 setContents', () => {
-        const apply = bodyOf(input, 'function applyAction(');
-        expect(apply).toContain('settleMarkerInsert(ctx, preDelta, selected, text, refreshFromEditor)');
+        const apply = bodyOf(toolState, 'function applyAction(action : RichAction) : void {');
+        expect(apply).toContain('settleMarkerInsert(ctx, preDelta, selected, text, deps.refresh)');
         // 顶层函数（0 缩进）的收尾是 "\n}"，bodyOf 会在内层 "\n    }" 处截断 ⇒ 从签名切到文件末尾
         const settle = delta.slice(delta.indexOf('export function settleMarkerInsert('));
         expect(settle).toContain('reconcileMarkerInsert(');
@@ -240,11 +244,12 @@ describe('记号四件走 insertText 逃生舱（editor 的 link 丢 URL、code 
 
     it('不调用 insertLink（链接输出 [文字](URL) 由作者自填 URL）', () => {
         expect(input).not.toContain('insertLink');
+        expect(toolState).not.toContain('insertLink');
     });
 
     it('分割线走 insertDivider，格式走 format', () => {
-        expect(input).toContain('ctx.insertDivider({');
-        expect(input).toContain('ctx.format(action.formatName, action.formatValue)');
+        expect(toolState).toContain('ctx.insertDivider({');
+        expect(toolState).toContain('ctx.format(action.formatName, action.formatValue)');
     });
 });
 
@@ -281,11 +286,13 @@ describe('失焦后点格式按钮仍可用：readOnly 保住选区，format 推
     });
 
     it('点按钮时若处于 readOnly，则 setTimeout 后执行并立刻恢复可编辑', () => {
-        const tap = bodyOf(input, 'function onActionTap(');
-        expect(tap).toContain('if (readOnly.value) {');
+        // 动作分发实体在 composable（#2962 拆出），输入区只留转发
+        expect(input).toContain('tool.onActionTap(id)');
+        const tap = bodyOf(toolState, 'function onActionTap(id : string) : void {');
+        expect(tap).toContain('if (deps.isReadOnly()) {');
         expect(tap).toContain('setTimeout(() => {');
         expect(tap).toContain('applyAction(action)');
-        expect(tap).toContain('readOnly.value = false');
+        expect(tap).toContain('deps.setReadOnly(false)');
     });
 
     // #2658：只读态会挡住「点编辑器重新聚焦」。一次被原生层丢弃的粘贴会让编辑器失焦，
@@ -293,7 +300,9 @@ describe('失焦后点格式按钮仍可用：readOnly 保住选区，format 推
     it('只读态必须自己放开：失焦后 READONLY_HOLD_MS 到点恢复可编辑', () => {
         const blur = bodyOf(input, 'function onEditorBlur()');
         expect(blur).toContain('readOnly.value = true');
-        expect(blur).toContain('setTimeout(() => { readOnly.value = false }, READONLY_HOLD_MS)');
+        // #2962 起这一放开加了工具态闸门（工具态可以开很久，放开就丢选区），但非工具态必须照旧放开：
+        expect(blur).toContain('READONLY_HOLD_MS');
+        expect(blur).toMatch(/setTimeout\(\(\) => \{[\s\S]*?readOnly\.value = false[\s\S]*?\}, READONLY_HOLD_MS\)/);
         expect(input).toContain('const READONLY_HOLD_MS : number =');
     });
 });
@@ -458,5 +467,71 @@ describe('样式红线：scss + 只用 class 选择器 + 编辑器本体不承�
         for (const banned of ['gap:', 'calc(', 'var(--', 'transition:', 'animation:']) {
             expect([banned, input.includes(banned)]).toEqual([banned, false]);
         }
+    });
+});
+
+// ===== 工具态（#2962，父规格 #2961）：面板开合是受控的，工具态内只读保活 =====
+
+describe('工具态接线（#2962）：面板开合受控 + 工具态内只读保活 + 点编辑区回输入态', () => {
+    it('面板开合是受控的：open 由输入区持有，工具条只 emit toggle', () => {
+        expect(toolbar).toContain('open?: boolean');
+        expect(toolbar).toContain("(e: 'toggle', open: boolean): void");
+        expect(toolbar).toContain("emit('toggle', !props.open)");
+        // 面板渲染读 prop，不读内部 ref —— 否则面板状态会有第二个事实源
+        expect(toolbar).toContain('<view v-if="open" class="panel">');
+        expect(toolbar).not.toContain('panelOpen');
+    });
+
+    it('输入区把 open/toggle 接上，且工具态开关是唯一权威（toolOpen 来自 composable）', () => {
+        // 状态机在 composable 里（行数预算），输入区只持实例与别名 —— 别名必须是同一个 ref，不许再造一份
+        expect(input).toContain('const tool = useWysiwygToolState({');
+        expect(input).toContain('const toolOpen = tool.toolOpen');
+        expect(input).not.toContain('const toolOpen = ref<boolean>(false)');
+        expect(input).toContain('@toggle="onToolbarToggle"');
+        expect(input).toContain('function onToolbarToggle(open : boolean) : void {');
+        expect(input).toContain('tool.onToggle(open)');
+        expect(toolState).toContain('const toolOpen = ref<boolean>(false)');
+        expect(toolState).toContain('function enterToolState() : void {');
+        expect(toolState).toContain('function leaveToolState() : void {');
+    });
+
+    it('进工具态：先记选区，再收键盘（父规格的拍板顺序不可反）', () => {
+        const block = bodyOf(toolState, 'function enterToolState() : void {');
+        expect(block).toContain('toolOpen.value = true');
+        expect(block).toContain('deps.setReadOnly(true)');
+        expect(block).toContain('getSelectionText(');
+        expect(block).toContain('uni.hideKeyboard()');
+        expect(block.indexOf('getSelectionText(')).toBeLessThan(block.indexOf('uni.hideKeyboard()'));
+    });
+
+    it('失焦后的只读保活**只在非工具态**定时放开（工具态可以开很久，放开就丢选区）', () => {
+        const block = bodyOf(input, 'function onEditorBlur() : void {');
+        expect(block).toContain('if (!toolOpen.value) {');
+        expect(block).toMatch(/if \(!toolOpen\.value\) \{\s*setTimeout/);
+    });
+
+    it('点编辑区退出工具态：外层 touchstart 早于这次点击的聚焦判定', () => {
+        expect(input).toContain('@touchstart="onEditorTouchStart"');
+        expect(input).toContain('tool.onEditorTouchStart()');
+        const block = bodyOf(toolState, 'function onEditorTouchStart() : void {');
+        expect(block).toContain('if (!toolOpen.value) return');
+        expect(block).toContain('leaveToolState()');
+    });
+
+    it('工具态内动作走选区闸门：快照 → 现场核对 → 取消时提示，不静默落到别处', () => {
+        expect(toolState).toContain('function runToolAction(action : RichAction) : void {');
+        expect(toolState).toContain('shouldCancelToolAction(snapshot, res.text)');
+        expect(toolState).toContain('RICH_SELECTION_LOST_NOTICE');
+        // onActionTap 在工具态先分叉，不许直接 applyAction
+        const block = bodyOf(toolState, 'function onActionTap(id : string) : void {');
+        expect(block).toContain('if (toolOpen.value) {');
+        expect(block).toContain('runToolAction(action)');
+    });
+
+    it('工具态内执行完动作要把只读收回去（否则「保持选区」在第一次动作后就失效）', () => {
+        const block = bodyOf(toolState, 'function runToolAction(action : RichAction) : void {');
+        expect(block).toContain('deps.setReadOnly(false)');
+        expect(block).toContain('if (toolOpen.value) {');
+        expect(block).toContain('deps.setReadOnly(true)');
     });
 });

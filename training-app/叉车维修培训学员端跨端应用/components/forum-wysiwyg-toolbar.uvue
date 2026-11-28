@@ -5,6 +5,9 @@
          由输入区那侧持有 editorCtx 决定怎么落地。这样「有哪些按钮」与「按钮怎么生效」各自只有一处。 -->
     <!-- touchstart 早于 editor 的 blur：把「作者按下了工具条」这件事先告诉输入区，
          否则失焦检测会把「点键」误当成「粘贴被原生层丢弃」并弹提示行（#2709）。 -->
+    <!-- 面板开合是**受控**的（#2962）：open 由输入区持有，工具条只 emit('toggle')。
+         原因：面板展开 = 进入「工具态」，它要同时驱动只读保活、收键盘、选区快照三件事，
+         那些都只能在持有 editorCtx 的输入区里做 —— 面板状态留在这里就会变成第二个事实源。 -->
     <view class="wysiwyg-toolbar" @touchstart="onPress">
         <!-- 常驻四键（粗体 / 斜体 / 删除线 / 列表）+ 二级面板开关。触摸目标 88rpx（R2）。
              字形是**文字**不是图片：B 真加粗、I 真斜体、S 真删除线（text-decoration-line: line-through）、≡ 列表。 -->
@@ -14,14 +17,14 @@
                 <text class="tool-glyph"
                     :class="{ 'tool-glyph-bold': act.glyphStyle == 'bold', 'tool-glyph-italic': act.glyphStyle == 'italic', 'tool-glyph-strike': act.glyphStyle == 'strike', active: isActive(act.id) }">{{ act.glyph }}</text>
             </view>
-            <view class="tool-btn tool-btn-more ml-16" :class="{ active: panelOpen }" @click="onTogglePanel">
-                <text class="tool-glyph" :class="{ active: panelOpen }">⋯</text>
+            <view class="tool-btn tool-btn-more ml-16" :class="{ active: open }" @click="onTogglePanel">
+                <text class="tool-glyph" :class="{ active: open }">⋯</text>
             </view>
         </view>
 
         <!-- 二级面板：格式组（标题 / 列表 / 分割线）+ 记号组（引用 / 代码块 / 行内代码 / 链接）+ 操作组（粘贴）。
              记号四件走 insertText 逃生舱（editor 的 link 属性丢 URL、code 属性 no-op）。 -->
-        <view v-if="panelOpen" class="panel">
+        <view v-if="open" class="panel">
             <!-- 折叠头：点标题行收起（与常驻行的「⋯」同一动作）。标题用中文常量而非按钮名，
                  与下方「操作」组同一口径 —— 面板标题不是格式按钮。 -->
             <view class="panel-head" @click="onTogglePanel">
@@ -55,7 +58,6 @@
 </template>
 
 <script setup lang="uts">
-    import { ref } from 'vue'
     import { PASTE_LABEL } from '../utils/forumPaste'
     import { richPanelGroups, richPrimaryActions } from '../utils/forumWysiwygInput'
     import type { RichAction, RichPanelGroup } from '../utils/forumWysiwygInput'
@@ -66,8 +68,11 @@
     const props = withDefaults(defineProps<{
         /** 点亮集合（**一律由输入区从 getContents 的 delta 推导**后传进来；工具条不自己判事实） */
         activeIds?: string[]
+        /** 二级面板是否展开（**受控**：#2962 由输入区持有 —— 它同时是「工具态」的开关） */
+        open?: boolean
     }>(), {
         activeIds: () => [] as string[],
+        open: false,
     })
 
     /**
@@ -79,12 +84,13 @@
         (e: 'paste'): void
         /** 工具条被按下（touchstart）：输入区据此区分「点键」与「粘贴被丢弃」（#2709） */
         (e: 'press'): void
+        /** 面板开合请求（受控组件不自己翻状态，#2962）：输入区据此进出「工具态」 */
+        (e: 'toggle', open: boolean): void
     }>()
 
     /** 按钮集是数据、不是模板硬编码：常驻四键与面板两组都取自 utils/forumWysiwygInput 的唯一实现。 */
     const primaryActions : RichAction[] = richPrimaryActions()
     const panelGroups : RichPanelGroup[] = richPanelGroups()
-    const panelOpen = ref<boolean>(false)
 
     function isActive(id : string) : boolean {
         return props.activeIds.indexOf(id) >= 0
@@ -103,7 +109,8 @@
     }
 
     function onTogglePanel() : void {
-        panelOpen.value = !panelOpen.value
+        // 不自己翻状态：面板开合要连带「只读保活 / 收键盘 / 选区快照」，只有输入区能做（#2962）
+        emit('toggle', !props.open)
     }
 </script>
 

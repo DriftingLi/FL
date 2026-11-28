@@ -339,6 +339,10 @@ const MODULES = {
       // 动作一律 emit 回去；只被上面那个输入组件消费，家与理由同上。
       'components/forum-wysiwyg-image-area.uvue',
       'composables/useForumImagePicker.uts',
+      // 'composables/useWysiwygToolState.uts' —— #2962：工具态状态机（面板开合 / 只读保活 / 选区闸门）
+      // 从输入区拆出（输入区撞上 600 预算，同 #2658 / #2689 按 ADR-0023 ③「拆而不覆盖」处理）。
+      // 只被 components/forum-wysiwyg-input.uvue 消费：依赖由宿主注入，家与理由同上。
+      'composables/useWysiwygToolState.uts',
       'composables/useReplyComposer.uts',
       'composables/useReport.uts',
       'composables/useResourcePoints.uts',
