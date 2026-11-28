@@ -4912,6 +4912,9 @@ definitions:
     type: object
   valuation.ConversationOperation:
     properties:
+      base_version:
+        type: integer
+        x-optional: true
       created_at:
         type: string
       draft_id:
@@ -4933,8 +4936,14 @@ definitions:
         x-nullable: true
       id:
         type: string
+      kind:
+        type: string
       operation_id:
         type: string
+      result:
+        allOf:
+        - $ref: '#/definitions/valuation.ValuationSuggestionResult'
+        x-optional: true
       status:
         type: string
       updated_at:
@@ -5492,6 +5501,15 @@ definitions:
           type: string
         type: array
     type: object
+  valuation.SuggestDraftRequest:
+    properties:
+      base_version:
+        type: integer
+      operation_id:
+        type: string
+      text:
+        type: string
+    type: object
   valuation.Tonnage:
     properties:
       id:
@@ -5685,6 +5703,25 @@ definitions:
         type: string
       version:
         type: integer
+    type: object
+  valuation.ValuationSuggestionResult:
+    properties:
+      draft_version:
+        type: integer
+      patches:
+        additionalProperties:
+          $ref: '#/definitions/valuation.DraftField'
+        type: object
+      questions:
+        items:
+          type: string
+        type: array
+      schema_version:
+        type: integer
+      supplements:
+        additionalProperties:
+          type: string
+        type: object
     type: object
   valuation.VehicleType:
     properties:
@@ -21614,6 +21651,59 @@ paths:
           schema:
             $ref: '#/definitions/response.R'
       summary: 修改估值草稿
+      tags:
+      - 估值-对话
+  /valuation/conversation/drafts/{id}/suggestions:
+    post:
+      consumes:
+      - application/json
+      description: 按 base_version 受理一次结构化模型建议；同键同负载恢复、不同负载 409。模型结果仅预填可靠唯一值，多候选与冲突留给用户，晚响应判
+        stale。匿名与登录共享草稿 8 次实际调用上限，另有可信 IP 与全站预算。
+      parameters:
+      - description: 草稿能力 ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: 操作标识、基准版本与待整理资料
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/valuation.SuggestDraftRequest'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: 已受理
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/valuation.ConversationOperation'
+              type: object
+        "400":
+          description: 参数错误或 IP 不可解析
+          schema:
+            $ref: '#/definitions/response.R'
+        "404":
+          description: 草稿不存在或已过期
+          schema:
+            $ref: '#/definitions/response.R'
+        "409":
+          description: 版本冲突或幂等负载冲突
+          schema:
+            $ref: '#/definitions/response.R'
+        "429":
+          description: 草稿、IP 或全站预算耗尽
+          schema:
+            $ref: '#/definitions/response.R'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 异步生成估值草稿建议
       tags:
       - 估值-对话
   /valuation/conversation/drafts/{id}/undo:

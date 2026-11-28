@@ -2,6 +2,7 @@ package valuation
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -32,7 +33,7 @@ func NewOperationRepository(pool *pgxpool.Pool) OperationRepository {
 }
 
 const operationColumns = `operation_key, request_hash, draft_id, draft_version,
-	first_accepted_user_id, evaluation_id, status, error_code, created_at, updated_at`
+	first_accepted_user_id, evaluation_id, status, error_code, operation_kind, result_json, created_at, updated_at`
 
 func (r *operationRepository) GetOperation(ctx context.Context, operationID string) (*ConversationOperation, error) {
 	row := r.pool.QueryRow(ctx, `SELECT `+operationColumns+` FROM valuation_operations WHERE operation_key = $1`, operationID)
@@ -113,16 +114,29 @@ func scanOperation(row pgx.Row) (*ConversationOperation, error) {
 	var userID *int
 	var evaluationID *int64
 	var errorCode *string
+	var operationKind string
+	var resultJSON []byte
 	var createdAt, updatedAt time.Time
 	if err := row.Scan(&operation.OperationID, &operation.RequestHash, &operation.DraftID, &operation.DraftVersion,
-		&userID, &evaluationID, &operation.Status, &errorCode, &createdAt, &updatedAt); err != nil {
+		&userID, &evaluationID, &operation.Status, &errorCode, &operationKind, &resultJSON, &createdAt, &updatedAt); err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, ErrOperationNotFound
 		}
 		return nil, fmt.Errorf("scan valuation operation: %w", err)
 	}
 	operation.ID = operation.OperationID
+	operation.Kind = operationKind
 	operation.FirstAcceptedUserID = userID
+	if operationKind == ConversationOperationKindSuggestion {
+		operation.BaseVersion = operation.DraftVersion
+	}
+	if len(resultJSON) > 0 {
+		var result ValuationSuggestionResult
+		if err := json.Unmarshal(resultJSON, &result); err != nil {
+			return nil, fmt.Errorf("decode valuation suggestion result: %w", err)
+		}
+		operation.Result = &result
+	}
 	if evaluationID != nil {
 		operation.EvaluationID = *evaluationID
 	}

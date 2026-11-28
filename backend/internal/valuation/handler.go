@@ -20,6 +20,7 @@
 //	  ├── PATCH /conversation/drafts/:id 修改草稿
 //	  ├── DELETE /conversation/drafts/:id 删除草稿
 //	  ├── POST /conversation/drafts/:id/undo 撤回最近一次修改
+//	  ├── POST /conversation/drafts/:id/suggestions 异步生成草稿建议
 //	  ├── POST /conversation/operations 确认草稿并创建正式评估
 //	  └── GET  /conversation/operations/:id 读取操作与正式结果
 //
@@ -143,6 +144,7 @@ func RegisterRoutes(
 			optional.PATCH("/conversation/drafts/:id", conversation.PatchDraft)
 			optional.DELETE("/conversation/drafts/:id", conversation.DeleteDraft)
 			optional.POST("/conversation/drafts/:id/undo", conversation.UndoDraft)
+			optional.POST("/conversation/drafts/:id/suggestions", conversation.SuggestDraft)
 			optional.POST("/conversation/operations", conversation.CreateOperation)
 			optional.GET("/conversation/operations/:id", conversation.GetOperation)
 		}

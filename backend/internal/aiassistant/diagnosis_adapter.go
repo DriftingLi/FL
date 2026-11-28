@@ -134,6 +134,10 @@ func (a *diagnosisAssistantAdapter) Complete(_ string, _ []*schema.Message, _ Co
 	return "", errors.New("智能维修诊断不支持阻塞补全")
 }
 
+func (a *diagnosisAssistantAdapter) CompleteStructured(context.Context, string, []*schema.Message, string, StructuredCompleteOptions) (string, error) {
+	return "", errors.New("智能维修诊断不支持结构化补全")
+}
+
 // Stream 调 v2 SSE：delta 经 sink.OnChunk 透传（只为观感），done 的 answer 为权威全文并跑
 // 归一链，badges/elapsed 经 sink.OnMeta 产出，status 经 sink.OnStatus 产出。
 func (a *diagnosisAssistantAdapter) Stream(ctx context.Context, _ ModelSelector, msgs []*schema.Message, sink StreamSink) (string, *Usage, error) {
@@ -614,6 +618,13 @@ func (r *routingAIModel) Complete(featureKey string, msgs []*schema.Message, opt
 		return r.diagnosis.Complete(featureKey, msgs, opts)
 	}
 	return r.normal.Complete(featureKey, msgs, opts)
+}
+
+func (r *routingAIModel) CompleteStructured(ctx context.Context, featureKey string, msgs []*schema.Message, schemaJSON string, opts StructuredCompleteOptions) (string, error) {
+	if aiFeatureAdapterOf(featureKey) == aiAdapterDiagnosis {
+		return r.diagnosis.CompleteStructured(ctx, featureKey, msgs, schemaJSON, opts)
+	}
+	return r.normal.CompleteStructured(ctx, featureKey, msgs, schemaJSON, opts)
 }
 
 // Stream 按注册表 adapter 分发：diagnosis 走外部诊断 RAG，其余走 eino（含未注册键回退路径）。

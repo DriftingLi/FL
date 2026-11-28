@@ -24,6 +24,7 @@ type ConversationService struct {
 	operations  OperationRepository
 	valuation   *Service
 	evaluations EvaluationStore
+	suggestions *suggestionRunner
 	now         func() time.Time
 }
 

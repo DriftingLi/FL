@@ -25,6 +25,7 @@ func TestAIFeatureRegistry_DerivedSurfaces(t *testing.T) {
 		FeatureExerciseSolving,
 		FeatureFaultDiagnosis,
 		FeatureMarketSampleExtract,
+		FeatureValuationDraftSuggest,
 	}
 	if !reflect.DeepEqual(AllAIFeatures, wantAll) {
 		t.Fatalf("AllAIFeatures 派生不符（含展示顺序）:\n got=%v\nwant=%v", AllAIFeatures, wantAll)
@@ -41,6 +42,7 @@ func TestAIFeatureRegistry_DerivedSurfaces(t *testing.T) {
 		FeatureExerciseSolving:        "习题解答",
 		FeatureFaultDiagnosis:         "智能维修诊断",
 		FeatureMarketSampleExtract:    "市场样本抽取",  // #2673 非对话批处理
+		FeatureValuationDraftSuggest:  "估值草稿建议",  // #2955 显式免费
 		FeatureAIAssistant:            "AI 助手对话", // 遗留兼容
 	}
 	if !reflect.DeepEqual(FeatureLabel, wantLabel) {
@@ -67,6 +69,7 @@ func TestAIFeatureRegistry_DerivedSurfaces(t *testing.T) {
 		FeatureGradeShortAnswer:       gradingSystemPrompt,
 		FeatureGenerateChapterContent: chapterContentSystemPrompt,
 		FeatureQuestionExplanation:    questionExplainSystemPrompt,
+		FeatureValuationDraftSuggest:  valuationDraftSuggestSystemPrompt,
 	}
 	for key, want := range wantPrompt {
 		if got := featureSystemPrompt(key); got != want {
@@ -105,7 +108,7 @@ func TestAIFeatureRegistry_BilledConsistency(t *testing.T) {
 		}
 	}
 	slices.Sort(billedFalse)
-	wantFreeList := []string{FeatureQuestionExplanation, FeatureGenerateChapterContent, FeatureGradeShortAnswer, FeatureMarketSampleExtract}
+	wantFreeList := []string{FeatureQuestionExplanation, FeatureGenerateChapterContent, FeatureGradeShortAnswer, FeatureMarketSampleExtract, FeatureValuationDraftSuggest}
 	if !reflect.DeepEqual(billedFalse, wantFreeList) {
 		t.Fatalf("billed=false 集合与免费清单不符: got=%v want=%v", billedFalse, wantFreeList)
 	}

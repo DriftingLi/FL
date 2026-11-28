@@ -8,6 +8,7 @@ import (
 
 	"forklift-training/internal/middleware"
 	"forklift-training/pkg/httpx"
+	"forklift-training/pkg/response"
 )
 
 type ConversationHandler struct {
@@ -30,6 +31,10 @@ var conversationErrStatus = &httpx.ErrStatusTable{Entries: []httpx.ErrStatusEntr
 	{Sentinel: ErrOperationDraftMismatch, Status: http.StatusConflict},
 	{Sentinel: ErrEvaluationRejected, Status: http.StatusBadRequest},
 	{Sentinel: ErrInvalidOperation, Status: http.StatusBadRequest},
+	{Sentinel: ErrInvalidClientIP, Status: http.StatusBadRequest},
+	{Sentinel: ErrSuggestionValidation, Status: http.StatusBadRequest},
+	{Sentinel: ErrSuggestionQuotaExceeded, Status: http.StatusTooManyRequests},
+	{Sentinel: ErrSuggestionUnavailable, Status: http.StatusInternalServerError},
 }}
 
 type draftPathRequest struct {
@@ -204,11 +209,56 @@ type operationPathRequest struct {
 }
 
 func parseOperationPath(c *gin.Context) (*operationPathRequest, error) {
-	id, err := normalizeOperationID(c.Param("id"))
+	id, err := normalizeConversationOperationKey(c.Param("id"))
 	if err != nil {
 		return nil, httpx.BadRequest("操作 ID 非法")
 	}
 	return &operationPathRequest{ID: id}, nil
+}
+
+type draftSuggestionPathRequest struct {
+	ID string `json:"-"`
+	SuggestDraftRequest
+}
+
+func parseDraftSuggestion(c *gin.Context) (*draftSuggestionPathRequest, error) {
+	path, err := parseDraftPath(c)
+	if err != nil {
+		return nil, err
+	}
+	req := &draftSuggestionPathRequest{ID: path.ID}
+	if err := c.ShouldBindJSON(&req.SuggestDraftRequest); err != nil {
+		return nil, httpx.BadRequest("请求参数错误")
+	}
+	return req, nil
+}
+
+// SuggestDraft 处理 POST /api/valuation/conversation/drafts/:id/suggestions。
+// @Summary 异步生成估值草稿建议
+// @Description 按 base_version 受理一次结构化模型建议；同键同负载恢复、不同负载 409。模型结果仅预填可靠唯一值，多候选与冲突留给用户，晚响应判 stale。匿名与登录共享草稿 8 次实际调用上限，另有可信 IP 与全站预算。
+// @Tags 估值-对话
+// @Accept json
+// @Produce json
+// @Param id path string true "草稿能力 ID"
+// @Param body body SuggestDraftRequest true "操作标识、基准版本与待整理资料"
+// @Success 202 {object} response.R{data=ConversationOperation} "已受理"
+// @Failure 400 {object} response.R "参数错误或 IP 不可解析"
+// @Failure 404 {object} response.R "草稿不存在或已过期"
+// @Failure 409 {object} response.R "版本冲突或幂等负载冲突"
+// @Failure 429 {object} response.R "草稿、IP 或全站预算耗尽"
+// @Failure 500 {object} response.R "服务器内部错误"
+// @Router /valuation/conversation/drafts/{id}/suggestions [post]
+func (h *ConversationHandler) SuggestDraft(c *gin.Context) {
+	httpx.Endpoint[draftSuggestionPathRequest, ConversationOperation]{
+		Parse: parseDraftSuggestion,
+		Invoke: func(ctx context.Context, req *draftSuggestionPathRequest) (*ConversationOperation, error) {
+			return h.svc.RequestSuggestions(ctx, req.ID, &req.SuggestDraftRequest, middleware.CurrentUserID(c), middleware.ClientIP(c))
+		},
+		Render: func(c *gin.Context, _ *draftSuggestionPathRequest, operation *ConversationOperation) {
+			c.JSON(http.StatusAccepted, response.R{Code: http.StatusAccepted, Message: "accepted", Data: operation})
+		},
+		ErrStatus: conversationErrStatus,
+	}.Handle(c)
 }
 
 // CreateOperation 处理 POST /api/valuation/conversation/operations。
