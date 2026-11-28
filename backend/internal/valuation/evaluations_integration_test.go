@@ -25,6 +25,7 @@ func TestEvaluationsRepository_LockedSuggestionsMapping(t *testing.T) {
 		OriginalPaint: true, Province: "安徽省", City: "合肥市",
 		HasLicensePlate: true, HasRegistrationCertificate: true, HasMaintenanceRecords: true,
 		ConditionRating: "A",
+		FormulaVersion:  FormulaVersionV2,
 		OriginalPrice:   100000, KTime: 0.5, KHours: 1.0, KBrand: 1.1, KCondition: 1.04, KMarket: 1.0,
 		EstimatedValue: 52000, ConfidenceLow: 46800, ConfidenceHigh: 57200,
 		UserID: 0,
@@ -49,8 +50,34 @@ func TestEvaluationsRepository_LockedSuggestionsMapping(t *testing.T) {
 	if detail.LambdaElectric != 0.12 || detail.LambdaCombustion != 0.10 {
 		t.Errorf("λ 映射错误: electric=%v combustion=%v", detail.LambdaElectric, detail.LambdaCombustion)
 	}
+	if detail.FormulaVersion != FormulaVersionV2 {
+		t.Errorf("公式版本映射错误: %q", detail.FormulaVersion)
+	}
 	if detail.EstimatedValue != 52000 || detail.KTime != 0.5 {
 		t.Errorf("既有字段映射回归: %+v", detail)
+	}
+}
+
+func TestEvaluationsRepository_MissingFormulaVersionIsLegacy(t *testing.T) {
+	pool := integrationPool(t)
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx, `TRUNCATE evaluations RESTART IDENTITY CASCADE`); err != nil {
+		t.Fatal(err)
+	}
+	repo := NewEvaluationRepository(pool)
+	id, err := repo.CreateEvaluation(ctx, testEvalParams())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE evaluations SET formula_version = NULL WHERE id = $1`, id); err != nil {
+		t.Fatal(err)
+	}
+	detail, err := repo.GetEvaluation(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if detail.FormulaVersion != FormulaVersionLegacy {
+		t.Fatalf("缺少版本应映射为旧版, got %q", detail.FormulaVersion)
 	}
 }
 
@@ -64,6 +91,7 @@ func testEvalParams() *CreateEvaluationParams {
 		OriginalPaint: true, Province: "安徽省", City: "合肥市",
 		HasLicensePlate: true, HasRegistrationCertificate: true, HasMaintenanceRecords: true,
 		ConditionRating: "A",
+		FormulaVersion:  FormulaVersionV2,
 		OriginalPrice:   100000, KTime: 0.5, KHours: 1.0, KBrand: 1.1, KCondition: 1.04, KMarket: 1.0,
 		EstimatedValue: 52000, ConfidenceLow: 46800, ConfidenceHigh: 57200,
 		UserID:           0,

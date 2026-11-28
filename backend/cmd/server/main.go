@@ -24,9 +24,11 @@ import (
 	"syscall"
 	"time"
 
+	"forklift-training/internal/aiassistant"
 	"forklift-training/internal/api"
 	"forklift-training/internal/audit"
 	"forklift-training/internal/auth"
+	"forklift-training/internal/clock"
 	"forklift-training/internal/config"
 	"forklift-training/internal/db"
 	"forklift-training/internal/geolocation"
@@ -169,7 +171,7 @@ func main() {
 			Account: res.Account, Username: res.Username, Role: res.Role,
 		}, nil
 	}
-	cleanup := setupValuation(router, cfg, deps.AuthSvc, deps.Session, vpool, st, logger, deps.AuditSvc, valuationLogin)
+	cleanup := setupValuation(router, cfg, deps.AuthSvc, deps.Session, vpool, st, logger, deps.AuditSvc, valuationLogin, deps.AIModelPort)
 	defer cleanup()
 
 	// 8. 启动 HTTP 服务
@@ -222,7 +224,7 @@ func createValuationPool(cfg *config.Config, logger *zap.Logger) (*pgxpool.Pool,
 // 返回 cleanup 函数用于释放 pgx 连接池（pool 由调用方创建并共用）。
 //
 //nolint:gocritic
-func setupValuation(r *gin.Engine, cfg *config.Config, authSvc valuation.ValuationAuth, sess *security.Session, pool *pgxpool.Pool, st storage.Storage, logger *zap.Logger, auditSvc *audit.Service, login valuation.ValuationLoginFunc) func() {
+func setupValuation(r *gin.Engine, cfg *config.Config, authSvc valuation.ValuationAuth, sess *security.Session, pool *pgxpool.Pool, st storage.Storage, logger *zap.Logger, auditSvc *audit.Service, login valuation.ValuationLoginFunc, model aiassistant.ModelPort) func() {
 	// 1. 装配数据访问层（手写 pgx 仓储）
 	dictRepo := valuation.NewDictionaryRepository(pool)
 	evalRepo := valuation.NewEvaluationRepository(pool)
@@ -243,7 +245,23 @@ func setupValuation(r *gin.Engine, cfg *config.Config, authSvc valuation.Valuati
 	// 认证经 ValuationAuth 窄接口注入主体系 AuthService（spec #75 D4）
 	// PDF 报告通过 storage 抽象层上传（local=本地磁盘 / r2=Cloudflare R2 对象存储）
 	// Session 单例：与主体系共用同一实例（装配一次，B2 D4；现由 NewDeps 创建）
-	valuation.RegisterRoutes(r, sess, logger, auditSvc, dictRepo, evalRepo, batteryRepo, valuationSvc, batterySvc, pdfGen, st, authSvc, login)
+	conversationSvc := valuation.NewConversationService(valuation.NewDraftRepository(pool), valuation.NewOperationRepository(pool), valuationSvc, evalRepo, clock.Now)
+	conversationSvc.EnableSuggestions(model, valuation.NewSuggestionRepository(pool), valuation.SuggestionConfig{
+		IPLimit: cfg.Valuation.SuggestionIPLimit, IPWindow: time.Duration(cfg.Valuation.SuggestionIPWindowSeconds) * time.Second,
+		GlobalLimit: cfg.Valuation.SuggestionGlobalLimit, GlobalWindow: time.Duration(cfg.Valuation.SuggestionGlobalWindowSeconds) * time.Second,
+		Timeout: time.Duration(cfg.Valuation.SuggestionTimeoutSeconds) * time.Second, HMACKey: cfg.SecretKey,
+	}, logger)
+	trialReader := valuation.NewPostgresTrialSnapshotReader(pool)
+	conversationSvc.EnableExplanations(model, valuation.NewExplanationRepository(pool), valuation.SuggestionConfig{
+		IPLimit: cfg.Valuation.SuggestionIPLimit, IPWindow: time.Duration(cfg.Valuation.SuggestionIPWindowSeconds) * time.Second,
+		GlobalLimit: cfg.Valuation.SuggestionGlobalLimit, GlobalWindow: time.Duration(cfg.Valuation.SuggestionGlobalWindowSeconds) * time.Second,
+		Timeout: time.Duration(cfg.Valuation.SuggestionTimeoutSeconds) * time.Second, HMACKey: cfg.SecretKey,
+	}, logger)
+	conversationSvc.SetTrialCardReader(trialReader)
+	valuation.RegisterRoutes(r, sess, logger, auditSvc, dictRepo, evalRepo, batteryRepo, valuationSvc, batterySvc, pdfGen, st, authSvc, login, conversationSvc)
+	trialStore := valuation.NewPostgresTrialAdminStore(pool)
+	valuation.RegisterTrialRoutes(r, trialReader, logger, cfg.AppEnv, trialStore)
+	valuation.RegisterTrialAdminRoutes(r.Group("/api"), sess, trialStore, logger, auditSvc)
 	logger.Info("valuation 路由注册完成", zap.String("prefix", "/api/valuation"))
 
 	return func() {

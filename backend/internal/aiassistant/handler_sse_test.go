@@ -25,6 +25,10 @@ func (p *ssePort) Complete(string, []*schema.Message, CompleteOptions) (string, 
 	return p.final, nil
 }
 
+func (p *ssePort) CompleteStructured(context.Context, string, []*schema.Message, string, StructuredCompleteOptions) (string, error) {
+	return p.final, nil
+}
+
 func (p *ssePort) Stream(_ context.Context, _ ModelSelector, _ []*schema.Message, sink StreamSink) (string, *Usage, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()

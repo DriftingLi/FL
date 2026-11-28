@@ -135,7 +135,11 @@ class DeployCliTopologyTest(unittest.TestCase):
                 ):
                     setattr(deployer, name, lambda *args, **kwargs: None)
                 deployer.plan_data = lambda: []
-                deployer.plan_app = lambda: []
+                # 有意给一个非 skip 决策：全 skip 且无迁移属于 #2958 的 no-op 路径，
+                # 本用例要锁的是「事务 verify 之后才发布快照」的顺序。
+                deployer.plan_app = lambda: [
+                    deploy_cli.Decision("backend", "recreate", "镜像变更", "b:sha-cli"),
+                ]
                 deployer.migration_needed = lambda image: False
                 deployer.preflight_migration_check = lambda image: True
                 events = []

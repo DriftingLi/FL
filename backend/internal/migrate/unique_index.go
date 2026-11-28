@@ -87,6 +87,16 @@ var criticalUniqueIndexes = []UniqueIndexSpec{
 		DDL: "CREATE UNIQUE INDEX uq_wrong_question_category ON wrong_question_category (wrong_question_id, category_id) WHERE category_id IS NOT NULL"},
 	{Name: "uq_wrong_question_unclassified", Table: "wrong_question_category", Migration: "000074_baseline.up.sql",
 		DDL: "CREATE UNIQUE INDEX uq_wrong_question_unclassified ON wrong_question_category (wrong_question_id) WHERE category_id IS NULL"},
+	{Name: "uq_valuation_operations_evaluation_id", Table: "valuation_operations", Migration: "000079_valuation_operations.up.sql",
+		DDL: "CREATE UNIQUE INDEX uq_valuation_operations_evaluation_id ON valuation_operations (evaluation_id) WHERE evaluation_id IS NOT NULL"},
+	{Name: "uq_valuation_trial_policy_combo", Table: "valuation_trial_policy", Migration: "000080_valuation_trial_policy.up.sql",
+		DDL: "CREATE UNIQUE INDEX uq_valuation_trial_policy_combo ON valuation_trial_policy (policy_name, brand, vehicle_type, tonnage)"},
+	{Name: "uq_valuation_suggestion_calls_operation_key", Table: "valuation_suggestion_calls", Migration: "000081_valuation_draft_suggestions.up.sql",
+		DDL: "CREATE UNIQUE INDEX uq_valuation_suggestion_calls_operation_key ON valuation_suggestion_calls (operation_key)"},
+	{Name: "uq_valuation_explanation_calls_operation_key", Table: "valuation_explanation_calls", Migration: "000082_valuation_explanations.up.sql",
+		DDL: "CREATE UNIQUE INDEX uq_valuation_explanation_calls_operation_key ON valuation_explanation_calls (operation_key)"},
+	{Name: "uq_valuation_trial_control_singleton", Table: "valuation_trial_control", Migration: "000083_valuation_trial_pilot.up.sql",
+		DDL: "CREATE UNIQUE INDEX uq_valuation_trial_control_singleton ON valuation_trial_control (id)"},
 }
 
 // CriticalUniqueIndexes 返回登记表副本（testutil 建库后补跑、check-columns 对账共用同一宿主）。

@@ -25347,6 +25347,528 @@
                 }
             }
         },
+        "/valuation/admin/trials/control": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "独立全局开关默认关闭；记录缺失或读取失败时按关闭处理。响应同时给出上线准备度（readiness），存在未批准项时开关不可开启。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "估值-管理"
+                ],
+                "summary": "读取试算全局开关",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/valuation.TrialControlResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "仅影响 trials，不影响草稿、建议、手动或正式评估；enabled 缺省为 false。上线准备度未通过时拒绝开启（409）。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "估值-管理"
+                ],
+                "summary": "更新试算全局开关",
+                "parameters": [
+                    {
+                        "description": "全局开关",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/valuation.TrialControlRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/valuation.TrialControlResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "409": {
+                        "description": "上线准备度未通过，开关不可开启",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/valuation/admin/trials/metrics": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "估值-管理"
+                ],
+                "summary": "查询试算观测指标",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "RFC3339 开始时间",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "RFC3339 结束时间",
+                        "name": "to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "策略名",
+                        "name": "policy_name",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "品牌",
+                        "name": "brand",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "车型",
+                        "name": "vehicle_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "number",
+                        "description": "吨位",
+                        "name": "tonnage",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "complete、masked 或 year_range",
+                        "name": "scenario",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "公式哈希",
+                        "name": "formula_hash",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "策略版本",
+                        "name": "policy_version",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "返回组数，1-1000，默认 200",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/valuation.TrialMetricsResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/valuation/admin/trials/metrics/export": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "估值-管理"
+                ],
+                "summary": "导出试算观测指标 JSON",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "RFC3339 开始时间",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "RFC3339 结束时间",
+                        "name": "to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "策略名",
+                        "name": "policy_name",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "品牌",
+                        "name": "brand",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "车型",
+                        "name": "vehicle_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "number",
+                        "description": "吨位",
+                        "name": "tonnage",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "complete、masked 或 year_range",
+                        "name": "scenario",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "公式哈希",
+                        "name": "formula_hash",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "策略版本",
+                        "name": "policy_version",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "返回组数，1-1000，默认 200",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "JSON 附件",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/valuation.TrialMetricSummary"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/valuation/admin/trials/policies": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "估值-管理"
+                ],
+                "summary": "查询试算获批策略",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "demo 或 pilot",
+                        "name": "policy_name",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "品牌",
+                        "name": "brand",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "车型",
+                        "name": "vehicle_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "number",
+                        "description": "吨位",
+                        "name": "tonnage",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/valuation.TrialPoliciesResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "空列表清空 allowlist；策略版本按替换内容重新计算并生成策略哈希。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "估值-管理"
+                ],
+                "summary": "全量更新试算获批策略",
+                "parameters": [
+                    {
+                        "description": "获批品牌×车型×吨位组合与情景",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/valuation.TrialPoliciesRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/valuation.TrialPoliciesResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/valuation/admin/vehicle-types": {
             "post": {
                 "security": [
@@ -26014,6 +26536,633 @@
                     },
                     "404": {
                         "description": "电池评估记录不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/valuation/conversation/drafts": {
+            "post": {
+                "description": "创建 30 分钟闲置过期的匿名可用草稿；value 状态保留真实 0/false 与来源依据。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "估值-对话"
+                ],
+                "summary": "创建估值草稿",
+                "parameters": [
+                    {
+                        "description": "初始字段与补充资料",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/valuation.CreateDraftRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/valuation.ValuationDraft"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/valuation/conversation/drafts/{id}": {
+            "get": {
+                "description": "按随机能力 ID 读取未过期草稿；读取不延长闲置有效期。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "估值-对话"
+                ],
+                "summary": "读取估值草稿",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "草稿能力 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/valuation.ValuationDraft"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "草稿不存在或已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "主动清除草稿；重复删除保持幂等。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "估值-对话"
+                ],
+                "summary": "删除估值草稿",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "草稿能力 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "success"
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "description": "按 base_version 执行 CAS；过期版本返回 409。成功修改生成新版本并刷新闲置 TTL。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "估值-对话"
+                ],
+                "summary": "修改估值草稿",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "草稿能力 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "基准版本与字段变更",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/valuation.PatchDraftRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/valuation.ValuationDraft"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "草稿不存在或已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "409": {
+                        "description": "版本冲突或草稿不可编辑",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/valuation/conversation/drafts/{id}/suggestions": {
+            "post": {
+                "description": "按 base_version 受理一次结构化模型建议；同键同负载恢复、不同负载 409。模型结果仅预填可靠唯一值，多候选与冲突留给用户，晚响应判 stale。匿名与登录共享草稿 8 次实际调用上限，另有可信 IP 与全站预算。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "估值-对话"
+                ],
+                "summary": "异步生成估值草稿建议",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "草稿能力 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "操作标识、基准版本与待整理资料",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/valuation.SuggestDraftRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/valuation.ConversationOperation"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "202": {
+                        "description": "已受理",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/valuation.ConversationOperation"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误或 IP 不可解析",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "草稿不存在或已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "409": {
+                        "description": "版本冲突或幂等负载冲突",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "429": {
+                        "description": "草稿、IP 或全站预算耗尽",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/valuation/conversation/drafts/{id}/undo": {
+            "post": {
+                "description": "恢复上一版字段与依据，生成新版本并回到 editing；仅支持一级撤回。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "估值-对话"
+                ],
+                "summary": "撤回最近一次草稿修改",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "草稿能力 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "可选基准版本；省略时使用当前版本",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/valuation.DraftUndoRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/valuation.ValuationDraft"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "草稿不存在或已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "409": {
+                        "description": "版本冲突或无可撤回修改",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/valuation/conversation/explanations": {
+            "post": {
+                "description": "仅允许草稿能力 ID、匿名正式 operation 或登录 owner、试算 request/snapshot 能力对。模型只选模板键与证据 ID，事实由原快照回填；草稿卡携带 snapshot 时按卡内锁定事实解释，当前草稿已变更也不返回 409，未携带快照才要求 draft_version 与当前草稿一致。工时反事实返回 recalculate，由用户触发重算。建议与解释共享草稿/IP/全站额度。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "估值-对话"
+                ],
+                "summary": "异步解释估值卡片",
+                "parameters": [
+                    {
+                        "description": "操作标识、卡片版本、原卡片（草稿可附字段快照）与问题",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/valuation.ExplainCardRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/valuation.ConversationOperation"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "202": {
+                        "description": "已受理",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/valuation.ConversationOperation"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "卡片不存在或无权访问",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "409": {
+                        "description": "未携带快照的旧卡与当前草稿版本不一致，或幂等负载冲突",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "429": {
+                        "description": "共享额度耗尽",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "解释暂不可用或已关停",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/valuation/conversation/operations": {
+            "post": {
+                "description": "仅接受已核对的完整草稿版本；operation 与 evaluation 同事务。同键同哈希重试返回首次结果，同键不同哈希返回 409。匿名首次受理的归属不因之后登录而改变。操作去重凭据随正式评估持久保留，不适用草稿的 30 分钟闲置 TTL。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "估值-对话"
+                ],
+                "summary": "确认草稿并创建正式评估",
+                "parameters": [
+                    {
+                        "description": "操作标识、草稿版本与正式评估请求",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/valuation.ConversationOperationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/valuation.ConversationOperation"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "草稿不存在或已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "409": {
+                        "description": "草稿不完整、版本冲突或请求哈希冲突",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/valuation/conversation/operations/{id}": {
+            "get": {
+                "description": "按操作能力 ID 返回首次受理状态与正式评估结果。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "估值-对话"
+                ],
+                "summary": "读取估值操作",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "操作能力 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/valuation.ConversationOperation"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "操作不存在",
                         "schema": {
                             "$ref": "#/definitions/response.R"
                         }
@@ -27535,6 +28684,70 @@
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/valuation/trials": {
+            "post": {
+                "description": "使用同一冻结目录、系数快照与 V2 公式计算参考区间。全局开关默认关闭，仅显式 demo/pilot 且组合已配置时可用；不写 evaluations、不生成报告。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "估值-评估"
+                ],
+                "summary": "参考试算",
+                "parameters": [
+                    {
+                        "description": "参考试算请求",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/valuation.TrialRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/valuation.TrialResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "参考试算未开放；data 仍带 reason_code、missing_fields 与 next_action",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
                         }
                     }
                 }
@@ -34976,25 +36189,29 @@
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/valuation.Brand"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "coefficients": {
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/valuation.CoefficientConfig"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "condition_ratings": {
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/valuation.ConditionRating"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "region_coefficients": {
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/valuation.RegionCoefficient"
-                    }
+                    },
+                    "x-nullable": true
                 }
             }
         },
@@ -35181,6 +36398,101 @@
                 }
             }
         },
+        "valuation.ConversationOperation": {
+            "type": "object",
+            "properties": {
+                "base_version": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "card_key": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "card_kind": {
+                    "description": "CardKind / CardKey 记录解释操作引用的卡片：draft 卡为草稿 ID（旧卡为 草稿 ID@版本），\nformal 卡为正式 operation ID，trial 卡为试算 request ID。",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "draft_id": {
+                    "type": "string"
+                },
+                "draft_version": {
+                    "type": "integer"
+                },
+                "error_code": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "evaluation": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/valuation.EvaluationDetail"
+                        }
+                    ],
+                    "x-optional": true
+                },
+                "evaluation_id": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "explanation": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/valuation.ValuationExplanationResult"
+                        }
+                    ],
+                    "x-optional": true
+                },
+                "first_accepted_user_id": {
+                    "type": "integer",
+                    "x-nullable": true
+                },
+                "id": {
+                    "type": "string"
+                },
+                "kind": {
+                    "type": "string"
+                },
+                "operation_id": {
+                    "type": "string"
+                },
+                "result": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/valuation.ValuationSuggestionResult"
+                        }
+                    ],
+                    "x-optional": true
+                },
+                "status": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "valuation.ConversationOperationRequest": {
+            "type": "object",
+            "properties": {
+                "draft_id": {
+                    "type": "string"
+                },
+                "draft_version": {
+                    "type": "integer"
+                },
+                "operation_id": {
+                    "type": "string"
+                },
+                "request": {
+                    "$ref": "#/definitions/valuation.EvaluationRequest"
+                }
+            }
+        },
         "valuation.CreateBatteryRequest": {
             "type": "object",
             "required": [
@@ -35244,6 +36556,21 @@
                     "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "valuation.CreateDraftRequest": {
+            "type": "object",
+            "properties": {
+                "fields": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/valuation.DraftField"
+                    }
+                },
+                "supplemental": {
+                    "type": "object",
+                    "additionalProperties": {}
                 }
             }
         },
@@ -35319,6 +36646,96 @@
                 }
             }
         },
+        "valuation.DraftCandidate": {
+            "type": "object",
+            "properties": {
+                "evidence": {
+                    "x-optional": true
+                },
+                "id": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "label": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "source": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "value": {}
+            }
+        },
+        "valuation.DraftField": {
+            "type": "object",
+            "properties": {
+                "candidates": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/valuation.DraftCandidate"
+                    },
+                    "x-optional": true
+                },
+                "evidence": {
+                    "x-optional": true
+                },
+                "range": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/valuation.DraftRange"
+                        }
+                    ],
+                    "x-optional": true
+                },
+                "source": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "state": {
+                    "$ref": "#/definitions/valuation.DraftFieldState"
+                },
+                "value": {
+                    "x-optional": true
+                }
+            }
+        },
+        "valuation.DraftFieldState": {
+            "type": "string",
+            "enum": [
+                "missing",
+                "unknown",
+                "value",
+                "range",
+                "candidate"
+            ],
+            "x-enum-varnames": [
+                "DraftFieldMissing",
+                "DraftFieldUnknown",
+                "DraftFieldValue",
+                "DraftFieldRange",
+                "DraftFieldCandidate"
+            ]
+        },
+        "valuation.DraftRange": {
+            "type": "object",
+            "properties": {
+                "max": {
+                    "type": "number"
+                },
+                "min": {
+                    "type": "number"
+                }
+            }
+        },
+        "valuation.DraftUndoRequest": {
+            "type": "object",
+            "properties": {
+                "base_version": {
+                    "type": "integer"
+                }
+            }
+        },
         "valuation.EngineType": {
             "type": "object",
             "properties": {
@@ -35371,6 +36788,10 @@
                 "factory_year": {
                     "type": "integer"
                 },
+                "formula_version": {
+                    "description": "结果字段",
+                    "type": "string"
+                },
                 "has_license_plate": {
                     "type": "boolean"
                 },
@@ -35418,7 +36839,6 @@
                     "type": "boolean"
                 },
                 "original_price": {
-                    "description": "结果字段",
                     "type": "number"
                 },
                 "province": {
@@ -35580,6 +37000,10 @@
                 "factory_year": {
                     "type": "integer"
                 },
+                "formula_version": {
+                    "description": "计算结果",
+                    "type": "string"
+                },
                 "has_license_plate": {
                     "type": "boolean"
                 },
@@ -35627,7 +37051,6 @@
                     "type": "boolean"
                 },
                 "original_price": {
-                    "description": "计算结果",
                     "type": "number"
                 },
                 "province": {
@@ -35654,6 +37077,77 @@
                 "vehicle_type": {
                     "type": "string"
                 }
+            }
+        },
+        "valuation.ExplainCardRequest": {
+            "type": "object",
+            "properties": {
+                "card": {
+                    "$ref": "#/definitions/valuation.ExplanationCard"
+                },
+                "draft_version": {
+                    "type": "integer"
+                },
+                "operation_id": {
+                    "type": "string"
+                },
+                "question": {
+                    "type": "string"
+                }
+            }
+        },
+        "valuation.ExplanationCard": {
+            "type": "object",
+            "properties": {
+                "draft_id": {
+                    "description": "DraftID 草稿能力 ID，仅 draft 卡使用。",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "evaluation_id": {
+                    "description": "EvaluationID 正式卡绑定的评估 ID，仅 formal 卡使用（登录 owner 可附带，用于确认卡片仍是同一评估）。",
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "kind": {
+                    "description": "Kind 只取 draft / formal / trial，决定下方引用字段与事实来源。",
+                    "type": "string"
+                },
+                "operation_id": {
+                    "description": "OperationID 正式卡的创建 operation ID，仅 formal 卡使用。",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "request_id": {
+                    "description": "RequestID 试算请求 ID，仅 trial 卡使用。",
+                    "type": "string",
+                    "x-optional": true
+                },
+                "snapshot": {
+                    "description": "Snapshot 草稿卡锁定的字段事实（键与 ValuationDraft.Fields 相同），仅 draft 卡使用。\n携带时按快照解释、不再读取当前草稿，因此已纠错的旧草稿卡仍可解释；未携带时要求 draft_version 与当前草稿一致。",
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/valuation.DraftField"
+                    },
+                    "x-optional": true
+                },
+                "snapshot_id": {
+                    "description": "SnapshotID 试算快照哈希（完整值或 7 位短哈希），仅 trial 卡使用。",
+                    "type": "string",
+                    "x-optional": true
+                }
+            }
+        },
+        "valuation.ExplanationFact": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "value": {}
             }
         },
         "valuation.FeatureImportance": {
@@ -35751,6 +37245,24 @@
                 }
             }
         },
+        "valuation.PatchDraftRequest": {
+            "type": "object",
+            "properties": {
+                "base_version": {
+                    "type": "integer"
+                },
+                "fields": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/valuation.DraftField"
+                    }
+                },
+                "supplemental": {
+                    "type": "object",
+                    "additionalProperties": {}
+                }
+            }
+        },
         "valuation.RawStats": {
             "type": "object",
             "properties": {
@@ -35828,19 +37340,36 @@
                     "type": "array",
                     "items": {
                         "type": "string"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "engine": {
                     "type": "array",
                     "items": {
                         "type": "string"
-                    }
+                    },
+                    "x-nullable": true
                 },
                 "transmission": {
                     "type": "array",
                     "items": {
                         "type": "string"
-                    }
+                    },
+                    "x-nullable": true
+                }
+            }
+        },
+        "valuation.SuggestDraftRequest": {
+            "type": "object",
+            "properties": {
+                "base_version": {
+                    "type": "integer"
+                },
+                "operation_id": {
+                    "type": "string"
+                },
+                "text": {
+                    "type": "string"
                 }
             }
         },
@@ -35863,6 +37392,634 @@
                 },
                 "name": {
                     "type": "string"
+                }
+            }
+        },
+        "valuation.TrialCandidate": {
+            "type": "object",
+            "properties": {
+                "brand": {
+                    "type": "string"
+                },
+                "config_type": {
+                    "type": "string"
+                },
+                "earliest_factory_year": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "mast_height_mm": {
+                    "type": "integer"
+                },
+                "mast_type": {
+                    "type": "string"
+                },
+                "original_price": {
+                    "type": "number"
+                },
+                "series": {
+                    "type": "string"
+                },
+                "tonnage": {
+                    "type": "number"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "vehicle_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "valuation.TrialControlRequest": {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "valuation.TrialControlResponse": {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
+                },
+                "readiness": {
+                    "$ref": "#/definitions/valuation.TrialReadiness"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
+        "valuation.TrialInterval": {
+            "type": "object",
+            "properties": {
+                "max": {
+                    "type": "number"
+                },
+                "mid": {
+                    "type": "number"
+                },
+                "min": {
+                    "type": "number"
+                },
+                "width": {
+                    "type": "number"
+                },
+                "width_ratio": {
+                    "type": "number"
+                }
+            }
+        },
+        "valuation.TrialMetricSummary": {
+            "type": "object",
+            "properties": {
+                "brand": {
+                    "type": "string"
+                },
+                "completion_tokens": {
+                    "type": "integer"
+                },
+                "cost_micros": {
+                    "type": "integer"
+                },
+                "covered": {
+                    "type": "integer"
+                },
+                "denominator": {
+                    "type": "integer"
+                },
+                "duration_sum_ms": {
+                    "type": "integer"
+                },
+                "follow_up_count": {
+                    "type": "integer"
+                },
+                "formula_hash": {
+                    "type": "string"
+                },
+                "formula_version": {
+                    "type": "string"
+                },
+                "policy_name": {
+                    "type": "string"
+                },
+                "policy_version": {
+                    "type": "string"
+                },
+                "priced": {
+                    "type": "integer"
+                },
+                "prompt_tokens": {
+                    "type": "integer"
+                },
+                "scenario": {
+                    "type": "string"
+                },
+                "tonnage": {
+                    "type": "number"
+                },
+                "too_wide": {
+                    "type": "integer"
+                },
+                "unpriced_reasons": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                },
+                "vehicle_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "valuation.TrialMetricsResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/valuation.TrialMetricSummary"
+                    }
+                }
+            }
+        },
+        "valuation.TrialPoliciesRequest": {
+            "type": "object",
+            "properties": {
+                "policies": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/valuation.TrialPolicyInput"
+                    }
+                }
+            }
+        },
+        "valuation.TrialPoliciesResponse": {
+            "type": "object",
+            "properties": {
+                "policies": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/valuation.TrialPolicy"
+                    }
+                }
+            }
+        },
+        "valuation.TrialPolicy": {
+            "type": "object",
+            "properties": {
+                "brand": {
+                    "type": "string"
+                },
+                "condition_ratings": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "has_license_plate_values": {
+                    "type": "array",
+                    "items": {
+                        "type": "boolean"
+                    }
+                },
+                "has_maintenance_records_values": {
+                    "type": "array",
+                    "items": {
+                        "type": "boolean"
+                    }
+                },
+                "has_registration_certificate_values": {
+                    "type": "array",
+                    "items": {
+                        "type": "boolean"
+                    }
+                },
+                "id": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "max_width_ratio": {
+                    "type": "number"
+                },
+                "original_paint_values": {
+                    "type": "array",
+                    "items": {
+                        "type": "boolean"
+                    }
+                },
+                "policy_name": {
+                    "type": "string"
+                },
+                "tonnage": {
+                    "type": "number"
+                },
+                "usage_hour_ratios": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
+                "vehicle_type": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
+        "valuation.TrialPolicyInput": {
+            "type": "object",
+            "required": [
+                "brand",
+                "condition_ratings",
+                "has_license_plate_values",
+                "has_maintenance_records_values",
+                "has_registration_certificate_values",
+                "max_width_ratio",
+                "original_paint_values",
+                "policy_name",
+                "tonnage",
+                "usage_hour_ratios",
+                "vehicle_type"
+            ],
+            "properties": {
+                "brand": {
+                    "type": "string"
+                },
+                "condition_ratings": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "has_license_plate_values": {
+                    "type": "array",
+                    "items": {
+                        "type": "boolean"
+                    }
+                },
+                "has_maintenance_records_values": {
+                    "type": "array",
+                    "items": {
+                        "type": "boolean"
+                    }
+                },
+                "has_registration_certificate_values": {
+                    "type": "array",
+                    "items": {
+                        "type": "boolean"
+                    }
+                },
+                "max_width_ratio": {
+                    "type": "number"
+                },
+                "original_paint_values": {
+                    "type": "array",
+                    "items": {
+                        "type": "boolean"
+                    }
+                },
+                "policy_name": {
+                    "type": "string"
+                },
+                "tonnage": {
+                    "type": "number"
+                },
+                "usage_hour_ratios": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
+                "vehicle_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "valuation.TrialReadiness": {
+            "type": "object",
+            "properties": {
+                "blockers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/valuation.TrialReadinessBlocker"
+                    }
+                },
+                "ready": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "valuation.TrialReadinessBlocker": {
+            "type": "object",
+            "properties": {
+                "approved": {
+                    "type": "boolean"
+                },
+                "detail": {
+                    "type": "string"
+                },
+                "evidence": {
+                    "type": "string"
+                },
+                "key": {
+                    "type": "string"
+                }
+            }
+        },
+        "valuation.TrialRequest": {
+            "type": "object",
+            "properties": {
+                "brand": {
+                    "type": "string"
+                },
+                "city": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "condition_rating": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "config_type": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "factory_year": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "factory_year_max": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "factory_year_min": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "has_license_plate": {
+                    "type": "boolean",
+                    "x-optional": true
+                },
+                "has_maintenance_records": {
+                    "type": "boolean",
+                    "x-optional": true
+                },
+                "has_registration_certificate": {
+                    "type": "boolean",
+                    "x-optional": true
+                },
+                "mast_height_mm": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "mast_type": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "original_paint": {
+                    "type": "boolean",
+                    "x-optional": true
+                },
+                "policy": {
+                    "type": "string"
+                },
+                "province": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "request_id": {
+                    "type": "string"
+                },
+                "sale_year": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "series": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "snapshot_id": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "tonnage": {
+                    "type": "number"
+                },
+                "usage_hours": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "vehicle_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "valuation.TrialResponse": {
+            "type": "object",
+            "properties": {
+                "assumptions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "candidates": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/valuation.TrialCandidate"
+                    }
+                },
+                "input": {
+                    "$ref": "#/definitions/valuation.TrialRequest"
+                },
+                "interval": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/valuation.TrialInterval"
+                        }
+                    ],
+                    "x-optional": true
+                },
+                "message": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "missing_fields": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "next_action": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "reason_code": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "request_id": {
+                    "type": "string"
+                },
+                "snapshot": {
+                    "$ref": "#/definitions/valuation.TrialSnapshotMeta"
+                },
+                "snapshot_id": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "status": {
+                    "type": "string"
+                },
+                "width_ratio": {
+                    "type": "number",
+                    "x-optional": true
+                }
+            }
+        },
+        "valuation.TrialSnapshotMeta": {
+            "type": "object",
+            "properties": {
+                "formula_hash": {
+                    "type": "string"
+                },
+                "formula_version": {
+                    "type": "string"
+                },
+                "hash": {
+                    "type": "string"
+                },
+                "policy": {
+                    "type": "string"
+                },
+                "policy_version": {
+                    "type": "string"
+                },
+                "sha7": {
+                    "type": "string"
+                }
+            }
+        },
+        "valuation.ValuationDraft": {
+            "type": "object",
+            "properties": {
+                "can_submit": {
+                    "type": "boolean"
+                },
+                "can_undo": {
+                    "type": "boolean"
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "fields": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/valuation.DraftField"
+                    }
+                },
+                "id": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "supplemental": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
+        "valuation.ValuationExplanationResult": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string"
+                },
+                "card_version": {
+                    "type": "integer"
+                },
+                "evidence_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "facts": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/valuation.ExplanationFact"
+                    }
+                },
+                "formula_version": {
+                    "type": "string"
+                },
+                "requires_user_action": {
+                    "type": "boolean"
+                },
+                "schema_version": {
+                    "type": "integer"
+                },
+                "snapshot_id": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "template": {
+                    "type": "string"
+                },
+                "template_key": {
+                    "type": "string"
+                }
+            }
+        },
+        "valuation.ValuationSuggestionResult": {
+            "type": "object",
+            "properties": {
+                "draft_version": {
+                    "type": "integer"
+                },
+                "patches": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/valuation.DraftField"
+                    }
+                },
+                "questions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "schema_version": {
+                    "type": "integer"
+                },
+                "supplements": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
                 }
             }
         },

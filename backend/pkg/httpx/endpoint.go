@@ -132,6 +132,8 @@ func renderStatus(c *gin.Context, status int, msg string) {
 		response.NotFound(c, msg)
 	case http.StatusConflict:
 		response.Conflict(c, msg)
+	case http.StatusTooManyRequests:
+		response.TooManyRequests(c, msg)
 	case http.StatusCreated:
 		response.Created(c, msg, nil)
 	default:

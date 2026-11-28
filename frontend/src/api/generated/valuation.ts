@@ -30,13 +30,29 @@
 //   POST /valuation/battery/evaluations/{id}/report
 //   GET  /valuation/battery/evaluations/{id}/report
 //   POST /valuation/auth/logout
+//   POST /valuation/trials
 //   POST /valuation/evaluations
 //   POST /valuation/battery/evaluations
+//   POST /valuation/conversation/drafts
+//   GET  /valuation/conversation/drafts/{id}
+//   PATCH /valuation/conversation/drafts/{id}
+//   DELETE /valuation/conversation/drafts/{id}
+//   POST /valuation/conversation/drafts/{id}/undo
+//   POST /valuation/conversation/drafts/{id}/suggestions
+//   POST /valuation/conversation/operations
+//   GET  /valuation/conversation/operations/{id}
+//   POST /valuation/conversation/explanations
 //   GET  /valuation/evaluations
 //   GET  /valuation/evaluations/{id}
 //   GET  /valuation/battery/evaluations
 //   GET  /valuation/battery/evaluations/{id}
 //   GET  /valuation/auth/me
+//   GET  /valuation/admin/trials/control
+//   PUT  /valuation/admin/trials/control
+//   GET  /valuation/admin/trials/policies
+//   PUT  /valuation/admin/trials/policies
+//   GET  /valuation/admin/trials/metrics
+//   GET  /valuation/admin/trials/metrics/export
 //   POST /valuation/admin/original-prices
 //   PUT  /valuation/admin/original-prices/{id}
 //   DELETE /valuation/admin/original-prices/{id}
@@ -69,7 +85,7 @@
 //   DELETE /valuation/admin/condition-ratings/{id}
 //   DELETE /valuation/admin/region-coefficients/{id}
 //
-// 覆盖的 Go 类型：AlgorithmParameters / BatteryEvaluation / BatteryEvaluationSummary / BatteryType / BatteryTypeDict / Brand / CoefficientConfig / ConditionRating / ConfigOption / CreateBatteryResponse / CycleFeature / DimensionScore / EngineType / EvaluationDetail / EvaluationResponse / FeatureImportance / ListBatteryResponse / MastHeight / MastType / OriginalPrice / RawStats / RegionCoefficient / Series / SeriesConfigOptions / Tonnage / TransmissionType / VehicleType
+// 覆盖的 Go 类型：AlgorithmParameters / BatteryEvaluation / BatteryEvaluationSummary / BatteryType / BatteryTypeDict / Brand / CoefficientConfig / ConditionRating / ConfigOption / ConversationOperation / CreateBatteryResponse / CycleFeature / DimensionScore / DraftCandidate / DraftField / DraftFieldState / DraftRange / EngineType / EvaluationDetail / EvaluationResponse / ExplanationFact / FeatureImportance / ListBatteryResponse / MastHeight / MastType / OriginalPrice / RawStats / RegionCoefficient / Series / SeriesConfigOptions / Tonnage / TransmissionType / TrialCandidate / TrialControlResponse / TrialInterval / TrialMetricSummary / TrialMetricsResponse / TrialPoliciesResponse / TrialPolicy / TrialReadiness / TrialReadinessBlocker / TrialRequest / TrialResponse / TrialSnapshotMeta / ValuationDraft / ValuationExplanationResult / ValuationSuggestionResult / VehicleType
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -82,10 +98,10 @@
 // 需要更精确的形状时先在注解层补齐（先例见 spec #940 片五②的差集清单）。
 
 export interface AlgorithmParameters {
-  brands: Brand[]
-  coefficients: CoefficientConfig[]
-  condition_ratings: ConditionRating[]
-  region_coefficients: RegionCoefficient[]
+  brands: Brand[] | null
+  coefficients: CoefficientConfig[] | null
+  condition_ratings: ConditionRating[] | null
+  region_coefficients: RegionCoefficient[] | null
 }
 
 export interface BatteryEvaluation {
@@ -151,6 +167,26 @@ export interface ConfigOption {
   name: string
 }
 
+export interface ConversationOperation {
+  base_version?: number
+  card_key?: string
+  card_kind?: string
+  created_at: string
+  draft_id: string
+  draft_version: number
+  error_code?: string
+  evaluation?: EvaluationDetail
+  evaluation_id?: number
+  explanation?: ValuationExplanationResult
+  first_accepted_user_id: number | null
+  id: string
+  kind: string
+  operation_id: string
+  result?: ValuationSuggestionResult
+  status: string
+  updated_at: string
+}
+
 export interface CreateBatteryResponse {
   battery_type: BatteryType
   confidence: number
@@ -178,6 +214,30 @@ export interface DimensionScore {
   value: number
 }
 
+export interface DraftCandidate {
+  evidence?: unknown
+  id?: string
+  label?: string
+  source?: string
+  value: unknown
+}
+
+export interface DraftField {
+  candidates?: DraftCandidate[]
+  evidence?: unknown
+  range?: DraftRange
+  source?: string
+  state: DraftFieldState
+  value?: unknown
+}
+
+export type DraftFieldState = 'missing' | 'unknown' | 'value' | 'range' | 'candidate'
+
+export interface DraftRange {
+  max: number
+  min: number
+}
+
 export interface EngineType {
   id: number
   name: string
@@ -195,6 +255,7 @@ export interface EvaluationDetail {
   dimension_scores: DimensionScore[]
   estimated_value: number
   factory_year: number
+  formula_version: string
   has_license_plate: boolean
   has_maintenance_records: boolean
   has_registration_certificate: boolean
@@ -233,6 +294,7 @@ export interface EvaluationResponse {
   dimension_scores: DimensionScore[]
   estimated_value: number
   factory_year: number
+  formula_version: string
   has_license_plate: boolean
   has_maintenance_records: boolean
   has_registration_certificate: boolean
@@ -256,6 +318,12 @@ export interface EvaluationResponse {
   tonnage: number
   usage_hours: number
   vehicle_type: string
+}
+
+export interface ExplanationFact {
+  id: string
+  label: string
+  value: unknown
 }
 
 export interface FeatureImportance {
@@ -322,9 +390,9 @@ export interface Series {
 }
 
 export interface SeriesConfigOptions {
-  battery: string[]
-  engine: string[]
-  transmission: string[]
+  battery: string[] | null
+  engine: string[] | null
+  transmission: string[] | null
 }
 
 export interface Tonnage {
@@ -335,6 +403,176 @@ export interface Tonnage {
 export interface TransmissionType {
   id: number
   name: string
+}
+
+export interface TrialCandidate {
+  brand: string
+  config_type: string
+  earliest_factory_year: number
+  id: number
+  mast_height_mm: number
+  mast_type: string
+  original_price: number
+  series: string
+  tonnage: number
+  updated_at: string
+  vehicle_type: string
+}
+
+export interface TrialControlResponse {
+  enabled: boolean
+  readiness: TrialReadiness
+  updated_at: string
+  version: number
+}
+
+export interface TrialInterval {
+  max: number
+  mid: number
+  min: number
+  width: number
+  width_ratio: number
+}
+
+export interface TrialMetricSummary {
+  brand: string
+  completion_tokens: number
+  cost_micros: number
+  covered: number
+  denominator: number
+  duration_sum_ms: number
+  follow_up_count: number
+  formula_hash: string
+  formula_version: string
+  policy_name: string
+  policy_version: string
+  priced: number
+  prompt_tokens: number
+  scenario: string
+  tonnage: number
+  too_wide: number
+  unpriced_reasons: Record<string, number>
+  vehicle_type: string
+}
+
+export interface TrialMetricsResponse {
+  items: TrialMetricSummary[]
+}
+
+export interface TrialPoliciesResponse {
+  policies: TrialPolicy[]
+}
+
+export interface TrialPolicy {
+  brand: string
+  condition_ratings: string[]
+  enabled: boolean
+  has_license_plate_values: boolean[]
+  has_maintenance_records_values: boolean[]
+  has_registration_certificate_values: boolean[]
+  id?: number
+  max_width_ratio: number
+  original_paint_values: boolean[]
+  policy_name: string
+  tonnage: number
+  usage_hour_ratios: number[]
+  vehicle_type: string
+  version: number
+}
+
+export interface TrialReadiness {
+  blockers: TrialReadinessBlocker[]
+  ready: boolean
+}
+
+export interface TrialReadinessBlocker {
+  approved: boolean
+  detail: string
+  evidence: string
+  key: string
+}
+
+export interface TrialRequest {
+  brand: string
+  city?: string
+  condition_rating?: string
+  config_type?: string
+  factory_year?: number
+  factory_year_max?: number
+  factory_year_min?: number
+  has_license_plate?: boolean
+  has_maintenance_records?: boolean
+  has_registration_certificate?: boolean
+  mast_height_mm?: number
+  mast_type?: string
+  original_paint?: boolean
+  policy: string
+  province?: string
+  request_id: string
+  sale_year?: number
+  series?: string
+  snapshot_id?: string
+  tonnage: number
+  usage_hours?: number
+  vehicle_type: string
+}
+
+export interface TrialResponse {
+  assumptions: string[]
+  candidates: TrialCandidate[]
+  input: TrialRequest
+  interval?: TrialInterval
+  message?: string
+  missing_fields: string[]
+  next_action?: string
+  reason_code?: string
+  request_id: string
+  snapshot: TrialSnapshotMeta
+  snapshot_id?: string
+  status: string
+  width_ratio?: number
+}
+
+export interface TrialSnapshotMeta {
+  formula_hash: string
+  formula_version: string
+  hash: string
+  policy: string
+  policy_version: string
+  sha7: string
+}
+
+export interface ValuationDraft {
+  can_submit: boolean
+  can_undo: boolean
+  expires_at: string
+  fields: Record<string, DraftField>
+  id: string
+  status: string
+  supplemental: Record<string, unknown>
+  updated_at: string
+  version: number
+}
+
+export interface ValuationExplanationResult {
+  action: string
+  card_version: number
+  evidence_ids: string[]
+  facts: ExplanationFact[]
+  formula_version: string
+  requires_user_action: boolean
+  schema_version: number
+  snapshot_id?: string
+  template: string
+  template_key: string
+}
+
+export interface ValuationSuggestionResult {
+  draft_version: number
+  patches: Record<string, DraftField>
+  questions: string[]
+  schema_version: number
+  supplements: Record<string, string>
 }
 
 export interface VehicleType {

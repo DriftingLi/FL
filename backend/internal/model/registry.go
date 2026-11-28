@@ -116,6 +116,15 @@ var ModelBlocks = []ModelBlock{
 		},
 	},
 	{
+		Name: "残值评估",
+		Models: []any{
+			&ValuationOperation{},
+			&ValuationSuggestionCall{},
+			&ValuationSuggestionBudget{},
+			&ValuationExplanationCall{},
+		},
+	},
+	{
 		Name: "AI",
 		Models: []any{
 			&AIConfig{},
@@ -156,6 +165,15 @@ var ModelBlocks = []ModelBlock{
 			&UserContributionFile{},
 			&ContributionDownload{},
 			&ContributionReport{},
+		},
+	},
+	{
+		Name: "残值评估",
+		Models: []any{
+			&ValuationTrialPolicy{},
+			&ValuationTrialSnapshot{},
+			&ValuationTrialControl{},
+			&ValuationTrialMetric{},
 		},
 	},
 	{
