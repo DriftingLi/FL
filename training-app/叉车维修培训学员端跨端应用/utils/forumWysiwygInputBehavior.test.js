@@ -293,3 +293,45 @@ describe('成对取证：判据有牙', () => {
         expect(bad.richFidelityNotice(['image-dropped'])).toBe('');
     });
 });
+
+// ===== ⑤ 工具态内的选区闸门（#2962，父规格 #2961 拍板规则 5）=====
+
+describe('工具态内的选区闸门：选区不可用就取消，绝不静默改错段', () => {
+    it('打开工具时没有选区 → 不拦（无选区语义照常走）', () => {
+        const m = mod();
+        expect(m.shouldCancelToolAction('', '')).toBe(false);
+        expect(m.shouldCancelToolAction('', '别处的字')).toBe(false);
+    });
+
+    it('快照有选区、当前选区一致 → 执行', () => {
+        const m = mod();
+        expect(m.shouldCancelToolAction('加粗测', '加粗测')).toBe(false);
+    });
+
+    it('快照有选区、当前选区空了 → 取消（选区没冻住）', () => {
+        const m = mod();
+        expect(m.shouldCancelToolAction('加粗测', '')).toBe(true);
+    });
+
+    it('快照有选区、当前选区换成另一段 → 取消（不能把格式落到别处）', () => {
+        const m = mod();
+        expect(m.shouldCancelToolAction('加粗测', '另一段')).toBe(true);
+    });
+
+    it('取消提示是可见文案，且不叫「已生效」', () => {
+        const m = mod();
+        expect(m.RICH_SELECTION_LOST_NOTICE.length).toBeGreaterThan(0);
+        expect(m.RICH_SELECTION_LOST_NOTICE).toContain('取消');
+    });
+
+    it('成对取证：闸门恒 false → 必红（选区丢了照样改正文）', () => {
+        const bad = loadMutated([['    return currentText != snapshotText', '    return false']]);
+        // 真源判 true（见上一条），变异体不再取消 ⇒ 这一对断言有牙
+        expect(bad.shouldCancelToolAction('加粗测', '')).toBe(false);
+    });
+
+    it('成对取证：只判空、不判内容变化 → 必红（格式落到另一段）', () => {
+        const bad = loadMutated([['    return currentText != snapshotText', '    return currentText.length == 0']]);
+        expect(bad.shouldCancelToolAction('加粗测', '另一段')).toBe(false);
+    });
+});

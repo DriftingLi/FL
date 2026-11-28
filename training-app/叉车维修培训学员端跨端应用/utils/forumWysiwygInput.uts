@@ -51,6 +51,12 @@ export const RICH_GLYPH_STYLE_PLAIN = 'plain'
 /** 正文图片被丢弃时的**持续可见**提示（R3：非一闪而过的 toast） */
 export const RICH_IMAGE_NOTICE = '正文图片已忽略，请用下方＋添加'
 
+/**
+ * 工具态（面板展开期）内**选区不可用**时的提示（#2962 拍板规则 5）。
+ * 提示必须持续可见、且与「这次操作被取消」绑定 —— 不能让作者以为格式已经生效。
+ */
+export const RICH_SELECTION_LOST_NOTICE = '选区未保留，已取消这次操作'
+
 export type RichAction = {
     id : string,
     label : string,
@@ -257,4 +263,20 @@ export function richFidelityNotice(issues : string[]) : string {
     if (styles.length > 0) parts.push(styles.join('、') + '已降级为纯文本')
     if (hasImage) parts.push(RICH_IMAGE_NOTICE)
     return parts.join('；')
+}
+
+/**
+ * 工具态内一次动作的**执行前闸门**（#2962 交付二，父规格 #2961 拍板规则 5）。
+ *
+ * 第一性原理：平台只有 `getSelectionText`（回文本、无偏移），没有 `setSelection` —— 不可能把选区
+ * 「恢复」回去。于是选区的唯一保障是**它自始至终没丢**：工具态内保持只读、不开键盘。
+ * 但「没丢」是假设不是事实，故每次执行前**现场核对**：
+ *   · 打开工具时本就没有选区（快照为空）⇒ 不拦，动作按「无选区」语义走（如插入模板）；
+ *   · 快照有选区而当前选区已变（空，或另一段文字）⇒ 取消、正文不动、提示作者。
+ * 为什么不「尽量应用到当前选区」：那会把作者针对 A 段的格式悄悄落到 B 段，属于「选区丢失导致正文
+ * 被错误修改」—— 票面判据明令禁止，宁可不做。
+ */
+export function shouldCancelToolAction(snapshotText : string, currentText : string) : boolean {
+    if (snapshotText.length == 0) return false
+    return currentText != snapshotText
 }

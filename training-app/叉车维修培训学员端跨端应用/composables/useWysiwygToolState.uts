@@ -1,0 +1,203 @@
+/**
+ * 论坛 WYSIWYG 输入区的「工具态」与动作分发（#2962，父规格 #2961）。
+ *
+ * 为什么单独成件：输入区撞上 600 行预算（ADR-0023 ③「拆而不覆盖」，同 #2658 工具条 / #2689 图片区的处理），
+ * 而工具态的判据恰恰是这几十行里最密的一段 —— 拆出来既降行数，也让「面板开合 → 只读保活 → 动作落地」
+ * 这条链只有一个事实源。输入区只负责接线：编辑器上下文、只读位、提示位、刷新回调都由它注入。
+ *
+ * 平台约束（决定了本件只能这么写）：uni-app x 的 EditorContext 只有 getSelectionText（回文本、无偏移），
+ * **没有** setSelection / 选区区间读写 ⇒ 选区不可能被「恢复」，只能被**冻住**：工具态期间保持只读、收掉键盘，
+ * 编辑器原地不动、选区自然还在。这也是 #2962 实测（微信开发者工具：收键盘 + 静置 5s 后格式仍落原选区）取到的形态。
+ */
+import { ref } from 'vue'
+import type { Ref } from 'vue'
+import { buildMarker, settleMarkerInsert } from '../utils/forumDeltaMarkdown'
+import {
+    RICH_KIND_DIVIDER,
+    RICH_KIND_MARKER,
+    RICH_SELECTION_LOST_NOTICE,
+    richActionById,
+    shouldCancelToolAction,
+} from '../utils/forumWysiwygInput'
+import type { RichAction } from '../utils/forumWysiwygInput'
+
+/** 输入区注入的依赖（本件不持编辑器、不持只读位 —— 那些是输入区的状态）。 */
+export type WysiwygToolDeps = {
+    /** 当前编辑器上下文（未 ready 时为 null） */
+    getContext : () => EditorContext | null
+    /** 最近一次 getContents 的 delta（记号动作要在「写之前」的文档上收敛） */
+    getLastDelta : () => string
+    /** 输入区的只读位（工具态保活就是靠它） */
+    setReadOnly : (value : boolean) => void
+    isReadOnly : () => boolean
+    /** 输入区提示带（选区丢失的提示落这里） */
+    setHint : (text : string) => void
+    /** 输入区的唯一刷新点（getContents → 序列化 → 点亮） */
+    refresh : () => void
+}
+
+export type WysiwygToolState = {
+    /** 工具态开关：面板展开期为 true，是「只读保活」的唯一权威（取代旧的 800ms 定时窗口） */
+    toolOpen : Ref<boolean>
+    onToggle : (open : boolean) => void
+    onEditorTouchStart : () => void
+    onActionTap : (id : string) => void
+    applyAction : (action : RichAction) => void
+}
+
+export function useWysiwygToolState(deps : WysiwygToolDeps) : WysiwygToolState {
+    const toolOpen = ref<boolean>(false)
+    /**
+     * 进入工具态那一刻的选区文本。平台没有 setSelection，故这里存的是**核对用的凭据**：
+     * 执行动作前拿当前选区跟它比，不一致就取消（见 shouldCancelToolAction）。
+     */
+    let selectionSnapshot : string = ''
+
+    function enterToolState() : void {
+        toolOpen.value = true
+        deps.setReadOnly(true)
+        selectionSnapshot = ''
+        const ctx = deps.getContext()
+        if (ctx != null) {
+            // 次序不能反：**先记选区，再收键盘**（父规格 #2961 的拍板顺序）。收键盘会引起失焦，之后未必还读得到。
+            ctx.getSelectionText({
+                success: (res) => { selectionSnapshot = res.text },
+                fail: () => { selectionSnapshot = '' }
+            })
+        }
+        uni.hideKeyboard()
+    }
+
+    function leaveToolState() : void {
+        toolOpen.value = false
+        selectionSnapshot = ''
+        // 放开只读但**不**主动唤键盘：回到输入态后由作者点编辑区按常规聚焦
+        // （父规格：只有点编辑区回键盘态；收起面板本身不弹键盘）。
+        deps.setReadOnly(false)
+    }
+
+    function applyAction(action : RichAction) : void {
+        const ctx = deps.getContext()
+        if (ctx == null) return
+        if (action.kind == RICH_KIND_DIVIDER) {
+            ctx.insertDivider({
+                success: () => { deps.refresh() }
+            })
+            return
+        }
+        if (action.kind == RICH_KIND_MARKER) {
+            // 记号逃生舱：有选区包裹选区、无选区插可替换模板；一律 insertText，不经 editor 的 link/code 属性。
+            // 写之前先把文档快照下来 —— 收敛要靠它反推落点（insertText 不删选区，见 settleMarkerInsert）。
+            const preDelta = deps.getLastDelta()
+            ctx.getSelectionText({
+                success: (res) => {
+                    const selected = res.text
+                    const text = buildMarker(action.id, selected)
+                    if (text.length == 0) return
+                    ctx.insertText({
+                        text: text,
+                        success: () => { settleMarkerInsert(ctx, preDelta, selected, text, deps.refresh) }
+                    })
+                }
+            })
+            return
+        }
+        // format(name, null) 是切换语义（对已应用样式的选区设置会取消样式）
+        ctx.format(action.formatName, action.formatValue)
+        setTimeout(() => { deps.refresh() }, 0)
+    }
+
+    /**
+     * 工具态内执行一次动作。两道闸：
+     *   ① **选区核对**：快照非空而当前选区已变（空了 / 换成另一段）⇒ 取消、正文一字不动、提示作者。
+     *      这是票面「任何选区丢失都不能导致正文被错误修改」的落点 —— 宁可不做，也不把针对 A 段的
+     *      格式悄悄落到 B 段；
+     *   ② **只读放开一拍**：format / insertText 在只读下可能被吞，故执行前放开、执行后立刻收回。
+     *      键盘已收起，这一拍不足以丢选区（保住选区靠的是「不收键盘 + 不长时间放开」）。
+     */
+    function runToolAction(action : RichAction) : void {
+        const ctx = deps.getContext()
+        if (ctx == null) return
+        const snapshot = selectionSnapshot
+        const proceed = () : void => {
+            deps.setReadOnly(false)
+            setTimeout(() => {
+                applyAction(action)
+                if (toolOpen.value) {
+                    setTimeout(() => { if (toolOpen.value) deps.setReadOnly(true) }, 0)
+                }
+            }, 0)
+        }
+        if (snapshot.length == 0) {
+            // 打开工具时本就没有选区：不拦 —— 按「无选区」语义走（记号类动作会插可替换模板）
+            proceed()
+            return
+        }
+        ctx.getSelectionText({
+            success: (res) => {
+                if (shouldCancelToolAction(snapshot, res.text)) {
+                    deps.setHint(RICH_SELECTION_LOST_NOTICE)
+                    return
+                }
+                proceed()
+            },
+            fail: () => {
+                // 读不到选区 = 无法确认落点 ⇒ 同样取消（票面「无法确认 → 取消」）
+                deps.setHint(RICH_SELECTION_LOST_NOTICE)
+            }
+        })
+    }
+
+    /**
+     * 面板开合 —— 「输入态 ⇄ 工具态」的唯一切换点。
+     *
+     * 为什么进工具态就收键盘并且一直保持只读：收起键盘后编辑器仍在原地、选区仍在，格式动作才落得准；
+     * 一旦定时放开只读，面板开着的时候选区就没了，而平台没有 setSelection，丢了再也「恢复」不回来。
+     */
+    function onToggle(open : boolean) : void {
+        if (open) {
+            enterToolState()
+            return
+        }
+        leaveToolState()
+    }
+
+    /**
+     * 点编辑区 = 退出工具态。handler 挂在编辑区外层，**touchstart** 早于这次点击的聚焦判定：
+     * 先把只读放开、面板收起，这一下点击才能让可编辑的 editor 聚焦、键盘弹起、光标留在原处。
+     * 平台无 focus() / setSelection，这是唯一能「一下点回键盘态」的时机。
+     * 退化安全：即便外层收不到 touchstart（编辑器吞事件），作者点「⋯」或面板折叠头也能收起工具，
+     * 那之后编辑器已可编辑，再点一下同样能聚焦 —— 只是要多一下。
+     */
+    function onEditorTouchStart() : void {
+        if (!toolOpen.value) return
+        leaveToolState()
+    }
+
+    function onActionTap(id : string) : void {
+        const action = richActionById(id)
+        if (action == null) return
+        if (toolOpen.value) {
+            runToolAction(action)
+            return
+        }
+        // 旧路径（非工具态的失焦保活窗口）：延一拍执行，执行完恢复可编辑（#2658 的绕行）
+        if (deps.isReadOnly()) {
+            setTimeout(() => {
+                applyAction(action)
+                deps.setReadOnly(false)
+            }, 0)
+            return
+        }
+        applyAction(action)
+    }
+
+    return {
+        toolOpen: toolOpen,
+        // Kotlin error17：return 里裸传函数引用会被判错，一律箭头包裹
+        onToggle: (open : boolean) : void => onToggle(open),
+        onEditorTouchStart: () : void => onEditorTouchStart(),
+        onActionTap: (id : string) : void => onActionTap(id),
+        applyAction: (action : RichAction) : void => applyAction(action),
+    }
+}

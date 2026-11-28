@@ -7,7 +7,10 @@
            · 保真提示 = 本组件把 issues 并进提示带（不是 toast）。
          图片只有下方单一 `＋` 入口：编辑器侧不提供插入入口，粘进正文的图片在序列化时丢弃并提示（R3）。 -->
     <view class="wysiwyg-input">
-        <view class="editor-box">
+        <!-- 工具态（面板展开）里点编辑区 = 回输入态（#2962 / 父规格 #2961）：touchstart 早于这次点击的
+             聚焦判定，先放开只读、收起面板，于是这一下点击本身就能聚焦、键盘弹起、光标落在原处。
+             平台没有 focus() 也没有 setSelection，这是唯一能「一下点回键盘态」的时机。 -->
+        <view class="editor-box" @touchstart="onEditorTouchStart">
             <!-- 重建（showEditor=false → true）只用于一条**显式**的恢复路径：粘贴写入失败且正文为空时
                  重建一次编辑器再写（#2658「失败后不可再聚焦」）。其余情况不重建 —— editor 的初始化
                  属性只在挂载时生效，把重建变成隐式副作用会丢正文。 -->
@@ -24,8 +27,8 @@
 
         <!-- 格式工具条（常驻四键 + 更多面板）拆成独立件：它只渲染并 emit 动作，
              怎么落地由本组件按 editorCtx 决定（#2658 拆分，行数预算 ADR-0023）。 -->
-        <ForumWysiwygToolbar :active-ids="activeIds" @action="onActionTap" @paste="onPasteTap"
-            @press="onToolbarPress" />
+        <ForumWysiwygToolbar :active-ids="activeIds" :open="toolOpen" @action="onActionTap"
+            @paste="onPasteTap" @press="onToolbarPress" @toggle="onToolbarToggle" />
 
         <!-- 图片区两态（#2689 决策 3）拆成独立展示件：本组件只把列表与计数递下去，动作原样 emit 回宿主。 -->
         <ForumWysiwygImageArea v-if="showImages" :preview-images="previewImages" :image-count="imageCount"
@@ -44,7 +47,8 @@
 
 <script setup lang="uts">
     import { ref, computed, getCurrentInstance, onUnmounted } from 'vue'
-    import { buildMarker, serializeDelta, settleMarkerInsert } from '../utils/forumDeltaMarkdown'
+    import { serializeDelta } from '../utils/forumDeltaMarkdown'
+    import { useWysiwygToolState } from '../composables/useWysiwygToolState'
     import { FORUM_MARKDOWN_BOUNDARY_NOTICE, FORUM_REGION_NOTICE } from '../utils/forumDisplay'
     import ForumWysiwygToolbar from './forum-wysiwyg-toolbar.uvue'
     import ForumWysiwygImageArea from './forum-wysiwyg-image-area.uvue'
@@ -59,14 +63,7 @@
         shouldClearPasteNotice,
         shouldOfferPasteHint,
     } from '../utils/forumPaste'
-    import {
-        RICH_KIND_DIVIDER,
-        RICH_KIND_MARKER,
-        richActionById,
-        richActiveFromDelta,
-        richFidelityNotice,
-    } from '../utils/forumWysiwygInput'
-    import type { RichAction } from '../utils/forumWysiwygInput'
+    import { richActiveFromDelta, richFidelityNotice } from '../utils/forumWysiwygInput'
 
     /** editor 的 id 与 createEditorContextAsync 的 id 必须同值；一页只挂一个本组件（发帖页 / 回复浮层各一页）。 */
     const EDITOR_ID : string = 'forum-wysiwyg-editor'
@@ -214,6 +211,21 @@
         })
     }
 
+    /**
+     * 工具态与动作分发（#2962）：实现落在 composables/useWysiwygToolState.uts（行数预算 + 单一事实源）。
+     * 本组件只注入依赖：编辑器上下文、只读位、提示位、刷新点，以及记号动作要用的 delta 快照。
+     */
+    const tool = useWysiwygToolState({
+        getContext: () : EditorContext | null => editorCtx,
+        getLastDelta: () : string => lastDeltaJson,
+        setReadOnly: (value : boolean) : void => { readOnly.value = value },
+        isReadOnly: () : boolean => readOnly.value,
+        setHint: (text : string) : void => { pasteHint.value = text },
+        refresh: () : void => { refreshFromEditor() },
+    })
+    /** 工具态开关（模板 v-if / :open 用）：面板开合的唯一权威，取代旧的 800ms 定时窗口 */
+    const toolOpen = tool.toolOpen
+
     /** 拿到 ctx 后把暂存串写进去（onEditorReady 的 success 回调里调用） */
     function ctx_insertMentionText(ctx : EditorContext, text : string) : void {
         ctx.insertText({
@@ -244,6 +256,10 @@
             setTimeout(() => {
                 readOnly.value = false
                 insertPastedText(text)
+                // 工具态内粘贴：写完立刻收回只读，否则「保持选区」会在这里被永久打破（#2962）
+                if (toolOpen.value) {
+                    setTimeout(() => { if (toolOpen.value) readOnly.value = true }, 0)
+                }
             }, 0)
             return
         }
@@ -369,7 +385,13 @@
      */
     function onEditorBlur() : void {
         readOnly.value = true
-        setTimeout(() => { readOnly.value = false }, READONLY_HOLD_MS)
+        // 工具态内**不**定时放开（#2962）：面板可能开很久，一放开设区就没了 —— 而平台没有 setSelection，
+        // 丢了就再也「恢复」不回来。只读只在三处被放开：点编辑区、收起面板、执行动作的那一拍。
+        if (!toolOpen.value) {
+            setTimeout(() => {
+                if (!toolOpen.value) readOnly.value = false
+            }, READONLY_HOLD_MS)
+        }
         // 等一拍再判：点工具条时 touchstart 可能晚于 blur（#2709），立刻判会把「点键」误当「粘贴被丢弃」
         setTimeout(() => { detectDroppedPaste() }, BLUR_SETTLE_MS)
     }
@@ -377,6 +399,15 @@
     /** 工具条按下（touchstart 早于 blur）：记下时刻，供失焦检测区分「点键」与「粘贴被丢弃」（#2709） */
     function onToolbarPress() : void {
         toolbarPressAt = Date.now()
+    }
+
+    /** 模板接线（实现在 composable）：面板开合、点编辑区回输入态、工具条动作分发 */
+    function onToolbarToggle(open : boolean) : void {
+        tool.onToggle(open)
+    }
+
+    function onEditorTouchStart() : void {
+        tool.onEditorTouchStart()
     }
 
     function onEditorInput(_event : UniEditorInputEvent) : void {
@@ -397,48 +428,9 @@
         refreshFromEditor()
     }
 
-    function applyAction(action : RichAction) : void {
-        const ctx = editorCtx
-        if (ctx == null) return
-        if (action.kind == RICH_KIND_DIVIDER) {
-            ctx.insertDivider({
-                success: () => { refreshFromEditor() }
-            })
-            return
-        }
-        if (action.kind == RICH_KIND_MARKER) {
-            // 记号逃生舱：有选区包裹选区、无选区插可替换模板；一律 insertText，不经 editor 的 link/code 属性。
-            // 写之前先把文档快照下来 —— 收敛要靠它反推落点（insertText 不删选区，见 settleMarkerInsert）。
-            const preDelta = lastDeltaJson
-            ctx.getSelectionText({
-                success: (res) => {
-                    const selected = res.text
-                    const text = buildMarker(action.id, selected)
-                    if (text.length == 0) return
-                    ctx.insertText({
-                        text: text,
-                        success: () => { settleMarkerInsert(ctx, preDelta, selected, text, refreshFromEditor) }
-                    })
-                }
-            })
-            return
-        }
-        // format(name, null) 是切换语义（对已应用样式的选区设置会取消样式）
-        ctx.format(action.formatName, action.formatValue)
-        setTimeout(() => { refreshFromEditor() }, 0)
-    }
-
+    /** 模板接线（实现在 composable）：工具态内走选区闸门，非工具态走旧的失焦保活绕行 */
     function onActionTap(id : string) : void {
-        const action = richActionById(id)
-        if (action == null) return
-        if (readOnly.value) {
-            setTimeout(() => {
-                applyAction(action)
-                readOnly.value = false
-            }, 0)
-            return
-        }
-        applyAction(action)
+        tool.onActionTap(id)
     }
 
     function onAddImage() : void {
