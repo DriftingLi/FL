@@ -26261,6 +26261,89 @@ const docTemplate = `{
                 }
             }
         },
+        "/valuation/conversation/drafts/{id}/suggestions": {
+            "post": {
+                "description": "按 base_version 受理一次结构化模型建议；同键同负载恢复、不同负载 409。模型结果仅预填可靠唯一值，多候选与冲突留给用户，晚响应判 stale。匿名与登录共享草稿 8 次实际调用上限，另有可信 IP 与全站预算。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "估值-对话"
+                ],
+                "summary": "异步生成估值草稿建议",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "草稿能力 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "操作标识、基准版本与待整理资料",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/valuation.SuggestDraftRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "已受理",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/valuation.ConversationOperation"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误或 IP 不可解析",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "404": {
+                        "description": "草稿不存在或已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "409": {
+                        "description": "版本冲突或幂等负载冲突",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "429": {
+                        "description": "草稿、IP 或全站预算耗尽",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/valuation/conversation/drafts/{id}/undo": {
             "post": {
                 "description": "恢复上一版字段与依据，生成新版本并回到 editing；仅支持一级撤回。",
@@ -35623,6 +35706,10 @@ const docTemplate = `{
         "valuation.ConversationOperation": {
             "type": "object",
             "properties": {
+                "base_version": {
+                    "type": "integer",
+                    "x-optional": true
+                },
                 "created_at": {
                     "type": "string"
                 },
@@ -35655,8 +35742,19 @@ const docTemplate = `{
                 "id": {
                     "type": "string"
                 },
+                "kind": {
+                    "type": "string"
+                },
                 "operation_id": {
                     "type": "string"
+                },
+                "result": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/valuation.ValuationSuggestionResult"
+                        }
+                    ],
+                    "x-optional": true
                 },
                 "status": {
                     "type": "string"
@@ -36475,6 +36573,20 @@ const docTemplate = `{
                 }
             }
         },
+        "valuation.SuggestDraftRequest": {
+            "type": "object",
+            "properties": {
+                "base_version": {
+                    "type": "integer"
+                },
+                "operation_id": {
+                    "type": "string"
+                },
+                "text": {
+                    "type": "string"
+                }
+            }
+        },
         "valuation.Tonnage": {
             "type": "object",
             "properties": {
@@ -36530,6 +36642,35 @@ const docTemplate = `{
                 },
                 "version": {
                     "type": "integer"
+                }
+            }
+        },
+        "valuation.ValuationSuggestionResult": {
+            "type": "object",
+            "properties": {
+                "draft_version": {
+                    "type": "integer"
+                },
+                "patches": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/valuation.DraftField"
+                    }
+                },
+                "questions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "schema_version": {
+                    "type": "integer"
+                },
+                "supplements": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
                 }
             }
         },

@@ -89,6 +89,8 @@ var criticalUniqueIndexes = []UniqueIndexSpec{
 		DDL: "CREATE UNIQUE INDEX uq_wrong_question_unclassified ON wrong_question_category (wrong_question_id) WHERE category_id IS NULL"},
 	{Name: "uq_valuation_operations_evaluation_id", Table: "valuation_operations", Migration: "000079_valuation_operations.up.sql",
 		DDL: "CREATE UNIQUE INDEX uq_valuation_operations_evaluation_id ON valuation_operations (evaluation_id) WHERE evaluation_id IS NOT NULL"},
+	{Name: "uq_valuation_suggestion_calls_operation_key", Table: "valuation_suggestion_calls", Migration: "000081_valuation_draft_suggestions.up.sql",
+		DDL: "CREATE UNIQUE INDEX uq_valuation_suggestion_calls_operation_key ON valuation_suggestion_calls (operation_key)"},
 }
 
 // CriticalUniqueIndexes 返回登记表副本（testutil 建库后补跑、check-columns 对账共用同一宿主）。

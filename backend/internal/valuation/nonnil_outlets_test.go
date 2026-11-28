@@ -11,6 +11,8 @@ import (
 	"net/http"
 	"testing"
 
+	"go.uber.org/zap"
+
 	"forklift-training/internal/testutil"
 )
 
@@ -18,19 +20,22 @@ import (
 // 前缀 nonnilOutlets 是约定的证据表名：apitypes 的表态锁按它扫目录收键（见
 // internal/apitypes/nullability_lock_test.go 的 nonNilEvidenceSources）。
 var nonnilOutletsValuation = map[string]func(t *testing.T) any{
-	"valuation.EvaluationDetail.dimension_scores":    outletEvalDetailData,
-	"valuation.EvaluationDetail.suggestions":         outletEvalDetailData,
-	"valuation.EvaluationResponse.dimension_scores":  outletEvalResponseData,
-	"valuation.EvaluationResponse.suggestions":       outletEvalResponseData,
-	"valuation.BatteryEvaluation.feature_importance": outletBatteryDetailData,
-	"valuation.BatteryEvaluation.cycle_features":     outletBatteryDetailData,
-	"valuation.BatteryEvaluation.suggestions":        outletBatteryDetailData,
-	"valuation.CycleFeature.feature_vector":          outletBatteryFirstCycleFeature,
-	"valuation.CreateBatteryResponse.suggestions":    outletBatteryCreateData,
-	"valuation.ListBatteryResponse.items":            outletBatteryListData,
-	"valuation.ValuationDraft.fields":                outletConversationDraftData,
-	"valuation.ValuationDraft.supplemental":          outletConversationDraftData,
-	"valuation.DraftField.candidates":                outletConversationDraftCandidate,
+	"valuation.EvaluationDetail.dimension_scores":     outletEvalDetailData,
+	"valuation.EvaluationDetail.suggestions":          outletEvalDetailData,
+	"valuation.EvaluationResponse.dimension_scores":   outletEvalResponseData,
+	"valuation.EvaluationResponse.suggestions":        outletEvalResponseData,
+	"valuation.BatteryEvaluation.feature_importance":  outletBatteryDetailData,
+	"valuation.BatteryEvaluation.cycle_features":      outletBatteryDetailData,
+	"valuation.BatteryEvaluation.suggestions":         outletBatteryDetailData,
+	"valuation.CycleFeature.feature_vector":           outletBatteryFirstCycleFeature,
+	"valuation.CreateBatteryResponse.suggestions":     outletBatteryCreateData,
+	"valuation.ListBatteryResponse.items":             outletBatteryListData,
+	"valuation.ValuationDraft.fields":                 outletConversationDraftData,
+	"valuation.ValuationDraft.supplemental":           outletConversationDraftData,
+	"valuation.DraftField.candidates":                 outletConversationDraftCandidate,
+	"valuation.ValuationSuggestionResult.patches":     outletConversationSuggestionResult,
+	"valuation.ValuationSuggestionResult.supplements": outletConversationSuggestionResult,
+	"valuation.ValuationSuggestionResult.questions":   outletConversationSuggestionResult,
 }
 
 // TestNonNilDeclaredOutletsNeverEmitNull 本域的举证入口（判据本体在 testutil）。
@@ -141,6 +146,28 @@ func outletConversationDraftData(t *testing.T) any {
 		t.Fatalf("草稿创建状态码 = %d: %s", w.Code, w.Body.String())
 	}
 	return mustDecodeData(t, w)
+}
+
+func outletConversationSuggestionResult(t *testing.T) any {
+	t.Helper()
+	r, _, _, _ := newSuggestionTestEngine(t, &suggestionModelFake{}, defaultSuggestionConfig(), zap.NewNop())
+	draft := createConversationDraft(t, r, map[string]any{})
+	operationID := "op:" + draft["id"].(string) + ":nonnil"
+	w := requestSuggestion(t, r, draft["id"].(string), "nonnil", 1, "无新增字段", "")
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("建议受理状态码 = %d: %s", w.Code, w.Body.String())
+	}
+	waitForSuggestion(t, r, operationID)
+	w = performRequest(r, http.MethodGet, "/api/valuation/conversation/operations/"+operationID, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("建议操作状态码 = %d: %s", w.Code, w.Body.String())
+	}
+	data := mustDecodeData(t, w)
+	result, _ := data["result"].(map[string]any)
+	if result == nil {
+		t.Fatalf("建议操作缺少 result: %v", data)
+	}
+	return result
 }
 
 func outletConversationDraftCandidate(t *testing.T) any {

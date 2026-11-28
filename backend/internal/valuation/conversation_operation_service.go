@@ -43,7 +43,7 @@ func (s *ConversationService) ExecuteOperation(ctx context.Context, req *Convers
 	now := s.now()
 	operation := &ConversationOperation{
 		OperationID: operationID, DraftID: req.DraftID, DraftVersion: req.DraftVersion,
-		Status: OperationStatusPending, RequestHash: hash, CreatedAt: now, UpdatedAt: now,
+		Kind: ConversationOperationKindEvaluation, Status: OperationStatusPending, RequestHash: hash, CreatedAt: now, UpdatedAt: now,
 	}
 	if userID > 0 {
 		operation.FirstAcceptedUserID = &userID
@@ -79,13 +79,29 @@ func (s *ConversationService) ExecuteOperation(ctx context.Context, req *Convers
 }
 
 func (s *ConversationService) GetOperation(ctx context.Context, operationID string) (*ConversationOperation, error) {
-	id, err := normalizeOperationID(operationID)
+	id, err := normalizeConversationOperationKey(operationID)
 	if err != nil {
 		return nil, err
+	}
+	if strings.HasPrefix(id, "op:") && s.suggestions != nil {
+		operation, err := s.suggestions.repository.GetSuggestion(ctx, id)
+		if err == nil {
+			if operation.Status == OperationStatusPending {
+				_ = s.suggestions.repository.ExpireSuggestion(ctx, id, s.now().Add(-s.suggestions.config.Timeout), s.now())
+				return s.suggestions.repository.GetSuggestion(ctx, id)
+			}
+			return operation, nil
+		}
+		if !errors.Is(err, ErrOperationNotFound) {
+			return nil, err
+		}
 	}
 	operation, err := s.operations.GetOperation(ctx, id)
 	if err != nil {
 		return nil, err
+	}
+	if operation.Kind == ConversationOperationKindSuggestion {
+		return operation, nil
 	}
 	if operation.Status == OperationStatusFailed {
 		return operation, nil
@@ -131,20 +147,21 @@ func (s *ConversationService) evaluateOperationDraft(ctx context.Context, req *C
 func (s *ConversationService) operationResponse(ctx context.Context, operation *ConversationOperation) (*ConversationOperation, error) {
 	result := *operation
 	result.Evaluation = nil
-	if operation.Status == OperationStatusSucceeded {
-		if operation.EvaluationID <= 0 {
-			return nil, ErrOperationResultMissing
-		}
-		evaluation, err := s.evaluations.GetEvaluation(ctx, operation.EvaluationID)
-		if err != nil {
-			return nil, fmt.Errorf("%w: %v", ErrOperationResultMissing, err)
-		}
-		RebuildDerivedFromDetail(evaluation)
-		if evaluation.Suggestions == nil {
-			evaluation.Suggestions = []string{}
-		}
-		result.Evaluation = evaluation
+	if operation.Kind == ConversationOperationKindSuggestion || operation.Status != OperationStatusSucceeded {
+		return &result, nil
 	}
+	if operation.EvaluationID <= 0 {
+		return nil, ErrOperationResultMissing
+	}
+	evaluation, err := s.evaluations.GetEvaluation(ctx, operation.EvaluationID)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrOperationResultMissing, err)
+	}
+	RebuildDerivedFromDetail(evaluation)
+	if evaluation.Suggestions == nil {
+		evaluation.Suggestions = []string{}
+	}
+	result.Evaluation = evaluation
 	return &result, nil
 }
 
@@ -262,6 +279,14 @@ func assignDraftValue(target, value any) error {
 func normalizeOperationID(id string) (string, error) {
 	id = strings.TrimSpace(id)
 	if id == "" || len(id) > 128 || strings.ContainsAny(id, "/?#") {
+		return "", fmt.Errorf("%w: invalid operation_id", ErrInvalidOperation)
+	}
+	return id, nil
+}
+
+func normalizeConversationOperationKey(id string) (string, error) {
+	id = strings.TrimSpace(id)
+	if id == "" || len(id) > 320 || strings.ContainsAny(id, "/?#") {
 		return "", fmt.Errorf("%w: invalid operation_id", ErrInvalidOperation)
 	}
 	return id, nil

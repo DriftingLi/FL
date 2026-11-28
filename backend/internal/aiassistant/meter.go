@@ -127,6 +127,17 @@ func (m *meteredAIModel) Complete(featureKey string, msgs []*schema.Message, opt
 	return "", fmt.Errorf("AI 功能 %q 声明计费但阻塞补全无计费主体，拒绝静默免费（见 ADR-0031）", featureKey)
 }
 
+// CompleteStructured 与 Complete 共用 billed 声明，但保持单次 Generate 语义。
+func (m *meteredAIModel) CompleteStructured(ctx context.Context, featureKey string, msgs []*schema.Message, schemaJSON string, opts StructuredCompleteOptions) (string, error) {
+	if !aiCompleteBilled(featureKey) {
+		if _, ok := lookupAIFeature(aiFeatureRegistry, featureKey); !ok {
+			m.logger.Warn("结构化补全使用未注册功能键，按免费放行（请核对功能注册表）", zap.String("feature", featureKey))
+		}
+		return m.next.CompleteStructured(ctx, featureKey, msgs, schemaJSON, opts)
+	}
+	return "", fmt.Errorf("AI 功能 %q 声明计费但结构化补全无计费主体，拒绝静默免费（见 ADR-0031）", featureKey)
+}
+
 // Stream 流式调用过闸：预检（发起前）→ 裸传输 → 扣费（成功后）。billed 判定路径 =
 // ctx 显式免费声明（内部二次消费）> 注册表对话计费声明（aiFeatureChatBilled 单点）；
 // 计费事实 = 调用方声明的 DTO 层消息列表优先，未声明回退端口消息推导（同一口径函数）；
