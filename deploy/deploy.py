@@ -256,6 +256,25 @@ def plan_decisions(
     return out
 
 
+def release_content_unchanged(
+    data_decisions: List[Decision],
+    app_decisions: List[Decision],
+    migration_needed: bool,
+) -> bool:
+    """重复发布是否完全无内容变化（#2958 testing 冒烟实测）。
+
+    只有数据服务与应用服务计划**全部为 skip** 且不需要迁移时才成立；
+    任一 start / create / recreate / blocked 或迁移需要都返回 False ——
+    no-op 路径不得绕过真实的配置、数据与镜像变化。
+    """
+    if migration_needed:
+        return False
+    return (
+        all(d.action == "skip" for d in data_decisions)
+        and all(d.action == "skip" for d in app_decisions)
+    )
+
+
 # ======================================================================
 # 环境变量：deploy/env.defaults 只作为「内存默认值」，绝不写进 os.environ
 # ======================================================================
@@ -1688,13 +1707,29 @@ class Deployer:
                 label = {"skip": "跳过", "start": "启动", "create": "创建", "recreate": "重建", "blocked": "阻止"}[d.action]
                 log_info(f"计划 {d.service}: {label}（{d.reason}）")
 
+            migration_needed = self.migration_needed(self.backend_ref)
+            if self.mode != "local" and release_content_unchanged(
+                data_decisions, app_decisions, migration_needed
+            ):
+                # 与上一版内容完全相同（内容哈希标签相同 / 测试环境重跑）：上一份发布计划的
+                # release_id 与本次相同，继续 create_release_plan 只会生成
+                # previous_release_id == release_id 并被事务校验拒绝（#2958 testing 冒烟实测）。
+                # 此时容器、compose 配置、镜像与迁移版本都没有变化，也没有新的发布事实：
+                # 不写发布计划、不重发拓扑快照（快照缺失/不一致仍由下一次真实发布的
+                # check_persisted_topology fail closed），不清理旧资源（本次没有新建镜像/备份）。
+                # 备份线程已在上面等待收尾；这里只做只读健康检查后成功返回。
+                log_ok("发布内容未变化，跳过发布事务")
+                self.health_check()
+                log_ok("部署完成!")
+                return
+
             env = DeployerEnvironment(self)
             if self.mode == "local":
                 plan = build_release_plan(
                     env=env,
                     desired_images=self.desired_app_images(),
                     decisions=app_decisions,
-                    migration_needed=self.migration_needed(self.backend_ref),
+                    migration_needed=migration_needed,
                 )
             else:
                 try:
@@ -1702,7 +1737,7 @@ class Deployer:
                         env=env,
                         desired_images=self.desired_app_images(),
                         decisions=app_decisions,
-                        migration_needed=self.migration_needed(self.backend_ref),
+                        migration_needed=migration_needed,
                         migration_preflight_verified=True,
                         release_id=self.topology.release_id,
                         topology=self.topology,

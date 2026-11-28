@@ -407,6 +407,186 @@ class DeploymentRollbackTest(unittest.TestCase):
             rollback_plan.assert_not_called()
 
 
+class _FakeReleaseTransaction:
+    """记录 transaction 是否真的被驱动（no-op 路径不得实例化它）。"""
+
+    def __init__(self, plan, env, on_applied=None):
+        self.plan = plan
+        self.applied_services = []
+        self.backup_error = None
+        self.executed = False
+        self.verified = False
+
+    def execute(self) -> None:
+        self.executed = True
+
+    def verify(self) -> None:
+        self.verified = True
+
+
+class NoopReleaseTest(unittest.TestCase):
+    """#2958：内容完全未变化的重复发布必须走合法 no-op。
+
+    背景：镜像标签自 #2935 起是内容哈希（c<tree-hash>），只改文档 / 移动端的合并
+    会让 testing 用与上一版相同的 release_id 重发；此时 create_release_plan 会生成
+    previous_release_id == release_id 并被事务校验拒绝（CD run 46137500367 实测）。
+    """
+
+    def _deployer(self, root, data_decisions=(), app_decisions=(), migration_needed=False):
+        d = deploy.Deployer.__new__(deploy.Deployer)
+        d.mode = "deploy"
+        d.opts = argparse.Namespace(force=False, remove_orphans=False, force_data_services=False)
+        d.profiles = []
+        d.skip_backup = True
+        d.backup_wait_timeout = 1
+        d.backup_dir = root / "backups"
+        d.backup_error = None
+        d.previous_images = {}
+        d.fallback_previous_topology = None
+        d.release_plan_path = root / "backups" / "release-plan.json"
+        d.topology = SimpleNamespace(
+            release_id="rel",
+            database=SimpleNamespace(backup=SimpleNamespace(synchronous=False)),
+        )
+        d.backend_ref = "b:rel"
+        d.desired_app_images = Mock(return_value={"backend": "b:rel"})
+        for name in (
+            "preflight", "login_registry", "ensure_registry_proxy", "write_env_file",
+            "_validate_compose", "cleanup_conflicting_containers", "capture_previous_images",
+            "pull_images", "apply_data", "wait_postgres", "health_check", "cleanup",
+            "publish_topology_snapshot", "rollback_transaction",
+        ):
+            setattr(d, name, Mock())
+        d.plan_data = Mock(return_value=list(data_decisions))
+        d.plan_app = Mock(return_value=list(app_decisions))
+        d.preflight_migration_check = Mock(return_value=True)
+        d.migration_needed = Mock(return_value=migration_needed)
+        return d
+
+    @staticmethod
+    def _skips(*services):
+        return [deploy.Decision(name, "skip", "无变化", f"{name}:rel") for name in services]
+
+    def test_fully_skipped_release_finishes_without_release_transaction(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = self._deployer(
+                Path(tmp),
+                data_decisions=self._skips("postgres"),
+                app_decisions=self._skips("backend", "frontend", "open_school"),
+            )
+            events = []
+            d.health_check.side_effect = lambda: events.append("health_check")
+            with patch.object(deploy, "create_release_plan") as create_plan, \
+                    patch.object(deploy, "ReleaseTransaction") as transaction, \
+                    patch.object(deploy, "log_ok") as log_ok:
+                d.deploy()
+            create_plan.assert_not_called()
+            transaction.assert_not_called()
+            d.publish_topology_snapshot.assert_not_called()
+            d.cleanup.assert_not_called()
+            d.rollback_transaction.assert_not_called()
+            self.assertEqual(events, ["health_check"], "no-op 仍要做只读健康检查")
+            messages = [call.args[0] for call in log_ok.call_args_list]
+            self.assertTrue(any("发布内容未变化，跳过发布事务" in m for m in messages), messages)
+
+    def test_external_database_without_data_services_is_still_noop(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = self._deployer(
+                Path(tmp),
+                data_decisions=[],
+                app_decisions=self._skips("backend", "frontend", "open_school"),
+            )
+            with patch.object(deploy, "create_release_plan") as create_plan, \
+                    patch.object(deploy, "ReleaseTransaction") as transaction, \
+                    patch.object(deploy, "log_ok"):
+                d.deploy()
+            create_plan.assert_not_called()
+            transaction.assert_not_called()
+
+    def test_any_data_or_app_change_still_runs_release_transaction(self):
+        cases = {
+            "数据服务启动": (
+                [deploy.Decision("postgres", "start", "容器未运行")],
+                self._skips("backend", "frontend", "open_school"),
+            ),
+            "数据服务重建": (
+                [deploy.Decision("postgres", "recreate", "compose 配置变更")],
+                self._skips("backend", "frontend", "open_school"),
+            ),
+            "应用服务创建": (
+                self._skips("postgres"),
+                [deploy.Decision("backend", "create", "容器不存在", "b:rel")],
+            ),
+            "应用服务重建": (
+                self._skips("postgres"),
+                [deploy.Decision("backend", "recreate", "镜像变更", "b:rel")],
+            ),
+        }
+        for label, (data, app) in cases.items():
+            with self.subTest(case=label), tempfile.TemporaryDirectory() as tmp:
+                d = self._deployer(Path(tmp), data_decisions=data, app_decisions=app)
+                events = []
+
+                class FakeTransaction(_FakeReleaseTransaction):
+                    def execute(self):
+                        events.append("execute")
+                        super().execute()
+
+                    def verify(self):
+                        events.append("verify")
+                        super().verify()
+
+                d.publish_topology_snapshot.side_effect = lambda: events.append("publish")
+                with patch.object(deploy, "create_release_plan", return_value=object()) as create_plan, \
+                        patch.object(deploy, "ReleaseTransaction", FakeTransaction), \
+                        patch.object(deploy, "log_ok"):
+                    d.deploy()
+                create_plan.assert_called_once()
+                self.assertEqual(events, ["execute", "verify", "publish"], label)
+
+    def test_migration_needed_still_runs_release_transaction(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = self._deployer(
+                Path(tmp),
+                data_decisions=self._skips("postgres"),
+                app_decisions=self._skips("backend", "frontend", "open_school"),
+                migration_needed=True,
+            )
+            with patch.object(deploy, "create_release_plan", return_value=object()) as create_plan, \
+                    patch.object(deploy, "ReleaseTransaction", _FakeReleaseTransaction), \
+                    patch.object(deploy, "log_ok"):
+                d.deploy()
+            create_plan.assert_called_once()
+            self.assertTrue(create_plan.call_args.kwargs["migration_needed"])
+
+
+class ReleaseContentUnchangedTest(unittest.TestCase):
+    """no-op 判据本身：只认「全 skip 且不需要迁移」。"""
+
+    def test_only_all_skip_without_migration_is_unchanged(self):
+        postgres = deploy.Decision("postgres", "skip", "无变化")
+        backend = deploy.Decision("backend", "skip", "无变化", "b:rel")
+        self.assertTrue(deploy.release_content_unchanged([postgres], [backend], False))
+        # 外部数据库模式没有数据服务：空列表等价于全 skip。
+        self.assertTrue(deploy.release_content_unchanged([], [backend], False))
+
+    def test_any_change_or_migration_keeps_transaction_path(self):
+        postgres = deploy.Decision("postgres", "skip", "无变化")
+        backend = deploy.Decision("backend", "skip", "无变化", "b:rel")
+        for data in (
+            [deploy.Decision("postgres", "start", "容器未运行")],
+            [deploy.Decision("postgres", "create", "容器不存在")],
+            [deploy.Decision("postgres", "recreate", "compose 配置变更")],
+        ):
+            with self.subTest(data=data):
+                self.assertFalse(deploy.release_content_unchanged(data, [backend], False))
+        for action in ("start", "create", "recreate", "blocked"):
+            with self.subTest(action=action):
+                change = deploy.Decision("backend", action, "变化", "b:rel")
+                self.assertFalse(deploy.release_content_unchanged([postgres], [change], False))
+        self.assertFalse(deploy.release_content_unchanged([postgres], [backend], True))
+
+
 class ForceDataServicesEnvTest(unittest.TestCase):
     """FORCE_DATA_SERVICES 的取值判据（CD 只给 testing 置 true）。
 
