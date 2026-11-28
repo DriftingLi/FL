@@ -7,10 +7,18 @@
 package valuation
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"testing"
+	"time"
 
+	"github.com/cloudwego/eino/schema"
+	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+
+	"forklift-training/internal/aiassistant"
+	"forklift-training/internal/security"
 	"forklift-training/internal/testutil"
 )
 
@@ -18,21 +26,98 @@ import (
 // 前缀 nonnilOutlets 是约定的证据表名：apitypes 的表态锁按它扫目录收键（见
 // internal/apitypes/nullability_lock_test.go 的 nonNilEvidenceSources）。
 var nonnilOutletsValuation = map[string]func(t *testing.T) any{
-	"valuation.EvaluationDetail.dimension_scores":    outletEvalDetailData,
-	"valuation.EvaluationDetail.suggestions":         outletEvalDetailData,
-	"valuation.EvaluationResponse.dimension_scores":  outletEvalResponseData,
-	"valuation.EvaluationResponse.suggestions":       outletEvalResponseData,
-	"valuation.BatteryEvaluation.feature_importance": outletBatteryDetailData,
-	"valuation.BatteryEvaluation.cycle_features":     outletBatteryDetailData,
-	"valuation.BatteryEvaluation.suggestions":        outletBatteryDetailData,
-	"valuation.CycleFeature.feature_vector":          outletBatteryFirstCycleFeature,
-	"valuation.CreateBatteryResponse.suggestions":    outletBatteryCreateData,
-	"valuation.ListBatteryResponse.items":            outletBatteryListData,
+	"valuation.EvaluationDetail.dimension_scores":               outletEvalDetailData,
+	"valuation.EvaluationDetail.suggestions":                    outletEvalDetailData,
+	"valuation.EvaluationResponse.dimension_scores":             outletEvalResponseData,
+	"valuation.EvaluationResponse.suggestions":                  outletEvalResponseData,
+	"valuation.TrialResponse.assumptions":                       outletTrialResponseData,
+	"valuation.TrialResponse.candidates":                        outletTrialResponseData,
+	"valuation.TrialResponse.missing_fields":                    outletTrialResponseData,
+	"valuation.BatteryEvaluation.feature_importance":            outletBatteryDetailData,
+	"valuation.BatteryEvaluation.cycle_features":                outletBatteryDetailData,
+	"valuation.BatteryEvaluation.suggestions":                   outletBatteryDetailData,
+	"valuation.CycleFeature.feature_vector":                     outletBatteryFirstCycleFeature,
+	"valuation.CreateBatteryResponse.suggestions":               outletBatteryCreateData,
+	"valuation.ListBatteryResponse.items":                       outletBatteryListData,
+	"valuation.ValuationDraft.fields":                           outletConversationDraftData,
+	"valuation.ValuationDraft.supplemental":                     outletConversationDraftData,
+	"valuation.DraftField.candidates":                           outletConversationDraftCandidate,
+	"valuation.ValuationSuggestionResult.patches":               outletConversationSuggestionResult,
+	"valuation.ValuationSuggestionResult.supplements":           outletConversationSuggestionResult,
+	"valuation.ValuationSuggestionResult.questions":             outletConversationSuggestionResult,
+	"valuation.ValuationExplanationResult.facts":                outletConversationExplanationResult,
+	"valuation.ValuationExplanationResult.evidence_ids":         outletConversationExplanationResult,
+	"valuation.TrialPoliciesResponse.policies":                  outletTrialPoliciesData,
+	"valuation.TrialMetricsResponse.items":                      outletTrialMetricsData,
+	"valuation.TrialReadiness.blockers":                         outletTrialReadinessData,
+	"valuation.TrialPolicy.usage_hour_ratios":                   outletTrialPolicyData,
+	"valuation.TrialPolicy.condition_ratings":                   outletTrialPolicyData,
+	"valuation.TrialPolicy.original_paint_values":               outletTrialPolicyData,
+	"valuation.TrialPolicy.has_license_plate_values":            outletTrialPolicyData,
+	"valuation.TrialPolicy.has_registration_certificate_values": outletTrialPolicyData,
+	"valuation.TrialPolicy.has_maintenance_records_values":      outletTrialPolicyData,
+	"valuation.TrialMetricSummary.unpriced_reasons":             outletTrialMetricSummaryData,
 }
 
 // TestNonNilDeclaredOutletsNeverEmitNull 本域的举证入口（判据本体在 testutil）。
 func TestNonNilDeclaredOutletsNeverEmitNull(t *testing.T) {
 	testutil.AssertNonNilOutlets(t, []map[string]func(t *testing.T) any{nonnilOutletsValuation})
+}
+
+type outletTrialAdminStore struct{}
+
+func (outletTrialAdminStore) GetTrialControl(context.Context) (TrialControl, error) {
+	return TrialControl{Enabled: false, Version: 1}, nil
+}
+func (outletTrialAdminStore) SetTrialControl(context.Context, bool) (TrialControl, error) {
+	return TrialControl{}, nil
+}
+func (outletTrialAdminStore) ListTrialPolicies(context.Context, TrialPolicyFilter) ([]TrialPolicy, error) {
+	return []TrialPolicy{{Name: "pilot", UsageHourRatios: []float64{0}, ConditionRatings: []string{"B"},
+		OriginalPaintValues: []bool{false}, HasLicensePlateValues: []bool{false},
+		HasRegistrationCertificateValues: []bool{false}, HasMaintenanceRecordsValues: []bool{false}}}, nil
+}
+func (outletTrialAdminStore) ReplaceTrialPolicies(context.Context, []TrialPolicyInput) error {
+	return nil
+}
+func (outletTrialAdminStore) ListTrialMetrics(context.Context, TrialMetricFilter) ([]TrialMetricSummary, error) {
+	return []TrialMetricSummary{{UnpricedReasons: map[string]int64{}}}, nil
+}
+func (outletTrialAdminStore) RecordTrialMetric(context.Context, TrialMetricEvent) error { return nil }
+
+func outletTrialAdminData(t *testing.T, path string) map[string]any {
+	t.Helper()
+	r := gin.New()
+	attachAdminCapabilities(r)
+	session := security.NewSession("test-secret", time.Hour, security.CookieConfig{Name: "hrwai_token"})
+	RegisterTrialAdminRoutes(r.Group("/api"), session, outletTrialAdminStore{}, zap.NewNop(), nil)
+	w := performRequestWithAuth(r, http.MethodGet, path, nil, adminAuthHeader(t))
+	if w.Code != http.StatusOK {
+		t.Fatalf("试算管理出口状态码=%d: %s", w.Code, w.Body.String())
+	}
+	return mustDecodeData(t, w)
+}
+
+func outletTrialControlData(t *testing.T) any {
+	return outletTrialAdminData(t, "/api/valuation/admin/trials/control")
+}
+func outletTrialReadinessData(t *testing.T) any {
+	data := outletTrialControlData(t).(map[string]any)
+	return data["readiness"]
+}
+func outletTrialPoliciesData(t *testing.T) any {
+	return outletTrialAdminData(t, "/api/valuation/admin/trials/policies")
+}
+func outletTrialMetricsData(t *testing.T) any {
+	return outletTrialAdminData(t, "/api/valuation/admin/trials/metrics")
+}
+func outletTrialPolicyData(t *testing.T) any {
+	data := outletTrialPoliciesData(t).(map[string]any)
+	return data["policies"].([]any)[0]
+}
+func outletTrialMetricSummaryData(t *testing.T) any {
+	data := outletTrialMetricsData(t).(map[string]any)
+	return data["items"].([]any)[0]
 }
 
 // outletEvalResponseData POST /api/valuation/evaluations 的 data：dimension_scores / suggestions
@@ -43,6 +128,20 @@ func outletEvalResponseData(t *testing.T) any {
 	w := performRequest(r, http.MethodPost, "/api/valuation/evaluations", baseEvalRequest())
 	if w.Code != http.StatusOK {
 		t.Fatalf("评估提交状态码 = %d: %s", w.Code, w.Body.String())
+	}
+	return mustDecodeData(t, w)
+}
+
+func outletTrialResponseData(t *testing.T) any {
+	t.Helper()
+	price := OriginalPrice{ID: 1, Brand: "林德", VehicleType: "电动叉车", Series: "K系列", Tonnage: 3,
+		ConfigType: "标准", MastType: "标准门架", MastHeightMM: 3000, EarliestFactoryYear: 2020, OriginalPrice: 100000}
+	reader := &stubTrialSnapshotReader{snapshot: newTrialSnapshotForTest(t, []OriginalPrice{price})}
+	r, _, _ := newTestValuationEngine(t)
+	RegisterTrialRoutes(r, reader, zap.NewNop(), "development")
+	w := performRequest(r, http.MethodPost, "/api/valuation/trials", trialCompleteRequest())
+	if w.Code != http.StatusOK {
+		t.Fatalf("试算状态码 = %d: %s", w.Code, w.Body.String())
 	}
 	return mustDecodeData(t, w)
 }
@@ -123,4 +222,71 @@ func outletEvalDetailData(t *testing.T) any {
 		t.Fatalf("评估详情状态码 = %d: %s", w.Code, w.Body.String())
 	}
 	return mustDecodeData(t, w)
+}
+
+func outletConversationDraftData(t *testing.T) any {
+	t.Helper()
+	r, _, _ := newTestValuationEngine(t)
+	w := performRequest(r, http.MethodPost, "/api/valuation/conversation/drafts", map[string]any{
+		"fields": map[string]any{"tonnage": map[string]any{
+			"state": "candidate", "candidates": []any{map[string]any{"value": 3}},
+		}},
+		"supplemental": map[string]any{"engine_model": "YC6B"},
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("草稿创建状态码 = %d: %s", w.Code, w.Body.String())
+	}
+	return mustDecodeData(t, w)
+}
+
+func outletConversationSuggestionResult(t *testing.T) any {
+	t.Helper()
+	r, _, _, _ := newSuggestionTestEngine(t, &suggestionModelFake{}, defaultSuggestionConfig(), zap.NewNop())
+	draft := createConversationDraft(t, r, map[string]any{})
+	operationID := "op:" + draft["id"].(string) + ":nonnil"
+	w := requestSuggestion(t, r, draft["id"].(string), "nonnil", 1, "无新增字段", "")
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("建议受理状态码 = %d: %s", w.Code, w.Body.String())
+	}
+	waitForSuggestion(t, r, operationID)
+	w = performRequest(r, http.MethodGet, "/api/valuation/conversation/operations/"+operationID, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("建议操作状态码 = %d: %s", w.Code, w.Body.String())
+	}
+	data := mustDecodeData(t, w)
+	result, _ := data["result"].(map[string]any)
+	if result == nil {
+		t.Fatalf("建议操作缺少 result: %v", data)
+	}
+	return result
+}
+
+func outletConversationExplanationResult(t *testing.T) any {
+	t.Helper()
+	model := &suggestionModelFake{structured: func(context.Context, string, []*schema.Message, string, aiassistant.StructuredCompleteOptions) (string, error) {
+		return explanationJSON("explain", "hours_coefficient", []string{"input.usage_hours"}), nil
+	}}
+	r, _, _, _ := newExplanationTestEngine(t, model)
+	draft := createConversationDraft(t, r, map[string]any{
+		"fields": map[string]any{"usage_hours": map[string]any{"state": "value", "value": 1200}},
+	})
+	w := requestExplanation(t, r, map[string]any{"operation_id": "nonnil", "draft_version": 1,
+		"card": map[string]any{"kind": "draft", "draft_id": draft["id"]}, "question": "工时如何影响？"}, "")
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("解释受理状态码 = %d: %s", w.Code, w.Body.String())
+	}
+	data := waitForExplanation(t, r, "explain:"+draft["id"].(string)+":nonnil")
+	result, _ := data["explanation"].(map[string]any)
+	return result
+}
+
+func outletConversationDraftCandidate(t *testing.T) any {
+	t.Helper()
+	data, ok := outletConversationDraftData(t).(map[string]any)
+	if !ok {
+		t.Fatal("草稿 data 不是对象")
+	}
+	fields, _ := data["fields"].(map[string]any)
+	field, _ := fields["tonnage"].(map[string]any)
+	return field
 }

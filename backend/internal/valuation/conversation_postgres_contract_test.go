@@ -1,0 +1,537 @@
+package valuation
+
+import (
+	"context"
+	"net/http"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"go.uber.org/zap"
+	"gorm.io/driver/postgres"
+
+	"forklift-training/internal/clock"
+	"forklift-training/internal/security"
+	"forklift-training/internal/storage"
+	"forklift-training/internal/testutil"
+)
+
+func TestConversationPostgresContract(t *testing.T) {
+	testutil.SetTestGinMode()
+	db := testutil.NewPostgresDB(t)
+	dialector, ok := db.Dialector.(*postgres.Dialector)
+	if !ok {
+		t.Fatalf("测试库不是 PostgreSQL: %T", db.Dialector)
+	}
+	pool, err := pgxpool.New(context.Background(), dialector.DSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+
+	fakeClock := clock.At(time.Now().UTC())
+	dict := NewDictionaryRepository(pool)
+	evaluations := NewEvaluationRepository(pool)
+	valuationSvc, err := NewService(dict, evaluations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conversationSvc := NewConversationService(NewDraftRepository(pool), NewOperationRepository(pool), valuationSvc, evaluations, fakeClock.Now)
+	session := security.NewSession("test-secret", time.Hour, security.CookieConfig{Name: "hrwai_token"})
+	r := gin.New()
+	r.Use(gin.Recovery())
+	attachAdminCapabilities(r)
+	RegisterRoutes(r, session, zap.NewNop(), nil, dict, evaluations, NewBatteryRepository(pool), valuationSvc,
+		NewBatteryRULService(), &memReportGenerator{}, storage.NewLocalStorage(t.TempDir()), nil, nil, conversationSvc)
+
+	request := EvaluationRequest{
+		Brand: "比亚迪", VehicleType: "电动平衡重式", Series: "CPD系列", Tonnage: 3,
+		ConfigType: "磷酸铁锂(LFP)", MastType: "两级标准门架", MastHeightMM: 3000,
+		FactoryYear: 2020, SaleYear: 2024, UsageHours: 0,
+		Province: "安徽省", City: "合肥市", ConditionRating: "A",
+		HasRegistrationCertificate: false,
+	}
+	draft := createCompleteConversationDraftForRequest(t, r, request)
+	body := map[string]any{
+		"operation_id": "pg-concurrent", "draft_id": draft["id"], "draft_version": 1, "request": request,
+	}
+
+	type result struct {
+		code       int
+		response   string
+		evaluation any
+	}
+	const workers = 6
+	results := make(chan result, workers)
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			w := performRequest(r, http.MethodPost, "/api/valuation/conversation/operations", body)
+			item := result{code: w.Code, response: w.Body.String()}
+			if w.Code == http.StatusOK {
+				_, _, data := decodeBody(t, w)
+				item.evaluation = data["evaluation_id"]
+			}
+			results <- item
+		}()
+	}
+	wg.Wait()
+	close(results)
+	var evaluationID any
+	for item := range results {
+		if item.code != http.StatusOK {
+			t.Fatalf("真实 PG 并发同键重试失败: %d\n%s", item.code, item.response)
+		}
+		if evaluationID == nil {
+			evaluationID = item.evaluation
+		}
+		if item.evaluation != evaluationID {
+			t.Fatalf("真实 PG 并发重试返回不同评估: %v vs %v", item.evaluation, evaluationID)
+		}
+	}
+
+	w := performRequestWithAuth(r, http.MethodPost, "/api/valuation/conversation/operations", body, authHeader(t, 7))
+	if w.Code != http.StatusOK {
+		t.Fatalf("登录后重试失败: %d\n%s", w.Code, w.Body.String())
+	}
+	_, _, replay := decodeBody(t, w)
+	if replay["evaluation_id"] != evaluationID || replay["first_accepted_user_id"] != nil {
+		t.Fatalf("登录重试改写匿名首次归属: %v", replay)
+	}
+
+	var (
+		status, requestHash string
+		errorCode           *string
+		firstUserID         *int
+		storedEvaluationID  int64
+		evaluationUserID    *int
+		evaluationCount     int
+		draftCount          int
+	)
+	ctx := context.Background()
+	if err := pool.QueryRow(ctx, `SELECT status, request_hash, first_accepted_user_id, evaluation_id, error_code
+		FROM valuation_operations WHERE operation_key = $1`, "pg-concurrent").Scan(&status, &requestHash, &firstUserID, &storedEvaluationID, &errorCode); err != nil {
+		t.Fatal(err)
+	}
+	if status != OperationStatusSucceeded || len(requestHash) != 64 || firstUserID != nil || errorCode != nil {
+		t.Fatalf("operation 持久化字段错误: status=%s hash=%s user=%v error=%v", status, requestHash, firstUserID, errorCode)
+	}
+	if int64(evaluationID.(float64)) != storedEvaluationID {
+		t.Fatalf("operation.evaluation_id 与首次结果不一致: %v vs %d", evaluationID, storedEvaluationID)
+	}
+	if err := pool.QueryRow(ctx, `SELECT user_id FROM evaluations WHERE id = $1`, storedEvaluationID).Scan(&evaluationUserID); err != nil {
+		t.Fatal(err)
+	}
+	if evaluationUserID != nil {
+		t.Fatalf("匿名首次受理的 evaluation 应 user_id=NULL, got %v", evaluationUserID)
+	}
+	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM evaluations`).Scan(&evaluationCount); err != nil {
+		t.Fatal(err)
+	}
+	if evaluationCount != 1 {
+		t.Fatalf("同键并发只应创建一条 evaluation, got %d", evaluationCount)
+	}
+	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM ephemeral_kv WHERE cache_key = $1`, draftKey(draft["id"].(string))).Scan(&draftCount); err != nil {
+		t.Fatal(err)
+	}
+	if draftCount != 1 {
+		t.Fatalf("草稿应落在 ephemeral_kv, got %d", draftCount)
+	}
+
+	fakeClock.T = fakeClock.T.Add(DraftIdleTTL + time.Second)
+	w = performRequest(r, http.MethodGet, "/api/valuation/conversation/drafts/"+draft["id"].(string), nil)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("草稿闲置超过 30 分钟应过期, got %d", w.Code)
+	}
+	w = performRequest(r, http.MethodGet, "/api/valuation/conversation/operations/pg-concurrent", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("正式 operation 去重凭据不得随草稿过期: %d\n%s", w.Code, w.Body.String())
+	}
+	assertOperationRetentionPolicy(t, pool)
+
+	changed := request
+	changed.UsageHours = 100
+	body["request"] = changed
+	w = performRequest(r, http.MethodPost, "/api/valuation/conversation/operations", body)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("真实 PG 同键不同哈希应 409, got %d\n%s", w.Code, w.Body.String())
+	}
+
+	incomplete := createConversationDraft(t, r, map[string]any{})
+	w = performRequest(r, http.MethodPost, "/api/valuation/conversation/operations", map[string]any{
+		"operation_id": "pg-incomplete", "draft_id": incomplete["id"], "draft_version": 1, "request": request,
+	})
+	if w.Code != http.StatusConflict {
+		t.Fatalf("不完整草稿应 409, got %d", w.Code)
+	}
+	if err := pool.QueryRow(ctx, `SELECT status, error_code FROM valuation_operations WHERE operation_key = $1`, "pg-incomplete").Scan(&status, &errorCode); err != nil {
+		t.Fatal(err)
+	}
+	if status != OperationStatusFailed || errorCode == nil || *errorCode != ErrorCodeDraftIncomplete {
+		t.Fatalf("失败 operation 未持久化: status=%s error=%v", status, errorCode)
+	}
+
+	assertDraftCASAndTTLOnPostgres(t, r, fakeClock)
+	assertOperationEvaluationTransactionRollback(t, pool)
+	assertOperationEvaluationPartialUniqueIndex(t, pool)
+}
+
+// TestConversationPostgresConcurrentAcceptOnTinyPool 把连接池压到 4（4 核 CI 的默认上限）
+// 再发 6 个同键请求：占位插入不得占满连接池，评估事务内的草稿/字典读取必须还能借到连接，
+// 否则全部请求会在端点 10s 超时后 500（#2954 #2957）。
+func TestConversationPostgresConcurrentAcceptOnTinyPool(t *testing.T) {
+	testutil.SetTestGinMode()
+	db := testutil.NewPostgresDB(t)
+	dialector, ok := db.Dialector.(*postgres.Dialector)
+	if !ok {
+		t.Fatalf("测试库不是 PostgreSQL: %T", db.Dialector)
+	}
+	poolConfig, err := pgxpool.ParseConfig(dialector.DSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	poolConfig.MaxConns = 4
+	pool, err := pgxpool.NewWithConfig(context.Background(), poolConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+
+	dict := NewDictionaryRepository(pool)
+	evaluations := NewEvaluationRepository(pool)
+	valuationSvc, err := NewService(dict, evaluations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conversationSvc := NewConversationService(NewDraftRepository(pool), NewOperationRepository(pool), valuationSvc, evaluations, time.Now)
+	session := security.NewSession("test-secret", time.Hour, security.CookieConfig{Name: "hrwai_token"})
+	r := gin.New()
+	r.Use(gin.Recovery())
+	attachAdminCapabilities(r)
+	RegisterRoutes(r, session, zap.NewNop(), nil, dict, evaluations, NewBatteryRepository(pool), valuationSvc,
+		NewBatteryRULService(), &memReportGenerator{}, storage.NewLocalStorage(t.TempDir()), nil, nil, conversationSvc)
+
+	request := EvaluationRequest{
+		Brand: "比亚迪", VehicleType: "电动平衡重式", Series: "CPD系列", Tonnage: 3,
+		ConfigType: "磷酸铁锂(LFP)", MastType: "两级标准门架", MastHeightMM: 3000,
+		FactoryYear: 2020, SaleYear: 2024, UsageHours: 0,
+		Province: "安徽省", City: "合肥市", ConditionRating: "A",
+		HasRegistrationCertificate: false,
+	}
+	draft := createCompleteConversationDraftForRequest(t, r, request)
+	body := map[string]any{
+		"operation_id": "pg-tiny-pool", "draft_id": draft["id"], "draft_version": 1, "request": request,
+	}
+	type result struct {
+		code       int
+		response   string
+		evaluation any
+	}
+	const workers = 6
+	results := make(chan result, workers)
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			w := performRequest(r, http.MethodPost, "/api/valuation/conversation/operations", body)
+			item := result{code: w.Code, response: w.Body.String()}
+			if w.Code == http.StatusOK {
+				_, _, data := decodeBody(t, w)
+				item.evaluation = data["evaluation_id"]
+			}
+			results <- item
+		}()
+	}
+	wg.Wait()
+	close(results)
+	var evaluationID any
+	for item := range results {
+		if item.code != http.StatusOK {
+			t.Fatalf("小连接池同键并发失败: %d\n%s", item.code, item.response)
+		}
+		if evaluationID == nil {
+			evaluationID = item.evaluation
+		}
+		if item.evaluation != evaluationID {
+			t.Fatalf("小连接池同键并发返回不同评估: %v vs %v", item.evaluation, evaluationID)
+		}
+	}
+	var operationCount, evaluationCount int
+	if err := pool.QueryRow(context.Background(), `SELECT COUNT(*) FROM valuation_operations WHERE operation_key = $1`, "pg-tiny-pool").Scan(&operationCount); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(context.Background(), `SELECT COUNT(*) FROM evaluations`).Scan(&evaluationCount); err != nil {
+		t.Fatal(err)
+	}
+	if operationCount != 1 || evaluationCount != 1 {
+		t.Fatalf("同键并发只应有一条 operation/evaluation: operations=%d evaluations=%d", operationCount, evaluationCount)
+	}
+}
+
+type blockingCalculationDictionary struct {
+	*DictionaryRepository
+	started       chan struct{}
+	release       chan struct{}
+	secondEntered chan struct{}
+	calculations  atomic.Int32
+}
+
+func (d *blockingCalculationDictionary) ListCoefficientConfigs(ctx context.Context) ([]CoefficientConfig, error) {
+	switch d.calculations.Add(1) {
+	case 1:
+		close(d.started)
+		select {
+		case <-d.release:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	case 2:
+		close(d.secondEntered)
+	}
+	return d.DictionaryRepository.ListCoefficientConfigs(ctx)
+}
+
+func TestConversationPostgresConcurrentMixedIdentityFirstAcceptance(t *testing.T) {
+	testutil.SetTestGinMode()
+	db := testutil.NewPostgresDB(t)
+	dialector, ok := db.Dialector.(*postgres.Dialector)
+	if !ok {
+		t.Fatalf("测试库不是 PostgreSQL: %T", db.Dialector)
+	}
+	pool, err := pgxpool.New(context.Background(), dialector.DSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+
+	dict := &blockingCalculationDictionary{
+		DictionaryRepository: NewDictionaryRepository(pool),
+		started:              make(chan struct{}),
+		release:              make(chan struct{}),
+		secondEntered:        make(chan struct{}),
+	}
+	evaluations := NewEvaluationRepository(pool)
+	valuationSvc, err := NewService(dict, evaluations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conversationSvc := NewConversationService(NewDraftRepository(pool), NewOperationRepository(pool), valuationSvc, evaluations, time.Now)
+	session := security.NewSession("test-secret", time.Hour, security.CookieConfig{Name: "hrwai_token"})
+	r := gin.New()
+	r.Use(gin.Recovery())
+	attachAdminCapabilities(r)
+	RegisterRoutes(r, session, zap.NewNop(), nil, dict, evaluations, NewBatteryRepository(pool), valuationSvc,
+		NewBatteryRULService(), &memReportGenerator{}, storage.NewLocalStorage(t.TempDir()), nil, nil, conversationSvc)
+
+	request := EvaluationRequest{
+		Brand: "比亚迪", VehicleType: "电动平衡重式", Series: "CPD系列", Tonnage: 3,
+		ConfigType: "磷酸铁锂(LFP)", MastType: "两级标准门架", MastHeightMM: 3000,
+		FactoryYear: 2020, SaleYear: 2024, UsageHours: 0,
+		Province: "安徽省", City: "合肥市", ConditionRating: "A",
+		HasRegistrationCertificate: false,
+	}
+	draft := createCompleteConversationDraftForRequest(t, r, request)
+	body := map[string]any{
+		"operation_id": "pg-mixed-identity", "draft_id": draft["id"], "draft_version": 1, "request": request,
+	}
+	type result struct {
+		code         int
+		response     string
+		evaluationID any
+		firstUserID  any
+	}
+	results := make(chan result, 2)
+	var wg sync.WaitGroup
+	var releaseOnce sync.Once
+	releaseCalculation := func() { releaseOnce.Do(func() { close(dict.release) }) }
+	defer releaseCalculation()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		w := performRequestWithAuth(r, http.MethodPost, "/api/valuation/conversation/operations", body, authHeader(t, 7))
+		item := result{code: w.Code, response: w.Body.String()}
+		if w.Code == http.StatusOK {
+			_, _, data := decodeBody(t, w)
+			item.evaluationID = data["evaluation_id"]
+			item.firstUserID = data["first_accepted_user_id"]
+		}
+		results <- item
+	}()
+	select {
+	case <-dict.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("首个登录请求未进入计算")
+	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		w := performRequest(r, http.MethodPost, "/api/valuation/conversation/operations", body)
+		item := result{code: w.Code, response: w.Body.String()}
+		if w.Code == http.StatusOK {
+			_, _, data := decodeBody(t, w)
+			item.evaluationID = data["evaluation_id"]
+			item.firstUserID = data["first_accepted_user_id"]
+		}
+		results <- item
+	}()
+	secondCalculatedBeforeRelease := false
+	select {
+	case <-dict.secondEntered:
+		secondCalculatedBeforeRelease = true
+	case <-time.After(250 * time.Millisecond):
+	}
+	releaseCalculation()
+	wg.Wait()
+	close(results)
+	if secondCalculatedBeforeRelease {
+		t.Fatal("同键匿名请求在首次受理提交前进入计算，可能抢走首次归属")
+	}
+	if got := dict.calculations.Load(); got != 1 {
+		t.Fatalf("同键并发只允许首次受理方计算，got %d", got)
+	}
+	var evaluationID any
+	for item := range results {
+		if item.code != http.StatusOK {
+			t.Fatalf("混合身份并发失败: %d\n%s", item.code, item.response)
+		}
+		if evaluationID == nil {
+			evaluationID = item.evaluationID
+		}
+		if item.evaluationID != evaluationID || item.firstUserID != float64(7) {
+			t.Fatalf("并发结果未保持首次登录归属: id=%v user=%v", item.evaluationID, item.firstUserID)
+		}
+	}
+	var firstUserID, evaluationUserID *int
+	var operationCount, evaluationCount int
+	if err := pool.QueryRow(context.Background(), `SELECT first_accepted_user_id FROM valuation_operations WHERE operation_key = $1`, "pg-mixed-identity").Scan(&firstUserID); err != nil {
+		t.Fatal(err)
+	}
+	if firstUserID == nil || *firstUserID != 7 {
+		t.Fatalf("operation 首次受理用户应为 7: %v", firstUserID)
+	}
+	if err := pool.QueryRow(context.Background(), `SELECT e.user_id FROM valuation_operations o JOIN evaluations e ON e.id = o.evaluation_id
+		WHERE o.operation_key = $1`, "pg-mixed-identity").Scan(&evaluationUserID); err != nil {
+		t.Fatal(err)
+	}
+	if evaluationUserID == nil || *evaluationUserID != 7 {
+		t.Fatalf("正式评估应归属首次受理用户 7: %v", evaluationUserID)
+	}
+	if err := pool.QueryRow(context.Background(), `SELECT COUNT(*) FROM valuation_operations WHERE operation_key = $1`, "pg-mixed-identity").Scan(&operationCount); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(context.Background(), `SELECT COUNT(*) FROM evaluations`).Scan(&evaluationCount); err != nil {
+		t.Fatal(err)
+	}
+	if operationCount != 1 || evaluationCount != 1 {
+		t.Fatalf("同键混合身份并发只应有一条 operation/evaluation: operations=%d evaluations=%d", operationCount, evaluationCount)
+	}
+}
+
+func assertOperationRetentionPolicy(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	var policy *string
+	if err := pool.QueryRow(context.Background(), `SELECT obj_description(c.oid)
+		FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+		WHERE n.nspname = current_schema() AND c.relname = 'valuation_operations'`).Scan(&policy); err != nil {
+		t.Fatal(err)
+	}
+	if policy == nil || !strings.Contains(*policy, "retained") || !strings.Contains(*policy, "no TTL") {
+		t.Fatalf("valuation_operations 必须明确持久保留且无 TTL: %v", policy)
+	}
+}
+
+func assertDraftCASAndTTLOnPostgres(t *testing.T, r *gin.Engine, fakeClock *clock.Fake) {
+	t.Helper()
+	draft := createConversationDraft(t, r, map[string]any{})
+	id := draft["id"].(string)
+	patch := map[string]any{"base_version": 1, "fields": map[string]any{
+		"brand": map[string]any{"state": "value", "value": "合力"},
+	}}
+	codes := make(chan int, 2)
+	var wg sync.WaitGroup
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			codes <- performRequest(r, http.MethodPatch, "/api/valuation/conversation/drafts/"+id, patch).Code
+		}()
+	}
+	wg.Wait()
+	close(codes)
+	var okCount, conflictCount int
+	for code := range codes {
+		switch code {
+		case http.StatusOK:
+			okCount++
+		case http.StatusConflict:
+			conflictCount++
+		default:
+			t.Fatalf("真实 PG 草稿 CAS 返回异常状态: %d", code)
+		}
+	}
+	if okCount != 1 || conflictCount != 1 {
+		t.Fatalf("真实 PG 同版本 CAS 应一成功一冲突: ok=%d conflict=%d", okCount, conflictCount)
+	}
+
+	fakeClock.T = fakeClock.T.Add(DraftIdleTTL + time.Second)
+	w := performRequest(r, http.MethodGet, "/api/valuation/conversation/drafts/"+id, nil)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("真实 PG 草稿闲置 30 分钟应过期, got %d", w.Code)
+	}
+}
+
+func assertOperationEvaluationTransactionRollback(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	repository := NewOperationRepository(pool)
+	operation := &ConversationOperation{
+		OperationID: "pg-rollback", DraftID: "draft", DraftVersion: 1,
+		Status: OperationStatusPending, RequestHash: strings.Repeat("a", 64),
+	}
+	params := testEvalParams()
+	params.Brand = strings.Repeat("x", 100)
+	_, inserted, err := repository.AcceptOperation(context.Background(), operation,
+		func(writer OperationEvaluationWriter) (int64, string, error) {
+			evaluationID, err := writer.CreateEvaluation(context.Background(), params)
+			return evaluationID, "", err
+		})
+	if err == nil || inserted {
+		t.Fatalf("evaluation 写入失败应回滚 operation 占位: inserted=%v err=%v", inserted, err)
+	}
+	var count int
+	if err := pool.QueryRow(context.Background(), `SELECT COUNT(*) FROM valuation_operations WHERE operation_key = $1`, operation.OperationID).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("回滚后不得残留 operation, got %d", count)
+	}
+}
+
+func assertOperationEvaluationPartialUniqueIndex(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	ctx := context.Background()
+	for _, key := range []string{"pg-null-a", "pg-null-b"} {
+		if _, err := pool.Exec(ctx, `INSERT INTO valuation_operations
+			(operation_key, request_hash, draft_id, draft_version, status) VALUES ($1, $2, 'draft', 1, 'failed')`,
+			key, strings.Repeat("b", 64)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, key := range []string{"pg-eval-a", "pg-eval-b"} {
+		_, err := pool.Exec(ctx, `INSERT INTO valuation_operations
+			(operation_key, request_hash, draft_id, draft_version, evaluation_id, status)
+			VALUES ($1, $2, 'draft', 1, 987654321, 'succeeded')`, key, strings.Repeat("c", 64))
+		if key == "pg-eval-a" && err != nil {
+			t.Fatal(err)
+		}
+		if key == "pg-eval-b" && err == nil {
+			t.Fatal("偏唯一索引未阻止 evaluation_id 重复归属")
+		}
+	}
+}

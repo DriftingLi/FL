@@ -207,10 +207,15 @@ type DefaultPasswordsConfig struct {
 
 // ValuationConfig 残值评估模块配置。
 type ValuationConfig struct {
-	PDFOutputDir      string
-	DBMaxOpenConns    int
-	DBMaxIdleConns    int
-	DBConnMaxLifetime int
+	PDFOutputDir                  string
+	DBMaxOpenConns                int
+	DBMaxIdleConns                int
+	DBConnMaxLifetime             int
+	SuggestionTimeoutSeconds      int
+	SuggestionIPLimit             int
+	SuggestionIPWindowSeconds     int
+	SuggestionGlobalLimit         int
+	SuggestionGlobalWindowSeconds int
 }
 
 // RateLimitConfig 限流配置（基于客户端 IP 的 token bucket）。
@@ -279,6 +284,11 @@ func setDefaults() {
 	viper.SetDefault("valuation_db_max_open_conns", 20)
 	viper.SetDefault("valuation_db_max_idle_conns", 5)
 	viper.SetDefault("valuation_db_conn_max_lifetime", 3600)
+	viper.SetDefault("valuation_suggestion_timeout_seconds", 45)
+	viper.SetDefault("valuation_suggestion_ip_limit", 20)
+	viper.SetDefault("valuation_suggestion_ip_window_seconds", 3600)
+	viper.SetDefault("valuation_suggestion_global_limit", 500)
+	viper.SetDefault("valuation_suggestion_global_window_seconds", 86400)
 	viper.SetDefault("rate_limit_rps", 20.0)
 	viper.SetDefault("rate_limit_burst", 40)
 	// 空 = 不信任任何反向代理（与 gin 的默认值相反，见 Config.TrustedProxies）
@@ -369,10 +379,15 @@ func Load() (*Config, error) {
 		AIBaseURL: viper.GetString("ai_base_url"),
 		AIModel:   viper.GetString("ai_model"),
 		Valuation: ValuationConfig{
-			PDFOutputDir:      viper.GetString("valuation_pdf_output_dir"),
-			DBMaxOpenConns:    positiveInt("valuation_db_max_open_conns", 20),
-			DBMaxIdleConns:    positiveInt("valuation_db_max_idle_conns", 5),
-			DBConnMaxLifetime: positiveInt("valuation_db_conn_max_lifetime", 3600),
+			PDFOutputDir:                  viper.GetString("valuation_pdf_output_dir"),
+			DBMaxOpenConns:                positiveInt("valuation_db_max_open_conns", 20),
+			DBMaxIdleConns:                positiveInt("valuation_db_max_idle_conns", 5),
+			DBConnMaxLifetime:             positiveInt("valuation_db_conn_max_lifetime", 3600),
+			SuggestionTimeoutSeconds:      positiveInt("valuation_suggestion_timeout_seconds", 45),
+			SuggestionIPLimit:             positiveInt("valuation_suggestion_ip_limit", 20),
+			SuggestionIPWindowSeconds:     positiveInt("valuation_suggestion_ip_window_seconds", 3600),
+			SuggestionGlobalLimit:         positiveInt("valuation_suggestion_global_limit", 500),
+			SuggestionGlobalWindowSeconds: positiveInt("valuation_suggestion_global_window_seconds", 86400),
 		},
 		RateLimit: RateLimitConfig{
 			Enabled: rateLimitEnabled,

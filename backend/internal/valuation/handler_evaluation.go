@@ -226,6 +226,7 @@ func buildEvaluationResponse(id int64, r *EvaluationResult, req *EvaluationReque
 		HasRegistrationCertificate: req.HasRegistrationCertificate,
 		HasMaintenanceRecords:      req.HasMaintenanceRecords,
 		ConditionRating:            req.ConditionRating,
+		FormulaVersion:             r.FormulaVersion,
 		OriginalPrice:              r.OriginalPrice,
 		KTime:                      r.KTime,
 		KHours:                     r.KHours,

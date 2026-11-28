@@ -89,6 +89,7 @@ type Deps struct {
 	ReviewSvc       *auth.ProfileReviewService
 	AuditSvc        *audit.Service
 	AIConfigSvc     *aiassistant.ConfigService
+	AIModelPort     aiassistant.ModelPort
 	ContentGenSvc   *core.ContentGenerateService
 	ExportStore     valuation.ExportStore
 

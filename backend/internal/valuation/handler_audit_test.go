@@ -39,7 +39,7 @@ func TestValuationAdminWriteAudited(t *testing.T) {
 		dict, evalStore, batteryStore,
 		valuationSvc, NewBatteryRULService(),
 		&memReportGenerator{}, &memStorage{},
-		nil, nil)
+		nil, nil, nil)
 
 	token, err := sess.Issue(1, "admin1", "admin")
 	if err != nil {
@@ -83,4 +83,41 @@ func TestValuationAdminWriteNotAuditedWithoutDB(t *testing.T) {
 		t.Fatalf("hrwai_user 写操作状态码 = %d, 期望 403: %s", w.Code, w.Body.String())
 	}
 	_ = context.TODO()
+}
+
+// TestTrialAdminWriteAudited 试算控制面与同前缀管理组同口径（#2958 审查项 2）：
+// PUT 开关/allowlist 必须落审计，读接口不落。
+func TestTrialAdminWriteAudited(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	auditDB := testutil.NewMemoryDB(t)
+	sess := security.NewSession("test-secret", time.Hour, security.CookieConfig{Name: "hrwai_token"})
+	r := gin.New()
+	attachAdminCapabilities(r)
+	RegisterTrialAdminRoutes(r.Group("/api"), sess, outletTrialAdminStore{}, zap.NewNop(), audit.NewService(auditDB))
+
+	token, err := sess.Issue(1, "admin1", "admin")
+	if err != nil {
+		t.Fatalf("签发 admin token 失败: %v", err)
+	}
+	if w := performRequestWithAuth(r, http.MethodPut, "/api/valuation/admin/trials/policies",
+		map[string]any{"policies": []any{}}, "Bearer "+token); w.Code != http.StatusOK {
+		t.Fatalf("试算策略写操作期望 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if w := performRequestWithAuth(r, http.MethodGet, "/api/valuation/admin/trials/policies", nil, "Bearer "+token); w.Code != http.StatusOK {
+		t.Fatalf("试算策略读操作期望 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var logs []model.AuditLog
+	if err := auditDB.Find(&logs).Error; err != nil {
+		t.Fatalf("查询审计日志失败: %v", err)
+	}
+	if len(logs) != 1 {
+		t.Fatalf("试算控制面应只有写操作落审计，got %d 条", len(logs))
+	}
+	entry := logs[0]
+	if entry.ActorRole != "admin" || entry.ActorID != 1 || entry.Method != http.MethodPut ||
+		entry.Path != "/api/valuation/admin/trials/policies" || entry.Status != http.StatusOK {
+		t.Fatalf("试算控制面审计条目异常: %+v", entry)
+	}
 }

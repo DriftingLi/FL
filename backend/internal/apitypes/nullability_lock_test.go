@@ -76,7 +76,7 @@ const (
 // 而那个包只握 *pgxpool.Pool，没有可脱离真库跑的出口。留给下一波的选择是「给这两个包加证据源
 // （含一个能跑真库的测试装置）」或「把它们从判据 3/4 的分母里显式移出并写明理由」——继续留在
 // 这个数上，就等于让一个结构性事实看起来像一件没干完的活。
-const declaredNullableWithoutContractFlag = 7
+const declaredNullableWithoutContractFlag = 0
 
 // outletSource 指出一处「正向证据」的来源：一个目录 + 一个变量名前缀。
 //
@@ -101,6 +101,7 @@ var (
 		{"internal/mockexam", "nullableOutlets"},
 		{"internal/recruit", "nullableOutlets"},
 		{"internal/resume", "nullableOutlets"},
+		{"internal/valuation", "nullableOutlets"},
 	}
 	// 前缀而非全名：分域文件各自声明 nonnilOutletsCore / nonnilOutletsCatalog / …，
 	// 由 init() 并进汇总表（见 service/nonnil_declaration_test.go）。新加一个域文件不必回来改这里。
@@ -215,11 +216,9 @@ func outletEvidenceKeys(t *testing.T, sources []outletSource, what string) map[s
 //	99 处 nullable 声明 − 3 处落在 2xx 响应闭包外 = 96 在射程内；当时走过真实出口、marshal 出过
 //	`null` 的只有 1 处（course.ChapterSlidesDTO.slides，未注入 slideRenderer 那一档） ⇒ 96 − 1 = 95
 //	    − 68（批①-A 改判 nonnil，它们本就不该说可空）  = 27
-//	    − 20（批①-B：15 处走真实出口 marshal 出 null 并进 nullableOutlets 表，5 处改判 nonnil） = 7
-//
-// 这个数**只准减**：新增一句没有证据的 nullable 会把它顶上去，把证据补上会把它降下来——
-// 两种都要人来改常量，于是一次没有证据的声明和一次收口都留下痕迹。
-const declaredNullableWithoutPositiveEvidence = 7
+//	    − 20（批①-B：15 处走真实出口 marshal 出 null 并进 nullableOutlets 表，5 处改判 nonnil）
+//	    − 7（估值域空目录出口举证）= 0
+const declaredNullableWithoutPositiveEvidence = 0
 
 // countWithoutEvidence 数「声明了某条表态、证据表里却没有它」的位置。
 func countWithoutEvidence(fields []string, evidence map[string]bool) []string {

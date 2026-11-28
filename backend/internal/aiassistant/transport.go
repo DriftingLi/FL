@@ -7,6 +7,9 @@ package aiassistant
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -17,6 +20,7 @@ import (
 	einoopenai "github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
+	"github.com/eino-contrib/jsonschema"
 	"go.uber.org/zap"
 )
 
@@ -61,6 +65,13 @@ type CompleteOptions struct {
 	Temperature float32
 }
 
+// StructuredCompleteOptions 结构化补全参数。Timeout 由调用方明确给出；
+// adapter 只做单次 Generate，不继承 Complete 的隐藏重试语义。
+type StructuredCompleteOptions struct {
+	CompleteOptions
+	Timeout time.Duration
+}
+
 // ModelPort 单一模型端口（ADR-0029 T2）：阻塞补全与流式回调合一，消费方只面对
 // 一套消息类型（eino schema.Message）与一个端口。凭证解析、client 生命周期（签名缓存）、
 // 超时与重试等深知识全部藏进 adapter 单点。*einoAIAdapter 为唯一生产 adapter，测试可注入 fake。
@@ -71,6 +82,9 @@ type ModelPort interface {
 	// featureKey 经注入 resolver 解析绑定配置；生命周期自持（不携带调用方 context，
 	// 与原阻塞栈语义一致——章节生成在后台 goroutine 运行、评分不随请求中断）。
 	Complete(featureKey string, msgs []*schema.Message, opts CompleteOptions) (string, error)
+	// CompleteStructured 单次结构化 Generate：调用方 context 可取消，Timeout 显式封顶，
+	// schema 进入响应格式与 client 缓存签名；不重试、不流式、不隐藏第二次消费。
+	CompleteStructured(ctx context.Context, featureKey string, msgs []*schema.Message, schemaJSON string, opts StructuredCompleteOptions) (string, error)
 	// Stream 流式调用：增量与富事件经 sink 产出，返回累积完整回复与计量产出
 	// （*Usage，ADR-0031；免费/未登录/未扣费为 nil，内容错误时不扣费）。
 	// 选择子经注入 resolver 解析凭证（调用方只传选择子）；沿用调用方 context（SSE
@@ -160,6 +174,41 @@ func (a *einoAIAdapter) Complete(featureKey string, msgs []*schema.Message, opts
 	return "", nil
 }
 
+// CompleteStructured 单次结构化 Generate。严格 schema 同时作为上游 response_format
+// 与本地 client 签名的一部分；任何失败原样返回，绝不重试。
+func (a *einoAIAdapter) CompleteStructured(ctx context.Context, featureKey string, msgs []*schema.Message, schemaJSON string, opts StructuredCompleteOptions) (string, error) {
+	if strings.TrimSpace(schemaJSON) == "" || !json.Valid([]byte(schemaJSON)) {
+		return "", errors.New("结构化补全 schema 必须是有效 JSON")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	timeout := opts.Timeout
+	if timeout <= 0 {
+		timeout = aiBlockingTimeout
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	mc, err := a.resolver.ResolveFeatureSettings(ctx, featureKey)
+	if err != nil {
+		return "", err
+	}
+	chatModel, err := a.ensureClient(ctx, mc, featureKey, schemaJSON)
+	if err != nil {
+		return "", fmt.Errorf("构建模型失败: %w", err)
+	}
+	resp, err := chatModel.Generate(ctx, msgs,
+		model.WithMaxTokens(opts.MaxTokens),
+		model.WithTemperature(opts.Temperature),
+	)
+	if err != nil {
+		return "", err
+	}
+	content, _ := responseContent(resp)
+	return content, nil
+}
+
 // Stream 流式调用（ModelPort 实现）：300s 超时纪律 → resolver 解析 → 签名缓存取 client
 // → eino Stream → Recv 收集循环单点（错误文案与原流式栈逐字一致）。裸传输不产生计量产出
 // （闸门在 meteredAIModel 装饰器内）。
@@ -188,15 +237,20 @@ func (a *einoAIAdapter) Stream(ctx context.Context, sel ModelSelector, msgs []*s
 // ensureClient 检查凭证签名是否变化，必要时重建 eino client（阻塞/流式共用，签名缓存单点）。
 // 锁内调用 newEinoChatModel 的安全性前提：eino NewChatModel 是纯构造（装配 config，无 IO/
 // 无拨号），持锁构建只串行化轻量对象创建；若未来该构建引入 IO，须先移出临界区。
-func (a *einoAIAdapter) ensureClient(ctx context.Context, cur ChatSettings, featureKey string) (*einoopenai.ChatModel, error) {
-	sig := cur.APIKey + "|" + cur.BaseURL + "|" + cur.Model
+func (a *einoAIAdapter) ensureClient(ctx context.Context, cur ChatSettings, featureKey string, structuredSchema ...string) (*einoopenai.ChatModel, error) {
+	schemaJSON := ""
+	if len(structuredSchema) > 0 {
+		schemaJSON = structuredSchema[0]
+	}
+	schemaSum := sha256.Sum256([]byte(schemaJSON))
+	sig := cur.APIKey + "|" + cur.BaseURL + "|" + cur.Model + "|schema:" + hex.EncodeToString(schemaSum[:])
 
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if sig == a.clientSig && a.client != nil {
 		return a.client, nil
 	}
-	cli, err := newEinoChatModel(ctx, cur)
+	cli, err := newEinoChatModel(ctx, cur, schemaJSON)
 	if err != nil {
 		return nil, err
 	}
@@ -218,12 +272,25 @@ func responseContent(resp *schema.Message) (content, finishReason string) {
 }
 
 // newEinoChatModel eino client 构建单点（adapter 签名缓存与 TestConfig 共用）。
-func newEinoChatModel(ctx context.Context, mc ChatSettings) (*einoopenai.ChatModel, error) {
-	return einoopenai.NewChatModel(ctx, &einoopenai.ChatModelConfig{
+func newEinoChatModel(ctx context.Context, mc ChatSettings, structuredSchema ...string) (*einoopenai.ChatModel, error) {
+	config := &einoopenai.ChatModelConfig{
 		APIKey:  mc.APIKey,
 		BaseURL: mc.BaseURL,
 		Model:   mc.Model,
-	})
+	}
+	if len(structuredSchema) > 0 && structuredSchema[0] != "" {
+		var parsed jsonschema.Schema
+		if err := json.Unmarshal([]byte(structuredSchema[0]), &parsed); err != nil {
+			return nil, fmt.Errorf("解析结构化 schema 失败: %w", err)
+		}
+		config.ResponseFormat = &einoopenai.ChatCompletionResponseFormat{
+			Type: einoopenai.ChatCompletionResponseFormatTypeJSONSchema,
+			JSONSchema: &einoopenai.ChatCompletionResponseFormatJSONSchema{
+				Name: "structured_response", Strict: true, JSONSchema: &parsed,
+			},
+		}
+	}
+	return einoopenai.NewChatModel(ctx, config)
 }
 
 // collectStreamReader 流式接收循环单点：EOF 正常结束，增量经 sink.OnChunk 产出，返回累积内容

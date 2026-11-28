@@ -175,6 +175,7 @@ type fakeAIModelPort struct {
 	gotMsgs   []*schema.Message
 	gotKey    string
 	gotOpts   CompleteOptions
+	gotSchema string
 	chunks    []string
 	streamN   int
 	completeN int
@@ -187,6 +188,17 @@ func (f *fakeAIModelPort) Complete(featureKey string, msgs []*schema.Message, op
 	f.gotKey = featureKey
 	f.gotMsgs = msgs
 	f.gotOpts = opts
+	return f.content, f.err
+}
+
+func (f *fakeAIModelPort) CompleteStructured(_ context.Context, featureKey string, msgs []*schema.Message, schemaJSON string, opts StructuredCompleteOptions) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.completeN++
+	f.gotKey = featureKey
+	f.gotMsgs = msgs
+	f.gotOpts = opts.CompleteOptions
+	f.gotSchema = schemaJSON
 	return f.content, f.err
 }
 
