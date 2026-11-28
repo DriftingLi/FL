@@ -42,63 +42,79 @@ func (r *operationRepository) GetOperation(ctx context.Context, operationID stri
 
 func (r *operationRepository) AcceptOperation(ctx context.Context, operation *ConversationOperation,
 	persist func(OperationEvaluationWriter) (int64, string, error)) (*ConversationOperation, bool, error) {
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return nil, false, fmt.Errorf("begin valuation operation: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	tag, err := tx.Exec(ctx, `INSERT INTO valuation_operations
-		(operation_key, request_hash, draft_id, draft_version, first_accepted_user_id, status)
-		VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (operation_key) DO NOTHING`,
-		operation.OperationID, operation.RequestHash, operation.DraftID, operation.DraftVersion,
-		operation.FirstAcceptedUserID, OperationStatusPending)
-	if err != nil {
-		return nil, false, fmt.Errorf("reserve valuation operation: %w", err)
-	}
-	if tag.RowsAffected() == 0 {
-		existing, err := scanOperation(tx.QueryRow(ctx, `SELECT `+operationColumns+`
-			FROM valuation_operations WHERE operation_key = $1`, operation.OperationID))
+	return acceptValuationOperation(ctx, r.pool, operation, ConversationOperationKindEvaluation, func(tx pgx.Tx) (*ConversationOperation, error) {
+		evaluationID, failureCode, err := persist(pgxEvaluationWriter{tx: tx})
+		if err != nil && failureCode == "" {
+			return nil, fmt.Errorf("persist valuation evaluation: %w", err)
+		}
 		if err != nil {
-			return nil, false, err
+			if _, err := tx.Exec(ctx, `UPDATE valuation_operations
+				SET status = $2, error_code = $3, updated_at = NOW()
+				WHERE operation_key = $1`, operation.OperationID, OperationStatusFailed, failureCode); err != nil {
+				return nil, fmt.Errorf("record valuation operation failure: %w", err)
+			}
+		} else {
+			if _, err := tx.Exec(ctx, `UPDATE valuation_operations
+				SET evaluation_id = $2, status = $3, error_code = NULL, updated_at = NOW()
+				WHERE operation_key = $1`, operation.OperationID, evaluationID, OperationStatusSucceeded); err != nil {
+				return nil, fmt.Errorf("complete valuation operation: %w", err)
+			}
 		}
-		return existing, false, nil
-	}
-
-	evaluationID, failureCode, err := persist(pgxEvaluationWriter{tx: tx})
-	if err != nil && failureCode == "" {
-		return nil, false, fmt.Errorf("persist valuation evaluation: %w", err)
-	}
-	if err != nil {
-		if _, err := tx.Exec(ctx, `UPDATE valuation_operations
-			SET status = $2, error_code = $3, updated_at = NOW()
-			WHERE operation_key = $1`, operation.OperationID, OperationStatusFailed, failureCode); err != nil {
-			return nil, false, fmt.Errorf("record valuation operation failure: %w", err)
-		}
-		accepted, err := scanOperation(tx.QueryRow(ctx, `SELECT `+operationColumns+`
+		return scanOperation(tx.QueryRow(ctx, `SELECT `+operationColumns+`
 			FROM valuation_operations WHERE operation_key = $1`, operation.OperationID))
+	})
+}
+
+func acceptValuationOperation(ctx context.Context, pool *pgxpool.Pool, operation *ConversationOperation, kind string,
+	persist func(pgx.Tx) (*ConversationOperation, error)) (accepted *ConversationOperation, inserted bool, err error) {
+	err = transactValuationOperation(ctx, pool, kind, func(tx pgx.Tx) error {
+		draftVersion := operation.DraftVersion
+		if kind == ConversationOperationKindSuggestion {
+			draftVersion = operation.BaseVersion
+		}
+		tag, err := tx.Exec(ctx, `INSERT INTO valuation_operations
+			(operation_key, request_hash, draft_id, draft_version, first_accepted_user_id, status, operation_kind)
+			VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (operation_key) DO NOTHING`,
+			operation.OperationID, operation.RequestHash, operation.DraftID, draftVersion,
+			operation.FirstAcceptedUserID, OperationStatusPending, kind)
 		if err != nil {
-			return nil, false, err
+			return fmt.Errorf("reserve valuation %s operation: %w", kind, err)
 		}
-		if err := tx.Commit(ctx); err != nil {
-			return nil, false, fmt.Errorf("commit failed valuation operation: %w", err)
+		if tag.RowsAffected() == 0 {
+			existing, err := scanOperation(tx.QueryRow(ctx, `SELECT `+operationColumns+`
+				FROM valuation_operations WHERE operation_key = $1`, operation.OperationID))
+			if err != nil {
+				return err
+			}
+			if existing.Kind != kind {
+				return ErrOperationHashConflict
+			}
+			accepted = existing
+			return nil
 		}
-		return accepted, true, nil
-	}
-	if _, err := tx.Exec(ctx, `UPDATE valuation_operations
-		SET evaluation_id = $2, status = $3, error_code = NULL, updated_at = NOW()
-		WHERE operation_key = $1`, operation.OperationID, evaluationID, OperationStatusSucceeded); err != nil {
-		return nil, false, fmt.Errorf("complete valuation operation: %w", err)
-	}
-	accepted, err := scanOperation(tx.QueryRow(ctx, `SELECT `+operationColumns+`
-		FROM valuation_operations WHERE operation_key = $1`, operation.OperationID))
+		accepted, err = persist(tx)
+		inserted = true
+		return err
+	})
 	if err != nil {
 		return nil, false, err
 	}
-	if err := tx.Commit(ctx); err != nil {
-		return nil, false, fmt.Errorf("commit valuation operation: %w", err)
+	return accepted, inserted, nil
+}
+
+func transactValuationOperation(ctx context.Context, pool *pgxpool.Pool, kind string, persist func(pgx.Tx) error) error {
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin valuation %s operation: %w", kind, err)
 	}
-	return accepted, true, nil
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	if err := persist(tx); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit valuation %s operation: %w", kind, err)
+	}
+	return nil
 }
 
 type pgxEvaluationWriter struct {

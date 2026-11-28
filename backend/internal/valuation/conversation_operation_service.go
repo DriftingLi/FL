@@ -221,24 +221,13 @@ func sameEvaluationRequest(left, right EvaluationRequest) (bool, error) {
 
 func evaluationRequestFromDraft(draft *ValuationDraft) (*EvaluationRequest, error) {
 	request := &EvaluationRequest{}
-	values := map[string]any{
-		"brand": &request.Brand, "vehicle_type": &request.VehicleType, "series": &request.Series,
-		"config_type": &request.ConfigType, "mast_type": &request.MastType,
-		"province": &request.Province, "city": &request.City, "condition_rating": &request.ConditionRating,
-		"original_paint": &request.OriginalPaint, "has_license_plate": &request.HasLicensePlate,
-		"has_registration_certificate": &request.HasRegistrationCertificate,
-		"has_maintenance_records":      &request.HasMaintenanceRecords,
-		"tonnage":                      &request.Tonnage, "mast_height_mm": &request.MastHeightMM,
-		"factory_year": &request.FactoryYear, "sale_year": &request.SaleYear,
-		"usage_hours": &request.UsageHours,
-	}
-	for name, target := range values {
-		field := draft.Fields[name]
+	for _, spec := range draftFieldSpecs {
+		field := draft.Fields[spec.name]
 		if field.State != DraftFieldValue || field.Value == nil {
 			return nil, ErrDraftIncomplete
 		}
-		if err := assignDraftValue(target, field.Value); err != nil {
-			return nil, fmt.Errorf("%w: %s", ErrInvalidDraftField, name)
+		if err := assignDraftValue(spec.requestPtr(request), field.Value); err != nil {
+			return nil, fmt.Errorf("%w: %s", ErrInvalidDraftField, spec.name)
 		}
 	}
 	return request, nil

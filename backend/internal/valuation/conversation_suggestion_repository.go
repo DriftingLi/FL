@@ -32,78 +32,47 @@ func (r *suggestionRepository) GetSuggestion(ctx context.Context, operationID st
 }
 
 func (r *suggestionRepository) AcceptSuggestion(ctx context.Context, operation *ConversationOperation, reservation SuggestionReservation, now time.Time) (*ConversationOperation, bool, error) {
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return nil, false, fmt.Errorf("begin valuation suggestion: %w", err)
-	}
-	defer func() { _ = tx.Rollback(context.Background()) }()
-
-	tag, err := tx.Exec(ctx, `INSERT INTO valuation_operations
-		(operation_key, request_hash, draft_id, draft_version, first_accepted_user_id, status, operation_kind)
-		VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (operation_key) DO NOTHING`,
-		operation.ID, operation.RequestHash, operation.DraftID, operation.BaseVersion,
-		operation.FirstAcceptedUserID, OperationStatusPending, ConversationOperationKindSuggestion)
-	if err != nil {
-		return nil, false, fmt.Errorf("reserve valuation suggestion: %w", err)
-	}
-	if tag.RowsAffected() == 0 {
-		existing, err := scanOperation(tx.QueryRow(ctx, `SELECT `+operationColumns+`
-			FROM valuation_operations WHERE operation_key = $1`, operation.ID))
+	return acceptValuationOperation(ctx, r.pool, operation, ConversationOperationKindSuggestion, func(tx pgx.Tx) (*ConversationOperation, error) {
+		var raw string
+		err := tx.QueryRow(ctx, `SELECT cache_value FROM ephemeral_kv
+			WHERE cache_key = $1 AND expires_at > $2 FOR UPDATE`, draftKey(operation.DraftID), now).Scan(&raw)
 		if err != nil {
-			return nil, false, err
+			if pgx.ErrNoRows == err {
+				return nil, ErrDraftNotFound
+			}
+			return nil, fmt.Errorf("lock valuation suggestion draft: %w", err)
 		}
-		if existing.Kind != ConversationOperationKindSuggestion {
-			return nil, false, ErrOperationHashConflict
+		draft, err := decodeStoredDraft(raw)
+		if err != nil {
+			return nil, err
 		}
-		return existing, false, nil
-	}
+		if draft.Draft.Version != operation.BaseVersion {
+			return nil, ErrDraftVersionConflict
+		}
+		if draft.Draft.Status != DraftStatusEditing {
+			return nil, ErrDraftNotEditing
+		}
 
-	var raw string
-	err = tx.QueryRow(ctx, `SELECT cache_value FROM ephemeral_kv
-		WHERE cache_key = $1 AND expires_at > $2 FOR UPDATE`, draftKey(operation.DraftID), now).Scan(&raw)
-	if err != nil {
-		if pgx.ErrNoRows == err {
-			return nil, false, ErrDraftNotFound
+		for _, budget := range []suggestionBudget{
+			reservation.budget(suggestionBudgetDraft),
+			reservation.budget(suggestionBudgetIP),
+			reservation.budget(suggestionBudgetGlobal),
+		} {
+			if _, err := reserveSuggestionBudget(ctx, tx, budget, now); err != nil {
+				return nil, err
+			}
 		}
-		return nil, false, fmt.Errorf("lock valuation suggestion draft: %w", err)
-	}
-	draft, err := decodeStoredDraft(raw)
-	if err != nil {
-		return nil, false, err
-	}
-	if draft.Draft.Version != operation.BaseVersion {
-		return nil, false, ErrDraftVersionConflict
-	}
-	if draft.Draft.Status != DraftStatusEditing {
-		return nil, false, ErrDraftNotEditing
-	}
-
-	if _, err := reserveSuggestionBudget(ctx, tx, "draft", reservation.DraftKey, reservation.DraftLimit, 0, now); err != nil {
-		return nil, false, err
-	}
-	if _, err := reserveSuggestionBudget(ctx, tx, "ip", reservation.IPHash, reservation.IPLimit, reservation.IPWindow, now); err != nil {
-		return nil, false, err
-	}
-	if _, err := reserveSuggestionBudget(ctx, tx, "global", "global", reservation.GlobalLimit, reservation.GlobalWindow, now); err != nil {
-		return nil, false, err
-	}
-	if _, err := tx.Exec(ctx, `INSERT INTO valuation_suggestion_calls
-		(call_key, operation_key, draft_id, ip_hash, reserved_at) VALUES ($1, $2, $3, $4, $5)`,
-		reservation.CallKey, operation.ID, operation.DraftID, reservation.IPHash, now); err != nil {
-		return nil, false, fmt.Errorf("record valuation suggestion call: %w", err)
-	}
-	accepted, err := scanOperation(tx.QueryRow(ctx, `SELECT `+operationColumns+`
-		FROM valuation_operations WHERE operation_key = $1`, operation.ID))
-	if err != nil {
-		return nil, false, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return nil, false, fmt.Errorf("commit valuation suggestion reservation: %w", err)
-	}
-	return accepted, true, nil
+		if _, err := tx.Exec(ctx, `INSERT INTO valuation_suggestion_calls
+			(call_key, operation_key, draft_id, ip_hash, reserved_at) VALUES ($1, $2, $3, $4, $5)`,
+			reservation.CallKey, operation.ID, operation.DraftID, reservation.IPHash, now); err != nil {
+			return nil, fmt.Errorf("record valuation suggestion call: %w", err)
+		}
+		return scanOperation(tx.QueryRow(ctx, `SELECT `+operationColumns+`
+			FROM valuation_operations WHERE operation_key = $1`, operation.ID))
+	})
 }
 
-func reserveSuggestionBudget(ctx context.Context, tx pgx.Tx, scope, key string, limit int, window time.Duration, now time.Time) (int, error) {
+func reserveSuggestionBudget(ctx context.Context, tx pgx.Tx, budget suggestionBudget, now time.Time) (int, error) {
 	var used int
 	err := tx.QueryRow(ctx, `INSERT INTO valuation_suggestion_budgets
 		(scope, budget_key, used, window_started_at) VALUES ($1, $2, 1, $3)
@@ -112,86 +81,80 @@ func reserveSuggestionBudget(ctx context.Context, tx pgx.Tx, scope, key string, 
 				THEN 1 ELSE valuation_suggestion_budgets.used + 1 END,
 			window_started_at = CASE WHEN $4 > 0 AND valuation_suggestion_budgets.window_started_at <= $3 - ($4 * interval '1 second')
 				THEN $3 ELSE valuation_suggestion_budgets.window_started_at END
-		RETURNING used`, scope, key, now, int64(window/time.Second)).Scan(&used)
+		RETURNING used`, budget.Scope, budget.Key, now, int64(budget.Window/time.Second)).Scan(&used)
 	if err != nil {
 		return 0, fmt.Errorf("reserve valuation suggestion budget: %w", err)
 	}
-	if used > limit {
+	if used > budget.Limit {
 		return 0, ErrSuggestionQuotaExceeded
 	}
 	return used, nil
 }
 
-func (r *suggestionRepository) CompleteSuggestion(ctx context.Context, operationID string, next *storedDraft, result *ValuationSuggestionResult, now time.Time) (string, error) {
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return "", fmt.Errorf("begin valuation suggestion completion: %w", err)
-	}
-	defer func() { _ = tx.Rollback(context.Background()) }()
-	operation, err := scanOperation(tx.QueryRow(ctx, `SELECT `+operationColumns+`
-		FROM valuation_operations WHERE operation_key = $1 FOR UPDATE`, operationID))
-	if err != nil {
-		return "", err
-	}
-	if operation.Kind != ConversationOperationKindSuggestion {
-		return "", ErrOperationNotFound
-	}
-	if operation.Status != OperationStatusPending {
-		return operation.Status, nil
-	}
-	var raw string
-	err = tx.QueryRow(ctx, `SELECT cache_value FROM ephemeral_kv
-		WHERE cache_key = $1 AND expires_at > $2 FOR UPDATE`, draftKey(operation.DraftID), now).Scan(&raw)
-	if errors.Is(err, pgx.ErrNoRows) || draftVersionFromRaw(raw) != operation.BaseVersion || draftStatusFromRaw(raw) != DraftStatusEditing {
-		if _, updateErr := tx.Exec(ctx, `UPDATE valuation_operations
-			SET status = $2, error_code = $3, updated_at = $4 WHERE operation_key = $1`,
-			operationID, OperationStatusStale, ErrorCodeDraftVersionConflict, now); updateErr != nil {
-			return "", updateErr
-		}
-		if commitErr := tx.Commit(ctx); commitErr != nil {
-			return "", commitErr
-		}
-		return OperationStatusStale, nil
-	}
-	if err != nil {
-		return "", fmt.Errorf("lock valuation suggestion draft: %w", err)
-	}
-	if next != nil {
-		encoded, err := encodeStoredDraft(next)
+func (r *suggestionRepository) CompleteSuggestion(ctx context.Context, operationID string, next *storedDraft, result *ValuationSuggestionResult, now time.Time) (status string, err error) {
+	err = transactValuationOperation(ctx, r.pool, ConversationOperationKindSuggestion, func(tx pgx.Tx) error {
+		operation, err := scanOperation(tx.QueryRow(ctx, `SELECT `+operationColumns+`
+			FROM valuation_operations WHERE operation_key = $1 FOR UPDATE`, operationID))
 		if err != nil {
-			return "", err
+			return err
 		}
-		tag, err := tx.Exec(ctx, `UPDATE ephemeral_kv SET cache_value = $2, expires_at = $3
-			WHERE cache_key = $1 AND cache_value = $4 AND expires_at > $5`,
-			draftKey(operation.DraftID), encoded, next.Draft.ExpiresAt, raw, now)
-		if err != nil {
-			return "", fmt.Errorf("CAS valuation suggestion draft: %w", err)
+		if operation.Kind != ConversationOperationKindSuggestion {
+			return ErrOperationNotFound
 		}
-		if tag.RowsAffected() != 1 {
-			if _, updateErr := tx.Exec(ctx, `UPDATE valuation_operations
+		if operation.Status != OperationStatusPending {
+			status = operation.Status
+			return nil
+		}
+		var raw string
+		err = tx.QueryRow(ctx, `SELECT cache_value FROM ephemeral_kv
+			WHERE cache_key = $1 AND expires_at > $2 FOR UPDATE`, draftKey(operation.DraftID), now).Scan(&raw)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return fmt.Errorf("lock valuation suggestion draft: %w", err)
+		}
+		stale := errors.Is(err, pgx.ErrNoRows) || draftVersionFromRaw(raw) != operation.BaseVersion || draftStatusFromRaw(raw) != DraftStatusEditing
+		if stale {
+			if _, err := tx.Exec(ctx, `UPDATE valuation_operations
 				SET status = $2, error_code = $3, updated_at = $4 WHERE operation_key = $1`,
-				operationID, OperationStatusStale, ErrorCodeDraftVersionConflict, now); updateErr != nil {
-				return "", updateErr
+				operationID, OperationStatusStale, ErrorCodeDraftVersionConflict, now); err != nil {
+				return err
 			}
-			if commitErr := tx.Commit(ctx); commitErr != nil {
-				return "", commitErr
-			}
-			return OperationStatusStale, nil
+			status = OperationStatusStale
+			return nil
 		}
-	}
-	resultJSON, err := json.Marshal(result)
-	if err != nil {
-		return "", fmt.Errorf("marshal valuation suggestion result: %w", err)
-	}
-	if _, err := tx.Exec(ctx, `UPDATE valuation_operations
-		SET status = $2, result_json = $3, error_code = NULL, updated_at = $4 WHERE operation_key = $1`,
-		operationID, OperationStatusSucceeded, resultJSON, now); err != nil {
-		return "", fmt.Errorf("complete valuation suggestion: %w", err)
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return "", fmt.Errorf("commit valuation suggestion completion: %w", err)
-	}
-	return OperationStatusSucceeded, nil
+		if next != nil {
+			encoded, err := encodeStoredDraft(next)
+			if err != nil {
+				return err
+			}
+			tag, err := tx.Exec(ctx, `UPDATE ephemeral_kv SET cache_value = $2, expires_at = $3
+				WHERE cache_key = $1 AND cache_value = $4 AND expires_at > $5`,
+				draftKey(operation.DraftID), encoded, next.Draft.ExpiresAt, raw, now)
+			if err != nil {
+				return fmt.Errorf("CAS valuation suggestion draft: %w", err)
+			}
+			if tag.RowsAffected() != 1 {
+				if _, err := tx.Exec(ctx, `UPDATE valuation_operations
+					SET status = $2, error_code = $3, updated_at = $4 WHERE operation_key = $1`,
+					operationID, OperationStatusStale, ErrorCodeDraftVersionConflict, now); err != nil {
+					return err
+				}
+				status = OperationStatusStale
+				return nil
+			}
+		}
+		resultJSON, err := json.Marshal(result)
+		if err != nil {
+			return fmt.Errorf("marshal valuation suggestion result: %w", err)
+		}
+		if _, err := tx.Exec(ctx, `UPDATE valuation_operations
+			SET status = $2, result_json = $3, error_code = NULL, updated_at = $4 WHERE operation_key = $1`,
+			operationID, OperationStatusSucceeded, resultJSON, now); err != nil {
+			return fmt.Errorf("complete valuation suggestion: %w", err)
+		}
+		status = OperationStatusSucceeded
+		return nil
+	})
+	return status, err
 }
 
 func draftVersionFromRaw(raw string) int {
