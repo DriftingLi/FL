@@ -20,9 +20,22 @@ const { loadUts, readText } = require('./utsHarness');
 
 const UTS = path.join(__dirname, 'forumWysiwygInput.uts');
 const DELTA_UTS = path.join(__dirname, 'forumDeltaMarkdown.uts');
+const PASTE_UTS = path.join(__dirname, 'forumPaste.uts');
+
+/**
+ * 依赖绑定（#2967）：forumWysiwygInput 现在 `import { PASTE_LABEL } from './forumPaste'`，
+ * 文案真源在 forumPaste.uts ⇒ 这里**从真源解析**而不手抄一份值，抄一份就多一个漂移面。
+ * 解析不到即抛（导出名或类型标注改了要显式改这里，不静默注入 undefined）。
+ */
+function pasteBindings() {
+    const m = readText(PASTE_UTS).match(/export const PASTE_LABEL\s*:\s*string\s*=\s*'([^']+)'/);
+    if (!m) throw new Error('forumPaste.uts 里找不到 PASTE_LABEL 定义（导出名 / 类型标注变了？）');
+    return { PASTE_LABEL: m[1] };
+}
+const BINDINGS = pasteBindings();
 
 /** 每次新实例（模块级状态不串） */
-const mod = () => loadUts(UTS, {});
+const mod = () => loadUts(UTS, BINDINGS);
 const delta = (ops) => JSON.stringify({ ops });
 
 /** 读真源 → 注入变异 → 落临时目录 → 真执行（不改工作树，不进仓） */
@@ -35,7 +48,7 @@ function loadMutated(replacements) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wysiwyg-input-'));
     const file = path.join(dir, 'forumWysiwygInput.uts');
     fs.writeFileSync(file, src);
-    return loadUts(file, {});
+    return loadUts(file, BINDINGS);
 }
 
 // ===== ① 常驻四键：粗体 / 斜体 / 删除线 / 列表（加「更多」开关 = 5 个触摸目标）=====
@@ -74,9 +87,9 @@ describe('常驻四键：粗体 / 斜体 / 删除线 / 列表（恰好四枚）'
             m.RICH_GLYPH_STYLE_STRIKE,
             m.RICH_GLYPH_STYLE_PLAIN,
         ]);
-        for (const act of acts) {
-            expect(act.icon).toBe('');
-        }
+        // #2967：B/I/S 在 entry 形态下同时是面板「字重」组的项，故带面板图标字形；列表仍是纯常驻键
+        expect(acts.slice(0, 3).map((a) => a.icon)).toEqual(['B', 'I', 'S']);
+        expect(acts[3].icon).toBe('');
     });
 
     it('触摸目标下限是 88rpx（R2）', () => {
@@ -84,22 +97,30 @@ describe('常驻四键：粗体 / 斜体 / 删除线 / 列表（恰好四枚）'
     });
 });
 
-// ===== ② 二级面板：两组、容量余量 = 0、记号组与 T1 同值 =====
+// ===== ② 二级面板：full 三组 / entry 四组、容量余量 = 0、记号组与 T1 同值 =====
 
-describe('二级面板：格式组 + 记号组', () => {
-    it('两组，id 与顺序固定', () => {
+describe('二级面板：full = 结构 / 记号 / 操作（#2967 决策⑤）', () => {
+    it('三组，id 与顺序固定；「格式」组更名为「结构」', () => {
         const m = mod();
-        expect(m.richPanelGroups().map((g) => g.id)).toEqual(['format', 'marker']);
-        expect(m.richPanelGroups().map((g) => g.label)).toEqual(['格式', '记号']);
+        expect(m.richPanelGroups().map((g) => g.id)).toEqual(['structure', 'marker', 'action']);
+        expect(m.richPanelGroups().map((g) => g.label)).toEqual(['结构', '记号', '操作']);
     });
 
-    it('格式组 = 标题 / 列表 / 分割线（容量余量 0）', () => {
+    it('结构组 = 标题 / 列表 / 分割线（容量余量 0）', () => {
         const m = mod();
         const group = m.richPanelGroups()[0];
         expect(group.actions.map((a) => a.id)).toEqual(['header', 'list', 'divider']);
         expect(group.actions[0].kind).toBe(m.RICH_KIND_FORMAT);
         expect(group.actions[1].kind).toBe(m.RICH_KIND_FORMAT);
         expect(group.actions[2].kind).toBe(m.RICH_KIND_DIVIDER);
+    });
+
+    it('操作组 = 粘贴，从模板硬编码移进数据层（文案取 utils/forumPaste）', () => {
+        const m = mod();
+        const group = m.richPanelGroups()[2];
+        expect(group.actions.map((a) => a.id)).toEqual([m.PASTE_ACTION_ID]);
+        expect(group.actions[0].kind).toBe(m.RICH_KIND_PASTE);
+        expect(group.actions[0].label).toBe('粘贴');
     });
 
     it('记号组 = 引用 / 代码块 / 行内代码 / 链接，且 id 与 T1 的 MARKER_KINDS 同值', () => {
@@ -156,6 +177,84 @@ describe('richActionById：常驻与面板全表可查', () => {
         const m = mod();
         expect(m.richActionById('underline')).toBeNull();
         expect(m.richActionById('')).toBeNull();
+    });
+
+    it('#2967：粘贴项按 id 可查（kind = paste），入口键不可解析（它开合面板，不是动作）', () => {
+        const m = mod();
+        expect(m.richActionById(m.PASTE_ACTION_ID).kind).toBe(m.RICH_KIND_PASTE);
+        expect(m.richActionById(m.RICH_ENTRY_ID)).toBeNull();
+        expect(m.richActionById(m.RICH_ENTRY_ID, m.RICH_VARIANT_ENTRY)).toBeNull();
+    });
+
+    it('#2967：两种形态下 B/I/S 都能解析到同一个动作（full 在常驻行、entry 在「字重」组）', () => {
+        const m = mod();
+        for (const variant of [m.RICH_VARIANT_FULL, m.RICH_VARIANT_ENTRY]) {
+            expect(m.richActionById('bold', variant).id).toBe('bold');
+            expect(m.richActionById('italic', variant).kind).toBe(m.RICH_KIND_FORMAT);
+            expect(m.richActionById('strike', variant).formatName).toBe('strike');
+        }
+    });
+});
+
+// ===== ③b 回复浮层单入口形态（#2967 决策⑤）=====
+
+describe('entry 形态：常驻行 1 枚入口 + 面板 4 组 11 项', () => {
+    it('常驻行恰好一枚入口键，kind = entry，文案「格式」', () => {
+        const m = mod();
+        const primary = m.richPrimaryActions(m.RICH_VARIANT_ENTRY);
+        expect(primary.length).toBe(1);
+        expect(primary[0].id).toBe(m.RICH_ENTRY_ID);
+        expect(primary[0].kind).toBe(m.RICH_KIND_ENTRY);
+        expect(primary[0].label).toBe('格式');
+        expect(m.RICH_ENTRY_LABEL).toBe('格式');
+    });
+
+    it('入口键不参与点亮：delta 里没有任何键能推导出 entry', () => {
+        const m = mod();
+        const d = delta([
+            { insert: '甲', attributes: { bold: true, italic: true, strike: true } },
+            { insert: '\n', attributes: { header: 1 } },
+        ]);
+        expect(m.richActiveFromDelta(d)).not.toContain(m.RICH_ENTRY_ID);
+    });
+
+    it('面板恰好 4 组 11 项，且 B / I / S 真的在「字重」组里', () => {
+        const m = mod();
+        const groups = m.richPanelGroups(m.RICH_VARIANT_ENTRY);
+        expect(groups.map((g) => g.id)).toEqual(['weight', 'structure', 'marker', 'action']);
+        expect(groups.map((g) => g.label)).toEqual(['字重', '结构', '记号', '操作']);
+        expect(groups[0].actions.map((a) => a.id)).toEqual(['bold', 'italic', 'strike']);
+        const total = groups.reduce((n, g) => n + g.actions.length, 0);
+        expect(total).toBe(11);
+    });
+
+    it('面板「结构」组里列表只出现一次（不重复），且 full 形态不含「字重」组', () => {
+        const m = mod();
+        const entryGroups = m.richPanelGroups(m.RICH_VARIANT_ENTRY);
+        const listIds = entryGroups.reduce((acc, g) => acc.concat(g.actions.filter((a) => a.id === m.RICH_ACTION_LIST)), []);
+        expect(listIds.length).toBe(1);
+        const fullIds = m.richPanelGroups(m.RICH_VARIANT_FULL).map((g) => g.id);
+        expect(fullIds).not.toContain('weight');
+    });
+
+    it('两种形态的常驻行、面板各自无重复 id（列表同时出现在两处是刻意的：常驻是快捷入口）', () => {
+        const m = mod();
+        for (const variant of [m.RICH_VARIANT_FULL, m.RICH_VARIANT_ENTRY]) {
+            const primary = m.richPrimaryActions(variant).map((a) => a.id);
+            const panel = m.richPanelGroups(variant)
+                .reduce((acc, g) => acc.concat(g.actions.map((a) => a.id)), []);
+            expect([variant, 'primary', primary.length]).toEqual([variant, 'primary', new Set(primary).size]);
+            expect([variant, 'panel', panel.length]).toEqual([variant, 'panel', new Set(panel).size]);
+        }
+    });
+
+    it('两种形态的可见动作是同一份数据：去掉入口键后 id 集合一致（entry 只换了入口）', () => {
+        const m = mod();
+        const actionIds = (variant) => m.richPrimaryActions(variant)
+            .concat(m.richPanelGroups(variant).reduce((acc, g) => acc.concat(g.actions), []))
+            .map((a) => a.id)
+            .filter((id) => id != m.RICH_ENTRY_ID);
+        expect(new Set(actionIds(m.RICH_VARIANT_ENTRY))).toEqual(new Set(actionIds(m.RICH_VARIANT_FULL)));
     });
 });
 
@@ -270,7 +369,7 @@ describe('成对取证：判据有牙', () => {
     it('常驻四键被换成下划线 → 「不含 underline」判据必红', () => {
         const bad = loadMutated([
             [
-                "formatAction(RICH_ACTION_STRIKE, '删除线', 'S', RICH_GLYPH_STYLE_STRIKE, '')",
+                "formatAction(RICH_ACTION_STRIKE, '删除线', 'S', RICH_GLYPH_STYLE_STRIKE, 'S')",
                 "formatAction('underline', '下划线', 'U', RICH_GLYPH_STYLE_PLAIN, '')",
             ],
         ]);
