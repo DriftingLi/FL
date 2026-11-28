@@ -31,6 +31,7 @@ type SuggestionModelResult struct {
 	Patches       []SuggestionPatch `json:"patches"`
 	Supplements   map[string]string `json:"supplements"`
 	Questions     []string          `json:"questions"`
+	Issues        []string          `json:"-"`
 }
 
 type ValuationSuggestionResult struct {
@@ -51,18 +52,50 @@ type SuggestionConfig struct {
 	HMACKey      string
 }
 
+type suggestionBudgetScope string
+
+const (
+	suggestionBudgetDraft  suggestionBudgetScope = "draft"
+	suggestionBudgetIP     suggestionBudgetScope = "ip"
+	suggestionBudgetGlobal suggestionBudgetScope = "global"
+)
+
+type suggestionQuota struct {
+	Limit  int
+	Window time.Duration
+}
+
+type suggestionBudgetLimits struct {
+	Draft  suggestionQuota
+	IP     suggestionQuota
+	Global suggestionQuota
+}
+
+type suggestionBudget struct {
+	Scope  suggestionBudgetScope
+	Key    string
+	Limit  int
+	Window time.Duration
+}
+
 type SuggestionReservation struct {
-	DraftKey     string
-	DraftUsed    int
-	DraftLimit   int
-	IPHash       string
-	IPUsed       int
-	IPLimit      int
-	IPWindow     time.Duration
-	GlobalUsed   int
-	GlobalLimit  int
-	GlobalWindow time.Duration
-	CallKey      string
+	DraftKey string
+	IPHash   string
+	CallKey  string
+	Limits   suggestionBudgetLimits
+}
+
+func (r SuggestionReservation) budget(scope suggestionBudgetScope) suggestionBudget {
+	switch scope {
+	case suggestionBudgetDraft:
+		return suggestionBudget{Scope: scope, Key: r.DraftKey, Limit: r.Limits.Draft.Limit}
+	case suggestionBudgetIP:
+		return suggestionBudget{Scope: scope, Key: r.IPHash, Limit: r.Limits.IP.Limit, Window: r.Limits.IP.Window}
+	case suggestionBudgetGlobal:
+		return suggestionBudget{Scope: scope, Key: string(scope), Limit: r.Limits.Global.Limit, Window: r.Limits.Global.Window}
+	default:
+		panic("unknown valuation suggestion budget scope")
+	}
 }
 
 type SuggestionRepository interface {

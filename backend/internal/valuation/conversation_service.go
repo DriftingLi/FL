@@ -13,12 +13,6 @@ import (
 
 const DraftIdleTTL = 30 * time.Minute
 
-var requiredDraftFields = []string{
-	"brand", "vehicle_type", "series", "tonnage", "config_type", "mast_type", "mast_height_mm",
-	"factory_year", "sale_year", "usage_hours", "original_paint", "province", "city",
-	"has_license_plate", "has_registration_certificate", "has_maintenance_records", "condition_rating",
-}
-
 type ConversationService struct {
 	drafts       DraftRepository
 	operations   OperationRepository
@@ -197,6 +191,9 @@ func validateDraftField(name string, field DraftField) error {
 		if field.Range == nil || field.Range.Min < 0 || field.Range.Max < field.Range.Min {
 			return invalid("range requires 0 <= min <= max")
 		}
+		if !draftFieldSpecByName[name].allowRange {
+			return invalid("field does not support range")
+		}
 		return nil
 	case DraftFieldCandidate:
 		if len(field.Candidates) == 0 {
@@ -259,27 +256,12 @@ func draftNumber(value any) (float64, bool) {
 }
 
 func draftFieldKind(name string) string {
-	switch name {
-	case "brand", "vehicle_type", "series", "config_type", "mast_type", "province", "city", "condition_rating":
-		return "string"
-	case "original_paint", "has_license_plate", "has_registration_certificate", "has_maintenance_records":
-		return "bool"
-	case "tonnage":
-		return "number"
-	case "mast_height_mm", "factory_year", "sale_year", "usage_hours":
-		return "integer"
-	default:
-		return ""
-	}
+	return draftFieldSpecByName[name].kind
 }
 
 func isRequiredDraftField(name string) bool {
-	for _, required := range requiredDraftFields {
-		if name == required {
-			return true
-		}
-	}
-	return false
+	_, ok := draftFieldSpecByName[name]
+	return ok
 }
 
 func draftComplete(draft ValuationDraft) bool {

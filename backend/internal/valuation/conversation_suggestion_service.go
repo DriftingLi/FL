@@ -128,9 +128,12 @@ func (s *ConversationService) RequestSuggestions(ctx context.Context, draftID st
 		operation.FirstAcceptedUserID = &userID
 	}
 	reservation := SuggestionReservation{
-		DraftKey: id, DraftLimit: runner.config.DraftLimit,
-		IPHash: suggestionIPHash(runner.config.HMACKey, ip), IPLimit: runner.config.IPLimit, IPWindow: runner.config.IPWindow,
-		GlobalLimit: runner.config.GlobalLimit, GlobalWindow: runner.config.GlobalWindow, CallKey: operationKey,
+		DraftKey: id, IPHash: suggestionIPHash(runner.config.HMACKey, ip), CallKey: operationKey,
+		Limits: suggestionBudgetLimits{
+			Draft:  suggestionQuota{Limit: runner.config.DraftLimit},
+			IP:     suggestionQuota{Limit: runner.config.IPLimit, Window: runner.config.IPWindow},
+			Global: suggestionQuota{Limit: runner.config.GlobalLimit, Window: runner.config.GlobalWindow},
+		},
 	}
 	accepted, inserted, err := runner.repository.AcceptSuggestion(ctx, operation, reservation, now)
 	if err != nil {

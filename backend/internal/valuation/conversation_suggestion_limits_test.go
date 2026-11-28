@@ -18,6 +18,31 @@ import (
 	"forklift-training/internal/aiassistant"
 )
 
+func TestValuationSuggestionReservationUsesTypedBudgetScopes(t *testing.T) {
+	reservation := SuggestionReservation{
+		DraftKey: "draft-a", IPHash: "ip-hash", Limits: suggestionBudgetLimits{
+			Draft:  suggestionQuota{Limit: 8},
+			IP:     suggestionQuota{Limit: 20, Window: time.Hour},
+			Global: suggestionQuota{Limit: 500, Window: 24 * time.Hour},
+		},
+	}
+	for _, tc := range []struct {
+		scope  suggestionBudgetScope
+		key    string
+		limit  int
+		window time.Duration
+	}{
+		{suggestionBudgetDraft, "draft-a", 8, 0},
+		{suggestionBudgetIP, "ip-hash", 20, time.Hour},
+		{suggestionBudgetGlobal, "global", 500, 24 * time.Hour},
+	} {
+		budget := reservation.budget(tc.scope)
+		if budget.Scope != tc.scope || budget.Key != tc.key || budget.Limit != tc.limit || budget.Window != tc.window {
+			t.Fatalf("预算 scope=%s 投影错误: %+v", tc.scope, budget)
+		}
+	}
+}
+
 func TestValuationSuggestionCanBeUndone(t *testing.T) {
 	model := &suggestionModelFake{structured: func(context.Context, string, []*schema.Message, string, aiassistant.StructuredCompleteOptions) (string, error) {
 		return suggestionJSON(`[{"field":"usage_hours","state":"value","value":4800}]`, `{}`, `[]`), nil

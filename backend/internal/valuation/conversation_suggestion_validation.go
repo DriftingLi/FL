@@ -57,16 +57,26 @@ func decodeSuggestionResult(content string) (*SuggestionModelResult, error) {
 		return nil, fmt.Errorf("%w: collection limit exceeded", ErrSuggestionValidation)
 	}
 	seenFields := map[string]bool{}
+	validPatches := make([]SuggestionPatch, 0, len(result.Patches))
 	for i := range result.Patches {
 		patch := &result.Patches[i]
-		if !isRequiredDraftField(patch.Field) || seenFields[patch.Field] {
-			return nil, fmt.Errorf("%w: unknown or duplicate field %q", ErrSuggestionValidation, patch.Field)
+		var issue error
+		switch {
+		case !isRequiredDraftField(patch.Field):
+			issue = fmt.Errorf("unknown field %q", patch.Field)
+		case seenFields[patch.Field]:
+			issue = fmt.Errorf("duplicate field %q", patch.Field)
+		default:
+			issue = validateSuggestionPatchShape(patch)
+		}
+		if issue != nil {
+			result.Issues = append(result.Issues, issue.Error())
+			continue
 		}
 		seenFields[patch.Field] = true
-		if err := validateSuggestionPatchShape(patch); err != nil {
-			return nil, err
-		}
+		validPatches = append(validPatches, *patch)
 	}
+	result.Patches = validPatches
 	for key, value := range result.Supplements {
 		if !suggestionSupplementKey.MatchString(key) || forbiddenSuggestionSupplementKeys[key] {
 			return nil, fmt.Errorf("%w: forbidden supplement key %q", ErrSuggestionValidation, key)
@@ -119,6 +129,12 @@ func validateSuggestionPatchShape(patch *SuggestionPatch) error {
 		if patch.Value != nil || patch.Range == nil || len(patch.CandidateKeys) != 0 {
 			return invalid("range state requires only range")
 		}
+		if !draftFieldSpecByName[patch.Field].allowRange {
+			return invalid("field does not support range")
+		}
+		if math.IsNaN(patch.Range.Min) || math.IsNaN(patch.Range.Max) || math.IsInf(patch.Range.Min, 0) || math.IsInf(patch.Range.Max, 0) || patch.Range.Min < 0 || patch.Range.Max < patch.Range.Min {
+			return invalid("range requires finite 0 <= min <= max")
+		}
 	case DraftFieldCandidate:
 		if patch.Value != nil || patch.Range != nil || len(patch.CandidateKeys) == 0 {
 			return invalid("candidate state requires candidate_keys")
@@ -143,13 +159,23 @@ func (s *ConversationService) prepareSuggestion(ctx context.Context, base *Valua
 		return nil, nil, fmt.Errorf("%w: catalog: %v", ErrSuggestionValidation, err)
 	}
 	changed := map[string]DraftField{}
+	issues := append([]string{}, modelResult.Issues...)
+	reject := func(name, reason string) {
+		working.Fields[name] = base.Fields[name]
+		delete(changed, name)
+		issues = append(issues, fmt.Sprintf("%s: %s", name, reason))
+	}
 	for _, patch := range modelResult.Patches {
 		if patch.State == DraftFieldCandidate {
 			continue
 		}
 		field, err := s.normalizeSuggestionPatch(working, patch, catalog)
+		if err == nil {
+			err = validateSuggestionField(patch.Field, field, now)
+		}
 		if err != nil {
-			return nil, nil, err
+			reject(patch.Field, err.Error())
+			continue
 		}
 		working.Fields[patch.Field] = field
 		changed[patch.Field] = field
@@ -159,14 +185,14 @@ func (s *ConversationService) prepareSuggestion(ctx context.Context, base *Valua
 		return nil, nil, fmt.Errorf("%w: catalog: %v", ErrSuggestionValidation, err)
 	}
 	for _, patch := range modelResult.Patches {
-		if patch.State == DraftFieldValue {
-			value, err := normalizeSuggestionValue(patch.Field, patch.Value)
-			if err != nil {
-				return nil, nil, err
-			}
-			if err := ensureSuggestionCatalogValue(patch.Field, value, contextualCatalog); err != nil {
-				return nil, nil, err
-			}
+		if patch.State != DraftFieldValue {
+			continue
+		}
+		if _, ok := changed[patch.Field]; !ok {
+			continue
+		}
+		if err := ensureSuggestionCatalogValue(patch.Field, working.Fields[patch.Field].Value, contextualCatalog); err != nil {
+			reject(patch.Field, err.Error())
 		}
 	}
 	for _, patch := range modelResult.Patches {
@@ -174,31 +200,36 @@ func (s *ConversationService) prepareSuggestion(ctx context.Context, base *Valua
 			continue
 		}
 		field, err := s.normalizeSuggestionPatch(working, patch, contextualCatalog)
+		if err == nil {
+			err = validateSuggestionField(patch.Field, field, now)
+		}
 		if err != nil {
-			return nil, nil, err
+			reject(patch.Field, err.Error())
+			continue
 		}
 		working.Fields[patch.Field] = field
 		changed[patch.Field] = field
 	}
-	if suggestionPatchesFullVehicle(changed) {
-		if err := s.validateSuggestionVehicleCombination(ctx, working); err != nil {
-			return nil, nil, err
-		}
-	}
 	if err := s.revalidateDraftDownstream(ctx, working, changed); err != nil {
 		return nil, nil, fmt.Errorf("%w: cascade: %v", ErrSuggestionValidation, err)
 	}
-	for _, name := range requiredDraftFields {
-		if _, ok := changed[name]; ok {
-			if err := validateSuggestionField(name, working.Fields[name], now); err != nil {
-				return nil, nil, err
+	if suggestionChangesVehicle(changed) && suggestionVehicleConfirmed(working) {
+		if err := s.validateSuggestionVehicleCombination(ctx, working); err != nil {
+			for _, spec := range draftFieldSpecs {
+				if _, ok := changed[spec.name]; spec.vehicle && ok {
+					reject(spec.name, err.Error())
+				}
 			}
 		}
 	}
 	factoryYear, factoryOK := draftNumberValue(working, "factory_year")
 	saleYear, saleOK := draftNumberValue(working, "sale_year")
 	if factoryOK && saleOK && saleYear < factoryYear {
-		return nil, nil, fmt.Errorf("%w: sale_year precedes factory_year", ErrSuggestionValidation)
+		for _, name := range []string{"factory_year", "sale_year"} {
+			if _, ok := changed[name]; ok {
+				reject(name, "sale_year precedes factory_year")
+			}
+		}
 	}
 
 	acceptedSupplements := map[string]string{}
@@ -208,9 +239,13 @@ func (s *ConversationService) prepareSuggestion(ctx context.Context, base *Valua
 			acceptedSupplements[key] = value
 		}
 	}
+	questions := append([]string{}, modelResult.Questions...)
+	for _, issue := range issues {
+		questions = appendSuggestionQuestion(questions, issue)
+	}
 	result := &ValuationSuggestionResult{
 		SchemaVersion: SuggestionSchemaVersion, Patches: map[string]DraftField{},
-		Supplements: acceptedSupplements, Questions: append([]string{}, modelResult.Questions...),
+		Supplements: acceptedSupplements, Questions: questions,
 		DraftVersion: base.Version,
 	}
 	for _, name := range requiredDraftFields {
@@ -235,9 +270,36 @@ func (s *ConversationService) prepareSuggestion(ctx context.Context, base *Valua
 	return &storedDraft{Draft: *working, Previous: previous}, result, nil
 }
 
-func suggestionPatchesFullVehicle(changed map[string]DraftField) bool {
-	for _, name := range []string{"brand", "vehicle_type", "series", "tonnage", "config_type", "mast_type", "mast_height_mm"} {
-		if field, ok := changed[name]; !ok || field.State != DraftFieldValue {
+func appendSuggestionQuestion(questions []string, issue string) []string {
+	issue = strings.TrimSpace(issue)
+	if issue == "" {
+		return questions
+	}
+	if len([]rune(issue)) > 300 {
+		issue = string([]rune(issue)[:300])
+	}
+	for _, question := range questions {
+		if question == issue {
+			return questions
+		}
+	}
+	return append(questions, issue)
+}
+
+func suggestionChangesVehicle(changed map[string]DraftField) bool {
+	for _, spec := range draftFieldSpecs {
+		if spec.vehicle {
+			if _, ok := changed[spec.name]; ok {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func suggestionVehicleConfirmed(draft *ValuationDraft) bool {
+	for _, spec := range draftFieldSpecs {
+		if spec.vehicle && draft.Fields[spec.name].State != DraftFieldValue {
 			return false
 		}
 	}
@@ -245,16 +307,16 @@ func suggestionPatchesFullVehicle(changed map[string]DraftField) bool {
 }
 
 func (s *ConversationService) validateSuggestionVehicleCombination(ctx context.Context, draft *ValuationDraft) error {
-	brand, brandOK := draftStringValue(draft, "brand")
-	vehicleType, vehicleOK := draftStringValue(draft, "vehicle_type")
-	series, seriesOK := draftStringValue(draft, "series")
-	tonnage, tonnageOK := draftNumberValue(draft, "tonnage")
-	configType, configOK := draftStringValue(draft, "config_type")
-	mastType, mastOK := draftStringValue(draft, "mast_type")
-	mastHeight, heightOK := draftNumberValue(draft, "mast_height_mm")
-	if !brandOK || !vehicleOK || !seriesOK || !tonnageOK || !configOK || !mastOK || !heightOK || s.valuation == nil {
-		return fmt.Errorf("%w: full vehicle suggestion must contain confirmed values", ErrSuggestionValidation)
+	if s.valuation == nil {
+		return fmt.Errorf("%w: valuation catalog is unavailable", ErrSuggestionValidation)
 	}
+	brand, _ := draftStringValue(draft, "brand")
+	vehicleType, _ := draftStringValue(draft, "vehicle_type")
+	series, _ := draftStringValue(draft, "series")
+	tonnage, _ := draftNumberValue(draft, "tonnage")
+	configType, _ := draftStringValue(draft, "config_type")
+	mastType, _ := draftStringValue(draft, "mast_type")
+	mastHeight, _ := draftNumberValue(draft, "mast_height_mm")
 	if _, err := s.valuation.dictRepo.FindOriginalPriceMatch(ctx, brand, vehicleType, series, tonnage, configType, mastType, int(mastHeight)); err != nil {
 		return fmt.Errorf("%w: vehicle combination is not in the real catalog", ErrSuggestionValidation)
 	}
@@ -268,9 +330,11 @@ func (s *ConversationService) buildSuggestionCatalog(ctx context.Context, draft 
 			Key: suggestionOptionKey(field, value), Label: fmt.Sprint(value), Value: value,
 		})
 	}
-	for _, field := range []string{"original_paint", "has_license_plate", "has_registration_certificate", "has_maintenance_records"} {
-		add(field, true)
-		add(field, false)
+	for _, spec := range draftFieldSpecs {
+		if spec.kind == "bool" {
+			add(spec.name, true)
+			add(spec.name, false)
+		}
 	}
 	if s.valuation != nil {
 		if lists, ok := s.valuation.dictRepo.(suggestionCatalogLists); ok {
@@ -315,14 +379,17 @@ func (s *ConversationService) buildSuggestionCatalog(ctx context.Context, draft 
 			}
 		}
 		if dictionary, ok := s.valuation.dictRepo.(draftCascadeDictionary); ok {
-			for _, name := range []string{"vehicle_type", "series", "tonnage", "config_type", "mast_type", "mast_height_mm"} {
-				values, ready, err := allowedDraftValues(ctx, dictionary, draft, name)
+			for _, spec := range draftFieldSpecs {
+				if !spec.vehicle || spec.name == "brand" {
+					continue
+				}
+				values, ready, err := allowedDraftValues(ctx, dictionary, draft, spec.name)
 				if err != nil {
 					return nil, err
 				}
 				if ready {
 					for _, value := range values {
-						add(name, value)
+						add(spec.name, value)
 					}
 				}
 			}
@@ -403,13 +470,7 @@ func ensureSuggestionCatalogValue(field string, value any, catalog map[string][]
 }
 
 func suggestionCatalogField(field string) bool {
-	switch field {
-	case "brand", "vehicle_type", "series", "tonnage", "config_type", "mast_type", "mast_height_mm", "condition_rating", "province", "city",
-		"original_paint", "has_license_plate", "has_registration_certificate", "has_maintenance_records":
-		return true
-	default:
-		return false
-	}
+	return draftFieldSpecByName[field].catalog
 }
 
 func findSuggestionCatalogOption(catalog map[string][]suggestionCatalogOption, field, key string) (suggestionCatalogOption, bool) {
@@ -493,16 +554,10 @@ func validateSuggestionField(name string, field DraftField, now time.Time) error
 }
 
 func suggestionFieldBounds(name string, now time.Time) (float64, float64, bool) {
-	switch name {
-	case "tonnage":
-		return 0.1, 100, false
-	case "usage_hours":
-		return 0, 100000, true
-	case "mast_height_mm":
-		return 0, 15000, true
-	case "factory_year", "sale_year":
-		return 1900, float64(now.Year() + 1), true
-	default:
-		return 0, math.MaxFloat64, false
+	spec := draftFieldSpecByName[name]
+	high := spec.max
+	if spec.yearUpper {
+		high = float64(now.Year() + 1)
 	}
+	return spec.min, high, spec.kind == "integer"
 }

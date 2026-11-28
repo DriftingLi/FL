@@ -17,6 +17,54 @@ const (
 	DraftFieldCandidate DraftFieldState = "candidate"
 )
 
+type draftFieldSpec struct {
+	name       string
+	kind       string
+	allowRange bool
+	min        float64
+	max        float64
+	yearUpper  bool
+	vehicle    bool
+	catalog    bool
+	requestPtr func(*EvaluationRequest) any
+}
+
+var draftFieldSpecs = []draftFieldSpec{
+	{name: "brand", kind: "string", vehicle: true, catalog: true, requestPtr: func(r *EvaluationRequest) any { return &r.Brand }},
+	{name: "vehicle_type", kind: "string", vehicle: true, catalog: true, requestPtr: func(r *EvaluationRequest) any { return &r.VehicleType }},
+	{name: "series", kind: "string", vehicle: true, catalog: true, requestPtr: func(r *EvaluationRequest) any { return &r.Series }},
+	{name: "tonnage", kind: "number", allowRange: true, min: 0.1, max: 100, vehicle: true, catalog: true, requestPtr: func(r *EvaluationRequest) any { return &r.Tonnage }},
+	{name: "config_type", kind: "string", vehicle: true, catalog: true, requestPtr: func(r *EvaluationRequest) any { return &r.ConfigType }},
+	{name: "mast_type", kind: "string", vehicle: true, catalog: true, requestPtr: func(r *EvaluationRequest) any { return &r.MastType }},
+	{name: "mast_height_mm", kind: "integer", allowRange: true, max: 15000, vehicle: true, catalog: true, requestPtr: func(r *EvaluationRequest) any { return &r.MastHeightMM }},
+	{name: "factory_year", kind: "integer", allowRange: true, min: 1900, yearUpper: true, requestPtr: func(r *EvaluationRequest) any { return &r.FactoryYear }},
+	{name: "sale_year", kind: "integer", allowRange: true, min: 1900, yearUpper: true, requestPtr: func(r *EvaluationRequest) any { return &r.SaleYear }},
+	{name: "usage_hours", kind: "integer", allowRange: true, max: 100000, requestPtr: func(r *EvaluationRequest) any { return &r.UsageHours }},
+	{name: "original_paint", kind: "bool", catalog: true, requestPtr: func(r *EvaluationRequest) any { return &r.OriginalPaint }},
+	{name: "province", kind: "string", catalog: true, requestPtr: func(r *EvaluationRequest) any { return &r.Province }},
+	{name: "city", kind: "string", catalog: true, requestPtr: func(r *EvaluationRequest) any { return &r.City }},
+	{name: "has_license_plate", kind: "bool", catalog: true, requestPtr: func(r *EvaluationRequest) any { return &r.HasLicensePlate }},
+	{name: "has_registration_certificate", kind: "bool", catalog: true, requestPtr: func(r *EvaluationRequest) any { return &r.HasRegistrationCertificate }},
+	{name: "has_maintenance_records", kind: "bool", catalog: true, requestPtr: func(r *EvaluationRequest) any { return &r.HasMaintenanceRecords }},
+	{name: "condition_rating", kind: "string", catalog: true, requestPtr: func(r *EvaluationRequest) any { return &r.ConditionRating }},
+}
+
+var draftFieldSpecByName = func() map[string]draftFieldSpec {
+	byName := make(map[string]draftFieldSpec, len(draftFieldSpecs))
+	for _, spec := range draftFieldSpecs {
+		byName[spec.name] = spec
+	}
+	return byName
+}()
+
+var requiredDraftFields = func() []string {
+	names := make([]string, 0, len(draftFieldSpecs))
+	for _, spec := range draftFieldSpecs {
+		names = append(names, spec.name)
+	}
+	return names
+}()
+
 type DraftRange struct {
 	Min float64 `json:"min"`
 	Max float64 `json:"max"`
