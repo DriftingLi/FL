@@ -49,7 +49,7 @@ func (m *memExplanationRepository) AcceptExplanation(ctx context.Context, op *Co
 		return &copy, false, nil
 	}
 	if m.suggestions != nil {
-		if _, _, err := m.suggestions.AcceptSuggestion(ctx, op, reservation, now); err != nil {
+		if _, _, err := m.suggestions.AcceptExplanationCall(op, reservation, now); err != nil {
 			return nil, false, err
 		}
 	}
@@ -247,6 +247,50 @@ func TestValuationExplanationFailuresAreFixedCodes(t *testing.T) {
 				t.Fatalf("错误码 = %v", op)
 			}
 		})
+	}
+}
+
+func TestValuationExplanationCounterfactualHoursIntent(t *testing.T) {
+	for _, tc := range []struct {
+		question string
+		want     bool
+	}{
+		{"为什么工时这么多？", false},
+		{"为什么工时这么少？", false},
+		{"工时为什么是 1200 小时？", false},
+		{"2020 年出厂、工时 1200 小时，为什么残值这么低？", false},
+		{"工时高所以残值低吗？", false},
+		{"工时从 1200 改成 5000 会差多少钱？", true},
+		{"如果工时变成 5000 小时，会差多少钱？", true},
+		{"工时 1200 和 5000 差多少钱？", true},
+		{"改一下工时看看差多少", true},
+		{"换一个工时能差多少", true},
+		{"调整工时之后残值差多少", true},
+		{"工时 1200 到 5000 的区间大概差多少", true},
+	} {
+		if got := counterfactualHoursQuestion(tc.question); got != tc.want {
+			t.Fatalf("反事实判定 %q = %v, want %v", tc.question, got, tc.want)
+		}
+	}
+}
+
+func TestValuationExplanationPureHoursQuestionStaysExplain(t *testing.T) {
+	model := &suggestionModelFake{structured: func(context.Context, string, []*schema.Message, string, aiassistant.StructuredCompleteOptions) (string, error) {
+		return explanationJSON("explain", "hours_coefficient", []string{"input.usage_hours"}), nil
+	}}
+	r, _, _, _ := newExplanationTestEngine(t, model)
+	draft := createConversationDraft(t, r, map[string]any{
+		"fields": map[string]any{"usage_hours": map[string]any{"state": "value", "value": 1200}},
+	})
+	w := requestExplanation(t, r, map[string]any{"operation_id": "why-many", "draft_version": 1,
+		"card": map[string]any{"kind": "draft", "draft_id": draft["id"]}, "question": "为什么工时这么多？"}, "")
+	if w.Code != http.StatusAccepted {
+		t.Fatal(w.Body.String())
+	}
+	op := waitForExplanation(t, r, "explain:"+draft["id"].(string)+":why-many")
+	result := op["explanation"].(map[string]any)
+	if result["action"] != "explain" || result["requires_user_action"] != false {
+		t.Fatalf("纯工时疑问不得误判为反事实: %v", result)
 	}
 }
 

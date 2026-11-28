@@ -198,7 +198,9 @@ func outletConversationExplanationResult(t *testing.T) any {
 		return explanationJSON("explain", "hours_coefficient", []string{"input.usage_hours"}), nil
 	}}
 	r, _, _, _ := newExplanationTestEngine(t, model)
-	draft := createConversationDraft(t, r, map[string]any{})
+	draft := createConversationDraft(t, r, map[string]any{
+		"fields": map[string]any{"usage_hours": map[string]any{"state": "value", "value": 1200}},
+	})
 	w := requestExplanation(t, r, map[string]any{"operation_id": "nonnil", "draft_version": 1,
 		"card": map[string]any{"kind": "draft", "draft_id": draft["id"]}, "question": "工时如何影响？"}, "")
 	if w.Code != http.StatusAccepted {

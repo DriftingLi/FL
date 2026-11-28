@@ -127,14 +127,7 @@ func (s *ConversationService) RequestSuggestions(ctx context.Context, draftID st
 	if userID > 0 {
 		operation.FirstAcceptedUserID = &userID
 	}
-	reservation := SuggestionReservation{
-		DraftKey: id, IPHash: suggestionIPHash(runner.config.HMACKey, ip), CallKey: operationKey,
-		Limits: suggestionBudgetLimits{
-			Draft:  suggestionQuota{Limit: runner.config.DraftLimit},
-			IP:     suggestionQuota{Limit: runner.config.IPLimit, Window: runner.config.IPWindow},
-			Global: suggestionQuota{Limit: runner.config.GlobalLimit, Window: runner.config.GlobalWindow},
-		},
-	}
+	reservation := suggestionReservation(runner.config, id, operationKey, ip)
 	accepted, inserted, err := runner.repository.AcceptSuggestion(ctx, operation, reservation, now)
 	if err != nil {
 		return nil, err
@@ -212,4 +205,16 @@ func suggestionIPHash(secret string, ip net.IP) string {
 	mac := hmac.New(sha256.New, []byte(secret))
 	_, _ = mac.Write([]byte(ip.String()))
 	return hex.EncodeToString(mac.Sum(nil))
+}
+
+// suggestionReservation 生成建议与解释共用的额度预约：同一份草稿/IP/全站预算，不同调用键。
+func suggestionReservation(config SuggestionConfig, budgetKey, callKey string, ip net.IP) SuggestionReservation {
+	return SuggestionReservation{
+		DraftKey: budgetKey, IPHash: suggestionIPHash(config.HMACKey, ip), CallKey: callKey,
+		Limits: suggestionBudgetLimits{
+			Draft:  suggestionQuota{Limit: config.DraftLimit},
+			IP:     suggestionQuota{Limit: config.IPLimit, Window: config.IPWindow},
+			Global: suggestionQuota{Limit: config.GlobalLimit, Window: config.GlobalWindow},
+		},
+	}
 }

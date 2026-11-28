@@ -4923,6 +4923,9 @@ definitions:
         type: string
         x-optional: true
       card_kind:
+        description: |-
+          CardKind / CardKey 记录解释操作引用的卡片：draft 卡为草稿 ID（旧卡为 草稿 ID@版本），
+          formal 卡为正式 operation ID，trial 卡为试算 request ID。
         type: string
         x-optional: true
       created_at:
@@ -5393,20 +5396,34 @@ definitions:
   valuation.ExplanationCard:
     properties:
       draft_id:
+        description: DraftID 草稿能力 ID，仅 draft 卡使用。
         type: string
         x-optional: true
       evaluation_id:
+        description: EvaluationID 正式卡绑定的评估 ID，仅 formal 卡使用（登录 owner 可附带，用于确认卡片仍是同一评估）。
         type: integer
         x-optional: true
       kind:
+        description: Kind 只取 draft / formal / trial，决定下方引用字段与事实来源。
         type: string
       operation_id:
+        description: OperationID 正式卡的创建 operation ID，仅 formal 卡使用。
         type: string
         x-optional: true
       request_id:
+        description: RequestID 试算请求 ID，仅 trial 卡使用。
         type: string
         x-optional: true
+      snapshot:
+        additionalProperties:
+          $ref: '#/definitions/valuation.DraftField'
+        description: |-
+          Snapshot 草稿卡锁定的字段事实（键与 ValuationDraft.Fields 相同），仅 draft 卡使用。
+          携带时按快照解释、不再读取当前草稿，因此已纠错的旧草稿卡仍可解释；未携带时要求 draft_version 与当前草稿一致。
+        type: object
+        x-optional: true
       snapshot_id:
+        description: SnapshotID 试算快照哈希（完整值或 7 位短哈希），仅 trial 卡使用。
         type: string
         x-optional: true
     type: object
@@ -21851,9 +21868,10 @@ paths:
       consumes:
       - application/json
       description: 仅允许草稿能力 ID、匿名正式 operation 或登录 owner、试算 request/snapshot 能力对。模型只选模板键与证据
-        ID，事实由原快照回填；工时反事实返回 recalculate，由用户触发重算。建议与解释共享草稿/IP/全站额度。
+        ID，事实由原快照回填；草稿卡携带 snapshot 时按卡内锁定事实解释，当前草稿已变更也不返回 409，未携带快照才要求 draft_version
+        与当前草稿一致。工时反事实返回 recalculate，由用户触发重算。建议与解释共享草稿/IP/全站额度。
       parameters:
-      - description: 操作标识、卡片版本、原卡片与问题
+      - description: 操作标识、卡片版本、原卡片（草稿可附字段快照）与问题
         in: body
         name: body
         required: true
@@ -21889,7 +21907,7 @@ paths:
           schema:
             $ref: '#/definitions/response.R'
         "409":
-          description: 旧卡或幂等负载冲突
+          description: 未携带快照的旧卡与当前草稿版本不一致，或幂等负载冲突
           schema:
             $ref: '#/definitions/response.R'
         "429":

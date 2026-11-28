@@ -72,11 +72,17 @@ func acceptValuationOperation(ctx context.Context, pool *pgxpool.Pool, operation
 		if kind == ConversationOperationKindSuggestion {
 			draftVersion = operation.BaseVersion
 		}
+		// 草稿卡的卡片键就是草稿 ID；正式卡/试算卡没有草稿，draft_id 沿用卡片键以满足非空约束。
+		draftID := operation.DraftID
+		if draftID == "" {
+			draftID = operation.CardKey
+		}
 		tag, err := tx.Exec(ctx, `INSERT INTO valuation_operations
-			(operation_key, request_hash, draft_id, draft_version, first_accepted_user_id, status, operation_kind)
-			VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (operation_key) DO NOTHING`,
-			operation.OperationID, operation.RequestHash, operation.DraftID, draftVersion,
-			operation.FirstAcceptedUserID, OperationStatusPending, kind)
+			(operation_key, request_hash, draft_id, draft_version, first_accepted_user_id, status, operation_kind, card_kind, card_key)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT (operation_key) DO NOTHING`,
+			operation.OperationID, operation.RequestHash, draftID, draftVersion,
+			operation.FirstAcceptedUserID, OperationStatusPending, kind,
+			nullableString(operation.CardKind), nullableString(operation.CardKey))
 		if err != nil {
 			return fmt.Errorf("reserve valuation %s operation: %w", kind, err)
 		}
@@ -100,6 +106,34 @@ func acceptValuationOperation(ctx context.Context, pool *pgxpool.Pool, operation
 		return nil, false, err
 	}
 	return accepted, inserted, nil
+}
+
+// getValuationOperation 按 operation 类型读取；类型不符与不存在同样按 404 处理。
+func getValuationOperation(ctx context.Context, pool *pgxpool.Pool, operationID, kind string) (*ConversationOperation, error) {
+	operation, err := scanOperation(pool.QueryRow(ctx, `SELECT `+operationColumns+`
+		FROM valuation_operations WHERE operation_key = $1`, operationID))
+	if err != nil {
+		return nil, err
+	}
+	if operation.Kind != kind {
+		return nil, ErrOperationNotFound
+	}
+	return operation, nil
+}
+
+// failValuationOperation 只把仍处于 pending 的同类操作改为失败，迟到响应不得覆盖终态。
+func failValuationOperation(ctx context.Context, pool *pgxpool.Pool, operationID, kind, code string, now time.Time) error {
+	_, err := pool.Exec(ctx, `UPDATE valuation_operations SET status = $2, error_code = $3, updated_at = $4
+		WHERE operation_key = $1 AND operation_kind = $5 AND status = $6`,
+		operationID, OperationStatusFailed, code, now, kind, OperationStatusPending)
+	return err
+}
+
+func expireValuationOperation(ctx context.Context, pool *pgxpool.Pool, operationID, kind string, olderThan, now time.Time) error {
+	_, err := pool.Exec(ctx, `UPDATE valuation_operations SET status = $2, error_code = $3, updated_at = $4
+		WHERE operation_key = $1 AND operation_kind = $5 AND status = $6 AND updated_at < $7`,
+		operationID, OperationStatusFailed, ErrorCodeSuggestionTimeout, now, kind, OperationStatusPending, olderThan)
+	return err
 }
 
 func transactValuationOperation(ctx context.Context, pool *pgxpool.Pool, kind string, persist func(pgx.Tx) error) error {

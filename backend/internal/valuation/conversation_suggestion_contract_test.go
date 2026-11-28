@@ -147,17 +147,32 @@ func (m *memSuggestionRepository) AcceptSuggestion(_ context.Context, operation 
 		copied := *existing
 		return &copied, false, nil
 	}
-	if operation.Kind != ConversationOperationKindExplanation {
-		draft, err := m.drafts.GetDraft(context.Background(), operation.DraftID, now)
-		if err != nil {
-			return nil, false, err
-		}
-		if draft.Draft.Version != operation.BaseVersion {
-			return nil, false, ErrDraftVersionConflict
-		}
-		if draft.Draft.Status != DraftStatusEditing {
-			return nil, false, ErrDraftNotEditing
-		}
+	draft, err := m.drafts.GetDraft(context.Background(), operation.DraftID, now)
+	if err != nil {
+		return nil, false, err
+	}
+	if draft.Draft.Version != operation.BaseVersion {
+		return nil, false, ErrDraftVersionConflict
+	}
+	if draft.Draft.Status != DraftStatusEditing {
+		return nil, false, ErrDraftNotEditing
+	}
+	return m.acceptReservedCall(operation, reservation, now)
+}
+
+// AcceptExplanationCall 与 AcceptSuggestion 共用幂等、额度和记账骨架；解释卡不需要草稿版本门，
+// 版本约束由服务层按卡片是否绑定当前草稿决定。
+func (m *memSuggestionRepository) AcceptExplanationCall(operation *ConversationOperation, reservation SuggestionReservation, now time.Time) (*ConversationOperation, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.acceptReservedCall(operation, reservation, now)
+}
+
+// acceptReservedCall 的调用方必须已持有 m.mu。
+func (m *memSuggestionRepository) acceptReservedCall(operation *ConversationOperation, reservation SuggestionReservation, now time.Time) (*ConversationOperation, bool, error) {
+	if existing, ok := m.rows[operation.ID]; ok {
+		copied := *existing
+		return &copied, false, nil
 	}
 	draftKey := reservation.DraftKey
 	draftBefore := m.draftCounts[draftKey]
@@ -173,7 +188,6 @@ func (m *memSuggestionRepository) AcceptSuggestion(_ context.Context, operation 
 		return nil, false, ErrSuggestionQuotaExceeded
 	}
 	stored := *operation
-	stored.Kind = ConversationOperationKindSuggestion
 	stored.Status = OperationStatusPending
 	stored.CreatedAt = now
 	stored.UpdatedAt = now

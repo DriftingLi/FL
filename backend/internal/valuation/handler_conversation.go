@@ -264,16 +264,16 @@ func (h *ConversationHandler) SuggestDraft(c *gin.Context) {
 
 // RequestExplanation 处理 POST /api/valuation/conversation/explanations。
 // @Summary 异步解释估值卡片
-// @Description 仅允许草稿能力 ID、匿名正式 operation 或登录 owner、试算 request/snapshot 能力对。模型只选模板键与证据 ID，事实由原快照回填；工时反事实返回 recalculate，由用户触发重算。建议与解释共享草稿/IP/全站额度。
+// @Description 仅允许草稿能力 ID、匿名正式 operation 或登录 owner、试算 request/snapshot 能力对。模型只选模板键与证据 ID，事实由原快照回填；草稿卡携带 snapshot 时按卡内锁定事实解释，当前草稿已变更也不返回 409，未携带快照才要求 draft_version 与当前草稿一致。工时反事实返回 recalculate，由用户触发重算。建议与解释共享草稿/IP/全站额度。
 // @Tags 估值-对话
 // @Accept json
 // @Produce json
-// @Param body body ExplainCardRequest true "操作标识、卡片版本、原卡片与问题"
+// @Param body body ExplainCardRequest true "操作标识、卡片版本、原卡片（草稿可附字段快照）与问题"
 // @Success 200 {object} response.R{data=ConversationOperation} "success"
 // @Success 202 {object} response.R{data=ConversationOperation} "已受理"
 // @Failure 400 {object} response.R "参数错误"
 // @Failure 404 {object} response.R "卡片不存在或无权访问"
-// @Failure 409 {object} response.R "旧卡或幂等负载冲突"
+// @Failure 409 {object} response.R "未携带快照的旧卡与当前草稿版本不一致，或幂等负载冲突"
 // @Failure 429 {object} response.R "共享额度耗尽"
 // @Failure 500 {object} response.R "解释暂不可用或已关停"
 // @Router /valuation/conversation/explanations [post]
