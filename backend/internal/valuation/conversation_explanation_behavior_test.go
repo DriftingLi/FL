@@ -37,27 +37,25 @@ func (m *memExplanationRepository) GetExplanation(_ context.Context, id string) 
 	if !ok {
 		return nil, ErrOperationNotFound
 	}
-	copy := *op
-	return &copy, nil
+	return cloneOperationRecord(op), nil
 }
 
 func (m *memExplanationRepository) AcceptExplanation(ctx context.Context, op *ConversationOperation, reservation SuggestionReservation, now time.Time) (*ConversationOperation, bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if old, ok := m.rows[op.ID]; ok {
-		copy := *old
-		return &copy, false, nil
+		return cloneOperationRecord(old), false, nil
 	}
 	if m.suggestions != nil {
 		if _, _, err := m.suggestions.AcceptExplanationCall(op, reservation, now); err != nil {
 			return nil, false, err
 		}
 	}
-	copy := *op
-	copy.Kind = ConversationOperationKindExplanation
-	copy.Status = OperationStatusPending
-	m.rows[op.ID] = &copy
-	return &copy, true, nil
+	stored := *op
+	stored.Kind = ConversationOperationKindExplanation
+	stored.Status = OperationStatusPending
+	m.rows[op.ID] = &stored
+	return cloneOperationRecord(&stored), true, nil
 }
 
 func (m *memExplanationRepository) CompleteExplanation(_ context.Context, id string, result *ValuationExplanationResult, now time.Time) (string, error) {

@@ -182,6 +182,99 @@ func TestConversationPostgresContract(t *testing.T) {
 	assertOperationEvaluationPartialUniqueIndex(t, pool)
 }
 
+// TestConversationPostgresConcurrentAcceptOnTinyPool 把连接池压到 4（4 核 CI 的默认上限）
+// 再发 6 个同键请求：占位插入不得占满连接池，评估事务内的草稿/字典读取必须还能借到连接，
+// 否则全部请求会在端点 10s 超时后 500（#2954 #2957）。
+func TestConversationPostgresConcurrentAcceptOnTinyPool(t *testing.T) {
+	testutil.SetTestGinMode()
+	db := testutil.NewPostgresDB(t)
+	dialector, ok := db.Dialector.(*postgres.Dialector)
+	if !ok {
+		t.Fatalf("测试库不是 PostgreSQL: %T", db.Dialector)
+	}
+	poolConfig, err := pgxpool.ParseConfig(dialector.DSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	poolConfig.MaxConns = 4
+	pool, err := pgxpool.NewWithConfig(context.Background(), poolConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+
+	dict := NewDictionaryRepository(pool)
+	evaluations := NewEvaluationRepository(pool)
+	valuationSvc, err := NewService(dict, evaluations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conversationSvc := NewConversationService(NewDraftRepository(pool), NewOperationRepository(pool), valuationSvc, evaluations, time.Now)
+	session := security.NewSession("test-secret", time.Hour, security.CookieConfig{Name: "hrwai_token"})
+	r := gin.New()
+	r.Use(gin.Recovery())
+	attachAdminCapabilities(r)
+	RegisterRoutes(r, session, zap.NewNop(), nil, dict, evaluations, NewBatteryRepository(pool), valuationSvc,
+		NewBatteryRULService(), &memReportGenerator{}, storage.NewLocalStorage(t.TempDir()), nil, nil, conversationSvc)
+
+	request := EvaluationRequest{
+		Brand: "比亚迪", VehicleType: "电动平衡重式", Series: "CPD系列", Tonnage: 3,
+		ConfigType: "磷酸铁锂(LFP)", MastType: "两级标准门架", MastHeightMM: 3000,
+		FactoryYear: 2020, SaleYear: 2024, UsageHours: 0,
+		Province: "安徽省", City: "合肥市", ConditionRating: "A",
+		HasRegistrationCertificate: false,
+	}
+	draft := createCompleteConversationDraftForRequest(t, r, request)
+	body := map[string]any{
+		"operation_id": "pg-tiny-pool", "draft_id": draft["id"], "draft_version": 1, "request": request,
+	}
+	type result struct {
+		code       int
+		response   string
+		evaluation any
+	}
+	const workers = 6
+	results := make(chan result, workers)
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			w := performRequest(r, http.MethodPost, "/api/valuation/conversation/operations", body)
+			item := result{code: w.Code, response: w.Body.String()}
+			if w.Code == http.StatusOK {
+				_, _, data := decodeBody(t, w)
+				item.evaluation = data["evaluation_id"]
+			}
+			results <- item
+		}()
+	}
+	wg.Wait()
+	close(results)
+	var evaluationID any
+	for item := range results {
+		if item.code != http.StatusOK {
+			t.Fatalf("小连接池同键并发失败: %d\n%s", item.code, item.response)
+		}
+		if evaluationID == nil {
+			evaluationID = item.evaluation
+		}
+		if item.evaluation != evaluationID {
+			t.Fatalf("小连接池同键并发返回不同评估: %v vs %v", item.evaluation, evaluationID)
+		}
+	}
+	var operationCount, evaluationCount int
+	if err := pool.QueryRow(context.Background(), `SELECT COUNT(*) FROM valuation_operations WHERE operation_key = $1`, "pg-tiny-pool").Scan(&operationCount); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(context.Background(), `SELECT COUNT(*) FROM evaluations`).Scan(&evaluationCount); err != nil {
+		t.Fatal(err)
+	}
+	if operationCount != 1 || evaluationCount != 1 {
+		t.Fatalf("同键并发只应有一条 operation/evaluation: operations=%d evaluations=%d", operationCount, evaluationCount)
+	}
+}
+
 type blockingCalculationDictionary struct {
 	*DictionaryRepository
 	started       chan struct{}

@@ -89,13 +89,19 @@ func (m *memOperationRepository) GetOperation(_ context.Context, operationID str
 	return &copied, nil
 }
 
+// cloneOperationRecord 返回与内部存储互不共享的记录副本：后台 goroutine 会在锁内改写
+// 状态/结果，响应序列化与读取都必须拿独立对象，否则与 handler 的 JSON 编码并发读写同一指针。
+func cloneOperationRecord(operation *ConversationOperation) *ConversationOperation {
+	copied := *operation
+	return &copied
+}
+
 func (m *memOperationRepository) AcceptOperation(_ context.Context, operation *ConversationOperation,
 	persist func(OperationEvaluationWriter) (int64, string, error)) (*ConversationOperation, bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if existing, ok := m.operations[operation.OperationID]; ok {
-		copied := *existing
-		return &copied, false, nil
+		return cloneOperationRecord(existing), false, nil
 	}
 	evaluationID, failureCode, err := persist(m.evaluations)
 	if err != nil && failureCode == "" {
@@ -111,5 +117,5 @@ func (m *memOperationRepository) AcceptOperation(_ context.Context, operation *C
 	stored.EvaluationID = evaluationID
 	stored.UpdatedAt = time.Now()
 	m.operations[stored.OperationID] = &stored
-	return &stored, true, nil
+	return cloneOperationRecord(&stored), true, nil
 }
