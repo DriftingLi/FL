@@ -249,7 +249,7 @@ make dev-up / dev-down / dev-reset   # 起停依赖容器 / 清卷重建（数�
 ```
 
 也可直接用 Go 运行迁移 CLI：`cd backend && go run ./cmd/migrate up|down|version|force|check-columns`。
-授权环境可用完整参数、目录与系数快照离线复算：`cd backend && go run ./cmd/replay-valuation -input replay.json`；该命令不连接数据库，也不创建正式评估记录。
+授权环境可用完整参数、目录与系数快照离线复算：`cd backend && go run ./cmd/replay-valuation -input replay.json`；加 `-trials trials.jsonl` 可让全批共享同一冻结快照，输出 20/30/40% 分组的给价、覆盖、过宽与无价原因指标（`-details` 附带逐条结果）。该命令不连接数据库，也不创建正式评估记录。
 
 ### 前端（在仓库根目录）
 

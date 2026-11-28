@@ -31,6 +31,7 @@
 //   GET  /valuation/battery/evaluations/{id}/report
 //   POST /valuation/auth/logout
 //   POST /valuation/evaluations
+//   POST /valuation/trials
 //   POST /valuation/battery/evaluations
 //   GET  /valuation/evaluations
 //   GET  /valuation/evaluations/{id}
@@ -69,7 +70,7 @@
 //   DELETE /valuation/admin/condition-ratings/{id}
 //   DELETE /valuation/admin/region-coefficients/{id}
 //
-// 覆盖的 Go 类型：AlgorithmParameters / BatteryEvaluation / BatteryEvaluationSummary / BatteryType / BatteryTypeDict / Brand / CoefficientConfig / ConditionRating / ConfigOption / CreateBatteryResponse / CycleFeature / DimensionScore / EngineType / EvaluationDetail / EvaluationResponse / FeatureImportance / ListBatteryResponse / MastHeight / MastType / OriginalPrice / RawStats / RegionCoefficient / Series / SeriesConfigOptions / Tonnage / TransmissionType / VehicleType
+// 覆盖的 Go 类型：AlgorithmParameters / BatteryEvaluation / BatteryEvaluationSummary / BatteryType / BatteryTypeDict / Brand / CoefficientConfig / ConditionRating / ConfigOption / CreateBatteryResponse / CycleFeature / DimensionScore / EngineType / EvaluationDetail / EvaluationResponse / FeatureImportance / ListBatteryResponse / MastHeight / MastType / OriginalPrice / RawStats / RegionCoefficient / Series / SeriesConfigOptions / Tonnage / TransmissionType / TrialCandidate / TrialInterval / TrialRequest / TrialResponse / TrialSnapshotMeta / VehicleType
 //
 // 可空性 / 缺省态由**注解层**表达，生成器只如实转写（Go 结构体 tag）：
 //   - extensions:"x-nullable" → 字段渲染 'T | null'：键一定在，值为 null（Go 指针且无 omitempty）；
@@ -337,6 +338,73 @@ export interface Tonnage {
 export interface TransmissionType {
   id: number
   name: string
+}
+
+export interface TrialCandidate {
+  brand: string
+  config_type: string
+  earliest_factory_year: number
+  id: number
+  mast_height_mm: number
+  mast_type: string
+  original_price: number
+  series: string
+  tonnage: number
+  updated_at: string
+  vehicle_type: string
+}
+
+export interface TrialInterval {
+  max: number
+  mid: number
+  min: number
+  width: number
+  width_ratio: number
+}
+
+export interface TrialRequest {
+  brand: string
+  city?: string
+  condition_rating?: string
+  config_type?: string
+  factory_year?: number
+  factory_year_max?: number
+  factory_year_min?: number
+  has_license_plate?: boolean
+  has_maintenance_records?: boolean
+  has_registration_certificate?: boolean
+  mast_height_mm?: number
+  mast_type?: string
+  original_paint?: boolean
+  policy: string
+  province?: string
+  sale_year?: number
+  series?: string
+  tonnage: number
+  usage_hours?: number
+  vehicle_type: string
+}
+
+export interface TrialResponse {
+  assumptions: string[]
+  candidates: TrialCandidate[]
+  input: TrialRequest
+  interval?: TrialInterval
+  message?: string
+  missing_fields: string[]
+  reason_code?: string
+  snapshot: TrialSnapshotMeta
+  status: string
+  width_ratio?: number
+}
+
+export interface TrialSnapshotMeta {
+  formula_hash: string
+  formula_version: string
+  hash: string
+  policy: string
+  policy_version: string
+  sha7: string
 }
 
 export interface VehicleType {

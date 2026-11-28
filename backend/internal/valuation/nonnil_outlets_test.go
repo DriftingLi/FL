@@ -11,6 +11,8 @@ import (
 	"net/http"
 	"testing"
 
+	"go.uber.org/zap"
+
 	"forklift-training/internal/testutil"
 )
 
@@ -22,6 +24,9 @@ var nonnilOutletsValuation = map[string]func(t *testing.T) any{
 	"valuation.EvaluationDetail.suggestions":         outletEvalDetailData,
 	"valuation.EvaluationResponse.dimension_scores":  outletEvalResponseData,
 	"valuation.EvaluationResponse.suggestions":       outletEvalResponseData,
+	"valuation.TrialResponse.assumptions":            outletTrialResponseData,
+	"valuation.TrialResponse.candidates":             outletTrialResponseData,
+	"valuation.TrialResponse.missing_fields":         outletTrialResponseData,
 	"valuation.BatteryEvaluation.feature_importance": outletBatteryDetailData,
 	"valuation.BatteryEvaluation.cycle_features":     outletBatteryDetailData,
 	"valuation.BatteryEvaluation.suggestions":        outletBatteryDetailData,
@@ -43,6 +48,20 @@ func outletEvalResponseData(t *testing.T) any {
 	w := performRequest(r, http.MethodPost, "/api/valuation/evaluations", baseEvalRequest())
 	if w.Code != http.StatusOK {
 		t.Fatalf("评估提交状态码 = %d: %s", w.Code, w.Body.String())
+	}
+	return mustDecodeData(t, w)
+}
+
+func outletTrialResponseData(t *testing.T) any {
+	t.Helper()
+	price := OriginalPrice{ID: 1, Brand: "林德", VehicleType: "电动叉车", Series: "K系列", Tonnage: 3,
+		ConfigType: "标准", MastType: "标准门架", MastHeightMM: 3000, EarliestFactoryYear: 2020, OriginalPrice: 100000}
+	reader := &stubTrialSnapshotReader{snapshot: newTrialSnapshotForTest(t, []OriginalPrice{price})}
+	r, _, _ := newTestValuationEngine(t)
+	RegisterTrialRoutes(r, reader, zap.NewNop(), "development")
+	w := performRequest(r, http.MethodPost, "/api/valuation/trials", trialCompleteRequest())
+	if w.Code != http.StatusOK {
+		t.Fatalf("试算状态码 = %d: %s", w.Code, w.Body.String())
 	}
 	return mustDecodeData(t, w)
 }

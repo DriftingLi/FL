@@ -891,6 +891,7 @@ var Domains = []Domain{
 		Roots: []string{
 			"valuation.EvaluationResponse",
 			"valuation.EvaluationDetail",
+			"valuation.TrialResponse",
 			"valuation.DimensionScore",
 			"valuation.CreateBatteryResponse",
 			"valuation.ListBatteryResponse",
@@ -953,6 +954,7 @@ var Domains = []Domain{
 			{Method: "POST", Path: "/valuation/auth/logout", NoData: true},
 			// 可选认证组：匿名可提交（登录则记录 user_id）
 			{Method: "POST", Path: "/valuation/evaluations"},
+			{Method: "POST", Path: "/valuation/trials"},
 			{Method: "POST", Path: "/valuation/battery/evaluations"},
 			// 估值鉴权组（JWTAuth + CapValuationUse）
 			{Method: "GET", Path: "/valuation/evaluations"},

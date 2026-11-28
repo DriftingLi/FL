@@ -159,6 +159,12 @@ var ModelBlocks = []ModelBlock{
 		},
 	},
 	{
+		Name: "残值评估",
+		Models: []any{
+			&ValuationTrialPolicy{},
+		},
+	},
+	{
 		Name: "帮助中心",
 		Models: []any{
 			&FaqCategory{}, // 先建分类：faq.category_id 外键指向它

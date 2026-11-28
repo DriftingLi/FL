@@ -244,6 +244,7 @@ func setupValuation(r *gin.Engine, cfg *config.Config, authSvc valuation.Valuati
 	// PDF 报告通过 storage 抽象层上传（local=本地磁盘 / r2=Cloudflare R2 对象存储）
 	// Session 单例：与主体系共用同一实例（装配一次，B2 D4；现由 NewDeps 创建）
 	valuation.RegisterRoutes(r, sess, logger, auditSvc, dictRepo, evalRepo, batteryRepo, valuationSvc, batterySvc, pdfGen, st, authSvc, login)
+	valuation.RegisterTrialRoutes(r, valuation.NewPostgresTrialSnapshotReader(pool), logger, cfg.AppEnv)
 	logger.Info("valuation 路由注册完成", zap.String("prefix", "/api/valuation"))
 
 	return func() {
