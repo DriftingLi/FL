@@ -22,6 +22,13 @@
         <!-- 二级面板：格式组（标题 / 列表 / 分割线）+ 记号组（引用 / 代码块 / 行内代码 / 链接）+ 操作组（粘贴）。
              记号四件走 insertText 逃生舱（editor 的 link 属性丢 URL、code 属性 no-op）。 -->
         <view v-if="panelOpen" class="panel">
+            <!-- 折叠头：点标题行收起（与常驻行的「⋯」同一动作）。标题用中文常量而非按钮名，
+                 与下方「操作」组同一口径 —— 面板标题不是格式按钮。 -->
+            <view class="panel-head" @click="onTogglePanel">
+                <text class="panel-head-title">更多工具</text>
+                <!-- 收起箭头用图形切片而非文本符号（DESIGN.md：方向箭头一律不渲染文本符号） -->
+                <image class="panel-head-arrow" src="/static/icons/ai-chat/chevron-model.png" mode="aspectFit" />
+            </view>
             <view v-for="(group, gi) in panelGroups" :key="group.id" class="panel-group"
                 :class="{ 'mt-16': gi > 0 }">
                 <text class="panel-group-title">{{ group.label }}</text>
@@ -186,6 +193,28 @@
 
     .panel-group {
         flex-direction: column;
+    }
+
+    /* 折叠头：整行 88rpx 命中区（R2），文字左、箭头右 */
+    .panel-head {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 88rpx;
+        padding: 0 8rpx;
+    }
+
+    .panel-head-title {
+        font-size: 26rpx;
+        color: #333333;
+    }
+
+    .panel-head-arrow {
+        width: 28rpx;
+        height: 28rpx;
+        /* 素材本身朝左（`<`）；这一行只在「展开中」渲染 ⇒ 顺时针 90° 变成朝上（`︿`），表示点它会收起。
+           #2959 真机取证：原先写 180° 转出的是 `>`，读成「还有下一页」。 */
+        transform: rotate(90deg);
     }
 
     .panel-group-title {

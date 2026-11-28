@@ -94,8 +94,10 @@ describe('常驻四键由数据驱动（按钮集是单点，不是模板硬编�
         // uvue 不支持 text-decoration ⇒ 删除线用绝对定位细线模拟
         expect(toolbar).toContain('.strike-line {');
         expect(toolbar).toContain('position: absolute;');
-        // 字形不是图片：常驻行里没有 <image>
-        expect(toolbar).not.toContain('<image');
+        // 字形不是图片：**常驻行**里没有 <image>（面板折叠头的方向箭头是切片图标，见 DESIGN.md）
+        const primaryRow = toolbar.slice(toolbar.indexOf('class="primary-row"'), toolbar.indexOf('class="panel"'))
+        expect(primaryRow.length).toBeGreaterThan(0);
+        expect(primaryRow).not.toContain('<image');
     });
 
     it('模板里不出现中文按钮名（文案单点在 utils/forumWysiwygInput）', () => {
@@ -183,13 +185,14 @@ describe('编辑器侧无图片插入入口：正文不产出 ![alt](url)（R3�
         expect(imageArea).toMatch(/\.image-band\s*\{[^}]*border-top:/);
     });
 
-    it('字数在正文右下（#2689 决策 5）：工具条之后、图片之前', () => {
+    it('字数在正文右下（#2689 决策 5）：紧贴编辑区（工具条之前）、图片之前', () => {
         const toolbarAt = input.indexOf('<ForumWysiwygToolbar');
         const counterAt = input.indexOf('class="counter-text"');
         const imageAt = input.indexOf('<ForumWysiwygImageArea');
         expect(toolbarAt).toBeGreaterThan(-1);
-        expect(counterAt).toBeGreaterThan(toolbarAt);
-        expect(imageAt).toBeGreaterThan(counterAt);
+        expect(counterAt).toBeGreaterThan(-1);
+        expect(counterAt).toBeLessThan(toolbarAt);
+        expect(imageAt).toBeGreaterThan(toolbarAt);
         expect(input).toContain("markdownLength.value.toString() + '/' + props.maxlength.toString()");
     });
 
