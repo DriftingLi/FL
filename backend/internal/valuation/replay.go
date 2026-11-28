@@ -15,6 +15,7 @@ type ReplayInput struct {
 	RegionCoefficients []RegionCoefficient `json:"region_coefficients"`
 	OriginalPrices     []OriginalPrice     `json:"original_prices"`
 	Coefficients       []CoefficientConfig `json:"coefficients"`
+	TrialPolicies      []TrialPolicy       `json:"trial_policies,omitempty"`
 }
 
 func (in ReplayInput) Validate() error {

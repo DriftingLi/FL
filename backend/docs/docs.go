@@ -27979,6 +27979,70 @@ const docTemplate = `{
                 }
             }
         },
+        "/valuation/trials": {
+            "post": {
+                "description": "使用同一冻结目录、系数快照与 V2 公式计算参考区间。默认关闭，仅显式 demo/pilot 且组合已配置时可用；不写 evaluations、不生成报告。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "估值-评估"
+                ],
+                "summary": "参考试算",
+                "parameters": [
+                    {
+                        "description": "参考试算请求",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/valuation.TrialRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/valuation.TrialResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "403": {
+                        "description": "参考试算未开放",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.R"
+                        }
+                    }
+                }
+            }
+        },
         "/wrong-questions": {
             "get": {
                 "security": [
@@ -36493,6 +36557,234 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "valuation.TrialCandidate": {
+            "type": "object",
+            "properties": {
+                "brand": {
+                    "type": "string"
+                },
+                "config_type": {
+                    "type": "string"
+                },
+                "earliest_factory_year": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "mast_height_mm": {
+                    "type": "integer"
+                },
+                "mast_type": {
+                    "type": "string"
+                },
+                "original_price": {
+                    "type": "number"
+                },
+                "series": {
+                    "type": "string"
+                },
+                "tonnage": {
+                    "type": "number"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "vehicle_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "valuation.TrialInterval": {
+            "type": "object",
+            "properties": {
+                "max": {
+                    "type": "number"
+                },
+                "mid": {
+                    "type": "number"
+                },
+                "min": {
+                    "type": "number"
+                },
+                "width": {
+                    "type": "number"
+                },
+                "width_ratio": {
+                    "type": "number"
+                }
+            }
+        },
+        "valuation.TrialRequest": {
+            "type": "object",
+            "properties": {
+                "brand": {
+                    "type": "string"
+                },
+                "city": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "condition_rating": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "config_type": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "factory_year": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "factory_year_max": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "factory_year_min": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "has_license_plate": {
+                    "type": "boolean",
+                    "x-optional": true
+                },
+                "has_maintenance_records": {
+                    "type": "boolean",
+                    "x-optional": true
+                },
+                "has_registration_certificate": {
+                    "type": "boolean",
+                    "x-optional": true
+                },
+                "mast_height_mm": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "mast_type": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "original_paint": {
+                    "type": "boolean",
+                    "x-optional": true
+                },
+                "policy": {
+                    "type": "string"
+                },
+                "province": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "request_id": {
+                    "type": "string"
+                },
+                "sale_year": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "series": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "snapshot_id": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "tonnage": {
+                    "type": "number"
+                },
+                "usage_hours": {
+                    "type": "integer",
+                    "x-optional": true
+                },
+                "vehicle_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "valuation.TrialResponse": {
+            "type": "object",
+            "properties": {
+                "assumptions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "candidates": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/valuation.TrialCandidate"
+                    }
+                },
+                "input": {
+                    "$ref": "#/definitions/valuation.TrialRequest"
+                },
+                "interval": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/valuation.TrialInterval"
+                        }
+                    ],
+                    "x-optional": true
+                },
+                "message": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "missing_fields": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "reason_code": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "request_id": {
+                    "type": "string"
+                },
+                "snapshot": {
+                    "$ref": "#/definitions/valuation.TrialSnapshotMeta"
+                },
+                "snapshot_id": {
+                    "type": "string",
+                    "x-optional": true
+                },
+                "status": {
+                    "type": "string"
+                },
+                "width_ratio": {
+                    "type": "number",
+                    "x-optional": true
+                }
+            }
+        },
+        "valuation.TrialSnapshotMeta": {
+            "type": "object",
+            "properties": {
+                "formula_hash": {
+                    "type": "string"
+                },
+                "formula_version": {
+                    "type": "string"
+                },
+                "hash": {
+                    "type": "string"
+                },
+                "policy": {
+                    "type": "string"
+                },
+                "policy_version": {
+                    "type": "string"
+                },
+                "sha7": {
                     "type": "string"
                 }
             }

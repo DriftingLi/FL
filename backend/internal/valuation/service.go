@@ -82,6 +82,16 @@ func (s *Service) evaluateInternal(ctx context.Context, req *EvaluationRequest) 
 }
 
 func (s *Service) evaluateWithDictionary(ctx context.Context, req *EvaluationRequest, dict DictionaryReader) (*EvaluationResult, error) {
+	originalPrice, err := lookupOriginalPrice(ctx, req, dict)
+	if err != nil {
+		return nil, err
+	}
+	return evaluateWithOriginalPrice(ctx, req, dict, originalPrice)
+}
+
+// evaluateWithOriginalPrice 是正式评估与参考试算共用的 V2 计算核心。
+// 调用方负责原价匹配；试算传入目录枚举出的精确候选价，不进入模糊最高价兜底。
+func evaluateWithOriginalPrice(ctx context.Context, req *EvaluationRequest, dict DictionaryReader, originalPrice float64) (*EvaluationResult, error) {
 	provider := NewCoefficientProvider(dict)
 	var coeff CoefficientResolver = provider
 	if snap, err := LoadCoefficientSnapshot(ctx, dict); err == nil {
@@ -101,13 +111,7 @@ func (s *Service) evaluateWithDictionary(ctx context.Context, req *EvaluationReq
 		powerType = PowerType(vt.PowerType)
 	}
 
-	// 3. 查询基准原价：精确匹配 → 模糊匹配
-	originalPrice, err := lookupOriginalPrice(ctx, req, dict)
-	if err != nil {
-		return nil, err
-	}
-
-	// 4. 计算 Kt（基于 factory_year 与 sale_year）
+	// 3. 计算 Kt（基于 factory_year 与 sale_year）
 	ktRes, err := CalcKTime(ctx, powerType, req.FactoryYear, req.SaleYear, coeff)
 	if err != nil {
 		return nil, err

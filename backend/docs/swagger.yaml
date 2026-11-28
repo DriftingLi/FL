@@ -5506,6 +5506,162 @@ definitions:
       name:
         type: string
     type: object
+  valuation.TrialCandidate:
+    properties:
+      brand:
+        type: string
+      config_type:
+        type: string
+      earliest_factory_year:
+        type: integer
+      id:
+        type: integer
+      mast_height_mm:
+        type: integer
+      mast_type:
+        type: string
+      original_price:
+        type: number
+      series:
+        type: string
+      tonnage:
+        type: number
+      updated_at:
+        type: string
+      vehicle_type:
+        type: string
+    type: object
+  valuation.TrialInterval:
+    properties:
+      max:
+        type: number
+      mid:
+        type: number
+      min:
+        type: number
+      width:
+        type: number
+      width_ratio:
+        type: number
+    type: object
+  valuation.TrialRequest:
+    properties:
+      brand:
+        type: string
+      city:
+        type: string
+        x-optional: true
+      condition_rating:
+        type: string
+        x-optional: true
+      config_type:
+        type: string
+        x-optional: true
+      factory_year:
+        type: integer
+        x-optional: true
+      factory_year_max:
+        type: integer
+        x-optional: true
+      factory_year_min:
+        type: integer
+        x-optional: true
+      has_license_plate:
+        type: boolean
+        x-optional: true
+      has_maintenance_records:
+        type: boolean
+        x-optional: true
+      has_registration_certificate:
+        type: boolean
+        x-optional: true
+      mast_height_mm:
+        type: integer
+        x-optional: true
+      mast_type:
+        type: string
+        x-optional: true
+      original_paint:
+        type: boolean
+        x-optional: true
+      policy:
+        type: string
+      province:
+        type: string
+        x-optional: true
+      request_id:
+        type: string
+      sale_year:
+        type: integer
+        x-optional: true
+      series:
+        type: string
+        x-optional: true
+      snapshot_id:
+        type: string
+        x-optional: true
+      tonnage:
+        type: number
+      usage_hours:
+        type: integer
+        x-optional: true
+      vehicle_type:
+        type: string
+    type: object
+  valuation.TrialResponse:
+    properties:
+      assumptions:
+        items:
+          type: string
+        type: array
+      candidates:
+        items:
+          $ref: '#/definitions/valuation.TrialCandidate'
+        type: array
+      input:
+        $ref: '#/definitions/valuation.TrialRequest'
+      interval:
+        allOf:
+        - $ref: '#/definitions/valuation.TrialInterval'
+        x-optional: true
+      message:
+        type: string
+        x-optional: true
+      missing_fields:
+        items:
+          type: string
+        type: array
+      reason_code:
+        type: string
+        x-optional: true
+      request_id:
+        type: string
+      snapshot:
+        $ref: '#/definitions/valuation.TrialSnapshotMeta'
+      snapshot_id:
+        type: string
+        x-optional: true
+      status:
+        type: string
+      width_ratio:
+        type: number
+        x-optional: true
+    type: object
+  valuation.TrialSnapshotMeta:
+    properties:
+      formula_hash:
+        type: string
+      formula_version:
+        type: string
+      hash:
+        type: string
+      policy:
+        type: string
+      policy_version:
+        type: string
+      sha7:
+        type: string
+    type: object
   valuation.ValuationDraft:
     properties:
       can_submit:
@@ -22510,6 +22666,45 @@ paths:
       summary: 估值子模块健康检查
       tags:
       - 估值-系统
+  /valuation/trials:
+    post:
+      consumes:
+      - application/json
+      description: 使用同一冻结目录、系数快照与 V2 公式计算参考区间。默认关闭，仅显式 demo/pilot 且组合已配置时可用；不写 evaluations、不生成报告。
+      parameters:
+      - description: 参考试算请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/valuation.TrialRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/valuation.TrialResponse'
+              type: object
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.R'
+        "403":
+          description: 参考试算未开放
+          schema:
+            $ref: '#/definitions/response.R'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.R'
+      summary: 参考试算
+      tags:
+      - 估值-评估
   /wrong-questions:
     get:
       consumes:

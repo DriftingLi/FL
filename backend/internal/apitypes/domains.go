@@ -893,6 +893,7 @@ var Domains = []Domain{
 			"valuation.EvaluationDetail",
 			"valuation.ValuationDraft",
 			"valuation.ConversationOperation",
+			"valuation.TrialResponse",
 			"valuation.DimensionScore",
 			"valuation.CreateBatteryResponse",
 			"valuation.ListBatteryResponse",
