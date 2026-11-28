@@ -58,7 +58,7 @@
                          保真 / 粘贴 / 属地 / 边界提示由组件合并成一条提示带（#2689 决策 4）。 -->
                     <!-- #ifndef MP-ALIPAY || MP-BAIDU || MP-TOUTIAO -->
                     <ForumWysiwygInput v-if="useRichEditor" :preview-images="imagePreviewUrls"
-                        :image-count="images.length" :max-images="topicImageLimit"
+                        :image-count="images.length" toolbar-variant="full" :max-images="topicImageLimit"
                         placeholder="请输入内容（1-10000 字）" :uploading="uploadingImage"
                         @update:markdown="onMarkdownChange" @update:issues="onIssuesChange"
                         @add-image="onAddImage" @remove-image="onRemoveImage"

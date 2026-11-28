@@ -27,8 +27,8 @@
 
         <!-- 格式工具条（常驻四键 + 更多面板）拆成独立件：它只渲染并 emit 动作，
              怎么落地由本组件按 editorCtx 决定（#2658 拆分，行数预算 ADR-0023）。 -->
-        <ForumWysiwygToolbar :active-ids="activeIds" :open="toolOpen" @action="onActionTap"
-            @paste="onPasteTap" @press="onToolbarPress" @toggle="onToolbarToggle" />
+        <ForumWysiwygToolbar :active-ids="activeIds" :open="toolOpen" :toolbar-variant="toolbarVariant"
+            @action="onActionTap" @press="onToolbarPress" @toggle="onToolbarToggle" />
 
         <!-- 图片区两态（#2689 决策 3）拆成独立展示件：本组件只把列表与计数递下去，动作原样 emit 回宿主。 -->
         <ForumWysiwygImageArea v-if="showImages" :preview-images="previewImages" :image-count="imageCount"
@@ -63,7 +63,7 @@
         shouldClearPasteNotice,
         shouldOfferPasteHint,
     } from '../utils/forumPaste'
-    import { richActiveFromDelta, richFidelityNotice } from '../utils/forumWysiwygInput'
+    import { PASTE_ACTION_ID, richActiveFromDelta, richFidelityNotice } from '../utils/forumWysiwygInput'
 
     /** editor 的 id 与 createEditorContextAsync 的 id 必须同值；一页只挂一个本组件（发帖页 / 回复浮层各一页）。 */
     const EDITOR_ID : string = 'forum-wysiwyg-editor'
@@ -106,6 +106,9 @@
         maxImages: number
         /** 'topic'（发帖表单）/ 'reply'（底部回复栏）—— 两处形态差异只在这个 prop 上 */
         variant?: string
+        /** 工具条形态（#2967 决策⑤）：'full' 常驻四键 + ⋯（发帖页）/ 'entry' 单「格式」入口（回复浮层）。
+            由调用方**显式**给：同一个输入区组件在两面各取一种，缺省不隐含形态。 */
+        toolbarVariant?: string
         maxlength?: number
         placeholder?: string
         showImages?: boolean
@@ -117,6 +120,7 @@
         previewImages: () => [] as string[],
         imageCount: 0,
         variant: 'topic',
+        toolbarVariant: 'full',
         maxlength: 10000,
         placeholder: '',
         showImages: true,
@@ -428,8 +432,16 @@
         refreshFromEditor()
     }
 
-    /** 模板接线（实现在 composable）：工具态内走选区闸门，非工具态走旧的失焦保活绕行 */
+    /**
+     * 模板接线（实现在 composable）：工具态内走选区闸门，非工具态走旧的失焦保活绕行。
+     * #2967：粘贴已收进数据层的「操作」组（kind = paste），与格式动作同一条 action 通道 ——
+     * 在这里分叉，因为它要读剪贴板、写 insertText，与 format/marker 的落地方式不同。
+     */
     function onActionTap(id : string) : void {
+        if (id == PASTE_ACTION_ID) {
+            onPasteTap()
+            return
+        }
         tool.onActionTap(id)
     }
 

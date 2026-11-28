@@ -40,7 +40,7 @@
                 </view>
                 <!-- #ifndef MP-ALIPAY || MP-BAIDU || MP-TOUTIAO -->
                 <ForumWysiwygInput v-if="useWysiwyg" ref="wysiwygRef" :preview-images="previewImages"
-                    :image-count="images.length" variant="reply" :max-images="maxImages"
+                    :image-count="images.length" variant="reply" toolbar-variant="entry" :max-images="maxImages"
                     :maxlength="10000" placeholder="写下你的回复..." :uploading="uploading"
                     @update:markdown="onContentChange"
                     @add-image="onAddImage" @remove-image="onRemoveImage"

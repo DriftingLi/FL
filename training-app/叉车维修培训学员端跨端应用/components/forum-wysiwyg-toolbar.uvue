@@ -1,6 +1,9 @@
 <template>
-    <!-- 论坛正文输入区的**格式工具条**（#2658 拆分，ADR-0073 R1/R2；#2689 五键重排）：
-         常驻四枚字形键（B / I / S / ≡）+「更多」开关 = 恰好 5 个触摸目标，其余动作收进二级面板。
+    <!-- 论坛正文输入区的**格式工具条**（#2658 拆分，ADR-0073 R1/R2；#2689 五键重排；#2967 双形态）：
+         两种形态由 `toolbar-variant` 选（决策⑤，不用 #ifdef、不判路由）：
+           · entry（回复浮层）= 常驻行**只剩一枚**「格式 ›」入口，点它开合面板 —— 面板头就是这枚入口，
+             收起「格式 ›」、展开「格式 ︿」，开合期间不新增第二个开关（不出现 ⋯）；
+           · full（发帖页）= 粗体 / 斜体 / 删除线 / 列表四枚字形键 + 「⋯」开关，与 #2689 完全一致。
          它只渲染、不碰编辑器 —— 按钮集是 utils/forumWysiwygInput 的数据，动作一律 emit 回输入区，
          由输入区那侧持有 editorCtx 决定怎么落地。这样「有哪些按钮」与「按钮怎么生效」各自只有一处。 -->
     <!-- touchstart 早于 editor 的 blur：把「作者按下了工具条」这件事先告诉输入区，
@@ -9,9 +12,17 @@
          原因：面板展开 = 进入「工具态」，它要同时驱动只读保活、收键盘、选区快照三件事，
          那些都只能在持有 editorCtx 的输入区里做 —— 面板状态留在这里就会变成第二个事实源。 -->
     <view class="wysiwyg-toolbar" @touchstart="onPress">
-        <!-- 常驻四键（粗体 / 斜体 / 删除线 / 列表）+ 二级面板开关。触摸目标 88rpx（R2）。
+        <!-- entry：整行 88rpx 的「格式 ›」入口（#2967）。为什么不沿用 ⋯ 方键：
+             88rpx 方键放不下「格式」两字 + 箭头；120rpx 又会让面板头另起一行、开合时几何跳变。
+             箭头上/下用 CSS 旋转表达（素材朝左）：收起 -90° = 朝下（点开），展开 +90° = 朝上（点收）。 -->
+        <view v-if="isEntry" class="entry-row" @click="onTogglePanel">
+            <text class="entry-label">{{ primaryActions[0].label }}</text>
+            <image class="entry-arrow" :class="{ 'entry-arrow-open': open }"
+                src="/static/icons/ai-chat/chevron-model.png" mode="aspectFit" />
+        </view>
+        <!-- full：常驻四键（粗体 / 斜体 / 删除线 / 列表）+ 「⋯」面板开关。触摸目标 88rpx（R2）。
              字形是**文字**不是图片：B 真加粗、I 真斜体、S 真删除线（text-decoration-line: line-through）、≡ 列表。 -->
-        <view class="primary-row">
+        <view v-else class="primary-row">
             <view v-for="(act, idx) in primaryActions" :key="act.id" class="tool-btn"
                 :class="{ active: isActive(act.id), 'ml-16': idx > 0 }" @click="onAction(act.id)">
                 <text class="tool-glyph"
@@ -22,16 +33,10 @@
             </view>
         </view>
 
-        <!-- 二级面板：格式组（标题 / 列表 / 分割线）+ 记号组（引用 / 代码块 / 行内代码 / 链接）+ 操作组（粘贴）。
+        <!-- 二级面板：组与项**全部**来自数据层（#2967 把「操作/粘贴」组也从模板移进数据层）。
+             entry = 字重 / 结构 / 记号 / 操作（4 组 11 项）；full = 结构 / 记号 / 操作（3 组）。
              记号四件走 insertText 逃生舱（editor 的 link 属性丢 URL、code 属性 no-op）。 -->
         <view v-if="open" class="panel">
-            <!-- 折叠头：点标题行收起（与常驻行的「⋯」同一动作）。标题用中文常量而非按钮名，
-                 与下方「操作」组同一口径 —— 面板标题不是格式按钮。 -->
-            <view class="panel-head" @click="onTogglePanel">
-                <text class="panel-head-title">更多工具</text>
-                <!-- 收起箭头用图形切片而非文本符号（DESIGN.md：方向箭头一律不渲染文本符号） -->
-                <image class="panel-head-arrow" src="/static/icons/ai-chat/chevron-model.png" mode="aspectFit" />
-            </view>
             <view v-for="(group, gi) in panelGroups" :key="group.id" class="panel-group"
                 :class="{ 'mt-16': gi > 0 }">
                 <text class="panel-group-title">{{ group.label }}</text>
@@ -43,54 +48,44 @@
                     </view>
                 </view>
             </view>
-            <!-- 操作组：粘贴。原生长按粘贴会整段丢弃 text/html（#2658），这条按钮把剪贴板内容取回来走 insertText -->
-            <view class="panel-group mt-16">
-                <text class="panel-group-title">操作</text>
-                <view class="panel-row">
-                    <view class="panel-btn" @click="onPaste">
-                        <text class="panel-btn-icon">📋</text>
-                        <text class="panel-btn-text">{{ pasteLabel }}</text>
-                    </view>
-                </view>
-            </view>
         </view>
     </view>
 </template>
 
 <script setup lang="uts">
-    import { PASTE_LABEL } from '../utils/forumPaste'
-    import { richPanelGroups, richPrimaryActions } from '../utils/forumWysiwygInput'
+    import { RICH_VARIANT_ENTRY, richPanelGroups, richPrimaryActions } from '../utils/forumWysiwygInput'
     import type { RichAction, RichPanelGroup } from '../utils/forumWysiwygInput'
-
-    /** 「粘贴」按钮文案（模板不硬编码中文，文案单点在 utils/forumPaste） */
-    const pasteLabel : string = PASTE_LABEL
 
     const props = withDefaults(defineProps<{
         /** 点亮集合（**一律由输入区从 getContents 的 delta 推导**后传进来；工具条不自己判事实） */
         activeIds?: string[]
         /** 二级面板是否展开（**受控**：#2962 由输入区持有 —— 它同时是「工具态」的开关） */
         open?: boolean
+        /** 形态（#2967 决策⑤）：'full' 发帖页常驻四键 + ⋯；'entry' 回复浮层单「格式」入口。由调用方显式给。 */
+        toolbarVariant?: string
     }>(), {
         activeIds: () => [] as string[],
         open: false,
+        toolbarVariant: 'full',
     })
 
     /**
-     * 只向上吐「哪个动作被点了」与「粘贴被点了」两件事 ——
-     * 怎么执行（format / insertDivider / insertText）留在输入区，因为那需要 editorCtx。
+     * 只向上吐「哪个动作被点了」一件事 ——
+     * 怎么执行（format / insertDivider / insertText / 读剪贴板）留在输入区，因为那需要 editorCtx。
+     * #2967：粘贴不再走单独的 'paste' 事件，它与格式动作同一条 `action` 通道（id = PASTE_ACTION_ID）。
      */
     const emit = defineEmits<{
         (e: 'action', id: string): void
-        (e: 'paste'): void
         /** 工具条被按下（touchstart）：输入区据此区分「点键」与「粘贴被丢弃」（#2709） */
         (e: 'press'): void
         /** 面板开合请求（受控组件不自己翻状态，#2962）：输入区据此进出「工具态」 */
         (e: 'toggle', open: boolean): void
     }>()
 
-    /** 按钮集是数据、不是模板硬编码：常驻四键与面板两组都取自 utils/forumWysiwygInput 的唯一实现。 */
-    const primaryActions : RichAction[] = richPrimaryActions()
-    const panelGroups : RichPanelGroup[] = richPanelGroups()
+    /** 按钮集是数据、不是模板硬编码：常驻行与面板全部取自 utils/forumWysiwygInput 的唯一实现。 */
+    const isEntry : boolean = props.toolbarVariant == RICH_VARIANT_ENTRY
+    const primaryActions : RichAction[] = richPrimaryActions(props.toolbarVariant)
+    const panelGroups : RichPanelGroup[] = richPanelGroups(props.toolbarVariant)
 
     function isActive(id : string) : boolean {
         return props.activeIds.indexOf(id) >= 0
@@ -104,10 +99,6 @@
         emit('action', id)
     }
 
-    function onPaste() : void {
-        emit('paste')
-    }
-
     function onTogglePanel() : void {
         // 不自己翻状态：面板开合要连带「只读保活 / 收键盘 / 选区快照」，只有输入区能做（#2962）
         emit('toggle', !props.open)
@@ -119,7 +110,38 @@
         flex-direction: column;
     }
 
-    /* ===== 常驻四键 + 更多（触摸目标 88rpx，R2）===== */
+    /* ===== entry 形态：整行「格式 ›」入口（#2967）。列方向父容器里 align-items 默认 stretch ⇒ 自动撑满工具行 ===== */
+    .entry-row {
+        height: 88rpx;
+        margin-top: 16rpx;
+        padding: 0 24rpx;
+        border-radius: 12rpx;
+        background-color: #ffffff;
+        /* 边框用表单控件 token（= 88rpx 键的 #e4e7ed 视觉近似，1/255 差不可见）：
+           共享件值面只减不增（#2865），新写入不许再落裸 hex */
+        border: 1rpx solid $input-border;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .entry-label {
+        font-size: 26rpx;
+        color: #333333;
+    }
+
+    /* 素材本身朝左（`<`）：收起 -90° = 朝下（点开），展开 +90° = 朝上（点收）。方向不靠文本符号。 */
+    .entry-arrow {
+        width: 28rpx;
+        height: 28rpx;
+        transform: rotate(-90deg);
+    }
+
+    .entry-arrow-open {
+        transform: rotate(90deg);
+    }
+
+    /* ===== full 形态：常驻四键 + 更多（触摸目标 88rpx，R2）===== */
     .primary-row {
         flex-direction: row;
         align-items: center;
@@ -200,28 +222,6 @@
 
     .panel-group {
         flex-direction: column;
-    }
-
-    /* 折叠头：整行 88rpx 命中区（R2），文字左、箭头右 */
-    .panel-head {
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-        min-height: 88rpx;
-        padding: 0 8rpx;
-    }
-
-    .panel-head-title {
-        font-size: 26rpx;
-        color: #333333;
-    }
-
-    .panel-head-arrow {
-        width: 28rpx;
-        height: 28rpx;
-        /* 素材本身朝左（`<`）；这一行只在「展开中」渲染 ⇒ 顺时针 90° 变成朝上（`︿`），表示点它会收起。
-           #2959 真机取证：原先写 180° 转出的是 `>`，读成「还有下一页」。 */
-        transform: rotate(90deg);
     }
 
     .panel-group-title {

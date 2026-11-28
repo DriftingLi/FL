@@ -57,33 +57,69 @@ function bodyOf(src, signature) {
     return rest.slice(0, Math.min(...candidates));
 }
 
-/** 去掉 HTML 注释与块注释：注释里点名按钮中文名不算「模板硬编码文案」。 */
+/** 去掉 HTML 注释、块注释与行注释：注释里点名按钮中文名不算「模板硬编码文案」。
+ *  行注释从「行首」或行内「非冒号字符 + //」起剥，避免误伤 `https://` 这类 URL。 */
 function stripComments(src) {
-    return src.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+    return src
+        .replace(/<!--[\s\S]*?-->/g, '')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/(^|[^:])\/\/.*$/gm, '$1');
 }
 
 // ===== ① 常驻四键：数据驱动，恰好四枚 + 「更多」开关 = 5 个触摸目标 =====
 
 describe('常驻四键由数据驱动（按钮集是单点，不是模板硬编码）', () => {
     it('工具条遍历 richPrimaryActions 的结果，不自己列按钮', () => {
-        expect(toolbar).toContain('const primaryActions : RichAction[] = richPrimaryActions()');
+        expect(toolbar).toContain('const primaryActions : RichAction[] = richPrimaryActions(props.toolbarVariant)');
+        expect(toolbar).toContain('const panelGroups : RichPanelGroup[] = richPanelGroups(props.toolbarVariant)');
         expect(toolbar).toContain('v-for="(act, idx) in primaryActions"');
         expect(toolbar).toContain('@click="onAction(act.id)"');
         // 拆分的接缝：工具条只 emit，输入区持有 editorCtx 才决定怎么落地
         expect(toolbar).toContain("(e: 'action', id: string): void");
         expect(toolbar).toContain("emit('action', id)");
-        expect(input).toContain('<ForumWysiwygToolbar :active-ids="activeIds" :open="toolOpen" @action="onActionTap"');
-        expect(input).toContain('@paste="onPasteTap"');
+        expect(input).toContain('<ForumWysiwygToolbar :active-ids="activeIds" :open="toolOpen" :toolbar-variant="toolbarVariant"');
+        // #2967：粘贴与格式动作同一条 action 通道，单独的 paste 事件已退役
+        expect(input).not.toContain('@paste="onPasteTap"');
+        expect(toolbar).not.toContain("emit('paste')");
         // #2709：工具条按下要单独上报（touchstart 早于 blur），失焦检测才分得清「点键」与「粘贴被丢弃」
         expect(input).toContain('@press="onToolbarPress"');
     });
 
-    it('常驻行恰好 5 个触摸目标：4 枚数据动作 + 「更多」开关（#2689 决策 2）', () => {
-        // 4 枚来自 richPrimaryActions 的 v-for，第 5 枚是硬编码的「更多」开关
+    it('#2967 两处调用点显式给形态：回复浮层 entry、发帖页 full（缺省不隐含形态）', () => {
+        expect(read('pages/forum/components/forum-reply-panel.uvue')).toContain('variant="reply" toolbar-variant="entry"');
+        expect(read('pages/forum/forum-create.uvue')).toContain('toolbar-variant="full"');
+        expect(input).toContain('toolbarVariant?: string');
+        expect(input).toContain(':toolbar-variant="toolbarVariant"');
+        // 组件侧只有中性缺省，形态由调用方定
+        expect(input).toContain("toolbarVariant: 'full'");
+    });
+
+    it('full 形态：常驻行恰好 5 个触摸目标 —— 4 枚数据动作 + 「更多」开关（#2689 决策 2）', () => {
+        // 4 枚来自 richPrimaryActions 的 v-for，第 5 枚是「更多」开关（full 分支里）
         expect(toolbar).toContain('v-for="(act, idx) in primaryActions"');
         expect(toolbar).toContain('class="tool-btn tool-btn-more ml-16"');
         // 常驻行里不再有独立的「粘贴」键（粘贴已收进面板「操作」组）
         expect(toolbar).not.toContain('tool-btn-paste');
+    });
+
+    it('entry 形态：常驻行恰好 1 个触摸目标 —— 只有「格式」入口，⋯ 不存在（#2967 决策⑤）', () => {
+        // 入口即面板头：整行一个 view，点它开合；不是「⋯」方键
+        expect(toolbar).toContain('v-if="isEntry"');
+        expect(toolbar).toContain('class="entry-row"');
+        expect(toolbar).toContain('{{ primaryActions[0].label }}');
+        expect(toolbar).toContain('@click="onTogglePanel"');
+        // entry 分支（从入口行到 full 分支开始）里没有「⋯」、也没有第二枚按键
+        const entryBranch = stripComments(toolbar.slice(toolbar.indexOf('class="entry-row"'), toolbar.indexOf('class="primary-row"')));
+        expect(entryBranch.length).toBeGreaterThan(0);
+        expect(entryBranch).not.toContain('⋯');
+        expect(entryBranch).not.toContain('tool-btn');
+        // 展开/收起用同一个素材旋转：收起朝下、展开朝上
+        expect(entryBranch).toContain('src="/static/icons/ai-chat/chevron-model.png"');
+        expect(entryBranch).toContain("'entry-arrow-open': open");
+        expect(toolbar).toContain('.entry-arrow {');
+        expect(toolbar).toContain('transform: rotate(-90deg);');
+        expect(toolbar).toContain('.entry-arrow-open {');
+        expect(toolbar).toContain('transform: rotate(90deg);');
     });
 
     it('B / I / S 是**真字形**不是图片：加粗 / 斜体 / 删除线（细线模拟）', () => {
@@ -98,7 +134,8 @@ describe('常驻四键由数据驱动（按钮集是单点，不是模板硬编�
         // uvue 不支持 text-decoration ⇒ 删除线用绝对定位细线模拟
         expect(toolbar).toContain('.strike-line {');
         expect(toolbar).toContain('position: absolute;');
-        // 字形不是图片：**常驻行**里没有 <image>（面板折叠头的方向箭头是切片图标，见 DESIGN.md）
+        // 字形不是图片：**full 的常驻行**里没有 <image>（方向箭头是切片图标，见 DESIGN.md；
+        // #2967 起箭头落在 entry 入口行里，那是「开合控件」不是格式键）
         const primaryRow = toolbar.slice(toolbar.indexOf('class="primary-row"'), toolbar.indexOf('class="panel"'))
         expect(primaryRow.length).toBeGreaterThan(0);
         expect(primaryRow).not.toContain('<image');
@@ -106,7 +143,8 @@ describe('常驻四键由数据驱动（按钮集是单点，不是模板硬编�
 
     it('模板里不出现中文按钮名（文案单点在 utils/forumWysiwygInput）', () => {
         for (const src of [stripComments(input), stripComments(toolbar)]) {
-            for (const label of ['粗体', '斜体', '删除线', '引用', '代码块', '行内代码', '链接']) {
+            // #2967：入口文案「格式」与操作组「粘贴」也进数据层；组名同理
+            for (const label of ['粗体', '斜体', '删除线', '引用', '代码块', '行内代码', '链接', '格式', '粘贴', '字重', '结构', '操作']) {
                 expect([label, src.includes(label)]).toEqual([label, false]);
             }
         }
@@ -117,7 +155,7 @@ describe('常驻四键由数据驱动（按钮集是单点，不是模板硬编�
         expect(model).not.toContain("RICH_ACTION_UNDERLINE");
         expect(model).not.toContain("formatAction('underline'");
         // 行内代码只出现在面板「记号」组，不在 richPrimaryActions 里
-        const primary = bodyOf(model, 'export function richPrimaryActions()');
+        const primary = bodyOf(model, 'export function richPrimaryActions(');
         expect(primary).not.toContain('CODE_INLINE');
     });
 });
@@ -133,8 +171,15 @@ describe('触摸目标 ≥88rpx（R2）：常驻键、面板键、更多键都�
         expect(toolbar).toMatch(/\.panel-btn \{[\s\S]*?min-width: 88rpx;[\s\S]*?height: 88rpx;/);
     });
 
-    it('「更多」键只加宽不加高（120rpx × 88rpx）', () => {
+    it('「更多」键只加宽不加高（120rpx × 88rpx；只在 full 形态出现）', () => {
         expect(toolbar).toMatch(/\.tool-btn-more \{[\s\S]*?width: 120rpx;/);
+    });
+
+    it('entry 入口行：高 88rpx、撑满工具行（不给固定 width，避免 88/120rpx 方键的老账）', () => {
+        const block = toolbar.match(/\.entry-row \{[\s\S]*?\}/);
+        expect(block).not.toBeNull();
+        expect(block[0]).toContain('height: 88rpx;');
+        expect(block[0]).not.toMatch(/[^-]width:/);
     });
 
     it('88 这个数只有一处来源：模型常量与样式表交叉对齐（防两处各写一份漂移）', () => {
@@ -310,15 +355,22 @@ describe('失焦后点格式按钮仍可用：readOnly 保住选区，format 推
 // ===== ⑥b 粘贴：原生粘贴丢弃 text/html，改走「粘贴」按钮 → insertText（#2658）=====
 
 describe('粘贴走 insertText 同一条 content-change 路径（原生粘贴会整段丢弃 text/html）', () => {
-    it('「粘贴」收在面板「操作」组，文案取自 utils/forumPaste 不硬编码', () => {
-        expect(toolbar).toContain('@click="onPaste"');
-        expect(toolbar).toContain('{{ pasteLabel }}');
-        expect(toolbar).toContain('const pasteLabel : string = PASTE_LABEL');
-        // #2689：粘贴不再是常驻键，落在面板第三组「操作」
-        expect(toolbar).toContain('>操作</text>');
-        // 接缝两端都在：工具条 emit paste，输入区把粘贴落地
-        expect(toolbar).toContain("emit('paste')");
-        expect(input).toContain('@paste="onPasteTap"');
+    it('「粘贴」收在数据层「操作」组（#2967）：组与项不再是模板硬编码', () => {
+        // 操作组由 richPanelGroups 提供，模板只遍历 group.actions
+        expect(toolbar).toContain('v-for="(group, gi) in panelGroups"');
+        expect(toolbar).toContain('v-for="act in group.actions"');
+        expect(toolbar).not.toContain('>操作</text>');
+        expect(toolbar).not.toContain('{{ pasteLabel }}');
+        // 文案与 id 都在数据层：粘贴项取 utils/forumPaste 的 PASTE_LABEL
+        expect(model).toContain("import { PASTE_LABEL } from './forumPaste'");
+        expect(model).toContain("export const PASTE_ACTION_ID = 'paste'");
+        expect(model).toContain('function pasteAction() : RichAction {');
+        // richPanelGroups 内部有 if 块收尾，不能用 bodyOf（按缩进取体会截断）⇒ 直接取到下一个函数之前
+        const groupsBody = model.slice(model.indexOf('export function richPanelGroups('), model.indexOf('export function richActionById('));
+        expect(groupsBody).toContain('pasteAction()');
+        // 接缝：工具条只发 action，输入区按 id 分叉去读剪贴板
+        expect(input).toContain('if (id == PASTE_ACTION_ID) {');
+        expect(input).toContain('onPasteTap()');
         expect(input).toContain('function onPasteTap()');
     });
 
